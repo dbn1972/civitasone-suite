@@ -9,7 +9,11 @@ import { employeeStatusEnum } from "./status.js";
 // (basicMinor bigint->number) but happened to carry this hunk along; the two
 // insertions are identical so whichever PR merges second should merge cleanly.
 export const employeeListQuery = listQuerySchema.extend({
-  employeeType: z.string().min(1).max(32).optional(),
+  // Comma-separated list of engagement types, matched case-insensitively
+  // (repo.listByTenant), e.g. ?employeeType=intern,apprentice. Max 8 values.
+  employeeType: z.string().min(1).max(200)
+    .refine((v) => v.split(",").map((t) => t.trim()).filter(Boolean).length <= 8, { message: "employeeType accepts at most 8 values" })
+    .optional(),
   // GAP-HR-EMPLOYEES-06: optional server-side status filter (canonical
   // lowercase EMPLOYEE_STATUSES) -- e.g. ?status=separated lists only separated.
   status: employeeStatusEnum.optional(),

@@ -16,6 +16,17 @@ const listQuerySchema = z.object({
 
 const idParam = z.object({ id: z.string().uuid() });
 
+/**
+ * fleet_maintenance.cost_minor is a bigint column (drizzle mode "bigint") and
+ * JSON.stringify throws on a BigInt. The shared observability preSerialization
+ * hook (jsonSafe) already stringifies bigints globally, so this does not change
+ * the wire format; it makes the contract explicit here (decimal string of minor
+ * units, null when no cost was recorded) instead of depending on that hook.
+ */
+export function serializeMaintenance<T extends { costMinor: bigint | null }>(row: T): Omit<T, "costMinor"> & { costMinor: string | null } {
+  return { ...row, costMinor: row.costMinor === null ? null : row.costMinor.toString() };
+}
+
 export async function fleetRoutes(app: FastifyInstance): Promise<void> {
   // ── Vehicles ────────────────────────────────────────────────────────────
 
@@ -122,7 +133,7 @@ export async function fleetRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req); requireRole(ctx, READER);
     const q = listQuerySchema.parse(req.query);
     const rows = await repo.listMaintenanceByTenant(ctx.tenantId, { limit: q.limit, offset: q.offset });
-    return reply.send({ data: rows, limit: q.limit, offset: q.offset });
+    return reply.send({ data: rows.map(serializeMaintenance), limit: q.limit, offset: q.offset });
   });
 
   app.patch("/v1/assets/fleet/maintenance/:id/complete", async (req, reply) => {

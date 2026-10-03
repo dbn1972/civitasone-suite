@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mapInterns } from "./internsModel";
+import { mapInterns, INTERN_TYPES_QUERY, INTERNS_PAGE_LIMIT, isRegisterCapped } from "./internsModel";
 
 const emp = (id: string, employeeType: string) => ({ id, name: "N" + id, department: "D", employeeType, status: "active" });
 
@@ -30,5 +30,19 @@ describe("mapInterns (GAP-HR-WORKFORCE-INTERNS-01)", () => {
   it("is a dash when stipend is absent (not ₹0.00)", () => {
     const rows = mapInterns([emp("a", "apprentice")], [{ apprenticeId: "a", status: "active" }]);
     expect(rows[0]!.stipend).toBe("—");
+  });
+});
+
+describe("server-side type filter + cap (GAP-HR-INTERNS-03)", () => {
+  it("INTERN_TYPES_QUERY carries every type mapInterns accepts", () => {
+    const sent = INTERN_TYPES_QUERY.split(",");
+    for (const t of ["intern", "apprentice", "internship", "apprenticeship"]) {
+      expect(sent).toContain(t);
+      expect(mapInterns([emp("x", t.toUpperCase())], [])).toHaveLength(1);
+    }
+  });
+  it("flags a full page as capped, a short page as complete", () => {
+    expect(isRegisterCapped(INTERNS_PAGE_LIMIT)).toBe(true);
+    expect(isRegisterCapped(INTERNS_PAGE_LIMIT - 1)).toBe(false);
   });
 });

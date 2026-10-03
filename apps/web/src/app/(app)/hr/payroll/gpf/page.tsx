@@ -6,6 +6,7 @@ import { MoneyChart } from "../_components/MoneyChart";
 import { toResourceState } from "../../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { formatMoney } from "@/lib/formatters";
+import { reconciliationKey, countNeedingAttention } from "../_components/reconciliation";
 import { getSessionRoles, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
 
 type GpfRow = {
@@ -17,6 +18,7 @@ type GpfRow = {
   // GAP-PAYROLL-GPF-04: null = no contribution figure in the statement
   // (rendered "—" by DataTable's formatMoney); 0 = a real zero month.
   contrib: number | null;
+  reconciliation: string;
 } & Record<string, unknown>;
 
 export default async function GpfStatementsPage() {
@@ -45,9 +47,11 @@ export default async function GpfStatementsPage() {
     employeeCode: r.employeeCode ?? "—",
     employeeName: r.employeeName ?? t("unknownEmployee"),
     period: r.period,
+    reconciliation: t(reconciliationKey(r.reconciliation)),
     contrib: r.empContribMinor ?? null,
   }));
 
+  const attentionCount = errored ? 0 : countNeedingAttention(rows);
   const uniqueEmps = errored ? null : new Set(tableRows.map((r) => r.employeeId)).size;
   const uniquePeriods = errored ? null : new Set(tableRows.map((r) => r.period)).size;
   // GAP-PAYROLL-GPF-04: totals skip missing figures (they are not zeros);
@@ -93,6 +97,12 @@ export default async function GpfStatementsPage() {
           "Projected Value at Retirement" tile (a tenant-wide contributions
           total projected 20 years at a single rate) are removed. A corpus
           belongs here only once the API returns real per-account balances. */}
+      {!errored && attentionCount > 0 && (
+        <p role="note" className="pill warn" style={{ width: "fit-content", margin: "4px 0 12px" }}>
+          {t("reconcileAttentionNote", { count: attentionCount })}
+        </p>
+      )}
+
       {!errored && missingCount > 0 && (
         <p role="note" className="pill warn" style={{ width: "fit-content", margin: "4px 0 12px" }}>
           {t("missingContribNote", { count: missingCount })}
@@ -146,6 +156,7 @@ export default async function GpfStatementsPage() {
               { key: "employeeCode", label: t("colCode") },
               { key: "period", label: t("colPeriod") },
               { key: "contrib", label: t("colContribution"), align: "right", cellType: "amount" },
+              { key: "reconciliation", label: t("colReconciliation") },
             ]}
             rows={tableRows}
             rowLinkKey="employeeId"

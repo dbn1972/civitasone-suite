@@ -55,7 +55,11 @@ export async function listByTenant(tenantId: string, limit = 100, offset = 0, em
   const conditions = [eq(hrmsEmployees.tenantId, tenantId)];
   // GAP-HR-EMPLOYEES-06: exact status match (canonical lowercase, see status.ts).
   if (status) conditions.push(eq(hrmsEmployees.status, status));
-  if (employeeType) conditions.push(eq(hrmsEmployees.employeeType, employeeType));
+  if (employeeType) {
+    // Case-insensitive, multi-value ("intern,apprentice"); a single value behaves as before.
+    const types = employeeType.split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
+    if (types.length > 0) conditions.push(inArray(sql`lower(${hrmsEmployees.employeeType})`, types));
+  }
   if (managerId) conditions.push(eq(hrmsEmployees.managerId, managerId));
   // GAP-HR-SF-06 (EntityPicker): optional free-text search over name/employee
   // number for the picker's search(q) adapter -- same tenant/manager scoping

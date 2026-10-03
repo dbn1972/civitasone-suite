@@ -324,6 +324,22 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-02 name enrichment", () => {
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(1);
   });
 
+  it("history row with an unresolvable actor shows Unknown officer, never the raw id", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: {
+        appraisal: BASE_APPRAISAL,
+        scores: [],
+        history: [{ id: "h9", toStage: "reporting_officer", actorId: "actor-raw-uuid-9", actorRole: "reporting_officer", override: false, remarks: null, createdAt: "2026-04-17T08:35:00.000Z" }],
+        actions: BASE_ACTIONS,
+      },
+    });
+    const ui = await AparDetailPage({ params: { id: "a1" } });
+    render(ui);
+    expect(screen.getByText("Unknown officer")).toBeInTheDocument();
+    expect(screen.queryByText("actor-raw-uuid-9")).not.toBeInTheDocument();
+  });
+
   it("history rows show the resolved actor name, not just actorId", async () => {
     fetchJsonMock.mockResolvedValue({
       source: "api",

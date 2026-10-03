@@ -30,6 +30,7 @@ import { orgChartRoutes }   from "./modules/orgchart/routes.js";
 import { appraisalRoutes }  from "./modules/appraisals/routes.js";
 import { feedbackRoutes } from "./modules/appraisals/feedback-routes.js";
 import { internalRoutes }   from "./modules/internal/routes.js";
+import { retirementAccountsRoutes } from "./modules/internal/retirement-accounts-routes.js";
 import { holidayRoutes } from "./modules/holidays/routes.js";
 import { leaveTypesReadRoutes } from "./modules/leave/leave-types-route.js";
 import { reportRoutes } from "./modules/reports/routes.js";
@@ -205,6 +206,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(appraisalRoutes);
   await app.register(feedbackRoutes);
   await app.register(internalRoutes);
+  await app.register(retirementAccountsRoutes);
   await app.register(holidayRoutes);
   await app.register(leaveTypesReadRoutes);
   await app.register(reportRoutes);

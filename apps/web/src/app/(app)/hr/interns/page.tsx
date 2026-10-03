@@ -4,7 +4,7 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { toHumanError } from "@/lib/messages";
-import { mapInterns, type ApiApprenticeship, type ApiEmployee, type InternRow as Row } from "./internsModel";
+import { mapInterns, isRegisterCapped, INTERN_TYPES_QUERY, INTERNS_PAGE_LIMIT, type ApiApprenticeship, type ApiEmployee, type InternRow as Row } from "./internsModel";
 import { getTranslations } from "next-intl/server";
 
 const EMPTY_APPRENTICESHIPS: ApiApprenticeship[] = [];
@@ -16,9 +16,13 @@ const EMPTY_APPRENTICESHIPS: ApiApprenticeship[] = [];
  * the stipend/period cells as an em dash and a visible "details unavailable"
  * note -- never a fabricated zero.
  */
-async function getInterns(): Promise<LoaderResult<Row[]> & { enrichmentFailed: boolean }> {
+async function getInterns(): Promise<LoaderResult<Row[]> & { enrichmentFailed: boolean; capped: boolean }> {
+  // GAP-HR-INTERNS-03: the intern/apprentice filter used to run client-side
+  // over the first 200 employees of the whole tenant, so on any larger
+  // workforce the register silently omitted interns. One server-side request
+  // now filters on every type the model accepts (multi-value, case-insensitive).
   const [emps, appr] = await Promise.all([
-    fetchJson<unknown, ApiEmployee[]>("/api/v1/hrms/employees?limit=200", [], {
+    fetchJson<unknown, ApiEmployee[]>(`/api/v1/hrms/employees?employeeType=${INTERN_TYPES_QUERY}&limit=${INTERNS_PAGE_LIMIT}`, [], {
       telemetryKey: "hr.interns",
       mapResponse: (p) => {
         const arr = Array.isArray(p) ? p : (p as { data?: ApiEmployee[] })?.data;
@@ -36,8 +40,9 @@ async function getInterns(): Promise<LoaderResult<Row[]> & { enrichmentFailed: b
   return {
     data: mapInterns(emps.data, appr.data),
     source: emps.source,
+    capped: isRegisterCapped(emps.data.length),
     enrichmentFailed: appr.source === "error",
-  } as LoaderResult<Row[]> & { enrichmentFailed: boolean };
+  } as LoaderResult<Row[]> & { enrichmentFailed: boolean; capped: boolean };
 }
 
 const EMPLOYEE_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
@@ -62,7 +67,7 @@ export default async function InternsPage() {
   if (!roles.some((r: string) => INTERNS_VIEW_ROLES.includes(r))) {
     return <PermissionDenied module="the interns register" requiredRoles={INTERNS_VIEW_ROLES} backHref="/hr" backLabel="Back to HR" />;
   }
-  const { data: items, source, enrichmentFailed } = await getInterns();
+  const { data: items, source, enrichmentFailed, capped } = await getInterns();
   const errored = source === "error";
   const canAdd = roles.some((r: string) => EMPLOYEE_ADMIN_ROLES.includes(r));
 
@@ -94,6 +99,9 @@ export default async function InternsPage() {
       <DataSourceBadge source={source} />
       {!errored && enrichmentFailed && (
         <p role="status" className="pill warn" style={{ margin: "0 0 12px" }}>{t("detailsUnavailable")}</p>
+      )}
+      {!errored && capped && (
+        <p role="status" className="pill warn" style={{ margin: "0 0 12px" }}>{t("cappedNotice", { count: INTERNS_PAGE_LIMIT })}</p>
       )}
       <StatGrid>
         <StatCard icon="🎓" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalLabel")} value={errored ? "—" : items.length} />

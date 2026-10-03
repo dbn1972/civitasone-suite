@@ -193,10 +193,10 @@ export default async function AparDetailPage({
     overrideLabel: h.override ? t("overrideYes") : "",
   }));
 
-  // GAP-HR-APAR-DETAIL-04: never a raw actor UUID -- a plain '—' when this
+  // GAP-HR-APAR-DETAIL-04: never a raw actor UUID -- "Unknown officer" when this
   // tenant's directory has no name for that id, same fallback convention as
   // the appraisal-level names below.
-  const historyRowsWithActorName = historyRows.map((h) => ({ ...h, actorName: h.actorName ?? "—" }));
+  const historyRowsWithActorName = historyRows.map((h) => ({ ...h, actorName: h.actorName ?? t("unknownOfficer") }));
 
   const HISTORY_COLS = [
     { key: "toStage" as const,      label: t("colStage"), cellType: "status" as const },

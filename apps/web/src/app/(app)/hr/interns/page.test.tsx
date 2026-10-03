@@ -30,6 +30,32 @@ beforeEach(() => {
   mockRoles = ["hr_admin"];
 });
 
+describe("/hr/interns server-side type filter (GAP-HR-INTERNS-03)", () => {
+  it("makes one employees request carrying every accepted type and a limit the schema allows (<=500)", async () => {
+    render(await InternsPage());
+    const urls = fetchJsonMock.mock.calls.map((c) => String(c[0])).filter((u) => u.includes("/employees"));
+    expect(urls).toHaveLength(1);
+    const sp = new URL(urls[0], "http://x").searchParams;
+    expect(sp.get("employeeType")?.split(",").sort()).toEqual(["apprentice", "apprenticeship", "intern", "internship"]);
+    expect(Number(sp.get("limit"))).toBeLessThanOrEqual(500);
+  });
+
+  it("shows no cap notice for a short page", async () => {
+    render(await InternsPage());
+    expect(screen.queryByText(/Showing the first/)).toBeNull();
+  });
+
+  it("shows the visible 'showing first N' notice when the page hit its cap (D5)", async () => {
+    const many = Array.from({ length: 500 }, (_, i) => ({ id: `e${i}`, name: `Intern ${i}`, department: "IT", employeeType: "intern", status: "active" }));
+    fetchJsonMock.mockImplementation(async (url: string, fallback: unknown, o: { mapResponse?: (p: unknown) => unknown }) => {
+      if (String(url).includes("/apprenticeships")) return { source: "api", data: [] };
+      return { source: "api", data: o.mapResponse ? o.mapResponse({ data: many }) : fallback };
+    });
+    render(await InternsPage());
+    expect(screen.getByText(/Showing the first {count} matching employees only/)).toBeInTheDocument();
+  });
+});
+
 describe("/hr/interns role gate (GAP-HR-INTERNS-04)", () => {
   it("shows PermissionDenied to a plain employee and never fetches the register", async () => {
     mockRoles = ["employee"];

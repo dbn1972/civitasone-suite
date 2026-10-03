@@ -35,6 +35,17 @@ export type InternRow = {
 } & Record<string, unknown>;
 
 const INTERN_TYPES = new Set(["intern", "apprentice", "internship", "apprenticeship"]);
+
+/** Server-side filter value covering every type mapInterns accepts (the API matches case-insensitively). */
+export const INTERN_TYPES_QUERY = [...INTERN_TYPES].join(",");
+
+/** Page size requested from the employees API (listQuerySchema max is 500). */
+export const INTERNS_PAGE_LIMIT = 500;
+
+/** The API returned a full page, so more matching employees may exist beyond it (hasMore === length === limit). */
+export function isRegisterCapped(fetchedCount: number): boolean {
+  return fetchedCount >= INTERNS_PAGE_LIMIT;
+}
 const DASH = "—";
 
 /** Pick the engagement to show per apprentice: the active one, else the latest-starting. */
@@ -49,6 +60,20 @@ function pickEngagements(list: readonly ApiApprenticeship[]): Map<string, ApiApp
     else if (aActive === curActive && (a.trainingStart ?? "") > (cur.trainingStart ?? "")) byId.set(a.apprenticeId, a);
   }
   return byId;
+}
+
+/** Union of the per-type employee lists, de-duplicated by id (first occurrence wins). */
+export function mergeEmployees(...lists: readonly (readonly ApiEmployee[])[]): ApiEmployee[] {
+  const seen = new Set<string>();
+  const out: ApiEmployee[] = [];
+  for (const list of lists) {
+    for (const e of list) {
+      if (seen.has(e.id)) continue;
+      seen.add(e.id);
+      out.push(e);
+    }
+  }
+  return out;
 }
 
 export function mapInterns(employees: readonly ApiEmployee[], apprenticeships: readonly ApiApprenticeship[]): InternRow[] {
