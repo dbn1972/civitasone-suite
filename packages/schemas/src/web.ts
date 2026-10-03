@@ -2454,6 +2454,7 @@ export const BudgetOutcomeSummarySchema = z.object({
   outcomeDesc: z.string(),
   indicator: z.string(),
   unit: z.string(),
+  polarity: z.string().optional(),
   baselineValue: z.string(),
   targetValue: z.string(),
   achievedValue: z.string(),
@@ -2602,6 +2603,7 @@ export const CashBookEntrySchema = z.object({
   bank_or_cash: z.string(),
   reference: z.string().nullable(),
   created_at: z.string(),
+  journal_id: z.string().nullable().optional(),
 });
 export const CashBookEntryListSchema = z.array(CashBookEntrySchema);
 

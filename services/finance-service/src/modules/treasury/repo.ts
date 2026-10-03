@@ -1,4 +1,4 @@
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, asc } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { financeHeads } from "../budget/schema.js";
 import {
@@ -69,6 +69,19 @@ export async function listDepositsByTenant(tenantId: string, limit: number, offs
     .orderBy(desc(financeDeposits.createdAt))
     .limit(limit)
     .offset(offset));
+}
+
+export async function findDepositByIdAndTenant(id: string, tenantId: string): Promise<DepositRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(financeDeposits)
+    .where(and(eq(financeDeposits.id, id), eq(financeDeposits.tenantId, tenantId))).limit(1));
+  return rows[0] ?? null;
+}
+
+/** Ledger of a deposit: its refund / forfeit / adjustment events, oldest first (stable by id). */
+export async function listDepositEvents(tenantId: string, depositId: string) {
+  return scopedRead((tx) => tx.select().from(financeDepositEvents)
+    .where(and(eq(financeDepositEvents.tenantId, tenantId), eq(financeDepositEvents.depositId, depositId)))
+    .orderBy(asc(financeDepositEvents.createdAt), asc(financeDepositEvents.id)));
 }
 
 export async function insertChallan(tx: Writer, row: ChallanInsert): Promise<void> {

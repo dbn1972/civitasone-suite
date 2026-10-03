@@ -9,6 +9,8 @@ export type SummaryRow = {
 export type LedgerRow = {
   id: string;
   invoice_id: string;
+  /** True when invoice_id is a bill of this tenant (finance-service verified), so it can be linked. */
+  invoice_is_bill?: boolean;
   invoice_no: string;
   invoice_date: string;
   party_gstin: string;

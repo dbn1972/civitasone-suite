@@ -6,6 +6,8 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 
 const log = pino({ name: "finance.dashboard.consumer" });
 const AUDIT_TOPIC = "audit.event.record";
+/** GAP-FINANCE-DASHBOARD-06: audit-on-export of the MIS CSV. */
+export const MIS_EXPORT_TOPIC = "finance.dashboard.mis_export_record";
 
 export function registerDashboardConsumers(queue: Queue): void {
   queue.subscribe("finance.dashboard.refresh", async (msg) => {
@@ -21,5 +23,18 @@ export function registerDashboardConsumers(queue: Queue): void {
     // Keys are dashboard:summary:<fy|all> (one per FY) -- invalidate by prefix so every FY entry goes.
     await cache.invalidateResource(p.tenantId, "dashboard");
     log.info({ id: msg.messageId }, "Processed dashboard.refresh");
+  });
+
+  queue.subscribe(MIS_EXPORT_TOPIC, async (msg) => {
+    const p = msg.payload as { fy: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await enqueue(tx as Parameters<typeof enqueue>[0], {
+        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { service: "finance", action: "export", resourceType: "finance_mis", resourceId: p.fy, outcome: "success" },
+      });
+    });
+    log.info({ id: msg.messageId }, "Processed dashboard.mis_export_record");
   });
 }

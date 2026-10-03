@@ -57,6 +57,12 @@ describe("formatClosedBy (GAP-FINANCE-PERIOD-CLOSE-06)", () => {
       title: "11111111-1111-1111-1111-111111111111",
     });
   });
+  it("shows the server-resolved name (never the id) and keeps the id as the title", () => {
+    expect(formatClosedBy("11111111-1111-1111-1111-111111111111", "Asha Verma")).toEqual({
+      text: "Asha Verma",
+      title: "11111111-1111-1111-1111-111111111111",
+    });
+  });
   it("keeps a real name and dashes a missing value", () => {
     expect(formatClosedBy("A. Verma")).toEqual({ text: "A. Verma" });
     expect(formatClosedBy(null)).toEqual({ text: "—" });

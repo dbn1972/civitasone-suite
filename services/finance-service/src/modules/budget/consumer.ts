@@ -405,12 +405,14 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
       id: string; tenantId: string; headId: string; fy: string;
       allocationId: string | null; schemeId: string | null;
       outputDesc: string; outcomeDesc: string; indicator: string; unit: string;
+      polarity?: "higher_is_better" | "lower_is_better";
       baselineValue: number; targetValue: number; allocatedMinor: number;
       currency: string; effectiveFrom: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await outcomeRepo.insertOutcome(tx, {
+        polarity: p.polarity ?? "higher_is_better",
         id: p.id, tenantId: p.tenantId, headId: p.headId, fy: p.fy,
         allocationId: p.allocationId, schemeId: p.schemeId,
         outputDesc: p.outputDesc, outcomeDesc: p.outcomeDesc,
@@ -437,7 +439,7 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
         throw new DomainError("OUTCOME_ALREADY_EVALUATED", `achievement is locked once the outcome is ${row.status}`);
       }
       await outcomeRepo.updateOutcome(tx, p.id, {
-        achievedValue: BigInt(p.achievedValue), updatedBy: msg.actorId,
+        achievedValue: BigInt(p.achievedValue), achievementRecorded: true, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "record_achievement", "budget_outcome", p.id);
     });
@@ -454,7 +456,7 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
       if (!row) throw new NonRetryableError(`[finance/budget] entity ${p.id} not found for tenant ${p.tenantId}`);
       assertEvaluatorDistinct(row.createdBy, msg.actorId);
       const rating = classifyAchievement(
-        { targetValue: row.targetValue, baselineValue: row.baselineValue },
+        { targetValue: row.targetValue, baselineValue: row.baselineValue, polarity: row.polarity as "higher_is_better" | "lower_is_better" },
         row.achievedValue,
       );
       await outcomeRepo.updateOutcome(tx, p.id, {
@@ -470,6 +472,39 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
         },
       });
       await audit(tx, msg, "evaluate", "budget_outcome", p.id);
+    });
+  });
+
+  // GAP-FINANCE-BUDGET-DEMAND-GRANTS-04: replace a draft demand's head-wise lines.
+  // The demand row is locked FOR UPDATE and status/total re-checked in the same
+  // transaction, so concurrent edits or an edit racing a status change cannot both land.
+  sub(COMMANDS.demandLinesSet, async (msg) => {
+    const dl = await import("./demand-lines.js");
+    const p = msg.payload as { tenantId: string; demandId: string; lines: Array<{ headCode: string; amountMinor: string }> };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      try {
+        await dl.replaceDemandLinesTx(tx as Parameters<typeof dl.replaceDemandLinesTx>[0], {
+          tenantId: p.tenantId, demandId: p.demandId, actorId: msg.actorId,
+          lines: p.lines.map((l) => ({ headCode: l.headCode, amountMinor: BigInt(l.amountMinor) })),
+        });
+      } catch (err) {
+        if (err instanceof dl.DemandLinesError) {
+          // Lost a concurrent edit or the demand changed state: replaceDemandLinesTx throws before it writes, so
+          // nothing is applied. Record the rejection (visible in the audit trail) instead of dropping it silently.
+          await enqueue(tx, {
+            topic: "audit.event.record", eventType: "audit.event.record",
+            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: {
+              service: "finance", action: "set_lines_rejected", resourceType: "demand_grant", resourceId: p.demandId,
+              outcome: "failure", details: { code: err.code, message: err.message },
+            },
+          });
+          return;
+        }
+        throw err;
+      }
+      await audit(tx, msg, "set_lines", "demand_grant", p.demandId);
     });
   });
 

@@ -2,8 +2,13 @@ import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getFinanceChallans } from "@/app/_data/loaders";
 import { challanStatusCounts } from "@/lib/finance/challanRegister";
 import { ChallansTable } from "./ChallansTable";
+import Link from "next/link";
+import { getTranslations } from "next-intl/server";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { canWrite } from "@/lib/finance/writeRoles";
 
 export default async function ChallansPage() {
+  const t = await getTranslations("financeChallansNew");
   const { data: challans, source } = await getFinanceChallans();
   // GAP-FINANCE-REVENUE-CHALLANS-03: count the real statuses (pending |
   // deposited | reconciled); anything else is "Other", so the cards sum to Total.
@@ -12,7 +17,14 @@ export default async function ChallansPage() {
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       {/* GAP-FINANCE-REVENUE-CHALLANS-05: the subtitle states only what the table shows. */}
-      <PageHeader title="Challan Register" subtitle="Government challans and deposit status." back="/finance" />
+      <PageHeader
+        title="Challan Register"
+        subtitle="Government challans and deposit status."
+        back="/finance"
+        actions={canWrite(getSessionRoles(), ["finance_officer", "finance_admin", "super_admin"]) ? (
+          <Link href="/finance/revenue/challans/new" className="btn primary">{t("recordAction")}</Link>
+        ) : null}
+      />
       <StatGrid>
         <StatCard icon="📄" iconBg="#e7edfd" label="Total Challans" value={counts.total} />
         <StatCard icon="⏳" iconBg="#fffaeb" label="Pending" value={counts.pending} />

@@ -14,6 +14,17 @@ export function withUnit(value: unknown, unit: unknown): string {
 }
 
 const FORMULA = "(achieved − baseline) ÷ (target − baseline)";
+const FORMULA_LOWER = "(baseline − achieved) ÷ (baseline − target); a reading at or below the target scores 100%";
+
+/** GAP-FINANCE-BUDGET-OUTCOME-BUDGET-02: the formula that applies to this indicator's polarity. */
+export function formulaFor(polarity: unknown): string {
+  return polarity === "lower_is_better" ? FORMULA_LOWER : FORMULA;
+}
+
+/** "Lower is better" marker shown beside the target so a lower reading is not misread as a shortfall. */
+export function polarityNote(polarity: unknown): string | null {
+  return polarity === "lower_is_better" ? "Lower is better" : null;
+}
 
 export function OutcomeBudgetTable({ outcomes, source = "api" }: { outcomes: Row[]; source?: "api" | "error" }) {
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<Row[]>("finance.outcome-budget", outcomes, source, (d) => d.length === 0);
@@ -29,7 +40,12 @@ export function OutcomeBudgetTable({ outcomes, source = "api" }: { outcomes: Row
         columns={[
           { key: "outcomeDesc", label: "Outcome" },
           { key: "indicator", label: "Output Indicator" },
-          { key: "targetValue", label: "Target", align: "right", render: (o) => <span style={{ fontVariantNumeric: "tabular-nums" }}>{withUnit(o.targetValue, o.unit)}</span>, csv: (o) => String(o.targetValue ?? "") },
+          { key: "targetValue", label: "Target", align: "right", render: (o) => (
+            <span style={{ fontVariantNumeric: "tabular-nums" }}>
+              {withUnit(o.targetValue, o.unit)}
+              {polarityNote(o.polarity) ? <small style={{ display: "block", color: "var(--ink2)" }}>{polarityNote(o.polarity)}</small> : null}
+            </span>
+          ), csv: (o) => String(o.targetValue ?? "") },
           { key: "achievedValue", label: "Achieved", align: "right", render: (o) => <span style={{ fontVariantNumeric: "tabular-nums" }}>{withUnit(o.achievedValue, o.unit)}</span>, csv: (o) => String(o.achievedValue ?? "") },
           {
             key: "achievementBps",
@@ -43,7 +59,7 @@ export function OutcomeBudgetTable({ outcomes, source = "api" }: { outcomes: Row
               if (bps === null) return <span title="No measurement recorded yet">—</span>;
               const pct = bps / 100;
               return (
-                <span title={`Achievement = ${FORMULA}`} style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: 120, justifyContent: "flex-end" }}>
+                <span title={`Achievement = ${formulaFor(o.polarity)}`} style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: 120, justifyContent: "flex-end" }}>
                   <span style={{ width: 64 }}><ProgressBar value={pct} /></span>
                   <span style={{ fontVariantNumeric: "tabular-nums" }}>{pct.toFixed(1)}%</span>
                 </span>

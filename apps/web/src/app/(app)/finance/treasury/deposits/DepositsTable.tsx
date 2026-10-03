@@ -35,6 +35,8 @@ export function DepositsTable({ deposits, source = "api" }: { deposits: Deposit[
         ]}
         // Deposit type shown (and exported) as its name, not the raw pd/emd/sd/fdr code.
         rows={rows.map((r) => ({ ...r, type: depositTypeLabel(r.type) }))}
+        rowLinkKey="id"
+        rowLinkPrefix="/finance/treasury/deposits/"
         sortable
         filterable
         filterPlaceholder="Search deposits…"

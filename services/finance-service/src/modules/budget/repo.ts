@@ -131,6 +131,43 @@ export async function listHeads(tenantId: string, limit: number, search?: string
   return scopedRead((tx) => tx.select().from(financeHeads).where(where).limit(limit));
 }
 
+/**
+ * GAP-FINANCE-JOURNAL-ENTRY-04: which of these account references (head code or
+ * head id) are control accounts. Used to bar manual journals from posting to a
+ * sub-ledger-controlled head. findControlAccountRefs opens its own tenant-scoped
+ * read; findControlAccountRefsTx reads through the caller's open transaction.
+ */
+function controlRefsWhere(tenantId: string, unique: string[]) {
+  return and(
+    eq(financeHeads.tenantId, tenantId),
+    eq(financeHeads.isControl, true),
+    or(inArray(financeHeads.code, unique), sql`${financeHeads.id}::text IN (${sql.join(unique.map((u) => sql`${u}`), sql`, `)})`),
+  );
+}
+
+function matchedRefs(rows: Array<{ id: string; code: string }>, unique: string[]): string[] {
+  const hit = new Set<string>();
+  for (const r of rows) {
+    if (unique.includes(r.code)) hit.add(r.code);
+    if (unique.includes(r.id)) hit.add(r.id);
+  }
+  return [...hit];
+}
+
+export async function findControlAccountRefs(tenantId: string, refs: string[]): Promise<string[]> {
+  const unique = [...new Set(refs)];
+  if (unique.length === 0) return [];
+  const rows = await scopedRead((t) => t.select({ id: financeHeads.id, code: financeHeads.code }).from(financeHeads).where(controlRefsWhere(tenantId, unique)));
+  return matchedRefs(rows, unique);
+}
+
+export async function findControlAccountRefsTx(tx: Writer, tenantId: string, refs: string[]): Promise<string[]> {
+  const unique = [...new Set(refs)];
+  if (unique.length === 0) return [];
+  const rows = await (tx as typeof db).select({ id: financeHeads.id, code: financeHeads.code }).from(financeHeads).where(controlRefsWhere(tenantId, unique));
+  return matchedRefs(rows, unique);
+}
+
 export async function listSanctionsByTenant(tenantId: string, limit: number, offset = 0): Promise<SanctionRow[]> {
   return scopedRead((tx) => tx.select().from(financeSanctions)
     .where(eq(financeSanctions.tenantId, tenantId))

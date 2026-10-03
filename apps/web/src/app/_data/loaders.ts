@@ -737,6 +737,7 @@ function mapAccounts(payload: unknown): AccountSummary[] | null {
       code, name, type, currency, balanceDisplay, status,
       ...(id ? { id } : {}),
       ...(parentId ? { parentId } : {}),
+      ...(row.isControl === true ? { isControl: true } : {}),
     });
   }
   return mapped.length > 0 ? mapped : null;

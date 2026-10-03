@@ -24,6 +24,8 @@ export function DemandGrantsTable({ grants, source = "api" }: { grants: Row[]; s
           { key: "status", label: "Status", cellType: "status" },
         ]}
         rows={rows}
+        rowLinkKey="id"
+        rowLinkPrefix="/finance/budget/demand-grants/"
         sortable
         filterable
         filterPlaceholder="Search demands…"

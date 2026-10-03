@@ -6,8 +6,10 @@ import { toHumanError } from "@/lib/messages";
 import type { FinanceAuditParaSummary } from "@civitasone/types";
 import { auditParaTone } from "./auditParaTone";
 import { auditParaStats } from "./auditParaStats";
+import { respondHref } from "./auditParaRowAction";
+import Link from "next/link";
 type Row = FinanceAuditParaSummary;
-export function AuditParasTable({ paras, source = "api" }: { paras: Row[]; source?: "api" | "error" }) {
+export function AuditParasTable({ paras, source = "api", canRespond = false }: { paras: Row[]; source?: "api" | "error"; canRespond?: boolean }) {
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<Row[]>("finance.audit-paras", paras, source, (d) => d.length === 0);
 
   // GAP-FINANCE-AUDIT-PARAS-02: a failed load with nothing cached must not read
@@ -43,6 +45,17 @@ export function AuditParasTable({ paras, source = "api" }: { paras: Row[]; sourc
               key: "status",
               label: "Status",
               render: (r) => <StatusPill status={r.status} variant={auditParaTone(r.status)} />,
+            },
+            // GAP-FINANCE-AUDIT-PARAS-05: a link to the para (where the reply is recorded), not an inline mutation.
+            {
+              key: "id",
+              label: "Action",
+              sortable: false,
+              render: (r) => {
+                const href = respondHref(r.id, r.status, canRespond);
+                return href ? <Link href={href} aria-label={`Respond to audit para ${r.paraNo}`}>Respond</Link> : null;
+              },
+              csv: () => "",
             },
           ]}
           rows={rows}

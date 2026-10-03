@@ -55,3 +55,17 @@ export function assertJournalHasAmount(lines: JournalLine[]): void {
     );
   }
 }
+
+/**
+ * GAP-FINANCE-JOURNAL-ENTRY-04: a manual journal may not post to a control
+ * account (a head maintained by a sub-ledger) -- doing so bypasses the
+ * sub-ledger and desynchronises it from the GL.
+ */
+export function assertNoControlAccounts(controlRefs: readonly string[]): void {
+  if (controlRefs.length > 0) {
+    throw new DomainError(
+      "CONTROL_ACCOUNT",
+      `manual journals cannot post to control account(s): ${controlRefs.join(", ")}`,
+    );
+  }
+}

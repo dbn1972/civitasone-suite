@@ -1,5 +1,5 @@
 import {
-  pgSchema, uuid, text, integer, bigint, char, varchar, timestamp, date,
+  pgSchema, uuid, text, integer, bigint, char, varchar, timestamp, date, boolean,
 } from "drizzle-orm/pg-core";
 
 // Reuse the existing "budget" pg schema namespace.
@@ -22,6 +22,10 @@ export const financeBudgetOutcomes = budgetOutcomeSchema.table("finance_budget_o
   outcomeDesc:     text("outcome_desc").notNull(), // the intended impact
   indicator:       text("indicator").notNull(),    // measurable indicator
   unit:            text("unit").notNull(),         // unit of measure
+  polarity:        varchar("polarity", { length: 24 }).notNull().default("higher_is_better"),
+  // false until a reading is recorded: a 0 reading is the BEST score for a
+  // lower_is_better indicator, so "no measurement yet" needs its own flag.
+  achievementRecorded: boolean("achievement_recorded").notNull().default(false),
   baselineValue:   bigint("baseline_value", { mode: "bigint" }).notNull().default(0n),
   targetValue:     bigint("target_value", { mode: "bigint" }).notNull(),
   achievedValue:   bigint("achieved_value", { mode: "bigint" }).notNull().default(0n),

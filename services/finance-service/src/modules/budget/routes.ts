@@ -16,11 +16,25 @@ import { createBudgetBody, reappropriateBody, createSanctionBody, budgetQueryPar
 import * as repo from "./repo.js";
 import { assertValidHeadParent, DomainError } from "./domain.js";
 import { db } from "../../shared/db.js";
+import { enqueue } from "../../shared/outbox.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 const READER_ROLES  = [...FINANCE_ROLES, "audit_officer", "procurement_officer"];
+/** Only admins may flag or un-flag a control account (it gates manual journal postings). */
+const HEAD_CONTROL_ROLES = ["finance_admin", "super_admin"];
+
+async function auditHeadControl(tx: Parameters<typeof enqueue>[0], ctx: { tenantId: string; actorId: string; correlationId: string }, headId: string, oldValue: boolean, newValue: boolean): Promise<void> {
+  await enqueue(tx, {
+    topic: "audit.event.record", eventType: "audit.event.record",
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
+    payload: {
+      service: "finance", action: "update_head_control", resourceType: "finance_head", resourceId: headId,
+      outcome: "success", details: { isControl: { old: oldValue, new: newValue } },
+    },
+  });
+}
 
 export async function budgetRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/finance/budgets", async (req, reply) => {
@@ -217,7 +231,11 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
       // GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-02: opaque parent head id (no FK
       // across services); required for level 1/2, forbidden for level 0.
       parentId:       z.string().uuid().optional(),
+      // GAP-FINANCE-JOURNAL-ENTRY-04: mark a sub-ledger-controlled head (no manual journal postings).
+      isControl:      z.boolean().default(false),
     }).parse(req.body);
+    // Flagging a head as a control account gates manual journals, so it is an admin-only control change.
+    if (body.isControl) requireRole(ctx, HEAD_CONTROL_ROLES);
     const parent = body.parentId ? await repo.findHeadByIdAndTenant(body.parentId, ctx.tenantId) : null;
     try {
       assertValidHeadParent(body.level, body.parentId !== undefined, parent);
@@ -232,8 +250,10 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
         code: body.code, name: body.name, level: body.level,
         hoaCode: body.hoaCode ?? null, classification: body.classification ?? null,
         parentId: body.parentId ?? null,
+        isControl: body.isControl,
         createdBy: ctx.actorId, updatedBy: ctx.actorId,
       });
+      if (body.isControl) await auditHeadControl(tx, ctx, id, false, true);
     });
     return reply.code(201).send({
       id, code: body.code, name: body.name, level: body.level, parentId: body.parentId ?? null, status: "created",
@@ -248,14 +268,24 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({
       name:           z.string().min(2).max(200).optional(),
       classification: z.enum(["asset", "liability", "equity", "income", "expense"]).optional(),
+      isControl:      z.boolean().optional(),
     }).parse(req.body);
     const head = await repo.findHeadByIdAndTenant(id, ctx.tenantId);
     if (!head) throw new HttpError(404, "NOT_FOUND", "budget head not found");
+    // Changing isControl alters which journals are accepted: admin-only, audited with old and new value.
+    const changesControl = body.isControl !== undefined && body.isControl !== head.isControl;
+    if (changesControl) requireRole(ctx, HEAD_CONTROL_ROLES);
     const patch: Record<string, unknown> = { updatedBy: ctx.actorId };
     if (body.name) patch.name = body.name;
     if (body.classification) patch.classification = body.classification;
+    if (body.isControl !== undefined) patch.isControl = body.isControl;
     await db.transaction(async (tx) => {
+      // Re-read the old value inside the transaction so the audit records what was actually replaced.
+      const before = changesControl ? await repo.findHeadByIdTx(tx, id) : null;
       await repo.updateHead(tx, id, patch as Parameters<typeof repo.updateHead>[2]);
+      if (changesControl && before && before.isControl !== body.isControl) {
+        await auditHeadControl(tx, ctx, id, before.isControl, body.isControl === true);
+      }
     });
     return reply.send({ id, status: "updated" });
   });

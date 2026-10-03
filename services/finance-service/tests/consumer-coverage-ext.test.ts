@@ -127,6 +127,8 @@ vi.mock("../src/modules/instruments/repo.js", () => ({
   // handlers throw inside the transaction.
   insertInstrumentTx: vi.fn(async () => undefined),
   transitionTx: vi.fn(async () => true),
+  // maker-checker lookup (GAP-FINANCE-TREASURY-CHEQUES-03): no stored issuer for these random ids.
+  findIssuerTx: vi.fn(async () => null),
 }));
 
 // ─── Reappropriation eOffice mocks ──────────────────────────────────────────

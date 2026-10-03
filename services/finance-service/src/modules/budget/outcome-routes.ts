@@ -7,7 +7,7 @@ import * as repo from "./outcome-repo.js";
 import {
   assertOutcomeLinkageValid, assertAchievementValid,
   assertAchievementEditable, assertEvaluatorDistinct,
-  achievementRatioBps,
+  achievementRatioBps, type OutcomePolarity,
 } from "./outcome-domain.js";
 import { DomainError } from "./domain.js";
 import { createOutcomeBody, recordAchievementBody, evaluateOutcomeBody, outcomeQuery, idParam } from "./outcome-validators.js";
@@ -23,6 +23,7 @@ export async function budgetOutcomeRoutes(app: FastifyInstance): Promise<void> {
     const body = createOutcomeBody.parse(req.body);
     const linkage = {
       indicator: body.indicator, unit: body.unit,
+      polarity: body.polarity,
       targetValue: BigInt(body.targetValue), baselineValue: BigInt(body.baselineValue),
       allocatedMinor: BigInt(body.allocatedMinor),
     };
@@ -40,7 +41,7 @@ export async function budgetOutcomeRoutes(app: FastifyInstance): Promise<void> {
         id, tenantId: ctx.tenantId, headId: body.headId, fy: body.fy,
         allocationId: body.allocationId ?? null, schemeId: body.schemeId ?? null,
         outputDesc: body.outputDesc, outcomeDesc: body.outcomeDesc,
-        indicator: body.indicator, unit: body.unit,
+        indicator: body.indicator, unit: body.unit, polarity: body.polarity,
         baselineValue: body.baselineValue, targetValue: body.targetValue,
         allocatedMinor: body.allocatedMinor, currency: body.currency,
         effectiveFrom: body.effectiveFrom ?? new Date().toISOString().slice(0, 10),
@@ -144,7 +145,12 @@ function serialize(r: BudgetOutcomeRow) {
     baselineValue: r.baselineValue.toString(),
     targetValue: r.targetValue.toString(),
     achievedValue: r.achievedValue.toString(),
-    achievementBps: achievementRatioBps({ targetValue: r.targetValue, baselineValue: r.baselineValue }, r.achievedValue).toString(),
+    polarity: r.polarity,
+    // A lower_is_better indicator with no reading yet would score 100% (0 is its best value),
+    // so an unmeasured one reports a blank bps ("not measured"), never a fabricated score.
+    achievementBps: r.polarity === "lower_is_better" && !r.achievementRecorded
+      ? ""
+      : achievementRatioBps({ targetValue: r.targetValue, baselineValue: r.baselineValue, polarity: r.polarity as OutcomePolarity }, r.achievedValue).toString(),
     allocatedMinor: r.allocatedMinor.toString(),
     currency: r.currency,
     status: r.status,

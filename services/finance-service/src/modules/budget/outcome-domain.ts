@@ -10,7 +10,15 @@ import { DomainError } from "./domain.js";
 export type OutcomeStatus = "draft" | "active" | "evaluated" | "closed";
 export type OutcomeRating = "not_achieved" | "at_risk" | "on_track" | "achieved";
 
+/**
+ * GAP-FINANCE-BUDGET-OUTCOME-BUDGET-02: which direction is "better". Days, cost
+ * and error-rate indicators are lower_is_better (baseline ABOVE target, e.g.
+ * 60 days -> 30 days); output counts are higher_is_better (baseline BELOW target).
+ */
+export type OutcomePolarity = "higher_is_better" | "lower_is_better";
+
 export interface OutcomeLinkage {
+  polarity?: OutcomePolarity;
   indicator: string;
   unit: string;
   targetValue: bigint;    // measurable target (e.g. 1200 = 1200 km of road)
@@ -22,14 +30,18 @@ const BPS = 10_000n; // 100.00% expressed in basis points
 
 /**
  * Achievement ratio in basis points (integer, no float) relative to the target,
- * net of the baseline. `(achieved - baseline) / (target - baseline) * 10000`.
- * Clamped at 0 (negative progress reads as 0). Returns 10000 (=100%) when the
- * target equals the baseline (nothing left to achieve).
+ * net of the baseline. higher_is_better (default):
+ * `(achieved - baseline) / (target - baseline) * 10000`. lower_is_better:
+ * `(baseline - achieved) / (baseline - target) * 10000`, so an over-shoot (a
+ * reading below the target) reads as 100%, never as a failure.
+ * Clamped to 0..10000 (negative progress reads as 0). Returns 10000 (=100%) when
+ * the target equals the baseline (nothing left to achieve).
  */
-export function achievementRatioBps(l: Pick<OutcomeLinkage, "targetValue" | "baselineValue">, achieved: bigint): bigint {
-  const span = l.targetValue - l.baselineValue;
+export function achievementRatioBps(l: Pick<OutcomeLinkage, "targetValue" | "baselineValue" | "polarity">, achieved: bigint): bigint {
+  const lower = l.polarity === "lower_is_better";
+  const span = lower ? l.baselineValue - l.targetValue : l.targetValue - l.baselineValue;
   if (span <= 0n) return BPS;
-  const progress = achieved - l.baselineValue;
+  const progress = lower ? l.baselineValue - achieved : achieved - l.baselineValue;
   if (progress <= 0n) return 0n;
   const bps = (progress * BPS) / span;
   return bps > BPS ? BPS : bps;
@@ -42,7 +54,7 @@ export function achievementRatioBps(l: Pick<OutcomeLinkage, "targetValue" | "bas
  *   >=  50%  → at_risk
  *   <   50%  → not_achieved
  */
-export function classifyAchievement(l: Pick<OutcomeLinkage, "targetValue" | "baselineValue">, achieved: bigint): OutcomeRating {
+export function classifyAchievement(l: Pick<OutcomeLinkage, "targetValue" | "baselineValue" | "polarity">, achieved: bigint): OutcomeRating {
   const bps = achievementRatioBps(l, achieved);
   if (bps >= BPS) return "achieved";
   if (bps >= 7_500n) return "on_track";
@@ -69,7 +81,11 @@ export function assertOutcomeLinkageValid(l: OutcomeLinkage): void {
   if (l.baselineValue < 0n) {
     throw new DomainError("INVALID_OUTCOME", "baseline value must not be negative");
   }
-  if (l.baselineValue >= l.targetValue) {
+  if (l.polarity === "lower_is_better") {
+    if (l.baselineValue <= l.targetValue) {
+      throw new DomainError("INVALID_OUTCOME", "baseline must be above the target for a lower-is-better indicator");
+    }
+  } else if (l.baselineValue >= l.targetValue) {
     throw new DomainError("INVALID_OUTCOME", "baseline must be below the target");
   }
   if (l.allocatedMinor < 0n) {

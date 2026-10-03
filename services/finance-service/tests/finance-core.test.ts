@@ -285,9 +285,13 @@ describe("Cheque/DD lifecycle — issued -> presented -> cleared | bounced", () 
     return res;
   }
 
-  async function act(id: string, action: string, body?: unknown) {
+  // GAP-FINANCE-TREASURY-CHEQUES-03: clearing / dishonouring an instrument is maker-checker, so
+  // those steps are taken by a second officer (a different `sub` from the issuer in `token()`).
+  const checkerToken = () => signToken({ sub: "00000000-aaaa-4000-8000-0000000000ac", tid: SEED_TENANT, roles: ["finance_officer"], sid: "sess-core-checker" }, SECRET);
+
+  async function act(id: string, action: string, body?: unknown, tok = token()) {
     const app = await buildApp();
-    const headers: Record<string, string> = { authorization: `Bearer ${token()}` };
+    const headers: Record<string, string> = { authorization: `Bearer ${tok}` };
     if (body) headers["content-type"] = "application/json";
     const res = await app.inject({
       method: "POST", url: `/v1/finance/instruments/${id}/${action}`,
@@ -315,7 +319,7 @@ describe("Cheque/DD lifecycle — issued -> presented -> cleared | bounced", () 
     expect(presented.statusCode).toBe(200);
     expect(presented.json().status).toBe("presented");
 
-    const cleared = await act(id, "clear");
+    const cleared = await act(id, "clear", undefined, checkerToken());
     expect(cleared.statusCode).toBe(200);
     expect(cleared.json().status).toBe("cleared");
 
@@ -327,7 +331,7 @@ describe("Cheque/DD lifecycle — issued -> presented -> cleared | bounced", () 
     const issued = await issue("Beta Suppliers", 99999);
     const id = issued.json().id;
     await act(id, "present");
-    const bounced = await act(id, "bounce", { reason: "insufficient funds" });
+    const bounced = await act(id, "bounce", { reason: "insufficient funds" }, checkerToken());
     expect(bounced.statusCode).toBe(200);
     expect(bounced.json().status).toBe("bounced");
     expect(bounced.json().bounceReason).toBe("insufficient funds");
@@ -337,7 +341,7 @@ describe("Cheque/DD lifecycle — issued -> presented -> cleared | bounced", () 
     const issued = await issue("Gamma Works", 12345);
     const id = issued.json().id;
     await act(id, "present");
-    await act(id, "clear");
+    await act(id, "clear", undefined, checkerToken());
     const cancel = await act(id, "cancel");
     expect(cancel.statusCode).toBe(409);
     expect(cancel.json().code).toBe("ILLEGAL_TRANSITION");
@@ -347,8 +351,8 @@ describe("Cheque/DD lifecycle — issued -> presented -> cleared | bounced", () 
     const issued = await issue("Delta Pvt", 7777);
     const id = issued.json().id;
     await act(id, "present");
-    const first = await act(id, "clear");
-    const second = await act(id, "clear");
+    const first = await act(id, "clear", undefined, checkerToken());
+    const second = await act(id, "clear", undefined, checkerToken());
     expect(first.statusCode).toBe(200);
     expect(second.statusCode).toBe(200);
     expect(second.json().status).toBe("cleared");

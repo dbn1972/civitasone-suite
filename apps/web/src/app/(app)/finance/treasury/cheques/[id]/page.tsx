@@ -5,6 +5,8 @@ import type { FinanceInstrumentSummary } from "@civitasone/types";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { canWrite } from "@/lib/finance/writeRoles";
 import { InstrumentActions } from "./InstrumentActions";
+import { InstrumentLifecycleActions } from "./InstrumentLifecycleActions";
+import { availableLifecycleActions } from "./lifecycleUi";
 import { INSTRUMENT_WRITE_ROLES, canCancelInstrument, chequeStatusIcon, chequeStatusLabel, clearedDateLabel } from "./chequeUi";
 
 type TimelineRow = { date: string; event: string };
@@ -70,8 +72,13 @@ export default async function ChequeDetailPage({ params }: { params: { id: strin
         subtitle={cheque.payee || undefined}
         back="/finance/treasury/cheques"
         actions={
-          canCancelInstrument(cheque.status) && canWrite(getSessionRoles(), INSTRUMENT_WRITE_ROLES) ? (
-            <InstrumentActions id={cheque.id} instrumentNo={cheque.instrumentNo} />
+          canWrite(getSessionRoles(), INSTRUMENT_WRITE_ROLES) ? (
+            <>
+              {availableLifecycleActions(cheque.status).length > 0 ? (
+                <InstrumentLifecycleActions id={cheque.id} instrumentNo={cheque.instrumentNo} status={cheque.status} />
+              ) : null}
+              {canCancelInstrument(cheque.status) ? <InstrumentActions id={cheque.id} instrumentNo={cheque.instrumentNo} /> : null}
+            </>
           ) : null
         }
       />

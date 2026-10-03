@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, StatusPill, Card, EmptyState, LoadErrorState } from "@/app/_components/ds";
 import { getFinanceSchemeById } from "@/app/_data/loaders";
+import { ucRegisterHref } from "../../utilization-certificates/ucScheme";
 import { formatIndianDate, formatMoney, humanizeStatus, utilisationPercent, isOverUtilised } from "@/lib/formatters";
 
 /**
@@ -66,6 +68,14 @@ export default async function SchemeDetailPage({ params }: { params: { id: strin
           <div className="field"><span className="label">{t("fieldLastUpdated")}</span><span>{formatIndianDate(scheme.updatedAt)}</span></div>
           <div className="field"><span className="label">{t("status")}</span><StatusPill status={scheme.status} /></div>
         </div>
+      </Card>
+
+      {/* GAP-FINANCE-EXPENDITURE-SCHEME-TRACKING-DETAIL-05: links only to routes that exist. */}
+      <Card title={t("relatedTitle")} padding>
+        <ul style={{ margin: 0, paddingLeft: 18 }}>
+          <li><Link href={ucRegisterHref(scheme.name)}>{t("relatedUcs")}</Link></li>
+          <li><Link href="/finance/budget/fund-releases">{t("relatedFundReleases")}</Link></li>
+        </ul>
       </Card>
     </div>
   );

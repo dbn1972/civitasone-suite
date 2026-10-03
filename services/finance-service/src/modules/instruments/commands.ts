@@ -29,23 +29,59 @@ function serialize(row: InstrumentRow) {
 }
 export type InstrumentView = ReturnType<typeof serialize>;
 
+type AuditableAction = "issue" | "present" | "clear" | "bounce" | "cancel";
+
+/** Audit event for an instrument mutation, enqueued inside the mutation's own transaction. */
+async function auditInstrumentTx(
+  tx: Parameters<typeof enqueue>[0], ctx: RequestContext, action: AuditableAction,
+  row: Pick<InstrumentRow, "id" | "instrumentType" | "instrumentNo">, fromStatus: string | null, toStatus: string,
+): Promise<void> {
+  await enqueue(tx, {
+    topic: "audit.event.record", eventType: "audit.event.record",
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
+    payload: {
+      service: "finance", action, resourceType: "instrument", resourceId: row.id, outcome: "success",
+      details: { instrumentType: row.instrumentType, instrumentNo: row.instrumentNo, fromStatus, toStatus },
+    },
+  });
+}
+
+/**
+ * GAP-FINANCE-TREASURY-CHEQUES-03: maker != checker. The officer who issued an
+ * instrument may not also record its clearance or dishonour -- the bank outcome
+ * of a payment instrument is confirmed by a second person. Always enforced, with
+ * no switch (a deployment-wide off-switch would disable the control for every
+ * tenant); any per-tenant opt-out belongs on the tenant finance policy.
+ */
+export function assertInstrumentChecker(issuerId: string, actorId: string): void {
+  if (issuerId === actorId) {
+    throw new HttpError(403, "MAKER_CHECKER_VIOLATION",
+      "the officer who issued this instrument cannot also record its clearance or dishonour (maker-checker)");
+  }
+}
+
 /** Issue a cheque/DD. Idempotent on (tenant, type, number). */
 export async function issueInstrument(ctx: RequestContext, body: IssueInstrumentBody): Promise<InstrumentView> {
   const issueDate = body.issueDate ?? new Date().toISOString().slice(0, 10);
-  const { row } = await repo.insertInstrument({
-    tenantId: ctx.tenantId,
-    instrumentType: body.instrumentType,
-    instrumentNo: body.instrumentNo,
-    bankName: body.bankName,
-    payee: body.payee,
-    amountMinor: BigInt(body.amountMinor),
-    currency: body.currency,
-    issueDate,
-    status: "issued",
-    createdBy: ctx.actorId,
-    updatedBy: ctx.actorId,
-    ...(body.bankAccountId ? { bankAccountId: body.bankAccountId } : {}),
-    ...(body.paymentId ? { paymentId: body.paymentId } : {}),
+  const { row } = await db.transaction(async (tx) => {
+    const res = await repo.insertInstrumentTx(tx, {
+      tenantId: ctx.tenantId,
+      instrumentType: body.instrumentType,
+      instrumentNo: body.instrumentNo,
+      bankName: body.bankName,
+      payee: body.payee,
+      amountMinor: BigInt(body.amountMinor),
+      currency: body.currency,
+      issueDate,
+      status: "issued",
+      createdBy: ctx.actorId,
+      updatedBy: ctx.actorId,
+      ...(body.bankAccountId ? { bankAccountId: body.bankAccountId } : {}),
+      ...(body.paymentId ? { paymentId: body.paymentId } : {}),
+    });
+    // Only the request that actually creates the row is audited; an idempotent re-issue is not.
+    if (res.created) await auditInstrumentTx(tx, ctx, "issue", res.row, null, "issued");
+    return res;
   });
   // Re-issue with mismatched material terms is a conflict, not a silent no-op.
   if (!sameTerms(row, body)) {
@@ -72,7 +108,11 @@ async function load(ctx: RequestContext, id: string): Promise<InstrumentRow> {
 export async function presentInstrument(ctx: RequestContext, id: string): Promise<InstrumentView> {
   const current = await load(ctx, id);
   if (current.status === "presented") return serialize(current);
-  const updated = await repo.transition(ctx.tenantId, id, ["issued"], "presented", {}, "presentedAt", ctx.actorId);
+  const updated = await db.transaction(async (tx) => {
+    const row = await repo.transitionTx(tx, ctx.tenantId, id, ["issued"], "presented", {}, "presentedAt", ctx.actorId);
+    if (row) await auditInstrumentTx(tx, ctx, "present", row, current.status, "presented");
+    return row;
+  });
   if (!updated) throw illegal(current.status, "presented");
   return serialize(updated);
 }
@@ -81,7 +121,12 @@ export async function presentInstrument(ctx: RequestContext, id: string): Promis
 export async function clearInstrument(ctx: RequestContext, id: string): Promise<InstrumentView> {
   const current = await load(ctx, id);
   if (current.status === "cleared") return serialize(current);
-  const updated = await repo.transition(ctx.tenantId, id, ["issued", "presented"], "cleared", {}, "clearedAt", ctx.actorId);
+  assertInstrumentChecker(current.createdBy, ctx.actorId);
+  const updated = await db.transaction(async (tx) => {
+    const row = await repo.transitionTx(tx, ctx.tenantId, id, ["issued", "presented"], "cleared", {}, "clearedAt", ctx.actorId);
+    if (row) await auditInstrumentTx(tx, ctx, "clear", row, current.status, "cleared");
+    return row;
+  });
   if (!updated) throw illegal(current.status, "cleared");
   return serialize(updated);
 }
@@ -90,10 +135,15 @@ export async function clearInstrument(ctx: RequestContext, id: string): Promise<
 export async function bounceInstrument(ctx: RequestContext, id: string, body: BounceInstrumentBody): Promise<InstrumentView> {
   const current = await load(ctx, id);
   if (current.status === "bounced") return serialize(current);
-  const updated = await repo.transition(
-    ctx.tenantId, id, ["issued", "presented"], "bounced",
-    { bounceReason: body.reason ?? "dishonoured" }, "bouncedAt", ctx.actorId,
-  );
+  assertInstrumentChecker(current.createdBy, ctx.actorId);
+  const updated = await db.transaction(async (tx) => {
+    const row = await repo.transitionTx(
+      tx, ctx.tenantId, id, ["issued", "presented"], "bounced",
+      { bounceReason: body.reason ?? "dishonoured" }, "bouncedAt", ctx.actorId,
+    );
+    if (row) await auditInstrumentTx(tx, ctx, "bounce", row, current.status, "bounced");
+    return row;
+  });
   if (!updated) throw illegal(current.status, "bounced");
   return serialize(updated);
 }
