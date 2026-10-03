@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
+import { renderIntl as render } from "../testIntl";
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -104,6 +105,17 @@ describe("ProjectsAucPage", () => {
 
     const placeholders = screen.getAllByText("—");
     expect(placeholders.length).toBeGreaterThanOrEqual(4);
+  });
+});
+
+describe("mapAucRows — journal state (fp-assets-01)", () => {
+  it("carries the finance-side journal state and reads anything unknown as none", () => {
+    const row = (glPostStatus: unknown) => mapAucRows({ data: [{ id: "1", projectCode: "A", name: "N", status: "capitalized", accumulatedMinor: 1, glPostStatus }] })![0]!;
+    expect(row("pending").glPostStatus).toBe("pending");
+    expect(row("failed").glPostStatus).toBe("failed");
+    expect(row("posted").glPostStatus).toBe("posted");
+    expect(row(undefined).glPostStatus).toBe("none");
+    expect(row("weird").glPostStatus).toBe("none");
   });
 });
 

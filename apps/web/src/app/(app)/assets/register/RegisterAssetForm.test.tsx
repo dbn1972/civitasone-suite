@@ -60,6 +60,41 @@ describe("RegisterAssetForm", () => {
   });
 
   // GAP-ASSETS-REGISTER-03
+  // GAP-ASSETS-LOCATIONS-03
+  describe("location", () => {
+    const LOCS = [
+      { id: "aaaaaaaa-0000-4000-8000-000000000001", code: "BLK-A", name: "Block A", parentId: null },
+      { id: "aaaaaaaa-0000-4000-8000-000000000002", code: "BLK-A-1", name: "Floor 1", parentId: "aaaaaaaa-0000-4000-8000-000000000001" },
+    ];
+
+    it("offers the registered locations nested, and posts the chosen locationId (no free-text location)", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ id: "x" }), { status: 202 }));
+      render(<RegisterAssetForm categories={CATS} locations={LOCS} />);
+      const select = screen.getByLabelText("Location") as HTMLSelectElement;
+      expect(select.tagName).toBe("SELECT");
+      expect(screen.getByRole("option", { name: "BLK-A · Block A" })).toBeInTheDocument();
+      expect(screen.getByRole("option", { name: "— BLK-A-1 · Floor 1" })).toBeInTheDocument();
+      fill();
+      fireEvent.change(select, { target: { value: LOCS[1]!.id } });
+      fireEvent.click(screen.getByRole("button", { name: "Register asset" }));
+      await waitFor(() => expect(screen.getByText("Register this asset?")).toBeInTheDocument());
+      fireEvent.change(screen.getByLabelText("Reason / authorisation"), { target: { value: "PO-1" } });
+      fireEvent.click(screen.getAllByRole("button", { name: "Register asset" }).at(-1)!);
+      await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+      const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+      expect(body.locationId).toBe(LOCS[1]!.id);
+      expect(body.location).toBeUndefined();
+    });
+
+    it("falls back to a free-text location when none are registered, and says so when the list failed to load", () => {
+      const { rerender } = render(<RegisterAssetForm categories={CATS} locations={[]} />);
+      expect((screen.getByLabelText("Location") as HTMLElement).tagName).toBe("INPUT");
+      expect(screen.queryByText(/could not be loaded/)).not.toBeInTheDocument();
+      rerender(<RegisterAssetForm categories={CATS} locations={[]} locationsFailed />);
+      expect(screen.getByText(/location list could not be loaded/)).toBeInTheDocument();
+    });
+  });
+
   it("requires an asset code instead of inventing one", () => {
     render(<RegisterAssetForm categories={CATS} />);
     fill();

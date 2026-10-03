@@ -1,8 +1,11 @@
 import {
-  pgSchema, uuid, text, integer, bigint, char, varchar, date, timestamp,
+  pgSchema, uuid, text, integer, bigint, char, varchar, date, timestamp, jsonb,
 } from "drizzle-orm/pg-core";
 
 export const insuranceSchema = pgSchema("insurance");
+
+/** A supporting document of a claim: the upload key (see admin-service uploads) plus what the browser reported. */
+export type ClaimAttachment = { key: string; fileName: string; size: number; mimeType: string };
 
 export const assetPolicies = insuranceSchema.table("asset_policies", {
   id:                  uuid("id").primaryKey().defaultRandom(),
@@ -35,6 +38,8 @@ export const assetClaims = insuranceSchema.table("asset_claims", {
   status:             varchar("status", { length: 16 }).notNull().default("pending"),
   settledAmountMinor: bigint("settled_amount_minor", { mode: "bigint" }).notNull().default(0n),
   notes:              text("notes"),
+  // GAP-ASSETS-INSURANCE-CLAIMS-06 (migration 0038): supporting documents, as upload references.
+  attachments:        jsonb("attachments").$type<ClaimAttachment[]>().notNull().default([]),
   createdAt:          timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:          timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:          uuid("created_by").notNull(),

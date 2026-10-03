@@ -24,7 +24,8 @@
  * removed; if a future trigger blocks deletes, these inserts are tenant-scoped to
  * the dedicated TENANT_A/TENANT_B test tenants and are harmless.
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { assetSettings } from "../src/modules/enterprise/schema.js";
 import { MemoryQueue } from "@civitasone/queue";
 import { eq, inArray } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
@@ -41,6 +42,7 @@ import { queue as sharedQueue } from "../src/shared/infra.js";
 import { uuidV5 } from "../src/shared/ids.js";
 import { COMMANDS } from "../src/topics.js";
 
+const TEST_SERVICE_SECRET = process.env.INTERNAL_SERVICE_SECRET ?? "test_internal_secret_for_civitasone"; // gitleaks:allow
 const SECRET  = "test_secret_for_civitasone_32chr";
 const GL_TOPIC = "finance.gl.post";
 
@@ -454,6 +456,25 @@ describe("Impairment & Revaluation GL", () => {
     registerF3EnterpriseConsumers(sharedQueue);
     await sharedQueue.start();
 
+    // There is no default fixed-asset head: the tenant configures it (validated against finance's chart, faked here).
+    process.env.INTERNAL_SERVICE_SECRET = TEST_SERVICE_SECRET;
+    const realFetch = globalThis.fetch;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.includes("/v1/finance/accounts/system-heads")) return new Response(JSON.stringify({ accumulatedDepreciationCode: "1250" }), { status: 200 });
+      if (url.includes("/v1/finance/accounts")) {
+        const chart = [
+          { code: "1200", name: "Fixed assets", type: "asset", status: "active" },
+          { code: "5200", name: "Impairment loss", type: "expense", status: "active" },
+          { code: "3100", name: "Revaluation reserve", type: "equity", status: "active" },
+        ];
+        const q = (new URL(url).searchParams.get("q") ?? "").toLowerCase();
+        return new Response(JSON.stringify({ data: chart.filter((c) => c.code.includes(q) || c.name.toLowerCase().includes(q)) }), { status: 200 });
+      }
+      return realFetch(input, init);
+    });
+    await asTenant(TENANT_A, (tx) => tx.insert(assetSettings).values({ tenantId: TENANT_A, fixedAssetAccountCode: "1200", impairmentExpenseAccountCode: "5200", revaluationReserveAccountCode: "3100", updatedBy: ACTOR }).onConflictDoNothing());
+
     // seed the asset directly so the route can load it (book value 1,000,000)
     await asTenant(TENANT_A, (tx) => tx.insert(assetAssets).values({
       id: A_IMP, tenantId: TENANT_A, name: "Imp Asset", code: "IMP-001",
@@ -466,7 +487,23 @@ describe("Impairment & Revaluation GL", () => {
     }));
   });
 
-  afterAll(async () => { await app.close(); });
+  afterAll(async () => {
+    vi.restoreAllMocks();
+    await asTenant(TENANT_A, (tx) => tx.delete(assetSettings).where(eq(assetSettings.tenantId, TENANT_A)));
+    await app.close();
+  });
+
+  it("impairment is refused (409) while the tenant has no fixed-asset head configured", async () => {
+    await asTenant(TENANT_A, (tx) => tx.delete(assetSettings).where(eq(assetSettings.tenantId, TENANT_A)));
+    const res = await app.inject({
+      method: "POST", url: `/v1/assets/assets/${A_IMP}/impairment`,
+      headers: { authorization: `Bearer ${bearer}`, "x-tenant-id": TENANT_A, "content-type": "application/json" },
+      payload: { amountMinor: 1000, reason: "no head", eventDate: "2024-06-01" },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).code).toBe("GL_HEADS_NOT_CONFIGURED");
+    await asTenant(TENANT_A, (tx) => tx.insert(assetSettings).values({ tenantId: TENANT_A, fixedAssetAccountCode: "1200", impairmentExpenseAccountCode: "5200", revaluationReserveAccountCode: "3100", updatedBy: ACTOR }));
+  });
 
   it("impairment emits Dr 5200 / Cr 1200 and leaves accumulatedDep UNCHANGED", async () => {
     const res = await app.inject({

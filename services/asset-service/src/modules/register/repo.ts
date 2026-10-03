@@ -37,7 +37,9 @@ export async function findAssetByCode(tenantId: string, code: string): Promise<A
   return rows[0] ?? null;
 }
 
-export async function findAssetsByTenant(tenantId: string, opts?: { category?: string; status?: string; type?: string; search?: string; limit?: number; offset?: number }): Promise<AssetRow[]> {
+type AssetFilter = { category?: string; status?: string; type?: string; search?: string };
+
+function assetConditions(tenantId: string, opts?: AssetFilter): SQL[] {
   const conditions: SQL[] = [eq(assetAssets.tenantId, tenantId)];
   if (opts?.category) conditions.push(eq(assetAssets.categoryId, opts.category));
   if (opts?.status)   conditions.push(eq(assetAssets.status, opts.status));
@@ -48,6 +50,18 @@ export async function findAssetsByTenant(tenantId: string, opts?: { category?: s
     const like = `%${opts.search.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
     conditions.push(sql`(to_tsvector('simple', ${assetAssets.name} || ' ' || ${assetAssets.code}) @@ plainto_tsquery('simple', ${opts.search}) OR ${assetAssets.name} ILIKE ${like} OR ${assetAssets.code} ILIKE ${like})`);
   }
+  return conditions;
+}
+
+/** GAP-ASSETS-LIST-06: the total number of assets matching the same filters as the list (no paging). */
+export async function countAssetsByTenant(tenantId: string, opts?: AssetFilter): Promise<number> {
+  const rows = await scopedRead((tx) => tx.select({ n: sql<number>`count(*)::int` }).from(assetAssets)
+    .where(and(...assetConditions(tenantId, opts))));
+  return rows[0]?.n ?? 0;
+}
+
+export async function findAssetsByTenant(tenantId: string, opts?: AssetFilter & { limit?: number; offset?: number }): Promise<AssetRow[]> {
+  const conditions = assetConditions(tenantId, opts);
   // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
   // read — a bare db.select() runs with no RLS GUC set.
   return scopedRead((tx) => tx.select().from(assetAssets)

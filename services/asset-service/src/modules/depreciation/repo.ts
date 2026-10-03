@@ -1,4 +1,4 @@
-import { eq, and, isNull, lte, SQL } from "drizzle-orm";
+import { eq, and, isNull, lte, sql, max, SQL } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { scannerDb } from "../../shared/scanner-db.js";
 import { assetDepSchedules, assetDepEntries, type DepScheduleInsert, type DepEntryInsert, type DepScheduleRow, type DepEntryRow } from "./schema.js";
@@ -37,6 +37,43 @@ export async function findDueEntries(tenantId: string, period: string, depBook?:
   // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
   // read — a bare db.select() runs with no RLS GUC set.
   return scopedRead((tx) => tx.select().from(assetDepEntries).where(and(...conditions)).limit(limit));
+}
+
+export type PeriodBookSummary = {
+  depBook: string; pendingCount: number; pendingMinor: bigint; postedCount: number; postedMinor: bigint; lastPostedAt: Date | null;
+};
+
+/**
+ * GAP-ASSETS-DEPRECIATION-02: what a run for `period` would do (pending = unposted entries) and what
+ * is already posted, per book. Read-only; drives the preview / "already posted" state of the run page.
+ */
+export async function summarizePeriod(tenantId: string, period: string, depBook?: string): Promise<PeriodBookSummary[]> {
+  const conds: SQL[] = [eq(assetDepEntries.tenantId, tenantId), eq(assetDepEntries.period, period)];
+  if (depBook) conds.push(eq(assetDepEntries.depBook, depBook));
+  const rows = await scopedRead((tx) => tx.select({
+    depBook: assetDepEntries.depBook,
+    pendingCount: sql<number>`count(*) filter (where ${assetDepEntries.postedAt} is null)::int`,
+    pendingMinor: sql<string>`coalesce(sum(${assetDepEntries.amountMinor}) filter (where ${assetDepEntries.postedAt} is null), 0)::text`,
+    postedCount: sql<number>`count(*) filter (where ${assetDepEntries.postedAt} is not null)::int`,
+    postedMinor: sql<string>`coalesce(sum(${assetDepEntries.amountMinor}) filter (where ${assetDepEntries.postedAt} is not null), 0)::text`,
+    lastPostedAt: max(assetDepEntries.postedAt),
+  }).from(assetDepEntries).where(and(...conds)).groupBy(assetDepEntries.depBook).orderBy(assetDepEntries.depBook));
+  return rows.map((r) => ({
+    depBook: r.depBook, pendingCount: r.pendingCount, pendingMinor: BigInt(r.pendingMinor),
+    postedCount: r.postedCount, postedMinor: BigInt(r.postedMinor), lastPostedAt: r.lastPostedAt ?? null,
+  }));
+}
+
+/** The most recent period that has any posted entry (and when it was posted), or null if nothing was ever posted. */
+export async function findLastPostedPeriod(tenantId: string): Promise<{ period: string; postedAt: Date } | null> {
+  const rows = await scopedRead((tx) => tx.select({ period: assetDepEntries.period, postedAt: max(assetDepEntries.postedAt) })
+    .from(assetDepEntries)
+    .where(and(eq(assetDepEntries.tenantId, tenantId), sql`${assetDepEntries.postedAt} is not null`))
+    .groupBy(assetDepEntries.period)
+    .orderBy(sql`${assetDepEntries.period} desc`)
+    .limit(1));
+  const r = rows[0];
+  return r && r.postedAt ? { period: r.period, postedAt: r.postedAt } : null;
 }
 
 export async function insertSchedule(tx: Writer, row: DepScheduleInsert): Promise<void> {

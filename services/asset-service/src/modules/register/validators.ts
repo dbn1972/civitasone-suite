@@ -16,6 +16,9 @@ export const createAssetBody = z.object({
   poRef:           z.string().optional(),
   grnRef:          z.string().optional(),
   location:        z.string().optional(),
+  // GAP-ASSETS-LOCATIONS-03: the functional location the asset sits in. When given it must be an
+  // ACTIVE location of this tenant, and `location` (display text) defaults to its name.
+  locationId:      z.string().uuid().optional(),
   notes:           z.string().optional(),
   barcode:         z.string().optional(),
 });

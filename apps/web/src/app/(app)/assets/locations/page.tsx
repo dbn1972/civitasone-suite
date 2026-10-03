@@ -1,14 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Button, PageHeader, EmptyState, ErrorState } from "../../../_components/ds";
+import { Button, PageHeader, EmptyState, ErrorState, ConfirmDialog, useConfirmAction } from "../../../_components/ds";
 import { SkeletonRow } from "../../../_components/ds/Skeleton";
 import { toHumanError } from "@/lib/messages";
 import { useFormError } from "@/lib/useFormError";
+import { errorCodeFromResponse, errorMessageFromResponse } from "@/lib/api/browserClient";
 import {
   buildLocationTree,
   fetchAllLocations,
   flattenTree,
+  activeOnly,
+  isLocationActive,
   hasDuplicateCode,
   orgUnitNames,
   type Location,
@@ -28,6 +31,50 @@ export default function LocationsPage() {
   const [orgUnits, setOrgUnits] = useState<string[] | null>(null);
   const [editing, setEditing] = useState<{ id: string; name: string; orgUnit: string } | null>(null);
   const formError = useFormError("functional location");
+  // GAP-ASSETS-LOCATIONS-02: deactivate (with a reason) instead of delete; the code stays reserved.
+  const [target, setTarget] = useState<Location | null>(null);
+  const deactivate = useConfirmAction({
+    onConfirm: async (reason) => {
+      if (!target) return;
+      setMessage("");
+      setIsError(false);
+      const res = await fetch(`/api/proxy/v1/asset/locations/${encodeURIComponent(target.id)}/deactivate`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ reason: (reason ?? "").trim() }),
+      });
+      if (!res.ok) {
+        const code = await errorCodeFromResponse(res);
+        if (code === "HAS_ACTIVE_CHILDREN") throw new Error("This location still has active child locations. Deactivate those first.");
+        if (code === "ALREADY_INACTIVE") { await load(); throw new Error("This location is already deactivated."); }
+        throw new Error(await errorMessageFromResponse(res, "save", "functional location"));
+      }
+      setMessage(`Location ${target.code} deactivated. Assets already placed there keep their reference; it is no longer offered for new assets.`);
+      await load();
+    },
+  });
+
+  async function reactivate(loc: Location) {
+    setMessage("");
+    setIsError(false);
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/proxy/v1/asset/locations/${encodeURIComponent(loc.id)}/reactivate`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      if (!res.ok) {
+        setIsError(true);
+        const code = await errorCodeFromResponse(res);
+        setMessage(code === "PARENT_INACTIVE" ? "Reactivate the parent location first." : (await formError.fromResponse(res, "save")).message);
+        return;
+      }
+      setMessage(`Location ${loc.code} reactivated.`);
+      await load();
+    } catch {
+      setIsError(true);
+      setMessage(formError.fromException("save").message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function load(signal?: AbortSignal) {
     setLoadError(false);
@@ -71,7 +118,8 @@ export default function LocationsPage() {
   }, []);
 
   const tree = useMemo(() => buildLocationTree(rows), [rows]);
-  const parentOptions = useMemo(() => flattenTree(tree), [tree]);
+  // A deactivated location is not offered as a parent for a new location.
+  const parentOptions = useMemo(() => activeOnly(flattenTree(tree)), [tree]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -159,8 +207,9 @@ export default function LocationsPage() {
             <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => setEditing(null)}>Cancel</Button>
           </span>
         ) : (
-          <>
+          <span style={isLocationActive(n) ? undefined : { opacity: 0.6 }}>
             <strong>{n.code}</strong> — {n.name}{n.orgUnit ? ` (${n.orgUnit})` : ""}{" "}
+            {isLocationActive(n) ? null : <span className="pill warn">Inactive</span>}{" "}
             <Button
               type="button" size="sm" variant="ghost"
               aria-label={`Edit location ${n.code}`}
@@ -168,7 +217,24 @@ export default function LocationsPage() {
             >
               Edit
             </Button>
-          </>
+            {isLocationActive(n) ? (
+              <Button
+                type="button" size="sm" variant="ghost" disabled={busy}
+                aria-label={`Deactivate location ${n.code}`}
+                onClick={() => { setTarget(n); deactivate.trigger(); }}
+              >
+                Deactivate
+              </Button>
+            ) : (
+              <Button
+                type="button" size="sm" variant="ghost" disabled={busy}
+                aria-label={`Reactivate location ${n.code}`}
+                onClick={() => void reactivate(n)}
+              >
+                Reactivate
+              </Button>
+            )}
+          </span>
         )}
         {n.children.length > 0 ? <ul style={{ margin: "4px 0 0", paddingLeft: 20, listStyle: "circle" }}>{n.children.map(renderNode)}</ul> : null}
       </li>
@@ -246,6 +312,18 @@ export default function LocationsPage() {
           </div>
         )}
       </div>
+      <ConfirmDialog
+        open={deactivate.open}
+        title="Deactivate this location?"
+        description={<>Location <b>{target?.code}</b> will no longer be offered when registering assets or adding child locations. Assets already placed there keep their reference. You can reactivate it later.</>}
+        confirmLabel="Deactivate"
+        requireReason
+        reasonLabel="Reason"
+        busy={deactivate.busy}
+        errorMessage={deactivate.error}
+        onConfirm={deactivate.confirm}
+        onCancel={deactivate.cancel}
+      />
     </>
   );
 }

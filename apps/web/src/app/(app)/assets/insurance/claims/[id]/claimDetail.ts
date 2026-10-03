@@ -1,3 +1,5 @@
+import { parseAttachments, type ClaimAttachment } from "../attachments";
+
 export type ClaimDetail = {
   id: string;
   policyId: string;
@@ -7,6 +9,7 @@ export type ClaimDetail = {
   settledAmountMinor: string;
   status: string;
   notes: string | null;
+  attachments: ClaimAttachment[];
 };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -32,5 +35,6 @@ export function mapClaimDetail(payload: unknown): ClaimDetail | null {
     settledAmountMinor: minor(payload.settledAmountMinor),
     status: typeof payload.status === "string" ? payload.status : "unknown",
     notes: typeof payload.notes === "string" && payload.notes.trim() ? payload.notes : null,
+    attachments: parseAttachments(payload.attachments),
   };
 }

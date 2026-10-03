@@ -1,4 +1,10 @@
-export type Location = { id: string; code: string; name: string; orgUnit?: string | null; parentId?: string | null };
+export type Location = {
+  id: string; code: string; name: string; orgUnit?: string | null; parentId?: string | null;
+  /** GAP-ASSETS-LOCATIONS-02: false once deactivated; absent on payloads from before the column existed (treated as active). */
+  isActive?: boolean;
+};
+
+export const isLocationActive = (l: Pick<Location, "isActive">): boolean => l.isActive !== false;
 
 export type LocationNode = Location & { children: LocationNode[] };
 export type FlatLocation = Location & { depth: number };
@@ -48,6 +54,11 @@ function isAncestor(nodes: Map<string, LocationNode & { children: LocationNode[]
     cur = nodes.get(cur)?.parentId;
   }
   return false;
+}
+
+/** Locations a NEW child / asset may be placed under: active ones only. */
+export function activeOnly<T extends Pick<Location, "isActive">>(rows: readonly T[]): T[] {
+  return rows.filter(isLocationActive);
 }
 
 /** Depth-first flattening of the tree, used for the indented parent <select>. */

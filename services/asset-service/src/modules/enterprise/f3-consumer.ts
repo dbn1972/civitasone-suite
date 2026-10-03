@@ -5,20 +5,135 @@ import { db } from "../../shared/db.js";
 import { queue as rawQueue } from "../../shared/infra.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { COMMANDS } from "../../topics.js";
+import { COMMANDS, CONSUMED_EVENTS } from "../../topics.js";
 import { uuidV5 } from "../../shared/ids.js";
 import * as repo from "./repo.js";
 import * as registerRepo from "../register/repo.js";
 import { makeBarcode } from "../register/consumer.js";
+import { todayIST } from "../../shared/dates.js";
+import { buildLeaseSchedule, type LeaseFrequency } from "./lease-domain.js";
+import { headsFromSettings, HEAD_LABEL } from "./gl-heads.js";
+import type { projectAuc } from "./schema.js";
 
 const log = pino({ name: "asset-f3-enterprise" });
 const WORKFLOW_CREATE = "workflow.instance.create";
 const GL_TOPIC = "finance.gl.post";
 const AUDIT_TOPIC = "audit.event.record";
 const DEFAULT_IT_CATEGORY = "77777777-0001-0000-0000-000000000001";
-const FIXED_ASSET_CODE = process.env.ASSET_FIXED_ASSET_CODE ?? "1200";
-const IMPAIRMENT_CODE = process.env.ASSET_IMPAIRMENT_CODE ?? "5200";
-const REVAL_RESERVE_CODE = process.env.ASSET_REVAL_RESERVE_CODE ?? "3100";
+// There are NO default heads for the fixed asset, capital work in progress, the right-of-use asset, the lease liability or
+// the lease clearing account: they come from asset_settings (validated against the finance chart of accounts when set), and the
+// routes refuse the action (409 GL_HEADS_NOT_CONFIGURED) until they exist.
+
+type AucRow = typeof projectAuc.$inferSelect;
+
+/** The capitalisation journal: Dr fixed asset / Cr CWIP. Deterministic id, so a repost is the same journal. */
+function aucJournal(auc: Pick<AucRow, "id" | "tenantId" | "accumulatedMinor">, capDate: string, heads: { fixed_asset: string; cwip: string }) {
+  return {
+    id: uuidV5(`auc-capitalize:${auc.id}`),
+    tenantId: auc.tenantId,
+    type: "asset_capitalization",
+    voucherNo: `CAP/${capDate}/${auc.id.slice(0, 8)}`,
+    postingDate: capDate,
+    lines: [
+      { accountCode: heads.fixed_asset, debitMinor: auc.accumulatedMinor.toString(), creditMinor: "0" },
+      { accountCode: heads.cwip, debitMinor: "0", creditMinor: auc.accumulatedMinor.toString() },
+    ],
+  };
+}
+
+type LeaseHeads = { rou?: string; lease_liability?: string; lease_offset?: string };
+/** Which heads a lease journal needs: the clearing head only when ROU differs from the liability. */
+function leaseHeadKinds(rou: bigint, liab: bigint): Array<"rou" | "lease_liability" | "lease_offset"> {
+  return rou === liab ? ["rou", "lease_liability"] : ["rou", "lease_liability", "lease_offset"];
+}
+
+/** Initial recognition: Dr ROU / Cr lease liability (+ the clearing head for any difference). Deterministic id. */
+function leaseJournal(lease: { id: string; tenantId: string; leaseStart: string; rouCostMinor: bigint; liabilityMinor: bigint }, heads: LeaseHeads) {
+  const rou = lease.rouCostMinor;
+  const liab = lease.liabilityMinor;
+  const lines = [
+    { accountCode: heads.rou as string, debitMinor: rou.toString(), creditMinor: "0" },
+    { accountCode: heads.lease_liability as string, debitMinor: "0", creditMinor: liab.toString() },
+  ];
+  if (rou > liab) lines.push({ accountCode: heads.lease_offset as string, debitMinor: "0", creditMinor: (rou - liab).toString() });
+  else if (liab > rou) lines.push({ accountCode: heads.lease_offset as string, debitMinor: (liab - rou).toString(), creditMinor: "0" });
+  return {
+    id: uuidV5(`lease-recognition:${lease.id}`),
+    tenantId: lease.tenantId,
+    type: "lease_recognition",
+    voucherNo: `LEASE/${lease.leaseStart}/${lease.id.slice(0, 8)}`,
+    postingDate: lease.leaseStart,
+    lines,
+  };
+}
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type Msg = { tenantId: string; actorId: string; correlationId: string };
+
+async function auditEvent(
+  tx: Tx, msg: Msg, action: string, resourceType: string, resourceId: string, details: Record<string, unknown>,
+  outcome: "success" | "failure" = "success",
+): Promise<void> {
+  await enqueue(tx, {
+    topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+    tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+    payload: { service: "asset", module: "enterprise", action, resourceType, resourceId, outcome, details },
+  });
+}
+
+/**
+ * GAP-ASSETS-PROJECTS-09: the AUC row has already been flipped to `capitalized` by a conditional UPDATE
+ * (so this runs at most once per project). Creates the fixed asset dated at the capitalisation date,
+ * posts Dr Fixed asset / Cr CWIP, and writes the audit event, all in the caller's transaction.
+ */
+async function capitalizeInTx(tx: Tx, msg: Msg, auc: AucRow, assetId: string, mode: "direct" | "approved"): Promise<string> {
+  const code = `AUC/${auc.projectCode}`;
+  const capDate = auc.capitalizationDate ?? todayIST();
+  await registerRepo.insertAsset(tx, {
+    id: assetId, tenantId: auc.tenantId, name: auc.name, code,
+    categoryId: DEFAULT_IT_CATEGORY, assetType: "infra", barcode: makeBarcode(code),
+    status: "active", acquisitionCost: auc.accumulatedMinor, salvageValue: 0n,
+    usefulLifeYears: 10, depRate: "10", depMethod: "SLM", currency: "INR",
+    bookValue: auc.accumulatedMinor, accumulatedDep: 0n,
+    acquisitionDate: capDate,
+    poRef: null, grnRef: null, location: null, notes: `Capitalized from AUC ${auc.projectCode}`,
+    projectRef: auc.projectCode, orgUnit: null, aucId: auc.id,
+    createdBy: msg.actorId, updatedBy: msg.actorId,
+  });
+  let journal: "none" | "pending" | "failed" = "none";
+  if (auc.accumulatedMinor > 0n) {
+    const aucHeads = headsFromSettings(await repo.getAssetSettingsTx(tx, auc.tenantId), ["cwip", "fixed_asset"]);
+    if (!aucHeads.cwip || !aucHeads.fixed_asset) {
+      // The route pre-flights this; reaching here means the setting was cleared in between. Never post to a guessed
+      // account: the record shows the journal as failed so it cannot look capitalised-and-posted.
+      journal = "failed";
+      const unset = (["cwip", "fixed_asset"] as const).filter((k) => !aucHeads[k]).map((k) => HEAD_LABEL[k]).join(", ");
+      await repo.setAucGlFailed(tx, auc.id, auc.tenantId, `no ${unset} account configured`);
+    } else {
+      const payload = aucJournal(auc, capDate, { fixed_asset: aucHeads.fixed_asset, cwip: aucHeads.cwip });
+      await enqueue(tx, {
+        topic: GL_TOPIC, eventType: GL_TOPIC,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload,
+      });
+      await repo.setAucGlPending(tx, auc.id, auc.tenantId, payload.id);
+      journal = "pending";
+    }
+  }
+  // Both depreciation books start at the capitalisation date. Enqueued through the outbox IN THIS transaction, so a
+  // crash after commit can never leave a capitalised asset without its schedules (deterministic ids make a replay a no-op).
+  for (const [method, depBook] of [["SLM", "company"], ["WDV", "statutory"]] as const) {
+    await enqueue(tx, {
+      topic: COMMANDS.depSchedule, eventType: COMMANDS.depSchedule,
+      tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+      payload: { id: uuidV5(`auc-dep:${auc.id}:${depBook}`), assetId, tenantId: auc.tenantId, method, startDate: capDate, depBook },
+    });
+  }
+  await auditEvent(tx, msg, "capitalize", "auc_project", auc.id, {
+    projectCode: auc.projectCode, assetId, amountMinor: auc.accumulatedMinor.toString(), capitalizationDate: capDate,
+    mode, requestedBy: auc.capRequestedBy ?? null, reason: auc.capReason ?? null, journal,
+  });
+  return capDate;
+}
 
 export function registerF3EnterpriseConsumers(rawQ: Queue): void {
   // Mirror other asset consumers: tenantScoped so NOBYPASSRLS + FORCE RLS
@@ -31,6 +146,10 @@ export function registerF3EnterpriseConsumers(rawQ: Queue): void {
     const ops = new Set([
       "auc_create", "auc_capitalize", "lease_create", "impairment", "revaluation",
       "location_create", "location_update", "spare_part", "request_disposal", "inter_org_transfer", "bulk_import",
+      "location_deactivate", "location_reactivate", "scan_log", "asset_settings_update",
+      "auc_capitalize_request", "auc_capitalize_approve", "auc_capitalize_reject",
+      "settings_off_request", "settings_off_approve", "settings_off_reject",
+      "auc_journal_repost", "lease_journal_repost",
     ]);
     if (!ops.has(op)) return;
     try {
@@ -65,29 +184,180 @@ export function registerF3EnterpriseConsumers(rawQ: Queue): void {
             break;
           }
           case "auc_capitalize": {
-            const aucId = p.aucId as string;
-            const assetId = p.assetId as string;
-            const tenantId = p.tenantId as string;
-            const projectCode = p.projectCode as string;
-            const name = p.name as string;
-            const accumulatedMinor = BigInt(p.accumulatedMinor as string);
-            const code = `AUC/${projectCode}`;
+            // Direct (single-actor) path: only valid while the tenant has maker-checker switched OFF. The route checks
+            // too, but the consumer is the authority: a request published before the setting flipped back ON is refused.
             // Double-click / replay guard: only the call that wins the conditional status flip creates the asset.
-            if (!(await repo.claimAucForCapitalize(tx, aucId, tenantId, assetId, msg.actorId))) break;
-            await registerRepo.insertAsset(tx, {
-              id: assetId, tenantId, name, code,
-              categoryId: DEFAULT_IT_CATEGORY, assetType: "infra", barcode: makeBarcode(code),
-              status: "active", acquisitionCost: accumulatedMinor, salvageValue: 0n,
-              usefulLifeYears: 10, depRate: "10", depMethod: "SLM", currency: "INR",
-              bookValue: accumulatedMinor, accumulatedDep: 0n,
-              acquisitionDate: new Date().toISOString().slice(0, 10),
-              poRef: null, grnRef: null, location: null, notes: `Capitalized from AUC ${projectCode}`,
-              projectRef: projectCode, orgUnit: null, aucId,
-              createdBy: msg.actorId, updatedBy: msg.actorId,
+            const assetId = p.assetId as string;
+            const current = await repo.getAssetSettingsTx(tx, p.tenantId as string);
+            if (current?.capitalizeMakerChecker ?? true) {
+              await auditEvent(tx, msg, "capitalize", "auc_project", p.aucId as string, { mode: "direct", failure: "MAKER_CHECKER_REQUIRED" }, "failure");
+              break;
+            }
+            const claimed = await repo.claimAucDirect(
+              tx, p.aucId as string, p.tenantId as string, assetId, msg.actorId,
+              (p.capitalizationDate as string | undefined) ?? todayIST(), String(p.reason ?? ""),
+            );
+            if (!claimed) {
+              await auditEvent(tx, msg, "capitalize", "auc_project", p.aucId as string, { mode: "direct", failure: "NOT_CAPITALIZABLE" }, "failure");
+              break;
+            }
+            await capitalizeInTx(tx, msg, claimed, assetId, "direct");
+            break;
+          }
+          case "auc_capitalize_request": {
+            // Maker step: under_construction -> pending_capitalization (conditional; a second request is a no-op).
+            const ok = await repo.requestAucCapitalization(
+              tx, p.aucId as string, p.tenantId as string, msg.actorId, p.capitalizationDate as string, String(p.reason ?? ""),
+            );
+            if (ok) {
+              await auditEvent(tx, msg, "capitalize_request", "auc_project", p.aucId as string, {
+                capitalizationDate: p.capitalizationDate, reason: p.reason ?? null,
+              });
+            }
+            break;
+          }
+          case "auc_capitalize_approve": {
+            // Checker step: ONE conditional UPDATE enforces pending status AND checker != maker, so a replay
+            // or a racing second approval cannot create a second asset / journal.
+            const assetId = p.assetId as string;
+            const approved = await repo.approveAucCapitalization(tx, p.aucId as string, p.tenantId as string, assetId, msg.actorId);
+            if (!approved) {
+              // Lost the race / replay / approver was the requester: recorded, not silent.
+              await auditEvent(tx, msg, "capitalize_approve", "auc_project", p.aucId as string, { failure: "NOT_PENDING_OR_SAME_ACTOR" }, "failure");
+              break;
+            }
+            await capitalizeInTx(tx, msg, approved, assetId, "approved");
+            break;
+          }
+          case "auc_capitalize_reject": {
+            const rejected = await repo.rejectAucCapitalization(tx, p.aucId as string, p.tenantId as string, msg.actorId, String(p.reason ?? ""));
+            await auditEvent(
+              tx, msg, "capitalize_reject", "auc_project", p.aucId as string,
+              rejected ? { reason: p.reason ?? null } : { failure: "NOT_PENDING", reason: p.reason ?? null },
+              rejected ? "success" : "failure",
+            );
+            break;
+          }
+          case "asset_settings_update": {
+            // GL heads and maker-checker ON. (Turning maker-checker OFF is a two-person request, see settings_off_*.)
+            const patch: repo.AssetSettingsPatch = {};
+            if (p.capitalizeMakerChecker === true) patch.capitalizeMakerChecker = true;
+            for (const k of ["cwipAccountCode", "fixedAssetAccountCode", "impairmentExpenseAccountCode", "revaluationReserveAccountCode", "rouAccountCode", "leaseLiabilityAccountCode", "leaseOffsetAccountCode"] as const) {
+              if (p[k] === null || typeof p[k] === "string") patch[k] = p[k] as string | null;
+            }
+            if (Object.keys(patch).length > 0) {
+              const before = await repo.getAssetSettingsTx(tx, p.tenantId as string);
+              await repo.upsertAssetSettings(tx, p.tenantId as string, msg.actorId, patch);
+              const after = await repo.getAssetSettingsTx(tx, p.tenantId as string);
+              await auditEvent(tx, msg, "update", "asset_settings", p.tenantId as string, {
+                reason: p.reason ?? null, before: settingsSnapshot(before), after: settingsSnapshot(after),
+              });
+            }
+            break;
+          }
+          case "settings_off_request": {
+            const inserted = await repo.insertSettingRequest(tx, {
+              id: p.id as string, tenantId: p.tenantId as string, kind: "maker_checker_off",
+              reason: String(p.reason ?? ""), requestedBy: msg.actorId,
+            });
+            await auditEvent(tx, msg, "maker_checker_off_request", "asset_settings", p.id as string,
+              inserted ? { reason: p.reason ?? null } : { failure: "ALREADY_PENDING" }, inserted ? "success" : "failure");
+            break;
+          }
+          case "settings_off_approve": {
+            const decided = await repo.decideSettingRequest(tx, p.tenantId as string, p.id as string, msg.actorId, "approved", (p.reason as string | null) ?? null);
+            if (!decided) {
+              await auditEvent(tx, msg, "maker_checker_off_approve", "asset_settings", p.id as string, { failure: "NOT_PENDING_OR_SAME_ACTOR" }, "failure");
+              break;
+            }
+            const before = await repo.getAssetSettingsTx(tx, p.tenantId as string);
+            await repo.upsertAssetSettings(tx, p.tenantId as string, msg.actorId, { capitalizeMakerChecker: false });
+            const after = await repo.getAssetSettingsTx(tx, p.tenantId as string);
+            await auditEvent(tx, msg, "maker_checker_off_approve", "asset_settings", p.id as string, {
+              requestedBy: decided.requestedBy, reason: decided.reason, before: settingsSnapshot(before), after: settingsSnapshot(after),
             });
             break;
           }
+          case "settings_off_reject": {
+            const decided = await repo.decideSettingRequest(tx, p.tenantId as string, p.id as string, msg.actorId, "rejected", (p.reason as string | null) ?? null);
+            await auditEvent(tx, msg, "maker_checker_off_reject", "asset_settings", p.id as string,
+              decided ? { reason: p.reason ?? null } : { failure: "NOT_PENDING" }, decided ? "success" : "failure");
+            break;
+          }
+          case "auc_journal_repost": {
+            // asset_admin repost of a FAILED capitalisation journal (the route re-validated the heads). ONE conditional
+            // UPDATE failed -> pending, so a double click reposts once; the same deterministic journal is re-enqueued under a
+            // fresh outbox message id, which finance sees as a new message (the dead-lettered one is already processed).
+            const tenantId = p.tenantId as string;
+            const aucId = p.aucId as string;
+            const heads = headsFromSettings(await repo.getAssetSettingsTx(tx, tenantId), ["cwip", "fixed_asset"]);
+            const row = await repo.findAucByIdTx(tx, tenantId, aucId);
+            if (!row || row.status !== "capitalized" || row.accumulatedMinor <= 0n || !heads.cwip || !heads.fixed_asset) {
+              await auditEvent(tx, msg, "journal_repost", "auc_project", aucId, { failure: !heads.cwip || !heads.fixed_asset ? "GL_HEADS_NOT_CONFIGURED" : "NOT_REPOSTABLE" }, "failure");
+              break;
+            }
+            const journal = aucJournal(row, row.capitalizationDate ?? todayIST(), { fixed_asset: heads.fixed_asset, cwip: heads.cwip });
+            if (!(await repo.repostAucJournal(tx, tenantId, aucId, journal.id))) {
+              await auditEvent(tx, msg, "journal_repost", "auc_project", aucId, { failure: "NOT_FAILED", glPostStatus: row.glPostStatus }, "failure");
+              break;
+            }
+            await enqueue(tx, { topic: GL_TOPIC, eventType: GL_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: journal });
+            await auditEvent(tx, msg, "journal_repost", "auc_project", aucId, { journalId: journal.id, from: "failed", to: "pending", previousError: row.glPostError ?? null });
+            break;
+          }
+          case "lease_journal_repost": {
+            const tenantId = p.tenantId as string;
+            const leaseId = p.leaseId as string;
+            const row = await repo.findLeaseByIdTx(tx, tenantId, leaseId);
+            if (!row) {
+              await auditEvent(tx, msg, "journal_repost", "asset_lease", leaseId, { failure: "NOT_REPOSTABLE" }, "failure");
+              break;
+            }
+            const needed = leaseHeadKinds(row.rouCostMinor, row.liabilityMinor);
+            const heads = headsFromSettings(await repo.getAssetSettingsTx(tx, tenantId), needed);
+            if (needed.some((k) => !heads[k])) {
+              await auditEvent(tx, msg, "journal_repost", "asset_lease", leaseId, { failure: "GL_HEADS_NOT_CONFIGURED" }, "failure");
+              break;
+            }
+            const journal = leaseJournal(row, heads);
+            if (!(await repo.repostLeaseJournal(tx, tenantId, leaseId, journal.id))) {
+              await auditEvent(tx, msg, "journal_repost", "asset_lease", leaseId, { failure: "NOT_FAILED", glPostStatus: row.glPostStatus }, "failure");
+              break;
+            }
+            await enqueue(tx, { topic: GL_TOPIC, eventType: GL_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: journal });
+            await auditEvent(tx, msg, "journal_repost", "asset_lease", leaseId, { journalId: journal.id, from: "failed", to: "pending", previousError: row.glPostError ?? null });
+            break;
+          }
+          case "scan_log": {
+            await repo.insertScanLog(tx, {
+              id: p.id as string, tenantId: p.tenantId as string, barcode: String(p.barcode).slice(0, 256),
+              assetId: (p.assetId as string | null) ?? null, found: Boolean(p.found), scannedBy: msg.actorId,
+            });
+            break;
+          }
+          case "location_deactivate": {
+            // Re-check the child rule INSIDE the transaction (the route's pre-check can race with a child create).
+            if ((await repo.countActiveChildren(tx, p.tenantId as string, p.id as string)) > 0) break;
+            if (await repo.setLocationActive(tx, p.tenantId as string, p.id as string, false, msg.actorId)) {
+              await auditEvent(tx, msg, "deactivate", "functional_location", p.id as string, { reason: p.reason ?? null });
+            }
+            break;
+          }
+          case "location_reactivate": {
+            if (await repo.setLocationActive(tx, p.tenantId as string, p.id as string, true, msg.actorId)) {
+              await auditEvent(tx, msg, "reactivate", "functional_location", p.id as string, {});
+            }
+            break;
+          }
           case "lease_create": {
+            // GL heads come from the tenant's settings (no defaults). The route pre-flights them; if they are gone by
+            // now the lease is still recorded but its journal is marked failed -- it never looks recognised.
+            const rou = BigInt(p.rouCostMinor as number);
+            const liab = BigInt(p.liabilityMinor as number);
+            const needed = leaseHeadKinds(rou, liab);
+            const leaseHeads = headsFromSettings(await repo.getAssetSettingsTx(tx, p.tenantId as string), needed);
+            const missingHeads = needed.filter((k) => !leaseHeads[k]);
+            const leaseJournalId = leaseJournal({ id: p.leaseId as string, tenantId: p.tenantId as string, leaseStart: p.leaseStart as string, rouCostMinor: rou, liabilityMinor: liab }, {}).id;
             await repo.insertLease(tx, {
               id: p.leaseId as string,
               tenantId: p.tenantId as string,
@@ -99,9 +369,28 @@ export function registerF3EnterpriseConsumers(rawQ: Queue): void {
               leaseEnd: p.leaseEnd as string,
               assetId: p.assetId as string,
               status: "active",
+              ibrBps: typeof p.ibrBps === "number" ? p.ibrBps : null,
+              paymentMinor: typeof p.paymentMinor === "number" ? BigInt(p.paymentMinor) : null,
+              paymentFrequency: typeof p.paymentFrequency === "string" ? p.paymentFrequency : null,
+              glPostStatus: missingHeads.length === 0 ? "pending" : "failed",
+              glJournalId: missingHeads.length === 0 ? leaseJournalId : null,
+              glPostError: missingHeads.length === 0 ? null : `no ${missingHeads.map((k) => HEAD_LABEL[k]).join(", ")} account configured`,
               createdBy: msg.actorId,
               updatedBy: msg.actorId,
             });
+            // GAP-ASSETS-LEASES-07: discounted lease => persist the amortisation schedule (recomputed from the
+            // same inputs the route used, so liability and schedule can never disagree).
+            if (typeof p.ibrBps === "number" && typeof p.paymentMinor === "number") {
+              const sched = buildLeaseSchedule({
+                leaseStart: p.leaseStart as string, leaseEnd: p.leaseEnd as string, paymentMinor: BigInt(p.paymentMinor),
+                ibrBps: p.ibrBps, frequency: (p.paymentFrequency as LeaseFrequency | undefined) ?? "monthly",
+              });
+              await repo.insertLeaseScheduleRows(tx, sched.rows.map((r) => ({
+                tenantId: p.tenantId as string, leaseId: p.leaseId as string, seq: r.seq, dueDate: r.dueDate,
+                openingMinor: r.openingMinor, interestMinor: r.interestMinor, paymentMinor: r.paymentMinor,
+                principalMinor: r.principalMinor, closingMinor: r.closingMinor,
+              })));
+            }
             await registerRepo.insertAsset(tx, {
               id: p.assetId as string,
               tenantId: p.tenantId as string,
@@ -123,9 +412,21 @@ export function registerF3EnterpriseConsumers(rawQ: Queue): void {
               poRef: null,
               grnRef: null,
               location: null,
-              notes: `IFRS 16 ROU lease ${p.leaseNo as string}`,
+              notes: `ROU lease ${p.leaseNo as string}`,
               createdBy: msg.actorId,
               updatedBy: msg.actorId,
+            });
+            // Initial recognition journal: Dr ROU asset / Cr lease liability (+ the clearing head for any ROU-vs-liability difference).
+            if (missingHeads.length === 0) {
+              await enqueue(tx, {
+                topic: GL_TOPIC, eventType: GL_TOPIC,
+                tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+                payload: leaseJournal({ id: p.leaseId as string, tenantId: p.tenantId as string, leaseStart: p.leaseStart as string, rouCostMinor: rou, liabilityMinor: liab }, leaseHeads),
+              });
+            }
+            await auditEvent(tx, msg, "create", "asset_lease", p.leaseId as string, {
+              leaseNo: p.leaseNo, rouCostMinor: rou.toString(), liabilityMinor: liab.toString(), discounted: typeof p.ibrBps === "number",
+              journal: missingHeads.length === 0 ? "pending" : "failed",
             });
             break;
           }
@@ -154,8 +455,8 @@ export function registerF3EnterpriseConsumers(rawQ: Queue): void {
                 voucherNo: `IMP/${eventDate}/${assetId.slice(0, 8)}`,
                 postingDate: eventDate,
                 lines: [
-                  { accountCode: IMPAIRMENT_CODE, debitMinor: amountMinor.toString(), creditMinor: "0" },
-                  { accountCode: FIXED_ASSET_CODE, debitMinor: "0", creditMinor: amountMinor.toString() },
+                  { accountCode: await requiredHead(tx, tenantId, "impairment_expense"), debitMinor: amountMinor.toString(), creditMinor: "0" },
+                  { accountCode: await requiredHead(tx, tenantId, "fixed_asset"), debitMinor: "0", creditMinor: amountMinor.toString() },
                 ],
               },
             });
@@ -180,12 +481,12 @@ export function registerF3EnterpriseConsumers(rawQ: Queue): void {
             if (delta > 0n) {
               const lines = isUpward
                 ? [
-                    { accountCode: FIXED_ASSET_CODE, debitMinor: delta.toString(), creditMinor: "0" },
-                    { accountCode: REVAL_RESERVE_CODE, debitMinor: "0", creditMinor: delta.toString() },
+                    { accountCode: await requiredHead(tx, tenantId, "fixed_asset"), debitMinor: delta.toString(), creditMinor: "0" },
+                    { accountCode: await requiredHead(tx, tenantId, "revaluation_reserve"), debitMinor: "0", creditMinor: delta.toString() },
                   ]
                 : [
-                    { accountCode: REVAL_RESERVE_CODE, debitMinor: delta.toString(), creditMinor: "0" },
-                    { accountCode: FIXED_ASSET_CODE, debitMinor: "0", creditMinor: delta.toString() },
+                    { accountCode: await requiredHead(tx, tenantId, "revaluation_reserve"), debitMinor: delta.toString(), creditMinor: "0" },
+                    { accountCode: await requiredHead(tx, tenantId, "fixed_asset"), debitMinor: "0", creditMinor: delta.toString() },
                   ];
               await enqueue(tx, {
                 topic: GL_TOPIC, eventType: GL_TOPIC,
@@ -318,23 +619,58 @@ export function registerF3EnterpriseConsumers(rawQ: Queue): void {
           }
         }
       });
-      if (op === "auc_capitalize") {
-        const assetId = p.assetId as string;
-        const tenantId = p.tenantId as string;
-        await rawQueue.publish(COMMANDS.depSchedule, {
-          messageId: randomUUID(), type: COMMANDS.depSchedule,
-          tenantId, actorId: msg.actorId, correlationId: msg.correlationId, schemaVersion: "1.0",
-          payload: { id: randomUUID(), assetId, tenantId, method: "SLM", startDate: new Date().toISOString().slice(0, 10), depBook: "company" },
-        });
-        await rawQueue.publish(COMMANDS.depSchedule, {
-          messageId: randomUUID(), type: COMMANDS.depSchedule,
-          tenantId, actorId: msg.actorId, correlationId: msg.correlationId, schemaVersion: "1.0",
-          payload: { id: randomUUID(), assetId, tenantId, method: "WDV", startDate: new Date().toISOString().slice(0, 10), depBook: "statutory" },
-        });
-      }
     } catch (err) {
       log.error({ err, op, messageId: msg.messageId }, "f3RouteWrite failed");
       throw err;
     }
   });
+
+  // Finance answers for every journal the asset service sent: flip the record's gl_post_status so the UI shows
+  // "journal not posted" instead of a silently-missing journal. Conditional on `pending`, so replays are no-ops.
+  queue.subscribe(CONSUMED_EVENTS.glPosted, async (msg) => {
+    const p = msg.payload as { journalId?: string };
+    if (typeof p.journalId !== "string") return;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await repo.resolveGlJournal(tx, msg.tenantId, p.journalId as string, "posted", null);
+    });
+  });
+
+  queue.subscribe(CONSUMED_EVENTS.glRejected, async (msg) => {
+    const p = msg.payload as { journalId?: string; reason?: string };
+    if (typeof p.journalId !== "string") return;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const reason = String(p.reason ?? "finance rejected the journal");
+      const hit = await repo.resolveGlJournal(tx, msg.tenantId, p.journalId as string, "failed", reason);
+      if (hit) {
+        await auditEvent(tx, msg, "gl_post", hit.kind === "auc" ? "auc_project" : "asset_lease", hit.id, { journalId: p.journalId, failure: reason }, "failure");
+      }
+    });
+  });
+}
+
+/**
+ * A tenant's configured head for an impairment / revaluation journal. No default: if it has vanished since the route
+ * pre-flighted it, the consumer REFUSES (throws, so nothing is written and the book value is not changed) rather than
+ * guessing an account.
+ */
+async function requiredHead(tx: Tx, tenantId: string, kind: "fixed_asset" | "impairment_expense" | "revaluation_reserve"): Promise<string> {
+  const head = headsFromSettings(await repo.getAssetSettingsTx(tx, tenantId), [kind])[kind];
+  if (!head) throw new Error(`GL_HEADS_NOT_CONFIGURED: no ${HEAD_LABEL[kind]} account configured for tenant ${tenantId}`);
+  return head;
+}
+
+/** Settings as shown in the audit before/after images. */
+function settingsSnapshot(s: Awaited<ReturnType<typeof repo.getAssetSettingsTx>>): Record<string, unknown> {
+  return {
+    capitalizeMakerChecker: s?.capitalizeMakerChecker ?? true,
+    cwipAccountCode: s?.cwipAccountCode ?? null,
+    fixedAssetAccountCode: s?.fixedAssetAccountCode ?? null,
+    impairmentExpenseAccountCode: s?.impairmentExpenseAccountCode ?? null,
+    revaluationReserveAccountCode: s?.revaluationReserveAccountCode ?? null,
+    rouAccountCode: s?.rouAccountCode ?? null,
+    leaseLiabilityAccountCode: s?.leaseLiabilityAccountCode ?? null,
+    leaseOffsetAccountCode: s?.leaseOffsetAccountCode ?? null,
+  };
 }

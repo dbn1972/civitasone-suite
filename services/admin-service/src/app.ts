@@ -44,6 +44,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
     logger: { level: process.env.LOG_LEVEL ?? "info" },
     genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID(),
+    // GET /v1/admin/uploads/:key takes a whole storage key as ONE url-encoded param (uploads/<tenant>/<category>/...,
+    // 100+ chars once the slashes are %2F-encoded). Fastify's default maxParamLength of 100 answered 404 for every
+    // real key, so the download route was unreachable.
+    maxParamLength: 512,
   });
 
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
