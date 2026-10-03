@@ -5,6 +5,7 @@ import { UCsTable } from "./UCsTable";
 import { ucMatchesScheme } from "./ucScheme";
 import { formatMoney } from "@/lib/formatters";
 import { ucStats } from "@/lib/finance/expenditureStats";
+import { getSessionRoles, getSessionUserId } from "@/lib/auth/roleGuard";
 
 export default async function UCsPage({ searchParams }: { searchParams?: { scheme?: string } }) {
   const t = await getTranslations("expenditureUtilizationCertificates");
@@ -19,6 +20,10 @@ export default async function UCsPage({ searchParams }: { searchParams?: { schem
   const scheme = searchParams?.scheme?.trim() || undefined;
   const shown = scheme ? ucs.filter((u) => ucMatchesScheme(u, scheme)) : ucs;
   const stats = ucStats(shown);
+  const roles = getSessionRoles();
+  // finance-service: verify/return = finance_admin/super_admin; resubmit = finance staff.
+  const canVerify = roles.some((r) => ["finance_admin", "super_admin"].includes(r));
+  const canResubmit = roles.some((r) => ["finance_officer", "finance_admin", "super_admin"].includes(r));
 
   return (
     <>
@@ -57,7 +62,7 @@ export default async function UCsPage({ searchParams }: { searchParams?: { schem
               {t("schemeFilterNote", { scheme })} <a href="/finance/expenditure/utilization-certificates">{t("schemeFilterClear")}</a>
             </p>
           ) : null}
-          <UCsTable ucs={ucs} source={source} scheme={scheme} />
+          <UCsTable ucs={ucs} source={source} scheme={scheme} viewerId={getSessionUserId()} canVerify={canVerify} canResubmit={canResubmit} />
         </Card>
       )}
     </>

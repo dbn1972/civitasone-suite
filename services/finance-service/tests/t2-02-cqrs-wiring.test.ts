@@ -24,13 +24,20 @@ describe("T2-02 finance CQRS + scanner-db", () => {
     expect(worker).toContain("registerReconConsumers");
   });
 
-  it("bank-recon / period-close / pfms / org-structure / recon routes have no db.(transaction|insert|update|delete)", () => {
+  it("bank-recon / period-close / pfms / org-structure / recon / approvals / uc / debt-guarantee / office / bank / fiscal-year routes have no db.(transaction|insert|update|delete)", () => {
     for (const rel of [
       "bank-recon/routes.ts",
       "org-structure/routes.ts",
       "period-close/routes.ts",
       "pfms/routes.ts",
       "recon/routes.ts",
+      // fp-finance-01
+      "approvals/routes.ts",
+      "payments/uc-routes.ts",
+      "treasury/register-routes.ts",
+      "budget/office-routes.ts",
+      "masters/bank-routes.ts",
+      "masters/fy-routes.ts",
     ]) {
       const src = readFileSync(resolve(__dirname, `../src/modules/${rel}`), "utf8");
       expect(src).not.toMatch(/\bdb\.(transaction|insert|update|delete)\s*\(/);

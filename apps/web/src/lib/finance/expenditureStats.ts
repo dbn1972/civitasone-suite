@@ -85,15 +85,40 @@ export function billStats(bills: readonly BillStatInput[]) {
   return { inProcess, pipelineValue, paidAllTime };
 }
 
+/** A guarantee is flagged "expiring" when it lapses within this many days (IST). */
+export const GUARANTEE_EXPIRY_WINDOW_DAYS = 30;
+
+export type GuaranteeValidity = "none" | "ok" | "expiring" | "lapsed";
+
 /**
- * Guarantees: the summary has no expiry/validity date, so "Expiring Soon"
- * cannot be computed. What the data supports is the count of guarantees that
- * are neither active nor released (expired, invoked, cancelled...) --
- * GAP-FINANCE-EXPENDITURE-GUARANTEES-01.
+ * Validity of one guarantee from its validity date (IST calendar days):
+ *  - released / cancelled guarantees are never flagged (nothing left to renew)
+ *  - no validUntil on the row (older data) -> "none": never guessed
+ *  - validUntil in the past -> "lapsed"; within the window (today included) -> "expiring"
  */
-export function guaranteeStats(guarantees: readonly { status: string }[]) {
+export function guaranteeValidity(
+  g: { status: string; validUntil?: string | null },
+  windowDays = GUARANTEE_EXPIRY_WINDOW_DAYS,
+): GuaranteeValidity {
+  const s = String(g.status).toLowerCase();
+  if (s === "fully_released" || s === "released" || s === "cancelled") return "none";
+  const days = daysUntilIST(g.validUntil);
+  if (days === null) return "none";
+  if (days < 0) return "lapsed";
+  return days <= windowDays ? "expiring" : "ok";
+}
+
+/**
+ * Guarantees (GAP-FINANCE-EXPENDITURE-GUARANTEES-01). "Expiring soon" is an
+ * ACTIVE guarantee whose validity ends within the window; "lapsed" is one whose
+ * validity has already ended without being released. Neither is inferred from
+ * status alone, and a row with no validity date counts as neither.
+ */
+export function guaranteeStats(guarantees: readonly { status: string; validUntil?: string | null }[]) {
   let active = 0;
   let released = 0;
+  let expiringSoon = 0;
+  let lapsed = 0;
   for (const g of guarantees) {
     const s = String(g.status).toLowerCase();
     if (s === "active") active += 1;
@@ -102,8 +127,11 @@ export function guaranteeStats(guarantees: readonly { status: string }[]) {
     // Released card was permanently 0 and fully-released guarantees were
     // miscounted as "other". "released" kept for legacy/seeded rows.
     else if (s === "fully_released" || s === "released") released += 1;
+    const v = guaranteeValidity(g);
+    if (v === "expiring") expiringSoon += 1;
+    else if (v === "lapsed") lapsed += 1;
   }
-  return { total: guarantees.length, active, released, otherStatus: guarantees.length - active - released };
+  return { total: guarantees.length, active, released, expiringSoon, lapsed, otherStatus: guarantees.length - active - released };
 }
 
 /** Schemes: "other" = neither active nor completed (GAP-...-SCHEME-TRACKING-02). */

@@ -14,6 +14,9 @@ import { COMMANDS } from "../../topics.js";
 import { zMoneyMinor } from "@civitasone/schemas/money";
 import { financeHeads } from "../budget/schema.js";
 import { assertOpeningBalancesBalanced, assertFiscalYearRangeValid, DomainError } from "./domain.js";
+import { checkFiscalYearActivation } from "../approvals/apply.js";
+import { readSettings } from "../approvals/repo.js";
+import { submitChangeRequest } from "../approvals/commands.js";
 import { pgSchema, uuid, varchar, integer, timestamp, bigint, text, date } from "drizzle-orm/pg-core";
 
 // UX-medium finding: this used to be a single FINANCE_ROLES = ["finance_admin",
@@ -151,6 +154,23 @@ export async function fyRoutes(app: FastifyInstance): Promise<void> {
     const target = rows.find((r) => r.code === code);
     if (!target) throw new HttpError(404, "NOT_FOUND", `fiscal year ${code} not found`);
     if (target.status === "active") throw new HttpError(409, "ALREADY_ACTIVE", `fiscal year ${code} is already active`);
+    // GAP-FINANCE-FISCAL-YEARS-02: refuse up front while the outgoing year still
+    // has periods that are not hard-closed (per-tenant setting). The consumer
+    // re-checks inside its transaction for the racing case.
+    try {
+      await scopedRead((tx) => checkFiscalYearActivation(tx, ctx.tenantId, code));
+    } catch (err) {
+      if (err instanceof DomainError) throw new HttpError(err.code === "NOT_FOUND" ? 404 : 409, err.code, err.message);
+      throw err;
+    }
+    // GAP-FINANCE-FISCAL-YEARS-01/-02: activation changes which year every
+    // posting lands in, so with the second-approver setting on (default) it
+    // becomes a pending request that a DIFFERENT officer approves.
+    const settings = await readSettings(ctx.tenantId);
+    if (settings.makerCheckerEnabled) {
+      const accepted = await submitChangeRequest(ctx, "fiscal_year_activate", code, { code }, body.reason);
+      return reply.code(202).send({ ...accepted, code });
+    }
     const id = randomUUID();
     await queue.publish(COMMANDS.fiscalYearActivate, {
       messageId: id,
@@ -250,6 +270,16 @@ export async function fyRoutes(app: FastifyInstance): Promise<void> {
       creditMinor: e.creditMinor.toString(),
       narration: e.narration ?? null,
     }));
+    // GAP-FINANCE-OPENING-BALANCES-01: seeding the ledger is approved by a
+    // second officer (per-tenant setting, default on): the batch is held as a
+    // pending request and posted only when a different finance_admin approves.
+    const settings = await readSettings(ctx.tenantId);
+    if (settings.makerCheckerEnabled) {
+      const accepted = await submitChangeRequest(
+        ctx, "opening_balances_enter", body.fyCode, { id, fyCode: body.fyCode, entries }, body.reason,
+      );
+      return reply.code(202).send({ ...accepted, count: entries.length });
+    }
     await queue.publish(COMMANDS.openingBalancesEnter, {
       messageId: id,
       type: COMMANDS.openingBalancesEnter,

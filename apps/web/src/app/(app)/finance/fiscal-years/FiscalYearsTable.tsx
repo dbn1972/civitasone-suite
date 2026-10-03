@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, DataTable, ConfirmDialog } from "../../../_components/ds";
-import { browserJson } from "@/lib/api/browserClient";
+import { browserFetch, errorCodeFromResponse, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { formatIndianDate } from "@/lib/formatters";
 import type { PeriodRow } from "../period-close/periodsLoader";
 
@@ -26,17 +26,26 @@ type DisplayRow = FiscalYearRow & {
  * `periods` / `periodsUnavailable` feed the activation check
  * (GAP-FINANCE-FISCAL-YEARS-02): periods of the outgoing year that are still
  * open or only soft-closed are listed in the dialog with a link to the
- * period-close cockpit. It warns rather than blocks -- whether activation must
- * be refused while periods are open is a finance-owner decision.
+ * period-close cockpit. finance-service REFUSES activation while any month of
+ * the outgoing year is not hard-closed (per-tenant setting, default on), so the
+ * dialog explains the block; the server is the authority.
+ *
+ * `secondApprover` (default on): activation is submitted as a request that a
+ * different finance administrator approves (GAP-FINANCE-FISCAL-YEARS-01/-02);
+ * `pendingCodes` are the years that already have such a request.
  */
 export function FiscalYearsTable({
   rows,
   periods = [],
   periodsUnavailable = false,
+  secondApprover = true,
+  pendingCodes = [],
 }: {
   rows: FiscalYearRow[];
   periods?: PeriodRow[];
   periodsUnavailable?: boolean;
+  secondApprover?: boolean;
+  pendingCodes?: string[];
 }) {
   const router = useRouter();
   const [pendingCode, setPendingCode] = useState<string | null>(null);
@@ -54,15 +63,30 @@ export function FiscalYearsTable({
     setBusy(true);
     setError(undefined);
     try {
-      await browserJson(`v1/finance/fiscal-years/${encodeURIComponent(code)}/activate`, {
+      const res = await browserFetch(`v1/finance/fiscal-years/${encodeURIComponent(code)}/activate`, {
         method: "PATCH",
         body: JSON.stringify({ reason }),
       });
+      if (!res.ok) {
+        // Known refusals get their own plain-language copy; anything else is the generic save error.
+        const known = await errorCodeFromResponse(res);
+        if (known === "FY_OPEN_PERIODS") setError(`Fiscal year ${outgoing?.code ?? "in use"} still has months that are not hard-closed. Hard-close them in Period Close, then try again.`);
+        else if (known === "FY_OPENING_BALANCES_MISSING") setError(`Enter the opening balances for ${code} before activating it.`);
+        else if (known === "CHANGE_REQUEST_PENDING") setError(`Activation of ${code} is already waiting for approval.`);
+        else if (known === "ALREADY_ACTIVE") setError(`Fiscal year ${code} is already active.`);
+        else setError(await errorMessageFromResponse(res, "save", "fiscal year"));
+        return;
+      }
+      const body = (await res.json().catch(() => null)) as { status?: string } | null;
       setPendingCode(null);
-      setMessage(`Fiscal year ${code} is now active.`);
+      setMessage(
+        body?.status === "pending_approval"
+          ? `Activation of ${code} was submitted. It takes effect when a different finance administrator approves it below.`
+          : `Activation of ${code} was submitted. It becomes the active year in a moment.`,
+      );
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error. Please try again.");
+    } catch {
+      setError("Network error. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -92,6 +116,8 @@ export function FiscalYearsTable({
       render: (row) =>
         row.status === "active" ? (
           <span style={{ color: "var(--mut)", fontSize: 12 }}>Currently active</span>
+        ) : pendingCodes.includes(row.code) ? (
+          <span style={{ color: "var(--mut)", fontSize: 12 }}>Awaiting approval</span>
         ) : (
           <Button
             type="button"
@@ -131,7 +157,7 @@ export function FiscalYearsTable({
       <ConfirmDialog
         open={!!pendingCode}
         title="Activate this fiscal year?"
-        confirmLabel="Activate fiscal year"
+        confirmLabel={secondApprover ? "Submit for approval" : "Activate fiscal year"}
         danger
         requireReason
         reasonLabel="Reason for switching the posting year"
@@ -146,9 +172,14 @@ export function FiscalYearsTable({
               <>Fiscal year <strong>{outgoing.code}</strong> will be closed. </>
             ) : null}
             This changes which year every new posting applies to; your reason is recorded in the audit trail.
+            {secondApprover ? (
+              <span style={{ display: "block", marginTop: 8 }}>
+                <strong>A different finance administrator must approve this</strong> before it takes effect. Until then {outgoing ? outgoing.code : "the current year"} stays active.
+              </span>
+            ) : null}
             {outgoing && unclosed.length > 0 ? (
               <span role="note" style={{ display: "block", marginTop: 8, color: "var(--warn, #b45309)" }}>
-                ⚠ {unclosed.length} period{unclosed.length === 1 ? "" : "s"} of {outgoing.code} not hard-closed:{" "}
+                ⚠ Activation is blocked: {unclosed.length} period{unclosed.length === 1 ? "" : "s"} of {outgoing.code} not hard-closed:{" "}
                 {unclosed.map((p) => `${p.period} (${p.status === "soft_close" ? "soft-closed" : "open"})`).join(", ")}.{" "}
                 <a href="/finance/period-close">Review period close</a>
               </span>

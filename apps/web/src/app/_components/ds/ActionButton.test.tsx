@@ -128,4 +128,24 @@ describe("ActionButton", () => {
     fireEvent.click(screen.getByText("Confirm"));
     await waitFor(() => expect(onSuccess).toHaveBeenCalled());
   });
+
+  // fp-finance-01: optionalReason is forwarded to ConfirmDialog (a welcome remark that never gates Confirm)
+  it("optionalReason shows the reason box, does not gate Confirm, and passes a typed remark through", async () => {
+    const onConfirm = vi.fn().mockResolvedValue(undefined);
+    render(<ActionButton label="Pay" confirmTitle="Sure?" optionalReason reasonLabel="Reference (optional)" onConfirm={onConfirm} />);
+    fireEvent.click(screen.getByRole("button", { name: "Pay" }));
+    expect(screen.getByRole("button", { name: "Confirm" })).not.toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Reference (optional)"), { target: { value: "  UTR123  " } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledWith("UTR123"));
+  });
+
+  it("without optionalReason there is no reason box and Confirm passes undefined", async () => {
+    const onConfirm = vi.fn().mockResolvedValue(undefined);
+    render(<ActionButton label="Pay" confirmTitle="Sure?" onConfirm={onConfirm} />);
+    fireEvent.click(screen.getByRole("button", { name: "Pay" }));
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledWith(undefined));
+  });
 });

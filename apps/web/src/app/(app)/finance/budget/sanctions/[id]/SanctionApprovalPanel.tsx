@@ -23,6 +23,7 @@ const FALLBACK: Record<string, string> = {
   chooseHint: "Approve directly (approving authority, a different officer from the proposer) or route through eOffice file noting.",
   eofficeOnlyHint: "Route this sanction through eOffice file noting; the eOffice decision approves it. Only a finance administrator can approve directly.",
   awaiting: "Awaiting eOffice decision:",
+  awaitingNoFile: "Awaiting an eOffice decision on this sanction.",
   openFile: "Open file",
   directUnavailable: "Direct approval is unavailable while this file is in flight.",
   fileEnded: "The linked eOffice file did not result in approval (it was rejected or closed). You may raise a new file or, as an approving authority, approve directly.",
@@ -42,11 +43,20 @@ export function SanctionApprovalPanel({
   id,
   isPending,
   canApprove,
+  efileInFlight = false,
+  efileFileNo,
   ...noteProps
-}: { id: string; isPending: boolean; canApprove: boolean } & Omit<RaiseEOfficeNoteProps, "refType" | "refId" | "onLinkedFileChange">) {
+}: {
+  id: string;
+  isPending: boolean;
+  canApprove: boolean;
+  /** finance-service says an eOffice file is deciding this sanction (authoritative; see sanctionApprovalMode). */
+  efileInFlight?: boolean;
+  efileFileNo?: string;
+} & Omit<RaiseEOfficeNoteProps, "refType" | "refId" | "onLinkedFileChange">) {
   const [state, setState] = useState<{ loading: boolean; file: LinkedFile | null }>({ loading: true, file: null });
   const t = useSanctionApprovalText();
-  const mode = sanctionApprovalMode({ isPending, canApprove, loading: state.loading, file: state.file });
+  const mode = sanctionApprovalMode({ isPending, canApprove, loading: state.loading, file: state.file, serverInFlight: efileInFlight });
 
   return (
     <>
@@ -55,11 +65,14 @@ export function SanctionApprovalPanel({
           {mode === "choose" ? t("chooseHint") : t("eofficeOnlyHint")}
         </p>
       ) : null}
-      {mode === "awaiting-eoffice" && state.file ? (
+      {mode === "awaiting-eoffice" && (state.file || efileFileNo) ? (
         <p role="status" style={{ marginTop: 18, fontSize: "0.8125rem" }}>
-          {t("awaiting")} <span className="mono">{state.file.file_no}</span>{" "}
-          <a href={`/estab/files/${state.file.id}`}>{t("openFile")}</a>. {t("directUnavailable")}
+          {t("awaiting")} <span className="mono">{state.file?.file_no ?? efileFileNo}</span>
+          {state.file ? <>{" "}<a href={`/estab/files/${state.file.id}`}>{t("openFile")}</a></> : null}. {t("directUnavailable")}
         </p>
+      ) : null}
+      {mode === "awaiting-eoffice" && !state.file && !efileFileNo ? (
+        <p role="status" style={{ marginTop: 18, fontSize: "0.8125rem" }}>{t("awaitingNoFile")} {t("directUnavailable")}</p>
       ) : null}
       {state.file && (mode === "choose" || mode === "eoffice-only") ? (
         <p role="status" style={{ marginTop: 8, fontSize: "0.8125rem" }}>{t("fileEnded")}</p>
@@ -69,7 +82,7 @@ export function SanctionApprovalPanel({
           <SanctionApproveAction id={id} />
         </div>
       ) : null}
-      <RaiseEOfficeNote {...noteProps} allowRaiseAfterTerminal refType="finance_sanction" refId={id} onLinkedFileChange={setState} />
+      <RaiseEOfficeNote {...noteProps} notifyWithFileNo allowRaiseAfterTerminal refType="finance_sanction" refId={id} onLinkedFileChange={setState} />
     </>
   );
 }

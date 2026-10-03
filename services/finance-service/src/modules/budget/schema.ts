@@ -89,6 +89,11 @@ export const financeSanctions = budgetSchema.table("finance_sanctions", {
   utilisedMinor:  bigint("utilised_minor", { mode: "bigint" }).notNull().default(0n),
   currency:       char("currency", { length: 3 }).notNull().default("INR"),
   status:         varchar("status", { length: 24 }).notNull().default("draft"),
+  // GAP-FINANCE-BUDGET-SANCTIONS-DETAIL-01: set when the sanction is submitted for
+  // eOffice approval (submit-approval), cleared by the eOffice decision callback.
+  // While set, a direct /approve is refused (409) -- the eOffice decision is the approver.
+  efileSubmittedAt: timestamp("efile_submitted_at", { withTimezone: true }),
+  efileFileNo:      text("efile_file_no"),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:      uuid("created_by").notNull(),

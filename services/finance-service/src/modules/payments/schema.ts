@@ -118,6 +118,9 @@ export const financeAdvances = paymentsSchema.table("finance_advances", {
   dueDate:        date("due_date"),
   adjustedMinor:  bigint("adjusted_minor", { mode: "bigint" }).notNull().default(0n),
   purpose:        text("purpose"),
+  // GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-01: who sanctioned the advance and why.
+  sanctionAuthority: text("sanction_authority"),
+  reason:         text("reason"),
   status:         varchar("status", { length: 16 }).notNull().default("active"),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -139,6 +142,15 @@ export const financeUC = paymentsSchema.table("finance_uc", {
   submittedDate: date("submitted_date"),
   purpose:       text("purpose"),
   status:        varchar("status", { length: 16 }).notNull().default("pending"),
+  // GAP-FINANCE-EXPENDITURE-UTILIZATION-CERTIFICATES-NEW-01 / -01: the certifier's
+  // declaration, and the verification outcome (rejection reason + resubmits).
+  declarationAccepted: boolean("declaration_accepted").notNull().default(false),
+  declaredBy:    uuid("declared_by"),
+  declaredAt:    timestamp("declared_at", { withTimezone: true }),
+  rejectionReason: text("rejection_reason"),
+  decidedBy:     uuid("decided_by"),
+  decidedAt:     timestamp("decided_at", { withTimezone: true }),
+  resubmitCount: integer("resubmit_count").notNull().default(0),
   createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:     timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:     uuid("created_by").notNull(),

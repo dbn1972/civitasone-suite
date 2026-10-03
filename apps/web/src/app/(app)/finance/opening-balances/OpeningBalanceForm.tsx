@@ -3,7 +3,7 @@
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "../../../_components/ds";
-import { browserJson } from "@/lib/api/browserClient";
+import { browserFetch, errorCodeFromResponse, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { parseRupeesToPaise } from "@/lib/money";
 import { formatMoney } from "@/lib/formatters";
 import { checkAccountCode, type CoaAccount } from "./openingBalanceAccounts";
@@ -17,6 +17,8 @@ type Props = {
    */
   accounts?: readonly CoaAccount[];
   accountsUnavailable?: boolean;
+  /** Per-tenant setting (default on): the batch is held for a different finance administrator to approve. */
+  secondApprover?: boolean;
 };
 
 type EntryRow = {
@@ -48,7 +50,7 @@ function rupeesToPaise(val: string): bigint | null {
 /** Minimum stated-reason length (matches finance-service's reasonField). */
 const OB_REASON_MIN = 10;
 
-export function OpeningBalanceForm({ fyCode, accounts, accountsUnavailable = false }: Props) {
+export function OpeningBalanceForm({ fyCode, accounts, accountsUnavailable = false, secondApprover = true }: Props) {
   const router = useRouter();
 
   const [rows, setRows] = useState<EntryRow[]>([emptyRow(), emptyRow()]);
@@ -153,17 +155,31 @@ export function OpeningBalanceForm({ fyCode, accounts, accountsUnavailable = fal
         narration: r.narration.trim() || undefined,
       }));
 
-      const res = await browserJson<{ status: string; count: number }>("v1/finance/opening-balances", {
+      const res = await browserFetch("v1/finance/opening-balances", {
         method: "POST",
         body: JSON.stringify({ fyCode, entries, reason }),
       });
+      if (!res.ok) {
+        const known = await errorCodeFromResponse(res);
+        if (known === "CHANGE_REQUEST_PENDING") setDialogError(`A batch of opening balances for ${fyCode} is already waiting for approval. Approve or reject it first.`);
+        else if (known === "OPENING_BALANCE_ALREADY_EXISTS") setDialogError(`Opening balances already exist for one of these accounts in ${fyCode}.`);
+        else setDialogError(await errorMessageFromResponse(res, "save", "opening balances"));
+        return;
+      }
+      const body = (await res.json().catch(() => null)) as { status?: string; count?: number } | null;
+      const count = body?.count ?? entries.length;
+      const noun = count === 1 ? "entry" : "entries";
 
       setConfirmOpen(false);
-      setMessage(`${res?.count ?? entries.length} opening balance ${((res?.count ?? entries.length) === 1) ? "entry" : "entries"} saved for ${fyCode}.`);
+      setMessage(
+        body?.status === "pending_approval"
+          ? `${count} opening balance ${noun} for ${fyCode} submitted. They are posted to the ledger when a different finance administrator approves them.`
+          : `${count} opening balance ${noun} saved for ${fyCode}.`,
+      );
       setRows([emptyRow(), emptyRow()]);
       router.refresh();
-    } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
+    } catch {
+      setDialogError("Network error. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -289,7 +305,7 @@ export function OpeningBalanceForm({ fyCode, accounts, accountsUnavailable = fal
       <ConfirmDialog
         open={confirmOpen}
         title="Save these opening balances?"
-        confirmLabel="Save opening balances"
+        confirmLabel={secondApprover ? "Submit for approval" : "Save opening balances"}
         danger
         requireReason
         reasonLabel="Reason / approving authority"
@@ -299,9 +315,11 @@ export function OpeningBalanceForm({ fyCode, accounts, accountsUnavailable = fal
         errorMessage={dialogError}
         description={
           <>
-            Save <strong>{entryCount}</strong> opening balance {entryCount === 1 ? "entry" : "entries"} for fiscal
-            year <strong>{fyCode}</strong>. They are saved immediately (there is no separate approval step) and set
-            the starting position of the ledger for these accounts; they cannot be edited or undone from this screen.
+            {secondApprover ? "Submit" : "Save"} <strong>{entryCount}</strong> opening balance {entryCount === 1 ? "entry" : "entries"} for fiscal
+            year <strong>{fyCode}</strong>.{" "}
+            {secondApprover
+              ? "Nothing is posted yet: a different finance administrator must approve this batch before it sets the starting position of the ledger."
+              : "They are saved immediately (this office has no separate approval step) and set the starting position of the ledger for these accounts; they cannot be edited or undone from this screen."}{" "}
             State the reason and the authority approving these figures — it is recorded in the audit trail.
           </>
         }

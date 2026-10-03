@@ -2413,7 +2413,11 @@
     "typeOther": "Other party",
     "hintAdvanceNumber": "Must be unique for your office. Up to 64 characters.",
     "errorPayee": "Enter the name of the officer or party receiving the advance.",
-    "helpPayee": "Officer or party receiving the advance. Individual officers' names are masked for roles not authorised to see them."
+    "helpPayee": "Officer or party receiving the advance. Individual officers' names are masked for roles not authorised to see them.",
+    "labelAuthority": "Sanctioning authority",
+    "helpAuthority": "The officer or order that sanctioned this advance, e.g. \"Under Secretary (Finance), order 12/2031\".",
+    "errorAuthority": "Name the sanctioning authority.",
+    "reasonLabel": "Reason for this advance"
   },
   "expenditureAdvancesTable": {
     "tabAll": "All",
@@ -2506,7 +2510,9 @@
     "routeErrorArea": "Finance page",
     "statOtherStatus": "Expired / invoked / other",
     "areaGuarantees": "guarantees",
-    "manageInProcurementLink": "EMD & bank guarantees (Procurement)"
+    "manageInProcurementLink": "EMD & bank guarantees (Procurement)",
+    "statExpiringSoon": "Expiring within {days} days",
+    "statLapsed": "Validity lapsed"
   },
   "expenditureGuaranteesTable": {
     "colEntity": "Entity",
@@ -2516,7 +2522,14 @@
     "colStatus": "Status",
     "filterPlaceholder": "Search guarantees…",
     "emptyTitle": "No guarantees",
-    "emptyMessage": "No bank guarantees or EMDs found."
+    "emptyMessage": "No bank guarantees or EMDs found.",
+    "colValidUntil": "Valid until",
+    "colValidity": "Validity",
+    "colBeneficiary": "Beneficiary",
+    "colLinkedRef": "Linked bill / contract",
+    "validityLapsed": "Lapsed",
+    "validityExpiring": "Expiring soon",
+    "validityOk": "Valid"
   },
   "expenditureSchemeDetail": {
     "relatedTitle": "Related records",
@@ -2589,7 +2602,10 @@
     "errorSchemeRequired": "Select the scheme this certificate is for.",
     "errorSchemesUnavailable": "The list of schemes could not be loaded. Refresh the page to try again.",
     "schemePlaceholder": "— select a scheme —",
-    "noSchemes": "No schemes are set up yet, so this field is not required."
+    "noSchemes": "No schemes are set up yet, so this field is not required.",
+    "labelGrantee": "Grantee (body that utilised the grant)",
+    "errorGrantee": "Name the grantee.",
+    "helpGrantRef": "If this is the number of an approved sanction, the amount cannot exceed what that sanction still leaves unclaimed."
   },
   "expenditureUtilizationCertificates": {
     "schemeFilterNote": "Showing utilization certificates for the scheme \"{scheme}\".",
@@ -2620,7 +2636,23 @@
     "colSubmitted": "Submitted",
     "colStatus": "Status",
     "filterPlaceholder": "Search UCs…",
-    "tabRejected": "Returned"
+    "tabRejected": "Returned",
+    "area": "utilization certificate",
+    "errSelfVerify": "You raised this certificate, so a different officer must verify or return it.",
+    "errAlreadyDecided": "This certificate has already moved on. Refresh to see its current status.",
+    "colRemarks": "Return reason",
+    "noReason": "No reason recorded",
+    "colActions": "Actions",
+    "verify": "Verify",
+    "verifyTitle": "Verify {ucNo}?",
+    "verifyHelp": "Verifying confirms the grant was utilised as certified. It is recorded in the audit trail.",
+    "returnUc": "Return",
+    "returnTitle": "Return {ucNo} to the submitter?",
+    "returnReason": "Why is it being returned?",
+    "resubmit": "Resubmit",
+    "resubmitTitle": "Resubmit {ucNo} for verification?",
+    "resubmitHelp": "The certificate goes back to the verifier. Resubmit once you have fixed what was raised.",
+    "resubmitNote": "Note for the verifier (optional)"
   },
   "expenses": {
     "title": "My Expense Claims",
@@ -2747,7 +2779,7 @@
   },
   "financeDebt": {
     "title": "Debt Management",
-    "subtitle": "Loan and debt instruments by source.",
+    "subtitle": "Loans and debt instruments by source and lender, with outstanding principal and repayment schedules.",
     "totalLoans": "Total Loans",
     "active": "Active",
     "closed": "Closed",
@@ -2765,7 +2797,12 @@
     "loadArea": "the debt register",
     "sourceRbi": "RBI",
     "sourceMarket": "Market",
-    "sourceCentralGovt": "Central Govt"
+    "sourceCentralGovt": "Central Govt",
+    "colLender": "Lender",
+    "colRate": "Rate p.a.",
+    "colOutstanding": "Outstanding principal",
+    "totalOutstanding": "Outstanding principal",
+    "newLoan": "+ New loan"
   },
   "sanctionApproval": {
     "chooseHint": "Approve directly (approving authority, a different officer from the proposer) or route through eOffice file noting.",
@@ -2773,7 +2810,8 @@
     "awaiting": "Awaiting eOffice decision:",
     "openFile": "Open file",
     "directUnavailable": "Direct approval is unavailable while this file is in flight.",
-    "fileEnded": "The linked eOffice file did not result in approval (it was rejected or closed). You may raise a new file or, as an approving authority, approve directly."
+    "fileEnded": "The linked eOffice file did not result in approval (it was rejected or closed). You may raise a new file or, as an approving authority, approve directly.",
+    "awaitingNoFile": "Awaiting an eOffice decision on this sanction."
   },
   "form16": {
     "loadingAriaLabel": "Loading…",
@@ -9391,5 +9429,174 @@
     "prevLabel": "Previous",
     "nextLabel": "Next",
     "showingRange": "Showing {from}-{to} of {total}"
+  },
+  "financeApprovals": {
+    "area": "change request",
+    "title": "Changes awaiting a second officer",
+    "intro": "These changes take effect only after a different finance administrator approves them. The officer who raised a change cannot approve it.",
+    "none": "No changes are waiting for approval.",
+    "kind": {
+      "fiscal_year_activate": "Activate fiscal year",
+      "opening_balances_enter": "Opening balances for",
+      "hoa_change": "HoA code change for head",
+      "settings_relax": "Switch off a control"
+    },
+    "hoaChange": "PFMS HoA code: {change}",
+    "balancesSummary": "{count, plural, one {# entry} other {# entries}}, total debit {total}",
+    "reason": "Reason: {reason}",
+    "raisedByYou": "Raised by you",
+    "raisedByOther": "Raised by another officer",
+    "approve": "Approve",
+    "approveTitle": "Approve this change?",
+    "approveHelp": {
+      "fiscal_year_activate": "The year becomes the active posting year and the current year is closed.",
+      "opening_balances_enter": "The balances are posted to the ledger.",
+      "hoa_change": "The new HoA code is used for PFMS payment and budget mapping.",
+      "settings_relax": "The control is switched off for this office. Ledger-shaping changes it protects will no longer need a second officer."
+    },
+    "reject": "Reject",
+    "rejectTitle": "Reject this change?",
+    "rejectReason": "Why is this rejected?",
+    "decided": "Decision recorded. The list updates in a moment.",
+    "withdraw": "Withdraw",
+    "withdrawTitle": "Withdraw your request?",
+    "withdrawn": "Request withdrawn.",
+    "waitingForOther": "Waiting for another finance administrator.",
+    "needsAdmin": "A finance administrator must decide this.",
+    "errSelf": "You raised this change, so a different officer must approve or reject it.",
+    "errNotPending": "This change has already been decided. Refresh to see its outcome.",
+    "settingsRelaxSummary": "Switches off: {controls}",
+    "settingsControl": {
+      "makerCheckerEnabled": "second approver",
+      "blockFyActivationOpenPeriods": "block activation while periods are open",
+      "requireOpeningBalancesForActivation": "require opening balances before activation"
+    }
+  },
+  "financeBankReveal": {
+    "area": "bank account number",
+    "failed": "The account number could not be shown. Please try again.",
+    "reveal": "Reveal",
+    "hide": "Hide",
+    "title": "Reveal the full account number?",
+    "description": "The full number is shown for 30 seconds. Your name and the reason you give are recorded in the audit trail.",
+    "confirm": "Reveal number",
+    "reasonLabel": "Why do you need the full number?",
+    "colBank": "Bank",
+    "colBranch": "Branch",
+    "colAccount": "Account No",
+    "colIfsc": "IFSC",
+    "colType": "Type",
+    "colStatus": "Status",
+    "emptyTitle": "No bank accounts",
+    "emptyMessage": "Add your office's bank accounts so payments can be issued."
+  },
+  "financeSettings": {
+    "area": "finance settings",
+    "title": "Finance policy settings",
+    "intro": "These switches control who must approve ledger-shaping changes and how fiscal years roll over. Every change needs a reason and is audited.",
+    "save": "Save settings",
+    "saved": "Settings saved. They apply to new requests from now on.",
+    "network": "Network error. Please try again.",
+    "confirmTitle": "Change finance policy settings?",
+    "confirmDescription": "Turning off the second-approver rule lets one officer make these changes alone. Your reason is recorded with the old and new values.",
+    "reasonLabel": "Reason for this change",
+    "flag": {
+      "makerCheckerEnabled": {
+        "label": "Second approver for ledger-shaping changes",
+        "help": "Fiscal-year activation, opening balances, HoA-code changes and utilisation-certificate verification need a different officer to approve them."
+      },
+      "blockFyActivationOpenPeriods": {
+        "label": "Block fiscal-year activation while periods are open",
+        "help": "A year cannot be activated until every month of the current year is hard-closed."
+      },
+      "requireOpeningBalancesForActivation": {
+        "label": "Require opening balances before activating a year",
+        "help": "Off by default so an office with a genuinely nil opening position is not locked out."
+      },
+      "fyCreateAsDraft": {
+        "label": "Create new fiscal years as drafts",
+        "help": "While another year is active, a new year does not change the posting year until it is activated separately."
+      }
+    },
+    "savedPending": "Submitted. Switching a control off takes effect only when a different finance administrator approves it; the control stays on until then.",
+    "confirmRelax": "You are switching a protective control OFF. This is held until a DIFFERENT finance administrator approves it. Your reason is recorded.",
+    "glTitle": "Debt GL heads",
+    "glHelp": "The loan register posts journals to these heads. There are no defaults: until all three are set, recording a loan or an instalment is refused.",
+    "glLoadFailed": "The chart of accounts could not be loaded, so the heads cannot be chosen right now. Reload the page to try again.",
+    "glNotSet": "Choose a head",
+    "glIncomplete": "Set all three heads together, or leave all three unset.",
+    "gl": {
+      "debtLoanLiabilityHeadId": "Loan liability head (liability)",
+      "debtInterestExpenseHeadId": "Interest expense head (expense)",
+      "debtBankHeadId": "Bank head (asset)"
+    }
+  },
+  "financeDebtNew": {
+    "title": "New loan",
+    "subtitle": "Record a loan or debt instrument. The EMI schedule is generated from these terms.",
+    "backLabel": "Debt Management",
+    "labelInstrument": "Instrument",
+    "labelSource": "Source",
+    "sourcePlaceholder": "Choose a source",
+    "sourceRbi": "RBI",
+    "sourceMarket": "Market",
+    "sourceCentralGovt": "Central Govt",
+    "labelLender": "Lender",
+    "labelPrincipal": "Principal amount (₹)",
+    "labelRate": "Interest rate (% per year)",
+    "labelTenure": "Tenure (months)",
+    "labelFirstEmi": "First instalment date",
+    "saving": "Saving…",
+    "submit": "Create loan",
+    "recorded": "Loan recorded. Its repayment schedule appears in a moment.",
+    "confirmTitle": "Record this loan?",
+    "confirmLabel": "Record loan",
+    "confirmDescription": "{instrument} from {lender}: {amount} at {rate}% a year over {months} monthly instalments, the first on {first}. The instalments are calculated on the reducing balance.",
+    "error": {
+      "instrument": "Enter the instrument name.",
+      "source": "Choose a source.",
+      "lender": "Name the lender.",
+      "principal": "Enter a positive amount in rupees with at most 2 decimals.",
+      "rate": "Enter a rate from 0 to 100 with at most 2 decimals.",
+      "tenure": "Enter a whole number of months from 1 to 600.",
+      "firstEmi": "Choose the first instalment date."
+    },
+    "glNotConfigured": "The loan GL heads are not set up, so a loan cannot be recorded yet. A finance administrator sets them under Finance configuration."
+  },
+  "financeDebtDetail": {
+    "title": "Loan",
+    "area": "this loan",
+    "notFoundTitle": "Loan not found",
+    "notFoundMessage": "This loan does not exist or is not in your office.",
+    "principal": "Principal",
+    "outstanding": "Outstanding principal",
+    "rate": "Rate p.a.",
+    "maturity": "Final instalment",
+    "schedule": "Repayment schedule",
+    "colNo": "No.",
+    "colDue": "Due date",
+    "colPrincipal": "Principal",
+    "colInterest": "Interest",
+    "colTotal": "Instalment",
+    "colStatus": "Status",
+    "colPaidOn": "Paid on",
+    "colAction": "Action",
+    "paid": "Paid",
+    "due": "Due",
+    "markPaid": "Record payment",
+    "markPaidTitle": "Record payment of instalment {no}?",
+    "markPaidHelp": "This records that {amount} was paid and reduces the outstanding principal. It does not move money; pay through Payments first.",
+    "paymentRef": "Payment reference (optional)",
+    "alreadyPaid": "This instalment is already recorded as paid. Refresh to see it.",
+    "noScheduleTitle": "No repayment schedule",
+    "noScheduleMessage": "This loan was recorded without a schedule.",
+    "colGl": "GL journal",
+    "glPosted": "Posted",
+    "glPending": "Awaiting posting",
+    "outOfOrder": "Record the earlier instalment first; instalments are recorded in order.",
+    "glNotConfigured": "The loan GL heads are not set up. A finance administrator sets them under Finance configuration.",
+    "badPaidOn": "The payment date must not be in the future or before the loan started.",
+    "receiptPosted": "The loan receipt is posted to the books.",
+    "receiptPending": "The loan receipt journal is awaiting posting."
   }
 }

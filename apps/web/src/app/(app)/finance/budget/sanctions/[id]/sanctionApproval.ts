@@ -28,8 +28,16 @@ export function sanctionApprovalMode(args: {
   canApprove: boolean;
   loading: boolean;
   file: LinkedFile | null;
+  /**
+   * finance-service's own record that an eOffice file is deciding this sanction
+   * (set on submit-approval, cleared by the decision). It holds even when the
+   * estab lookup is slow or fails, and finance-service refuses direct approval
+   * (409 EFILE_IN_FLIGHT) in the same state.
+   */
+  serverInFlight?: boolean;
 }): SanctionApprovalMode {
   if (!args.isPending) return "none";
+  if (args.serverInFlight) return "awaiting-eoffice";
   if (args.loading) return "pending-lookup";
   if (args.file && isEofficeFileInFlight(args.file.status)) return "awaiting-eoffice";
   return args.canApprove ? "choose" : "eoffice-only";

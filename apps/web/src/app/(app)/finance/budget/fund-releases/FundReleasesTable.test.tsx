@@ -5,7 +5,7 @@ vi.mock("@/lib/sync/resource", () => ({
   useSeededResource: (_k: string, initial: unknown) => ({ data: initial, fromCache: false, offline: false, cachedAt: null, provenance: "live" }),
 }));
 
-import { FundReleasesTable, releaseAmountLabel } from "./FundReleasesTable";
+import { FundReleasesTable, releaseAmountLabel, officeNameMap, officeLabel } from "./FundReleasesTable";
 
 const rel = (o: Record<string, unknown>) => ({
   id: "r1", fy: "2026-27", fromOfficeId: "11111111-1111-4111-8111-111111111111", toOfficeId: "22222222-2222-4222-8222-222222222222",
@@ -54,5 +54,30 @@ describe("FundReleasesTable", () => {
     render(<FundReleasesTable releases={[rel({})]} />);
     expect(document.body.textContent).not.toContain("33333333".slice(-8) + "3333");
     expect(document.body.textContent).not.toMatch(/[0-9a-f]{8}(?![0-9a-f-])/);
+  });
+});
+
+// GAP-FINANCE-BUDGET-FUND-RELEASES-01
+describe("FundReleasesTable office names", () => {
+  it("shows the office names the server joined from the directory, never an id fragment", () => {
+    render(<FundReleasesTable releases={[rel({ fromOfficeName: "Department of Finance", toOfficeName: "District Roads Office" })]} />);
+    expect(screen.getByText("Department of Finance")).toBeInTheDocument();
+    expect(screen.getByText("District Roads Office")).toBeInTheDocument();
+    expect(screen.queryByText(/11111111|22222222|1111$|2222$/)).not.toBeInTheDocument();
+  });
+
+  it("an office the directory does not know reads 'Unknown office' (id kept as a tooltip), not a guess or a fragment", () => {
+    render(<FundReleasesTable releases={[rel({ fromOfficeName: "Department of Finance", toOfficeName: null })]} />);
+    const unknown = screen.getByText("Unknown office");
+    expect(unknown).toHaveAttribute("title", "22222222-2222-4222-8222-222222222222");
+    expect(screen.queryByText("22222222")).not.toBeInTheDocument();
+  });
+
+  it("officeNameMap / officeLabel resolve ids to names and fall back to Unknown office", () => {
+    const names = officeNameMap([rel({ fromOfficeName: "A", toOfficeName: "B" }), rel({ id: "r2", fromOfficeName: "", toOfficeName: null })]);
+    expect(officeLabel("11111111-1111-4111-8111-111111111111", names)).toBe("A");
+    expect(officeLabel("22222222-2222-4222-8222-222222222222", names)).toBe("B");
+    expect(officeLabel("33333333-3333-4333-8333-333333333333", names)).toBe("Unknown office");
+    expect(officeLabel(undefined, names)).toBe("Unknown office");
   });
 });

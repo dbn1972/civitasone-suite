@@ -15,6 +15,8 @@ import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../
 import { createBudgetBody, reappropriateBody, createSanctionBody, budgetQueryParams, idParam, updateHeadHoABody, rejectSanctionBody, submitReappropriationBody } from "./validators.js";
 import * as repo from "./repo.js";
 import { assertValidHeadParent, DomainError } from "./domain.js";
+
+const submitSanctionBody = z.object({ fileNo: z.string().trim().min(1).max(64).optional() });
 import { db } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import * as commands from "./commands.js";
@@ -113,8 +115,11 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FINANCE_ROLES);
     const { id } = idParam.parse(req.params);
     const body = updateHeadHoABody.parse(req.body);
-    await commands.updateHeadHoA(ctx, id, body);
-    return reply.send({ id, hoaCode: body.hoaCode, status: "updated" });
+    const result = await commands.updateHeadHoA(ctx, id, body);
+    if (result.status === "pending_approval") {
+      return reply.code(202).send({ id, hoaCode: body.hoaCode, status: "pending_approval", requestId: result.requestId });
+    }
+    return reply.code(202).send({ id, hoaCode: body.hoaCode, status: "accepted", requestId: result.requestId });
   });
 
   app.get("/v1/finance/budgets", async (req, reply) => {
@@ -187,7 +192,8 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const { id } = idParam.parse(req.params);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.submitSanctionForApproval(ctx, id));
+    const { fileNo } = submitSanctionBody.parse(req.body ?? {});
+    return sendAccepted(reply, acceptedResponseSchema, await commands.submitSanctionForApproval(ctx, id, fileNo ?? null));
   });
 
   // Submit a budget re-appropriation to eOffice for administrative approval.

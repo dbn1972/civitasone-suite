@@ -24,6 +24,7 @@ function renderPage(ui: React.ReactElement) {
 
 function fillForm() {
   fireEvent.change(screen.getByLabelText("UC number"), { target: { value: "UC-001" } });
+  fireEvent.change(screen.getByLabelText("Grantee (body that utilised the grant)"), { target: { value: "Gram Panchayat Rampur" } });
   fireEvent.change(screen.getByLabelText("Amount utilised (₹)"), { target: { value: "1000" } });
   fireEvent.change(screen.getByLabelText("Purpose"), { target: { value: "Scheme expenditure" } });
   fireEvent.click(screen.getByLabelText(/I certify that the grant was utilised/));
@@ -94,6 +95,35 @@ describe("NewUCForm", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect((init.headers as Record<string, string>)["x-idempotency-key"]).toBeTruthy();
+  });
+
+  // GAP-FINANCE-EXPENDITURE-UTILIZATION-CERTIFICATES-NEW-02 / -01 (declaration persisted)
+  it("requires a grantee (no POST without one) and sends grantee + declaration:true", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 202 }));
+    renderPage(<NewUCForm schemes={[]} />);
+    fillForm();
+    fireEvent.change(screen.getByLabelText("Grantee (body that utilised the grant)"), { target: { value: " " } });
+    fireEvent.click(screen.getByRole("button", { name: /submit uc/i }));
+    expect(await screen.findByText("Name the grantee.")).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText("Grantee (body that utilised the grant)"), { target: { value: "  District Health Society " } });
+    fireEvent.click(screen.getByRole("button", { name: /submit uc/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Submit certificate" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toMatchObject({ grantee: "District Health Society", declaration: true });
+  });
+
+  it("shows the server's over-claim message on the amount field", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      code: "UC_OVERCLAIM", message: "x", fieldErrors: [{ field: "amountMinor", message: "This is more than the sanctioned grant still leaves." }],
+    }), { status: 409 }));
+    renderPage(<NewUCForm schemes={[]} />);
+    fillForm();
+    fireEvent.click(screen.getByRole("button", { name: /submit uc/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Submit certificate" }));
+    expect(await screen.findByText("This is more than the sanctioned grant still leaves.")).toBeInTheDocument();
   });
 
   // GAP-FINANCE-EXPENDITURE-UTILIZATION-CERTIFICATES-NEW-02

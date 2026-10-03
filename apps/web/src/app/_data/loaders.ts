@@ -89,6 +89,9 @@ import type {
   FinanceDepositSummary,
   FinanceGuaranteeSummary,
   FinanceDebtSummary,
+  FinanceDebtDetail,
+  FinanceChangeRequest,
+  FinanceSettings,
   FinanceSchemeSummary,
   FinanceDemandSummary,
   FinanceAuditParaSummary,
@@ -256,6 +259,9 @@ import {
   FinanceDepositSummaryListSchema,
   FinanceGuaranteeSummaryListSchema,
   FinanceDebtSummaryListSchema,
+  FinanceDebtDetailSchema,
+  FinanceChangeRequestListSchema,
+  FinanceSettingsSchema,
   FinanceSchemeSummarySchema,
   FinanceSchemeSummaryListSchema,
   FinanceDemandSummaryListSchema,
@@ -2390,6 +2396,42 @@ export async function getFinanceDebt(): Promise<LoaderResult<FinanceDebtSummary[
     telemetryKey: "finance.debt",
     responseSchema: FinanceDebtSummaryListSchema,
     mapResponse: (p) => getArrayPayload(p) as FinanceDebtSummary[] | null,
+  });
+}
+
+/** GAP-FINANCE-DEBT-01: one loan with its EMI schedule (null when the id is unknown). */
+export async function getFinanceDebtById(id: string): Promise<LoaderResult<FinanceDebtDetail | null>> {
+  return fetchJson<unknown, FinanceDebtDetail | null>(`/api/v1/finance/debt/${encodeURIComponent(id)}`, null, {
+    revalidateSeconds: 30,
+    telemetryKey: "finance.debt.detail",
+    responseSchema: FinanceDebtDetailSchema,
+    mapResponse: (p) => (isRecord(p) ? (p as FinanceDebtDetail) : null),
+  });
+}
+
+/**
+ * fp-finance-01: maker-checker change requests awaiting a second officer
+ * (fiscal-year activation, opening balances, HoA-code change). `kind` narrows to one.
+ */
+export async function getFinancePendingChangeRequests(
+  kind?: FinanceChangeRequest["kind"],
+): Promise<LoaderResult<FinanceChangeRequest[]>> {
+  const qs = `status=pending&limit=100${kind ? `&kind=${kind}` : ""}`;
+  return fetchJson<unknown, FinanceChangeRequest[]>(`/api/v1/finance/change-requests?${qs}`, [], {
+    revalidateSeconds: 0,
+    telemetryKey: "finance.change-requests",
+    responseSchema: FinanceChangeRequestListSchema,
+    mapResponse: (p) => getArrayPayload(p) as FinanceChangeRequest[] | null,
+  });
+}
+
+/** fp-finance-01: per-tenant finance policy switches (second approver, FY activation rules). */
+export async function getFinanceSettings(): Promise<LoaderResult<FinanceSettings | null>> {
+  return fetchJson<unknown, FinanceSettings | null>("/api/v1/finance/settings", null, {
+    revalidateSeconds: 0,
+    telemetryKey: "finance.settings",
+    responseSchema: FinanceSettingsSchema,
+    mapResponse: (p) => (isRecord(p) ? (p as FinanceSettings) : null),
   });
 }
 

@@ -23,6 +23,8 @@ import { distributionSchema } from "../modules/budget/distribution-schema.js";
 import { supplementarySchema } from "../modules/budget/supplementary-schema.js";
 import { schema as resolutionIntakeModule } from "../modules/resolution-intake/schema.js";
 import { schema as reconModule } from "../modules/recon/schema.js";
+import { officeSchema } from "../modules/budget/office-schema.js";
+import { schema as approvalsModule } from "../modules/approvals/schema.js";
 import { outboxSchema }             from "./outbox.js";
 
 const SCHEMA = {
@@ -34,6 +36,8 @@ const SCHEMA = {
   ...periodCloseModule,
   ...hoaModule,
   ...mastersModule,
+  ...approvalsModule,
+  ...officeSchema,
   ...bankReconModule,
   ...simplifiedModule,
   ...anomalyModule,

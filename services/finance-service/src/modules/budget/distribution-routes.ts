@@ -5,6 +5,7 @@ import { db } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./distribution-repo.js";
+import { officeNamesByIds } from "./office-repo.js";
 import {
   assertDistributionAmountValid, assertDistinctOffices, assertWithinAllocation,
   assertAcknowledgerDistinct, assertDistributionTransition, remainingDistributable,
@@ -71,7 +72,16 @@ export async function allocationDistributionRoutes(app: FastifyInstance): Promis
     requireRole(ctx, READER_ROLES);
     const q = distributionQuery.parse(req.query);
     const rows = await repo.listDistributions(ctx.tenantId, { allocationId: q.allocationId, fy: q.fy, toOfficeId: q.toOfficeId }, q.limit);
-    return reply.send({ data: rows.map(serialize) });
+    // GAP-FINANCE-BUDGET-FUND-RELEASES-01: office names from the finance office
+    // directory; an id with no directory entry carries a null name (never a guess).
+    const names = await officeNamesByIds(ctx.tenantId, rows.flatMap((r) => [r.fromOfficeId, r.toOfficeId]));
+    return reply.send({
+      data: rows.map((r) => ({
+        ...serialize(r),
+        fromOfficeName: names.get(r.fromOfficeId) ?? null,
+        toOfficeName: names.get(r.toOfficeId) ?? null,
+      })),
+    });
   });
 
   app.get("/v1/finance/allocation-distributions/:id", async (req, reply) => {

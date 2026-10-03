@@ -101,7 +101,7 @@ describe("POST /v1/finance/advances — HTTP surface", () => {
       // this route (matches createBillBody.grossMinor's established
       // precision-safe pattern) — a raw JSON number can silently lose
       // precision above 2^53 before Zod ever sees it.
-      payload: { advanceNo: "ADV-OK-1", purpose: "Site visit", payee: "R. Sharma", amountMinor: "250000", currency: "INR", dueDate: "2025-12-31" },
+      payload: { advanceNo: "ADV-OK-1", purpose: "Site visit", payee: "R. Sharma", sanctionAuthority: "Under Secretary (Finance)", reason: "Site visit sanctioned", amountMinor: "250000", currency: "INR", dueDate: "2025-12-31" },
     });
     await app.close();
     expect(res.statusCode).toBe(202);
@@ -182,7 +182,7 @@ describe("POST /v1/finance/utilization-certificates — HTTP surface", () => {
       headers: { authorization: `Bearer ${makeToken()}`, "content-type": "application/json" },
       // BUG FIX (bigint-safe money fields): amountMinor is now string-only at
       // this route — see the advances test above for the full rationale.
-      payload: { ucNo: "UC-OK-1", purpose: "Scheme X utilisation", scheme: "PMAY-G", amountMinor: "750000", currency: "INR" },
+      payload: { ucNo: "UC-OK-1", purpose: "Scheme X utilisation", scheme: "PMAY-G", grantee: "Gram Panchayat Rampur", declaration: true, amountMinor: "750000", currency: "INR" },
     });
     await app.close();
     expect(res.statusCode).toBe(202);
@@ -208,7 +208,7 @@ describe("utilization-certificate consumer — CQRS wiring (integration)", () =>
       tenantId: TENANT, actorId: ACTOR, correlationId: UC_CORR, schemaVersion: "1.0",
       payload: {
         id: UC_ID, tenantId: TENANT, ucNo: "UC-CONSUMER-1",
-        purpose: "Annual grant utilisation", scheme: "NHM-2024",
+        purpose: "Annual grant utilisation", scheme: "NHM-2024", grantee: "District Health Society", declaration: true,
         amountMinor: 1200000, currency: "INR",
       },
     });
@@ -220,7 +220,9 @@ describe("utilization-certificate consumer — CQRS wiring (integration)", () =>
     const rows = await scoped(TENANT, (tx) => tx.select().from(financeUC).where(eq(financeUC.id, UC_ID)));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.ucNo).toBe("UC-CONSUMER-1");
-    expect(rows[0]?.grantee).toBe("NHM-2024");
+    expect(rows[0]?.grantee).toBe("District Health Society");
+    expect(rows[0]?.declarationAccepted).toBe(true);
+    expect(rows[0]?.declaredBy).toBe(ACTOR);
     expect(rows[0]?.grantRef).toBe("NHM-2024");
     expect(rows[0]?.purpose).toBe("Annual grant utilisation");
     expect(rows[0]?.amountMinor).toBe(1200000n);
@@ -272,7 +274,7 @@ describe("GET /v1/finance/utilization-certificates — HTTP surface (bigint-safe
       tenantId: TENANT, actorId: ACTOR, correlationId: UC_LIST_CORR, schemaVersion: "1.0",
       payload: {
         id: UC_LIST_ID, tenantId: TENANT, ucNo: "UC-LIST-1",
-        purpose: "Large-value grant utilisation", scheme: "PMAY-G-LARGE",
+        purpose: "Large-value grant utilisation", scheme: "PMAY-G-LARGE", grantee: "State Housing Board", declaration: true,
         amountMinor: UC_LARGE_AMOUNT_MINOR, currency: "INR",
       },
     });

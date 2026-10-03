@@ -32,7 +32,7 @@ describe("expenditure list pages on a FAILED load (FAILMASK)", () => {
   const cases: [string, keyof typeof loaders, () => Promise<React.ReactElement>, number][] = [
     ["advances", "getFinanceAdvances", () => AdvancesPage(), 4],
     ["bills", "getFinanceBills", () => BillsPage(), 4],
-    ["guarantees", "getFinanceGuarantees", () => GuaranteesPage(), 4],
+    ["guarantees", "getFinanceGuarantees", () => GuaranteesPage(), 5],
     ["scheme tracking", "getFinanceSchemes", () => SchemeTrackingPage(), 4],
     ["utilization certificates", "getFinanceUCs", () => UCsPage({}), 6],
   ];
@@ -92,6 +92,30 @@ describe("expenditure stat cards mean what they say", () => {
     render(await UCsPage({}));
     expect(screen.getByText("statPendingSubmission").closest(".stat")).toHaveTextContent("1");
     expect(screen.getByText("statRejected").closest(".stat")).toHaveTextContent("1");
+  });
+
+  // GAP-FINANCE-EXPENDITURE-GUARANTEES-01: expiry is computed from the validity date, never from status alone.
+  it("guarantees: 'expiring soon' and 'lapsed' come from validUntil (IST days), not from status", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-02T06:00:00.000Z"));
+    try {
+      loaders.getFinanceGuarantees.mockResolvedValue({
+        data: [
+          { id: "1", status: "active", validUntil: "2026-10-12" },
+          { id: "2", status: "active", validUntil: "2027-06-30" },
+          { id: "3", status: "active", validUntil: "2026-09-01" },
+          { id: "4", status: "cancelled", validUntil: "2026-09-01" },
+          { id: "5", status: "active" },
+        ],
+        source: "api",
+      });
+      render(await GuaranteesPage());
+      expect(screen.getByText("statExpiringSoon").closest(".stat")).toHaveTextContent("1");
+      expect(screen.getByText("statLapsed").closest(".stat")).toHaveTextContent("1");
+      expect(screen.queryByText("statOtherStatus")).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("schemes and guarantees: 4th card is 'other status', not UC / expiry", async () => {

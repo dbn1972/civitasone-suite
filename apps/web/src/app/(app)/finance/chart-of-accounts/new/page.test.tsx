@@ -130,6 +130,26 @@ describe("MapHeadOfAccountPage", () => {
     expect(JSON.parse(patch.body!)).toEqual({ hoaCode: NEW, reason: "Aligning with PFMS mapping" });
   });
 
+  // GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-01 (second approver)
+  it("a 202 from the server is announced as submitted-for-approval, not as saved", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      if (init?.method === "PATCH") return new Response(JSON.stringify({ status: "pending_approval", requestId: "r1" }), { status: 202 });
+      return new Response(JSON.stringify({ data: ACCOUNTS }), { status: 200 });
+    });
+    render(<MapHeadOfAccountPage />);
+    await waitFor(() => expect(screen.getAllByText("2110 · Sundry Creditors").length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText("Head of account"), { target: { value: "acc-1" } });
+    fireEvent.change(screen.getByLabelText("PFMS HoA code"), { target: { value: "123456789012345678" } });
+    fireEvent.click(screen.getByRole("button", { name: /save hoa code/i }));
+    // the dialog warns that a different finance administrator must approve
+    expect(await screen.findByText(/different finance administrator approves it/i)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Reason for changing PFMS HoA code"), { target: { value: "Aligning with PFMS mapping" } });
+    fireEvent.click(screen.getByRole("button", { name: "Change HoA code" }));
+    const status = await screen.findByText(/takes effect when a different finance administrator approves it/i);
+    expect(status.closest("[role='status']")).not.toBeNull();
+    expect(screen.queryByText("Head of Account code saved.")).not.toBeInTheDocument();
+  });
+
   // GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-02
   it("requires a parent head for a minor head and sends parentId", async () => {
     const posts: string[] = [];

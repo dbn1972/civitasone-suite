@@ -13,6 +13,7 @@ import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { registerMastersConsumers } from "../src/modules/masters/consumer.js";
 import { COMMANDS } from "../src/topics.js";
+import { setFinanceSettings } from "./_finance-settings.js";
 
 const ACTOR = "70000000-0ba1-4000-8000-00000000f001";
 
@@ -62,6 +63,7 @@ describe("fiscal-year writes under concurrency (real DB)", () => {
 
   it("two concurrent activates leave exactly one active year", async () => {
     const tenant = randomUUID();
+    await setFinanceSettings(tenant, { blockFyActivationOpenPeriods: false });
     await runWithTenant(tenant, () => db.transaction((tx) => tx.execute(sql`
       INSERT INTO gl.finance_fiscal_years (id, tenant_id, code, label, start_date, end_date, status, created_by) VALUES
         (gen_random_uuid(), ${tenant}::uuid, '2028-29', 'X', '2028-04-01', '2029-03-31', 'active', ${ACTOR}::uuid),

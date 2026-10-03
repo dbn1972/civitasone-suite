@@ -592,6 +592,10 @@ export const SanctionDetailSchema = SanctionSummarySchema.extend({
     action: z.string(),
     timestamp: z.string(),
   })).default([]),
+  // GAP-FINANCE-BUDGET-SANCTIONS-DETAIL-01: an eOffice file is deciding this sanction
+  // (set on submit-approval, cleared by the decision). Optional for older servers.
+  efileInFlight: z.boolean().optional(),
+  efileFileNo: z.string().optional(),
 });
 
 export const BillSummarySchema = z.object({
@@ -647,6 +651,9 @@ export const AdvanceSummarySchema = z.object({
   adjustedAmount: zMoneyMinorString.default(0),
   balance: zMoneyMinorString,
   status: z.enum(["active", "adjusted", "overdue", "closed"]),
+  // GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-01: who sanctioned the advance and why.
+  sanctionAuthority: z.string().optional(),
+  reason: z.string().optional(),
 });
 export const AdvanceSummaryListSchema = z.array(AdvanceSummarySchema);
 
@@ -665,6 +672,11 @@ export const UCSummarySchema = z.object({
   periodTo: z.string(),
   submittedDate: z.string().optional(),
   status: z.enum(["pending", "submitted", "verified", "rejected"]),
+  // fp-finance-01: verification outcome and the certifier's declaration.
+  rejectionReason: z.string().optional(),
+  declarationAccepted: z.boolean().optional(),
+  resubmitCount: z.number().optional(),
+  createdBy: z.string().optional(),
 });
 export const UCSummaryListSchema = z.array(UCSummarySchema);
 
@@ -2485,6 +2497,9 @@ export const AllocationDistributionSummarySchema = z.object({
   issuedBy: z.string().nullable(),
   acknowledgedBy: z.string().nullable(),
   acknowledgeNote: z.string().nullable(),
+  // GAP-FINANCE-BUDGET-FUND-RELEASES-01: names from the finance office directory (null = not in it).
+  fromOfficeName: z.string().nullable().optional(),
+  toOfficeName: z.string().nullable().optional(),
   version: z.number(),
 });
 export const AllocationDistributionSummaryListSchema = z.array(AllocationDistributionSummarySchema);
@@ -2648,6 +2663,10 @@ export const FinanceGuaranteeSummarySchema = z.object({
   currency: z.string(),
   feePct: z.string(),
   status: z.string(),
+  // GAP-FINANCE-EXPENDITURE-GUARANTEES-01/-02: validity, beneficiary, linked bill/contract.
+  validUntil: z.string().nullable().optional(),
+  beneficiary: z.string().nullable().optional(),
+  linkedRef: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
   version: z.number(),
@@ -2662,11 +2681,77 @@ export const FinanceDebtSummarySchema = z.object({
   currency: z.string(),
   maturity: z.string().nullable(),
   status: z.string(),
+  // GAP-FINANCE-DEBT-01: lender, terms and repayment position (null on legacy rows).
+  lender: z.string().nullable().optional(),
+  interestRateBps: z.number().nullable().optional(),
+  tenureMonths: z.number().nullable().optional(),
+  outstandingMinor: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
   version: z.number(),
 });
 export const FinanceDebtSummaryListSchema = z.array(FinanceDebtSummarySchema);
+
+export const FinanceDebtEmiSchema = z.object({
+  installmentNo: z.number(),
+  dueDate: z.string(),
+  principalMinor: z.string(),
+  interestMinor: z.string(),
+  totalMinor: z.string(),
+  status: z.enum(["due", "paid"]),
+  paidOn: z.string().nullable(),
+  paymentRef: z.string().nullable(),
+  /** "posted" once the GL journal exists, "pending" while it is queued, null for a due instalment. */
+  glStatus: z.enum(["posted", "pending"]).nullable().optional(),
+});
+export const FinanceDebtDetailSchema = z.object({
+  id: z.string(),
+  instrument: z.string(),
+  source: z.string(),
+  lender: z.string().nullable(),
+  principalMinor: z.string(),
+  currency: z.string(),
+  interestRateBps: z.number().nullable(),
+  tenureMonths: z.number().nullable(),
+  firstEmiDate: z.string().nullable(),
+  maturity: z.string().nullable(),
+  status: z.string(),
+  outstandingMinor: z.string().nullable(),
+  receiptGlStatus: z.enum(["posted", "pending"]).nullable().optional(),
+  schedule: z.array(FinanceDebtEmiSchema),
+});
+
+// fp-finance-01: maker-checker change requests and per-tenant finance settings.
+export const FinanceChangeRequestSchema = z.object({
+  id: z.string(),
+  kind: z.enum(["fiscal_year_activate", "opening_balances_enter", "hoa_change", "settings_relax"]),
+  subjectKey: z.string(),
+  payload: z.record(z.unknown()),
+  reason: z.string(),
+  status: z.enum(["pending", "approved", "rejected", "cancelled"]),
+  requestedBy: z.string(),
+  requestedAt: z.string(),
+  decidedBy: z.string().nullable(),
+  decidedAt: z.string().nullable(),
+  decisionNote: z.string().nullable(),
+  version: z.number(),
+});
+export const FinanceChangeRequestListSchema = z.object({
+  data: z.array(FinanceChangeRequestSchema),
+  total: z.number(),
+  limit: z.number(),
+  offset: z.number(),
+});
+export const FinanceSettingsSchema = z.object({
+  makerCheckerEnabled: z.boolean(),
+  blockFyActivationOpenPeriods: z.boolean(),
+  requireOpeningBalancesForActivation: z.boolean(),
+  fyCreateAsDraft: z.boolean(),
+  debtLoanLiabilityHeadId: z.string().nullable(),
+  debtInterestExpenseHeadId: z.string().nullable(),
+  debtBankHeadId: z.string().nullable(),
+  updatedAt: z.string().nullable(),
+});
 
 export const FinanceSchemeSummarySchema = z.object({
   id: z.string(),

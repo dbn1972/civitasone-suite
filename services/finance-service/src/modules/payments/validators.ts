@@ -86,6 +86,10 @@ export const createAdvanceBody = z.object({
   amountMinor: moneyMinorField,
   currency:    z.string().length(3).default("INR"),
   dueDate:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "dueDate must be YYYY-MM-DD").optional(),
+  // GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-01: an advance is an outward commitment of
+  // public money, so the sanctioning authority and the reason are recorded with it.
+  sanctionAuthority: z.string().trim().min(2, "Name the sanctioning authority").max(200),
+  reason:      z.string().trim().min(5, "Give the reason for this advance (at least 5 characters)").max(500),
 });
 export type CreateAdvanceBody = z.infer<typeof createAdvanceBody>;
 
@@ -93,13 +97,25 @@ export const createUCBody = z.object({
   ucNo:        z.string().min(1).max(64),
   purpose:     z.string().min(1).max(500),
   scheme:      z.string().max(200).optional(),
+  // GAP-FINANCE-EXPENDITURE-UTILIZATION-CERTIFICATES-NEW-02: the body that utilised the grant.
+  grantee:     z.string().trim().min(2, "Name the grantee").max(200),
   grantRef:    z.string().max(200).optional(),
+  // GAP-FINANCE-EXPENDITURE-UTILIZATION-CERTIFICATES-NEW-01: the certifier attests the
+  // grant was utilised for the sanctioned purpose; recorded with who and when.
+  declaration: z.literal(true, { errorMap: () => ({ message: "The utilisation declaration must be accepted" }) }),
   amountMinor: moneyMinorField,
   currency:    z.string().length(3).default("INR"),
   periodFrom:  z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "periodFrom must be YYYY-MM-DD").optional(),
   periodTo:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "periodTo must be YYYY-MM-DD").optional(),
 });
 export type CreateUCBody = z.infer<typeof createUCBody>;
+
+export const rejectUCBody = z.object({
+  reason: z.string().trim().min(5, "Say why this certificate is returned (at least 5 characters)").max(500),
+});
+export const resubmitUCBody = z.object({
+  note: z.string().trim().max(500).optional(),
+});
 
 export const adjustAdvanceBody = z.object({
   adjustedMinor: moneyMinorField,

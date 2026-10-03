@@ -87,12 +87,37 @@ export const financeDebt = treasurySchema.table("finance_debt", {
   amountMinor: bigint("amount_minor", { mode: "bigint" }).notNull().default(0n),
   currency:    char("currency", { length: 3 }).notNull().default("INR"),
   maturity:    date("maturity"),
+  // GAP-FINANCE-DEBT-01 (migrations/0082): lender, terms and repayment position.
+  lender:           text("lender"),
+  interestRateBps:  integer("interest_rate_bps"),
+  tenureMonths:     integer("tenure_months"),
+  firstEmiDate:     date("first_emi_date"),
+  outstandingMinor: bigint("outstanding_minor", { mode: "bigint" }),
+  receiptJournalId: uuid("receipt_journal_id"),
   status:      varchar("status", { length: 24 }).notNull().default("active"),
   createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:   timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:   uuid("created_by").notNull(),
   updatedBy:   uuid("updated_by").notNull(),
   version:     integer("version").notNull().default(1),
+});
+
+/** One scheduled repayment instalment of a debt instrument (migrations/0082). */
+export const financeDebtEmi = treasurySchema.table("finance_debt_emi", {
+  id:             uuid("id").primaryKey().defaultRandom(),
+  tenantId:       uuid("tenant_id").notNull(),
+  debtId:         uuid("debt_id").notNull(),
+  installmentNo:  integer("installment_no").notNull(),
+  dueDate:        date("due_date").notNull(),
+  principalMinor: bigint("principal_minor", { mode: "bigint" }).notNull(),
+  interestMinor:  bigint("interest_minor", { mode: "bigint" }).notNull(),
+  totalMinor:     bigint("total_minor", { mode: "bigint" }).notNull(),
+  status:         varchar("status", { length: 8 }).notNull().default("due"),
+  paidOn:         date("paid_on"),
+  paidBy:         uuid("paid_by"),
+  paymentRef:     text("payment_ref"),
+  journalId:      uuid("journal_id"),
+  version:        integer("version").notNull().default(1),
 });
 
 export const financeGuarantees = treasurySchema.table("finance_guarantees", {
@@ -103,6 +128,10 @@ export const financeGuarantees = treasurySchema.table("finance_guarantees", {
   amountMinor: bigint("amount_minor", { mode: "bigint" }).notNull().default(0n),
   currency:    char("currency", { length: 3 }).notNull().default("INR"),
   feePct:      numeric("fee_pct", { precision: 5, scale: 4 }).notNull().default("0"),
+  // GAP-FINANCE-EXPENDITURE-GUARANTEES-01/-02 (migrations/0082).
+  validUntil:  date("valid_until"),
+  beneficiary: text("beneficiary"),
+  linkedRef:   text("linked_ref"),
   status:      varchar("status", { length: 24 }).notNull().default("active"),
   createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:   timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -151,6 +180,7 @@ export type DepositEventInsert = typeof financeDepositEvents.$inferInsert;
 export type InstrumentRow    = typeof financeInstruments.$inferSelect;
 export type InstrumentInsert = typeof financeInstruments.$inferInsert;
 export type DebtRow       = typeof financeDebt.$inferSelect;
+export type DebtEmiRow    = typeof financeDebtEmi.$inferSelect;
 export type GuaranteeRow  = typeof financeGuarantees.$inferSelect;
 
-export const schema = { financeBanks, financeChallans, financeDeposits, financeDepositEvents, financeDebt, financeGuarantees, financeInstruments };
+export const schema = { financeBanks, financeChallans, financeDeposits, financeDepositEvents, financeDebt, financeDebtEmi, financeGuarantees, financeInstruments };

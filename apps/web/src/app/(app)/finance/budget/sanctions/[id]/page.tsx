@@ -91,6 +91,8 @@ export default async function SanctionDetailPage({ params }: { params: { id: str
         id={params.id}
         isPending={isPending}
         canApprove={canApprove}
+        efileInFlight={sanction.efileInFlight === true}
+        {...(sanction.efileFileNo ? { efileFileNo: sanction.efileFileNo } : {})}
         subject={sanction.subject}
         dept={sanction.majorHead ?? "Finance"}
         amountMinor={sanction.amount}

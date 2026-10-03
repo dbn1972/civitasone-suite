@@ -83,21 +83,34 @@ describe("FiscalYearForm", () => {
     expect(screen.queryByText("Create this fiscal year?")).not.toBeInTheDocument();
   });
 
-  it("names the active year that will be closed, requires a 10+ char reason, and POSTs it", async () => {
+  // GAP-FINANCE-FISCAL-YEARS-01: while another year is active a new year is a DRAFT (default); the posting year does not change.
+  it("creates a DRAFT while another year is active: says the active year stays active, requires a 10+ char reason, and POSTs it", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ id: "x", status: "accepted" }), { status: 202 }));
     render(<FiscalYearForm rows={EXISTING} />);
     fillYear("2027-28", "2027-04-01", "2028-03-31");
     await waitFor(() => expect(screen.getByText("Create this fiscal year?")).toBeInTheDocument());
-    expect(screen.getByText(/will be closed/)).toBeInTheDocument();
+    const text = screen.getByRole("alertdialog").textContent ?? "";
+    expect(text).toMatch(/created as a draft/);
+    expect(text).toMatch(/2026-27.*stays the active posting year/);
+    expect(text).not.toMatch(/will be closed/);
     const confirm = screen.getByRole("button", { name: "Create fiscal year" });
-    fireEvent.change(screen.getByLabelText("Reason for creating and activating this year"), { target: { value: "too short" } });
+    fireEvent.change(screen.getByLabelText("Reason for creating this year"), { target: { value: "too short" } });
     expect(confirm).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("Reason for creating and activating this year"), { target: { value: "Year-end rollover per GO 12/2027" } });
+    fireEvent.change(screen.getByLabelText("Reason for creating this year"), { target: { value: "Year-end rollover per GO 12/2027" } });
     expect(confirm).not.toBeDisabled();
     fireEvent.click(confirm);
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const body = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
     expect(body.reason).toBe("Year-end rollover per GO 12/2027");
+    expect(await screen.findByText(/created as a draft\. Activate it from the table below/)).toBeInTheDocument();
+  });
+
+  it("when this office creates years active immediately (setting off) the dialog names the year that will be closed", async () => {
+    render(<FiscalYearForm rows={EXISTING} createsAsDraft={false} />);
+    fillYear("2027-28", "2027-04-01", "2028-03-31");
+    await waitFor(() => expect(screen.getByText("Create this fiscal year?")).toBeInTheDocument());
+    expect(screen.getByText(/will be closed/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Reason for creating and activating this year")).toBeInTheDocument();
   });
 
   // GAP-FINANCE-FISCAL-YEARS-05

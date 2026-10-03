@@ -261,5 +261,7 @@ export async function getSanctionDetail(id: string, tenantId: string) {
     majorHead: head?.code ?? row.headId,
     lineItems: [],
     approvalTrail: [],
+    efileInFlight: row.efileSubmittedAt != null,
+    ...(row.efileFileNo ? { efileFileNo: row.efileFileNo } : {}),
   };
 }

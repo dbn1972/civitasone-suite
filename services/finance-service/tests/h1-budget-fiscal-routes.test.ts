@@ -12,6 +12,7 @@ import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { scoped } from "./_tenant.js";
+import { setFinanceSettings, clearFinanceSettings } from "./_finance-settings.js";
 import { financeBudgetAllocation } from "../src/modules/budget/allocation-schema.js";
 import { financeHeads } from "../src/modules/budget/schema.js";
 import { pgSchema, uuid, varchar, integer, timestamp } from "drizzle-orm/pg-core";
@@ -49,6 +50,7 @@ const admin = () => ({ authorization: `Bearer ${tok(["finance_admin"])}` });
 const officer = () => ({ authorization: `Bearer ${tok(["finance_officer"])}` });
 
 async function cleanup() {
+  await clearFinanceSettings(TENANT);
   await scoped(TENANT, (tx) => tx.delete(financeBudgetAllocation).where(eq(financeBudgetAllocation.tenantId, TENANT)));
   await scoped(TENANT, (tx) => tx.delete(financeHeads).where(eq(financeHeads.tenantId, TENANT)));
   await scoped(TENANT, (tx) => tx.execute(sql`DELETE FROM gl.finance_fiscal_years WHERE tenant_id = ${TENANT}::uuid`));
@@ -57,6 +59,8 @@ async function cleanup() {
 
 beforeAll(async () => {
   await cleanup();
+  // Single-officer paths under test here; the maker-checker + period-block paths are in tests/fp01-change-requests.test.ts.
+  await setFinanceSettings(TENANT, { makerCheckerEnabled: false, blockFyActivationOpenPeriods: false });
   await scoped(TENANT, (tx) => tx.insert(financeHeads).values([
     { id: HEAD_EXP, tenantId: TENANT, code: "3054-H1", name: "Roads and Bridges", level: 1, classification: "expense", createdBy: ACTOR, updatedBy: ACTOR },
     { id: HEAD_LIAB, tenantId: TENANT, code: "8443-H1", name: "Civil Deposits", level: 1, classification: "liability", createdBy: ACTOR, updatedBy: ACTOR },

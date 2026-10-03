@@ -96,6 +96,32 @@ describe("sanctionApprovalMode", () => {
   });
 });
 
+// GAP-FINANCE-BUDGET-SANCTIONS-DETAIL-01 step 6: finance-service's own flag is authoritative
+describe("server-side eFile-in-flight flag", () => {
+  it("serverInFlight locks direct approval even while the estab lookup is loading or found nothing", () => {
+    expect(sanctionApprovalMode({ isPending: true, canApprove: true, loading: true, file: null, serverInFlight: true })).toBe("awaiting-eoffice");
+    expect(sanctionApprovalMode({ isPending: true, canApprove: true, loading: false, file: null, serverInFlight: true })).toBe("awaiting-eoffice");
+    expect(sanctionApprovalMode({ isPending: false, canApprove: true, loading: false, file: null, serverInFlight: true })).toBe("none");
+    expect(sanctionApprovalMode({ isPending: true, canApprove: true, loading: false, file: null, serverInFlight: false })).toBe("choose");
+  });
+
+  it("the panel hides Approve and names the file number finance-service recorded, though the estab lookup returned nothing", async () => {
+    mockLinkedFile(null);
+    render(<SanctionApprovalPanel id="s-1" isPending canApprove efileInFlight efileFileNo="FIN/2031/77" {...noteProps} />);
+    expect(await screen.findByText(/Awaiting eOffice decision/)).toBeInTheDocument();
+    expect(screen.getByText("FIN/2031/77")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Approve sanction" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Direct approval is unavailable while this file is in flight/)).toBeInTheDocument();
+  });
+
+  it("without a file number it still says an eOffice decision is awaited", async () => {
+    mockLinkedFile(null);
+    render(<SanctionApprovalPanel id="s-1" isPending canApprove efileInFlight {...noteProps} />);
+    expect(await screen.findByText(/Awaiting an eOffice decision on this sanction/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Approve sanction" })).not.toBeInTheDocument();
+  });
+});
+
 describe("sanctionApprovalMode (base)", () => {
   const file = { id: "f", file_no: "N", status: "open" };
   it("covers every branch", () => {

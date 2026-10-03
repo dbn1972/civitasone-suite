@@ -10,6 +10,8 @@ import * as repo from "./repo.js";
 import * as budgetRepo from "../budget/repo.js";
 import { assertThreeWayMatchPresent, assertThreeWayMatch, assertBillPassed, assertBillRejectable, assertPaymentSubmittable, PAYMENT_SUBMIT_BLOCKED_LIST, assertValidPaymentMode, assertDistinctMakerChecker, assertPayerNotPasser, nextStage, deviationExceedsTolerance, DEFAULT_THREE_WAY_TOLERANCE_PCT, DomainError } from "./domain.js";
 import { minorString } from "@civitasone/schemas/money";
+import * as ucRepo from "./uc-repo.js";
+import { assertUCWithinSanction, assertUCPeriodValid } from "./uc-domain.js";
 import { assertValidDdoCode } from "../../shared/pfms.js";
 import { assertValidHoAWithMaster } from "../hoa/domain.js";
 import { ddoExists, paoExists, vendorExists } from "../masters/repo.js";
@@ -481,6 +483,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; advanceNo: string; purpose: string; payee?: string;
       type?: string; amountMinor: number; currency?: string; dueDate?: string;
+      sanctionAuthority?: string; reason?: string;
     };
     const today = new Date().toISOString().slice(0, 10);
     // payee is required by createAdvanceBody; a legacy queued message without
@@ -498,6 +501,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
           disbursedDate: today,
           ...(p.dueDate ? { dueDate: p.dueDate } : {}),
           purpose: p.purpose,
+          sanctionAuthority: p.sanctionAuthority ?? null, reason: p.reason ?? null,
           status: "active", createdBy: msg.actorId, updatedBy: msg.actorId,
         });
         await audit(tx, msg, "create", "advance", p.id);
@@ -522,22 +526,39 @@ export function registerPaymentsConsumers(queue: Queue): void {
 
   sub(COMMANDS.ucCreate, async (msg) => {
     const p = msg.payload as {
-      id: string; tenantId: string; ucNo: string; purpose: string; scheme?: string;
-      grantRef?: string; amountMinor: number; currency?: string; periodFrom?: string; periodTo?: string;
+      id: string; tenantId: string; ucNo: string; purpose: string; scheme?: string; grantee?: string;
+      grantRef?: string; amountMinor: number | string; currency?: string; periodFrom?: string; periodTo?: string;
+      declaration?: boolean;
     };
     const today = new Date().toISOString().slice(0, 10);
+    // A certificate is a signed statement: refuse one with no accepted declaration or grantee.
+    if (p.declaration !== true) throw new NonRetryableError("[finance/payments] ucCreate SCHEMA_VIOLATION: declaration must be accepted");
+    const grantee = (p.grantee ?? "").trim();
+    if (!grantee) throw new NonRetryableError("[finance/payments] ucCreate SCHEMA_VIOLATION: grantee is required");
+    const grantRef = p.grantRef ?? p.scheme ?? null;
+    const amountMinor = BigInt(p.amountMinor);
+    assertUCPeriodValid(p.periodFrom, p.periodTo);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Over-claim guard (race-safe): when the grant reference is an approved
+      // sanction's number, lock that sanction row so concurrent UCs for it are
+      // serialised, then require sum(other claiming UCs) + this <= sanctioned.
+      if (grantRef) {
+        const sanction = await ucRepo.findApprovedSanctionByNo(tx, p.tenantId, grantRef, true);
+        if (sanction) {
+          assertUCWithinSanction(sanction.amountMinor, await ucRepo.sumClaimedForGrantRef(tx, p.tenantId, grantRef), amountMinor);
+        }
+      }
       await repo.insertUC(tx, {
         id: p.id, tenantId: p.tenantId, ucNo: p.ucNo,
-        grantRef: p.grantRef ?? p.scheme ?? null,
-        // grantee is NOT NULL; fall back to the (required) purpose when no scheme given.
-        grantee: p.scheme && p.scheme.trim() ? p.scheme.trim() : p.purpose,
-        amountMinor: BigInt(p.amountMinor), currency: p.currency ?? "INR",
+        grantRef,
+        grantee,
+        amountMinor, currency: p.currency ?? "INR",
         periodFrom: p.periodFrom ?? today,
         periodTo: p.periodTo ?? today,
         submittedDate: today,
         purpose: p.purpose,
+        declarationAccepted: true, declaredBy: msg.actorId, declaredAt: new Date(),
         status: "submitted", createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "create", "utilization_certificate", p.id);

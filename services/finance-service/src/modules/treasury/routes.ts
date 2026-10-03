@@ -50,6 +50,8 @@ export async function treasuryRoutes(app: FastifyInstance): Promise<void> {
       id: r.id, instrument: r.instrument, source: r.source,
       amountMinor: r.amountMinor.toString(), currency: r.currency,
       maturity: r.maturity, status: r.status,
+      lender: r.lender, interestRateBps: r.interestRateBps, tenureMonths: r.tenureMonths,
+      outstandingMinor: r.outstandingMinor == null ? null : r.outstandingMinor.toString(),
       createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(), version: r.version,
     })));
   });
@@ -65,6 +67,7 @@ export async function treasuryRoutes(app: FastifyInstance): Promise<void> {
       id: r.id, entity: r.entity, type: r.type,
       amountMinor: r.amountMinor.toString(), currency: r.currency,
       feePct: String(r.feePct), status: r.status,
+      validUntil: r.validUntil, beneficiary: r.beneficiary, linkedRef: r.linkedRef,
       createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(), version: r.version,
     })));
   });

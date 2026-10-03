@@ -60,6 +60,20 @@ export const COMMANDS = {
   fiscalYearCreate: "finance.masters.fiscal_year.create",
   fiscalYearActivate: "finance.masters.fiscal_year.activate",
   openingBalancesEnter: "finance.masters.opening_balances.enter",
+  bankAccountReveal: "finance.masters.bank_account.reveal",
+  // fp-finance-01: maker-checker change requests + per-tenant finance settings
+  changeRequestSubmit: "finance.change_request.submit",
+  changeRequestDecide: "finance.change_request.decide",
+  financeSettingsUpdate: "finance.settings.update",
+  hoaChangeApply: "finance.hoa.change_apply",
+  // fp-finance-01: registers
+  ucVerify: "finance.uc.verify",
+  ucReject: "finance.uc.reject",
+  ucResubmit: "finance.uc.resubmit",
+  guaranteeCreate: "finance.guarantee.create",
+  debtCreate: "finance.debt.create",
+  debtEmiPay: "finance.debt.emi_pay",
+  officeCreate: "finance.office.create",
   // budget allocation / distribution / formulation (F3 CQRS)
   budgetAllocationUpsert: "finance.budget.allocation.upsert",
   budgetAllocationReappropriate: "finance.budget.allocation.reappropriate",
