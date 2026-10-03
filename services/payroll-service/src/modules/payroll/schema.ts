@@ -103,6 +103,10 @@ export const payrollDdos = payrollSchema.table("payroll_ddos", {
   tenantId:  uuid("tenant_id").notNull(),
   ddoCode:   varchar("ddo_code", { length: 32 }).notNull(),
   name:      text("name").notNull(),
+  // GAP-PAYROLL-DDOS-03 (migration 0067): a deactivated DDO cannot start new runs.
+  isActive:      boolean("is_active").notNull().default(true),
+  deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
+  deactivatedBy: uuid("deactivated_by"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -131,7 +135,12 @@ export const payrollPensioners = payrollSchema.table("payroll_pensioners", {
   bankIfsc:              encryptedText("bank_ifsc"),
   pan:                   encryptedText("pan"),
   taxRegime:             varchar("tax_regime", { length: 8 }).notNull().default("new"),
+  // active | stopped | deceased (migration 0067, payroll_pensioners_status_check)
   status:                varchar("status", { length: 16 }).notNull().default("active"),
+  statusReason:          text("status_reason"),
+  statusChangedAt:       timestamp("status_changed_at", { withTimezone: true }),
+  statusChangedBy:       uuid("status_changed_by"),
+  dateOfDeath:           date("date_of_death"),
   createdAt:             timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:             timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:             uuid("created_by").notNull(),

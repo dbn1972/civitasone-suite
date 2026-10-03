@@ -106,9 +106,11 @@ vi.mock("../src/shared/infra.js", () => ({
 }));
 
 const executedQueries: unknown[] = [];
+// fin-payroll-03: lets a test script what the consumer's SELECT / RETURNING statements see.
+let executeResponder: (query: unknown, callNo: number) => unknown[] = () => [];
 let mockMarkResult = true;
 const mockTx: any = {
-  execute: (query: unknown) => { executedQueries.push(query); return Promise.resolve([]); },
+  execute: (query: unknown) => { executedQueries.push(query); return Promise.resolve(executeResponder(query, executedQueries.length)); },
 };
 
 vi.mock("../src/shared/db.js", async () => {
@@ -150,6 +152,7 @@ beforeEach(() => {
   executedQueries.length = 0;
   mockEnqueued.length = 0;
   mockMarkResult = true;
+  executeResponder = () => [];
 });
 
 describe("Arrear CQRS", () => {
@@ -282,13 +285,13 @@ describe("Reimbursement CQRS", () => {
     const { COMMANDS } = await import("../src/topics.js");
 
     const result = await createReimbursement(baseCtx, {
-      employeeId: EMPLOYEE, category: "medical", amountMinor: 250000, period: "2026-07",
+      employeeId: EMPLOYEE, category: "food", amountMinor: 250000, period: "2026-07",
     } as any);
 
     expect(mockPublish).toHaveBeenCalledTimes(1);
     const [topic, msg] = mockPublish.mock.calls[0];
     expect(topic).toBe(COMMANDS.reimbursementCreate);
-    expect(msg.payload.category).toBe("medical");
+    expect(msg.payload.category).toBe("food");
     expect(msg.payload.amountMinor).toBe(250000);
     expect(result.status).toBe("accepted");
   });
@@ -303,12 +306,12 @@ describe("Reimbursement CQRS", () => {
 
     await handlers[COMMANDS.reimbursementCreate]({
       ...baseMsg, messageId: "m-reimb-1",
-      payload: { id: "reimb-1", tenantId: TENANT, employeeId: EMPLOYEE, category: "medical", amountMinor: 250000, period: "2026-07", billDate: null, billRef: null },
+      payload: { id: "reimb-1", tenantId: TENANT, employeeId: EMPLOYEE, category: "food", amountMinor: 250000, period: "2026-07", billDate: null, billRef: null },
     });
 
     expect(executedQueries).toHaveLength(1);
     const params = paramsOf(executedQueries[0]);
-    expect(params).toContain("medical");
+    expect(params).toContain("food");
     expect(params).toContain(250000);
 
     expect(mockEnqueued.some((e) => e.topic === EVENTS.reimbursementCreated)).toBe(true);
@@ -325,7 +328,7 @@ describe("Reimbursement CQRS", () => {
 
     await handlers[COMMANDS.reimbursementCreate]({
       ...baseMsg, messageId: "m-reimb-dup",
-      payload: { id: "reimb-dup", tenantId: TENANT, employeeId: EMPLOYEE, category: "medical", amountMinor: 1, period: "2026-07" },
+      payload: { id: "reimb-dup", tenantId: TENANT, employeeId: EMPLOYEE, category: "food", amountMinor: 1, period: "2026-07" },
     });
 
     expect(executedQueries).toHaveLength(0);
@@ -353,29 +356,64 @@ describe("Salary revision CQRS (F3 leftover)", () => {
     expect(result.status).toBe("accepted");
   });
 
-  it("consumer persists the salary revision row and fires salaryRevisionCreated", async () => {
+  const REVISION_MSG = {
+    id: "salrev-1", tenantId: TENANT, employeeId: EMPLOYEE, effectiveDate: "2026-04-01",
+    oldBasicMinor: 5000000, newBasicMinor: 5500000, oldGrossMinor: 8000000, newGrossMinor: 8700000,
+    revisionType: "annual_increment", orderNo: "ORD-95",
+  };
+
+  // fin-payroll-03 (GAP-PAYROLL-SALARY-REVISIONS-04): with the per-tenant
+  // second-approver switch OFF the legacy behaviour is unchanged -- the row is
+  // approved at once and the HRMS basic-pay sync event fires.
+  it("consumer persists the salary revision row and fires salaryRevisionCreated (second approver OFF)", async () => {
     const { registerPayrollConsumers } = await import("../src/modules/payroll/consumer.js");
     const { COMMANDS, EVENTS } = await import("../src/topics.js");
 
     const handlers: Record<string, (msg: unknown) => Promise<void>> = {};
     const q = { subscribe: (t: string, fn: (msg: unknown) => Promise<void>) => { handlers[t] = fn; } } as any;
     registerPayrollConsumers(q);
+    executeResponder = (_q, n) => (n === 1 ? [{ salary_revision_second_approver: false }] : [{ id: "salrev-1" }]);
 
-    await handlers[COMMANDS.salaryRevisionCreate]({
-      ...baseMsg, messageId: "m-salrev-1",
-      payload: {
-        id: "salrev-1", tenantId: TENANT, employeeId: EMPLOYEE, effectiveDate: "2026-04-01",
-        oldBasicMinor: 5000000, newBasicMinor: 5500000, oldGrossMinor: 8000000, newGrossMinor: 8700000,
-        revisionType: "annual_increment", orderNo: "ORD-95",
-      },
-    });
+    await handlers[COMMANDS.salaryRevisionCreate]({ ...baseMsg, messageId: "m-salrev-1", payload: REVISION_MSG });
 
-    expect(executedQueries).toHaveLength(1);
-    const params = paramsOf(executedQueries[0]);
+    expect(executedQueries).toHaveLength(2); // settings read + insert
+    const params = paramsOf(executedQueries[1]);
     expect(params).toContain(EMPLOYEE);
     expect(params).toContain(5500000);
-
+    expect(params).toContain("approved");
     expect(mockEnqueued.some((e) => e.topic === EVENTS.salaryRevisionCreated)).toBe(true);
+  });
+
+  // DEFAULT policy: second approver ON (also when the tenant has no settings row).
+  it("fin-payroll-03: by default the revision is PENDING and the HRMS sync event is NOT fired until a second user approves", async () => {
+    const { registerPayrollConsumers } = await import("../src/modules/payroll/consumer.js");
+    const { COMMANDS, EVENTS } = await import("../src/topics.js");
+
+    const handlers: Record<string, (msg: unknown) => Promise<void>> = {};
+    const q = { subscribe: (t: string, fn: (msg: unknown) => Promise<void>) => { handlers[t] = fn; } } as any;
+    registerPayrollConsumers(q);
+    executeResponder = (_q, n) => (n === 1 ? [] /* no settings row => default ON */ : [{ id: "salrev-1" }]);
+
+    await handlers[COMMANDS.salaryRevisionCreate]({ ...baseMsg, messageId: "m-salrev-2", payload: REVISION_MSG });
+
+    const params = paramsOf(executedQueries[1]);
+    expect(params).toContain("pending");
+    expect(params).not.toContain("approved");
+    expect(mockEnqueued.some((e) => e.topic === EVENTS.salaryRevisionCreated)).toBe(false);
+    expect(mockEnqueued.some((e) => e.topic === "audit.event.record")).toBe(true);
+  });
+
+  it("fin-payroll-03: a redelivered revision whose row already exists emits nothing (ON CONFLICT DO NOTHING returns no row)", async () => {
+    const { registerPayrollConsumers } = await import("../src/modules/payroll/consumer.js");
+    const { COMMANDS } = await import("../src/topics.js");
+
+    const handlers: Record<string, (msg: unknown) => Promise<void>> = {};
+    const q = { subscribe: (t: string, fn: (msg: unknown) => Promise<void>) => { handlers[t] = fn; } } as any;
+    registerPayrollConsumers(q);
+    executeResponder = (_q, n) => (n === 1 ? [{ salary_revision_second_approver: false }] : []);
+
+    await handlers[COMMANDS.salaryRevisionCreate]({ ...baseMsg, messageId: "m-salrev-3", payload: REVISION_MSG });
+    expect(mockEnqueued).toHaveLength(0);
   });
 
   it("is idempotent on redelivery (markProcessed returns false)", async () => {

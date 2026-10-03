@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, ConfirmDialog, DataTable } from "../../../../_components/ds";
+import { Button, ConfirmDialog, DataTable, Modal } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 
@@ -16,6 +16,8 @@ export type ClaimRow = {
   period_display: string;
   bill_date_display: string;
   bill_ref: string;
+  /** GAP-PAYROLL-REIMBURSEMENTS-03 */
+  receipt_count: number;
   status: string;
 } & Record<string, unknown>;
 
@@ -46,6 +48,23 @@ export function ReimbursementsTable({
   const [busy, setBusy] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
+  // GAP-PAYROLL-REIMBURSEMENTS-03: receipts viewer (links are fetched on demand,
+  // short-lived, and each view is audited server-side).
+  const [viewing, setViewing] = useState<ClaimRow | null>(null);
+  const [links, setLinks] = useState<Array<{ index: number; filename: string; url: string }> | null>(null);
+  const [linksError, setLinksError] = useState<string | null>(null);
+
+  async function viewReceipts(row: ClaimRow) {
+    setViewing(row);
+    setLinks(null);
+    setLinksError(null);
+    try {
+      const res = await browserJson<{ data: Array<{ index: number; filename: string; url: string }> }>(`v1/payroll/reimbursements/${row.id}/attachments`);
+      setLinks(res.data ?? []);
+    } catch (err) {
+      setLinksError(err instanceof Error ? err.message : t("networkError"));
+    }
+  }
 
   async function decide(reason?: string) {
     if (!decision) return;
@@ -74,6 +93,24 @@ export function ReimbursementsTable({
     // GAP-PAYROLL-REIMBURSEMENTS-03: bill_date was captured but never shown.
     { key: "bill_date_display" as const, label: t("colBillDate"), sortable: false },
     { key: "bill_ref" as const, label: t("colBillRef") },
+    {
+      key: "receipt_count" as const,
+      label: t("colReceipts"),
+      sortable: false,
+      render: (row: ClaimRow) =>
+        row.receipt_count > 0 ? (
+          <Button
+            variant="ghost"
+            style={{ minHeight: 32, fontSize: 12, padding: "0 12px" }}
+            aria-label={t("viewReceiptsAria", { count: row.receipt_count, employee: row.employee_label })}
+            onClick={() => void viewReceipts(row)}
+          >
+            {t("viewReceipts", { count: row.receipt_count })}
+          </Button>
+        ) : (
+          <span style={{ color: "var(--mut)" }}>{t("noReceipts")}</span>
+        ),
+    },
     { key: "status" as const, label: t("colStatus"), cellType: "status" as const },
     ...(canDecide
       ? [{
@@ -123,6 +160,21 @@ export function ReimbursementsTable({
         emptyTitle={t("emptyTitle")}
         emptyMessage={t("emptyMessage")}
       />
+      <Modal open={viewing !== null} onClose={() => setViewing(null)} title={t("receiptsTitle")}>
+        {linksError && <p role="alert" className="pill bad" style={{ width: "fit-content" }}>{linksError}</p>}
+        {!linksError && links === null && <p role="status">{t("receiptsLoading")}</p>}
+        {links && (
+          <ul style={{ margin: 0, paddingInlineStart: 18 }}>
+            {links.map((l) => (
+              <li key={l.index}>
+                <a href={l.url} target="_blank" rel="noopener noreferrer">{l.filename}</a>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p style={{ fontSize: 12, color: "var(--mut)" }}>{t("receiptsNote")}</p>
+        <Button type="button" variant="ghost" onClick={() => setViewing(null)}>{t("receiptsClose")}</Button>
+      </Modal>
       <ConfirmDialog
         open={decision !== null}
         title={decision?.kind === "reject" ? t("rejectConfirmTitle") : t("approveConfirmTitle")}

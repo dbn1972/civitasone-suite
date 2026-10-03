@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { listQuerySchema } from "@civitasone/schemas/common";
+import { REIMBURSEMENT_ATTACHMENT_MAX, revisionSanityIssue } from "./fin03-domain.js";
 
 export const createStructureBody = z.object({
   name:        z.string().min(1).max(128),
@@ -188,6 +189,11 @@ export const createReimbursementBody = z.object({
   // GAP-PAYROLL-REIMBURSEMENTS-04: a real calendar month (2026-13 was
   // accepted), same "YYYY-MM" the payroll run compares against.
   period:      z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "period must be YYYY-MM"),
+  // GAP-PAYROLL-REIMBURSEMENTS-03: private object-store keys from the
+  // presign endpoint (the route checks each lives under this tenant's prefix
+  // and was actually uploaded). Bill/receipt images and PDFs only -- never
+  // file bytes through this API.
+  attachmentKeys: z.array(z.string().min(1).max(400)).max(REIMBURSEMENT_ATTACHMENT_MAX).optional(),
 });
 export type CreateReimbursementBody = z.infer<typeof createReimbursementBody>;
 
@@ -214,6 +220,10 @@ export const createSalaryRevisionBody = z.object({
   revisionType:  z.enum(["annual_increment", "promotion", "correction", "fitment"]).default("annual_increment"),
   // GAP-PAYROLL-SALARY-REVISIONS-02: a revision rewrites HRMS basic pay, so it must cite its sanctioning order.
   orderNo:       z.string().trim().min(1).max(64),
+}).superRefine((b, ctx) => {
+  // GAP-PAYROLL-SALARY-REVISIONS-03: the same sanity rules the web form applies.
+  const issue = revisionSanityIssue(b);
+  if (issue) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [issue.path], message: issue.message });
 });
 export type CreateSalaryRevisionBody = z.infer<typeof createSalaryRevisionBody>;
 
@@ -226,6 +236,9 @@ export const updateSettingsBody = z.object({
   subsistenceReviewAfterDays: z.number().int().min(1).max(366).optional(),
   subsistenceRevisedMinPctBps: bps.optional(),
   subsistenceRevisedMaxPctBps: bps.optional(),
+  // GAP-PAYROLL-SALARY-REVISIONS-04: per-tenant maker != checker switch for
+  // salary revisions (default ON when never set).
+  salaryRevisionSecondApprover: z.boolean().optional(),
 }).refine(
   (b) => b.subsistenceRevisedMinPctBps == null || b.subsistenceRevisedMaxPctBps == null
     || b.subsistenceRevisedMinPctBps <= b.subsistenceRevisedMaxPctBps,

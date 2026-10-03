@@ -55,6 +55,12 @@ export const COMMANDS = {
   sponsorConfigUpsert:    "payroll.sponsor_config.upsert",
   // Read-side audit events previously written via route db.transaction+outbox
   auditRecord:            "payroll.audit.record",
+  // fin-payroll-03 gap batch (fin03-consumer.ts)
+  ddoSetActive:           "payroll.ddo.set_active",
+  payGroupUpdate:         "payroll.paygroup.update",
+  payGroupSetActive:      "payroll.paygroup.set_active",
+  pensionerSetStatus:     "payroll.pensioner.set_status",
+  salaryRevisionDecide:   "payroll.salary_revision.decide",
 } as const;
 
 export const EVENTS = {

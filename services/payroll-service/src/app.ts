@@ -100,6 +100,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(worldClassPayrollRoutes);
   const { gapRoutes } = await import("./modules/payroll/gap-routes.js");
   await app.register(gapRoutes);
+  const { fin03Routes } = await import("./modules/payroll/fin03-routes.js");
+  await app.register(fin03Routes);
   await app.register((await import("./modules/form16-pdf/routes.js")).form16PdfRoutes);
 
   return app;

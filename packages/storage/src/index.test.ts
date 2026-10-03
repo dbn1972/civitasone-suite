@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { presignedPutUrl, presignedGetUrl, resetClient } from "./index.js";
+import { presignedPutUrl, presignedGetUrl, headObject, resetClient } from "./index.js";
 
 // Set test env before importing
 beforeAll(() => {
@@ -48,5 +48,25 @@ describe("@civitasone/storage presigned URLs", () => {
     // Neither URL is a bare endpoint/bucket/key without auth
     expect(putUrl).not.toMatch(/^http:\/\/localhost:4566\/civitasone-test\/a\.txt$/);
     expect(getUrl).not.toMatch(/^http:\/\/localhost:4566\/civitasone-test\/a\.txt$/);
+  });
+});
+
+describe("presignedPutUrl contentLength (GAP-PAYROLL-REIMBURSEMENTS-03)", () => {
+  it("signs content-length into the URL when given, so a body of another size is refused by the store", async () => {
+    const url = await presignedPutUrl({ key: "r/a.pdf", contentType: "application/pdf", contentLength: 2048 });
+    expect(decodeURIComponent(url)).toMatch(/X-Amz-SignedHeaders=[^&]*content-length/i);
+  });
+
+  it("does not sign content-length when the caller gives none (other callers unchanged)", async () => {
+    const url = await presignedPutUrl({ key: "r/b.pdf", contentType: "application/pdf" });
+    expect(decodeURIComponent(url)).not.toMatch(/X-Amz-SignedHeaders=[^&]*content-length/i);
+  });
+
+  it("headObject is null for an object that cannot be read", async () => {
+    process.env.AWS_ENDPOINT_URL = "http://127.0.0.1:1"; // nothing listens here
+    resetClient();
+    expect(await headObject("does/not/exist.pdf")).toBeNull();
+    process.env.AWS_ENDPOINT_URL = "http://localhost:4566";
+    resetClient();
   });
 });

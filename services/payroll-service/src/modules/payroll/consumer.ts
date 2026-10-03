@@ -22,6 +22,8 @@ import { tenantScoped } from "../../shared/tenant-queue.js";
 import { clearRunRegister, rebuildRunRegister, resolveRegisterDepartments } from "./register.js";
 import { computeSubsistenceEarnings, resolveProfiledSuspension, mergeSubsistenceSettings, DEFAULT_SUBSISTENCE_CONFIG, type SubsistenceEarnings } from "./subsistence.js";
 import { recordRunSuspension, resolveSubsistenceConfig } from "./subsistence-repo.js";
+import { registerFin03Consumers } from "./fin03-consumer.js";
+import { receiptRuleViolation } from "./fin03-domain.js";
 
 /** DOM-008: sentinel tenant_id for the platform-default statutory config row (see migration 0038). */
 const PLATFORM_TENANT_ID = "00000000-0000-0000-0000-000000000000";
@@ -315,6 +317,7 @@ export async function resolveLatestRevision(tx: typeof db, tenantId: string, emp
     SELECT new_basic_minor, effective_date::text AS effective_date
     FROM payroll.payroll_salary_revisions
     WHERE tenant_id = ${tenantId}::uuid AND employee_id = ${employeeId}::uuid
+      AND status = 'approved'
       AND effective_date <= ${month + "-01"}::date
     ORDER BY effective_date DESC, created_at DESC LIMIT 1
   `)) as unknown as Array<{ new_basic_minor: string | number; effective_date: string }>;
@@ -349,6 +352,7 @@ export async function resolveLatestRevisionsTx(tx: typeof db, tenantId: string, 
     SELECT DISTINCT ON (employee_id) employee_id, new_basic_minor, effective_date::text AS effective_date
     FROM payroll.payroll_salary_revisions
     WHERE tenant_id = ${tenantId}::uuid AND employee_id = ANY(${sql`ARRAY[${sql.join(employeeIds.map((id) => sql`${id}::uuid`), sql`, `)}]`})
+      AND status = 'approved'
       AND effective_date <= ${month + "-01"}::date
     ORDER BY employee_id, effective_date DESC, created_at DESC
   `)) as unknown as Array<{ employee_id: string; new_basic_minor: string | number; effective_date: string }>;
@@ -404,6 +408,7 @@ export async function generateRetroArrears(
     SELECT old_basic_minor, new_basic_minor, effective_date::text AS effective_date
     FROM payroll.payroll_salary_revisions
     WHERE tenant_id = ${tenantId}::uuid AND employee_id = ${employeeId}::uuid
+      AND status = 'approved'
       AND to_char(effective_date,'YYYY-MM') < ${runMonth}
     ORDER BY effective_date ASC
   `)) as unknown as Array<{ old_basic_minor: string | number; new_basic_minor: string | number; effective_date: string }>;
@@ -597,6 +602,7 @@ export async function resolveDdoDepartments(tx: typeof db, tenantId: string, ddo
 
 export function registerPayrollConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
+  registerFin03Consumers(queue);
   queue.subscribe(COMMANDS.structureCreate, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; name: string; description?: string; isDefault: boolean };
     await db.transaction(async (tx) => {
@@ -983,14 +989,23 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; employeeId: string; category: string; amountMinor: number;
       billDate?: string | null; billRef?: string | null; period: string;
+      attachmentKeys?: string[];
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      const keys = p.attachmentKeys ?? [];
+      // Re-asserted here because the command can be published without the route
+      // (GAP-PAYROLL-REIMBURSEMENTS-03): a new claim in a receipt-required
+      // category needs a receipt, and every key must be one this tenant issued
+      // to the submitter. Dead-lettered, nothing inserted.
+      const violation = receiptRuleViolation(p.tenantId, msg.actorId, p.category, keys);
+      if (violation) throw new NonRetryableError(`${violation}: reimbursement ${p.id} rejected`);
       await tx.execute(sql`
         INSERT INTO payroll.payroll_reimbursements
-          (id, tenant_id, employee_id, category, amount_minor, bill_date, bill_ref, period, created_by)
+          (id, tenant_id, employee_id, category, amount_minor, bill_date, bill_ref, period, created_by, attachment_keys)
         VALUES (${p.id}::uuid, ${p.tenantId}::uuid, ${p.employeeId}::uuid, ${p.category}, ${p.amountMinor},
-          ${p.billDate ?? null}::date, ${p.billRef ?? null}, ${p.period}, ${msg.actorId}::uuid)
+          ${p.billDate ?? null}::date, ${p.billRef ?? null}, ${p.period}, ${msg.actorId}::uuid,
+          ${sql`ARRAY[${keys.length ? sql.join(keys.map((k) => sql`${k}`), sql`, `) : sql``}]::text[]`})
         ON CONFLICT (id) DO NOTHING
       `);
       await enqueue(tx, {
@@ -1098,14 +1113,17 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; name: string;
       frequency: string; payDayOfMonth: number; timezone: string;
+      payWeekday?: number | null; payLastDay?: boolean; payWeekParity?: number | null;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await tx.execute(sql`
         INSERT INTO payroll.pay_groups
-          (id, tenant_id, name, frequency, pay_day_of_month, timezone, created_by, updated_by)
+          (id, tenant_id, name, frequency, pay_day_of_month, timezone, pay_weekday, pay_last_day, pay_week_parity,
+           created_by, updated_by)
         VALUES (${p.id}::uuid, ${p.tenantId}::uuid, ${p.name}, ${p.frequency},
-          ${p.payDayOfMonth}, ${p.timezone}, ${msg.actorId}::uuid, ${msg.actorId}::uuid)
+          ${p.payDayOfMonth}, ${p.timezone}, ${p.payWeekday ?? null}, ${p.payLastDay ?? false}, ${p.payWeekParity ?? null},
+          ${msg.actorId}::uuid, ${msg.actorId}::uuid)
         ON CONFLICT (id) DO NOTHING
       `);
       await enqueue(tx, {
@@ -1296,19 +1314,25 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       ptSlabs?: Array<{ fromMinor: number; toMinor: number; taxMinor: number }>;
       lwfEmployee?: number; lwfEmployer?: number;
       lwfFrequency?: "monthly" | "quarterly" | "half_yearly" | "yearly";
+      effectiveFrom?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       for (const slab of p.ptSlabs ?? []) {
+        // GAP-PAYROLL-STATUTORY-PT-04: effective_from is recorded with the slab
+        // (a new slab without one gets the column default; an update without
+        // one keeps the stored date).
         await tx.execute(sql`
           INSERT INTO payroll.payroll_professional_tax
-            (tenant_id, state_code, slab_from_minor, slab_to_minor, pt_amount_minor)
+            (tenant_id, state_code, slab_from_minor, slab_to_minor, pt_amount_minor, effective_from)
           VALUES (${p.tenantId}::uuid, ${p.stateCode},
             ${slab.fromMinor.toString()}::bigint, ${slab.toMinor.toString()}::bigint,
-            ${slab.taxMinor.toString()}::bigint)
+            ${slab.taxMinor.toString()}::bigint,
+            COALESCE(${p.effectiveFrom ?? null}::date, DATE '2024-04-01'))
           ON CONFLICT (tenant_id, state_code, slab_from_minor)
           DO UPDATE SET slab_to_minor = EXCLUDED.slab_to_minor,
-            pt_amount_minor = EXCLUDED.pt_amount_minor
+            pt_amount_minor = EXCLUDED.pt_amount_minor,
+            effective_from = COALESCE(${p.effectiveFrom ?? null}::date, payroll.payroll_professional_tax.effective_from)
         `);
       }
       if (p.lwfEmployee != null || p.lwfEmployer != null || p.lwfFrequency != null) {
@@ -1339,7 +1363,9 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { stateCode: p.stateCode, ptSlabCount: p.ptSlabs?.length ?? 0 },
       });
-      await audit(tx, msg, "upsert", "payroll_state_rules", p.stateCode);
+      await audit(tx, msg, "upsert", "payroll_state_rules", p.stateCode, {
+        ...(p.effectiveFrom ? { newValue: { effectiveFrom: p.effectiveFrom, ptSlabs: p.ptSlabs ?? [] } } : {}),
+      });
     });
   });
 
@@ -1358,23 +1384,38 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await tx.execute(sql`
+      // GAP-PAYROLL-SALARY-REVISIONS-04: per-tenant second-approver switch
+      // (payroll_settings.salary_revision_second_approver, DEFAULT ON; a
+      // tenant with no settings row is ON too). ON -> the revision is
+      // 'pending' (no payroll effect, no HRMS sync) until a DIFFERENT user
+      // approves it; OFF -> approved immediately, exactly the legacy behaviour.
+      const setting = (await tx.execute(sql`
+        SELECT salary_revision_second_approver FROM payroll.payroll_settings
+         WHERE tenant_id = ${p.tenantId}::uuid LIMIT 1
+      `)) as unknown as Array<{ salary_revision_second_approver: boolean }>;
+      const needsSecondApprover = setting[0]?.salary_revision_second_approver ?? true;
+      const status = needsSecondApprover ? "pending" : "approved";
+      const inserted = (await tx.execute(sql`
         INSERT INTO payroll.payroll_salary_revisions
           (id, tenant_id, employee_id, effective_date, old_basic_minor, new_basic_minor,
-           old_gross_minor, new_gross_minor, revision_type, order_no, approved_by, created_at)
+           old_gross_minor, new_gross_minor, revision_type, order_no, approved_by, created_by, status, created_at)
         VALUES
           (${p.id}::uuid, ${p.tenantId}::uuid, ${p.employeeId}::uuid,
            ${p.effectiveDate}::date, ${p.oldBasicMinor}, ${p.newBasicMinor},
            ${p.oldGrossMinor}, ${p.newGrossMinor}, ${p.revisionType},
-           ${p.orderNo ?? null}, ${msg.actorId}::uuid, NOW())
+           ${p.orderNo ?? null}, ${needsSecondApprover ? null : msg.actorId}::uuid, ${msg.actorId}::uuid, ${status}, NOW())
         ON CONFLICT (id) DO NOTHING
-      `);
-      await enqueue(tx, {
-        topic: EVENTS.salaryRevisionCreated, eventType: EVENTS.salaryRevisionCreated,
-        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { id: p.id, employeeId: p.employeeId, newBasicMinor: p.newBasicMinor },
-      });
-      await audit(tx, msg, "create", "payroll_salary_revision", p.id);
+        RETURNING id
+      `)) as unknown as Array<{ id: string }>;
+      if (inserted.length === 0) return;
+      if (!needsSecondApprover) {
+        await enqueue(tx, {
+          topic: EVENTS.salaryRevisionCreated, eventType: EVENTS.salaryRevisionCreated,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { id: p.id, employeeId: p.employeeId, newBasicMinor: p.newBasicMinor },
+        });
+      }
+      await audit(tx, msg, "create", "payroll_salary_revision", p.id, { newValue: { status } });
     });
   });
 
@@ -1383,6 +1424,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       tenantId: string; protectedNetFloorMinor: number;
       subsistenceInitialPctBps?: number; subsistenceReviewAfterDays?: number;
       subsistenceRevisedMinPctBps?: number; subsistenceRevisedMaxPctBps?: number;
+      salaryRevisionSecondApprover?: boolean;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -1393,10 +1435,12 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       const prevRows = (await tx.execute(sql`
         SELECT protected_net_floor_minor::text AS floor,
                subsistence_initial_pct_bps, subsistence_review_after_days,
-               subsistence_revised_min_pct_bps, subsistence_revised_max_pct_bps
+               subsistence_revised_min_pct_bps, subsistence_revised_max_pct_bps,
+               salary_revision_second_approver
           FROM payroll.payroll_settings WHERE tenant_id = ${p.tenantId}::uuid
          FOR UPDATE
       `)) as unknown as Array<{
+        salary_revision_second_approver: boolean;
         floor: string; subsistence_initial_pct_bps: number; subsistence_review_after_days: number;
         subsistence_revised_min_pct_bps: number; subsistence_revised_max_pct_bps: number;
       }>;
@@ -1418,10 +1462,11 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
           tenant_id, protected_net_floor_minor,
           subsistence_initial_pct_bps, subsistence_review_after_days,
           subsistence_revised_min_pct_bps, subsistence_revised_max_pct_bps,
-          created_at, updated_at)
+          salary_revision_second_approver, created_at, updated_at)
         VALUES (${p.tenantId}::uuid, ${p.protectedNetFloorMinor},
           ${Number(next.initialPctBps)}, ${next.reviewAfterDays},
           ${Number(next.revisedMinPctBps)}, ${Number(next.revisedMaxPctBps)},
+          COALESCE(${p.salaryRevisionSecondApprover ?? null}::boolean, TRUE),
           NOW(), NOW())
         ON CONFLICT (tenant_id) DO UPDATE
           SET protected_net_floor_minor = EXCLUDED.protected_net_floor_minor,
@@ -1429,6 +1474,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
               subsistence_review_after_days = EXCLUDED.subsistence_review_after_days,
               subsistence_revised_min_pct_bps = EXCLUDED.subsistence_revised_min_pct_bps,
               subsistence_revised_max_pct_bps = EXCLUDED.subsistence_revised_max_pct_bps,
+              salary_revision_second_approver = COALESCE(${p.salaryRevisionSecondApprover ?? null}::boolean, payroll.payroll_settings.salary_revision_second_approver),
               updated_at = NOW()
       `);
       await enqueue(tx, {
@@ -1438,16 +1484,20 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       });
       // FR 53 review fix: the money-driving percentages must be reconstructable
       // from the audit trail, so record before/after (null before = no row yet).
-      const snapshot = (floor: string, c: typeof next) => ({
+      // The second-approver switch is part of the trail too; a tenant with no row
+      // (or a pre-0068 row) is ON, the default.
+      const priorSecondApprover = prev ? prev.salary_revision_second_approver !== false : true;
+      const snapshot = (floor: string, c: typeof next, secondApprover: boolean) => ({
         protectedNetFloorMinor: floor,
+        salaryRevisionSecondApprover: secondApprover,
         subsistenceInitialPctBps: Number(c.initialPctBps),
         subsistenceReviewAfterDays: c.reviewAfterDays,
         subsistenceRevisedMinPctBps: Number(c.revisedMinPctBps),
         subsistenceRevisedMaxPctBps: Number(c.revisedMaxPctBps),
       });
       await audit(tx, msg, "update", "payroll_settings", p.tenantId, {
-        before: prev ? snapshot(prev.floor, stored) : null,
-        after: snapshot(String(p.protectedNetFloorMinor), next),
+        before: prev ? snapshot(prev.floor, stored, priorSecondApprover) : null,
+        after: snapshot(String(p.protectedNetFloorMinor), next, p.salaryRevisionSecondApprover ?? priorSecondApprover),
       });
     });
   });

@@ -24,8 +24,26 @@ const ptSlab = z.object({
   taxMinor: z.number().int().nonnegative(),
 }).refine((s) => s.toMinor >= s.fromMinor, { message: "toMinor must be >= fromMinor", path: ["toMinor"] });
 
+/**
+ * GAP-PAYROLL-STATUTORY-PT-04: the states / UTs a PT or LWF rule can be
+ * keyed on -- ISO 3166-2:IN subdivision codes, plus the legacy codes still in
+ * common use (OR = Odisha, DN/DD = the two UTs merged into DH in 2020,
+ * UT/UK = Uttarakhand). Anything else ("ZZ") is rejected at the boundary.
+ */
+export const INDIAN_STATE_UT_CODES = [
+  "AN", "AP", "AR", "AS", "BR", "CH", "CG", "DH", "DL", "GA", "GJ", "HR", "HP", "JK", "JH", "KA", "KL",
+  "LA", "LD", "MP", "MH", "MN", "ML", "MZ", "NL", "OD", "PB", "PY", "RJ", "SK", "TN", "TS", "TR", "UP",
+  "UK", "WB",
+  "OR", "DN", "DD", "UT",
+] as const;
+const STATE_CODE_SET: ReadonlySet<string> = new Set(INDIAN_STATE_UT_CODES);
+
 export const stateRulesBody = z.object({
-  stateCode: z.string().min(2).max(4),
+  stateCode: z.string().trim().toUpperCase().min(2).max(4)
+    .refine((c) => STATE_CODE_SET.has(c), "must be an Indian state / UT code, e.g. KA"),
+  // Date the posted slab values take effect (recorded + audited; defaults to
+  // the column default for a brand-new slab, kept as-is on an update).
+  effectiveFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   ptSlabs: z.array(ptSlab).max(50).optional(),
   lwfEmployee: z.number().int().nonnegative().optional(),
   lwfEmployer: z.number().int().nonnegative().optional(),

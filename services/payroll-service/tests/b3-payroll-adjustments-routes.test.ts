@@ -239,7 +239,7 @@ describe("GAP-PAYROLL-REIMBURSEMENTS-05: self-service list is scoped to the call
     const headers = auth(FIN_EMP_ACTOR, ["finance_officer", "employee"]);
     const list = await inject({ method: "GET", url: `/v1/payroll/reimbursements?employeeId=${CLAIMANT_EMP_ID}`, headers });
     expect(list.statusCode).toBe(403);
-    const create = await inject({ method: "POST", url: "/v1/payroll/reimbursements", headers, payload: { employeeId: CLAIMANT_EMP_ID, category: "medical", amountMinor: 1000, period: "2026-08" } });
+    const create = await inject({ method: "POST", url: "/v1/payroll/reimbursements", headers, payload: { employeeId: CLAIMANT_EMP_ID, category: "food", amountMinor: 1000, period: "2026-08" } });
     expect(create.statusCode).toBe(403);
   });
 
@@ -252,7 +252,7 @@ describe("GAP-PAYROLL-REIMBURSEMENTS-05: self-service list is scoped to the call
 });
 
 describe("GAP-PAYROLL-REIMBURSEMENTS-01/04: self-service create uses the resolved employee id", () => {
-  const claim = (employeeId: string, period = "2026-08") => ({ employeeId, category: "medical", amountMinor: 150000, period });
+  const claim = (employeeId: string, period = "2026-08") => ({ employeeId, category: "food", amountMinor: 150000, period });
 
   it("202 when an employee files for their own employee id", async () => {
     const res = await inject({ method: "POST", url: "/v1/payroll/reimbursements", headers: employee(), payload: claim(EMP_OWN_ID) });

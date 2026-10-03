@@ -108,7 +108,7 @@ describe("PtSlabForm", () => {
     }
 
     it("rejects a slab that only touches an existing slab's upper bound (ranges are inclusive)", () => {
-      fill("ka", "15000", "20000");
+      fill("KA", "15000", "20000");
       expect(screen.getByText("This slab overlaps an existing slab for this state.")).toBeInTheDocument();
       expect(screen.queryByText("Save this professional tax slab?")).not.toBeInTheDocument();
     });
@@ -136,6 +136,82 @@ describe("PtSlabForm", () => {
     it("rejects To below From", () => {
       fill("MH", "600", "500");
       expect(screen.getByText("Slab 'To' cannot be less than slab 'From'.")).toBeInTheDocument();
+    });
+  });
+
+  // fin-payroll-03 (GAP-PAYROLL-STATUTORY-PT-04/06)
+  describe("state picker, effective date and error mapping", () => {
+    it("offers a state / UT picker (no free text) that includes KA and MH", () => {
+      renderForm();
+      const select = screen.getByLabelText(/State Code/) as HTMLSelectElement;
+      expect(select.tagName).toBe("SELECT");
+      const values = Array.from(select.options).map((o) => o.value);
+      expect(values).toContain("KA");
+      expect(values).toContain("MH");
+      expect(values).not.toContain("ZZ");
+    });
+
+    it("states beside the date field, and again in the confirm dialog, that the date does not defer the change", async () => {
+      renderForm();
+      const note = "Saving replaces this slab immediately for all runs not yet computed; the date is recorded and does not defer the change.";
+      expect(screen.getByLabelText("Effective from")).toHaveAccessibleDescription(note);
+      fireEvent.change(screen.getByLabelText(/State Code/), { target: { value: "KA" } });
+      fireEvent.change(screen.getByLabelText(/PT Amount/), { target: { value: "200" } });
+      fireEvent.click(screen.getByRole("button", { name: "Save PT Slab" }));
+      const dialog = await screen.findByRole("alertdialog");
+      expect(dialog).toHaveTextContent(note);
+    });
+
+    it("sends the Effective from date (default today) with the slab", async () => {
+      const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 202 }));
+      renderForm();
+      fireEvent.change(screen.getByLabelText(/State Code/), { target: { value: "KA" } });
+      fireEvent.change(screen.getByLabelText(/PT Amount/), { target: { value: "200" } });
+      fireEvent.change(screen.getByLabelText("Effective from"), { target: { value: "2026-04-01" } });
+      fireEvent.click(screen.getByRole("button", { name: "Save PT Slab" }));
+      await waitFor(() => expect(screen.getByText("Save this professional tax slab?")).toBeInTheDocument());
+      fireEvent.click(screen.getByText("Confirm & Save"));
+      await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+      const body = JSON.parse(String((fetchMock.mock.calls[0]![1] as RequestInit).body));
+      expect(body.effectiveFrom).toBe("2026-04-01");
+      expect(body.stateCode).toBe("KA");
+    });
+
+    it("warns (without blocking) when the slab leaves a gap in the state's chain", async () => {
+      render(
+        <NextIntlClientProvider locale="en" messages={enMessages}>
+          <PtSlabForm existingSlabs={[{ state_code: "KA", slab_from_minor: 0, slab_to_minor: 1500000 }]} />
+        </NextIntlClientProvider>,
+      );
+      fireEvent.change(screen.getByLabelText(/State Code/), { target: { value: "KA" } });
+      fireEvent.change(screen.getByLabelText(/Slab From/), { target: { value: "20000" } });
+      fireEvent.change(screen.getByLabelText(/PT Amount/), { target: { value: "200" } });
+      fireEvent.click(screen.getByRole("button", { name: "Save PT Slab" }));
+      await waitFor(() => expect(screen.getByText("Save this professional tax slab?")).toBeInTheDocument());
+      expect(screen.getByText(/leaves a gap in the state's slab chain/)).toBeInTheDocument();
+    });
+
+    it("PT-06: a 403 on save reads as a permission problem, not the generic save failure", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ code: "FORBIDDEN", message: "requires one of: payroll_admin" }), { status: 403 }));
+      renderForm();
+      fireEvent.change(screen.getByLabelText(/State Code/), { target: { value: "KA" } });
+      fireEvent.change(screen.getByLabelText(/PT Amount/), { target: { value: "200" } });
+      fireEvent.click(screen.getByRole("button", { name: "Save PT Slab" }));
+      await waitFor(() => expect(screen.getByText("Save this professional tax slab?")).toBeInTheDocument());
+      fireEvent.click(screen.getByText("Confirm & Save"));
+      await waitFor(() => expect(screen.getByText(/don't have permission/i)).toBeInTheDocument());
+      expect(screen.queryByText(/payroll_admin/)).not.toBeInTheDocument();
+    });
+
+    it("PT-06: other failures name the area ('your professional tax slab')", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));
+      renderForm();
+      fireEvent.change(screen.getByLabelText(/State Code/), { target: { value: "KA" } });
+      fireEvent.change(screen.getByLabelText(/PT Amount/), { target: { value: "200" } });
+      fireEvent.click(screen.getByRole("button", { name: "Save PT Slab" }));
+      await waitFor(() => expect(screen.getByText("Save this professional tax slab?")).toBeInTheDocument());
+      fireEvent.click(screen.getByText("Confirm & Save"));
+      await waitFor(() => expect(screen.getByText(/couldn't save your professional tax slab/i)).toBeInTheDocument());
     });
   });
 });

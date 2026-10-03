@@ -95,4 +95,33 @@ describe("DdosPage", () => {
     expect(screen.getByText("Access restricted")).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
   });
+
+  // fin-payroll-03 (GAP-PAYROLL-DDOS-03): status column + deactivate control.
+  it("shows an Active / Inactive status per DDO", async () => {
+    routeFetch([
+      { ddoCode: "DDO01", name: "Treasury", departmentIds: [], isActive: true },
+      { ddoCode: "DDO02", name: "Old Office", departmentIds: [], isActive: false },
+    ]);
+    await renderPage();
+    expect(screen.getByRole("columnheader", { name: /Status/ })).toBeInTheDocument();
+    expect(screen.getByText(/inactive/i)).toBeInTheDocument();
+  });
+
+  it("offers Deactivate for an active DDO in edit mode and Reactivate for an inactive one", async () => {
+    routeFetch([{ ddoCode: "DDO01", name: "Treasury", departmentIds: [], isActive: true }]);
+    await renderPage({ edit: "DDO01" });
+    expect(screen.getByRole("button", { name: "Deactivate DDO" })).toBeInTheDocument();
+
+    routeFetch([{ ddoCode: "DDO01", name: "Treasury", departmentIds: [], isActive: false }]);
+    document.body.innerHTML = "";
+    await renderPage({ edit: "DDO01" });
+    expect(screen.getByRole("button", { name: "Reactivate DDO" })).toBeInTheDocument();
+  });
+
+  it("does not offer deactivate to read-only roles", async () => {
+    routeFetch([{ ddoCode: "DDO01", name: "Treasury", departmentIds: [], isActive: true }]);
+    rolesMock.mockReturnValue(["hr_admin"]);
+    await renderPage({ edit: "DDO01" });
+    expect(screen.queryByRole("button", { name: "Deactivate DDO" })).not.toBeInTheDocument();
+  });
 });

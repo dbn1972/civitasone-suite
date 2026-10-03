@@ -85,7 +85,8 @@ export default async function PensionersPage() {
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       {/* GAP-PAYROLL-PENSIONERS-04: PPO number, full name, DDO code and pension
           amount are personal data (DPDP Act 2023). State the purpose limit. */}
-      <p role="note" className="sub" style={{ margin: "0 0 12px", fontSize: 12, color: "var(--mut)" }}>{t("dataUseNotice")}</p>
+      <p role="note" className="sub" style={{ margin: "0 0 4px", fontSize: 12, color: "var(--mut)" }}>{t("dataUseNotice")}</p>
+      <p className="sub" style={{ margin: "0 0 12px", fontSize: 12, color: "var(--mut)" }}>{t("ppoMaskedNote")}</p>
       <StatGrid>
         <StatCard icon="👴" iconBg="var(--panel)" label={t("statTotalPensioners")} value={errored ? null : total} />
         <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statActive")} value={errored ? null : active} />
@@ -106,6 +107,10 @@ export default async function PensionersPage() {
           <DataTable<DisplayRow>
             columns={columns}
             rows={rows}
+            // GAP-PAYROLL-PENSIONERS-03: every row opens the pensioner's own
+            // page (details, audited reveal, stop / mark deceased).
+            rowLinkKey="id"
+            rowLinkPrefix="/hr/payroll/pensioners/"
             sortable
             filterable
             filterPlaceholder={t("filterPlaceholder")}

@@ -61,4 +61,13 @@ describe("PensionersPage", () => {
     render(await PensionersPage());
     expect(screen.getByRole("note")).toHaveTextContent(/DPDP Act, 2023/);
   });
+
+  it("fin-payroll-03 PENSIONERS-03/04: rows open the pensioner page and the PPO masking is explained", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [{ ...ACTIVE, ppoNo: "••••0001", ppoNoMasked: true }], source: "api" });
+    render(await PensionersPage());
+    expect(screen.getByText(/PPO numbers are shown masked/)).toBeInTheDocument();
+    expect(screen.getByText("••••0001")).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: /Ramesh Sharma|••••0001/ });
+    expect(link.getAttribute("href")).toBe("/hr/payroll/pensioners/p1");
+  });
 });

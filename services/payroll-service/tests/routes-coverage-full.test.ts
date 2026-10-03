@@ -309,7 +309,7 @@ describe("POST /v1/payroll/reimbursements — valid payload", () => {
       headers: { authorization: `Bearer ${token()}` },
       payload: {
         employeeId: randomUUID(),
-        category: "medical",
+        category: "food",
         amountMinor: 250000,
         period: "2026-06",
         billDate: "2026-06-01",

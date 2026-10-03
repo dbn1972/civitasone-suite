@@ -19,8 +19,10 @@ vi.mock("../../shared/infra.js", () => ({
   },
 }));
 
+const fetchPayrollReadiness = vi.fn(async () => new Map<string, string[]>());
 vi.mock("../../shared/hrms-client.js", () => ({
   fetchEmployeeSummaries: async () => new Map(),
+  fetchPayrollReadiness: (...args: unknown[]) => (fetchPayrollReadiness as (...a: unknown[]) => unknown)(...args),
 }));
 
 import { listRuns, getRunDetail } from "./queries.js";
@@ -192,5 +194,39 @@ describe("runs-list totals-vs-headcount fix — gross/net always match the live 
       expect(detail?.netAmount).toBe(2700); // (180000+90000)/100
       expect(detail?.deductions).toBe(300);
     });
+  });
+});
+
+// GAP-PAYROLL-DETAIL-05: per-slip pre-disbursement issue codes (no PAN / account number).
+describe("getRunDetail attaches readiness issue codes to each slip", () => {
+  const slip = (employeeId: string) => ({
+    id: `slip-${employeeId}`, employeeId, employeeNo: `EMP-${employeeId}`,
+    grossMinor: 100000n, totalDeductionsMinor: 10000n, netPayMinor: 90000n, status: "computed",
+  });
+  beforeEach(() => {
+    findRunById.mockReset();
+    listSlipsByRun.mockReset();
+    fetchPayrollReadiness.mockReset();
+    findRunById.mockResolvedValue({ ...baseRun, status: "processing", lastError: null });
+    listSlipsByRun.mockResolvedValue([slip("e1"), slip("e2")]);
+  });
+
+  it("maps issue codes to the right employee and leaves healthy ones empty", async () => {
+    fetchPayrollReadiness.mockResolvedValue(new Map([["e1", ["MISSING_PAN", "INVALID_IFSC"]]]));
+    const detail = await getRunDetail("run-1", "tenant-1");
+    const byEmp = Object.fromEntries((detail?.salarySlips ?? []).map((s) => [s.employeeId, s.issues]));
+    expect(byEmp).toEqual({ e1: ["MISSING_PAN", "INVALID_IFSC"], e2: [] });
+  });
+
+  it("when hrms-service cannot answer (empty map) every slip simply has no issues, and the run still loads", async () => {
+    fetchPayrollReadiness.mockResolvedValue(new Map());
+    const detail = await getRunDetail("run-1", "tenant-1");
+    expect(detail?.salarySlips.every((s) => s.issues.length === 0)).toBe(true);
+  });
+
+  it("never carries a PAN or account number on the slip", async () => {
+    fetchPayrollReadiness.mockResolvedValue(new Map([["e1", ["MISSING_PAN"]]]));
+    const detail = await getRunDetail("run-1", "tenant-1");
+    expect(JSON.stringify(detail)).not.toMatch(/\b[A-Z]{5}\d{4}[A-Z]\b/);
   });
 });

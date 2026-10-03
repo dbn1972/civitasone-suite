@@ -3,7 +3,7 @@ import * as repo from "./repo.js";
 import type { PayrollRunRow, PayrollSlipRow } from "./schema.js";
 import type { SlipWithRun } from "./repo.js";
 import { EMPLOYEE_VISIBLE_SLIP_STATUSES } from "../payslip-pdf/slip-gate.js";
-import { fetchEmployeeSummaries, fetchPayrollInput, HrmsUnavailableError } from "../../shared/hrms-client.js";
+import { fetchEmployeeSummaries, fetchPayrollInput, fetchPayrollReadiness, HrmsUnavailableError } from "../../shared/hrms-client.js";
 
 /**
  * payroll-critical fix: this used to map the DB's 'failed' status to
@@ -177,6 +177,9 @@ export async function getRunDetail(id: string, tenantId: string) {
   // FR 53: every pay-suspended employee this run touched -- paid subsistence
   // allowance, or withheld (no slip) and flagged for HR.
   const suspendedEmployees = await repo.listRunSuspensionsByRun(id, tenantId);
+  // GAP-PAYROLL-DETAIL-05: per-slip pre-disbursement issue codes (no PAN /
+  // account number), from hrms-service; empty when unavailable.
+  const readiness = await fetchPayrollReadiness(tenantId);
   return {
     id: run.id,
     runDate: new Date(run.createdAt as unknown as string).toISOString().slice(0, 10),
@@ -207,6 +210,7 @@ export async function getRunDetail(id: string, tenantId: string) {
       deductions: Number(s.totalDeductionsMinor) / 100,
       net: Number(s.netPayMinor) / 100,
       status: s.status,
+      issues: readiness.get(s.employeeId) ?? [],
     })),
     suspendedEmployees,
   };

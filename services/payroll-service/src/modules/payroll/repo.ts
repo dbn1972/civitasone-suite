@@ -268,7 +268,14 @@ export async function listLwf(tenantId: string) {
 // ─── Reimbursements ───────────────────────────────────────────────────────────
 
 export async function listReimbursements(tenantId: string, employeeId: string | null, status: string | null) {
-  return scopedRead((tx) => tx.execute(sql`SELECT * FROM payroll.payroll_reimbursements WHERE tenant_id=${tenantId}::uuid AND (${employeeId}::uuid IS NULL OR employee_id=${employeeId}::uuid) AND (${status}::text IS NULL OR status=${status}) ORDER BY created_at DESC LIMIT 100`));
+  const rows = (await scopedRead((tx) => tx.execute(sql`SELECT * FROM payroll.payroll_reimbursements WHERE tenant_id=${tenantId}::uuid AND (${employeeId}::uuid IS NULL OR employee_id=${employeeId}::uuid) AND (${status}::text IS NULL OR status=${status}) ORDER BY created_at DESC LIMIT 100`))) as unknown as Array<Record<string, unknown>>;
+  // GAP-PAYROLL-REIMBURSEMENTS-03: expose how many receipts a claim carries,
+  // never the object-store keys (those are only resolved, audited, by the
+  // attachments endpoint).
+  return rows.map(({ attachment_keys, ...rest }) => ({
+    ...rest,
+    attachment_count: Array.isArray(attachment_keys) ? attachment_keys.length : 0,
+  }));
 }
 
 export type ReimbursementInsert = {
