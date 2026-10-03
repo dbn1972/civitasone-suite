@@ -43,6 +43,9 @@ vi.mock("./cycle-counts/[id]/CycleCountActions", () => ({
 }));
 vi.mock("./goods-returns/[id]/QcInspectionForm", () => ({ QcInspectionForm: () => <div>QC FORM</div> }));
 vi.mock("../stock/_components/PrintExportButton", () => ({ PrintExportButton: () => null }));
+vi.mock("./RegisterLinkCard", () => ({ RegisterLinkCard: () => <div>REGISTER LINK CARD</div> }));
+const links = vi.hoisted(() => ({ getItemLinks: vi.fn(async () => ({ source: "api", data: [] })) }));
+vi.mock("./_dataLinks", () => links);
 vi.mock("./list/InventoryStockListClient", () => ({
   InventoryStockListClient: () => <div>STOCK REGISTER</div>,
 }));

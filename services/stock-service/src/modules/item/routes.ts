@@ -41,12 +41,22 @@ export async function itemRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(item);
   });
 
+  // Read-only per-warehouse quantity/valuation of one item, for the linked inventory item detail.
+  app.get("/v1/stock/items/:id/balances", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    if (!(await queries.getItem(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "item not found");
+    return reply.send(await queries.getItemBalances(ctx.tenantId, id));
+  });
+
   app.get("/v1/stock/items", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = itemQueryParams.parse(req.query);
-    const opts: { category?: string; limit: number; offset: number } = { limit: q.limit, offset: q.offset };
+    const opts: { category?: string; q?: string; limit: number; offset: number } = { limit: q.limit, offset: q.offset };
     if (q.category !== undefined) opts.category = q.category;
+    if (q.q !== undefined) opts.q = q.q;
     const items = await queries.listItems(ctx.tenantId, opts);
     return reply.send({ data: items, limit: q.limit, offset: q.offset });
   });

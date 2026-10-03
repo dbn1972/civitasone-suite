@@ -122,3 +122,10 @@ export const INVENTORY_BIN_MANAGE_ROLES = ["inventory_manager", "inventory_admin
  * Mirrors inventory-service's SETTINGS_ROLES (GAP-INVENTORY-GOODS-RETURNS-DETAIL-04).
  */
 export const INVENTORY_SETTINGS_ROLES = ["inventory_admin", "super_admin"];
+
+/**
+ * Who may confirm or remove an inventory <-> stock item link and open the unlinked-items report.
+ * Mirrors LINK_ROLES in inventory-service modules/item-links/routes.ts
+ * (GAP-INVENTORY-DETAIL-04 / GAP-INVENTORY-LIST-02); the service stays the real gate.
+ */
+export const INVENTORY_ITEM_LINK_ROLES = ["inventory_manager", "inventory_admin", "super_admin"];
