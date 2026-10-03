@@ -60,4 +60,58 @@ describe("RegisterVehicleForm", () => {
     });
     expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
   });
+
+  // GAP-ASSETS-FLEET-VEHICLES-05
+  it("rejects a malformed registration number and accepts OD02AB1234", () => {
+    render(<RegisterVehicleForm />);
+    const reg = screen.getByLabelText(/^Registration No\./);
+    fireEvent.change(reg, { target: { value: "abc" } });
+    fireEvent.click(screen.getByRole("button", { name: "Register Vehicle" }));
+    expect(screen.getByText(/Enter a valid registration number/)).toBeInTheDocument();
+
+    fireEvent.change(reg, { target: { value: "od 02-ab 1234" } });
+    fireEvent.change(screen.getByLabelText(/^Make/), { target: { value: "Tata" } });
+    fireEvent.change(screen.getByLabelText(/^Model/), { target: { value: "Nexon" } });
+    fireEvent.click(screen.getByRole("button", { name: "Register Vehicle" }));
+    expect(screen.queryByText(/Enter a valid registration number/)).not.toBeInTheDocument();
+    expect(screen.getByText("Register this vehicle?")).toBeInTheDocument();
+  });
+
+  it("upper-cases and strips separators on blur, and posts the normalised plate", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ data: { id: "v" } }), { status: 202 }));
+    render(<RegisterVehicleForm />);
+    const reg = screen.getByLabelText(/^Registration No\./) as HTMLInputElement;
+    fireEvent.change(reg, { target: { value: "od-02 ab1234" } });
+    fireEvent.blur(reg);
+    expect(reg.value).toBe("OD02AB1234");
+    expect(screen.getByText("e.g. OD02AB1234")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/^Make/), { target: { value: "Tata" } });
+    fireEvent.change(screen.getByLabelText(/^Model/), { target: { value: "Nexon" } });
+    fireEvent.click(screen.getByRole("button", { name: "Register Vehicle" }));
+    await screen.findByText("Register this vehicle?");
+    fireEvent.click(screen.getByText("Register vehicle"));
+    await waitFor(() => expect(spy).toHaveBeenCalled());
+    expect(JSON.parse(String(spy.mock.calls[0]![1]!.body)).registrationNo).toBe("OD02AB1234");
+  });
+
+  it("surfaces the server's duplicate-registration message in the dialog", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ code: "DUPLICATE_REGISTRATION", message: "a vehicle with this registration number is already registered" }), { status: 409 }),
+    );
+    render(<RegisterVehicleForm />);
+    fireEvent.change(screen.getByLabelText(/^Registration No\./), { target: { value: "OD02AB1234" } });
+    fireEvent.change(screen.getByLabelText(/^Make/), { target: { value: "Tata" } });
+    fireEvent.change(screen.getByLabelText(/^Model/), { target: { value: "Nexon" } });
+    fireEvent.click(screen.getByRole("button", { name: "Register Vehicle" }));
+    await screen.findByText("Register this vehicle?");
+    fireEvent.click(screen.getByText("Register vehicle"));
+    expect(await screen.findByText(/already registered/i)).toBeInTheDocument();
+  });
+
+  // GAP-ASSETS-FLEET-VEHICLES-04
+  it("offers CNG (not Cng) in the fuel type dropdown", () => {
+    render(<RegisterVehicleForm />);
+    expect(screen.getByRole("option", { name: "CNG" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Cng" })).not.toBeInTheDocument();
+  });
 });

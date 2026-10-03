@@ -55,7 +55,7 @@ describe("asset-service fleetDeviceTelemetry -- nested-transaction pool-exhausti
         await runWithTenant(TENANT, async () => {
           await db.transaction(async (tx) => {
             await tx.insert(fleetVehicles).values({
-              id: vehicleId, tenantId: TENANT, registrationNo: "REG-" + i,
+              id: vehicleId, tenantId: TENANT, registrationNo: "REG" + randomUUID().replace(/-/g, "").slice(0, 12),
               status: "active", createdBy: ACTOR,
             });
             await tx.insert(fleetDevices).values({

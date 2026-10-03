@@ -25,6 +25,39 @@ import type { ChangeEvent } from "react";
 import { z } from "zod";
 
 // ---------------------------------------------------------------------------
+// Telematics identifiers (GAP-ASSETS-FLEET-DEVICES-06)
+// ---------------------------------------------------------------------------
+
+/** Luhn mod-10 checksum over a digit string. */
+export function luhnValid(digits: string): boolean {
+  if (!/^\d+$/.test(digits)) return false;
+  let sum = 0;
+  let dbl = false;
+  for (let i = digits.length - 1; i >= 0; i--) {
+    let d = digits.charCodeAt(i) - 48;
+    if (dbl) {
+      d *= 2;
+      if (d > 9) d -= 9;
+    }
+    sum += d;
+    dbl = !dbl;
+  }
+  return sum % 10 === 0;
+}
+
+/** IMEI: exactly 15 digits; with `checksum` also passes the Luhn check. */
+export function isValidImei(value: string, checksum = true): boolean {
+  const v = value.trim();
+  if (!/^\d{15}$/.test(v)) return false;
+  return checksum ? luhnValid(v) : true;
+}
+
+/** SIM ICCID: 19 or 20 digits (a trailing check digit is included in both). */
+export function isValidIccid(value: string): boolean {
+  return /^\d{19,20}$/.test(value.trim());
+}
+
+// ---------------------------------------------------------------------------
 // Validator type
 // ---------------------------------------------------------------------------
 

@@ -4,13 +4,22 @@ import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
+import { isValidIccid, isValidImei } from "@/lib/form-validation";
 
 const PROTOCOLS = ["gt06", "teltonika", "queclink", "concox"] as const;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * GAP-ASSETS-FLEET-DEVICES-06 POLICY: real IMEIs carry a Luhn check digit, but
+ * some vendors ship test/non-Luhn IMEIs. Set to false to accept any 15-digit
+ * IMEI (the asset-service enforces digits-only either way).
+ */
+const IMEI_ENFORCE_CHECKSUM = true;
+
 type FieldErrors = {
   vehicleId?: string;
   deviceImei?: string;
+  simIccid?: string;
 };
 
 const inputStyle = { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 } as const;
@@ -35,22 +44,30 @@ export function RegisterDeviceForm() {
   const simIccidId = useId();
   const vehicleIdErrId = useId();
   const deviceImeiErrId = useId();
+  const simIccidErrId = useId();
 
   const vehicleIdRef = useRef<HTMLInputElement>(null);
   const deviceImeiRef = useRef<HTMLInputElement>(null);
+  const simIccidRef = useRef<HTMLInputElement>(null);
 
   function validate(): boolean {
     const next: FieldErrors = {};
     if (!vehicleId.trim() || !UUID_RE.test(vehicleId.trim())) {
       next.vehicleId = "Enter a valid vehicle ID (UUID).";
     }
-    if (deviceImei.trim().length !== 15) {
-      next.deviceImei = "Device IMEI must be exactly 15 characters.";
+    if (!isValidImei(deviceImei, IMEI_ENFORCE_CHECKSUM)) {
+      next.deviceImei = IMEI_ENFORCE_CHECKSUM
+        ? "IMEI must be 15 digits and pass the checksum."
+        : "IMEI must be exactly 15 digits.";
+    }
+    if (simIccid.trim() && !isValidIccid(simIccid)) {
+      next.simIccid = "SIM ICCID must be 19 or 20 digits.";
     }
 
     setErrors(next);
     if (next.vehicleId) { vehicleIdRef.current?.focus(); return false; }
     if (next.deviceImei) { deviceImeiRef.current?.focus(); return false; }
+    if (next.simIccid) { simIccidRef.current?.focus(); return false; }
     return Object.keys(next).length === 0;
   }
 
@@ -126,6 +143,7 @@ export function RegisterDeviceForm() {
                 value={deviceImei}
                 onChange={(e) => setDeviceImei(e.target.value)}
                 maxLength={15}
+                inputMode="numeric"
                 aria-required="true"
                 aria-invalid={!!errors.deviceImei || undefined}
                 aria-describedby={errors.deviceImei ? deviceImeiErrId : undefined}
@@ -152,11 +170,16 @@ export function RegisterDeviceForm() {
               <label htmlFor={simIccidId} style={{ fontSize: 13, fontWeight: 600 }}>SIM ICCID</label>
               <input
                 id={simIccidId}
+                ref={simIccidRef}
                 value={simIccid}
                 onChange={(e) => setSimIccid(e.target.value)}
                 maxLength={22}
+                inputMode="numeric"
+                aria-invalid={!!errors.simIccid || undefined}
+                aria-describedby={errors.simIccid ? simIccidErrId : undefined}
                 style={inputStyle}
               />
+              {errors.simIccid && <p id={simIccidErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.simIccid}</p>}
             </div>
           </div>
 

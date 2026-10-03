@@ -12,8 +12,9 @@
  * view here — see BACKEND FOLLOW-UPS for consumer status.
  */
 import { useId, useRef, useState } from "react";
-import { Button, Card } from "../../../../_components/ds";
+import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
+import { IST_OFFSET_MS } from "@/lib/formatters";
 import { FleetPicker } from "../FleetPicker";
 import type { PickerOption } from "../_data/labels";
 
@@ -24,7 +25,20 @@ type FieldErrors = {
   speed?: string;
   heading?: string;
   fuelLevel?: string;
+  readingTime?: string;
 };
+
+/** "YYYY-MM-DDTHH:mm" for `instant` as seen in IST (datetime-local has no zone). */
+export function istLocalInputValue(instant: Date): string {
+  return new Date(instant.getTime() + IST_OFFSET_MS).toISOString().slice(0, 16);
+}
+
+/** Parse a datetime-local value as an IST wall-clock time -> ISO instant, or null. */
+export function istInputToIso(value: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return null;
+  const d = new Date(`${value}:00+05:30`);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
 
 const inputStyle = { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 } as const;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -43,11 +57,15 @@ export function TelemetryForm({ options, devicesError = false }: Props) {
   const [heading, setHeading] = useState("");
   const [fuelLevel, setFuelLevel] = useState("");
   const [engineOn, setEngineOn] = useState(true);
+  // GAP-ASSETS-FLEET-DEVICES-05: a delayed radio report can be back-dated; the
+  // default is "now" in IST rather than the browser clock being sent silently.
+  const [readingTime, setReadingTime] = useState(() => istLocalInputValue(new Date()));
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [dialogError, setDialogError] = useState<string | undefined>();
 
   const [errors, setErrors] = useState<FieldErrors>({});
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [isError, setIsError] = useState(false);
 
   const deviceIdId = useId();
   const latId = useId();
@@ -62,6 +80,8 @@ export function TelemetryForm({ options, devicesError = false }: Props) {
   const speedErrId = useId();
   const headingErrId = useId();
   const fuelLevelErrId = useId();
+  const readingTimeId = useId();
+  const readingTimeErrId = useId();
 
   const deviceIdRef = useRef<HTMLSelectElement>(null);
   const latRef = useRef<HTMLInputElement>(null);
@@ -69,6 +89,7 @@ export function TelemetryForm({ options, devicesError = false }: Props) {
   const speedRef = useRef<HTMLInputElement>(null);
   const headingRef = useRef<HTMLInputElement>(null);
   const fuelLevelRef = useRef<HTMLInputElement>(null);
+  const readingTimeRef = useRef<HTMLInputElement>(null);
 
   function validate(): boolean {
     const next: FieldErrors = {};
@@ -85,6 +106,9 @@ export function TelemetryForm({ options, devicesError = false }: Props) {
       const fuelNum = Number(fuelLevel);
       if (Number.isNaN(fuelNum) || fuelNum < 0 || fuelNum > 100) next.fuelLevel = "Fuel level must be a number between 0 and 100.";
     }
+    const iso = istInputToIso(readingTime);
+    if (!iso) next.readingTime = "Enter a valid reading time.";
+    else if (new Date(iso).getTime() > Date.now() + 60_000) next.readingTime = "Reading time cannot be in the future.";
 
     setErrors(next);
     if (next.deviceId) { deviceIdRef.current?.focus(); return false; }
@@ -93,15 +117,25 @@ export function TelemetryForm({ options, devicesError = false }: Props) {
     if (next.speed) { speedRef.current?.focus(); return false; }
     if (next.heading) { headingRef.current?.focus(); return false; }
     if (next.fuelLevel) { fuelLevelRef.current?.focus(); return false; }
+    if (next.readingTime) { readingTimeRef.current?.focus(); return false; }
     return Object.keys(next).length === 0;
   }
 
-  async function submit(e: React.FormEvent) {
+  const selectedLabel = options.find((o) => o.id === deviceId)?.label ?? "the selected device";
+
+  function submit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
-    setIsError(false);
     if (!validate()) return;
+    setDialogError(undefined);
+    setConfirmOpen(true);
+  }
+
+  async function logReading() {
+    const timestamp = istInputToIso(readingTime);
+    if (!timestamp) return;
     setBusy(true);
+    setDialogError(undefined);
     try {
       await browserJson(`v1/assets/fleet/devices/${deviceId.trim()}/telemetry`, {
         method: "POST",
@@ -112,18 +146,19 @@ export function TelemetryForm({ options, devicesError = false }: Props) {
           heading: Number(heading),
           fuelLevel: fuelLevel.trim() ? Number(fuelLevel) : undefined,
           engineOn,
-          timestamp: new Date().toISOString(),
+          timestamp,
         }),
       });
-      setMessage(`Telemetry reading accepted for ${options.find((o) => o.id === deviceId)?.label ?? "the selected device"}.`);
+      setConfirmOpen(false);
+      setMessage(`Telemetry reading accepted for ${selectedLabel}.`);
       setLat("");
       setLng("");
       setSpeed("");
       setHeading("");
       setFuelLevel("");
+      setReadingTime(istLocalInputValue(new Date()));
     } catch (err) {
-      setIsError(true);
-      setMessage(err instanceof Error ? err.message : "Network error. Please try again.");
+      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -235,6 +270,24 @@ export function TelemetryForm({ options, devicesError = false }: Props) {
               {errors.fuelLevel && <p id={fuelLevelErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.fuelLevel}</p>}
             </div>
 
+            <div style={{ display: "grid", gap: 6 }}>
+              <label htmlFor={readingTimeId} style={{ fontSize: 13, fontWeight: 600 }}>
+                Reading time (IST) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              </label>
+              <input
+                id={readingTimeId}
+                ref={readingTimeRef}
+                type="datetime-local"
+                value={readingTime}
+                onChange={(e) => setReadingTime(e.target.value)}
+                aria-required="true"
+                aria-invalid={!!errors.readingTime || undefined}
+                aria-describedby={errors.readingTime ? readingTimeErrId : undefined}
+                style={inputStyle}
+              />
+              {errors.readingTime && <p id={readingTimeErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.readingTime}</p>}
+            </div>
+
             <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 22 }}>
               <input
                 id={engineOnId}
@@ -251,18 +304,34 @@ export function TelemetryForm({ options, devicesError = false }: Props) {
           </div>
 
           <div>
-            <Button type="submit" style={{ minHeight: 44 }} disabled={busy} aria-busy={busy}>
-              {busy ? "Logging…" : "Log Telemetry"}
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
+              Log Telemetry
             </Button>
           </div>
 
           {message && (
-            <p role={isError ? "alert" : "status"} aria-live={isError ? "assertive" : "polite"} className={`pill ${isError ? "bad" : "good"}`} style={{ width: "fit-content" }}>
+            <p role="status" className="pill good" style={{ width: "fit-content" }}>
               {message}
             </p>
           )}
         </div>
       </Card>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Log this reading?"
+        confirmLabel="Log reading"
+        busy={busy}
+        errorMessage={dialogError}
+        description={
+          <>
+            Log a manual reading ({lat.trim()}, {lng.trim()}; {speed.trim()} km/h) for <strong>{selectedLabel}</strong> at{" "}
+            <strong>{readingTime.replace("T", " ")} IST</strong>. It also updates the vehicle&apos;s last known position.
+          </>
+        }
+        onConfirm={() => void logReading()}
+        onCancel={() => !busy && setConfirmOpen(false)}
+      />
     </form>
   );
 }

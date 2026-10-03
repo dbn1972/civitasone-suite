@@ -43,6 +43,10 @@ export async function fleetRoutes(app: FastifyInstance): Promise<void> {
       year:           z.number().int().min(1980).max(2100),
       fuelType:       z.enum(["petrol", "diesel", "electric", "cng"]),
     }).parse(req.body);
+    // GAP-ASSETS-FLEET-VEHICLES-05: one active vehicle per registration number.
+    if (await repo.findVehicleByRegistration(ctx.tenantId, body.registrationNo)) {
+      throw new HttpError(409, "DUPLICATE_REGISTRATION", "a vehicle with this registration number is already registered");
+    }
     const id = randomUUID();
     await queue.publish(COMMANDS.fleetCreate, {
       messageId: id, type: COMMANDS.fleetCreate,
@@ -65,6 +69,10 @@ export async function fleetRoutes(app: FastifyInstance): Promise<void> {
       odometerKm:     z.number().int().nonnegative().optional(),
       status:         z.enum(["active", "in_maintenance", "decommissioned"]).optional(),
     }).parse(req.body);
+    if (body.registrationNo !== undefined) {
+      const clash = await repo.findVehicleByRegistration(ctx.tenantId, body.registrationNo, id);
+      if (clash) throw new HttpError(409, "DUPLICATE_REGISTRATION", "a vehicle with this registration number is already registered");
+    }
     const msgId = randomUUID();
     await queue.publish(COMMANDS.fleetVehicleUpdate, {
       messageId: msgId, type: COMMANDS.fleetVehicleUpdate,
@@ -104,7 +112,8 @@ export async function fleetRoutes(app: FastifyInstance): Promise<void> {
       correlationId: ctx.correlationId, schemaVersion: "1.0",
       payload: { id, tenantId: ctx.tenantId, ...body },
     });
-    return reply.code(202).send({ data: { id, ...body, status: "accepted" } });
+    // updatedAt = acceptance time; the consumer stamps last_gps_at when it applies the command.
+    return reply.code(202).send({ data: { id, ...body, updatedAt: new Date().toISOString(), status: "accepted" } });
   });
 
   // ── Maintenance ─────────────────────────────────────────────────────────
@@ -125,12 +134,30 @@ export async function fleetRoutes(app: FastifyInstance): Promise<void> {
     const job = await repo.findMaintenanceById(id, ctx.tenantId);
     if (!job) throw new HttpError(404, "NOT_FOUND", "maintenance record not found");
     if (job.status === "completed") throw new HttpError(409, "ALREADY_COMPLETED", "maintenance already marked as completed");
+    if (job.status === "cancelled") throw new HttpError(409, "ALREADY_CANCELLED", "a cancelled maintenance job cannot be completed");
     const msgId = randomUUID();
     await queue.publish(COMMANDS.fleetMaintenanceComplete, {
       messageId: msgId, type: COMMANDS.fleetMaintenanceComplete,
       tenantId: ctx.tenantId, actorId: ctx.actorId,
       correlationId: ctx.correlationId, schemaVersion: "1.0",
       payload: { id, tenantId: ctx.tenantId, costMinor: body.costMinor ?? null },
+    });
+    return reply.code(202).send({ data: { id, status: "accepted" } });
+  });
+
+  // GAP-ASSETS-FLEET-MAINTENANCE-05: cancel a job that is still open.
+  app.patch("/v1/assets/fleet/maintenance/:id/cancel", async (req, reply) => {
+    const ctx = resolveContext(req); requireRole(ctx, ADMIN);
+    const { id } = idParam.parse(req.params);
+    const job = await repo.findMaintenanceById(id, ctx.tenantId);
+    if (!job) throw new HttpError(404, "NOT_FOUND", "maintenance record not found");
+    if (job.status === "completed") throw new HttpError(409, "ALREADY_COMPLETED", "a completed maintenance job cannot be cancelled");
+    if (job.status === "cancelled") throw new HttpError(409, "ALREADY_CANCELLED", "maintenance already cancelled");
+    await queue.publish(COMMANDS.fleetMaintenanceCancel, {
+      messageId: randomUUID(), type: COMMANDS.fleetMaintenanceCancel,
+      tenantId: ctx.tenantId, actorId: ctx.actorId,
+      correlationId: ctx.correlationId, schemaVersion: "1.0",
+      payload: { id, tenantId: ctx.tenantId },
     });
     return reply.code(202).send({ data: { id, status: "accepted" } });
   });

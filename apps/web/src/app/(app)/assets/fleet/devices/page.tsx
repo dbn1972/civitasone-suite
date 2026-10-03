@@ -1,5 +1,5 @@
-import { PageHeader, Card, DataTable } from "../../../../_components/ds";
-import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import { PageHeader, Card, DataTable, RefreshErrorState } from "../../../../_components/ds";
+import { toHumanError } from "@/lib/messages";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { RegisterDeviceForm } from "./RegisterDeviceForm";
 import { TelemetryForm } from "./TelemetryForm";
@@ -9,10 +9,10 @@ import { vehicleLabel } from "../_data/labels";
 /**
  * GET /v1/assets/fleet/devices (asset-service, port 3015, gateway prefix
  * /api/v1/assets). Field names are inferred from the register payload
- * (vehicleId, deviceImei, protocol, simIccid) — the route as read from
- * services/asset-service/src/modules/fleet-devices/routes.ts currently
- * always returns `{ data: [], meta: { total: 0 } }` (no DB-backed list yet);
- * see BACKEND FOLLOW-UPS.
+ * (vehicleId, deviceImei, protocol, simIccid, status) and match the
+ * DB-backed list the asset-service fleet-devices route returns
+ * (GAP-ASSETS-FLEET-DEVICES-07: verified against listDevicesByTenant; the
+ * service stores no last-seen/offline status, so none is shown).
  */
 type RawRow = {
   id: string;
@@ -94,23 +94,27 @@ export default async function FleetDevicesPage() {
         subtitle="Telematics devices mounted on government vehicles."
         back="/assets/fleet"
         backLabel="Fleet & Telematics"
-        actions={source === "error" ? <DataSourceBadge source="error" /> : null}
       />
 
       <RegisterDeviceForm />
 
       <Card title="Devices">
-        <DataTable<DeviceTableRow>
-          columns={columns}
-          rows={rows}
-          sortable
-          filterable
-          filterPlaceholder="Filter by IMEI, vehicle, protocol…"
-          pageSize={15}
-          emptyIcon="📡"
-          emptyTitle="No devices registered yet"
-          emptyMessage="Register your first telematics device using the form above."
-        />
+        {/* GAP-ASSETS-FLEET-DEVICES-04: a failed load is an error, not "No devices registered yet". */}
+        {source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "fleet devices" })} />
+        ) : (
+          <DataTable<DeviceTableRow>
+            columns={columns}
+            rows={rows}
+            sortable
+            filterable
+            filterPlaceholder="Filter by IMEI, vehicle, protocol…"
+            pageSize={15}
+            emptyIcon="📡"
+            emptyTitle="No devices registered yet"
+            emptyMessage="Register your first telematics device using the form above."
+          />
+        )}
       </Card>
 
       <TelemetryForm options={deviceOptions} devicesError={source === "error"} />

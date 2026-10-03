@@ -88,4 +88,12 @@ describe("ScheduleMaintenanceForm", () => {
     render(<ScheduleMaintenanceForm options={[]} />);
     expect(screen.getByLabelText(/^Vehicle/)).toBeDisabled();
   });
+
+  // GAP-ASSETS-FLEET-MAINTENANCE-06
+  it("explains the optional odometer threshold and links the help text to the field", () => {
+    render(<ScheduleMaintenanceForm options={[]} />);
+    const field = screen.getByLabelText(/^Odometer Threshold \(km\) \(optional\)/);
+    const help = screen.getByText(/does not trigger it/);
+    expect(field.getAttribute("aria-describedby")).toContain(help.id);
+  });
 });

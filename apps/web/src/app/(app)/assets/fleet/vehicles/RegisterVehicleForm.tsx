@@ -3,9 +3,9 @@
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
-import { browserJson } from "@/lib/api/browserClient";
-
-const FUEL_TYPES = ["petrol", "diesel", "electric", "cng"] as const;
+import { browserFetch, errorCodeFromResponse, errorMessageFromResponse } from "@/lib/api/browserClient";
+import { FUEL_LABELS, FUEL_TYPES } from "../_data/labels";
+import { REGISTRATION_HINT, normaliseRegistration, parseRegistration } from "../_data/registration";
 
 type FieldErrors = {
   registrationNo?: string;
@@ -37,6 +37,7 @@ export function RegisterVehicleForm() {
   const yearId = useId();
   const fuelTypeId = useId();
   const registrationErrId = useId();
+  const registrationHintId = useId();
   const makeErrId = useId();
   const modelErrId = useId();
   const yearErrId = useId();
@@ -48,7 +49,8 @@ export function RegisterVehicleForm() {
 
   function validate(): boolean {
     const next: FieldErrors = {};
-    if (!registrationNo.trim()) next.registrationNo = "Registration number is required.";
+    const reg = parseRegistration(registrationNo);
+    if (!reg.ok) next.registrationNo = reg.error;
     if (!make.trim()) next.make = "Make is required.";
     if (!model.trim()) next.model = "Model is required.";
     const yearNum = Number(year);
@@ -78,21 +80,32 @@ export function RegisterVehicleForm() {
     setBusy(true);
     setDialogError(undefined);
     try {
-      const res = await browserJson<{ data?: { id: string; status: string } }>("v1/assets/fleet/vehicles", {
+      const res = await browserFetch("v1/assets/fleet/vehicles", {
         method: "POST",
         body: JSON.stringify({
-          registrationNo: registrationNo.trim(),
+          registrationNo: normaliseRegistration(registrationNo),
           make: make.trim(),
           model: model.trim(),
           year: Number(year),
           fuelType,
         }),
       });
+      if (!res.ok) {
+        // GAP-ASSETS-FLEET-VEHICLES-05: the service answers 409 DUPLICATE_REGISTRATION.
+        const code = await errorCodeFromResponse(res);
+        setDialogError(
+          code === "DUPLICATE_REGISTRATION"
+            ? "A vehicle with this registration number is already registered."
+            : await errorMessageFromResponse(res),
+        );
+        return;
+      }
+      const body = (await res.json().catch(() => null)) as { data?: { id?: string } } | null;
       setConfirmOpen(false);
       setMessage(
-        res?.data?.id
-          ? `Vehicle ${registrationNo.trim()} registered (id ${res.data.id}).`
-          : `Vehicle ${registrationNo.trim()} registered.`,
+        body?.data?.id
+          ? `Vehicle ${normaliseRegistration(registrationNo)} registered (id ${body.data.id}).`
+          : `Vehicle ${normaliseRegistration(registrationNo)} registered.`,
       );
       setRegistrationNo("");
       setMake("");
@@ -122,12 +135,15 @@ export function RegisterVehicleForm() {
                 ref={registrationRef}
                 value={registrationNo}
                 onChange={(e) => setRegistrationNo(e.target.value)}
+                onBlur={() => setRegistrationNo((v) => (v.trim() ? normaliseRegistration(v) : ""))}
                 maxLength={32}
+                autoCapitalize="characters"
                 aria-required="true"
                 aria-invalid={!!errors.registrationNo || undefined}
-                aria-describedby={errors.registrationNo ? registrationErrId : undefined}
+                aria-describedby={errors.registrationNo ? `${registrationErrId} ${registrationHintId}` : registrationHintId}
                 style={inputStyle}
               />
+              <p id={registrationHintId} style={{ fontSize: 12, margin: 0, color: "var(--ink2)" }}>{REGISTRATION_HINT}</p>
               {errors.registrationNo && <p id={registrationErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.registrationNo}</p>}
             </div>
 
@@ -194,7 +210,7 @@ export function RegisterVehicleForm() {
                 style={inputStyle}
               >
                 {FUEL_TYPES.map((f) => (
-                  <option key={f} value={f}>{f.charAt(0).toUpperCase() + f.slice(1)}</option>
+                  <option key={f} value={f}>{FUEL_LABELS[f]}</option>
                 ))}
               </select>
             </div>
@@ -222,7 +238,7 @@ export function RegisterVehicleForm() {
         errorMessage={dialogError}
         description={
           <>
-            Register <strong>{registrationNo}</strong> ({make} {model}, {year}, {fuelType}) to the fleet.
+            Register <strong>{normaliseRegistration(registrationNo)}</strong> ({make} {model}, {year}, {FUEL_LABELS[fuelType]}) to the fleet.
           </>
         }
         onConfirm={() => void registerVehicle()}

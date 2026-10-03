@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -61,12 +61,32 @@ describe("FleetVehiclesPage", () => {
     expect(screen.getByText("No vehicles registered yet")).toBeInTheDocument();
   });
 
-  it("shows the data-source badge when the loader falls back on error", async () => {
+  // GAP-ASSETS-FLEET-VEHICLES-03
+  it("shows a load error with Retry -- not the empty state -- when the loader falls back on error", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: [], source: "error" });
 
     const ui = await FleetVehiclesPage({});
     render(ui);
 
-    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+    expect(screen.queryByText("No vehicles registered yet")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /try again|retry/i }).length).toBeGreaterThan(0);
+    // the register form stays usable
+    expect(screen.getByRole("button", { name: "Register Vehicle" })).toBeInTheDocument();
+  });
+
+  // GAP-ASSETS-FLEET-VEHICLES-04
+  it("renders fuel types with their proper labels (CNG, not Cng)", async () => {
+    fetchJsonMock.mockResolvedValueOnce({
+      data: [
+        { id: "v1", registrationNo: "DL01AB1234", make: "Tata", model: "Nexon", year: 2023, fuelType: "cng" },
+        { id: "v2", registrationNo: "DL01AB5678", make: "Tata", model: "Nexon", year: 2023, fuelType: "petrol" },
+      ],
+      source: "api",
+    });
+    render(await FleetVehiclesPage({}));
+    const table = within(screen.getByRole("table"));
+    expect(table.getByText("CNG")).toBeInTheDocument();
+    expect(table.getByText("Petrol")).toBeInTheDocument();
+    expect(screen.queryByText("Cng")).not.toBeInTheDocument();
   });
 });

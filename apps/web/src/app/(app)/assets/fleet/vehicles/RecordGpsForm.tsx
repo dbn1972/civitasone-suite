@@ -7,13 +7,13 @@
  * entry form, not a device-ingest form — GPS position is more commonly pushed
  * by a telematics device (see the IoT Devices telemetry screen), but a fleet
  * manager can also record a manual position (e.g. a driver phoning in a
- * location) here. Per routes.ts as read at build time, this endpoint echoes
- * the submitted coordinates back with a 200 and does NOT publish a queue
- * event or persist to a store — see BACKEND FOLLOW-UPS in the PR body.
+ * location) here. The endpoint publishes a GPS-update command (202) that the
+ * asset-service fleet consumer persists onto the vehicle row.
  */
 import { useId, useRef, useState } from "react";
-import { Button, Card } from "../../../../_components/ds";
+import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
+import { formatIndianDateTime } from "@/lib/formatters";
 import { FleetPicker } from "../FleetPicker";
 import type { PickerOption } from "../_data/labels";
 
@@ -43,7 +43,8 @@ export function RecordGpsForm({ options, vehiclesError = false, initialVehicleId
   const [errors, setErrors] = useState<FieldErrors>({});
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [isError, setIsError] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [dialogError, setDialogError] = useState<string | undefined>();
   const [lastPosition, setLastPosition] = useState<{ id: string; lat: number; lng: number; updatedAt: string } | null>(null);
 
   const vehicleIdId = useId();
@@ -81,27 +82,35 @@ export function RecordGpsForm({ options, vehiclesError = false, initialVehicleId
 
   const selectedLabel = options.find((o) => o.id === vehicleId)?.label ?? "the selected vehicle";
 
-  async function submit(e: React.FormEvent) {
+  /** GAP-ASSETS-FLEET-VEHICLES-06: validate, then confirm the coordinates before posting. */
+  function submit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
-    setIsError(false);
     if (!validate()) return;
+    setDialogError(undefined);
+    setConfirmOpen(true);
+  }
+
+  async function recordPosition() {
     setBusy(true);
+    setDialogError(undefined);
     try {
-      const res = await browserJson<{ data?: { id: string; lat: number; lng: number; updatedAt: string } }>(
+      const res = await browserJson<{ data?: { id: string; lat: number; lng: number; updatedAt?: string } }>(
         `v1/assets/fleet/vehicles/${vehicleId.trim()}/gps`,
         {
           method: "POST",
           body: JSON.stringify({ lat: Number(lat), lng: Number(lng) }),
         },
       );
-      if (res?.data) setLastPosition(res.data);
+      // The service stamps the position when its consumer applies it; show the
+      // server time when echoed, else the time the request was accepted.
+      if (res?.data) setLastPosition({ ...res.data, updatedAt: res.data.updatedAt ?? new Date().toISOString() });
+      setConfirmOpen(false);
       setMessage(`Position recorded for ${selectedLabel}.`);
       setLat("");
       setLng("");
     } catch (err) {
-      setIsError(true);
-      setMessage(err instanceof Error ? err.message : "Network error. Please try again.");
+      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -164,24 +173,39 @@ export function RecordGpsForm({ options, vehiclesError = false, initialVehicleId
           </div>
 
           <div>
-            <Button type="submit" style={{ minHeight: 44 }} disabled={busy} aria-busy={busy}>
-              {busy ? "Recording…" : "Record Position"}
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
+              Record Position
             </Button>
           </div>
 
           {message && (
-            <p role={isError ? "alert" : "status"} aria-live={isError ? "assertive" : "polite"} className={`pill ${isError ? "bad" : "good"}`} style={{ width: "fit-content" }}>
+            <p role="status" className="pill good" style={{ width: "fit-content" }}>
               {message}
             </p>
           )}
 
           {lastPosition && (
             <div role="status" style={{ fontSize: 13 }}>
-              <strong>Last recorded position</strong> — {options.find((o) => o.id === lastPosition.id)?.label ?? "vehicle"}: lat {lastPosition.lat}, lng {lastPosition.lng}, at {lastPosition.updatedAt}.
+              <strong>Last recorded position</strong> — {options.find((o) => o.id === lastPosition.id)?.label ?? "vehicle"}: lat {lastPosition.lat}, lng {lastPosition.lng}, at {formatIndianDateTime(lastPosition.updatedAt)} IST.
             </div>
           )}
         </div>
       </Card>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Record this position?"
+        confirmLabel="Record position"
+        busy={busy}
+        errorMessage={dialogError}
+        description={
+          <>
+            Record position <strong>{lat.trim()}, {lng.trim()}</strong> (lat, lng) for <strong>{selectedLabel}</strong>. This overwrites its last known position.
+          </>
+        }
+        onConfirm={() => void recordPosition()}
+        onCancel={() => !busy && setConfirmOpen(false)}
+      />
     </form>
   );
 }

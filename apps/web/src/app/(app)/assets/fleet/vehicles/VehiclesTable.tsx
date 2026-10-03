@@ -2,6 +2,7 @@
 
 import { DataTable } from "../../../../_components/ds";
 import type { VehicleRow } from "../_data/vehicles";
+import { fuelLabel } from "../_data/labels";
 
 type VehicleTableRow = VehicleRow & { action: string };
 
@@ -11,7 +12,7 @@ type VehicleTableRow = VehicleRow & { action: string };
  * GAP-ASSETS-FLEET-VEHICLES-01: the action preselects the vehicle in the GPS form.
  */
 export function VehiclesTable({ vehicles }: { vehicles: VehicleRow[] }) {
-  const rows: VehicleTableRow[] = vehicles.map((v) => ({ ...v, action: "Record GPS" }));
+  const rows: VehicleTableRow[] = vehicles.map((v) => ({ ...v, fuelType: fuelLabel(v.fuelType), action: "Record GPS" }));
   return (
     <DataTable<VehicleTableRow>
       columns={[

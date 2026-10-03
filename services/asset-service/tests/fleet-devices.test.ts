@@ -11,7 +11,7 @@ async function hit(m: string, u: string, a?: string, p?: unknown) { const app = 
 describe("fleet-devices + maintenance", () => {
   it("POST devices → 202", async () => { expect(await hit("POST", "/v1/assets/fleet/devices", admin, { vehicleId: randomUUID(), deviceImei: "123456789012345", protocol: "gt06" })).toBe(202); });
   it("GET devices → 200", async () => { expect([200, 500]).toContain(await hit("GET", "/v1/assets/fleet/devices", admin)); });
-  it("POST telemetry → 202", async () => { expect(await hit("POST", `/v1/assets/fleet/devices/${randomUUID()}/telemetry`, admin, { lat: 28.6, lng: 77.2, speed: 45, heading: 90, timestamp: new Date().toISOString() })).toBe(202); });
+  it("POST telemetry for an unknown device → 404", async () => { expect(await hit("POST", `/v1/assets/fleet/devices/${randomUUID()}/telemetry`, admin, { lat: 28.6, lng: 77.2, speed: 45, heading: 90, timestamp: new Date().toISOString() })).toBe(404); });
   it("POST maintenance/schedule → 202", async () => { expect(await hit("POST", "/v1/assets/fleet/maintenance/schedule", admin, { vehicleId: randomUUID(), type: "oil_change", scheduledDate: new Date(Date.now() + 86400000).toISOString() })).toBe(202); });
   it("401 without auth", async () => { expect(await hit("GET", "/v1/assets/fleet/devices")).toBe(401); });
 });

@@ -16,7 +16,7 @@ const listQuerySchema = z.object({
 export async function fleetDeviceRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/assets/fleet/devices", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);
-    const body = z.object({ vehicleId: z.string().uuid(), deviceImei: z.string().min(15).max(15), protocol: z.enum(["gt06", "teltonika", "queclink", "concox"]), simIccid: z.string().optional() }).parse(req.body);
+    const body = z.object({ vehicleId: z.string().uuid(), deviceImei: z.string().regex(/^\d{15}$/, "IMEI must be 15 digits"), protocol: z.enum(["gt06", "teltonika", "queclink", "concox"]), simIccid: z.string().regex(/^\d{19,20}$/, "ICCID must be 19 or 20 digits").optional() }).parse(req.body);
     const id = randomUUID();
     await queue.publish(COMMANDS.fleetDeviceRegister, { messageId: id, type: COMMANDS.fleetDeviceRegister, tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0", payload: { id, tenantId: ctx.tenantId, ...body } });
     return reply.code(202).send({ data: { id, status: "registered" } });
@@ -30,7 +30,8 @@ export async function fleetDeviceRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/assets/fleet/devices/:id/telemetry", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const body = z.object({ lat: z.number(), lng: z.number(), speed: z.number().min(0), heading: z.number().min(0).max(360), fuelLevel: z.number().min(0).max(100).optional(), engineOn: z.boolean().optional(), timestamp: z.string().datetime() }).parse(req.body);
+    if (!(await repo.findDeviceById(id, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "device not found");
+    const body = z.object({ lat: z.number(), lng: z.number(), speed: z.number().min(0), heading: z.number().min(0).max(360), fuelLevel: z.number().min(0).max(100).optional(), engineOn: z.boolean().optional(), timestamp: z.string().datetime().refine((t) => Date.parse(t) <= Date.now() + 5 * 60_000, "reading time cannot be in the future") }).parse(req.body);
     await queue.publish(COMMANDS.fleetDeviceTelemetry, { messageId: randomUUID(), type: COMMANDS.fleetDeviceTelemetry, tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0", payload: { deviceId: id, tenantId: ctx.tenantId, lat: body.lat, lng: body.lng, speed: body.speed, heading: body.heading, fuelLevelPct: body.fuelLevel, engineOn: body.engineOn, timestamp: body.timestamp } });
     return reply.code(202).send({ data: { deviceId: id, received: true } });
   });

@@ -30,6 +30,10 @@ export default async function AssetDetailPage({ params }: { params: { id: string
   }
 
   const ext = asset as typeof asset & { barcode?: string };
+  // GAP-ASSETS-INFRA-05: roads/drains/buildings are not tagged or under an AMC;
+  // those lifecycle steps are movable-asset concepts. The depreciation schedule
+  // is kept for infra pending a finance decision (see PR VERIFY list).
+  const isInfra = asset.type === "infra";
   const roles = getSessionRoles();
   // GAP-ASSETS-DETAIL-01: each sub-fetch reports its own source.
   const depFailed = parts.depreciation === "error";
@@ -108,9 +112,13 @@ export default async function AssetDetailPage({ params }: { params: { id: string
             <div className="pad">
               <ul className="tl">
                 <li className="done"><div className="t">Acquired (GRN)</div><div className="d">{formatIndianDate(asset.purchaseDate)}</div></li>
-                <li className={asset.status !== "condemned" && asset.status !== "disposed" ? "done" : "todo"}><div className="t">Tagged</div><div className="d"></div></li>
+                {!isInfra && (
+                  <li className={asset.status !== "condemned" && asset.status !== "disposed" ? "done" : "todo"}><div className="t">Tagged</div><div className="d"></div></li>
+                )}
                 <li className={asset.status === "in_use" || asset.status === "active" ? "cur" : asset.status === "disposed" || asset.status === "condemned" ? "done" : "todo"}><div className="t">In use</div><div className="d"></div></li>
-                <li className={asset.warrantyExpiry ? "done" : "todo"}><div className="t">AMC</div><div className="d">{asset.warrantyExpiry ? formatIndianDate(asset.warrantyExpiry) : ""}</div></li>
+                {!isInfra && (
+                  <li className={asset.warrantyExpiry ? "done" : "todo"}><div className="t">AMC</div><div className="d">{asset.warrantyExpiry ? formatIndianDate(asset.warrantyExpiry) : ""}</div></li>
+                )}
                 <li className={asset.status === "disposed" || asset.status === "condemned" ? "done" : "todo"}><div className="t">Disposal</div><div className="d"></div></li>
               </ul>
             </div>

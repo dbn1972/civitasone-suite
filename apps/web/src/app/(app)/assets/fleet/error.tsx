@@ -9,7 +9,7 @@ export default function ErrorBoundary({ error, reset }: { error: Error & { diges
       reset={reset}
       backHref="/assets"
       backLabel="Back to Assets"
-      area="Assets"
+      area="Fleet & Telematics"
     />
   );
 }

@@ -42,4 +42,21 @@ describe("ModuleHub", () => {
     render(<ModuleHub title="Finance" description="desc" links={links} help="finance" />);
     expect(screen.getByRole("link", { name: /how this works/i })).toHaveAttribute("href", "/help/finance");
   });
+
+  // GAP-ASSETS-HOME-01
+  it("renders headed groups, one tile grid per group, when groups are given", () => {
+    render(
+      <ModuleHub
+        title="Assets"
+        description="desc"
+        groups={[
+          { heading: "Register", links: [{ href: "/a/new", label: "New" }] },
+          { heading: "Registers", links: [{ href: "/a/list", label: "List" }, { href: "/a/fixed", label: "Fixed" }] },
+        ]}
+      />,
+    );
+    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual(["Register", "Registers"]);
+    expect(screen.getByRole("region", { name: "Registers" })).toBeInTheDocument();
+    expect(screen.getAllByRole("link")).toHaveLength(3);
+  });
 });

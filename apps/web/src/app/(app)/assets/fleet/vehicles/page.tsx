@@ -1,5 +1,5 @@
-import { PageHeader, Card } from "../../../../_components/ds";
-import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import { PageHeader, Card, RefreshErrorState } from "../../../../_components/ds";
+import { toHumanError } from "@/lib/messages";
 import { getVehicles, type VehicleRow } from "../_data/vehicles";
 import { vehicleOptions } from "../_data/labels";
 import { RegisterVehicleForm } from "./RegisterVehicleForm";
@@ -18,13 +18,17 @@ export default async function FleetVehiclesPage({ searchParams }: { searchParams
         subtitle="Government vehicles registered to the fleet."
         back="/assets/fleet"
         backLabel="Fleet & Telematics"
-        actions={source === "error" ? <DataSourceBadge source="error" /> : null}
       />
 
       <RegisterVehicleForm />
 
       <Card title="Vehicles">
-        <VehiclesTable vehicles={vehicles} />
+        {/* GAP-ASSETS-FLEET-VEHICLES-03: a failed load is an error, never "No vehicles registered yet". */}
+        {source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "fleet vehicles" })} />
+        ) : (
+          <VehiclesTable vehicles={vehicles} />
+        )}
       </Card>
 
       <RecordGpsForm

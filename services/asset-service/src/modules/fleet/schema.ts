@@ -26,6 +26,11 @@ export const fleetVehicles = fleetSchema.table("fleet_vehicles", {
   createdBy:        uuid("created_by").notNull(),
   version:          integer("version").notNull().default(1),
 });
+// Expression unique index uq_fleet_vehicles_tenant_plate (tenant_id,
+// upper(regexp_replace(registration_no, ...)) WHERE
+// status <> decommissioned) lives in migrations/0034_fleet_vehicle_unique_plate.sql;
+// this drizzle version cannot declare an expression index, so it is not repeated here.
+
 
 export const fleetMaintenance = fleetSchema.table("fleet_maintenance", {
   id:                   uuid("id").primaryKey().defaultRandom(),

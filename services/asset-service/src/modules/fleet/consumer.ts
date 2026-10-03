@@ -9,6 +9,24 @@ import * as repo from "./repo.js";
 const log = pino({ name: "asset-fleet-consumer" });
 const AUDIT_TOPIC = "audit.event.record";
 
+/** Postgres unique_violation, whether raised directly or wrapped by the driver/ORM. */
+function isUniqueViolation(err: unknown): boolean {
+  const e = err as { code?: string; cause?: { code?: string } } | null;
+  return e?.code === "23505" || e?.cause?.code === "23505";
+}
+
+/** Records the message as processed (so it is not retried) and audits the refusal. */
+async function rejectDuplicate(msg: any, action: string, resourceId: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    if (!(await markProcessed(tx, msg.messageId))) return;
+    await enqueue(tx, {
+      topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+      tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+      payload: { service: "asset", action, resourceType: "fleet_vehicle", resourceId, outcome: "failure", reason: "DUPLICATE_REGISTRATION" },
+    });
+  });
+}
+
 /**
  * Fleet + fleet-devices consumers (facade closure). fleet/routes.ts and
  * fleet-devices/routes.ts publish commands but, until this file, had no
@@ -38,6 +56,12 @@ export function registerFleetConsumers(rawQueue: Queue): void {
         await audit(tx, msg, "create", "fleet_vehicle", p.id);
       });
     } catch (err) {
+      if (isUniqueViolation(err)) {
+        // Lost the race against a concurrent create of the same plate: clean failure, no retry.
+        log.warn({ messageId: msg.messageId, type: COMMANDS.fleetCreate }, "Duplicate vehicle registration refused");
+        await rejectDuplicate(msg, "create", (msg.payload as { id: string }).id).catch((e) => log.error({ err: e }, "duplicate audit failed"));
+        return;
+      }
       log.error({ err, messageId: msg.messageId, type: COMMANDS.fleetCreate }, "Consumer processing failed");
     }
   });
@@ -120,13 +144,18 @@ export function registerFleetConsumers(rawQueue: Queue): void {
           recordedAt: new Date(p.timestamp),
         });
         const device = await repo.findDeviceByIdTx(tx, p.deviceId, p.tenantId);
+        // The history row above is always kept; the vehicle's live position only
+        // moves forward in time, so a back-dated reading cannot overwrite a newer one.
+        let applied = false;
         if (device) {
-          await repo.updateVehiclePosition(tx, device.vehicleId, p.tenantId, {
+          applied = await repo.updateVehiclePosition(tx, device.vehicleId, p.tenantId, {
             lat: String(p.lat), lng: String(p.lng),
             fuelLevelPct: p.fuelLevelPct ?? undefined, lastGpsAt: new Date(p.timestamp),
-          });
+          }, { onlyIfNotOlder: true });
         }
-        await audit(tx, msg, "telemetry", "fleet_device", p.deviceId);
+        await audit(tx, msg, "telemetry", "fleet_device", p.deviceId, {
+          recordedAt: p.timestamp, lat: p.lat, lng: p.lng, backdated: !applied,
+        });
       });
     } catch (err) {
       log.error({ err, messageId: msg.messageId, type: COMMANDS.fleetDeviceTelemetry }, "Consumer processing failed");
@@ -154,6 +183,11 @@ export function registerFleetConsumers(rawQueue: Queue): void {
         await audit(tx, msg, "update", "fleet_vehicle", p.id);
       });
     } catch (err) {
+      if (isUniqueViolation(err)) {
+        log.warn({ messageId: msg.messageId, type: COMMANDS.fleetVehicleUpdate }, "Duplicate vehicle registration refused");
+        await rejectDuplicate(msg, "update", (msg.payload as { id: string }).id).catch((e) => log.error({ err: e }, "duplicate audit failed"));
+        return;
+      }
       log.error({ err, messageId: msg.messageId, type: COMMANDS.fleetVehicleUpdate }, "Consumer processing failed");
     }
   });
@@ -178,22 +212,34 @@ export function registerFleetConsumers(rawQueue: Queue): void {
       const p = msg.payload as { id: string; tenantId: string; costMinor?: number | null };
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        await repo.updateMaintenanceStatus(
-          tx, p.id, p.tenantId, "completed",
-          p.costMinor != null ? BigInt(p.costMinor) : null,
-        );
-        await audit(tx, msg, "complete", "fleet_maintenance", p.id);
+        const changed = await repo.completeMaintenance(tx, p.id, p.tenantId, p.costMinor != null ? BigInt(p.costMinor) : null);
+        if (changed) await audit(tx, msg, "complete", "fleet_maintenance", p.id);
       });
     } catch (err) {
       log.error({ err, messageId: msg.messageId, type: COMMANDS.fleetMaintenanceComplete }, "Consumer processing failed");
     }
   });
+
+  // asset.fleet.maintenance_cancel → update fleet_maintenance.status = cancelled
+  // (only while still open: a completed job is never overwritten).
+  queue.subscribe(COMMANDS.fleetMaintenanceCancel, async (msg) => {
+    try {
+      const p = msg.payload as { id: string; tenantId: string };
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        const changed = await repo.cancelMaintenance(tx, p.id, p.tenantId);
+        if (changed) await audit(tx, msg, "cancel", "fleet_maintenance", p.id);
+      });
+    } catch (err) {
+      log.error({ err, messageId: msg.messageId, type: COMMANDS.fleetMaintenanceCancel }, "Consumer processing failed");
+    }
+  });
 }
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
+async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string, extra: Record<string, unknown> = {}): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "asset", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "asset", action, resourceType, resourceId, outcome: "success", ...extra },
   });
 }

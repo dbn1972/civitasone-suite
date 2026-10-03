@@ -376,7 +376,81 @@
     "inventory": "Inventory",
     "maintenance": "Maintenance",
     "disposal": "Disposal",
-    "transfer": "Transfer"
+    "transfer": "Transfer",
+    "description": "Asset lifecycle, depreciation, maintenance and disposal.",
+    "groups": {
+      "overview": "Overview",
+      "register": "Register & capture",
+      "registers": "Registers",
+      "operate": "Operate",
+      "account": "Account & dispose"
+    },
+    "links": {
+      "dashboard": {
+        "label": "Dashboard",
+        "note": "Overview and quick navigation"
+      },
+      "register": {
+        "label": "Register Asset",
+        "note": "Manual capitalization"
+      },
+      "bulkImport": {
+        "label": "Bulk Import",
+        "note": "Mass asset load"
+      },
+      "scan": {
+        "label": "Barcode Scan",
+        "note": "Mobile field verification"
+      },
+      "verification": {
+        "label": "Physical Verification",
+        "note": "Stock-take and reconciliation"
+      },
+      "list": {
+        "label": "Asset Register",
+        "note": "All assets with status and valuation"
+      },
+      "fixedAssets": {
+        "label": "Fixed Assets",
+        "note": "Capitalized assets"
+      },
+      "infra": {
+        "label": "Infrastructure",
+        "note": "Roads, buildings and networks"
+      },
+      "locations": {
+        "label": "Functional Locations",
+        "note": "PM hierarchy"
+      },
+      "leases": {
+        "label": "IFRS 16 Leases",
+        "note": "ROU assets and liabilities"
+      },
+      "projects": {
+        "label": "Projects & AUC",
+        "note": "Capitalize WIP to fixed assets"
+      },
+      "maintenance": {
+        "label": "Maintenance",
+        "note": "AMC, preventive and corrective"
+      },
+      "fleet": {
+        "label": "Fleet & Telematics",
+        "note": "Vehicles, GPS and IoT devices"
+      },
+      "insurance": {
+        "label": "Insurance",
+        "note": "Policies and claims"
+      },
+      "depreciation": {
+        "label": "Depreciation Run",
+        "note": "Multi-book period-end posting"
+      },
+      "condemnation": {
+        "label": "Condemnation & Disposal",
+        "note": "Survey, auction and disposal workflow"
+      }
+    }
   },
   "assistant": {
     "title": "Ask CivitasOne",
