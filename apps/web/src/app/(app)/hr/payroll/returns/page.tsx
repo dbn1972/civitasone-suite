@@ -3,10 +3,11 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { maskPan } from "../../../../_components/ds/Masked";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { formatMoney } from "@/lib/formatters";
+import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { statusAwareGet } from "../_lib/statusAwareFetch";
 import { QuarterLookupForm } from "./QuarterLookupForm";
 import { ForceFileButton } from "./ForceFileButton";
+import { RecordFilingForm } from "./RecordFilingForm";
 import { RpuDownloadLink } from "./RpuDownloadLink";
 import { TaxReturnsSummary, type QuarterSummaryRow } from "./TaxReturnsSummary";
 import { toHumanError } from "@/lib/messages";
@@ -56,6 +57,9 @@ type Form24Q = {
    */
   filedAt: string | null;
   challanRef: string | null;
+  /** NSDL provisional receipt number + revision of the latest recorded filing (null when none). */
+  filingReceiptNo: string | null;
+  filingRevision: number | null;
 };
 
 type Deductee26Q = {
@@ -119,6 +123,8 @@ function toForm24Q(raw: unknown): Form24Q | null {
     note: String(r.note ?? ""),
     filedAt: typeof r.filedAt === "string" && r.filedAt ? r.filedAt : null,
     challanRef: typeof r.challanRef === "string" && r.challanRef ? r.challanRef : null,
+    filingReceiptNo: typeof r.filingReceiptNo === "string" && r.filingReceiptNo ? r.filingReceiptNo : null,
+    filingRevision: typeof r.filingRevision === "number" ? r.filingRevision : null,
   };
 }
 
@@ -202,6 +208,8 @@ export default async function ReturnsPage({
   if (!getSessionRoles().some((r) => PAYROLL_STATUTORY_ADMIN_ROLES.includes(r))) {
     return <PermissionDenied module="TDS returns (24Q/26Q)" requiredRoles={PAYROLL_STATUTORY_ADMIN_ROLES} backHref="/hr/payroll" backLabel={t("backToPayrollLabel")} />;
   }
+  // GAP-PAYROLL-RETURNS-01: payroll-service's filing-record roles (hr_admin may read, not record).
+  const canRecordFiling = getSessionRoles().some((r) => ["payroll_admin", "payroll_officer", "super_admin", "finance_officer"].includes(r));
   // TaxReturnsSummary/QuarterLookupForm are plain (non-async) components --
   // see their own file comments -- so this page resolves their translators
   // once, here, and passes them down as props.
@@ -355,6 +363,17 @@ iconBg={f24Lookup.data.reconciliation.matched ? "var(--goodbg, #e6f7f0)" : "var(
               <p style={{ marginTop: 10 }}>
                 <RpuDownloadLink href={rpuHref("form24q")} reconciled={f24Lookup.data.reconciliation.matched} />
               </p>
+              {/* GAP-PAYROLL-RETURNS-01: Filed only when a filing is recorded. */}
+              {f24Lookup.data.filedAt ? (
+                <p role="status" className="pill good" style={{ width: "fit-content", marginTop: 10 }}>
+                  {t("filedLine", { date: formatIndianDate(f24Lookup.data.filedAt), receipt: f24Lookup.data.filingReceiptNo ?? "—" })}
+                </p>
+              ) : (
+                <p role="note" className="pill warn" style={{ width: "fit-content", marginTop: 10 }}>{t("notFiledLine")}</p>
+              )}
+              {canRecordFiling && (
+                <RecordFilingForm fy={fy} quarter={quarter} currentRevision={f24Lookup.data.filingRevision} />
+              )}
             </>
           )}
         </div>

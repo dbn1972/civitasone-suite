@@ -46,6 +46,8 @@ export const COMMANDS = {
   flexElectionUpsert:     "payroll.flex_election.upsert",
   flexElectionDecide:     "payroll.flex_election.decide",
   costingRuleUpsert:      "payroll.costing_rule.upsert",
+  // GAP-PAYROLL-COSTING-02: edit split % / deactivate / reactivate a rule.
+  costingRuleUpdate:      "payroll.costing_rule.update",
   offCycleCreate:         "payroll.off_cycle.create",
   offCycleProcess:        "payroll.off_cycle.process",
   stateRulesUpsert:       "payroll.state_rules.upsert",
@@ -74,6 +76,10 @@ export const COMMANDS = {
   perquisiteComponentDelete: "payroll.perquisite_component.delete",
   taxDeclarationWindowSet:   "payroll.tax_declaration_window.set",
   bonusRuleCreate:        "payroll.bonus_rule.create",
+  // fin-payroll-01: tenant slip letterhead (GAP-PAYROLL-SALARY-SLIPS-DETAIL-02)
+  // and the manual Form 24Q filing record (GAP-PAYROLL-RETURNS-01).
+  letterheadUpsert:       "payroll.letterhead.upsert",
+  returnFilingRecord:     "payroll.return_filing.record",
 } as const;
 
 export const EVENTS = {
@@ -102,6 +108,7 @@ export const EVENTS = {
   flexElectionUpserted:   "payroll.flex_election.upserted",
   flexElectionDecided:    "payroll.flex_election.decided",
   costingRuleUpserted:    "payroll.costing_rule.upserted",
+  costingRuleUpdated:     "payroll.costing_rule.updated",
   offCycleCreated:        "payroll.off_cycle.created",
   offCycleProcessed:      "payroll.off_cycle.processed",
   stateRulesUpserted:     "payroll.state_rules.upserted",
@@ -110,6 +117,8 @@ export const EVENTS = {
   dscConfigRemoved:       "payroll.dsc_config.removed",
   sponsorConfigUpserted:  "payroll.sponsor_config.upserted",
   bankFileSigningUpdated: "payroll.bank_file_signing.updated",
+  letterheadUpserted:     "payroll.letterhead.upserted",
+  returnFilingRecorded:   "payroll.return_filing.recorded",
 } as const;
 
 export const CONSUMED_EVENTS = {

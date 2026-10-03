@@ -32,6 +32,10 @@ import { fnfRoutes } from "./modules/fnf/routes.js";
 import { dscConfigRoutes } from "./modules/dsc-config/routes.js";
 import { bankFileSigningRoutes } from "./modules/bank-file-signing/routes.js";
 import { form16VerifyRoutes } from "./modules/form16-verify/routes.js";
+import { costingRuleRoutes } from "./modules/costing-rules/routes.js";
+import { employeeLookupRoutes } from "./modules/employee-lookup/routes.js";
+import { letterheadRoutes } from "./modules/letterhead/routes.js";
+import { returnFilingRoutes } from "./modules/return-filings/routes.js";
 import { registerRateLimit } from "@civitasone/rate-limit";
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -106,6 +110,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(dscConfigRoutes);
   await app.register(bankFileSigningRoutes);
   await app.register(form16VerifyRoutes);
+  await app.register(costingRuleRoutes);
+  await app.register(employeeLookupRoutes);
+  await app.register(letterheadRoutes);
+  await app.register(returnFilingRoutes);
   const { worldClassPayrollRoutes } = await import("./modules/payroll/world-class-routes.js");
   await app.register(worldClassPayrollRoutes);
   const { gapRoutes } = await import("./modules/payroll/gap-routes.js");

@@ -72,7 +72,7 @@ describe("loanCreate command", () => {
     const q = new MemoryQueue(); registerLoansConsumers(q); await q.start();
     await q.publish(COMMANDS.loanCreate, makeMsg(COMMANDS.loanCreate, {
       id: randomUUID(), tenantId: TENANT, loanNo: "LN/001", employeeId: randomUUID(),
-      loanType: "personal", principalMinor: 5000000, emiMinor: 500000,
+      loanType: "personal", principalMinor: 5000000, emiMinor: 450000, // 12 x 450000 = principal + 8% simple interest (GAP-PAYROLL-LOANS-05 bound)
       tenureMonths: 12, interestRatePct: 8, currency: "INR",
     }));
     await settle();

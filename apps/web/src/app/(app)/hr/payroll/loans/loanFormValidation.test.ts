@@ -71,11 +71,18 @@ describe("validateLoanForm (GAP-PAYROLL-LOANS-05)", () => {
     expect(!r.ok && r.errors.interestRate).toBe("rateInvalid");
   });
 
+  // GAP-PAYROLL-LOANS-05: the server allocates the loan number when it is omitted.
+  it("a blank loan number is valid and becomes null (server allocates)", () => {
+    const r = validateLoanForm({ ...valid, loanNo: "   " });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value.loanNo).toBeNull();
+  });
+
   it("flags every missing required field", () => {
     const r = validateLoanForm({ loanNo: " ", employeeId: null, principalRupees: "", emiRupees: "", tenureMonths: "", interestRatePct: "" });
     expect(r.ok).toBe(false);
     if (!r.ok) {
-      expect(r.errors).toEqual({ loanNo: "required", employeeId: "required", principal: "required", emi: "required", tenure: "required" });
+      expect(r.errors).toEqual({ employeeId: "required", principal: "required", emi: "required", tenure: "required" });
     }
   });
 });

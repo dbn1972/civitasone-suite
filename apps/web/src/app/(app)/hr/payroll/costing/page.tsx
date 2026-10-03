@@ -3,6 +3,7 @@ import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import type { LoaderResult } from "@/app/_data/apiClient";
 import { CostingPeriodForm } from "./CostingPeriodForm";
 import { CreateCostingRuleForm } from "./CreateCostingRuleForm";
+import { CostingRulesTable, type RuleRow } from "./CostingRulesTable";
 import { toHumanError } from "@/lib/messages";
 import { getSessionRoles, PAYROLL_ADMIN_ROLES, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
 import { parsePeriodParam } from "@/lib/payroll/period";
@@ -24,15 +25,6 @@ type DisplayRow = {
   costCenterLabel: string;
   splitPctLabel: string;
   allocatedMinor: string | null;
-} & Record<string, unknown>;
-
-type RuleDisplayRow = {
-  id: string;
-  employeeGroup: string;
-  costCenterLabel: string;
-  splitPctLabel: string;
-  groupTotalLabel: string;
-  status: string;
 } & Record<string, unknown>;
 
 export default async function CostingPage({
@@ -82,12 +74,13 @@ export default async function CostingPage({
 
   const rules = rulesResult.data;
   const totals = groupTotals(rules);
-  const ruleRows: RuleDisplayRow[] = rules.map((r) => {
+  const ruleRows: RuleRow[] = rules.map((r) => {
     const total = totals.get(r.employeeGroup) ?? 0;
     return {
       id: r.id,
       employeeGroup: r.employeeGroup,
       costCenterLabel: costCenterLabel(r.costCenterId, centerMap, unresolved).label,
+      splitPct: r.splitPct,
       splitPctLabel: formatSplitPct(r.splitPct),
       groupTotalLabel: total === 100 ? formatSplitPct(total) : t("groupTotalInvalid", { total: formatSplitPct(total) }),
       status: r.status,
@@ -106,13 +99,6 @@ export default async function CostingPage({
     { key: "costCenterLabel", label: t("colCostCenter") },
     { key: "splitPctLabel", label: t("colSplitPct"), align: "right" },
     { key: "allocatedMinor", label: t("colAllocated"), align: "right", cellType: "amount" },
-  ];
-  const ruleColumns: { key: keyof RuleDisplayRow & string; label: string; align?: "left" | "right"; cellType?: "status" }[] = [
-    { key: "employeeGroup", label: t("colEmployeeGroup") },
-    { key: "costCenterLabel", label: t("colCostCenter") },
-    { key: "splitPctLabel", label: t("colSplitPct"), align: "right" },
-    { key: "groupTotalLabel", label: t("colGroupTotal"), align: "right" },
-    { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   return (
@@ -148,18 +134,8 @@ export default async function CostingPage({
                 {t("groupsNot100Warning", { groups: invalidGroups.join(", ") })}
               </p>
             )}
-            <DataTable<RuleDisplayRow>
-              columns={ruleColumns}
-              rows={ruleRows}
-              caption={t("rulesCaption")}
-              sortable
-              filterable
-              filterPlaceholder={t("filterPlaceholder")}
-              pageSize={15}
-              emptyIcon="📋"
-              emptyTitle={t("rulesEmptyTitle")}
-              emptyMessage={t("rulesEmptyMessage")}
-            />
+            {/* GAP-PAYROLL-COSTING-02: edit / deactivate / reactivate (payroll admins). */}
+            <CostingRulesTable rows={ruleRows} rules={rules} canAdminister={canAdminister} />
           </>
         )}
       </Card>

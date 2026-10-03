@@ -112,3 +112,47 @@ export function decideDisbursal(
   }
   return { allowed: true };
 }
+
+/**
+ * GAP-PAYROLL-LOANS-05: server-side sanity bounds on the hand-entered loan
+ * terms, in integer paise (no floats).
+ *
+ *  - EMI may not exceed the principal (a single instalment can never recover
+ *    more than the loan);
+ *  - EMI x tenure must at least repay the principal (otherwise the loan can
+ *    never close inside its tenure);
+ *  - EMI x tenure may not exceed the SIMPLE-interest total
+ *    principal x (1 + rate x tenure/12), plus one paisa per instalment of
+ *    rounding. A reducing-balance EMI always collects less than the simple-
+ *    interest total, so anything above it is an error, not a policy choice.
+ *
+ * VERIFY: the ceiling is a mathematical bound, not an organisational limit;
+ * a tenant-specific max tenure / max EMI policy would sit on top of this.
+ */
+export type LoanTermsDecision =
+  | { ok: true }
+  | { ok: false; code: "EMI_EXCEEDS_PRINCIPAL" | "EMI_TOO_LOW_TO_REPAY" | "EMI_EXCEEDS_INTEREST_BOUND"; message: string };
+
+export function checkLoanTerms(t: { principalMinor: bigint; emiMinor: bigint; tenureMonths: number; interestRatePct: number }): LoanTermsDecision {
+  const tenure = BigInt(t.tenureMonths);
+  const total = t.emiMinor * tenure;
+  if (t.emiMinor > t.principalMinor) {
+    return { ok: false, code: "EMI_EXCEEDS_PRINCIPAL", message: "monthly EMI cannot be more than the loan principal" };
+  }
+  if (total < t.principalMinor) {
+    return { ok: false, code: "EMI_TOO_LOW_TO_REPAY", message: "EMI x tenure is less than the principal: the loan could never be repaid within its tenure" };
+  }
+  const rateBps = BigInt(Math.round(t.interestRatePct * 100));
+  // principal x (12*10000 + rateBps x tenure) / (12*10000), rounded up, + 1 paisa per instalment.
+  const denom = 120_000n;
+  const bound = (t.principalMinor * (denom + rateBps * tenure) + denom - 1n) / denom + tenure;
+  if (total > bound) {
+    return { ok: false, code: "EMI_EXCEEDS_INTEREST_BOUND", message: "EMI x tenure is more than the principal plus simple interest for the tenure: check the EMI" };
+  }
+  return { ok: true };
+}
+
+/** LN-<year>-<6-digit sequence>, e.g. LN-2026-000042. */
+export function formatLoanNo(year: number, seq: number): string {
+  return `LN-${year}-${String(seq).padStart(6, "0")}`;
+}

@@ -4,6 +4,7 @@ import { useCallback, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { Button, EntityPicker, type EntityOption } from "./ds";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
+import { searchPayrollEmployees, resolvePayrollEmployees } from "@/lib/entityAdapters/payrollEmployee";
 
 export interface EmployeePickerProps {
   /** Selected employee id, or null when nothing is chosen. */
@@ -29,6 +30,13 @@ export interface EmployeePickerProps {
    * it calls onChange(null, null).
    */
   clearable?: boolean;
+  /**
+   * Which directory backs the search. "hrms" (default) is the HR employee
+   * directory (HR roles only). "payroll" is the payroll employee lookup,
+   * open to payroll_admin / payroll_officer / finance_officer
+   * (GAP-PAYROLL-LOANS-01) -- use it on payroll screens.
+   */
+  directory?: "hrms" | "payroll";
 }
 
 /**
@@ -48,6 +56,7 @@ export function EmployeePicker({
   id,
   "aria-label": ariaLabel,
   clearable = false,
+  directory = "hrms",
 }: EmployeePickerProps) {
   const t = useTranslations("employeePicker");
   const knownRef = useRef<Map<string, EntityOption>>(
@@ -60,12 +69,14 @@ export function EmployeePicker({
   }, []);
 
   const search = useCallback(
-    async (query: string, signal: AbortSignal) => remember(await searchEmployees(query, signal)),
-    [remember],
+    async (query: string, signal: AbortSignal) =>
+      remember(await (directory === "payroll" ? searchPayrollEmployees : searchEmployees)(query, signal)),
+    [remember, directory],
   );
   const resolve = useCallback(
-    async (ids: string[]) => remember(await resolveEmployees(ids)),
-    [remember],
+    async (ids: string[]) =>
+      remember(await (directory === "payroll" ? resolvePayrollEmployees : resolveEmployees)(ids)),
+    [remember, directory],
   );
 
   const picker = (

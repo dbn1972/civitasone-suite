@@ -825,6 +825,11 @@ export const PayrollRunDetailSchema = z.object({
   grossAmount: z.number(),
   netAmount: z.number(),
   deductions: z.number(),
+  // GAP-PAYROLL-DISBURSEMENT-08: authoritative integer-paise totals (bigint
+  // strings). Optional so a payload from an older payroll-service still validates.
+  grossMinor: z.string().regex(/^-?\d+$/).optional(),
+  netMinor: z.string().regex(/^-?\d+$/).optional(),
+  deductionsMinor: z.string().regex(/^-?\d+$/).optional(),
   // payroll-critical fix: 'failed' added as a real, distinct status -- it
   // used to be silently remapped to 'draft' server-side (payroll-service's
   // queries.ts mapRunStatus), making a run whose async processing genuinely

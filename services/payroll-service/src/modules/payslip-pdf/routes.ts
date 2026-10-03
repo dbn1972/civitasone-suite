@@ -1,3 +1,5 @@
+import { escapeHtml, renderTemplate, safeFilenamePart } from "../../shared/html.js";
+import { loadLetterhead } from "../letterhead/routes.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -84,9 +86,6 @@ function formatAmount(minor: number | bigint): string {
 // template needs (earnings/deductions/pension rows) is pre-rendered to an
 // HTML string by the caller below and passed in as a plain flat var —
 // keep it that way rather than growing a template engine for one seed row.
-function renderTemplate(template: string, vars: Record<string, string>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
-}
 
 export async function payslipPdfRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/payroll/slips/:id/pdf", async (req, reply) => {
@@ -198,10 +197,10 @@ export async function payslipPdfRoutes(app: FastifyInstance): Promise<void> {
     const deductions = components.filter((c) => c.type === "deduction");
 
     const earningsRows = earnings
-      .map((e) => `<tr><td>${e.name}</td><td class="amount">${formatAmount(e.amountMinor)}</td></tr>`)
+      .map((e) => `<tr><td>${escapeHtml(e.name)}</td><td class="amount">${formatAmount(e.amountMinor)}</td></tr>`)
       .join("\n    ");
     const deductionsRows = deductions
-      .map((d) => `<tr><td>${d.name}</td><td class="amount">${formatAmount(d.amountMinor)}</td></tr>`)
+      .map((d) => `<tr><td>${escapeHtml(d.name)}</td><td class="amount">${formatAmount(d.amountMinor)}</td></tr>`)
       .join("\n    ");
 
     const pensionRows: string[] = [];
@@ -227,7 +226,9 @@ export async function payslipPdfRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const vars: Record<string, string> = {
-      orgName: "Organization", // Would be fetched from tenant config in production
+      // GAP-PAYROLL-SALARY-SLIPS-DETAIL-02: the tenant's own issuing organisation
+      // (HTML-escaped: an admin-entered string) -- never a platform default.
+      orgName: (await loadLetterhead(ctx.tenantId))?.orgName ?? "",
       month: run?.month ?? "",
       employeeNo: slip.employeeNo,
       employeeName,
@@ -246,7 +247,7 @@ export async function payslipPdfRoutes(app: FastifyInstance): Promise<void> {
       footerText,
     };
 
-    const html = renderTemplate(template, vars);
+    const html = renderTemplate(template, vars, ["earningsRows", "deductionsRows", "pensionRows"]);
     await publishSlipDownloadAudit(ctx, slip.id, "pdf");
     return reply
       .header("content-type", "text/html; charset=utf-8")

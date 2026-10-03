@@ -1,5 +1,5 @@
 import {
-  pgSchema, uuid, integer, bigint, char, varchar, date, timestamp, jsonb,
+  pgSchema, uuid, integer, bigint, char, varchar, date, timestamp, jsonb, text,
 } from "drizzle-orm/pg-core";
 
 const payrollSchema = pgSchema("payroll");
@@ -50,6 +50,14 @@ export const fnfSettlements = payrollSchema.table("fnf_settlements", {
   rejectedBy:                 uuid("rejected_by"),
   rejectedAt:                 timestamp("rejected_at", { withTimezone: true }),
   rejectionReason:            varchar("rejection_reason", { length: 512 }),
+  // GAP-PAYROLL-FNF-05 (migration 0058): payee of a death settlement. The full
+  // account number is sealed (encryptPii) and never returned by any API.
+  nomineeName:                varchar("nominee_name", { length: 128 }),
+  nomineeRelationship:        varchar("nominee_relationship", { length: 32 }),
+  nomineeIfsc:                varchar("nominee_ifsc", { length: 11 }),
+  nomineeAccountLast4:        varchar("nominee_account_last4", { length: 4 }),
+  nomineeAccountSealed:       text("nominee_account_sealed"),
+  nomineeDocumentRef:         varchar("nominee_document_ref", { length: 64 }),
 });
 
 export const ltcExemptions = payrollSchema.table("ltc_exemptions", {

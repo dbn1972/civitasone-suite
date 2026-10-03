@@ -225,7 +225,7 @@ export default async function DisbursementPage() {
               <RefreshErrorState error={toHumanError("load", { area: "bank transfers" })} backHref="/hr/payroll" />
             </div>
           ) : (
-            <DisbursementTransferTable transfers={transfers} />
+            <DisbursementTransferTable transfers={transfers} canReveal />
           )}
         </Card>
       </section>

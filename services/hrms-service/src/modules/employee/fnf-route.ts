@@ -8,7 +8,6 @@
  * - gratuity = (basic * 15/26) * years_of_service (if >= 5 years)
  * Returns the F&F breakdown with optional tax breakdown from payroll-service.
  */
-import { effectiveBalanceDays } from "../leave/domain.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -18,6 +17,7 @@ import { hrmsEmployees } from "./schema.js";
 import { hrmsLeaveAllocs } from "../leave/schema.js";
 import { fetchFnfTaxBreakdown, PayrollUnavailableError } from "../../shared/payroll-client.js";
 import { loadTypeResolver } from "./engagement-policy.js";
+import { completedYearsOfService, totalLeaveBalanceDays } from "./fnf-service-snapshot.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin", "finance_officer", "payroll_admin"];
 
@@ -79,14 +79,16 @@ export async function fnfRoutes(app: FastifyInstance): Promise<void> {
         eq(hrmsLeaveAllocs.tenantId, ctx.tenantId),
         eq(hrmsLeaveAllocs.employeeId, id),
       )));
-    const totalLeaveBalance = allocations.reduce((sum, a) => sum + effectiveBalanceDays(a), 0);
+    // Exact (half-day aware) balance: the shared helper the internal snapshot payroll verifies against uses too.
+    const totalLeaveBalance = totalLeaveBalanceDays(allocations);
     // GAP-HR-LEAVE-APPLY-05: half-day balances make totalLeaveBalance fractional (x.5).
     let leaveEncashmentMinor = Math.round(dailyBasicMinor * totalLeaveBalance);
 
     // 3. Gratuity (only if >= 5 years of service)
     // Formula: (basic * 15) / 26 * completed_years
     let gratuityMinor = 0;
-    const completedYears = Math.floor(yearsOfService);
+    // Same definition the internal snapshot payroll-service verifies against.
+    const completedYears = completedYearsOfService(emp.dateOfJoining, body.separationDate);
     if (completedYears >= 5) {
       gratuityMinor = Math.round((basicMinor * 15 * completedYears) / 26);
     }

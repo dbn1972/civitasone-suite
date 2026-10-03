@@ -163,6 +163,36 @@ describe("ReturnsPage", () => {
     expect(screen.getByText("0 / 4")).toBeInTheDocument();
   });
 
+  it("RETURNS-01: a recorded filing shows the filing date + receipt; a reconciled quarter without one is 'Not filed yet' and offers the record form", async () => {
+    const body = (extra: Record<string, unknown>) => ({
+      formType: "24Q", fy: "2025-26", quarter: "Q1", deducteeCount: 0, deductees: [],
+      reconciliation: { matched: true }, note: "reconciled", ...extra,
+    });
+    statusAwareGetMock.mockResolvedValue({ kind: "ok", status: 200, body: body({}) });
+    let ui = await ReturnsPage({ searchParams: { fy: "2025-26", quarter: "Q1" } });
+    const first = render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+    expect(screen.getByText(/Not filed yet/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Record the filing" })).toBeInTheDocument();
+    first.unmount();
+
+    statusAwareGetMock.mockResolvedValue({ kind: "ok", status: 200, body: body({ filedAt: "2025-07-28", filingReceiptNo: "123456789012345", filingRevision: 0 }) });
+    ui = await ReturnsPage({ searchParams: { fy: "2025-26", quarter: "Q1" } });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+    expect(screen.getByText(/Filed on 28 Jul 2025 — provisional receipt no\. 123456789012345\./)).toBeInTheDocument();
+    expect(screen.queryByText(/Not filed yet/)).not.toBeInTheDocument();
+    // a correction statement is offered as the next revision
+    expect(screen.getByRole("heading", { name: "Record a correction statement (revision 1)" })).toBeInTheDocument();
+  });
+
+  it("RETURNS-01: hr_admin (read-only for filings) is not offered the record form", async () => {
+    getSessionRolesMock.mockReturnValue(["hr_admin"]);
+    statusAwareGetMock.mockResolvedValue({ kind: "ok", status: 200, body: { formType: "24Q", fy: "2025-26", quarter: "Q1", deducteeCount: 0, deductees: [], reconciliation: { matched: true }, note: "n" } });
+    const ui = await ReturnsPage({ searchParams: { fy: "2025-26", quarter: "Q1" } });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+    expect(screen.getByText(/Not filed yet/)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Record the filing" })).not.toBeInTheDocument();
+  });
+
   it("loads all four quarters for the annual overview and shows a failed one as unknown, not ₹0 pending (RETURNS-02/03)", async () => {
     statusAwareGetMock.mockImplementation((url: string) =>
       Promise.resolve(url.includes("quarter=Q3") ? { kind: "http_error", status: 500, body: {} } : ok24("Q1")),

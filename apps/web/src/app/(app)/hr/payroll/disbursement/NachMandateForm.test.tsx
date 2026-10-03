@@ -10,9 +10,9 @@ vi.mock("next/navigation", () => ({
 // GAP-PAYROLL-DISBURSEMENT-08: the employee is now picked from the directory
 // (EntityPicker over searchEmployees) instead of typed as a raw UUID.
 const EMP = { id: "11111111-1111-1111-1111-111111111111", label: "Asha Rao (E042)" };
-vi.mock("@/lib/entityAdapters/employee", () => ({
-  searchEmployees: vi.fn(async () => [EMP]),
-  resolveEmployees: vi.fn(async () => []),
+vi.mock("@/lib/entityAdapters/payrollEmployee", () => ({
+  searchPayrollEmployees: vi.fn(async () => [EMP]),
+  resolvePayrollEmployees: vi.fn(async () => []),
 }));
 
 import { NachMandateForm } from "./NachMandateForm";

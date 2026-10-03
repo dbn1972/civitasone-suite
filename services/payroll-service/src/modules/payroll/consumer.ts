@@ -1,3 +1,4 @@
+import { exceedsCap, lockCostingGroup, otherActiveSplitHundredths } from "../costing-rules/split-cap.js";
 import type { Queue } from "@civitasone/queue";
 import { resolveVerificationPlan, verifiedDeductionFigures, NO_VERIFIED } from "../tax/verified-inputs.js";
 import { NonRetryableError } from "@civitasone/queue";
@@ -1268,13 +1269,29 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // GAP-PAYROLL-COSTING-02: the authoritative "group splits never exceed
+      // 100%" gate. Serialised per group so two concurrent saves cannot both
+      // pass; a rejected save changes nothing and leaves a failed audit event.
+      await lockCostingGroup(tx, p.tenantId, p.employeeGroup);
+      const otherHundredths = await otherActiveSplitHundredths(tx, p.tenantId, p.employeeGroup, { costCenterId: p.costCenterId });
+      if (exceedsCap(otherHundredths, p.splitPct)) {
+        await enqueue(tx, {
+          topic: AUDIT, eventType: AUDIT,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            service: "payroll", action: "upsert", resourceType: "payroll_costing_rule", resourceId: p.id, outcome: "failure",
+            detail: { code: "COSTING_SPLIT_EXCEEDS_100", employeeGroup: p.employeeGroup, otherHundredths, requestedSplitPct: p.splitPct },
+          },
+        });
+        return;
+      }
       await tx.execute(sql`
         INSERT INTO payroll.costing_rules
           (id, tenant_id, employee_group, cost_center_id, split_pct, created_by)
         VALUES (${p.id}::uuid, ${p.tenantId}::uuid, ${p.employeeGroup},
           ${p.costCenterId}::uuid, ${p.splitPct}, ${msg.actorId}::uuid)
         ON CONFLICT (tenant_id, employee_group, cost_center_id)
-        DO UPDATE SET split_pct = EXCLUDED.split_pct
+        DO UPDATE SET split_pct = EXCLUDED.split_pct, status = 'active'
       `);
       await enqueue(tx, {
         topic: EVENTS.costingRuleUpserted, eventType: EVENTS.costingRuleUpserted,

@@ -29,6 +29,7 @@ export function LoanSearchForm({
     <div style={{ display: "grid", gap: 6, maxWidth: 520 }}>
       <Field id={fieldId} label={t("fieldLabel")}>
         <EmployeePicker
+          directory="payroll"
           value={empId}
           initialOption={initialEmployee}
           clearable

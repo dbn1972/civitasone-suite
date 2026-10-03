@@ -25,6 +25,9 @@ import { registerChallanConsumers } from "./modules/statutory-returns/challan-co
 import { registerDscConfigConsumers } from "./modules/dsc-config/consumer.js";
 import { registerSponsorConfigConsumers } from "./modules/sponsor-config/consumer.js";
 import { registerBankFileSigningConsumers } from "./modules/bank-file-signing/consumer.js";
+import { registerCostingRuleConsumers } from "./modules/costing-rules/consumer.js";
+import { registerLetterheadConsumers } from "./modules/letterhead/consumer.js";
+import { registerReturnFilingConsumers } from "./modules/return-filings/consumer.js";
 import { loadTaxConfig } from "./modules/tax/config.js";
 import { assertPiiKeyAtBoot } from "./shared/pii-crypto.js";
 
@@ -84,6 +87,9 @@ registerChallanConsumers(queue);
 registerDscConfigConsumers(queue);
 registerSponsorConfigConsumers(queue);
 registerBankFileSigningConsumers(queue);
+registerCostingRuleConsumers(queue);
+registerLetterheadConsumers(queue);
+registerReturnFilingConsumers(queue);
 
 await queue.start();
 // Cross-tenant outbox scan must use BYPASSRLS scannerDb — FORCE RLS on

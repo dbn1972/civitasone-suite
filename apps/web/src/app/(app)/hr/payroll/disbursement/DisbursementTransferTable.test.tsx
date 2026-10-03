@@ -123,7 +123,7 @@ describe("DisbursementTransferTable", () => {
     const row = toClientTransferRow(API_ROW);
     expect(row).toEqual({
       id: API_ROW.id, employeeName: "Vikram Singh", accountLast4: "5544", ifsc: "HDFC0000123",
-      amountRupees: 61000, status: "returned", nachBatchId: "NACH_SBIN_1_20260930.txt", failureReason: "Account closed",
+      amountMinor: "6100000", status: "returned", nachBatchId: "NACH_SBIN_1_20260930.txt", failureReason: "Account closed",
     });
     expect(JSON.stringify(row)).not.toContain(API_ROW.employeeId);
   });

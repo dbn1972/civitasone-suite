@@ -56,7 +56,8 @@ export type LoanFormResult =
       ok: true;
       warnings: LoanFormWarnings;
       value: {
-        loanNo: string;
+        /** Null when left blank: the server then allocates the next LN-<year>-<seq> (GAP-PAYROLL-LOANS-05). */
+        loanNo: string | null;
         employeeId: string;
         principalMinor: bigint;
         emiMinor: bigint;
@@ -89,8 +90,9 @@ function parseAmount(raw: string): { minor: bigint } | { error: LoanFormErrorCod
 export function validateLoanForm(input: LoanFormInput): LoanFormResult {
   const errors: Partial<Record<LoanFormField, LoanFormErrorCode>> = {};
 
+  // GAP-PAYROLL-LOANS-05: the loan number is optional -- blank means "server
+  // allocates". A typed number is still checked for uniqueness server-side.
   const loanNo = input.loanNo.trim();
-  if (!loanNo) errors.loanNo = "required";
 
   const employeeId = input.employeeId ?? "";
   if (!employeeId) errors.employeeId = "required";
@@ -131,7 +133,7 @@ export function validateLoanForm(input: LoanFormInput): LoanFormResult {
     ok: true,
     warnings,
     value: {
-      loanNo,
+      loanNo: loanNo || null,
       employeeId,
       principalMinor: principal.minor,
       emiMinor: emi.minor,

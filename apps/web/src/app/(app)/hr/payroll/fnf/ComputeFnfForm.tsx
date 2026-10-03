@@ -4,11 +4,11 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog, EntityPicker, type EntityOption } from "../../../../_components/ds";
-import { browserJson } from "@/lib/api/browserClient";
+import { browserFetch, browserJson, errorCodeFromResponse } from "@/lib/api/browserClient";
 import { useFormError } from "@/lib/useFormError";
-import { nonNegativeRupeesToMinorString } from "@/lib/money";
+import { minorToDecimalString, nonNegativeRupeesToMinorString } from "@/lib/money";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
-import { searchEmployees } from "@/lib/entityAdapters/employee";
+import { searchPayrollEmployees } from "@/lib/entityAdapters/payrollEmployee";
 import { FNF_POLL_INTERVAL_MS, FNF_POLL_MAX_TICKS } from "./fnfWorkflow";
 
 const SEPARATION_TYPES = ["retirement", "superannuation", "resignation", "retrenchment", "vrs", "death"] as const;
@@ -44,10 +44,37 @@ const MONEY_FIELDS = Object.keys(MONEY_FIELD_KEYS) as MoneyField[];
 
 const REQUIRED_TOP_FIELDS = ["employeeId", "separationDate", "completedYears", "leaveBalanceDays", "fyStartYear"] as const;
 type TopField = (typeof REQUIRED_TOP_FIELDS)[number];
-type FieldKey = TopField | MoneyField | "overrideReason";
+type FieldKey = TopField | MoneyField | "overrideReason" | `nominee.${NomineeField}`;
 
-/** Record-derived inputs: pre-filled from HR records, editable only via an explicit override. */
-type OverridableField = "completedYears" | "leaveBalanceDays";
+/**
+ * GAP-PAYROLL-FNF-03: pay-record-derived money inputs. payroll-service derives
+ * them from the employee's finalised payslips (GET /v1/payroll/fnf/pay-snapshot)
+ * and refuses a compute whose value differs without an override reason.
+ */
+export const PAY_FIELDS = ["lastDrawnWages", "avgSalaryLast10Months", "salaryYtd", "tdsYtd"] as const;
+type PayField = (typeof PAY_FIELDS)[number];
+
+/** Record-derived inputs: pre-filled from HR / pay records, editable only via an explicit override. */
+type HrField = "completedYears" | "leaveBalanceDays";
+type OverridableField = HrField | PayField;
+
+/** GET /v1/payroll/fnf/pay-snapshot (payroll-service fnf/pay-snapshot.ts): paise as strings. */
+type PaySnapshot = {
+  available: boolean;
+  fyStartYear: number;
+  wageMonths: number;
+  ytdMonths: number;
+  lastDrawnWagesMinor: string;
+  avgSalaryLast10MonthsMinor: string;
+  salaryYtdMinor: string;
+  tdsYtdMinor: string;
+};
+
+/** GAP-PAYROLL-FNF-05: payee of a death settlement. */
+export const NOMINEE_RELATIONSHIPS = ["spouse", "son", "daughter", "father", "mother", "sibling", "other_legal_heir"] as const;
+type NomineeField = "name" | "relationship" | "accountNumber" | "ifsc" | "documentRef";
+const NOMINEE_ACCOUNT_RE = /^\d{9,18}$/;
+const NOMINEE_IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 
 /**
  * GAP-PAYROLL-FNF-03: what hrms-service derives from the employee's own
@@ -74,7 +101,14 @@ export const MIN_OVERRIDE_REASON = 10;
 
 type SnapshotState = "idle" | "loading" | "loaded" | "unavailable";
 type LabelMap = Map<string, string>;
-const NO_OVERRIDES: Record<OverridableField, boolean> = { completedYears: false, leaveBalanceDays: false };
+const NO_OVERRIDES: Record<OverridableField, boolean> = {
+  completedYears: false, leaveBalanceDays: false,
+  lastDrawnWages: false, avgSalaryLast10Months: false, salaryYtd: false, tdsYtd: false,
+};
+const EMPTY_NOMINEE: Record<NomineeField, string> = { name: "", relationship: "", accountNumber: "", ifsc: "", documentRef: "" };
+
+/** Rupee decimal string for a paise string (exact; no float). */
+const rupeesOfMinor = (minor: string): string => minorToDecimalString(minor) ?? "";
 
 export function ComputeFnfForm() {
   const t = useTranslations("computeFnfForm");
@@ -109,6 +143,9 @@ export function ComputeFnfForm() {
   );
   const [snapshot, setSnapshot] = useState(null as HrSnapshot | null);
   const [snapshotState, setSnapshotState] = useState("idle" as SnapshotState);
+  const [paySnap, setPaySnap] = useState(null as PaySnapshot | null);
+  const [paySnapState, setPaySnapState] = useState("idle" as SnapshotState);
+  const [nominee, setNominee] = useState(EMPTY_NOMINEE);
   const [override, setOverride] = useState(NO_OVERRIDES);
   const [overrideReason, setOverrideReason] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -140,7 +177,7 @@ export function ComputeFnfForm() {
   const employeeLabels = useRef(new Map() as LabelMap);
   const [directoryForbidden, setDirectoryForbidden] = useState(false);
   async function searchAndRemember(query: string, signal: AbortSignal): Promise<EntityOption[]> {
-    const options = await searchEmployees(query, signal, { onForbidden: () => setDirectoryForbidden(true) });
+    const options = await searchPayrollEmployees(query, signal, { onForbidden: () => setDirectoryForbidden(true) });
     for (const o of options) employeeLabels.current.set(o.id, o.label);
     return options;
   }
@@ -211,12 +248,70 @@ export function ComputeFnfForm() {
     return () => { cancelled = true; };
   }, [employeeId, separationDate]);
 
-  /** Overridden record-derived fields whose value actually differs from HR's. */
+  // GAP-PAYROLL-FNF-03: wages, 10-month average and FY-to-date salary / TDS
+  // come from the employee's finalised payslips, not from typing.
+  useEffect(() => {
+    if (!employeeId || !separationDate) {
+      setPaySnap(null);
+      setPaySnapState("idle");
+      return;
+    }
+    let cancelled = false;
+    setPaySnapState("loading");
+    browserJson<{ data: PaySnapshot }>(
+      `v1/payroll/fnf/pay-snapshot?employeeId=${encodeURIComponent(employeeId)}&separationDate=${encodeURIComponent(separationDate)}`,
+    )
+      .then((res) => {
+        if (cancelled) return;
+        const snap = res.data;
+        if (!snap?.available) {
+          setPaySnap(null);
+          setPaySnapState("unavailable");
+          return;
+        }
+        setPaySnap(snap);
+        setPaySnapState("loaded");
+        setMoney((prev) => ({
+          ...prev,
+          lastDrawnWages: rupeesOfMinor(snap.lastDrawnWagesMinor),
+          avgSalaryLast10Months: rupeesOfMinor(snap.avgSalaryLast10MonthsMinor),
+          salaryYtd: rupeesOfMinor(snap.salaryYtdMinor),
+          tdsYtd: rupeesOfMinor(snap.tdsYtdMinor),
+        }));
+        setFyStartYear(String(snap.fyStartYear));
+        setOverride((prev) => ({ ...prev, lastDrawnWages: false, avgSalaryLast10Months: false, salaryYtd: false, tdsYtd: false }));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPaySnap(null);
+        setPaySnapState("unavailable");
+      });
+    return () => { cancelled = true; };
+  }, [employeeId, separationDate]);
+
+  /** What the payslips say for a pay field, as a rupee string (null when nothing was derived). */
+  function derivedFor(field: PayField): string | null {
+    if (!paySnap) return null;
+    const minor = field === "lastDrawnWages" ? paySnap.lastDrawnWagesMinor
+      : field === "avgSalaryLast10Months" ? paySnap.avgSalaryLast10MonthsMinor
+      : field === "salaryYtd" ? paySnap.salaryYtdMinor
+      : paySnap.tdsYtdMinor;
+    return rupeesOfMinor(minor);
+  }
+
+  /** Overridden record-derived fields whose value actually differs from the records'. */
   function overriddenFields(): OverridableField[] {
-    if (!snapshot) return [];
     const out: OverridableField[] = [];
-    if (override.completedYears && completedYears !== String(snapshot.completedYears)) out.push("completedYears");
-    if (override.leaveBalanceDays && leaveBalanceDays !== String(snapshot.leaveBalanceDays)) out.push("leaveBalanceDays");
+    if (snapshot) {
+      if (override.completedYears && completedYears !== String(snapshot.completedYears)) out.push("completedYears");
+      if (override.leaveBalanceDays && leaveBalanceDays !== String(snapshot.leaveBalanceDays)) out.push("leaveBalanceDays");
+    }
+    if (paySnap) {
+      for (const f of PAY_FIELDS) {
+        const derived = derivedFor(f);
+        if (override[f] && derived !== null && minorFor(f) !== nonNegativeRupeesToMinorString(derived)) out.push(f);
+      }
+    }
     return out;
   }
 
@@ -291,6 +386,23 @@ export function ComputeFnfForm() {
       return;
     }
 
+    // GAP-PAYROLL-FNF-05: a death settlement pays the nominee / legal heir.
+    if (separationType === "death") {
+      const bad = new Set<FieldKey>();
+      const n = nominee;
+      if (n.name.trim().length < 2) bad.add("nominee.name");
+      if (!n.relationship) bad.add("nominee.relationship");
+      if (!NOMINEE_ACCOUNT_RE.test(n.accountNumber.trim())) bad.add("nominee.accountNumber");
+      if (!NOMINEE_IFSC_RE.test(n.ifsc.trim().toUpperCase())) bad.add("nominee.ifsc");
+      if (n.documentRef.trim().length < 3) bad.add("nominee.documentRef");
+      if (bad.size > 0) {
+        setInvalidFields(bad);
+        setError(t("nomineeInvalidError"));
+        document.getElementById(`${baseId}-nominee-${[...bad][0]!.slice("nominee.".length)}`)?.focus();
+        return;
+      }
+    }
+
     setInvalidFields(new Set());
     setConfirmOpen(true);
   }
@@ -302,7 +414,7 @@ export function ComputeFnfForm() {
     const m = (f: MoneyField) => minorFor(f) ?? "0";
     const overridden = overriddenFields();
     try {
-      const res = await browserJson<{ data: { message: string; employeeId: string } }>("v1/payroll/fnf/compute", {
+      const res = await browserFetch("v1/payroll/fnf/compute", {
         method: "POST",
         body: JSON.stringify({
           employeeId,
@@ -329,10 +441,27 @@ export function ComputeFnfForm() {
           otherDeductionsMinor: m("otherDeductions"),
           fyStartYear: Number(fyStartYear),
           ...(overridden.length > 0 ? { overrides: { fields: overridden, reason: overrideReason.trim() } } : {}),
+          ...(separationType === "death" ? { nominee: {
+            name: nominee.name.trim(),
+            relationship: nominee.relationship,
+            accountNumber: nominee.accountNumber.trim(),
+            ifsc: nominee.ifsc.trim().toUpperCase(),
+            documentRef: nominee.documentRef.trim(),
+          } } : {}),
         }),
       });
+      if (!res.ok) {
+        const code = await errorCodeFromResponse(res);
+        if (code === "FNF_OVERRIDE_REQUIRED") {
+          setError(t("overrideRequiredServerError"));
+          return;
+        }
+        setError(formError.fromException("save").message);
+        return;
+      }
+      const body = (await res.json().catch(() => null)) as { data?: { message?: string } } | null;
       setConfirmOpen(false);
-      setMessage(res.data.message ?? t("computeQueuedMessage"));
+      setMessage(body?.data?.message ?? t("computeQueuedMessage"));
       router.refresh();
       setPollTicks(0);
       setPolling(true);
@@ -347,7 +476,7 @@ export function ComputeFnfForm() {
   const lockedStyle = { ...inputStyle, background: "var(--panel)" } as const;
   const overridden = overriddenFields();
 
-  function overridableInput(field: OverridableField, id: string, labelKey: string, value: string, setValue: (v: string) => void) {
+  function overridableInput(field: HrField, id: string, labelKey: string, value: string, setValue: (v: string) => void) {
     const locked = snapshot !== null && !override[field];
     return (
       <div style={{ display: "grid", gap: 6 }}>
@@ -359,6 +488,7 @@ export function ComputeFnfForm() {
           ref={(el) => { topFieldRefs.current[field] = el; }}
           type="number"
           min={0}
+          step={field === "leaveBalanceDays" ? 0.5 : 1}
           value={value}
           readOnly={locked}
           onChange={(e) => { setValue(e.target.value); clearInvalid(field); }}
@@ -470,6 +600,9 @@ export function ComputeFnfForm() {
           {snapshotState === "loading" && <p role="status" style={{ margin: 0, fontSize: 12, color: "var(--ink2)" }}>{t("hrRecordsLoading")}</p>}
           {snapshotState === "loaded" && <p role="status" style={{ margin: 0, fontSize: 12, color: "var(--ink2)" }}>{t("hrRecordsLoaded")}</p>}
           {snapshotState === "unavailable" && <p role="status" className="pill warn" style={{ width: "fit-content", margin: 0 }}>{t("hrRecordsUnavailable")}</p>}
+          {paySnapState === "loading" && <p role="status" style={{ margin: 0, fontSize: 12, color: "var(--ink2)" }}>{t("payRecordsLoading")}</p>}
+          {paySnapState === "loaded" && paySnap && <p role="status" style={{ margin: 0, fontSize: 12, color: "var(--ink2)" }}>{t("payRecordsLoaded", { months: paySnap.ytdMonths })}</p>}
+          {paySnapState === "unavailable" && <p role="status" className="pill warn" style={{ width: "fit-content", margin: 0 }}>{t("payRecordsUnavailable")}</p>}
 
           {overridden.length > 0 && (
             <div style={{ display: "grid", gap: 6 }}>
@@ -498,6 +631,9 @@ export function ComputeFnfForm() {
                 const id = `${baseId}-${f}`;
                 const required = REQUIRED_MONEY_FIELDS.includes(f);
                 const invalid = invalidFields.has(f);
+                // GAP-PAYROLL-FNF-03: derived from payslips -> read-only until overridden.
+                const payField: PayField | null = paySnap !== null && (PAY_FIELDS as readonly string[]).includes(f) ? (f as PayField) : null;
+                const lockedPay = payField !== null && !override[payField];
                 const hint = snapshot
                   ? f === "gratuityGross" ? snapshot.gratuityEstimateMinor
                   : f === "leaveEncashmentGross" ? snapshot.leaveEncashmentEstimateMinor
@@ -515,12 +651,27 @@ export function ComputeFnfForm() {
                       type="text"
                       inputMode="decimal"
                       value={money[f]}
+                      readOnly={lockedPay}
                       onChange={(e) => setMoneyField(f, e.target.value)}
                       aria-required={required}
                       aria-invalid={invalid || undefined}
                       aria-describedby={invalid ? errId : undefined}
-                      style={inputStyle}
+                      style={lockedPay ? lockedStyle : inputStyle}
                     />
+                    {payField && (
+                      <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "var(--ink2)" }}>
+                        <input
+                          type="checkbox"
+                          checked={override[payField]}
+                          onChange={(e) => {
+                            const on = e.target.checked;
+                            setOverride((prev) => ({ ...prev, [payField]: on }));
+                            if (!on) setMoneyField(f, derivedFor(payField) ?? "");
+                          }}
+                        />
+                        {t("payOverrideToggle", { value: formatMoney(nonNegativeRupeesToMinorString(derivedFor(payField) ?? "0") ?? "0") })}
+                      </label>
+                    )}
                     {hint !== null && (
                       <span style={{ fontSize: 12, color: "var(--ink2)" }}>{t("systemEstimateHint", { amount: formatMoney(hint) })}</span>
                     )}
@@ -529,6 +680,55 @@ export function ComputeFnfForm() {
               })}
             </div>
           </fieldset>
+
+          {separationType === "death" && (
+            <fieldset style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 14 }}>
+              <legend style={{ fontSize: 13, fontWeight: 700, padding: "0 6px" }}>{t("nomineeLegend")}</legend>
+              <p style={{ margin: "0 0 12px", fontSize: 12, color: "var(--ink2)" }}>{t("nomineeIntro")}</p>
+              <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
+                {([
+                  ["name", "nomineeNameLabel", "text"],
+                  ["relationship", "nomineeRelationshipLabel", "select"],
+                  ["accountNumber", "nomineeAccountLabel", "account"],
+                  ["ifsc", "nomineeIfscLabel", "text"],
+                  ["documentRef", "nomineeDocumentLabel", "text"],
+                ] as const).map(([field, labelKey, kind]) => {
+                  const id = `${baseId}-nominee-${field}`;
+                  const invalid = invalidFields.has(`nominee.${field}`);
+                  const common = {
+                    id,
+                    "aria-required": true as const,
+                    "aria-invalid": invalid || undefined,
+                    "aria-describedby": invalid ? errId : undefined,
+                    style: inputStyle,
+                  };
+                  return (
+                    <div key={field} style={{ display: "grid", gap: 6 }}>
+                      <label htmlFor={id} style={{ fontSize: 13, fontWeight: 600 }}>
+                        {t(labelKey)} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                      </label>
+                      {kind === "select" ? (
+                        <select {...common} value={nominee.relationship} onChange={(e) => { setNominee((p) => ({ ...p, relationship: e.target.value })); clearInvalid("nominee.relationship"); }}>
+                          <option value="">{t("nomineeRelationshipPlaceholder")}</option>
+                          {NOMINEE_RELATIONSHIPS.map((r) => <option key={r} value={r}>{t(`nomineeRelationship_${r}`)}</option>)}
+                        </select>
+                      ) : (
+                        <input
+                          {...common}
+                          type="text"
+                          inputMode={kind === "account" ? "numeric" : undefined}
+                          autoComplete="off"
+                          maxLength={field === "ifsc" ? 11 : field === "accountNumber" ? 18 : 128}
+                          value={nominee[field]}
+                          onChange={(e) => { setNominee((p) => ({ ...p, [field]: e.target.value })); clearInvalid(`nominee.${field}`); }}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </fieldset>
+          )}
 
           <div>
             <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
@@ -563,18 +763,31 @@ export function ComputeFnfForm() {
               separationDate: formatIndianDate(separationDate),
               strong: (chunks) => <strong>{chunks}</strong>,
             })}
-            {snapshot && overridden.length > 0 && (
+            {overridden.length > 0 && (
               <ul style={{ margin: "8px 0 0", paddingInlineStart: 18 }}>
-                {overridden.map((f) => (
-                  <li key={f}>
-                    {t("confirmOverrideLine", {
-                      field: t(f === "completedYears" ? "completedYearsLabel" : "leaveBalanceLabel"),
-                      system: snapshot[f],
-                      entered: f === "completedYears" ? completedYears : leaveBalanceDays,
-                    })}
-                  </li>
-                ))}
+                {overridden.map((f) => {
+                  const isPay = (PAY_FIELDS as readonly string[]).includes(f);
+                  return (
+                    <li key={f}>
+                      {t("confirmOverrideLine", {
+                        field: isPay ? MONEY_LABELS[f as PayField]
+                          : t(f === "completedYears" ? "completedYearsLabel" : "leaveBalanceLabel"),
+                        system: isPay ? formatMoney(nonNegativeRupeesToMinorString(derivedFor(f as PayField) ?? "0") ?? "0") : snapshot ? snapshot[f as "completedYears" | "leaveBalanceDays"] : "",
+                        entered: isPay ? formatMoney(minorFor(f as PayField) ?? "0") : f === "completedYears" ? completedYears : leaveBalanceDays,
+                      })}
+                    </li>
+                  );
+                })}
               </ul>
+            )}
+            {separationType === "death" && (
+              <p style={{ margin: "8px 0 0" }}>
+                {t("confirmNomineeLine", {
+                  name: nominee.name.trim(),
+                  relationship: nominee.relationship ? t(`nomineeRelationship_${nominee.relationship}`) : "",
+                  last4: nominee.accountNumber.trim().slice(-4),
+                })}
+              </p>
             )}
           </>
         }
