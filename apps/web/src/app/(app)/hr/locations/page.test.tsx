@@ -39,6 +39,15 @@ describe("LocationsPage", () => {
     expect(screen.getByText("HQ")).toBeInTheDocument();
   });
 
+  it("links each location name to its detail page (GAP-HR-LOCATIONS-03)", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: [{ id: "l1", name: "HQ", type: "office", city: "Delhi" }],
+      source: "api",
+    });
+    await renderPage();
+    expect(screen.getByRole("link", { name: "HQ" })).toHaveAttribute("href", "/hr/locations/l1");
+  });
+
   it("shows the honest empty state when there genuinely are no locations", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
     await renderPage();

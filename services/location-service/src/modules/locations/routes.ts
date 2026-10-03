@@ -3,7 +3,7 @@ import { ZodError } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createLocationBody, updateLocationBody, archiveLocationBody, idParam, locationsListSchema, locationTreeSchema, nearbyQuerySchema } from "./validators.js";
+import { createLocationBody, updateLocationBody, archiveLocationBody, idParam, locationsListSchema, locationTreeSchema, nearbyQuerySchema, locationHierarchySchema } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
@@ -87,6 +87,19 @@ export async function locationRoutes(app: FastifyInstance): Promise<void> {
     const removed = await repo.clearSamples(ctx.tenantId);
     await cache.invalidateResource(ctx.tenantId, RESOURCE);
     return reply.send({ removed });
+  });
+
+  // Read-only hierarchy (breadcrumb + children + descendant ids) for the HR
+  // per-location employee page (GAP-HR-LOCATIONS-03) and hrms-service's
+  // sub-location filter. Same low-sensitivity reference data as GET
+  // /v1/locations, so the same LOCATION_VIEW_ROLES gate.
+  app.get("/v1/locations/:id/hierarchy", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, LOCATION_VIEW_ROLES);
+    const { id } = idParam.parse(req.params);
+    const hierarchy = await queries.getLocationHierarchy(id, ctx.tenantId);
+    if (!hierarchy) throw new HttpError(404, "NOT_FOUND", "location not found");
+    sendValidated(reply, locationHierarchySchema, hierarchy);
   });
 
   app.get("/v1/locations/:id", async (req, reply) => {

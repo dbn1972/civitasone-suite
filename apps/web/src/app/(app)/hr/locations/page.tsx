@@ -179,7 +179,8 @@ export default async function LocationsPage() {
                 render: (row) => (
                   <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <MapPin size={13} color="var(--primary,#2563eb)" />
-                    <span style={{ fontWeight: 500 }}>{row.name}</span>
+                    {/* GAP-HR-LOCATIONS-03: name opens the per-location page (employees assigned here). */}
+                    <Link href={`/hr/locations/${row.id}`} style={{ fontWeight: 500 }}>{row.name}</Link>
                   </span>
                 ),
               },
