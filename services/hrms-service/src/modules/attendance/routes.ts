@@ -7,7 +7,7 @@ import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { publishF3Write } from "../../shared/f3-publish.js";
-import { markAttendanceBody, regularisationCreateBody, periodLockBody } from "./validators.js";
+import { markAttendanceBody, regularisationCreateBody, periodLockBody, type ResolvedRegularisationBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
@@ -147,6 +147,34 @@ async function assertSelfOrHr(ctx: RequestContext, claimedEmployeeId: string, ac
 }
 
 /**
+ * GAP-HR-ATTENDANCE-REGULARISATION-01: who a regularisation request is FOR.
+ *
+ *  - HR (hr_admin/hr_officer/super_admin): on behalf of anyone; employeeId is
+ *    required (there is no "self" default for an HR actor acting as HR).
+ *  - manager: themselves or a DIRECT REPORT only (hrms_employees.manager_id),
+ *    never an arbitrary colleague.
+ *  - employee: themselves only. employeeId may be omitted (derived from the
+ *    caller's linked employee record) but, if sent, must equal it.
+ * An actor with no linked employee record cannot raise one for themselves.
+ */
+async function resolveRegularisationSubject(ctx: RequestContext, claimed: string | undefined): Promise<string> {
+  if (HR_ROLES.some((r) => ctx.roles.includes(r))) {
+    if (!claimed) throw new HttpError(400, "VALIDATION_FAILED", "employeeId is required when raising a regularisation on behalf of an employee");
+    return claimed;
+  }
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+  if (!actorEmp) throw new HttpError(403, "FORBIDDEN", "no employee record is linked to your account");
+  if (!claimed || claimed === actorEmp.id) return actorEmp.id;
+  if (ctx.roles.includes("manager")) {
+    const report = await scopedRead((tx) => tx.select({ id: hrmsEmployees.id }).from(hrmsEmployees)
+      .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), eq(hrmsEmployees.id, claimed), eq(hrmsEmployees.managerId, actorEmp.id))).limit(1));
+    if (report[0]) return claimed;
+    throw new HttpError(403, "NOT_YOUR_REPORT", "you may only raise a regularisation for yourself or your own direct reports");
+  }
+  throw new HttpError(403, "FORBIDDEN", "employees may only raise a regularisation for themselves");
+}
+
+/**
  * Self-approval guard for the approve/reject routes below. ownerEmployeeId
  * (from the fetched request row) is already an hrms_employees.id; resolve
  * the approving actor's own linked row the same way before comparing -- an
@@ -178,6 +206,21 @@ async function assertManagerOwnsReport(ctx: RequestContext, ownerEmployeeId: str
   const scope = await resolveSelfScopedEmployeeId(ctx, ownerEmployeeId);
   if (isEmptyScope(scope)) {
     throw new HttpError(403, "NOT_YOUR_REPORT", `you may only ${action} for your own direct reports`);
+  }
+}
+
+/**
+ * Maker != checker: now that an employee (or HR) can raise a regularisation
+ * for themselves, the person deciding it must never be the person it is FOR.
+ * Unconditional -- a conflict-of-interest guard, not a tenant policy.
+ */
+async function assertNotOwnRegularisation(ctx: RequestContext, regularisationId: string): Promise<void> {
+  const rows = await scopedRead((tx) => tx.select({ employeeId: hrmsAttendanceRegularisations.employeeId })
+    .from(hrmsAttendanceRegularisations)
+    .where(and(eq(hrmsAttendanceRegularisations.id, regularisationId), eq(hrmsAttendanceRegularisations.tenantId, ctx.tenantId))).limit(1));
+  const owner = rows[0]?.employeeId;
+  if (owner && (await isSelfApproval(ctx, owner))) {
+    throw new HttpError(403, "SELF_APPROVAL_FORBIDDEN", "you cannot decide your own regularisation request");
   }
 }
 
@@ -260,16 +303,26 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/hrms/attendance/regularisations", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ALL_ROLES);
+    // GAP-HR-ATTENDANCE-REGULARISATION-01: employees can raise their own
+    // requests now, so they must be able to see them -- scoped to their own
+    // rows. A manager is scoped to self + direct reports (same scope the
+    // sibling shift/WFH/overtime lists already apply); HR sees the full queue.
+    requireRole(ctx, [...ALL_ROLES, "employee"]);
     const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, AttendanceRegularisationListSchema, await queries.listRegularisations(ctx.tenantId, q.limit));
+    const scope = await resolveSelfScopedEmployeeId(ctx, undefined);
+    if (isEmptyScope(scope)) return sendValidated(reply, AttendanceRegularisationListSchema, []);
+    // Scope goes into the SQL WHERE (before limit), not a post-filter.
+    const ids = scope === undefined ? undefined : scope === null ? [] : Array.isArray(scope) ? scope : [scope];
+    sendValidated(reply, AttendanceRegularisationListSchema, await queries.listRegularisations(ctx.tenantId, q.limit, ids));
   });
 
   app.post("/v1/hrms/attendance/regularisations", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ALL_ROLES);
-    const body = regularisationCreateBody.parse(req.body);
-    await assertPeriodsUnlocked(ctx.tenantId, [body.date]);
+    requireRole(ctx, [...ALL_ROLES, "employee"]);
+    const parsed = regularisationCreateBody.parse(req.body);
+    // Period lock first: it depends only on the date, not on who the request is for.
+    await assertPeriodsUnlocked(ctx.tenantId, [parsed.date]);
+    const body: ResolvedRegularisationBody = { ...parsed, employeeId: await resolveRegularisationSubject(ctx, parsed.employeeId) };
     // HIGH fix: repo.insertRegularisation (consumer.ts) was a blind insert with
     // no check that a raw attendance record exists for this employee+date -- a
     // regularisation is meant to correct attendance that was actually marked,
@@ -312,6 +365,7 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     if (!existing[0] || existing[0].status !== "pending") {
       throw new HttpError(404, "NOT_FOUND", "regularisation not found or already decided");
     }
+    await assertNotOwnRegularisation(ctx, id);
 
     await publishF3Write(ctx, "attendance_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.code(202).send({ id, status: "approved" }) as any;
@@ -335,6 +389,7 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     if (!existing[0] || existing[0].status !== "pending") {
       throw new HttpError(404, "NOT_FOUND", "regularisation not found or already decided");
     }
+    await assertNotOwnRegularisation(ctx, id);
 
     await publishF3Write(ctx, "attendance_routes__1", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.code(202).send({ id, status: "rejected" }) as any;

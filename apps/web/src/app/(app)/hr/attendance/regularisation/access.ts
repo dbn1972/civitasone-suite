@@ -16,7 +16,16 @@ import type { AttendanceRegularisation } from "@civitasone/types";
  * so the two PRs stay independently mergeable in either order -- see that
  * file's own comment on the same tradeoff.
  */
-export const REGULARISATION_VIEW_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager"];
+// GAP-HR-ATTENDANCE-REGULARISATION-01: "employee" is now admitted -- they raise
+// their own requests, and the backend scopes the list to their own rows.
+export const REGULARISATION_VIEW_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager", "employee"];
+
+/** HR and managers choose who a request is for; an employee only ever raises their own. */
+export const REGULARISATION_PICK_EMPLOYEE_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager"];
+
+export function canPickRegularisationEmployee(roles: string[]): boolean {
+  return roles.some((r) => REGULARISATION_PICK_EMPLOYEE_ROLES.includes(r));
+}
 
 export function canViewRegularisations(roles: string[]): boolean {
   return roles.some((r) => REGULARISATION_VIEW_ROLES.includes(r));

@@ -83,6 +83,14 @@ export const updateLocationBody = z.object({
   parentId: z.string().uuid().optional().nullable(),
   latitude: z.number().min(-90).max(90).optional().nullable(),
   longitude: z.number().min(-180).max(180).optional().nullable(),
-  status: z.enum(["active", "inactive"]).optional(),
+  status: z.enum(["active", "inactive", "archived"]).optional(),
+  // GAP-HR-LOCATIONS-02: optional free-text reason, recorded in the audit event
+  // (never persisted on the row itself).
+  reason: z.string().trim().min(1).max(500).optional(),
 });
 export type UpdateLocationBody = z.infer<typeof updateLocationBody>;
+
+/** PATCH /v1/locations/:id/archive body. */
+export const archiveLocationBody = z.object({
+  reason: z.string().trim().min(1).max(500).optional(),
+});

@@ -1034,6 +1034,14 @@ export const EmployeeDetailSchema = z.object({
   uanNumber: z.string().optional(),
   esicIpNumber: z.string().optional(),
   pran: z.string().optional(),
+  // GAP-HR-EMPLOYEES-NEW-01 (migration 0178): profile fields the Add Employee
+  // wizard collects. Declared here or apps/web's loader (which validates the
+  // response against this schema) would strip them.
+  serviceGrade: z.string().optional(),
+  maritalStatus: z.string().optional(),
+  bloodGroup: z.string().optional(),
+  shift: z.string().optional(),
+  costCenterId: z.string().optional(),
 });
 
 type OrgChartNodeType = {

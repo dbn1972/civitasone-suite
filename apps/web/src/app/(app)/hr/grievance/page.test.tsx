@@ -15,98 +15,74 @@ vi.mock("@/app/_data/apiClient", () => ({
 
 import GrievancePage from "./page";
 
-describe("GrievancePage", () => {
+const COUNTS = { total: 5, open: 2, underInquiry: 2, disposed: 1 };
+const ROW = {
+  id: "11111111-1111-1111-1111-111111111111", caseNo: "GRV/2026/0001", employee: "A. Kumar",
+  department: "Revenue", category: "facilities", filedDate: "2026-01-01", assignedToName: null, status: "registered",
+};
+
+describe("GrievancePage (real register)", () => {
   beforeEach(() => {
     fetchJsonMock.mockReset();
     mockRoles = ["hr_admin"];
   });
 
-  // GAP-HR-GRIEVANCE-04/05: this page had no role gate of its own before --
-  // relied entirely on the API's 403, even though hr/layout.tsx admits
-  // manager/employee into /hr and the register's columns are DPDP-sensitive.
-  it("shows an honest permission-denied state for a role the backend would reject, and never fetches", async () => {
+  // GAP-HR-GRIEVANCE-04/05: role gate before any fetch.
+  it("shows permission-denied for a role the backend would reject, and never fetches", async () => {
     mockRoles = ["employee"];
-    const ui = await GrievancePage();
-    render(ui);
+    render(await GrievancePage({}));
     expect(screen.getByRole("heading", { name: "Access restricted" })).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
   });
 
-  // GAP-HR-GRIEVANCE-01: GET /v1/hrms/grievances is a permanent stub that
-  // always returns { data: [], meta: { note: "..." } } -- this used to be
-  // indistinguishable from a real, empty register (four "0" stat cards).
-  it("shows an honest 'not yet available' state instead of misleading zero stat cards when the backend reports the register isn't built", async () => {
-    fetchJsonMock.mockResolvedValue({
-      data: { items: [], notBuilt: true },
-      source: "api",
-    });
-
-    const ui = await GrievancePage();
-    render(ui);
-
-    expect(screen.getByText("Grievance register is not yet available")).toBeInTheDocument();
-    // No stat card should show a real "0" -- statValue() returns null (a
-    // dash) whenever notBuilt is true.
-    expect(screen.queryByText("0")).not.toBeInTheDocument();
+  // GAP-HR-GRIEVANCE-03: the Ref column is the stored GRV/YYYY/NNNN, never a UUID slice.
+  it("renders the stored case number, links the row to its detail page, and shows the coarse category", async () => {
+    fetchJsonMock.mockResolvedValue({ data: { items: [ROW], total: 1, counts: COUNTS }, source: "api" });
+    render(await GrievancePage({}));
+    expect(screen.getByText("GRV/2026/0001")).toBeInTheDocument();
+    expect(screen.queryByText("11111111")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /GRV\/2026\/0001|A\. Kumar|Open/ })).toHaveAttribute("href", "/hr/grievance/11111111-1111-1111-1111-111111111111");
+    expect(screen.getByText("Facilities")).toBeInTheDocument();
+    expect(screen.getByText("Unassigned")).toBeInTheDocument();
   });
 
-  it("renders the real register and stat counts once the backend actually returns rows", async () => {
-    fetchJsonMock.mockResolvedValue({
-      data: {
-        items: [
-          { id: "11111111-1111-1111-1111-111111111111", employee: "A. Kumar", department: "Revenue", category: "Harassment", filedDate: "2026-01-01", assignedTo: "HR Officer", description: "x", status: "opened" },
-        ],
-        notBuilt: false,
-      },
-      source: "api",
-    });
-
-    const ui = await GrievancePage();
-    render(ui);
-
-    expect(screen.queryByText("Grievance register is not yet available")).not.toBeInTheDocument();
-    expect(screen.getByText("A. Kumar")).toBeInTheDocument();
+  // GAP-HR-GRIEVANCE-02: a Register action exists for HR roles.
+  it("offers a Register grievance action", async () => {
+    fetchJsonMock.mockResolvedValue({ data: { items: [], total: 0, counts: { total: 0, open: 0, underInquiry: 0, disposed: 0 } }, source: "api" });
+    render(await GrievancePage({}));
+    expect(screen.getByRole("link", { name: "Register grievance" })).toHaveAttribute("href", "/hr/grievance/new");
   });
 
-  it("shows permission-denied (not a generic retry) for a live 403, via LoadErrorState", async () => {
-    // Distinct from the role-gate test above: this covers a role that
-    // passes the client-side gate but the backend itself still rejects
-    // (e.g. a role-list drift between this page and gap-features/routes.ts).
-    fetchJsonMock.mockResolvedValue({
-      data: { items: [], notBuilt: false },
-      source: "error",
-      status: 403,
-      errorMessage: undefined,
-    });
-
-    const ui = await GrievancePage();
-    render(ui);
-    expect(screen.getByRole("heading", { name: "Access restricted" })).toBeInTheDocument();
-  });
-
-  // GAP-HR-GRIEVANCE-06: an unlisted status used to vanish from every stat
-  // card; it now counts as Open so the cards reconcile to Total.
-  it("counts an unknown status under Open so Open + Under Inquiry + Disposed equals Total", async () => {
-    const base = { department: "Revenue", category: "Pay", filedDate: "2026-01-01", assignedTo: "HR", description: "x" };
-    fetchJsonMock.mockResolvedValue({
-      data: {
-        items: [
-          { ...base, id: "a1111111-1111-1111-1111-111111111111", employee: "A", status: "opened" },
-          { ...base, id: "b1111111-1111-1111-1111-111111111111", employee: "B", status: "escalated" },
-          { ...base, id: "c1111111-1111-1111-1111-111111111111", employee: "C", status: "under_inquiry" },
-          { ...base, id: "d1111111-1111-1111-1111-111111111111", employee: "D", status: "dropped" },
-          { ...base, id: "e1111111-1111-1111-1111-111111111111", employee: "E", status: "closed" },
-        ],
-        notBuilt: false,
-      },
-      source: "api",
-    });
-    render(await GrievancePage());
+  // GAP-HR-GRIEVANCE-06: stat cards come from the server's whole-register
+  // counts and reconcile to Total; the list request is bounded + offset.
+  it("shows the server's counts (not the page's rows) in the stat cards", async () => {
+    fetchJsonMock.mockResolvedValue({ data: { items: [ROW], total: 5, counts: COUNTS }, source: "api" });
+    render(await GrievancePage({}));
     const val = (label: string) =>
       Array.from(document.querySelectorAll(".stat")).find((el) => el.textContent?.includes(label))?.querySelector(".val")?.textContent;
-    expect(val("Open")).toBe("2");
-    expect(val("Under Inquiry")).toBe("1");
-    expect(val("Disposed")).toBe("2");
     expect(val("Total Cases")).toBe("5");
+    expect(val("Open")).toBe("2");
+    expect(val("Under Inquiry")).toBe("2");
+    expect(val("Disposed")).toBe("1");
+    expect(Number(val("Open")) + Number(val("Under Inquiry")) + Number(val("Disposed"))).toBe(Number(val("Total Cases")));
+    expect(String(fetchJsonMock.mock.calls[0]![0])).toContain("limit=50&offset=0");
+  });
+
+  it("steps to the next server batch via ?page=", async () => {
+    fetchJsonMock.mockResolvedValue({ data: { items: [ROW], total: 120, counts: COUNTS }, source: "api" });
+    render(await GrievancePage({ searchParams: { page: "2" } }));
+    expect(String(fetchJsonMock.mock.calls[0]![0])).toContain("offset=50");
+    expect(screen.getByRole("link", { name: /Previous/ })).toHaveAttribute("href", "/hr/grievance?page=1");
+    expect(screen.getByRole("link", { name: /Next/ })).toHaveAttribute("href", "/hr/grievance?page=3");
+  });
+
+  it("shows permission-denied (not a generic retry) for a live 403, via LoadErrorState, with dash stat cards", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: { items: [], total: 0, counts: { total: 0, open: 0, underInquiry: 0, disposed: 0 } },
+      source: "error", status: 403, errorMessage: undefined,
+    });
+    render(await GrievancePage({}));
+    expect(screen.getByRole("heading", { name: "Access restricted" })).toBeInTheDocument();
+    expect(screen.queryByText("0")).not.toBeInTheDocument();
   });
 });

@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { and, eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
-import { hrmsOvertimeRequests, hrmsWfhRequests, hrmsShiftChangeRequests } from "./schema.js";
+import { hrmsOvertimeRequests, hrmsWfhRequests, hrmsShiftChangeRequests, hrmsAttendanceRegularisations } from "./schema.js";
 import * as repo from "./repo.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 
@@ -62,6 +62,23 @@ const log = pino({ name: "hrms-f3-attendance" });
  * only ever a race and is logged and skipped, same convention as every other
  * case in this file.
  */
+/**
+ * Maker != checker, re-asserted where the decision is applied (the route also
+ * checks, but a request can be published by anything that reaches the queue):
+ * inside the transaction, refuse when the request's owner is the deciding
+ * actor's own employee record.
+ */
+async function refuseOwnRegularisation(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0], tenantId: string, regId: string, deciderEmployeeId: string | null,
+): Promise<void> {
+  if (!deciderEmployeeId) return;
+  const rows = await tx.select({ employeeId: hrmsAttendanceRegularisations.employeeId }).from(hrmsAttendanceRegularisations)
+    .where(and(eq(hrmsAttendanceRegularisations.tenantId, tenantId), eq(hrmsAttendanceRegularisations.id, regId))).limit(1);
+  if (rows[0]?.employeeId === deciderEmployeeId) {
+    throw new NonRetryableError("SELF_APPROVAL_FORBIDDEN: a regularisation request cannot be decided by the employee it is for");
+  }
+}
+
 export function registerF3_attendance_Consumers(queue: Queue): void {
   queue.subscribe(COMMANDS.f3RouteWrite, async (msg) => {
     const p = msg.payload as Record<string, any>;
@@ -94,7 +111,7 @@ export function registerF3_attendance_Consumers(queue: Queue): void {
     // apar/f3-consumer.ts does. An approver with no linked row (e.g. an HR
     // admin who is not on the employee roll) records approved_by = NULL; the
     // actor is still captured in updated_by.
-    const approverEmployeeId = op === "attendance_routes__6" || op === "attendance_routes__9"
+    const approverEmployeeId = op === "attendance_routes__0" || op === "attendance_routes__1" || op === "attendance_routes__6" || op === "attendance_routes__9"
       ? (await resolveEmployeeForActor(p.tenantId, msg.actorId))?.id ?? null
       : null;
     let invalidateRegList = false;
@@ -104,6 +121,7 @@ export function registerF3_attendance_Consumers(queue: Queue): void {
         switch (op) {
           case "attendance_routes__0": {
             const regId = (params.id as string) || id;
+            await refuseOwnRegularisation(tx, p.tenantId, regId, approverEmployeeId);
             const updated = await repo.updateRegularisationStatus(tx, p.tenantId, regId, "approved", msg.actorId, body.reason);
             if (!updated) {
               log.warn({ op, regId, messageId: msg.messageId }, "regularisation already decided or missing before async approve");
@@ -148,6 +166,7 @@ export function registerF3_attendance_Consumers(queue: Queue): void {
           }
           case "attendance_routes__1": {
             const regId = (params.id as string) || id;
+            await refuseOwnRegularisation(tx, p.tenantId, regId, approverEmployeeId);
             const updated = await repo.updateRegularisationStatus(tx, p.tenantId, regId, "rejected", msg.actorId, body.reason);
             if (!updated) {
               log.warn({ op, regId, messageId: msg.messageId }, "regularisation already decided or missing before async reject");

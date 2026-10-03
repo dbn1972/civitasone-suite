@@ -93,6 +93,12 @@ export const hrmsEmployees = employeeSchema.table("hrms_employees", {
   legalEntityId:    uuid("legal_entity_id"),     // finance org.legal_entities
   costCenterId:     uuid("cost_center_id"),      // finance org.cost_centers
   locationId:       uuid("location_id"),         // location-service
+  // GAP-HR-EMPLOYEES-NEW-01 (migration 0178): collected by the Add Employee
+  // wizard but never persisted before.
+  serviceGrade:     varchar("service_grade", { length: 64 }),
+  maritalStatus:    varchar("marital_status", { length: 16 }),
+  bloodGroup:       varchar("blood_group", { length: 4 }),
+  shift:            varchar("shift", { length: 16 }),
   createdAt:        timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:        timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:        uuid("created_by").notNull(),

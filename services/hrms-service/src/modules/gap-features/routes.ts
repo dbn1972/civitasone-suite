@@ -826,12 +826,8 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: rows });
   });
 
-  // ── Gap: Grievances (minor disciplinary cases) ─────────────────────────────
-  app.get("/v1/hrms/grievances", async (req, reply) => {
-    const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
-    // Grievance table pending dedicated migration — stub until hrms_grievances is created
-    return reply.send({ data: [], meta: { note: "Grievance table pending — coming in next migration" } });
-  });
+  // GAP-HR-GRIEVANCE-01: the GET /v1/hrms/grievances stub that lived here is
+  // replaced by the real register in modules/grievance/routes.ts.
 
   // ── Gap: Skills (employee competency assessments) ──────────────────────────
   // IDOR fix (audit): org-wide list dump with no employee filter, exposing

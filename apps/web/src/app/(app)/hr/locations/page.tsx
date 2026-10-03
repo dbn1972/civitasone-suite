@@ -292,7 +292,7 @@ export default async function LocationsPage() {
                     {
                       key: "actions",
                       label: "",
-                      render: (row: Location) => <LocationRowActions id={row.id} name={row.name} />,
+                      render: (row: Location) => <LocationRowActions id={row.id} name={row.name} archived={row.status === "archived"} />,
                     },
                   ]
                 : []),

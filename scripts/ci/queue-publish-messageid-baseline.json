@@ -45,7 +45,7 @@
     "services/grant-service/src/modules/scheme/commands.ts:29",
     "services/helpdesk-service/src/modules/ml-breach/consumer.ts:124",
     "services/helpdesk-service/src/modules/ml-breach/routes.ts:199",
-    "services/hrms-service/src/modules/employee/commands.ts:80",
+    "services/hrms-service/src/modules/employee/commands.ts:84",
     "services/inspection-service/src/modules/assignment/tada-integration.ts:117",
     "services/legal-service/src/modules/contracts/commands.ts:20",
     "services/legal-service/src/modules/hearings/commands.ts:21",

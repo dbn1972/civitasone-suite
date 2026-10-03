@@ -1,24 +1,24 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
+import { useFormError } from "@/lib/useFormError";
 import { ActionButton } from "../../../_components/ds";
 
 /**
- * Per-row Archive action for /hr/locations (GAP-HR-LOCATIONS-02).
+ * Per-row Edit / Archive actions for /hr/locations (GAP-HR-LOCATIONS-02).
  *
- * Reuses the same PATCH /api/proxy/v1/locations/:id/archive endpoint the
- * sibling /locations/list screen already calls successfully
- * (LocationActions.tsx's `archive()`) -- that endpoint and the
- * reason-prompting ActionButton pattern already exist and work; this page
- * just never wired to them. A full "Edit" action (renamed fields, not just
- * lifecycle) is intentionally NOT added here -- hr.md's own catalog entry
- * marks GAP-HR-LOCATIONS-02 as depending on GAP-HR-LOCATIONS-NEW-01 (the
- * create form gaining a parent/state/district selector), since editing
- * should reuse that same, by-then-complete form rather than being built
- * twice. That dependency is a different page, out of this lane's scope.
+ * Archive calls PATCH /api/proxy/v1/locations/:id/archive (location-service),
+ * which refuses while active sub-locations exist and records the reason in the
+ * audit event. Edit links to the prefilled add form (hr/locations/[id]/edit).
+ * All copy comes from the `locationRowActions` messages; failures go through
+ * useFormError so a raw status or server text never reaches the user.
  */
-export function LocationRowActions({ id, name }: { id: string; name: string }) {
+export function LocationRowActions({ id, name, archived = false }: { id: string; name: string; archived?: boolean }) {
+  const t = useTranslations("locationRowActions");
   const router = useRouter();
+  const formError = useFormError("location");
 
   async function archive(reason?: string) {
     const res = await fetch(`/api/proxy/v1/locations/${id}/archive`, {
@@ -26,22 +26,31 @@ export function LocationRowActions({ id, name }: { id: string; name: string }) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ reason: reason || undefined }),
     });
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) {
+      const code = await res.clone().json().then((b: { code?: string }) => b.code ?? null).catch(() => null);
+      if (code === "HAS_ACTIVE_CHILDREN") throw new Error(t("errHasActiveChildren"));
+      if (code === "ALREADY_ARCHIVED") throw new Error(t("errAlreadyArchived"));
+      throw new Error((await formError.fromResponse(res, "save")).message);
+    }
     router.refresh();
   }
 
+  if (archived) return null;
   return (
-    <ActionButton
-      label="Archive"
-      className="btn ghost"
-      danger
-      requireReason
-      reasonLabel="Reason for archiving"
-      confirmTitle="Archive this location?"
-      confirmDescription={`This will archive "${name}". Archived locations are hidden from active operations and cannot be selected for new records.`}
-      confirmLabel="Archive location"
-      onConfirm={archive}
-      onSuccess={() => router.refresh()}
-    />
+    <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+      <Link href={`/hr/locations/${id}/edit`} className="btn ghost" aria-label={t("editAria", { name })}>{t("edit")}</Link>
+      <ActionButton
+        label={t("archive")}
+        className="btn ghost"
+        danger
+        requireReason
+        reasonLabel={t("reasonLabel")}
+        confirmTitle={t("confirmTitle")}
+        confirmDescription={t("confirmDescription", { name })}
+        confirmLabel={t("confirmLabel")}
+        onConfirm={archive}
+        onSuccess={() => router.refresh()}
+      />
+    </span>
   );
 }

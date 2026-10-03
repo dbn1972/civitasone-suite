@@ -378,6 +378,8 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
       esicIpNumber?: string; uanNumber?: string; pran?: string; gstin?: string; sacCode?: string; agencyRef?: string; napsId?: string;
       // GAP-HR-EMPLOYEES-DETAIL-EDIT-03
       reason?: string;
+      // GAP-HR-EMPLOYEES-NEW-01
+      serviceGrade?: string; maritalStatus?: string; bloodGroup?: string; shift?: string; costCenterId?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -416,6 +418,11 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
       if (p.napsId      !== undefined) { patch.napsId      = p.napsId; changedFields.push("napsId"); }
       if (p.payStructureId !== undefined) { patch.payStructureId = p.payStructureId; changedFields.push("payStructureId"); }
       if (p.managerId    !== undefined) { patch.managerId    = p.managerId; changedFields.push("managerId"); }
+      if (p.serviceGrade  !== undefined) { patch.serviceGrade  = p.serviceGrade;  changedFields.push("serviceGrade"); }
+      if (p.maritalStatus !== undefined) { patch.maritalStatus = p.maritalStatus; changedFields.push("maritalStatus"); }
+      if (p.bloodGroup    !== undefined) { patch.bloodGroup    = p.bloodGroup;    changedFields.push("bloodGroup"); }
+      if (p.shift         !== undefined) { patch.shift         = p.shift;         changedFields.push("shift"); }
+      if (p.costCenterId  !== undefined) { patch.costCenterId  = p.costCenterId;  changedFields.push("costCenterId"); }
       if (patch.basicMinor !== undefined) {
         // Concurrency guard: this generic profile-update path lets an HR
         // admin edit basicMinor directly (PATCH /v1/hrms/employees/:id),

@@ -16,6 +16,13 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
 }));
 
+// ApplyTemplateCard is a next-intl client component (GAP-HR-ONBOARDING-02); this
+// page test renders the server page without a NextIntlClientProvider, so stand
+// it in -- its own behaviour is covered by ApplyTemplateCard.test.tsx.
+vi.mock("../_components/ApplyTemplateCard", () => ({
+  ApplyTemplateCard: ({ hasTasks }: { hasTasks: boolean }) => <div data-testid="apply-template" data-has-tasks={String(hasTasks)} />,
+}));
+
 import OnboardingDetailPage from "./page";
 
 function employeeDetail(overrides: Record<string, unknown> = {}) {
@@ -87,6 +94,17 @@ describe("OnboardingDetailPage", () => {
     expect(screen.queryByText("Documents Submitted")).not.toBeInTheDocument();
     expect(screen.queryByText("ID Card Issued")).not.toBeInTheDocument();
     expect(screen.queryByText("Probation Review Scheduled")).not.toBeInTheDocument();
+  });
+
+  // GAP-HR-ONBOARDING-02
+  it("offers 'apply a template' to start onboarding for a joinee with no tasks, and to top up one who has some", async () => {
+    fetchJsonMock.mockImplementation((path: string) => Promise.resolve(path.includes("/onboarding-tasks") ? { data: [], source: "api" } : mockFor(path)));
+    const { unmount } = render(await OnboardingDetailPage({ params: { id: "emp-1" } }));
+    expect(screen.getByTestId("apply-template")).toHaveAttribute("data-has-tasks", "false");
+    unmount();
+    fetchJsonMock.mockImplementation((path: string) => Promise.resolve(mockFor(path)));
+    render(await OnboardingDetailPage({ params: { id: "emp-1" } }));
+    expect(screen.getByTestId("apply-template")).toHaveAttribute("data-has-tasks", "true");
   });
 
   // GAP-HR-ONBOARDING-DETAIL-04

@@ -1,6 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
+import { resolveEmployees } from "@/lib/entityAdapters/employee";
+import { resolveCostCenters } from "@/lib/entityAdapters/costCenter";
 import type { WizardData } from "../wizardTypes";
 import { ACCENT } from "../wizardTypes";
 
@@ -57,6 +60,21 @@ export function Step5({ data, departments, designations, submitting, onGoToStep 
   const t = useTranslations("employeeWizardStep5");
   const deptName = departments.find((d) => d.id === data.departmentId)?.name ?? data.departmentId;
   const desigName = designations.find((d) => d.id === data.designationId)?.name ?? data.designationId;
+  // Names, never raw ids, for the two picked references.
+  const [managerName, setManagerName] = useState("");
+  const [costCenterName, setCostCenterName] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    setManagerName("");
+    if (data.managerId) resolveEmployees([data.managerId]).then((o) => { if (!cancelled) setManagerName(o[0]?.label ?? ""); }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [data.managerId]);
+  useEffect(() => {
+    let cancelled = false;
+    setCostCenterName("");
+    if (data.costCenterId) resolveCostCenters([data.costCenterId]).then((o) => { if (!cancelled) setCostCenterName(o[0]?.label ?? ""); }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [data.costCenterId]);
 
   const SHIFT_LABELS: Record<string, string> = {
     general: t("shiftGeneral"),
@@ -86,7 +104,7 @@ export function Step5({ data, departments, designations, submitting, onGoToStep 
     );
   }
 
-  function Row({ label, value, masked, notSaved }: { label: string; value?: string | boolean; masked?: boolean; notSaved?: boolean }) {
+  function Row({ label, value, masked }: { label: string; value?: string | boolean; masked?: boolean }) {
     const displayValue =
       typeof value === "boolean"
         ? value ? t("yes") : t("no")
@@ -99,17 +117,6 @@ export function Step5({ data, departments, designations, submitting, onGoToStep 
         <span style={LABEL}>{label}</span>
         <span style={VALUE}>
           {displayValue}
-          {/* GAP-HR-EMPLOYEES-NEW-01: this field has no corresponding
-              column in createEmployeeBody today -- showing it as if it
-              were a normal review row implied it would be saved, when the
-              API would have silently discarded it. Honest until a real
-              product/schema decision lands (see AddEmployeeWizard.tsx's
-              buildPayload comment). */}
-          {notSaved && value && (
-            <span style={{ display: "block", fontSize: 10, color: "var(--warn, #b45309)", fontWeight: 400 }}>
-              {t("notSavedYet")}
-            </span>
-          )}
         </span>
       </div>
     );
@@ -139,8 +146,8 @@ export function Step5({ data, departments, designations, submitting, onGoToStep 
         <Row label={t("fullName")} value={data.fullName} />
         <Row label={t("dateOfBirth")} value={data.dateOfBirth} />
         <Row label={t("gender")} value={data.gender} />
-        <Row label={t("maritalStatus")} value={data.maritalStatus} notSaved />
-        <Row label={t("bloodGroup")} value={data.bloodGroup} notSaved />
+        <Row label={t("maritalStatus")} value={data.maritalStatus} />
+        <Row label={t("bloodGroup")} value={data.bloodGroup} />
         <Row label={t("officialEmail")} value={data.email} />
         <Row label={t("mobile")} value={data.mobile} />
       </section>
@@ -151,7 +158,7 @@ export function Step5({ data, departments, designations, submitting, onGoToStep 
         <Row label={t("employeeId")} value={data.employeeNo} />
         <Row label={t("department")} value={deptName} />
         <Row label={t("designation")} value={desigName} />
-        <Row label={t("payGrade")} value={data.grade} notSaved />
+        <Row label={t("payGrade")} value={data.grade} />
         <Row label={t("dateOfJoining")} value={data.dateOfJoining} />
         <Row label={t("employmentType")} value={data.employeeType} />
         <Row label={t("basicPay")} value={data.basicPay} />
@@ -160,10 +167,10 @@ export function Step5({ data, departments, designations, submitting, onGoToStep 
       {/* Step 3 — Assignment */}
       <section style={SECTION} aria-label={t("sectionAssignment")}>
         <SectionHeader title={t("sectionAssignment")} step={3} />
-        <Row label={t("reportingManagerId")} value={data.managerId} />
+        <Row label={t("reportingManagerId")} value={managerName || (data.managerId ? "…" : "")} />
         <Row label={t("workLocation")} value={data.workLocation} />
-        <Row label={t("shift")} value={data.shift ? SHIFT_LABELS[data.shift] : ""} notSaved />
-        <Row label={t("costCenter")} value={data.costCenter} notSaved />
+        <Row label={t("shift")} value={data.shift ? SHIFT_LABELS[data.shift] : ""} />
+        <Row label={t("costCenter")} value={costCenterName || (data.costCenterId ? "…" : "")} />
       </section>
 
       {/* Step 4 — Statutory */}

@@ -18,6 +18,24 @@ import { getTranslations } from "next-intl/server";
 // title rendered "Transfer -> --" / "Promoted to --" regardless, even
 // after that backend fix landed, because the two sides never agreed on a
 // field name. Typed against the *current* real response shape.
+/**
+ * GAP-HR-EMPLOYEES-NEW-01: the cost centre is stored as an id (a finance
+ * master). Show its name -- never the raw id -- and only to roles that
+ * administer the record; a viewer who cannot read the finance master (or an
+ * id that no longer resolves) simply sees no cost-centre row.
+ */
+async function getCostCenterName(id: string): Promise<string | null> {
+  const r = await fetchJson<unknown, string | null>("/api/v1/finance/cost-centers", null, {
+    telemetryKey: "hr.employee.costcentre",
+    mapResponse: (p) => {
+      const rows = (p as { data?: { id: string; name?: string; code?: string }[] } | null)?.data;
+      const row = rows?.find((x) => x.id === id);
+      return row ? (row.name ?? row.code ?? null) : null;
+    },
+  });
+  return r.data;
+}
+
 type TransferItem = {
   id: string; status: string;
   toDepartmentName?: string; fromDepartmentName?: string;
@@ -175,6 +193,7 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
   // report), unrelated to *administering the employee record itself*.
   const roles = getSessionRoles();
   const canAdminister = roles.some((r) => EMPLOYEE_ADMIN_ROLES.includes(r));
+  const costCenterName = canAdminister && employee.costCenterId ? await getCostCenterName(employee.costCenterId) : null;
 
   // Build base lifecycle events from known fields
   const baseEvents: LifecycleEvent[] = [];
@@ -330,6 +349,38 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
             <div className="fld">
               <span className="l">{t("fieldPostingLocation")}</span>
               <span className="v">{employee.postingLocation}</span>
+            </div>
+          )}
+          {/* GAP-HR-EMPLOYEES-NEW-01: profile fields the Add Employee wizard
+              collects (persisted since migration 0178). */}
+          {employee.serviceGrade && (
+            <div className="fld">
+              <span className="l">{t("fieldServiceGrade")}</span>
+              <span className="v">{employee.serviceGrade}</span>
+            </div>
+          )}
+          {employee.shift && (
+            <div className="fld">
+              <span className="l">{t("fieldShift")}</span>
+              <span className="v">{t(`shift_${employee.shift}` as never)}</span>
+            </div>
+          )}
+          {employee.maritalStatus && (
+            <div className="fld">
+              <span className="l">{t("fieldMaritalStatus")}</span>
+              <span className="v">{t(`marital_${employee.maritalStatus}` as never)}</span>
+            </div>
+          )}
+          {employee.bloodGroup && (
+            <div className="fld">
+              <span className="l">{t("fieldBloodGroup")}</span>
+              <span className="v">{employee.bloodGroup}</span>
+            </div>
+          )}
+          {costCenterName && (
+            <div className="fld">
+              <span className="l">{t("fieldCostCenter")}</span>
+              <span className="v">{costCenterName}</span>
             </div>
           )}
           {employee.reportingTo && (

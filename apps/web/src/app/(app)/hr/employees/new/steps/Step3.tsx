@@ -10,6 +10,8 @@ import {
 } from "../wizardTypes";
 import { Field, EntityPicker } from "@/app/_components/ds";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
+import { searchCostCenters, resolveCostCenters } from "@/lib/entityAdapters/costCenter";
+import { searchLocations, resolveLocations } from "@/lib/entityAdapters/location";
 
 interface Props {
   data: WizardData;
@@ -57,14 +59,34 @@ export function Step3({ data, errors: _errors, onChange, onBlur: _onBlur }: Prop
         </Field>
 
         {/* Work Location */}
+        {/* GAP-HR-LOCATIONS-03: pick from the location master (stores its id as
+            locationId, and its name as the display `station`). The free-text
+            box below is only for a place that is not in the master yet --
+            it is disabled while a master location is picked. */}
         <div style={fieldWrap}>
-          <label htmlFor="w-location" style={labelStyle}>{t("workLocationLabel")}</label>
-          <input
-            id="w-location"
-            type="text"
-            value={data.workLocation}
-            onChange={(e) => onChange("workLocation", e.target.value)}
+          <span id="w-location-label" style={labelStyle}>{t("workLocationLabel")}</span>
+          <EntityPicker
+            value={data.locationId || null}
+            onChange={(v) => {
+              const id = (Array.isArray(v) ? v[0] : v) ?? "";
+              onChange("locationId", id);
+              if (!id) { onChange("workLocation", ""); return; }
+              void resolveLocations([id]).then((o) => onChange("workLocation", o[0]?.label ?? ""));
+            }}
+            search={searchLocations}
+            resolve={resolveLocations}
             placeholder={t("workLocationPlaceholder")}
+            searchingText={t("pickerSearching")}
+            noResultsText={t("pickerNoResults")}
+          />
+          <label htmlFor="w-location-text" style={{ ...labelStyle, fontWeight: 400, fontSize: 12 }}>{t("workLocationOtherLabel")}</label>
+          <input
+            id="w-location-text"
+            type="text"
+            value={data.locationId ? "" : data.workLocation}
+            disabled={!!data.locationId}
+            onChange={(e) => onChange("workLocation", e.target.value)}
+            placeholder={t("workLocationOtherPlaceholder")}
             style={inputStyle}
           />
         </div>
@@ -86,17 +108,19 @@ export function Step3({ data, errors: _errors, onChange, onBlur: _onBlur }: Prop
         </div>
 
         {/* Cost Center */}
-        <div style={fieldWrap}>
-          <label htmlFor="w-costCenter" style={labelStyle}>{t("costCenterLabel")}</label>
-          <input
-            id="w-costCenter"
-            type="text"
-            value={data.costCenter}
-            onChange={(e) => onChange("costCenter", e.target.value)}
+        {/* GAP-HR-EMPLOYEES-NEW-01: a real picker over the finance cost-centre
+            master -- the old free-text box never reached the record. */}
+        <Field label={t("costCenterLabel")}>
+          <EntityPicker
+            value={data.costCenterId || null}
+            onChange={(v) => onChange("costCenterId", (Array.isArray(v) ? v[0] : v) ?? "")}
+            search={searchCostCenters}
+            resolve={resolveCostCenters}
             placeholder={t("costCenterPlaceholder")}
-            style={inputStyle}
+            searchingText={t("pickerSearching")}
+            noResultsText={t("pickerNoResults")}
           />
-        </div>
+        </Field>
       </div>
 
       <p style={{ marginTop: 20, marginBottom: 0, fontSize: 12, color: "var(--mut, #64748b)" }}>

@@ -82,6 +82,8 @@ import { npsRoutes } from "./modules/nps/routes.js";
 import { cpfRoutes } from "./modules/cpf/routes.js";
 import { deputationRoutes } from "./modules/deputation/routes.js";
 import { payProfileRoutes } from "./modules/pay-profile/routes.js";
+import { grievanceRoutes } from "./modules/grievance/routes.js";
+import { onboardingTemplateRoutes } from "./modules/lifecycle/onboarding-template.js";
 import { claimsRoutes } from "./modules/claims/routes.js";
 import { schedulerRoutes } from "./modules/scheduler/routes.js";
 import { disciplinaryRoutes } from "./modules/disciplinary/routes.js";
@@ -245,6 +247,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cpfRoutes);
   await app.register(deputationRoutes);
   await app.register(payProfileRoutes);
+  await app.register(grievanceRoutes);
+  await app.register(onboardingTemplateRoutes);
   await app.register(claimsRoutes);
   await app.register(consultantInvoiceRoutes);
   await app.register(contractorBillRoutes);

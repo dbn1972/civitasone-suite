@@ -5,7 +5,8 @@ import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { toHumanError } from "@/lib/messages";
-import { canViewRegularisations, computeRegularisationStats, REGULARISATION_VIEW_ROLES } from "./access";
+import { canViewRegularisations, canPickRegularisationEmployee, computeRegularisationStats, REGULARISATION_VIEW_ROLES } from "./access";
+import { RaiseRegularisation } from "./RaiseRegularisation";
 
 /**
  * Mirrors attendance/routes.ts: approve/reject regularisation routes
@@ -41,7 +42,7 @@ export default async function AttendanceRegularisationPage() {
         title={t("title")}
         subtitle={t("subtitlePage")}
         back="/hr/attendance" backLabel="Back to Attendance"
-        actions={<span />}
+        actions={<RaiseRegularisation canPickEmployee={canPickRegularisationEmployee(roles)} />}
       />
       <StatGrid>
         <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotal")} value={stats.total} />

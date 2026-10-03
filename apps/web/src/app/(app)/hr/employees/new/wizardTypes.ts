@@ -36,8 +36,13 @@ export type WizardData = {
   // Step 3 — Assignment
   managerId: string;
   workLocation: string;
+  // GAP-HR-LOCATIONS-03: the picked location-master id (opaque cross-service
+  // reference, never an FK). `workLocation` then carries its display name,
+  // which is what the legacy `station` column stores.
+  locationId: string;
   shift: "general" | "morning" | "evening" | "night" | "";
-  costCenter: string;
+  // GAP-HR-EMPLOYEES-NEW-01: the picked finance cost-centre's id (was free text that never persisted).
+  costCenterId: string;
   // Step 4 — Statutory
   pan: string;
   aadhaarRef: string;
@@ -64,8 +69,9 @@ export const WIZARD_INIT: WizardData = {
   basicPay: "",
   managerId: "",
   workLocation: "",
+  locationId: "",
   shift: "",
-  costCenter: "",
+  costCenterId: "",
   pan: "",
   aadhaarRef: "",
   bankAccountNo: "",

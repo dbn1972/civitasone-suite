@@ -39,6 +39,17 @@ function routeFetch(overrides: { onAllocate?: () => Response } = {}) {
   });
 }
 
+/** GAP-HR-LEAVE-ALLOCATE-01: the confirm dialog now collects a reason (required to enable Allocate). */
+function confirmWithReason(dialog: HTMLElement, reason = "Annual entitlement") {
+  fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: reason } });
+  fireEvent.click(within(dialog).getByRole("button", { name: /^allocate$/i }));
+}
+
+function allocationBody(fetchMock: ReturnType<typeof routeFetch>): Record<string, unknown> | null {
+  const call = fetchMock.mock.calls.find(([u]) => typeof u === "string" && u.includes("leave-allocations"));
+  return call ? JSON.parse(((call as unknown as [string, RequestInit])[1]).body as string) : null;
+}
+
 async function pickEmployee() {
   const input = screen.getByLabelText(/employee/i);
   fireEvent.change(input, { target: { value: "Test" } });
@@ -80,8 +91,78 @@ describe("AllocateLeaveForm", () => {
     expect(dialog).toHaveTextContent("Earned Leave");
     expect(fetchMock.mock.calls.some(([u]) => typeof u === "string" && u.includes("leave-allocations"))).toBe(false);
 
-    fireEvent.click(within(dialog).getByRole("button", { name: /^allocate$/i }));
+    confirmWithReason(dialog);
     await waitFor(() => expect(fetchMock.mock.calls.some(([u]) => typeof u === "string" && u.includes("leave-allocations"))).toBe(true));
+  });
+
+  // GAP-HR-LEAVE-ALLOCATE-01
+  it("will not enable Allocate until a reason is given, then sends it (and no override within the cap)", async () => {
+    renderForm();
+    await waitFor(() => expect(screen.getByRole("option", { name: /earned leave/i })).toBeInTheDocument());
+    await pickEmployee();
+    fireEvent.change(screen.getByRole("combobox", { name: /leave type/i }), { target: { value: "lt1" } });
+    fireEvent.change(screen.getByLabelText(/total days/i), { target: { value: "12" } });
+    fireEvent.click(screen.getByRole("button", { name: /allocate leave/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByRole("button", { name: /^allocate$/i })).toBeDisabled();
+    confirmWithReason(dialog, "Annual entitlement");
+    await waitFor(() => expect(allocationBody(fetchMock)).not.toBeNull());
+    expect(allocationBody(fetchMock)).toEqual({ employeeId: "e1", leaveTypeId: "lt1", fy: expect.any(String), totalDays: 12, reason: "Annual entitlement" });
+  });
+
+  // GAP-HR-LEAVE-ALLOCATE-03
+  it("above the policy maximum it sends the explicit override flag together with the reason", async () => {
+    fetchMock.mockImplementation((url: string) => {
+      if (url.includes("/hrms/employees")) return Promise.resolve(new Response(JSON.stringify({ data: EMPLOYEES }), { status: 200 }));
+      if (url.includes("/hrms/leave-types")) return Promise.resolve(new Response(JSON.stringify({ data: LEAVE_TYPES }), { status: 200 }));
+      if (url.includes("/hrms/leave-context")) return Promise.resolve(new Response(JSON.stringify({ leaveTypes: [{ id: "lt1", code: "EL", name: "Earned Leave", maxDays: 30 }], allocations: [] }), { status: 200 }));
+      return Promise.resolve(new Response(JSON.stringify({ id: "a1", status: "accepted" }), { status: 202 }));
+    });
+    renderForm();
+    await waitFor(() => expect(screen.getByRole("option", { name: /earned leave/i })).toBeInTheDocument());
+    await pickEmployee();
+    fireEvent.change(screen.getByRole("combobox", { name: /leave type/i }), { target: { value: "lt1" } });
+    fireEvent.change(screen.getByLabelText(/total days/i), { target: { value: "45" } });
+    await screen.findByText(/policy maximum/i);
+    fireEvent.click(screen.getByRole("button", { name: /allocate leave/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent(/exceeding the policy maximum/i);
+    confirmWithReason(dialog, "Special grant");
+    await waitFor(() => expect(allocationBody(fetchMock)).not.toBeNull());
+    expect(allocationBody(fetchMock)).toMatchObject({ totalDays: 45, reason: "Special grant", exceedMax: true });
+  });
+
+  // GAP-HR-LEAVE-ALLOCATE-03
+  it("when the server refuses with EXCEEDS_TYPE_MAX (cap unknown to the form) it explains and the next confirm sends the override", async () => {
+    let first = true;
+    const base = routeFetch({
+      onAllocate: () => {
+        if (first) { first = false; return new Response(JSON.stringify({ code: "EXCEEDS_TYPE_MAX", message: "x" }), { status: 422 }); }
+        return new Response(JSON.stringify({ id: "a1", status: "accepted" }), { status: 202 });
+      },
+    });
+    // the leave-context call reports NO cap for this type, so the form cannot know it is over the maximum
+    fetchMock = vi.fn((url: string, _init?: RequestInit) =>
+      url.includes("/hrms/leave-context")
+        ? Promise.resolve(new Response(JSON.stringify({ leaveTypes: [{ id: "lt1", code: "EL", name: "Earned Leave", maxDays: 0 }], allocations: [] }), { status: 200 }))
+        : base(url)) as unknown as ReturnType<typeof routeFetch>;
+    vi.stubGlobal("fetch", fetchMock);
+    renderForm();
+    await waitFor(() => expect(screen.getByRole("option", { name: /earned leave/i })).toBeInTheDocument());
+    await pickEmployee();
+    fireEvent.change(screen.getByRole("combobox", { name: /leave type/i }), { target: { value: "lt1" } });
+    fireEvent.change(screen.getByLabelText(/total days/i), { target: { value: "40" } });
+    fireEvent.click(screen.getByRole("button", { name: /allocate leave/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    confirmWithReason(dialog, "Special grant");
+    await waitFor(() => expect(dialog).toHaveTextContent(/above the policy maximum/i));
+    fireEvent.click(within(dialog).getByRole("button", { name: /^allocate$/i }));
+    await waitFor(() => expect(screen.getByText(/allocation submitted/i)).toBeInTheDocument());
+    const bodies = (fetchMock.mock.calls as unknown as Array<[string, RequestInit]>)
+      .filter(([u]) => String(u).includes("leave-allocations"))
+      .map(([, i]) => JSON.parse(i.body as string));
+    expect(bodies[0]).not.toHaveProperty("exceedMax");
+    expect(bodies[1]).toMatchObject({ exceedMax: true, reason: "Special grant" });
   });
 
   // GAP-HR-LEAVE-ALLOCATE-05
@@ -93,7 +174,7 @@ describe("AllocateLeaveForm", () => {
     fireEvent.change(screen.getByLabelText(/total days/i), { target: { value: "12" } });
     fireEvent.click(screen.getByRole("button", { name: /allocate leave/i }));
     const dialog = await screen.findByRole("alertdialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: /^allocate$/i }));
+    confirmWithReason(dialog);
 
     await waitFor(() => expect(screen.getByText(/allocation submitted/i)).toBeInTheDocument());
     expect(screen.getByLabelText(/employee/i)).toHaveValue("");
@@ -137,11 +218,11 @@ describe("AllocateLeaveForm", () => {
     fireEvent.change(screen.getByLabelText(/total days/i), { target: { value: "12" } });
     fireEvent.click(screen.getByRole("button", { name: /allocate leave/i }));
     const dialog = await screen.findByRole("alertdialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: /^allocate$/i }));
+    confirmWithReason(dialog);
 
     await waitFor(() => expect(dialog).toHaveTextContent(/couldn't save/i));
     expect(dialog.textContent).not.toMatch(/leave-service/);
-    expect(dialog.textContent).not.toMatch(/\b500\b/);
+    expect(dialog.textContent).not.toMatch(/HTTP 500|status 500|\(500\)/);
   });
 
   // GAP-HR-LEAVE-ALLOCATE-01

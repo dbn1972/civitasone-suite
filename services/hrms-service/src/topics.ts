@@ -76,6 +76,15 @@ export const COMMANDS = {
   payProfileRequest:    "hrms.pay_profile.request",
   payProfileDecide:     "hrms.pay_profile.decide",
 
+  // GAP-HR-ONBOARDING-02: create an employee's onboarding tasks from a template.
+  onboardingApplyTemplate: "hrms.onboarding.apply_template",
+
+  // GAP-HR-GRIEVANCE-01/02: grievance register (register / assign / dispose + DPDP detail-read audit).
+  grievanceRegister:    "hrms.grievance.register",
+  grievanceAssign:      "hrms.grievance.assign",
+  grievanceDispose:     "hrms.grievance.dispose",
+  grievanceRead:        "hrms.grievance.read",
+
   // medical
   medicalClaimCreate:    "hrms.medical_claim.create",
   medicalClaimApprove:   "hrms.medical_claim.approve",

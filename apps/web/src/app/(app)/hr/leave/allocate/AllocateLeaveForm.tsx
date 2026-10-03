@@ -56,6 +56,10 @@ export function AllocateLeaveForm() {
   // it's open, so a submit failure must surface here instead or the user
   // never sees it.
   const [submitError, setSubmitError] = useState<string | undefined>();
+  // GAP-HR-LEAVE-ALLOCATE-03: set after the server refuses an allocation above
+  // the type's maximum we did not know about yet (context not loaded) -- the
+  // next confirm then sends the explicit override.
+  const [forceExceed, setForceExceed] = useState(false);
   const formError = useFormError("leave allocation");
 
   // GAP-HR-LEAVE-ALLOCATE-03: the chosen employee's existing allocations —
@@ -137,7 +141,7 @@ export function AllocateLeaveForm() {
     setConfirmOpen(true);
   }
 
-  async function submitAllocation() {
+  async function submitAllocation(reason?: string) {
     setStatus("submitting");
     setSubmitError(undefined);
     const days = parseInt(totalDays, 10);
@@ -145,15 +149,30 @@ export function AllocateLeaveForm() {
       const res = await fetch("/api/proxy/v1/hrms/leave-allocations", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ employeeId, leaveTypeId, fy, totalDays: days }),
+        // GAP-HR-LEAVE-ALLOCATE-01: the reason is recorded in the audit event.
+        // GAP-HR-LEAVE-ALLOCATE-03: above the policy maximum, the server wants
+        // an explicit override (which it only accepts together with a reason).
+        body: JSON.stringify({
+          employeeId, leaveTypeId, fy, totalDays: days,
+          ...(reason ? { reason } : {}),
+          ...(overCap || forceExceed ? { exceedMax: true } : {}),
+        }),
       });
       if (!res.ok) {
+        const code = await res.clone().json().then((b: { code?: string }) => b.code ?? null).catch(() => null);
+        if (code === "EXCEEDS_TYPE_MAX") {
+          setForceExceed(true);
+          setStatus("error");
+          setSubmitError(t("exceedsMaxError"));
+          return;
+        }
         const resolved = await formError.fromResponse(res, "save");
         setStatus("error");
         setSubmitError(resolved.message);
         return;
       }
       setConfirmOpen(false);
+      setForceExceed(false);
       setStatus("success");
       setMessage(t("allocationSuccess"));
       // GAP-HR-LEAVE-ALLOCATE-05: reset employeeId too, not just totalDays —
@@ -254,7 +273,7 @@ export function AllocateLeaveForm() {
           <select
             id={ltId}
             value={leaveTypeId}
-            onChange={(e) => { setLeaveTypeId(e.target.value); clearErr("leaveType"); }}
+            onChange={(e) => { setLeaveTypeId(e.target.value); setForceExceed(false); clearErr("leaveType"); }}
             style={invalid.has("leaveType") ? inputErrStyle : inputStyle}
             aria-invalid={invalid.has("leaveType")}
             aria-describedby={invalid.has("leaveType") ? `${ltId}-err` : undefined}
@@ -331,13 +350,16 @@ export function AllocateLeaveForm() {
         confirmLabel={t("confirmAllocateLabel")}
         busy={status === "submitting"}
         errorMessage={submitError}
+        requireReason
+        reasonLabel={overCap || forceExceed ? t("confirmReasonLabelExceed") : t("confirmReasonLabel")}
+        maxReasonLength={500}
         description={t("confirmAllocateDescription", {
           days: totalDays,
           typeName: selectedLeaveType?.name ?? "",
           fy,
           employee: employeeLabel ?? t("thisEmployee"),
         })}
-        onConfirm={() => void submitAllocation()}
+        onConfirm={(reason) => void submitAllocation(reason)}
         onCancel={() => { if (status !== "submitting") { setConfirmOpen(false); setSubmitError(undefined); } }}
       />
     </>

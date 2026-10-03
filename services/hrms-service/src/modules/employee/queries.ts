@@ -104,6 +104,14 @@ export async function getEmployeeDetail(id: string, tenantId: string): Promise<E
     pan: emp.pan ? maskValue(emp.pan)! : null,
     ...(desig?.payGrade    ? { grade: desig.payGrade }                : {}),
     ...(emp.station        ? { postingLocation: emp.station }         : {}),
+    // GAP-HR-EMPLOYEES-NEW-01: profile fields the Add Employee wizard collects
+    // (migration 0178). `grade` above is the DESIGNATION's pay grade; this is
+    // the employee's own service grade/group, so it gets its own key.
+    ...(emp.serviceGrade   ? { serviceGrade: emp.serviceGrade }       : {}),
+    ...(emp.maritalStatus  ? { maritalStatus: emp.maritalStatus }     : {}),
+    ...(emp.bloodGroup     ? { bloodGroup: emp.bloodGroup }           : {}),
+    ...(emp.shift          ? { shift: emp.shift }                     : {}),
+    ...(emp.costCenterId   ? { costCenterId: emp.costCenterId }       : {}),
     // HR-A deep-verify finding: confirmationDate is a real column already on
     // `emp` (no extra query), declared on the EmployeeDetail type, and used by
     // the frontend to render a "Service Confirmed" lifecycle event -- but was

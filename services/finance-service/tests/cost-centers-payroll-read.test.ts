@@ -22,7 +22,7 @@ const tok = (roles: string[]) => signToken({ sub: "u-b4", tid: TENANT, roles, si
 afterAll(async () => { await sqlClient.end(); });
 
 describe("GET /v1/finance/cost-centers -- payroll read access", () => {
-  it.each(["payroll_admin", "payroll_officer", "hr_admin"])("admits %s", async (role) => {
+  it.each(["payroll_admin", "payroll_officer", "hr_admin", "hr_officer"])("admits %s", async (role) => {
     const app = await buildApp();
     const res = await app.inject({ method: "GET", url: "/v1/finance/cost-centers", headers: { authorization: `Bearer ${tok([role])}` } });
     await app.close();

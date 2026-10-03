@@ -32,6 +32,14 @@ export const allocateLeaveBody = z.object({
       return Number(end) === (Number(start) + 1) % 100;
     }, "must be a real financial year (e.g. 2026-27)"),
   totalDays:   z.number().int().positive(),
+  // GAP-HR-LEAVE-ALLOCATE-01: why this entitlement is being granted. Optional
+  // for API callers (cross-service contract unchanged); the web form requires
+  // it, and it is mandatory whenever exceedMax is set. Recorded in the audit.
+  reason:      z.string().trim().min(1).max(500).optional(),
+  // GAP-HR-LEAVE-ALLOCATE-03: an allocation above the leave type's policy
+  // maxDays is refused unless the caller explicitly overrides (pro-rated or
+  // special grants are legitimate) AND gives a reason.
+  exceedMax:   z.boolean().optional(),
 });
 export type AllocateLeaveBody = z.infer<typeof allocateLeaveBody>;
 
