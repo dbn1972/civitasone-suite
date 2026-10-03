@@ -94,3 +94,10 @@ export type UpdateLocationBody = z.infer<typeof updateLocationBody>;
 export const archiveLocationBody = z.object({
   reason: z.string().trim().min(1).max(500).optional(),
 });
+
+export const locationHierarchySchema = z.object({
+  location: locationViewSchema,
+  ancestors: z.array(locationViewSchema),
+  children: z.array(locationViewSchema),
+  descendantIds: z.array(z.string().uuid()),
+});

@@ -3,6 +3,7 @@ import { RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 import type { LocationView } from "./schema.js";
 import type { LocationTreeNode } from "./validators.js";
+import { buildLocationHierarchy, type LocationHierarchy } from "./hierarchy.js";
 
 export async function getLocation(id: string, tenantId: string): Promise<LocationView | null> {
   return cache.getOrLoad<LocationView>(
@@ -74,4 +75,14 @@ export async function getLocationTree(tenantId: string): Promise<{ data: Locatio
   sortTree(roots);
 
   return { data: roots };
+}
+
+/**
+ * A location with its ancestor breadcrumb, direct children and every
+ * descendant id -- backs the HR per-location employee page and hrms-service's
+ * "include sub-locations" filter. Tenant-scoped (listAllByTenant); null when
+ * the id does not exist in this tenant.
+ */
+export async function getLocationHierarchy(id: string, tenantId: string): Promise<LocationHierarchy | null> {
+  return buildLocationHierarchy(await repo.listAllByTenant(tenantId), id);
 }

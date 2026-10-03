@@ -10,6 +10,7 @@ import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
 import { writeAuditLog } from "./shared/audit.js";
 import { employeeRoutes }   from "./modules/employee/routes.js";
+import { locationEmployeeRoutes } from "./modules/employee/location-employees.js";
 import { nomineeAddressRoutes } from "./modules/employee/nominee-address-routes.js";
 import { leaveRoutes }      from "./modules/leave/routes.js";
 import { leaveConversionRoutes } from "./modules/leave/conversion-routes.js";
@@ -183,6 +184,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
 
   await app.register(employeeRoutes);
+  await app.register(locationEmployeeRoutes);
   await app.register(nomineeAddressRoutes);
   await app.register(leaveRoutes);
   await app.register(leaveConversionRoutes);
