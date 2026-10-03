@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   canRaiseForApproval,
+  hasPaymentHistory,
   formatPaymentRef,
   paymentAmountMinor,
   paymentStatusVariant,
@@ -64,5 +65,14 @@ describe("paymentAmountMinor (GAP-FINANCE-PAYMENTS-05)", () => {
   });
   it("is null when nothing parses", () => {
     expect(paymentAmountMinor({ amountDisplay: "n/a" })).toBeNull();
+  });
+});
+
+describe("hasPaymentHistory (fp-finance-02)", () => {
+  it("is true only for a context with at least one event", () => {
+    expect(hasPaymentHistory(null)).toBe(false);
+    expect(hasPaymentHistory(undefined)).toBe(false);
+    expect(hasPaymentHistory({ events: [] })).toBe(false);
+    expect(hasPaymentHistory({ events: [{ status: "initiated" }] })).toBe(true);
   });
 });

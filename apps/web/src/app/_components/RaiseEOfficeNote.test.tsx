@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { RaiseEOfficeNote } from "./RaiseEOfficeNote";
+
+// The officer pickers are EmployeePickers (next-intl), so every render needs the provider.
+function render(ui: React.ReactElement) {
+  return rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+}
 
 const EMPLOYEES = [
   { id: "12345678-1234-1234-1234-123456789012", employeeNo: "E-001", name: "Asha Rao", department: "Finance" },
@@ -156,6 +163,66 @@ describe("RaiseEOfficeNote", () => {
     const body = JSON.parse((submitCall![1] as RequestInit).body as string);
     expect(body.initiatedBy).toBe("12345678-1234-1234-1234-123456789012");
     expect(body.currentWith).toBe("abcdefab-abcd-abcd-abcd-abcdefabcdef");
+  });
+});
+
+// ── GAP-FINANCE-PAYMENTS-DETAIL-02 ────────────────────────────────────────
+describe("RaiseEOfficeNote defaults the initiating officer to the signed-in user", () => {
+  const props = { refType: "finance_payment", refId: "p-1", subject: "Payment PAY-1", dept: "Finance" };
+  const ME = { id: "99999999-9999-9999-9999-999999999999", fullName: "Meera Self", employeeNo: "E-009" };
+
+  function mockWithProfile(profile: Response) {
+    return vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url;
+      if (url.includes("/estab/files/by-ref")) return new Response(null, { status: 404 });
+      if (url.includes("/hrms/me/profile")) return profile;
+      if (url.includes("/hrms/employees")) return new Response(JSON.stringify({ data: EMPLOYEES }), { status: 200 });
+      if (url.includes("/estab/files/from-module")) return new Response(JSON.stringify({ id: "f", fileNo: "EO/FIN/2026/009" }), { status: 201 });
+      return new Response(null, { status: 404 });
+    });
+  }
+
+  beforeEach(() => vi.restoreAllMocks());
+
+  it("pre-selects the signed-in user, so the officer completes the raise without typing the initiator", async () => {
+    const fetchMock = mockWithProfile(new Response(JSON.stringify(ME), { status: 200 }));
+    render(<RaiseEOfficeNote {...props} />);
+    await waitFor(() => expect(screen.getByText("Raise for approval")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Raise for approval"));
+    expect(await screen.findByDisplayValue("Meera Self (E-009)")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Forward to officer"), { target: { value: "Ben" } });
+    fireEvent.mouseDown(await screen.findByText("Ben Iyer (E-002)"));
+    await screen.findByDisplayValue("Ben Iyer (E-002)");
+    fireEvent.change(screen.getByPlaceholderText(/Justification/i), { target: { value: "Please approve this payment." } });
+    fireEvent.click(screen.getByText("Submit to eOffice"));
+
+    // The success message names both officers, never an id.
+    const done = await screen.findByText(/Raised eFile EO\/FIN\/2026\/009/);
+    expect(done).toHaveTextContent("Initiated by Meera Self (E-009), forwarded to Ben Iyer (E-002)");
+    expect(done.textContent).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}/);
+    const call = fetchMock.mock.calls.find(([i]) => String(typeof i === "string" ? i : (i as Request).url).includes("from-module"))!;
+    const body = JSON.parse((call[1] as RequestInit).body as string);
+    expect(body.initiatedBy).toBe(ME.id);
+    expect(body.currentWith).toBe("abcdefab-abcd-abcd-abcd-abcdefabcdef");
+  });
+
+  it("a user with no employee record (404) simply starts with an empty initiating officer", async () => {
+    mockWithProfile(new Response(null, { status: 404 }));
+    render(<RaiseEOfficeNote {...props} />);
+    await waitFor(() => expect(screen.getByText("Raise for approval")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Raise for approval"));
+    await waitFor(() => expect(screen.getByLabelText("Initiating officer")).toBeInTheDocument());
+    expect((screen.getByLabelText("Initiating officer") as HTMLInputElement).value).toBe("");
+    fireEvent.click(screen.getByText("Submit to eOffice"));
+    expect(await screen.findByText(/Choose the initiating officer/i)).toBeInTheDocument();
+  });
+
+  it("does not look the profile up until the form is opened", async () => {
+    const fetchMock = mockWithProfile(new Response(JSON.stringify(ME), { status: 200 }));
+    render(<RaiseEOfficeNote {...props} />);
+    await waitFor(() => expect(screen.getByText("Raise for approval")).toBeInTheDocument());
+    expect(fetchMock.mock.calls.some(([i]) => String(typeof i === "string" ? i : (i as Request).url).includes("/hrms/me/profile"))).toBe(false);
   });
 });
 

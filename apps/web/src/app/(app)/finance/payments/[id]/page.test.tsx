@@ -2,7 +2,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
 const getByIdMock = vi.fn();
-vi.mock("@/app/_data/loaders", () => ({ getFinancePaymentById: (...a: unknown[]) => getByIdMock(...a) }));
+const getContextMock = vi.fn();
+const getNamesMock = vi.fn();
+vi.mock("@/app/_data/loaders", () => ({
+  getFinancePaymentById: (...a: unknown[]) => getByIdMock(...a),
+  getFinancePaymentContext: (...a: unknown[]) => getContextMock(...a),
+  getFinanceActorNames: (...a: unknown[]) => getNamesMock(...a),
+}));
 const notFoundMock = vi.fn(() => {
   throw new Error("NEXT_NOT_FOUND");
 });
@@ -40,6 +46,10 @@ describe("PaymentDetailPage", () => {
   beforeEach(() => {
     getByIdMock.mockReset();
     notFoundMock.mockClear();
+    getContextMock.mockReset();
+    getNamesMock.mockReset();
+    getContextMock.mockResolvedValue({ data: { beneficiary: null, bill: null, approvedBy: null, events: [] }, source: "api" });
+    getNamesMock.mockResolvedValue({});
   });
 
   // GAP-FINANCE-PAYMENTS-DETAIL-03
@@ -111,5 +121,53 @@ describe("PaymentDetailPage", () => {
     render(await PaymentDetailPage({ params: { id: ID } }));
     expect(notFoundMock).not.toHaveBeenCalled();
     expect(screen.getByText(/couldn't load/i)).toBeInTheDocument();
+  });
+
+  // GAP-FINANCE-PAYMENTS-DETAIL-04: beneficiary, bill, approver and the status history.
+  it("shows the beneficiary, bill number, approver and a status timeline with names, never raw ids", async () => {
+    getByIdMock.mockResolvedValue(payment({ status: "released", createdBy: "11111111-1111-4111-8111-111111111111" }));
+    getContextMock.mockResolvedValue({
+      source: "api",
+      data: {
+        beneficiary: { vendorId: "v-9", name: "M/s Acme Traders" },
+        bill: { id: "b1b1b1b1-0000-4000-8000-000000000001", billNo: "BILL/2026/17" },
+        approvedBy: "22222222-2222-4222-8222-222222222222",
+        events: [
+          { status: "initiated", actorId: "11111111-1111-4111-8111-111111111111", note: null, at: "2026-07-04T12:00:00.000Z" },
+          { status: "pending_approval", actorId: "11111111-1111-4111-8111-111111111111", note: null, at: "2026-07-05T09:00:00.000Z" },
+          { status: "released", actorId: "22222222-2222-4222-8222-222222222222", note: null, at: "2026-07-06T09:00:00.000Z" },
+        ],
+      },
+    });
+    getNamesMock.mockResolvedValue({ "11111111-1111-4111-8111-111111111111": "Asha Rao", "22222222-2222-4222-8222-222222222222": "Dev Menon" });
+    const { container } = render(await PaymentDetailPage({ params: { id: ID } }));
+    expect(screen.getByRole("link", { name: "M/s Acme Traders" })).toHaveAttribute("href", "/finance/vendors/v-9");
+    expect(screen.getByRole("link", { name: "BILL/2026/17" })).toHaveAttribute("href", "/finance/expenditure/bills/b1b1b1b1-0000-4000-8000-000000000001");
+    const timeline = screen.getByRole("list", { name: "Payment status history" });
+    expect(timeline.querySelectorAll("li")).toHaveLength(3);
+    expect(timeline.textContent).toContain("Dev Menon");
+    expect(screen.getAllByText("Dev Menon").length).toBeGreaterThan(1); // approver field + timeline row
+    expect(screen.getAllByText("Asha Rao").length).toBeGreaterThan(1); // created-by field + timeline rows
+    expect(container.textContent).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-4/);
+    // The header pill still shows the status exactly once outside the history list.
+    expect(container.querySelectorAll(".page-head .pill, header .pill").length).toBeLessThanOrEqual(1);
+  });
+
+  it("missing beneficiary / bill / approver show a dash, and an empty history is its own empty state", async () => {
+    getByIdMock.mockResolvedValue(payment({ billId: undefined }));
+    render(await PaymentDetailPage({ params: { id: ID } }));
+    const beneficiary = screen.getByText("Beneficiary").closest(".field")!;
+    expect(beneficiary).toHaveTextContent("—");
+    expect(screen.getByText("Approved by").closest(".field")).toHaveTextContent("—");
+    expect(screen.getByText("No history recorded")).toBeInTheDocument();
+  });
+
+  it("a failed context lookup is a load error for the history only; the payment itself still renders", async () => {
+    getByIdMock.mockResolvedValue(payment({ status: "initiated" }));
+    getContextMock.mockResolvedValue({ data: null, source: "error", status: 503 });
+    render(await PaymentDetailPage({ params: { id: ID } }));
+    expect(screen.getByText(/couldn't load payment history/i)).toBeInTheDocument();
+    expect(screen.queryByText("No history recorded")).not.toBeInTheDocument();
+    expect(screen.getAllByText("₹1,00,00,000.00").length).toBeGreaterThan(0);
   });
 });

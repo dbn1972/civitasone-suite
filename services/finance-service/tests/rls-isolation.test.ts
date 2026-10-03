@@ -201,9 +201,9 @@ describe("Finance — Vendor Master RLS Isolation", () => {
     const body = res.json();
     createdVendorId = body.id;
     expect(createdVendorId).toBeDefined();
-    // Writer-role token (finance_admin is in tokenForTenant's default roles) —
-    // create response should show full, unmasked bank details.
-    expect(body.bankAccount).toBe("123456789012");
+    // The create echo is masked like every vendor read (clear values only through the audited reveal
+    // endpoint). Writer roles still see the full IFSC.
+    expect(body.bankAccount).toBe("********9012");
     expect(body.ifsc).toBe("TEST0123456");
   });
 

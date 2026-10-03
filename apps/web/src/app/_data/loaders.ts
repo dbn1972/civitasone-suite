@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import { GL_JOURNAL_LIMIT } from "@/lib/financeLimits";
 import { pathSeg } from "@/lib/pathSegment";
+import type { AuditParaEvent, GlLinesPagination, GlLinesTotals, PaymentContext } from "@/lib/finance/workflowTypes";
 import { HR_AUDIT_SERVICES } from "@/app/(app)/hr/audit-log/auditResource";
 import type {
   AccountSummary,
@@ -2006,6 +2007,20 @@ export async function getFinanceDashboard(fy?: string): Promise<LoaderResult<Fin
   });
 }
 
+/**
+ * GAP-FINANCE-BUDGET-ALLOCATION-03: the budget (BE/RE) rows a re-appropriation moves money between. These are
+ * finance_budgets ids -- NOT allocation ids -- which is what POST /v1/finance/reappropriations/:id/submit-approval
+ * takes. The wide limit keeps the picker from silently truncating at the endpoint's default page size.
+ */
+export async function getFinanceBudgetsForReappropriation(): Promise<LoaderResult<BudgetSummary[]>> {
+  return fetchJson<unknown, BudgetSummary[]>("/api/v1/finance/budgets?limit=500", [], {
+    revalidateSeconds: 60,
+    telemetryKey: "finance.budgets.reappropriation",
+    responseSchema: BudgetSummaryListSchema,
+    mapResponse: (p) => getArrayPayload(p) as BudgetSummary[] | null,
+  });
+}
+
 export async function getFinanceBudgets(): Promise<LoaderResult<BudgetSummary[]>> {
   return fetchJson<unknown, BudgetSummary[]>("/api/v1/finance/budgets", [], {
     revalidateSeconds: 120,
@@ -2137,8 +2152,8 @@ export async function getFinanceCheques(): Promise<LoaderResult<FinanceInstrumen
 }
 
 export async function getFinanceChequeById(id: string): Promise<LoaderResult<FinanceInstrumentSummary | null>> {
+  // No data-cache: a cancel / re-present / mark-stale must show on the next refresh, not 30s later.
   return fetchJson<unknown, FinanceInstrumentSummary | null>(`/api/v1/finance/instruments/${id}`, null, {
-    revalidateSeconds: 30,
     telemetryKey: "finance.cheque.detail",
     responseSchema: FinanceInstrumentSummarySchema,
     mapResponse: (p) => (isRecord(p) ? (p as FinanceInstrumentSummary) : null),
@@ -2302,8 +2317,8 @@ export async function getFinanceVendors(): Promise<LoaderResult<FinanceVendorSum
 }
 
 export async function getFinanceVendorById(id: string): Promise<LoaderResult<FinanceVendorDetail | null>> {
+  // No data-cache: approve / reject / bank-change decisions must show on the next refresh.
   return fetchJson<unknown, FinanceVendorDetail | null>(`/api/v1/finance/vendors/${id}`, null, {
-    revalidateSeconds: 60,
     telemetryKey: "finance.vendor.detail",
     responseSchema: FinanceVendorDetailSchema,
     mapResponse: (p) => (isRecord(p) ? (p as FinanceVendorDetail) : null),
@@ -2384,11 +2399,77 @@ export async function getFinanceAuditParas(): Promise<LoaderResult<FinanceAuditP
 }
 
 export async function getFinanceAuditParaById(id: string): Promise<LoaderResult<FinanceAuditParaSummary | null>> {
+  // No data-cache: a recorded reply / escalation / settlement must show on the next refresh.
   return fetchJson<unknown, FinanceAuditParaSummary | null>(`/api/v1/finance/audit-paras/${id}`, null, {
-    revalidateSeconds: 60,
     telemetryKey: "finance.audit-para.detail",
     responseSchema: FinanceAuditParaSummarySchema,
     mapResponse: (p) => (isRecord(p) ? (p as FinanceAuditParaSummary) : null),
+  });
+}
+
+/** GAP-FINANCE-AUDIT-PARAS-DETAIL-04: the reply / escalate / settle trail of one audit para. */
+export async function getFinanceAuditParaEvents(id: string): Promise<LoaderResult<AuditParaEvent[]>> {
+  return fetchJson<unknown, AuditParaEvent[]>(`/api/v1/finance/audit-paras/${pathSeg(id)}/events`, [], {
+    telemetryKey: "finance.audit-para.events",
+    mapResponse: (p) => (isRecord(p) && Array.isArray(p.data) ? (p.data as AuditParaEvent[]) : null),
+  });
+}
+
+/** GAP-FINANCE-PAYMENTS-DETAIL-04: beneficiary, linked bill, approver and status history of one payment. */
+export async function getFinancePaymentContext(id: string): Promise<LoaderResult<PaymentContext | null>> {
+  return fetchJson<unknown, PaymentContext | null>(`/api/v1/finance/payments/${pathSeg(id)}/context`, null, {
+    telemetryKey: "finance.payment.context",
+    mapResponse: (p) => {
+      if (!isRecord(p) || !Array.isArray(p.events)) return null;
+      return p as unknown as PaymentContext;
+    },
+  });
+}
+
+/**
+ * Actor id -> display name, for the finance detail pages. Fail-open by design: a lookup failure yields
+ * an empty map and the page shows "User 1a2b3c4d" instead of breaking (a display enrichment only).
+ */
+export async function getFinanceActorNames(ids: readonly (string | null | undefined)[]): Promise<Record<string, string>> {
+  const unique = [...new Set(ids.filter((i): i is string => !!i && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(i)))].slice(0, 50);
+  if (unique.length === 0) return {};
+  const res = await fetchJson<unknown, Record<string, string>>(`/api/v1/finance/actors?ids=${unique.join(",")}`, {}, {
+    revalidateSeconds: 60,
+    telemetryKey: "finance.actors",
+    mapResponse: (p) => {
+      if (!isRecord(p) || !Array.isArray(p.data)) return null;
+      const out: Record<string, string> = {};
+      for (const r of p.data as Array<{ id?: unknown; name?: unknown }>) {
+        if (typeof r.id === "string" && typeof r.name === "string") out[r.id] = r.name;
+      }
+      return out;
+    },
+  });
+  return res.data;
+}
+
+export type GlPageParams = { fy?: string | undefined; type?: string | undefined; q?: string | undefined; page: number; pageSize: number };
+export type GlPageData = { entries: GLEntrySummary[]; pagination: GlLinesPagination; totals: GlLinesTotals | null };
+
+/** GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-03: one server-filtered page of ledger lines with whole-set totals. */
+export async function getFinanceGLPage(p: GlPageParams): Promise<LoaderResult<GlPageData>> {
+  const qs = new URLSearchParams({ limit: String(p.pageSize), offset: String((Math.max(1, p.page) - 1) * p.pageSize) });
+  if (p.fy) qs.set("fy", p.fy);
+  if (p.type) qs.set("type", p.type);
+  if (p.q) qs.set("q", p.q);
+  const empty: GlPageData = { entries: [], pagination: { limit: p.pageSize, offset: 0, total: 0, hasMore: false }, totals: null };
+  return fetchJson<unknown, GlPageData>(`/api/v1/finance/journals/lines?${qs.toString()}`, empty, {
+    telemetryKey: "finance.gl.page",
+    mapResponse: (raw) => {
+      if (!isRecord(raw) || !Array.isArray(raw.data) || !isRecord(raw.pagination)) return null;
+      const parsed = GLEntrySummaryListSchema.safeParse(raw.data);
+      if (!parsed.success) return null;
+      return {
+        entries: parsed.data as GLEntrySummary[],
+        pagination: raw.pagination as unknown as GlLinesPagination,
+        totals: isRecord(raw.totals) ? (raw.totals as unknown as GlLinesTotals) : null,
+      };
+    },
   });
 }
 

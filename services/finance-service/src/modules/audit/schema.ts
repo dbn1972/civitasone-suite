@@ -19,9 +19,26 @@ export const financeAuditParas = auditModuleSchema.table("finance_audit_paras", 
   createdBy:       uuid("created_by").notNull(),
   updatedBy:       uuid("updated_by").notNull(),
   version:         integer("version").notNull().default(1),
+  // Who recorded the department reply (migrations/0085): the settle maker != checker rule pins on it.
+  respondedBy:     uuid("responded_by"),
+});
+
+// Append-only reply / escalate / settle trail (migrations/0085).
+export const financeAuditParaEvents = auditModuleSchema.table("finance_audit_para_events", {
+  id:         uuid("id").primaryKey().defaultRandom(),
+  tenantId:   uuid("tenant_id").notNull(),
+  paraId:     uuid("para_id").notNull(),
+  action:     varchar("action", { length: 16 }).notNull(),
+  fromStatus: varchar("from_status", { length: 24 }).notNull(),
+  toStatus:   varchar("to_status", { length: 24 }).notNull(),
+  note:       text("note").notNull(),
+  actorId:    uuid("actor_id").notNull(),
+  createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export type AuditParaRow    = typeof financeAuditParas.$inferSelect;
 export type AuditParaInsert = typeof financeAuditParas.$inferInsert;
 
-export const schema = { financeAuditParas };
+export type AuditParaEventRow = typeof financeAuditParaEvents.$inferSelect;
+
+export const schema = { financeAuditParas, financeAuditParaEvents };

@@ -1,4 +1,5 @@
 import { cache } from "../../shared/infra.js";
+import { fyDateBounds } from "../dashboard/queries.js";
 import * as repo from "./repo.js";
 import type { JournalLine } from "./schema.js";
 import type { LedgerQueryParams } from "./validators.js";
@@ -133,4 +134,34 @@ export async function listFinancialStatements(tenantId: string) {
     closingBalance: Number(row.totalCredit - row.totalDebit) / 100,
     type: deriveStatementType(row.code, row.classification),
   }));
+}
+
+/**
+ * Server-paged General Ledger lines (GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-03). Same line shape as
+ * listJournalEntries so the web table renders either; adds filters and whole-set totals.
+ */
+export async function pageGeneralLedger(
+  tenantId: string,
+  p: { fy?: string | undefined; type?: string | undefined; q?: string | undefined; limit: number; offset: number },
+) {
+  const bounds = p.fy ? fyDateBounds(p.fy) : null;
+  const { rows, totals } = await repo.pageJournalLines({
+    tenantId, from: bounds?.start, to: bounds?.end, type: p.type, q: p.q, limit: p.limit, offset: p.offset,
+  });
+  return {
+    data: rows.map((r) => ({
+      id: `${r.journal_id}:${r.account_code}`,
+      voucherNo: r.voucher_no,
+      date: r.posting_date,
+      accountCode: r.account_code,
+      accountName: r.account_code,
+      ...(r.narration ? { narration: r.narration } : {}),
+      debit: r.debit,
+      credit: r.credit,
+      referenceNo: r.voucher_no,
+      type: r.type as "payment" | "receipt" | "journal" | "budget",
+    })),
+    pagination: { limit: p.limit, offset: p.offset, total: totals.entryLines, hasMore: p.offset + rows.length < totals.entryLines },
+    totals,
+  };
 }

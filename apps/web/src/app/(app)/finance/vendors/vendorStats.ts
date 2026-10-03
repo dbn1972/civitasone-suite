@@ -10,14 +10,17 @@ export interface VendorStatInput {
 
 export function vendorStats(vendors: readonly VendorStatInput[]) {
   let active = 0;
+  let pending = 0;
   const categories = new Set<string>();
   for (const v of vendors) {
-    if (String(v.status ?? "").trim().toLowerCase() === "active") active += 1;
+    const status = String(v.status ?? "").trim().toLowerCase();
+    if (status === "active") active += 1;
+    if (status === "pending") pending += 1;
     // "Supplier" / "supplier " are one category; a missing category is none.
     const c = String(v.category ?? "").trim().toLowerCase();
     if (c !== "") categories.add(c);
   }
-  return { total: vendors.length, active, categories: categories.size };
+  return { total: vendors.length, active, pending, categories: categories.size };
 }
 
 /** GSTIN cell text: a vendor with no GSTIN is unregistered, which drives TDS / ITC handling. */

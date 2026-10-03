@@ -72,3 +72,14 @@ export const reverseParam = z.object({
   id: z.string().uuid(),
 });
 export type ReverseParam = z.infer<typeof reverseParam>;
+
+/** GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-03: filters + bounded paging for the ledger page. */
+export const ledgerPageQuery = z.object({
+  fy: z.string().regex(/^\d{4}-\d{2}$/, "fy must be a fiscal year such as 2026-27")
+    .refine((v) => Number(v.slice(5)) === (Number(v.slice(0, 4)) + 1) % 100, "fy must be consecutive years such as 2026-27").optional(),
+  type: z.enum(["journal", "payment", "receipt", "contra", "budget"]).optional(),
+  q: z.string().trim().max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  offset: z.coerce.number().int().min(0).max(10_000_000).default(0),
+});
+export type LedgerPageQuery = z.infer<typeof ledgerPageQuery>;

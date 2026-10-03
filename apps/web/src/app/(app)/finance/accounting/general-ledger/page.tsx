@@ -1,20 +1,26 @@
 import { PageHeader, LoadErrorState } from "../../../../_components/ds";
-import { getFinanceGLEntries } from "../../../../_data/loaders";
+import { getFinanceGLPage } from "../../../../_data/loaders";
 import { GLTable } from "./GLTable";
 import { PrintExportButton } from "../../_components/PrintExportButton";
 import { PrintHeader } from "../../_components/PrintHeader";
+import { FyFilter } from "../../_components/FyFilter";
+import { GL_PAGE_SIZE, GL_TAB_TYPE, parseGlView } from "./glPage";
 
 export default async function GeneralLedgerPage({
   searchParams,
 }: {
-  searchParams?: { posted?: string; state?: string };
+  searchParams?: { posted?: string; state?: string; fy?: string; type?: string; q?: string; page?: string };
 }) {
   // GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-02: a just-posted voucher is announced
   // here (the voucher form hands over ?posted=<voucherNo>&state=queued|posted).
   const posted = searchParams?.posted?.trim().slice(0, 64) || null;
   const queued = searchParams?.state === "queued";
-  const result = await getFinanceGLEntries();
-  const { data: entries, source } = result;
+  // GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-03: fiscal year / voucher type / search / page are URL state;
+  // the server returns one bounded page plus totals over the whole filtered set.
+  const view = parseGlView(searchParams);
+  const result = await getFinanceGLPage({
+    fy: view.fy, type: GL_TAB_TYPE[view.tab], q: view.q || undefined, page: view.page, pageSize: GL_PAGE_SIZE,
+  });
 
   return (
     <>
@@ -23,18 +29,15 @@ export default async function GeneralLedgerPage({
         subtitle="Double-entry ledger — every debit has a corresponding credit."
         actions={
           <>
+            <FyFilter />
             <PrintExportButton label="Print / Save as PDF" documentTitle="General Ledger" />
             <a href="/finance/accounting/vouchers/new" className="btn primary">+ New Voucher</a>
           </>
         }
       />
 
-      <PrintHeader title="General Ledger" scope="All loaded vouchers" />
+      <PrintHeader title="General Ledger" scope={`FY ${view.fy}, current page`} />
 
-      {/* UX-012: the data-source badge now lives inside GLTable, driven by
-          the same useSeededResource call that produces its rows — not a
-          second, independent read of `source` here that could disagree
-          with the table's own cache state (UX-002's pattern). */}
       {posted ? (
         <p
           role="status"
@@ -54,11 +57,11 @@ export default async function GeneralLedgerPage({
         </p>
       ) : null}
 
-      {/* A 403 is a permission decision a retry cannot fix. */}
-      {source === "error" && result.status === 403 ? (
+      {/* A failed load is its own state (retry / permission), never an empty or "Balanced" ledger. */}
+      {result.source === "error" ? (
         <LoadErrorState result={result} area="general ledger" backHref="/finance" />
       ) : (
-        <GLTable entries={entries} source={source} />
+        <GLTable entries={result.data.entries} pagination={result.data.pagination} totals={result.data.totals} view={view} />
       )}
     </>
   );

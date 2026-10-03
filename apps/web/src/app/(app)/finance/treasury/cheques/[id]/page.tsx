@@ -1,28 +1,16 @@
 import { PageHeader, StatGrid, StatCard, StatusPill, Card, EmptyState, LoadErrorState } from "@/app/_components/ds";
-import { getFinanceChequeById } from "@/app/_data/loaders";
+import { getFinanceActorNames, getFinanceChequeById } from "@/app/_data/loaders";
+import { RevealableValue } from "@/app/_components/ds/RevealableValue";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
-import type { FinanceInstrumentSummary } from "@civitasone/types";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
-import { canWrite } from "@/lib/finance/writeRoles";
+import { BANK_ACCOUNT_REVEAL_ROLES, canWrite } from "@/lib/finance/writeRoles";
 import { InstrumentActions } from "./InstrumentActions";
 import { InstrumentLifecycleActions } from "./InstrumentLifecycleActions";
 import { availableLifecycleActions } from "./lifecycleUi";
-import { INSTRUMENT_WRITE_ROLES, canCancelInstrument, chequeStatusIcon, chequeStatusLabel, clearedDateLabel } from "./chequeUi";
-
-type TimelineRow = { date: string; event: string };
-
-/** Built from the instrument's real lifecycle timestamps — issued -> presented -> cleared|bounced|cancelled. */
-function timelineOf(c: FinanceInstrumentSummary): TimelineRow[] {
-  const rows: TimelineRow[] = [];
-  if (c.issueDate) rows.push({ date: formatIndianDate(c.issueDate), event: "Instrument issued" });
-  if (c.presentedAt) rows.push({ date: formatIndianDate(c.presentedAt), event: "Presented at bank" });
-  if (c.clearedAt) rows.push({ date: formatIndianDate(c.clearedAt), event: "Cleared by bank" });
-  if (c.bouncedAt) {
-    rows.push({ date: formatIndianDate(c.bouncedAt), event: c.bounceReason ? `Bounced — ${c.bounceReason}` : "Bounced" });
-  }
-  if (c.cancelledAt) rows.push({ date: formatIndianDate(c.cancelledAt), event: "Cancelled" });
-  return rows;
-}
+import {
+  istToday, INSTRUMENT_WRITE_ROLES, buildChequeTimeline, hasTimelineRows, canCancelInstrument, canMarkStale, canRepresentInstrument,
+  chequeStatusIcon, chequeStatusLabel, clearedDateLabel, maskedAccountLabel,
+} from "./chequeUi";
 
 /**
  * Cheque / DD detail. Reads the typed FinanceInstrumentSummary contract
@@ -32,14 +20,15 @@ function timelineOf(c: FinanceInstrumentSummary): TimelineRow[] {
  * any other failed load is an outage the user can retry, and a 403 is a
  * permission decision.
  *
- * GAP-FINANCE-TREASURY-CHEQUES-DETAIL-01: this page used to print
- * `accountNo ?? bankAccountNumber` in clear text to every finance role. The
- * instrument API carries no bank account NUMBER at all (only an opaque
- * bankAccountId), so that row could only ever show "—" today -- and would have
- * leaked the full number to audit/budget roles the day a backend added the
- * field. The row is removed and the page reads typed fields only, so an
- * account number can never be rendered here by accident. A role-gated, audited
- * "reveal" needs a backend endpoint that does not exist yet.
+ * GAP-FINANCE-TREASURY-CHEQUES-DETAIL-01: the drawn-on account shows as
+ * XXXXXXXX1234 (last four from the API) and only roles in
+ * BANK_ACCOUNT_REVEAL_ROLES get a Reveal control, which asks for a reason and calls
+ * finance-service's audited reveal endpoint (actor + reason written to the audit
+ * trail; the number is never in the page payload and re-masks itself after 30s).
+ *
+ * GAP-FINANCE-TREASURY-CHEQUES-DETAIL-03: timeline actors come from the explicit
+ * per-step actor ids on the instrument (names resolved server-side), and the actor
+ * column is hidden when no step has one.
  */
 export default async function ChequeDetailPage({ params }: { params: { id: string } }) {
   const result = await getFinanceChequeById(params.id);
@@ -63,7 +52,16 @@ export default async function ChequeDetailPage({ params }: { params: { id: strin
     );
   }
 
-  const timeline = timelineOf(cheque);
+  const roles = getSessionRoles();
+  const names = await getFinanceActorNames([
+    cheque.issuedBy, cheque.presentedBy, cheque.clearedBy, cheque.bouncedBy, cheque.cancelledBy, cheque.lastRepresentedBy, cheque.staledBy,
+  ]);
+  const timeline = buildChequeTimeline(cheque, names);
+  const writer = canWrite(roles, INSTRUMENT_WRITE_ROLES);
+  const today = istToday();
+  const canCancel = writer && canCancelInstrument(cheque.status);
+  const canRepresent = writer && canRepresentInstrument(cheque.status);
+  const canStale = writer && canMarkStale(cheque.status, cheque.validUntil, today);
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -72,12 +70,14 @@ export default async function ChequeDetailPage({ params }: { params: { id: strin
         subtitle={cheque.payee || undefined}
         back="/finance/treasury/cheques"
         actions={
-          canWrite(getSessionRoles(), INSTRUMENT_WRITE_ROLES) ? (
+          writer ? (
             <>
               {availableLifecycleActions(cheque.status).length > 0 ? (
                 <InstrumentLifecycleActions id={cheque.id} instrumentNo={cheque.instrumentNo} status={cheque.status} />
               ) : null}
-              {canCancelInstrument(cheque.status) ? <InstrumentActions id={cheque.id} instrumentNo={cheque.instrumentNo} /> : null}
+              {canCancel || canRepresent || canStale ? (
+                <InstrumentActions id={cheque.id} instrumentNo={cheque.instrumentNo} canCancel={canCancel} canRepresent={canRepresent} canStale={canStale} />
+              ) : null}
             </>
           ) : null
         }
@@ -96,23 +96,41 @@ export default async function ChequeDetailPage({ params }: { params: { id: strin
           <div className="field"><span className="label">Payee</span><span>{cheque.payee}</span></div>
           <div className="field"><span className="label">Amount</span><span>{formatMoney(cheque.amountMinor)}</span></div>
           <div className="field"><span className="label">Bank</span><span>{cheque.bankName}</span></div>
+          <div className="field">
+            <span className="label">Account No</span>
+            <RevealableValue
+              maskedText={maskedAccountLabel(cheque.accountNoLast4)}
+              revealPath={`v1/finance/instruments/${cheque.id}/reveal-account`}
+              pick={(json) => (json as { accountNo?: string })?.accountNo}
+              canReveal={!!cheque.bankAccountId && canWrite(roles, BANK_ACCOUNT_REVEAL_ROLES)}
+              label="account number"
+              fallback="—"
+            />
+          </div>
           <div className="field"><span className="label">Status</span><StatusPill status={cheque.status} /></div>
           <div className="field"><span className="label">Cleared Date</span><span>{clearedDateLabel(cheque.clearedAt, cheque.status)}</span></div>
           {cheque.bounceReason ? (
             <div className="field"><span className="label">Bounce Reason</span><span>{cheque.bounceReason}</span></div>
           ) : null}
+          {cheque.cancelReason ? (
+            <div className="field"><span className="label">Cancel Reason</span><span>{cheque.cancelReason}</span></div>
+          ) : null}
+          {cheque.validUntil ? (
+            <div className="field"><span className="label">Valid Until</span><span>{formatIndianDate(cheque.validUntil)}</span></div>
+          ) : null}
         </div>
       </Card>
 
       <Card title="Clearance Timeline" padding>
-        {timeline.length === 0 ? (
+        {!hasTimelineRows(timeline) ? (
           <EmptyState icon="🕒" title="No timeline recorded" message="No lifecycle events have been recorded for this instrument." />
         ) : (
           <ol style={{ listStyle: "none", padding: 0, margin: 0 }} aria-label="Cheque clearance timeline">
-            {timeline.map((item, i) => (
-              <li key={i} style={{ display: "flex", gap: 12, padding: "8px 0", borderBottom: i < timeline.length - 1 ? "1px solid var(--border)" : "none" }}>
+            {timeline.rows.map((item, i) => (
+              <li key={i} style={{ display: "flex", gap: 12, padding: "8px 0", borderBottom: i < timeline.rows.length - 1 ? "1px solid var(--border)" : "none" }}>
                 <span style={{ minWidth: 100, fontSize: 13, color: "var(--muted)" }}>{item.date}</span>
                 <span style={{ flex: 1 }}>{item.event}</span>
+                {timeline.showActor ? <span style={{ minWidth: 140, fontSize: 13, color: "var(--muted)" }}>{item.actor ?? "—"}</span> : null}
               </li>
             ))}
           </ol>
