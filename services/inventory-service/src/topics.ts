@@ -17,6 +17,9 @@ export const COMMANDS = {
   substituteCreate: "inventory.substitute.create",
   // Bins/rack (SVC-052)
   binCreate:        "inventory.bin.create",
+  binSetStatus:     "inventory.bin.set_status",
+  // Per-tenant inventory policy (QC maker-checker)
+  settingsUpdate:   "inventory.settings.update",
   // Reservations/allocations (SVC-054)
   reservationCreate:  "inventory.reservation.create",
   reservationRelease: "inventory.reservation.release",
@@ -85,6 +88,10 @@ export const EVENTS = {
   substituteCreated: "inventory.substitute.created",
   /** Emitted when a bin location is created in a store. */
   binCreated:        "inventory.bin.created",
+  /** Emitted when a bin location is activated or deactivated. */
+  binStatusChanged:  "inventory.bin.status_changed",
+  /** Emitted when a tenant inventory policy setting changes. */
+  settingsUpdated:   "inventory.settings.updated",
   /** Emitted when stock is reserved against an indent/PO. */
   reservationCreated: "inventory.reservation.created",
   /** Emitted when a reservation is released (issued or cancelled). */

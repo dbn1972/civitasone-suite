@@ -7,8 +7,8 @@
  * so the module stays self-contained.
  */
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { SUBSTITUTES_ITEM_CAP } from "./substitutesCoverage";
-import { getItemNames, getStoreNames, getWarehouseNames } from "./_lookups";
+import { SUBSTITUTES_PAGE_LIMIT } from "./substitutesCoverage";
+import { getItemNames, getStoreNames, getSupplierNames, getWarehouseNames } from "./_lookups";
 
 import { INVENTORY_LEDGER_LIMIT, INVENTORY_LIST_LIMIT } from "./_limits";
 export { INVENTORY_LEDGER_LIMIT, INVENTORY_LIST_LIMIT };
@@ -42,6 +42,14 @@ export type InventoryLedgerRow = {
   valueMinor: string;
   reasonCode: string | null;
   postingDate: string;
+  /** Document reference copied from the movement header (GAP-INVENTORY-RECEIPTS-03). */
+  refDoc?: string | null;
+  refNo?: string | null;
+  grnNo?: string | null;
+  poRef?: string | null;
+  supplierId?: string | null;
+  /** Resolved from the procurement vendor list; null when it could not be named. */
+  supplierName?: string | null;
 } & WithItemName & { storeName?: string | null };
 
 export type InventoryLowStockRow = {
@@ -188,13 +196,135 @@ export async function getInventoryLedger(
     },
   );
   return withNames(res, async (rows) => {
-    const [items, stores] = await Promise.all([getItemNames(rows.map((r) => r.itemId)), getStoreNames()]);
+    // Supplier names only matter when a row carries a supplier id (receipts posted from a GRN).
+    const needSuppliers = rows.some((r) => r.supplierId);
+    const [items, stores, suppliers] = await Promise.all([
+      getItemNames(rows.map((r) => r.itemId)),
+      getStoreNames(),
+      needSuppliers ? getSupplierNames() : Promise.resolve(new Map<string, string>()),
+    ]);
     return rows.map((r) => ({
       ...r,
       itemName: items.get(r.itemId)?.name ?? null,
       itemSku: items.get(r.itemId)?.sku ?? null,
       storeName: stores.get(r.storeId) ?? null,
+      supplierName: r.supplierId ? suppliers.get(r.supplierId) ?? null : null,
     }));
+  });
+}
+
+export type InventoryMovementLine = {
+  id: string;
+  itemId: string;
+  qty: number;
+  rateMinor: string;
+  amountMinor: string;
+  itemName?: string | null;
+  itemSku?: string | null;
+};
+
+export type InventoryMovementDetail = {
+  id: string;
+  movementType: string;
+  postingDate: string;
+  refDoc: string | null;
+  refNo: string | null;
+  grnNo: string | null;
+  poRef: string | null;
+  reasonCode: string | null;
+  notes: string | null;
+  status: string;
+  fromStoreId: string | null;
+  toStoreId: string | null;
+  createdBy: string | null;
+  createdByName: string | null;
+  createdAt: string;
+  lines: InventoryMovementLine[];
+  fromStoreName?: string | null;
+  toStoreName?: string | null;
+};
+
+const text = (v: unknown): string | null => (typeof v === "string" && v.trim() !== "" ? v : null);
+
+export function mapMovementDetail(payload: unknown): InventoryMovementDetail | null {
+  const d = isRecord(payload) && isRecord(payload.data) ? payload.data : null;
+  const id = d ? text(d.id) : null;
+  if (!d || !id) return null;
+  const lines = Array.isArray(d.lines) ? d.lines.filter(isRecord) : [];
+  return {
+    id,
+    movementType: text(d.movementType) ?? "—",
+    postingDate: text(d.postingDate) ?? "—",
+    refDoc: text(d.refDoc),
+    refNo: text(d.refNo),
+    grnNo: text(d.grnNo),
+    poRef: text(d.poRef),
+    reasonCode: text(d.reasonCode),
+    notes: text(d.notes),
+    status: text(d.status) ?? "posted",
+    fromStoreId: text(d.fromStoreId),
+    toStoreId: text(d.toStoreId),
+    createdBy: text(d.createdBy),
+    createdByName: text(d.createdByName),
+    createdAt: text(d.createdAt) ?? "—",
+    lines: lines.flatMap((l) => {
+      const itemId = text(l.itemId);
+      const lid = text(l.id);
+      if (!itemId || !lid) return [];
+      return [{
+        id: lid,
+        itemId,
+        qty: typeof l.qty === "number" ? l.qty : Number(l.qty ?? 0),
+        rateMinor: text(l.rateMinor) ?? "0",
+        amountMinor: text(l.amountMinor) ?? "0",
+      }];
+    }),
+  };
+}
+
+/**
+ * One stock movement (receipt / issue / transfer / adjustment) with its lines, via
+ * GET /inventory/movements/:id. Target of the "View stock adjustment" link on an
+ * approved cycle count (GAP-INVENTORY-CYCLE-COUNTS-DETAIL-05).
+ */
+export async function getInventoryMovementById(id: string): Promise<LoaderResult<InventoryMovementDetail | null>> {
+  const res = await fetchJson<unknown, InventoryMovementDetail | null>(
+    `/api/v1/inventory/movements/${encodeURIComponent(id)}`,
+    null,
+    { revalidateSeconds: 15, telemetryKey: "inventory.movement.detail", mapResponse: mapMovementDetail },
+  );
+  if (res.source === "error" || !res.data) return res;
+  try {
+    const m = res.data;
+    const [items, stores] = await Promise.all([getItemNames(m.lines.map((l) => l.itemId)), getStoreNames()]);
+    return {
+      ...res,
+      data: {
+        ...m,
+        fromStoreName: m.fromStoreId ? stores.get(m.fromStoreId) ?? null : null,
+        toStoreName: m.toStoreId ? stores.get(m.toStoreId) ?? null : null,
+        lines: m.lines.map((l) => ({ ...l, itemName: items.get(l.itemId)?.name ?? null, itemSku: items.get(l.itemId)?.sku ?? null })),
+      },
+    };
+  } catch {
+    return res;
+  }
+}
+
+export type InventorySettings = { qcMakerChecker: boolean };
+
+/**
+ * Per-tenant inventory policy (GAP-INVENTORY-GOODS-RETURNS-DETAIL-04). The
+ * default when the service cannot be read is the conservative one: maker-checker ON.
+ */
+export function getInventorySettings(): Promise<LoaderResult<InventorySettings>> {
+  return fetchJson<unknown, InventorySettings>("/api/v1/inventory/settings", { qcMakerChecker: true }, {
+    revalidateSeconds: 15,
+    telemetryKey: "inventory.settings",
+    mapResponse: (payload) => {
+      const d = isRecord(payload) && isRecord(payload.data) ? payload.data : null;
+      return d && typeof d.qcMakerChecker === "boolean" ? { qcMakerChecker: d.qcMakerChecker } : null;
+    },
   });
 }
 
@@ -368,7 +498,7 @@ export function getInventoryItemForecast(itemId: string): Promise<LoaderResult<I
 }
 
 export type InventorySubstitutesResult = LoaderResult<InventorySubstituteRow[]> & {
-  /** True when the item master has more items than SUBSTITUTES_ITEM_CAP. */
+  /** True when the substitutes page is full (SUBSTITUTES_PAGE_LIMIT), so more links may exist. */
   truncated: boolean;
   /** Number of per-item requests that failed (rows for those items are missing). */
   failedCount: number;
@@ -381,48 +511,38 @@ export type InventorySubstitutesResult = LoaderResult<InventorySubstituteRow[]> 
  * the current item master so the hub screen has a tenant-wide view.
  */
 export async function getInventorySubstitutes(): Promise<InventorySubstitutesResult> {
-  const { data: items, source: itemsSource } = await getInventoryItems();
-  if (itemsSource === "error") {
+  // GAP-INVENTORY-SUBSTITUTES-04: one tenant-wide, ordered, paged read instead of
+  // one request per item (GET /substitutes, limit capped at SUBSTITUTES_PAGE_LIMIT).
+  const [subs, itemsRes] = await Promise.all([
+    fetchJson<Envelope<InventorySubstituteRow>, InventorySubstituteRow[]>(
+      `/api/v1/inventory/substitutes?limit=${SUBSTITUTES_PAGE_LIMIT}`,
+      [],
+      { revalidateSeconds: 60, telemetryKey: "inventory.substitutes", mapResponse: listOf },
+    ),
+    getInventoryItems(),
+  ]);
+  if (subs.source === "error") {
     return { data: [], source: "error", truncated: false, failedCount: 0, itemCount: 0 };
   }
-  if (items.length === 0) {
-    return { data: [], source: "api", truncated: false, failedCount: 0, itemCount: 0 };
-  }
-
-  const results = await Promise.all(
-    items.slice(0, SUBSTITUTES_ITEM_CAP).map((item) =>
-      fetchJson<Envelope<InventorySubstituteRow>, InventorySubstituteRow[]>(
-        `/api/v1/inventory/items/${item.id}/substitutes`,
-        [],
-        {
-          revalidateSeconds: 60,
-          telemetryKey: "inventory.substitutes",
-          mapResponse: listOf,
-        },
-      ),
-    ),
-  );
 
   // GAP-INVENTORY-SUBSTITUTES-03: name both ends from the item master already
   // in hand. A substitute outside the fetched page keeps a null name (the UI
   // falls back to a short id).
+  const items = itemsRes.source === "error" ? [] : itemsRes.data;
   const byId = new Map(items.map((i) => [i.id, i] as const));
-  const rows = results.flatMap((r) => r.data).map((r) => ({
+  const rows = subs.data.map((r) => ({
     ...r,
     itemName: byId.get(r.itemId)?.name ?? null,
     itemSku: byId.get(r.itemId)?.sku ?? null,
     substituteName: byId.get(r.substituteId)?.name ?? null,
     substituteSku: byId.get(r.substituteId)?.sku ?? null,
   }));
-  const failedCount = results.filter((r) => r.source === "error").length;
-  // GAP-INVENTORY-SUBSTITUTES-02: "error" only when EVERY request failed; a
-  // partial failure or the item cap is reported via failedCount/truncated so
-  // the page can warn instead of showing an incomplete list as complete.
   return {
     data: rows,
-    source: failedCount === results.length ? "error" : "api",
-    truncated: items.length > SUBSTITUTES_ITEM_CAP,
-    failedCount,
+    source: "api",
+    // A full page means more pairs may exist than were fetched (the page warns instead of showing it as complete).
+    truncated: subs.data.length >= SUBSTITUTES_PAGE_LIMIT,
+    failedCount: 0,
     itemCount: items.length,
   };
 }

@@ -9,6 +9,7 @@
  * This ensures real-time re-scoring on every ticket status or assignment update.
  */
 
+import { SYSTEM_ACTOR_ID } from "@civitasone/outbox";
 import type { Queue } from "@civitasone/queue";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { pino } from "pino";
@@ -124,7 +125,7 @@ async function rescoreTicket(
       await queueInstance.publish(CONSUMES.mlBreachRiskHigh, {
         type: CONSUMES.mlBreachRiskHigh,
         tenantId,
-        actorId: "system",
+        actorId: SYSTEM_ACTOR_ID,
         correlationId,
         schemaVersion: "1.0",
         payload: {

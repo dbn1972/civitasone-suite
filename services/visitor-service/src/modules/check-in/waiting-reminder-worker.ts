@@ -24,6 +24,7 @@
  *
  * Follows the `startVisitRequestAutoReject` pattern.
  */
+import { SYSTEM_ACTOR_ID } from "@civitasone/outbox";
 import { randomUUID } from "node:crypto";
 import { and, eq, lt, gt } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
@@ -192,7 +193,7 @@ export async function processWaitingReminderCycle(
       await queue.publish(NOTIFICATION_SEND, {
         type: NOTIFICATION_SEND,
         tenantId: ci.tenantId,
-        actorId: "system",
+        actorId: SYSTEM_ACTOR_ID,
         correlationId: randomUUID(),
         schemaVersion: "1.0",
         payload: buildNotificationPayload({

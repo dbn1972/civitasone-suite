@@ -27,6 +27,9 @@ describe("AuditLogTable", () => {
     render(<AuditLogTable entries={entries} />);
     expect(screen.getByText("System")).toBeInTheDocument();
     expect(formatActor("")).toBe("System");
+    // platform-published events carry the uuid system actor, never shown raw
+    expect(formatActor("00000000-0000-0000-0000-0000000000c9")).toBe("System");
+    expect(formatActor("00000000-0000-0000-0000-0000000000C9")).toBe("System");
     expect(formatActor("asha@gov.in")).toBe("asha@gov.in");
   });
 

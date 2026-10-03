@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
-import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed, stableUuid } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as historyRepo from "../history/repo.js";
@@ -191,7 +191,7 @@ export function registerMessagesConsumers(q: Queue): void {
     for (const sub of subscriptions) {
       await db.transaction(async (tx) => {
         // Use a unique messageId per subscription to avoid dedup collisions
-        const dedupId = `${msg.messageId}:${sub.id}`;
+        const dedupId = stableUuid(`${msg.messageId}:${sub.id}`); // uuid column: fold the composite key
         if (!(await markProcessed(tx, dedupId))) return;
 
         // Mark signal as matched

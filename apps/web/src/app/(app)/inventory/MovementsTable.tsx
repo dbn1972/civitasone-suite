@@ -7,7 +7,7 @@ import { useSeededResource } from "@/lib/sync/resource";
 import { RegisterFrame, statValue } from "./RegisterFrame";
 import type { InventoryLedgerRow } from "./_data";
 import { INVENTORY_LEDGER_LIMIT, capNote } from "./_limits";
-import { itemLabel, nameOrDash } from "./_labels";
+import { itemLabel, nameOrDash, receiptDocLabels } from "./_labels";
 
 type Col = {
   key: keyof InventoryLedgerRow & string;
@@ -48,6 +48,30 @@ export function MovementsTable({
       ? { key: "qtyIn", label: "Qty In", align: "right" }
       : { key: "qtyOut", label: "Qty Out", align: "right" };
 
+  // GAP-INVENTORY-RECEIPTS-03: a receipt row shows the GRN / PO it came from and the supplier
+  // ("—" when it was a manual receipt or predates the reference columns).
+  const referenceCols: Col[] =
+    kind === "receipt"
+      ? [
+          {
+            key: "grnNo",
+            label: "GRN / PO",
+            render: (r) => {
+              const { grn, po } = receiptDocLabels(r);
+              if (!grn && !po) return "—";
+              return (
+                <span>
+                  {grn ? <span>GRN {grn}</span> : null}
+                  {grn && po ? <br /> : null}
+                  {po ? <span>PO {po}</span> : null}
+                </span>
+              );
+            },
+          },
+          { key: "supplierId", label: "Supplier", render: (r) => <span title={r.supplierId ?? undefined}>{nameOrDash(r.supplierName)}</span> },
+        ]
+      : [];
+
   const columns: Col[] = [
     { key: "postingDate", label: "Date", render: (r) => formatIndianDate(r.postingDate) },
     // GAP-INVENTORY-ISSUES-03: item by SKU/name (short id only as a fallback),
@@ -55,6 +79,7 @@ export function MovementsTable({
     // one movement type, so it repeated the same word on every row.
     { key: "itemId", label: "Item", render: (r) => <span title={r.itemId}>{itemLabel(r)}</span> },
     { key: "storeId", label: "Store", render: (r) => <span title={r.storeId}>{nameOrDash(r.storeName)}</span> },
+    ...referenceCols,
     qtyCol,
     { key: "balanceQty", label: "Balance", align: "right" },
     { key: "rateMinor", label: "Rate", align: "right", render: (r) => formatMoney(r.rateMinor) },

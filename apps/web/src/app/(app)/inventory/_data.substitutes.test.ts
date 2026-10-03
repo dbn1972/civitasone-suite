@@ -5,62 +5,70 @@ vi.mock("@/app/_data/apiClient", () => ({ fetchJson: fetchJsonMock }));
 
 const { getInventorySubstitutes } = await import("./_data");
 
-const items = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `item-${i}`, name: `Item ${i}` }));
+type Sub = { id: string; itemId: string; substituteId: string };
 
-// First call is the item master; the rest are per-item substitute fetches.
-function wire(itemCount: number, failItem: (i: number) => boolean = () => false) {
+// Substitutes come from ONE tenant-wide read; the item master is read only to name both ends.
+function wire(opts: { subs?: Sub[]; subsFail?: boolean; items?: Array<{ id: string; name: string; sku?: string | null }> }) {
   fetchJsonMock.mockImplementation(async (...args: unknown[]) => {
     const path = String(args[0]);
-    if (path === "/api/v1/inventory/items" || path.startsWith("/api/v1/inventory/items?")) {
-      return { data: items(itemCount), source: "api" };
+    if (path.startsWith("/api/v1/inventory/substitutes")) {
+      return opts.subsFail ? { data: [], source: "error", status: 500 } : { data: opts.subs ?? [], source: "api" };
     }
-    const idx = Number(/items\/item-(\d+)\/substitutes/.exec(path)?.[1]);
-    return failItem(idx) ? { data: [], source: "error", status: 500 } : { data: [{ id: `s-${idx}`, itemId: `item-${idx}` }], source: "api" };
+    if (path.startsWith("/api/v1/inventory/items")) {
+      return { data: opts.items ?? [], source: "api" };
+    }
+    return { data: [], source: "api" };
   });
 }
 
 beforeEach(() => fetchJsonMock.mockReset());
 
-describe("GAP-INVENTORY-SUBSTITUTES-02: getInventorySubstitutes coverage", () => {
-  it("60 items: only 50 per-item fetches, truncated true", async () => {
-    wire(60);
+describe("GAP-INVENTORY-SUBSTITUTES-04: bulk substitutes read (no per-item fan-out)", () => {
+  it("makes exactly one substitutes request, however many items exist", async () => {
+    wire({ subs: [{ id: "s1", itemId: "a", substituteId: "b" }], items: Array.from({ length: 120 }, (_, i) => ({ id: `item-${i}`, name: `Item ${i}` })) });
     const res = await getInventorySubstitutes();
-    const perItem = fetchJsonMock.mock.calls.filter(([p]) => String(p).includes("/substitutes"));
-    expect(perItem).toHaveLength(50);
-    expect(res).toMatchObject({ truncated: true, failedCount: 0, itemCount: 60, source: "api" });
+    const subsCalls = fetchJsonMock.mock.calls.filter(([p]) => String(p).includes("/substitutes"));
+    expect(subsCalls).toHaveLength(1);
+    expect(String(subsCalls[0]![0])).toBe("/api/v1/inventory/substitutes?limit=200");
+    expect(res).toMatchObject({ source: "api", truncated: false, failedCount: 0, itemCount: 120 });
+    expect(res.data).toHaveLength(1);
   });
 
-  it("1 of 3 fetches failing: still source api with the other rows, failedCount 1", async () => {
-    wire(3, (i) => i === 1);
+  it("a full page is reported as truncated", async () => {
+    wire({ subs: Array.from({ length: 200 }, (_, i) => ({ id: `s${i}`, itemId: "a", substituteId: `b${i}` })) });
     const res = await getInventorySubstitutes();
-    expect(res.source).toBe("api");
-    expect(res.failedCount).toBe(1);
-    expect(res.data).toHaveLength(2);
-    expect(res.truncated).toBe(false);
+    expect(res.truncated).toBe(true);
+    expect(res.data).toHaveLength(200);
   });
 
-  it("every fetch failing is an error", async () => {
-    wire(2, () => true);
+  it("a failed substitutes read is an error, not an empty register", async () => {
+    wire({ subsFail: true });
     const res = await getInventorySubstitutes();
     expect(res.source).toBe("error");
-    expect(res.failedCount).toBe(2);
+    expect(res.data).toEqual([]);
   });
 });
 
 describe("GAP-INVENTORY-SUBSTITUTES-03: names from the item master", () => {
   it("names both the item and the substitute; a substitute outside the item page stays null", async () => {
-    fetchJsonMock.mockImplementation(async (...args: unknown[]) => {
-      const path = String(args[0]);
-      if (path.startsWith("/api/v1/inventory/items?")) {
-        return { data: [{ id: "a", name: "Gel pen", sku: "PEN-01" }, { id: "b", name: "Ball pen", sku: null }], source: "api" };
-      }
-      return path.includes("/items/a/")
-        ? { data: [{ id: "s1", itemId: "a", substituteId: "b" }, { id: "s2", itemId: "a", substituteId: "zzz" }], source: "api" }
-        : { data: [], source: "api" };
+    wire({
+      subs: [{ id: "s1", itemId: "a", substituteId: "b" }, { id: "s2", itemId: "a", substituteId: "zzz" }],
+      items: [{ id: "a", name: "Gel pen", sku: "PEN-01" }, { id: "b", name: "Ball pen", sku: null }],
     });
     const res = await getInventorySubstitutes();
     expect(res.data[0]).toMatchObject({ itemName: "Gel pen", itemSku: "PEN-01", substituteName: "Ball pen", substituteSku: null });
     expect(res.data[1]).toMatchObject({ substituteName: null });
   });
-});
 
+  it("still lists the links when the item master cannot be read (names fall back)", async () => {
+    fetchJsonMock.mockImplementation(async (...args: unknown[]) => {
+      const path = String(args[0]);
+      return path.startsWith("/api/v1/inventory/substitutes")
+        ? { data: [{ id: "s1", itemId: "a", substituteId: "b" }], source: "api" }
+        : { data: [], source: "error", status: 500 };
+    });
+    const res = await getInventorySubstitutes();
+    expect(res.source).toBe("api");
+    expect(res.data[0]).toMatchObject({ itemName: null, substituteName: null });
+  });
+});

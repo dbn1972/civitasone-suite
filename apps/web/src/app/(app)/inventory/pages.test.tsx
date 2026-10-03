@@ -16,6 +16,7 @@ const inv = vi.hoisted(() => ({
   getInventoryLedger: vi.fn(),
   getInventoryLowStock: vi.fn(),
   getInventoryItemForecast: vi.fn(),
+  getInventorySettings: vi.fn(),
 }));
 vi.mock("./_data", () => inv);
 
@@ -40,7 +41,7 @@ vi.mock("@/lib/auth/roleGuard", async (importOriginal) => ({
 vi.mock("./cycle-counts/[id]/CycleCountActions", () => ({
   CycleCountActions: () => <button type="button">Approve</button>,
 }));
-vi.mock("./goods-returns/[id]/QcInspectionForm", () => ({ QcInspectionForm: () => null }));
+vi.mock("./goods-returns/[id]/QcInspectionForm", () => ({ QcInspectionForm: () => <div>QC FORM</div> }));
 vi.mock("../stock/_components/PrintExportButton", () => ({ PrintExportButton: () => null }));
 vi.mock("./list/InventoryStockListClient", () => ({
   InventoryStockListClient: () => <div>STOCK REGISTER</div>,
@@ -74,6 +75,7 @@ beforeEach(() => {
   auth.getSessionUserId.mockReturnValue("approver-1");
   inv.getInventoryCycleCounts.mockResolvedValue({ data: [], source: "api" });
   inv.getInventoryGoodsReturns.mockResolvedValue({ data: [], source: "api" });
+  inv.getInventorySettings.mockResolvedValue({ data: { qcMakerChecker: true }, source: "api" });
   lookups.getItemNames.mockResolvedValue(new Map());
   lookups.getStoreNames.mockResolvedValue(new Map());
   lookups.getWarehouseNames.mockResolvedValue(new Map());
@@ -345,13 +347,29 @@ describe("GAP-INVENTORY-CYCLE-COUNTS-DETAIL-03 / -05", () => {
     expect(screen.getAllByText("T-1 · Toner").length).toBeGreaterThan(0);
     expect(screen.getByText("Main Store")).toBeInTheDocument();
     expect(screen.queryByText("i-1")).not.toBeInTheDocument();
-    expect(screen.getByText("adj-0001")).toBeInTheDocument();
+    // GAP-INVENTORY-CYCLE-COUNTS-DETAIL-05: a real link to the movement detail, never the raw id as text
+    const link = screen.getByRole("link", { name: "View stock adjustment" });
+    expect(link).toHaveAttribute("href", "/inventory/movements/adj-0001");
+    expect(screen.queryByText("adj-0001")).not.toBeInTheDocument();
+  });
+
+  it("names the approver when the service resolved the name, else 'User <id prefix>'", async () => {
+    loaders.getCycleCountById.mockResolvedValue({ source: "api", data: { ...base, approvedByName: "Vikram Sethi" } });
+    render(await CycleCountDetailPage(params));
+    expect(screen.getByText("Vikram Sethi")).toBeInTheDocument();
+    expect(screen.queryByText(/User u-123456/)).not.toBeInTheDocument();
+  });
+
+  it("falls back to 'User <id prefix>' when no name was resolved", async () => {
+    loaders.getCycleCountById.mockResolvedValue({ source: "api", data: base });
+    render(await CycleCountDetailPage(params));
+    expect(screen.getByText("User u-123456")).toBeInTheDocument();
   });
 
   it("an unresolvable warehouse reads '—' and a rejected count shows no adjustment reference", async () => {
     loaders.getCycleCountById.mockResolvedValue({ source: "api", data: { ...base, status: "rejected", rejectedBy: "u-2" } });
     render(await CycleCountDetailPage(params));
-    expect(screen.queryByText(/stock adjustment reference/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "View stock adjustment" })).not.toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
 });
@@ -374,6 +392,48 @@ describe("GAP-INVENTORY-GOODS-RETURNS-DETAIL-05: names and disposition wording",
     expect(screen.getByText("Quarantine")).toBeInTheDocument();
     expect(screen.queryByText(/penalty/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/GRN reference/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("GAP-INVENTORY-GOODS-RETURNS-DETAIL-04 / -05: maker != checker and inspector names", () => {
+  const pending = {
+    id: "gr-1", originalIssueId: "iss-1", itemId: "i-1", storeId: "s-1", qty: 3, reason: "damaged",
+    qcStatus: "pending", qcInspectedBy: null, qcInspectedAt: null, qcNotes: null,
+    disposition: "pending", createdAt: "2026-08-01", createdBy: "maker-1", createdByName: "Asha Rao",
+  };
+
+  it("the person who recorded the return does not get the QC form, and is told why", async () => {
+    auth.getSessionUserId.mockReturnValue("maker-1");
+    loaders.getGoodsReturnById.mockResolvedValue({ source: "api", data: pending });
+    render(await GoodsReturnDetailPage(params));
+    expect(screen.queryByText("QC FORM")).not.toBeInTheDocument();
+    expect(screen.getByText(/a different person must record its QC verdict/i)).toBeInTheDocument();
+  });
+
+  it("a different user gets the QC form", async () => {
+    auth.getSessionUserId.mockReturnValue("checker-1");
+    loaders.getGoodsReturnById.mockResolvedValue({ source: "api", data: pending });
+    render(await GoodsReturnDetailPage(params));
+    expect(screen.getByText("QC FORM")).toBeInTheDocument();
+    expect(screen.getByText("Asha Rao")).toBeInTheDocument();
+  });
+
+  it("when the tenant turned maker-checker off the creator gets the form", async () => {
+    auth.getSessionUserId.mockReturnValue("maker-1");
+    inv.getInventorySettings.mockResolvedValue({ data: { qcMakerChecker: false }, source: "api" });
+    loaders.getGoodsReturnById.mockResolvedValue({ source: "api", data: pending });
+    render(await GoodsReturnDetailPage(params));
+    expect(screen.getByText("QC FORM")).toBeInTheDocument();
+  });
+
+  it("shows the inspector by name once decided", async () => {
+    loaders.getGoodsReturnById.mockResolvedValue({
+      source: "api",
+      data: { ...pending, qcStatus: "passed", disposition: "restock", qcInspectedBy: "checker-1", qcInspectedByName: "Vikram Sethi", qcInspectedAt: "2026-08-02" },
+    });
+    render(await GoodsReturnDetailPage(params));
+    expect(screen.getByText("Vikram Sethi")).toBeInTheDocument();
+    expect(screen.queryByText(/User checker-1/)).not.toBeInTheDocument();
   });
 });
 

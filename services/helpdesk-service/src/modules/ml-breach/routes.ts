@@ -10,6 +10,7 @@
  * is available.
  */
 
+import { SYSTEM_ACTOR_ID } from "@civitasone/outbox";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { eq, and, notInArray, sql } from "drizzle-orm";
@@ -199,7 +200,7 @@ async function emitBreachRiskHighEvent(
     await queue.publish(CONSUMES.mlBreachRiskHigh, {
       type: CONSUMES.mlBreachRiskHigh,
       tenantId,
-      actorId: "system",
+      actorId: SYSTEM_ACTOR_ID,
       correlationId,
       schemaVersion: "1.0",
       payload: {

@@ -21,6 +21,7 @@
  *
  * Requirements validated: 3.2, 3.3, 3.4, 3.5, 3.6, 3.8
  */
+import { SYSTEM_ACTOR_ID } from "@civitasone/outbox";
 import { pino } from "pino";
 import { and, eq } from "drizzle-orm";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
@@ -172,7 +173,7 @@ async function transitionToOffline(
         topic: EVENTS.deviceHealthOffline,
         eventType: EVENTS.deviceHealthOffline,
         tenantId,
-        actorId: "system",
+        actorId: SYSTEM_ACTOR_ID,
         correlationId: device.id,
         payload: {
           deviceId: device.id,
@@ -219,7 +220,7 @@ async function transitionToOnline(
         topic: EVENTS.deviceHealthOnline,
         eventType: EVENTS.deviceHealthOnline,
         tenantId,
-        actorId: "system",
+        actorId: SYSTEM_ACTOR_ID,
         correlationId: device.id,
         payload: {
           deviceId: device.id,
@@ -272,7 +273,7 @@ async function checkOfflineAlert(
     await queue.publish(NOTIFICATION_SEND, {
       type: NOTIFICATION_SEND,
       tenantId,
-      actorId: "system",
+      actorId: SYSTEM_ACTOR_ID,
       correlationId: device.id,
       schemaVersion: "1.0",
       payload: buildNotificationPayload({

@@ -52,3 +52,33 @@ export async function fetchGrn(tenantId: string, grnId: string): Promise<RemoteG
   const body = await res.json() as { id: string; status: string };
   return { id: body.id, status: body.status };
 }
+
+export interface GrnReference {
+  grnNo: string | undefined;
+  poRef: string | undefined;
+  supplierId: string | undefined;
+}
+
+/**
+ * Display references (GRN number, PO reference, supplier id) of a GRN, for the
+ * receipts register (GAP-INVENTORY-RECEIPTS-03). Unlike fetchGrn this is
+ * best-effort enrichment: any failure (unreachable, 404, bad body) yields null
+ * and the receipt is still posted without the references.
+ */
+export async function fetchGrnReference(tenantId: string, grnId: string): Promise<GrnReference | null> {
+  const serviceSecret = process.env.INTERNAL_SERVICE_SECRET ?? "";
+  try {
+    const res = await fetch(`${PROCUREMENT_URL}/v1/procurement/grns/${encodeURIComponent(grnId)}`, {
+      headers: { "x-internal": "1", "x-service-secret": serviceSecret, "x-tenant-id": tenantId },
+      signal: AbortSignal.timeout(GRN_FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+    const body = await res.json() as { grnNo?: unknown; poRef?: unknown; vendorId?: unknown };
+    const str = (v: unknown, max: number): string | undefined =>
+      typeof v === "string" && v.length > 0 ? v.slice(0, max) : undefined;
+    const vendor = typeof body.vendorId === "string" && /^[0-9a-f-]{36}$/i.test(body.vendorId) ? body.vendorId : undefined;
+    return { grnNo: str(body.grnNo, 64), poRef: str(body.poRef, 64), supplierId: vendor };
+  } catch {
+    return null;
+  }
+}

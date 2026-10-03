@@ -2,11 +2,11 @@
  * items repo — Drizzle queries against the `inventory` schema ONLY.
  * Every read is tenant-scoped; updates are optimistic-locked on `version`.
  */
-import { eq, and, sql, asc, desc, type SQL } from "drizzle-orm";
+import { eq, ne, and, sql, asc, desc, type SQL } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { DomainError } from "../../shared/domain.js";
 import {
-  items, categories, uoms, itemSubstitutes, bins, custodians, reservations, goodsReturns,
+  items, categories, uoms, itemSubstitutes, bins, custodians, reservations, goodsReturns, tenantSettings,
   type ItemInsert, type ItemRow, type ItemView,
   type CategoryInsert, type CategoryRow,
   type UomInsert, type UomRow,
@@ -211,6 +211,58 @@ export async function listBins(tenantId: string, limit: number, offset: number):
     .limit(limit).offset(offset));
 }
 
+export async function findBin(tenantId: string, id: string): Promise<BinRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(bins)
+    .where(and(eq(bins.id, id), eq(bins.tenantId, tenantId))).limit(1));
+  return rows[0] ?? null;
+}
+
+/**
+ * Conditional state transition: only flips a bin that is currently in the OPPOSITE
+ * state, so two concurrent requests cannot both "win" and a repeat is detectable.
+ * Nothing else references bins yet (no bin_id on any stock table), so no referenced-bin
+ * rule applies; if one is added, enforce it in this WHERE clause.
+ */
+export async function setBinActive(
+  tx: Writer, id: string, tenantId: string, isActive: boolean, actorId: string,
+): Promise<void> {
+  const updated = await (tx as typeof db)
+    .update(bins)
+    .set({ isActive, updatedAt: new Date(), updatedBy: actorId, version: sql`${bins.version} + 1` })
+    .where(and(eq(bins.id, id), eq(bins.tenantId, tenantId), eq(bins.isActive, !isActive)))
+    .returning({ id: bins.id });
+  if (updated.length === 0) {
+    throw new DomainError("BIN_STATE", `bin ${id} not found or already ${isActive ? "active" : "inactive"}`);
+  }
+}
+
+// ── Tenant settings ───────────────────────────────────────────────────────
+
+/** Missing row = defaults (QC maker-checker ON). */
+export async function getTenantSettings(tenantId: string): Promise<{ qcMakerChecker: boolean; version: number }> {
+  const rows = await scopedRead((tx) => tx.select().from(tenantSettings)
+    .where(eq(tenantSettings.tenantId, tenantId)).limit(1));
+  return { qcMakerChecker: rows[0]?.qcMakerChecker ?? true, version: rows[0]?.version ?? 0 };
+}
+
+export async function upsertTenantSettings(
+  tx: Writer, tenantId: string, patch: { qcMakerChecker: boolean }, actorId: string,
+): Promise<void> {
+  await tx.insert(tenantSettings).values({ tenantId, qcMakerChecker: patch.qcMakerChecker, updatedBy: actorId })
+    .onConflictDoUpdate({
+      target: tenantSettings.tenantId,
+      set: { qcMakerChecker: patch.qcMakerChecker, updatedAt: new Date(), updatedBy: actorId, version: sql`${tenantSettings.version} + 1` },
+    });
+}
+
+/** Tenant-wide substitute pairs (bulk read; the per-item route fans out one call per item). */
+export async function listAllSubstitutes(tenantId: string, limit: number, offset: number): Promise<ItemSubstituteRow[]> {
+  return scopedRead((tx) => tx.select().from(itemSubstitutes)
+    .where(eq(itemSubstitutes.tenantId, tenantId))
+    .orderBy(asc(itemSubstitutes.itemId), asc(itemSubstitutes.priority), asc(itemSubstitutes.id))
+    .limit(limit).offset(offset));
+}
+
 // ── Reservations (SVC-054) ─────────────────────────────────────────────────
 
 export async function insertReservation(tx: Writer, row: ReservationInsert): Promise<void> {
@@ -257,13 +309,30 @@ export async function updateGoodsReturnQc(
   id: string,
   tenantId: string,
   patch: { qcStatus: string; qcInspectedBy: string; qcInspectedAt: Date; qcNotes?: string; disposition: string },
+  opts: { makerChecker?: boolean } = {},
 ): Promise<void> {
+  // Maker != checker is part of the guarded UPDATE itself (not a read-then-write), so it holds
+  // under concurrency: the creator's verdict simply matches no row.
+  const conds = [eq(goodsReturns.id, id), eq(goodsReturns.tenantId, tenantId), eq(goodsReturns.qcStatus, "pending")];
+  if (opts.makerChecker) conds.push(ne(goodsReturns.createdBy, patch.qcInspectedBy));
   const updated = await (tx as typeof db)
     .update(goodsReturns)
     .set({ ...patch, updatedAt: new Date(), updatedBy: patch.qcInspectedBy, version: sql`${goodsReturns.version} + 1` })
-    .where(and(eq(goodsReturns.id, id), eq(goodsReturns.tenantId, tenantId), eq(goodsReturns.qcStatus, "pending")))
+    .where(and(...conds))
     .returning();
-  if (updated.length === 0) throw new DomainError("QC_NOT_PENDING", `goods return ${id} is not pending inspection`);
+  if (updated.length === 0) {
+    throw new DomainError(
+      opts.makerChecker ? "QC_NOT_PENDING_OR_MAKER" : "QC_NOT_PENDING",
+      `goods return ${id} is not pending inspection${opts.makerChecker ? " or was recorded by the inspector" : ""}`,
+    );
+  }
+}
+
+/** In-transaction read of the per-tenant QC maker-checker policy (missing row = ON). */
+export async function readQcMakerChecker(tx: Writer, tenantId: string): Promise<boolean> {
+  const rows = await tx.select({ v: tenantSettings.qcMakerChecker }).from(tenantSettings)
+    .where(eq(tenantSettings.tenantId, tenantId)).limit(1);
+  return rows[0]?.v ?? true;
 }
 
 export async function listGoodsReturns(tenantId: string, limit: number, offset: number): Promise<GoodsReturnRow[]> {

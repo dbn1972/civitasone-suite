@@ -57,3 +57,12 @@ export async function listGoodsReturns(tenantId: string, limit: number, offset: 
 export async function getGoodsReturn(tenantId: string, id: string): Promise<GoodsReturnRow | null> {
   return cache.getOrLoad(cache.makeKey(tenantId, RESOURCE.goodsReturn, id), () => repo.findGoodsReturn(tenantId, id));
 }
+
+export async function listAllSubstitutes(tenantId: string, limit: number, offset: number): Promise<ItemSubstituteRow[]> {
+  return repo.listAllSubstitutes(tenantId, limit, offset);
+}
+
+export async function getSettings(tenantId: string): Promise<{ qcMakerChecker: boolean }> {
+  const s = await repo.getTenantSettings(tenantId);
+  return { qcMakerChecker: s.qcMakerChecker };
+}

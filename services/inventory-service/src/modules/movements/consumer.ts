@@ -17,7 +17,7 @@ import type { Queue, CommandEnvelope } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
-import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed, stableUuid } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED, INTEGRATION, RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 import type { Tx } from "./repo.js";
@@ -30,6 +30,7 @@ import {
 import { recomputeWavg } from "../costing/wavg-engine.js";
 import { consumeFifo } from "../costing/fifo-engine.js";
 import { DomainError } from "../../shared/domain.js";
+import { fetchGrnReference } from "../srn/grn-client.js";
 
 type EnqueueTx = Parameters<typeof enqueue>[0];
 
@@ -159,11 +160,19 @@ export function registerMovementConsumers(queue: Queue): void {
     if (!storeId || stockItems.length === 0) return;
     const postingDate = p.postingDate ?? new Date().toISOString().slice(0, 10);
     const movementId = randomUUID();
+    // Best-effort: copy the GRN number / PO / supplier so the receipts register can show them.
+    // Outside the transaction (no network call while holding row locks); null on any failure.
+    const ref = await fetchGrnReference(msg.tenantId, p.grnId);
 
     await db.transaction(async (tx) => {
-      // Stable dedupe key for the whole GRN.
-      if (!(await markProcessed(tx, `${msg.messageId}:grn:${p.grnId}`))) return;
-      await insertHeader(tx, msg, movementId, "receipt", { postingDate, toStoreId: storeId, refDoc: "GRN", refNo: p.grnId });
+      // Stable dedupe key for the whole GRN. _inbox.processed.message_id is a uuid column, so the
+      // composite key is folded into a deterministic uuid (the raw "<id>:grn:<id>" string made every
+      // GRN-accepted receipt fail with "invalid input syntax for type uuid" and dead-letter).
+      if (!(await markProcessed(tx, stableUuid(`${msg.messageId}:grn:${p.grnId}`)))) return;
+      await insertHeader(tx, msg, movementId, "receipt", {
+        postingDate, toStoreId: storeId, refDoc: "GRN", refNo: p.grnId,
+        grnNo: ref?.grnNo, poRef: ref?.poRef, supplierId: ref?.supplierId,
+      });
       await insertLines(tx, msg, movementId, stockItems.map((i) => ({ itemId: i.itemId, qty: i.acceptedQty, rateMinor: i.rateMinor, currency: i.currency })));
 
       let totalMinor = 0n;
@@ -312,6 +321,7 @@ interface HeaderFields {
   postingDate: string;
   fromStoreId?: string | undefined; toStoreId?: string | undefined;
   refDoc?: string | undefined; refNo?: string | undefined; reasonCode?: string | undefined; notes?: string | undefined;
+  grnNo?: string | undefined; poRef?: string | undefined; supplierId?: string | undefined;
 }
 
 async function insertHeader(tx: Tx, msg: CommandEnvelope, id: string, movementType: string, f: HeaderFields): Promise<void> {
@@ -321,6 +331,7 @@ async function insertHeader(tx: Tx, msg: CommandEnvelope, id: string, movementTy
     postingDate: f.postingDate,
     fromStoreId: f.fromStoreId ?? null, toStoreId: f.toStoreId ?? null,
     reasonCode: f.reasonCode ?? null, notes: f.notes ?? null,
+    grnNo: f.grnNo ?? null, poRef: f.poRef ?? null, supplierId: f.supplierId ?? null,
     status: "posted", createdBy: msg.actorId, updatedBy: msg.actorId,
   });
 }

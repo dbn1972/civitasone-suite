@@ -4,7 +4,7 @@ import { pino } from "pino";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
-import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed, SYSTEM_ACTOR_ID } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as editionPolicyRepo from "./edition-policy-repo.js";
@@ -344,7 +344,7 @@ export function registerRecruitmentConsumers(queue: Queue): void {
             version: 1,
             refType: "employee",
             refId: p.employeeId,
-            triggeredBy: msg.actorId ?? "system",
+            triggeredBy: msg.actorId ?? SYSTEM_ACTOR_ID,
           },
         });
       });

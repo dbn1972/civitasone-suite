@@ -1,3 +1,4 @@
+import { SYSTEM_ACTOR_ID } from "@civitasone/outbox";
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { ZodError } from "zod";
@@ -142,7 +143,7 @@ export async function checkoutRoutes(app: FastifyInstance): Promise<void> {
       messageId,
       type: COMMANDS.webhookRazorpay,
       tenantId: "system", // webhook does not carry tenant context
-      actorId: "system",
+      actorId: SYSTEM_ACTOR_ID,
       correlationId: messageId,
       schemaVersion: "1.0",
       payload: webhookPayload,

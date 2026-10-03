@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
-import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed, stableUuid } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as receiptRepo from "../receipt/repo.js";
@@ -159,7 +159,7 @@ export function registerEntryConsumers(queue: Queue): void {
       const newQty = current.qty + item.acceptedQty;
 
       await db.transaction(async (tx) => {
-        if (!(await markProcessed(tx, `${msg.messageId}:${item.itemCode}`))) return;
+        if (!(await markProcessed(tx, stableUuid(`${msg.messageId}:${item.itemCode}`)))) return;
         await repo.upsertValuationRate(tx, msg.tenantId, item.itemId!, warehouseId, newQty, newRate, item.currency ?? "INR");
         await repo.appendLedger(tx, {
           id: randomUUID(), tenantId: msg.tenantId,
@@ -192,7 +192,7 @@ export function registerEntryConsumers(queue: Queue): void {
       const diff = item.countedQty - current.qty;
       if (diff === 0) continue;
       await db.transaction(async (tx) => {
-        if (!(await markProcessed(tx, `${msg.messageId}:${item.itemId}`))) return;
+        if (!(await markProcessed(tx, stableUuid(`${msg.messageId}:${item.itemId}`)))) return;
         await repo.upsertValuationRate(tx, p.tenantId, item.itemId, p.warehouseId, item.countedQty, current.rateMinor, "INR");
         await repo.appendLedger(tx, {
           id: randomUUID(), tenantId: p.tenantId, itemId: item.itemId,

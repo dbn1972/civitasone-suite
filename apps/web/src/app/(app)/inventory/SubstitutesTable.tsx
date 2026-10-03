@@ -8,7 +8,7 @@ import { useSeededResource } from "@/lib/sync/resource";
 import { RegisterFrame, isNoData, statValue } from "./RegisterFrame";
 import type { InventorySubstituteRow } from "./_data";
 import { formatConversionFactor, itemLabel } from "./_labels";
-import { SUBSTITUTES_ITEM_CAP } from "./substitutesCoverage";
+import { SUBSTITUTES_PAGE_LIMIT } from "./substitutesCoverage";
 
 type Col = {
   key: keyof InventorySubstituteRow & string;
@@ -70,7 +70,7 @@ export function SubstitutesTable({
           {coverage && (coverage.truncated || coverage.failedCount > 0) ? (
             <p role="status" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>
               {coverage.truncated
-                ? `Showing substitutes for the first ${SUBSTITUTES_ITEM_CAP} of ${coverage.itemCount} items. `
+                ? `Showing the first ${SUBSTITUTES_PAGE_LIMIT} substitute links. `
                 : ""}
               {coverage.failedCount > 0
                 ? `Substitutes for ${coverage.failedCount} item${coverage.failedCount === 1 ? "" : "s"} could not be loaded. `

@@ -2,7 +2,7 @@ import type { Queue, CommandEnvelope } from "@civitasone/queue";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
-import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed, stableUuid, SYSTEM_ACTOR_ID } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMES, SOURCE, RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 import { findSimilarTickets } from "./duplicate-detection.js";
@@ -256,7 +256,7 @@ export function registerTicketConsumers(rawQueue: Queue): void {
         messageId: randomUUID(),
         type: COMMANDS.detectDuplicates,
         tenantId: msg.tenantId,
-        actorId: "system",
+        actorId: SYSTEM_ACTOR_ID,
         correlationId: msg.correlationId,
         schemaVersion: "1.0",
         payload: { ticketId, description: p.description, tenantId: msg.tenantId },
@@ -595,12 +595,12 @@ export function registerTicketConsumers(rawQueue: Queue): void {
     for (const s of similar) {
       const linkId = randomUUID();
       await db.transaction(async (tx) => {
-        if (!(await markProcessed(tx, `dedup-${p.ticketId}-${s.ticketId}`))) return;
+        if (!(await markProcessed(tx, stableUuid(`dedup-${p.ticketId}-${s.ticketId}`)))) return;
         await enqueue(tx, {
           topic: COMMANDS.linkTickets,
           eventType: COMMANDS.linkTickets,
           tenantId: p.tenantId,
-          actorId: "system",
+          actorId: SYSTEM_ACTOR_ID,
           correlationId: msg.correlationId,
           payload: {
             id: linkId,
@@ -608,7 +608,7 @@ export function registerTicketConsumers(rawQueue: Queue): void {
             sourceTicketId: p.ticketId,
             targetTicketId: s.ticketId,
             linkType: "related",
-            createdBy: "system",
+            createdBy: SYSTEM_ACTOR_ID,
             autoDetected: true,
             similarity: s.similarity,
           },

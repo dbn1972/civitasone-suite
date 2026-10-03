@@ -18,6 +18,7 @@
  * IIFE, swallows errors to avoid crashing the worker process, logs warnings on
  * failures, and returns the interval handle for graceful shutdown cleanup.
  */
+import { SYSTEM_ACTOR_ID } from "@civitasone/outbox";
 import { randomUUID } from "node:crypto";
 import { and, eq, lt } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
@@ -136,7 +137,7 @@ export async function processOvstayDetectionCycle(
       await queue.publish(COMMANDS.overstayDetect, {
         type: COMMANDS.overstayDetect,
         tenantId: pass.tenantId,
-        actorId: "system",
+        actorId: SYSTEM_ACTOR_ID,
         correlationId: randomUUID(),
         schemaVersion: "1.0",
         payload: {
@@ -184,7 +185,7 @@ export async function processOvstayDetectionCycle(
         await queue.publish(NOTIFICATION_SEND, {
           type: NOTIFICATION_SEND,
           tenantId: pass.tenantId,
-          actorId: "system",
+          actorId: SYSTEM_ACTOR_ID,
           correlationId: randomUUID(),
           schemaVersion: "1.0",
           payload: buildNotificationPayload({

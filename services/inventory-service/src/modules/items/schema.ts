@@ -159,6 +159,20 @@ export const goodsReturns = domainSchema.table("goods_returns", {
   version:        integer("version").notNull().default(1),
 });
 
+/**
+ * Per-tenant inventory policy (migration 0023). A missing row means defaults.
+ * qcMakerChecker: when true (default) the user who recorded a goods return may
+ * not record its QC verdict.
+ */
+export const tenantSettings = domainSchema.table("tenant_settings", {
+  tenantId:       uuid("tenant_id").primaryKey(),
+  qcMakerChecker: boolean("qc_maker_checker").notNull().default(true),
+  updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedBy:      uuid("updated_by").notNull(),
+  version:        integer("version").notNull().default(1),
+});
+export type TenantSettingsRow = typeof tenantSettings.$inferSelect;
+
 export type CategoryRow    = typeof categories.$inferSelect;
 export type CategoryInsert = typeof categories.$inferInsert;
 export type UomRow         = typeof uoms.$inferSelect;
@@ -205,5 +219,5 @@ export type ItemView = {
 };
 
 export const schema = {
-  categories, uoms, items, itemSubstitutes, bins, custodians, reservations, goodsReturns,
+  categories, uoms, items, itemSubstitutes, bins, custodians, reservations, goodsReturns, tenantSettings,
 };

@@ -109,3 +109,16 @@ export const INVENTORY_CYCLE_COUNT_APPROVE_ROLES = ["inventory_manager", "invent
  * authority, this only stops offering a control that is guaranteed to 403.
  */
 export const INVENTORY_WRITE_ROLES = ["inventory_user", "inventory_manager", "inventory_admin", "store_keeper", "super_admin"];
+
+/**
+ * Roles permitted to activate/deactivate a bin. Mirrors inventory-service's
+ * BIN_ADMIN_ROLES in modules/items/routes.ts (GAP-INVENTORY-BINS-03); the
+ * service stays the authority.
+ */
+export const INVENTORY_BIN_MANAGE_ROLES = ["inventory_manager", "inventory_admin", "super_admin"];
+
+/**
+ * Roles permitted to change tenant inventory policy (QC maker-checker).
+ * Mirrors inventory-service's SETTINGS_ROLES (GAP-INVENTORY-GOODS-RETURNS-DETAIL-04).
+ */
+export const INVENTORY_SETTINGS_ROLES = ["inventory_admin", "super_admin"];

@@ -9,6 +9,7 @@
  * Requirements: 13.4, 13.5, 13.6, 13.7, 13.8
  */
 
+import { SYSTEM_ACTOR_ID } from "@civitasone/outbox";
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { ZodError } from "zod";
@@ -249,7 +250,7 @@ export async function gatewayRoutes(app: FastifyInstance): Promise<void> {
       messageId,
       type: COMMANDS.webhookPayu,
       tenantId: "system",
-      actorId: "system",
+      actorId: SYSTEM_ACTOR_ID,
       correlationId: messageId,
       schemaVersion: "1.0",
       payload: { ...(typeof body === "object" ? body : {}), txnId, mihpayid, status },
@@ -271,7 +272,7 @@ export async function gatewayRoutes(app: FastifyInstance): Promise<void> {
       messageId,
       type: COMMANDS.webhookCcavenue,
       tenantId: "system",
-      actorId: "system",
+      actorId: SYSTEM_ACTOR_ID,
       correlationId: messageId,
       schemaVersion: "1.0",
       payload: { encResp },
