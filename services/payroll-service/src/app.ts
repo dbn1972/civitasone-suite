@@ -26,6 +26,7 @@ import { disbursementTransferRoutes } from "./modules/disbursement-transfers/rou
 import { nachRoutes } from "./modules/nach/routes.js";
 import { fnfRoutes } from "./modules/fnf/routes.js";
 import { dscConfigRoutes } from "./modules/dsc-config/routes.js";
+import { bankFileSigningRoutes } from "./modules/bank-file-signing/routes.js";
 import { form16VerifyRoutes } from "./modules/form16-verify/routes.js";
 import { registerRateLimit } from "@civitasone/rate-limit";
 
@@ -95,6 +96,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(nachRoutes);
   await app.register(fnfRoutes);
   await app.register(dscConfigRoutes);
+  await app.register(bankFileSigningRoutes);
   await app.register(form16VerifyRoutes);
   const { worldClassPayrollRoutes } = await import("./modules/payroll/world-class-routes.js");
   await app.register(worldClassPayrollRoutes);

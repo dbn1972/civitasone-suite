@@ -30,6 +30,7 @@ import { HttpError } from "../../shared/context.js";
 import type { Beneficiary } from "./beneficiaries.js";
 import { accountLast4, writeIssuedLines, type IssuedLine, type LedgerFileFormat, type LineKind } from "../disbursement-transfers/ledger.js";
 import { disbursementFileIssuances, type IssuanceMode } from "../disbursement-transfers/schema.js";
+import type { SignedFile, SigningRecord } from "../bank-file-signing/service.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -85,9 +86,23 @@ export type IssueInput = {
   fullReissue: boolean;
   fullReissueReason: string | null;
   render: Renderer;
+  /**
+   * GAP-PAYROLL-DISBURSEMENT-03: signs (and verifies, and optionally
+   * encrypts) the rendered file. REQUIRED: there is no path that issues a file
+   * without going through the signing policy. It throws to abort the issuance
+   * (fail closed): the transaction rolls back, so no ledger rows are written.
+   */
+  sign: (file: RenderedFile) => Promise<SignedFile>;
 };
 
-export type IssueResult = { file: RenderedFile; issuanceId: string; mode: IssuanceMode; lineCount: number; totalMinor: bigint };
+export type IssueResult = {
+  file: RenderedFile;
+  issuanceId: string;
+  mode: IssuanceMode;
+  lineCount: number;
+  totalMinor: bigint;
+  signing: SigningRecord;
+};
 
 type StatusCounts = { pending: number; sent: number; success: number; failed: number; returned: number };
 const zeroCounts = (): StatusCounts => ({ pending: 0, sent: 0, success: 0, failed: 0, returned: 0 });
@@ -168,7 +183,10 @@ export async function issueBankFile(input: IssueInput): Promise<IssueResult> {
        WHERE tenant_id = ${ctx.tenantId}::uuid AND run_id = ${run.id}::uuid
     `))[0]!;
     const seq = Number(seqRow.seq);
-    const file = input.render(lines, { seq, batchBase: Number(seqRow.batch_base) });
+    const rendered = input.render(lines, { seq, batchBase: Number(seqRow.batch_base) });
+    // Sign + self-check BEFORE anything is recorded: a signing failure aborts
+    // here and leaves no issuance, ledger rows or audit event behind.
+    const { file, record: signing } = await input.sign(rendered);
     const totalMinor = lines.reduce((s, l) => s + l.amountMinor, 0n);
     const issuanceId = randomUUID();
 
@@ -179,7 +197,9 @@ export async function issueBankFile(input: IssueInput): Promise<IssueResult> {
       seq,
       mode,
       fileFormat: format,
-      fileName: file.downloadName,
+      // The ledger / return-file name stays the plaintext name even when the
+      // delivered file is encrypted (downloadName then ends in .pgp).
+      fileName: rendered.downloadName,
       batchFrom: file.batchFrom,
       batchTo: file.batchTo,
       lineCount: lines.length,
@@ -187,6 +207,12 @@ export async function issueBankFile(input: IssueInput): Promise<IssueResult> {
       reason: input.reason,
       fullReissueReason: mode === "full_reissue" ? input.fullReissueReason : null,
       createdBy: ctx.actorId,
+      signatureFormat: signing.format,
+      signature: signing.signature,
+      fileSha256: signing.fileSha256,
+      signedAt: signing.signedAt,
+      signingKeyFingerprint: signing.keyFingerprint,
+      encryptedToBank: signing.encryptedToBank,
     });
 
     const issued: IssuedLine[] = lines.map((l, i) => ({
@@ -224,7 +250,7 @@ export async function issueBankFile(input: IssueInput): Promise<IssueResult> {
           seq,
           mode,
           format,
-          fileName: file.downloadName,
+          fileName: rendered.downloadName,
           fileCount: file.fileCount,
           recordCount: lines.length,
           totalAmountMinor: totalMinor.toString(),
@@ -238,11 +264,15 @@ export async function issueBankFile(input: IssueInput): Promise<IssueResult> {
           ledgerRootTotalMinor: rootTotal.toString(),
           runTotalNetMinor: run.totalNetMinor.toString(),
           totalsReconcile: rootTotal === run.totalNetMinor,
-          signed: false,
+          signed: signing.signed,
+          signatureFormat: signing.format,
+          fileSha256: signing.fileSha256,
+          signingKeyFingerprint: signing.keyFingerprint,
+          encryptedToBank: signing.encryptedToBank,
         },
       },
     });
 
-    return { file, issuanceId, mode, lineCount: lines.length, totalMinor };
+    return { file, issuanceId, mode, lineCount: lines.length, totalMinor, signing };
   });
 }

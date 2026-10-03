@@ -2,10 +2,12 @@
 
 import { useId, useState } from "react";
 import { useTranslations } from "next-intl";
-import { browserFetch } from "@/lib/api/browserClient";
+import { browserFetch, errorCodeFromResponse } from "@/lib/api/browserClient";
 import { useFormError } from "@/lib/useFormError";
 import { formatRupees, formatIndianDate, daysUntilIST } from "@/lib/formatters";
 import { Button, ConfirmDialog } from "@/app/_components/ds";
+import { SigningBadge } from "./SigningBadge";
+import { saveResponseAsFile } from "./IssuedBankFilesTable";
 
 /**
  * A run eligible for a bank file. API status "completed" == DB "approved"
@@ -98,6 +100,11 @@ export function BankFileWizard({
   const [format, setFormat] = useState<Format>("csv");
   const [filename, setFilename] = useState<string | null>(null);
   const [signed, setSigned] = useState<boolean | null>(null);
+  // GAP-PAYROLL-DISBURSEMENT-03: what the server says it did with the file.
+  const [sigFormat, setSigFormat] = useState<string | null>(null);
+  const [issuanceId, setIssuanceId] = useState<string | null>(null);
+  const [encrypted, setEncrypted] = useState(false);
+  const [sigError, setSigError] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -139,6 +146,11 @@ export function BankFileWizard({
         body: JSON.stringify({ format, reason }),
       });
       if (!res.ok) {
+        // Production keystore not set up yet: say so plainly (503 SIGNING_NOT_IMPLEMENTED).
+        if (res.status === 503 && (await errorCodeFromResponse(res)) === "SIGNING_NOT_IMPLEMENTED") {
+          setError(t("signingNotReady"));
+          return;
+        }
         const resolved = await formError.fromResponse(res, "save");
         setError(resolved.message);
         return;
@@ -150,7 +162,13 @@ export function BankFileWizard({
       const fn = match?.[1] ?? `bank_transfer_${runId}.${ext}`;
       // GAP-PAYROLL-DISBURSEMENT-03: only the server can say whether it
       // signed the file. Anything other than an explicit "true" is UNSIGNED.
-      setSigned(res.headers.get("x-bank-file-signed") === "true");
+      const isSigned = res.headers.get("x-bank-file-signed") === "true";
+      const fmt = res.headers.get("x-bank-file-signature-format");
+      const issuance = res.headers.get("x-bank-file-issuance-id");
+      setSigned(isSigned);
+      setSigFormat(fmt);
+      setIssuanceId(issuance);
+      setEncrypted(res.headers.get("x-bank-file-encrypted") === "true");
       setFilename(fn);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -160,10 +178,30 @@ export function BankFileWizard({
       a.click();
       URL.revokeObjectURL(url);
       setConfirmOpen(false);
+      // A detached signature (.sig / .p7s) is a second download; the bank
+      // needs it with the file. Best effort here -- the button on the success
+      // screen fetches it again.
+      if (isSigned && issuance && (fmt === "pgp_detached" || fmt === "pkcs7_detached")) {
+        await downloadSignatureFor(issuance, fn);
+      }
     } catch {
       setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function downloadSignatureFor(id: string, fileName: string) {
+    try {
+      const res = await browserFetch(`v1/payroll/disbursement/files/${encodeURIComponent(id)}/signature`);
+      if (!res.ok) {
+        setSigError(true);
+        return;
+      }
+      setSigError(false);
+      await saveResponseAsFile(res, `${fileName}.sig`);
+    } catch {
+      setSigError(true);
     }
   }
 
@@ -340,12 +378,20 @@ export function BankFileWizard({
                 <p aria-hidden="true" style={{ fontSize: 36, margin: "0 0 10px" }}>✅</p>
                 <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{t("downloadedTitle")}</p>
                 <p style={{ fontSize: 13, fontFamily: "monospace", color: "var(--ink2)" }}>{filename}</p>
-                {signed ? (
-                  <p className="pill good" style={{ display: "inline-block", marginTop: 8 }}>{t("signedBadge")}</p>
-                ) : (
-                  <p role="status" className="pill bad" style={{ display: "inline-block", marginTop: 8, fontWeight: 700 }}>
-                    {t("unsignedBadge")}
-                  </p>
+                <p style={{ marginTop: 8 }}><SigningBadge format={sigFormat} signed={signed === true} /></p>
+                {signed !== true && (
+                  <p role="note" style={{ fontSize: 12, color: "var(--bad, #c0392b)", margin: "6px 0 0" }}>{t("unsignedDisclosure")}</p>
+                )}
+                {encrypted && <p style={{ fontSize: 12, color: "var(--ink2)", margin: "6px 0 0" }}>{t("encryptedNote")}</p>}
+                {signed === true && issuanceId && (sigFormat === "pgp_detached" || sigFormat === "pkcs7_detached") && (
+                  <div style={{ marginTop: 10 }}>
+                    <Button variant="secondary" onClick={() => void downloadSignatureFor(issuanceId, filename)}>
+                      {t("downloadSignatureBtn")}
+                    </Button>
+                    {sigError && (
+                      <p role="alert" className="pill bad" style={{ marginTop: 8, width: "fit-content", marginInline: "auto" }}>{t("signatureDownloadFailed")}</p>
+                    )}
+                  </div>
                 )}
                 <p style={{ fontSize: 13, color: "var(--ink2)", marginTop: 10 }}>
                   {t("downloadedHint")}
@@ -367,7 +413,7 @@ export function BankFileWizard({
           <div style={{ display: "flex", gap: 10 }}>
             {!filename && <Button variant="ghost" onClick={() => setStep(2)}>{t("backBtn")}</Button>}
             {filename && (
-              <Button variant="ghost" onClick={() => { setStep(0); setFilename(null); setSigned(null); setError(undefined); }}>
+              <Button variant="ghost" onClick={() => { setStep(0); setFilename(null); setSigned(null); setSigFormat(null); setIssuanceId(null); setEncrypted(false); setSigError(false); setError(undefined); }}>
                 {t("generateAnotherBtn")}
               </Button>
             )}

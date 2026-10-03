@@ -12,6 +12,8 @@ import { validateNachBeneficiaries, computeSettlementDate, splitIntoBatches } fr
 import type { NachBeneficiary } from "./domain.js";
 import { generateBankFile } from "./format-router.js";
 import { createZipBuffer } from "./zip-util.js";
+import { loadBankFileSigning } from "../bank-file-signing/config-repo.js";
+import { planBankFileSigning, signRenderedFile } from "../bank-file-signing/service.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 /** A full re-issue pays already-sent/paid employees again: admin only. */
@@ -42,13 +44,21 @@ const generateBodySchema = z.object({
 });
 
 /**
- * GAP-PAYROLL-DISBURSEMENT-03: the bank-file path does not sign files with the
- * tenant DSC today (the DSC is only used for Form 16 PDFs). Every response
- * carries this header so a client can show "Signed"/"UNSIGNED" from the
- * server's own statement instead of assuming; it flips to "true" only when
- * real signing is implemented here.
+ * GAP-PAYROLL-DISBURSEMENT-03: bank files are SIGNED by default (see
+ * bank-file-signing/). Every response states what the server actually did, so
+ * a client shows "Signed (PGP)" / "Unsigned (dev only)" from the server's own
+ * statement instead of assuming:
+ *   x-bank-file-signed            "true" only when a verified signature exists
+ *   x-bank-file-signature-format  pgp_detached | xml_dsig | pkcs7_detached | none
+ *   x-bank-file-sha256            hex sha256 of the signed bytes
+ *   x-bank-file-encrypted         "true" when the body is OpenPGP-encrypted to the bank
+ * A detached signature (.sig / .p7s) is fetched from
+ * GET /v1/payroll/disbursement/files/:issuanceId/signature.
  */
 export const BANK_FILE_SIGNED_HEADER = "x-bank-file-signed";
+export const BANK_FILE_SIGNATURE_FORMAT_HEADER = "x-bank-file-signature-format";
+export const BANK_FILE_SHA256_HEADER = "x-bank-file-sha256";
+export const BANK_FILE_ENCRYPTED_HEADER = "x-bank-file-encrypted";
 /** Which lines the file carries: first | incremental | full_reissue. */
 export const BANK_FILE_MODE_HEADER = "x-bank-file-mode";
 export const BANK_FILE_ISSUANCE_HEADER = "x-bank-file-issuance-id";
@@ -204,6 +214,14 @@ export async function bankTransferRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "INVALID_STATE", "bank file can only be generated for approved or disbursed runs");
     }
 
+    // GAP-PAYROLL-DISBURSEMENT-03: resolve the signing policy up front so an
+    // unsigned-in-production config (or a missing key) is refused before any
+    // work. The bank code (sponsor code / IFSC prefix) selects a per-bank override.
+    const signingStored = await loadBankFileSigning(ctx.tenantId);
+    const sponsorForBank = await findByTenantId(ctx.tenantId);
+    const bankCode = sponsorForBank ? (sponsorForBank.sponsorCode || sponsorForBank.sponsorIfsc.slice(0, 4)).toUpperCase() : null;
+    const signingPlan = await planBankFileSigning(ctx.tenantId, signingStored.config, bankCode);
+
     let render: Renderer;
     if (format === "nach" || format === "apbs") {
       const sponsorConfig = await findByTenantId(ctx.tenantId);
@@ -262,12 +280,16 @@ export async function bankTransferRoutes(app: FastifyInstance): Promise<void> {
       fullReissue: body.fullReissue,
       fullReissueReason: body.fullReissueReason ?? null,
       render,
+      sign: (file) => signRenderedFile(signingPlan, file),
     });
 
     return reply
       .header("content-type", issued.file.contentType)
       .header("content-disposition", `attachment; filename="${issued.file.downloadName}"`)
-      .header(BANK_FILE_SIGNED_HEADER, "false")
+      .header(BANK_FILE_SIGNED_HEADER, issued.signing.signed ? "true" : "false")
+      .header(BANK_FILE_SIGNATURE_FORMAT_HEADER, issued.signing.format)
+      .header(BANK_FILE_SHA256_HEADER, issued.signing.fileSha256)
+      .header(BANK_FILE_ENCRYPTED_HEADER, issued.signing.encryptedToBank ? "true" : "false")
       .header(BANK_FILE_MODE_HEADER, issued.mode)
       .header(BANK_FILE_ISSUANCE_HEADER, issued.issuanceId)
       .send(issued.file.body);

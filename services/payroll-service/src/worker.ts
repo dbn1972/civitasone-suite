@@ -19,6 +19,7 @@ import { registerForm16BulkConsumers } from "./modules/form16-pdf/bulk-consumer.
 import { registerChallanConsumers } from "./modules/statutory-returns/challan-consumer.js";
 import { registerDscConfigConsumers } from "./modules/dsc-config/consumer.js";
 import { registerSponsorConfigConsumers } from "./modules/sponsor-config/consumer.js";
+import { registerBankFileSigningConsumers } from "./modules/bank-file-signing/consumer.js";
 import { loadTaxConfig } from "./modules/tax/config.js";
 import { assertPiiKeyAtBoot } from "./shared/pii-crypto.js";
 
@@ -73,6 +74,7 @@ registerForm16BulkConsumers(queue);
 registerChallanConsumers(queue);
 registerDscConfigConsumers(queue);
 registerSponsorConfigConsumers(queue);
+registerBankFileSigningConsumers(queue);
 
 await queue.start();
 // Cross-tenant outbox scan must use BYPASSRLS scannerDb — FORCE RLS on

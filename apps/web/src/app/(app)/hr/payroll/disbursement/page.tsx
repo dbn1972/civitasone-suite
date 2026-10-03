@@ -13,6 +13,9 @@ import { NachReturnForm } from "./NachReturnForm";
 import { SponsorBankConfigForm } from "./SponsorBankConfigForm";
 import { DscConfigForm } from "./DscConfigForm";
 import { DisbursementTransferTable } from "./DisbursementTransferTable";
+import { BankFileSigningForm } from "./BankFileSigningForm";
+import { IssuedBankFilesTable } from "./IssuedBankFilesTable";
+import { hasItems, mapIssuedFiles, mapSigningSettings, type IssuedFile, type SigningSettings } from "./signingState";
 // Plain (non-"use client") module: these are CALLED here on the server.
 import { toClientTransferRow, isCreditedTransfer, isFailedTransfer, type RawTransferRow } from "./transferRows";
 
@@ -84,6 +87,22 @@ async function getTransfers(): Promise<LoaderResult<RawTransferRow[]>> {
   });
 }
 
+// GAP-PAYROLL-DISBURSEMENT-03: issued bank files with their signing state
+// (any payroll operator), and the signing policy + key status (admin only).
+async function getIssuedFiles(): Promise<LoaderResult<IssuedFile[]>> {
+  return fetchJson<unknown, IssuedFile[]>("/api/v1/payroll/disbursement/files?limit=50", [], {
+    telemetryKey: "payroll.disbursement.files",
+    mapResponse: mapIssuedFiles,
+  });
+}
+
+async function getSigningSettings(): Promise<LoaderResult<SigningSettings | null>> {
+  return fetchJson<unknown, SigningSettings | null>("/api/v1/payroll/bank-file-signing", null, {
+    telemetryKey: "payroll.disbursement.signing",
+    mapResponse: mapSigningSettings,
+  });
+}
+
 const notFetched = <T,>(data: T): Promise<LoaderResult<T>> => Promise.resolve({ data, source: "api" });
 
 const SECTION_STYLE = { scrollMarginTop: 80 } as const;
@@ -111,12 +130,17 @@ export default async function DisbursementPage() {
 
   // Sponsor/DSC config are admin-only APIs: don't call them for an officer
   // (that only produced a guaranteed 403 and a misleading error badge).
-  const [runsResult, sponsorResult, dscResult, transfersResult] = await Promise.all([
+  const [runsResult, sponsorResult, dscResult, transfersResult, filesResult, signingResult] = await Promise.all([
     getRuns(),
     canConfigure ? getSponsorConfig() : notFetched<SponsorConfig | null>(null),
     canConfigure ? getDscConfig() : notFetched<RawDscConfig | null>(null),
     getTransfers(),
+    getIssuedFiles(),
+    canConfigure ? getSigningSettings() : notFetched<SigningSettings | null>(null),
   ]);
+  const filesErrored = filesResult.source === "error";
+  const signingErrored = signingResult.source === "error";
+  const signingSettings = signingResult.data;
 
   // Both config endpoints answer 404 when nothing is configured yet -- that
   // is "not configured", not an outage.
@@ -143,7 +167,7 @@ export default async function DisbursementPage() {
   // versa. `anyError` is kept only for the summary badge.
   const runsErrored = runsResult.source === "error";
   const transfersErrored = transfersResult.source === "error";
-  const anyError = runsErrored || sponsorErrored || dscErrored || transfersErrored;
+  const anyError = runsErrored || sponsorErrored || dscErrored || transfersErrored || filesErrored || signingErrored;
 
   // GAP-PAYROLL-DISBURSEMENT-01: reduce every row to last-4 on the SERVER --
   // the full account number never reaches the client component's props.
@@ -223,6 +247,21 @@ export default async function DisbursementPage() {
         </Card>
       </section>
 
+      {/* GAP-PAYROLL-DISBURSEMENT-03: issued files + signed/unsigned state */}
+      <section id="issued-files" style={SECTION_STYLE}>
+        <Card title={t("issuedFilesCardTitle")}>
+          {filesErrored ? (
+            <div className="pad">
+              <RefreshErrorState error={toHumanError("load", { area: "issued bank files" })} backHref="/hr/payroll" />
+            </div>
+          ) : hasItems(filesResult.data) ? (
+            <IssuedBankFilesTable files={filesResult.data} />
+          ) : (
+            <EmptyState icon="🗂️" title={t("issuedFilesEmptyTitle")} message={t("issuedFilesEmptyMessage")} />
+          )}
+        </Card>
+      </section>
+
       <section id="nach" style={SECTION_STYLE}>
         <Card title={t("nachMandatesCardTitle")}>
           <NachMandateForm />
@@ -265,6 +304,20 @@ export default async function DisbursementPage() {
                 <SponsorBankConfigForm initial={sponsorConfig} />
               )}
             </Card>
+
+            <div id="bank-file-signing" style={SECTION_STYLE}>
+              <Card title={t("signingCardTitle")}>
+                {signingErrored || !signingSettings ? (
+                  <div className="pad">
+                    <RefreshErrorState error={toHumanError("load", { area: "bank file signing settings" })} backHref="/hr/payroll" />
+                  </div>
+                ) : (
+                  <div className="pad">
+                    <BankFileSigningForm settings={signingSettings} />
+                  </div>
+                )}
+              </Card>
+            </div>
 
             <div id="dsc-config" style={SECTION_STYLE}>
               <Card title={t("dscCardTitle")}>
