@@ -106,8 +106,8 @@ export function toApiEndpointRow(e: Record<string, unknown>, generatedAt?: strin
 }
 
 // GAP-ADMIN-API-MONITORING-06 ------------------------------------------------
-// Wire contract for GET /v1/admin/api-monitoring rows (no service in this tree serves
-// it yet, so this is the contract a serving service must meet; see the PR's VERIFY list):
+// Wire contract for GET /v1/admin/api-monitoring rows (served by admin-service from the gateway's
+// per-tenant request rollup, api-monitoring module; see the PR's VERIFY list):
 //   errorRate    number = PERCENT of requests (0-100), or a string such as "1.2%"
 //   p95Latency   number = milliseconds (the column header already says "p95 (ms)")
 //   checkedAt    ISO timestamp the row was measured; the envelope's generatedAt is the fallback

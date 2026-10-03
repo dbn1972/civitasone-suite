@@ -42,6 +42,8 @@ export const SERVICE_ROUTES: ServiceRoute[] = [
   { name: "citizen",      prefix: "/api/v1/citizen",   upstream: upstream("citizen", 3020) },
   { name: "legal",        prefix: "/api/v1/legal",     upstream: upstream("legal", 3021) },
   { name: "admin-users",  prefix: "/api/v1/admin/users", upstream: upstream("identity", 3001), upstreamPath: "/identity/users" },
+  // GAP-ADMIN-OPERATORS-05: platform-operator directory + maker-checker requests live in identity-service.
+  { name: "admin-operators", prefix: "/api/v1/admin/operators", upstream: upstream("identity", 3001), upstreamPath: "/identity/operators" },
   { name: "admin",        prefix: "/api/v1/admin",     upstream: upstream("admin", 3022) },
   { name: "billing",      prefix: "/api/v1/billing",   upstream: upstream("billing", 3023) },
   { name: "crm",          prefix: "/api/v1/crm",       upstream: upstream("crm", 3024) },

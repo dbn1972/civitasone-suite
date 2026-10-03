@@ -21,6 +21,9 @@ export const COMMANDS = {
   platformDataAccess: "admin.platform_data_access.record",
   onboardingCreate:   "admin.onboarding.create",
   onboardingMove:     "admin.onboarding.move_stage",
+  // GAP-ADMIN-API-MONITORING-06: gateway batches (system telemetry, not audited) and the per-tenant retention setting (audited).
+  apiMetricsIngest:       "admin.api_metrics.ingest",
+  apiMetricsRetentionSet: "admin.api_metrics.retention_set",
   moduleToggle:       "admin.module.toggle",
   // Platform-wide flag registry (config module — config.admin_feature_flags,
   // global + per-tenant `overrides` jsonb).

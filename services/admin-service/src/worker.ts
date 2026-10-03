@@ -16,6 +16,7 @@ import { registerDataExportConsumers } from "./modules/data-export/consumer.js";
 import { registerFeatureFlagConsumers } from "./modules/feature-flags/consumer.js";
 import { registerAuditLogExportConsumers } from "./modules/audit-log-export/consumer.js";
 import { registerPlatformOpsConsumers } from "./modules/platform-ops/consumer.js";
+import { registerApiMonitoringConsumers, startApiMetricsPurge } from "./modules/api-monitoring/consumer.js";
 import { registerUserExportConsumers } from "./modules/user-export/consumer.js";
 import { registerTenantSettingsConsumers } from "./modules/tenant-settings/consumer.js";
 // WC-009: subscriber for the admin.sandbox_refresh.execute command published by
@@ -37,6 +38,7 @@ registerAuditLogExportConsumers(queue);
 registerUserExportConsumers(queue);
 registerPlatformOpsConsumers(queue);
 registerTenantSettingsConsumers(tenantScoped(queue));
+registerApiMonitoringConsumers(queue);
 // handleSandboxRefreshExecute wraps its own work in runWithTenant(), so it does
 // not need the tenantScoped(queue) proxy.
 registerSandboxConsumers(queue);
@@ -91,6 +93,8 @@ const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPur
 const breakGlassSweepMs = Number(process.env.BREAK_GLASS_SWEEP_MS ?? 60_000);
 const breakGlassSweeper = startBreakGlassSweeper(breakGlassSweepMs);
 // Executes approved suspensions whose effective time has arrived.
+// GAP-ADMIN-API-MONITORING-06: bounded retention for the gateway metrics rollup.
+const apiMetricsPurge = startApiMetricsPurge();
 const lifecycleSweeper = startLifecycleSweeper(Number(process.env.TENANT_LIFECYCLE_SWEEP_MS ?? 60_000));
 // Run one sweep immediately on boot so grants that expired while the worker was
 // down are closed without waiting a full interval.
@@ -106,6 +110,7 @@ async function shutdown(signal: string): Promise<void> {
   clearInterval(relay);
   clearInterval(breakGlassSweeper);
   clearInterval(lifecycleSweeper);
+  clearInterval(apiMetricsPurge);
   clearInterval(sftpLeadIngest);
   await queue.stop();
   await sqlClient.end();

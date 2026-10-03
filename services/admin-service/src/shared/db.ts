@@ -33,6 +33,7 @@ import { schema as orgHierarchyLevelsModule } from "../modules/org-hierarchy-lev
 import { schema as platformOpsModule } from "../modules/platform-ops/schema.js";
 import { schema as tenantSettingsModule } from "../modules/tenant-settings/schema.js";
 import { schema as platformIntegrationsModule } from "../modules/platform-integrations/schema.js";
+import { schema as apiMonitoringModule } from "../modules/api-monitoring/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 // NOTE (Phase 4 coverage-gap closure): custom-domains, webhooks, data-export,
@@ -68,6 +69,7 @@ const SCHEMA = {
   ...platformOpsModule,
   ...tenantSettingsModule,
   ...platformIntegrationsModule,
+  ...apiMonitoringModule,
   ...outboxSchema,
 };
 
