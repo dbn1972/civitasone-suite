@@ -117,6 +117,48 @@ describe("ApplicationDetailPage", () => {
     expect(screen.getByText("Not provided")).toBeInTheDocument();
   });
 
+  // GAP-RECRUITMENT-DETAIL-08: the single-record view shows the service-masked address with an audited reveal.
+  it("shows the masked email with a Reveal control, never the raw address", async () => {
+    stubFetch({ [APP_URL]: () => json({ ...APP, email: "r***@e***.com", contactMasked: true }) });
+    renderPage();
+    await screen.findByRole("heading", { name: "Rahul Singh" });
+    expect(screen.getByTestId("contact-app-2")).toHaveTextContent("r***@e***.com");
+    expect(screen.getByRole("button", { name: /reveal contact details for rahul singh/i })).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain("rahul@example.com");
+  });
+
+  it("opens an uploaded resume through the audited short-lived link (https only)", async () => {
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    stubFetch({
+      [APP_URL]: () => json({ ...APP, hasResume: true, resumeViewable: true }),
+      "/api/proxy/v1/hrms/applications/app-2/resume-link": () => json({ data: { url: "https://files.example/resume.pdf", expiresInSeconds: 300 } }),
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "View resume" }));
+    await waitFor(() => expect(open).toHaveBeenCalledWith("https://files.example/resume.pdf", "_blank", "noopener,noreferrer"));
+    open.mockRestore();
+  });
+
+  it("refuses a non-https resume link", async () => {
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    stubFetch({
+      [APP_URL]: () => json({ ...APP, hasResume: true, resumeViewable: true }),
+      "/api/proxy/v1/hrms/applications/app-2/resume-link": () => json({ data: { url: "javascript:alert(1)" } }),
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "View resume" }));
+    expect(await screen.findByText("The resume could not be opened.")).toBeInTheDocument();
+    expect(open).not.toHaveBeenCalled();
+    open.mockRestore();
+  });
+
+  it("the fee button opens the fee dialog (assess / record an offline payment)", async () => {
+    stubFetch({ [APP_URL]: () => json(APP) });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Manage fee" }));
+    expect(await screen.findByText(/no fee has been assessed/i)).toBeInTheDocument();
+  });
+
   it("renders the fee, offers and PDF link sections", async () => {
     stubFetch({
       [APP_URL]: () => json(APP),

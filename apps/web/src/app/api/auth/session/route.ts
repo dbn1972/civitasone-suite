@@ -23,6 +23,10 @@ export async function GET() {
   const tenantId = (claims?.tid as string) ?? (claims?.tenantId as string) ?? "";
   const userId = (claims?.sub as string) ?? "";
 
+  // Display-only hints for the signed-in user's own UI (never an authorisation decision -- the
+  // services re-check every role): which buttons to offer, and maker-checker "you created this" hints.
+  const roles = Array.isArray(claims?.roles) ? (claims.roles as unknown[]).filter((r): r is string => typeof r === "string") : [];
+
   // tenantId + userId namespace the per-user encrypted IndexedDB store (01-T5).
-  return NextResponse.json({ authenticated: true, tenantId, userId });
+  return NextResponse.json({ authenticated: true, tenantId, userId, roles });
 }

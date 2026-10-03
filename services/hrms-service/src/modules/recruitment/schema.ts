@@ -97,6 +97,24 @@ export const hrmsApplications = recruitmentSchema.table("hrms_applications", {
   version:       integer("version").notNull().default(1),
 });
 
+/**
+ * Per-tenant recruitment settings (migration 0180). One row per tenant; absent row = defaults
+ * (offer workflow required, no public organisation identity configured).
+ */
+export const hrmsRecruitmentSettings = recruitmentSchema.table("hrms_recruitment_settings", {
+  tenantId:             uuid("tenant_id").primaryKey(),
+  organisationName:     varchar("organisation_name", { length: 200 }),
+  departmentName:       varchar("department_name", { length: 200 }),
+  emblemUrl:            text("emblem_url"),
+  offerWorkflowRequired: boolean("offer_workflow_required").notNull().default(true),
+  applicantPurposeNote: text("applicant_purpose_note"),
+  createdAt:            timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:            timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedBy:            uuid("updated_by").notNull(),
+  version:              integer("version").notNull().default(1),
+});
+export type RecruitmentSettingsRow = typeof hrmsRecruitmentSettings.$inferSelect;
+
 export const hrmsOffers = recruitmentSchema.table("hrms_offers", {
   id:            uuid("id").primaryKey().defaultRandom(),
   tenantId:      uuid("tenant_id").notNull(),
@@ -113,6 +131,9 @@ export const hrmsOffers = recruitmentSchema.table("hrms_offers", {
   variablePayMinor:  bigint("variable_pay_minor", { mode: "bigint" }).notNull().default(0n),
   grossCtcMinor:     bigint("gross_ctc_minor", { mode: "bigint" }).notNull().default(0n),
   grade:         varchar("grade", { length: 48 }),
+  // 7th-CPC pay-matrix coordinates (GAP-RECRUITMENT-DETAIL-05); both NULL for non-Govt offers.
+  payLevel:      varchar("pay_level", { length: 8 }),
+  payCell:       integer("pay_cell"),
   templateRef:   varchar("template_ref", { length: 200 }),
   approvalChain: jsonb("approval_chain").notNull().default([]),
   currentStage:  integer("current_stage").notNull().default(-1),

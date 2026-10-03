@@ -12,6 +12,9 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import * as screeningRepo from "./screening-repo.js";
+import * as settingsRepo from "./settings-repo.js";
+import { isPublicResumeKey } from "./careers-resume.js";
+import { maskEmail, maskMobile } from "./pii-mask.js";
 import { resolveDeptScope } from "./dept-scope.js";
 import { tenantStorage } from "@civitasone/db";
 import { writeAuditLog } from "../../shared/audit.js";
@@ -101,14 +104,20 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
       stage: q.stage || undefined,
       includeActive: q.includeActive,
     } as { skill?: string; minExp?: number; source?: string; stage?: string; includeActive?: boolean }, pageLimit, pageOffset);
+    // GAP-RECRUITMENT-TALENT-POOL-02: the office's configured purpose / retention note for this applicant data.
+    const settings = await settingsRepo.getSettings(ctx.tenantId);
     return reply.send({
       total,
       limit: pageLimit,
       offset: pageOffset,
+      purposeNote: settings.applicantPurposeNote,
       data: rows.map((r) => ({
         id: r.id,
         applicantName: r.applicantName,
-        email: r.email,
+        // GAP-RECRUITMENT-TALENT-POOL-02 (DPDP): past applicants tenant-wide -> masked at the API; the full
+        // address is only available through the audited reveal-contact endpoint (hr_admin / super_admin).
+        email: maskEmail(r.email),
+        contactMasked: true,
         // GAP-RECRUITMENT-TALENT-POOL-02: mobile is deliberately NOT returned here -- the
         // talent-pool page does not use it and it is PII for every past applicant tenant-wide.
         qualification: r.qualification,
@@ -153,7 +162,9 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
       jobOpeningId: r.jobOpeningId,
       applicationNo: r.applicationNo ?? null,
       applicantName: r.applicantName,
-      email: r.email,
+      // GAP-RECRUITMENT-DETAIL-08 (DPDP): masked here; the audited reveal-contact endpoint gives the full address.
+      email: maskEmail(r.email),
+      contactMasked: true,
       qualification: r.qualification,
       experienceYears: r.experienceYears,
       skills: r.skills,
@@ -165,6 +176,8 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
       category: r.category ?? null,
       dateOfBirth: canSeeDob ? (r.dateOfBirth ?? null) : null,
       hasResume: Boolean(r.resumeRef || r.resumeFileKey),
+      // An uploaded file (public apply) that the audited resume-link can open, as opposed to a bare reference.
+      resumeViewable: Boolean(r.resumeFileKey),
     });
   });
 
@@ -180,8 +193,14 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
         // GAP-RECRUITMENT-DETAIL-APPLICATIONS-APPLICATION-02: human-readable reference for the HR UI.
         applicationNo: r.applicationNo ?? null,
         applicantName: r.applicantName,
-        email: r.email,
-        mobile: r.mobile,
+        // GAP-RECRUITMENT-DETAIL-08 (DPDP): contact details are masked HERE, before they leave the
+        // service. The full values are only available through the audited, reason-bearing
+        // POST /v1/hrms/applications/:id/reveal-contact.
+        email: maskEmail(r.email),
+        mobile: maskMobile(r.mobile),
+        contactMasked: true,
+        // GAP-RECRUITMENT-CAREERS-DETAIL-04: only whether a resume exists; the file is opened via the audited link.
+        hasResume: Boolean(r.resumeFileKey),
         qualification: r.qualification,
         experienceYears: r.experienceYears,
         skills: r.skills,
@@ -235,6 +254,13 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
     // own race window this synchronous check alone can't close.
     if (repo.NOT_OFFERABLE_STAGES.includes(existingApp.stage) || repo.NOT_OFFERABLE_STATUSES.includes(existingApp.status)) {
       throw new HttpError(409, "INVALID_STATE", `Cannot offer application in stage "${existingApp.stage}" (status "${existingApp.status}")`);
+    }
+    // GAP-RECRUITMENT-DETAIL-05: this single-field shortcut releases compensation with NO approval
+    // chain. By default (offerWorkflowRequired, per tenant, default ON) it is refused and offers must
+    // go through POST /applications/:id/offers -> submit -> approve (maker != checker) -> release.
+    // A small-office tenant may switch the policy off in recruitment settings.
+    if ((await settingsRepo.getSettings(ctx.tenantId)).offerWorkflowRequired) {
+      throw new HttpError(409, "OFFER_WORKFLOW_REQUIRED", "offers must go through the approval workflow (create a draft offer, submit it, and have it approved before release)");
     }
     const body = offerApplicationBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.offerApplication(ctx, id, body));
@@ -305,6 +331,10 @@ export async function publicRecruitmentRoutes(app: FastifyInstance): Promise<voi
     // R-RA-0069: no applications after closure (deadline / max-applicants etc.)
     if (!isApplicationOpen(vacancy as never, Date.now())) {
       throw new HttpError(409, "VACANCY_CLOSED", applicationClosedReason(vacancy as never, Date.now()));
+    }
+    // GAP-RECRUITMENT-CAREERS-DETAIL-04: a resume key is accepted only if this service issued it for THIS tenant.
+    if (body.resumeKey && !isPublicResumeKey(body.resumeKey, vacancy.tenantId)) {
+      throw new HttpError(422, "INVALID_RESUME", "the uploaded resume reference is not valid; upload the file again");
     }
     const dedupKey = deriveDedupKey(vacancy, body.email);
     // HIGH fix (response-integrity): a prior version of this pre-check caught

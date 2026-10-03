@@ -4,36 +4,23 @@ import { useCallback, useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 
-/** Vertical reservation categories, matching hrms-service reservation-domain.ts RESERVATION_CATEGORIES. */
-export const ROSTER_CATEGORIES = ["UR", "SC", "ST", "OBC", "EWS"] as const;
-export type RosterCategory = (typeof ROSTER_CATEGORIES)[number];
-export type GoiReservationCategory = "sc" | "st" | "obc" | "ews";
+import {
+  ROSTER_CATEGORIES, GOI_RESERVATION_QUOTA_PCT, HORIZONTAL_CATEGORIES, categoryOfApplication, horizontalDraftErrors,
+  type RosterCategory, type GoiReservationCategory, type HorizontalCategory,
+} from "./reservationCategories";
+import { ReservationShortlistPanel } from "./ReservationShortlistPanel";
+import type { ShortlistCandidate } from "./reservationShortlist";
 
-/** Statutory GOI vertical-reservation percentages (DoPT OM / GFR 2017; EWS 10% per the 103rd Amendment).
- * Used ONLY as guidance when a vacancy has no sanctioned roster -- the sanctioned roster is the source of truth. */
-export const GOI_RESERVATION_QUOTA_PCT: Record<GoiReservationCategory, number> = {
-  sc: 15, st: 7.5, obc: 27, ews: 10,
-};
-
-/** Application.category values that count as each roster category (matches reservation-domain.ts synonyms). */
-const CATEGORY_ALIASES: Record<RosterCategory, string[]> = {
-  UR: ["ur", "gen", "general", "unreserved", "open"],
-  SC: ["sc"],
-  ST: ["st"],
-  OBC: ["obc", "obc-ncl", "obcncl", "obc ncl", "sebc", "bc", "obc(ncl)"],
-  EWS: ["ews"],
-};
-
-export function categoryOfApplication(raw: string | null | undefined): RosterCategory | null {
-  const v = (raw ?? "").trim().toLowerCase();
-  if (!v) return null;
-  return ROSTER_CATEGORIES.find((c) => CATEGORY_ALIASES[c].includes(v)) ?? null;
-}
+// Re-exported so existing imports from this module keep working.
+export { ROSTER_CATEGORIES, GOI_RESERVATION_QUOTA_PCT, categoryOfApplication };
+export type { RosterCategory, GoiReservationCategory };
 
 type Roster = {
   status: string;
   totalVacancies: number;
   categoryVacancies: Record<string, number>;
+  /** Horizontal reservations (PwBD / ex-servicemen / women); absent on rosters saved before they existed. */
+  horizontalVacancies?: Record<string, number>;
 };
 
 interface GOIReservationCardProps {
@@ -46,6 +33,11 @@ interface GOIReservationCardProps {
    * failed): fill figures are then withheld instead of showing a fabricated 0.
    */
   categoryDataAvailable?: boolean;
+  /**
+   * Screened-eligible applications for the reservation shortlist (offered once the roster is approved).
+   * Omit (e.g. in blind-screening mode, where categories are withheld) to hide the shortlist panel.
+   */
+  candidates?: readonly ShortlistCandidate[];
 }
 
 const COLORS: Record<RosterCategory, string> = {
@@ -56,7 +48,7 @@ const COLORS: Record<RosterCategory, string> = {
   EWS: "var(--good, #10b981)",
 };
 
-export function GOIReservationCard({ jobOpeningId, totalVacancies, hiredByCategory = {}, categoryDataAvailable = true }: GOIReservationCardProps) {
+export function GOIReservationCard({ jobOpeningId, totalVacancies, hiredByCategory = {}, categoryDataAvailable = true, candidates }: GOIReservationCardProps) {
   const t = useTranslations("recruitmentGoiCard");
   const formError = useFormError("reservation roster");
   const [open, setOpen] = useState(false);
@@ -64,6 +56,7 @@ export function GOIReservationCard({ jobOpeningId, totalVacancies, hiredByCatego
   const [roster, setRoster] = useState<Roster | null>(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Record<RosterCategory, string>>({ UR: "", SC: "", ST: "", OBC: "", EWS: "" });
+  const [hDraft, setHDraft] = useState<Record<HorizontalCategory, string>>({ PWBD: "", EXSM: "", WOMEN: "" });
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const formId = useId();
@@ -94,6 +87,12 @@ export function GOIReservationCard({ jobOpeningId, totalVacancies, hiredByCatego
       base[c] = n != null ? String(n) : roster ? "0" : "";
     }
     setDraft(base);
+    const h: Record<HorizontalCategory, string> = { PWBD: "", EXSM: "", WOMEN: "" };
+    for (const k of HORIZONTAL_CATEGORIES) {
+      const n = roster?.horizontalVacancies?.[k];
+      h[k] = n != null ? String(n) : "";
+    }
+    setHDraft(h);
     setMessage(null);
     setEditing(true);
   }
@@ -101,7 +100,8 @@ export function GOIReservationCard({ jobOpeningId, totalVacancies, hiredByCatego
   const draftNumbers = ROSTER_CATEGORIES.map((c) => (draft[c].trim() === "" ? 0 : Number(draft[c])));
   const draftValid = draftNumbers.every((n) => Number.isInteger(n) && n >= 0);
   const draftSum = draftNumbers.reduce((a, b) => a + b, 0);
-  const draftMatchesTotal = draftValid && draftSum === totalVacancies;
+  const hErrors = horizontalDraftErrors(hDraft, totalVacancies);
+  const draftMatchesTotal = draftValid && draftSum === totalVacancies && hErrors.length === 0;
 
   async function saveRoster(e: React.FormEvent) {
     e.preventDefault();
@@ -113,7 +113,10 @@ export function GOIReservationCard({ jobOpeningId, totalVacancies, hiredByCatego
       const res = await fetch(`/api/proxy/v1/hrms/job-openings/${jobOpeningId}/reservation-roster`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ totalVacancies, categoryVacancies }),
+        body: JSON.stringify({
+          totalVacancies, categoryVacancies,
+          horizontalVacancies: Object.fromEntries(HORIZONTAL_CATEGORIES.filter((k) => hDraft[k].trim() !== "").map((k) => [k, Number(hDraft[k])])),
+        }),
       });
       if (!res.ok) {
         setMessage({ kind: "error", text: (await formError.fromResponse(res, "save")).message });
@@ -259,6 +262,21 @@ export function GOIReservationCard({ jobOpeningId, totalVacancies, hiredByCatego
                       </div>
                     ))}
                   </div>
+                  <fieldset className="grid grid-cols-3 gap-3">
+                    <legend className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">{t("horizontalLegend")}</legend>
+                    {HORIZONTAL_CATEGORIES.map((k) => (
+                      <div key={k}>
+                        <label htmlFor={`${formId}-h-${k}`} className="block text-xs text-slate-600 dark:text-slate-300 mb-1">{t(`horizontal_${k}`)}</label>
+                        <input
+                          id={`${formId}-h-${k}`} type="number" min={0} max={totalVacancies} step={1} inputMode="numeric"
+                          value={hDraft[k]} aria-invalid={hErrors.includes(k)}
+                          onChange={(e) => setHDraft((d) => ({ ...d, [k]: e.target.value }))}
+                          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-gray-900 px-2 py-1.5 text-sm"
+                        />
+                      </div>
+                    ))}
+                    <p className="col-span-3 text-[11px] text-slate-500">{t("horizontalHelp")}</p>
+                  </fieldset>
                   <p className={`text-xs ${draftMatchesTotal ? "text-slate-500" : "text-red-600"}`} role="status">
                     {t("rosterSum", { sum: draftSum, total: totalVacancies })}
                   </p>
@@ -282,6 +300,16 @@ export function GOIReservationCard({ jobOpeningId, totalVacancies, hiredByCatego
                     </button>
                   )}
                 </div>
+              )}
+
+              {sanctioned && Object.keys(roster!.horizontalVacancies ?? {}).length > 0 && (
+                <p className="mt-3 text-xs text-slate-600 dark:text-slate-300">
+                  {t("horizontalSummary", { list: HORIZONTAL_CATEGORIES.filter((k) => roster!.horizontalVacancies?.[k] != null).map((k) => `${t(`horizontal_${k}`)} ${roster!.horizontalVacancies![k]}`).join(" · ") })}
+                </p>
+              )}
+
+              {sanctioned && roster!.status === "approved" && candidates && (
+                <ReservationShortlistPanel jobOpeningId={jobOpeningId} candidates={candidates} />
               )}
 
               <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-4 border-t border-slate-100 dark:border-slate-700 pt-3">{t("footnote")}</p>

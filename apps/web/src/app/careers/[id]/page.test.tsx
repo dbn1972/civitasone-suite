@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render as rtlRender, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 vi.mock("next/navigation", () => ({
   notFound: () => { throw new Error("NEXT_NOT_FOUND"); },
@@ -9,6 +11,13 @@ vi.mock("./ApplyForm", () => ({ ApplyForm: () => <div data-testid="apply-form" /
 
 import VacancyPage from "./page";
 import { isClosed } from "./vacancy";
+
+
+// The page chrome includes the language switcher (a client component), so renders need the intl provider the
+// root layout supplies in production.
+function render(ui: React.ReactElement) {
+  return rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+}
 
 afterEach(() => { vi.unstubAllGlobals(); });
 

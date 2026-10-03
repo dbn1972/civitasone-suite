@@ -16,6 +16,8 @@ import {
   type Application, type LookupState, type NamedOption,
 } from "./applicationData";
 import { ApplicationExtras } from "./ApplicationExtras";
+import { ContactReveal } from "../../../_components/ContactReveal";
+import { ApplicationFeeDialog } from "../../_components/ApplicationFeeDialog";
 
 const inputStyle: CSSProperties = {
   width: "100%", padding: "8px 12px", border: "1px solid var(--line)",
@@ -34,6 +36,20 @@ export default function ApplicationDetailPage() {
   const [error, setError] = useState<{ message: string; forbidden: boolean } | null>(null);
 
   const [showHireDialog, setShowHireDialog] = useState(false);
+  const [showFee, setShowFee] = useState(false);
+  const [resumeError, setResumeError] = useState<string | null>(null);
+  // GAP-RECRUITMENT-CAREERS-DETAIL-04: open the uploaded resume through the audited, short-lived link.
+  const openResume = useCallback(async () => {
+    setResumeError(null);
+    try {
+      const res = await fetch(`/api/proxy/v1/hrms/applications/${appId}/resume-link`);
+      const j = res.ok ? (await res.json()) as { data?: { url?: string } } : null;
+      if (!j?.data?.url || !/^https:\/\//i.test(j.data.url)) { setResumeError(t("resumeLinkFailed")); return; }
+      window.open(j.data.url, "_blank", "noopener,noreferrer");
+    } catch {
+      setResumeError(t("resumeLinkFailed"));
+    }
+  }, [appId, t]);
   const [employeeNo, setEmployeeNo] = useState("");
   const [dateOfJoining, setDateOfJoining] = useState("");
   // Entered in RUPEES (decimal string) and converted to paise only at submit via
@@ -313,15 +329,27 @@ export default function ApplicationDetailPage() {
           <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("stage")}</span><span>{enumLabel("stage", application.stage)}</span></div>
           <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("screeningDecision")}</span><span>{enumLabel("decision", application.screeningDecision)}</span></div>
           <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("source")}</span>{enumLabel("source", application.source)}</div>
-          {application.email && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("email")}</span>{application.email}</div>}
+          {application.email && (
+            <div>
+              <span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("email")}</span>
+              {application.contactMasked === false
+                ? application.email
+                : <ContactReveal applicationId={application.id} applicantName={application.applicantName} email={application.email} scope="inbox" />}
+            </div>
+          )}
           {application.qualification && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("qualification")}</span>{application.qualification}</div>}
           {application.experienceYears != null && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("experience")}</span>{t("experienceYears", { count: application.experienceYears })}</div>}
           {application.category && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("category")}</span>{application.category}</div>}
           {application.dateOfBirth && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("dateOfBirth")}</span>{formatIndianDate(application.dateOfBirth)}</div>}
-          {application.hasResume !== undefined && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("resume")}</span>{application.hasResume ? t("resumeOnFile") : t("resumeNone")}</div>}
+          {application.hasResume !== undefined && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("resume")}</span>{application.hasResume ? t("resumeOnFile") : t("resumeNone")}{application.resumeViewable && (<>{" "}<button type="button" style={{ textDecoration: "underline", background: "none", border: 0, color: "var(--primary, #4f46e5)", cursor: "pointer" }} onClick={() => void openResume()}>{t("viewResume")}</button></>)}{resumeError && <span role="alert" style={{ color: "var(--bad, #dc2626)", marginInlineStart: 8 }}>{resumeError}</span>}</div>}
           <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("applied")}</span>{formatIndianDate(application.appliedAt)}</div>
         </div>
       </Card>
+
+      <div style={{ margin: "12px 0" }}>
+        <Button variant="secondary" size="sm" onClick={() => setShowFee(true)}>{t("feeStatusButton")}</Button>
+      </div>
+      {showFee && <ApplicationFeeDialog applicationId={application.id} applicantName={application.applicantName} onClose={() => setShowFee(false)} />}
 
       <ApplicationExtras appId={appId} />
 

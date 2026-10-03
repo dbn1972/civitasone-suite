@@ -55,6 +55,9 @@ const compBody = {
   relocationMinor: z.coerce.number().int().min(0).default(0),
   variablePayMinor: z.coerce.number().int().min(0).default(0),
   grade: z.string().max(48).optional(),
+  // 7th-CPC pay-matrix coordinates (GAP-RECRUITMENT-DETAIL-05); both or neither.
+  payLevel: z.coerce.number().int().min(1).max(18).optional(),
+  payCell: z.coerce.number().int().min(1).max(40).optional(),
   templateRef: z.string().max(200).optional(),
   joiningDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 };
@@ -79,6 +82,9 @@ export async function offerRoutes(app: FastifyInstance): Promise<void> {
     // An offer is made to a selected candidate — the application must be shortlisted.
     if (a.screeningDecision !== "shortlisted") {
       throw new HttpError(409, "NOT_SHORTLISTED", "an offer can only be made to a shortlisted candidate");
+    }
+    if ((body.payLevel == null) !== (body.payCell == null)) {
+      throw new HttpError(422, "PAY_LEVEL_AND_CELL", "payLevel and payCell must be given together");
     }
     const privileged = ctx.roles.some((r: string) => ADMIN_ROLES.includes(r));
     if (body.approvalChain && !privileged) throw new HttpError(403, "CHAIN_NOT_ALLOWED", "only HR admins may set a custom approval chain");

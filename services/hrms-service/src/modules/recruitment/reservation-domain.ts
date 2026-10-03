@@ -5,8 +5,9 @@
  * reserved-category candidate who qualifies on open merit is counted against the
  * UNRESERVED (UR) quota, freeing a reserved slot for the next reserved candidate.
  *
- * Horizontal reservations (PwD, ex-servicemen) overlay vertical categories and are
- * a documented follow-up — this module handles the vertical roster (UR/SC/ST/OBC/EWS).
+ * Horizontal reservations (PwBD, ex-servicemen, women) overlay the vertical categories:
+ * they are sanctioned per post (validateHorizontal) and recorded on the roster, but the
+ * shortlist allocation below handles the vertical roster (UR/SC/ST/OBC/EWS) only.
  * No I/O; deterministic (merit desc, ties broken by applicationId).
  */
 
@@ -58,6 +59,29 @@ const CATEGORY_SYNONYMS: Record<string, ReservationCategory> = {
 export function normalizeCategory(c: string): ReservationCategory | null {
   const u = (c || "").trim().toUpperCase().replace(/\s+/g, " ");
   return CATEGORY_SYNONYMS[u] ?? null;
+}
+
+/**
+ * Horizontal reservation groups (GAP-RECRUITMENT-DETAIL-03). They cut ACROSS the vertical
+ * categories (a PwBD candidate is also SC/ST/OBC/EWS/UR), so they are stored as separate
+ * counts and never added into the vertical sum. PWBD = persons with benchmark disabilities
+ * (RPwD Act 2016, s.34; the statutory floor is 4% of vacancies), EXSM = ex-servicemen,
+ * WOMEN = women (state-specific; absent for most Central posts).
+ */
+export const HORIZONTAL_CATEGORIES = ["PWBD", "EXSM", "WOMEN"] as const;
+export type HorizontalCategory = (typeof HORIZONTAL_CATEGORIES)[number];
+export type HorizontalRoster = Partial<Record<HorizontalCategory, number>>;
+
+/** Validation errors for the horizontal counts: each a non-negative integer not exceeding the total posts. */
+export function validateHorizontal(h: HorizontalRoster, totalVacancies: number): string[] {
+  const errors: string[] = [];
+  for (const cat of HORIZONTAL_CATEGORIES) {
+    const n = h[cat];
+    if (n == null) continue;
+    if (!Number.isInteger(n) || n < 0) errors.push(`horizontal ${cat} vacancies must be a non-negative integer`);
+    else if (n > totalVacancies) errors.push(`horizontal ${cat} vacancies (${n}) cannot exceed the total vacancies (${totalVacancies})`);
+  }
+  return errors;
 }
 
 /** Application ids + raw category strings that do NOT map to a known category. */

@@ -104,6 +104,7 @@ export default async function RecruitmentPage() {
           <>
             <Link href="/hr/recruitment/talent-pool" className="btn ghost">{t("talentPool")}</Link>
             {canCreate && <Link href="/hr/recruitment/requisitions" className="btn ghost">{t("requisitions")}</Link>}
+            <Link href="/hr/recruitment/settings" className="btn ghost">{t("settingsLink")}</Link>
             {canCreate && <Link href="/hr/recruitment/new" className="btn primary">{t("newVacancy")}</Link>}
           </>
         }

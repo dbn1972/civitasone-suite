@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render as rtlRender, screen, within } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const cookieJar = vi.hoisted(() => ({ token: undefined as string | undefined }));
 vi.mock("next/headers", () => ({ cookies: () => ({ get: (n: string) => (n === "cand_token" && cookieJar.token ? { value: cookieJar.token } : undefined) }) }));
@@ -8,6 +10,13 @@ vi.mock("next/navigation", () => ({
 }));
 
 import PortalPage from "./page";
+
+
+// The page chrome includes the language switcher (a client component), so renders need the intl provider the
+// root layout supplies in production.
+function render(ui: React.ReactElement) {
+  return rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+}
 
 const goodToken = `${Buffer.from(JSON.stringify({ tenantId: "t1" })).toString("base64url")}.sig`;
 const app = (o: Record<string, unknown> = {}) => ({

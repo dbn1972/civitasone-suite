@@ -51,6 +51,26 @@ export const createApplicationBody = z.object({
 });
 export type CreateApplicationBody = z.infer<typeof createApplicationBody>;
 
+/**
+ * Self-declared reservation category on the public apply form (GAP-RECRUITMENT-CAREERS-DETAIL-03).
+ * Stored lower-case, which is what the HR reservation card compares against. It is a CLAIM: nothing
+ * is exempted or allocated on it until HR verifies the certificate (the fee assessment already
+ * requires categoryVerified). Horizontal groups (PwBD / ex-servicemen) are not vertical categories
+ * and are recorded by HR on the candidate profile, so they are not offered here.
+ */
+export const SELF_DECLARED_CATEGORIES = ["ur", "sc", "st", "obc", "ews"] as const;
+const selfDeclaredCategory = z.preprocess(
+  (v) => (typeof v === "string" ? v.trim().toLowerCase() : v),
+  z.enum(SELF_DECLARED_CATEGORIES, { errorMap: () => ({ message: "Choose one of General, SC, ST, OBC or EWS" }) }),
+);
+
+/** ISO calendar date in the past (a future date of birth is rejected). */
+export const pastIsoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use the format YYYY-MM-DD").refine((v) => {
+  const d = new Date(`${v}T00:00:00Z`);
+  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== v) return false;
+  return v >= "1900-01-01" && v < new Date().toISOString().slice(0, 10);
+}, "Date of birth must be a real date in the past");
+
 /** Public application — no auth required; source = "public_portal". */
 export const publicApplicationBody = z.object({
   jobOpeningId:    z.string().uuid(),
@@ -60,6 +80,10 @@ export const publicApplicationBody = z.object({
   qualification:   z.string().max(500).optional(),
   experienceYears: z.number().int().nonnegative().optional(),
   skills:          z.array(z.string().max(64)).max(20).optional(),
+  category:        selfDeclaredCategory.optional(),
+  dateOfBirth:     pastIsoDate.optional(),
+  // Key returned by POST /v1/careers/resume; the route checks it belongs to this tenant's namespace.
+  resumeKey:       z.string().min(1).max(300).optional(),
   // Internship-specific
   institutionName:          z.string().max(200).optional(),
   graduationYear:           z.number().int().min(1990).max(2040).optional(),

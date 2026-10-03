@@ -7,7 +7,9 @@ export type Application = {
   /** Human-readable reference (hrms_applications.application_no); null for legacy rows. */
   applicationNo?: string | null;
   applicantName: string;
+  /** Masked by the service (contactMasked); the audited reveal gives the full address. */
   email?: string | null;
+  contactMasked?: boolean;
   qualification?: string | null;
   experienceYears?: number | null;
   skills?: string[] | null;
@@ -21,6 +23,8 @@ export type Application = {
   /** ISO date; the API returns it only to hr_admin / super_admin, null for everyone else. */
   dateOfBirth?: string | null;
   hasResume?: boolean;
+  /** An uploaded file the audited resume-link can open. */
+  resumeViewable?: boolean;
 };
 
 export type LoadOutcome =

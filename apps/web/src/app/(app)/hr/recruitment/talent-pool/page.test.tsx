@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render as rtlRender, screen, within, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
+
+// The reveal control is a client component (useTranslations), so every render needs the intl provider --
+// in production the root layout supplies it.
+function render(ui: React.ReactElement) {
+  return rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+}
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -8,6 +16,8 @@ vi.mock("@/app/_data/apiClient", () => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
+const rolesMock = vi.hoisted(() => ({ roles: ["hr_admin"] as string[] }));
+vi.mock("@/lib/auth/roleGuard", () => ({ getSessionRoles: () => rolesMock.roles }));
 
 import TalentPoolPage from "./page";
 
@@ -32,6 +42,7 @@ const pool = (candidates: unknown[], total = candidates.length) => ({ candidates
 describe("TalentPoolPage (HR-A deep-verify)", () => {
   beforeEach(() => {
     fetchJsonMock.mockReset();
+    rolesMock.roles = ["hr_admin"];
   });
 
   it("renders a candidate row using the real /talent-pool response field names", async () => {
@@ -192,5 +203,52 @@ describe("TalentPoolPage (HR-A deep-verify)", () => {
     expect(clear.className).toContain("btn-tall");
     expect(search.getAttribute("style") ?? "").not.toContain("min-height");
     expect(clear.getAttribute("style") ?? "").not.toContain("min-height");
+  });
+});
+
+
+// GAP-RECRUITMENT-TALENT-POOL-02 (remainder): audited reveal + purpose note.
+describe("TalentPoolPage: audited reveal and purpose note", () => {
+  beforeEach(() => { fetchJsonMock.mockReset(); rolesMock.roles = ["hr_admin"]; });
+  const withIntl = render;
+
+  it("an hr_admin sees a Reveal control per row; hr_officer does not (the service refuses it anyway)", async () => {
+    fetchJsonMock.mockResolvedValue({ data: pool([candidate({})]), source: "api" });
+    withIntl(await TalentPoolPage({ searchParams: {} }));
+    expect(screen.getByRole("button", { name: /reveal contact details for ravi kumar/i })).toBeInTheDocument();
+    document.body.innerHTML = "";
+    rolesMock.roles = ["hr_officer"];
+    withIntl(await TalentPoolPage({ searchParams: {} }));
+    expect(screen.queryByRole("button", { name: /reveal contact details/i })).not.toBeInTheDocument();
+    expect(screen.getByText("r***@e***.com")).toBeInTheDocument();
+  });
+
+  it("revealing asks for a reason, calls the audited endpoint with the talent_pool scope, and does NOT navigate the row", async () => {
+    const push = vi.fn();
+    vi.doMock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ data: { id: "c1", email: "ravi@example.com", mobile: null } }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchFn);
+    fetchJsonMock.mockResolvedValue({ data: pool([candidate({ jobOpeningId: "job-3" })]), source: "api" });
+    withIntl(await TalentPoolPage({ searchParams: {} }));
+    fireEvent.click(screen.getByRole("button", { name: /reveal contact details for ravi kumar/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText(/reason/i), { target: { value: "re-engage for new vacancy" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^reveal$/i }));
+    await waitFor(() => expect(screen.getByTestId("contact-c1")).toHaveTextContent("ravi@example.com"));
+    const [url, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/proxy/v1/hrms/applications/c1/reveal-contact");
+    expect(JSON.parse(String(init.body))).toEqual({ reason: "re-engage for new vacancy", scope: "talent_pool" });
+    expect(push).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("shows the office's configured purpose / retention note, or a default when none is set", async () => {
+    fetchJsonMock.mockResolvedValue({ data: { ...pool([candidate({})]), purposeNote: "Held for 12 months for reconsideration only." }, source: "api" });
+    withIntl(await TalentPoolPage({ searchParams: {} }));
+    expect(screen.getByRole("note")).toHaveTextContent("Held for 12 months for reconsideration only.");
+    document.body.innerHTML = "";
+    fetchJsonMock.mockResolvedValue({ data: pool([candidate({})]), source: "api" });
+    withIntl(await TalentPoolPage({ searchParams: {} }));
+    expect(screen.getByRole("note")).toHaveTextContent(/recruitment only/i);
   });
 });

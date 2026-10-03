@@ -29,6 +29,7 @@
     "@civitasone/render": "workspace:*",
     "@civitasone/schemas": "workspace:*",
     "@civitasone/search": "workspace:*",
+    "@civitasone/scanner": "workspace:*",
     "@civitasone/storage": "workspace:*",
     "@civitasone/types": "workspace:*",
     "@fastify/cors": "^9.0.0",

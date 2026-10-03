@@ -997,6 +997,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
                   relocationMinor: c.relocationMinor, variablePayMinor: c.variablePayMinor,
                   grossCtcMinor: c.grossCtcMinor, ctcMinor: c.grossCtcMinor, // keep legacy ctc_minor in sync
                   ...(body.grade ? { grade: body.grade } : {}),
+                  ...(body.payLevel != null ? { payLevel: String(body.payLevel), payCell: Number(body.payCell) } : {}),
                   ...(body.templateRef ? { templateRef: body.templateRef } : {}),
                   ...(body.joiningDate ? { joiningDate: body.joiningDate } : {}),
                   approvalChain: chain as never, currentStage: -1, status: "draft",
@@ -1035,6 +1036,10 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             const o = await offerRepo.findOfferTx(tx, p.tenantId, offerId);
             if (!o) throw new HttpError(404, "NOT_FOUND", "offer not found");
             await offerRepo.updateOffer(tx, p.tenantId, offerId, { status: "released", releasedAt: new Date(), ...(body.expiresAt ? { expiresAt: body.expiresAt } : {}) }, o.version);
+                  // GAP-RECRUITMENT-DETAIL-05: a released offer moves the application to stage "offered" (what the
+                  // legacy PATCH did), so the Hire step (stage selected|offered) keeps working on the approval path.
+                  // Returns false (no-op) when the application is already offered/hired or in a terminal state.
+                  await coreRepo.claimApplicationForOffer(tx, o.applicationId, p.tenantId);
                   await offerRepo.insertEvent(tx, { tenantId: p.tenantId, offerId, applicationId: o.applicationId, action: "release", actorId: msg.actorId });
             break;
           }
@@ -1098,6 +1103,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
                     relocationMinor: c.relocationMinor, variablePayMinor: c.variablePayMinor,
                     grossCtcMinor: c.grossCtcMinor, ctcMinor: c.grossCtcMinor,
                     grade: (body.grade ?? prev.grade) as string | null,
+                    payLevel: prev.payLevel, payCell: prev.payCell,
                     approvalChain: prev.approvalChain as never, currentStage: -1, status: "draft",
                     supersedesOfferId: offerId,
                     createdBy: msg.actorId, updatedBy: msg.actorId,
@@ -1507,6 +1513,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             const existing = await reservationRepo.findByJobTx(tx, p.tenantId, jobOpeningId);
             const totalVacancies = numOr(body.totalVacancies, 0);
             const categoryVacancies = numRecord(body.categoryVacancies ?? {});
+            const horizontalVacancies = numRecord(body.horizontalVacancies ?? {});
             const locationRosters: Record<string, Record<string, number>> = {};
             for (const [loc, roster] of Object.entries((body.locationRosters ?? {}) as Record<string, unknown>)) {
               locationRosters[loc] = numRecord(roster);
@@ -1514,12 +1521,14 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             if (existing) {
                       await reservationRepo.updateRoster(tx, p.tenantId, jobOpeningId, {
                         totalVacancies, categoryVacancies: categoryVacancies as never,
-                        locationRosters: locationRosters as never, updatedBy: msg.actorId,
+                        locationRosters: locationRosters as never, horizontalVacancies: horizontalVacancies as never,
+                        updatedBy: msg.actorId,
                       }, existing.version);
                     } else {
                       await reservationRepo.insertRoster(tx, {
                         id: randomUUID(), tenantId: p.tenantId, jobOpeningId, totalVacancies,
                         categoryVacancies: categoryVacancies as never, locationRosters: locationRosters as never,
+                        horizontalVacancies: horizontalVacancies as never,
                         status: "draft", createdBy: msg.actorId, updatedBy: msg.actorId,
                       });
                     }

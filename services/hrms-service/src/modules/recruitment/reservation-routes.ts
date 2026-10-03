@@ -20,7 +20,7 @@ import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import {
-  RESERVATION_CATEGORIES, validateRoster, validateLocationRosters, unmappedCategories,
+  RESERVATION_CATEGORIES, HORIZONTAL_CATEGORIES, validateHorizontal, validateRoster, validateLocationRosters, unmappedCategories,
   allocateShortlist, allocateByLocation, type Roster, type Candidate,
 } from "./reservation-domain.js";
 import * as repo from "./reservation-repo.js";
@@ -29,6 +29,7 @@ const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 const RESERVATION_ADMIN_ROLES = ["hr_admin", "super_admin"];
 const idParam = z.object({ id: z.string().uuid() });
 const rosterShape = z.record(z.enum(RESERVATION_CATEGORIES), z.coerce.number().int().min(0));
+const horizontalShape = z.record(z.enum(HORIZONTAL_CATEGORIES), z.coerce.number().int().min(0));
 
 export async function reservationRoutes(app: FastifyInstance): Promise<void> {
   // ---- set the roster (draft) ------------------------------------------
@@ -40,9 +41,12 @@ export async function reservationRoutes(app: FastifyInstance): Promise<void> {
       totalVacancies: z.coerce.number().int().min(1),
       categoryVacancies: rosterShape,
       locationRosters: z.record(z.string().min(1).max(120), rosterShape).optional(),
+      // GAP-RECRUITMENT-DETAIL-03: horizontal reservations (PwBD / ex-servicemen / women).
+      horizontalVacancies: horizontalShape.optional(),
     }).parse(req.body);
 
     const errors = validateRoster(body.categoryVacancies as Roster, body.totalVacancies);
+    errors.push(...validateHorizontal(body.horizontalVacancies ?? {}, body.totalVacancies));
     // Location rosters must reconcile with the approved category vacancies — the
     // per-category sum across locations must equal that category's total, so
     // location-mode shortlisting can never exceed the sanctioned profile.
