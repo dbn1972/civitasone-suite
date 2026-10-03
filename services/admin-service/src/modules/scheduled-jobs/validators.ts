@@ -31,3 +31,12 @@ export const updateJobBody = z.object({
 export type UpdateJobBody = z.infer<typeof updateJobBody>;
 
 export const jobIdParam = z.object({ id: z.string().uuid() });
+
+/**
+ * GAP-ADMIN-SCHEDULED-JOBS-01: why an operator deleted / ran / paused a job. It is
+ * carried on the command and written to the audit event. Delete always needs one;
+ * run-now needs one for jobs aimed at finance/hrms/audit (see targets.ts).
+ */
+export const reasonField = z.string().trim().min(3).max(500);
+export const actionBody = z.object({ reason: reasonField.optional() }).strict();
+export type ActionBody = z.infer<typeof actionBody>;

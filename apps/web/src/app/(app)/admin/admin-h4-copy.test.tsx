@@ -13,7 +13,6 @@ vi.mock("next/navigation", () => ({
 import TenantProvisionPage from "./tenant-provision/page";
 import { InvoicesTable } from "./invoices/InvoicesTable";
 import BulkScanPage from "./bulk-scan/page";
-import DiscoveryPage from "./discovery/page";
 
 // GAP-ADMIN-TENANT-PROVISION-01/-02
 describe("tenant-provision", () => {
@@ -46,12 +45,22 @@ describe("InvoicesTable", () => {
     expect(screen.getAllByText(/1,18,000/).length).toBeGreaterThan(0);
     expect(screen.queryByText("11800000")).not.toBeInTheDocument();
   });
+
+  // GAP-ADMIN-INVOICES-06: the invoice number opens the detail page.
+  it("links each invoice number to its detail page", () => {
+    render(
+      <InvoicesTable
+        invoices={[{ id: "5e7e1000-0000-4000-8000-000000000001", periodMonth: "2026-09", status: "issued", totalMinor: "100", paidMinor: "0", outstandingMinor: "100", issuedAt: "2026-09-30T00:00:00Z" }]}
+        source="api"
+      />,
+    );
+    expect(screen.getByRole("link", { name: "5e7e1000-0000-4000-8000-000000000001" })).toHaveAttribute("href", "/admin/invoices/5e7e1000-0000-4000-8000-000000000001");
+  });
 });
 
 // GAP-ADMIN-BULK-SCAN-03/-04, GAP-ADMIN-DISCOVERY-03/-04
 describe.each([
   ["bulk-scan", BulkScanPage, "Bulk accessibility scans are coming soon."],
-  ["discovery", DiscoveryPage, "Service discovery is coming soon."],
 ] as const)("%s placeholder", (dir, Page, subtitle) => {
   it("uses plain user-facing copy with no fake control and no engineering words", () => {
     const { container } = render(Page());

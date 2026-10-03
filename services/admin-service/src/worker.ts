@@ -16,6 +16,7 @@ import { registerFeatureFlagConsumers } from "./modules/feature-flags/consumer.j
 import { registerAuditLogExportConsumers } from "./modules/audit-log-export/consumer.js";
 import { registerPlatformOpsConsumers } from "./modules/platform-ops/consumer.js";
 import { registerUserExportConsumers } from "./modules/user-export/consumer.js";
+import { registerTenantSettingsConsumers } from "./modules/tenant-settings/consumer.js";
 // WC-009: subscriber for the admin.sandbox_refresh.execute command published by
 // the approve route. Without this the command would have no consumer.
 import { registerSandboxConsumers } from "./modules/sandbox/consumer.js";
@@ -26,7 +27,7 @@ registerTenantConsumers(queue);
 registerConfigConsumers(queue);
 registerBackupConsumers(queue);
 registerSupportConsumers(queue);
-registerScheduledJobConsumers(queue);
+registerScheduledJobConsumers(tenantScoped(queue));
 registerCustomDomainConsumers(queue);
 registerWebhookConsumers(queue);
 registerDataExportConsumers(queue);
@@ -34,6 +35,7 @@ registerFeatureFlagConsumers(queue);
 registerAuditLogExportConsumers(queue);
 registerUserExportConsumers(queue);
 registerPlatformOpsConsumers(queue);
+registerTenantSettingsConsumers(tenantScoped(queue));
 // handleSandboxRefreshExecute wraps its own work in runWithTenant(), so it does
 // not need the tenantScoped(queue) proxy.
 registerSandboxConsumers(queue);

@@ -39,6 +39,8 @@ import { documentGovernanceRoutes } from "./modules/uploads/doc-routes.js";
 // (real org-unit INSTANCES, forwarded to tenant-service).
 import { platformOpsRoutes } from "./modules/platform-ops/routes.js";
 import { orgHierarchyLevelRoutes } from "./modules/org-hierarchy-levels/routes.js";
+import { tenantSettingsRoutes } from "./modules/tenant-settings/routes.js";
+import { discoveryRoutes } from "./modules/discovery/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -96,6 +98,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(documentGovernanceRoutes);
   await app.register(orgHierarchyLevelRoutes);
   await app.register(platformOpsRoutes);
+  await app.register(tenantSettingsRoutes);
+  await app.register(discoveryRoutes);
   const { adminGapRoutes } = await import("./modules/gap/routes.js");
   await app.register(adminGapRoutes);
 

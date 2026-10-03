@@ -42,7 +42,7 @@ const tenantAdmin: [string, PageFn][] = [
   ["org", OrgPage],
   ["role-features", RoleFeaturesPage],
   ["roles", RolesPage],
-  ["users", UsersPage],
+  ["users", () => UsersPage({})],
   ["integrations", IntegrationsPage],
   ["settings", SettingsPage],
 ];
