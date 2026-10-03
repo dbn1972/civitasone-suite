@@ -1,9 +1,13 @@
+import { notFound } from "next/navigation";
+import Link from "next/link";
 import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState, LoadErrorState } from "@/app/_components/ds";
 import { getAdminTenantDetail, getAdminTenantModules } from "@/app/_data/loaders";
 import { toHumanError } from "@/lib/messages";
 import { PLATFORM_ADMIN_ROLES } from "@/lib/auth/adminRoles";
 import { AdminAccessDenied, sessionHasAnyRole } from "../../_components/AdminAccessGate";
+import { isUuid } from "@/lib/pathSegment";
 import { TenantModulesTable } from "./TenantModulesTable";
+import { seatsInUse, hasNoModules, settingsRows } from "./tenantDetailView";
 
 export default async function TenantDetailPage({ params }: { params: Promise<{ id: string }> }) {
   // GAP-ADMIN-TENANTS-DETAIL-02: a cross-tenant record -- platform operators
@@ -14,6 +18,9 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ i
     return <AdminAccessDenied title="Tenant" area="tenant records" roles={PLATFORM_ADMIN_ROLES} />;
   }
   const { id } = await params;
+  // GAP-ADMIN-TENANTS-DETAIL-03: tenant ids are uuids (admin-service idParam);
+  // anything else never reaches the upstream path.
+  if (!isUuid(id)) notFound();
   const [detailResult, modulesResult] = await Promise.all([
     getAdminTenantDetail(id),
     getAdminTenantModules(id),
@@ -60,18 +67,20 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ i
   }
 
   const enabledCount = modules.filter((m) => m.enabled === "Yes").length;
-  const totalUsers = modules.reduce((sum, m) => sum + m.users, 0);
+  const seats = seatsInUse(modules);
+  const settings = settingsRows(tenant.settings);
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={`Tenant: ${tenant.name}`}
-        subtitle={`Edition: ${tenant.edition} · Status: ${tenant.status} · Region: ${tenant.region}`}
+        subtitle={`${tenant.domain ? `Domain: ${tenant.domain} · ` : ""}Edition: ${tenant.edition} · Status: ${tenant.status} · Region: ${tenant.region}`}
         back="/admin/tenants"
+        actions={<Link href="/admin/onboarding" className="btn ghost sm">Onboarding queue</Link>}
       />
       <StatGrid>
         <StatCard icon="📦" iconBg="#eef2ff" label="Modules Enabled" value={enabledCount} />
-        <StatCard icon="👥" iconBg="#ecfdf3" label="Active Users" value={totalUsers} />
+        <StatCard icon="👥" iconBg="#ecfdf3" label="Module seats in use" value={seats ?? "—"} />
         <StatCard icon="🏢" iconBg="#fffaeb" label="Edition" value={tenant.edition} />
         <StatCard icon="🔒" iconBg="#fce7ee" label="Status" value={tenant.status} />
       </StatGrid>
@@ -82,12 +91,24 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ i
             disagree with the table's own cache state (UX-002's pattern). */}
         {source === "error" ? (
           <RefreshErrorState error={toHumanError("load", { area: "tenant modules" })} />
-        ) : modules.length === 0 ? (
+        ) : hasNoModules(modules) ? (
           <EmptyState icon="📦" title="No modules" message="No modules configured for this tenant." />
         ) : (
-          <TenantModulesTable modules={modules} source="api" />
+          <TenantModulesTable tenantId={id} modules={modules} source="api" />
         )}
       </Card>
+      {settings.length > 0 && (
+        <Card title="Settings">
+          <dl style={{ display: "grid", gridTemplateColumns: "minmax(120px, 220px) 1fr", gap: "6px 16px", margin: 0, fontSize: 13 }}>
+            {settings.map((r) => (
+              <div key={r.key} style={{ display: "contents" }}>
+                <dt style={{ color: "var(--mut)" }}>{r.key}</dt>
+                <dd style={{ margin: 0, overflowWrap: "anywhere" }}>{r.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </Card>
+      )}
     </div>
   );
 }

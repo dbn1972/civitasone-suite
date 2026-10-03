@@ -85,4 +85,68 @@ describe("AdminUsersManager", () => {
     const superBox = await screen.findByRole("checkbox", { name: /Super Admin/ });
     await waitFor(() => expect(superBox).not.toBeDisabled());
   });
+
+  // GAP-ADMIN-USERS-05
+  it("stat tiles move immediately when a user is suspended", async () => {
+    render(<AdminUsersManager initialUsers={[other, { ...other, id: "u-3", email: "z@x.gov.in", name: "Zed" }]} roles={roles} source="api" currentUserId="u-me" />);
+    const tile = (label: string) => Array.from(document.querySelectorAll(".lab")).find((e) => e.textContent === label)!.parentElement!.textContent ?? "";
+    expect(tile("Active")).toContain("2");
+    fireEvent.click(screen.getAllByRole("button", { name: "Suspend" })[0]!);
+    fireEvent.change(await screen.findByRole("textbox"), { target: { value: "left the department" } });
+    fireEvent.click(screen.getByRole("button", { name: "Suspend user" }));
+    await waitFor(() => expect(tile("Active")).toContain("1"));
+    expect(tile("Suspended")).toContain("1");
+  });
+
+  // GAP-ADMIN-USERS-06
+  it("export is confirmed, audited first, and the CSV is quoted + formula-safe", async () => {
+    let blobText = "";
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, writable: true, value: () => "" });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, writable: true, value: () => {} });
+    vi.spyOn(URL, "createObjectURL").mockImplementation((b) => { const fr = new FileReader(); fr.onload = () => { blobText = String(fr.result); }; fr.readAsText(b as Blob); return "blob:x"; });
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    const bad = { ...other, id: "u-4", name: "=cmd|x, Evil", email: "e@x.gov.in" };
+    render(<AdminUsersManager initialUsers={[bad]} roles={roles} source="api" />);
+    fireEvent.click(screen.getByRole("button", { name: "Export CSV" }));
+    expect(await screen.findByText(/personal data/)).toBeInTheDocument();
+    expect(fetchSpy.mock.calls.filter(([u]) => String(u).includes("user-exports/audit"))).toHaveLength(0);
+    fireEvent.click(screen.getAllByRole("button", { name: "Export CSV" }).at(-1)!);
+    await waitFor(() => expect(blobText).toContain("Evil"));
+    const audit = fetchSpy.mock.calls.filter(([u]) => String(u).includes("/api/proxy/v1/admin/user-exports/audit"));
+    expect(audit).toHaveLength(1);
+    expect(JSON.parse((audit[0]![1] as RequestInit).body as string)).toMatchObject({ rowCount: 1 });
+    expect(blobText).toContain(`"'=cmd|x, Evil"`);
+  });
+
+  it("no file is created when the audit record cannot be written", async () => {
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, writable: true, value: () => "" });
+    const create = vi.spyOn(URL, "createObjectURL").mockImplementation(() => "blob:x");
+    fetchSpy.mockImplementation(async () => new Response("{}", { status: 500 }));
+    render(<AdminUsersManager initialUsers={[other]} roles={roles} source="api" />);
+    fireEvent.click(screen.getByRole("button", { name: "Export CSV" }));
+    fireEvent.click((await screen.findAllByRole("button", { name: "Export CSV" })).at(-1)!);
+    expect(await screen.findByText(/no file was created/)).toBeInTheDocument();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  // GAP-ADMIN-USERS-07
+  it("status filter supports arrow keys (roving tabs)", () => {
+    render(<AdminUsersManager initialUsers={[other]} roles={roles} source="api" />);
+    const all = screen.getByRole("tab", { name: "All" });
+    fireEvent.keyDown(all, { key: "ArrowRight" });
+    expect(screen.getByRole("tab", { name: "Active" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("Edit Roles sheet: Esc closes it and focus returns to the opener; Reset Password explained without hover", async () => {
+    render(<AdminUsersManager initialUsers={[other]} roles={roles} source="api" />);
+    expect(screen.getByText(/managed in the Keycloak Admin console/)).toBeVisible();
+    const opener = screen.getByRole("button", { name: "Edit Roles" });
+    opener.focus();
+    fireEvent.click(opener);
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(opener).toHaveFocus();
+  });
 });

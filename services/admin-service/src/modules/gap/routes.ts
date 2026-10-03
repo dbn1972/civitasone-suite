@@ -19,6 +19,9 @@ import * as incidentRepo from "../security-incident/repo.js";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import * as auditLogExportCommands from "../audit-log-export/commands.js";
+import * as userExportCommands from "../user-export/commands.js";
+// Mirrors the web ADMIN_USERS_LIST_LIMIT: the browser can only ever export the rows it loaded.
+const USER_EXPORT_MAX_ROWS = 200;
 
 const ROLES = ["tenant_admin", "platform_admin", "super_admin"];
 // Tighter gates matching the CANONICAL module for a resource, used only where
@@ -259,6 +262,20 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
     const { status, body } = await callUpstream(req, ctx, "PATCH", identityBaseUrl(), `/identity/users/${id}/status`, parsed.data);
     if (status < 200 || status >= 300) { const r = relayError(status, body); return reply.code(r.status).send(r.payload); }
     return reply.code(status).send(body);
+  });
+
+  // ─── Audit record for a user-directory CSV export (GAP-ADMIN-USERS-06) ───
+  // Deliberately NOT under /v1/admin/users/*: the gateway sends that whole
+  // prefix to identity-service (see the user-roles note below).
+  app.post("/v1/admin/user-exports/audit", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const parsed = z.object({
+      rowCount: z.number().int().min(0).max(USER_EXPORT_MAX_ROWS),
+      filter: z.string().max(200).optional(),
+    }).safeParse(req.body);
+    if (!parsed.success) throw new HttpError(400, "VALIDATION_FAILED", "body must be { rowCount: number (0-" + USER_EXPORT_MAX_ROWS + "), filter?: string }");
+    return sendAccepted(reply, acceptedResponseSchema, await userExportCommands.recordUserExport(ctx, parsed.data.rowCount, parsed.data.filter));
   });
 
   // ─── Effective roles for a user — real, forwarded to identity-service RBAC ───
