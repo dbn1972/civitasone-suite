@@ -18,6 +18,7 @@ const ROW: ClaimRow = {
   period_display: "Jul 2026",
   bill_date_display: "01/07/2026",
   bill_ref: "BILL-1",
+  receipt_count: 0,
   status: "submitted",
 };
 
@@ -86,5 +87,24 @@ describe("ReimbursementsTable (GAP-PAYROLL-REIMBURSEMENTS-02)", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Approve" }));
     await waitFor(() => expect(within(dialog).getByRole("alert")).toBeInTheDocument());
     expect(refreshMock).not.toHaveBeenCalled();
+  });
+
+  // fin-payroll-03 (GAP-PAYROLL-REIMBURSEMENTS-03): receipts column + viewer.
+  it("shows how many receipts a claim carries and a dash when none", () => {
+    renderTable(false, [{ ...ROW, receipt_count: 2 }, { ...ROW, id: "dddddddd-3333-4333-8333-333333333302", receipt_count: 0 }]);
+    expect(screen.getByRole("button", { name: /View 2 receipt\(s\)/ })).toHaveTextContent("View (2)");
+    expect(screen.getByRole("columnheader", { name: /Receipts/ })).toBeInTheDocument();
+  });
+
+  it("opens the receipts through the audited endpoint and links the short-lived URLs", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: [{ index: 0, filename: "bill.pdf", url: "https://bucket.example/get?sig=1" }] }), { status: 200 }),
+    );
+    renderTable(false, [{ ...ROW, receipt_count: 1 }]);
+    fireEvent.click(screen.getByRole("button", { name: /View 1 receipt/ }));
+    const link = await screen.findByRole("link", { name: "bill.pdf" });
+    expect(link).toHaveAttribute("href", "https://bucket.example/get?sig=1");
+    expect(link).toHaveAttribute("rel", expect.stringContaining("noopener"));
+    expect(String(fetchSpy.mock.calls[0]![0])).toContain(`v1/payroll/reimbursements/${ROW.id}/attachments`);
   });
 });

@@ -46,7 +46,7 @@ function token(sub: string, roles: string[]) {
 }
 
 function payload(employeeId: string) {
-  return { employeeId, category: "medical", amountMinor: 150000, period: "2026-08" };
+  return { employeeId, category: "food", amountMinor: 150000, period: "2026-08" };
 }
 
 describe("POST /v1/payroll/reimbursements — ownership (SEC-P2-03)", () => {

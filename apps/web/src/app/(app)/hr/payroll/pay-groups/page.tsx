@@ -20,6 +20,9 @@ type Row = {
   name: string;
   frequency: string;
   pay_day_of_month: number;
+  pay_weekday?: number | null;
+  pay_last_day?: boolean | null;
+  pay_week_parity?: number | null;
   timezone: string;
   status: string;
   employeeCount?: number;
@@ -28,7 +31,9 @@ type Row = {
 } & Record<string, unknown>;
 
 async function getData(): Promise<LoaderResult<Row[]>> {
-  return fetchJson<unknown, Row[]>("/api/v1/payroll/pay-groups", [], {
+  // GAP-PAYROLL-PAY-GROUPS-03: includeInactive so a deactivated group stays
+  // visible (and can be reactivated) instead of silently disappearing.
+  return fetchJson<unknown, Row[]>("/api/v1/payroll/pay-groups?includeInactive=true", [], {
     telemetryKey: "payroll.pay-groups",
     mapResponse: (p) => {
       const arr = Array.isArray(p) ? p : (p as { data?: Row[] })?.data;
@@ -37,7 +42,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
   });
 }
 
-export default async function PayGroupsPage() {
+export default async function PayGroupsPage({ searchParams }: { searchParams?: { edit?: string } }) {
   const t = await getTranslations("payrollPayGroups");
 
   // GAP-PAYROLL-PAY-GROUPS-04: GET is READER_ROLES and POST is PAYROLL_ROLES
@@ -57,12 +62,17 @@ export default async function PayGroupsPage() {
   const resource = toResourceState(result);
   const errored = resource.status === "error";
 
-  // GAP-PAYROLL-PAY-GROUPS-03: the API lists active groups only and has no
-  // edit/deactivate endpoint, so an "Inactive" count was always 0 and
-  // "Active" always equalled the total. Break down by frequency instead.
-  const monthlyCount = errored ? null : groups.filter((g) => g.frequency === "monthly").length;
-  const biWeeklyCount = errored ? null : groups.filter((g) => g.frequency === "bi_weekly").length;
-  const weeklyCount = errored ? null : groups.filter((g) => g.frequency === "weekly").length;
+  // GAP-PAYROLL-PAY-GROUPS-03: deactivated ('archived') groups are listed too,
+  // so Inactive is a real count and the frequency breakdown counts active
+  // groups only.
+  const isActiveRow = (g: Row) => g.status === "active";
+  const activeGroups = groups.filter(isActiveRow);
+  const inactiveCount = errored ? null : groups.length - activeGroups.length;
+  const monthlyCount = errored ? null : activeGroups.filter((g) => g.frequency === "monthly").length;
+  const biWeeklyCount = errored ? null : activeGroups.filter((g) => g.frequency === "bi_weekly").length;
+  const weeklyCount = errored ? null : activeGroups.filter((g) => g.frequency === "weekly").length;
+  const editId = searchParams?.edit?.trim();
+  const editRow = editId ? groups.find((g) => g.id === editId && isActiveRow(g)) : undefined;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -75,13 +85,28 @@ export default async function PayGroupsPage() {
       <DataSourceBadge source={result.source} message={t("loadErrorMessage")} />
 
       <StatGrid>
-        <StatCard icon="👥" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? null : groups.length} />
+        <StatCard icon="👥" iconBg="var(--infobg)" label={t("statActive")} value={errored ? null : activeGroups.length} />
         <StatCard icon="📅" iconBg="var(--warnbg)" label={t("statMonthly")} value={monthlyCount} />
         <StatCard icon="📆" iconBg="var(--goodbg)" label={t("statBiWeekly")} value={biWeeklyCount} />
         <StatCard icon="🗓️" iconBg="var(--panel)" label={t("statWeekly")} value={weeklyCount} />
+        <StatCard icon="🚫" iconBg="var(--badbg)" label={t("statInactive")} value={inactiveCount} />
       </StatGrid>
 
-      {canAdminister && <CreatePayGroupForm />}
+      {canAdminister && (
+        <CreatePayGroupForm
+          key={editRow?.id ?? "new"}
+          {...(editRow
+            ? {
+                editing: {
+                  id: editRow.id, name: editRow.name, frequency: editRow.frequency as "monthly" | "bi_weekly" | "weekly",
+                  payDayOfMonth: editRow.pay_day_of_month, payWeekday: editRow.pay_weekday ?? null,
+                  payLastDay: editRow.pay_last_day === true, payWeekParity: editRow.pay_week_parity ?? null,
+                  timezone: editRow.timezone,
+                },
+              }
+            : {})}
+        />
+      )}
 
       {errored ? (
         <Card title={t("cardTitle")}>
@@ -99,7 +124,6 @@ export default async function PayGroupsPage() {
         </Card>
       ) : (
         <Card title={t("cardsTitle")}>
-          <p style={{ margin: "12px 16px 0", fontSize: 13, color: "var(--mut)" }}>{t("readOnlyNote")}</p>
           <div
             style={{
               display: "grid",
@@ -115,6 +139,10 @@ export default async function PayGroupsPage() {
                 name={g.name}
                 frequency={g.frequency}
                 payDayOfMonth={g.pay_day_of_month}
+                payWeekday={g.pay_weekday ?? null}
+                payLastDay={g.pay_last_day ?? false}
+                payWeekParity={g.pay_week_parity ?? null}
+                canAdminister={canAdminister}
                 timezone={g.timezone}
                 status={g.status}
                 employeeCount={typeof g.employeeCount === "number" ? g.employeeCount : undefined}

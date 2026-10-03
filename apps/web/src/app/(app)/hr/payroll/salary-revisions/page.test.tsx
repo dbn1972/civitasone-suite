@@ -39,6 +39,7 @@ const E_UNKNOWN = "99999999-9999-4999-8999-999999999999";
 // page.tsx fetches the revisions, then resolves employee names through the
 // shared hrms directory `ids=` batch (resolveEmployeeNames). Route each
 // mocked fetchJson call by path.
+let settingsSecondApprover = true;
 function mockRevisionsAndNames(
   revisions: Record<string, unknown>[],
   revisionsSource: "api" | "error" = "api",
@@ -48,7 +49,9 @@ function mockRevisionsAndNames(
     Promise.resolve(
       path.startsWith("/api/v1/hrms/employees")
         ? { data: names, source: "api" }
-        : { data: revisions, source: revisionsSource },
+        : path.startsWith("/api/v1/payroll/settings")
+          ? { data: settingsSecondApprover, source: "api" }
+          : { data: revisions, source: revisionsSource },
     ),
   );
 }
@@ -68,6 +71,7 @@ describe("SalaryRevisionsPage", () => {
     fetchJsonMock.mockReset();
     getSessionRolesMock.mockReset();
     getSessionRolesMock.mockReturnValue(["payroll_admin"]);
+    settingsSecondApprover = true;
   });
 
   it("renders the list of salary revisions", async () => {
@@ -210,5 +214,33 @@ describe("SalaryRevisionsPage", () => {
     expect(screen.queryByText("Access restricted")).not.toBeInTheDocument();
     expect(screen.getByText("Salary Revision History")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Record Revision" })).not.toBeInTheDocument();
+  });
+
+  // fin-payroll-03 (GAP-PAYROLL-SALARY-REVISIONS-04): maker != checker.
+  it("lists revisions awaiting a second approver with Approve / Reject, and a status column", async () => {
+    mockRevisionsAndNames(
+      [rev({ id: "sr-pending", status: "pending" }), rev({ id: "sr-ok", status: "approved", order_no: "ORD-2" })],
+      "api",
+      [[E1, { name: "Asha Rao", employeeNo: "EMP-1" }]],
+    );
+    await renderPage();
+    expect(screen.getByText("Salary revisions awaiting approval")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Approve the salary revision for Asha Rao (EMP-1)" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /Status/ })).toBeInTheDocument();
+    // only the pending one is listed for decision
+    expect(screen.getAllByRole("button", { name: /^Approve the salary revision/ })).toHaveLength(1);
+  });
+
+  it("hr_admin can read the history but gets no approval controls", async () => {
+    getSessionRolesMock.mockReturnValue(["hr_admin"]);
+    mockRevisionsAndNames([rev({ status: "pending" })]);
+    await renderPage();
+    expect(screen.queryByText("Salary revisions awaiting approval")).not.toBeInTheDocument();
+  });
+
+  it("rows from an older API (no status) read as approved and need no decision", async () => {
+    mockRevisionsAndNames([rev()]);
+    await renderPage();
+    expect(screen.queryByText("Salary revisions awaiting approval")).not.toBeInTheDocument();
   });
 });
