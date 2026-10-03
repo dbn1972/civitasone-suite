@@ -47,4 +47,19 @@ describe("DevicesPage", () => {
     render(await DevicesPage());
     expect(screen.getByText("Total Devices").parentElement).toHaveTextContent("1");
   });
+
+  // GAP-ADMIN-DEVICES-05: Android + iOS + Web/other must sum to the total.
+  it("counts web / other platforms so the platform cards sum to Total Devices", async () => {
+    const mk = (id: string, platform: string) => ({ id, employeeName: "A", deviceName: id, platform, trustStatus: "trusted", osVersion: "", appVersion: "", lastSeen: "", loginCount: 1, flaggedReason: "" });
+    fetchJsonMock.mockResolvedValue({ data: [mk("a", "android"), mk("b", "ios"), mk("c", "web")], source: "api" });
+    render(await DevicesPage());
+    expect(screen.getByText("Total Devices").parentElement).toHaveTextContent("3");
+    expect(screen.getByText("Web / other").parentElement).toHaveTextContent("1");
+  });
+
+  it("no longer promises 'flag or trust' actions it does not offer", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
+    render(await DevicesPage());
+    expect(screen.queryByText(/block, flag, or trust/)).not.toBeInTheDocument();
+  });
 });

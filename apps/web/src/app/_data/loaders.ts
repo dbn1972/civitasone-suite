@@ -357,6 +357,7 @@ import {
 } from "@civitasone/schemas/web";
 import { fetchJson, type LoaderResult, type LoaderSource } from "./apiClient";
 import { formatMoney } from "@/lib/formatters";
+import { toApiEndpointRow, toEditionRow, type ApiEndpointRow, type EditionRow } from "@/lib/admin/monitoring";
 import {
   mapAdminUserSummaries,
   mapAssetSummaries,
@@ -4634,10 +4635,14 @@ export async function getSAGateways(): Promise<LoaderResult<Record<string, unkno
   });
 }
 
-export async function getSAEditions(): Promise<LoaderResult<Record<string, unknown>[]>> {
-  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/admin/editions", [], {
+// GAP-ADMIN-EDITIONS-06: typed row so the table's column keys are checked by tsc.
+export async function getSAEditions(): Promise<LoaderResult<EditionRow[]>> {
+  return fetchJson<unknown, EditionRow[]>("/api/v1/admin/editions", [], {
     revalidateSeconds: 300, telemetryKey: "sa.editions",
-    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+    mapResponse: (p) => {
+      const rows = getArrayPayload(p);
+      return rows ? rows.filter(isRecord).map(toEditionRow) : null;
+    },
   });
 }
 
@@ -4669,10 +4674,14 @@ export async function getSAEntitlements(): Promise<LoaderResult<Record<string, u
   });
 }
 
-export async function getSAApiMonitoring(): Promise<LoaderResult<Record<string, unknown>[]>> {
-  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/admin/api-monitoring", [], {
+// GAP-ADMIN-API-MONITORING-05: typed row so the table's column keys are checked by tsc.
+export async function getSAApiMonitoring(): Promise<LoaderResult<ApiEndpointRow[]>> {
+  return fetchJson<unknown, ApiEndpointRow[]>("/api/v1/admin/api-monitoring", [], {
     revalidateSeconds: 30, telemetryKey: "sa.api-monitoring",
-    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+    mapResponse: (p) => {
+      const rows = getArrayPayload(p);
+      return rows ? rows.filter(isRecord).map(toApiEndpointRow) : null;
+    },
   });
 }
 
@@ -5372,8 +5381,16 @@ export type AdminAuditLogEntry = {
   timestamp: string;
 };
 
-export async function getAdminAuditLogEntries(): Promise<LoaderResult<AdminAuditLogEntry[]>> {
-  return fetchJson<unknown, AdminAuditLogEntry[]>("/api/v1/admin/audit-logs?limit=200", [], {
+/** Events per audit-log page; admin-service caps `limit` at 200. */
+export const ADMIN_AUDIT_LOG_PAGE_SIZE = 200;
+
+/**
+ * GAP-ADMIN-AUDIT-LOG-02: `offset` pages back through older events (the API is
+ * newest-first with limit/offset) so events beyond the newest 200 stay reachable.
+ */
+export async function getAdminAuditLogEntries(offset = 0): Promise<LoaderResult<AdminAuditLogEntry[]>> {
+  const safeOffset = Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0;
+  return fetchJson<unknown, AdminAuditLogEntry[]>(`/api/v1/admin/audit-logs?limit=${ADMIN_AUDIT_LOG_PAGE_SIZE}&offset=${safeOffset}`, [], {
     telemetryKey: "admin.audit-logs.list",
     mapResponse: (p) => {
       const rows = getArrayPayload(p);

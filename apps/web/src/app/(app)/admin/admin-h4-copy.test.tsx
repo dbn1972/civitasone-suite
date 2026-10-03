@@ -12,6 +12,8 @@ vi.mock("next/navigation", () => ({
 
 import TenantProvisionPage from "./tenant-provision/page";
 import { InvoicesTable } from "./invoices/InvoicesTable";
+import BulkScanPage from "./bulk-scan/page";
+import DiscoveryPage from "./discovery/page";
 
 // GAP-ADMIN-TENANT-PROVISION-01/-02
 describe("tenant-provision", () => {
@@ -43,5 +45,24 @@ describe("InvoicesTable", () => {
     );
     expect(screen.getAllByText(/1,18,000/).length).toBeGreaterThan(0);
     expect(screen.queryByText("11800000")).not.toBeInTheDocument();
+  });
+});
+
+// GAP-ADMIN-BULK-SCAN-03/-04, GAP-ADMIN-DISCOVERY-03/-04
+describe.each([
+  ["bulk-scan", BulkScanPage, "Bulk accessibility scans are coming soon."],
+  ["discovery", DiscoveryPage, "Service discovery is coming soon."],
+] as const)("%s placeholder", (dir, Page, subtitle) => {
+  it("uses plain user-facing copy with no fake control and no engineering words", () => {
+    const { container } = render(Page());
+    expect(screen.getByText(subtitle)).toBeInTheDocument();
+    expect(screen.getByText("Not available yet")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /queue|scan/i })).not.toBeInTheDocument();
+    expect(container.textContent ?? "").not.toMatch(/backend|implementation|placeholder/i);
+  });
+
+  it("has no inline hex colours in the source", () => {
+    const src = readFileSync(join(__dirname, dir, "page.tsx"), "utf8");
+    expect(src).not.toMatch(/#[0-9a-fA-F]{6}\b/);
   });
 });

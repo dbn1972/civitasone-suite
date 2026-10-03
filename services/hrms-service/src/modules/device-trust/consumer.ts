@@ -3,6 +3,7 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { COMMANDS } from "../../topics.js";
 
 const log = pino({ name: "hrms.device-trust.consumer" });
 const AUDIT = "audit.event.record";
@@ -72,5 +73,22 @@ export function registerDeviceTrustConsumers(queue: Queue): void {
     });
     await cache.invalidateResource(msg.tenantId, "device_trust");
     log.info({ id: msg.messageId }, "Processed device_trust.policy_update");
+  });
+
+  // GAP-ADMIN-DEVICES-04: audit-on-export. The route publishes, this writes the audit outbox row.
+  queue.subscribe(COMMANDS.deviceExportRecorded, async (msg) => {
+    const p = msg.payload as { rowCount?: number; filtered?: boolean };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await enqueue(tx, {
+        topic: AUDIT, eventType: AUDIT,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          service: "hrms", action: "export", resourceType: "device", resourceId: "tenant_list",
+          outcome: "success", rowCount: p.rowCount ?? 0, filtered: p.filtered === true,
+        },
+      });
+    });
+    log.info({ id: msg.messageId }, "Processed device_trust.export_recorded");
   });
 }

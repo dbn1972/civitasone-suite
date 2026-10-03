@@ -4,6 +4,9 @@ import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sqlClient } from "../../shared/db.js";
 import { withRawTenantGuc } from "@civitasone/db";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import * as deviceCommands from "./commands.js";
 
 /**
  * Device Trust & Compliance Module.
@@ -17,6 +20,9 @@ import { withRawTenantGuc } from "@civitasone/db";
  * 4. Auto-flag non-compliant devices (rooted, no screen lock, outdated OS)
  * 5. Compliance policies configurable per tenant
  */
+
+/** GAP-ADMIN-DEVICES-03: a block always carries a real, trimmed reason; there is no default. */
+const blockBodySchema = z.object({ reason: z.string().trim().min(3).max(200) });
 
 const deviceReportSchema = z.object({
   deviceId: z.string().min(5),
@@ -247,52 +253,77 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
+  // ─── ADMIN: EXPORT AUDIT ──────────────────────────────────────────────
+
+  /**
+   * POST /v1/hrms/devices/export-audit -- GAP-ADMIN-DEVICES-04: the web CSV export
+   * (employee names + device inventory) reports each export here so it lands on
+   * the audit trail. Same roles as the list endpoint the export is built from.
+   */
+  app.post("/v1/hrms/devices/export-audit", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["hr_admin", "it_admin", "super_admin"]);
+    const body = z.object({ rowCount: z.number().int().min(0).max(100000), filtered: z.boolean().optional() }).parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await deviceCommands.recordDeviceExport(ctx, body.rowCount, body.filtered === true));
+  });
+
   // ─── ADMIN: BLOCK DEVICE ──────────────────────────────────────────────
 
-  /** PATCH /v1/hrms/devices/:id/block — block a specific device */
+  /** PATCH /v1/hrms/devices/:id/block — block a specific device (reason required, 3-200 chars) */
   app.patch("/v1/hrms/devices/:id/block", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ["hr_admin", "it_admin", "super_admin"]);
-    const { id } = req.params as { id: string };
-    const { reason } = (req.body as any) ?? {};
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const { reason } = blockBodySchema.parse(req.body ?? {});
+
+    const updated = await withTenantGuc(ctx.tenantId, (pool) => pool.query<{ device_id: string; user_id: string }>(
+      `UPDATE hrms.trusted_devices SET trust_status = 'blocked', blocked_by = $1, blocked_at = NOW(), blocked_reason = $2
+       WHERE id = $3 AND tenant_id = $4
+       RETURNING device_id, user_id`,
+      [ctx.actorId, reason, id, ctx.tenantId],
+    ));
+    const device = updated.rows[0];
+    if (!device) throw new HttpError(404, "DEVICE_NOT_FOUND", "device not found");
 
     await withTenantGuc(ctx.tenantId, (pool) => pool.query(
-      `UPDATE hrms.trusted_devices SET trust_status = 'blocked', blocked_by = $1, blocked_at = NOW(), blocked_reason = $2
-       WHERE id = $3 AND tenant_id = $4`,
-      [ctx.actorId, reason ?? "Blocked by admin", id, ctx.tenantId],
+      `INSERT INTO hrms.device_activity_log (tenant_id, device_id, user_id, event_type, metadata, ip_address)
+       VALUES ($1, $2, $3, 'blocked', $4, $5)`,
+      [ctx.tenantId, device.device_id, device.user_id, JSON.stringify({ reason, blockedBy: ctx.actorId }), req.ip],
     ));
-
-    // Log the block event
-    const device = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
-      `SELECT device_id, user_id FROM hrms.trusted_devices WHERE id = $1`,
-      [id],
-    ));
-    if (device.rows[0]) {
-      await withTenantGuc(ctx.tenantId, (pool) => pool.query(
-        `INSERT INTO hrms.device_activity_log (tenant_id, device_id, user_id, event_type, metadata, ip_address)
-         VALUES ($1, $2, $3, 'blocked', $4, $5)`,
-        [ctx.tenantId, device.rows[0].device_id, device.rows[0].user_id, JSON.stringify({ reason, blockedBy: ctx.actorId }), req.ip],
-      ));
-    }
 
     return reply.send({ id, status: "blocked" });
   });
 
   // ─── ADMIN: UNBLOCK DEVICE ────────────────────────────────────────────
 
-  /** PATCH /v1/hrms/devices/:id/unblock — restore access */
+  /**
+   * PATCH /v1/hrms/devices/:id/unblock — lift an admin block.
+   * A device that is rooted or still carries compliance flags goes back to
+   * 'flagged' (never straight to 'trusted'); the next heartbeat re-evaluates it.
+   */
   app.patch("/v1/hrms/devices/:id/unblock", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ["hr_admin", "it_admin", "super_admin"]);
-    const { id } = req.params as { id: string };
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
-    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
-      `UPDATE hrms.trusted_devices SET trust_status = 'trusted', blocked_by = NULL, blocked_at = NULL, blocked_reason = NULL
-       WHERE id = $1 AND tenant_id = $2 AND trust_status = 'blocked'`,
+    const updated = await withTenantGuc(ctx.tenantId, (pool) => pool.query<{ device_id: string; user_id: string; trust_status: string }>(
+      `UPDATE hrms.trusted_devices
+          SET trust_status = CASE WHEN is_rooted IS TRUE OR COALESCE(flagged_reason, '') <> '' THEN 'flagged' ELSE 'trusted' END,
+              blocked_by = NULL, blocked_at = NULL, blocked_reason = NULL
+        WHERE id = $1 AND tenant_id = $2 AND trust_status = 'blocked'
+       RETURNING device_id, user_id, trust_status`,
       [id, ctx.tenantId],
     ));
+    const device = updated.rows[0];
+    if (!device) throw new HttpError(404, "DEVICE_NOT_BLOCKED", "device not found or not blocked");
 
-    return reply.send({ id, status: "trusted" });
+    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
+      `INSERT INTO hrms.device_activity_log (tenant_id, device_id, user_id, event_type, metadata, ip_address)
+       VALUES ($1, $2, $3, 'unblocked', $4, $5)`,
+      [ctx.tenantId, device.device_id, device.user_id, JSON.stringify({ unblockedBy: ctx.actorId, restoredStatus: device.trust_status }), req.ip],
+    ));
+
+    return reply.send({ id, status: device.trust_status });
   });
 
   // ─── ADMIN: DEVICE ACTIVITY LOG ───────────────────────────────────────

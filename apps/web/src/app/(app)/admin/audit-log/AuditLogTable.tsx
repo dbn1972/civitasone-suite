@@ -1,24 +1,43 @@
 "use client";
 import { useMemo, useState } from "react";
-import { Button, DataTable, StatusPill } from "@/app/_components/ds";
+import { DataTable, Segmented, StatusPill } from "@/app/_components/ds";
 import type { AdminAuditLogEntry } from "@/app/_data/loaders";
+import { formatIndianDateTime } from "@/lib/formatters";
 
 type Row = AdminAuditLogEntry & Record<string, unknown>;
 
-function formatWhen(iso: string): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  return d.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+const OUTCOME_OPTIONS = ["All", "Success", "Failure"] as const;
+type OutcomeOption = (typeof OUTCOME_OPTIONS)[number];
+
+/**
+ * GAP-ADMIN-AUDIT-LOG-03: the CSV is a bulk copy of the audit trail, so the
+ * export itself is recorded (admin-service POST /v1/admin/audit-logs/export-audit,
+ * audit readers only -- the same people who can load this page). Fire-and-forget:
+ * a failing audit call never blocks the user's own download.
+ */
+export async function recordAuditLogExport(info: { rowCount: number; filter: string }): Promise<void> {
+  await fetch("/api/proxy/v1/admin/audit-logs/export-audit", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    // Only whether a search was active is recorded, never the raw search text.
+    body: JSON.stringify({ rowCount: info.rowCount, filtered: info.filter.trim() !== "" }),
+  });
+}
+
+/** GAP-ADMIN-AUDIT-LOG-04: the loader's literal "system" fallback reads as a person; show it as a system actor. */
+export function formatActor(actor: unknown): string {
+  const a = String(actor ?? "").trim();
+  if (!a || a.toLowerCase() === "system") return "System";
+  return a;
 }
 
 export function AuditLogTable({ entries }: { entries: AdminAuditLogEntry[] }) {
-  const [outcomeFilter, setOutcomeFilter] = useState<"all" | "success" | "failure">("all");
+  const [outcome, setOutcome] = useState<OutcomeOption>("All");
 
   const filtered = useMemo<Row[]>(() => {
-    const base = outcomeFilter === "all" ? entries : entries.filter((e) => e.outcome === outcomeFilter);
+    const base = outcome === "All" ? entries : entries.filter((e) => e.outcome === outcome.toLowerCase());
     return base as Row[];
-  }, [entries, outcomeFilter]);
+  }, [entries, outcome]);
   // GAP-ADMIN-AUDIT-LOG-01: only claim "no events match" when a filter is
   // actually narrowing a non-empty list; an empty source list is just "none yet".
   const noEventsAtAll = entries.length === 0;
@@ -27,29 +46,20 @@ export function AuditLogTable({ entries }: { entries: AdminAuditLogEntry[] }) {
     <div className="card">
       <div className="card-h" style={{ flexWrap: "wrap", gap: 12 }}>
         <h3>Activity log</h3>
-        <div style={{ display: "flex", gap: 6 }} role="group" aria-label="Filter by outcome">
-          {(["all", "success", "failure"] as const).map((o) => (
-            <Button
-              key={o}
-              onClick={() => setOutcomeFilter(o)}
-              aria-pressed={outcomeFilter === o}
-              variant={outcomeFilter === o ? "primary" : "ghost"}
-              size="sm"
-              style={{ fontSize: 11.5, textTransform: "capitalize" }}
-            >
-              {o}
-            </Button>
-          ))}
-        </div>
+        <Segmented options={[...OUTCOME_OPTIONS]} value={outcome} onChange={(v) => setOutcome(v as OutcomeOption)} />
       </div>
       <DataTable<Row>
         columns={[
           {
             key: "timestamp",
             label: "When",
-            render: (e) => <span style={{ whiteSpace: "nowrap", fontSize: 12.5, fontFamily: "monospace" }}>{formatWhen(String(e.timestamp))}</span>,
+            render: (e) => <span style={{ whiteSpace: "nowrap", fontSize: 12.5, fontFamily: "monospace" }}>{formatIndianDateTime(String(e.timestamp))}</span>,
           },
-          { key: "actor", label: "Actor", render: (e) => <span style={{ fontSize: 13 }}>{String(e.actor)}</span> },
+          {
+            key: "actor",
+            label: "Actor",
+            render: (e) => <span style={{ fontSize: 13 }} title={String(e.actor)}>{formatActor(e.actor)}</span>,
+          },
           { key: "action", label: "Action", render: (e) => <code style={{ fontSize: 12 }}>{String(e.action)}</code> },
           { key: "resource", label: "Resource", render: (e) => <span style={{ fontSize: 13 }}>{e.resource ? String(e.resource) : "—"}</span> },
           {
@@ -65,6 +75,7 @@ export function AuditLogTable({ entries }: { entries: AdminAuditLogEntry[] }) {
         pageSize={25}
         exportable
         exportFilename="audit-log"
+        onExport={(info) => { void recordAuditLogExport(info).catch(() => undefined); }}
         emptyIcon="🔍"
         emptyTitle={noEventsAtAll ? "No audit events yet" : "No audit events match"}
         emptyMessage={noEventsAtAll ? "Events appear here as actions are recorded." : "Adjust the filters above to find events."}

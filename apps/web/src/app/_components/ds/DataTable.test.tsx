@@ -410,6 +410,49 @@ describe("DataTable", () => {
     });
   });
 
+  // GAP-ADMIN-AUDIT-LOG-03: CSV formula injection.
+  describe("CSV export formula escaping", () => {
+    async function exportCsv(data: Array<{ id: string; who: string }>): Promise<string> {
+      const blobs: Blob[] = [];
+      const origCreate = URL.createObjectURL;
+      URL.createObjectURL = vi.fn((b: Blob) => { blobs.push(b); return "blob:mock"; });
+      URL.revokeObjectURL = vi.fn();
+      render(<DataTable columns={[{ key: "id" as const, label: "ID" }, { key: "who" as const, label: "Who" }]} rows={data} exportable />);
+      fireEvent.click(screen.getByText("⬇ CSV"));
+      URL.createObjectURL = origCreate;
+      return await new Promise<string>((resolve) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(String(fr.result));
+        fr.readAsText(blobs[0] as Blob);
+      });
+    }
+
+    it("prefixes cells that start with = + - @ with an apostrophe", async () => {
+      const csv = await exportCsv([
+        { id: "1", who: "=cmd()" },
+        { id: "2", who: "@SUM(A1)" },
+        { id: "3", who: "+1+1" },
+        { id: "4", who: "-2+3" },
+      ]);
+      expect(csv).toContain("1,'=cmd()");
+      expect(csv).toContain("2,'@SUM(A1)");
+      expect(csv).toContain("3,'+1+1");
+      expect(csv).toContain("4,'-2+3");
+    });
+
+    it("does not escape a lone dash (the empty-value placeholder)", async () => {
+      const csv = await exportCsv([{ id: "9", who: "-" }]);
+      expect(csv).toContain("9,-");
+      expect(csv).not.toContain("'-");
+    });
+
+    it("leaves plain text and plain negative numbers untouched", async () => {
+      const csv = await exportCsv([{ id: "1", who: "Asha" }, { id: "2", who: "-1,500.50" }]);
+      expect(csv).toContain("1,Asha");
+      expect(csv).toContain('2,"-1,500.50"');
+    });
+  });
+
   // SF-08: DataTable's `render` prop is documented client-only (see Column<T>
   // in DataTable.tsx) because a function can't cross the Server->Client (RSC)
   // boundary — the crash that class of bug produces (GAP-HR-EXPENSES-01 /

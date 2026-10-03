@@ -1,7 +1,8 @@
-import { PageHeader, StatGrid, StatCard, DataTable, LoadErrorState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, LoadErrorState } from "../../../_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { requireAnyRole } from "@/lib/auth/roleGuard";
 import { DEVICE_ADMIN_ROLES } from "@/lib/auth/adminRoles";
+import { DevicesTable } from "./DevicesTable";
 
 type Row = {
   id: string;
@@ -44,7 +45,7 @@ export default async function DevicesPage() {
       <div className="space-y-6">
         <PageHeader
           title="Device Trust & Compliance"
-          subtitle="Monitor all devices accessing organization data — block, flag, or trust"
+          subtitle="Monitor devices accessing organization data — block a device or restore access"
         />
         <LoadErrorState result={res} area="devices" backHref="/admin" requiredRoles={DEVICE_ADMIN_ROLES} />
       </div>
@@ -57,24 +58,14 @@ export default async function DevicesPage() {
   const blocked = items.filter((i) => i.trustStatus === "blocked").length;
   const android = items.filter((i) => i.platform === "android").length;
   const ios = items.filter((i) => i.platform === "ios").length;
-
-  const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
-    { key: "employeeName", label: "Employee" },
-    { key: "deviceName", label: "Device" },
-    { key: "platform", label: "Platform" },
-    { key: "osVersion", label: "OS" },
-    { key: "appVersion", label: "App Ver" },
-    { key: "lastSeen", label: "Last Active" },
-    { key: "loginCount", label: "Logins" },
-    { key: "trustStatus", label: "Status", cellType: "status" },
-    { key: "flaggedReason", label: "Flags" },
-  ];
+  // GAP-ADMIN-DEVICES-05: hrms-service also reports "web" devices, so Android + iOS never summed to Total.
+  const other = items.length - android - ios;
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Device Trust & Compliance"
-        subtitle="Monitor all devices accessing organization data — block, flag, or trust"
+        subtitle="Monitor devices accessing organization data — block a device or restore access"
       />
 
       <StatGrid>
@@ -84,9 +75,10 @@ export default async function DevicesPage() {
         <StatCard icon="🚫" iconBg="#fef2f2" label="Blocked" value={blocked} />
         <StatCard icon="🤖" iconBg="#f5f5f5" label="Android" value={android} />
         <StatCard icon="🍎" iconBg="#f0f0ff" label="iOS" value={ios} />
+        <StatCard icon="🌐" iconBg="#f1f5f9" label="Web / other" value={other} />
       </StatGrid>
 
-      <DataTable columns={columns} rows={items} exportable />
+      <DevicesTable items={items} />
     </div>
   );
 }

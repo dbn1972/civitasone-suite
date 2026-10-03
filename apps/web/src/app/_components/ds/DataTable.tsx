@@ -100,6 +100,12 @@ interface Column<T> {
    * GAP-FINANCE-BUDGET-FUND-RELEASES-04.
    */
   csv?: (row: T) => string;
+  /**
+   * Opt-in: leave this column out of the CSV export -- for a row-action column
+   * whose underlying value (usually the row id) is not data a person should
+   * find in the file (GAP-ADMIN-DEVICES-03).
+   */
+  csvExclude?: boolean;
 }
 
 interface DataTableProps<T extends Record<string, unknown>> {
@@ -432,16 +438,31 @@ export function DataTable<T extends Record<string, unknown>>({
     return String(row[col.key] ?? "");
   }
 
+  /**
+   * GAP-ADMIN-AUDIT-LOG-03: a cell that starts with = + - @ (or a tab / CR) is
+   * evaluated as a formula by Excel/Sheets, so free text such as an actor or a
+   * resource name could execute on the auditor's machine. Prefix it with an
+   * apostrophe (OWASP CSV-injection guidance). Plain numbers and formatted
+   * money ("-1,500", "-₹1,500.00") are left alone so exports stay numeric.
+   */
+  function csvSafe(val: string): string {
+    if (!/^[=+\-@\t\r]/.test(val)) return val;
+    if (val === "-") return val; // the empty-value dash, not a formula
+    if (/^[-+]?[₹$]?\s?[\d,]+(\.\d+)?%?$/.test(val)) return val;
+    return `'${val}`;
+  }
+
   function downloadCsv() {
     try {
       onExport?.({ rowCount: sorted.length, filter });
     } catch {
       /* never block the download on an audit-callback failure */
     }
-    const header = columns.map((c) => c.label).join(",");
+    const csvColumns = columns.filter((c) => !c.csvExclude);
+    const header = csvColumns.map((c) => c.label).join(",");
     const csvRows = sorted.map((row) =>
-      columns.map((col) => {
-        const val = csvCellValue(col, row).replace(/"/g, '""');
+      csvColumns.map((col) => {
+        const val = csvSafe(csvCellValue(col, row)).replace(/"/g, '""');
         return val.includes(",") || val.includes('"') || val.includes("\n") ? `"${val}"` : val;
       }).join(",")
     );

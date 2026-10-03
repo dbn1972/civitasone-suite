@@ -16,12 +16,21 @@ import * as featureFlagCommands from "../feature-flags/commands.js";
 import * as complianceRepo from "../security-compliance/repo.js";
 import { computePosture } from "../security-compliance/posture.js";
 import * as incidentRepo from "../security-incident/repo.js";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import * as auditLogExportCommands from "../audit-log-export/commands.js";
 
 const ROLES = ["tenant_admin", "platform_admin", "super_admin"];
 // Tighter gates matching the CANONICAL module for a resource, used only where
 // that module's own role list is narrower than ROLES above — never looser:
 // aliasing a route must never grant a caller a capability the real owning
 // module wouldn't. See PR description for the per-route rationale.
+// Mirrors audit-service's own event-log readers (see GET /v1/admin/audit-logs below).
+const AUDIT_LOG_READERS = ["audit_officer", "audit_admin", "platform_admin", "super_admin"];
+const auditLogExportBody = z.object({
+  rowCount: z.number().int().min(0).max(1_000_000),
+  filtered: z.boolean().optional(),
+});
 const FEATURE_FLAG_ADMIN = ["platform_admin", "super_admin"];
 const CUSTOM_DOMAIN_ADMIN = ["platform_admin", "super_admin"];
 
@@ -523,6 +532,22 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
     if (status < 200 || status >= 300) { const r = relayError(status, body); return reply.code(r.status).send(r.payload); }
     const rows = Array.isArray(body) ? body : [];
     return reply.send({ data: rows, meta: pageMeta(q.limit, q.offset, rows.length) });
+  });
+
+  // GAP-ADMIN-AUDIT-LOG-03: the web CSV export of the audit trail reports each
+  // export here so the export itself lands on the audit trail (the file is a
+  // bulk copy of who-did-what). Same readers as audit-service's event log;
+  // publishes a command, the consumer writes the audit record (routes never
+  // write Postgres).
+  app.post("/v1/admin/audit-logs/export-audit", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, AUDIT_LOG_READERS);
+    const parsed = auditLogExportBody.safeParse(req.body);
+    if (!parsed.success) {
+      throw new HttpError(400, "VALIDATION_FAILED", parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
+    }
+    const body = parsed.data;
+    return sendAccepted(reply, acceptedResponseSchema, await auditLogExportCommands.recordAuditLogExport(ctx, body.rowCount, body.filtered === true));
   });
 
   // ─── Usage — real, forwarded to tenant-service's quota/usage tracker ───

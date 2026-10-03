@@ -225,6 +225,19 @@ const STATUS_MAP: Record<string, PillVariant> = {
   "not selected": "mut",
   published: "good",
   unpublished: "mut",
+  // Platform monitoring (admin/api-monitoring) and the edition catalogue
+  // (admin/editions). GAP-ADMIN-API-MONITORING-05 / GAP-ADMIN-EDITIONS-06: none
+  // of these keys existed, so Healthy / Degraded / Down all rendered the same
+  // neutral "info" pill. The backing endpoint is not in this repo, so the
+  // vocabulary below is the conservative superset (see lib/admin/monitoring.ts).
+  healthy: "good",
+  unhealthy: "bad",
+  unknown: "mut",
+  maintenance: "mut",
+  deprecated: "mut",
+  sunset: "mut",
+  // Device trust (admin/devices): hrms.trusted_devices.trust_status.
+  trusted: "good",
 };
 // Deliberately NOT added: a generic "flagged" key. tenant-admin/security/SecurityTable.tsx
 // has its own inline outcome->variant mapping that fails closed to "bad" for any
