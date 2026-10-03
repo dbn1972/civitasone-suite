@@ -2,6 +2,7 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { LEAVE_POLICY_ADMIN_ROLES } from "@/lib/auth/workRoles";
 import { PermissionDenied } from "../../../_components/PermissionDenied";
 import LeavePoliciesClient from "./LeavePoliciesClient";
+import HalfDayLeaveSettings from "./HalfDayLeaveSettings";
 
 /**
  * GAP-HR-LEAVE-POLICIES-01/02: role list moved to the shared
@@ -19,5 +20,11 @@ export default function LeavePoliciesPage() {
     return <PermissionDenied module="leave policy management" requiredRoles={LEAVE_POLICY_ADMIN_ROLES} />;
   }
 
-  return <LeavePoliciesClient />;
+  return (
+    <>
+      <LeavePoliciesClient />
+      {/* GAP-HR-LEAVE-APPLY-05: per-tenant half-day / short-leave switch (default OFF). */}
+      <div className="page-main wrap"><HalfDayLeaveSettings /></div>
+    </>
+  );
 }

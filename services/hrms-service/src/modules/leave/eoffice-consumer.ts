@@ -5,6 +5,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import { exactAppliedDays } from "./domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -44,7 +45,7 @@ export function registerLeaveSpecialEOfficeConsumers(queue: Queue): void {
       employeeId = app.employeeId;
 
       if (cb.decision === "approved") {
-        await repo.debitLeaveBalance(tx, app.allocId, app.daysApplied);
+        await repo.debitLeaveBalance(tx, app.allocId, exactAppliedDays(app));
         await repo.updateLeaveApp(tx, cb.refId, { status: "approved", approvedBy: cb.decidedBy, updatedBy: cb.decidedBy });
         await audit(tx, msg, "eoffice_approved", cb.refId, {
           fileNo: cb.fileNo, employeeId: app.employeeId, dscHash: cb.dscHash ?? null,

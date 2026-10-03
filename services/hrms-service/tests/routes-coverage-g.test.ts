@@ -111,13 +111,15 @@ async function seedProfilePhoto(employeeId: string): Promise<void> {
  * randomUUID()s are fine there). "ordered" is what /relieve requires;
  * "relieved" is what /join requires — see lifecycle/routes.ts.
  */
-async function seedTransfer(status: "ordered" | "relieved"): Promise<string> {
+async function seedTransfer(status: "requested" | "ordered" | "relieved"): Promise<string> {
   const employeeId = await seedEmployeeForMe();
   const id = randomUUID();
   await runWithTenant(TENANT, () => db.transaction((tx) => tx.insert(hrmsTransfers).values({
     id, tenantId: TENANT, employeeId, fromDeptId: randomUUID(), toDeptId: randomUUID(),
     effectiveDate: "2026-05-01", status,
-    orderNo: "TO/2026/001", orderDate: "2026-05-01",
+    // a transfer that has not been ordered yet carries no order number
+    // order numbers are unique per tenant now, and this tenant is long-lived: never reuse one
+    ...(status === "requested" ? {} : { orderNo: `TO/${randomUUID().slice(0, 8)}`, orderDate: "2026-05-01" }),
     ...(status === "relieved" ? { relievedDate: "2026-05-10" } : {}),
     createdBy: UUID, updatedBy: UUID,
   })));
@@ -369,11 +371,21 @@ describe("HRMS POST routes — Lifecycle (low coverage)", () => {
   });
 
   it("POST /v1/hrms/lifecycle/transfers/:id/issue-order", async () => {
+    const transferId = await seedTransfer("requested");
+    const app = await buildApp();
+    const r = await app.inject({ method: "POST", url: `/v1/hrms/lifecycle/transfers/${transferId}/issue-order`, headers: { authorization: `Bearer ${token()}` },
+      payload: { orderNo: `TO/${randomUUID().slice(0, 8)}`, orderDate: "2026-05-01" } });
+    await app.close();
+    expect(r.statusCode).toBe(202);
+  });
+
+  // GAP-HR-TRANSFER-02: issue-order now reads the transfer first; an unknown id is a real 404.
+  it("POST /v1/hrms/lifecycle/transfers/:id/issue-order -> 404 for an unknown transfer", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/lifecycle/transfers/${FAKE}/issue-order`, headers: { authorization: `Bearer ${token()}` },
-      payload: { orderNo: "TO/2026/001", orderDate: "2026-05-01" } });
+      payload: { orderNo: "TO/2026/002", orderDate: "2026-05-01" } });
     await app.close();
-    expect(r.statusCode).not.toBe(404);
+    expect(r.statusCode).toBe(404);
   });
 
   it("POST /v1/hrms/lifecycle/transfers/:id/relieve", async () => {

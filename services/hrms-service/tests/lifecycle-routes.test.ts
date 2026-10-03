@@ -44,6 +44,8 @@ vi.mock("../src/shared/db.js", () => {
           then: (res: (v: unknown) => void) => Promise.resolve(result).then(res),
         }),
         then: (res: (v: unknown) => void) => Promise.resolve(result).then(res),
+        // GAP-HR-TRANSFER-02: issue-order reads the transfer row (status check).
+        limit: () => Promise.resolve([{ id: "t", status: "requested" }]),
       }),
     }),
   });
@@ -62,6 +64,12 @@ vi.mock("../src/shared/db.js", () => {
     sqlPool: { query: async () => ({ rows: [], rowCount: 0 }) },
   };
 });
+
+// GAP-HR-TRANSFER-02: no other transfer carries the order number in these mock-only tests.
+vi.mock("../src/modules/lifecycle/repo.js", async (io) => ({
+  ...(await io<Record<string, unknown>>()),
+  findTransferByOrderNo: async () => null,
+}));
 
 vi.mock("../src/shared/infra.js", () => ({
   cache: {

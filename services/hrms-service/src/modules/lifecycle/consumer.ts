@@ -257,10 +257,35 @@ export function registerLifecycleMutationConsumers(q: Queue): void {
     const p = msg.payload as Record<string, any>;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.transitionTransfer(p.tenantId, p.id, msg.actorId, {
+      // GAP-HR-TRANSFER-02: the route's pre-check can race, so serialise on
+      // (tenant, order number) and re-check inside the transaction. A clash is
+      // recorded as a FAILED audit event (not a silent return) and nothing is issued.
+      await repo.lockTransferOrderNo(tx, p.tenantId, p.orderNo);
+      if (await repo.findTransferByOrderNoTx(tx, p.tenantId, p.orderNo, p.id)) {
+        await enqueue(tx as any, {
+          topic: AUDIT, eventType: AUDIT,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            service: "hrms", action: "issue_order", resourceType: "transfer", resourceId: p.id, outcome: "failure",
+            metadata: { orderNo: p.orderNo, reason: "ORDER_NO_EXISTS" },
+          },
+        });
+        return;
+      }
+      const ordered = await repo.transitionTransfer(p.tenantId, p.id, msg.actorId, {
         from: ["requested", "pending"], to: "ordered",
         set: { orderNo: p.orderNo, orderDate: p.orderDate, orderRef: p.orderRef ?? null },
       }, tx);
+      if (ordered) {
+        await enqueue(tx as any, {
+          topic: AUDIT, eventType: AUDIT,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            service: "hrms", action: "issue_order", resourceType: "transfer", resourceId: p.id, outcome: "success",
+            metadata: { orderNo: p.orderNo, orderDate: p.orderDate },
+          },
+        });
+      }
     });
   });
 

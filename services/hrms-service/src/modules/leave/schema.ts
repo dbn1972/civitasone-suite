@@ -1,5 +1,5 @@
 import {
-  pgSchema, uuid, text, integer, char, varchar, boolean, date, timestamp,
+  pgSchema, uuid, text, integer, char, varchar, boolean, date, timestamp, numeric,
 } from "drizzle-orm/pg-core";
 
 export const leaveSchema = pgSchema("leave");
@@ -45,6 +45,10 @@ export const hrmsLeaveAllocs = leaveSchema.table("hrms_leave_allocs", {
   fy:           char("fy", { length: 7 }).notNull(),
   totalDays:    integer("total_days").notNull().default(0),
   balanceDays:  integer("balance_days").notNull().default(0),
+  // GAP-HR-LEAVE-APPLY-05 (migration 0183): exact balance in 0.5-day units.
+  // NULL = never fractionally touched; readers use effectiveBalanceDays().
+  // balance_days keeps FLOOR(exact) as a safe whole-day shadow.
+  balanceDaysExact: numeric("balance_days_exact", { precision: 6, scale: 1 }),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:    uuid("created_by").notNull(),
@@ -61,6 +65,11 @@ export const hrmsLeaveApps = leaveSchema.table("hrms_leave_apps", {
   fromDate:     date("from_date").notNull(),
   toDate:       date("to_date").notNull(),
   daysApplied:  integer("days_applied").notNull(),
+  // GAP-HR-LEAVE-APPLY-05 (migration 0183): exact applied days in 0.5-day units
+  // (NULL = whole-day row, use days_applied; days_applied = CEIL(exact) shadow).
+  daysAppliedExact: numeric("days_applied_exact", { precision: 5, scale: 1 }),
+  // 'full' | 'first_half' | 'second_half' | 'short_leave'
+  dayPart:      varchar("day_part", { length: 16 }).notNull().default("full"),
   reason:       text("reason"),
   approvedBy:   uuid("approved_by"),
   status:       varchar("status", { length: 24 }).notNull().default("draft"),
@@ -91,4 +100,18 @@ export const hrmsLeaveConversions = leaveSchema.table("hrms_leave_conversions", 
 });
 export type LeaveConversionRow = typeof hrmsLeaveConversions.$inferSelect;
 
-export const schema = { hrmsLeaveTypes, hrmsLeaveAllocs, hrmsLeaveApps, hrmsLeaveConversions };
+// GAP-HR-LEAVE-APPLY-05 (migration 0184): per-tenant half-day / short-leave
+// switch. No row == both OFF (whole days only, the pre-existing behaviour).
+export const hrmsLeaveTenantConfig = leaveSchema.table("hrms_leave_tenant_config", {
+  tenantId:         uuid("tenant_id").primaryKey(),
+  halfDayEnabled:   boolean("half_day_enabled").notNull().default(false),
+  shortLeaveEnabled: boolean("short_leave_enabled").notNull().default(false),
+  createdAt:        timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:        timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:        uuid("created_by").notNull(),
+  updatedBy:        uuid("updated_by").notNull(),
+  version:          integer("version").notNull().default(1),
+});
+export type LeaveTenantConfigRow = typeof hrmsLeaveTenantConfig.$inferSelect;
+
+export const schema = { hrmsLeaveTypes, hrmsLeaveAllocs, hrmsLeaveApps, hrmsLeaveConversions, hrmsLeaveTenantConfig };

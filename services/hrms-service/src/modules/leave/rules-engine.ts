@@ -9,6 +9,7 @@ import { db, scopedRead } from "../../shared/db.js";
 import { hrmsHolidays } from "../holidays/schema.js";
 import { findTenantLeavePolicy } from "./repo.js";
 import type { LeavePolicyRuleRow } from "./policy-schema.js";
+import { dayPartUnits, type LeaveDayPart } from "./domain.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -61,6 +62,13 @@ export interface LeaveValidationInput {
    * defaults to `employeeType` when omitted.
    */
   rawEmployeeType?: string;
+  /**
+   * GAP-HR-LEAVE-APPLY-05: 'first_half' | 'second_half' | 'short_leave' makes
+   * this a 0.5-day request on a single working day. Omitted / 'full' keeps the
+   * whole-day calculation untouched. The tenant switch is enforced by the
+   * caller (routes.ts) -- this engine only enforces the calendar rules.
+   */
+  dayPart?: LeaveDayPart;
 }
 
 export interface ValidationResult {
@@ -283,7 +291,17 @@ export async function validateLeaveRequest(input: LeaveValidationInput): Promise
   let computedDays: number;
   let workingDaysInRange: number;
 
-  if (policy.countMethod === "working_days") {
+  const halfDay = input.dayPart != null && input.dayPart !== "full";
+  if (halfDay) {
+    // Half-day / short leave: one working day, charged 0.5. A weekend or a
+    // holiday has nothing to take half of, so it is rejected (never silently
+    // converted); sandwich / prefix-suffix rules cannot apply to a single day.
+    if (input.leaveCode !== "CL") errors.push("Half-day and short leave can only be taken as Casual Leave (CL)");
+    if (input.fromDate !== input.toDate) errors.push("A half-day or short leave must be a single date");
+    workingDaysInRange = countWorkingDaysExcludingHolidays(input.fromDate, input.fromDate, holidaySet);
+    if (workingDaysInRange === 0) errors.push(`${input.fromDate} is a weekend or holiday; a half-day or short leave must fall on a working day`);
+    computedDays = dayPartUnits(input.dayPart as LeaveDayPart);
+  } else if (policy.countMethod === "working_days") {
     workingDaysInRange = countWorkingDaysExcludingHolidays(input.fromDate, input.toDate, holidaySet);
     computedDays = workingDaysInRange;
   } else {

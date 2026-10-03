@@ -809,6 +809,10 @@ export function computeGratuity(
 export function computeLeaveEncashmentGrossMinor(lastBasicMinor: bigint, lastDaMinor: bigint, leaveBalanceDays: number): bigint {
   if (leaveBalanceDays <= 0) return 0n;
   const emoluments = lastBasicMinor + lastDaMinor;
-  const cappedDays = BigInt(Math.min(leaveBalanceDays, 300));
-  return roundRupee((emoluments * cappedDays) / 30n);
+  // GAP-HR-LEAVE-APPLY-05: the balance can now carry a half day (e.g. 10.5), so
+  // the day count is taken in half-day units: emoluments * halves / 60 is the
+  // same figure as emoluments * days / 30 but never truncates a half day. For a
+  // whole-day balance (halves = 2 * days) the result is identical to before.
+  const cappedHalves = BigInt(Math.round(Math.min(leaveBalanceDays, 300) * 2));
+  return roundRupee((emoluments * cappedHalves) / 60n);
 }

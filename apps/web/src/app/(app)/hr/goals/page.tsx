@@ -22,6 +22,8 @@ type GoalRow = {
   keyResults?: KeyResult[];
   progress?: number;
   status: string;
+  /** GAP-HR-GOALS-04: server-derived health (hrms-service social/goal-health.ts); absent on an older service. */
+  health?: string;
   dueDate?: string | null;
   period?: string | null;
 } & Record<string, unknown>;
@@ -120,8 +122,12 @@ export default async function GoalsPage() {
   // honest state.
   const devPlansErrored = devPlansSource === "error";
 
-  const onTrack   = items.filter((i) => ["on_track","on track","active"].includes((i.status ?? "").toLowerCase())).length;
-  const atRisk    = items.filter((i) => ["at_risk","behind","at risk"].includes((i.status ?? "").toLowerCase())).length;
+  // GAP-HR-GOALS-04: health is derived server-side from progress vs time to
+  // the due date (and respects a manually set status); `status` is the fallback
+  // for a service that does not send it.
+  const healthOf = (i: GoalRow) => (i.health ?? i.status ?? "").toLowerCase();
+  const onTrack   = items.filter((i) => ["on_track","on track","active"].includes(healthOf(i))).length;
+  const atRisk    = items.filter((i) => ["at_risk","behind","at risk"].includes(healthOf(i))).length;
   const completed = items.filter((i) => ["completed","achieved","closed"].includes((i.status ?? "").toLowerCase())).length;
 
   const categoryScores = buildCategoryScores(items, {
@@ -215,7 +221,7 @@ export default async function GoalsPage() {
                   description={item.description as string | undefined}
                   targetMetric={targetMetric}
                   progress={item.progress ?? 0}
-                  status={(item.status ?? "active") as GoalStatus}
+                  status={(item.health ?? item.status ?? "active") as GoalStatus}
                   category={categoryLabel[item.category ?? "individual"] ?? item.category ?? t("categoryIndividual")}
                   dueDate={(item.dueDate as string | null) ?? null}
                   cascadeLevel={inferCascade(item.category)}

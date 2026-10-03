@@ -46,6 +46,13 @@ vi.mock("../src/shared/infra.js", () => ({
   queue: { publish: async () => {} },
 }));
 
+// GAP-HR-DASHBOARD-08: the route reads the tenant's dashboard_scope policy for a
+// manager; this suite has no DB, and its manager case predates scoping, so pin
+// the opt-in organisation-wide behaviour (scoping itself: dashboard-manager-scope-real-db.test.ts).
+vi.mock("../src/modules/policy-settings/repo.js", () => ({
+  getPolicy: async () => ({ managerScope: "organisation" }),
+}));
+
 import { buildApp } from "../src/app.js";
 
 const tok = (sub = USER, roles = ["hr_admin"]) =>

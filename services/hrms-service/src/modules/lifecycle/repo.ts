@@ -1,5 +1,5 @@
-import { eq, and, inArray, lte, sql } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { eq, and, inArray, lte, ne, sql } from "drizzle-orm";
+import { db, scopedRead } from "../../shared/db.js";
 import { hrmsTransfers, hrmsPromotions, hrmsSeparations, hrmsSeparationChecklist, type TransferRow, type PromotionRow, type SeparationRow } from "./schema.js";
 import { TOTAL_CHECKLIST_ITEMS } from "./validators.js";
 import * as employeeRepo from "../employee/repo.js";
@@ -43,6 +43,40 @@ export async function transitionTransfer(
     ))
     .returning();
   return rows[0] ?? null;
+}
+
+/**
+ * GAP-HR-TRANSFER-02: another transfer in this tenant already carrying this
+ * order number (case-insensitive), excluding `exceptId`. Used by the issue-order
+ * route for a friendly 409 and re-checked in the consumer.
+ */
+export async function findTransferByOrderNo(
+  tenantId: string, orderNo: string, exceptId: string,
+): Promise<{ id: string } | null> {
+  const rows = await scopedRead((t) => orderNoQuery(t as unknown as Writer, tenantId, orderNo, exceptId));
+  return rows[0] ?? null;
+}
+
+/** Tx-scoped twin for the consumer (reads through its own open transaction -- no nested scopedRead). */
+export async function findTransferByOrderNoTx(
+  tx: Writer, tenantId: string, orderNo: string, exceptId: string,
+): Promise<{ id: string } | null> {
+  const rows = await orderNoQuery(tx, tenantId, orderNo, exceptId);
+  return rows[0] ?? null;
+}
+
+function orderNoQuery(t: Writer, tenantId: string, orderNo: string, exceptId: string) {
+  return (t as typeof db).select({ id: hrmsTransfers.id }).from(hrmsTransfers)
+    .where(and(
+      eq(hrmsTransfers.tenantId, tenantId),
+      sql`lower(${hrmsTransfers.orderNo}) = lower(${orderNo})`,
+      ne(hrmsTransfers.id, exceptId),
+    )).limit(1);
+}
+
+/** Serialises concurrent issue-order commands that carry the same (tenant, order number). */
+export async function lockTransferOrderNo(tx: Writer, tenantId: string, orderNo: string): Promise<void> {
+  await (tx as typeof db).execute(sql`select pg_advisory_xact_lock(hashtextextended(${`transfer-order-no:${tenantId}:${orderNo.toLowerCase()}`}, 0))`);
 }
 
 export async function insertPromotion(tx: Writer, row: typeof hrmsPromotions.$inferInsert): Promise<void> {

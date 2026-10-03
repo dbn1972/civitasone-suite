@@ -25,23 +25,18 @@ async function getTypes(): Promise<LoaderResult<EmpType[]>> {
 /**
  * Mirrors employee-types-routes.ts's own HR_ROLES for POST/PATCH -- these
  * gate the "new"/"edit" actions added here (GAP-HR-EMPLOYEE-TYPES-01), not
- * who may view the list. The separate, still-open question of who may READ
- * the list (GAP-HR-EMPLOYEE-TYPES-04 -- the backend GET route additionally
- * allows "manager"/"officer" but not "hr_officer", and hr/layout.tsx admits
- * several more roles again) is a real access-policy call with no default
- * given in the campaign's decision packet, so it is deliberately left alone
- * here; only the LoadErrorState swap below (an honest 403 render, not a role
- * change) addresses that item.
+ * who may view the list (see EMPLOYEE_TYPE_READ_ROLES below).
  */
 const EMPLOYEE_TYPE_ADMIN_ROLES = ["hr_admin", "super_admin", "admin"];
 
 /**
- * GAP-HR-EMPLOYEE-TYPES-04 (steps 3-4): mirrors the backend GET guard
- * (employee-types-routes.ts: HR_ROLES + manager + officer) 1:1, so a role the
- * API would 403 gets PermissionDenied before any fetch. Widening this list
- * (hr_officer, payroll_*) remains an open policy decision.
+ * GAP-HR-EMPLOYEE-TYPES-04: mirrors the backend GET guard
+ * (employee-types-routes.ts EMPLOYEE_TYPE_READ_ROLES) 1:1, so a role the API
+ * would 403 gets PermissionDenied before any fetch. hr_officer and the two
+ * payroll roles were added to both sides: they run HR / payroll and need the
+ * type flags; a plain employee still cannot read statutory configuration.
  */
-const EMPLOYEE_TYPE_READ_ROLES = [...EMPLOYEE_TYPE_ADMIN_ROLES, "manager", "officer"];
+const EMPLOYEE_TYPE_READ_ROLES = [...EMPLOYEE_TYPE_ADMIN_ROLES, "hr_officer", "manager", "officer", "payroll_admin", "payroll_officer"];
 
 export default async function EmployeeTypesPage() {
   const roles = getSessionRoles();

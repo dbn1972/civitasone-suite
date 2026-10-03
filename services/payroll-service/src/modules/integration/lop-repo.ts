@@ -2,6 +2,11 @@ import { eq, and, inArray, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { payrollLopLedger } from "./schema.js";
 
+/** Exact LOP days of a ledger row: the numeric column when set, else the legacy integer. */
+export function effectiveLopDays(row: { lopDays: number; lopDaysExact?: string | null }): number {
+  return row.lopDaysExact != null ? Number(row.lopDaysExact) : row.lopDays;
+}
+
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function upsertLopDays(
@@ -19,19 +24,31 @@ export async function upsertLopDays(
       eq(payrollLopLedger.month, month),
       eq(payrollLopLedger.source, source),
     )).limit(1);
+  // GAP-HR-LEAVE-APPLY-05: stay on the integer column exactly as before while
+  // every figure is a whole day; the moment a fractional amount arrives, the
+  // exact numeric column takes over (lop_days keeps FLOOR as a safe shadow).
+  const current = existing[0] ? effectiveLopDays(existing[0]) : 0;
+  const total = Math.round((current + addDays) * 100) / 100;
+  const needsExact = !Number.isInteger(total) || existing[0]?.lopDaysExact != null;
   if (existing[0]) {
     await tx.update(payrollLopLedger)
-      .set({ lopDays: existing[0].lopDays + addDays, updatedAt: new Date() })
+      .set({
+        lopDays: Math.floor(total),
+        ...(needsExact ? { lopDaysExact: total.toFixed(2) } : {}),
+        updatedAt: new Date(),
+      })
       .where(eq(payrollLopLedger.id, existing[0].id));
   } else {
     await tx.insert(payrollLopLedger).values({
-      tenantId, employeeId, month, source, lopDays: addDays,
+      tenantId, employeeId, month, source,
+      lopDays: Math.floor(total),
+      ...(needsExact ? { lopDaysExact: total.toFixed(2) } : {}),
     });
   }
 }
 
 export async function sumLopDays(tenantId: string, employeeId: string, month: string): Promise<number> {
-  const [row] = await scopedRead((tx) => tx.select({ total: sql<number>`coalesce(sum(${payrollLopLedger.lopDays}), 0)::int` })
+  const [row] = await scopedRead((tx) => tx.select({ total: sql<number>`coalesce(sum(coalesce(${payrollLopLedger.lopDaysExact}, ${payrollLopLedger.lopDays}::numeric)), 0)::float8` })
     .from(payrollLopLedger)
     .where(and(
       eq(payrollLopLedger.tenantId, tenantId),
@@ -66,7 +83,7 @@ export async function getLopForMonthTx(
 ): Promise<{ hasLedger: boolean; days: number }> {
   const [row] = await tx.select({
     cnt: sql<number>`count(*)::int`,
-    total: sql<number>`coalesce(sum(${payrollLopLedger.lopDays}), 0)::int`,
+    total: sql<number>`coalesce(sum(coalesce(${payrollLopLedger.lopDaysExact}, ${payrollLopLedger.lopDays}::numeric)), 0)::float8`,
   })
     .from(payrollLopLedger)
     .where(and(
@@ -108,7 +125,7 @@ export async function getLopForMonthsTx(
   const rows = await tx.select({
     employeeId: payrollLopLedger.employeeId,
     cnt: sql<number>`count(*)::int`,
-    total: sql<number>`coalesce(sum(${payrollLopLedger.lopDays}), 0)::int`,
+    total: sql<number>`coalesce(sum(coalesce(${payrollLopLedger.lopDaysExact}, ${payrollLopLedger.lopDays}::numeric)), 0)::float8`,
   })
     .from(payrollLopLedger)
     .where(and(

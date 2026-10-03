@@ -18,6 +18,8 @@ import { db, scopedRead } from "../../shared/db.js";
 import { pgSchema, uuid, varchar, integer, timestamp, boolean } from "drizzle-orm/pg-core";
 
 const HR_ROLES = ["hr_admin", "super_admin", "admin"];
+// GAP-HR-EMPLOYEE-TYPES-04: mirrored by apps/web .../hr/employee-types/page.tsx and lib/auth/hrTileAccess.ts.
+export const EMPLOYEE_TYPE_READ_ROLES = [...HR_ROLES, "hr_officer", "manager", "officer", "payroll_admin", "payroll_officer"];
 
 const employeeSchema = pgSchema("employee");
 const employeeTypeMaster = employeeSchema.table("hrms_employee_types", {
@@ -78,7 +80,12 @@ export async function employeeTypeRoutes(app: FastifyInstance): Promise<void> {
   // List all employee types for this tenant
   app.get("/v1/hrms/employee-types", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, [...HR_ROLES, "manager", "officer"]);
+    // GAP-HR-EMPLOYEE-TYPES-04: read access also for hr_officer (it was the one
+    // HR role excluded even though it runs the day-to-day HR desk) and the two
+    // payroll roles, who need the type flags (leave / gratuity / bonus /
+    // NPS) to run and audit payroll. Writes below stay HR_ROLES only; a plain
+    // employee still has no business reading statutory configuration.
+    requireRole(ctx, EMPLOYEE_TYPE_READ_ROLES);
     const rows = await scopedRead((tx) => tx.select().from(employeeTypeMaster).where(eq(employeeTypeMaster.tenantId, ctx.tenantId)));
     return reply.send({ data: rows });
   });

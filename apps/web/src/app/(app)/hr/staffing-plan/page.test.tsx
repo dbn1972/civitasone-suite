@@ -235,7 +235,7 @@ describe("StaffingPlanPage — vacancy over-threshold alert (GAP-HR-WORKFORCE-ST
       source: "api",
     });
     await renderPage();
-    expect(screen.getByRole("alert")).toHaveTextContent(/1 department or cadre has vacancies above 10%/i);
+    expect(screen.getByRole("alert").textContent?.trim()).toBe("1 department or cadre has vacancies above 10% of sanctioned strength.");
     expect(screen.getAllByText(/over 10% vacant/i)).toHaveLength(1);
   });
 

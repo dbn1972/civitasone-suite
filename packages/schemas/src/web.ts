@@ -744,6 +744,10 @@ export const HRDashboardSchema = z.object({
   // about this field (e.g. HR_DASHBOARD_EMPTY / DASH_OK in page.test.tsx)
   // parsing exactly as before.
   routingFailedCount: z.number().default(0),
+  // GAP-HR-DASHBOARD-08: what the figures cover (see hrms-service
+  // dashboard/routes.ts resolveDashboardScope). Defaults to organisation so
+  // an older service that never sends it reads exactly as before.
+  scope: z.enum(["organisation", "direct_reports"]).default("organisation"),
   // GAP-HR-DASHBOARD-06: real count of this tenant's hrms_departments rows --
   // distinct from departmentBreakdown.length, which is capped to a top-6-
   // plus-"Others" bucket and understates the true department count.

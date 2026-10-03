@@ -55,6 +55,14 @@
 - EL: Credited Jan 1 (advance) or earned monthly (1/12 per month)
 - Carry forward: EL accumulates; max 300 days total
 
+### R9: Half-day and short leave (per-tenant, default OFF)
+- Controlled by `leave.hrms_leave_tenant_config` (`GET/PUT /v1/hrms/leave-config`): `half_day_enabled`, `short_leave_enabled`. No row = both OFF = whole days only.
+- Only Casual Leave (CL), only a single working date. Weekend/holiday dates are rejected (never converted).
+- `day_part` = `first_half` | `second_half` | `short_leave`; each counts 0.5 day. A first half and a second half may share one date; the same part twice is an overlap.
+- Stored in NEW numeric columns (`hrms_leave_apps.days_applied_exact`, `hrms_leave_allocs.balance_days_exact`); the integer columns keep a safe shadow (`days_applied` = CEIL, `balance_days` = FLOOR). Readers use `exactAppliedDays()` / `effectiveBalanceDays()`.
+- Approve debits / cancel credits the exact figure. Attendance is NOT stamped `on_leave` for a part day.
+- Payroll: `hrms.leave.approved` carries `daysExact` + `dayPart`; the LOP ledger (`payroll_lop_ledger.lop_days_exact`) keeps two decimals for part days; F&F leave encashment prices a half-day balance in half-day units.
+
 ## 3. Approval Workflow by Employee Type
 
 | Employee Type | Level 1 | Level 2 | Level 3 |

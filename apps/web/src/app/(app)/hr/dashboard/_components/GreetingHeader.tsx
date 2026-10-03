@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { useDays } from "./useDays";
 
 interface Props {
   userName: string;
@@ -49,6 +50,7 @@ function hasValue(value: number | null | undefined): value is number {
 }
 
 export function GreetingHeader({ userName, greeting, pendingCount, payrollDaysLeft, today, dayName, actions = DEFAULT_ACTIONS }: Props) {
+  const formatDays = useDays();
   // hasValue(pendingCount) is checked first and short-circuits the rest of
   // the chain on purpose: if we don't know the real pending count, we can't
   // conclude "nothing urgent", and silently falling back to the payroll
@@ -59,7 +61,7 @@ export function GreetingHeader({ userName, greeting, pendingCount, payrollDaysLe
     : pendingCount > 0
     ? `${pendingCount} item${pendingCount > 1 ? "s" : ""} need${pendingCount === 1 ? "s" : ""} your attention`
     : payrollDaysLeft <= 7
-    ? `Payroll closes in ${payrollDaysLeft} day${payrollDaysLeft !== 1 ? "s" : ""}`
+    ? `Payroll closes in ${formatDays(payrollDaysLeft)}`
     : "No urgent actions today";
 
   return (

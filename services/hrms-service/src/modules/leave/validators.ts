@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { LEAVE_DAY_PARTS } from "./domain.js";
 
 export const createLeaveTypeBody = z.object({
   code:         z.string().min(1).max(16),
@@ -49,10 +50,35 @@ export const applyLeaveBody = z.object({
   allocId:     z.string().uuid(),
   fromDate:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   toDate:      z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  daysApplied: z.number().int().positive(),
+  // GAP-HR-LEAVE-APPLY-05: a whole-day request stays an integer; a half-day /
+  // short-leave request (dayPart != 'full') is exactly 0.5 on a single date.
+  // Whether the tenant has enabled either is checked server-side in routes.ts
+  // (assertDayPartAllowed) -- the shape alone cannot know the tenant policy.
+  daysApplied: z.number().positive(),
+  dayPart:     z.enum(LEAVE_DAY_PARTS).default("full"),
   reason:      z.string().max(1000).optional(),
+}).superRefine((v, ctx) => {
+  if (v.dayPart === "full") {
+    if (!Number.isInteger(v.daysApplied)) {
+      ctx.addIssue({ code: "custom", path: ["daysApplied"], message: "must be a whole number of days unless a half-day or short leave is selected" });
+    }
+  } else {
+    if (v.daysApplied !== 0.5) {
+      ctx.addIssue({ code: "custom", path: ["daysApplied"], message: "a half-day or short leave counts as exactly 0.5 day" });
+    }
+    if (v.fromDate !== v.toDate) {
+      ctx.addIssue({ code: "custom", path: ["toDate"], message: "a half-day or short leave must be a single date" });
+    }
+  }
 });
 export type ApplyLeaveBody = z.infer<typeof applyLeaveBody>;
+
+/** GAP-HR-LEAVE-APPLY-05: PUT body of the per-tenant half-day / short-leave switch. */
+export const leaveTenantConfigBody = z.object({
+  halfDayEnabled:    z.boolean(),
+  shortLeaveEnabled: z.boolean(),
+});
+export type LeaveTenantConfigBody = z.infer<typeof leaveTenantConfigBody>;
 
 export const idParam = z.object({ id: z.string().uuid() });
 

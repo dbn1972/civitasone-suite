@@ -14,6 +14,7 @@ import { registerDisciplinaryEOfficeConsumers } from "./modules/disciplinary/eof
 import { registerLeaveSpecialEOfficeConsumers } from "./modules/leave/eoffice-consumer.js";
 import { registerRecruitmentEOfficeConsumers } from "./modules/recruitment/eoffice-consumer.js";
 import { registerLeaveConsumers }      from "./modules/leave/consumer.js";
+import { registerPolicySettingsConsumers } from "./modules/policy-settings/consumer.js";
 import { registerAttendanceConsumers } from "./modules/attendance/consumer.js";
 import { registerRecruitmentConsumers } from "./modules/recruitment/consumer.js";
 import { registerLifecycleMutationConsumers } from "./modules/lifecycle/consumer.js";
@@ -93,6 +94,7 @@ registerPromotionEOfficeConsumers(queue);
 registerDisciplinaryConsumers(queue);
 registerDisciplinaryEOfficeConsumers(queue);
 registerLeaveConsumers(queue);
+registerPolicySettingsConsumers(queue);
 registerLeaveSpecialEOfficeConsumers(queue);
 registerAttendanceConsumers(queue);
 registerRecruitmentConsumers(queue);

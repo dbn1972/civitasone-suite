@@ -1,6 +1,7 @@
 import { cache } from "../../shared/infra.js";
 import { and, eq, inArray } from "drizzle-orm";
 import * as repo from "./repo.js";
+import { effectiveBalanceDays, exactAppliedDays } from "./domain.js";
 import * as employeeRepo from "../employee/repo.js";
 import { hrmsLeaveAllocs, type LeaveAppRow } from "./schema.js";
 
@@ -150,7 +151,8 @@ async function toLeaveRequestDetails(tenantId: string, rows: LeaveAppRow[]) {
     leaveType: typeNameById.get(r.leaveTypeId) ?? r.leaveTypeId.slice(0, 8),
     fromDate: r.fromDate,
     toDate: r.toDate,
-    days: r.daysApplied,
+    days: exactAppliedDays(r),
+    dayPart: r.dayPart,
     reason: r.reason ?? undefined,
     approver: r.approvedBy ?? undefined,
     status: mapLeaveStatus(r.status),
@@ -193,5 +195,5 @@ export async function listLeaveAllocations(tenantId: string, limit: number, empl
   const conditions = [eq(hrmsLeaveAllocs.tenantId, tenantId)];
   if (employeeIds) conditions.push(inArray(hrmsLeaveAllocs.employeeId, employeeIds));
   const rows = await scopedRead((tx) => tx.select().from(hrmsLeaveAllocs).where(and(...conditions)).limit(limit));
-  return rows.map(r => ({ id: r.id, employeeId: r.employeeId, leaveTypeId: r.leaveTypeId, fy: r.fy, totalDays: r.totalDays, balanceDays: r.balanceDays }));
+  return rows.map(r => ({ id: r.id, employeeId: r.employeeId, leaveTypeId: r.leaveTypeId, fy: r.fy, totalDays: r.totalDays, balanceDays: effectiveBalanceDays(r) }));
 }

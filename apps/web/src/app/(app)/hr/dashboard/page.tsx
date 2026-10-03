@@ -274,6 +274,11 @@ export default async function HRDashboardPage() {
   // the existing (unchanged) scope honest/transparent instead of silently
   // implying it's "the manager's own" data.
   const isManagerOnlyViewer = !canManageEmployees;
+  // GAP-HR-DASHBOARD-08: the server now narrows a manager-only viewer's
+  // figures to their direct reports (dashboard_scope policy, default) and says
+  // so in `data.scope`; the label follows what the server actually did, so it
+  // can never claim "Organisation-wide" for scoped numbers or vice versa.
+  const scopedToReports = data.scope === "direct_reports";
 
   const recentEmployees = employees;
 
@@ -312,11 +317,11 @@ export default async function HRDashboardPage() {
           isManagerOnlyViewer's doc comment above. Transparency only; does
           not change what data a manager can already see. */}
       {isManagerOnlyViewer && (
-        <p
+        <p data-testid="dashboard-scope-note"
           className="scope-note"
           style={{ margin: "0 24px 8px", fontSize: 11, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted,#64748b)" }}
         >
-          Organisation-wide data
+          {scopedToReports ? t("dashboard.scopeDirectReports") : t("dashboard.scopeOrganisationData")}
         </p>
       )}
       <HRKPIStrip
@@ -373,7 +378,7 @@ export default async function HRDashboardPage() {
         <div className="dash-col-center">
           <DeptHeadcountChart
             breakdown={data.departmentBreakdown}
-            scopeNote={isManagerOnlyViewer ? "Organisation-wide" : undefined}
+            scopeNote={isManagerOnlyViewer ? (scopedToReports ? t("dashboard.scopeDirectReports") : t("dashboard.scopeOrganisation")) : undefined}
           />
         </div>
 

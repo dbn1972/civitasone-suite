@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -8,6 +10,8 @@ vi.mock("@/app/_data/apiClient", () => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
+const rolesMock = vi.fn(() => [] as string[]);
+vi.mock("@/lib/auth/roleGuard", () => ({ getSessionRoles: () => rolesMock() }));
 
 import ShiftsPage from "./page";
 
@@ -17,7 +21,27 @@ const MOCK_SHIFTS = [
 ];
 
 describe("ShiftsPage", () => {
-  beforeEach(() => fetchJsonMock.mockReset());
+  beforeEach(() => { fetchJsonMock.mockReset(); rolesMock.mockReset(); rolesMock.mockReturnValue([]); });
+
+  // GAP-HR-SHIFTS-01: create/edit is offered to HR roles only (the API
+  // re-checks server-side; this just stops showing a control that would 403).
+  it("shows Add shift / Edit to an HR officer", async () => {
+    rolesMock.mockReturnValue(["hr_officer"]);
+    fetchJsonMock.mockResolvedValue({ data: MOCK_SHIFTS, source: "api" });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await ShiftsPage()}</NextIntlClientProvider>);
+    expect(screen.getByRole("button", { name: "Add shift" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit shift General Duty" })).toBeInTheDocument();
+  });
+
+  it("shows no management controls to a manager or employee", async () => {
+    for (const roles of [["manager"], ["employee"], []]) {
+      rolesMock.mockReturnValue(roles);
+      fetchJsonMock.mockResolvedValue({ data: MOCK_SHIFTS, source: "api" });
+      const { unmount } = render(await ShiftsPage());
+      expect(screen.queryByRole("button", { name: "Add shift" })).toBeNull();
+      unmount();
+    }
+  });
 
   it("renders shift definitions from API", async () => {
     fetchJsonMock.mockResolvedValue({ data: MOCK_SHIFTS, source: "api" });

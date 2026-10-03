@@ -117,12 +117,13 @@ export const updateEmployeeBody = z.object({
   email:          z.string().email().optional(),
   bankAccountNo:  z.string().optional(),
   bankIfsc:       z.string().max(16).optional(),
-  // HR-A deep-verify finding: this was `z.bigint()`, which can never parse a
-  // real HTTP JSON body (JSON has no bigint literal) -- every PATCH that
-  // included basicMinor would 400 with "Expected bigint, received number".
-  // Match createEmployeeBody's basicMinor type; commands.ts already does
-  // `.toString()` on this value, which works the same on a plain number.
-  basicMinor:     z.number().int().nonnegative().optional(),
+  // GAP-HR-EMPLOYEES-DETAIL-EDIT-04: basic pay is NOT editable on this generic
+  // profile route. It is money that feeds every payslip, and this path has no
+  // maker-checker, no effective date and no arrears handling; payroll's salary
+  // revision / pay-matrix flows own it (approved, effective-dated, audited).
+  // No UI ever sent it, so nothing legitimate breaks; a caller that still does
+  // gets an explicit 400 instead of a silent overwrite or a silent drop.
+  basicMinor:     z.undefined({ message: "Basic pay cannot be changed here. Use a salary revision in Payroll, which is approved, effective-dated and audited." }).optional(),
   payStructureId: z.string().uuid().optional(),
   managerId:      z.string().uuid().optional(),
   uanNumber:      z.string().max(12).optional(),

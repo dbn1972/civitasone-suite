@@ -8,7 +8,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { StatusPill, ConfirmDialog, Button } from "@/app/_components/ds";
+import { StatusPill, ConfirmDialog, Button, Modal, Field, Input } from "@/app/_components/ds";
+import { validateIssueOrder, toIssueOrderBody, type IssueOrderForm, type IssueOrderError } from "./issueOrder";
 import { formatIndianDate } from "@/lib/formatters";
 import { useToast } from "@/app/_components/ds/Toast";
 import { useFormError } from "@/lib/useFormError";
@@ -48,11 +49,8 @@ type PendingStage = {
 
 /** IST calendar date as YYYY-MM-DD -- GAP-HR-TRANSFER-02: `new
  * Date().toISOString().split("T")[0]` is the UTC date, one day behind IST
- * between 00:00 and 05:30 IST. The fabricated-order-number question itself
- * (manual entry vs. a real server-generated series) is a real open product
- * decision the gap catalog explicitly says not to guess at -- left as-is
- * pending that decision -- but the date computation underneath it was a
- * plain, independently-fixable bug. */
+ * between 00:00 and 05:30 IST. The order number is no longer fabricated: the
+ * Issue Order dialog makes the officer type the order-register number. */
 function todayIST(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
 }
@@ -66,6 +64,11 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
   const [acting, setActing] = useState(false);
   const [pending, setPending] = useState<PendingStage | null>(null);
   const [dialogError, setDialogError] = useState<string | undefined>();
+  // GAP-HR-TRANSFER-02: Issue Order is a form (order number + date typed by the
+  // officer), not a bare confirm with a made-up number.
+  const [issueOpen, setIssueOpen] = useState(false);
+  const [issueForm, setIssueForm] = useState<IssueOrderForm>({ orderNo: "", orderDate: "", orderRef: "" });
+  const [issueErrors, setIssueErrors] = useState<IssueOrderError[]>([]);
   const formError = useFormError("transfer order");
   const statusLabel = statusText(transfer.status);
   const currentIdx = directPipelineIndex(transfer.status);
@@ -90,6 +93,7 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
       toast.success(tr("updatedToast"));
       router.refresh();
       setPending(null);
+      setIssueOpen(false);
       onAction?.();
     } catch (err) {
       setDialogError(err instanceof Error ? err.message : formError.fromException("save").message);
@@ -233,13 +237,12 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
             {transfer.status === "requested" && (
               <Button style={{ fontSize: 13 }} disabled={acting} loading={acting}
-                onClick={() => setPending({
-                  path: "issue-order",
-                  body: { orderNo: `TO-${transfer.id.slice(0, 8).toUpperCase()}`, orderDate: today },
-                  label: tr("issueOrder"),
-                  title: tr("issueTitle"),
-                  description: tr("issueDesc", { name: empLabel, from: fromLabel, to: toLabel, date: today }),
-                })}>
+                onClick={() => {
+                  setIssueForm({ orderNo: "", orderDate: today, orderRef: "" });
+                  setIssueErrors([]);
+                  setDialogError(undefined);
+                  setIssueOpen(true);
+                }}>
                 {acting ? tr("processing") : tr("issueOrder")}
               </Button>
             )}
@@ -270,6 +273,50 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
           </div>
         )}
       </div>
+
+      <Modal open={issueOpen} onClose={() => { if (!acting) setIssueOpen(false); }} title={tr("issueTitle")}>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const errs = validateIssueOrder(issueForm, today);
+            setIssueErrors(errs);
+            if (errs.length === 0) void postAction("issue-order", toIssueOrderBody(issueForm));
+          }}
+          style={{ display: "grid", gap: 14 }}
+          noValidate
+        >
+          <p style={{ margin: 0, fontSize: 13 }}>
+            {tr("issueFormDesc", { name: empLabel, from: fromLabel, to: toLabel })}
+          </p>
+          {dialogError && (
+            <p role="alert" aria-live="assertive" style={{ margin: 0, fontSize: 13, color: "var(--bad, #b91c1c)" }}>{dialogError}</p>
+          )}
+          <Field
+            id="issue-order-no"
+            label={<>{tr("orderNo")} <span style={{ fontWeight: 400, color: "var(--ink2)", fontSize: 12 }}>({tr("orderNoHint")})</span></>}
+            error={issueErrors.includes("orderNoRequired") ? tr("errOrderNoRequired") : issueErrors.includes("orderNoFormat") ? tr("errOrderNoFormat") : undefined}
+            required
+          >
+            <Input value={issueForm.orderNo} maxLength={64} onChange={(e) => setIssueForm({ ...issueForm, orderNo: e.target.value })} />
+          </Field>
+          <Field
+            id="issue-order-date"
+            label={tr("orderDate")}
+            error={issueErrors.includes("orderDateRequired") ? tr("errOrderDateRequired") : issueErrors.includes("orderDateFuture") ? tr("errOrderDateFuture") : undefined}
+            required
+          >
+            <Input type="date" max={today} value={issueForm.orderDate} onChange={(e) => setIssueForm({ ...issueForm, orderDate: e.target.value })} />
+          </Field>
+          <Field id="issue-order-ref" label={tr("orderRefLabel")}>
+            <Input value={issueForm.orderRef} maxLength={128} onChange={(e) => setIssueForm({ ...issueForm, orderRef: e.target.value })} />
+          </Field>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--ink2)" }}>{tr("issueIrreversible")}</p>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <Button type="button" variant="ghost" onClick={() => setIssueOpen(false)} disabled={acting}>{tr("cancelLabel")}</Button>
+            <Button type="submit" disabled={acting} loading={acting}>{acting ? tr("processing") : tr("issueOrder")}</Button>
+          </div>
+        </form>
+      </Modal>
 
       <ConfirmDialog
         open={pending !== null}

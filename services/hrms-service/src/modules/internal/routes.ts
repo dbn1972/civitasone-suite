@@ -3,6 +3,7 @@ import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as employeeRepo from "../employee/repo.js";
 import * as leaveRepo from "../leave/repo.js";
+import { exactAppliedDays } from "../leave/domain.js";
 import * as attendanceRepo from "../attendance/repo.js";
 import { getHolidaysInRange, countWorkingDaysExcludingHolidays } from "../leave/rules-engine.js";
 import { activePaySuspendedEmployeeIds, type ActivePaySuspension } from "../disciplinary/repo.js";
@@ -114,7 +115,13 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
       (await leaveRepo.listLeaveTypesByTenant(ctx.tenantId)).map((lt) => [lt.id, lt.lopFractionBps]),
     );
     for (const leave of lopEligibleLeaves) {
-      const days = countWorkingDaysExcludingHolidays(leave.fromDate, leave.toDate, holidaySet);
+      // GAP-HR-LEAVE-APPLY-05: a half-day / short leave is exactly its exact
+      // unit count (0.5) -- never run through the working-day counter, and
+      // never rounded up to a whole LOP day below.
+      const isPartDay = leave.dayPart != null && leave.dayPart !== "full";
+      const days = isPartDay
+        ? exactAppliedDays(leave)
+        : countWorkingDaysExcludingHolidays(leave.fromDate, leave.toDate, holidaySet);
       // Unknown leave type (shouldn't happen -- every leave app's
       // leaveTypeId is a real FK -- but fails toward "fully counts as LOP"
       // rather than silently exempting it, same posture as this column's
@@ -122,7 +129,11 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
       // convention just above.
       const lopFractionBps = lopFractionByTypeId.get(leave.leaveTypeId) ?? 10000;
       if (lopFractionBps === 0) continue; // fully-paid leave type: no LOP.
-      const lopDays = Math.round((days * lopFractionBps) / 10000);
+      // Whole-day rows keep the historical integer rounding byte-for-byte;
+      // part-day rows keep two decimals (0.5 day at 5000 bps = 0.25).
+      const lopDays = isPartDay
+        ? Math.round((days * lopFractionBps) / 100) / 100
+        : Math.round((days * lopFractionBps) / 10000);
       if (lopDays <= 0) continue;
       lopByEmployee.set(leave.employeeId, (lopByEmployee.get(leave.employeeId) ?? 0) + lopDays);
     }

@@ -267,6 +267,9 @@
   },
   "aparFlowCard": {
     "emptyText": "No APAR records found",
+    "deadlineDueIn": "Due in {days, plural, one {# day} other {# days}}",
+    "deadlineToday": "Due today",
+    "deadlineOverdue": "Overdue by {days, plural, one {# day} other {# days}}",
     "employeeUnavailable": "Employee unavailable",
     "periodPrefix": "Period:",
     "bandPrefix": "Band: {band}",
@@ -696,6 +699,7 @@
   },
   "benefits": {
     "title": "My Benefit Elections",
+    "personalNote": "Benefit elections are personal to each employee, so this page needs an account that is linked to an employee record.",
     "subtitle": "Your HRA, LTC, medical, and flex-benefit elections for the financial year.",
     "dataSourceErrorMessage": "Couldn't load — showing nothing",
     "colPlan": "Plan",
@@ -1471,8 +1475,14 @@
     "resolved": "Resolved",
     "open": "Open"
   },
+  "dashboardDays": {
+    "count": "{count, plural, one {# day} other {# days}}"
+  },
   "dashboard": {
     "title": "HR Dashboard",
+    "scopeDirectReports": "Your direct reports",
+    "scopeOrganisationData": "Organisation-wide data",
+    "scopeOrganisation": "Organisation-wide",
     "greeting": {
       "morning": "Good morning",
       "afternoon": "Good afternoon",
@@ -3357,6 +3367,11 @@
   },
   "leaveApply": {
     "title": "Apply for Leave",
+    "dayPartLabel": "Duration",
+    "dayPart_full": "Full day(s)",
+    "dayPart_first_half": "First half (half day)",
+    "dayPart_second_half": "Second half (half day)",
+    "dayPart_short_leave": "Short leave",
     "subtitle": "Submit a leave request for approval.",
     "loadingSubtitle": "Submit a leave request.",
     "employeeLabel": "Employee",
@@ -3510,6 +3525,13 @@
   },
   "leavePolicies": {
     "title": "Leave Policy Configuration",
+    "halfDayTitle": "Half-day and short leave",
+    "halfDayHelp": "Off by default: leave is then taken in whole days only. When on, employees can apply for half a day (first or second half) or a short leave on a single working day. Only Casual Leave (CL) can be split; each counts as half a day.",
+    "halfDayLabel": "Allow half-day Casual Leave",
+    "shortLeaveLabel": "Allow short leave",
+    "halfDaySave": "Save settings",
+    "halfDaySaving": "Saving…",
+    "halfDaySaved": "Saved.",
     "subtitle": "Configure leave entitlements for each employee type. Changes take effect immediately.",
     "statTotal": "Total Policies",
     "statActive": "Active",
@@ -5541,7 +5563,19 @@
     "cardStart": "Start",
     "cardEnd": "End",
     "cardBreak": "Break",
-    "cardTotal": "Total"
+    "cardTotal": "Total",
+    "manageTitle": "Manage shifts",
+    "addShift": "Add shift",
+    "editShift": "Edit shift",
+    "editShiftAria": "Edit shift {name}",
+    "edit": "Edit",
+    "fieldName": "Shift name",
+    "fieldStart": "Start time",
+    "fieldEnd": "End time",
+    "fieldGrace": "Grace period (minutes)",
+    "save": "Save",
+    "saving": "Saving…",
+    "cancel": "Cancel"
   },
   "socialFeed": {
     "title": "Social Feed",
@@ -5610,7 +5644,7 @@
     "backToHr": "Back to HR",
     "colVacancyAlert": "Vacancy alert",
     "vacancyFlagOver": "⚠ Over {pct}% vacant",
-    "vacancyAlertMessage": "{count, plural, one {# department or cadre has} other {# departments or cadres have}} vacancies above {pct}% of sanctioned strength (GFR 2017 Rule 228 vacancy review threshold)."
+    "vacancyAlertMessage": "{count, plural, one {# department or cadre has} other {# departments or cadres have}} vacancies above {pct}% of sanctioned strength."
   },
   "stat": {
     "total": "Total",
@@ -5963,7 +5997,7 @@
   },
   "wfhForm": {
     "ariaLabel": "Work From Home request form",
-    "gazettedError": "WFH is available for non-gazetted staff (Level 1–10) only per DoPT OM 2022.",
+    "gazettedError": "WFH is available for non-gazetted staff (Level 1–9) only per DoPT OM 2022.",
     "weeklyCapError": "2-day weekly WFH limit reached (DoPT OM 2022).",
     "payLevelWarning": "Pay level could not be verified. You may submit, but the request is subject to eligibility review.",
     "policyNote": "Per DoPT O.M., WFH is permitted for eligible cadres up to <strong>{limit} days per week</strong>. Requests beyond this limit require DG/Secretary approval.",
@@ -6354,7 +6388,7 @@
     "title": "Goals & Development",
     "subtitle": "Performance goals, OKRs, and development plans for the current appraisal cycle.",
     "statTotal": "Total Goals",
-    "statOnTrack": "On Track (Active)",
+    "statOnTrack": "On Track",
     "statAtRisk": "At Risk / Behind",
     "statCompleted": "Completed",
     "achievementCardTitle": "Goal Achievement by Category",
@@ -8144,6 +8178,15 @@
     "issueOrder": "Issue Order",
     "issueTitle": "Issue the transfer order?",
     "issueDesc": "This issues a formal transfer order for {name} ({from} → {to}), dated {date}. The order number cannot be un-issued once created.",
+    "issueFormDesc": "Issue a formal transfer order for {name} ({from} → {to}). Enter the order number exactly as it appears in your order register.",
+    "orderNoHint": "Letters, digits and / . - _ only, e.g. 12/2026-Estt.",
+    "orderRefLabel": "Order reference (optional)",
+    "issueIrreversible": "The order number cannot be changed or un-issued once the order is created.",
+    "errOrderNoRequired": "Enter the order number.",
+    "errOrderNoFormat": "Use letters, digits and / . - _ only (up to 64 characters).",
+    "errOrderDateRequired": "Enter the order date.",
+    "errOrderDateFuture": "The order date cannot be in the future.",
+    "cancelLabel": "Cancel",
     "markRelieved": "Mark Relieved",
     "relieveTitle": "Mark this employee relieved?",
     "relieveDesc": "This records {name} as relieved from {from} effective {date}, ending their tenure at the current post.",

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { useDays } from "./useDays";
 
 interface Props {
   daysLeft: number;
@@ -14,6 +15,7 @@ interface Props {
 }
 
 export function PayrollBanner({ daysLeft, monthName, headcount, canRunPayroll }: Props) {
+  const formatDays = useDays();
   return (
     // GAP-HR-DASHBOARD-05: role="status" (polite), not role="alert"
     // (assertive) -- an approaching payroll deadline is informational, not
@@ -25,7 +27,7 @@ export function PayrollBanner({ daysLeft, monthName, headcount, canRunPayroll }:
       </div>
       <div className="pb-text">
         <div className="pb-label">Payroll Processing</div>
-        <div className="pb-sub">{monthName} cycle · {headcount != null ? headcount.toLocaleString("en-IN") : "—"} employees · Deadline in {daysLeft} day{daysLeft !== 1 ? "s" : ""}</div>
+        <div className="pb-sub">{monthName} cycle · {headcount != null ? headcount.toLocaleString("en-IN") : "—"} employees · Deadline in {formatDays(daysLeft)}</div>
       </div>
       {canRunPayroll && <Link href="/hr/payroll" className="pb-btn">Start Run →</Link>}
       <style>{`

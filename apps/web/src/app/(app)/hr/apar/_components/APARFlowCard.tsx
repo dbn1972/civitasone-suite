@@ -11,13 +11,11 @@
  * backend actually uses (self_pending … finalised) — see that module's
  * doc comment for the full history.
  *
- * GAP-HR-APAR-03: the deadline countdown (`deadlineMeta`, the `dl` badge)
- * is removed. `AparRecord.deadline` was never computed by the backend (no
- * `deadline` column on hrms_appraisals, nothing in apar/routes.ts sets one)
- * so this block never rendered for a single real record — see the decision
- * packet's "everything else" bucket: no per-stage deadline policy exists to
- * adopt, so the item's own stated safe default (delete the dead code
- * instead of inventing statutory due-dates) applies here.
+ * GAP-HR-APAR-03: the deadline countdown is back, now backed by real data:
+ * GET /v1/hrms/apar computes `deadline` per record (the tenant's apar_deadlines
+ * policy per stage, or the record's own representationDue once disclosed).
+ * Shown as TEXT with an icon ("Due in 5 days" / "Overdue by 2 days"), never
+ * colour alone.
  *
  * GAP-HR-APAR-05: stage labels now use DoPT/SPARROW terminology throughout
  * (Reporting Officer, Reviewing Officer, Accepting Authority) instead of
@@ -31,7 +29,8 @@
  * all) -- this is the first consumer of it here.
  */
 import { useTranslations } from "next-intl";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, todayIST } from "@/lib/formatters";
+import { deadlineState } from "@/lib/apar/deadline";
 import { APAR_STAGE_GROUPS, stageIndex, isFinal, isRepresentationFiled } from "@/lib/apar/stages";
 
 export type AparRecord = {
@@ -46,6 +45,8 @@ export type AparRecord = {
   status: string;
   overallBand?: string | null;
   overallGrade?: string | null;
+  /** GAP-HR-APAR-03: YYYY-MM-DD, computed by GET /v1/hrms/apar from the tenant's apar_deadlines policy. */
+  deadline?: string | null;
   updatedAt: string;
 } & Record<string, unknown>;
 
@@ -82,6 +83,7 @@ function APARCard({ record }: { record: AparRecord }) {
   const isRepresentation = isRepresentationFiled(record.status);
   const isClosed = isFinal(record.status);
   const ownerName = !isClosed ? stageOwnerName(record) : undefined;
+  const dl = deadlineState(record.deadline, todayIST(), isClosed);
 
   return (
     <article
@@ -228,6 +230,15 @@ function APARCard({ record }: { record: AparRecord }) {
           {/* GAP-HR-APAR-02 fix step 3: name the officer (or the employee,
               for self/disclosure stages) the ball is currently with. */}
           {ownerName && <span> — {ownerName}</span>}
+          {dl && (
+            <span
+              data-testid="apar-deadline"
+              style={{ marginInlineStart: 8, fontWeight: 600, color: dl.kind === "overdue" ? "var(--bad, #b91c1c)" : dl.kind === "today" ? "var(--warn, #b45309)" : "var(--ink2)" }}
+            >
+              <span aria-hidden="true">{dl.kind === "overdue" ? "⚠ " : "⏰ "}</span>
+              {dl.kind === "overdue" ? t("deadlineOverdue", { days: dl.days }) : dl.kind === "today" ? t("deadlineToday") : t("deadlineDueIn", { days: dl.days })}
+            </span>
+          )}
         </span>
         <span>{t("updatedPrefix", { date: formatIndianDate(record.updatedAt) })}</span>
       </div>

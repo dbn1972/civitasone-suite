@@ -101,7 +101,8 @@ const computeFnfBody = z.object({
   lastDrawnWagesMinor: minor(),
   completedYears: z.number().int().min(0),
   avgSalaryLast10MonthsMinor: minor(),
-  leaveBalanceDays: z.number().int().min(0),
+  // GAP-HR-LEAVE-APPLY-05: half-day leave means the balance can be x.5.
+  leaveBalanceDays: z.number().min(0).multipleOf(0.5),
   priorLeaveEncashExemptionMinor: minor().default("0"),
   remainingMonthsToRetirement: z.number().int().min(0).default(0),
   taxRegime: z.enum(["old", "new"]),
@@ -137,7 +138,7 @@ const internalBreakdownQuery = z.object({
   lastDrawnWagesMinor: z.string().transform((v) => BigInt(v)),
   completedYears: z.coerce.number().int().min(0),
   avgSalaryLast10MonthsMinor: z.string().transform((v) => BigInt(v)),
-  leaveBalanceDays: z.coerce.number().int().min(0),
+  leaveBalanceDays: z.coerce.number().min(0).multipleOf(0.5),
   priorLeaveEncashExemptionMinor: z.string().transform((v) => BigInt(v)).default("0"),
   remainingMonthsToRetirement: z.coerce.number().int().min(0).default(0),
   taxRegime: z.enum(["old", "new"]),

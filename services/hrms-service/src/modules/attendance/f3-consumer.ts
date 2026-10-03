@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { pino } from "pino";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
-import { hrmsOvertimeRequests, hrmsWfhRequests, hrmsShiftChangeRequests, hrmsAttendanceRegularisations } from "./schema.js";
+import { hrmsOvertimeRequests, hrmsWfhRequests, hrmsShiftChangeRequests, hrmsAttendanceRegularisations, hrmsShifts } from "./schema.js";
 import * as repo from "./repo.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 
@@ -95,6 +95,8 @@ export function registerF3_attendance_Consumers(queue: Queue): void {
       "attendance_routes__8",
       "attendance_routes__9",
       "attendance_routes__10",
+      "attendance_shifts__create",
+      "attendance_shifts__update",
     ]);
     if (!ops.has(op)) return;
     const body = p.body ?? {};
@@ -119,6 +121,50 @@ export function registerF3_attendance_Consumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         switch (op) {
+          case "attendance_shifts__create": {
+            await tx.insert(hrmsShifts).values({
+              id, tenantId: p.tenantId, name: String(body.name).trim(),
+              startTime: body.startTime, endTime: body.endTime, graceMins: body.graceMins ?? 0,
+              createdBy: msg.actorId, updatedBy: msg.actorId,
+            });
+            await enqueue(tx, {
+              topic: "audit.event.record", eventType: "audit.event.record",
+              tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+              payload: {
+                service: "hrms", action: "create", resourceType: "shift", resourceId: id, outcome: "success",
+                metadata: { name: body.name, startTime: body.startTime, endTime: body.endTime, graceMins: body.graceMins ?? 0 },
+              },
+            });
+            break;
+          }
+          case "attendance_shifts__update": {
+            const before = (await tx.select().from(hrmsShifts)
+              .where(and(eq(hrmsShifts.id, id), eq(hrmsShifts.tenantId, p.tenantId))).limit(1))[0];
+            if (!before) {
+              log.warn({ op, id, messageId: msg.messageId }, "shift missing before async update");
+              return;
+            }
+            const patch: Record<string, unknown> = {};
+            if (body.name !== undefined) patch.name = String(body.name).trim();
+            if (body.startTime !== undefined) patch.startTime = body.startTime;
+            if (body.endTime !== undefined) patch.endTime = body.endTime;
+            if (body.graceMins !== undefined) patch.graceMins = body.graceMins;
+            await tx.update(hrmsShifts)
+              .set({ ...patch, updatedBy: msg.actorId, updatedAt: new Date(), version: sql`${hrmsShifts.version} + 1` })
+              .where(and(eq(hrmsShifts.id, id), eq(hrmsShifts.tenantId, p.tenantId)));
+            await enqueue(tx, {
+              topic: "audit.event.record", eventType: "audit.event.record",
+              tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+              payload: {
+                service: "hrms", action: "update", resourceType: "shift", resourceId: id, outcome: "success",
+                metadata: {
+                  before: { name: before.name, startTime: before.startTime, endTime: before.endTime, graceMins: before.graceMins },
+                  after: patch,
+                },
+              },
+            });
+            break;
+          }
           case "attendance_routes__0": {
             const regId = (params.id as string) || id;
             await refuseOwnRegularisation(tx, p.tenantId, regId, approverEmployeeId);

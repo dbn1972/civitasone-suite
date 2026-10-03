@@ -1,3 +1,4 @@
+import { effectiveBalanceDays, exactAppliedDays } from "../leave/domain.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { eq, and } from "drizzle-orm";
@@ -51,7 +52,7 @@ export async function selfServiceRoutes(app: FastifyInstance): Promise<void> {
     if (!emps[0]) return reply.code(404).send({ code: "NOT_FOUND", message: "No employee record" });
     const allocs = await scopedRead((tx) => tx.select().from(hrmsLeaveAllocs)
       .where(and(eq(hrmsLeaveAllocs.tenantId, ctx.tenantId), eq(hrmsLeaveAllocs.employeeId, emps[0]!.id))));
-    return reply.send({ data: allocs.map(a => ({ leaveTypeId: a.leaveTypeId, fy: a.fy, total: a.totalDays, balance: a.balanceDays, used: a.totalDays - a.balanceDays })) });
+    return reply.send({ data: allocs.map(a => ({ leaveTypeId: a.leaveTypeId, fy: a.fy, total: a.totalDays, balance: effectiveBalanceDays(a), used: a.totalDays - effectiveBalanceDays(a) })) });
   });
 
   // My attendance this month
@@ -74,7 +75,7 @@ export async function selfServiceRoutes(app: FastifyInstance): Promise<void> {
     if (!emps[0]) return reply.code(404).send({ code: "NOT_FOUND", message: "No employee record" });
     const apps = await scopedRead((tx) => tx.select().from(hrmsLeaveApps)
       .where(and(eq(hrmsLeaveApps.tenantId, ctx.tenantId), eq(hrmsLeaveApps.employeeId, emps[0]!.id))));
-    return reply.send({ data: apps.map(a => ({ id: a.id, leaveTypeId: a.leaveTypeId, fromDate: a.fromDate, toDate: a.toDate, days: a.daysApplied, status: a.status })) });
+    return reply.send({ data: apps.map(a => ({ id: a.id, leaveTypeId: a.leaveTypeId, fromDate: a.fromDate, toDate: a.toDate, days: exactAppliedDays(a), status: a.status })) });
   });
 
   app.setErrorHandler((err, req, reply) => {

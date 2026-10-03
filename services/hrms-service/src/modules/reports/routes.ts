@@ -1,3 +1,4 @@
+import { effectiveBalanceDays } from "../leave/domain.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { eq, sql, and } from "drizzle-orm";
@@ -37,8 +38,8 @@ export async function reportRoutes(app: FastifyInstance): Promise<void> {
       leaveTypeId: a.leaveTypeId,
       fy: a.fy,
       totalDays: a.totalDays,
-      balanceDays: a.balanceDays,
-      usedDays: a.totalDays - a.balanceDays,
+      balanceDays: effectiveBalanceDays(a),
+      usedDays: a.totalDays - effectiveBalanceDays(a),
     }));
     return reply.send({ data: summary });
   });

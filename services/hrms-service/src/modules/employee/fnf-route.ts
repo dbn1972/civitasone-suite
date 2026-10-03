@@ -8,6 +8,7 @@
  * - gratuity = (basic * 15/26) * years_of_service (if >= 5 years)
  * Returns the F&F breakdown with optional tax breakdown from payroll-service.
  */
+import { effectiveBalanceDays } from "../leave/domain.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -78,8 +79,9 @@ export async function fnfRoutes(app: FastifyInstance): Promise<void> {
         eq(hrmsLeaveAllocs.tenantId, ctx.tenantId),
         eq(hrmsLeaveAllocs.employeeId, id),
       )));
-    const totalLeaveBalance = allocations.reduce((sum, a) => sum + (a.balanceDays ?? 0), 0);
-    let leaveEncashmentMinor = dailyBasicMinor * totalLeaveBalance;
+    const totalLeaveBalance = allocations.reduce((sum, a) => sum + effectiveBalanceDays(a), 0);
+    // GAP-HR-LEAVE-APPLY-05: half-day balances make totalLeaveBalance fractional (x.5).
+    let leaveEncashmentMinor = Math.round(dailyBasicMinor * totalLeaveBalance);
 
     // 3. Gratuity (only if >= 5 years of service)
     // Formula: (basic * 15) / 26 * completed_years
