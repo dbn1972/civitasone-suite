@@ -7,7 +7,7 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import type { PayrollRunDetail } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
 import { formatRupees } from "@/lib/formatters";
-import { payrollRunStatusLabel } from "@/lib/payroll/statusLabels";
+import { payrollRunStatusLabel, payrollRunStatusVariant } from "@/lib/payroll/statusLabels";
 
 export function PayrollRunsTable({ runs, source = "api", canAdminister = false }: { runs: PayrollRunDetail[]; source?: "api" | "error"; canAdminister?: boolean }) {
   const t = useTranslations("payrollRunsTable");
@@ -30,7 +30,7 @@ export function PayrollRunsTable({ runs, source = "api", canAdminister = false }
     // i18n. `render` (checked before cellType by DataTable's cellValue())
     // keeps the pill's color keyed off the real `status` while giving it a
     // translated `label` explicitly, via this table's own i18n status map.
-    { key: "status", label: t("colStatus"), render: (r) => <StatusPill status={r.status} label={payrollRunStatusLabel(r.status, t)} /> },
+    { key: "status", label: t("colStatus"), render: (r) => <StatusPill status={r.status} label={payrollRunStatusLabel(r.status, t)} variant={payrollRunStatusVariant(r.status)} /> },
   ];
 
   return (

@@ -1,4 +1,5 @@
 import type { useTranslations } from "next-intl";
+import type { PillVariant } from "@/app/_components/ds/StatusPill";
 
 type TFn = ReturnType<typeof useTranslations>;
 
@@ -35,6 +36,33 @@ export function payrollRunStatusLabel(status: string, t: TFn): string {
   return (PAYROLL_RUN_STATUSES as readonly string[]).includes(status)
     ? t(`status.${status}` as Parameters<TFn>[0])
     : status;
+}
+
+/**
+ * GAP-PAYROLL-HOME-07: pill tone for a payroll RUN status. StatusPill's global
+ * map (shared by ~80 call sites) paints "completed" and "paid" the same green,
+ * so a run that is computed but not yet paid looked identical to one whose
+ * money has moved. Payroll-local override, passed as StatusPill's `variant`
+ * (the global map is deliberately left alone):
+ *   draft -> neutral, processing -> warn, completed -> info (computed, awaiting
+ *   disbursement: NOT green), paid/disbursed -> good, failed -> bad.
+ * The translated label already differs in text ("Completed" vs "Paid"), so the
+ * distinction is not colour-only. An unknown status gets no override (undefined)
+ * and falls back to StatusPill's own default.
+ */
+const PAYROLL_RUN_VARIANT: Record<(typeof PAYROLL_RUN_STATUSES)[number], PillVariant> = {
+  draft: "mut",
+  processing: "warn",
+  completed: "info",
+  paid: "good",
+  disbursed: "good",
+  failed: "bad",
+};
+
+export function payrollRunStatusVariant(status: string): PillVariant | undefined {
+  return (PAYROLL_RUN_STATUSES as readonly string[]).includes(status)
+    ? PAYROLL_RUN_VARIANT[status as (typeof PAYROLL_RUN_STATUSES)[number]]
+    : undefined;
 }
 
 // draft/finalized come from the list endpoint's narrowed status; computed,

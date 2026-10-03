@@ -15,12 +15,13 @@ export default async function TaxConfigPage() {
             <table className="tbl" style={{ fontSize: 13 }}>
               <thead><tr><th>{t("thSlabAnnual")}</th><th>{t("thRate")}</th></tr></thead>
               <tbody>
-                <tr><td>{t("newUpTo3L")}</td><td>{t("nil")}</td></tr>
-                <tr><td>₹3,00,001 – ₹7,00,000</td><td>5%</td></tr>
-                <tr><td>₹7,00,001 – ₹10,00,000</td><td>10%</td></tr>
-                <tr><td>₹10,00,001 – ₹12,00,000</td><td>15%</td></tr>
-                <tr><td>₹12,00,001 – ₹15,00,000</td><td>20%</td></tr>
-                <tr><td>{t("newAbove15L")}</td><td>30%</td></tr>
+                <tr><td>{t("newUpTo4L")}</td><td>{t("nil")}</td></tr>
+                <tr><td>₹4,00,001 – ₹8,00,000</td><td>5%</td></tr>
+                <tr><td>₹8,00,001 – ₹12,00,000</td><td>10%</td></tr>
+                <tr><td>₹12,00,001 – ₹16,00,000</td><td>15%</td></tr>
+                <tr><td>₹16,00,001 – ₹20,00,000</td><td>20%</td></tr>
+                <tr><td>₹20,00,001 – ₹24,00,000</td><td>25%</td></tr>
+                <tr><td>{t("newAbove24L")}</td><td>30%</td></tr>
               </tbody>
             </table>
             </div>
@@ -65,10 +66,12 @@ export default async function TaxConfigPage() {
               <tbody>
                 <tr><td>{t("surcharge50LTo1Cr")}</td><td>10%</td></tr>
                 <tr><td>{t("surcharge1CrTo2Cr")}</td><td>15%</td></tr>
-                <tr><td>{t("aboveTwoCr")}</td><td>25%</td></tr>
+                <tr><td>{t("surcharge2CrTo5Cr")}</td><td>25%</td></tr>
+                <tr><td>{t("surchargeAbove5Cr")}</td><td>37%</td></tr>
               </tbody>
             </table>
             </div>
+            <p style={{ marginTop: 8, fontSize: 12, color: "var(--mut)" }}>{t("surchargeNote")}</p>
             <p style={{ marginTop: 8, fontSize: 12, color: "var(--mut)" }}>{t("cessNote")}</p>
           </Card>
         </div>

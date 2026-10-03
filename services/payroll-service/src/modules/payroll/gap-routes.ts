@@ -20,6 +20,7 @@ import * as commands from "./commands.js";
 import { stateRulesBody, findPtSlabOverlap } from "./state-rules.js";
 import { assertElectionWithinPlan } from "./adjustment-guards.js";
 import { isValidIanaTimeZone } from "./validators.js";
+import { fetchEmployeeSummaries } from "../../shared/hrms-client.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES = [...PAYROLL_ROLES, "hr_admin", "finance_officer"];
@@ -302,6 +303,88 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     `))) as unknown as Array<Record<string, unknown>>;
     return reply.send({ data: rows });
   });
+
+  // GAP-PAYROLL-FLEX-BENEFITS-05: the approver's queue. Payroll roles only.
+  // Bounded limit/offset + total + stable ORDER BY (created_at, id); employee
+  // NAMES come from the hrms directory (fails open to null -> the UI shows a
+  // neutral label, never the UUID).
+  app.get("/v1/payroll/flex-benefits/elections", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, PAYROLL_ROLES);
+    const q = z.object({
+      status: z.enum(["submitted", "approved", "rejected"]).optional(),
+      limit: z.coerce.number().int().min(1).max(100).default(25),
+      offset: z.coerce.number().int().min(0).max(100000).default(0),
+    }).parse(req.query);
+    const statusFilter = q.status ? sql`AND e.status = ${q.status}` : sql``;
+    const rows = (await scopedRead((tx) => tx.execute(sql`
+      SELECT e.id, e.employee_id, e.plan_id, p.name AS plan_name, e.fy, e.elections,
+             e.total_elected_minor::text AS total_elected_minor,
+             md5(e.elections::text || e.total_elected_minor::text) AS etag, e.status,
+             e.created_by, e.created_at, e.reviewed_at, e.review_reason,
+             (e.created_by = ${ctx.actorId}::uuid) AS is_own_submission
+        FROM payroll.flex_benefit_elections e
+        JOIN payroll.flex_benefit_plans p ON p.id = e.plan_id AND p.tenant_id = e.tenant_id
+       WHERE e.tenant_id = ${ctx.tenantId}::uuid ${statusFilter}
+       ORDER BY e.created_at DESC, e.id
+       LIMIT ${q.limit} OFFSET ${q.offset}
+    `))) as unknown as Array<Record<string, unknown> & { employee_id: string }>;
+    const totals = (await scopedRead((tx) => tx.execute(sql`
+      SELECT COUNT(*)::int AS total,
+             COUNT(*) FILTER (WHERE status = 'submitted')::int AS pending
+        FROM payroll.flex_benefit_elections e
+       WHERE e.tenant_id = ${ctx.tenantId}::uuid ${statusFilter}
+    `))) as unknown as Array<{ total: number; pending: number }>;
+    const names = await fetchEmployeeSummaries(ctx.tenantId);
+    return reply.send({
+      data: rows.map((r) => ({ ...r, employee_name: names.get(r.employee_id)?.fullName ?? null })),
+      total: totals[0]?.total ?? 0,
+      pending: totals[0]?.pending ?? 0,
+      limit: q.limit,
+      offset: q.offset,
+    });
+  });
+
+  // GAP-PAYROLL-FLEX-BENEFITS-05: maker-checker decision. The route answers
+  // 404/409/403 for what it can see; the consumer re-asserts all of it in one
+  // conditional UPDATE (race-safe) and audits the decision. Reject needs a
+  // reason (>= 10 chars); an approval reason is optional.
+  for (const decision of ["approve", "reject"] as const) {
+    app.post(`/v1/payroll/flex-benefits/elections/:id/${decision}`, async (req, reply) => {
+      const ctx = resolveContext(req);
+      requireRole(ctx, PAYROLL_ROLES);
+      const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+      const body = z.object({
+        // md5 of what the reviewer saw (GET .../elections `etag`); a changed election is 409 STALE_ELECTION.
+        etag: z.string().regex(/^[0-9a-f]{32}$/),
+        reason: decision === "reject" ? z.string().trim().min(10).max(512) : z.string().trim().max(512).optional(),
+      }).parse(req.body ?? {});
+      const rows = (await scopedRead((tx) => tx.execute(sql`
+        SELECT e.status, e.created_by, md5(e.elections::text || e.total_elected_minor::text) AS etag,
+               COALESCE((SELECT s.flex_election_maker_checker FROM payroll.payroll_settings s
+                          WHERE s.tenant_id = e.tenant_id), TRUE) AS maker_checker
+          FROM payroll.flex_benefit_elections e
+         WHERE e.id = ${id}::uuid AND e.tenant_id = ${ctx.tenantId}::uuid LIMIT 1
+      `))) as unknown as Array<{ status: string; created_by: string; etag: string; maker_checker: boolean }>;
+      const row = rows[0];
+      if (!row) throw new HttpError(404, "NOT_FOUND", "election not found");
+      if (row.status !== "submitted") {
+        throw new HttpError(409, "ELECTION_NOT_PENDING", `election is already ${row.status}`);
+      }
+      if (row.etag !== body.etag) {
+        throw new HttpError(409, "STALE_ELECTION", "the election changed after you loaded it; refresh and review it again");
+      }
+      if (row.maker_checker && row.created_by === ctx.actorId) {
+        throw new HttpError(403, "SELF_APPROVAL_FORBIDDEN", "an election must be decided by someone other than its submitter");
+      }
+      return sendAccepted(reply, acceptedResponseSchema, await commands.decideFlexElection(ctx, {
+        id,
+        decision: decision === "approve" ? "approved" : "rejected",
+        etag: body.etag,
+        reason: body.reason || undefined,
+      }));
+    });
+  }
 
   // ─── Gap 6: Costing Rules ────────────────────────────────────────────────
   app.post("/v1/payroll/costing/rules", async (req, reply) => {
