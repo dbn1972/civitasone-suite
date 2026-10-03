@@ -4,15 +4,19 @@ import type { ReactNode } from "react";
 import { DataTable, StatusPill, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { formatMoney } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
+import { useTranslations } from "next-intl";
 import { RegisterFrame, statValue } from "./RegisterFrame";
+import { linkState } from "./linkHelpers";
 import type { InventoryItemRow } from "./_data";
 import { INVENTORY_LIST_LIMIT, capNote } from "./_limits";
 
+/** `linkState` holds the badge TEXT, so the column's filter, sort and CSV use what the user reads. */
+type Row = InventoryItemRow & { linkState: string };
 type Col = {
-  key: keyof InventoryItemRow & string;
+  key: keyof Row & string;
   label: string;
   align?: "left" | "right" | "center";
-  render?: (row: InventoryItemRow) => ReactNode;
+  render?: (row: Row) => ReactNode;
 };
 
 const columns: Col[] = [
@@ -27,7 +31,15 @@ const columns: Col[] = [
   { key: "status", label: "Status", render: (r) => <StatusPill status={r.status} /> },
 ];
 
-export function ItemsTable({ items, source = "api" }: { items: InventoryItemRow[]; source?: "api" | "error" }) {
+/**
+ * `linkedItemIds` are the item master ids that are linked to a stock register item; null when the
+ * links could not be loaded (then no row claims to be linked or unlinked).
+ */
+export function ItemsTable({
+  items, source = "api", linkedItemIds = null,
+}: { items: InventoryItemRow[]; source?: "api" | "error"; linkedItemIds?: string[] | null }) {
+  const t = useTranslations("inventoryLink");
+  const linked = linkedItemIds === null ? null : new Set(linkedItemIds);
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<InventoryItemRow[]>(
     "inventory.items",
     items,
@@ -35,6 +47,16 @@ export function ItemsTable({ items, source = "api" }: { items: InventoryItemRow[
     (d) => d.length === 0,
   );
 
+  const columnsWithLink: Col[] = [
+    ...columns.slice(0, -1),
+    {
+      key: "linkState",
+      label: t("badge.column"),
+      render: (r) => <StatusPill status={r.linkState === t("badge.linked") ? "active" : "info"} label={r.linkState} />,
+    },
+    columns[columns.length - 1]!,
+  ];
+  const tableRows: Row[] = rows.map((r) => ({ ...r, linkState: t(`badge.${linkState(r.id, linked)}`) }));
   const active = rows.filter((i) => i.status === "active").length;
   const consumables = rows.filter((i) => i.itemType === "consumable").length;
   const tracked = rows.filter((i) => i.reorderLevel > 0).length;
@@ -49,9 +71,12 @@ export function ItemsTable({ items, source = "api" }: { items: InventoryItemRow[
       </StatGrid>
       <Card title="Items">
         <RegisterFrame provenance={provenance} cachedAt={cachedAt} offline={offline} area="item master" capNote={capNote(rows.length, INVENTORY_LIST_LIMIT, "items")}>
-          <DataTable<InventoryItemRow>
-            columns={columns}
-            rows={rows}
+          <DataTable<Row>
+            columns={columnsWithLink}
+            rows={tableRows}
+            rowLinkPrefix="/inventory/items/"
+            rowLinkKey="id"
+            identifyingColumnKey="name"
             sortable
             filterable
             filterPlaceholder="Filter items…"

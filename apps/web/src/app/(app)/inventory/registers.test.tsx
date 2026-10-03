@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import type { DataProvenance } from "@/lib/sync/resource";
 
 /**
@@ -32,7 +34,7 @@ const ID = "11111111-2222-3333-4444-555555555555";
 const registers: Array<{ name: string; ui: () => JSX.Element; area: RegExp; sample: unknown }> = [
   { name: "bins", ui: () => <BinsTable bins={[]} source="error" />, area: /bins and racks/, sample: { id: "b1", code: "B-1", storeId: ID, aisle: null, rack: null, shelf: null, capacity: 5, isActive: true, createdAt: "2026-08-01" } },
   { name: "goods returns", ui: () => <GoodsReturnsTable returns={[]} source="error" />, area: /goods returns/, sample: { id: "g1", itemId: ID, storeId: ID, originalIssueId: ID, qty: "3", reason: "damaged", qcStatus: "pending", disposition: "quarantine", createdAt: "2026-08-01" } },
-  { name: "items", ui: () => <ItemsTable items={[]} source="error" />, area: /item master/, sample: { id: "i1", sku: "S1", name: "Pen", category: null, uom: "ea", itemType: "consumable", reorderLevel: 5, reorderQty: 10, unitCostMinor: "100", status: "active" } },
+  { name: "items", ui: () => <NextIntlClientProvider locale="en" messages={enMessages}><ItemsTable items={[]} source="error" /></NextIntlClientProvider>, area: /item master/, sample: { id: "i1", sku: "S1", name: "Pen", category: null, uom: "ea", itemType: "consumable", reorderLevel: 5, reorderQty: 10, unitCostMinor: "100", status: "active" } },
   { name: "low stock", ui: () => <LowStockTable rows={[]} source="error" />, area: /low-stock alerts/, sample: { itemId: "i1", sku: "S1", name: "Pen", onHandQty: 1, reorderLevel: 5, suggestedReorderQty: 10 } },
   { name: "reservations", ui: () => <ReservationsTable reservations={[]} source="error" />, area: /stock reservations/, sample: { id: "r1", itemId: ID, storeId: ID, qty: "2", refType: "indent", refId: ID, status: "active", expiresAt: null, createdAt: "2026-08-01" } },
   { name: "substitutes", ui: () => <SubstitutesTable substitutes={[]} source="error" />, area: /item substitutes/, sample: { id: "s1", itemId: ID, substituteId: ID, priority: 2, conversionFactor: "1", createdAt: "2026-08-01" } },

@@ -14,6 +14,8 @@ export type CreateItemBody = z.infer<typeof createItemBody>;
 
 export const itemQueryParams = z.object({
   category: z.string().uuid().optional(),
+  /** Case-insensitive substring match on name or code (the cross-master item picker). */
+  q:        z.string().trim().min(1).max(100).optional(),
   limit:    z.coerce.number().int().positive().max(200).default(50),
   offset:   z.coerce.number().int().nonnegative().default(0),
 });

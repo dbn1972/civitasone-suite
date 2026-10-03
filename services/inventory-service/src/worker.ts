@@ -7,6 +7,7 @@ import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { startOutboxPurge } from "@civitasone/outbox";
 import { registerItemConsumers } from "./modules/items/consumer.js";
+import { registerItemLinkConsumers } from "./modules/item-links/consumer.js";
 import { registerStoreConsumers } from "./modules/stores/consumer.js";
 import { registerMovementConsumers } from "./modules/movements/consumer.js";
 import { registerWarehouseConsumers } from "./modules/warehouses/consumer.js";
@@ -33,6 +34,7 @@ const log = pino({ name: "inventory-worker" });
 }
 
 registerItemConsumers(queue);
+registerItemLinkConsumers(queue);
 registerStoreConsumers(queue);
 registerMovementConsumers(queue);
 registerWarehouseConsumers(queue);
