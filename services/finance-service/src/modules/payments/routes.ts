@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { listQuerySchema } from "@civitasone/schemas/common";
 import { paymentsListSchema, BillSummaryListSchema, BillDetailSchema, AdvanceSummaryListSchema, UCSummaryListSchema } from "@civitasone/schemas/web";
@@ -207,7 +208,7 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
       assertBillRejectable(bill.status);
     } catch (err) { toDomain(err, 409); }
     await queue.publish(COMMANDS.billReject, {
-      type: COMMANDS.billReject,
+      messageId: randomUUID(), type: COMMANDS.billReject,
       tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
       payload: { id, tenantId: ctx.tenantId, reason: body.reason },
     });

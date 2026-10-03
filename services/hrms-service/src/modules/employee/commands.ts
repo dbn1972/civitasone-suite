@@ -93,7 +93,7 @@ export async function confirmEmployee(ctx: RequestContext, id: string, body: Con
 // GAP-HR-CONFIRMATION-05
 export async function extendProbation(ctx: RequestContext, id: string, body: ProbationExtensionBody): Promise<Accepted> {
   await queue.publish(COMMANDS.employeeProbationExtend, {
-    type: COMMANDS.employeeProbationExtend,
+    messageId: randomUUID(), type: COMMANDS.employeeProbationExtend,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { ...body, id, tenantId: ctx.tenantId },
   });
