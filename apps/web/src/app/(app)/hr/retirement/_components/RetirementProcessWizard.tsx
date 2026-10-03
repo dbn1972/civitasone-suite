@@ -12,6 +12,7 @@
  */
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useFormError } from "@/lib/useFormError";
 import { Button, ConfirmDialog, useToast } from "@/app/_components/ds";
 
 const STEP_IDS = ["1", "2", "3", "4", "5"] as const;
@@ -40,6 +41,7 @@ export function RetirementProcessWizard({ employeeName, separationId }: Props) {
     checks: Array.from({ length: CHECKS_PER_STEP }, (_, ci) => t(`step${id}Check${ci}`)),
   }));
 
+  const formError = useFormError("retirement checklist");
   const [activeStep, setActiveStep] = useState(0);
   const [checked, setChecked] = useState<ChecklistState>({});
   const [ppoIssuedAt, setPpoIssuedAt] = useState<string | null>(null);
@@ -95,7 +97,10 @@ export function RetirementProcessWizard({ employeeName, separationId }: Props) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ stepId, checkIndex, done: nextValue }),
       });
-      if (!res.ok) throw new Error(String(res.status));
+      if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "save");
+        throw new Error(resolved.message);
+      }
     } catch {
       setChecked((prev) => ({ ...prev, [stepId]: { ...(prev[stepId] ?? {}), [checkIndex]: prevValue } }));
       toast.error(t("toggleErrorToast"));
@@ -107,7 +112,10 @@ export function RetirementProcessWizard({ employeeName, separationId }: Props) {
     setIssuing(true);
     try {
       const res = await fetch(`/api/proxy/v1/hrms/separations/${separationId}/issue-ppo`, { method: "POST" });
-      if (!res.ok) throw new Error(String(res.status));
+      if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "save");
+        throw new Error(resolved.message);
+      }
       setPpoIssuedAt(new Date().toISOString());
       setConfirmOpen(false);
       toast.success(t("ppoIssuedToast"));

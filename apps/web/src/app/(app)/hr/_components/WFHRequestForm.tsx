@@ -131,7 +131,10 @@ export function WFHRequestForm({
     poll: async (created) => {
       const qs = employeeId ? `?empId=${encodeURIComponent(employeeId)}` : "";
       const res = await fetch(`/api/proxy/v1/hrms/wfh-requests${qs}`);
-      if (!res.ok) throw new Error(String(res.status));
+      if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "load");
+        throw new Error(resolved.message);
+      }
       return (await res.json()) as WfhRequestsList;
     },
     isDone: (polled, created) => polled.data.some((row) => row.id === created.id),
