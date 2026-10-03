@@ -1,5 +1,5 @@
 import {
-  pgSchema, uuid, text, integer, bigint, char, varchar, date, timestamp, boolean,
+  pgSchema, uuid, text, integer, bigint, char, varchar, date, timestamp, boolean, jsonb,
 } from "drizzle-orm/pg-core";
 
 export const enterpriseSchema = pgSchema("enterprise");
@@ -103,10 +103,17 @@ export const assetScanLog = enterpriseSchema.table("asset_scan_log", {
 export const assetSettings = enterpriseSchema.table("asset_settings", {
   tenantId:              uuid("tenant_id").primaryKey(),
   capitalizeMakerChecker: boolean("capitalize_maker_checker").notNull().default(true),
+  // Second approver for GL head changes (migration 0039). Default ON.
+  glMakerChecker:        boolean("gl_maker_checker").notNull().default(true),
   cwipAccountCode:       varchar("cwip_account_code", { length: 16 }),
   fixedAssetAccountCode: varchar("fixed_asset_account_code", { length: 16 }),
   impairmentExpenseAccountCode: varchar("impairment_expense_account_code", { length: 16 }),
   revaluationReserveAccountCode: varchar("revaluation_reserve_account_code", { length: 16 }),
+  // fp-assets-02 (migration 0039): the heads the acquisition / maintenance journals used to default from env.
+  grnClearingAccountCode: varchar("grn_clearing_account_code", { length: 16 }),
+  acquisitionOffsetAccountCode: varchar("acquisition_offset_account_code", { length: 16 }),
+  maintenanceExpenseAccountCode: varchar("maintenance_expense_account_code", { length: 16 }),
+  apControlAccountCode:  varchar("ap_control_account_code", { length: 16 }),
   rouAccountCode:        varchar("rou_account_code", { length: 16 }),
   leaseLiabilityAccountCode: varchar("lease_liability_account_code", { length: 16 }),
   leaseOffsetAccountCode: varchar("lease_offset_account_code", { length: 16 }),
@@ -127,6 +134,8 @@ export const assetSettingRequests = enterpriseSchema.table("asset_setting_reques
   decidedBy:      uuid("decided_by"),
   decidedAt:      timestamp("decided_at", { withTimezone: true }),
   decisionReason: text("decision_reason"),
+  // The change the request carries (kind gl_heads_change: the head patch applied on approval).
+  payload:        jsonb("payload").$type<Record<string, unknown>>(),
 });
 
 /** GAP-ASSETS-LEASES-07 (migration 0038): amortisation schedule of a discounted lease liability. */

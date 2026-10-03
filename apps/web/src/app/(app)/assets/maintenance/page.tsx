@@ -4,6 +4,9 @@ import { PageHeader, StatCard, StatGrid, EmptyState, DataTable, RefreshErrorStat
 import { toHumanError } from "@/lib/messages";
 import Link from "next/link";
 import { buildMaintenanceRows, countByType } from "./maintenanceRows";
+import { getTranslations } from "next-intl/server";
+import { AccountingBanner } from "../AccountingBanner";
+import { journalKey, rejectionNote } from "../glStatus";
 
 export default async function AssetMaintenancePage() {
   const { data: records, source } = await getAssetMaintenance();
@@ -13,7 +16,12 @@ export default async function AssetMaintenancePage() {
   const breakdowns = errored ? null : countByType(records, "breakdown");
   const completed = errored ? null : records.filter((r) => r.status === "completed").length;
 
-  const rows = buildMaintenanceRows(records);
+  const t = await getTranslations("assetsGl");
+  // A completed job whose journal is not (yet) with finance says so in its own column.
+  const rows = buildMaintenanceRows(records, (s, error) => {
+    const note = s === "failed" ? rejectionNote(error) : null;
+    return note ? `${t(journalKey(s))}. ${t(note.key, { reason: note.reason })}` : t(journalKey(s));
+  });
 
   return (
     <>
@@ -28,6 +36,7 @@ export default async function AssetMaintenancePage() {
           </>
         }
       />
+      <AccountingBanner areas={["maintenance"]} />
       <StatGrid>
         <StatCard icon="🛠️" iconBg="#fdf0e3" label="Open Jobs" value={openJobs === null ? "—" : openJobs.toLocaleString("en-IN")} />
         <StatCard icon="🔧" iconBg="#eff6ff" label="Preventive" value={preventive === null ? "—" : preventive.toLocaleString("en-IN")} />
@@ -51,6 +60,7 @@ export default async function AssetMaintenancePage() {
               { key: "scheduledDate", label: "Scheduled" },
               { key: "vendor", label: "Technician / Agency" },
               { key: "status", label: "Status", cellType: "status" },
+              { key: "journal", label: t("journal") },
             ]}
             rows={rows}
             rowLinkKey="assetId"

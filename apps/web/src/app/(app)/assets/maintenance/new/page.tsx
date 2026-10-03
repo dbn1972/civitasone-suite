@@ -27,6 +27,7 @@ import {
   type MaintenanceType,
 } from "./workOrderForm";
 import { todayIST } from "@/lib/formatters";
+import { AccountingBanner } from "../../AccountingBanner";
 
 const inputStyle = { width: "100%", padding: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 
@@ -127,6 +128,7 @@ function NewWorkOrderForm() {
   return (
     <>
       <PageHeader title={heading.title} subtitle={heading.subtitle} back="/assets/maintenance" backLabel="Asset Maintenance" />
+      <AccountingBanner areas={["maintenance"]} />
       {message ? (
         <div
           role={isError ? "alert" : "status"}

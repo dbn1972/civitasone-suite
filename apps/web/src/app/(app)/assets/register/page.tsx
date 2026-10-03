@@ -4,6 +4,7 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { canWriteAssets } from "@/lib/auth/workRoles";
 import { toHumanError } from "@/lib/messages";
 import { RegisterAssetForm } from "./RegisterAssetForm";
+import { AccountingBanner } from "../AccountingBanner";
 
 export default async function RegisterAssetPage() {
   const header = (
@@ -35,6 +36,8 @@ export default async function RegisterAssetPage() {
   return (
     <>
       {header}
+      {/* The asset is saved either way; without the GL accounts its journal waits (never posted to a guessed account). */}
+      <AccountingBanner areas={["acquisition"]} />
       {source === "error" ? (
         <RefreshErrorState error={toHumanError("load", { area: "asset categories" })} />
       ) : categories.length === 0 ? (

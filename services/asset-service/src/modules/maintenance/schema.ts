@@ -39,6 +39,10 @@ export const assetWorkOrders = maintenanceSchema.table("asset_work_orders", {
   // CHECK preventive|corrective|amc|breakdown) but was not mapped, so every
   // work order silently stayed 'corrective'.
   maintenanceType: varchar("maintenance_type", { length: 16 }).notNull().default("corrective"),
+  // Finance-side state of the maintenance journal (migration 0039): none | awaiting_accounts | pending | posted | failed.
+  glPostStatus:  varchar("gl_post_status", { length: 20 }).notNull().default("none"),
+  glJournalId:   uuid("gl_journal_id"),
+  glPostError:   text("gl_post_error"),
   createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:     timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:     uuid("created_by").notNull(),

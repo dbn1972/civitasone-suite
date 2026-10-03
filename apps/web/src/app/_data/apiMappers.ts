@@ -881,6 +881,8 @@ export function mapAssetSummaries(payload: unknown): AssetSummary[] | null {
       // GAP-ASSETS-FIXED-ASSETS-03: only a real barcode counts as tagged.
       ...(toText(row.barcode) ? { barcode: toText(row.barcode) as string } : {}),
       ...(toText(row.locationId) ? { locationId: toText(row.locationId) as string } : {}),
+      ...(toText(row.glPostStatus) ? { glPostStatus: toText(row.glPostStatus) as string } : {}),
+      ...(toText(row.glPostError) ? { glPostError: toText(row.glPostError) as string } : {}),
     });
   }
   return mapped;
@@ -981,6 +983,8 @@ export function mapMaintenanceSummaries(payload: unknown): MaintenanceSummary[] 
       actualCost: parseMinor(row.costMinor) ?? 0,
       status,
       remarks: toText(row.notes) ?? undefined,
+      ...(toText(row.glPostStatus) ? { glPostStatus: toText(row.glPostStatus) as string } : {}),
+      ...(toText(row.glPostError) ? { glPostError: toText(row.glPostError) as string } : {}),
     });
   }
   return mapped;

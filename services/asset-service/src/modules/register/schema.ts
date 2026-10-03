@@ -45,6 +45,10 @@ export const assetAssets = registerSchema.table("asset_assets", {
   location:        text("location"),
   // GAP-ASSETS-LOCATIONS-03 (migration 0036): the functional location the asset sits in.
   locationId:      uuid("location_id"),
+  // Finance-side state of the acquisition journal (migration 0039): none | awaiting_accounts | pending | posted | failed.
+  glPostStatus:    varchar("gl_post_status", { length: 20 }).notNull().default("none"),
+  glJournalId:     uuid("gl_journal_id"),
+  glPostError:     text("gl_post_error"),
   notes:           text("notes"),
   createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:       timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

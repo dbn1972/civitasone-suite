@@ -1,4 +1,4 @@
-import { eq, and, or, sql, inArray, desc, isNull } from "drizzle-orm";
+import { eq, and, or, sql, inArray, desc, isNull, isNotNull } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { DomainError, headSearchPattern } from "./domain.js";
 import {
@@ -136,6 +136,13 @@ export async function findReappropriationById(id: string): Promise<Reappropriati
  * text are escaped by headSearchPattern), so a head beyond the first page of
  * a large chart can still be found.
  */
+/** Ids of every head that has at least one child (a group account) in this tenant's chart. */
+export async function listParentHeadIds(tenantId: string): Promise<Set<string>> {
+  const rows = await scopedRead((tx) => tx.select({ parentId: financeHeads.parentId }).from(financeHeads)
+    .where(and(eq(financeHeads.tenantId, tenantId), isNotNull(financeHeads.parentId))));
+  return new Set(rows.map((r) => r.parentId).filter((v): v is string => typeof v === "string"));
+}
+
 export async function listHeads(tenantId: string, limit: number, search?: string): Promise<HeadRow[]> {
   const pattern = search ? headSearchPattern(search) : null;
   const where = pattern

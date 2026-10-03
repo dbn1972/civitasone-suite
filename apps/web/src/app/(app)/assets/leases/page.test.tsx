@@ -68,7 +68,7 @@ describe("LeasesPage register", () => {
   it("refuses with a clear (translated) message when GL accounts are not configured, and shows no raw server text", async () => {
     fetchSpy.mockImplementation(async (_url, init) =>
       (init as RequestInit | undefined)?.method === "POST"
-        ? new Response(JSON.stringify({ code: "GL_HEADS_NOT_CONFIGURED", message: "server text" }), { status: 409 })
+        ? new Response(JSON.stringify({ code: "ASSET_GL_NOT_CONFIGURED", message: "server text" }), { status: 409 })
         : new Response(JSON.stringify({ data: [] }), { status: 200 }));
     render(<LeasesPage />);
     fill();

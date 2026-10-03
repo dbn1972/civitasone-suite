@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mapAssetSummaries, mapAssetDetail, parseMinorString } from "./apiMappers";
+import { mapAssetSummaries, mapAssetDetail, parseMinorString, mapMaintenanceSummaries } from "./apiMappers";
 
 const row = (over: Record<string, unknown>) => ({ id: "a1", name: "Laptop", code: "AST-1", acquisitionCost: "100000", bookValue: "80000", ...over });
 const status = (s: string) => mapAssetSummaries({ data: [row({ status: s })] })![0]!.status;
@@ -34,6 +34,16 @@ describe("mapAssetSummaries status (GAP-ASSETS-LIST-04)", () => {
   it("is case-insensitive", () => {
     expect(status("WRITTEN_OFF")).toBe("written_off");
     expect(status("Under_Maintenance")).toBe("maintenance");
+  });
+});
+
+describe("journal state (fp-assets-02)", () => {
+  it("carries the acquisition journal state on assets and the maintenance journal state on work orders", () => {
+    expect(mapAssetSummaries({ data: [row({ glPostStatus: "awaiting_accounts" })] })![0]!.glPostStatus).toBe("awaiting_accounts");
+    expect(mapAssetSummaries({ data: [row({})] })![0]).not.toHaveProperty("glPostStatus");
+    const wo = mapMaintenanceSummaries({ data: [{ id: "w1", assetId: "a1", status: "completed", glPostStatus: "failed" }] })!;
+    expect(wo[0]!.glPostStatus).toBe("failed");
+    expect(mapMaintenanceSummaries({ data: [{ id: "w2", assetId: "a1" }] })![0]).not.toHaveProperty("glPostStatus");
   });
 });
 

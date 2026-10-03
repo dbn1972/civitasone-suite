@@ -137,20 +137,20 @@ describe("AucTable", () => {
     const code409 = (code: string) => new Response(JSON.stringify({ code, message: "server text that must not be shown" }), { status: 409 });
 
     it("shows a clear message (en) when the GL accounts are not configured, never the server text or the code", async () => {
-      vi.spyOn(globalThis, "fetch").mockResolvedValue(code409("GL_HEADS_NOT_CONFIGURED"));
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(code409("ASSET_GL_NOT_CONFIGURED"));
       render(<AucTable rows={[UNDER_CONSTRUCTION]} />);
       fireEvent.click(screen.getByRole("button", { name: "Capitalize project AUC-001" }));
       fireEvent.change(await screen.findByLabelText(/Reason/), { target: { value: "Commissioned" } });
       fireEvent.click(screen.getByText("Request capitalization"));
       expect(await screen.findByText(/GL accounts are not set up yet/)).toBeInTheDocument();
       expect(screen.queryByText(/server text/)).not.toBeInTheDocument();
-      expect(screen.queryByText(/GL_HEADS_NOT_CONFIGURED/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/ASSET_GL_NOT_CONFIGURED/)).not.toBeInTheDocument();
       expect(refreshMock).not.toHaveBeenCalled();
       expect(calls()).toHaveLength(1);
     });
 
     it("shows the same message in Hindi", async () => {
-      vi.spyOn(globalThis, "fetch").mockResolvedValue(code409("GL_HEADS_NOT_CONFIGURED"));
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(code409("ASSET_GL_NOT_CONFIGURED"));
       render(<AucTable rows={[UNDER_CONSTRUCTION]} />, "hi");
       fireEvent.click(screen.getByRole("button", { name: "Capitalize project AUC-001" }));
       fireEvent.change(await screen.findByLabelText(/Reason/), { target: { value: "Commissioned" } });
@@ -187,7 +187,7 @@ describe("AucTable", () => {
 
     it("a repost refused because the heads are not valid says so in plain words, and a non-admin 403 is plain too", async () => {
       const failed: AucRow = { ...UNDER_CONSTRUCTION, id: "77777777-7777-7777-7777-777777777777", projectCode: "AUC-777F", status: "capitalized", assetId: null, glPostStatus: "failed" };
-      vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(code409("GL_HEADS_NOT_CONFIGURED"));
+      vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(code409("ASSET_GL_NOT_CONFIGURED"));
       render(<AucTable rows={[failed]} />, "hi");
       fireEvent.click(screen.getByRole("button", { name: /AUC-777F/ }));
       fireEvent.click(await screen.findByRole("button", { name: "पुनः भेजें" }));

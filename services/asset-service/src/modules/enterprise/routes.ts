@@ -12,14 +12,17 @@ import { uuidV5 } from "../../shared/ids.js";
 import { bulkImportBody, duplicateCodes, summariseCodes, parseIdempotencyKey } from "./bulk-import.js";
 import { isRealDateNotAfterToday, todayIST } from "../../shared/dates.js";
 import { buildLeaseSchedule, type LeaseFrequency } from "./lease-domain.js";
-import { requireGlHeads, reasonMessage, assertDistinctHeads, headsFromSettings, ALL_HEAD_KINDS } from "./gl-heads.js";
+import { requireGlHeads, reasonMessage, assertDistinctHeads, headsFromSettings, ALL_HEAD_KINDS, accountingStatus } from "./gl-heads.js";
 import { validateHead, type HeadKind } from "../../shared/finance-client.js";
+import { SWEEP_LIMIT } from "./postings.js";
 
 const ASSET_ROLES = ["asset_manager", "asset_admin", "super_admin"];
-const READER_ROLES = [...ASSET_ROLES, "audit_officer", "finance_officer"];
+const READER_ROLES = [...ASSET_ROLES, "audit_officer", "finance_officer", "finance_admin"];
 const DEFAULT_IT_CATEGORY = "77777777-0001-0000-0000-000000000001";
 // Checker roles for AUC capitalisation (the maker may be any ASSET_ROLES member).
 const APPROVER_ROLES = ["asset_admin", "super_admin"];
+// Asset settings (GL heads) are shared with finance: a finance_admin may request and approve them too.
+const SETTINGS_ROLES = ["asset_admin", "finance_admin", "super_admin"];
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 const leaseBody = z.object({
@@ -159,13 +162,29 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const s = await repo.getAssetSettings(ctx.tenantId);
-    const pending = await repo.getPendingSettingRequest(ctx.tenantId);
+    const pendingAll = await repo.listPendingSettingRequests(ctx.tenantId);
+    const pending = pendingAll.find((r) => r.kind === "maker_checker_off") ?? null;
     return reply.send({
       capitalizeMakerChecker: s?.capitalizeMakerChecker ?? true,
+      // GL head edits and switching this off need a second approver (default ON).
+      glMakerChecker: s?.glMakerChecker ?? true,
+      sweepLimit: SWEEP_LIMIT,
+      pendingRequests: pendingAll.map((r) => ({
+        id: r.id, kind: r.kind, reason: r.reason, requestedAt: r.requestedAt, requestedByMe: r.requestedBy === ctx.actorId,
+        heads: r.kind === "gl_heads_change" ? (r.payload ?? {}) : null,
+      })),
       cwipAccountCode: s?.cwipAccountCode ?? null,
       fixedAssetAccountCode: s?.fixedAssetAccountCode ?? null,
       impairmentExpenseAccountCode: s?.impairmentExpenseAccountCode ?? null,
       revaluationReserveAccountCode: s?.revaluationReserveAccountCode ?? null,
+      grnClearingAccountCode: s?.grnClearingAccountCode ?? null,
+      acquisitionOffsetAccountCode: s?.acquisitionOffsetAccountCode ?? null,
+      maintenanceExpenseAccountCode: s?.maintenanceExpenseAccountCode ?? null,
+      apControlAccountCode: s?.apControlAccountCode ?? null,
+      // Per posting area: which GL accounts are still unset (drives the "Accounting not set up" banner), and how many
+      // records are waiting for / were refused by finance.
+      accounting: accountingStatus(s),
+      glOpen: await repo.countGlOpen(ctx.tenantId),
       rouAccountCode: s?.rouAccountCode ?? null,
       leaseLiabilityAccountCode: s?.leaseLiabilityAccountCode ?? null,
       leaseOffsetAccountCode: s?.leaseOffsetAccountCode ?? null,
@@ -176,16 +195,23 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
   const headCode = z.string().trim().regex(/^[A-Za-z0-9._-]{1,16}$/).nullable().optional();
   app.patch("/v1/assets/settings", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, APPROVER_ROLES);
+    requireRole(ctx, SETTINGS_ROLES);
     const body = z.object({
       capitalizeMakerChecker: z.boolean().optional(),
-      cwipAccountCode: headCode, fixedAssetAccountCode: headCode, impairmentExpenseAccountCode: headCode, revaluationReserveAccountCode: headCode, rouAccountCode: headCode, leaseLiabilityAccountCode: headCode, leaseOffsetAccountCode: headCode,
+      glMakerChecker: z.boolean().optional(),
+      cwipAccountCode: headCode, fixedAssetAccountCode: headCode, impairmentExpenseAccountCode: headCode, revaluationReserveAccountCode: headCode,
+      grnClearingAccountCode: headCode, acquisitionOffsetAccountCode: headCode, maintenanceExpenseAccountCode: headCode, apControlAccountCode: headCode, rouAccountCode: headCode, leaseLiabilityAccountCode: headCode, leaseOffsetAccountCode: headCode,
       reason: z.string().trim().min(3).max(500),
     }).refine((b) => Object.keys(b).some((k) => k !== "reason" && (b as Record<string, unknown>)[k] !== undefined), { message: "nothing to update" }).parse(req.body);
-    // Each head is checked against the finance chart of accounts BEFORE it is stored (exists, active, right type,
-    // not accumulated depreciation). Clearing a head (null) needs no check.
+    // finance_admin is limited to GL-head requests: the capitalisation approval control stays asset_admin / super_admin.
+    if (body.capitalizeMakerChecker !== undefined) requireRole(ctx, APPROVER_ROLES);
+    // Fast-fail pre-check. The CONSUMER repeats it on the locked settings row (the authoritative check): each head is checked
+    // against the finance chart of accounts (exists, active, leaf, right type, not accumulated depreciation) and the merged
+    // set must have no duplicates. Clearing a head (null) needs no chart check.
     const kinds: Array<[HeadKind, keyof typeof body]> = [
-      ["cwip", "cwipAccountCode"], ["fixed_asset", "fixedAssetAccountCode"], ["impairment_expense", "impairmentExpenseAccountCode"], ["revaluation_reserve", "revaluationReserveAccountCode"], ["rou", "rouAccountCode"], ["lease_liability", "leaseLiabilityAccountCode"], ["lease_offset", "leaseOffsetAccountCode"],
+      ["cwip", "cwipAccountCode"], ["fixed_asset", "fixedAssetAccountCode"], ["impairment_expense", "impairmentExpenseAccountCode"], ["revaluation_reserve", "revaluationReserveAccountCode"],
+      ["grn_clearing", "grnClearingAccountCode"], ["acquisition_offset", "acquisitionOffsetAccountCode"], ["maintenance_expense", "maintenanceExpenseAccountCode"], ["ap_control", "apControlAccountCode"],
+      ["rou", "rouAccountCode"], ["lease_liability", "leaseLiabilityAccountCode"], ["lease_offset", "leaseOffsetAccountCode"],
     ];
     for (const [kind, field] of kinds) {
       const code = body[field] as string | null | undefined;
@@ -197,7 +223,6 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
       }
     }
     const current = await repo.getAssetSettings(ctx.tenantId);
-    // The resulting set of heads (current settings overlaid with this patch) must have no duplicates.
     const merged = headsFromSettings(current, ALL_HEAD_KINDS);
     for (const [kind, field] of kinds) {
       const v = body[field] as string | null | undefined;
@@ -205,52 +230,89 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
       else if (typeof v === "string") merged[kind] = v;
     }
     assertDistinctHeads(merged);
-    const turningOff = body.capitalizeMakerChecker === false;
-    if (turningOff) {
-      // Weakening the control needs a SECOND approver (same pending-request pattern as capitalisation itself).
+
+    const glMc = current?.glMakerChecker ?? true;
+    const turnGlOn = Boolean(body.glMakerChecker) && !glMc; // already ON: nothing to do
+    // While approval is ON every head change is a pending request, even if the same PATCH also says glMakerChecker:true
+    // (that part is a no-op: it is already ON). Only when it is OFF do heads apply directly (a PATCH turning it ON then
+    // applies the heads first, under the OFF policy it is leaving, and switches it ON in the same locked transaction).
+    const headsNeedApproval = glMc;
+    const headFields = Object.fromEntries(kinds.filter(([, f]) => body[f] !== undefined).map(([, f]) => [f, body[f]]));
+    const hasHeads = Object.keys(headFields).length > 0;
+    const pendingKinds = new Set((await repo.listPendingSettingRequests(ctx.tenantId)).map((r) => r.kind));
+    const requestIds: string[] = [];
+    const queueRequest = async (kind: string, extra: Record<string, unknown> = {}) => {
+      if (pendingKinds.has(kind)) throw new HttpError(409, "REQUEST_PENDING", "a request of this kind is already awaiting approval");
+      const rid = randomUUID();
+      await publishF3Write(ctx, "settings_request", rid, { kind, reason: body.reason, ...extra });
+      requestIds.push(rid);
+    };
+    // Weakening a control needs a SECOND approver (the same pending-request pattern as capitalisation).
+    if (body.capitalizeMakerChecker === false) {
       if (!(current?.capitalizeMakerChecker ?? true)) throw new HttpError(409, "ALREADY_OFF", "capitalisation maker-checker is already off");
-      if (await repo.getPendingSettingRequest(ctx.tenantId)) throw new HttpError(409, "REQUEST_PENDING", "a request to switch maker-checker off is already awaiting approval");
+      await queueRequest("maker_checker_off");
     }
+    if (body.glMakerChecker === false) {
+      if (!glMc) throw new HttpError(409, "ALREADY_OFF", "GL maker-checker is already off");
+      await queueRequest("gl_maker_checker_off");
+    }
+    // GL head edits: with GL maker-checker ON (default) they are a pending request a DIFFERENT approver must approve; the
+    // deferred-journal sweep runs only after that approval. With it OFF they apply directly.
+    if (hasHeads && headsNeedApproval) await queueRequest("gl_heads_change", { heads: headFields });
+    const direct = body.capitalizeMakerChecker === true || turnGlOn || (hasHeads && !headsNeedApproval);
     const id = randomUUID();
-    const hasDirect = body.capitalizeMakerChecker === true || kinds.some(([, f]) => body[f] !== undefined);
-    if (hasDirect) {
+    if (direct) {
       await publishF3Write(ctx, "asset_settings_update", id, {
         capitalizeMakerChecker: body.capitalizeMakerChecker === true ? true : undefined,
-        cwipAccountCode: body.cwipAccountCode, fixedAssetAccountCode: body.fixedAssetAccountCode, impairmentExpenseAccountCode: body.impairmentExpenseAccountCode,
-        revaluationReserveAccountCode: body.revaluationReserveAccountCode, rouAccountCode: body.rouAccountCode,
-        leaseLiabilityAccountCode: body.leaseLiabilityAccountCode, leaseOffsetAccountCode: body.leaseOffsetAccountCode, reason: body.reason,
+        glMakerChecker: turnGlOn ? true : undefined,
+        ...(hasHeads && !headsNeedApproval ? headFields : {}),
+        reason: body.reason,
       });
     }
-    let requestId: string | undefined;
-    if (turningOff) {
-      requestId = randomUUID();
-      await publishF3Write(ctx, "settings_off_request", requestId, { reason: body.reason });
-    }
-    return sendAccepted(reply, acceptedResponseSchema, { id: requestId ?? id, status: "accepted", correlationId: ctx.correlationId });
+    return sendAccepted(reply, acceptedResponseSchema, { id: requestIds[0] ?? id, status: "accepted", correlationId: ctx.correlationId });
+  });
+
+  // Post the journals that were deferred while accounts were missing, and re-send ones finance rejected. Bounded per run:
+  // `more` says records are left over, so the screen can show "N more waiting - run again".
+  app.post("/v1/assets/settings/post-pending", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, SETTINGS_ROLES);
+    const open = await repo.countGlOpen(ctx.tenantId);
+    const waitingAssets = open.assetsAwaiting + open.assetsFailed;
+    const waitingWorkOrders = open.workOrdersAwaiting + open.workOrdersFailed;
+    const id = randomUUID();
+    await publishF3Write(ctx, "gl_post_pending", id, {});
+    return reply.code(202).send({
+      id, status: "accepted", correlationId: ctx.correlationId,
+      waiting: waitingAssets + waitingWorkOrders, limit: SWEEP_LIMIT,
+      more: waitingAssets > SWEEP_LIMIT || waitingWorkOrders > SWEEP_LIMIT,
+    });
   });
 
   app.post("/v1/assets/settings/requests/:id/approve", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, APPROVER_ROLES);
+    requireRole(ctx, SETTINGS_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = z.object({ reason: z.string().trim().max(500).optional() }).parse(req.body ?? {});
     const r = await repo.findSettingRequest(ctx.tenantId, id);
     if (!r) throw new HttpError(404, "NOT_FOUND", "request not found");
     if (r.status !== "pending") throw new HttpError(409, "REQUEST_NOT_PENDING", "this request has already been decided");
+    if (r.kind === "maker_checker_off") requireRole(ctx, APPROVER_ROLES); // capitalisation control: not finance_admin
     if (r.requestedBy === ctx.actorId) throw new HttpError(403, "MAKER_CHECKER", "a different approver must approve this request");
-    await publishF3Write(ctx, "settings_off_approve", id, { reason: body.reason ?? null });
+    await publishF3Write(ctx, "settings_request_approve", id, { reason: body.reason ?? null });
     return sendAccepted(reply, acceptedResponseSchema, { id, status: "accepted", correlationId: ctx.correlationId });
   });
 
   app.post("/v1/assets/settings/requests/:id/reject", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, APPROVER_ROLES);
+    requireRole(ctx, SETTINGS_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = z.object({ reason: z.string().trim().min(3).max(500) }).parse(req.body);
     const r = await repo.findSettingRequest(ctx.tenantId, id);
     if (!r) throw new HttpError(404, "NOT_FOUND", "request not found");
     if (r.status !== "pending") throw new HttpError(409, "REQUEST_NOT_PENDING", "this request has already been decided");
-    await publishF3Write(ctx, "settings_off_reject", id, { reason: body.reason });
+    if (r.kind === "maker_checker_off") requireRole(ctx, APPROVER_ROLES);
+    await publishF3Write(ctx, "settings_request_reject", id, { reason: body.reason });
     return sendAccepted(reply, acceptedResponseSchema, { id, status: "accepted", correlationId: ctx.correlationId });
   });
 
@@ -576,7 +638,7 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
   app.setErrorHandler((err, req, reply) => {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError) return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId });
-    if (err instanceof HttpError) return reply.code(err.status).send({ code: err.code, message: err.message, correlationId });
+    if (err instanceof HttpError) return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, ...(err.details ? { details: err.details } : {}) });
     req.log.error({ err }, "unhandled error");
     return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId });
   });
