@@ -6,7 +6,7 @@ import { useSeededResource } from "@/lib/sync/resource";
 
 vi.mock("@/lib/sync/resource", () => ({ useSeededResource: vi.fn() }));
 
-const m = (status: string, tenant = status) => ({ tenant, apiCalls: 10, storage: "1 GB", users: 3, billingPeriod: "2026-09", amount: 100, status });
+const m = (status: string, tenant = status) => ({ tenant, apiCalls: 10, storage: "1 GB", users: 3, billingPeriod: "2026-09", amountMinor: "250050", status });
 function seeded(data: Record<string, unknown>[], provenance: "live" | "cached" | "error-no-data") {
   vi.mocked(useSeededResource).mockReturnValue({ data, fromCache: provenance === "cached", offline: false, cachedAt: null, provenance } as never);
 }
@@ -24,14 +24,14 @@ describe("MeteringTable (GAP-ADMIN-METERING-03/-04)", () => {
   it("cached provenance with empty server rows: Metered Tenants equals the table row count", () => {
     seeded([m("billed", "t1"), m("pending", "t2")], "cached");
     render(<MeteringTable meters={[]} />);
-    expect(screen.getByText("Metered Tenants").parentElement).toHaveTextContent("2");
+    expect(screen.getByText("Billing periods").parentElement).toHaveTextContent("2");
     expect(screen.getAllByRole("row")).toHaveLength(3); // header + 2
   });
 
   it("error-no-data: dashes + retry, no 'No metering data'", () => {
     seeded([], "error-no-data");
     render(<MeteringTable meters={[]} source="error" errorStatus={500} />);
-    expect(screen.getByText("Metered Tenants").parentElement).toHaveTextContent("—");
+    expect(screen.getByText("Billing periods").parentElement).toHaveTextContent("—");
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
     expect(screen.queryByText("No metering data")).not.toBeInTheDocument();
   });
@@ -39,6 +39,18 @@ describe("MeteringTable (GAP-ADMIN-METERING-03/-04)", () => {
   it("live empty shows 0", () => {
     seeded([], "live");
     render(<MeteringTable meters={[]} />);
-    expect(screen.getByText("Metered Tenants").parentElement).toHaveTextContent("0");
+    expect(screen.getByText("Billing periods").parentElement).toHaveTextContent("0");
+  });
+});
+
+// GAP-ADMIN-METERING-02
+describe("MeteringTable amount (GAP-ADMIN-METERING-02)", () => {
+  it("renders integer paise as rupees with lakh grouping, never x100", () => {
+    seeded([{ ...m("billed", "t1"), amountMinor: "250050" }, { ...m("pending", "t2"), amountMinor: "1234567890" }], "live");
+    render(<MeteringTable meters={[]} />);
+    expect(screen.getByRole("columnheader", { name: /Amount/ })).toBeInTheDocument();
+    expect(screen.getByText("₹2,500.50")).toBeInTheDocument();
+    expect(screen.getByText("₹1,23,45,678.90")).toBeInTheDocument();
+    expect(screen.queryByText("250050")).not.toBeInTheDocument();
   });
 });

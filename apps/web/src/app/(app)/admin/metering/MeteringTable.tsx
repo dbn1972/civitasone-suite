@@ -31,7 +31,7 @@ export function MeteringTable({
       errorStatus={errorStatus}
       errorMessage={errorMessage}
       stats={[
-        { icon: "📊", iconBg: "#eef2ff", label: "Metered Tenants", value: s.total },
+        { icon: "📊", iconBg: "#eef2ff", label: "Billing periods", value: s.total },
         { icon: "✅", iconBg: "#ecfdf3", label: "Billed", value: s.billed },
         { icon: "⏳", iconBg: "#fffaeb", label: "Pending", value: s.pending },
         { icon: "⚠️", iconBg: "#fce7ee", label: "Overdue", value: s.overdue },
@@ -45,10 +45,9 @@ export function MeteringTable({
           { key: "storage", label: "Storage" },
           { key: "users", label: "Users", align: "right" },
           { key: "billingPeriod", label: "Period" },
-          // GAP-ADMIN-METERING-02: no billing-service route serves
-          // /v1/billing/metering, so the unit of `amount` is unknowable; the
-          // header must not assert rupees (billing-service stores paise).
-          { key: "amount", label: "Amount", align: "right" },
+          // GAP-ADMIN-METERING-02: billing-service sends integer paise (string);
+          // cellType "amount" is formatMoney() -> "₹2,500.50" with lakh grouping.
+          { key: "amountMinor", label: "Amount", align: "right", cellType: "amount" },
           { key: "status", label: "Status", render: (r) => <StatusPill status={r.status} variant={meterStatusTone(r.status)} /> },
         ]}
         rows={rows} sortable filterable filterPlaceholder="Search metering…" pageSize={15} exportable exportFilename="usage-metering" emptyIcon="📊" emptyTitle="No metering data" emptyMessage="No usage metering records found."

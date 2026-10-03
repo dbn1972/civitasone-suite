@@ -1,11 +1,14 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button, ConfirmDialog, DataTable, StatCard, Tabs } from "@/app/_components/ds";
 import type { AdminUserSummary, AdminRoleSummary } from "@/app/_data/loaders";
 import { useFormError } from "@/lib/useFormError";
 import { toHumanError } from "@/lib/messages";
 import { toCsv } from "@/lib/csv";
 import { summarizeUsers } from "./usersSummary";
+import { applyStatusDelta, directoryHref, pageWindow, statusRefusalMessage, type DirectoryState } from "./usersDirectory";
 
 type Row = AdminUserSummary & Record<string, unknown>;
 
@@ -47,7 +50,11 @@ async function callApi(path: string, method: string, body?: unknown): Promise<{ 
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
     const json = await res.json().catch(() => undefined);
-    if (!res.ok) return { ok: false, message: adminUserError() };
+    if (!res.ok) {
+      // GAP-ADMIN-USERS-01: a 409 from the server says WHY (own account / last tenant admin).
+      const code = json && typeof json === "object" ? (json as { code?: unknown }).code : undefined;
+      return { ok: false, message: res.status === 409 ? statusRefusalMessage(code) ?? adminUserError() : adminUserError() };
+    }
     return { ok: true, json };
   } catch {
     return { ok: false, message: adminUserError() };
@@ -257,7 +264,7 @@ export function AdminUsersManager({
   source,
   currentUserId = null,
   canAssignPlatformRoles = false,
-  truncatedAt = null,
+  directory,
 }: {
   initialUsers: AdminUserSummary[];
   roles: AdminRoleSummary[];
@@ -266,14 +273,18 @@ export function AdminUsersManager({
   currentUserId?: string | null;
   /** True only for platform_admin/super_admin sessions. */
   canAssignPlatformRoles?: boolean;
-  /** Set to the list cap when the directory may hold more users than were loaded. */
-  truncatedAt?: number | null;
+  /** Server-side search/filter/paging state (GAP-ADMIN-USERS-03). Absent: the list is treated as the whole directory. */
+  directory?: DirectoryState;
 }) {
+  const router = useRouter();
   const [confirm, setConfirm] = useState<{ user: AdminUserSummary; next: "suspended" | "active" } | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [confirmError, setConfirmError] = useState<string | undefined>(undefined);
   const [users, setUsers] = useState<AdminUserSummary[]>(initialUsers);
-  const [filter, setFilter] = useState<StatusFilter>("All");
+  const dir: DirectoryState = directory ?? { total: initialUsers.length, counts: null, page: 1, pageSize: Math.max(25, initialUsers.length), query: "", status: null };
+  const [filter, setFilter] = useState<StatusFilter>(() => (dir.status ? (dir.status.charAt(0).toUpperCase() + dir.status.slice(1)) as StatusFilter : "All"));
+  // Tenant-wide per-status counts: from the server when sent, adjusted locally as statuses change.
+  const [counts, setCounts] = useState(dir.counts);
   const [editUser, setEditUser] = useState<AdminUserSummary | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -283,12 +294,19 @@ export function AdminUsersManager({
 
   // GAP-ADMIN-USERS-05: tiles derive from the live `users` state, so a
   // suspend/activate moves the counts immediately.
-  const summary = useMemo(() => summarizeUsers(users), [users]);
+  const summary = useMemo(() => {
+    const derived = summarizeUsers(users);
+    if (!counts) return derived;
+    const total = counts.active + counts.suspended + counts.locked + counts.deactivated;
+    return { total, active: counts.active, suspended: counts.suspended, other: counts.locked + counts.deactivated };
+  }, [users, counts]);
 
   const filtered = useMemo<Row[]>(() => {
     const base = filter === "All" ? users : users.filter((u) => u.status === filter.toLowerCase());
     return base as Row[];
   }, [users, filter]);
+
+  const win = pageWindow(dir.page, dir.pageSize, dir.total, filtered.length);
 
   function askToggleStatus(user: AdminUserSummary) {
     // GAP-ADMIN-USERS-01: never act on your own account from this screen.
@@ -314,6 +332,7 @@ export function AdminUsersManager({
     // Reflect the confirmed state from the server response rather than
     // assuming the request succeeded exactly as sent.
     setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, status: next } : u)));
+    setCounts((c) => (c ? applyStatusDelta(c, user.status, next) : c));
     setConfirm(null);
   }
 
@@ -351,13 +370,8 @@ export function AdminUsersManager({
           {error}
         </div>
       )}
-      {truncatedAt !== null && (
-        <div role="status" style={{ background: "#fffbeb", color: "#92400e", border: "1px solid #fde68a", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 }}>
-          Showing the first {truncatedAt} users only. There may be more people in this office than are listed here, so a missing user is not proof they do not exist.
-        </div>
-      )}
       <div className="grid g-4" style={{ marginBottom: 18 }}>
-        <StatCard icon="👥" iconBg="#f1f5f9" label="Total users" value={truncatedAt !== null ? `${summary.total}+` : summary.total} />
+        <StatCard icon="👥" iconBg="#f1f5f9" label="Total users" value={summary.total} />
         <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={summary.active} />
         <StatCard icon="⛔" iconBg="#fef3f2" label="Suspended" value={summary.suspended} />
         <StatCard icon="🔒" iconBg="#fffbeb" label="Locked / deactivated" value={summary.other} />
@@ -366,10 +380,24 @@ export function AdminUsersManager({
         <div className="card-h">
           <h3>User directory</h3>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <Tabs tabs={[...STATUS_FILTERS]} active={filter} onChange={(t) => setFilter(t as StatusFilter)} />
+            <Tabs
+              tabs={[...STATUS_FILTERS]}
+              active={filter}
+              onChange={(t) => {
+                setFilter(t as StatusFilter);
+                // Status is filtered by the server so the total and paging stay right.
+                router.push(directoryHref({ q: dir.query, status: t === "All" ? null : String(t).toLowerCase() }));
+              }}
+            />
             <Button type="button" variant="ghost" size="sm" onClick={() => { setExportError(undefined); setExportOpen(true); }}>Export CSV</Button>
           </div>
         </div>
+        <form method="get" action="/admin/users" role="search" aria-label="Search users" style={{ display: "flex", gap: 8, padding: "0 16px 12px" }}>
+          <input type="search" name="q" defaultValue={dir.query} aria-label="Search name, email or employee code" placeholder="Search name, email or employee code…" maxLength={100} style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13.5 }} />
+          {dir.status && <input type="hidden" name="status" value={dir.status} />}
+          <Button type="submit" size="sm">Search</Button>
+          {dir.query && <Link className="btn ghost sm" href={directoryHref({ status: dir.status })}>Clear search</Link>}
+        </form>
         <DataTable<Row>
           columns={[
             {
@@ -423,14 +451,22 @@ export function AdminUsersManager({
           ]}
           rows={filtered}
           sortable
-          filterable
-          filterPlaceholder="Search name or email…"
-          pageSize={25}
+          pageSize={dir.pageSize}
           emptyIcon="👥"
           emptyTitle={source === "error" ? "Couldn't load users" : "No users match"}
           emptyMessage={source === "error" ? "The user directory couldn't be reached — showing nothing." : "Try a different filter or clear the search."}
         />
       </div>
+      {source === "api" && (
+        <nav aria-label="User directory pages" style={{ display: "flex", alignItems: "center", gap: 12, margin: "10px 0 0", fontSize: 13, color: "var(--mut)" }}>
+          <span data-testid="users-window">
+            {win.last === 0 ? "No users to show" : `Showing ${win.first.toLocaleString("en-IN")}–${win.last.toLocaleString("en-IN")} of ${dir.total.toLocaleString("en-IN")}`}
+            {dir.query ? ` matching “${dir.query}”` : ""}
+          </span>
+          {win.hasPrev && <Link href={directoryHref({ q: dir.query, status: dir.status, page: dir.page - 1 })} rel="prev">← Previous</Link>}
+          {win.hasNext && <Link href={directoryHref({ q: dir.query, status: dir.status, page: dir.page + 1 })} rel="next">Next →</Link>}
+        </nav>
+      )}
       <ConfirmDialog
         open={exportOpen}
         title="Export user list?"

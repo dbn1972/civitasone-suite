@@ -4,7 +4,7 @@ import { userListResponseSchema } from "@civitasone/schemas/web";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createUserBody, updateUserBody, statusBody, userIdParam, tenantIdQuery } from "./validators.js";
+import { createUserBody, updateUserBody, statusBody, userIdParam, tenantIdQuery, userSearchQuery } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as sessionCommands from "../sessions/commands.js";
@@ -41,6 +41,19 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(403, "FORBIDDEN", "cross-tenant access denied");
     }
     sendValidated(reply, userListResponseSchema, await queries.listUsers(q.tenantId, q.limit, q.offset));
+  });
+
+  // GAP-ADMIN-USERS-03: filtered, paged directory with a real total and per-status counts.
+  // Registered next to the list route; a static path always wins over /identity/users/:id.
+  app.get("/identity/users/search", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN);
+    const raw = req.query as Record<string, string | undefined>;
+    const q = userSearchQuery.parse({ ...raw, tenantId: raw.tenantId ?? ctx.tenantId });
+    if (ctx.tenantId !== q.tenantId && !ctx.roles.some((r) => ["platform_admin", "super_admin"].includes(r))) {
+      throw new HttpError(403, "FORBIDDEN", "cross-tenant access denied");
+    }
+    return reply.send(await queries.searchUsers(q.tenantId, { q: q.q, status: q.status, limit: q.limit, offset: q.offset }));
   });
 
   app.patch("/identity/users/:id", async (req, reply) => {

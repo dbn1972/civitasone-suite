@@ -9,11 +9,12 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { scheduledJobs, jobExecutionHistory } from "./schema.js";
-import { eq, and } from "drizzle-orm";
+import { eq, and, ne, or, lt, isNull } from "drizzle-orm";
 
 const log = pino({ name: "admin-scheduled-jobs-consumer" });
 const AUDIT_TOPIC = "audit.event.record";
 const RESOURCE = "scheduled_job";
+const RUN_NOW_DEBOUNCE_MS = 60_000;
 
 function listKey(tenantId: string) { return cache.makeKey(tenantId, RESOURCE, "list"); }
 
@@ -79,14 +80,22 @@ export function registerScheduledJobConsumers(queue: Queue): void {
     }
   });
 
-  queue.subscribe<{ jobId: string; tenantId: string }>(COMMANDS.scheduledJobDelete, async (msg) => {
+  type ActionPayload = { jobId: string; tenantId: string; reason?: string };
+
+  // Delete / run-now / pause / resume are conditional transitions: each one
+  // acts only if the job still exists (and, for run-now, is not already
+  // running), so a stale or duplicated command is a no-op with no audit row
+  // instead of an orphan history row or a double fire.
+  queue.subscribe<ActionPayload>(COMMANDS.scheduledJobDelete, async (msg) => {
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         const p = msg.payload;
-        await (tx as any).delete(scheduledJobs)
-          .where(and(eq(scheduledJobs.id, p.jobId), eq(scheduledJobs.tenantId, p.tenantId)));
-        await emit(tx, msg, "admin.scheduled_job.deleted", p, "delete", p.jobId);
+        const removed = await (tx as any).delete(scheduledJobs)
+          .where(and(eq(scheduledJobs.id, p.jobId), eq(scheduledJobs.tenantId, p.tenantId)))
+          .returning({ id: scheduledJobs.id });
+        if (removed.length === 0) return;
+        await emit(tx, msg, "admin.scheduled_job.deleted", p, "delete", p.jobId, p.reason);
       });
       await cache.invalidate(listKey(msg.payload.tenantId));
     } catch (err) {
@@ -94,11 +103,22 @@ export function registerScheduledJobConsumers(queue: Queue): void {
     }
   });
 
-  queue.subscribe<{ jobId: string; tenantId: string }>(COMMANDS.scheduledJobRunNow, async (msg) => {
+  queue.subscribe<ActionPayload>(COMMANDS.scheduledJobRunNow, async (msg) => {
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         const p = msg.payload;
+        const started = await (tx as any).update(scheduledJobs)
+          .set({ lastRunAt: new Date(), lastRunStatus: "running", updatedBy: msg.actorId, updatedAt: new Date() })
+          .where(and(
+            eq(scheduledJobs.id, p.jobId),
+            eq(scheduledJobs.tenantId, p.tenantId),
+            // Debounce a double click / redelivered request: a job that started
+            // running within the last RUN_NOW_DEBOUNCE_MS is not fired again.
+            or(ne(scheduledJobs.lastRunStatus, "running"), isNull(scheduledJobs.lastRunAt), lt(scheduledJobs.lastRunAt, new Date(Date.now() - RUN_NOW_DEBOUNCE_MS))),
+          ))
+          .returning({ id: scheduledJobs.id });
+        if (started.length === 0) return;
         const executionId = crypto.randomUUID();
         await (tx as any).insert(jobExecutionHistory).values({
           id: executionId,
@@ -107,9 +127,7 @@ export function registerScheduledJobConsumers(queue: Queue): void {
           startedAt: new Date(),
           status: "running",
         });
-        await (tx as any).update(scheduledJobs).set({ lastRunAt: new Date(), lastRunStatus: "running", updatedBy: msg.actorId, updatedAt: new Date() })
-          .where(and(eq(scheduledJobs.id, p.jobId), eq(scheduledJobs.tenantId, p.tenantId)));
-        await emit(tx, msg, "admin.scheduled_job.run_triggered", { ...p, executionId }, "run_now", p.jobId);
+        await emit(tx, msg, "admin.scheduled_job.run_triggered", { ...p, executionId }, "run_now", p.jobId, p.reason);
       });
       await cache.invalidate(listKey(msg.payload.tenantId));
     } catch (err) {
@@ -117,35 +135,28 @@ export function registerScheduledJobConsumers(queue: Queue): void {
     }
   });
 
-  queue.subscribe<{ jobId: string; tenantId: string }>(COMMANDS.scheduledJobPause, async (msg) => {
-    try {
-      await db.transaction(async (tx) => {
-        if (!(await markProcessed(tx, msg.messageId))) return;
-        const p = msg.payload;
-        await (tx as any).update(scheduledJobs).set({ enabled: false, updatedBy: msg.actorId, updatedAt: new Date() })
-          .where(and(eq(scheduledJobs.id, p.jobId), eq(scheduledJobs.tenantId, p.tenantId)));
-        await emit(tx, msg, "admin.scheduled_job.paused", p, "pause", p.jobId);
-      });
-      await cache.invalidate(listKey(msg.payload.tenantId));
-    } catch (err) {
-      log.error({ err, messageId: msg.messageId, type: COMMANDS.scheduledJobPause }, "Consumer processing failed");
-    }
-  });
-
-  queue.subscribe<{ jobId: string; tenantId: string }>(COMMANDS.scheduledJobResume, async (msg) => {
-    try {
-      await db.transaction(async (tx) => {
-        if (!(await markProcessed(tx, msg.messageId))) return;
-        const p = msg.payload;
-        await (tx as any).update(scheduledJobs).set({ enabled: true, updatedBy: msg.actorId, updatedAt: new Date() })
-          .where(and(eq(scheduledJobs.id, p.jobId), eq(scheduledJobs.tenantId, p.tenantId)));
-        await emit(tx, msg, "admin.scheduled_job.resumed", p, "resume", p.jobId);
-      });
-      await cache.invalidate(listKey(msg.payload.tenantId));
-    } catch (err) {
-      log.error({ err, messageId: msg.messageId, type: COMMANDS.scheduledJobResume }, "Consumer processing failed");
-    }
-  });
+  for (const [command, enabled, event, action] of [
+    [COMMANDS.scheduledJobPause, false, "admin.scheduled_job.paused", "pause"],
+    [COMMANDS.scheduledJobResume, true, "admin.scheduled_job.resumed", "resume"],
+  ] as const) {
+    queue.subscribe<ActionPayload>(command, async (msg) => {
+      try {
+        await db.transaction(async (tx) => {
+          if (!(await markProcessed(tx, msg.messageId))) return;
+          const p = msg.payload;
+          const changed = await (tx as any).update(scheduledJobs)
+            .set({ enabled, updatedBy: msg.actorId, updatedAt: new Date() })
+            .where(and(eq(scheduledJobs.id, p.jobId), eq(scheduledJobs.tenantId, p.tenantId)))
+            .returning({ id: scheduledJobs.id });
+          if (changed.length === 0) return;
+          await emit(tx, msg, event, p, action, p.jobId, p.reason);
+        });
+        await cache.invalidate(listKey(msg.payload.tenantId));
+      } catch (err) {
+        log.error({ err, messageId: msg.messageId, type: command }, "Consumer processing failed");
+      }
+    });
+  }
 }
 
 async function emit(
@@ -155,6 +166,7 @@ async function emit(
   payload: Record<string, unknown>,
   action: string,
   resourceId: string,
+  reason?: string,
 ): Promise<void> {
   const t = tx as Parameters<typeof enqueue>[0];
   await enqueue(t, {
@@ -164,6 +176,6 @@ async function emit(
   await enqueue(t, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId,
     correlationId: msg.correlationId,
-    payload: { service: "admin", action, resourceType: RESOURCE, resourceId, outcome: "success" },
+    payload: { service: "admin", action, resourceType: RESOURCE, resourceId, outcome: "success", ...(reason ? { reason } : {}) },
   });
 }

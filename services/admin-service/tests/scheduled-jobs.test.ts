@@ -3,10 +3,13 @@
  * Tests CRUD, pause/resume, run-now, history, auth, and validation.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { eq } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
-import { sqlClient } from "../src/shared/db.js";
+import { db, sqlClient } from "../src/shared/db.js";
+import { runWithTenant } from "@civitasone/db";
+import { scheduledJobs } from "../src/modules/scheduled-jobs/schema.js";
 
 const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-cccc-4000-8000-000000000001";
@@ -23,8 +26,23 @@ function authHeader(roles?: string[], tenantId?: string) {
 
 let app: FastifyInstance;
 
-beforeAll(async () => { app = await buildApp(); });
-afterAll(async () => { await app.close(); await sqlClient.end(); });
+// GAP-ADMIN-SCHEDULED-JOBS-01: delete / run-now act on an EXISTING job of the caller's tenant
+// (an unknown id is a 404), so the 202 cases below need a real row. Written directly: this file
+// registers no consumers, and the API's create is asynchronous.
+beforeAll(async () => {
+  app = await buildApp();
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.insert(scheduledJobs).values({
+      id: VALID_UUID, tenantId: TENANT, name: "Seeded job", cronExpression: "0 8 * * *",
+      targetService: "admin-service", targetCommand: "admin.noop", createdBy: ACTOR, updatedBy: ACTOR,
+    }).onConflictDoNothing();
+  }));
+});
+afterAll(async () => {
+  await runWithTenant(TENANT, () => db.transaction((tx) => tx.delete(scheduledJobs).where(eq(scheduledJobs.id, VALID_UUID))));
+  await app.close();
+  await sqlClient.end();
+});
 
 // ══════════════════════════════════════════════════════════════════════════════
 // GET /v1/admin/scheduled-jobs — LIST
@@ -174,12 +192,18 @@ describe("PUT /v1/admin/scheduled-jobs/:id", () => {
 // DELETE /v1/admin/scheduled-jobs/:id
 // ══════════════════════════════════════════════════════════════════════════════
 describe("DELETE /v1/admin/scheduled-jobs/:id", () => {
-  it("returns 202 for super_admin", async () => {
+  it("returns 202 for super_admin with a reason", async () => {
     const res = await app.inject({
       method: "DELETE", url: `/v1/admin/scheduled-jobs/${VALID_UUID}`,
-      headers: authHeader(["super_admin"]),
+      headers: authHeader(["super_admin"]), payload: { reason: "no longer needed" },
     });
     expect(res.statusCode).toBe(202);
+  });
+
+  it("returns 400 without a reason, and 404 for a job that does not exist", async () => {
+    expect((await app.inject({ method: "DELETE", url: `/v1/admin/scheduled-jobs/${VALID_UUID}`, headers: authHeader(["super_admin"]) })).statusCode).toBe(400);
+    const missing = "11111111-cccc-4000-8000-999999999999";
+    expect((await app.inject({ method: "DELETE", url: `/v1/admin/scheduled-jobs/${missing}`, headers: authHeader(["super_admin"]), payload: { reason: "no longer needed" } })).statusCode).toBe(404);
   });
 
   it("returns 400 with invalid uuid", async () => {
@@ -210,6 +234,14 @@ describe("POST /v1/admin/scheduled-jobs/:id/run-now", () => {
     });
     expect(res.statusCode).toBe(202);
     expect(res.json().status).toBe("accepted");
+  });
+
+  it("returns 404 for a job that does not exist", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/admin/scheduled-jobs/11111111-cccc-4000-8000-999999999999/run-now",
+      headers: authHeader(["super_admin"]),
+    });
+    expect(res.statusCode).toBe(404);
   });
 
   it("returns 400 with invalid uuid", async () => {

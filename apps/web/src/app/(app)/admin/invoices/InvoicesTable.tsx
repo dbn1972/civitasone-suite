@@ -1,5 +1,6 @@
 "use client";
 import { useMemo } from "react";
+import Link from "next/link";
 import { DataTable, StatusPill } from "@/app/_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
 import { AdminRegister } from "../_components/AdminRegister";
@@ -45,7 +46,8 @@ export function InvoicesTable({
         // GAP-ADMIN-INVOICES-07: rows are typed (InvoiceRow) so a column key that
         // is not on the API shape fails to compile.
         columns={[
-          { key: "id", label: "Invoice ID" },
+          // GAP-ADMIN-INVOICES-06: each invoice number opens its detail page.
+          { key: "id", label: "Invoice ID", render: (r) => <Link href={`/admin/invoices/${encodeURIComponent(r.id)}`}>{r.id}</Link> },
           { key: "periodMonth", label: "Period" },
           { key: "totalMinor", label: "Total", align: "right", cellType: "amount" },
           { key: "paidMinor", label: "Paid", align: "right", cellType: "amount" },

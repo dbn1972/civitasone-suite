@@ -43,6 +43,7 @@
  */
 import type { Queue } from "@civitasone/queue";
 import { tenantScoped } from "../../src/shared/tenant-queue.js";
+import { registerTenantSettingsConsumers } from "../../src/modules/tenant-settings/consumer.js";
 
 import { registerTenantConsumers } from "../../src/modules/tenants/consumer.js";
 import { registerTenantLifecycleConsumers } from "../../src/modules/tenants/lifecycle-consumer.js";
@@ -88,7 +89,7 @@ export function registerAllF3Consumers(queue: Queue): void {
   registerConfigConsumers(queue);
   registerBackupConsumers(queue);
   registerSupportConsumers(queue);
-  registerScheduledJobConsumers(queue);
+  registerScheduledJobConsumers(tenantScoped(queue));
   registerCustomDomainConsumers(queue);
   registerWebhookConsumers(queue);
   registerDataExportConsumers(queue);
@@ -110,4 +111,5 @@ export function registerAllF3Consumers(queue: Queue): void {
   registerF3_support_Consumers(tenantScoped(queue));
   registerIntegrationOpsConsumers(tenantScoped(queue));
   registerTenantLifecycleConsumers(tenantScoped(queue));
+  registerTenantSettingsConsumers(tenantScoped(queue));
 }

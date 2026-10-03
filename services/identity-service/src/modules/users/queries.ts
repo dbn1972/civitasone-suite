@@ -19,3 +19,8 @@ export async function listUsers(tenantId: string, limit: number, offset: number)
     () => repo.findByTenantId(tenantId, limit, offset)
   ) as Promise<UserView[]>;
 }
+
+/** Not cached: a filtered, paged search must reflect the directory as it is now. */
+export async function searchUsers(tenantId: string, f: repo.UserSearch) {
+  return repo.search(tenantId, f);
+}

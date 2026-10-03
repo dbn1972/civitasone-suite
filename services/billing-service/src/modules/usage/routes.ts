@@ -3,7 +3,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireSuperAdmin, HttpError } from "../../shared/context.js";
-import { recordUsageBody, tenantParam, usageQuery } from "./validators.js";
+import { recordUsageBody, tenantParam, usageQuery, meteringQuery } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -21,6 +21,14 @@ export async function usageRoutes(app: FastifyInstance): Promise<void> {
     const { id } = tenantParam.parse(req.params);
     const { month } = usageQuery.parse(req.query);
     return reply.send(await queries.getUsage(id, month));
+  });
+
+  // GAP-ADMIN-METERING-02: the Usage Metering screen's data. Amounts are paise strings.
+  app.get("/v1/billing/metering", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireSuperAdmin(ctx);
+    const { months } = meteringQuery.parse(req.query);
+    return reply.send({ data: await queries.getMetering(ctx.tenantId, months), meta: { unit: "paise", months } });
   });
 
   app.setErrorHandler((err, req, reply) => {
