@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { DataTable, Segmented, StatusPill } from "@/app/_components/ds";
 import type { AdminAuditLogEntry } from "@/app/_data/loaders";
 import { formatIndianDateTime } from "@/lib/formatters";
+import { SYSTEM_ACTOR_ID } from "@/lib/systemActor";
 
 type Row = AdminAuditLogEntry & Record<string, unknown>;
 
@@ -24,10 +25,13 @@ export async function recordAuditLogExport(info: { rowCount: number; filter: str
   });
 }
 
-/** GAP-ADMIN-AUDIT-LOG-04: the loader's literal "system" fallback reads as a person; show it as a system actor. */
+/**
+ * GAP-ADMIN-AUDIT-LOG-04: the loader's literal "system" fallback reads as a person; show it as a system actor.
+ * Platform-published events carry the uuid SYSTEM_ACTOR_ID, which must not show as a raw id either.
+ */
 export function formatActor(actor: unknown): string {
   const a = String(actor ?? "").trim();
-  if (!a || a.toLowerCase() === "system") return "System";
+  if (!a || a.toLowerCase() === "system" || a.toLowerCase() === SYSTEM_ACTOR_ID) return "System";
   return a;
 }
 

@@ -6,6 +6,7 @@
  *   - Twilio: X-Twilio-Signature HMAC-SHA1 over URL + sorted POST params
  *   - Exotel: X-Exotel-Token bearer token comparison
  */
+import { SYSTEM_ACTOR_ID } from "@civitasone/outbox";
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { randomUUID } from "node:crypto";
 import { queue } from "../../shared/infra.js";
@@ -77,7 +78,7 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
       messageId: callSid,
       type: COMMANDS.createCall,
       tenantId,
-      actorId: "system",
+      actorId: SYSTEM_ACTOR_ID,
       correlationId: callSid,
       schemaVersion: "1.0",
       payload: {
@@ -119,7 +120,7 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
         messageId: randomUUID(),
         type: COMMANDS.completeCall,
         tenantId,
-        actorId: "system",
+        actorId: SYSTEM_ACTOR_ID,
         correlationId: callSid,
         schemaVersion: "1.0",
         payload: {
@@ -152,7 +153,7 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
       messageId: randomUUID(),
       type: COMMANDS.attachRecording,
       tenantId,
-      actorId: "system",
+      actorId: SYSTEM_ACTOR_ID,
       correlationId: callSid,
       schemaVersion: "1.0",
       payload: {
@@ -185,7 +186,7 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
       messageId: callSid,
       type: COMMANDS.createCall,
       tenantId,
-      actorId: "system",
+      actorId: SYSTEM_ACTOR_ID,
       correlationId: callSid,
       schemaVersion: "1.0",
       payload: {
@@ -221,7 +222,7 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
         messageId: randomUUID(),
         type: COMMANDS.completeCall,
         tenantId,
-        actorId: "system",
+        actorId: SYSTEM_ACTOR_ID,
         correlationId: callSid,
         schemaVersion: "1.0",
         payload: {

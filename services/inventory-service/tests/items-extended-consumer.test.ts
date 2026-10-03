@@ -42,6 +42,8 @@ const TENANT_A = "a1a1a1a1-0000-4000-8000-00000000c051";
 const TENANT_B = "b2b2b2b2-0000-4000-8000-00000000c051";
 const ACTOR_A  = "a1a1a1a1-0000-4000-8000-aaaaaaaaaaaa";
 const ACTOR_B  = "b2b2b2b2-0000-4000-8000-bbbbbbbbbbbb";
+/** A different person from ACTOR_A: the QC verdict must be recorded by someone other than the creator (maker != checker). */
+const ACTOR_QC = "a1a1a1a1-0000-4000-8000-cccccccccccc";
 const ITEM_A1  = "cccccccc-0000-4000-8000-00000000d001";
 const ITEM_A2  = "cccccccc-0000-4000-8000-00000000d002";
 const ITEM_B1  = "cccccccc-0000-4000-8000-00000000d003";
@@ -261,7 +263,7 @@ describe("goods-return consumer — create + QC inspect round-trip", () => {
     await drain();
 
     const inspect = await app.inject({
-      method: "PATCH", url: `/v1/inventory/goods-returns/${id}/inspect`, headers: hdr(TENANT_A, ACTOR_A),
+      method: "PATCH", url: `/v1/inventory/goods-returns/${id}/inspect`, headers: hdr(TENANT_A, ACTOR_QC),
       payload: { qcStatus: "passed", disposition: "restock", qcNotes: "good condition" },
     });
     expect(inspect.statusCode).toBe(202);
@@ -270,7 +272,7 @@ describe("goods-return consumer — create + QC inspect round-trip", () => {
     const rows = await runWithTenant(TENANT_A, () => db.transaction(async (tx) => tx.select().from(goodsReturns).where(eq(goodsReturns.id, id))));
     expect(rows[0]!.qcStatus).toBe("passed");
     expect(rows[0]!.disposition).toBe("restock");
-    expect(rows[0]!.qcInspectedBy).toBe(ACTOR_A);
+    expect(rows[0]!.qcInspectedBy).toBe(ACTOR_QC);
     expect(rows[0]!.qcNotes).toBe("good condition");
   });
 
@@ -287,7 +289,7 @@ describe("goods-return consumer — create + QC inspect round-trip", () => {
     expect(beforeInspect.json().data.qcStatus).toBe("pending");
 
     await app.inject({
-      method: "PATCH", url: `/v1/inventory/goods-returns/${id}/inspect`, headers: hdr(TENANT_A, ACTOR_A),
+      method: "PATCH", url: `/v1/inventory/goods-returns/${id}/inspect`, headers: hdr(TENANT_A, ACTOR_QC),
       payload: { qcStatus: "failed", disposition: "scrap", qcNotes: "cracked casing" },
     });
     await drain();
@@ -308,14 +310,14 @@ describe("goods-return consumer — create + QC inspect round-trip", () => {
     await drain();
 
     await app.inject({
-      method: "PATCH", url: `/v1/inventory/goods-returns/${id}/inspect`, headers: hdr(TENANT_A, ACTOR_A),
+      method: "PATCH", url: `/v1/inventory/goods-returns/${id}/inspect`, headers: hdr(TENANT_A, ACTOR_QC),
       payload: { qcStatus: "failed", disposition: "scrap" },
     });
     await drain();
 
     // The route now rejects synchronously with a real 409 instead of a 202 the consumer drops.
     const again = await app.inject({
-      method: "PATCH", url: `/v1/inventory/goods-returns/${id}/inspect`, headers: hdr(TENANT_A, ACTOR_A),
+      method: "PATCH", url: `/v1/inventory/goods-returns/${id}/inspect`, headers: hdr(TENANT_A, ACTOR_QC),
       payload: { qcStatus: "passed", disposition: "restock" },
     });
     expect(again.statusCode).toBe(409);

@@ -93,3 +93,27 @@ describe("QcInspectionForm", () => {
     expect(refresh).toHaveBeenCalled();
   });
 });
+
+describe("QcInspectionForm failures (GAP-INVENTORY-GOODS-RETURNS-DETAIL-04)", () => {
+  async function submitPass() {
+    render(<QcInspectionForm goodsReturnId="gr-1" qty={3} itemName="Toner" />);
+    fireEvent.click(screen.getByLabelText("Pass"));
+    fireEvent.click(record());
+    fireEvent.click(confirmButton());
+  }
+
+  it("a maker-checker 403 says a different person must decide, with no raw JSON", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ code: "MAKER_CHECKER", message: "the user who recorded a goods return cannot record its QC verdict" }), { status: 403 }));
+    await submitPass();
+    await waitFor(() => expect(screen.getByRole("alertdialog")).toHaveTextContent(/different approver must decide/i));
+    expect(screen.getByRole("alertdialog")).not.toHaveTextContent(/MAKER_CHECKER|\{/);
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it("a 409 (already inspected) refreshes the page so the recorded verdict shows", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ code: "NOT_PENDING" }), { status: 409 }));
+    await submitPass();
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    expect(screen.getByRole("alertdialog")).toHaveTextContent(/someone else already decided/i);
+  });
+});

@@ -9,6 +9,7 @@
  * S3 fetch uses @civitasone/circuit-breaker for resilience.
  * Emits payroll.dsc.expiry_warning if certificate expires within 30 days.
  */
+import { SYSTEM_ACTOR_ID } from "@civitasone/outbox";
 import { readFile } from "node:fs/promises";
 import { CircuitBreaker } from "@civitasone/circuit-breaker";
 import { getObject } from "@civitasone/storage";
@@ -103,7 +104,7 @@ async function emitExpiryWarningIfNeeded(tenantId: string, certInfo: Certificate
       messageId: `dsc-expiry:${tenantId}:${certInfo.notAfter.toISOString()}:${now.toISOString().slice(0, 10)}`,
       type: DSC_EXPIRY_TOPIC,
       tenantId,
-      actorId: "system",
+      actorId: SYSTEM_ACTOR_ID,
       correlationId: `dsc-expiry-${tenantId}`,
       schemaVersion: "1.0",
       payload: {

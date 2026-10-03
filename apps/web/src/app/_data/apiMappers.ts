@@ -455,6 +455,9 @@ export function mapGoodsReturnDetail(payload: unknown): GoodsReturnDetail | null
     qcNotes: toText(payload.qcNotes),
     disposition: (GOODS_RETURN_DISPOSITIONS.has(dispositionRaw) ? dispositionRaw : "pending") as GoodsReturnDetail["disposition"],
     createdAt: toText(payload.createdAt) ?? "—",
+    createdBy: toText(payload.createdBy) ?? undefined,
+    createdByName: toText(payload.createdByName) ?? undefined,
+    qcInspectedByName: toText(payload.qcInspectedByName) ?? undefined,
   };
 }
 
@@ -495,6 +498,8 @@ export function mapCycleCountDetail(payload: unknown): CycleCountDetail | null {
     rejectionReason: toText(payload.rejectionReason) ?? undefined,
     createdBy: toText(payload.createdBy) ?? undefined,
     adjustmentId: toText(payload.adjustmentId) ?? undefined,
+    approvedByName: toText(payload.approvedByName) ?? undefined,
+    rejectedByName: toText(payload.rejectedByName) ?? undefined,
     countedAt: toText(payload.countedAt) ?? "—",
     createdAt: toText(payload.createdAt) ?? "—",
     version: typeof payload.version === "number" ? payload.version : 1,

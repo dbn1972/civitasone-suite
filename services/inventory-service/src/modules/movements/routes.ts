@@ -13,7 +13,9 @@ import {
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as repo from "./repo.js";
 import type { LedgerOpts } from "./repo.js";
+import { resolveUserNames } from "../../shared/identity-client.js";
 
 const STORE_ROLES  = ["inventory_user", "inventory_manager", "store_keeper", "inventory_admin", "super_admin"];
 const ADJUST_ROLES = ["inventory_manager", "inventory_admin", "super_admin"];
@@ -60,7 +62,22 @@ export async function movementRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const movement = await queries.getMovement(ctx.tenantId, id);
     if (!movement) throw new HttpError(404, "NOT_FOUND", "movement not found");
-    return reply.send({ data: movement });
+    // Lines + poster name make this the target of the "stock adjustment" link on an approved
+    // cycle count (GAP-INVENTORY-CYCLE-COUNTS-DETAIL-05). Additive: every existing field is unchanged.
+    const [lines, names] = await Promise.all([
+      repo.listMovementLines(ctx.tenantId, id),
+      resolveUserNames(ctx.tenantId, [movement.createdBy]),
+    ]);
+    return reply.send({
+      data: {
+        ...movement,
+        createdByName: names.get(movement.createdBy) ?? null,
+        lines: lines.map((l) => ({
+          id: l.id, itemId: l.itemId, qty: l.qty,
+          rateMinor: l.rateMinor.toString(), amountMinor: l.amountMinor.toString(), currency: l.currency,
+        })),
+      },
+    });
   });
 
   app.get("/v1/inventory/balances", async (req, reply) => {

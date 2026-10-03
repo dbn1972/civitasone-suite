@@ -9,7 +9,7 @@ import { COMMANDS } from "../../topics.js";
 import type {
   CreateItemBody, UpdateItemBody, CreateCategoryBody, CreateUomBody,
   CreateSubstituteBody, CreateBinBody, CreateReservationBody, ReleaseReservationBody,
-  CreateGoodsReturnBody, QcInspectionBody,
+  CreateGoodsReturnBody, QcInspectionBody, BinStatusBody, UpdateSettingsBody,
 } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -89,4 +89,16 @@ export async function inspectGoodsReturn(ctx: RequestContext, id: string, body: 
   const messageId = randomUUID();
   await publish(COMMANDS.goodsReturnInspect, ctx, messageId, { id, tenantId: ctx.tenantId, inspectedBy: ctx.actorId, ...body });
   return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function setBinStatus(ctx: RequestContext, id: string, body: BinStatusBody): Promise<Accepted> {
+  // Fresh messageId: the bin id is already recorded in the inbox by bin.create, and the same
+  // bin can be deactivated and reactivated repeatedly -- a deterministic id would drop later decisions.
+  await publish(COMMANDS.binSetStatus, ctx, randomUUID(), { id, tenantId: ctx.tenantId, ...body });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function updateSettings(ctx: RequestContext, body: UpdateSettingsBody): Promise<Accepted> {
+  await publish(COMMANDS.settingsUpdate, ctx, randomUUID(), { tenantId: ctx.tenantId, ...body });
+  return { id: ctx.tenantId, status: "accepted", correlationId: ctx.correlationId };
 }

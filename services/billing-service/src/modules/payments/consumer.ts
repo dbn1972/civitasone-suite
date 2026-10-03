@@ -1,3 +1,4 @@
+import { SYSTEM_ACTOR_ID } from "@civitasone/outbox";
 import type { Queue } from "@civitasone/queue";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { randomUUID } from "node:crypto";
@@ -141,7 +142,7 @@ export function registerPaymentsConsumers(rawQueue: Queue): void {
         await repo.insertGatewayTxn(tx, {
           id: gwId, tenantId, paymentId: gwId, gateway: "razorpay",
           gatewayRef: paymentId,
-          status: "captured", createdBy: "system", updatedBy: "system",
+          status: "captured", createdBy: SYSTEM_ACTOR_ID, updatedBy: SYSTEM_ACTOR_ID,
         });
 
         // Activate subscription on successful capture
@@ -152,20 +153,20 @@ export function registerPaymentsConsumers(rawQueue: Queue): void {
 
         await enqueue(tx, {
           topic: EVENTS.checkoutCompleted, eventType: EVENTS.checkoutCompleted,
-          tenantId, actorId: "system", correlationId: msg.correlationId,
+          tenantId, actorId: SYSTEM_ACTOR_ID, correlationId: msg.correlationId,
           payload: { razorpayOrderId: orderId, razorpayPaymentId: paymentId, amountPaise },
         });
       } else if (event === "payment.failed" && entity) {
         await enqueue(tx, {
           topic: EVENTS.checkoutFailed, eventType: EVENTS.checkoutFailed,
-          tenantId: msg.tenantId, actorId: "system", correlationId: msg.correlationId,
+          tenantId: msg.tenantId, actorId: SYSTEM_ACTOR_ID, correlationId: msg.correlationId,
           payload: { event, reason: (entity["error_description"] as string) ?? "payment failed" },
         });
       }
 
       await enqueue(tx, {
         topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
-        tenantId: msg.tenantId, actorId: "system", correlationId: msg.correlationId,
+        tenantId: msg.tenantId, actorId: SYSTEM_ACTOR_ID, correlationId: msg.correlationId,
         payload: { service: "billing", action: "webhook_razorpay", resourceType: "webhook", resourceId: msg.messageId, outcome: "success", event },
       });
     });
@@ -187,7 +188,7 @@ export function registerPaymentsConsumers(rawQueue: Queue): void {
       // the dunning scheduler knows the attempt happened.
       await enqueue(tx, {
         topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
-        tenantId: p.tenantId, actorId: "system", correlationId: msg.correlationId,
+        tenantId: p.tenantId, actorId: SYSTEM_ACTOR_ID, correlationId: msg.correlationId,
         payload: { service: "billing", action: "dunning_retry", resourceType: "invoice", resourceId: p.invoiceId, outcome: "attempted", attempt: p.attempt },
       });
 
@@ -195,7 +196,7 @@ export function registerPaymentsConsumers(rawQueue: Queue): void {
       if (p.attempt >= 3) {
         await enqueue(tx, {
           topic: EVENTS.dunningExhausted, eventType: EVENTS.dunningExhausted,
-          tenantId: p.tenantId, actorId: "system", correlationId: msg.correlationId,
+          tenantId: p.tenantId, actorId: SYSTEM_ACTOR_ID, correlationId: msg.correlationId,
           payload: { invoiceId: p.invoiceId, attempts: p.attempt },
         });
       }

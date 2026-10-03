@@ -2,7 +2,7 @@ import { pino } from "pino";
 import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
-import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { enqueue, SYSTEM_ACTOR_ID } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
 import { hrmsContracts, hrmsContractNotifications } from "./schema.js";
 import { detectMilestones, daysUntilExpiry } from "./domain.js";
@@ -132,7 +132,7 @@ async function processContract(
           topic: NOTIFICATION_SEND,
           eventType: NOTIFICATION_SEND,
           tenantId,
-          actorId: msg.actorId ?? "system",
+          actorId: msg.actorId ?? SYSTEM_ACTOR_ID,
           correlationId: msg.correlationId,
           payload: {
             tenantId,
@@ -173,7 +173,7 @@ async function processContract(
         .update(hrmsContracts)
         .set({
           status: "expiring",
-          updatedBy: msg.actorId ?? "system",
+          updatedBy: msg.actorId ?? SYSTEM_ACTOR_ID,
           updatedAt: new Date(),
         })
         .where(
@@ -198,7 +198,7 @@ async function processContract(
           .update(hrmsContracts)
           .set({
             status: "expired",
-            updatedBy: msg.actorId ?? "system",
+            updatedBy: msg.actorId ?? SYSTEM_ACTOR_ID,
             updatedAt: new Date(),
           })
           .where(
@@ -210,7 +210,7 @@ async function processContract(
           topic: COMMANDS.contractAutoSeparate,
           eventType: COMMANDS.contractAutoSeparate,
           tenantId,
-          actorId: msg.actorId ?? "system",
+          actorId: msg.actorId ?? SYSTEM_ACTOR_ID,
           correlationId: msg.correlationId,
           payload: {
             tenantId,
@@ -223,7 +223,7 @@ async function processContract(
           topic: EVENTS.contractExpired,
           eventType: EVENTS.contractExpired,
           tenantId,
-          actorId: msg.actorId ?? "system",
+          actorId: msg.actorId ?? SYSTEM_ACTOR_ID,
           correlationId: msg.correlationId,
           payload: {
             contractId: contract.id,
@@ -252,7 +252,7 @@ async function processContract(
           .update(hrmsContracts)
           .set({
             status: "escalated",
-            updatedBy: msg.actorId ?? "system",
+            updatedBy: msg.actorId ?? SYSTEM_ACTOR_ID,
             updatedAt: new Date(),
           })
           .where(
@@ -264,7 +264,7 @@ async function processContract(
           topic: NOTIFICATION_SEND,
           eventType: NOTIFICATION_SEND,
           tenantId,
-          actorId: msg.actorId ?? "system",
+          actorId: msg.actorId ?? SYSTEM_ACTOR_ID,
           correlationId: msg.correlationId,
           payload: {
             tenantId,
@@ -287,7 +287,7 @@ async function processContract(
           topic: EVENTS.contractEscalated,
           eventType: EVENTS.contractEscalated,
           tenantId,
-          actorId: msg.actorId ?? "system",
+          actorId: msg.actorId ?? SYSTEM_ACTOR_ID,
           correlationId: msg.correlationId,
           payload: {
             contractId: contract.id,

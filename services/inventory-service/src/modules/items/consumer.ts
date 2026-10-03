@@ -19,7 +19,7 @@ import * as repo from "./repo.js";
 import {
   createItemPayload, updateItemPayload, createCategoryPayload, createUomPayload,
   createSubstitutePayload, createBinPayload, createReservationPayload,
-  releaseReservationPayload, createGoodsReturnPayload, qcInspectionPayload, qcMatrixViolation,
+  releaseReservationPayload, createGoodsReturnPayload, binStatusPayload, updateSettingsPayload, qcInspectionPayload, qcMatrixViolation,
 } from "./validators.js";
 
 export function registerItemConsumers(rawQueue: Queue): void {
@@ -134,6 +134,37 @@ export function registerItemConsumers(rawQueue: Queue): void {
     });
   });
 
+  queue.subscribe(COMMANDS.binSetStatus, async (msg) => {
+    const p = binStatusPayload.parse(msg.payload);
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      try {
+        await repo.setBinActive(tx, p.id, p.tenantId, p.isActive, msg.actorId);
+      } catch (err) {
+        if (err instanceof DomainError) throw new NonRetryableError(err.message);
+        throw err;
+      }
+      await emit(tx, msg, EVENTS.binStatusChanged, { binId: p.id, isActive: p.isActive }, p.isActive ? "activate" : "deactivate", "bin", p.id);
+    });
+  });
+
+  // ── Tenant inventory policy ────────────────────────────────────────────────
+  queue.subscribe(COMMANDS.settingsUpdate, async (msg) => {
+    const p = updateSettingsPayload.parse(msg.payload);
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      // Read the prior value inside the same transaction so the audit event records what changed.
+      const beforeValue = await repo.readQcMakerChecker(tx, p.tenantId);
+      await repo.upsertTenantSettings(tx, p.tenantId, { qcMakerChecker: p.qcMakerChecker }, msg.actorId);
+      await emit(
+        tx, msg, EVENTS.settingsUpdated,
+        { before: { qcMakerChecker: beforeValue }, after: { qcMakerChecker: p.qcMakerChecker } },
+        "update", "inventory_settings", p.tenantId, false,
+        { before: { qcMakerChecker: beforeValue }, after: { qcMakerChecker: p.qcMakerChecker } },
+      );
+    });
+  });
+
   // ── Reservations (SVC-054) ─────────────────────────────────────────────────
   queue.subscribe(COMMANDS.reservationCreate, async (msg) => {
     const p = createReservationPayload.parse(msg.payload);
@@ -195,8 +226,10 @@ export function registerItemConsumers(rawQueue: Queue): void {
         qcStatus: p.qcStatus, qcInspectedBy: p.inspectedBy, qcInspectedAt: new Date(), disposition: p.disposition,
       };
       if (p.qcNotes !== undefined) patch.qcNotes = p.qcNotes;
+      // Maker != checker, per-tenant (default ON), enforced inside the guarded UPDATE.
+      const makerChecker = await repo.readQcMakerChecker(tx, p.tenantId);
       try {
-        await repo.updateGoodsReturnQc(tx, p.id, p.tenantId, patch);
+        await repo.updateGoodsReturnQc(tx, p.id, p.tenantId, patch, { makerChecker });
       } catch (err) {
         if (err instanceof DomainError) throw new NonRetryableError(err.message);
         throw err;
@@ -225,6 +258,7 @@ async function emit(
   resourceType: string,
   resourceId: string,
   auditOnly = false,
+  auditDetail?: Record<string, unknown>,
 ): Promise<void> {
   const t = tx as Parameters<typeof enqueue>[0];
   if (!auditOnly) {
@@ -237,6 +271,6 @@ async function emit(
   await enqueue(t, {
     topic: INTEGRATION.audit, eventType: INTEGRATION.audit,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "inventory", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "inventory", action, resourceType, resourceId, outcome: "success", ...(auditDetail ?? {}) },
   });
 }

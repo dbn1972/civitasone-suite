@@ -1142,6 +1142,11 @@ export type GoodsReturnDetail = {
   qcNotes: string | null;
   disposition: "pending" | "restock" | "quarantine" | "scrap";
   createdAt: string;
+  /** User id (JWT sub) that recorded the return; the maker, who may not record its QC verdict when maker-checker is on. */
+  createdBy?: string;
+  /** Display names resolved server-side from identity-service; absent when not resolvable. */
+  createdByName?: string;
+  qcInspectedByName?: string;
 };
 
 export type TenderSummary = {
@@ -1881,6 +1886,9 @@ export type CycleCountDetail = {
   createdBy?: string;
   /** Id of the stock-adjustment movement this count posted (approved/auto_posted only). */
   adjustmentId?: string;
+  /** Display names resolved server-side from identity-service; absent when not resolvable. */
+  approvedByName?: string;
+  rejectedByName?: string;
   countedAt: string;
   createdAt: string;
   version: number;

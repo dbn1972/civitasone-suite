@@ -3,7 +3,7 @@
  * Balance reads on the write path take a row lock (FOR UPDATE) so concurrent
  * movements on the same (item, store) serialise instead of racing.
  */
-import { eq, and, lte, gte, gt, desc, inArray, sql, type SQL } from "drizzle-orm";
+import { eq, and, getTableColumns, lte, gte, gt, desc, inArray, sql, type SQL } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import {
   movements, movementLines, stockBalances, stockLedger,
@@ -43,6 +43,13 @@ export async function getMovement(tenantId: string, id: string): Promise<Movemen
     .where(and(eq(movements.id, id), eq(movements.tenantId, tenantId)))
     .limit(1));
   return rows[0] ?? null;
+}
+
+/** Lines of one movement (tenant-scoped), for the movement detail view. */
+export async function listMovementLines(tenantId: string, movementId: string) {
+  return scopedRead((tx) => tx.select().from(movementLines)
+    .where(and(eq(movementLines.tenantId, tenantId), eq(movementLines.movementId, movementId)))
+    .orderBy(movementLines.createdAt, movementLines.id));
 }
 
 // ── Stock balances ─────────────────────────────────────────────────────────
@@ -196,20 +203,32 @@ export async function sumOpenLayerValues(tenantId: string, itemIds: string[]): P
 
 // ── Stock ledger ─────────────────────────────────────────────────────────
 
+/** A ledger row plus its movement header's document reference (null for rows with no header match). */
+export type LedgerWithReference = LedgerRow & {
+  refDoc: string | null; refNo: string | null; grnNo: string | null; poRef: string | null; supplierId: string | null;
+};
+
 export interface LedgerOpts {
   itemId?: string; storeId?: string; movementType?: string; from?: string; to?: string; limit: number; offset: number;
 }
 
 export async function listLedger(
   tenantId: string, opts: LedgerOpts,
-): Promise<LedgerRow[]> {
+): Promise<LedgerWithReference[]> {
   const conds: SQL[] = [eq(stockLedger.tenantId, tenantId)];
   if (opts.itemId) conds.push(eq(stockLedger.itemId, opts.itemId));
   if (opts.storeId) conds.push(eq(stockLedger.storeId, opts.storeId));
   if (opts.movementType) conds.push(eq(stockLedger.movementType, opts.movementType));
   if (opts.from) conds.push(gte(stockLedger.postingDate, opts.from));
   if (opts.to) conds.push(lte(stockLedger.postingDate, opts.to));
-  return scopedRead((tx) => tx.select().from(stockLedger)
+  // Left join the movement header so a receipt row can show its GRN / PO / supplier
+  // reference (GAP-INVENTORY-RECEIPTS-03). Same schema, same tenant: not a cross-service join.
+  return scopedRead((tx) => tx.select({
+      ...getTableColumns(stockLedger),
+      refDoc: movements.refDoc, refNo: movements.refNo,
+      grnNo: movements.grnNo, poRef: movements.poRef, supplierId: movements.supplierId,
+    }).from(stockLedger)
+    .leftJoin(movements, and(eq(movements.id, stockLedger.movementId), eq(movements.tenantId, stockLedger.tenantId)))
     .where(and(...conds))
     // id tiebreak: rows posted in one transaction share createdAt, and an
     // unstable order would duplicate/skip rows across offset pages.

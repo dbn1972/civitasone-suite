@@ -35,6 +35,10 @@ export const movements = domainSchema.table("movements", {
   toStoreId:    uuid("to_store_id"),
   reasonCode:   varchar("reason_code", { length: 32 }),
   notes:        varchar("notes", { length: 512 }),
+  /** GAP-INVENTORY-RECEIPTS-03: copied from procurement-service when a receipt is posted from an accepted GRN. */
+  grnNo:        varchar("grn_no", { length: 64 }),
+  poRef:        varchar("po_ref", { length: 64 }),
+  supplierId:   uuid("supplier_id"),
   status:       varchar("status", { length: 16 }).notNull().default("posted"),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

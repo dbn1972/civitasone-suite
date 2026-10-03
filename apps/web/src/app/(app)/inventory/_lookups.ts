@@ -53,6 +53,15 @@ export function getWarehouseNames(): Promise<Map<string, string>> {
 }
 
 /**
+ * Supplier (vendor) names from procurement-service, for the receipts register
+ * (GAP-INVENTORY-RECEIPTS-03). Best-effort: an inventory role that cannot read
+ * vendors, or an unreachable service, yields an empty map and the column shows "—".
+ */
+export function getSupplierNames(): Promise<Map<string, string>> {
+  return loadNamed(`/api/v1/procurement/vendors?limit=${LOOKUP_LIMIT}`, "inventory.lookup.suppliers");
+}
+
+/**
  * Item names for the ids a page is about to show: the first list page, then a
  * bounded number of single-item reads for ids that page did not contain.
  */

@@ -20,6 +20,7 @@ import { and, asc, eq, isNull, inArray, sql } from "drizzle-orm";
 import type { PostgresJsQueryResultHKT } from "drizzle-orm/postgres-js";
 import type { Queue } from "@civitasone/queue";
 import { incrementOutboxRelayFailure, captureError } from "@civitasone/observability";
+import { createHash } from "node:crypto";
 import { getTopicSchemaVersion } from "./schema-versions.js";
 
 /**
@@ -354,6 +355,37 @@ export function startRelay(db: DrizzleTx, queue: Queue, intervalMs = 500, servic
         running = false;
       });
   }, intervalMs);
+}
+
+/**
+ * Actor id for events/commands published by the platform itself (schedulers, workers, webhooks).
+ * outbox actor_id and most created_by/updated_by columns are uuid, so the literal "system" makes
+ * every such enqueue/insert throw "invalid input syntax for type uuid".
+ */
+export const SYSTEM_ACTOR_ID = "00000000-0000-0000-0000-0000000000c9";
+
+// Fixed namespace for stableUuid() (arbitrary, constant -- changing it would re-key every dedupe row).
+const STABLE_UUID_NS = "3b1f7a52-5c0e-4d6a-9b8e-2f4d1c7a9e10";
+
+/**
+ * Deterministic uuid-shaped dedupe key for `name`. `_inbox.processed.message_id` is a uuid column,
+ * so a composite key such as `${msg.messageId}:${lineId}` must be folded through this before it
+ * reaches markProcessed(); passing the raw string throws "invalid input syntax for type uuid" on
+ * every delivery and the command is dead-lettered (the work never happens). Same name -> same uuid,
+ * so redelivery still dedupes.
+ *
+ * This is an idempotency key, not an identifier a third party relies on, so it is deliberately NOT
+ * a UUIDv5: v5 mandates SHA-1, which weak-crypto scanners flag. It hashes namespace + name with
+ * SHA-256, keeps the first 16 bytes and stamps the RFC 9562 UUIDv8 (custom) version nibble and the
+ * RFC 4122 variant bits, so the result is a valid uuid string for the column.
+ */
+export function stableUuid(name: string): string {
+  const ns = Buffer.from(STABLE_UUID_NS.replace(/-/g, ""), "hex");
+  const bytes = createHash("sha256").update(ns).update(Buffer.from(name, "utf8")).digest().subarray(0, 16);
+  bytes[6] = (bytes[6]! & 0x0f) | 0x80; // version 8 (custom)
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80; // RFC 4122 variant
+  const h = bytes.toString("hex");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
 /** Mark a consumed message processed (idempotency). Returns false if already seen. */

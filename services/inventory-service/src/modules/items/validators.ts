@@ -95,6 +95,14 @@ export const createBinBody = z.object({
 });
 export type CreateBinBody = z.infer<typeof createBinBody>;
 
+/** Activate / deactivate a bin (no hard delete: bins stay on the register for history). */
+export const binStatusBody = z.object({ isActive: z.boolean() });
+export type BinStatusBody = z.infer<typeof binStatusBody>;
+
+/** Per-tenant inventory policy (migration 0023). */
+export const updateSettingsBody = z.object({ qcMakerChecker: z.boolean() });
+export type UpdateSettingsBody = z.infer<typeof updateSettingsBody>;
+
 // ── Reservations ──────────────────────────────────────────────────────────
 export const createReservationBody = z.object({
   itemId:    z.string().uuid(),
@@ -175,6 +183,13 @@ export const createSubstitutePayload = createSubstituteBody.extend({
 });
 export const createBinPayload = createBinBody.extend({
   id:       z.string().uuid(),
+  tenantId: z.string().uuid(),
+});
+export const binStatusPayload = binStatusBody.extend({
+  id:       z.string().uuid(),
+  tenantId: z.string().uuid(),
+});
+export const updateSettingsPayload = updateSettingsBody.extend({
   tenantId: z.string().uuid(),
 });
 export const createReservationPayload = createReservationBody.extend({

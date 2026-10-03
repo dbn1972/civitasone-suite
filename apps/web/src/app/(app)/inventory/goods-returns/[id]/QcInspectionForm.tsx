@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ConfirmDialog, useToast } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { decisionFailure } from "@/lib/decisionError";
 import {
   DISPOSITION_LABELS,
   QC_NOTES_MAX_LENGTH,
@@ -100,7 +101,15 @@ export function QcInspectionForm({
         }),
       });
       if (!res.ok) {
-        setDialogError((await formError.fromResponse(res, "save")).message);
+        // 409 (already inspected) and 403 (maker-checker) read in plain language; the page is
+        // refreshed on a stale 409 so the recorded verdict shows. Anything else uses the form error.
+        if (res.status === 409 || res.status === 403) {
+          const failure = await decisionFailure(res, "goods return");
+          if (failure.stale) router.refresh();
+          setDialogError(failure.message);
+        } else {
+          setDialogError((await formError.fromResponse(res, "save")).message);
+        }
         return;
       }
       setConfirmOpen(false);

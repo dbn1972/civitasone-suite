@@ -6,6 +6,7 @@
  * Gap 7: On a configured IVR option selection, publish `notification.send`
  *         to send an SMS to the caller.
  */
+import { SYSTEM_ACTOR_ID } from "@civitasone/outbox";
 import type { Queue } from "@civitasone/queue";
 import { randomUUID } from "node:crypto";
 
@@ -44,7 +45,7 @@ export async function handleCreateLead(
     messageId,
     type: "crm.lead.inbound_capture",
     tenantId: ctx.tenantId,
-    actorId: "system",
+    actorId: SYSTEM_ACTOR_ID,
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
     payload: {
@@ -81,7 +82,7 @@ export async function handleSendSms(
     messageId,
     type: "notification.send",
     tenantId: ctx.tenantId,
-    actorId: "system",
+    actorId: SYSTEM_ACTOR_ID,
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
     payload: {

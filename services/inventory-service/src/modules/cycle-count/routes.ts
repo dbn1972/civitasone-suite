@@ -12,6 +12,7 @@ import {
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import { resolveUserNames } from "../../shared/identity-client.js";
 
 const WRITE_ROLES    = ["inventory_manager", "inventory_admin", "store_keeper", "super_admin"];
 const APPROVE_ROLES  = ["inventory_manager", "inventory_admin", "super_admin"];
@@ -33,7 +34,17 @@ export async function cycleCountRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const record = await queries.getCycleCount(ctx.tenantId, id);
     if (!record) throw new HttpError(404, "NOT_FOUND", "cycle count not found");
-    return reply.send({ data: record });
+    // Display names for the audit trail (best-effort; absent when identity-service cannot name them).
+    const names = await resolveUserNames(ctx.tenantId, [record.createdBy, record.approvedBy, record.rejectedBy]);
+    const nameOf = (id: string | null): string | null => (id ? names.get(id) ?? null : null);
+    return reply.send({
+      data: {
+        ...record,
+        createdByName: nameOf(record.createdBy),
+        approvedByName: nameOf(record.approvedBy),
+        rejectedByName: nameOf(record.rejectedBy),
+      },
+    });
   });
 
   // ── List cycle counts ─────────────────────────────────────────────────────

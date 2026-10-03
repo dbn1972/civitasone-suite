@@ -1,3 +1,4 @@
+import { SYSTEM_ACTOR_ID } from "@civitasone/outbox";
 import type { Queue } from "@civitasone/queue";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { db } from "../../shared/db.js";
@@ -62,7 +63,7 @@ export function registerSubscriptionsConsumers(rawQueue: Queue): void {
           topic: "billing.subscription.suspended",
           eventType: "billing.subscription.suspended",
           tenantId: msg.tenantId,
-          actorId: "system",
+          actorId: SYSTEM_ACTOR_ID,
           correlationId: msg.correlationId,
           payload: { subscriptionId: subId, reason: "dunning_exhausted", attempts: msg.payload.attempts },
         });

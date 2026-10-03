@@ -8,6 +8,7 @@
  *
  * _Requirements: 1.1, 1.2, 1.6, 1.9_
  */
+import { SYSTEM_ACTOR_ID } from "@civitasone/outbox";
 import { pino } from "pino";
 import { sql } from "drizzle-orm";
 import { db, sqlClient } from "./shared/db.js";
@@ -155,7 +156,7 @@ async function processOverdueFindings(): Promise<void> {
                 topic: EVENTS.findingOverdue,
                 eventType: EVENTS.findingOverdue,
                 tenantId,
-                actorId: "system",
+                actorId: SYSTEM_ACTOR_ID,
                 correlationId: `overdue-check-${finding.id}`,
                 payload: {
                   findingId: finding.id,
@@ -171,7 +172,7 @@ async function processOverdueFindings(): Promise<void> {
                 topic: "notification.send",
                 eventType: "notification.send",
                 tenantId,
-                actorId: "system",
+                actorId: SYSTEM_ACTOR_ID,
                 correlationId: `overdue-notif-${finding.id}`,
                 payload: {
                   type: "finding.overdue_escalation",

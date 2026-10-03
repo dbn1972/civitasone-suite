@@ -4,6 +4,7 @@ import { formatIndianDate } from "@/lib/formatters";
 import { getSessionRoles, getSessionUserId, INVENTORY_CYCLE_COUNT_APPROVE_ROLES } from "@/lib/auth/roleGuard";
 import { getItemNames, getWarehouseNames } from "../../_lookups";
 import { itemLabel, nameOrDash, userRefLabel } from "../../_labels";
+import Link from "next/link";
 import { CycleCountActions } from "./CycleCountActions";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -50,8 +51,8 @@ export default async function CycleCountDetailPage({ params }: { params: { id: s
   const canDecide = cycleCount.status === "pending_approval" && isApprover && !isMaker;
 
   // GAP-INVENTORY-CYCLE-COUNTS-DETAIL-03: item and warehouse by name (ids only as
-  // tooltips). People are shown as "User <id prefix>": there is no directory
-  // lookup an inventory role may call, so the name cannot be resolved here.
+  // tooltips). People are named by inventory-service (resolved from identity-service);
+  // "User <id prefix>" is only the fallback when a name cannot be resolved.
   const [itemNames, warehouseNames] = await Promise.all([getItemNames([cycleCount.itemId]), getWarehouseNames()]);
   const itemRef = itemNames.get(cycleCount.itemId);
   const itemText = itemLabel({ itemId: cycleCount.itemId, itemName: itemRef?.name, itemSku: itemRef?.sku });
@@ -124,17 +125,18 @@ export default async function CycleCountDetailPage({ params }: { params: { id: s
           </div>
           {showsAdjustment ? (
             <div className="field">
-              {/* GAP-INVENTORY-CYCLE-COUNTS-DETAIL-05: the posted adjustment's reference. There is no
-                  per-movement screen to link to yet, so it is shown as a reference, not a dead link. */}
-              <span className="label">Stock adjustment reference</span>
-              <span className="mono" title={cycleCount.adjustmentId}>{cycleCount.adjustmentId}</span>
+              {/* GAP-INVENTORY-CYCLE-COUNTS-DETAIL-05: link to the posted stock adjustment (movement detail). */}
+              <span className="label">Stock adjustment</span>
+              <Link href={`/inventory/movements/${cycleCount.adjustmentId}`} title={cycleCount.adjustmentId}>
+                View stock adjustment
+              </Link>
             </div>
           ) : null}
           {cycleCount.status === "approved" ? (
             <div className="field">
               <span className="label">Approved</span>
               <span>
-                <span title={cycleCount.approvedBy}>{userRefLabel(cycleCount.approvedBy)}</span>
+                <span title={cycleCount.approvedBy}>{userRefLabel(cycleCount.approvedBy, cycleCount.approvedByName)}</span>
                 {cycleCount.approvedAt ? ` · ${formatIndianDate(cycleCount.approvedAt)}` : ""}
               </span>
             </div>
@@ -144,7 +146,7 @@ export default async function CycleCountDetailPage({ params }: { params: { id: s
               <div className="field">
                 <span className="label">Rejected</span>
                 <span>
-                  <span title={cycleCount.rejectedBy}>{userRefLabel(cycleCount.rejectedBy)}</span>
+                  <span title={cycleCount.rejectedBy}>{userRefLabel(cycleCount.rejectedBy, cycleCount.rejectedByName)}</span>
                   {cycleCount.rejectedAt ? ` · ${formatIndianDate(cycleCount.rejectedAt)}` : ""}
                 </span>
               </div>

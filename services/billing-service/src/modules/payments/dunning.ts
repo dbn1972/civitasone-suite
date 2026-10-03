@@ -1,3 +1,4 @@
+import { SYSTEM_ACTOR_ID } from "@civitasone/outbox";
 import { randomUUID } from "node:crypto";
 import { sql, eq, and, lt } from "drizzle-orm";
 import { db } from "../../shared/db.js";
@@ -94,7 +95,7 @@ export async function evaluateOverdueSubscriptions(): Promise<{ retried: number;
         messageId: id,
         type: COMMANDS.dunningRetry,
         tenantId: sub.tenantId,
-        actorId: "system",
+        actorId: SYSTEM_ACTOR_ID,
         correlationId: id,
         schemaVersion: "1.0",
         payload: {
@@ -119,7 +120,7 @@ export async function evaluateOverdueSubscriptions(): Promise<{ retried: number;
         messageId: randomUUID(),
         type: EVENTS.dunningExhausted,
         tenantId: sub.tenantId,
-        actorId: "system",
+        actorId: SYSTEM_ACTOR_ID,
         correlationId: latest.id,
         schemaVersion: "1.0",
         payload: {
@@ -148,7 +149,7 @@ export async function evaluateOverdueSubscriptions(): Promise<{ retried: number;
           messageId: newId,
           type: COMMANDS.dunningRetry,
           tenantId: sub.tenantId,
-          actorId: "system",
+          actorId: SYSTEM_ACTOR_ID,
           correlationId: newId,
           schemaVersion: "1.0",
           payload: {

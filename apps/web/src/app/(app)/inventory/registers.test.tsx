@@ -89,11 +89,11 @@ describe("goods returns: no unitless cross-item Total Qty (GAP-INVENTORY-GOODS-R
 });
 
 describe("substitutes: coverage warning (GAP-INVENTORY-SUBSTITUTES-02)", () => {
-  it("warns when the item cap truncated the list and when some per-item loads failed", () => {
+  it("warns when the page limit truncated the list and when some per-item loads failed", () => {
     state.provenance = "live";
     state.rows = [registers[5].sample];
     render(<SubstitutesTable substitutes={[]} source="api" coverage={{ truncated: true, failedCount: 2, itemCount: 60 }} />);
-    expect(screen.getByText(/first 50 of 60 items/)).toBeInTheDocument();
+    expect(screen.getByText(/first 200 substitute links/)).toBeInTheDocument();
     expect(screen.getByText(/2 items could not be loaded/)).toBeInTheDocument();
   });
 

@@ -1,5 +1,7 @@
 import { PageHeader, Card, StatusPill, EmptyState, LoadErrorState } from "@/app/_components/ds";
 import { getGoodsReturnById } from "@/app/_data/loaders";
+import { getSessionUserId } from "@/lib/auth/roleGuard";
+import { getInventorySettings } from "../../_data";
 import { formatIndianDate } from "@/lib/formatters";
 import { getItemNames, getStoreNames } from "../../_lookups";
 import { itemLabel, nameOrDash, userRefLabel } from "../../_labels";
@@ -35,6 +37,13 @@ export default async function GoodsReturnDetailPage({ params }: { params: { id: 
   }
 
   const isPending = goodsReturn.qcStatus === "pending";
+
+  // GAP-INVENTORY-GOODS-RETURNS-DETAIL-04: maker != checker (per-tenant policy, default ON). The
+  // service enforces it; here we just stop offering a form that is guaranteed to 403.
+  const settings = isPending ? await getInventorySettings() : null;
+  const makerChecker = settings ? settings.data.qcMakerChecker : true;
+  const isMaker = Boolean(goodsReturn.createdBy) && goodsReturn.createdBy === getSessionUserId();
+  const blockedAsMaker = isPending && makerChecker && isMaker;
 
   // GAP-INVENTORY-GOODS-RETURNS-02 / DETAIL-05: show names, not UUIDs. Both
   // lookups are best-effort; an unresolved item falls back to its short id and
@@ -82,6 +91,12 @@ export default async function GoodsReturnDetailPage({ params }: { params: { id: 
             <span className="label">Returned on</span>
             <span>{formatIndianDate(goodsReturn.createdAt)}</span>
           </div>
+          {goodsReturn.createdBy ? (
+            <div className="field">
+              <span className="label">Recorded by</span>
+              <span title={goodsReturn.createdBy}>{userRefLabel(goodsReturn.createdBy, goodsReturn.createdByName)}</span>
+            </div>
+          ) : null}
           {!isPending ? (
             <>
               <div className="field">
@@ -95,7 +110,7 @@ export default async function GoodsReturnDetailPage({ params }: { params: { id: 
               {goodsReturn.qcInspectedBy ? (
                 <div className="field">
                   <span className="label">Inspected by</span>
-                  <span title={goodsReturn.qcInspectedBy}>{userRefLabel(goodsReturn.qcInspectedBy)}</span>
+                  <span title={goodsReturn.qcInspectedBy}>{userRefLabel(goodsReturn.qcInspectedBy, goodsReturn.qcInspectedByName)}</span>
                 </div>
               ) : null}
               {goodsReturn.qcInspectedAt ? (
@@ -115,7 +130,13 @@ export default async function GoodsReturnDetailPage({ params }: { params: { id: 
         </div>
       </Card>
 
-      {isPending ? (
+      {blockedAsMaker ? (
+        <p role="note" style={{ fontSize: 13, color: "#92400e", margin: "16px 0 0" }}>
+          You recorded this return, so a different person must record its QC verdict.
+        </p>
+      ) : null}
+
+      {isPending && !blockedAsMaker ? (
         <>
           <h2 style={{ margin: "24px 0 8px", fontSize: "1.1rem" }}>Record QC verdict</h2>
           <QcInspectionForm goodsReturnId={goodsReturn.id} qty={goodsReturn.qty} itemName={itemText} />
