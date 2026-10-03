@@ -2,10 +2,12 @@ import { Button, PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, Re
 import { toHumanError } from "@/lib/messages";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
-import { getChartOfAccounts } from "@/app/_data/loaders";
-import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { getChartOfAccounts, getFinancePendingChangeRequests, getFinanceSettings } from "@/app/_data/loaders";
+import { getSessionRoles, getSessionUserId } from "@/lib/auth/roleGuard";
 import { OPENING_BALANCE_WRITE_ROLES } from "@/lib/auth/workRoles";
 import { OpeningBalanceForm } from "./OpeningBalanceForm";
+import { ChangeRequestsPanel } from "../_components/ChangeRequestsPanel";
+import { CHANGE_REQUEST_DECIDER_ROLES } from "../_components/changeRequests";
 import { accountLabel, fiscalYearOptionLabel, fyAllowsOpeningBalances, type CoaAccount } from "./openingBalanceAccounts";
 
 type FiscalYearOption = { code: string; label: string; status: string };
@@ -93,6 +95,11 @@ export default async function OpeningBalancesPage({
   const selectedFy = searchParams?.fy?.trim() || "";
 
   const { data: fiscalYears, source: fySource } = await getFiscalYears();
+  // fp-finance-01: batches held for a second officer, and the per-tenant policy (unknown -> the conservative default, on).
+  const [requestsResult, settingsResult] = await Promise.all([getFinancePendingChangeRequests("opening_balances_enter"), getFinanceSettings()]);
+  const secondApprover = settingsResult.data?.makerCheckerEnabled ?? true;
+  const viewerId = getSessionUserId();
+  const canDecide = getSessionRoles().some((r) => (CHANGE_REQUEST_DECIDER_ROLES as readonly string[]).includes(r));
 
   const balancesResult = selectedFy
     ? await getOpeningBalances(selectedFy)
@@ -214,6 +221,7 @@ export default async function OpeningBalancesPage({
               fyCode={selectedFy}
               accounts={accounts}
               accountsUnavailable={!coaOk}
+              secondApprover={secondApprover}
             />
           ) : (
             <p style={{ color: "var(--ink2)", fontSize: 13, margin: "0 0 16px" }}>
@@ -235,6 +243,13 @@ export default async function OpeningBalancesPage({
             />
           </Card>
         </>
+      )}
+
+      {/* A failed load is its own state: never "nothing is waiting". */}
+      {requestsResult.source === "error" ? (
+        <RefreshErrorState error={toHumanError("load", { area: "pending approvals" })} />
+      ) : (
+        <ChangeRequestsPanel requests={requestsResult.data} viewerId={viewerId} canDecide={canDecide} />
       )}
     </div>
   );

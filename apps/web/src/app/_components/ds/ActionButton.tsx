@@ -72,6 +72,8 @@ export interface ActionButtonProps {
   cancelLabel?: string;
   danger?: boolean;
   requireReason?: boolean;
+  /** Forwarded to ConfirmDialog: shows the reason box but never gates Confirm on it (a welcome remark, e.g. a payment reference). */
+  optionalReason?: boolean;
   reasonLabel?: string;
   /** Forwarded to ConfirmDialog — see its doc comment. Defaults to 1 (non-empty). */
   minReasonLength?: number;
@@ -91,6 +93,7 @@ export function ActionButton({
   cancelLabel,
   danger = false,
   requireReason = false,
+  optionalReason = false,
   reasonLabel,
   minReasonLength,
   maxReasonLength,
@@ -118,6 +121,7 @@ export function ActionButton({
         cancelLabel={cancelLabel}
         danger={danger}
         requireReason={requireReason}
+        optionalReason={optionalReason}
         reasonLabel={reasonLabel}
         {...(minReasonLength !== undefined ? { minReasonLength } : {})}
         {...(maxReasonLength !== undefined ? { maxReasonLength } : {})}

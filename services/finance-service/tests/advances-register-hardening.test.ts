@@ -66,7 +66,7 @@ describe("advances register over HTTP", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/finance/advances",
       headers: { authorization: `Bearer ${token(["finance_officer"])}`, "content-type": "application/json" },
-      payload: { advanceNo: "ADV-DUP-1", purpose: "Again", payee: "X", amountMinor: "1000" },
+      payload: { advanceNo: "ADV-DUP-1", purpose: "Again", payee: "X", sanctionAuthority: "Under Secretary", reason: "Sanctioned by order", amountMinor: "1000" },
     });
     await app.close();
     expect(res.statusCode).toBe(409);
@@ -80,7 +80,7 @@ describe("advances register over HTTP", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/finance/advances",
       headers: { authorization: `Bearer ${token(["finance_officer"])}`, "content-type": "application/json" },
-      payload: { advanceNo: "ADV-FRESH-1", purpose: "New", payee: "X", amountMinor: "1000" },
+      payload: { advanceNo: "ADV-FRESH-1", purpose: "New", payee: "X", sanctionAuthority: "Under Secretary", reason: "Sanctioned by order", amountMinor: "1000" },
     });
     await app.close();
     expect(res.statusCode).toBe(202);
@@ -132,7 +132,7 @@ describe("purpose is masked with the name, and payee is required", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/finance/advances",
       headers: { authorization: `Bearer ${token(["finance_officer"])}`, "content-type": "application/json" },
-      payload: { advanceNo: "ADV-NOPAYEE", purpose: "Tour advance for Asha Verma", amountMinor: "1000" },
+      payload: { advanceNo: "ADV-NOPAYEE", purpose: "Tour advance for Asha Verma", sanctionAuthority: "Under Secretary", reason: "Sanctioned by order", amountMinor: "1000" },
     });
     await app.close();
     expect(res.statusCode).toBe(400);

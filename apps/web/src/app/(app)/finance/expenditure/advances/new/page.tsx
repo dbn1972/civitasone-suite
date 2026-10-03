@@ -23,8 +23,9 @@ const inputStyle = { width: "100%", padding: 8, borderRadius: 8, border: "1px so
 export default function NewAdvancePage() {
   const t = useTranslations("expenditureAdvancesNew");
   const router = useRouter();
-  const [form, setForm] = useState({ advanceNo: "", purpose: "", payee: "", type: "employee", amount: "", dueDate: "" });
+  const [form, setForm] = useState({ advanceNo: "", purpose: "", payee: "", type: "employee", amount: "", dueDate: "", sanctionAuthority: "" });
   const [payeeError, setPayeeError] = useState("");
+  const [authorityError, setAuthorityError] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
@@ -49,6 +50,12 @@ export default function NewAdvancePage() {
       return;
     }
     setPayeeError("");
+    // GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-01: the sanctioning authority is recorded with the advance.
+    if (form.sanctionAuthority.trim().length < 2) {
+      setAuthorityError(t("errorAuthority"));
+      return;
+    }
+    setAuthorityError("");
     if (rupeesToMinorString(form.amount) === null) {
       setAmountError(t("errorAmount"));
       return;
@@ -57,7 +64,7 @@ export default function NewAdvancePage() {
     setConfirmOpen(true);
   }
 
-  async function submit() {
+  async function submit(reason?: string) {
     const amountMinor = rupeesToMinorString(form.amount);
     if (amountMinor === null) return;
     setBusy(true);
@@ -80,6 +87,8 @@ export default function NewAdvancePage() {
           amountMinor,
           currency: "INR",
           dueDate: form.dueDate || undefined,
+          sanctionAuthority: form.sanctionAuthority.trim(),
+          reason: (reason ?? "").trim(),
         }),
       });
       setConfirmOpen(false);
@@ -134,6 +143,15 @@ export default function NewAdvancePage() {
               )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
+              <label className="l" htmlFor="adv-authority">{t("labelAuthority")}</label>
+              <input id="adv-authority" required aria-required="true" maxLength={200} aria-invalid={authorityError ? true : undefined} aria-describedby="adv-authority-help" value={form.sanctionAuthority} onChange={(e) => setForm({ ...form, sanctionAuthority: e.target.value })} style={inputStyle} />
+              <span id="adv-authority-help" style={{ fontSize: 12, color: "var(--ink2)" }}>{t("helpAuthority")}</span>
+              {authorityError && <span role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>{authorityError}</span>}
+              {formError.fieldError("sanctionAuthority") && (
+                <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("sanctionAuthority")}</span>
+              )}
+            </div>
+            <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="adv-type">{t("labelType")}</label>
               <select id="adv-type" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} style={inputStyle}>
                 <option value="employee">{t("typeEmployee")}</option>
@@ -181,8 +199,12 @@ export default function NewAdvancePage() {
           dueDate: form.dueDate ? formatIndianDate(form.dueDate) : t("confirmNoDueDate"),
         })}
         confirmLabel={t("confirmLabel")}
+        requireReason
+        reasonLabel={t("reasonLabel")}
+        minReasonLength={5}
+        maxReasonLength={500}
         busy={busy}
-        onConfirm={() => { void submit(); }}
+        onConfirm={(reason) => { void submit(reason); }}
         onCancel={() => setConfirmOpen(false)}
       />
     </>

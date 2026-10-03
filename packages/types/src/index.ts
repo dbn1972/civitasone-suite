@@ -698,6 +698,9 @@ export type SanctionDetail = SanctionSummary & {
   lineItems: Array<{ description: string; amount: string; head: string }>;
   remarks?: string;
   approvalTrail: Array<{ actor: string; action: string; timestamp: string }>;
+  /** An eOffice file is deciding this sanction (direct approval is refused meanwhile). */
+  efileInFlight?: boolean;
+  efileFileNo?: string;
 };
 
 export type BillSummary = {
@@ -733,6 +736,8 @@ export type AdvanceSummary = {
   adjustedAmount: string;
   balance: string;
   status: "active" | "adjusted" | "overdue" | "closed";
+  sanctionAuthority?: string;
+  reason?: string;
 };
 
 export type UCSummary = {
@@ -745,6 +750,10 @@ export type UCSummary = {
   periodTo: string;
   submittedDate?: string;
   status: "pending" | "submitted" | "verified" | "rejected";
+  rejectionReason?: string;
+  declarationAccepted?: boolean;
+  resubmitCount?: number;
+  createdBy?: string;
 };
 
 export type GLEntrySummary = {
@@ -2476,6 +2485,8 @@ export type AllocationDistributionSummary = {
   issuedBy: string | null;
   acknowledgedBy: string | null;
   acknowledgeNote: string | null;
+  fromOfficeName?: string | null;
+  toOfficeName?: string | null;
   version: number;
 };
 
@@ -2634,6 +2645,9 @@ export type FinanceGuaranteeSummary = {
   currency: string;
   feePct: string;
   status: string;
+  validUntil?: string | null;
+  beneficiary?: string | null;
+  linkedRef?: string | null;
   createdAt: string;
   updatedAt: string;
   version: number;
@@ -2648,9 +2662,69 @@ export type FinanceDebtSummary = {
   currency: string;
   maturity: string | null;
   status: string;
+  lender?: string | null;
+  interestRateBps?: number | null;
+  tenureMonths?: number | null;
+  outstandingMinor?: string | null;
   createdAt: string;
   updatedAt: string;
   version: number;
+};
+
+export type FinanceDebtEmi = {
+  installmentNo: number;
+  dueDate: string;
+  principalMinor: string;
+  interestMinor: string;
+  totalMinor: string;
+  status: "due" | "paid";
+  paidOn: string | null;
+  paymentRef: string | null;
+  glStatus?: "posted" | "pending" | null;
+};
+
+export type FinanceDebtDetail = {
+  id: string;
+  instrument: string;
+  source: string;
+  lender: string | null;
+  principalMinor: string;
+  currency: string;
+  interestRateBps: number | null;
+  tenureMonths: number | null;
+  firstEmiDate: string | null;
+  maturity: string | null;
+  status: string;
+  outstandingMinor: string | null;
+  receiptGlStatus?: "posted" | "pending" | null;
+  schedule: FinanceDebtEmi[];
+};
+
+/** A maker-checker change request (fiscal-year activation, opening balances, HoA change). */
+export type FinanceChangeRequest = {
+  id: string;
+  kind: "fiscal_year_activate" | "opening_balances_enter" | "hoa_change" | "settings_relax";
+  subjectKey: string;
+  payload: Record<string, unknown>;
+  reason: string;
+  status: "pending" | "approved" | "rejected" | "cancelled";
+  requestedBy: string;
+  requestedAt: string;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  decisionNote: string | null;
+  version: number;
+};
+
+export type FinanceSettings = {
+  makerCheckerEnabled: boolean;
+  blockFyActivationOpenPeriods: boolean;
+  requireOpeningBalancesForActivation: boolean;
+  fyCreateAsDraft: boolean;
+  debtLoanLiabilityHeadId: string | null;
+  debtInterestExpenseHeadId: string | null;
+  debtBankHeadId: string | null;
+  updatedAt: string | null;
 };
 
 /** Modeled on budget.finance_schemes DDL — no live GET route (see file header note). */

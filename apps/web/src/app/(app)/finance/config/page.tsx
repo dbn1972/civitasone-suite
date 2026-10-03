@@ -1,25 +1,37 @@
 import Link from "next/link";
 import { PageHeader, Card, StatGrid, StatCard, DataTable, EmptyState, LoadErrorState } from "../../../_components/ds";
-import { maskLast4 } from "../../../_components/ds/Masked";
-import { getFinanceBankAccounts, getFinanceFiscalYears, type FinanceBankAccount, type FinanceFiscalYear } from "@/app/_data/loaders";
-import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { getFinanceBankAccounts, getFinanceFiscalYears, getFinanceSettings, getChartOfAccounts, getFinancePendingChangeRequests, type FinanceBankAccount, type FinanceFiscalYear } from "@/app/_data/loaders";
+import { getSessionRoles, getSessionUserId } from "@/lib/auth/roleGuard";
+import { ChangeRequestsPanel } from "../_components/ChangeRequestsPanel";
 import { BankAccountForm } from "./BankAccountForm";
+import { BankAccountsTable } from "./BankAccountsTable";
+import { FinanceSettingsPanel } from "./FinanceSettingsPanel";
 
-// The table renders the server-masked account value only (GAP-FINANCE-CONFIG-02).
+// The table renders the server-masked account value only; a finance admin can reveal it with a
+// stated, audited reason (GAP-FINANCE-CONFIG-02).
 type FY = FinanceFiscalYear & Record<string, unknown>;
-type BankRow = FinanceBankAccount & Record<string, unknown> & { accountMasked: string };
 
 /** Bank-account create/list is finance_admin/super_admin only server-side (bank-routes.ts). */
 const BANK_ADMIN_ROLES = ["finance_admin", "super_admin"];
 
 export default async function FinanceConfigPage() {
-  const [fyResult, bankResult] = await Promise.all([getFinanceFiscalYears(), getFinanceBankAccounts()]);
+  const canManageBanks = getSessionRoles().some((r) => BANK_ADMIN_ROLES.includes(r));
+  // The policy panel is for the admins who can change it; others never trigger the read.
+  const [fyResult, bankResult, settingsResult, coaResult, relaxResult] = await Promise.all([
+    getFinanceFiscalYears(), getFinanceBankAccounts(), canManageBanks ? getFinanceSettings() : Promise.resolve(null),
+    canManageBanks ? getChartOfAccounts() : Promise.resolve(null),
+    canManageBanks ? getFinancePendingChangeRequests("settings_relax") : Promise.resolve(null),
+  ]);
+  const viewerId = getSessionUserId();
+  // GL head options for the debt posting selects; null when the chart could not be read (shown as an error, not empty).
+  const headOptions = coaResult && coaResult.source !== "error"
+    ? coaResult.data.filter((a): a is typeof a & { id: string } => typeof a.id === "string").map((a) => ({ id: a.id, code: a.code, name: a.name, type: a.type }))
+    : null;
   const fys = fyResult.data as FY[];
   const fyErr = fyResult.source === "error";
   const bankErr = bankResult.source === "error";
-  const canManageBanks = getSessionRoles().some((r) => BANK_ADMIN_ROLES.includes(r));
   const activeFY = fys.find((f) => f.status === "active");
-  const banks: BankRow[] = bankResult.data.map((b) => ({ ...b, accountMasked: maskLast4(String(b.accountNoLast4 ?? "")) }));
+  const banks: FinanceBankAccount[] = bankResult.data;
 
   return (
     <div className="page-main" aria-labelledby="page-heading">
@@ -64,24 +76,31 @@ export default async function FinanceConfigPage() {
       <Card title="Bank Accounts">
         {bankResult.source === "error" ? (
           <div className="pad"><LoadErrorState result={bankResult} area="bank accounts" requiredRoles={BANK_ADMIN_ROLES} /></div>
-        ) : banks.length === 0 ? (
-          <EmptyState icon="🏦" title="No bank accounts" message="Add your office's bank accounts so payments can be issued." />
         ) : (
-          <DataTable<BankRow>
-            columns={[
-              { key: "bankName", label: "Bank" },
-              { key: "branchName", label: "Branch" },
-              { key: "accountMasked", label: "Account No" },
-              { key: "ifscPrefix", label: "IFSC" },
-              { key: "accountType", label: "Type" },
-              { key: "status", label: "Status", cellType: "status" },
-            ]}
-            rows={banks}
-            sortable
-          />
+          <BankAccountsTable rows={banks} canReveal={canManageBanks} />
         )}
       </Card>
       {canManageBanks && !bankErr ? <BankAccountForm /> : null}
+
+      {/* Second-approver and fiscal-year rules (finance admins only). A failed read is its own state. */}
+      {canManageBanks && settingsResult ? (
+        settingsResult.data ? (
+          <>
+            <FinanceSettingsPanel settings={settingsResult.data} heads={headOptions} />
+            {relaxResult && relaxResult.source !== "error" ? (
+              <ChangeRequestsPanel requests={relaxResult.data} viewerId={viewerId} canDecide={canManageBanks} title="Control changes awaiting a second admin" />
+            ) : (
+              <Card title="Control changes awaiting a second admin">
+                <div className="pad"><LoadErrorState result={relaxResult ?? { status: 500 }} area="pending control changes" /></div>
+              </Card>
+            )}
+          </>
+        ) : (
+          <Card title="Finance policy settings">
+            <div className="pad"><LoadErrorState result={settingsResult} area="finance policy settings" requiredRoles={BANK_ADMIN_ROLES} /></div>
+          </Card>
+        )
+      ) : null}
 
       {/* Setup order: financial year, bank accounts, opening balances. The card is
           always shown (GAP-FINANCE-CONFIG-06); without an active year the link is

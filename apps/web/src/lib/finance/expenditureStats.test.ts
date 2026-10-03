@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { advanceStats, billStats, guaranteeStats, schemeStats, ucStats } from "./expenditureStats";
+import { advanceStats, billStats, guaranteeStats, guaranteeValidity, schemeStats, ucStats } from "./expenditureStats";
 
 describe("advanceStats", () => {
   beforeEach(() => {
@@ -62,6 +62,32 @@ describe("guaranteeStats / schemeStats", () => {
       { status: "cancelled" },
     ]);
     expect(g).toMatchObject({ total: 4, active: 1, released: 1, otherStatus: 2 });
+  });
+  // GAP-FINANCE-EXPENDITURE-GUARANTEES-01
+  it("expiring = active guarantee whose validity ends within 30 IST days; lapsed = validity already ended", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-02T06:00:00.000Z")); // 11:30 IST on 2 Oct 2026
+    try {
+      const g = guaranteeStats([
+        { status: "active", validUntil: "2026-10-12" }, // +10d -> expiring
+        { status: "active", validUntil: "2027-01-01" }, // +90d -> ok
+        { status: "active", validUntil: "2026-09-30" }, // lapsed
+        { status: "active", validUntil: "2026-10-02" }, // today -> expiring
+        { status: "active", validUntil: "2026-11-01" }, // exactly +30d -> expiring
+        { status: "active", validUntil: "2026-11-02" }, // +31d -> ok
+        { status: "fully_released", validUntil: "2026-10-05" }, // released: never flagged
+        { status: "cancelled", validUntil: "2026-09-01" }, // cancelled: never flagged
+        { status: "active" }, // no date: neither
+        { status: "active", validUntil: null },
+      ]);
+      expect(g).toMatchObject({ total: 10, expiringSoon: 3, lapsed: 1 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("guaranteeValidity reports none for rows without a date", () => {
+    expect(guaranteeValidity({ status: "active" })).toBe("none");
+    expect(guaranteeValidity({ status: "active", validUntil: "not-a-date" })).toBe("none");
   });
   it("scheme other = neither active nor completed", () => {
     const s = schemeStats([{ status: "active" }, { status: "completed" }, { status: "on_hold" }, { status: "cancelled" }]);

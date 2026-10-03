@@ -19,6 +19,11 @@ export type DebtLabels = {
   instrument: string;
   source: string;
   principal: string;
+  /** fp-finance-01 (GAP-FINANCE-DEBT-01) */
+  lender: string;
+  rate: string;
+  outstanding: string;
+  totalOutstanding: string;
   maturity: string;
   status: string;
   search: string;
@@ -54,7 +59,14 @@ export function DebtTable({
   const unknown = provenance === "error-no-data";
   const stats = summariseDebt(rows);
   const dash = (v: string | number) => (unknown ? "—" : v);
-  const tableRows = rows.map((r) => ({ ...r, sourceLabel: debtSourceLabel(r.source, labels.sources) }));
+  const tableRows = rows.map((r) => ({
+    ...r,
+    sourceLabel: debtSourceLabel(r.source, labels.sources),
+    lenderLabel: r.lender || "—",
+    rateLabel: r.interestRateBps == null ? "—" : `${(r.interestRateBps / 100).toFixed(2)}%`,
+    // null = no repayment position recorded (older rows): a dash, never a believable 0.
+    outstandingLabel: r.outstandingMinor == null ? "—" : formatMoney(r.outstandingMinor),
+  }));
 
   return (
     <>
@@ -63,6 +75,7 @@ export function DebtTable({
         <StatCard icon="📈" iconBg="var(--infobg)" label={labels.active} value={dash(stats.active)} />
         <StatCard icon="✅" iconBg="var(--goodbg)" label={labels.closed} value={dash(stats.closed)} />
         <StatCard icon="💰" iconBg="var(--line2)" label={labels.totalPrincipal} value={dash(stats.allInr ? formatMoney(stats.totalMinor) : "—")} />
+        <StatCard icon="📉" iconBg="var(--warnbg)" label={labels.totalOutstanding} value={dash(stats.allInr && stats.hasOutstanding ? formatMoney(stats.outstandingMinor) : "—")} />
       </StatGrid>
       {!unknown && !stats.allInr ? <p role="note" style={{ fontSize: 13, color: "var(--mut)", margin: "0 0 12px" }}>{labels.mixedCurrency}</p> : null}
       {/* UX-012: this badge is the ONLY place that reports data provenance for
@@ -77,11 +90,16 @@ export function DebtTable({
             columns={[
               { key: "instrument", label: labels.instrument },
               { key: "sourceLabel", label: labels.source },
+              { key: "lenderLabel", label: labels.lender },
+              { key: "rateLabel", label: labels.rate, align: "right" },
               { key: "amountMinor", label: labels.principal, align: "right", cellType: "amount" },
+              { key: "outstandingLabel", label: labels.outstanding, align: "right" },
               { key: "maturity", label: labels.maturity, cellType: "date" },
               { key: "status", label: labels.status, cellType: "status" },
             ]}
             rows={tableRows}
+            rowHref={(r) => `/finance/debt/${r.id}`}
+            identifyingColumnKey="instrument"
             sortable
             filterable
             filterPlaceholder={labels.search}

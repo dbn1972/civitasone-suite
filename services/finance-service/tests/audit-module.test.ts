@@ -22,7 +22,7 @@ import { MemoryQueue } from "@civitasone/queue";
 const {
   dbTransactionFn, enqueuedMessages, markProcessedMock,
   insertBudgetMock, findBudgetByIdMock, transferBudgetReMinorGuardedMock,
-  insertSanctionMock, findSanctionByIdTxMock, updateSanctionMock,
+  insertSanctionMock, findSanctionByIdTxMock, updateSanctionMock, approveSanctionIfNoEfileMock,
   insertReappropriationMock,
 } = vi.hoisted(() => {
   const _mockTx = { insert: vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) }) };
@@ -40,6 +40,7 @@ const {
     insertSanctionMock: vi.fn(async () => undefined),
     findSanctionByIdTxMock: vi.fn(async () => null as any),
     updateSanctionMock: vi.fn(async () => undefined),
+    approveSanctionIfNoEfileMock: vi.fn(async () => true),
     insertReappropriationMock: vi.fn(async () => undefined),
   };
 });
@@ -76,6 +77,7 @@ vi.mock("../src/modules/budget/repo.js", () => ({
   insertSanction: (...a: any[]) => insertSanctionMock(...a),
   findSanctionByIdTx: (...a: any[]) => findSanctionByIdTxMock(...a),
   updateSanction: (...a: any[]) => updateSanctionMock(...a),
+  approveSanctionIfNoEfile: (...a: any[]) => approveSanctionIfNoEfileMock(...a),
   insertReappropriation: (...a: any[]) => insertReappropriationMock(...a),
 }));
 

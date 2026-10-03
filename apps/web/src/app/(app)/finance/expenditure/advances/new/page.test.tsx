@@ -29,6 +29,13 @@ function fillForm() {
   fireEvent.change(screen.getByLabelText("Amount (₹)"), { target: { value: "1000" } });
   fireEvent.change(screen.getByLabelText("Purpose"), { target: { value: "Tour advance" } });
   fireEvent.change(screen.getByLabelText("Payee"), { target: { value: "R. Sharma" } });
+  fireEvent.change(screen.getByLabelText("Sanctioning authority"), { target: { value: "Under Secretary (Finance)" } });
+}
+
+/** The confirm dialog now captures the reason (GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-01). */
+async function confirmWithReason(reason = "Sanctioned vide order 12/2031") {
+  fireEvent.change(await screen.findByLabelText("Reason for this advance"), { target: { value: reason } });
+  fireEvent.click(screen.getByRole("button", { name: "Issue advance" }));
 }
 
 describe("NewAdvancePage", () => {
@@ -43,7 +50,7 @@ describe("NewAdvancePage", () => {
     renderPage(<NewAdvancePage />);
     fillForm();
     fireEvent.click(screen.getByRole("button", { name: /create advance/i }));
-    fireEvent.click(await screen.findByRole("button", { name: "Issue advance" }));
+    await confirmWithReason();
 
     await waitFor(() => expect(screen.getByText("Advance recorded.")).toBeInTheDocument());
     expect(fetchMock).toHaveBeenCalledWith(
@@ -65,7 +72,7 @@ describe("NewAdvancePage", () => {
     renderPage(<NewAdvancePage />);
     fillForm();
     fireEvent.click(screen.getByRole("button", { name: /create advance/i }));
-    fireEvent.click(await screen.findByRole("button", { name: "Issue advance" }));
+    await confirmWithReason();
 
     const alert = await screen.findByText(/couldn't save/i);
     expect(alert.textContent).not.toMatch(/insufficient_budget/i);
@@ -91,7 +98,8 @@ describe("NewAdvancePage", () => {
     fillForm();
     fireEvent.change(screen.getByLabelText("Amount (₹)"), { target: { value: "1.15" } });
     fireEvent.click(screen.getByRole("button", { name: /create advance/i }));
-    const confirm = await screen.findByRole("button", { name: "Issue advance" });
+    fireEvent.change(await screen.findByLabelText("Reason for this advance"), { target: { value: "Sanctioned vide order 12/2031" } });
+    const confirm = screen.getByRole("button", { name: "Issue advance" });
     fireEvent.click(confirm);
     fireEvent.click(confirm);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
@@ -109,6 +117,38 @@ describe("NewAdvancePage", () => {
     fireEvent.click(screen.getByRole("button", { name: /create advance/i }));
     expect(await screen.findByText(/at most 2 decimals/i)).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-01: authority + reason are captured and sent
+  it("keeps Issue disabled until a reason is typed, then sends sanctionAuthority and reason", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 202 }));
+    renderPage(<NewAdvancePage />);
+    fillForm();
+    fireEvent.click(screen.getByRole("button", { name: /create advance/i }));
+    const issue = await screen.findByRole("button", { name: "Issue advance" });
+    expect(issue).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Reason for this advance"), { target: { value: "abc" } }); // under 5 chars
+    expect(issue).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Reason for this advance"), { target: { value: "  Sanctioned vide order 12/2031  " } });
+    expect(issue).not.toBeDisabled();
+    fireEvent.click(issue);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toMatchObject({
+      sanctionAuthority: "Under Secretary (Finance)", reason: "Sanctioned vide order 12/2031",
+    });
+  });
+
+  it("blocks submission without a sanctioning authority and sends nothing", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    renderPage(<NewAdvancePage />);
+    fillForm();
+    fireEvent.change(screen.getByLabelText("Sanctioning authority"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: /create advance/i }));
+    expect(await screen.findByText("Name the sanctioning authority.")).toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Sanctioning authority")).toBeRequired();
   });
 
   // GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-03
@@ -134,7 +174,7 @@ describe("NewAdvancePage", () => {
     fireEvent.change(screen.getByLabelText("Payee"), { target: { value: "  Acme Traders  " } });
     fireEvent.change(screen.getByLabelText("Advance type"), { target: { value: "vendor" } });
     fireEvent.click(screen.getByRole("button", { name: /create advance/i }));
-    fireEvent.click(await screen.findByRole("button", { name: "Issue advance" }));
+    await confirmWithReason();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const body = JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string);
     expect(body).toMatchObject({ type: "vendor", payee: "Acme Traders", purpose: "Tour advance" });
@@ -164,7 +204,7 @@ describe("NewAdvancePage", () => {
     renderPage(<NewAdvancePage />);
     fillForm();
     fireEvent.click(screen.getByRole("button", { name: /create advance/i }));
-    fireEvent.click(await screen.findByRole("button", { name: "Issue advance" }));
+    await confirmWithReason();
     expect(await screen.findByText(/already in use/i)).toBeInTheDocument();
   });
 
@@ -174,7 +214,7 @@ describe("NewAdvancePage", () => {
     renderPage(<NewAdvancePage />);
     fillForm();
     fireEvent.click(screen.getByRole("button", { name: /create advance/i }));
-    fireEvent.click(await screen.findByRole("button", { name: "Issue advance" }));
+    await confirmWithReason();
     const alert = await screen.findByText(/don't have permission/i);
     expect(alert.textContent).not.toMatch(/try again/i);
   });

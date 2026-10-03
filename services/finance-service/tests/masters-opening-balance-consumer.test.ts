@@ -21,7 +21,12 @@ const { mockTx, dbTransactionFn, insertValuesMock, onConflictDoNothingMock, retu
   const _returningMock = vi.fn().mockResolvedValue([{ id: "mock-inserted-id" }]);
   const _onConflictDoNothingMock = vi.fn().mockReturnValue({ returning: _returningMock });
   const _insertValuesMock = vi.fn().mockReturnValue({ onConflictDoNothing: _onConflictDoNothingMock });
-  const _mockTx = { insert: vi.fn().mockReturnValue({ values: _insertValuesMock }) };
+  const _mockTx = {
+    insert: vi.fn().mockReturnValue({ values: _insertValuesMock }),
+    // approvals/apply.ts takes the per-tenant advisory lock and pre-checks for existing balances.
+    execute: vi.fn(async () => []),
+    select: vi.fn(() => ({ from: () => ({ where: async () => [] }) })),
+  };
   const _dbTransactionFn = vi.fn(async (cb: (tx: unknown) => Promise<void>) => { await cb(_mockTx); });
   return {
     mockTx: _mockTx,

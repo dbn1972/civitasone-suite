@@ -1,10 +1,15 @@
 import { PageHeader, Term, LoadErrorState } from "../../../_components/ds";
-import { getChartOfAccounts } from "../../../_data/loaders";
+import { getChartOfAccounts, getFinancePendingChangeRequests } from "../../../_data/loaders";
+import { getSessionRoles, getSessionUserId } from "@/lib/auth/roleGuard";
+import { ChangeRequestsPanel } from "../_components/ChangeRequestsPanel";
+import { CHANGE_REQUEST_DECIDER_ROLES } from "../_components/changeRequests";
 import { AccountsTable } from "./AccountsTable";
 
 export default async function ChartOfAccountsPage() {
-  const result = await getChartOfAccounts();
+  const [result, requestsResult] = await Promise.all([getChartOfAccounts(), getFinancePendingChangeRequests("hoa_change")]);
   const { data: accounts, source } = result;
+  const canDecide = getSessionRoles().some((r) => CHANGE_REQUEST_DECIDER_ROLES.includes(r));
+  const viewerId = getSessionUserId();
 
   return (
     <>
@@ -35,6 +40,14 @@ export default async function ChartOfAccountsPage() {
         <LoadErrorState result={result} area="chart of accounts" backHref="/finance" />
       ) : (
         <AccountsTable accounts={accounts} source={source} />
+      )}
+
+      {/* GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-01: HoA-code changes wait here for a second
+          finance administrator. A failed load is its own state, never "nothing waiting". */}
+      {requestsResult.source === "error" ? (
+        <LoadErrorState result={requestsResult} area="pending HoA changes" />
+      ) : (
+        <ChangeRequestsPanel requests={requestsResult.data} viewerId={viewerId} canDecide={canDecide} title="HoA code changes awaiting approval" />
       )}
     </>
   );

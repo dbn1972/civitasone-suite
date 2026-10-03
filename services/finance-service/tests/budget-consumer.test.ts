@@ -8,7 +8,7 @@ import { MemoryQueue } from "@civitasone/queue";
 const {
   mockTx, dbTransactionFn, enqueuedMessages,
   insertBudgetMock, findBudgetByIdMock, transferBudgetReMinorGuardedMock,
-  insertSanctionMock, findSanctionByIdTxMock, updateSanctionMock,
+  insertSanctionMock, findSanctionByIdTxMock, updateSanctionMock, approveSanctionIfNoEfileMock,
   insertReappropriationMock,
 } = vi.hoisted(() => {
   const _mockTx = { insert: vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) }) };
@@ -23,6 +23,7 @@ const {
     insertSanctionMock: vi.fn(async () => undefined),
     findSanctionByIdTxMock: vi.fn(async () => null as any),
     updateSanctionMock: vi.fn(async () => undefined),
+    approveSanctionIfNoEfileMock: vi.fn(async () => true),
     insertReappropriationMock: vi.fn(async () => undefined),
   };
 });
@@ -54,6 +55,7 @@ vi.mock("../src/shared/infra.js", () => ({
   cache: { invalidate: vi.fn(async () => undefined), makeKey: (...parts: string[]) => parts.join(":") },
 }));
 vi.mock("../src/modules/budget/repo.js", () => ({
+  approveSanctionIfNoEfile: (...a: any[]) => approveSanctionIfNoEfileMock(...a),
   insertBudget: (...a: any[]) => insertBudgetMock(...a),
   findBudgetById: (...a: any[]) => findBudgetByIdMock(...a),
   findBudgetByIdTx: (...a: any[]) => findBudgetByIdMock(...a),
@@ -140,11 +142,26 @@ describe("sanctionApprove command", () => {
       id: sanctionId, tenantId: TENANT,
     }, CHECKER));
     await settle();
-    expect(updateSanctionMock).toHaveBeenCalledOnce();
-    const [, , patch] = updateSanctionMock.mock.calls[0]! as [unknown, string, Record<string, unknown>];
-    expect(patch.status).toBe("approved");
+    // The approval is one conditional update (pending AND no eOffice file in flight).
+    expect(approveSanctionIfNoEfileMock).toHaveBeenCalledOnce();
+    expect(approveSanctionIfNoEfileMock.mock.calls[0]!.slice(1)).toEqual([sanctionId, TENANT, CHECKER]);
     const evt = enqueuedMessages.find((m) => m.topic === EVENTS.sanctionApproved);
     expect(evt).toBeDefined();
+    await q.stop();
+  });
+
+  it("does not approve (no event) when an eOffice file is in flight: the conditional update matches nothing", async () => {
+    const sanctionId = randomUUID();
+    findSanctionByIdTxMock.mockResolvedValue({
+      id: sanctionId, tenantId: TENANT, status: "pending_approval",
+      createdBy: ACTOR, headId: randomUUID(), amountMinor: 50000000n, efileSubmittedAt: new Date(),
+    });
+    approveSanctionIfNoEfileMock.mockResolvedValueOnce(false);
+    const q = new MemoryQueue(); registerBudgetConsumers(q); await q.start();
+    await q.publish(COMMANDS.sanctionApprove, makeMsg(COMMANDS.sanctionApprove, { id: sanctionId, tenantId: TENANT }, CHECKER));
+    await settle();
+    expect(enqueuedMessages.find((m) => m.topic === EVENTS.sanctionApproved)).toBeUndefined();
+    expect(q.dlq.length).toBe(1);
     await q.stop();
   });
 

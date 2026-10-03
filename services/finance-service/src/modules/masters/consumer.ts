@@ -1,14 +1,16 @@
 import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
-import { and, eq, ne, sql } from "drizzle-orm";
-import { pgSchema, uuid, varchar, integer, timestamp, bigint, text, date } from "drizzle-orm/pg-core";
+import { and, eq, sql } from "drizzle-orm";
+import { pgSchema, uuid, varchar, integer, timestamp, date } from "drizzle-orm/pg-core";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { encryptedText } from "../../shared/pii-crypto.js";
 import { HttpError } from "../../shared/context.js";
-import { assertOpeningBalancesBalanced, assertFiscalYearRangeValid, sameBankAccount, DomainError } from "./domain.js";
+import { assertFiscalYearRangeValid, sameBankAccount, DomainError } from "./domain.js";
+import { applyFiscalYearActivation, applyOpeningBalances } from "../approvals/apply.js";
+import { loadSettingsTx } from "../approvals/repo.js";
 import { financePao, financeDdo } from "./schema.js";
 
 const log = pino({ name: "finance.masters.consumer" });
@@ -41,19 +43,6 @@ const fiscalYears = glSchema.table("finance_fiscal_years", {
   status: varchar("status", { length: 12 }).notNull().default("active"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),
-  version: integer("version").notNull().default(1),
-});
-
-const openingBalances = glSchema.table("finance_opening_balances", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  tenantId: uuid("tenant_id").notNull(),
-  fyCode: varchar("fy_code", { length: 9 }).notNull(),
-  accountCode: varchar("account_code", { length: 20 }).notNull(),
-  debitMinor: bigint("debit_minor", { mode: "bigint" }).notNull().default(0n),
-  creditMinor: bigint("credit_minor", { mode: "bigint" }).notNull().default(0n),
-  narration: text("narration"),
-  enteredAt: timestamp("entered_at", { withTimezone: true }).notNull().defaultNow(),
-  enteredBy: uuid("entered_by").notNull(),
   version: integer("version").notNull().default(1),
 });
 
@@ -190,6 +179,15 @@ export function registerMastersConsumers(queue: Queue): void {
     await cache.invalidateResource(msg.tenantId, "masters");
   });
 
+  // GAP-FINANCE-CONFIG-02: audit trail for an unmasked bank-account read (actor + reason; never the number).
+  queue.subscribe(COMMANDS.bankAccountReveal, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; reason: string; accountNoLast4: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await audit(tx, msg, "reveal_bank_account", "bank_account", p.id, { reason: p.reason, accountNoLast4: p.accountNoLast4 });
+    });
+  });
+
   queue.subscribe(COMMANDS.fiscalYearCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; code: string; label: string; startDate: string; endDate: string;
@@ -209,18 +207,31 @@ export function registerMastersConsumers(queue: Queue): void {
       }).from(fiscalYears).where(eq(fiscalYears.tenantId, p.tenantId));
       assertFiscalYearRangeValid(p, existingYears);
       const previouslyActive = existingYears.filter((y) => y.status === "active").map((y) => y.code);
+      // GAP-FINANCE-FISCAL-YEARS-01: while another year is active, a new year is
+      // created as `draft` (per-tenant setting, default on) so entering next
+      // year early never switches the posting year. Only the Activate action,
+      // with a reason, a clean period close and a second approver, does that.
+      // A tenant with no active year gets its first year active straight away.
+      const settings = await loadSettingsTx(tx, p.tenantId);
+      const asDraft = settings.fyCreateAsDraft && previouslyActive.length > 0;
+      // Close the current active year BEFORE inserting an active one: gl.finance_fiscal_years has a partial
+      // unique index (one active year per tenant), so the swap must never have two active rows at once.
+      // If the insert below fails (duplicate code) the whole transaction rolls back, undoing the close.
+      if (!asDraft) {
+        await tx.update(fiscalYears)
+          .set({ status: "closed" })
+          .where(and(eq(fiscalYears.tenantId, p.tenantId), eq(fiscalYears.status, "active")));
+      }
       const inserted = await tx.insert(fiscalYears).values({
         id: p.id, tenantId: p.tenantId, code: p.code, label: p.label,
-        startDate: p.startDate, endDate: p.endDate, status: "active", createdBy: msg.actorId,
+        startDate: p.startDate, endDate: p.endDate, status: asDraft ? "draft" : "active", createdBy: msg.actorId,
       }).onConflictDoNothing().returning({ id: fiscalYears.id });
       if (inserted.length === 0) {
         throw new HttpError(409, "ALREADY_EXISTS", `fiscal year ${p.code} already exists`);
       }
-      await tx.update(fiscalYears)
-        .set({ status: "closed" })
-        .where(and(eq(fiscalYears.tenantId, p.tenantId), eq(fiscalYears.status, "active"), ne(fiscalYears.id, p.id)));
       await audit(tx, msg, "create_fiscal_year", "fiscal_year", p.id, {
-        code: p.code, reason: p.reason ?? null, closedFiscalYears: previouslyActive,
+        code: p.code, reason: p.reason ?? null, status: asDraft ? "draft" : "active",
+        closedFiscalYears: asDraft ? [] : previouslyActive,
       });
     });
     await cache.invalidateResource(msg.tenantId, "masters");
@@ -230,24 +241,14 @@ export function registerMastersConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; code: string; reason?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await lockTenant(tx, "fy", p.tenantId);
-      const years = await tx.select({ code: fiscalYears.code, status: fiscalYears.status })
-        .from(fiscalYears).where(eq(fiscalYears.tenantId, p.tenantId));
-      // Never close the current year unless the target really exists --
-      // otherwise the tenant is left with no active posting year at all.
-      if (!years.some((y) => y.code === p.code)) {
-        throw new DomainError("NOT_FOUND", `fiscal year ${p.code} not found`);
-      }
-      const previouslyActive = years.filter((y) => y.status === "active" && y.code !== p.code).map((y) => y.code);
-      await tx.update(fiscalYears)
-        .set({ status: "closed" })
-        .where(and(eq(fiscalYears.tenantId, p.tenantId), eq(fiscalYears.status, "active")));
-      await tx.update(fiscalYears)
-        .set({ status: "active" })
-        .where(and(eq(fiscalYears.tenantId, p.tenantId), eq(fiscalYears.code, p.code)));
-      await audit(tx, msg, "activate_fiscal_year", "fiscal_year", p.code, {
-        reason: p.reason ?? null, closedFiscalYears: previouslyActive,
-      });
+      // Shared with the maker-checker approval path (approvals/apply.ts): the
+      // target must exist (never close the current year for a typo), the
+      // outgoing year's periods must be hard-closed (per-tenant setting), and
+      // the swap runs under the tenant's fiscal-year advisory lock.
+      await applyFiscalYearActivation(
+        tx, { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId },
+        { code: p.code, reason: p.reason ?? "" },
+      );
     });
     await cache.invalidateResource(msg.tenantId, "masters");
   });
@@ -261,60 +262,16 @@ export function registerMastersConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      // Non-bypassable enforcement (mirrors gl/consumer.ts's postJournal
-      // calling assertJournalBalances right before it inserts anything): even
-      // if a caller publishes this command directly -- skipping the HTTP
-      // route's own check in fy-routes.ts -- an unbalanced set can never
-      // reach the ledger. Throwing here rolls back the whole transaction,
-      // including the markProcessed row, so a redelivery is rejected the
-      // same way every time rather than being silently swallowed.
-      assertOpeningBalancesBalanced(p.entries);
-      // gl.finance_opening_balances already carries UNIQUE(tenant_id, fy_code,
-      // account_code) (migrations/0022_fy_opening_balance.sql, present since
-      // that file's first commit -- verified directly against a fresh
-      // Postgres built from this repo's own migrations, not assumed). An
-      // opening balance is entered once per account+FY: OpeningBalanceForm.tsx
-      // always starts blank and has no edit/correct affordance, so a second
-      // submission naming an account+FY that already has a row is a genuine
-      // duplicate, not a correction, and must be rejected loudly.
-      //
-      // PROVEN silent-data-loss bug this closes: two finance_admins submitted
-      // opening balances for the same account+FY (fyCode 2027-28, accounts
-      // 1100/2202) concurrently with different amounts. Only the first
-      // request's amounts persisted; the second got 202 accepted but its data
-      // existed nowhere -- no row, no error, no log trace. Root cause: the
-      // bare `.onConflictDoNothing()` below (no conflict target) silently
-      // catches ANY unique-constraint violation on this table -- including
-      // this natural-key one -- exactly like COMMANDS.fiscalYearCreate above
-      // already relies on it to. Unlike that handler, this one never checked
-      // whether a row was actually written, so the losing submission's insert
-      // was silently skipped, the transaction still committed, and the
-      // "success" audit event below still fired for data that was never
-      // persisted. Checking `.returning().length` and throwing here rolls
-      // back the WHOLE transaction (including markProcessed), so a
-      // redelivery is rejected identically every time and the failure is
-      // finally observable (queue_consumer_error / DLQ) instead of silent and
-      // untraceable. See tests/masters-opening-balance-race.test.ts (real
-      // Postgres, genuine concurrent Promise.all) for the regression proof.
-      for (const entry of p.entries) {
-        const inserted = await tx.insert(openingBalances).values({
-          id: entry.id, tenantId: p.tenantId, fyCode: p.fyCode,
-          accountCode: entry.accountCode,
-          debitMinor: BigInt(entry.debitMinor),
-          creditMinor: BigInt(entry.creditMinor),
-          narration: entry.narration,
-          enteredBy: msg.actorId,
-        }).onConflictDoNothing().returning({ id: openingBalances.id });
-        if (inserted.length === 0) {
-          throw new DomainError(
-            "OPENING_BALANCE_ALREADY_EXISTS",
-            `an opening balance for account ${entry.accountCode} in FY ${p.fyCode} already exists`,
-          );
-        }
-      }
-      await audit(tx, msg, "enter_opening_balances", "opening_balance", p.id, {
-        fyCode: p.fyCode, entryCount: p.entries.length, reason: p.reason ?? null,
-      });
+      // Non-bypassable enforcement (balanced entries, one balance per
+      // account+FY, loud failure instead of a silent drop) lives in
+      // approvals/apply.ts so the direct path and the maker-checker approval
+      // path run the exact same checks. Throwing rolls back the whole
+      // transaction, including markProcessed, so a redelivery is rejected the
+      // same way every time. See tests/masters-opening-balance-race.test.ts.
+      await applyOpeningBalances(
+        tx, { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId },
+        { id: p.id, fyCode: p.fyCode, entries: p.entries, reason: p.reason ?? "" },
+      );
     });
     await cache.invalidateResource(msg.tenantId, "masters");
   });

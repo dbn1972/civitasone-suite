@@ -5,17 +5,23 @@ import type { FinanceDebtSummary } from "@civitasone/types";
  * rows the table shows. Money is bigint paise (amountMinor arrives as a
  * decimal string); an unparseable amount counts as 0 rather than throwing.
  */
-export function summariseDebt(rows: (Pick<FinanceDebtSummary, "status" | "amountMinor"> & { currency?: string })[]): {
+export function summariseDebt(rows: (Pick<FinanceDebtSummary, "status" | "amountMinor"> & { currency?: string; outstandingMinor?: string | null })[]): {
   total: number;
   active: number;
   closed: number;
   totalMinor: bigint;
+  /** Principal still to repay across loans that carry a repayment position (GAP-FINANCE-DEBT-01). */
+  outstandingMinor: bigint;
+  /** False when no loan has a recorded outstanding balance (older rows): the card then reads "—", never 0. */
+  hasOutstanding: boolean;
   /** True only when every row is INR; a total across currencies is meaningless. */
   allInr: boolean;
 } {
   let active = 0;
   let closed = 0;
   let totalMinor = 0n;
+  let outstandingMinor = 0n;
+  let hasOutstanding = false;
   let allInr = true;
   for (const r of rows) {
     const s = String(r.status).toLowerCase();
@@ -24,6 +30,8 @@ export function summariseDebt(rows: (Pick<FinanceDebtSummary, "status" | "amount
     if ((r.currency ?? "INR").trim().toUpperCase() !== "INR") allInr = false;
     const a = String(r.amountMinor ?? "").trim();
     if (/^-?\d+$/.test(a)) totalMinor += BigInt(a);
+    const o = String(r.outstandingMinor ?? "").trim();
+    if (/^-?\d+$/.test(o)) { outstandingMinor += BigInt(o); hasOutstanding = true; }
   }
-  return { total: rows.length, active, closed, totalMinor, allInr };
+  return { total: rows.length, active, closed, totalMinor, outstandingMinor, hasOutstanding, allInr };
 }

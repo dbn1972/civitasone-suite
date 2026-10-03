@@ -15,6 +15,16 @@ export function officeLabel(officeId: unknown, names?: ReadonlyMap<string, strin
   return (id && names?.get(id)) || UNKNOWN_OFFICE;
 }
 
+/** id -> name for every office the server named on these rows. */
+export function officeNameMap(rows: ReadonlyArray<Record<string, unknown>>): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const r of rows) {
+    if (typeof r.fromOfficeId === "string" && typeof r.fromOfficeName === "string" && r.fromOfficeName) m.set(r.fromOfficeId, r.fromOfficeName);
+    if (typeof r.toOfficeId === "string" && typeof r.toOfficeName === "string" && r.toOfficeName) m.set(r.toOfficeId, r.toOfficeName);
+  }
+  return m;
+}
+
 const isInr = (currency: unknown) => currency == null || currency === "" || currency === "INR";
 
 /**
@@ -38,14 +48,14 @@ export function FundReleasesTable({ releases, source = "api" }: { releases: Row[
   // when a non-rupee release is present.
   const allInr = rows.every((r) => isInr(r.currency));
 
+  // GAP-FINANCE-BUDGET-FUND-RELEASES-01: names come from finance-service's office
+  // directory (fromOfficeName / toOfficeName, null when the id is not in it).
+  // An id with no name stays "Unknown office" -- never an id fragment, never a guess.
+  const names = officeNameMap(rows);
   const enriched = rows.map((r) => ({
     ...r,
-    // GAP-FINANCE-BUDGET-FUND-RELEASES-01: an 8-char uuid tail is not an
-    // office name. No office directory backs from/to_office_id yet, so the
-    // row says so plainly (full id kept as a tooltip for support) rather
-    // than printing a fragment or guessing a name.
-    _from: officeLabel(r.fromOfficeId),
-    _to: officeLabel(r.toOfficeId),
+    _from: officeLabel(r.fromOfficeId, names),
+    _to: officeLabel(r.toOfficeId, names),
   }));
 
   return (
@@ -59,7 +69,7 @@ export function FundReleasesTable({ releases, source = "api" }: { releases: Row[
       <DataTable<Row>
         columns={[
           { key: "fy",        label: "FY" },
-          // csv: the full office id (the display text is "Unknown office" until a directory backs the names).
+          // csv: the full office id alongside the display name, so an export stays traceable.
           { key: "_from",     label: "From Office", render: (r) => <span title={String(r.fromOfficeId ?? "")}>{String(r._from)}</span>, csv: (r) => String(r.fromOfficeId ?? "") },
           { key: "_to",       label: "To Office",   render: (r) => <span title={String(r.toOfficeId ?? "")}>{String(r._to)}</span>, csv: (r) => String(r.toOfficeId ?? "") },
           // Sorts on the raw paise string; CSV carries the plain decimal.

@@ -48,6 +48,13 @@ export type RaiseEOfficeNoteProps = {
    */
   notifyPath?: string;
   /**
+   * When true the notify POST carries the raised file number (`{ fileNo }`), so the
+   * source service can record WHICH file is deciding the record (finance sanctions
+   * use it to refuse a direct approve while the file is in flight). Off by default:
+   * other callers keep the empty body.
+   */
+  notifyWithFileNo?: boolean;
+  /**
    * Optional (GAP-FINANCE-BUDGET-SANCTIONS-DETAIL-01): reports the linked
    * eFile lookup to a parent that needs to react to it (e.g. hide a competing
    * direct-approve button). Called whenever the lookup settles; pages that do
@@ -84,7 +91,7 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
     refType, refId, subject, dept,
     amountMinor, defaultApprovalChain = "estab.generic.standard",
     classification: classificationProp = "confidential", priority = "normal",
-    notifyPath, onLinkedFileChange, allowRaiseAfterTerminal = false,
+    notifyPath, notifyWithFileNo = false, onLinkedFileChange, allowRaiseAfterTerminal = false,
   } = props;
 
   const [file, setFile] = useState<LinkedFile | null>(null);
@@ -168,7 +175,11 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
       let notifyFailed = false;
       if (notifyPath) {
         try {
-          const nres = await fetch(notifyPath, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+          const nres = await fetch(notifyPath, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: notifyWithFileNo && body.fileNo ? JSON.stringify({ fileNo: body.fileNo }) : "{}",
+          });
           notifyFailed = !nres.ok;
         } catch {
           notifyFailed = true;

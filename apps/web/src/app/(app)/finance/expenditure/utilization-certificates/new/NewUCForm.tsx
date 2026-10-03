@@ -33,7 +33,7 @@ const inputStyle = { width: "100%", padding: 8, borderRadius: 8, border: "1px so
 export function NewUCForm({ schemes }: { schemes: SchemeOption[] | null }) {
   const t = useTranslations("expenditureUCNew");
   const router = useRouter();
-  const [form, setForm] = useState({ ucNo: "", purpose: "", scheme: "", grantRef: "", periodFrom: "", periodTo: "", amount: "" });
+  const [form, setForm] = useState({ ucNo: "", purpose: "", scheme: "", grantee: "", grantRef: "", periodFrom: "", periodTo: "", amount: "" });
   const [declared, setDeclared] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -54,6 +54,7 @@ export function NewUCForm({ schemes }: { schemes: SchemeOption[] | null }) {
     const next: Record<string, string> = {};
     if (schemes === null) next.scheme = t("errorSchemesUnavailable");
     else if (schemes.length > 0 && !form.scheme) next.scheme = t("errorSchemeRequired");
+    if (form.grantee.trim().length < 2) next.grantee = t("errorGrantee");
     if (rupeesToMinorString(form.amount) === null) next.amount = t("errorAmount");
     if (form.periodFrom && form.periodTo && form.periodFrom > form.periodTo) next.period = t("errorPeriodOrder");
     if (!declared) next.declaration = t("errorDeclaration");
@@ -74,11 +75,15 @@ export function NewUCForm({ schemes }: { schemes: SchemeOption[] | null }) {
           ucNo: form.ucNo,
           purpose: form.purpose,
           scheme: form.scheme || undefined,
-          grantRef: form.grantRef || undefined,
+          // GAP-...-UTILIZATION-CERTIFICATES-NEW-02: the body that utilised the grant.
+          grantee: form.grantee.trim(),
+          grantRef: form.grantRef.trim() || undefined,
           periodFrom: form.periodFrom || undefined,
           periodTo: form.periodTo || undefined,
           amountMinor,
           currency: "INR",
+          // GAP-...-UTILIZATION-CERTIFICATES-NEW-01: the certifier's declaration is stored with the certificate.
+          declaration: true,
         }),
       });
       setConfirmOpen(false);
@@ -147,8 +152,17 @@ export function NewUCForm({ schemes }: { schemes: SchemeOption[] | null }) {
               )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
+              <label className="l" htmlFor="uc-grantee">{t("labelGrantee")}</label>
+              <input id="uc-grantee" required aria-required="true" maxLength={200} value={form.grantee} onChange={(e) => setForm({ ...form, grantee: e.target.value })} aria-invalid={errors.grantee ? true : undefined} style={inputStyle} />
+              {errors.grantee && <span role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>{errors.grantee}</span>}
+              {formError.fieldError("grantee") && (
+                <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("grantee")}</span>
+              )}
+            </div>
+            <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="uc-grant">{t("labelGrantRef")}</label>
-              <input id="uc-grant" value={form.grantRef} onChange={(e) => setForm({ ...form, grantRef: e.target.value })} style={inputStyle} />
+              <input id="uc-grant" value={form.grantRef} aria-describedby="uc-grant-help" onChange={(e) => setForm({ ...form, grantRef: e.target.value })} style={inputStyle} />
+              <span id="uc-grant-help" style={{ fontSize: 12, color: "var(--ink2)" }}>{t("helpGrantRef")}</span>
               {formError.fieldError("grantRef") && (
                 <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("grantRef")}</span>
               )}

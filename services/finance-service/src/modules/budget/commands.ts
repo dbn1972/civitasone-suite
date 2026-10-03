@@ -7,8 +7,8 @@ import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import { assertValidFY, assertReappropriationValid, assertSanctionApproverDistinct, assertBudgetableHead, DomainError } from "./domain.js";
 import * as repo from "./repo.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
+import { readSettings } from "../approvals/repo.js";
+import { submitChangeRequest } from "../approvals/commands.js";
 import type { CreateBudgetBody, ReappropriateBody, CreateSanctionBody, UpdateHeadHoABody, RejectSanctionBody, SubmitReappropriationBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -94,31 +94,34 @@ export async function createSanction(ctx: RequestContext, body: CreateSanctionBo
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function updateHeadHoA(ctx: RequestContext, id: string, body: UpdateHeadHoABody): Promise<void> {
+export type HoaChangeResult = { status: "accepted" | "pending_approval"; requestId: string };
+
+/**
+ * GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-01: HoA codes drive PFMS payment and budget
+ * mapping. With the per-tenant second-approver setting on (default) a change is
+ * held as a pending request that a DIFFERENT finance_admin approves (maker !=
+ * checker, enforced in the decision consumer); with it off the officer's change
+ * applies at once. Either way the old -> new code and reason are audited.
+ */
+export async function updateHeadHoA(ctx: RequestContext, id: string, body: UpdateHeadHoABody): Promise<HoaChangeResult> {
   const head = await repo.findHeadById(id);
   if (!head || head.tenantId !== ctx.tenantId) throw new HttpError(404, "NOT_FOUND", "head not found");
-  // FIX: this previously wrote via the bare `db` import instead of an open
-  // db.transaction(), so budget.finance_heads' FORCE ROW LEVEL SECURITY policy
-  // saw current_tenant_id() as NULL (no app.tenant_id GUC set) and the UPDATE
-  // matched zero rows -- silently, since drizzle doesn't surface affected-row
-  // counts. Route still returned 200. Mirrors the already-correct sibling
-  // PATCH /v1/finance/accounts/:id handler below (routes.ts), which wraps the
-  // same repo.updateHead(tx, ...) call in db.transaction() for this reason.
-  await db.transaction(async (tx) => {
-    await repo.updateHead(tx, id, { hoaCode: body.hoaCode, updatedBy: ctx.actorId });
-    // GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-01: audit the old -> new HoA change
-    // with the actor's stated reason (same outbox, same tx as the write).
-    await enqueue(tx, {
-      topic: "audit.event.record", eventType: "audit.event.record",
-      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
-      payload: {
-        service: "finance", action: "head_hoa_changed", resourceType: "finance_head", resourceId: id,
-        outcome: "success",
-        details: { headCode: head.code, oldHoaCode: head.hoaCode ?? null, newHoaCode: body.hoaCode, reason: body.reason },
-      },
-    });
+  const settings = await readSettings(ctx.tenantId);
+  if (settings.makerCheckerEnabled) {
+    const accepted = await submitChangeRequest(
+      ctx, "hoa_change", id,
+      { headId: id, headCode: head.code, oldHoaCode: head.hoaCode ?? null, hoaCode: body.hoaCode }, body.reason,
+    );
+    return { status: "pending_approval", requestId: accepted.id };
+  }
+  // Single-officer path: publish; the consumer applies it (write + audit in one transaction).
+  const requestId = randomUUID();
+  await queue.publish(COMMANDS.hoaChangeApply, {
+    messageId: requestId, type: COMMANDS.hoaChangeApply,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { headId: id, hoaCode: body.hoaCode, reason: body.reason },
   });
-  await cache.invalidate(cache.makeKey(ctx.tenantId, "accounts", "list:50"));
+  return { status: "accepted", requestId };
 }
 
 export async function rejectSanction(ctx: RequestContext, id: string, body: RejectSanctionBody): Promise<Accepted> {
@@ -152,11 +155,11 @@ export async function rejectSanction(ctx: RequestContext, id: string, body: Reje
  * sanction to `approved`. This transition makes the source state honest while
  * the file is under approval.
  */
-export async function submitSanctionForApproval(ctx: RequestContext, id: string): Promise<Accepted> {
+export async function submitSanctionForApproval(ctx: RequestContext, id: string, fileNo: string | null = null): Promise<Accepted> {
   await queue.publish(COMMANDS.sanctionSubmitApproval, {
     messageId: randomUUID(), type: COMMANDS.sanctionSubmitApproval,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId },
+    payload: { id, tenantId: ctx.tenantId, fileNo },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "sanction", id));
   return { id, status: "accepted", correlationId: ctx.correlationId };
@@ -186,6 +189,12 @@ export async function approveSanction(ctx: RequestContext, id: string): Promise<
   try {
     assertSanctionApproverDistinct(existing.createdBy, ctx.actorId);
   } catch (err) { toDomain(err, 409); }
+  // GAP-FINANCE-BUDGET-SANCTIONS-DETAIL-01: while an eOffice file is deciding this
+  // sanction, direct approval would race the file; the eOffice decision approves.
+  if (existing.efileSubmittedAt) {
+    throw new HttpError(409, "EFILE_IN_FLIGHT",
+      `this sanction is awaiting an eOffice decision${existing.efileFileNo ? ` (file ${existing.efileFileNo})` : ""}; it cannot be approved directly`);
+  }
   await queue.publish(COMMANDS.sanctionApprove, {
     messageId: randomUUID(), type: COMMANDS.sanctionApprove,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",

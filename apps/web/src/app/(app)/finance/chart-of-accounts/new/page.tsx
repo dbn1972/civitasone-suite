@@ -231,7 +231,10 @@ export default function MapHeadOfAccountPage() {
         setMessage((await mapFormError.fromResponse(res, "save")).message);
         return;
       }
-      setMessage(res.status === 202 ? "HoA code change submitted for approval." : "Head of Account code saved.");
+      const body = (await res.json().catch(() => null)) as { status?: string } | null;
+      setMessage(body?.status === "pending_approval"
+        ? "HoA code change submitted. It takes effect when a different finance administrator approves it; you can follow it on the Chart of Accounts page."
+        : body?.status === "accepted" ? "Head of Account code submitted. It is applied in a moment." : "Head of Account code saved.");
       setHoaCode("");
       router.refresh();
       setTimeout(() => router.push("/finance/chart-of-accounts"), 700);
@@ -412,6 +415,9 @@ export default function MapHeadOfAccountPage() {
           <>
             <p style={{ margin: "0 0 8px" }}>
               HoA codes drive PFMS payment and budget mapping; a wrong code silently misroutes money.
+            </p>
+            <p style={{ margin: "0 0 8px" }}>
+              Unless this office has switched the second-approver rule off, the change is held until a <strong>different finance administrator approves it</strong>; the current code stays in use until then.
             </p>
             <p style={{ margin: 0 }}>
               {selectedHead ? <strong>{[selectedHead.code, selectedHead.name].filter(Boolean).join(" · ")}</strong> : null}

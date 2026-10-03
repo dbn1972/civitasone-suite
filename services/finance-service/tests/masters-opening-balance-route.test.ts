@@ -15,6 +15,7 @@ import { financeHeads } from "../src/modules/budget/schema.js";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { setFinanceSettings, clearFinanceSettings } from "./_finance-settings.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-0000000000b1";
@@ -30,6 +31,7 @@ const HEADS = ["1100", "3100"].map((code, i) => ({
   classification: i === 0 ? "asset" : "equity", createdBy: ACTOR, updatedBy: ACTOR,
 }));
 async function cleanup() {
+  await clearFinanceSettings(TENANT);
   await scoped(TENANT, (tx) => tx.delete(financeHeads).where(eq(financeHeads.tenantId, TENANT)));
   await scoped(TENANT, (tx) => tx.execute(sql`DELETE FROM gl.finance_fiscal_years WHERE tenant_id = ${TENANT}::uuid`));
 }
@@ -37,6 +39,8 @@ beforeAll(async () => {
   await cleanup();
   // GAP-FINANCE-OPENING-BALANCES-03/-06: the route now needs a real chart of accounts, and refuses a closed FY.
   await scoped(TENANT, (tx) => tx.insert(financeHeads).values(HEADS));
+  // These tests cover the single-officer path; the second-approver path is in tests/fp01-change-requests.test.ts.
+  await setFinanceSettings(TENANT, { makerCheckerEnabled: false });
   await scoped(TENANT, (tx) => tx.execute(sql`
     INSERT INTO gl.finance_fiscal_years (id, tenant_id, code, label, start_date, end_date, status, created_by)
     VALUES (gen_random_uuid(), ${TENANT}::uuid, '2026-27', 'FY 2026-27', '2026-04-01', '2027-03-31', 'active', ${ACTOR}::uuid),

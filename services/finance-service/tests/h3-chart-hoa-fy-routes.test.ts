@@ -4,7 +4,10 @@
  *  - PATCH /v1/finance/accounts/:id/hoa reason + audit row + 404       [CHART-OF-ACCOUNTS-NEW-01]
  *  - GET /v1/finance/dashboard?fy= validation and FY scoping           [DASHBOARD-02]
  */
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, beforeAll, vi } from "vitest";
+import { MemoryQueue, type Handler } from "@civitasone/queue";
+import { queue } from "../src/shared/infra.js";
+import { registerApprovalsConsumers } from "../src/modules/approvals/consumer.js";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
@@ -12,6 +15,7 @@ import { runWithTenant } from "@civitasone/db";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { financeLedger } from "../src/modules/gl/schema.js";
+import { setFinanceSettings, clearFinanceSettings } from "./_finance-settings.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const ACTOR = randomUUID();
@@ -24,7 +28,9 @@ function auth(tenant: string) {
   return { authorization: `Bearer ${signToken({ sub: ACTOR, tid: tenant, roles: ["finance_officer"], sid: "s1" }, SECRET)}` };
 }
 
-afterAll(async () => { await sqlClient.end(); });
+// The single-officer HoA path is under test here; the second-approver path is in tests/fp01-change-requests.test.ts.
+beforeAll(async () => { await setFinanceSettings(TENANT_A, { makerCheckerEnabled: false }); });
+afterAll(async () => { await clearFinanceSettings(TENANT_A); await sqlClient.end(); });
 
 async function createHead(app: Awaited<ReturnType<typeof buildApp>>, tenant: string, body: Record<string, unknown>) {
   return app.inject({ method: "POST", url: "/v1/finance/accounts", headers: auth(tenant), payload: body });
@@ -90,8 +96,20 @@ describe("PATCH /v1/finance/accounts/:id/hoa", () => {
       const otherTenant = await app.inject({ method: "PATCH", url, headers: auth(TENANT_B), payload: { hoaCode: HOA2, reason: "Aligning with PFMS" } });
       expect(otherTenant.statusCode).toBe(404);
 
+      const published: Array<{ topic: string; env: any }> = [];
+      const spy = vi.spyOn(queue, "publish").mockImplementation(async (topic: string, env: any) => { published.push({ topic, env }); return undefined as never; });
       const ok = await app.inject({ method: "PATCH", url, headers: auth(TENANT_A), payload: { hoaCode: HOA2, reason: "Aligning with PFMS mapping" } });
-      expect(ok.statusCode).toBe(200);
+      spy.mockRestore();
+      expect(ok.statusCode).toBe(202);
+      expect(ok.json().status).toBe("accepted");
+      // applied by the consumer (the request handler no longer writes): run it
+      const q = new MemoryQueue({ maxAttempts: 1 });
+      const raw = q.subscribe.bind(q);
+      q.subscribe = ((topic: string, handler: Handler) => raw(topic, (m: Parameters<Handler>[0]) => runWithTenant(m.tenantId, () => handler(m)))) as typeof q.subscribe;
+      registerApprovalsConsumers(q);
+      await q.start();
+      for (const p of published) await q.publish(p.topic, p.env);
+      await q.drain();
 
       const rows = await runWithTenant(TENANT_A, () =>
         db.transaction(async (tx) => {

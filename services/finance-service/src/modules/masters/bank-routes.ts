@@ -5,7 +5,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { resolveContext, requireRole, financeErrorHandler, HttpError } from "../../shared/context.js";
 import { sameBankAccount } from "./domain.js";
 import { scopedRead } from "../../shared/db.js";
@@ -94,6 +94,29 @@ export async function bankRoutes(app: FastifyInstance): Promise<void> {
       },
     });
     return reply.code(202).send({ id, status: "accepted" });
+  });
+
+  // GAP-FINANCE-CONFIG-02: the list is masked (last 4 only). A finance admin who
+  // needs the full number asks for it here with a stated reason. The audit
+  // command is published BEFORE any digit is returned and the request fails
+  // closed if it cannot be: no reveal without a trail. Every reveal is audited
+  // with actor, account id and reason; the number itself is never logged.
+  app.post("/v1/finance/bank-accounts/:id/reveal", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FINANCE_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const { reason } = z.object({
+      reason: z.string().trim().min(10, "Reason must be at least 10 characters").max(500),
+    }).parse(req.body ?? {});
+    const [row] = await scopedRead((tx) => tx.select().from(bankAccounts)
+      .where(and(eq(bankAccounts.tenantId, ctx.tenantId), eq(bankAccounts.id, id))).limit(1));
+    if (!row) throw new HttpError(404, "NOT_FOUND", "bank account not found");
+    await queue.publish(COMMANDS.bankAccountReveal, {
+      messageId: randomUUID(), type: COMMANDS.bankAccountReveal,
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+      payload: { id, tenantId: ctx.tenantId, reason, accountNoLast4: String(row.accountNo).slice(-4) },
+    });
+    return reply.header("Cache-Control", "no-store").send({ id, accountNo: String(row.accountNo), ifsc: String(row.ifsc) });
   });
 
   app.setErrorHandler(financeErrorHandler);

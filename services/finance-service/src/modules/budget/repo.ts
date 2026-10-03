@@ -1,4 +1,4 @@
-import { eq, and, or, sql, inArray, desc } from "drizzle-orm";
+import { eq, and, or, sql, inArray, desc, isNull } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { DomainError, headSearchPattern } from "./domain.js";
 import {
@@ -87,6 +87,22 @@ export async function insertSanction(tx: Writer, row: SanctionInsert): Promise<v
 
 export async function updateSanction(tx: Writer, id: string, patch: Partial<SanctionInsert>): Promise<void> {
   await tx.update(financeSanctions).set({ ...patch, updatedAt: new Date() }).where(eq(financeSanctions.id, id));
+}
+
+/**
+ * Race-safe direct approval: moves a still-pending sanction to approved ONLY when
+ * no eOffice file is in flight. Returns false when the row is no longer eligible
+ * (state changed, or a file was submitted meanwhile).
+ */
+export async function approveSanctionIfNoEfile(tx: Writer, id: string, tenantId: string, actorId: string): Promise<boolean> {
+  const rows = await tx.update(financeSanctions)
+    .set({ status: "approved", updatedBy: actorId, updatedAt: new Date() })
+    .where(and(
+      eq(financeSanctions.id, id), eq(financeSanctions.tenantId, tenantId),
+      inArray(financeSanctions.status, ["pending_approval", "draft"]),
+      isNull(financeSanctions.efileSubmittedAt),
+    )).returning({ id: financeSanctions.id });
+  return rows.length > 0;
 }
 
 export async function findSanctionByIdTx(tx: Writer, id: string): Promise<SanctionRow | null> {

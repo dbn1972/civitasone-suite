@@ -13,6 +13,9 @@ import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { DomainError, assertBillRejectable, assertPaymentSubmittable, assertPayerNotPasser, maskAdvanceBeneficiaries } from "./domain.js";
 import * as mastersRepo from "../masters/repo.js";
+import * as ucRepo from "./uc-repo.js";
+import { assertUCWithinSanction, assertUCPeriodValid } from "./uc-domain.js";
+import { scopedRead } from "../../shared/db.js";
 
 const FINANCE_ROLES  = ["finance_officer", "finance_admin", "super_admin"];
 const APPROVER_ROLES = ["accounts_officer", "finance_admin", "super_admin"];
@@ -87,6 +90,27 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const body = createUCBody.parse(req.body);
+    try {
+      assertUCPeriodValid(body.periodFrom, body.periodTo);
+    } catch (err) {
+      if (err instanceof DomainError) throw new HttpError(400, err.code, err.message, [{ field: "periodTo", message: "The period end must not be before the period start." }]);
+      throw err;
+    }
+    // Over-claim pre-check (GAP-...-UTILIZATION-CERTIFICATES-NEW-02). The consumer repeats it
+    // under a row lock on the sanction, which is what makes it race-safe.
+    if (body.grantRef) {
+      const grantRef = body.grantRef;
+      const sanction = await scopedRead((tx) => ucRepo.findApprovedSanctionByNo(tx, ctx.tenantId, grantRef));
+      if (sanction) {
+        const claimed = await scopedRead((tx) => ucRepo.sumClaimedForGrantRef(tx, ctx.tenantId, grantRef));
+        try {
+          assertUCWithinSanction(sanction.amountMinor, claimed, BigInt(body.amountMinor));
+        } catch (err) {
+          if (err instanceof DomainError) throw new HttpError(409, err.code, err.message, [{ field: "amountMinor", message: "This is more than the sanctioned grant still leaves." }]);
+          throw err;
+        }
+      }
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createUC(ctx, body));
   });
 

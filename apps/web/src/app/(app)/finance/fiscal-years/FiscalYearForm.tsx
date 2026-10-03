@@ -18,7 +18,13 @@ type FieldErrors = {
 /** Minimum length of the stated reason (matches finance-service's reasonField). */
 export const FY_REASON_MIN = 10;
 
-export function FiscalYearForm({ rows = [] }: { rows?: FiscalYearRow[] }) {
+/**
+ * `createsAsDraft` (per-tenant setting, default on): while another year is
+ * active a new year is created as a DRAFT and the posting year does not change;
+ * activation is a separate, approved step in the table below
+ * (GAP-FINANCE-FISCAL-YEARS-01). The very first year of a tenant is active at once.
+ */
+export function FiscalYearForm({ rows = [], createsAsDraft = true }: { rows?: FiscalYearRow[]; createsAsDraft?: boolean }) {
   const router = useRouter();
 
   const [code, setCode] = useState("");
@@ -94,6 +100,8 @@ export function FiscalYearForm({ rows = [] }: { rows?: FiscalYearRow[] }) {
   }
 
   const activeYear = rows.find((r) => r.status === "active") ?? null;
+  // Mirrors the server rule: a draft only while another year is active.
+  const asDraft = createsAsDraft && activeYear !== null;
   const gap = confirmOpen ? findFiscalYearConflicts({ code: code.trim(), startDate, endDate }, rows).gapAfter : undefined;
 
   async function createFiscalYear(reason?: string) {
@@ -111,7 +119,9 @@ export function FiscalYearForm({ rows = [] }: { rows?: FiscalYearRow[] }) {
         }),
       });
       setConfirmOpen(false);
-      setMessage(`Fiscal year ${code.trim()} created.`);
+      setMessage(asDraft
+        ? `Fiscal year ${code.trim()} created as a draft. Activate it from the table below when the current year is closed.`
+        : `Fiscal year ${code.trim()} created.`);
       setCode("");
       setLabel("");
       setStartDate("");
@@ -246,9 +256,9 @@ export function FiscalYearForm({ rows = [] }: { rows?: FiscalYearRow[] }) {
         open={confirmOpen}
         title="Create this fiscal year?"
         confirmLabel="Create fiscal year"
-        danger
+        danger={!asDraft}
         requireReason
-        reasonLabel="Reason for creating and activating this year"
+        reasonLabel={asDraft ? "Reason for creating this year" : "Reason for creating and activating this year"}
         minReasonLength={FY_REASON_MIN}
         maxReasonLength={500}
         busy={busy}
@@ -256,13 +266,21 @@ export function FiscalYearForm({ rows = [] }: { rows?: FiscalYearRow[] }) {
         description={
           <>
             Create fiscal year <strong>{code}</strong> (<strong>{label}</strong>) running from{" "}
-            <strong>{formatIndianDate(startDate)}</strong> to <strong>{formatIndianDate(endDate)}</strong>. It becomes the <strong>active posting year immediately</strong>
-            {activeYear ? (
+            <strong>{formatIndianDate(startDate)}</strong> to <strong>{formatIndianDate(endDate)}</strong>.{" "}
+            {asDraft && activeYear ? (
               <>
-                {" "}and fiscal year <strong>{activeYear.code}</strong> ({activeYear.label}) <strong>will be closed</strong>
+                It is created as a <strong>draft</strong>: fiscal year <strong>{activeYear.code}</strong> ({activeYear.label}) stays the
+                active posting year. Activating {code} is a separate step that needs a clean period close and a second approver.
               </>
-            ) : null}
-            . Every new posting will land in {code}. Your reason is recorded in the audit trail.
+            ) : activeYear ? (
+              <>
+                It becomes the <strong>active posting year immediately</strong> and fiscal year <strong>{activeYear.code}</strong> ({activeYear.label}){" "}
+                <strong>will be closed</strong>. Every new posting will land in {code}.
+              </>
+            ) : (
+              <>As the first fiscal year it becomes the <strong>active posting year</strong>; every new posting will land in {code}.</>
+            )}{" "}
+            Your reason is recorded in the audit trail.
             {gap ? (
               <>
                 {" "}<strong>Note:</strong> {gap.days} day{gap.days === 1 ? "" : "s"} between the end of {gap.code} and

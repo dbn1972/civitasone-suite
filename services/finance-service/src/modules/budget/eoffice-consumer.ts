@@ -39,7 +39,7 @@ export function registerEOfficeDecisionConsumers(queue: Queue): void {
       if (sanction.status !== "pending_approval" && sanction.status !== "draft") return;
 
       if (cb.decision === "approved") {
-        await repo.updateSanction(tx, cb.refId, { status: "approved", updatedBy: cb.decidedBy });
+        await repo.updateSanction(tx, cb.refId, { status: "approved", updatedBy: cb.decidedBy, efileSubmittedAt: null });
         await enqueue(tx, {
           topic: EVENTS.sanctionApproved, eventType: EVENTS.sanctionApproved,
           tenantId: msg.tenantId, actorId: cb.decidedBy, correlationId: msg.correlationId,
@@ -47,10 +47,12 @@ export function registerEOfficeDecisionConsumers(queue: Queue): void {
         });
         await audit(tx, msg, "eoffice_approved", cb.refId, { fileNo: cb.fileNo, dscHash: cb.dscHash ?? null });
       } else if (cb.decision === "rejected") {
-        await repo.updateSanction(tx, cb.refId, { status: "cancelled", updatedBy: cb.decidedBy });
+        await repo.updateSanction(tx, cb.refId, { status: "cancelled", updatedBy: cb.decidedBy, efileSubmittedAt: null });
         await audit(tx, msg, "eoffice_rejected", cb.refId, { fileNo: cb.fileNo });
       } else {
-        // "returned" — leave as draft for revision (no state change needed).
+        // "returned" — leave as draft for revision; the file is no longer in
+        // flight, so direct approval is possible again.
+        await repo.updateSanction(tx, cb.refId, { efileSubmittedAt: null, updatedBy: cb.decidedBy });
         await audit(tx, msg, "eoffice_returned", cb.refId, { fileNo: cb.fileNo });
       }
     });

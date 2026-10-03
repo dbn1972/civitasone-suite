@@ -149,7 +149,12 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
       // R11 SoD: the approving officer (checker) must differ from the creator
       // (maker). Same-officer approval is the maker-checker bypass we are closing.
       assertSanctionApproverDistinct(sanction.createdBy, msg.actorId);
-      await repo.updateSanction(tx, p.id, { status: "approved", updatedBy: msg.actorId });
+      // GAP-FINANCE-BUDGET-SANCTIONS-DETAIL-01: a sanction whose eOffice file is
+      // in flight is approved only by the eOffice decision, never directly.
+      // Conditional update: still pending AND no file in flight, atomically.
+      if (!(await repo.approveSanctionIfNoEfile(tx, p.id, p.tenantId, msg.actorId))) {
+        throw new NonRetryableError(`[finance/budget] EFILE_IN_FLIGHT_OR_STATE_CHANGED: id=${p.id} cannot be approved directly`);
+      }
       await enqueue(tx, {
         topic: EVENTS.sanctionApproved, eventType: EVENTS.sanctionApproved,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
@@ -175,14 +180,21 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
   });
 
   sub(COMMANDS.sanctionSubmitApproval, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string };
+    const p = msg.payload as { id: string; tenantId: string; fileNo?: string | null };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const sanction = await repo.findSanctionByIdTx(tx, p.id);
       // H2: IDOR / not-found — throw to roll back markProcessed and trigger retry/DLQ.
       if (!sanction || sanction.tenantId !== p.tenantId)
         throw new NonRetryableError(`[finance/budget] IDOR or not-found: id=${p.id} tenant=${p.tenantId}`);
-      await repo.updateSanction(tx, p.id, { status: "pending_approval", updatedBy: msg.actorId });
+      // A decided sanction is never pulled back to pending by a late submit.
+      if (sanction.status === "approved" || sanction.status === "cancelled")
+        throw new NonRetryableError(`[finance/budget] INVALID_SANCTION_STATE: id=${p.id} status=${sanction.status}`);
+      // Records that an eOffice file is now deciding this sanction (direct approve is refused meanwhile).
+      await repo.updateSanction(tx, p.id, {
+        status: "pending_approval", updatedBy: msg.actorId,
+        efileSubmittedAt: new Date(), efileFileNo: p.fileNo ?? null,
+      });
       await audit(tx, msg, "submit_for_eoffice_approval", "sanction", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "sanction", p.id));

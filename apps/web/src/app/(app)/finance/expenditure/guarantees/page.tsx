@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, LoadErrorState } from "@/app/_components/ds";
-import { guaranteeStats } from "@/lib/finance/expenditureStats";
+import { guaranteeStats, GUARANTEE_EXPIRY_WINDOW_DAYS } from "@/lib/finance/expenditureStats";
 import { getFinanceGuarantees } from "@/app/_data/loaders";
 import { GuaranteesTable } from "./GuaranteesTable";
 
@@ -29,7 +29,8 @@ export default async function GuaranteesPage() {
         <StatCard icon="🛡️" iconBg="#e7edfd" label={t("statTotal")} value={failed ? null : stats.total} />
         <StatCard icon="📈" iconBg="#ecfdf3" label={t("statActive")} value={failed ? null : stats.active} />
         <StatCard icon="✅" iconBg="#fffaeb" label={t("statReleased")} value={failed ? null : stats.released} />
-        <StatCard icon="⚠️" iconBg="#fce7ee" label={t("statOtherStatus")} value={failed ? null : stats.otherStatus} />
+        <StatCard icon="⏳" iconBg="#fffaeb" label={t("statExpiringSoon", { days: GUARANTEE_EXPIRY_WINDOW_DAYS })} value={failed ? null : stats.expiringSoon} />
+        <StatCard icon="⚠️" iconBg="#fce7ee" label={t("statLapsed")} value={failed ? null : stats.lapsed} />
       </StatGrid>
       {/* UX-012: the data-source badge now lives inside GuaranteesTable,
           driven by the same useSeededResource call that produces its rows —

@@ -191,6 +191,8 @@ export async function listAdvances(tenantId: string, limit: number, offset = 0) 
       adjustedAmount: adjustedMinor.toString(),
       balance: (amountMinor - adjustedMinor).toString(),
       status: resolveAdvanceStatus({ status: row.status, dueDate: row.dueDate ? String(row.dueDate) : null }),
+      ...(row.sanctionAuthority ? { sanctionAuthority: row.sanctionAuthority } : {}),
+      ...(row.reason ? { reason: row.reason } : {}),
     };
   });
 }
@@ -212,6 +214,10 @@ export async function listUCs(tenantId: string, limit: number) {
     periodTo: String(row.periodTo),
     submittedDate: row.submittedDate ? String(row.submittedDate) : undefined,
     status: (row.status as "pending" | "submitted" | "verified" | "rejected"),
+    ...(row.rejectionReason ? { rejectionReason: row.rejectionReason } : {}),
+    declarationAccepted: row.declarationAccepted ?? false,
+    resubmitCount: row.resubmitCount ?? 0,
+    createdBy: row.createdBy,
   }));
 }
 

@@ -17,6 +17,7 @@ function seed(data: unknown, provenance: "live" | "cached" | "error-no-data") {
 const labels: DebtLabels = {
   totalLoans: "Total Loans", active: "Active", closed: "Closed", totalPrincipal: "Total principal", mixedCurrency: "mixed",
   portfolio: "Loan Portfolio", instrument: "Instrument", source: "Source", principal: "Principal amount",
+  lender: "Lender", rate: "Rate p.a.", outstanding: "Outstanding principal", totalOutstanding: "Outstanding principal",
   maturity: "Maturity", status: "Status", search: "Search loans…", emptyTitle: "No loans",
   emptyMessage: "No loan or debt records found.", loadArea: "the debt register",
   sources: { rbi: "RBI", market: "Market", central_govt: "Central Govt" },
@@ -32,7 +33,7 @@ describe("DebtTable (GAP-FINANCE-DEBT-02/-03/-04/-05)", () => {
   it("failed load with nothing cached: all four cards read a dash and a retry state shows, never zeros or 'No loans'", () => {
     seed([], "error-no-data");
     render(<DebtTable loans={[]} source="error" errorStatus={500} labels={labels} />);
-    for (const label of ["Total Loans", "Active", "Closed", "Total principal"]) {
+    for (const label of ["Total Loans", "Active", "Closed", "Total principal", "Outstanding principal"]) {
       expect(screen.getByText(label).closest(".stat")).toHaveTextContent("—");
     }
     expect(screen.getByRole("button", { name: /try again|retry/i })).toBeInTheDocument();
@@ -55,6 +56,28 @@ describe("DebtTable (GAP-FINANCE-DEBT-02/-03/-04/-05)", () => {
     expect(screen.getByRole("columnheader", { name: /Principal amount/ })).toBeInTheDocument();
     expect(screen.getByText("Total principal").closest(".stat")).toHaveTextContent("₹3,500.50");
     expect(screen.queryByText("Sources")).not.toBeInTheDocument();
+  });
+
+  // GAP-FINANCE-DEBT-01
+  it("shows lender, rate and outstanding principal; a loan with no repayment position shows a dash, never ₹0.00", () => {
+    seed([
+      LOAN({ lender: "NABARD", interestRateBps: 850, outstandingMinor: "75000" }),
+      LOAN({ id: "d2", instrument: "Legacy loan", lender: null, interestRateBps: null, outstandingMinor: null }),
+    ], "live");
+    render(<DebtTable loans={[]} labels={labels} />);
+    expect(screen.getByText("NABARD")).toBeInTheDocument();
+    expect(screen.getByText("8.50%")).toBeInTheDocument();
+    expect(screen.getByText("₹750.00", { selector: "td" })).toBeInTheDocument();
+    expect(screen.getAllByText("Outstanding principal")[0].closest(".stat")).toHaveTextContent("₹750.00");
+    const legacy = screen.getByText("Legacy loan").closest("tr")!;
+    expect(legacy).not.toHaveTextContent("₹0.00");
+    expect(legacy).toHaveTextContent("—");
+  });
+
+  it("each row links to the loan's detail / schedule page", () => {
+    seed([LOAN({})], "live");
+    render(<DebtTable loans={[]} labels={labels} />);
+    expect(screen.getByRole("link", { name: /Term loan/ })).toHaveAttribute("href", "/finance/debt/d1");
   });
 
   it("Closed tile is no longer on the amber warning background", () => {
