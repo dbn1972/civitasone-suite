@@ -24,10 +24,18 @@ const PLAN_ROW = {
   components: [{ name: "Medical", maxMinor: 2000000, taxExempt: true }],
 };
 
-function withData(elections: { data: unknown; source: string }, plans: { data: unknown; source: string } = { data: [PLAN_ROW], source: "api" }) {
-  fetchJsonMock.mockImplementation((path: string) =>
-    Promise.resolve(path.startsWith("/api/v1/payroll/flex-benefits/plans") ? plans : elections),
-  );
+const NO_PENDING = { data: { rows: [], total: 0 }, source: "api" };
+
+function withData(
+  elections: { data: unknown; source: string },
+  plans: { data: unknown; source: string } = { data: [PLAN_ROW], source: "api" },
+  pending: { data: unknown; source: string } = NO_PENDING,
+) {
+  fetchJsonMock.mockImplementation((path: string) => {
+    if (path.startsWith("/api/v1/payroll/flex-benefits/plans")) return Promise.resolve(plans);
+    if (path.startsWith("/api/v1/payroll/flex-benefits/elections")) return Promise.resolve(pending);
+    return Promise.resolve(elections);
+  });
 }
 
 async function renderPage() {
@@ -89,5 +97,30 @@ describe("FlexBenefitsPage", () => {
     withData({ data: [], source: "error" });
     await renderPage();
     expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+  });
+
+  it("GAP-PAYROLL-FLEX-BENEFITS-05: a payroll admin sees the approval queue with the employee name", async () => {
+    sessionRoles = ["payroll_admin"];
+    withData({ data: [], source: "api" }, undefined, {
+      source: "api",
+      data: { total: 1, rows: [{ id: "e1", employeeName: "Asha Verma", planName: "Standard Flex", fy: "2026-27", totalElectedMinor: "150000", status: "submitted", etag: "c", isOwnSubmission: false }] },
+    });
+    await renderPage();
+    expect(screen.getByText("Elections Awaiting Approval")).toBeInTheDocument();
+    expect(screen.getByText("Asha Verma")).toBeInTheDocument();
+  });
+
+  it("GAP-PAYROLL-FLEX-BENEFITS-05: a failed queue load shows an error state, not an empty queue", async () => {
+    sessionRoles = ["payroll_admin"];
+    withData({ data: [], source: "api" }, undefined, { source: "error", data: { rows: [], total: 0 } });
+    await renderPage();
+    expect(screen.queryByText("No flex benefit elections are waiting for approval.")).not.toBeInTheDocument();
+  });
+
+  it("GAP-PAYROLL-FLEX-BENEFITS-05: an employee never loads or sees the approval queue", async () => {
+    withData({ data: [], source: "api" });
+    await renderPage();
+    expect(screen.queryByText("Elections Awaiting Approval")).not.toBeInTheDocument();
+    expect(fetchJsonMock.mock.calls.some((c) => String(c[0]).includes("/flex-benefits/elections"))).toBe(false);
   });
 });

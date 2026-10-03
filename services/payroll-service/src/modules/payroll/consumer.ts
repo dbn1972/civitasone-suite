@@ -1173,7 +1173,12 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
           ${p.totalElectedMinor.toString()}::bigint, ${msg.actorId}::uuid)
         ON CONFLICT (tenant_id, employee_id, plan_id, fy)
         DO UPDATE SET elections = EXCLUDED.elections,
-          total_elected_minor = EXCLUDED.total_elected_minor
+          total_elected_minor = EXCLUDED.total_elected_minor,
+          -- GAP-PAYROLL-FLEX-BENEFITS-05: a changed election is a new
+          -- submission: it goes back to the approver and the maker is the
+          -- latest submitter (the maker-checker comparison key).
+          status = 'submitted', created_by = EXCLUDED.created_by,
+          reviewed_by = NULL, reviewed_at = NULL, review_reason = NULL
       `);
       await enqueue(tx, {
         topic: EVENTS.flexElectionUpserted, eventType: EVENTS.flexElectionUpserted,
@@ -1181,6 +1186,45 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
         payload: { id: p.id, planId: p.planId, fy: p.fy },
       });
       await audit(tx, msg, "upsert", "payroll_flex_election", p.id);
+    });
+  });
+
+  // GAP-PAYROLL-FLEX-BENEFITS-05: approve / reject a submitted election. One
+  // conditional UPDATE re-asserts status='submitted' and, when the tenant's
+  // flex_election_maker_checker switch is on (default), reviewer != maker, so
+  // two racing reviewers (or a replay) can never decide twice and the maker
+  // can never approve their own submission. Zero rows => no-op, no audit.
+  queue.subscribe(COMMANDS.flexElectionDecide, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; decision: "approved" | "rejected"; etag?: string; reason?: string;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const updated = (await tx.execute(sql`
+        UPDATE payroll.flex_benefit_elections e
+           SET status = ${p.decision}, reviewed_by = ${msg.actorId}::uuid,
+               reviewed_at = NOW(), review_reason = ${p.reason ?? null}
+         WHERE e.id = ${p.id}::uuid AND e.tenant_id = ${p.tenantId}::uuid
+           AND e.status = 'submitted'
+           -- the reviewer approved/rejected exactly what they saw: an election edited since is left alone
+           AND md5(e.elections::text || e.total_elected_minor::text) = ${p.etag ?? ""}
+           AND (
+             e.created_by <> ${msg.actorId}::uuid
+             OR NOT COALESCE((SELECT s.flex_election_maker_checker
+                                FROM payroll.payroll_settings s
+                               WHERE s.tenant_id = e.tenant_id), TRUE)
+           )
+        RETURNING e.id, e.employee_id, e.plan_id, e.fy
+      `)) as unknown as Array<{ id: string; employee_id: string; plan_id: string; fy: string }>;
+      if (updated.length === 0) return;
+      await enqueue(tx, {
+        topic: EVENTS.flexElectionDecided, eventType: EVENTS.flexElectionDecided,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { id: p.id, employeeId: updated[0]!.employee_id, planId: updated[0]!.plan_id, fy: updated[0]!.fy, decision: p.decision },
+      });
+      await audit(tx, msg, p.decision === "approved" ? "approve" : "reject", "payroll_flex_election", p.id, {
+        reason: p.reason ?? null, decision: p.decision,
+      });
     });
   });
 
@@ -1383,6 +1427,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       tenantId: string; protectedNetFloorMinor: number;
       subsistenceInitialPctBps?: number; subsistenceReviewAfterDays?: number;
       subsistenceRevisedMinPctBps?: number; subsistenceRevisedMaxPctBps?: number;
+      flexElectionMakerChecker?: boolean;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -1393,12 +1438,14 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       const prevRows = (await tx.execute(sql`
         SELECT protected_net_floor_minor::text AS floor,
                subsistence_initial_pct_bps, subsistence_review_after_days,
-               subsistence_revised_min_pct_bps, subsistence_revised_max_pct_bps
+               subsistence_revised_min_pct_bps, subsistence_revised_max_pct_bps,
+               flex_election_maker_checker
           FROM payroll.payroll_settings WHERE tenant_id = ${p.tenantId}::uuid
          FOR UPDATE
       `)) as unknown as Array<{
         floor: string; subsistence_initial_pct_bps: number; subsistence_review_after_days: number;
         subsistence_revised_min_pct_bps: number; subsistence_revised_max_pct_bps: number;
+        flex_election_maker_checker: boolean;
       }>;
       const prev = prevRows[0];
       const stored = prev ? {
@@ -1431,6 +1478,14 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
               subsistence_revised_max_pct_bps = EXCLUDED.subsistence_revised_max_pct_bps,
               updated_at = NOW()
       `);
+      // GAP-PAYROLL-FLEX-BENEFITS-05: only touched when the command carries it
+      // (omitted keeps the stored value; a first row defaults to ON).
+      if (p.flexElectionMakerChecker !== undefined) {
+        await tx.execute(sql`
+          UPDATE payroll.payroll_settings SET flex_election_maker_checker = ${p.flexElectionMakerChecker}
+           WHERE tenant_id = ${p.tenantId}::uuid
+        `);
+      }
       await enqueue(tx, {
         topic: EVENTS.settingsUpdated, eventType: EVENTS.settingsUpdated,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
@@ -1446,8 +1501,11 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
         subsistenceRevisedMaxPctBps: Number(c.revisedMaxPctBps),
       });
       await audit(tx, msg, "update", "payroll_settings", p.tenantId, {
-        before: prev ? snapshot(prev.floor, stored) : null,
-        after: snapshot(String(p.protectedNetFloorMinor), next),
+        before: prev ? { ...snapshot(prev.floor, stored), flexElectionMakerChecker: prev.flex_election_maker_checker } : null,
+        after: {
+          ...snapshot(String(p.protectedNetFloorMinor), next),
+          flexElectionMakerChecker: p.flexElectionMakerChecker ?? prev?.flex_election_maker_checker ?? true,
+        },
       });
     });
   });

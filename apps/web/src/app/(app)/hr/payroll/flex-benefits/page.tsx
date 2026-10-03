@@ -6,7 +6,8 @@ import { formatMoney } from "@/lib/formatters";
 import { getSessionRoles, PAYROLL_ADMIN_ROLES, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
 import { CreateFlexPlanForm } from "./CreateFlexPlanForm";
 import { ElectFlexBenefitForm } from "./ElectFlexBenefitForm";
-import { mapFlexPlans, type FlexPlan } from "./flexPlans";
+import { FlexElectionApprovals } from "./FlexElectionApprovals";
+import { mapFlexPlans, mapPendingElections, type FlexElectionStatus, type FlexPlan, type PendingFlexElections } from "./flexPlans";
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
 
@@ -16,7 +17,9 @@ type ElectionRow = {
   plan_name: string;
   fy: string;
   total_elected_minor: number | string;
-  status: string;
+  // submitted | approved | rejected; typed loosely so an unexpected API value
+  // renders as raw text with a neutral tone instead of crashing.
+  status: FlexElectionStatus | (string & {});
 } & Record<string, unknown>;
 
 type PlanRow = {
@@ -53,6 +56,19 @@ async function getPlans(): Promise<LoaderResult<FlexPlan[]>> {
   });
 }
 
+/**
+ * GAP-PAYROLL-FLEX-BENEFITS-05: the approver queue (payroll roles only; the
+ * endpoint is PAYROLL_ROLES). Oldest-first would hide new work, so the API
+ * returns newest first; the first 50 are shown with a "showing N of M" note.
+ */
+async function getPendingElections(): Promise<LoaderResult<PendingFlexElections>> {
+  return fetchJson<unknown, PendingFlexElections>(
+    "/api/v1/payroll/flex-benefits/elections?status=submitted&limit=50",
+    { rows: [], total: 0 },
+    { telemetryKey: "payroll.flex-benefits.pending-elections", mapResponse: mapPendingElections },
+  );
+}
+
 export default async function FlexBenefitsPage() {
   const t = await getTranslations("payrollFlexBenefits");
   const roles = getSessionRoles();
@@ -68,7 +84,11 @@ export default async function FlexBenefitsPage() {
     );
   }
 
-  const [{ data: elections, source }, { data: plans, source: plansSource }] = await Promise.all([getElections(), getPlans()]);
+  const [{ data: elections, source }, { data: plans, source: plansSource }, pending] = await Promise.all([
+    getElections(),
+    getPlans(),
+    canManagePlans ? getPendingElections() : Promise.resolve(null),
+  ]);
   const errored = source === "error";
 
   const columns: { key: keyof ElectionRow & string; label: string; align?: "left" | "right"; cellType?: "status" | "amount" }[] = [
@@ -132,6 +152,18 @@ export default async function FlexBenefitsPage() {
           />
         )}
       </Card>
+
+      {pending && (
+        <Card title={t("pendingCardTitle")}>
+          {pending.source === "error" ? (
+            <div className="pad">
+              <RefreshErrorState error={toHumanError("load", { area: "flex benefit elections awaiting approval" })} backHref="/hr/payroll" />
+            </div>
+          ) : (
+            <FlexElectionApprovals rows={pending.data.rows} total={pending.data.total} />
+          )}
+        </Card>
+      )}
 
       {canElect && (
         <Card title={t("cardTitle")}>

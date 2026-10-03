@@ -448,6 +448,28 @@ export async function upsertFlexElection(ctx: RequestContext, body: UpsertFlexEl
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
+/**
+ * GAP-PAYROLL-FLEX-BENEFITS-05: reviewer decision on a submitted election.
+ * The consumer re-asserts status='submitted' and (when the tenant switch is
+ * on) reviewer != maker, and that the election still matches `etag` (what the
+ * reviewer saw), in one conditional UPDATE. The message id is RANDOM: an
+ * election can legitimately be decided, re-elected and decided again, and a
+ * deterministic id would make markProcessed silently drop the second decision.
+ * Idempotency comes from the conditional UPDATE (status='submitted').
+ */
+export type DecideFlexElectionInput = {
+  id: string; decision: "approved" | "rejected"; etag: string; reason?: string | undefined;
+};
+export async function decideFlexElection(ctx: RequestContext, body: DecideFlexElectionInput): Promise<Accepted> {
+  await queue.publish(COMMANDS.flexElectionDecide, {
+    messageId: randomUUID(),
+    type: COMMANDS.flexElectionDecide,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { tenantId: ctx.tenantId, ...body },
+  });
+  return { id: body.id, status: "accepted", correlationId: ctx.correlationId };
+}
+
 export type UpsertCostingRuleInput = {
   employeeGroup: string; costCenterId: string; splitPct: number;
 };

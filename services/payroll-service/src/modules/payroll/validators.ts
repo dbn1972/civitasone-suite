@@ -226,6 +226,9 @@ export const updateSettingsBody = z.object({
   subsistenceReviewAfterDays: z.number().int().min(1).max(366).optional(),
   subsistenceRevisedMinPctBps: bps.optional(),
   subsistenceRevisedMaxPctBps: bps.optional(),
+  // GAP-PAYROLL-FLEX-BENEFITS-05 (migration 0070): maker-checker on flex-benefit
+  // election approval. Optional: omitted keeps the stored value (default ON).
+  flexElectionMakerChecker: z.boolean().optional(),
 }).refine(
   (b) => b.subsistenceRevisedMinPctBps == null || b.subsistenceRevisedMaxPctBps == null
     || b.subsistenceRevisedMinPctBps <= b.subsistenceRevisedMaxPctBps,

@@ -4,7 +4,7 @@ import { PageHeader, Card, StatGrid, StatCard, StatusPill } from "../../../../_c
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { getPayrollRunById, getPayrollRunDetails } from "../../../../_data/loaders";
 import { formatRupees, formatIndianDate } from "@/lib/formatters";
-import { payrollRunStatusLabel } from "@/lib/payroll/statusLabels";
+import { payrollRunStatusLabel, payrollRunStatusVariant } from "@/lib/payroll/statusLabels";
 import { PayrollRunActions } from "./PayrollRunActions";
 import { PayrollRunStepper } from "./PayrollRunStepper";
 import { MonthOverMonthCards } from "./MonthOverMonthCards";
@@ -186,7 +186,7 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
                   treated "processing" and "completed" (awaiting
                   disbursement) identically, unlike the run-list table's
                   StatusPill+translated-label pattern used everywhere else. */}
-              <StatusPill status={run.status} label={payrollRunStatusLabel(run.status, tStatus)} />
+              <StatusPill status={run.status} label={payrollRunStatusLabel(run.status, tStatus)} variant={payrollRunStatusVariant(run.status)} />
             </div>
           </div>
           <div className="fld">
