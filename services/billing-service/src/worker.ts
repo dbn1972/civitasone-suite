@@ -12,6 +12,8 @@ import { registerPaymentsConsumers } from "./modules/payments/consumer.js";
 import { registerEInvoiceConsumers } from "./modules/einvoice/consumer.js";
 import { registerRevenueConsumers } from "./modules/revenue/consumer.js";
 import { registerChurnConsumers } from "./modules/churn/consumer.js";
+import { registerInvoiceOpsConsumers } from "./modules/invoice-ops/consumer.js";
+import { startReminderSweep } from "./modules/invoice-ops/sweep.js";
 
 const log = pino({ name: "billing-worker" });
 
@@ -35,6 +37,7 @@ registerPaymentsConsumers(queue);
 registerEInvoiceConsumers(queue);
 registerRevenueConsumers(queue);
 registerChurnConsumers(queue);
+registerInvoiceOpsConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);
@@ -44,12 +47,15 @@ const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPur
   batchSize: 1000,
   logger: log,
 });
+// Optional per-tenant scheduled invoice reminders (setting default OFF; nothing is sent for tenants that did not enable it).
+const reminderSweep = startReminderSweep(log);
 log.info("billing-service worker: consumers + outbox relay running");
 
 async function shutdown(signal: string): Promise<void> {
   log.info({ signal }, "shutting down");
   clearInterval(purge);
   clearInterval(relay);
+  clearInterval(reminderSweep);
   await queue.stop();
   await sqlClient.end();
   process.exit(0);
