@@ -1306,9 +1306,9 @@ describe("POST /v1/payroll/off-cycle/:id/process (gap)", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("POST /v1/payroll/statutory/state-rules (gap)", () => {
-  it("202 (T1-03 CQRS lift) — valid state rules with PT slabs", async () => {
+  it("202 (T1-03 CQRS lift) — valid state rules (LWF)", async () => {
     const app = await buildApp();
-    const res = await app.inject({ method: "POST", url: "/v1/payroll/statutory/state-rules", headers: auth(["payroll_admin"]), payload: { stateCode: "KA", ptSlabs: [{ fromMinor: 0, toMinor: 1500000, taxMinor: 0 }, { fromMinor: 1500001, toMinor: 99999999, taxMinor: 20000 }] } });
+    const res = await app.inject({ method: "POST", url: "/v1/payroll/statutory/state-rules", headers: auth(["payroll_admin"]), payload: { stateCode: "KA", lwfEmployee: 2000, lwfEmployer: 4000 } });
     await app.close();
     expect([202, 500]).toContain(res.statusCode);
   });

@@ -157,38 +157,14 @@ describe("GAP-PAYROLL-OFF-CYCLE-01: off-cycle process maker-checker", () => {
   });
 });
 
-describe("GAP-PAYROLL-STATUTORY-PT-03 / LWF-02: state rules", () => {
-  it("rejects a slab overlapping an existing one with 422", async () => {
-    readQueue.push([
-      { slab_from_minor: "0", slab_to_minor: "1500000" },
-      { slab_from_minor: "1500001", slab_to_minor: "999999999999" },
-    ]);
-    const r = await post("/v1/payroll/statutory/state-rules", MAKER, {
-      stateCode: "KA", ptSlabs: [{ fromMinor: 1000000, toMinor: 2000000, taxMinor: 20000 }],
-    });
-    expect(r.statusCode).toBe(422);
-    expect(r.json().code).toBe("PT_SLAB_OVERLAP");
-    expect(mockPublish).not.toHaveBeenCalled();
-  });
-
-  it("accepts an update to an existing slab (same start) and publishes only that slab", async () => {
-    readQueue.push([
-      { slab_from_minor: "0", slab_to_minor: "1500000" },
-      { slab_from_minor: "1500001", slab_to_minor: "999999999999" },
-    ]);
+describe("GAP-PAYROLL-STATUTORY-PT-04 / LWF-02: state rules", () => {
+  it("refuses PT slabs on state-rules with 422 -- they are versioned now", async () => {
     const r = await post("/v1/payroll/statutory/state-rules", MAKER, {
       stateCode: "KA", ptSlabs: [{ fromMinor: 1500001, toMinor: 999999999999, taxMinor: 25000 }],
     });
-    expect(r.statusCode).toBe(202);
-    const msg = mockPublish.mock.calls[0]![1] as { payload: { ptSlabs: unknown[] } };
-    expect(msg.payload.ptSlabs).toHaveLength(1);
-  });
-
-  it("rejects a slab whose end is before its start", async () => {
-    const r = await post("/v1/payroll/statutory/state-rules", MAKER, {
-      stateCode: "KA", ptSlabs: [{ fromMinor: 500, toMinor: 100, taxMinor: 0 }],
-    });
-    expect(r.statusCode).toBe(400);
+    expect(r.statusCode).toBe(422);
+    expect(r.json().code).toBe("PT_SLABS_USE_VERSIONS");
+    expect(mockPublish).not.toHaveBeenCalled();
   });
 
   it("accepts an LWF frequency and rejects an unknown one", async () => {

@@ -623,28 +623,13 @@ describe("reimbursement receipts", () => {
 });
 
 // ─── PT slabs (GAP-PAYROLL-STATUTORY-PT-04) ─────────────────────────────────
-describe("PT state rules: state codes + effective date", () => {
-  it("rejects a code that is not a state / UT, and records the effective date with the slab", async () => {
-    const zz = await app.inject({ method: "POST", url: "/v1/payroll/statutory/state-rules", headers: auth(MAKER, OFFICER), payload: { stateCode: "ZZ", ptSlabs: [{ fromMinor: 0, toMinor: 100, taxMinor: 0 }] } });
+describe("PT state rules: state codes", () => {
+  it("rejects a code that is not a state / UT, and refuses PT slabs on state-rules (versioned: pt-versions-real-db.test.ts)", async () => {
+    const zz = await app.inject({ method: "POST", url: "/v1/payroll/statutory/state-rules", headers: auth(MAKER, OFFICER), payload: { stateCode: "ZZ", lwfEmployee: 100 } });
     expect(zz.statusCode).toBe(400);
-
-    const ok = await app.inject({
-      method: "POST", url: "/v1/payroll/statutory/state-rules", headers: auth(MAKER, OFFICER),
-      payload: { stateCode: "gj", effectiveFrom: "2026-04-01", ptSlabs: [{ fromMinor: 0, toMinor: 1200000, taxMinor: 0 }, { fromMinor: 1200001, toMinor: 999999999999, taxMinor: 20000 }] },
-    });
-    expect(ok.statusCode).toBe(202);
-    const rows = await until(() => q(sql`SELECT slab_from_minor::text AS f, effective_from::text AS eff FROM payroll.payroll_professional_tax WHERE state_code = 'GJ' ORDER BY slab_from_minor`), (r) => r.length === 2);
-    expect(rows.map((r) => r.eff)).toEqual(["2026-04-01", "2026-04-01"]);
-
-    const get = await app.inject({ method: "GET", url: "/v1/payroll/statutory/state-rules", headers: auth(MAKER, OFFICER) });
-    const gj = (get.json() as { ptSlabs: Array<{ state_code: string; effective_from: string }> }).ptSlabs.filter((s) => s.state_code === "GJ");
-    expect(gj).toHaveLength(2);
-    expect(gj[0]!.effective_from).toBe("2026-04-01");
-
-    // an update without a date keeps the stored one
-    await app.inject({ method: "POST", url: "/v1/payroll/statutory/state-rules", headers: auth(MAKER, OFFICER), payload: { stateCode: "GJ", ptSlabs: [{ fromMinor: 1200001, toMinor: 999999999999, taxMinor: 25000 }] } });
-    const kept = await until(() => q(sql`SELECT pt_amount_minor::text AS amt, effective_from::text AS eff FROM payroll.payroll_professional_tax WHERE state_code = 'GJ' AND slab_from_minor = 1200001`), (r) => r[0]?.amt === "25000");
-    expect(kept[0]!.eff).toBe("2026-04-01");
+    const slabs = await app.inject({ method: "POST", url: "/v1/payroll/statutory/state-rules", headers: auth(MAKER, OFFICER), payload: { stateCode: "GJ", ptSlabs: [{ fromMinor: 0, toMinor: 100, taxMinor: 0 }] } });
+    expect(slabs.statusCode).toBe(422);
+    expect((slabs.json() as { code: string }).code).toBe("PT_SLABS_USE_VERSIONS");
   });
 });
 
