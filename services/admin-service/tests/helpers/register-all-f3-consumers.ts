@@ -74,6 +74,7 @@ import { registerF3_integration_settings_Consumers } from "../../src/modules/int
 import { registerF3_uploads_Consumers } from "../../src/modules/uploads/doc-f3-consumer.js";
 import { registerF3_support_Consumers } from "../../src/modules/support/f3-consumer.js";
 import { registerIntegrationOpsConsumers } from "../../src/modules/integration-ops/consumer.js";
+import { registerPlatformIntegrationConsumers } from "../../src/modules/platform-integrations/consumer.js";
 
 /**
  * Registers every consumer src/worker.ts registers, against the given Queue
@@ -110,4 +111,5 @@ export function registerAllF3Consumers(queue: Queue): void {
   registerF3_support_Consumers(tenantScoped(queue));
   registerIntegrationOpsConsumers(tenantScoped(queue));
   registerTenantLifecycleConsumers(tenantScoped(queue));
+  registerPlatformIntegrationConsumers(tenantScoped(queue));
 }
