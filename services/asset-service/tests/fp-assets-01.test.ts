@@ -342,7 +342,7 @@ describe("GAP-ASSETS-MAINTENANCE-NEW-06: one open work order per asset + type", 
 });
 
 // ── GL heads: no defaults, validated against the finance chart, per-tenant settings ─────────────────────────────
-const CHART: Record<string, { name: string; type: string; status?: string }> = {
+const CHART: Record<string, { name: string; type: string; status?: string; isLeaf?: boolean }> = {
   "1200": { name: "Fixed assets", type: "asset" },
   "1250": { name: "Accumulated depreciation", type: "asset" },
   "5200": { name: "Impairment loss", type: "expense" },
@@ -373,7 +373,7 @@ function installFinanceChart(): void {
     const term = (new URL(url).searchParams.get("q") ?? "").toLowerCase();
     const data = Object.entries(CHART)
       .filter(([code, v]) => code.includes(term) || v.name.toLowerCase().includes(term))
-      .map(([code, v]) => ({ id: randomUUID(), code, name: v.name, type: v.type, status: v.status ?? "active" }));
+      .map(([code, v]) => ({ id: randomUUID(), code, name: v.name, type: v.type, status: v.status ?? "active", isLeaf: v.isLeaf ?? true }));
     return new Response(JSON.stringify({ data }), { status: 200 });
   });
 }
@@ -384,7 +384,15 @@ const clearSettings = async (tid = T1) => {
     await tx.delete(assetSettingRequests).where(eq(assetSettingRequests.tenantId, tid));
   });
 };
-const setSettings = (patch: Record<string, unknown>, actor = MAKER) => f3("asset_settings_update", { reason: "test setup", ...patch }, T1, actor);
+// head edits apply directly only while GL maker-checker is OFF (fp-assets-02), so the setup turns it off first
+const setSettings = async (patch: Record<string, unknown>, actor = MAKER) => {
+  await asTenant(T1, (tx) => tx.insert(assetSettings).values({ tenantId: T1, updatedBy: actor, glMakerChecker: false })
+    .onConflictDoUpdate({ target: assetSettings.tenantId, set: { glMakerChecker: false } }));
+  await f3("asset_settings_update", { reason: "test setup", ...patch }, T1, actor);
+};
+// writes the table directly, bypassing the consumer's validation: simulates a stale / wrong value already stored
+const forceSettings = (patch: Record<string, unknown>) => asTenant(T1, (tx) => tx.insert(assetSettings).values({ tenantId: T1, updatedBy: MAKER, ...patch })
+  .onConflictDoUpdate({ target: assetSettings.tenantId, set: patch }));
 const getSettings = async () => JSON.parse((await app.inject({ method: "GET", url: "/v1/assets/settings", headers: auth() })).body) as Record<string, any>;
 const glEvent = async (topic: string, payload: Record<string, unknown>, tid = T1) => {
   await q.publish(topic, { messageId: randomUUID(), type: topic, tenantId: tid, actorId: MAKER, correlationId: "c", schemaVersion: "1.0", payload });
@@ -459,7 +467,7 @@ describe("GL head rules: distinct heads, fixed-asset head per tenant, accumulate
 
   it("a stale clash already in the table is caught before any capitalisation or lease", async () => {
     await clearSettings();
-    await setSettings({ cwipAccountCode: "1200", fixedAssetAccountCode: "1200", rouAccountCode: "1400", leaseLiabilityAccountCode: "2300" });
+    await forceSettings({ cwipAccountCode: "1200", fixedAssetAccountCode: "1200", rouAccountCode: "1400", leaseLiabilityAccountCode: "2300" });
     const id = randomUUID();
     await f3("auc_create", { id, projectCode: "CLASH-1", name: "Clash", amountMinor: 100, reason: "Sanctioned" });
     const res = await app.inject({ method: "POST", url: `/v1/assets/projects/auc/${id}/capitalize`, headers: auth(), payload: { reason: "Commissioned" } });
@@ -474,7 +482,7 @@ describe("GL head rules: distinct heads, fixed-asset head per tenant, accumulate
     await f3("auc_create", { id, projectCode: "NOFIXED-1", name: "No fixed", amountMinor: 100, reason: "Sanctioned" });
     const res = await app.inject({ method: "POST", url: `/v1/assets/projects/auc/${id}/capitalize`, headers: auth(), payload: { reason: "Commissioned" } });
     expect(res.statusCode).toBe(409);
-    expect(JSON.parse(res.body).code).toBe("GL_HEADS_NOT_CONFIGURED");
+    expect(JSON.parse(res.body).code).toBe("ASSET_GL_NOT_CONFIGURED");
     expect(JSON.parse(res.body).message).toMatch(/fixed asset/);
   });
 
@@ -536,13 +544,13 @@ describe("impairment / revaluation heads: per-tenant, validated, no env defaults
     expect((await patch({ revaluationReserveAccountCode: "1200" })).statusCode).toBe(409);
   });
 
-  it("impairment and revaluation answer 409 GL_HEADS_NOT_CONFIGURED until THEIR heads are set (no 5200 / 3100 defaults)", async () => {
+  it("impairment and revaluation answer 409 ASSET_GL_NOT_CONFIGURED until THEIR heads are set (no 5200 / 3100 defaults)", async () => {
     await clearSettings();
     const id = await seedAsset(T1, "IMPREV-1", { bookValue: 1_000_000n, acquisitionCost: 1_000_000n });
     await setSettings({ fixedAssetAccountCode: "1200" }); // the fixed-asset head alone is not enough
     const imp = await impair(id);
     expect(imp.statusCode).toBe(409);
-    expect(JSON.parse(imp.body).code).toBe("GL_HEADS_NOT_CONFIGURED");
+    expect(JSON.parse(imp.body).code).toBe("ASSET_GL_NOT_CONFIGURED");
     expect(JSON.parse(imp.body).message).toMatch(/impairment loss/);
     const rev = await reval(id, 1_200_000);
     expect(rev.statusCode).toBe(409);
@@ -600,12 +608,12 @@ describe("GAP-ASSETS-PROJECTS-09: capitalisation is maker != checker, dated, pos
   const cap = (id: string, actor = MAKER, payload: Record<string, unknown> = { reason: "Commissioned" }) =>
     app.inject({ method: "POST", url: `/v1/assets/projects/auc/${id}/capitalize`, headers: auth(T1, actor), payload });
 
-  it("refuses (409 GL_HEADS_NOT_CONFIGURED) to request OR approve a capitalisation until the CWIP head is set", async () => {
+  it("refuses (409 ASSET_GL_NOT_CONFIGURED) to request OR approve a capitalisation until the CWIP head is set", async () => {
     await clearSettings();
     const id = await newAuc("NOHEAD-1", 500000);
     const request = await cap(id);
     expect(request.statusCode).toBe(409);
-    expect(JSON.parse(request.body).code).toBe("GL_HEADS_NOT_CONFIGURED");
+    expect(JSON.parse(request.body).code).toBe("ASSET_GL_NOT_CONFIGURED");
     expect(JSON.parse(request.body).message).toMatch(/capital work in progress/);
     expect((await aucRow(id)).status).toBe("under_construction");
 
@@ -614,14 +622,14 @@ describe("GAP-ASSETS-PROJECTS-09: capitalisation is maker != checker, dated, pos
     await setSettings({ cwipAccountCode: null }); // head removed after the request
     const approve = await app.inject({ method: "POST", url: `/v1/assets/projects/auc/${id}/capitalize/approve`, headers: auth(T1, CHECKER) });
     expect(approve.statusCode).toBe(409);
-    expect(JSON.parse(approve.body).code).toBe("GL_HEADS_NOT_CONFIGURED");
+    expect(JSON.parse(approve.body).code).toBe("ASSET_GL_NOT_CONFIGURED");
     await setSettings({ cwipAccountCode: "1300", fixedAssetAccountCode: "1200" });
   });
 
   it("a head that finance no longer accepts blocks the approval (GL_HEAD_INVALID), and an unreachable finance is a 503", async () => {
     const id = await newAuc("BADHEAD-1", 500000);
     await f3("auc_capitalize_request", { aucId: id, capitalizationDate: "2026-06-15", reason: "Commissioned" });
-    await setSettings({ cwipAccountCode: "1250" }); // consumer-level write: simulates a stale/wrong value in the table
+    await forceSettings({ cwipAccountCode: "1250" }); // direct table write: simulates a stale/wrong value in the table
     const res = await app.inject({ method: "POST", url: `/v1/assets/projects/auc/${id}/capitalize/approve`, headers: auth(T1, CHECKER) });
     expect(res.statusCode).toBe(409);
     expect(JSON.parse(res.body).code).toBe("GL_HEAD_INVALID");
@@ -759,7 +767,7 @@ describe("GAP-ASSETS-PROJECTS-09: capitalisation is maker != checker, dated, pos
     const req = await patch(MAKER, { capitalizeMakerChecker: false, reason: "Small unit" });
     expect(req.statusCode).toBe(202);
     const requestId = JSON.parse(req.body).id as string;
-    await f3("settings_off_request", { id: requestId, reason: "Small unit" });
+    await f3("settings_request", { id: requestId, kind: "maker_checker_off", reason: "Small unit" });
     expect((await getSettings()).capitalizeMakerChecker).toBe(true); // NOT switched off by the request alone
     expect((await getSettings()).pendingMakerCheckerOff).toMatchObject({ id: requestId, requestedByMe: true });
     expect((await patch(MAKER, { capitalizeMakerChecker: false, reason: "Again" })).statusCode).toBe(409); // one pending request at a time
@@ -767,15 +775,15 @@ describe("GAP-ASSETS-PROJECTS-09: capitalisation is maker != checker, dated, pos
     const selfApprove = await app.inject({ method: "POST", url: `/v1/assets/settings/requests/${requestId}/approve`, headers: auth(T1, MAKER) });
     expect(selfApprove.statusCode).toBe(403);
     expect(JSON.parse(selfApprove.body).code).toBe("MAKER_CHECKER");
-    await f3("settings_off_approve", { id: requestId }, T1, MAKER); // consumer: the requester cannot win either
+    await f3("settings_request_approve", { id: requestId }, T1, MAKER); // consumer: the requester cannot win either
     expect((await getSettings()).capitalizeMakerChecker).toBe(true);
     const lostSelf = await outboxFor(T1, "audit.event.record", (p) => p.resourceId === requestId && p.action === "maker_checker_off_approve" && p.outcome === "failure");
     expect(lostSelf).toHaveLength(1);
 
     const ok = await app.inject({ method: "POST", url: `/v1/assets/settings/requests/${requestId}/approve`, headers: auth(T1, CHECKER) });
     expect(ok.statusCode).toBe(202);
-    await f3("settings_off_approve", { id: requestId }, T1, CHECKER);
-    await f3("settings_off_approve", { id: requestId }, T1, CHECKER); // loser: recorded
+    await f3("settings_request_approve", { id: requestId }, T1, CHECKER);
+    await f3("settings_request_approve", { id: requestId }, T1, CHECKER); // loser: recorded
     expect((await getSettings()).capitalizeMakerChecker).toBe(false);
     expect((await getSettings()).pendingMakerCheckerOff).toBeNull();
     const approved = await outboxFor(T1, "audit.event.record", (p) => p.resourceId === requestId && p.action === "maker_checker_off_approve");
@@ -803,10 +811,10 @@ describe("GAP-ASSETS-PROJECTS-09: capitalisation is maker != checker, dated, pos
     await setSettings({ capitalizeMakerChecker: true }, MAKER);
     expect((await getSettings()).capitalizeMakerChecker).toBe(true);
     const req2 = JSON.parse((await patch(MAKER, { capitalizeMakerChecker: false, reason: "Try again" })).body).id as string;
-    await f3("settings_off_request", { id: req2, reason: "Try again" });
+    await f3("settings_request", { id: req2, kind: "maker_checker_off", reason: "Try again" });
     const rej = await app.inject({ method: "POST", url: `/v1/assets/settings/requests/${req2}/reject`, headers: auth(T1, CHECKER), payload: { reason: "Not justified" } });
     expect(rej.statusCode).toBe(202);
-    await f3("settings_off_reject", { id: req2, reason: "Not justified" }, T1, CHECKER);
+    await f3("settings_request_reject", { id: req2, reason: "Not justified" }, T1, CHECKER);
     expect((await getSettings()).capitalizeMakerChecker).toBe(true);
     expect((await getSettings()).pendingMakerCheckerOff).toBeNull();
     expect((await app.inject({ method: "POST", url: `/v1/assets/settings/requests/${req2}/reject`, headers: auth(T1, CHECKER), payload: { reason: "Not justified" } })).statusCode).toBe(409);
@@ -817,11 +825,11 @@ describe("GAP-ASSETS-LEASES-04/07: discounted liability, schedule, recognition j
   const terms = { leaseNo: "L-12", lessorName: "Acme Realty", rouCostMinor: 12_000_000, leaseStart: "2026-04-01", leaseEnd: "2027-03-31", ibrBps: 800, paymentMinor: 1_000_000, paymentFrequency: "monthly" };
   const leaseRow = async (id: string) => (await asTenant(T1, (tx) => tx.select().from(assetLeases).where(eq(assetLeases.id, id))))[0]!;
 
-  it("is refused (409 GL_HEADS_NOT_CONFIGURED) until the ROU and lease-liability heads are set, and the clearing head is needed when ROU differs from the liability", async () => {
+  it("is refused (409 ASSET_GL_NOT_CONFIGURED) until the ROU and lease-liability heads are set, and the clearing head is needed when ROU differs from the liability", async () => {
     await clearSettings();
     const none = await app.inject({ method: "POST", url: "/v1/assets/leases", headers: auth(), payload: terms });
     expect(none.statusCode).toBe(409);
-    expect(JSON.parse(none.body).code).toBe("GL_HEADS_NOT_CONFIGURED");
+    expect(JSON.parse(none.body).code).toBe("ASSET_GL_NOT_CONFIGURED");
     expect(JSON.parse(none.body).message).toMatch(/right-of-use asset, lease liability/);
     await setSettings({ rouAccountCode: "1400", leaseLiabilityAccountCode: "2300" });
     const gap = await app.inject({ method: "POST", url: "/v1/assets/leases", headers: auth(), payload: terms });
@@ -832,7 +840,7 @@ describe("GAP-ASSETS-LEASES-04/07: discounted liability, schedule, recognition j
     expect(even.statusCode).toBe(202);
     await setSettings({ leaseOffsetAccountCode: "2390" });
     // a head finance does not accept is a 409 GL_HEAD_INVALID at creation, too
-    await setSettings({ leaseLiabilityAccountCode: "1400" }); // asset type where a liability is required
+    await forceSettings({ leaseLiabilityAccountCode: "1400" }); // asset type where a liability is required
     const bad = await app.inject({ method: "POST", url: "/v1/assets/leases", headers: auth(), payload: terms });
     expect(bad.statusCode).toBe(409);
     expect(JSON.parse(bad.body).code).toBe("GL_HEAD_INVALID");
@@ -978,12 +986,12 @@ describe("repost a failed journal (asset_admin only, heads re-validated, once)",
     await setSettings({ cwipAccountCode: null });
     const res = await repostAuc(auc.id);
     expect(res.statusCode).toBe(409);
-    expect(JSON.parse(res.body).code).toBe("GL_HEADS_NOT_CONFIGURED");
+    expect(JSON.parse(res.body).code).toBe("ASSET_GL_NOT_CONFIGURED");
     await f3("auc_journal_repost", { aucId: auc.id }, T1, CHECKER); // published anyway (e.g. setting cleared after the route check)
     expect((await aucRow(auc.id)).glPostStatus).toBe("failed");
     expect(await journalsOf(auc.glJournalId!)).toHaveLength(1);
     const audits = await outboxFor(T1, "audit.event.record", (p) => p.resourceId === auc.id && p.action === "journal_repost");
-    expect(audits[0]).toMatchObject({ outcome: "failure", details: { failure: "GL_HEADS_NOT_CONFIGURED" } });
+    expect(audits[0]).toMatchObject({ outcome: "failure", details: { failure: "ASSET_GL_NOT_CONFIGURED" } });
     // chart fixed again: the repost goes through
     await setSettings({ cwipAccountCode: "1300" });
     expect((await repostAuc(auc.id)).statusCode).toBe(202);
@@ -1019,7 +1027,7 @@ describe("repost a failed journal (asset_admin only, heads re-validated, once)",
     await setSettings({ leaseOffsetAccountCode: null });
     const res = await repostLease(leaseId); // the gap needs the clearing head
     expect(res.statusCode).toBe(409);
-    expect(JSON.parse(res.body).code).toBe("GL_HEADS_NOT_CONFIGURED");
+    expect(JSON.parse(res.body).code).toBe("ASSET_GL_NOT_CONFIGURED");
   });
 });
 

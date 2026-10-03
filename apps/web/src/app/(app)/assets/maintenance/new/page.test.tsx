@@ -7,6 +7,8 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
+vi.mock("../../AccountingBanner", () => ({ AccountingBanner: ({ areas }: { areas: string[] }) => <div data-testid="accounting-banner" data-areas={areas.join(",")} /> }));
+
 import NewWorkOrderPage from "./page";
 
 const ASSET = "11111111-2222-3333-4444-555555555555";
@@ -41,6 +43,12 @@ describe("NewWorkOrderPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Confirm" }));
     expect(await screen.findByText(/An open maintenance job of this type already exists for this asset/)).toBeInTheDocument();
     expect(screen.queryByText(/DUPLICATE_OPEN_WORK_ORDER/)).not.toBeInTheDocument();
+  });
+
+  it("shows the maintenance accounting banner", () => {
+    mockFetch();
+    render(<NewWorkOrderPage />);
+    expect(screen.getByTestId("accounting-banner")).toHaveAttribute("data-areas", "maintenance");
   });
 
   it("preselects Preventive from ?type= and titles the page accordingly (GAP-ASSETS-MAINTENANCE-01)", async () => {

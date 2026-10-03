@@ -43,6 +43,8 @@ export type AccountListItem = {
   parentId: string | null;
   /** Sub-ledger-controlled account: not postable from a manual journal. */
   isControl: boolean;
+  /** True when no other head hangs under this one: only a leaf (detail) account is postable. */
+  isLeaf: boolean;
   type: "asset" | "liability" | "equity" | "income" | "expense";
   currency: string;
   balanceDisplay: string;
@@ -98,9 +100,10 @@ function formatBalanceMinor(minor: bigint): string {
 export async function listAccounts(tenantId: string, limit: number, search?: string): Promise<AccountListItem[]> {
   const term = search?.trim() || undefined;
   const load = async (): Promise<AccountListItem[]> => {
-    const [heads, balanceRows] = await Promise.all([
+    const [heads, balanceRows, parentIds] = await Promise.all([
       repo.listHeads(tenantId, limit, term),
       glRepo.getTrialBalance(tenantId),
+      repo.listParentHeadIds(tenantId),
     ]);
     const balanceByHead = new Map(balanceRows.map((b) => [b.headId, b]));
     return heads.map((h) => {
@@ -117,6 +120,7 @@ export async function listAccounts(tenantId: string, limit: number, search?: str
         level: h.level,
         parentId: h.parentId ?? null,
         isControl: h.isControl === true,
+        isLeaf: !parentIds.has(h.id),
         type,
         currency: "INR",
         balanceDisplay: formatBalanceMinor(balanceMinor),

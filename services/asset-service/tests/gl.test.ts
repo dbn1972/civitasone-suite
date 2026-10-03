@@ -209,12 +209,22 @@ const LABELS: Array<[string, string]> = [
 const ALL_ASSETS_A = [A_ACQ, A_DEP_A, A_IMP];
 const ALL_ASSETS_B = [A_DEP_B];
 
+// There are no default GL accounts: the tenant's asset_settings carry every head these journals post to.
+const GL_HEADS = {
+  fixedAssetAccountCode: "1200", acquisitionOffsetAccountCode: "2050", grnClearingAccountCode: "2070",
+  maintenanceExpenseAccountCode: "5300", apControlAccountCode: "2050",
+  impairmentExpenseAccountCode: "5200", revaluationReserveAccountCode: "3100",
+} as const;
+
 beforeAll(async () => {
   await cleanupTenant(TENANT_A, ALL_ASSETS_A);
   await cleanupTenant(TENANT_B, ALL_ASSETS_B);
+  await asTenant(TENANT_A, (tx) => tx.delete(assetSettings).where(eq(assetSettings.tenantId, TENANT_A)));
+  await asTenant(TENANT_A, (tx) => tx.insert(assetSettings).values({ tenantId: TENANT_A, ...GL_HEADS, updatedBy: ACTOR }));
 });
 
 afterAll(async () => {
+  await asTenant(TENANT_A, (tx) => tx.delete(assetSettings).where(eq(assetSettings.tenantId, TENANT_A)));
   await cleanupTenant(TENANT_A, ALL_ASSETS_A);
   await cleanupTenant(TENANT_B, ALL_ASSETS_B);
   await sqlClient.end();
@@ -464,16 +474,16 @@ describe("Impairment & Revaluation GL", () => {
       if (url.includes("/v1/finance/accounts/system-heads")) return new Response(JSON.stringify({ accumulatedDepreciationCode: "1250" }), { status: 200 });
       if (url.includes("/v1/finance/accounts")) {
         const chart = [
-          { code: "1200", name: "Fixed assets", type: "asset", status: "active" },
-          { code: "5200", name: "Impairment loss", type: "expense", status: "active" },
-          { code: "3100", name: "Revaluation reserve", type: "equity", status: "active" },
+          { code: "1200", name: "Fixed assets", type: "asset", status: "active", isLeaf: true },
+          { code: "5200", name: "Impairment loss", type: "expense", status: "active", isLeaf: true },
+          { code: "3100", name: "Revaluation reserve", type: "equity", status: "active", isLeaf: true },
         ];
         const q = (new URL(url).searchParams.get("q") ?? "").toLowerCase();
         return new Response(JSON.stringify({ data: chart.filter((c) => c.code.includes(q) || c.name.toLowerCase().includes(q)) }), { status: 200 });
       }
       return realFetch(input, init);
     });
-    await asTenant(TENANT_A, (tx) => tx.insert(assetSettings).values({ tenantId: TENANT_A, fixedAssetAccountCode: "1200", impairmentExpenseAccountCode: "5200", revaluationReserveAccountCode: "3100", updatedBy: ACTOR }).onConflictDoNothing());
+    await asTenant(TENANT_A, (tx) => tx.insert(assetSettings).values({ tenantId: TENANT_A, ...GL_HEADS, updatedBy: ACTOR }).onConflictDoNothing());
 
     // seed the asset directly so the route can load it (book value 1,000,000)
     await asTenant(TENANT_A, (tx) => tx.insert(assetAssets).values({
@@ -489,7 +499,6 @@ describe("Impairment & Revaluation GL", () => {
 
   afterAll(async () => {
     vi.restoreAllMocks();
-    await asTenant(TENANT_A, (tx) => tx.delete(assetSettings).where(eq(assetSettings.tenantId, TENANT_A)));
     await app.close();
   });
 
@@ -501,8 +510,8 @@ describe("Impairment & Revaluation GL", () => {
       payload: { amountMinor: 1000, reason: "no head", eventDate: "2024-06-01" },
     });
     expect(res.statusCode).toBe(409);
-    expect(JSON.parse(res.body).code).toBe("GL_HEADS_NOT_CONFIGURED");
-    await asTenant(TENANT_A, (tx) => tx.insert(assetSettings).values({ tenantId: TENANT_A, fixedAssetAccountCode: "1200", impairmentExpenseAccountCode: "5200", revaluationReserveAccountCode: "3100", updatedBy: ACTOR }));
+    expect(JSON.parse(res.body).code).toBe("ASSET_GL_NOT_CONFIGURED");
+    await asTenant(TENANT_A, (tx) => tx.insert(assetSettings).values({ tenantId: TENANT_A, ...GL_HEADS, updatedBy: ACTOR }));
   });
 
   it("impairment emits Dr 5200 / Cr 1200 and leaves accumulatedDep UNCHANGED", async () => {

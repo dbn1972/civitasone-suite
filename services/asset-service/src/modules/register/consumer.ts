@@ -7,6 +7,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, CONSUMED, EVENTS } from "../../topics.js";
 import { uuidV5 } from "../../shared/ids.js";
 import * as repo from "./repo.js";
+import { postAcquisitionOrDefer } from "../enterprise/postings.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -15,16 +16,9 @@ export function isUniqueViolation(err: unknown): boolean {
   const e = err as { code?: string; cause?: { code?: string } } | null;
   return e?.code === "23505" || e?.cause?.code === "23505";
 }
-const GL_TOPIC    = "finance.gl.post";
-// 4-digit finance head CODES (resolved by finance via findHeadByCodeTx). These
-// must exist in budget.finance_heads. Overridable via env to match a tenant's
-// chart of accounts.
-const FIXED_ASSET_CODE  = process.env.ASSET_FIXED_ASSET_CODE ?? "1200";
-const GRN_CLEARING_CODE = process.env.ASSET_GRN_CLEARING_CODE ?? "2070";
-// Offset for a DIRECT asset registration (no GRN/procurement context). Dr
-// Fixed Asset (1200) / Cr this head. Defaults to AP Control (2050); override
-// per a tenant chart of accounts (e.g. Capital Account 3001 for donations).
-const ACQ_OFFSET_CODE   = process.env.ASSET_ACQUISITION_OFFSET_CODE ?? "2050";
+// There are NO default GL accounts. The acquisition journal's heads (fixed asset, GRN clearing / acquisition offset) are
+// the tenant's asset_settings; when they are not configured the asset is still saved and its journal is deferred
+// (gl_post_status "awaiting_accounts", error ASSET_GL_NOT_CONFIGURED) -- see enterprise/postings.ts.
 const DEFAULT_IT_CATEGORY = "77777777-0001-0000-0000-000000000001";
 const DEFAULT_VEHICLE_CATEGORY = "77777777-0001-0000-0000-000000000002";
 
@@ -69,31 +63,11 @@ export function registerRegisterConsumers(rawQueue: Queue): void {
         payload: { assetId: p.id, code: p.code, acquisitionCost: p.acquisitionCost },
       });
       await audit(tx, msg, "create", "asset", p.id);
-      // GAP-FIX: a DIRECT asset registration must hit the books exactly like a
-      // GRN auto-capitalization does -- previously only the GRN path posted an
-      // acquisition journal, so a manually-registered asset existed in the asset
-      // register but never in the GL (carrying amount silently off the balance
-      // sheet). Emit a balanced StandardJournal Dr Fixed Asset (1200) / Cr AP
-      // (2050), with a deterministic uuidV5 id keyed off the assetId so a
-      // redelivered create no-ops in finance (single balanced post, no double).
-      // Skip a zero-cost create so finance never sees a zero-total journal.
-      if (costMinor > 0n) {
-        await enqueue(tx, {
-          topic: GL_TOPIC, eventType: GL_TOPIC,
-          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-          payload: {
-            id: uuidV5(`acq:${p.id}`),
-            tenantId: msg.tenantId,
-            type: "asset_acquisition",
-            voucherNo: `ACQ/${p.acquisitionDate}/${p.id.slice(0, 8)}`,
-            postingDate: p.acquisitionDate,
-            lines: [
-              { accountCode: FIXED_ASSET_CODE, debitMinor: costMinor.toString(), creditMinor: "0" },
-              { accountCode: ACQ_OFFSET_CODE, debitMinor: "0", creditMinor: costMinor.toString() },
-            ],
-          },
-        });
-      }
+      // A DIRECT asset registration hits the books like a GRN capitalization does: a balanced journal Dr fixed asset /
+      // Cr the tenant's acquisition-offset account, with a deterministic id (a redelivered create no-ops in finance).
+      // The accounts are the tenant's settings -- if they are not configured the asset is kept and the journal deferred.
+      // A zero-cost create has no journal.
+      await postAcquisitionOrDefer(tx, msg, { id: p.id, tenantId: msg.tenantId, costMinor, date: p.acquisitionDate }, "direct");
       await enqueueDualDepSchedules(tx, msg, p.id, p.tenantId, p.acquisitionDate);
     });
     } catch (err) {
@@ -161,37 +135,11 @@ export function registerRegisterConsumers(rawQueue: Queue): void {
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
           payload: { assetId, code: item.itemCode, acquisitionCost: totalCost.toString(), grnId: p.grnId },
         });
-        // P0-1/P0-2: acquisition GL on capitalization. Finance's GL consumer
-        // treats anything that is NOT type:"depreciation"/"asset_disposal" as a
-        // StandardJournal and requires {id, tenantId, voucherNo, type,
-        // postingDate, lines:[{accountCode,debitMinor,creditMinor}]} with
-        // balanced string-paise legs resolved by 4-digit head CODE. The old
-        // payload had none of that shape (no lines/postingDate/tenantId) and a
-        // truncated id `acq:` (no assetId) — finance silently dropped it and any
-        // redelivery shared the same blank key. We now emit a balanced
-        // StandardJournal: Dr Fixed Asset (1200) / Cr GRN-Clearing (2070), with
-        // a deterministic id `acq:${assetId}` so a redelivered GRN hits the
-        // journal PK in finance and no-ops (single balanced post, no double).
+        // Acquisition journal on capitalization: a balanced StandardJournal Dr fixed asset / Cr GRN clearing with a
+        // deterministic uuidV5 id keyed off the asset (a redelivered GRN hits the journal PK in finance and no-ops).
+        // The accounts are the tenant's settings; if they are not configured the asset is kept and the journal deferred.
         const acqDate = new Date().toISOString().slice(0, 10);
-        await enqueue(tx, {
-          topic: GL_TOPIC, eventType: GL_TOPIC,
-          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-          payload: {
-            // finance.finance_journals.id is a uuid column. The human-readable
-            // key `acq:${assetId}` is hashed into a stable RFC-4122 UUIDv5 so the
-            // journal id is both deterministic (redelivery hits the PK -> no-op)
-            // and a valid uuid (no dead-letter on the uuid cast).
-            id: uuidV5(`acq:${assetId}`),
-            tenantId: msg.tenantId,
-            type: "asset_acquisition",
-            voucherNo: `ACQ/${acqDate}/${assetId.slice(0, 8)}`,
-            postingDate: acqDate,
-            lines: [
-              { accountCode: FIXED_ASSET_CODE, debitMinor: totalCost.toString(), creditMinor: "0" },
-              { accountCode: GRN_CLEARING_CODE, debitMinor: "0", creditMinor: totalCost.toString() },
-            ],
-          },
-        });
+        await postAcquisitionOrDefer(tx, msg, { id: assetId, tenantId: msg.tenantId, costMinor: totalCost, date: acqDate }, "grn");
         await audit(tx, msg, "create_from_grn", "asset", assetId);
         await enqueueDualDepSchedules(tx, msg, assetId, msg.tenantId, new Date().toISOString().slice(0, 10));
       });

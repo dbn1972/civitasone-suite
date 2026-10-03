@@ -805,7 +805,7 @@ describe("Enterprise routes", () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it("POST /v1/assets/leases → 409 GL_HEADS_NOT_CONFIGURED (no GL head defaults exist)", async () => {
+  it("POST /v1/assets/leases → 409 ASSET_GL_NOT_CONFIGURED (no GL head defaults exist)", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/assets/leases",
       headers: authHeader(),
@@ -816,7 +816,7 @@ describe("Enterprise routes", () => {
       },
     });
     expect(res.statusCode).toBe(409);
-    expect(JSON.parse(res.body).code).toBe("GL_HEADS_NOT_CONFIGURED");
+    expect(JSON.parse(res.body).code).toBe("ASSET_GL_NOT_CONFIGURED");
   });
 
   it("POST /v1/assets/leases → 400 empty body", async () => {

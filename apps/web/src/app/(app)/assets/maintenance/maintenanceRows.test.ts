@@ -13,6 +13,13 @@ describe("buildMaintenanceRows", () => {
     expect(row).toMatchObject({ assetCode: "DG-062", maintenanceType: "Breakdown", scheduledDate: "05 Oct 2026", status: "in_progress", vendor: "—" });
   });
 
+  it("carries the journal state through the supplied labeller (unknown state reads as none)", () => {
+    const label = (s: string) => `L:${s}`;
+    expect(buildMaintenanceRows([{ ...base, glPostStatus: "awaiting_accounts" }], label)[0]?.journal).toBe("L:awaiting_accounts");
+    expect(buildMaintenanceRows([{ ...base, glPostStatus: "bogus" }], label)[0]?.journal).toBe("L:none");
+    expect(buildMaintenanceRows([base], label)[0]?.journal).toBe("L:none");
+  });
+
   it("shows a dash when the date is unknown", () => {
     expect(buildMaintenanceRows([{ ...base, scheduledDate: "—" }])[0]?.scheduledDate).toBe("—");
   });

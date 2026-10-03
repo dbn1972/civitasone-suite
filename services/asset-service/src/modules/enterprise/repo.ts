@@ -5,7 +5,8 @@ import {
   assetScanLog, assetSettings, assetSettingRequests, leaseScheduleRows,
 } from "./schema.js";
 import { assetAssets } from "../register/schema.js";
-import { pgSchema, uuid, text, varchar, date, bigint, char, timestamp, integer } from "drizzle-orm/pg-core";
+import { assetWorkOrders } from "../maintenance/schema.js";
+import { pgSchema, uuid, text, varchar, date, bigint, char, timestamp } from "drizzle-orm/pg-core";
 
 const lifecycleSchema = pgSchema("lifecycle");
 
@@ -153,10 +154,15 @@ export async function getAssetSettingsTx(tx: Writer, tenantId: string) {
 
 export type AssetSettingsPatch = {
   capitalizeMakerChecker?: boolean;
+  glMakerChecker?: boolean;
   cwipAccountCode?: string | null;
   fixedAssetAccountCode?: string | null;
   impairmentExpenseAccountCode?: string | null;
   revaluationReserveAccountCode?: string | null;
+  grnClearingAccountCode?: string | null;
+  acquisitionOffsetAccountCode?: string | null;
+  maintenanceExpenseAccountCode?: string | null;
+  apControlAccountCode?: string | null;
   rouAccountCode?: string | null;
   leaseLiabilityAccountCode?: string | null;
   leaseOffsetAccountCode?: string | null;
@@ -165,10 +171,15 @@ export type AssetSettingsPatch = {
 export async function upsertAssetSettings(tx: Writer, tenantId: string, actor: string, patch: AssetSettingsPatch): Promise<void> {
   const fields: AssetSettingsPatch = {};
   if (patch.capitalizeMakerChecker !== undefined) fields.capitalizeMakerChecker = patch.capitalizeMakerChecker;
+  if (patch.glMakerChecker !== undefined) fields.glMakerChecker = patch.glMakerChecker;
   if (patch.cwipAccountCode !== undefined) fields.cwipAccountCode = patch.cwipAccountCode;
   if (patch.fixedAssetAccountCode !== undefined) fields.fixedAssetAccountCode = patch.fixedAssetAccountCode;
   if (patch.impairmentExpenseAccountCode !== undefined) fields.impairmentExpenseAccountCode = patch.impairmentExpenseAccountCode;
   if (patch.revaluationReserveAccountCode !== undefined) fields.revaluationReserveAccountCode = patch.revaluationReserveAccountCode;
+  if (patch.grnClearingAccountCode !== undefined) fields.grnClearingAccountCode = patch.grnClearingAccountCode;
+  if (patch.acquisitionOffsetAccountCode !== undefined) fields.acquisitionOffsetAccountCode = patch.acquisitionOffsetAccountCode;
+  if (patch.maintenanceExpenseAccountCode !== undefined) fields.maintenanceExpenseAccountCode = patch.maintenanceExpenseAccountCode;
+  if (patch.apControlAccountCode !== undefined) fields.apControlAccountCode = patch.apControlAccountCode;
   if (patch.rouAccountCode !== undefined) fields.rouAccountCode = patch.rouAccountCode;
   if (patch.leaseLiabilityAccountCode !== undefined) fields.leaseLiabilityAccountCode = patch.leaseLiabilityAccountCode;
   if (patch.leaseOffsetAccountCode !== undefined) fields.leaseOffsetAccountCode = patch.leaseOffsetAccountCode;
@@ -184,9 +195,34 @@ export async function insertSettingRequest(tx: Writer, row: typeof assetSettingR
   return rows.length > 0;
 }
 
-export async function getPendingSettingRequest(tenantId: string) {
+export async function getPendingSettingRequest(tenantId: string, kind = "maker_checker_off") {
   const rows = await scopedRead((tx) => tx.select().from(assetSettingRequests)
-    .where(and(eq(assetSettingRequests.tenantId, tenantId), eq(assetSettingRequests.status, "pending"))).limit(1));
+    .where(and(eq(assetSettingRequests.tenantId, tenantId), eq(assetSettingRequests.kind, kind), eq(assetSettingRequests.status, "pending"))).limit(1));
+  return rows[0] ?? null;
+}
+
+/** Every pending request of the tenant (any kind), oldest first. */
+export async function listPendingSettingRequests(tenantId: string) {
+  return scopedRead((tx) => tx.select().from(assetSettingRequests)
+    .where(and(eq(assetSettingRequests.tenantId, tenantId), eq(assetSettingRequests.status, "pending")))
+    .orderBy(asc(assetSettingRequests.requestedAt), asc(assetSettingRequests.id)));
+}
+
+/**
+ * Serialise settings writes per tenant: make sure the settings row exists, then lock it (FOR UPDATE) for the rest of the
+ * transaction. Everything that merges, validates and applies a settings change runs behind this lock, so two concurrent
+ * saves cannot each validate against a stale row. Returns the locked, current row.
+ */
+export async function lockAssetSettings(tx: Writer, tenantId: string, actor: string) {
+  await (tx as typeof db).insert(assetSettings).values({ tenantId, updatedBy: actor }).onConflictDoNothing();
+  const rows = await (tx as typeof db).select().from(assetSettings).where(eq(assetSettings.tenantId, tenantId)).limit(1).for("update");
+  return rows[0]!;
+}
+
+/** A pending request read under lock, so approve / reject of the same request serialise. */
+export async function findSettingRequestForUpdate(tx: Writer, tenantId: string, id: string) {
+  const rows = await (tx as typeof db).select().from(assetSettingRequests)
+    .where(and(eq(assetSettingRequests.tenantId, tenantId), eq(assetSettingRequests.id, id))).limit(1).for("update");
   return rows[0] ?? null;
 }
 
@@ -254,7 +290,7 @@ export async function setLeaseGlFailed(tx: Writer, id: string, tenantId: string,
  */
 export async function resolveGlJournal(
   tx: Writer, tenantId: string, journalId: string, outcome: "posted" | "failed", error: string | null,
-): Promise<{ kind: "auc" | "lease"; id: string } | null> {
+): Promise<{ kind: "auc" | "lease" | "asset" | "work_order"; id: string } | null> {
   const set = { glPostStatus: outcome, glPostError: error ? error.slice(0, 500) : null };
   const auc = await tx.update(projectAuc).set(set)
     .where(and(eq(projectAuc.tenantId, tenantId), eq(projectAuc.glJournalId, journalId), eq(projectAuc.glPostStatus, "pending")))
@@ -263,7 +299,94 @@ export async function resolveGlJournal(
   const lease = await tx.update(assetLeases).set(set)
     .where(and(eq(assetLeases.tenantId, tenantId), eq(assetLeases.glJournalId, journalId), eq(assetLeases.glPostStatus, "pending")))
     .returning({ id: assetLeases.id });
-  return lease[0] ? { kind: "lease", id: lease[0].id } : null;
+  if (lease[0]) return { kind: "lease", id: lease[0].id };
+  const asset = await tx.update(assetAssets).set(set)
+    .where(and(eq(assetAssets.tenantId, tenantId), eq(assetAssets.glJournalId, journalId), eq(assetAssets.glPostStatus, "pending")))
+    .returning({ id: assetAssets.id });
+  if (asset[0]) return { kind: "asset", id: asset[0].id };
+  const wo = await tx.update(assetWorkOrders).set(set)
+    .where(and(eq(assetWorkOrders.tenantId, tenantId), eq(assetWorkOrders.glJournalId, journalId), eq(assetWorkOrders.glPostStatus, "pending")))
+    .returning({ id: assetWorkOrders.id });
+  return wo[0] ? { kind: "work_order", id: wo[0].id } : null;
+}
+
+// ── deferred journals (fp-assets-02): records saved while the GL accounts were not configured ──
+export type GlOpenStatus = "awaiting_accounts" | "failed";
+
+/**
+ * Set a record's journal state. `expect` makes it CONDITIONAL on the state the caller saw: a sweep that selected a row as
+ * awaiting_accounts / failed can never overwrite a row that has meanwhile become pending or posted (finance's answer).
+ * Returns true only when a row was actually updated; callers enqueue the journal only then. With no `expect` (the
+ * consumers that have just INSERTED the record) it is unconditional.
+ */
+export async function setAssetGl(
+  tx: Writer, tenantId: string, id: string, status: "none" | "awaiting_accounts" | "pending", journalId: string | null, error: string | null,
+  expect?: readonly string[],
+): Promise<boolean> {
+  const conds = [eq(assetAssets.id, id), eq(assetAssets.tenantId, tenantId)];
+  if (expect) conds.push(inArray(assetAssets.glPostStatus, [...expect]));
+  const rows = await tx.update(assetAssets).set({ glPostStatus: status, glJournalId: journalId, glPostError: error ? error.slice(0, 500) : null })
+    .where(and(...conds)).returning({ id: assetAssets.id });
+  return rows.length > 0;
+}
+
+export async function setWorkOrderGl(
+  tx: Writer, tenantId: string, id: string, status: "none" | "awaiting_accounts" | "pending", journalId: string | null, error: string | null,
+  expect?: readonly string[],
+): Promise<boolean> {
+  const conds = [eq(assetWorkOrders.id, id), eq(assetWorkOrders.tenantId, tenantId)];
+  if (expect) conds.push(inArray(assetWorkOrders.glPostStatus, [...expect]));
+  const rows = await tx.update(assetWorkOrders).set({ glPostStatus: status, glJournalId: journalId, glPostError: error ? error.slice(0, 500) : null })
+    .where(and(...conds)).returning({ id: assetWorkOrders.id });
+  return rows.length > 0;
+}
+
+/**
+ * Deferred / rejected assets whose journal CAN be built now. Eligibility is decided in SQL (a GRN asset needs the GRN
+ * clearing head, a direct one the acquisition offset, both the fixed-asset head; cost > 0), so a blocked row can never
+ * occupy the window and starve later rows. Rows are locked FOR UPDATE SKIP LOCKED: two overlapping sweeps never pick the
+ * same row.
+ */
+export async function findAssetsGlOpen(
+  tx: Writer, tenantId: string, statuses: readonly GlOpenStatus[], limit: number,
+  ready: { direct: boolean; grn: boolean },
+) {
+  if (!ready.direct && !ready.grn) return [];
+  const isGrn = sql`left(${assetAssets.grnRef}, 16) = 'procurement_grn:'`;
+  const kindOk = ready.direct && ready.grn ? sql`true` : ready.grn ? isGrn : sql`NOT COALESCE(${isGrn}, false)`;
+  return (tx as typeof db).select().from(assetAssets)
+    .where(and(
+      eq(assetAssets.tenantId, tenantId), inArray(assetAssets.glPostStatus, [...statuses]),
+      sql`${assetAssets.acquisitionCost} > 0`, kindOk,
+    ))
+    .orderBy(asc(assetAssets.createdAt), asc(assetAssets.id)).limit(limit)
+    .for("update", { skipLocked: true });
+}
+
+export async function findWorkOrdersGlOpen(tx: Writer, tenantId: string, statuses: readonly GlOpenStatus[], limit: number, ready: boolean) {
+  if (!ready) return [];
+  return (tx as typeof db).select().from(assetWorkOrders)
+    .where(and(
+      eq(assetWorkOrders.tenantId, tenantId), inArray(assetWorkOrders.glPostStatus, [...statuses]),
+      sql`${assetWorkOrders.costMinor} > 0`, sql`${assetWorkOrders.completedDate} IS NOT NULL`,
+    ))
+    .orderBy(asc(assetWorkOrders.createdAt), asc(assetWorkOrders.id)).limit(limit)
+    .for("update", { skipLocked: true });
+}
+
+/** Counts shown on the settings screen: records waiting for accounts, and journals finance rejected. */
+export async function countGlOpen(tenantId: string) {
+  const one = async (table: typeof assetAssets | typeof assetWorkOrders, status: string) => {
+    const rows = await scopedRead((tx) => tx.select({ n: sql<number>`count(*)::int` }).from(table)
+      .where(and(eq(table.tenantId, tenantId), eq(table.glPostStatus, status))));
+    return rows[0]?.n ?? 0;
+  };
+  return {
+    assetsAwaiting: await one(assetAssets, "awaiting_accounts"),
+    assetsFailed: await one(assetAssets, "failed"),
+    workOrdersAwaiting: await one(assetWorkOrders, "awaiting_accounts"),
+    workOrdersFailed: await one(assetWorkOrders, "failed"),
+  };
 }
 
 export async function insertScanLog(tx: Writer, row: typeof assetScanLog.$inferInsert) {

@@ -12,11 +12,13 @@ import { pino } from "pino";
 
 const log = pino({ name: "asset-finance-client" });
 
-export type HeadKind = "cwip" | "fixed_asset" | "impairment_expense" | "revaluation_reserve" | "rou" | "lease_liability" | "lease_offset";
+export type HeadKind =
+  | "cwip" | "fixed_asset" | "impairment_expense" | "revaluation_reserve" | "rou" | "lease_liability" | "lease_offset"
+  | "grn_clearing" | "acquisition_offset" | "maintenance_expense" | "ap_control";
 export type HeadType = "asset" | "liability" | "equity" | "income" | "expense";
 
-/** The finance account type each head must have; null = any non-contra type (clearing head). */
-export const REQUIRED_HEAD_TYPE: Record<HeadKind, HeadType | null> = {
+/** The finance account type(s) each head must have; null = any non-contra type (clearing head). */
+export const REQUIRED_HEAD_TYPE: Record<HeadKind, HeadType | HeadType[] | null> = {
   cwip: "asset",
   fixed_asset: "asset",
   impairment_expense: "expense", // impairment loss
@@ -24,16 +26,20 @@ export const REQUIRED_HEAD_TYPE: Record<HeadKind, HeadType | null> = {
   rou: "asset",
   lease_liability: "liability",
   lease_offset: null,
+  grn_clearing: "liability", // goods received, not yet invoiced
+  acquisition_offset: ["liability", "equity"], // payable, or a capital account (donated / transferred-in assets)
+  maintenance_expense: "expense",
+  ap_control: "liability", // accounts payable control
 };
 
 export type HeadCheck =
   | { ok: true; code: string; name: string; type: HeadType }
-  | { ok: false; reason: "NOT_FOUND" | "INACTIVE" | "WRONG_TYPE" | "ACCUMULATED_DEPRECIATION" | "UNAVAILABLE"; detail?: string };
+  | { ok: false; reason: "NOT_FOUND" | "INACTIVE" | "WRONG_TYPE" | "NOT_LEAF" | "ACCUMULATED_DEPRECIATION" | "UNAVAILABLE"; detail?: string };
 
 /** Belt and braces on top of finance's own code: an account literally NAMED accumulated depreciation is never a target. */
 const ACCUM_DEP_NAME = /accumulated\s+depreciation|accum\.?\s*dep/i;
 
-type AccountRow = { code?: unknown; name?: unknown; type?: unknown; status?: unknown };
+type AccountRow = { code?: unknown; name?: unknown; type?: unknown; status?: unknown; isLeaf?: unknown };
 
 export function financeBaseUrl(): string {
   return process.env.FINANCE_SERVICE_URL ?? "http://127.0.0.1:3007";
@@ -88,7 +94,11 @@ export async function validateHead(tenantId: string, kind: HeadKind, code: strin
     if (accumDep === null) return { ok: false, reason: "UNAVAILABLE", detail: "finance did not report its accumulated-depreciation account" };
     if (code === accumDep || ACCUM_DEP_NAME.test(name)) return { ok: false, reason: "ACCUMULATED_DEPRECIATION" };
     const need = REQUIRED_HEAD_TYPE[kind];
-    if (need && type !== need) return { ok: false, reason: "WRONG_TYPE", detail: `expected ${need}, found ${String(type)}` };
+    const allowed = need === null ? null : Array.isArray(need) ? need : [need];
+    if (allowed && !allowed.includes(type)) return { ok: false, reason: "WRONG_TYPE", detail: `expected ${allowed.join(" or ")}, found ${String(type)}` };
+    // Only a LEAF account is postable (finance rejects a posting to a group account). Fail closed: a lookup that does
+    // not say the account is a leaf is not trusted.
+    if (row.isLeaf !== true) return { ok: false, reason: "NOT_LEAF" };
     return { ok: true, code, name, type };
   } catch (err) {
     log.warn({ err }, "finance accounts lookup threw");

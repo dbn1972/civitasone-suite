@@ -13,6 +13,8 @@ import { makeBarcode } from "../register/consumer.js";
 import { todayIST } from "../../shared/dates.js";
 import { buildLeaseSchedule, type LeaseFrequency } from "./lease-domain.js";
 import { headsFromSettings, HEAD_LABEL } from "./gl-heads.js";
+import { sweepDeferred } from "./postings.js";
+import { applySettingsChange, auditSettings, headPatchFrom } from "./settings-apply.js";
 import type { projectAuc } from "./schema.js";
 
 const log = pino({ name: "asset-f3-enterprise" });
@@ -22,7 +24,9 @@ const AUDIT_TOPIC = "audit.event.record";
 const DEFAULT_IT_CATEGORY = "77777777-0001-0000-0000-000000000001";
 // There are NO default heads for the fixed asset, capital work in progress, the right-of-use asset, the lease liability or
 // the lease clearing account: they come from asset_settings (validated against the finance chart of accounts when set), and the
-// routes refuse the action (409 GL_HEADS_NOT_CONFIGURED) until they exist.
+// routes refuse the action (409 ASSET_GL_NOT_CONFIGURED) until they exist.
+
+const REQUEST_KINDS = ["maker_checker_off", "gl_maker_checker_off", "gl_heads_change"];
 
 type AucRow = typeof projectAuc.$inferSelect;
 
@@ -148,8 +152,8 @@ export function registerF3EnterpriseConsumers(rawQ: Queue): void {
       "location_create", "location_update", "spare_part", "request_disposal", "inter_org_transfer", "bulk_import",
       "location_deactivate", "location_reactivate", "scan_log", "asset_settings_update",
       "auc_capitalize_request", "auc_capitalize_approve", "auc_capitalize_reject",
-      "settings_off_request", "settings_off_approve", "settings_off_reject",
-      "auc_journal_repost", "lease_journal_repost",
+      "settings_request", "settings_request_approve", "settings_request_reject",
+      "auc_journal_repost", "lease_journal_repost", "gl_post_pending",
     ]);
     if (!ops.has(op)) return;
     try {
@@ -239,49 +243,76 @@ export function registerF3EnterpriseConsumers(rawQ: Queue): void {
             break;
           }
           case "asset_settings_update": {
-            // GL heads and maker-checker ON. (Turning maker-checker OFF is a two-person request, see settings_off_*.)
-            const patch: repo.AssetSettingsPatch = {};
-            if (p.capitalizeMakerChecker === true) patch.capitalizeMakerChecker = true;
-            for (const k of ["cwipAccountCode", "fixedAssetAccountCode", "impairmentExpenseAccountCode", "revaluationReserveAccountCode", "rouAccountCode", "leaseLiabilityAccountCode", "leaseOffsetAccountCode"] as const) {
-              if (p[k] === null || typeof p[k] === "string") patch[k] = p[k] as string | null;
-            }
-            if (Object.keys(patch).length > 0) {
-              const before = await repo.getAssetSettingsTx(tx, p.tenantId as string);
-              await repo.upsertAssetSettings(tx, p.tenantId as string, msg.actorId, patch);
-              const after = await repo.getAssetSettingsTx(tx, p.tenantId as string);
-              await auditEvent(tx, msg, "update", "asset_settings", p.tenantId as string, {
-                reason: p.reason ?? null, before: settingsSnapshot(before), after: settingsSnapshot(after),
-              });
-            }
-            break;
-          }
-          case "settings_off_request": {
-            const inserted = await repo.insertSettingRequest(tx, {
-              id: p.id as string, tenantId: p.tenantId as string, kind: "maker_checker_off",
-              reason: String(p.reason ?? ""), requestedBy: msg.actorId,
-            });
-            await auditEvent(tx, msg, "maker_checker_off_request", "asset_settings", p.id as string,
-              inserted ? { reason: p.reason ?? null } : { failure: "ALREADY_PENDING" }, inserted ? "success" : "failure");
-            break;
-          }
-          case "settings_off_approve": {
-            const decided = await repo.decideSettingRequest(tx, p.tenantId as string, p.id as string, msg.actorId, "approved", (p.reason as string | null) ?? null);
-            if (!decided) {
-              await auditEvent(tx, msg, "maker_checker_off_approve", "asset_settings", p.id as string, { failure: "NOT_PENDING_OR_SAME_ACTOR" }, "failure");
+            // Direct save: GL heads (only while the tenant's GL maker-checker is OFF; otherwise they go through a pending
+            // request) and the "ON" direction of both maker-checker flags. Turning a control OFF is a two-person request.
+            const tenantId = p.tenantId as string;
+            const heads = headPatchFrom(p);
+            const hasHeads = Object.keys(heads).length > 0;
+            const wantCap = p.capitalizeMakerChecker === true ? true : undefined;
+            const wantGl = p.glMakerChecker === true ? true : undefined;
+            if (!hasHeads && wantCap === undefined && wantGl === undefined) break;
+            const locked = await repo.lockAssetSettings(tx, tenantId, msg.actorId);
+            // ANY head in the command while approval is ON is refused, whatever else the command carries (e.g. glMakerChecker:true)
+            if (hasHeads && locked.glMakerChecker) {
+              await auditSettings(tx, msg, "update", tenantId, { failure: "MAKER_CHECKER_REQUIRED", attempted: heads, reason: p.reason ?? null }, "failure");
               break;
             }
-            const before = await repo.getAssetSettingsTx(tx, p.tenantId as string);
-            await repo.upsertAssetSettings(tx, p.tenantId as string, msg.actorId, { capitalizeMakerChecker: false });
-            const after = await repo.getAssetSettingsTx(tx, p.tenantId as string);
-            await auditEvent(tx, msg, "maker_checker_off_approve", "asset_settings", p.id as string, {
-              requestedBy: decided.requestedBy, reason: decided.reason, before: settingsSnapshot(before), after: settingsSnapshot(after),
+            await applySettingsChange(tx, msg, tenantId, {
+              heads, capitalizeMakerChecker: wantCap, glMakerChecker: wantGl, reason: (p.reason as string | null) ?? null, resourceId: tenantId,
             });
             break;
           }
-          case "settings_off_reject": {
+          case "gl_post_pending": {
+            // Post journals deferred for missing accounts AND re-send ones finance rejected, once the accounts are right.
+            // Bounded (SWEEP_LIMIT per kind); `more` tells the user to run it again.
+            const swept = await sweepDeferred(tx, msg, p.tenantId as string, { includeFailed: true });
+            await auditSettings(tx, msg, "gl_post_pending", p.tenantId as string, { ...swept });
+            break;
+          }
+          case "settings_request": {
+            // A change that weakens a control, or edits the GL heads while GL maker-checker is ON, waits for a second approver.
+            const kind = String(p.kind ?? "");
+            if (!REQUEST_KINDS.includes(kind)) { await auditSettings(tx, msg, "settings_request", p.id as string, { failure: "UNKNOWN_KIND", kind }, "failure"); break; }
+            const inserted = await repo.insertSettingRequest(tx, {
+              id: p.id as string, tenantId: p.tenantId as string, kind,
+              reason: String(p.reason ?? ""), requestedBy: msg.actorId, payload: kind === "gl_heads_change" ? headPatchFrom(p.heads as Record<string, unknown> ?? {}) : null,
+            });
+            await auditSettings(tx, msg, `${kind}_request`, p.id as string,
+              inserted ? { reason: p.reason ?? null, heads: p.heads ?? null } : { failure: "ALREADY_PENDING", kind }, inserted ? "success" : "failure");
+            break;
+          }
+          case "settings_request_approve": {
+            const tenantId = p.tenantId as string;
+            const id = p.id as string;
+            await repo.lockAssetSettings(tx, tenantId, msg.actorId); // one lock order everywhere: settings row, then the request
+            const req = await repo.findSettingRequestForUpdate(tx, tenantId, id);
+            if (!req || req.status !== "pending" || req.requestedBy === msg.actorId) {
+              await auditSettings(tx, msg, `${req?.kind ?? "settings_request"}_approve`, id, { failure: !req || req.status !== "pending" ? "NOT_PENDING" : "SAME_ACTOR" }, "failure");
+              break;
+            }
+            const reason = (p.reason as string | null) ?? null;
+            if (req.kind === "gl_heads_change") {
+              const applied = await applySettingsChange(tx, msg, tenantId, {
+                heads: headPatchFrom((req.payload ?? {}) as Record<string, unknown>), reason: req.reason, resourceId: id,
+                action: "gl_heads_change_approve", requestedBy: req.requestedBy,
+              });
+              if (!applied.ok) {
+                // The accounts are no longer valid (or now clash): the request is closed as rejected, with the reason shown to the requester.
+                await repo.decideSettingRequest(tx, tenantId, id, msg.actorId, "rejected", `${applied.refusal.code}: ${applied.refusal.message}`);
+                break;
+              }
+            } else if (req.kind === "gl_maker_checker_off") {
+              await applySettingsChange(tx, msg, tenantId, { glMakerChecker: false, reason: req.reason, resourceId: id, action: "gl_maker_checker_off_approve", requestedBy: req.requestedBy });
+            } else {
+              await applySettingsChange(tx, msg, tenantId, { capitalizeMakerChecker: false, reason: req.reason, resourceId: id, action: "maker_checker_off_approve", requestedBy: req.requestedBy });
+            }
+            await repo.decideSettingRequest(tx, tenantId, id, msg.actorId, "approved", reason);
+            break;
+          }
+          case "settings_request_reject": {
             const decided = await repo.decideSettingRequest(tx, p.tenantId as string, p.id as string, msg.actorId, "rejected", (p.reason as string | null) ?? null);
-            await auditEvent(tx, msg, "maker_checker_off_reject", "asset_settings", p.id as string,
-              decided ? { reason: p.reason ?? null } : { failure: "NOT_PENDING" }, decided ? "success" : "failure");
+            await auditSettings(tx, msg, decided ? `${decided.kind}_reject` : "settings_request_reject", p.id as string,
+              decided ? { kind: decided.kind, reason: p.reason ?? null } : { failure: "NOT_PENDING" }, decided ? "success" : "failure");
             break;
           }
           case "auc_journal_repost": {
@@ -293,7 +324,7 @@ export function registerF3EnterpriseConsumers(rawQ: Queue): void {
             const heads = headsFromSettings(await repo.getAssetSettingsTx(tx, tenantId), ["cwip", "fixed_asset"]);
             const row = await repo.findAucByIdTx(tx, tenantId, aucId);
             if (!row || row.status !== "capitalized" || row.accumulatedMinor <= 0n || !heads.cwip || !heads.fixed_asset) {
-              await auditEvent(tx, msg, "journal_repost", "auc_project", aucId, { failure: !heads.cwip || !heads.fixed_asset ? "GL_HEADS_NOT_CONFIGURED" : "NOT_REPOSTABLE" }, "failure");
+              await auditEvent(tx, msg, "journal_repost", "auc_project", aucId, { failure: !heads.cwip || !heads.fixed_asset ? "ASSET_GL_NOT_CONFIGURED" : "NOT_REPOSTABLE" }, "failure");
               break;
             }
             const journal = aucJournal(row, row.capitalizationDate ?? todayIST(), { fixed_asset: heads.fixed_asset, cwip: heads.cwip });
@@ -316,7 +347,7 @@ export function registerF3EnterpriseConsumers(rawQ: Queue): void {
             const needed = leaseHeadKinds(row.rouCostMinor, row.liabilityMinor);
             const heads = headsFromSettings(await repo.getAssetSettingsTx(tx, tenantId), needed);
             if (needed.some((k) => !heads[k])) {
-              await auditEvent(tx, msg, "journal_repost", "asset_lease", leaseId, { failure: "GL_HEADS_NOT_CONFIGURED" }, "failure");
+              await auditEvent(tx, msg, "journal_repost", "asset_lease", leaseId, { failure: "ASSET_GL_NOT_CONFIGURED" }, "failure");
               break;
             }
             const journal = leaseJournal(row, heads);
@@ -637,18 +668,23 @@ export function registerF3EnterpriseConsumers(rawQ: Queue): void {
   });
 
   queue.subscribe(CONSUMED_EVENTS.glRejected, async (msg) => {
-    const p = msg.payload as { journalId?: string; reason?: string };
+    const p = msg.payload as { journalId?: string; reason?: string; code?: string };
     if (typeof p.journalId !== "string") return;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const reason = String(p.reason ?? "finance rejected the journal");
+      // Finance's refusal code is kept with the reason (PERIOD_CLOSED, NOT_LEAF_ACCOUNT, UNKNOWN_ACCOUNT_CODE, ...) so the
+      // record's page can say what to do. The record is only marked rejected; the journal is never silently re-dated.
+      const text = String(p.reason ?? "finance rejected the journal");
+      const reason = p.code && !text.startsWith(p.code) ? `${p.code}: ${text}` : text;
       const hit = await repo.resolveGlJournal(tx, msg.tenantId, p.journalId as string, "failed", reason);
       if (hit) {
-        await auditEvent(tx, msg, "gl_post", hit.kind === "auc" ? "auc_project" : "asset_lease", hit.id, { journalId: p.journalId, failure: reason }, "failure");
+        await auditEvent(tx, msg, "gl_post", REJECTED_RESOURCE[hit.kind], hit.id, { journalId: p.journalId, code: p.code ?? null, failure: reason }, "failure");
       }
     });
   });
 }
+
+const REJECTED_RESOURCE = { auc: "auc_project", lease: "asset_lease", asset: "asset", work_order: "work_order" } as const;
 
 /**
  * A tenant's configured head for an impairment / revaluation journal. No default: if it has vanished since the route
@@ -657,20 +693,6 @@ export function registerF3EnterpriseConsumers(rawQ: Queue): void {
  */
 async function requiredHead(tx: Tx, tenantId: string, kind: "fixed_asset" | "impairment_expense" | "revaluation_reserve"): Promise<string> {
   const head = headsFromSettings(await repo.getAssetSettingsTx(tx, tenantId), [kind])[kind];
-  if (!head) throw new Error(`GL_HEADS_NOT_CONFIGURED: no ${HEAD_LABEL[kind]} account configured for tenant ${tenantId}`);
+  if (!head) throw new Error(`ASSET_GL_NOT_CONFIGURED: no ${HEAD_LABEL[kind]} account configured for tenant ${tenantId}`);
   return head;
-}
-
-/** Settings as shown in the audit before/after images. */
-function settingsSnapshot(s: Awaited<ReturnType<typeof repo.getAssetSettingsTx>>): Record<string, unknown> {
-  return {
-    capitalizeMakerChecker: s?.capitalizeMakerChecker ?? true,
-    cwipAccountCode: s?.cwipAccountCode ?? null,
-    fixedAssetAccountCode: s?.fixedAssetAccountCode ?? null,
-    impairmentExpenseAccountCode: s?.impairmentExpenseAccountCode ?? null,
-    revaluationReserveAccountCode: s?.revaluationReserveAccountCode ?? null,
-    rouAccountCode: s?.rouAccountCode ?? null,
-    leaseLiabilityAccountCode: s?.leaseLiabilityAccountCode ?? null,
-    leaseOffsetAccountCode: s?.leaseOffsetAccountCode ?? null,
-  };
 }

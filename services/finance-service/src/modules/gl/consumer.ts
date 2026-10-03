@@ -16,6 +16,7 @@ import { nextVoucherNo, fyFromDate } from "../hoa/voucher.js";
 import { deterministicId } from "./spine.js";
 import type { JournalLine } from "./schema.js";
 import { validateOrgAssignmentTx } from "../org-structure/domain.js";
+import { refusalCode } from "./refusal.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -427,21 +428,30 @@ export function registerGlConsumers(queue: Queue): void {
         await postJournal(tx, msg, p);
       });
     } catch (err) {
-      if (err instanceof UnknownAccountCodeError) {
-        // The posting transaction rolled back. Tell the producer (finance.gl.rejected, in its own transaction, which
-        // also marks the message processed) and raise an alertable error, then dead-letter -- never retry.
+      // A deterministic refusal (unknown account, closed period, group account, ...). The posting transaction rolled
+      // back. Tell the producer EVERY time, with the reason code (finance.gl.rejected, in its own transaction, which also
+      // marks the message processed) and raise an alertable error, then dead-letter -- never retry a refusal that a retry
+      // cannot change. A record that waits on this journal (asset-service) shows it as not posted and why, instead of
+      // staying pending forever. Transient failures (no code) keep their normal retry behaviour.
+      const code = refusalCode(err);
+      if (code) {
+        const accountCode = err instanceof UnknownAccountCodeError ? err.accountCode : undefined;
         captureError(err, {
-          service: "finance-service", alert: "GL_UNKNOWN_ACCOUNT_CODE", topic: COMMANDS.journalPost,
-          journalId: p.id, voucherNo: p.voucherNo, accountCode: err.accountCode, tenantId: msg.tenantId,
+          service: "finance-service", alert: code === "UNKNOWN_ACCOUNT_CODE" ? "GL_UNKNOWN_ACCOUNT_CODE" : "GL_JOURNAL_REFUSED", topic: COMMANDS.journalPost,
+          journalId: p.id, voucherNo: p.voucherNo, code, ...(accountCode ? { accountCode } : {}), tenantId: msg.tenantId,
         });
+        const reason = err instanceof UnknownAccountCodeError
+          ? `UNKNOWN_ACCOUNT_CODE: account ${err.accountCode} is not in the chart of accounts`
+          : `${code}: ${String((err as Error).message).replace(/^\[?[A-Z_]+\]?[:\s]\s*/, "")}`;
         await db.transaction(async (tx) => {
           if (!(await markProcessed(tx, msg.messageId))) return;
           await enqueue(tx, {
             topic: EVENTS.glRejected, eventType: EVENTS.glRejected,
             tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-            payload: { journalId: p.id, voucherNo: p.voucherNo, type: p.type, reason: `UNKNOWN_ACCOUNT_CODE: account ${err.accountCode} is not in the chart of accounts`, accountCode: err.accountCode },
+            payload: { journalId: p.id, voucherNo: p.voucherNo, type: p.type, code, reason, ...(accountCode ? { accountCode } : {}) },
           });
         });
+        if (!(err instanceof NonRetryableError)) throw new NonRetryableError(String((err as Error).message));
       }
       throw err;
     }

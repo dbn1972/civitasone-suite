@@ -1765,6 +1765,9 @@ export type AssetSummary = {
   barcode?: string;
   /** The registered functional location the asset sits in (GAP-ASSETS-LOCATIONS-03); `location` is its display text. */
   locationId?: string;
+  /** Finance-side state of the acquisition journal: none | awaiting_accounts | pending | posted | failed. */
+  glPostStatus?: string;
+  glPostError?: string;
   condition?: "excellent" | "good" | "fair" | "poor";
 };
 
@@ -1802,6 +1805,9 @@ export type MaintenanceSummary = {
   actualCost: number;
   status: "scheduled" | "in_progress" | "completed" | "cancelled" | "overdue";
   remarks?: string;
+  /** Finance-side state of the maintenance journal: none | awaiting_accounts | pending | posted | failed. */
+  glPostStatus?: string;
+  glPostError?: string;
 };
 
 export type StockDashboard = {
