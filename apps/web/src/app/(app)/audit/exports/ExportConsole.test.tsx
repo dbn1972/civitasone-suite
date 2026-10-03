@@ -76,7 +76,7 @@ describe("ExportConsole", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Verify integrity" })).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Verify integrity" }));
 
-    expect(await screen.findByText(/couldn't (load|check)/i)).toBeInTheDocument();
+    expect(await screen.findByText(/We couldn't connect\. Check your internet connection and try again\./)).toBeInTheDocument();
     expect(screen.queryByText(/backend timed out/)).not.toBeInTheDocument();
   });
 });

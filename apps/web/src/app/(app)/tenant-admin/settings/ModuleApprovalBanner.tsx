@@ -55,8 +55,8 @@ export function ModuleApprovalBanner({ roles, dirtyKeys, pendingState }: ModuleA
         return;
       }
       setRequestStatus("submitted");
-    } catch {
-      setErrorMessage(formError.fromException("save").message);
+    } catch (caught) {
+      setErrorMessage(formError.fromException("save", caught).message);
       setRequestStatus("error");
     }
   }

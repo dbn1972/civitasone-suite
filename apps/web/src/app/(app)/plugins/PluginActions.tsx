@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
 import { ActionButton } from "../../_components/ds";
 
@@ -31,7 +32,7 @@ export function PluginActions({ plugin }: { plugin: Plugin }) {
 			headers: body ? { "Content-Type": "application/json" } : undefined,
 			body,
 		});
-		if (!res.ok) throw new Error((await res.text()) || `Failed to ${verb} plugin.`);
+		if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
 		router.refresh();
 	}
 

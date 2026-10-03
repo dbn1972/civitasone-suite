@@ -97,9 +97,9 @@ export function RunQueryForm() {
         setCatalog(data);
         // Initialise metric to first option
         if (data.metrics.length > 0) setMetric(data.metrics[0].key);
-      } catch {
+      } catch (caught) {
         if (cancelled) return;
-        setCatalogError(catalogFormError.fromException("load").message);
+        setCatalogError(catalogFormError.fromException("load", caught).message);
       }
     }
 
@@ -199,8 +199,8 @@ export function RunQueryForm() {
 
         setSuccessMsg("Query queued — results appear in Query Results once processed.");
         resetForm();
-      } catch {
-        setSubmitError(queryFormError.fromException("save").message);
+      } catch (caught) {
+        setSubmitError(queryFormError.fromException("save", caught).message);
       } finally {
         setSubmitting(false);
       }

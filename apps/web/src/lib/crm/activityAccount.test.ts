@@ -247,7 +247,7 @@ describe("loaders + mutations", () => {
     const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
     expect(body.dealId).toBe("d1");
     fetchMock.mockResolvedValueOnce(res({ code: "BAD", message: "no" }, 400));
-    await expect(createActivity({ type: "note", subjectType: "contact", subjectId: "c1", text: "x" })).rejects.toThrow(/couldn't save/i);
+    await expect(createActivity({ type: "note", subjectType: "contact", subjectId: "c1", text: "x" })).rejects.toThrow("Some details weren't accepted. Check what you entered and try again.");
     fetchMock.mockResolvedValueOnce(res({ code: "BAD", message: "no" }, 400));
     await expect(createActivity({ type: "note", subjectType: "contact", subjectId: "c1", text: "x" })).rejects.not.toThrow(/BAD/);
   });

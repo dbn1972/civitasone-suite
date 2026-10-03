@@ -50,7 +50,7 @@ export function IntegrationsClient() {
       setHasLoaded(true);
     } catch (err) {
       if (err instanceof Error && err.name !== 'AbortError') {
-        setError(formError.fromException("load").message);
+        setError(formError.fromException("load", err).message);
       }
     } finally {
       setLoading(false);

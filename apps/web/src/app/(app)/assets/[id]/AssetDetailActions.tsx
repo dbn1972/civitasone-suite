@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
 import { useId, useRef, useState } from "react";
 import { Button, ConfirmDialog, useConfirmAction } from "../../../_components/ds";
@@ -169,7 +170,7 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ barcode: tagCode.trim() }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       setMessage("Barcode tagged.");
       router.refresh();
     } catch (e) {
@@ -218,7 +219,7 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
           reason,
         }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       setMessage("Asset transferred.");
       router.refresh();
     },
@@ -241,7 +242,7 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
           notes: reason,
         }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       setMessage("Disposal submitted for workflow approval.");
       router.refresh();
     },
@@ -268,7 +269,7 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
           notes,
         }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       setMessage("Direct disposal submitted (workflow bypassed).");
       router.refresh();
     },
@@ -286,7 +287,7 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
           ...(interOrgNotes.trim() ? { notes: interOrgNotes.trim() } : {}),
         }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       setMessage("Inter-organisation transfer submitted.");
       router.refresh();
     },

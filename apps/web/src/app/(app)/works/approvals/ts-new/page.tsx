@@ -64,8 +64,8 @@ export default function NewTsPage() {
       setMessage("Technical sanction created.");
       toast.success("Technical sanction created.");
       setTimeout(() => router.push("/works/approvals"), 600);
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

@@ -107,7 +107,7 @@ describe("OrgConfigPage (COMP-014: real per-tenant org-hierarchy-levels)", () =>
     // own error slot, which OrgConfigPage never populates; querying by role
     // would resolve against that one instead of the page's own error
     // paragraph.
-    expect(await screen.findByText(/couldn't save/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Some details weren't accepted\. Check what you entered and try again\./)).toBeInTheDocument();
     expect(screen.queryByText("validation failed: level ids must be unique")).not.toBeInTheDocument();
     expect(screen.queryByText("Org hierarchy saved.")).not.toBeInTheDocument();
   });
@@ -123,7 +123,7 @@ describe("OrgConfigPage (COMP-014: real per-tenant org-hierarchy-levels)", () =>
     render(<OrgConfigPage initialLevels={LEVELS} source="api" />);
     clickSaveOrder();
 
-    expect(await screen.findByText(/couldn't save/i)).toBeInTheDocument();
+    expect(await screen.findByText(/We couldn't connect\. Check your internet connection and try again\./)).toBeInTheDocument();
     expect(screen.queryByText("Failed to fetch")).not.toBeInTheDocument();
     expect(screen.queryByText("Org hierarchy saved.")).not.toBeInTheDocument();
   });

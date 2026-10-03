@@ -5,6 +5,7 @@
  * Status chip + pipeline position from the shared, real-enum transferStatus module.
  * Action buttons per stage. Horizontal progress timeline.
  */
+import { UserFacingError } from "@/lib/userFacingError";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -85,14 +86,14 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
       );
       if (!res.ok) {
         const resolved = await formError.fromResponse(res, "save");
-        throw new Error(resolved.message);
+        throw UserFacingError.from(resolved);
       }
       toast.success(tr("updatedToast"));
       router.refresh();
       setPending(null);
       onAction?.();
     } catch (err) {
-      setDialogError(err instanceof Error ? err.message : formError.fromException("save").message);
+      setDialogError(formError.fromException("save", err).message);
     } finally {
       setActing(false);
     }

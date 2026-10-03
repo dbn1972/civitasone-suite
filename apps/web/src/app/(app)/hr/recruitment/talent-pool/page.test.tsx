@@ -108,7 +108,7 @@ describe("TalentPoolPage (HR-A deep-verify)", () => {
     render(ui);
 
     expect(screen.getByText("Access restricted")).toBeInTheDocument();
-    expect(screen.getByText(/don.t have permission to view the talent pool/i)).toBeInTheDocument();
+    expect(screen.getByText(/You don't have permission to do this\. Ask your administrator if you need access\./)).toBeInTheDocument();
     // Must NOT suggest retrying — retrying a real 403 never succeeds.
     expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
     expect(screen.queryByText(/try again/i)).not.toBeInTheDocument();

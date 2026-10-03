@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import type { FormDesignState } from "@/app/_components/ds/designer/formTypes";
 import { formDesignFromService } from "@/app/_components/ds/designer/StatusTimeline";
 import { toHumanError } from "@/lib/messages";
@@ -201,7 +202,7 @@ export async function createPaymentIntent(payload: {
       subject: payload.subject ?? {},
     }),
   });
-  if (!(res.ok || res.status === 202)) throw new Error((await res.text()) || "Payment intent failed.");
+  if (!(res.ok || res.status === 202)) throw await userFacingErrorFromResponse(res, "save");
   const body = (await res.json()) as { id?: string };
   if (!body.id) throw new Error("Payment intent missing id.");
   return body.id;
@@ -221,7 +222,7 @@ export async function confirmPayment(
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ mode, ...(gatewayRef ? { gatewayRef } : {}) }),
   });
-  if (!(res.ok || res.status === 202)) throw new Error((await res.text()) || "Payment confirm failed.");
+  if (!(res.ok || res.status === 202)) throw await userFacingErrorFromResponse(res, "save");
 }
 
 export async function trackApplication(trackingNo: string): Promise<TrackingAck> {

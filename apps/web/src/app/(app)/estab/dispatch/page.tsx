@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useCallback, useEffect, useState } from "react";
 import { PageHeader, StatusPill, DataTable, EmptyState, ErrorState } from "../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
@@ -26,7 +27,7 @@ export default function DispatchRegistryPage() {
     setError(false);
     try {
       const res = await fetch("/api/proxy/v1/estab/dispatch?limit=100", { signal });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       const body = await res.json() as { data?: DispatchRow[] };
       setRows(body.data ?? []);
     } catch (e) {

@@ -59,8 +59,8 @@ export default function NewTenderPage() {
       setMessage("Created.");
       toast.success("Pre-tender created.");
       setTimeout(() => router.push("/works/tenders"), 600);
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

@@ -59,9 +59,9 @@ export function EvaluateForm() {
       const body = (await res.json().catch(() => ({}))) as Decision;
       setStatus("ok");
       setResult(body);
-    } catch {
+    } catch (caught) {
       setStatus("error");
-      setError(formError.fromException("save").message);
+      setError(formError.fromException("save", caught).message);
     }
   }
 

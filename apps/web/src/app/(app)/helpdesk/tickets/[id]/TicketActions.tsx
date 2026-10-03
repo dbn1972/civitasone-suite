@@ -1,5 +1,6 @@
 "use client";
 
+import { UserFacingError } from "@/lib/userFacingError";
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog } from "../../../../_components/ds";
@@ -55,7 +56,7 @@ export function TicketActions({ ticketId }: Props) {
         body: body ? JSON.stringify(body) : undefined,
       });
       if (!res.ok) {
-        throw new Error((await formError.fromResponse(res, "save")).message);
+        throw UserFacingError.from(await formError.fromResponse(res, "save"));
       }
     } finally {
       setBusy(false);
@@ -79,8 +80,8 @@ export function TicketActions({ ticketId }: Props) {
     try {
       await request("POST", `/v1/citizen/tickets/${ticketId}/notes`, { body: reply });
       onSuccess("Reply sent to the citizen.");
-    } catch {
-      setResult({ kind: "err", text: formError.fromException("save").message });
+    } catch (caught) {
+      setResult({ kind: "err", text: formError.fromException("save", caught).message });
     }
   }
 
@@ -101,8 +102,8 @@ export function TicketActions({ ticketId }: Props) {
         });
         onSuccess("Ticket closed.");
       }
-    } catch {
-      setConfirmErr(formError.fromException("save").message);
+    } catch (caught) {
+      setConfirmErr(formError.fromException("save", caught).message);
     }
   }
 

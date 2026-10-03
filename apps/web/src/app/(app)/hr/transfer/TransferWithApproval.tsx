@@ -13,6 +13,7 @@
  *      the hrms eoffice-consumer effects the transfer.
  */
 
+import { UserFacingError } from "@/lib/userFacingError";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useToast } from "@/app/_components/ds/Toast";
@@ -204,10 +205,10 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
           // directly to the user. Route it through the same clerk-safe
           // useFormError path TransferOrderCard.tsx already uses.
           const resolved = await formError.fromResponse(subRes, "save");
-          throw new Error(resolved.message);
+          throw UserFacingError.from(resolved);
         }
         const sub = (await subRes.json()) as { id?: string };
-        if (!sub.id) throw new Error(tr("errMissingId"));
+        if (!sub.id) throw new UserFacingError(tr("errMissingId"));
         transferId = sub.id;
         setSubmittedTransferId(transferId);
       }
@@ -231,8 +232,9 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
       });
       if (!raiseRes.ok) {
         const resolved = await formError.fromResponse(raiseRes, "save");
-        throw new Error(
+        throw new UserFacingError(
           tr("errEfileFailed", { message: resolved.message }),
+          resolved.reference,
         );
       }
       const file = (await raiseRes.json()) as { fileNo?: string };
@@ -240,7 +242,7 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
       reset();
       setOpen(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : formError.fromException("save").message);
+      setError(formError.fromException("save", err).message);
     } finally {
       setSaving(false);
     }

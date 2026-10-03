@@ -29,7 +29,7 @@ describe("FileUpload", () => {
     const bigFile = new File(["x".repeat(2 * 1024 * 1024)], "big.pdf", { type: "application/pdf" });
     Object.defineProperty(input, "files", { value: [bigFile] });
     fireEvent.change(input);
-    expect(screen.getByText(/exceeds 1MB limit/)).toBeInTheDocument();
+    expect(screen.getByText("The file is too large. Upload a file smaller than 1 MB.")).toBeInTheDocument();
   });
 
   it("accepts valid file and shows progress", async () => {

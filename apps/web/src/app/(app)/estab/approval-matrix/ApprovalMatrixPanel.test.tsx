@@ -27,7 +27,7 @@ describe("ApprovalMatrixPanel — UX-016 clerk-safe errors", () => {
     fireEvent.change(screen.getByPlaceholderText("director, cto, ceo"), { target: { value: "director" } });
     fireEvent.click(screen.getByRole("button", { name: "Add rule" }));
 
-    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Some details weren't accepted\. Check what you entered and try again\./)).toBeInTheDocument());
     expect(document.body.textContent).not.toMatch(/workflow_definition_code not found/i);
     expect(document.body.textContent).not.toMatch(/\b422\b/);
   });

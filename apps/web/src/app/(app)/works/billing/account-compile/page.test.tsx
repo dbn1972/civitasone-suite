@@ -38,7 +38,7 @@ describe("AccountCompilePage — UX-016 clerk-safe errors", () => {
     fireEvent.click(screen.getByRole("button", { name: "Compile Account" }));
 
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toMatch(/couldn't save/i);
+    expect(alert.textContent).toMatch(/This account compile was changed by someone else\. Refresh to see the latest version, then try again\./);
     expect(alert.textContent).not.toMatch(/409/);
   });
 

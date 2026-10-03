@@ -87,7 +87,7 @@ describe("CreateReimbursementForm", () => {
     fireEvent.click(screen.getByRole("button", { name: "Submit Claim" }));
     await waitFor(() => expect(screen.getByText("Submit this reimbursement claim?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Submit claim"));
-    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Some details weren't accepted\. Check what you entered and try again\./)).toBeInTheDocument());
     expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
   });
 });

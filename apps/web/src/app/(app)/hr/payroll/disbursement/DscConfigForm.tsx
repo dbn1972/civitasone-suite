@@ -95,7 +95,7 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
       if (fileRef.current) fileRef.current.value = "";
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : formError.fromException("save").message);
+      setError(formError.fromException("save", err).message);
     } finally {
       setBusy(false);
     }
@@ -110,7 +110,7 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
       setMessage(t("removedMessage"));
       router.refresh();
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : formError.fromException("save").message);
+      setDeleteError(formError.fromException("save", err).message);
     } finally {
       setBusy(false);
     }

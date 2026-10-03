@@ -140,7 +140,7 @@ describe("StaffingPlanPage — 403 vs network error (GAP-HR-STAFFING-PLAN-04)", 
       errorMessage: "requires one of: hr_admin, super_admin, hr_officer",
     });
     await renderPage();
-    expect(screen.getByText(/requires one of/i)).toBeInTheDocument();
+    expect(screen.getByText(/You don't have permission to do this\. Ask your administrator if you need access\./)).toBeInTheDocument();
     // Scoped to the card body's own error state, not the top DataSourceBadge
     // pill (which legitimately shows its own "Couldn't load" wording for
     // ANY source:"error" case, 403 included -- that pill is unrelated to

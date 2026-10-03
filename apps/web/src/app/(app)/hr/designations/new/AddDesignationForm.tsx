@@ -117,9 +117,9 @@ export function AddDesignationForm({ onCancel, onSuccess }: Props) {
       setMessage(t("successMsg", { name: trimName }));
       reset();
       onSuccess?.();
-    } catch {
+    } catch (caught) {
       setTone("error");
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

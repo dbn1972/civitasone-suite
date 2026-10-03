@@ -48,9 +48,9 @@ export function CreateCaseForm() {
       }
       router.push("/legal/list");
       router.refresh();
-    } catch {
+    } catch (caught) {
       setStatus("error");
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     }
   }
 

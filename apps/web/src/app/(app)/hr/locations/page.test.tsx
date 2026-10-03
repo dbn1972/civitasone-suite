@@ -53,7 +53,7 @@ describe("LocationsPage", () => {
       errorMessage: "requires one of: hr_admin, hr_officer, super_admin",
     });
     await renderPage();
-    expect(screen.getByText(/requires one of: hr_admin, hr_officer, super_admin/i)).toBeInTheDocument();
+    expect(screen.getByText(/You don't have permission to do this\. Ask your administrator if you need access\./)).toBeInTheDocument();
     expect(screen.queryByText("No locations yet")).not.toBeInTheDocument();
     // single title, not "Locations (0)" -- the old title bug this item also fixed
     expect(screen.queryByText("Locations (0)")).not.toBeInTheDocument();
@@ -62,7 +62,7 @@ describe("LocationsPage", () => {
   it("shows the generic retryable error on a non-403 failure, and does not double-announce it", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
     await renderPage();
-    expect(screen.getByText("We couldn't load locations.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't connect.")).toBeInTheDocument();
     // DataSourceBadge must not also render on the error path (GAP-HR-LOCATIONS-04)
     expect(screen.queryByText(/showing cached|live data/i)).not.toBeInTheDocument();
   });

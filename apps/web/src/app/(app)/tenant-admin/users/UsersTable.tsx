@@ -1,5 +1,6 @@
 "use client";
 
+import { UserFacingError } from "@/lib/userFacingError";
 import { useId, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, StatusPill, Segmented, ConfirmDialog, DataTable } from "../../../_components/ds";
@@ -188,7 +189,7 @@ function InviteUserDialog({ open, onClose, onCreated }: { open: boolean; onClose
       }),
     });
     if (!res.ok) {
-      throw new Error((await formError.fromResponse(res, "save")).message);
+      throw UserFacingError.from(await formError.fromResponse(res, "save"));
     }
     reset();
   }

@@ -74,8 +74,8 @@ export default function TemplateDetailPage() {
           return;
         }
         setVersions(toArray(await res.json()));
-      } catch {
-        setError(formError.fromException("load").message);
+      } catch (caught) {
+        setError(formError.fromException("load", caught).message);
       } finally {
         setLoading(false);
       }

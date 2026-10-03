@@ -63,7 +63,7 @@ describe("ClaimActions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Settle claim" }));
     await waitFor(() => expect(screen.getByText("Settle this claim?")).toBeInTheDocument());
     fireEvent.click(screen.getAllByRole("button", { name: "Settle claim" }).at(-1)!);
-    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/This information was changed by someone else\. Refresh to see the latest version, then try again\./)).toBeInTheDocument());
     expect(refreshMock).not.toHaveBeenCalled();
   });
 });

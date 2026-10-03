@@ -66,8 +66,8 @@ function NewBoqItemForm() {
       setMessage("BoQ item added.");
       toast.success("BoQ item added.");
       setTimeout(() => router.push(form.workId.trim() ? `/works/boq/${form.workId.trim()}` : "/works/boq"), 600);
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

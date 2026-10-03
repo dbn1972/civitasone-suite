@@ -142,8 +142,8 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
       // a server component. Let the parent re-fetch its list explicitly.
       onCreated?.();
       router.refresh();
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

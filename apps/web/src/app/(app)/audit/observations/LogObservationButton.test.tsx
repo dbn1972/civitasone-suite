@@ -46,7 +46,7 @@ describe("LogObservationButton", () => {
     openAndFillDialog();
     fireEvent.click(screen.getByRole("button", { name: "Log observation" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't save/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/This observation was changed by someone else\. Refresh to see the latest version, then try again\./);
     expect(screen.queryByText(/unique constraint/)).not.toBeInTheDocument();
     expect(refreshMock).not.toHaveBeenCalled();
   });

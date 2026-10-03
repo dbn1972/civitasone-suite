@@ -175,7 +175,7 @@ describe("ApplicationDetailPage", () => {
     let n = 0;
     stubFetch({ [APP_URL]: () => (n++ === 0 ? new Response("", { status: 500 }) : json(APP)) });
     renderPage();
-    await waitFor(() => expect(screen.getByText(/couldn't load application/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/We couldn't load the application because of a problem on our side\. Try again in a few minutes\./)).toBeInTheDocument());
     expect(screen.queryByText("Application not found.")).not.toBeInTheDocument();
     expect(screen.queryByText(/\b500\b/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /try again|retry/i }));

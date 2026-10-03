@@ -55,7 +55,7 @@ describe("NewGrievancePage", () => {
     fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: "No water for 3 days" } });
     fireEvent.click(screen.getByRole("button", { name: "Submit Grievance" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't save/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Some details weren't accepted\. Check what you entered and try again\./);
     expect(screen.queryByText("Invalid category")).not.toBeInTheDocument();
     expect(pushMock).not.toHaveBeenCalled();
   });

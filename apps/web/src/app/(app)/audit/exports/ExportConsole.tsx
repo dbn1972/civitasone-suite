@@ -1,5 +1,6 @@
 "use client";
 
+import { UserFacingError } from "@/lib/userFacingError";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { formatIndianDate } from "@/lib/formatters";
 import { ActionButton, Button } from "@/app/_components/ds";
@@ -122,7 +123,7 @@ export function ExportConsole() {
   const generate = useCallback(async () => {
     setVerify(null);
     if (new Date(from) > new Date(to)) {
-      throw new Error("Start date must be on or before end date.");
+      throw new UserFacingError("Start date must be on or before end date.");
     }
     const res = await fetch("/api/proxy/audit/exports", {
       method: "POST",
@@ -131,10 +132,10 @@ export function ExportConsole() {
     });
     if (!res.ok) {
       const resolved = await formError.fromResponse(res, "save");
-      throw new Error(resolved.message);
+      throw UserFacingError.from(resolved);
     }
     const body = (await res.json()) as { id?: string };
-    if (!body.id) throw new Error("Backend did not return an export id.");
+    if (!body.id) throw new UserFacingError("Backend did not return an export id.");
     setJob({
       id: body.id,
       status: "queued",
@@ -174,8 +175,8 @@ export function ExportConsole() {
       const body = (await res.json()) as { data: VerifyResult };
       setVerify(body.data);
       flash(body.data.verified ? "ok" : "err", body.data.verified ? "Integrity verified." : "Integrity check failed.");
-    } catch {
-      flash("err", formError.fromException("load").message);
+    } catch (caught) {
+      flash("err", formError.fromException("load", caught).message);
     } finally {
       setVerifyBusy(false);
     }

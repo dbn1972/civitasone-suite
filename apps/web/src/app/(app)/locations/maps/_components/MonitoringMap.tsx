@@ -104,7 +104,7 @@ export function MonitoringMap() {
       setMarkers(normalizeMarkers(body));
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") return;
-      setError(formError.fromException("load").message);
+      setError(formError.fromException("load", err).message);
     } finally {
       setLoading(false);
     }

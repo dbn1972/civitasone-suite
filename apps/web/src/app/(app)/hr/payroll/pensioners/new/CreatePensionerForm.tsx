@@ -187,9 +187,9 @@ export function CreatePensionerForm() {
       setMessage(t("successMessage"));
       router.push("/hr/payroll/pensioners");
       router.refresh();
-    } catch {
+    } catch (caught) {
       setStatus("error");
-      setDialogError(formError.fromException("save").message);
+      setDialogError(formError.fromException("save", caught).message);
     }
   }
 

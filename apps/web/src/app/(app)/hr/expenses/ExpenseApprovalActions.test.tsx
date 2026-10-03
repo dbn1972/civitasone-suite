@@ -90,7 +90,7 @@ describe("ExpenseApprovalActions — GAP-HR-EXPENSES-02", () => {
     const dialog = await screen.findByRole("alertdialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /^approve$/i }));
 
-    await waitFor(() => expect(within(dialog).getByRole("alert")).toHaveTextContent(/couldn't save/i));
+    await waitFor(() => expect(within(dialog).getByRole("alert")).toHaveTextContent("You can't approve your own request. Another approver needs to do this."));
     const alertText = within(dialog).getByRole("alert").textContent ?? "";
     expect(alertText).not.toMatch(/\b403\b/);
     expect(refreshMock).not.toHaveBeenCalled();

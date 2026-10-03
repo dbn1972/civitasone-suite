@@ -51,8 +51,8 @@ export function AddTaskForm({ employeeId }: AddTaskFormProps) {
       // Async write (F3 queue, same as every other mutation in this module)
       // -- refresh shortly after so the new task actually shows up.
       setTimeout(() => router.refresh(), 1000);
-    } catch {
-      setLocalError(formError.fromException("save").message);
+    } catch (caught) {
+      setLocalError(formError.fromException("save", caught).message);
     } finally {
       setSubmitting(false);
     }

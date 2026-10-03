@@ -76,7 +76,7 @@ export function TenantLifecycleSection({
   }
 
   async function failWith(res: Response | null) {
-    if (!res) { setDialogError(formError.fromException("save").message); return; }
+    if (!res) { setDialogError(formError.fromException("save", new TypeError("no response")).message); return; }
     const code = knownErrorCode(await errorCodeOf(res));
     if (code) { setDialogError(t(`error.${code}` as never)); return; }
     setDialogError((await formError.fromResponse(res, "save")).message);

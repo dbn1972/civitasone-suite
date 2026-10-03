@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button, PageHeader, DataTable, EmptyState, ErrorState, ConfirmDialog, SkeletonRow, useConfirmAction } from "../../../_components/ds";
@@ -88,7 +89,7 @@ export default function LeasesPage() {
           leaseEnd: form.leaseEnd,
         }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       setMessage(`Lease ${leaseNo} submitted. Its ROU asset ROU/${leaseNo} and lease liability will appear shortly.`);
       setForm({ leaseNo: "", lessorName: "", rouCost: "", liability: "", leaseStart: "", leaseEnd: "" });
       await load();

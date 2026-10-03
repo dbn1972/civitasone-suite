@@ -180,9 +180,9 @@ export function TaxDeclarationForm() {
       setMessage(t("savedMessage"));
       setHasExisting(true);
       setExistingStatus("submitted");
-    } catch {
+    } catch (caught) {
       setTone("bad");
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

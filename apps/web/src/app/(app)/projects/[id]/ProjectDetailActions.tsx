@@ -39,8 +39,8 @@ export function ProjectDetailActions({ projectId, milestones }: Props) {
       setMessage(`Milestone “${target.title}” marked complete.`);
       setTarget(null);
       router.refresh();
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

@@ -1,4 +1,5 @@
 "use client";
+import { UserFacingError } from "@/lib/userFacingError";
 import { useState } from "react";
 import Link from "next/link";
 import type { LeaveInboxItem } from "@civitasone/types";
@@ -84,7 +85,7 @@ export function ActionInbox({ initialItems, canDecide }: Props) {
       throw new Error(message);
     }
     const resolved = await formError.fromResponse(res, "save");
-    throw new Error(resolved.message);
+    throw UserFacingError.from(resolved);
   }
 
   return (

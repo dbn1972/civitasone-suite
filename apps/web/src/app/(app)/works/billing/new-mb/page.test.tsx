@@ -54,7 +54,7 @@ describe("Issue Measurement Book form", () => {
     fireEvent.click(screen.getByRole("button", { name: "Submit" }));
 
     const alert = await screen.findByRole("alert");
-    await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+    await waitFor(() => expect(alert).toHaveTextContent(/This measurement book was changed by someone else\. Refresh to see the latest version, then try again\./));
     expect(alert.textContent).not.toMatch(/mb_number already exists/i);
     expect(alert.textContent).not.toMatch(/\b409\b/);
   });

@@ -44,8 +44,8 @@ export function OvertimeActions({ id }: { id: string }) {
       }
       setDialog(null);
       router.refresh();
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

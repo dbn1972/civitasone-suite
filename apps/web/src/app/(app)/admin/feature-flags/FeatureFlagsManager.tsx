@@ -199,9 +199,9 @@ export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: Ad
       setDialog(null);
       toast.success(`Flag created: ${v.name}`);
       await refresh();
-    } catch {
+    } catch (caught) {
       setCreating(false);
-      setError(formError.fromException("save").message);
+      setError(formError.fromException("save", caught).message);
     }
   }
 

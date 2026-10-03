@@ -1,5 +1,6 @@
 "use client";
 
+import { UserFacingError } from "@/lib/userFacingError";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, DataTable, StatusPill, ActionButton, ErrorState } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
@@ -105,8 +106,8 @@ export function OperatorsPanel() {
     setSaving(true); setMessage(""); setError("");
     clear();
     try {
-      if (!/^[0-9a-f-]{36}$/i.test(form.employeeId)) throw new Error("Pick an employee or enter a valid employee ID");
-      if (!form.division.trim()) throw new Error("Division is required");
+      if (!/^[0-9a-f-]{36}$/i.test(form.employeeId)) throw new UserFacingError("Pick an employee or enter a valid employee ID");
+      if (!form.division.trim()) throw new UserFacingError("Division is required");
       const payload = {
         employeeId: form.employeeId,
         division: form.division.trim(),
@@ -127,7 +128,7 @@ export function OperatorsPanel() {
     } catch (err) {
       // "Pick an employee..." / "Division is required" above are already
       // clerk-safe, client-side validation copy — preserved via err.message.
-      setError(err instanceof Error ? err.message : fromException("save").message);
+      setError(fromException("save", err).message);
     } finally {
       setSaving(false);
     }
@@ -139,7 +140,7 @@ export function OperatorsPanel() {
       body: JSON.stringify({ active: !op.active }),
     });
     if (!res.ok) {
-      throw new Error((await fromResponse(res, "save")).message);
+      throw UserFacingError.from(await fromResponse(res, "save"));
     }
     setMessage(`Operator ${op.active ? "deactivated" : "reactivated"}.`);
     setTimeout(() => void load(), 800);

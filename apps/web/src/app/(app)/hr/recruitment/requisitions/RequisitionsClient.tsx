@@ -1,5 +1,6 @@
 "use client";
 
+import { UserFacingError } from "@/lib/userFacingError";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -123,9 +124,9 @@ export function RequisitionsClient() {
       setCreateMessage(t("createdMessage"));
       setTitle(""); setQualification(""); setReason(""); setVacancies("1");
       reloadAfterWrite();
-    } catch {
+    } catch (caught) {
       setCreateState("error");
-      setCreateMessage(formError.fromException("save").message);
+      setCreateMessage(formError.fromException("save", caught).message);
     }
   }
 
@@ -139,7 +140,7 @@ export function RequisitionsClient() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(path === "approve" || path === "return" ? { comments: text || undefined } : {}),
       });
-      if (!res.ok) throw new Error((await formError.fromResponse(res, "save")).message);
+      if (!res.ok) throw UserFacingError.from(await formError.fromResponse(res, "save"));
       if (path === "publish") {
         const body = (await res.json()) as { publishedOpeningId?: string };
         if (body.publishedOpeningId) setPublishedIds((prev) => ({ ...prev, [pending.id]: body.publishedOpeningId as string }));

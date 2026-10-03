@@ -54,7 +54,7 @@ describe("ExecutionActions — UX-016 clerk-safe errors", () => {
     const dialog = screen.getByRole("alertdialog");
     fireEvent.click(within(dialog).getByRole("button", { name: "Close Work" }));
 
-    await waitFor(() => expect(screen.getAllByText(/couldn't save/i).length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText(/This work closure was changed by someone else\. Refresh to see the latest version, then try again\./).length).toBeGreaterThan(0));
     expect(screen.queryByText(/409/)).not.toBeInTheDocument();
   });
 });

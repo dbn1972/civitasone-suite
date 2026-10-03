@@ -64,8 +64,8 @@ export default function NewDomainPage() {
       }
       const body = await res.json() as { id?: string };
       router.push(body.id ? `/domains/${body.id}` : "/domains");
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

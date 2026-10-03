@@ -39,7 +39,7 @@ describe("BillingActions — UX-016 clerk-safe errors", () => {
     const dialog = screen.getByRole("alertdialog");
     fireEvent.click(within(dialog).getByRole("button", { name: "Advance" }));
 
-    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/This bill was changed by someone else\. Refresh to see the latest version, then try again\./)).toBeInTheDocument());
     expect(screen.queryByText(/Conflict: bill already at this status/)).not.toBeInTheDocument();
     expect(screen.queryByText(/409/)).not.toBeInTheDocument();
   });
@@ -58,7 +58,7 @@ describe("BillingActions — UX-016 clerk-safe errors", () => {
     // This component shows the resolved message twice by design — once in
     // its own inline status paragraph, once inside the ConfirmDialog itself
     // — so assert on "at least one", not a single unique match.
-    await waitFor(() => expect(screen.getAllByText(/couldn't save/i).length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText(/We couldn't find this measurement book\. It may have been removed or the link may be wrong\./).length).toBeGreaterThan(0));
     expect(screen.queryByText("Not Found")).not.toBeInTheDocument();
   });
 });

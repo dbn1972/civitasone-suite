@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -27,7 +28,7 @@ export function EstabApprovalsPanel() {
     setLoadError(false);
     try {
       const res = await fetch("/api/proxy/v1/workflow/tasks?status=pending&limit=50", { signal });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       const body = await res.json() as { data?: WorkflowTask[] } | WorkflowTask[];
       const rows = Array.isArray(body) ? body : (body.data ?? []);
       setTasks(rows.filter((t) => t.refType === "estab_file" && t.status === "pending"));
@@ -58,7 +59,7 @@ export function EstabApprovalsPanel() {
         body: JSON.stringify({ decision, reason }),
       });
       if (!res.ok) {
-        throw new Error((await res.text()) || `${decision} failed`);
+        throw await userFacingErrorFromResponse(res, "save");
       }
       const task = tasks.find((t) => t.id === taskId);
       const role = task?.roleRef ?? "";

@@ -158,9 +158,9 @@ export function NewTrainingForm() {
       setStatus("success");
       setMessage(t("submittedMessage"));
       router.refresh();
-    } catch {
+    } catch (caught) {
       setStatus("error");
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     }
   }
 

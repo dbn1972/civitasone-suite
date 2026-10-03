@@ -29,9 +29,9 @@ export function RoleFeatureGrantForm() {
       const body = await res.json().catch(() => ({}));
       setStatus("ok");
       setMessage(body?.id ? `Accepted — id ${body.id}` : "Accepted (202)");
-    } catch {
+    } catch (caught) {
       setStatus("error");
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     }
   }
 

@@ -59,8 +59,8 @@ export function ContractorRatingForm({
       toast.success("Rating submitted.");
       setTimeout(() => router.refresh(), 600);
       setSelectedRating(0);
-    } catch {
-      setErrorMessage(formError.fromException("save").message);
+    } catch (caught) {
+      setErrorMessage(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

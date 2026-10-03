@@ -135,7 +135,7 @@ export function GatewayConfigClient() {
       setError(null);
     } catch (err) {
       if (err instanceof Error && err.name !== 'AbortError') {
-        setError(formError.fromException("load").message);
+        setError(formError.fromException("load", err).message);
       }
     } finally {
       setLoading(false);
@@ -189,8 +189,8 @@ export function GatewayConfigClient() {
       setConfirmOpen(false);
       setSuccess("Gateway configuration updated successfully");
       setTimeout(() => setSuccess(null), 4000);
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setSaving(false);
     }

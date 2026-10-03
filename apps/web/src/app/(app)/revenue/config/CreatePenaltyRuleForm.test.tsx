@@ -55,7 +55,7 @@ describe("CreatePenaltyRuleForm", () => {
     fireEvent.click(screen.getByText("Create penalty rule"));
 
     await waitFor(() => {
-      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
+      expect(screen.getByText(/Some details weren't accepted\. Check what you entered and try again\./)).toBeInTheDocument();
     });
     expect(screen.queryByText(/API_ERROR: 422/)).not.toBeInTheDocument();
   });

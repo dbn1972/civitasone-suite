@@ -87,9 +87,9 @@ export function NewPlanForm() {
       setStatus("success");
       setMessage("Plan created successfully.");
       router.push("/billing/plans");
-    } catch {
+    } catch (caught) {
       setStatus("error");
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     }
   }
 

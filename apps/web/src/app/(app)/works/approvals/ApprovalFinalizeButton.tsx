@@ -118,8 +118,8 @@ export function ApprovalFinalizeButton({
         `${label} submitted for finalization. It will show as finalized once processed.`,
       );
       setTimeout(() => router.refresh(), 800);
-    } catch {
-      setErrorMessage(formError.fromException("save").message);
+    } catch (caught) {
+      setErrorMessage(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

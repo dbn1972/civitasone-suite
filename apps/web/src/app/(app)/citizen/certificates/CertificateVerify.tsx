@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/app/_components/ds";
@@ -34,7 +35,7 @@ export function CertificateVerify() {
     try {
       const res = await fetch(`/api/proxy/v1/citizen/certificates/verify/${encodeURIComponent(token)}`);
       if (res.status === 404) { setResult({ found: false, validity: "invalid" }); return; }
-      if (!res.ok) throw new Error((await res.text()) || "Verification failed.");
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       setResult((await res.json()) as VerifyResult);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Verification failed.");

@@ -336,8 +336,8 @@ export function ComputeFnfForm() {
       router.refresh();
       setPollTicks(0);
       setPolling(true);
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

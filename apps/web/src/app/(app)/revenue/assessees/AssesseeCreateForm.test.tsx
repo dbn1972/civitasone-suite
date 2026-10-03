@@ -58,7 +58,7 @@ describe("AssesseeCreateForm", () => {
     fireEvent.click(screen.getByText("Register assessee"));
 
     await waitFor(() => {
-      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
+      expect(screen.getByText(/Some details weren't accepted\. Check what you entered and try again\./)).toBeInTheDocument();
     });
     expect(screen.queryByText(/VALIDATION_FAILED: identifierNo is required/)).not.toBeInTheDocument();
   });

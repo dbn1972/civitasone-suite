@@ -67,8 +67,8 @@ export function OutsourcedRegister({
       resetForm();
       setNotice(t("noticeSubmitted"));
       router.refresh();
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }
@@ -87,8 +87,8 @@ export function OutsourcedRegister({
       setTerminateTarget(null);
       setNotice(t("noticeSubmitted"));
       router.refresh();
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

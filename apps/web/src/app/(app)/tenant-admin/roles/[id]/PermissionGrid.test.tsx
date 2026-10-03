@@ -25,7 +25,7 @@ describe("PermissionGrid — UX-016 clerk-safe errors", () => {
     fireEvent.change(within(dialog).getByLabelText(/Reason for change/i), { target: { value: "grant read access" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
 
-    await waitFor(() => expect(dialog.textContent).toMatch(/couldn't save/i));
+    await waitFor(() => expect(dialog.textContent).toMatch(/Some details weren't accepted\. Check what you entered and try again\./));
     expect(dialog.textContent).not.toMatch(/malformed effect/i);
     expect(dialog.textContent).not.toMatch(/\b400\b/);
     // The resource:action context prefix is preserved.

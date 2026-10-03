@@ -44,8 +44,8 @@ export function DocumentsPanel({ employeeId, documents, dpdpNotice }: DocumentsP
       // module) -- refresh shortly after so the real committed status
       // (not just the presigned-upload's own local state) shows up.
       setTimeout(() => router.refresh(), 1000);
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     }
   }
 

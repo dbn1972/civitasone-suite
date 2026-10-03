@@ -168,8 +168,8 @@ export function HearingsTable({ items, source = "api" }: { items: Hearing[]; sou
       setReminderBusy(false);
       setReminderRow(null);
       router.refresh();
-    } catch {
-      setReminderError(formError.fromException("save").message);
+    } catch (caught) {
+      setReminderError(formError.fromException("save", caught).message);
       setReminderBusy(false);
     }
   }

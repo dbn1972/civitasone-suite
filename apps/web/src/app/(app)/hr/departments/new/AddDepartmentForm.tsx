@@ -3,6 +3,7 @@
 import { useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
+import { ErrorSummary } from "@/app/_components/ds/ErrorSummary";
 import { Button, ConfirmDialog, EntityPicker } from "../../../../_components/ds";
 import { eligibleParentOptions, type MinimalDept } from "@/lib/hr/departmentTree";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
@@ -167,9 +168,9 @@ export function AddDepartmentForm({ onCancel, onSuccess, departments = [] }: Pro
       // tore the whole form down 1.5s after every single success.
       codeInputRef.current?.focus();
       onSuccess?.();
-    } catch {
+    } catch (caught) {
       setTone("error");
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }
@@ -191,9 +192,17 @@ export function AddDepartmentForm({ onCancel, onSuccess, departments = [] }: Pro
       <div className="pad" style={{ display: "grid", gap: 16 }}>
         {/* Status region */}
         <div aria-live="polite" aria-atomic="true" id={statusId}>
-          {message && (
+          {message && tone === "error" && (
+            // GOV.UK error summary: focus moves here, announced as an alert, and each
+            // field message links to its field (apps/web/docs/ERROR-MESSAGES.md).
+            <ErrorSummary
+              error={{ message, fieldErrors: formError.fieldErrors, reference: formError.reference }}
+              fieldId={(f) => ({ code: codeId, name: nameId, parentId: parentSelectId, type: typeId }[f] ?? f)}
+            />
+          )}
+          {message && tone !== "error" && (
             <p
-              role={tone === "error" ? "alert" : "status"}
+              role="status"
               style={{
                 margin: 0,
                 padding: "10px 14px",

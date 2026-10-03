@@ -81,7 +81,7 @@ describe("EcrGeneratorForm", () => {
       // "API_ERROR: <status>" — that was the same raw-status-leak bug class
       // UX-003/UX-016 close elsewhere, just via this shared helper. A 404
       // now maps to the catalogued "couldn't load" message.
-      expect(screen.getByText(/couldn't load/i)).toBeInTheDocument();
+      expect(screen.getByText(/We couldn't find this information\. It may have been removed or the link may be wrong\./)).toBeInTheDocument();
     });
     expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
     expect(screen.queryByText(/\b404\b/)).not.toBeInTheDocument();

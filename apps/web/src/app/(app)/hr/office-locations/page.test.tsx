@@ -31,7 +31,7 @@ describe("/hr/office-locations page (GAP-HR-LOCATIONS-NEW-02)", () => {
   it("shows PermissionDenied for a role that may not create geofences, without fetching", async () => {
     mockRoles = ["employee"];
     render(await OfficeLocationsPage());
-    expect(screen.getByText(/office locations/i)).toBeInTheDocument();
+    expect(screen.getByText(/You don't have permission to do this\. Ask your administrator if you need access\./)).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
     expect(screen.queryByRole("form")).toBeNull();
   });

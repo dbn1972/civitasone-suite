@@ -14,6 +14,7 @@
  *      reappropriation eoffice-consumer applies the change to the target budget.
  */
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useCallback, useState } from "react";
 import { Button } from "../../../../_components/ds";
 
@@ -65,7 +66,7 @@ export function ReappropriateWithApproval() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(reqBody),
       });
-      if (!subRes.ok) throw new Error((await subRes.text()) || "Could not create re-appropriation request");
+      if (!subRes.ok) throw await userFacingErrorFromResponse(subRes, "save");
 
       // Step 2 — raise the eFile against the re-appropriation request.
       const raiseRes = await fetch("/api/proxy/v1/estab/files/from-module", {
@@ -85,7 +86,7 @@ export function ReappropriateWithApproval() {
           context: { budgetId, amountMinor, ...(reqBody.headId ? { headId: reqBody.headId } : {}) },
         }),
       });
-      if (!raiseRes.ok) throw new Error((await raiseRes.text()) || "Re-appropriation request created, but raising the eFile failed");
+      if (!raiseRes.ok) throw await userFacingErrorFromResponse(raiseRes, "save");
       const file = (await raiseRes.json()) as { fileNo?: string };
       setMessage(`Re-appropriation raised for approval (eFile ${file.fileNo ?? ""}). On approval the budget head is updated automatically.`);
       reset();

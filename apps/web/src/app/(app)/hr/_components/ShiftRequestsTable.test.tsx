@@ -89,7 +89,7 @@ describe("ShiftRequestsTable", () => {
     fireEvent.change(within(dialog).getByLabelText(/approval remarks/i), { target: { value: "ok" } });
     fireEvent.click(within(dialog).getByRole("button", { name: /^approve$/i }));
 
-    await waitFor(() => expect(dialog).toHaveTextContent(/couldn't save/i));
+    await waitFor(() => expect(dialog).toHaveTextContent(/You don't have permission to do this\. Ask your administrator if you need access\./));
     expect(dialog.textContent).not.toMatch(/\b403\b/);
   });
 });

@@ -85,7 +85,7 @@ export default function MapHeadOfAccountPage() {
       setLoadError("");
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") return;
-      setLoadError(loadFormError.fromException("load").message);
+      setLoadError(loadFormError.fromException("load", err).message);
     }
     // loadFormError.fromResponse/fromException are stable (useCallback'd on a
     // fixed `area` string inside useFormError) even though the wrapping
@@ -159,9 +159,9 @@ export default function MapHeadOfAccountPage() {
       setCreateHoaCode("");
       await loadAccounts();
       router.refresh();
-    } catch {
+    } catch (caught) {
       setCreateIsError(true);
-      setCreateMessage(createFormError.fromException("save").message);
+      setCreateMessage(createFormError.fromException("save", caught).message);
     } finally {
       setCreateBusy(false);
     }
@@ -235,10 +235,10 @@ export default function MapHeadOfAccountPage() {
       setHoaCode("");
       router.refresh();
       setTimeout(() => router.push("/finance/chart-of-accounts"), 700);
-    } catch {
+    } catch (caught) {
       setConfirmOpen(false);
       setIsError(true);
-      setMessage(mapFormError.fromException("save").message);
+      setMessage(mapFormError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

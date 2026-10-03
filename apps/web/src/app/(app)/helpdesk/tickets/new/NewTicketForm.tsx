@@ -66,9 +66,9 @@ export function NewTicketForm() {
       toast.success("Ticket submitted successfully.");
       router.push("/helpdesk/tickets");
       router.refresh();
-    } catch {
+    } catch (caught) {
       setStatus("error");
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     }
   }
 

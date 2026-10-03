@@ -72,7 +72,8 @@ describe("ObligationsPanel", () => {
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
-    await waitFor(() => expect(screen.getByText(/version conflict|failed/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/This information was changed by someone else\. Refresh to see the latest version, then try again\./)).toBeInTheDocument());
+    expect(screen.queryByText(/version conflict/i)).not.toBeInTheDocument();
   });
 
   it("marking complete is gated behind a confirmation (terminal, cannot be reopened)", async () => {

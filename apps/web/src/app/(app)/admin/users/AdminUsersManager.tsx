@@ -173,10 +173,10 @@ function EditRolesSheet({
         return;
       }
       onClose();
-    } catch {
+    } catch (caught) {
       setBusy(false);
       setConfirmOpen(false);
-      setError(formError.fromException("save").message);
+      setError(formError.fromException("save", caught).message);
     }
   }
 

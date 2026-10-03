@@ -76,8 +76,8 @@ export function RegularisationTable({ regs, source = "api", canApprove = true }:
       setPending(null);
       setToast({ tone: "good", text: decision === "approve" ? t("toastApproved") : t("toastRejected") });
       router.refresh();
-    } catch {
-      setDialogError(formError.fromException("save").message);
+    } catch (caught) {
+      setDialogError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

@@ -93,10 +93,10 @@ export default function NewAdvancePage() {
       setMessage(t("recorded"));
       router.refresh();
       setTimeout(() => router.push("/finance/expenditure/advances"), 700);
-    } catch {
+    } catch (caught) {
       setConfirmOpen(false);
       setIsError(true);
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

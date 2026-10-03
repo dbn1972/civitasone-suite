@@ -57,7 +57,7 @@ describe("FollowUpModal", () => {
     fireEvent.change(screen.getByLabelText(/service type/i), { target: { value: "Renewal Support" } });
     fireEvent.click(screen.getByRole("button", { name: "Create Service Request" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't save/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Some details weren't accepted\. Check what you entered and try again\./);
     expect(screen.queryByText("subject is required")).not.toBeInTheDocument();
     expect(pushMock).not.toHaveBeenCalled();
   });

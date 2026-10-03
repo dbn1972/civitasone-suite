@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import { Button } from "@/app/_components/ds";
@@ -32,7 +33,7 @@ export function AssistantClient() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ question }),
       });
-      if (!res.ok) throw new Error((await res.text()) || "The assistant is unavailable.");
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "load");
       const body = (await res.json()) as { data: AskAnswer };
       setAnswer(body.data);
     } catch (e) {
@@ -51,7 +52,7 @@ export function AssistantClient() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ question, interactionId: answer?.interactionId, priority: "Medium" }),
       });
-      if (!res.ok) throw new Error((await res.text()) || "Could not open a ticket.");
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       setEscalated(true);
       router.refresh();
     } catch (e) {

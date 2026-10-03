@@ -111,7 +111,7 @@ describe("ServiceBookPage (HR caller)", () => {
 
     expect(screen.getByRole("heading", { name: "Access restricted" })).toBeInTheDocument();
     expect(
-      screen.getByText("Requires one of: hr_admin, hr_officer, super_admin, manager."),
+      screen.getByText(/You don't have permission to do this\. Ask your administrator if you need access\./),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
   });

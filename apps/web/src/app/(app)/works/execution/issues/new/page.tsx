@@ -61,8 +61,8 @@ function RaiseIssueForm() {
 
       toast.success("Issue raised.");
       setTimeout(() => router.push(`/works/execution/${workId}`), 600);
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
       setBusy(false);
     }
   }

@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ActionButton } from "@/app/_components/ds";
@@ -22,7 +23,7 @@ export function PolicyActions({ policyId, status }: { policyId: string; status: 
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body ?? {}),
     });
-    if (!res.ok) throw new Error((await res.text()) || `Failed to ${path}.`);
+    if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
     router.refresh();
   }
 

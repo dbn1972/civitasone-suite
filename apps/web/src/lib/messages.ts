@@ -5,7 +5,13 @@
  * least one safe action. Requirements 5 and 6.
  */
 
-export type SafeAction = "retry" | "back" | "help";
+export type SafeAction = "retry" | "back" | "help" | "signin";
+
+import {
+  resolveHumanError,
+  type ErrorContext,
+  type ErrorStatusKind,
+} from "./errorCatalogue";
 
 export type HumanError = {
   /** What happened, in plain words. (R6.1) */
@@ -78,7 +84,7 @@ export function toHumanError(kind: MessageKind, ctx?: { area?: string }): HumanE
       // "retry" as a safe action.
       return {
         what: "You don't have permission to do this.",
-        next: "Contact your administrator if you think this is a mistake.",
+        next: "Ask your administrator if you need access.",
         actions: ["back", "help"],
       };
     case "conflict":
@@ -97,8 +103,8 @@ export function toHumanError(kind: MessageKind, ctx?: { area?: string }): HumanE
       };
     default:
       return {
-        what: "Something went wrong.",
-        next: "Please try again, or open help if it keeps happening.",
+        what: "We couldn't complete that.",
+        next: "Try again in a few minutes, or open help if it keeps happening.",
         actions: ["retry", "help"],
       };
   }
@@ -109,6 +115,7 @@ export const ACTION_LABELS: Record<SafeAction, string> = {
   retry: "Try again",
   back: "Go back",
   help: "Open help",
+  signin: "Sign in",
 };
 
 /**
@@ -116,3 +123,55 @@ export const ACTION_LABELS: Record<SafeAction, string> = {
  * identifier is never shown without context. Requirement 5.3.
  */
 export const SUPPORT_REFERENCE_PREFIX = "If you contact support, quote this code:";
+
+/**
+ * The standard, status-aware message (apps/web/docs/ERROR-MESSAGES.md): what
+ * happened and what to do next, chosen from a known domain `code` first, then
+ * the HTTP status (no status = the request never reached us). Never echoes the
+ * status, code or backend text.
+ */
+export function humanErrorForStatus(
+  status: number | undefined,
+  ctx?: ErrorContext & { code?: string | null; forceKind?: ErrorStatusKind },
+): HumanError {
+  const r = resolveHumanError({ status, code: ctx?.code, ctx, forceKind: ctx?.forceKind });
+  return { what: r.what, next: r.next, actions: r.actions };
+}
+
+/** Backend codes that mean one specific situation whatever the HTTP status says. */
+const CODE_TO_STATUS_KIND: Record<string, ErrorStatusKind> = {
+  VALIDATION_FAILED: "validation",
+  VALIDATION_ERROR: "validation",
+  NOT_FOUND: "notFound",
+  FORBIDDEN: "forbidden",
+};
+
+/**
+ * One call for every failed-request helper: status + backend `code` + the
+ * caller's legacy `kind`/`area` -> the standard message. A domain code wins,
+ * then a code that pins a situation, then an explicit "forbidden" / "conflict"
+ * / "offline" `kind` (only for a non-5xx status), then the HTTP status.
+ */
+export function humanErrorFromFailure(input: {
+  status?: number;
+  code?: string | null;
+  kind?: MessageKind;
+  area?: string;
+  /** For a 413: the allowed size, e.g. "5 MB". */
+  limit?: string;
+  /** For a 415: the accepted types, e.g. "PDF or JPG". */
+  types?: string;
+  /** Pin the situation (e.g. "network" for a thrown fetch). */
+  forceKind?: ErrorStatusKind;
+  /** The failure carries field-level messages (400/422 copy then says "highlighted fields"). */
+  hasFieldErrors?: boolean;
+}): HumanError {
+  const { status, code, kind, area, limit, types, hasFieldErrors } = input;
+  const intent = kind === "load" || kind === "unknownStatus" ? "load" : "save";
+  let forceKind: ErrorStatusKind | undefined = input.forceKind ?? (code ? CODE_TO_STATUS_KIND[code] : undefined);
+  const clientSide = status === undefined || status < 500;
+  if (!forceKind && kind === "forbidden" && clientSide) forceKind = "forbidden";
+  if (!forceKind && kind === "conflict" && clientSide) forceKind = "conflict";
+  if (!forceKind && kind === "offline") forceKind = "network";
+  return humanErrorForStatus(status, { area, intent, code, forceKind, limit, types, hasFieldErrors });
+}

@@ -64,9 +64,9 @@ export function NewInternalTicketForm() {
       toast.success("Ticket created.");
       router.push("/helpdesk/internal");
       router.refresh();
-    } catch {
+    } catch (caught) {
       setStatus("error");
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     }
   }
 

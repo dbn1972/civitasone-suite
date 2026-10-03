@@ -57,8 +57,8 @@ export default function NewSanctionPage() {
         }
         const json = (await res.json()) as { data?: AccountRow[] } | AccountRow[];
         if (active) setAccounts(budgetableHeads(Array.isArray(json) ? json : json.data ?? []));
-      } catch {
-        if (active) setLoadError(formError.fromException("load").message);
+      } catch (caught) {
+        if (active) setLoadError(formError.fromException("load", caught).message);
       }
     })();
     return () => { active = false; };
@@ -98,9 +98,9 @@ export default function NewSanctionPage() {
       setMessage("Sanction submitted. It now awaits approval by a different finance officer.");
       router.refresh();
       setTimeout(() => router.push("/finance/budget/sanctions"), 900);
-    } catch {
+    } catch (caught) {
       setIsError(true);
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

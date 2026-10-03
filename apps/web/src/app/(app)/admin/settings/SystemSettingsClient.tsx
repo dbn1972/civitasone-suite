@@ -97,8 +97,8 @@ function useSectionState<T extends Record<string, unknown>>(initial: T, area: st
       setChanged(new Set());
       // A typed password must not linger in client state after it was sent.
       setValues((prev) => ("smtpPass" in prev ? { ...prev, smtpPass: "" } : prev));
-    } catch {
-      formError.fromException("save");
+    } catch (caught) {
+      formError.fromException("save", caught);
       setSaveState("error");
     }
   }

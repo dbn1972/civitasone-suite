@@ -81,9 +81,9 @@ export function CreateSchemeForm() {
       }
       router.push("/grants/schemes");
       router.refresh();
-    } catch {
+    } catch (caught) {
       setStatus("error");
-      formError.fromException("save");
+      formError.fromException("save", caught);
     }
   }
 

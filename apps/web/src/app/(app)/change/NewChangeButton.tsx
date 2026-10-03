@@ -60,8 +60,8 @@ export function NewChangeButton() {
       const body = await res.json();
       setOpen(false);
       if (body.id) router.push(`/change/${body.id}`); else router.refresh();
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

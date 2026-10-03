@@ -58,7 +58,8 @@ describe("LeasesPage register", () => {
     fireEvent.click(screen.getByRole("button", { name: "Register lease" }));
     await waitFor(() => expect(screen.getByText("Register this IFRS 16 lease?")).toBeInTheDocument());
     fireEvent.click(screen.getAllByRole("button", { name: "Register lease" }).at(-1)!);
-    expect(await screen.findByText(/duplicate lease number/)).toBeInTheDocument();
+    expect(await screen.findByText(/This information was changed by someone else\. Refresh to see the latest version, then try again\./)).toBeInTheDocument();
+    expect(screen.queryByText(/duplicate lease number/)).not.toBeInTheDocument();
   });
 
   it("rejects an invalid amount before opening the dialog", () => {

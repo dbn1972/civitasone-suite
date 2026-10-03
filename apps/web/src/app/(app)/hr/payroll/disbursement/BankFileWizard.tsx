@@ -160,8 +160,8 @@ export function BankFileWizard({
       a.click();
       URL.revokeObjectURL(url);
       setConfirmOpen(false);
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

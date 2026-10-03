@@ -120,9 +120,9 @@ export function ApplyForm({ jobOpeningId, vacancyType = "regular" }: { jobOpenin
       setApplicationNo(data.applicationNo ?? null);
       setStatus("success");
       setMessage("Your application has been received! We'll be in touch at the email you provided.");
-    } catch {
+    } catch (caught) {
       setStatus("error");
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     }
   }
 

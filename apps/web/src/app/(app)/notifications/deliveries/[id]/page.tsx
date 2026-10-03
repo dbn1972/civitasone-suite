@@ -73,8 +73,8 @@ export default function DeliveryDetailPage() {
           return;
         }
         setDelivery((await res.json()) as Delivery);
-      } catch {
-        setError(formError.fromException("load").message);
+      } catch (caught) {
+        setError(formError.fromException("load", caught).message);
       } finally {
         setLoading(false);
       }

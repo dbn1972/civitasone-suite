@@ -34,7 +34,7 @@ describe("/hr/interns role gate (GAP-HR-INTERNS-04)", () => {
   it("shows PermissionDenied to a plain employee and never fetches the register", async () => {
     mockRoles = ["employee"];
     render(await InternsPage());
-    expect(screen.getByText(/interns register/i)).toBeInTheDocument();
+    expect(screen.getByText(/You don't have permission to do this\. Ask your administrator if you need access\./)).toBeInTheDocument();
     expect(screen.queryByText("Asha Rao")).toBeNull();
     expect(fetchJsonMock).not.toHaveBeenCalled();
   });
