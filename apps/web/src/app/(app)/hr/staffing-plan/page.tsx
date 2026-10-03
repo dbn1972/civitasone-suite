@@ -5,6 +5,7 @@ import { getTranslations } from "next-intl/server";
 import { formatPercent } from "@/lib/formatters";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { getData, type Row } from "./_data";
+import { VACANCY_ALERT_THRESHOLD_PCT, countOverVacancyThreshold, isOverVacancyThreshold } from "./vacancyAlert";
 
 /**
  * GAP-HR-STAFFING-PLAN-04: mirrors gap-features/routes.ts's own HR_ROLES
@@ -48,6 +49,18 @@ export default async function StaffingPlanPage({ searchParams }: { searchParams?
     ? formatPercent(Math.round((totalFilled / totalSanctioned) * 100), 0)
     : "—";
 
+  // GAP-HR-WORKFORCE-STAFFING-PLAN-01: departments whose vacancy exceeds the
+  // threshold are flagged per row (pre-formatted string: this is a Server
+  // Component, so no render function can cross into DataTable) and counted in
+  // an alert banner.
+  const overThreshold = errored ? 0 : countOverVacancyThreshold(items);
+  const flaggedItems: Row[] = items.map((r) => ({
+    ...r,
+    vacancyFlag: isOverVacancyThreshold(Number(r.vacant), Number(r.sanctionedPosts))
+      ? t("vacancyFlagOver", { pct: VACANCY_ALERT_THRESHOLD_PCT })
+      : "—",
+  }));
+
   const columns: { key: keyof Row & string; label: string; cellType?: "status"; align?: "left" | "right" }[] = [
     { key: "departmentCadre", label: t("colDepartmentCadre") },
     { key: "planYear", label: t("colPlanYear"), align: "right" },
@@ -55,6 +68,7 @@ export default async function StaffingPlanPage({ searchParams }: { searchParams?
     { key: "filled", label: t("colFilled"), align: "right" },
     { key: "vacant", label: t("colVacant"), align: "right" },
     { key: "fillPercentage", label: t("colFillPercent"), align: "right" },
+    { key: "vacancyFlag", label: t("colVacancyAlert") },
     { key: "lastReview", label: t("colLastReview") },
     { key: "status", label: t("colStatus"), cellType: "status" },
   ];
@@ -96,6 +110,11 @@ export default async function StaffingPlanPage({ searchParams }: { searchParams?
         </form>
       )}
 
+      {overThreshold > 0 && (
+        <div role="alert" className="pill warn" style={{ display: "block", padding: "10px 14px", marginBottom: 12, borderRadius: 8 }}>
+          {t("vacancyAlertMessage", { count: overThreshold, pct: VACANCY_ALERT_THRESHOLD_PCT })}
+        </div>
+      )}
       <StatGrid>
         <StatCard icon="📊" iconBg="var(--infobg, #e6f0ff)" label={t("statSanctionedPostsLabel")} value={errored ? null : totalSanctioned} />
         <StatCard icon="👥" iconBg="var(--goodbg, #e6f7f0)" label={t("statFilledLabel")} value={errored ? null : totalFilled} />
@@ -110,7 +129,7 @@ export default async function StaffingPlanPage({ searchParams }: { searchParams?
         ) : (
           <DataTable<Row>
             columns={columns}
-            rows={items}
+            rows={flaggedItems}
             sortable
             filterable
             filterPlaceholder={t("filterPlaceholder")}

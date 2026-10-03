@@ -150,6 +150,16 @@ async function proxyHandler(
       .send({ code: "NOT_FOUND", message: "no upstream for path" });
   }
 
+  // Service-to-service-only surface: workflow-service internal lookups
+  // (e.g. POST /v1/workflow/internal/open-task-refs, called by hrms-service
+  // directly with the service secret) must never be reachable from external
+  // traffic through this proxy, whatever credentials the caller presents.
+  if (/^\/api\/v1\/workflow\/internal(\/|$)/i.test(pathname)) {
+    return reply
+      .code(403)
+      .send({ code: "FORBIDDEN", message: "internal endpoint", correlationId: req.id });
+  }
+
   // Enforce authentication for all non-public routes.
   //
   // SEC-023: this used to test ONLY for a literal `Authorization: Bearer`

@@ -1,46 +1,94 @@
-import { PageHeader, Card, EmptyState } from "../../../_components/ds";
+import Link from "next/link";
+import { PageHeader, StatGrid, StatCard, Card, LoadErrorState } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PermissionDenied } from "../../../_components/PermissionDenied";
+import { fetchJson } from "@/app/_data/apiClient";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { todayIST } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
+import { mapContracts, type ApiContract, type ApiStats } from "./outsourcedModel";
+import { OutsourcedRegister } from "./OutsourcedRegister";
 
 /**
- * No backend endpoint serves outsourced-staff records (vendor, headcount,
- * service, contractValue, contractEnd). The only "outsourc*" hits under
- * services/hrms-service/src/modules are a code comment in
- * id-cards/routes.ts and one in leave/policy-admin-routes.ts -- neither is
- * a data endpoint. This page used to fetch /api/v1/hrms/employees?limit=50
- * and render it through outsourced-shaped columns the Employee record
- * doesn't have, producing rows with every outsourced-specific cell blank,
- * plus stat cards (unique vendors, active contracts, total headcount)
- * computed from that same wrong-shaped data. Rather than wire a
- * DataSourceBadge to a fetch that can never return the right data, show an
- * honest "not built yet" state.
- *
- * GAP-HR-OUTSOURCED-01: whether to build the real module or park it
- * permanently is a product-scope decision the campaign's decision packet
- * left open ("build now or park?" with no default given) -- only the
- * honest-empty-state half (already shipped above) and the hub-tile /
- * subtitle copy fix (this file, hr/page.tsx) apply either way.
- * GAP-HR-OUTSOURCED-03: the empty state previously offered no next step at
- * all. /hr/contractual is a related (not identical) register and safe to
- * link from any HR session; a second link to /works/contractors was
- * considered but left out -- that module's own role gate wasn't verified
- * as part of this lane, and guessing it wrong would send some sessions to
- * a 403 instead of a useful next step.
+ * GAP-HR-OUTSOURCED-01: the real vendor-supplied workforce register, served by
+ * GET /v1/hrms/outsourced (hrms-service outsourced module). Mirrors that route's
+ * own role gate (hr_admin / hr_officer / super_admin) -- contract values are
+ * commercially sensitive, so this is HR-only, same as the backend.
  */
-export default async function OutsourcedPage() {
+const OUTSOURCED_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const PAGE_SIZE = 50;
+
+type Page = { rows: ApiContract[]; total: number; offset: number; stats: ApiStats };
+const EMPTY_STATS: ApiStats = { contracts: 0, vendors: 0, activeContracts: 0, expiringIn60Days: 0, totalHeadcount: 0 };
+
+export default async function OutsourcedPage({ searchParams }: { searchParams?: { offset?: string } }) {
+  const roles = getSessionRoles();
+  if (!roles.some((r) => OUTSOURCED_ROLES.includes(r))) {
+    return <PermissionDenied module="the outsourced workforce register" requiredRoles={OUTSOURCED_ROLES} backHref="/hr" backLabel="Back to HR" />;
+  }
   const t = await getTranslations("outsourced");
   const tc = await getTranslations("common");
+  const requested = Math.max(0, Number(searchParams?.offset ?? 0) || 0);
+  const result = await fetchJson<unknown, Page>(
+    `/api/v1/hrms/outsourced?limit=${PAGE_SIZE}&offset=${requested}`,
+    { rows: [], total: 0, offset: requested, stats: EMPTY_STATS },
+    {
+      telemetryKey: "hr.outsourced",
+      mapResponse: (p) => {
+        const b = p as { data?: ApiContract[]; total?: number; stats?: ApiStats };
+        if (!Array.isArray(b?.data)) return null;
+        return { rows: b.data, total: b.total ?? b.data.length, offset: requested, stats: b.stats ?? EMPTY_STATS };
+      },
+    },
+  );
+  const { data: page, source } = result;
+  const errored = source === "error";
+  const items = mapContracts(page.rows, todayIST());
+  const showingFrom = page.total > 0 ? page.offset + 1 : 0;
+  const showingTo = page.offset + items.length;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel={tc("backToHr")} />
-      <Card title={t("cardTitle")}>
-        <EmptyState
-          icon="🏢"
-          title={t("emptyTitle")}
-          message={t("emptyMessage")}
-          action={<a href="/hr/contractual" className="btn">{t("emptyActionContractual")}</a>}
-        />
-      </Card>
+      <DataSourceBadge source={source} />
+      <StatGrid>
+        <StatCard icon="📄" iconBg="var(--infobg, #e6f0ff)" label={t("statContractsLabel")} value={errored ? "—" : page.stats.activeContracts} />
+        <StatCard icon="🏢" iconBg="var(--bg, #f5f5f5)" label={t("statVendorsLabel")} value={errored ? "—" : page.stats.vendors} />
+        <StatCard icon="👥" iconBg="var(--goodbg, #e6f7f0)" label={t("statHeadcountLabel")} value={errored ? "—" : page.stats.totalHeadcount} />
+        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label={t("statExpiringLabel")} value={errored ? "—" : page.stats.expiringIn60Days} />
+      </StatGrid>
+      {errored ? (
+        <Card title={t("cardTitle")}>
+          <div className="pad">
+            <LoadErrorState result={result} area="outsourced contracts" backHref="/hr" requiredRoles={OUTSOURCED_ROLES} />
+          </div>
+        </Card>
+      ) : (
+        <>
+          {page.total > items.length ? (
+            <p style={{ fontSize: 13, color: "var(--mut)", margin: "0 0 12px" }}>
+              {t("showingRange", { from: showingFrom, to: showingTo, total: page.total })}
+            </p>
+          ) : null}
+          <OutsourcedRegister
+            rows={items}
+            canManage
+            cardTitle={t("cardTitle")}
+            emptyTitle={t("emptyTitle")}
+            emptyMessage={t("emptyMessage")}
+          />
+          {page.total > PAGE_SIZE ? (
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
+              {page.offset > 0 ? (
+                <Link href={`/hr/outsourced?offset=${Math.max(0, page.offset - PAGE_SIZE)}`} className="btn ghost">{t("prevPage")}</Link>
+              ) : null}
+              {page.offset + PAGE_SIZE < page.total ? (
+                <Link href={`/hr/outsourced?offset=${page.offset + PAGE_SIZE}`} className="btn ghost">{t("nextPage")}</Link>
+              ) : null}
+            </div>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }

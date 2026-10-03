@@ -112,8 +112,12 @@ export default async function WorkSummaryPage({
   // makes today's actual (self-scoped) behavior honest in the UI.
   const isHr = roles.some((r) => HR_ROLES.includes(r));
 
-  const offset = Math.max(0, Number(searchParams?.offset ?? 0) || 0);
-  const { data: page, source, status, errorMessage } = await getData(offset);
+  const requestedOffset = Math.max(0, Number(searchParams?.offset ?? 0) || 0);
+  const { data: page, source, status, errorMessage } = await getData(requestedOffset);
+  // GAP-HR-WORK-SUMMARY-05: the server clamps an offset past the end back to
+  // the last real page and returns the offset it actually served; every range
+  // label and Prev/Next link below must use THAT, never the raw URL value.
+  const offset = page.offset;
   const errored = source === "error";
   const items = mapRows(page.rows);
   const total = page.total;

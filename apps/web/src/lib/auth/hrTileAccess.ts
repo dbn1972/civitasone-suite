@@ -43,6 +43,7 @@ export const HR_TILE_ROLE_OVERRIDES: Record<string, readonly string[]> = {
   "/hr/apar": ["hr_admin", "hr_officer", "super_admin", "manager", "employee"], // apar/page.tsx APAR_ROLES
   "/hr/employee-types": ["hr_admin", "super_admin", "admin", "manager", "officer"], // GAP-HR-EMPLOYEE-TYPES-04: mirrors employee-types-routes.ts GET guard (HR_ROLES + manager + officer) 1:1; widening it is the open policy question
   "/hr/interns": ["hr_admin", "hr_officer", "super_admin", "manager"], // interns/page.tsx INTERNS_VIEW_ROLES (GAP-HR-INTERNS-04)
+  "/hr/outsourced": ["hr_admin", "hr_officer", "super_admin"], // outsourced/page.tsx OUTSOURCED_ROLES (GAP-HR-OUTSOURCED-01) = outsourced/routes.ts guard
   "/hr/office-locations": ["hr_admin", "super_admin", "admin"], // office-locations/page.tsx OFFICE_LOCATION_ADMIN_ROLES (GAP-HR-LOCATIONS-NEW-02)
   "/hr/icc": ["hr_admin", "super_admin", "icc_member"], // icc/page.tsx ICC_ROLES
   "/hr/id-cards": ["hr_admin", "security_admin", "super_admin"], // id-cards/page.tsx ID_CARDS_ROLES

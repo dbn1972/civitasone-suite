@@ -113,6 +113,15 @@ export async function findLeaveAppsByTenant(
     .limit(limit).offset(offset));
 }
 
+/** GAP-HR-LEAVE-APPROVALS-04: tenant-scoped fetch of specific applications by id (bounded by the caller's <=50 ids). */
+export async function findLeaveAppsByIds(tenantId: string, ids: string[]): Promise<LeaveAppRow[]> {
+  if (ids.length === 0) return [];
+  return scopedRead((tx) => tx.select().from(hrmsLeaveApps)
+    .where(and(eq(hrmsLeaveApps.tenantId, tenantId), inArray(hrmsLeaveApps.id, ids)))
+    .orderBy(desc(hrmsLeaveApps.createdAt), desc(hrmsLeaveApps.id))
+    .limit(ids.length));
+}
+
 export async function listLeaveTypesByTenant(tenantId: string, limit = 100): Promise<Array<typeof hrmsLeaveTypes.$inferSelect>> {
   return scopedRead((tx) => tx.select().from(hrmsLeaveTypes).where(eq(hrmsLeaveTypes.tenantId, tenantId)).limit(limit));
 }

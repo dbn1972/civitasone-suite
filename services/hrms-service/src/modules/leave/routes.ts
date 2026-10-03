@@ -15,6 +15,7 @@ import { loadTypeResolver, leaveEligible } from "../employee/engagement-policy.j
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import { fetchOpenTaskRefIds } from "../../shared/workflow-client.js";
 
 const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
@@ -406,7 +407,8 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
       // a NARROWING on top of the existing role-based scope below, never a
       // widening one -- an id outside that scope is silently dropped, same
       // as any other row that scope excludes today.
-      ids: z.string().optional().transform((v) => (v ? v.split(",").filter(Boolean) : undefined)),
+      ids: z.string().optional().transform((v) => (v ? v.split(",").filter(Boolean) : undefined))
+        .pipe(z.array(z.string().uuid()).max(50).optional()),
     }).parse(req.query);
     // IDOR fix (GAP-HR-SF-16): this route returned every employee's leave
     // request detail tenant-wide to ANY ALL_ROLES-holding caller (including
@@ -426,14 +428,31 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
     // employeeIds param) with a deterministic ORDER BY, so limit/offset
     // paginate the caller's own visible set, not the tenant's.
     const employeeIds = await resolveLeaveReadScope(ctx, req, q.empId);
+    if (q.ids) {
+      // GAP-HR-LEAVE-APPROVALS-04: id-based read for the approvals panel. The
+      // ids are fetched directly (not filtered out of a limit/offset page, which
+      // dropped any id beyond the first page) and authorised PER RECORD: HR
+      // sees any; otherwise the caller's own/direct-report scope applies, and
+      // a record outside it is released only if the caller holds an OPEN
+      // workflow approval task on it (workflow-service, fail-closed) -- the
+      // "approver who is not the line manager" case. Anything else is silently
+      // dropped, same as the role scope has always done.
+      const found = await queries.listLeaveRequestDetailsByIds(ctx.tenantId, q.ids);
+      const inScope = (r: { employeeId: string }) => employeeIds === undefined || employeeIds.includes(r.employeeId);
+      const outside = found.filter((r) => !inScope(r));
+      let viaTask = new Set<string>();
+      if (outside.length > 0) {
+        viaTask = await fetchOpenTaskRefIds({
+          tenantId: ctx.tenantId, actorId: ctx.actorId, roles: ctx.roles,
+          refType: "leave_app", refIds: outside.map((r) => r.id),
+        });
+      }
+      const allowed = found.filter((r) => inScope(r) || viaTask.has(r.id));
+      sendValidated(reply, LeaveRequestDetailListSchema, allowed);
+      return;
+    }
     const rows = await queries.listLeaveRequestDetails(ctx.tenantId, q.limit, q.offset, employeeIds);
-    // GAP-HR-LEAVE-APPROVALS-04: `ids` narrows further on top of the
-    // role-based scope above (never instead of it) -- `rows` here is
-    // already scoped to `employeeIds` at the DB level (GAP-HR-LEAVE-03/04
-    // above), so an id outside that scope can never appear here even if a
-    // caller names it explicitly.
-    const idsScoped = q.ids ? rows.filter((r) => q.ids!.includes(r.id)) : rows;
-    sendValidated(reply, LeaveRequestDetailListSchema, idsScoped);
+    sendValidated(reply, LeaveRequestDetailListSchema, rows);
   });
 
   app.setErrorHandler(errorHandler);

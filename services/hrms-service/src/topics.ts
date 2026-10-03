@@ -50,6 +50,9 @@ export const COMMANDS = {
   lifecycleChecklistToggle: "hrms.lifecycle.separation.checklist_toggle",
   lifecycleIssuePpo:        "hrms.lifecycle.separation.issue_ppo",
   nominationComplete:       "hrms.nomination.complete",
+  // GAP-HR-OUTSOURCED-01: vendor-supplied workforce contract register.
+  outsourcedCreate:         "hrms.outsourced.create",
+  outsourcedUpdate:         "hrms.outsourced.update",
   loanCreate:               "hrms.loan.create",
   loanEmiPaid:              "hrms.loan.emi_paid",
   // GAP-HR-LOANS-02: audit-on-export for the HR loans CSV (same async shape as

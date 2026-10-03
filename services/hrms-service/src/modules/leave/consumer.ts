@@ -12,6 +12,9 @@ import { assertSufficientLeaveBalance, assertLeaveAppStatusTransition } from "./
 import { resolveAccumulationCap } from "./rules-engine.js";
 import { markLeaveDaysOnAttendance } from "../attendance/leave-sync.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { pino } from "pino";
+
+const log = pino({ name: "hrms-leave-consumer" });
 
 const AUDIT = "audit.event.record";
 const WORKFLOW_CREATE = "workflow.instance.create";
@@ -270,6 +273,16 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const app = await repo.findLeaveAppByIdTx(tx, p.id, p.tenantId);
       if (!app) throw new Error(`leave app ${p.id} not found`);
+      // Two legitimate paths can both reject the same leave (an HR direct
+      // reject, then the workflow reject dispatch for the same application).
+      // The loser must not throw into the DLQ: already rejected is an
+      // idempotent no-op (no second notification/audit); approved/cancelled
+      // is a logged no-op -- the decision already stands.
+      if (app.status === "rejected") return;
+      if (app.status === "approved" || app.status === "cancelled") {
+        log.warn({ leaveAppId: p.id, status: app.status, messageId: msg.messageId }, "leave reject ignored: application already decided");
+        return;
+      }
       assertLeaveAppStatusTransition(app.status, "rejected");
       employeeId = app.employeeId;
       await repo.updateLeaveApp(tx, p.id, { status: "rejected", updatedBy: msg.actorId });

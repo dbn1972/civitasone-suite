@@ -135,34 +135,48 @@ export async function listLeaveApplications(tenantId: string, limit: number, off
  * name; a genuinely missing employee falls back to "Unknown employee", not a
  * UUID fragment.
  */
+async function toLeaveRequestDetails(tenantId: string, rows: LeaveAppRow[]) {
+  const distinctEmployeeIds = Array.from(new Set(rows.map((r) => r.employeeId)));
+  const [employees, leaveTypes] = await Promise.all([
+    employeeRepo.listByIds(tenantId, distinctEmployeeIds),
+    repo.listLeaveTypesByTenant(tenantId),
+  ]);
+  const empMap = new Map(employees.map((e) => [e.id, e]));
+  const typeNameById = new Map(leaveTypes.map((t) => [t.id, t.name]));
+  return rows.map((r) => ({
+    id: r.id,
+    employeeId: r.employeeId,
+    employeeName: empMap.get(r.employeeId)?.fullName ?? "Unknown employee",
+    leaveType: typeNameById.get(r.leaveTypeId) ?? r.leaveTypeId.slice(0, 8),
+    fromDate: r.fromDate,
+    toDate: r.toDate,
+    days: r.daysApplied,
+    reason: r.reason ?? undefined,
+    approver: r.approvedBy ?? undefined,
+    status: mapLeaveStatus(r.status),
+    appliedAt: new Date(r.createdAt as unknown as string).toISOString(),
+  }));
+}
+
 export async function listLeaveRequestDetails(tenantId: string, limit: number, offset = 0, employeeIds?: string[]) {
   if (employeeIds && employeeIds.length === 0) return [];
   const scopeKey = employeeIds ? [...employeeIds].sort().join(",") : "all";
   return cache.listOrLoad(tenantId, "leave_request_detail", `list:${limit}:${offset}:${scopeKey}`, async () => {
     const rows = await repo.findLeaveAppsByTenant(tenantId, limit, offset, employeeIds);
-    const distinctEmployeeIds = Array.from(new Set(rows.map((r) => r.employeeId)));
-    const [employees, leaveTypes] = await Promise.all([
-      employeeRepo.listByIds(tenantId, distinctEmployeeIds),
-      repo.listLeaveTypesByTenant(tenantId),
-    ]);
-    const empMap = new Map(employees.map((e) => [e.id, e]));
-    const typeNameById = new Map(leaveTypes.map((t) => [t.id, t.name]));
-    return rows.map((r) => ({
-      id: r.id,
-      employeeId: r.employeeId,
-      employeeName: empMap.get(r.employeeId)?.fullName ?? "Unknown employee",
-      leaveType: typeNameById.get(r.leaveTypeId) ?? r.leaveTypeId.slice(0, 8),
-      fromDate: r.fromDate,
-      toDate: r.toDate,
-      days: r.daysApplied,
-      reason: r.reason ?? undefined,
-      approver: r.approvedBy ?? undefined,
-      status: mapLeaveStatus(r.status),
-      appliedAt: new Date(r.createdAt as unknown as string).toISOString(),
-    }));
+    return toLeaveRequestDetails(tenantId, rows);
   });
 }
 
+/**
+ * GAP-HR-LEAVE-APPROVALS-04: id-based detail read (<=50 ids, tenant-scoped).
+ * Uncached on purpose -- the result set depends on the caller's authorisation.
+ * Returns the raw employeeId alongside each row so the route can authorise
+ * per record; the route strips nothing the list endpoint doesn't already send.
+ */
+export async function listLeaveRequestDetailsByIds(tenantId: string, ids: string[]) {
+  const rows = await repo.findLeaveAppsByIds(tenantId, ids);
+  return toLeaveRequestDetails(tenantId, rows);
+}
 
 /**
  * IDOR fix: this used to run with `WHERE tenant_id=$1 LIMIT 50` and no

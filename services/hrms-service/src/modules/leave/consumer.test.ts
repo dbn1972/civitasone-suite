@@ -157,6 +157,7 @@ vi.mock("../attendance/leave-sync.js", () => ({
 // ---------------------------------------------------------------------------
 import { registerLeaveConsumers } from "./consumer.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
+import { markProcessed } from "../../shared/outbox.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -483,6 +484,56 @@ describe("leaveReject command", () => {
     );
     await settle();
     expect(debitLeaveBalanceMock).not.toHaveBeenCalled();
+    await q.stop();
+  });
+
+  // HR direct reject, then the workflow reject dispatch for the same leave:
+  // the second must be an idempotent no-op, not a throw into the DLQ.
+  it("a second reject (workflow after HR direct) on an already-rejected leave is a silent no-op", async () => {
+    const q = await buildQueue();
+    await q.publish(COMMANDS.leaveReject, makeMsg(COMMANDS.leaveReject, { id: "app-2", tenantId: TENANT, rejectedBy: ACTOR, reason: "HR direct" }));
+    await settle();
+    expect(updateLeaveAppMock).toHaveBeenCalledTimes(1);
+    expect(enqueuedMessages.filter((m) => m.topic === "notification.send")).toHaveLength(1);
+
+    // the row is now rejected; the workflow dispatch (different messageId) arrives
+    findLeaveAppByIdMock.mockResolvedValue({ ...PENDING_APP, status: "rejected" });
+    const processed = vi.mocked(markProcessed);
+    const callsBefore = processed.mock.calls.length;
+    await q.publish(COMMANDS.leaveReject, makeMsg(COMMANDS.leaveReject, { id: "app-2", tenantId: TENANT, rejectedBy: ACTOR, reason: "workflow" }));
+    await settle();
+    expect(processed.mock.calls.length).toBe(callsBefore + 1); // handled once, not retried/redelivered
+    expect(updateLeaveAppMock).toHaveBeenCalledTimes(1);      // no second write
+    expect(enqueuedMessages.filter((m) => m.topic === "notification.send")).toHaveLength(1); // no second notification
+    expect(enqueuedMessages.filter((m) => m.topic === "audit.event.record")).toHaveLength(1);
+    await q.stop();
+  });
+
+  it.each(["approved", "cancelled"])("a reject for a leave already '%s' is a logged no-op (no write, no notification, no throw)", async (status) => {
+    findLeaveAppByIdMock.mockResolvedValue({ ...PENDING_APP, status });
+    const q = await buildQueue();
+    await q.publish(COMMANDS.leaveReject, makeMsg(COMMANDS.leaveReject, { id: "app-2", tenantId: TENANT, rejectedBy: ACTOR, reason: "late" }));
+    await settle();
+    expect(updateLeaveAppMock).not.toHaveBeenCalled();
+    expect(enqueuedMessages).toHaveLength(0);
+    await q.stop();
+  });
+
+  it("replaying the SAME messageId does not reject or notify twice", async () => {
+    const processedIds = new Set<string>();
+    vi.mocked(markProcessed).mockImplementation(async (_tx: unknown, id: string) => {
+      if (processedIds.has(id)) return false;
+      processedIds.add(id);
+      return true;
+    });
+    const q = await buildQueue();
+    const msg = makeMsg(COMMANDS.leaveReject, { id: "app-2", tenantId: TENANT, rejectedBy: ACTOR, reason: "once" });
+    await q.publish(COMMANDS.leaveReject, msg);
+    await q.publish(COMMANDS.leaveReject, msg);
+    await settle();
+    expect(updateLeaveAppMock).toHaveBeenCalledTimes(1);
+    expect(enqueuedMessages.filter((m) => m.topic === "notification.send")).toHaveLength(1);
+    vi.mocked(markProcessed).mockImplementation(async () => true);
     await q.stop();
   });
 });

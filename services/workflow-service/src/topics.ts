@@ -122,6 +122,7 @@ export const EVENTS = {
 /** Cross-service commands dispatched when a workflow task completes. */
 export const DISPATCH = {
   leaveApprove: "hrms.leave.approve",
+  leaveReject: "hrms.leave.reject",
   payrollRunApprove: "payroll.run.approve",
   indentApprove: "procurement.indent.approve",
   poApprove: "procurement.po.approve",

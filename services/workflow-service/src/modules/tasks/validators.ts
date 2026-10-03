@@ -25,6 +25,19 @@ export const taskViewSchema = z.object({
 
 export const completeTaskBody = z.object({
   decision: z.enum(["approve", "reject", "return"]).default("approve"),
+  // GAP-HR-LEAVE-APPROVALS-03: optional approver remark / rejection reason,
+  // persisted atomically with the decision (task history detail) and, for a
+  // rejected leave_app, carried to the applicant-facing rejection notice.
+  reason: z.string().trim().min(1).max(1000).optional(),
+});
+
+// GAP-HR-LEAVE-APPROVALS-04 — internal (service-account only) lookup: which of
+// these record ids does `actorId` (holding `roles`) have an open task on?
+export const openTaskRefsBody = z.object({
+  actorId: z.string().uuid(),
+  roles: z.array(z.string().min(1).max(128)).max(50),
+  refType: z.string().min(1).max(64),
+  refIds: z.array(z.string().uuid()).min(1).max(50),
 });
 
 // P1-1 — assign a task to a specific user.

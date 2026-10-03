@@ -66,6 +66,7 @@ const HIDDEN_FROM_EMPLOYEE = [
   "/hr/employee-types",
   "/hr/id-cards",
   "/hr/interns",
+  "/hr/outsourced", // GAP-HR-OUTSOURCED-01: HR-only register (contract values)
   "/hr/office-locations",
   "/hr/leave-policies",
   "/hr/onboarding",

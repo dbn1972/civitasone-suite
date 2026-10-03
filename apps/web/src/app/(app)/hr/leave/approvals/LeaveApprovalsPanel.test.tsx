@@ -31,7 +31,6 @@ function mockFetch() {
     if (url.includes("/workflow/tasks?")) return { ok: true, status: 200, json: async () => ({ data: [TASK] }) } as Response;
     if (url.includes("/hrms/leave-requests")) return { ok: true, status: 200, json: async () => ({ data: [LEAVE] }) } as Response;
     if (url.endsWith("/complete")) return { ok: true, status: 202, text: async () => "{}" } as Response;
-    if (url.endsWith("/workflow/comments")) return { ok: true, status: 202, text: async () => "{}" } as Response;
     return { ok: false, status: 404, text: async () => "{}" } as Response;
   });
   (fn as unknown as { calls: typeof calls }).calls = calls;
@@ -69,10 +68,10 @@ describe("LeaveApprovalsPanel — cancels its initial load on unmount", () => {
   });
 });
 
-describe("LeaveApprovalsPanel — reason persistence", () => {
+describe("LeaveApprovalsPanel — reason persistence (GAP-HR-LEAVE-APPROVALS-03)", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("records the rejection reason as a comment, since workflow-service's complete endpoint silently drops it", async () => {
+  it("sends the rejection reason in the single atomic complete call and never posts a separate comment", async () => {
     const fetchMock = mockFetch();
     vi.stubGlobal("fetch", fetchMock);
     renderPanel();
@@ -84,32 +83,19 @@ describe("LeaveApprovalsPanel — reason persistence", () => {
 
     await waitFor(() => {
       const calls = (fetchMock as unknown as { calls: { url: string; body: unknown }[] }).calls;
-      expect(calls.some((c) => c.url.endsWith("/workflow/comments"))).toBe(true);
+      expect(calls.some((c) => c.url.endsWith("/complete"))).toBe(true);
     });
 
     const calls = (fetchMock as unknown as { calls: { url: string; body: unknown }[] }).calls;
-    const completeCall = calls.find((c) => c.url.endsWith("/complete"));
-    const commentCall = calls.find((c) => c.url.endsWith("/workflow/comments"));
-
-    // completeTaskBody on the backend only accepts {decision} — sending more is harmless
-    // but the reason must not be relied upon to reach the server through this call.
-    expect(completeCall?.body).toEqual({ decision: "reject" });
-    expect(commentCall?.body).toMatchObject({
-      entityType: "leave_app",
-      entityId: "leave-1",
-      body: expect.stringContaining("Insufficient staffing on those dates"),
-    });
+    const completeCalls = calls.filter((c) => c.url.endsWith("/complete"));
+    expect(completeCalls).toHaveLength(1);
+    expect(completeCalls[0]?.body).toEqual({ decision: "reject", reason: "Insufficient staffing on those dates" });
+    expect(calls.some((c) => c.url.includes("/workflow/comments"))).toBe(false);
   });
 
-  it("still completes the decision even if saving the reason comment fails, but says so honestly", async () => {
-    const fn = vi.fn(async (url: string) => {
-      if (url.includes("/workflow/tasks?")) return { ok: true, status: 200, json: async () => ({ data: [TASK] }) } as Response;
-      if (url.includes("/hrms/leave-requests")) return { ok: true, status: 200, json: async () => ({ data: [LEAVE] }) } as Response;
-      if (url.endsWith("/complete")) return { ok: true, status: 202, text: async () => "{}" } as Response;
-      if (url.endsWith("/workflow/comments")) return { ok: false, status: 500, text: async () => "boom" } as Response;
-      return { ok: false, status: 404, text: async () => "{}" } as Response;
-    });
-    vi.stubGlobal("fetch", fn);
+  it("sends an approve remark in the same complete call, and omits reason when blank", async () => {
+    const fetchMock = mockFetch();
+    vi.stubGlobal("fetch", fetchMock);
     renderPanel();
 
     fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
@@ -117,8 +103,29 @@ describe("LeaveApprovalsPanel — reason persistence", () => {
     fireEvent.click(screen.getByRole("button", { name: "Approve leave" }));
 
     await waitFor(() => {
-      expect(screen.getByText(/reason could not be saved/i)).toBeInTheDocument();
+      const calls = (fetchMock as unknown as { calls: { url: string; body: unknown }[] }).calls;
+      expect(calls.some((c) => c.url.endsWith("/complete"))).toBe(true);
     });
+    const calls = (fetchMock as unknown as { calls: { url: string; body: unknown }[] }).calls;
+    expect(calls.find((c) => c.url.endsWith("/complete"))?.body).toEqual({ decision: "approve", reason: "Looks fine" });
+  });
+
+  it("keeps the dialog open with an error and no success toast when the single complete call fails", async () => {
+    const fn = vi.fn(async (url: string) => {
+      if (url.includes("/workflow/tasks?")) return { ok: true, status: 200, json: async () => ({ data: [TASK] }) } as Response;
+      if (url.includes("/hrms/leave-requests")) return { ok: true, status: 200, json: async () => ({ data: [LEAVE] }) } as Response;
+      if (url.endsWith("/complete")) return { ok: false, status: 500, text: async () => "boom" } as Response;
+      return { ok: false, status: 404, text: async () => "{}" } as Response;
+    });
+    vi.stubGlobal("fetch", fn);
+    renderPanel();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reject" }));
+    fireEvent.change(screen.getByLabelText(/reason for rejection/i), { target: { value: "No cover" } });
+    fireEvent.click(screen.getByRole("button", { name: "Reject leave" }));
+
+    await waitFor(() => expect(screen.getByRole("alertdialog")).toBeInTheDocument());
+    expect(screen.queryByText(/Leave rejected\./)).not.toBeInTheDocument();
   });
 });
 

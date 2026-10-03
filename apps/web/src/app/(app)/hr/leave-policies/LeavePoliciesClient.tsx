@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { PageHeader, Card, DataTable, EmptyState, ErrorState, ConfirmDialog, StatGrid, StatCard, StatusPill, SkeletonTable, Button } from "../../../_components/ds";
+import { PageHeader, Card, DataTable, EmptyState, ErrorState, ConfirmDialog, Drawer, StatGrid, StatCard, StatusPill, SkeletonTable, Button } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { CreateLeavePolicyForm } from "./CreateLeavePolicyForm";
 import { useFormError } from "@/lib/useFormError";
@@ -63,20 +63,18 @@ export default function LeavePoliciesClient() {
 
   const [editId, setEditId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<Partial<Policy>>({});
-  const [confirmOpen, setConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | undefined>();
   const [toast, setToast] = useState<{ tone: "good" | "bad"; text: string } | null>(null);
   const formError = useFormError("leave policy");
 
-  // GAP-HR-LEAVE-POLICIES-05: startEdit used to unconditionally overwrite
-  // editId/editValues, so clicking Edit on row B while row A had unsaved
-  // changes silently discarded A's edit with no warning. pendingEditTarget
-  // holds the row the user just clicked Edit on while a DIFFERENT row is
-  // dirty; discardConfirmOpen gates a "Discard changes?" prompt before
-  // switching.
-  const [pendingEditTarget, setPendingEditTarget] = useState<Policy | null>(null);
-  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
+  // GAP-HR-LEAVE-POLICIES-05: editing now happens in a single labelled
+  // Drawer (all 12 fields) instead of inline in an 11-column table, so only
+  // one policy can ever be mid-edit and nothing is silently overwritten.
+  // `discardPromptOpen` is the in-drawer "Discard unsaved changes?" prompt
+  // shown when the user closes the drawer with edits (kept inline rather than
+  // a second stacked modal so focus trapping stays correct).
+  const [discardPromptOpen, setDiscardPromptOpen] = useState(false);
 
   // GAP-HR-LEAVE-POLICIES-04: policies whose Deactivate/Reactivate request
   // is in flight — used to disable that row's own action button only
@@ -118,8 +116,6 @@ export default function LeavePoliciesClient() {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchPolicies is redefined each render but only closes over values already listed in this array; nothing else it reads can change independently.
   }, [filter]);
 
-  // GAP-HR-LEAVE-POLICIES-05: does `values` differ from `original` on any
-  // field the edit form actually exposes?
   function isDirty(original: Policy | null, values: Partial<Policy>): boolean {
     if (!original) return false;
     return (Object.keys(values) as (keyof Policy)[]).some((k) => values[k] !== original[k]);
@@ -128,6 +124,7 @@ export default function LeavePoliciesClient() {
   function startEdit(p: Policy) {
     setEditId(p.id);
     setSaveError(undefined);
+    setDiscardPromptOpen(false);
     setEditValues({
       maxDaysPerYear: p.maxDaysPerYear,
       carryForward: p.carryForward,
@@ -144,26 +141,17 @@ export default function LeavePoliciesClient() {
     });
   }
 
-  // GAP-HR-LEAVE-POLICIES-05: the Edit button's actual onClick target now.
-  // Only prompts when switching away from a DIFFERENT row that has unsaved
-  // changes; clicking Edit again on the row already being edited, or on any
-  // row when nothing is dirty, behaves exactly as before.
-  function requestEdit(p: Policy) {
-    if (editId && editId !== p.id) {
-      const current = policies.find((x) => x.id === editId) ?? null;
-      if (isDirty(current, editValues)) {
-        setPendingEditTarget(p);
-        setDiscardConfirmOpen(true);
-        return;
-      }
-    }
-    startEdit(p);
+  function closeEditor() {
+    setEditId(null);
+    setDiscardPromptOpen(false);
+    setSaveError(undefined);
   }
 
-  function confirmDiscardAndSwitch() {
-    setDiscardConfirmOpen(false);
-    if (pendingEditTarget) startEdit(pendingEditTarget);
-    setPendingEditTarget(null);
+  // Closing with unsaved edits asks first; closing a clean editor just closes.
+  function requestCloseEditor() {
+    const current = policies.find((x) => x.id === editId) ?? null;
+    if (isDirty(current, editValues)) setDiscardPromptOpen(true);
+    else closeEditor();
   }
 
   async function saveEdit() {
@@ -190,8 +178,8 @@ export default function LeavePoliciesClient() {
       // rather than "updated" since the change may not be visible to a
       // fresh GET for a moment yet.
       setPolicies((prev) => prev.map((p) => (p.id === editedId ? { ...p, ...snapshot } : p)));
-      setConfirmOpen(false);
       setEditId(null);
+      setDiscardPromptOpen(false);
       setToast({ tone: "good", text: t("toastUpdated") });
       setTimeout(() => setToast(null), 4000);
       // Background reconcile: confirm the optimistic view against the real,
@@ -354,222 +342,92 @@ export default function LeavePoliciesClient() {
                 key: "maxDaysPerYear",
                 label: t("colDaysPerYear"),
                 align: "center",
-                render: (p) => {
-                  if (editId === (p.id as string)) {
-                    return (
-                      <>
-                        <label className="sr-only" htmlFor={`days-${p.id as string}`}>{t("srDaysPerYear")}</label>
-                        <input
-                          id={`days-${p.id as string}`}
-                          type="number"
-                          style={{ width: 64, textAlign: "center", padding: 6, border: "1px solid var(--line)", borderRadius: 8 }}
-                          value={editValues.maxDaysPerYear ?? 0}
-                          onChange={(e) => setEditValues({ ...editValues, maxDaysPerYear: Number(e.target.value) })}
-                        />
-                      </>
-                    );
-                  }
-                  return <span style={{ fontWeight: 700, color: "var(--primary-d)" }}>{p.maxDaysPerYear as number}</span>;
-                },
+                render: (p) => <span style={{ fontWeight: 700, color: "var(--primary-d)" }}>{p.maxDaysPerYear as number}</span>,
               },
               {
                 key: "maxContinuousDays",
                 label: t("colMaxContinuous"),
                 align: "center",
-                render: (p) => {
-                  if (editId === (p.id as string)) {
-                    return (
-                      <>
-                        <label className="sr-only" htmlFor={`cont-${p.id as string}`}>{t("srMaxContinuousDays")}</label>
-                        <input
-                          id={`cont-${p.id as string}`}
-                          type="number"
-                          style={{ width: 64, textAlign: "center", padding: 6, border: "1px solid var(--line)", borderRadius: 8 }}
-                          value={editValues.maxContinuousDays ?? 0}
-                          onChange={(e) => setEditValues({ ...editValues, maxContinuousDays: Number(e.target.value) })}
-                        />
-                      </>
-                    );
-                  }
-                  return <span style={{ color: "var(--ink2)" }}>{p.maxContinuousDays as number}d</span>;
-                },
+                render: (p) => <span style={{ color: "var(--ink2)" }}>{p.maxContinuousDays as number}d</span>,
               },
               {
                 key: "carryForward",
                 label: t("colCarryFwd"),
                 align: "center",
-                render: (p) => {
-                  if (editId === (p.id as string)) {
-                    return (
-                      <input
-                        type="checkbox"
-                        aria-label={t("ariaCarryForward")}
-                        checked={editValues.carryForward ?? false}
-                        onChange={(e) => setEditValues({ ...editValues, carryForward: e.target.checked })}
-                      />
-                    );
-                  }
-                  return p.carryForward ? <span aria-label={t("ariaYes")}>✓</span> : <span aria-label={t("ariaNo")}>—</span>;
-                },
+                render: (p) => (p.carryForward ? <span aria-label={t("ariaYes")}>✓</span> : <span aria-label={t("ariaNo")}>—</span>),
               },
               {
                 key: "encashable",
                 label: t("colEncashable"),
                 align: "center",
-                render: (p) => {
-                  if (editId === (p.id as string)) {
-                    return (
-                      <input
-                        type="checkbox"
-                        aria-label={t("ariaEncashable")}
-                        checked={editValues.encashable ?? false}
-                        onChange={(e) => setEditValues({ ...editValues, encashable: e.target.checked })}
-                      />
-                    );
-                  }
-                  return p.encashable ? <span aria-label={t("ariaEncashable")}>💰</span> : <span aria-label={t("ariaNo")}>—</span>;
-                },
+                render: (p) => (p.encashable ? <span aria-label={t("ariaEncashable")}>💰</span> : <span aria-label={t("ariaNo")}>—</span>),
               },
               {
                 key: "countMethod",
                 label: t("colCountMethod"),
                 align: "center",
-                render: (p) => {
-                  if (editId === (p.id as string)) {
-                    return (
-                      <>
-                        <label className="sr-only" htmlFor={`cm-${p.id as string}`}>{t("srCountMethod")}</label>
-                        <select
-                          id={`cm-${p.id as string}`}
-                          style={{ padding: 6, border: "1px solid var(--line)", borderRadius: 8 }}
-                          value={editValues.countMethod ?? "calendar"}
-                          onChange={(e) => setEditValues({ ...editValues, countMethod: e.target.value })}
-                        >
-                          <option value="calendar">{t("optionCalendar")}</option>
-                          <option value="working_days">{t("optionWorkingDays")}</option>
-                        </select>
-                      </>
-                    );
-                  }
-                  return <span style={{ fontSize: 12 }}>{(p.countMethod as string) === "working_days" ? t("countWorkingShort") : t("optionCalendar")}</span>;
-                },
+                render: (p) => (
+                  <span style={{ fontSize: 12 }}>{(p.countMethod as string) === "working_days" ? t("countWorkingShort") : t("optionCalendar")}</span>
+                ),
               },
               {
                 key: "requiresMedicalCert",
                 label: t("colMedCert"),
                 align: "center",
-                render: (p) => {
-                  if (editId === (p.id as string)) {
-                    return (
-                      <input
-                        type="checkbox"
-                        aria-label={t("ariaRequiresMedCert")}
-                        checked={editValues.requiresMedicalCert ?? false}
-                        onChange={(e) => setEditValues({ ...editValues, requiresMedicalCert: e.target.checked })}
-                      />
-                    );
-                  }
-                  return (p.requiresMedicalCert as boolean)
+                render: (p) =>
+                  (p.requiresMedicalCert as boolean)
                     ? <span><span aria-hidden="true">⚕️</span> &gt;{p.requiresMedicalCertAfterDays as number}d</span>
-                    : <span aria-label={t("notRequired")}>—</span>;
-                },
+                    : <span aria-label={t("notRequired")}>—</span>,
               },
               {
                 key: "sandwichRule",
                 label: t("colSandwich"),
                 align: "center",
-                render: (p) => {
-                  if (editId === (p.id as string)) {
-                    return (
-                      <input
-                        type="checkbox"
-                        aria-label={t("ariaSandwichRule")}
-                        checked={editValues.sandwichRule ?? false}
-                        onChange={(e) => setEditValues({ ...editValues, sandwichRule: e.target.checked })}
-                      />
-                    );
-                  }
-                  return p.sandwichRule ? <span aria-label={t("ariaYes")}>✓</span> : <span aria-label={t("ariaNo")}>—</span>;
-                },
+                render: (p) => (p.sandwichRule ? <span aria-label={t("ariaYes")}>✓</span> : <span aria-label={t("ariaNo")}>—</span>),
               },
               {
                 key: "minServiceMonths",
                 label: t("colMinService"),
                 align: "center",
-                render: (p) => {
-                  if (editId === (p.id as string)) {
-                    return (
-                      <>
-                        <label className="sr-only" htmlFor={`svc-${p.id as string}`}>{t("srMinServiceMonths")}</label>
-                        <input
-                          id={`svc-${p.id as string}`}
-                          type="number"
-                          style={{ width: 56, textAlign: "center", padding: 6, border: "1px solid var(--line)", borderRadius: 8 }}
-                          value={editValues.minServiceMonths ?? 0}
-                          onChange={(e) => setEditValues({ ...editValues, minServiceMonths: Number(e.target.value) })}
-                        />
-                        {" "}<span style={{ fontSize: 11, color: "var(--mut)" }}>{t("monthsShort")}</span>
-                      </>
-                    );
-                  }
-                  return (
-                    <span style={{ fontSize: 12, color: "var(--ink2)" }}>
-                      {(p.minServiceMonths as number) > 0 ? `${p.minServiceMonths as number}${t("monthsShort")}` : "—"}
-                    </span>
-                  );
-                },
+                render: (p) => (
+                  <span style={{ fontSize: 12, color: "var(--ink2)" }}>
+                    {(p.minServiceMonths as number) > 0 ? `${p.minServiceMonths as number}${t("monthsShort")}` : "—"}
+                  </span>
+                ),
               },
               {
                 key: "id",
                 label: t("colActions"),
                 align: "center",
                 sortable: false,
-                render: (p) => {
-                  if (editId === (p.id as string)) {
-                    return (
-                      <div style={{ display: "inline-flex", gap: 6 }}>
-                        <Button
-                          size="sm"
-                          disabled={saving}
-                          onClick={() => { setSaveError(undefined); setConfirmOpen(true); }}
-                        >
-                          {t("saveBtn")}
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => setEditId(null)}>
-                          {t("cancelBtn")}
-                        </Button>
-                      </div>
-                    );
-                  }
-                  return (
-                    <div style={{ display: "inline-flex", gap: 6 }}>
-                      <Button variant="ghost" size="sm" onClick={() => requestEdit(p as Policy)}>
-                        {t("editBtn")}
+                render: (p) => (
+                  <div style={{ display: "inline-flex", gap: 6 }}>
+                    <Button variant="ghost" size="sm" onClick={() => startEdit(p as Policy)}>
+                      {t("editBtn")}
+                    </Button>
+                    {/* GAP-HR-LEAVE-POLICIES-04: DELETE (deactivate) already existed
+                        server-side with no web caller; PATCH {isActive:true} reactivates. */}
+                    {(p as Policy).isActive ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={statusBusyId === (p.id as string)}
+                        onClick={() => { setDeactivateError(undefined); setDeactivateTarget(p as Policy); }}
+                      >
+                        {t("deactivateBtn")}
                       </Button>
-                      {/* GAP-HR-LEAVE-POLICIES-04: DELETE (deactivate) already existed
-                          server-side with no web caller; PATCH {isActive:true} reactivates. */}
-                      {(p as Policy).isActive ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={statusBusyId === (p.id as string)}
-                          onClick={() => { setDeactivateError(undefined); setDeactivateTarget(p as Policy); }}
-                        >
-                          {t("deactivateBtn")}
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={statusBusyId === (p.id as string)}
-                          onClick={() => void submitStatusChange(p as Policy, true)}
-                        >
-                          {t("reactivateBtn")}
-                        </Button>
-                      )}
-                    </div>
-                  );
-                },
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={statusBusyId === (p.id as string)}
+                        onClick={() => void submitStatusChange(p as Policy, true)}
+                      >
+                        {t("reactivateBtn")}
+                      </Button>
+                    )}
+                  </div>
+                ),
               },
             ]}
             rows={rows}
@@ -586,37 +444,101 @@ export default function LeavePoliciesClient() {
         {" "}{t("legendFooter")}
       </div>
 
-      <ConfirmDialog
-        open={confirmOpen}
-        title={t("confirmSaveTitle")}
-        confirmLabel={t("confirmSaveLabel")}
+      {/* GAP-HR-LEAVE-POLICIES-05: one labelled editor for all 12 fields; the
+          table above stays read-only. Saves go through the same PATCH. */}
+      <Drawer
+        open={editingPolicy !== null}
+        onClose={requestCloseEditor}
         busy={saving}
-        errorMessage={saveError}
-        description={
-          editingPolicy ? (
-            t.rich("confirmDescRich", {
-              leaveType: editingPolicy.leaveTypeName,
-              employeeType: tf(`employeeTypes.${editingPolicy.employeeType}`),
-              strongType: (chunks) => <strong>{chunks}</strong>,
-              strongEmp: (chunks) => <strong>{chunks}</strong>,
-            })
-          ) : (
-            t("confirmDescDefault")
-          )
+        title={editingPolicy ? t("editDrawerTitle", { leaveType: editingPolicy.leaveTypeName, employeeType: tf(`employeeTypes.${editingPolicy.employeeType}`) }) : ""}
+        footer={
+          <>
+            <Button variant="ghost" onClick={requestCloseEditor} disabled={saving}>{t("cancelBtn")}</Button>
+            <Button onClick={() => void saveEdit()} disabled={saving}>{t("confirmSaveLabel")}</Button>
+          </>
         }
-        onConfirm={() => void saveEdit()}
-        onCancel={() => !saving && setConfirmOpen(false)}
-      />
-
-      {/* GAP-HR-LEAVE-POLICIES-05: discard-unsaved-edit guard */}
-      <ConfirmDialog
-        open={discardConfirmOpen}
-        title={t("discardTitle")}
-        confirmLabel={t("discardConfirmLabel")}
-        description={t("discardDescription")}
-        onConfirm={confirmDiscardAndSwitch}
-        onCancel={() => { setDiscardConfirmOpen(false); setPendingEditTarget(null); }}
-      />
+      >
+        {editingPolicy && (
+          <>
+            <p style={{ margin: 0, fontSize: 13, color: "var(--ink2)" }}>
+              {t.rich("confirmDescRich", {
+                leaveType: editingPolicy.leaveTypeName,
+                employeeType: tf(`employeeTypes.${editingPolicy.employeeType}`),
+                strongType: (chunks) => <strong>{chunks}</strong>,
+                strongEmp: (chunks) => <strong>{chunks}</strong>,
+              })}
+            </p>
+            {saveError && <p role="alert" className="pill bad" style={{ margin: 0 }}>{saveError}</p>}
+            {discardPromptOpen && (
+              <div role="alert" style={{ padding: 12, border: "1px solid var(--warn)", background: "var(--warnbg)", borderRadius: 8 }}>
+                <strong>{t("discardTitle")}</strong>
+                <p style={{ margin: "4px 0 8px", fontSize: 13 }}>{t("discardDescription")}</p>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <Button size="sm" onClick={closeEditor}>{t("discardConfirmLabel")}</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setDiscardPromptOpen(false)}>{t("keepEditing")}</Button>
+                </div>
+              </div>
+            )}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+              <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
+                {tf("daysPerYearLabel")}
+                <input type="number" min={0} max={730} value={editValues.maxDaysPerYear ?? 0}
+                  onChange={(e) => setEditValues({ ...editValues, maxDaysPerYear: Number(e.target.value) })}
+                  style={{ padding: 8, border: "1px solid var(--line)", borderRadius: 8 }} />
+              </label>
+              <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
+                {tf("maxAccumulationLabel")}
+                <input type="number" min={0} value={editValues.maxAccumulation ?? 0}
+                  onChange={(e) => setEditValues({ ...editValues, maxAccumulation: Number(e.target.value) })}
+                  style={{ padding: 8, border: "1px solid var(--line)", borderRadius: 8 }} />
+              </label>
+              <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
+                {tf("maxContinuousLabel")}
+                <input type="number" min={0} value={editValues.maxContinuousDays ?? 0}
+                  onChange={(e) => setEditValues({ ...editValues, maxContinuousDays: Number(e.target.value) })}
+                  style={{ padding: 8, border: "1px solid var(--line)", borderRadius: 8 }} />
+              </label>
+              <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
+                {tf("minServiceLabel")}
+                <input type="number" min={0} value={editValues.minServiceMonths ?? 0}
+                  onChange={(e) => setEditValues({ ...editValues, minServiceMonths: Number(e.target.value) })}
+                  style={{ padding: 8, border: "1px solid var(--line)", borderRadius: 8 }} />
+              </label>
+              <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
+                {tf("medCertDaysLabel")}
+                <input type="number" min={0} value={editValues.requiresMedicalCertAfterDays ?? 0}
+                  onChange={(e) => setEditValues({ ...editValues, requiresMedicalCertAfterDays: Number(e.target.value) })}
+                  style={{ padding: 8, border: "1px solid var(--line)", borderRadius: 8 }} />
+              </label>
+              <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
+                {tf("countMethodLabel")}
+                <select value={editValues.countMethod ?? "calendar"}
+                  onChange={(e) => setEditValues({ ...editValues, countMethod: e.target.value })}
+                  style={{ padding: 8, border: "1px solid var(--line)", borderRadius: 8 }}>
+                  <option value="calendar">{t("optionCalendar")}</option>
+                  <option value="working_days">{t("optionWorkingDays")}</option>
+                </select>
+              </label>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10 }}>
+              {([
+                ["carryForward", "checkCarryForward"],
+                ["encashable", "checkEncashable"],
+                ["requiresMedicalCert", "checkRequiresMedCert"],
+                ["prefixSuffixRule", "checkPrefixSuffix"],
+                ["sandwichRule", "checkSandwich"],
+                ["proRataOnJoining", "checkProRata"],
+              ] as const).map(([field, labelKey]) => (
+                <label key={field} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13 }}>
+                  <input type="checkbox" checked={editValues[field] ?? false}
+                    onChange={(e) => setEditValues({ ...editValues, [field]: e.target.checked })} />
+                  {tf(labelKey)}
+                </label>
+              ))}
+            </div>
+          </>
+        )}
+      </Drawer>
 
       {/* GAP-HR-LEAVE-POLICIES-04: deactivate requires a reason (changes a
           live employee type's leave entitlement); reactivate does not. */}

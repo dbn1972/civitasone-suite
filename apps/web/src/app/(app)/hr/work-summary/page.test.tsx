@@ -135,3 +135,15 @@ describe("WorkSummaryPage", () => {
     }
   });
 });
+
+describe("WorkSummaryPage — past-the-end offset (GAP-HR-WORK-SUMMARY-05)", () => {
+  it("labels the range from the offset the server actually served, not the raw ?offset= (no 'Showing 1001-1000')", async () => {
+    getSessionRolesMock.mockReturnValue(["hr_admin"]);
+    const rows = Array.from({ length: 100 }, (_, i) => ({ id: `r${i}`, employee: `E${i}`, employeeId: `e${i}`, department: "D", period: "2025-26", overallGrade: 7, rating: 4, status: "approved" }));
+    // user typed ?offset=5000; the server clamped to the last real page (offset 1000 of 1100)
+    fetchJsonMock.mockResolvedValue(loaderResult(rows, 1100, 1000));
+    await renderPage({ offset: "5000" });
+    expect(screen.getByText(/Showing 1001.{1,3}1100 of 1100/)).toBeInTheDocument();
+    expect(screen.queryByText(/Showing 5001/)).not.toBeInTheDocument();
+  });
+});
