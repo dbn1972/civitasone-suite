@@ -81,6 +81,12 @@ const nextConfig = {
       { source: '/stock/list', destination: '/inventory/list', permanent: true },
       { source: '/stock/ledger', destination: '/inventory/reconcile', permanent: true },
       { source: '/stock/dashboard', destination: '/inventory', permanent: true },
+      // Legacy finance bookmarks -> HR modules (GAP-FINANCE-EXPENSES-02,
+      // GAP-FINANCE-LOANS-02). Config redirects run before finance/layout.tsx's
+      // role gate and keep the query string; the page-level redirect() files
+      // and their orphaned components were deleted.
+      { source: '/finance/expenses', destination: '/hr/expenses', permanent: true },
+      { source: '/finance/loans', destination: '/hr/loans', permanent: true },
       { source: '/stock/:path*', destination: '/inventory/:path*', permanent: true },
     ];
   },

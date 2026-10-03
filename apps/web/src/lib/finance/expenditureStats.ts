@@ -120,12 +120,19 @@ export function ucStats(ucs: readonly { status: string; amount: string }[]) {
   let pending = 0;
   let rejected = 0;
   let covered = 0n;
+  let pendingAmount = 0n;
   for (const u of ucs) {
     const s = String(u.status).toLowerCase();
-    if (s === "submitted" || s === "verified") submittedVerified += 1;
-    else if (s === "pending") pending += 1;
-    else if (s === "rejected") rejected += 1;
-    covered += safeBig(u.amount);
+    // GAP-FINANCE-EXPENDITURE-UTILIZATION-CERTIFICATES-03: "covered" counts
+    // only UCs that have been submitted or verified; a pending UC is reported
+    // separately and a rejected (returned) UC counts toward neither.
+    if (s === "submitted" || s === "verified") {
+      submittedVerified += 1;
+      covered += safeBig(u.amount);
+    } else if (s === "pending") {
+      pending += 1;
+      pendingAmount += safeBig(u.amount);
+    } else if (s === "rejected") rejected += 1;
   }
-  return { total: ucs.length, submittedVerified, pending, rejected, covered };
+  return { total: ucs.length, submittedVerified, pending, rejected, covered, pendingAmount };
 }

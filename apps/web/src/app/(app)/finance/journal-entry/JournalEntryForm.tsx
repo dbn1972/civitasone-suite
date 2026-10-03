@@ -9,11 +9,18 @@ import { Button, ConfirmDialog, EmptyState, HelpTip } from "@/app/_components/ds
 import { explain } from "@/lib/glossary";
 import { trackActivation } from "@/lib/activation";
 import { useFormError } from "@/lib/useFormError";
+import { checkPostingDate, type PeriodStatusRow } from "@/lib/finance/periodStatus";
 
 type Props = {
   accounts: AccountSummary[];
   /** Where to go after a successful post (vouchers/new redirects to the GL). */
   redirectTo?: string;
+  /**
+   * GAP-FINANCE-JOURNAL-ENTRY-03: accounting periods (status per YYYY-MM) for
+   * the closed-period check on the posting date. `null` = the list failed to
+   * load (status is shown as unverified); omitted = no check is offered.
+   */
+  periods?: PeriodStatusRow[] | null;
 };
 
 type JournalLine = {
@@ -71,6 +78,25 @@ function amountPreview(val: string) {
   return <span style={{ fontSize: "0.7rem", color: "var(--ink2, #475569)", display: "block" }}>= {formatMoney(minor)}</span>;
 }
 
+const TYPE_ORDER = ["asset", "liability", "equity", "income", "expense"] as const;
+const TYPE_LABEL: Record<string, string> = { asset: "Assets", liability: "Liabilities", equity: "Equity", income: "Income", expense: "Expenses" };
+
+/**
+ * GAP-FINANCE-JOURNAL-ENTRY-04: postable accounts grouped by type (assets,
+ * liabilities, ...) and narrowed by the text filter. The account already
+ * chosen on a line is always kept so a filter never blanks a selection.
+ */
+export function accountGroups(accounts: AccountSummary[], filter: string, selectedCode: string) {
+  const q = filter.trim().toLowerCase();
+  const shown = accounts.filter(
+    (a) => !q || a.code === selectedCode || a.code.toLowerCase().includes(q) || a.name.toLowerCase().includes(q),
+  );
+  const types = [...TYPE_ORDER, ...Array.from(new Set(shown.map((a) => String(a.type)))).filter((t) => !(TYPE_ORDER as readonly string[]).includes(t))];
+  return types
+    .map((type) => ({ type, label: TYPE_LABEL[type] ?? type, accounts: shown.filter((a) => String(a.type) === type) }))
+    .filter((g) => g.accounts.length > 0);
+}
+
 type FieldErrors = {
   voucherNo?: string;
   narration?: string;
@@ -79,7 +105,7 @@ type FieldErrors = {
   balance?: string;
 };
 
-export function JournalEntryForm({ accounts: allAccounts, redirectTo }: Props) {
+export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }: Props) {
   // GAP-FINANCE-JOURNAL-ENTRY-01: only active, leaf heads are postable. A head
   // that is some other head's parent is a group head, which the GL consumer
   // refuses (DOM-010 NOT_LEAF_ACCOUNT), so it is not offered.
@@ -98,13 +124,15 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo }: Props) {
     emptyLine(defaultCredit),
   ]);
   const [errors, setErrors] = useState<FieldErrors>({});
+  // GAP-FINANCE-JOURNAL-ENTRY-04: a long chart of accounts needs a text filter.
+  const [accountFilter, setAccountFilter] = useState("");
   const [status,  setStatus]  = useState<"idle" | "submitting" | "accepted" | "error">("idle");
   const [message, setMessage] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   // GAP-FINANCE-VOUCHERS-NEW-02: after a successful post with a redirectTo the
   // clerk stays on a success panel (no instant hard navigation) and chooses
   // between viewing the GL and posting another voucher.
-  const [posted, setPosted] = useState<{ voucherNo: string; queued: boolean } | null>(null);
+  const [posted, setPosted] = useState<{ voucherNo: string | null; queued: boolean } | null>(null);
   const formError = useFormError("journal entry");
   // EVT-4 (accounting-high-findings): one idempotency key per logical
   // submission attempt. The backend mechanism (idempotentId() in
@@ -143,13 +171,22 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo }: Props) {
   const diffPaise = totalDebitPaise - totalCreditPaise;
   const balanced = totalDebitPaise > 0n && diffPaise === 0n;
 
+  const dateCheck = periods === undefined ? null : checkPostingDate(postingDate, periods);
+
   /* ── validation (per-field) ─────────────────────────────────── */
   function validate(): FieldErrors {
     const e: FieldErrors = {};
-    const voucherErr = voucherNoError(voucherNo);
+    // JOURNAL-ENTRY-06: blank is allowed (server allocates); a typed reference must still be well-formed.
+    const voucherErr = voucherNo.trim() ? voucherNoError(voucherNo) : null;
     if (voucherErr) e.voucherNo = voucherErr;
     if (!narration.trim()) e.narration = "Narration is required.";
     if (!postingDate) e.postingDate = "Posting date is required.";
+    else if (dateCheck?.kind === "hard_close") {
+      e.postingDate = `Period ${dateCheck.period} is hard-closed. Choose a date in an open period.`;
+    } else if (dateCheck?.kind === "soft_close") {
+      // finance-service refuses type "journal" in a soft-closed period (PERIOD_SOFT_CLOSED).
+      e.postingDate = `Period ${dateCheck.period} is soft-closed: only adjustment/closing journals are accepted in a soft-closed period. Choose a date in an open period.`;
+    }
     const lineErrs: Record<number, string> = {};
     lines.forEach((l) => {
       const debit = parseMinorOrZero(l.debit);
@@ -164,7 +201,7 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo }: Props) {
       e.balance =
         totalDebitPaise === 0n
           ? "Enter at least one debit and matching credit."
-          : `Journal does not balance — debit ${formatMoney(totalDebitPaise)} vs credit ${formatMoney(totalCreditPaise)} (difference ${formatMoney(diffPaise < 0n ? -diffPaise : diffPaise)}).`;
+          : `Debit and credit differ by ${formatMoney(diffPaise < 0n ? -diffPaise : diffPaise)} (debit ${formatMoney(totalDebitPaise)}, credit ${formatMoney(totalCreditPaise)}).`;
     }
     return e;
   }
@@ -175,8 +212,12 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo }: Props) {
     const errs = validate();
     setErrors(errs);
     if (Object.keys(errs).length > 0) {
-      setStatus("error");
-      setMessage("Please correct the highlighted fields before posting.");
+      // GAP-FINANCE-JOURNAL-ENTRY-05: when the only problem is the balance, its
+      // own alert (below the totals) is the single announcement -- no second
+      // generic banner for screen readers to read out.
+      const onlyBalance = Object.keys(errs).length === 1 && errs.balance !== undefined;
+      setStatus(onlyBalance ? "idle" : "error");
+      setMessage(onlyBalance ? "" : "Please correct the highlighted fields before posting.");
       return;
     }
     setStatus("idle");
@@ -191,7 +232,9 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo }: Props) {
     formError.clear();
 
     const body = {
-      voucherNo:   voucherNo.trim(),
+      // GAP-FINANCE-JOURNAL-ENTRY-06: blank -> "AUTO"; finance-service allocates
+      // the gapless number on approval and enforces UNIQUE(tenant_id, voucher_no).
+      voucherNo:   voucherNo.trim() || "AUTO",
       type:        "journal" as const,
       postingDate,
       narration:   narration.trim(),
@@ -229,7 +272,7 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo }: Props) {
       // distinct entry can't be deduped against this one's messageId.
       setIdempotencyKey(crypto.randomUUID());
       if (redirectTo) {
-        setPosted({ voucherNo: voucherNo.trim(), queued: res.status === 202 });
+        setPosted({ voucherNo: voucherNo.trim() || null, queued: res.status === 202 });
         return;
       }
       /* reset form */
@@ -283,13 +326,13 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo }: Props) {
             : "Journal entry posted successfully."}
         </p>
         <p style={{ margin: "0 0 12px", fontSize: "0.85rem", color: "var(--ink2, #475569)" }}>
-          Voucher <strong>{posted.voucherNo}</strong>
+          {posted.voucherNo ? <>Voucher <strong>{posted.voucherNo}</strong></> : "The voucher number is allocated when the entry is approved. The entry"}
           {posted.queued ? " is queued and may take a moment to appear in the General Ledger." : " has been posted."}
         </p>
         <div style={{ display: "flex", gap: 8 }}>
           <Link
             className="btn primary"
-            href={`${redirectTo}?posted=${encodeURIComponent(posted.voucherNo)}&state=${posted.queued ? "queued" : "posted"}`}
+            href={`${redirectTo}?${posted.voucherNo ? `posted=${encodeURIComponent(posted.voucherNo)}&` : ""}state=${posted.queued ? "queued" : "posted"}`}
           >
             View in General Ledger
           </Link>
@@ -312,13 +355,16 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo }: Props) {
           <input
             id="jv-voucher"
             className="input"
-            placeholder="e.g. JV-2026-001"
+            placeholder="Leave blank to auto-number"
             maxLength={VOUCHER_NO_MAX}
             value={voucherNo}
             onChange={(e) => setVoucherNo(e.target.value)}
             aria-invalid={errors.voucherNo ? true : undefined}
             aria-describedby={errors.voucherNo ? "jv-voucher-err" : undefined}
           />
+          <span style={{ fontSize: "0.7rem", color: "var(--ink2, #475569)", display: "block", marginTop: 2 }}>
+            Optional. If left blank, a gapless voucher number is allocated when the entry is approved.
+          </span>
           {errors.voucherNo && <span id="jv-voucher-err" style={{ fontSize: "0.75rem", color: "#b91c1c", marginTop: 2, display: "block" }} role="alert">{errors.voucherNo}</span>}
           {formError.fieldError("voucherNo") && <span style={{ fontSize: "0.75rem", color: "#b91c1c", marginTop: 2, display: "block" }} role="alert">{formError.fieldError("voucherNo")}</span>}
         </div>
@@ -333,6 +379,21 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo }: Props) {
             aria-invalid={errors.postingDate ? true : undefined}
             aria-describedby={errors.postingDate ? "jv-date-err" : undefined}
           />
+          {dateCheck && !errors.postingDate && (
+            <span
+              role="status"
+              style={{
+                fontSize: "0.75rem", marginTop: 2, display: "block", fontWeight: 600,
+                color: dateCheck.kind === "open" ? "#15803d" : dateCheck.kind === "hard_close" || dateCheck.kind === "soft_close" ? "#b91c1c" : "#b45309",
+              }}
+            >
+              {dateCheck.kind === "open" && `Period ${dateCheck.period} is open.`}
+              {dateCheck.kind === "soft_close" && `Period ${dateCheck.period} is soft-closed: only adjustment/closing journals are accepted in a soft-closed period.`}
+              {dateCheck.kind === "hard_close" && `Period ${dateCheck.period} is hard-closed and cannot take postings.`}
+              {dateCheck.kind === "unknown" && `No period record found for ${dateCheck.period}; its status is unverified.`}
+              {dateCheck.kind === "unverified" && `Closed-period status could not be loaded, so ${dateCheck.period} is unverified. The server still blocks closed periods.`}
+            </span>
+          )}
           {errors.postingDate && <span id="jv-date-err" style={{ fontSize: "0.75rem", color: "#b91c1c", marginTop: 2, display: "block" }} role="alert">{errors.postingDate}</span>}
           {formError.fieldError("postingDate") && <span style={{ fontSize: "0.75rem", color: "#b91c1c", marginTop: 2, display: "block" }} role="alert">{formError.fieldError("postingDate")}</span>}
         </div>
@@ -361,6 +422,18 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo }: Props) {
             Every entry has two sides — money going out (debit) and money coming in (credit). The two sides must add up to the same total before you can post.
           </HelpTip>
         </legend>
+
+        <div className="field" style={{ marginBottom: 8 }}>
+          <label className="label" htmlFor="jv-account-filter">Filter accounts</label>
+          <input
+            id="jv-account-filter"
+            className="input"
+            type="search"
+            placeholder="Type a code or name, e.g. cash"
+            value={accountFilter}
+            onChange={(e) => setAccountFilter(e.target.value)}
+          />
+        </div>
 
         {/* header row */}
         <div
@@ -403,10 +476,14 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo }: Props) {
               aria-invalid={lineErr ? true : undefined}
             >
               <option value="">— select account —</option>
-              {accounts.map((a) => (
-                <option key={a.code} value={a.code}>
-                  {a.code} — {a.name}
-                </option>
+              {accountGroups(accounts, accountFilter, line.accountCode).map((g) => (
+                <optgroup key={g.type} label={g.label}>
+                  {g.accounts.map((a) => (
+                    <option key={a.code} value={a.code}>
+                      {a.code} — {a.name}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
             <div>

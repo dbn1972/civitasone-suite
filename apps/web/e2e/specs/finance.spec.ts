@@ -9,9 +9,10 @@
  * assertion here works against rendered HTML, not mocked client calls.
  *
  * REL-023: all 5 routes below now live under /hr/* — finance/{advances,
- * travel,medical,expenses,loans}/page.tsx are redirect stubs ("called
- * finance-service routes that 404, superseded by the working hrms
- * equivalent"). Retargeted every page.goto() to the new location and
+ * travel,medical}/page.tsx are redirect stubs ("called finance-service
+ * routes that 404, superseded by the working hrms equivalent");
+ * /finance/expenses and /finance/loans are now config redirects in
+ * next.config.mjs (their page files were deleted). Retargeted every page.goto() to the new location and
  * re-verified each assertion against the current hr per-route page.tsx source
  * rather than assuming a 1:1 port — several did NOT come across unchanged;
  * see the two test.fixme() blocks below for the two real gaps that turned

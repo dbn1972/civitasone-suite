@@ -67,6 +67,17 @@ describe("ucStats", () => {
       { status: "rejected", amount: "20" },
       { status: "submitted", amount: "30" },
     ]);
-    expect(s).toMatchObject({ pending: 1, rejected: 1, submittedVerified: 1, covered: 60n });
+    expect(s).toMatchObject({ pending: 1, rejected: 1, submittedVerified: 1 });
+  });
+  // GAP-FINANCE-EXPENDITURE-UTILIZATION-CERTIFICATES-03
+  it("covered amount counts only submitted/verified UCs; pending is reported separately, rejected counts in neither", () => {
+    const s = ucStats([
+      { status: "verified", amount: "100" },
+      { status: "pending", amount: "50" },
+      { status: "rejected", amount: "25" },
+      { status: "submitted", amount: "9007199254740993" },
+    ]);
+    expect(s.covered).toBe(9007199254741093n);
+    expect(s.pendingAmount).toBe(50n);
   });
 });

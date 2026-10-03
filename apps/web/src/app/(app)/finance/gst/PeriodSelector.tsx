@@ -3,6 +3,7 @@
 import { useId, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card } from "../../../_components/ds";
+import { PERIOD_PATTERN } from "@/lib/finance/gstTotals";
 
 export function PeriodSelector({ period }: { period: string }) {
   const router = useRouter();
@@ -10,12 +11,13 @@ export function PeriodSelector({ period }: { period: string }) {
   const [error, setError] = useState<string | null>(null);
   const id = useId();
   const errId = useId();
+  const hintId = useId();
   const ref = useRef<HTMLInputElement>(null);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!/^\d{4}-\d{2}$/.test(value)) {
-      setError("Choose a period (YYYY-MM) to view.");
+    if (!PERIOD_PATTERN.test(value)) {
+      setError("Enter a valid period as YYYY-MM, with a month from 01 to 12 (for example 2026-07).");
       ref.current?.focus();
       return;
     }
@@ -39,9 +41,12 @@ export function PeriodSelector({ period }: { period: string }) {
               onChange={(e) => { setValue(e.target.value); }}
               aria-required="true"
               aria-invalid={error ? true : undefined}
-              aria-describedby={error ? errId : undefined}
+              placeholder="YYYY-MM"
+              pattern="\d{4}-(0[1-9]|1[0-2])"
+              aria-describedby={error ? `${hintId} ${errId}` : hintId}
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
+            <span id={hintId} style={{ fontSize: 12, color: "var(--mut)" }}>Format YYYY-MM, e.g. 2026-07.</span>
           </div>
           <Button type="submit" style={{ minHeight: 44 }}>View Period</Button>
         </div>

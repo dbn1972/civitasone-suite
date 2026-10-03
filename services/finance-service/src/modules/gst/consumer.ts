@@ -3,6 +3,7 @@ import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { GST_LEDGER_EXPORT_TOPIC } from "./commands.js";
 import { isValidGstRate, VALID_GST_RATES } from "./gst-rates.js";
 
 const log = pino({ name: "finance.gst.consumer" });
@@ -10,6 +11,24 @@ const log = pino({ name: "finance.gst.consumer" });
 const AUDIT_TOPIC = "audit.event.record";
 
 export function registerGstConsumers(queue: Queue): void {
+  // GAP-FINANCE-GST-05: audit-on-export. Routes may not write to Postgres, so
+  // the POST route only publishes this command and the audit row is enqueued here.
+  queue.subscribe(GST_LEDGER_EXPORT_TOPIC, async (msg) => {
+    const p = msg.payload as { id: string; period: string; rowCount: number; filtered?: boolean };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          service: "finance", action: "export", resourceType: "gst_ledger", resourceId: p.period,
+          outcome: "success", rowCount: p.rowCount, filtered: p.filtered === true,
+        },
+      });
+    });
+    log.info({ id: msg.messageId }, "Processed gst ledger export audit");
+  });
+
   queue.subscribe("finance.gst.entry_record", async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; invoiceId?: string; invoiceNo: string;

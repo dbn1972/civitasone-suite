@@ -13,6 +13,8 @@
  * therefore read the year+month AS OBSERVED IN IST before the boundary test.
  */
 
+import { z } from "zod";
+
 /** Year and 1-based month of `date` as observed in Asia/Kolkata. */
 function istYearMonth(date: Date): { year: number; month: number } {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -109,6 +111,71 @@ export function findFiscalYearConflicts(next: FiscalYearRange, rows: readonly Fi
   if (before) {
     const days = Math.round((Date.parse(`${next.startDate}T00:00:00Z`) - Date.parse(`${before.endDate}T00:00:00Z`)) / DAY_MS) - 1;
     if (days > 0) out.gapAfter = { code: before.code, days };
+  }
+  return out;
+}
+
+/* ── Fiscal-year form validation (GAP-FINANCE-FISCAL-YEARS-05) ───────────── */
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+export const FY_CODE_FORMAT_MESSAGE = "Code must be in YYYY-YY format, e.g. 2026-27.";
+
+/** The standard Indian FY that starts in `startYear`: 1 April -> 31 March, with its code and label. */
+export function standardFiscalYear(startYear: number): { code: string; label: string; startDate: string; endDate: string } {
+  const code = fiscalYearLabel(startYear);
+  return { code, label: `FY ${code}`, startDate: `${startYear}-04-01`, endDate: `${startYear + 1}-03-31` };
+}
+
+/**
+ * Schema for the "create fiscal year" form. The code must be a real FY label
+ * (the two-digit suffix is the following year: "2026-99" and "2026-28" are
+ * rejected), dates are ISO and end after start, and -- unless `nonStandard`
+ * is set (a deliberate short first year or a tenant on another year-end) --
+ * the year must run 1 April to 31 March of the code's years.
+ */
+export function fiscalYearSchema(opts: { nonStandard?: boolean } = {}) {
+  return z
+    .object({
+      code: z
+        .string()
+        .trim()
+        .regex(/^\d{4}-\d{2}$/, FY_CODE_FORMAT_MESSAGE)
+        .refine((c) => isValidFinancialYearLabel(c), (c) => ({
+          message: `${c} is not a valid fiscal year: the second part must be ${String((Number(c.slice(0, 4)) + 1) % 100).padStart(2, "0")} (the year after ${c.slice(0, 4)}).`,
+        })),
+      label: z.string().trim().min(1, "Label is required."),
+      startDate: z.string().min(1, "Start date is required.").regex(ISO_DATE, "Enter a valid start date."),
+      endDate: z.string().min(1, "End date is required.").regex(ISO_DATE, "Enter a valid end date."),
+    })
+    .superRefine((v, ctx) => {
+      if (!ISO_DATE.test(v.startDate) || !ISO_DATE.test(v.endDate)) return;
+      if (v.endDate <= v.startDate) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["endDate"], message: "End date must be after the start date." });
+        return;
+      }
+      if (opts.nonStandard || !isValidFinancialYearLabel(v.code)) return;
+      const std = standardFiscalYear(Number(v.code.slice(0, 4)));
+      if (v.startDate !== std.startDate) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["startDate"], message: `Fiscal year ${v.code} starts on 1 April ${v.code.slice(0, 4)}. Tick "Non-standard year" to use other dates.` });
+      } else if (v.endDate !== std.endDate) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["endDate"], message: `Fiscal year ${v.code} ends on 31 March ${Number(v.code.slice(0, 4)) + 1}. Tick "Non-standard year" to use other dates.` });
+      }
+    });
+}
+
+export type FiscalYearFieldErrors = Partial<Record<"code" | "label" | "startDate" | "endDate", string>>;
+
+/** First error per field, or an empty object when the input is valid. */
+export function validateFiscalYear(
+  input: { code: string; label: string; startDate: string; endDate: string },
+  opts: { nonStandard?: boolean } = {},
+): FiscalYearFieldErrors {
+  const r = fiscalYearSchema(opts).safeParse(input);
+  if (r.success) return {};
+  const out: FiscalYearFieldErrors = {};
+  for (const issue of r.error.issues) {
+    const key = issue.path[0];
+    if ((key === "code" || key === "label" || key === "startDate" || key === "endDate") && !out[key]) out[key] = issue.message;
   }
   return out;
 }

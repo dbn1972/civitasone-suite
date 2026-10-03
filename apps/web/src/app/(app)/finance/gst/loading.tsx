@@ -1,3 +1,6 @@
+import { PageSkeleton } from "../_components/PageSkeleton";
+
 export default function Loading() {
-  return <div className="page-main wrap"><div className="skeleton" role="status" aria-live="polite" aria-label="Loading…" /></div>;
+  // Mirrors page.tsx: header, period selector, four stat cards, tabbed table.
+  return <PageSkeleton label="Loading GST console" statCards={4} formFields={1} formFirst />;
 }

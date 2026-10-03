@@ -6,6 +6,8 @@ import {
   recentFinancialYears,
   fiscalYearLabel,
   currentMonthPeriod,
+  validateFiscalYear,
+  standardFiscalYear,
 } from "./fiscalYear";
 
 describe("fiscalYear (Indian FY, Asia/Kolkata boundary)", () => {
@@ -101,5 +103,30 @@ describe("findFiscalYearConflicts (GAP-FINANCE-FISCAL-YEARS-01)", () => {
   });
   it("reports a gap after the latest earlier year", () => {
     expect(findFiscalYearConflicts({ code: "2028-29", startDate: "2028-04-01", endDate: "2029-03-31" }, rows).gapAfter).toEqual({ code: "2026-27", days: 366 });
+  });
+});
+
+describe("validateFiscalYear (GAP-FINANCE-FISCAL-YEARS-05)", () => {
+  const ok = { code: "2026-27", label: "FY 2026-27", startDate: "2026-04-01", endDate: "2027-03-31" };
+  it("accepts a standard 1 Apr - 31 Mar year", () => {
+    expect(validateFiscalYear(ok)).toEqual({});
+  });
+  it("rejects '2026-99' and '2026-28' (suffix is not the following year)", () => {
+    expect(validateFiscalYear({ ...ok, code: "2026-99" }).code).toMatch(/second part must be 27/);
+    expect(validateFiscalYear({ ...ok, code: "2026-28" }).code).toMatch(/second part must be 27/);
+  });
+  it("rejects a malformed code with the format message", () => {
+    expect(validateFiscalYear({ ...ok, code: "bad-code" }).code).toBe("Code must be in YYYY-YY format, e.g. 2026-27.");
+  });
+  it("rejects an end date before the start", () => {
+    expect(validateFiscalYear({ ...ok, endDate: "2026-03-31" }).endDate).toBe("End date must be after the start date.");
+  });
+  it("rejects calendar-year dates unless non-standard is allowed", () => {
+    const cal = { ...ok, startDate: "2026-01-01", endDate: "2026-12-31" };
+    expect(validateFiscalYear(cal).startDate).toMatch(/starts on 1 April 2026/);
+    expect(validateFiscalYear(cal, { nonStandard: true })).toEqual({});
+  });
+  it("standardFiscalYear(2026) prefills code, label and dates", () => {
+    expect(standardFiscalYear(2026)).toEqual(ok);
   });
 });

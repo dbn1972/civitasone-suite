@@ -125,7 +125,12 @@ describe("JournalEntryForm", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Post Journal Entry" }));
 
-    expect(screen.getByText("Please correct the highlighted fields before posting.")).toBeInTheDocument();
+    // GAP-FINANCE-JOURNAL-ENTRY-05: one alert (the balance one), no second generic banner.
+    expect(screen.queryByText("Please correct the highlighted fields before posting.")).not.toBeInTheDocument();
+    const alerts = screen.getAllByRole("alert");
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]).toHaveTextContent(`Debit and credit differ by ${formatMoney(400000)}`);
+    expect(alerts[0]).toHaveTextContent(`debit ${formatMoney(500000)}, credit ${formatMoney(100000)}`);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
@@ -298,5 +303,85 @@ describe("voucherNoError (GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-05)", () => {
     fireEvent.change(screen.getByLabelText("Voucher Number", { selector: "input" }), { target: { value: "bad#no" } });
     fireEvent.click(screen.getByRole("button", { name: "Post Journal Entry" }));
     expect(screen.getByText(/Use letters, numbers and/)).toBeInTheDocument();
+  });
+});
+
+// GAP-FINANCE-JOURNAL-ENTRY-03: closed-period check on the posting date.
+describe("JournalEntryForm posting-date period check (GAP-FINANCE-JOURNAL-ENTRY-03)", () => {
+  beforeEach(() => vi.restoreAllMocks());
+  const periods = [
+    { period: "2026-04", status: "open" },
+    { period: "2026-03", status: "hard_close" },
+    { period: "2026-02", status: "soft_close" },
+  ];
+
+  it("a date in a hard_close period is a field error and no confirm dialog opens", () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    render(<JournalEntryForm accounts={accounts} periods={periods} />);
+    fillBalancedLines();
+    fireEvent.change(screen.getByLabelText("Posting Date"), { target: { value: "2026-03-20" } });
+    fireEvent.click(screen.getByRole("button", { name: "Post Journal Entry" }));
+    expect(screen.getAllByText(/Period 2026-03 is hard-closed/).length).toBeGreaterThan(0);
+    expect(screen.queryByText("Post this journal entry?")).not.toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("a soft_close period blocks posting like a hard close (server refuses journals there)", () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    render(<JournalEntryForm accounts={accounts} periods={periods} />);
+    fillBalancedLines();
+    fireEvent.change(screen.getByLabelText("Posting Date"), { target: { value: "2026-02-10" } });
+    fireEvent.click(screen.getByRole("button", { name: "Post Journal Entry" }));
+    expect(screen.getAllByText(/only adjustment\/closing journals are accepted in a soft-closed period/).length).toBeGreaterThan(0);
+    expect(screen.queryByText("Post this journal entry?")).not.toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("an open period shows an open pill", () => {
+    render(<JournalEntryForm accounts={accounts} periods={periods} />);
+    fireEvent.change(screen.getByLabelText("Posting Date"), { target: { value: "2026-04-15" } });
+    expect(screen.getByText("Period 2026-04 is open.")).toBeInTheDocument();
+  });
+
+  it("when the periods failed to load, status is shown as unverified rather than silently allowed", () => {
+    render(<JournalEntryForm accounts={accounts} periods={null} />);
+    fireEvent.change(screen.getByLabelText("Posting Date"), { target: { value: "2026-04-15" } });
+    expect(screen.getByText(/could not be loaded, so 2026-04 is unverified/)).toBeInTheDocument();
+  });
+});
+
+// GAP-FINANCE-JOURNAL-ENTRY-04
+describe("JournalEntryForm account picker (GAP-FINANCE-JOURNAL-ENTRY-04)", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it("groups accounts by type and filters them as the user types", () => {
+    render(<JournalEntryForm accounts={accounts} />);
+    const select = screen.getByLabelText("Account code, line 1") as HTMLSelectElement;
+    expect(Array.from(select.querySelectorAll("optgroup")).map((g) => g.label)).toEqual(["Assets", "Expenses"]);
+    fireEvent.change(screen.getByLabelText("Filter accounts"), { target: { value: "cash" } });
+    const names = Array.from((screen.getByLabelText("Account code, line 1") as HTMLSelectElement).options).map((o) => o.textContent);
+    expect(names).toContain("2202-cash — Cash");
+    expect(names).not.toContain("2202-exp — Office Expense");
+    // line 2 is already set to Office Expense: a filter never blanks an existing selection.
+    expect(Array.from((screen.getByLabelText("Account code, line 2") as HTMLSelectElement).options).map((o) => o.textContent)).toContain("2202-exp — Office Expense");
+  });
+});
+
+// GAP-FINANCE-JOURNAL-ENTRY-06
+describe("JournalEntryForm voucher number (GAP-FINANCE-JOURNAL-ENTRY-06)", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it("a blank voucher number is allowed and sent as AUTO (server allocates it)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({}), { status: 202 }));
+    render(<JournalEntryForm accounts={accounts} />);
+    fillBalancedLines();
+    fireEvent.change(screen.getByLabelText("Voucher Number", { selector: "input" }), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Post Journal Entry" }));
+    await waitFor(() => expect(screen.getByText("Post this journal entry?")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Reason / authority for posting (maker-checker)"), { target: { value: "Month-end" } });
+    fireEvent.click(screen.getByRole("button", { name: "Post entry" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.voucherNo).toBe("AUTO");
   });
 });

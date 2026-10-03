@@ -77,6 +77,7 @@ describe("FiscalYearForm", () => {
 
   it("blocks a year that overlaps an existing one; the dialog never opens", () => {
     render(<FiscalYearForm rows={EXISTING} />);
+    fireEvent.click(screen.getByLabelText(/Non-standard year/));
     fillYear("2027-28", "2027-01-01", "2027-12-31");
     expect(screen.getByText("These dates overlap fiscal year 2026-27.")).toBeInTheDocument();
     expect(screen.queryByText("Create this fiscal year?")).not.toBeInTheDocument();
@@ -97,5 +98,46 @@ describe("FiscalYearForm", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const body = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
     expect(body.reason).toBe("Year-end rollover per GO 12/2027");
+  });
+
+  // GAP-FINANCE-FISCAL-YEARS-05
+  it("rejects '2026-99' (suffix is not the following year) before any dialog", () => {
+    render(<FiscalYearForm rows={[]} />);
+    fillYear("2026-99", "2026-04-01", "2027-03-31");
+    expect(screen.getByText(/second part must be 27/)).toBeInTheDocument();
+    expect(screen.queryByText("Create this fiscal year?")).not.toBeInTheDocument();
+  });
+
+  it("rejects calendar-year dates for a standard year unless 'Non-standard year' is ticked", () => {
+    render(<FiscalYearForm rows={[]} />);
+    fillYear("2026-27", "2026-01-01", "2026-12-31");
+    expect(screen.getByText(/starts on 1 April 2026/)).toBeInTheDocument();
+    expect(screen.queryByText("Create this fiscal year?")).not.toBeInTheDocument();
+  });
+
+  it("choosing a start year prefills code, label and the 1 Apr - 31 Mar dates, read-only", () => {
+    render(<FiscalYearForm rows={[]} />);
+    const yr = new Date().getFullYear();
+    const startYear = String(yr);
+    fireEvent.change(screen.getByLabelText("Start year"), { target: { value: startYear } });
+    const next = String((yr + 1) % 100).padStart(2, "0");
+    expect((screen.getByLabelText(/^Code/) as HTMLInputElement).value).toBe(`${startYear}-${next}`);
+    expect((screen.getByLabelText(/^Label/) as HTMLInputElement).value).toBe(`FY ${startYear}-${next}`);
+    expect((screen.getByLabelText(/^Start Date/) as HTMLInputElement).value).toBe(`${startYear}-04-01`);
+    expect((screen.getByLabelText(/^End Date/) as HTMLInputElement).value).toBe(`${yr + 1}-03-31`);
+    expect((screen.getByLabelText(/^Start Date/) as HTMLInputElement).readOnly).toBe(true);
+    fireEvent.click(screen.getByLabelText(/Non-standard year/));
+    expect((screen.getByLabelText(/^Start Date/) as HTMLInputElement).readOnly).toBe(false);
+  });
+
+  // GAP-FINANCE-FISCAL-YEARS-06
+  it("shows the dates in the confirm dialog in Indian format, not raw ISO", async () => {
+    render(<FiscalYearForm rows={[]} />);
+    fillYear("2027-28", "2027-04-01", "2028-03-31");
+    await waitFor(() => expect(screen.getByText("Create this fiscal year?")).toBeInTheDocument());
+    const dialogText = screen.getByRole("alertdialog").textContent ?? "";
+    expect(dialogText).toContain("01 Apr 2027");
+    expect(dialogText).toContain("31 Mar 2028");
+    expect(dialogText).not.toContain("2027-04-01");
   });
 });

@@ -26,10 +26,13 @@ const financeSections: NavTile[] = [
 	{ title: "Scheme Tracking", section: "Expenditure", description: "Scheme outlay and utilisation by funding source.", href: "/finance/expenditure/scheme-tracking" },
 
 	// Treasury & Banking
+	{ title: "PFMS Payments and Batches", section: "Treasury & Banking", description: "PFMS (the government's central payment platform) batches, salary bills, payment advice, bank file and e-sign.", href: "/finance/pfms" },
 	{ title: "e-Payment Orders", section: "Treasury & Banking", description: "Electronic payment orders with status tracking.", href: "/finance/treasury/e-payments" },
 	{ title: "Cheque Register", section: "Treasury & Banking", description: "Cheque/DD register with clearance tracking.", href: "/finance/treasury/cheques" },
 	{ title: "Deposits Register", section: "Treasury & Banking", description: "Personal deposits, EMDs, security deposits and FDRs with administrator and balance.", href: "/finance/treasury/deposits" },
 	{ title: "Cash & Bank Book", section: "Treasury & Banking", description: "Day book with receipts, payments, and balance.", href: "/finance/treasury/cash-bank" },
+	{ title: "Debt Management", section: "Treasury & Banking", description: "Loans, EMI schedules, and lender-wise debt.", href: "/finance/debt" },
+	{ title: "Reconciliation", section: "Treasury & Banking", description: "Bank/subledger reconciliation runs and break resolution.", href: "/finance/reconciliation" },
 
 	// Revenue & Receipts
 	{ title: "Challan Register", section: "Revenue & Receipts", description: "Government challans with deposit verification.", href: "/finance/revenue/challans" },
@@ -46,23 +49,21 @@ const financeSections: NavTile[] = [
 
 	// Audit & Compliance
 	{ title: "Audit Paras", section: "Audit & Compliance", description: "CAG audit observations and department responses.", href: "/finance/audit-paras" },
-	{ title: "Debt Management", section: "Audit & Compliance", description: "Loans, EMI schedules, and lender-wise debt.", href: "/finance/debt" },
 
 	// Vendor & Masters
 	{ title: "Vendors", section: "Vendor & Masters", description: "Registered vendor master with PAN and GSTIN.", href: "/finance/vendors" },
+	{ title: "Finance Configuration", section: "Vendor & Masters", description: "Bank accounts and fiscal-year setup for the finance module.", href: "/finance/config" },
 
 	// Statutory
 	{ title: "TDS Deductions", section: "Statutory", description: "Vendor TDS deduction register by section and quarter, with CSV export.", href: "/finance/statutory/tds-returns" },
 	{ title: "GST & ITC", section: "Statutory", description: "GST summary, ledger, and input-tax-credit reconciliation.", href: "/finance/gst" },
-	{ title: "Reconciliation", section: "Statutory", description: "Bank/subledger reconciliation runs and break resolution.", href: "/finance/reconciliation" },
-	{ title: "PFMS Payments and Batches", section: "Statutory", description: "PFMS (the government's central payment platform) batches, salary bills, payment advice, bank file and e-sign.", href: "/finance/pfms" },
 ];
 
 export default async function Page() {
 	const t = await getTranslations("finance");
 	return (
 		<div className="page-main" aria-labelledby="page-heading">
-			<PageHeader title={t("title")} subtitle="Ledgers, budgets, expenditure, treasury, revenue, and statutory reporting." help="finance" />
+			<PageHeader title={t("title")} subtitle={t("subtitle")} help="finance" />
 			<LinkTiles tiles={financeSections} columns="four" />
 		</div>
 	);
