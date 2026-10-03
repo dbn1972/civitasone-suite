@@ -723,6 +723,8 @@ export type AdvanceSummary = {
   advanceNo: string;
   beneficiary: string;
   type: "employee" | "vendor" | "other";
+  /** Free-text purpose entered at issue time (distinct from `type`). */
+  purpose?: string;
   amount: string;
   disbursedDate: string;
   dueDate?: string;

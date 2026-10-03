@@ -181,6 +181,9 @@ export async function listAdvances(tenantId: string, limit: number, offset = 0) 
       advanceNo: row.advanceNo,
       beneficiary: row.beneficiary,
       type: (row.type as "employee" | "vendor" | "other"),
+      // The stated purpose was stored but never returned, so the register
+      // showed the advance TYPE under a "Purpose" heading (GAP-...-ADVANCES-NEW-06).
+      ...(row.purpose ? { purpose: row.purpose } : {}),
       // H3: string to avoid 2^53 precision loss on large government advance amounts.
       amount: amountMinor.toString(),
       disbursedDate: String(row.disbursedDate),

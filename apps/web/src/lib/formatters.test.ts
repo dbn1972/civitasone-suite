@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { formatMoneyCompact, formatMoney, formatIndianDate, formatIndianDateTime, todayIST, addDaysIST, minorToRupeesOrNull, formatClockTime12h } from "./formatters";
+import { formatMoneyCompact, formatMoney, formatIndianDate, formatIndianDateTime, todayIST, addDaysIST, minorToRupeesOrNull, formatClockTime12h, percentOfMinor, humanizeStatus, formatEntityRef, utilisationPercent, isOverUtilised } from "./formatters";
 
 // ---------------------------------------------------------------------------
 // formatClockTime12h -- GAP-HR-ATTENDANCE-CONFIG-02
@@ -410,5 +410,66 @@ describe("formatMoneyCompact (GAP-FINANCE-BUDGET-ALLOCATION-05)", () => {
   it("is exact beyond 2^53 and rolls 99.995 L up to 1 Cr, not '100.00 L'", () => {
     expect(formatMoneyCompact(9007199254740993000n)).toBe("₹9007199254.74 Cr");
     expect(formatMoneyCompact(999950000n)).toBe("₹1.00 Cr");
+  });
+});
+
+describe("percentOfMinor (GAP-FINANCE-EXPENDITURE-SCHEME-TRACKING-DETAIL-02)", () => {
+  it("computes whole percentages, flagging over-utilisation as >100", () => {
+    expect(percentOfMinor("120", "100")).toBe(120);
+    expect(percentOfMinor(50n, 200n)).toBe(25);
+    expect(percentOfMinor("1", "3")).toBe(33);
+    expect(percentOfMinor("2", "3")).toBe(67);
+  });
+  it("is null (render an em dash) when there is no positive outlay", () => {
+    expect(percentOfMinor("1", "0")).toBeNull();
+    expect(percentOfMinor("0", "0")).toBeNull();
+    expect(percentOfMinor("5", null)).toBeNull();
+    expect(percentOfMinor("abc", "10")).toBeNull();
+  });
+  it("is exact above 2^53 paise (no Number() precision loss)", () => {
+    expect(percentOfMinor("9007199254740993", "9007199254740993")).toBe(100);
+    expect(percentOfMinor("18014398509481986", "9007199254740993")).toBe(200);
+    expect(percentOfMinor("9007199254740992", "9007199254740993")).toBe(100);
+  });
+});
+
+describe("humanizeStatus guarantee types (GAP-FINANCE-EXPENDITURE-GUARANTEES-05)", () => {
+  it("renders acronyms and snake_case types", () => {
+    expect(humanizeStatus("emd")).toBe("EMD");
+    expect(humanizeStatus("bg")).toBe("BG");
+    expect(humanizeStatus("pbg")).toBe("PBG");
+    expect(humanizeStatus("performance")).toBe("Performance");
+    expect(humanizeStatus("partially_released")).toBe("Partially Released");
+  });
+});
+
+describe("formatEntityRef (GAP-FINANCE-EXPENDITURE-BILLS-06)", () => {
+  it("drops the type prefix and shortens a raw UUID", () => {
+    expect(formatEntityRef("procurement_po:5b1c2d3e-0000-4000-8000-000000000000")).toBe("PO 5b1c2d3e");
+    expect(formatEntityRef("procurement_grn:5b1c2d3e-0000-4000-8000-000000000000")).toBe("GRN 5b1c2d3e");
+  });
+  it("shows a human number as-is and a missing ref as an em dash", () => {
+    expect(formatEntityRef("procurement_po:PO-2026-014")).toBe("PO-2026-014");
+    expect(formatEntityRef("PO-9")).toBe("PO-9");
+    expect(formatEntityRef(null)).toBe("—");
+    expect(formatEntityRef("procurement_po:undefined")).toBe("—");
+    expect(formatEntityRef("procurement_po:")).toBe("—");
+  });
+});
+
+describe("utilisationPercent / isOverUtilised (exact over-utilisation)", () => {
+  it("keeps one decimal so 100.3% is not rounded to 100%", () => {
+    expect(utilisationPercent("1003", "1000")).toBe(100.3);
+    expect(utilisationPercent("400", "1000")).toBe(40);
+    expect(utilisationPercent("1", "0")).toBeNull();
+  });
+  it("flags on the exact BigInt comparison, not the rounded percentage", () => {
+    expect(isOverUtilised("1003", "1000")).toBe(true);
+    // 100.04% rounds to 100.0 but is still over.
+    expect(isOverUtilised("10004", "10000")).toBe(true);
+    expect(isOverUtilised("1000", "1000")).toBe(false);
+    expect(isOverUtilised("999", "1000")).toBe(false);
+    expect(isOverUtilised("5", "0")).toBe(false);
+    expect(isOverUtilised("9007199254740994", "9007199254740993")).toBe(true);
   });
 });

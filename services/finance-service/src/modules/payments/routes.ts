@@ -10,7 +10,7 @@ import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import { DomainError, assertBillRejectable, assertPaymentSubmittable } from "./domain.js";
+import { DomainError, assertBillRejectable, assertPaymentSubmittable, assertPayerNotPasser, maskAdvanceBeneficiaries } from "./domain.js";
 import * as mastersRepo from "../masters/repo.js";
 
 const FINANCE_ROLES  = ["finance_officer", "finance_admin", "super_admin"];
@@ -54,7 +54,9 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, AdvanceSummaryListSchema, await queries.listAdvances(ctx.tenantId, q.limit, q.offset));
+    // Personal advances name a natural person: mask the name for roles that
+    // are not entitled to it (DPDP; GAP-FINANCE-EXPENDITURE-ADVANCES-03).
+    sendValidated(reply, AdvanceSummaryListSchema, maskAdvanceBeneficiaries(await queries.listAdvances(ctx.tenantId, q.limit, q.offset), ctx.roles));
   });
 
   app.get("/v1/finance/utilization-certificates", async (req, reply) => {
@@ -68,6 +70,15 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const body = createAdvanceBody.parse(req.body);
+    // Advance numbers are typed by hand and (tenant_id, advance_no) is UNIQUE:
+    // without this pre-check a duplicate got a 202 and then failed silently in
+    // the async consumer. The unique index stays the authority for a true race
+    // (GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-02).
+    if (await repo.findAdvanceByNo(ctx.tenantId, body.advanceNo)) {
+      throw new HttpError(409, "DUPLICATE_ADVANCE_NO", "advance number already exists", [
+        { field: "advanceNo", message: "This advance number is already in use. Enter a different number." },
+      ]);
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createAdvance(ctx, body));
   });
 
@@ -119,6 +130,12 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const body = initiateEftBody.parse(req.body);
+    // Synchronous pre-check of the passer != payer rule (the consumer stays
+    // authoritative): the common case gets an immediate 409, not a silent 202.
+    const bill = await repo.findBillByIdAndTenant(body.billId, ctx.tenantId);
+    if (bill) {
+      try { assertPayerNotPasser(bill.status, bill.updatedBy, ctx.actorId); } catch (err) { toDomain(err, 409); }
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.initiatePayment(ctx, body));
   });
 

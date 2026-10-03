@@ -74,6 +74,25 @@ describe("useFormError", () => {
     expect(result.current.message).not.toMatch(/\b403\b/);
   });
 
+  it("a bare 403 with no JSON envelope still gets permission copy, never 'try again' (GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-05)", async () => {
+    const { result } = renderHook(() => useFormError("advance"));
+    const res = new Response("Forbidden", { status: 403, headers: { "content-type": "text/plain" } });
+    await act(async () => {
+      await result.current.fromResponse(res, "save");
+    });
+    expect(result.current.message).toMatch(/permission/i);
+    expect(result.current.message).not.toMatch(/try again/i);
+    expect(result.current.message).not.toMatch(/\b403\b/);
+  });
+
+  it("a 422 still gets the save copy", async () => {
+    const { result } = renderHook(() => useFormError("advance"));
+    await act(async () => {
+      await result.current.fromResponse(jsonResponse(422, { code: "VALIDATION_FAILED" }), "save");
+    });
+    expect(result.current.message).toMatch(/couldn't save/i);
+  });
+
   it("fromException never reads err.message and never leaks a status code", () => {
     const { result } = renderHook(() => useFormError("grievance"));
     act(() => {

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { DataTable, StatusPill } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { formatIndianDate, formatInternalRef } from "@/lib/formatters";
+import { formatIndianDate, formatEntityRef } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
 
 type Bill = {
@@ -40,7 +40,7 @@ export function BillsTable({ bills, source = "api" }: { bills: Bill[]; source?: 
         columns={[
           { key: "billNo", label: t("colBill"), render: (b) => <span className="mono">{b.billNo}</span> },
           { key: "vendor", label: t("colVendor") },
-          { key: "poRef", label: t("colPoRef"), render: (b) => formatInternalRef(b.poRef) },
+          { key: "poRef", label: t("colPoRef"), render: (b) => formatEntityRef(b.poRef) },
           { key: "amount", label: t("colAmount"), align: "right", cellType: "amount" },
           { key: "submittedDate", label: t("colSubmitted"), render: (b) => formatIndianDate(b.submittedDate) },
           { key: "dueDate", label: t("colDue"), render: (b) => (b.dueDate ? formatIndianDate(b.dueDate) : "—") },

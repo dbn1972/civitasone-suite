@@ -2255,8 +2255,8 @@
   "expenditureAdvances": {
     "title": "Advance Management",
     "subtitle": "Issue and recover advances against actual expenditure.",
-    "printExportLabel": "Ageing",
-    "printExportDocumentTitle": "Advance Ageing",
+    "printExportLabel": "Print register",
+    "printExportDocumentTitle": "Advances register",
     "newAdvanceLink": "+ New Advance",
     "statOpenAdvances": "Open Advances",
     "statOutstanding": "Outstanding",
@@ -2284,14 +2284,21 @@
     "confirmDescription": "This records an outward advance of {amount} to {payee}, due {dueDate}. It commits public money and is recovered against actual expenditure.",
     "confirmNoPayee": "the payee",
     "confirmNoDueDate": "no due date set",
-    "confirmLabel": "Issue advance"
+    "confirmLabel": "Issue advance",
+    "labelType": "Advance type",
+    "typeEmployee": "Officer / employee",
+    "typeVendor": "Vendor",
+    "typeOther": "Other party",
+    "hintAdvanceNumber": "Must be unique for your office. Up to 64 characters.",
+    "errorPayee": "Enter the name of the officer or party receiving the advance.",
+    "helpPayee": "Officer or party receiving the advance. Individual officers' names are masked for roles not authorised to see them."
   },
   "expenditureAdvancesTable": {
     "tabAll": "All",
     "tabOpen": "Open",
     "tabOverdue": "Overdue",
     "colAdvanceNo": "Advance No",
-    "colBeneficiary": "Officer / Party",
+    "colBeneficiary": "Payee",
     "colPurpose": "Purpose",
     "colAdvance": "Advance",
     "colSettled": "Settled",
@@ -2299,7 +2306,11 @@
     "colDisbursed": "Disbursed",
     "colDue": "Due",
     "colStatus": "Status",
-    "filterPlaceholder": "Search advances…"
+    "filterPlaceholder": "Search advances…",
+    "colType": "Type",
+    "kindAll": "All payees",
+    "kindOfficer": "Officers",
+    "kindParty": "Parties"
   },
   "expenditureBillDetail": {
     "breadcrumbLabel": "Breadcrumb",
@@ -2338,7 +2349,6 @@
   "expenditureBills": {
     "title": "Bill Processing",
     "subtitle": "Receive, pre-audit, pass and pay bills against sanctions.",
-    "financeConfigLink": "Finance Configuration",
     "statInProcess": "Bills In Process",
     "statTotal": "Total Bills",
     "statValueInPipeline": "Value In Pipeline",
@@ -2373,7 +2383,8 @@
     "routeErrorBackLabel": "Back to Finance",
     "routeErrorArea": "Finance page",
     "statOtherStatus": "Expired / invoked / other",
-    "areaGuarantees": "guarantees"
+    "areaGuarantees": "guarantees",
+    "manageInProcurementLink": "EMD & bank guarantees (Procurement)"
   },
   "expenditureGuaranteesTable": {
     "colEntity": "Entity",
@@ -2401,7 +2412,8 @@
     "fieldCreated": "Created",
     "fieldLastUpdated": "Last Updated",
     "routeErrorBackLabel": "Back to Finance",
-    "routeErrorArea": "Finance page"
+    "routeErrorArea": "Finance page",
+    "overUtilised": "Over-utilised"
   },
   "expenditureSchemeTracking": {
     "title": "Scheme Tracking",
@@ -2424,7 +2436,9 @@
     "colStatus": "Status",
     "filterPlaceholder": "Search schemes…",
     "emptyTitle": "No schemes",
-    "emptyMessage": "No scheme expenditure records found."
+    "emptyMessage": "No scheme expenditure records found.",
+    "colUtilisation": "Utilisation",
+    "overUtilised": "Over-utilised"
   },
   "expenditureUCNew": {
     "title": "New Utilization Certificate",

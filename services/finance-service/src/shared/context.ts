@@ -6,7 +6,13 @@ import { hasAnyRole } from "@civitasone/auth";
 import type { RequestContext } from "@civitasone/types";
 
 export class HttpError extends Error {
-  constructor(public status: number, public code: string, message: string) {
+  constructor(
+    public status: number,
+    public code: string,
+    message: string,
+    /** Optional per-field messages, sent in the same `fieldErrors` shape as a validation failure. */
+    public fieldErrors?: { field: string; message: string }[],
+  ) {
     super(message);
   }
 }
@@ -75,7 +81,10 @@ export function financeErrorHandler(err: unknown, req: FastifyRequest, reply: Fa
     });
   }
   if (err instanceof HttpError) {
-    return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
+    return reply.code(err.status).send({
+      code: err.code, message: err.message, correlationId, retryable: false,
+      ...(err.fieldErrors?.length ? { fieldErrors: err.fieldErrors } : {}),
+    });
   }
   // Preserve a real status code Fastify/a plugin already attached instead of
   // flattening every other error shape to 500. Only trusted for 4xx — a

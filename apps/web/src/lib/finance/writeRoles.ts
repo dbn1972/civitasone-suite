@@ -7,6 +7,16 @@
  * The server stays the authority; this only avoids offering a dead control.
  */
 export const VENDOR_WRITE_ROLES = ["finance_admin", "super_admin"] as const;
+/**
+ * GAP-FINANCE-EXPENDITURE-BILLS-05: POST /v1/finance/bills and POST
+ * /v1/finance/advances are guarded by FINANCE_ROLES in payments/routes.ts, while
+ * the module-wide web gate also admits read-only roles (audit_officer,
+ * procurement_officer, ...). Only these roles are offered the "New ..." link.
+ */
+export const BILL_CREATE_ROLES = ["finance_officer", "finance_admin", "super_admin"] as const;
+export const ADVANCE_CREATE_ROLES = BILL_CREATE_ROLES;
+/** PATCH /v1/finance/bills/:id/approve -> APPROVER_ROLES in payments/routes.ts. */
+export const BILL_APPROVE_ROLES = ["accounts_officer", "finance_admin", "super_admin"] as const;
 export const RECURRING_WRITE_ROLES = ["finance_officer", "finance_admin", "super_admin"] as const;
 
 /**

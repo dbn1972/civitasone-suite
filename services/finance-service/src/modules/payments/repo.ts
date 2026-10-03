@@ -207,6 +207,14 @@ export async function listAdvancesByTenant(tenantId: string, limit: number, offs
     .offset(offset));
 }
 
+/** GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-02: existing advance with this number for the tenant, if any. */
+export async function findAdvanceByNo(tenantId: string, advanceNo: string): Promise<{ id: string } | null> {
+  const rows = await scopedRead((tx) => tx.select({ id: financeAdvances.id }).from(financeAdvances)
+    .where(and(eq(financeAdvances.tenantId, tenantId), eq(financeAdvances.advanceNo, advanceNo)))
+    .limit(1));
+  return rows[0] ?? null;
+}
+
 export async function insertAdvance(tx: Writer, row: AdvanceInsert): Promise<void> {
   await tx.insert(financeAdvances).values(row);
 }

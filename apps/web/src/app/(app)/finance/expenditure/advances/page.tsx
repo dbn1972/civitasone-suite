@@ -5,6 +5,8 @@ import { AdvancesTable } from "./AdvancesTable";
 import { PrintExportButton } from "../../_components/PrintExportButton";
 import { formatMoney } from "@/lib/formatters";
 import { advanceStats } from "@/lib/finance/expenditureStats";
+import { canWrite, ADVANCE_CREATE_ROLES } from "@/lib/finance/writeRoles";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 
 export default async function AdvancesPage() {
   const t = await getTranslations("expenditureAdvances");
@@ -16,6 +18,9 @@ export default async function AdvancesPage() {
   // / ₹0.00 (GAP-FINANCE-EXPENDITURE-ADVANCES-02).
   const failed = result.source === "error" && advances.length === 0;
   const stats = advanceStats(advances);
+  // GAP-FINANCE-EXPENDITURE-BILLS-05: POST /v1/finance/advances is FINANCE_ROLES
+  // only; do not offer the link to read-only finance readers.
+  const mayCreate = canWrite(getSessionRoles(), ADVANCE_CREATE_ROLES);
 
   return (
     <>
@@ -25,7 +30,7 @@ export default async function AdvancesPage() {
         actions={
           <>
             <PrintExportButton label={t("printExportLabel")} documentTitle={t("printExportDocumentTitle")} />
-            <a href="/finance/expenditure/advances/new" className="btn primary">{t("newAdvanceLink")}</a>
+            {mayCreate ? <a href="/finance/expenditure/advances/new" className="btn primary">{t("newAdvanceLink")}</a> : null}
           </>
         }
       />

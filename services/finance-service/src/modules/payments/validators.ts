@@ -79,7 +79,9 @@ export type GemInvoiceMatchBody = z.infer<typeof gemInvoiceMatchBody>;
 export const createAdvanceBody = z.object({
   advanceNo:   z.string().min(1).max(64),
   purpose:     z.string().min(1).max(500),
-  payee:       z.string().max(200).optional(),
+  // Required: the beneficiary column is NOT NULL and must never be back-filled
+  // from the free-text purpose (which can name a person; DPDP masking).
+  payee:       z.string().trim().min(1).max(200),
   type:        z.enum(["employee", "vendor", "other"]).default("employee"),
   amountMinor: moneyMinorField,
   currency:    z.string().length(3).default("INR"),

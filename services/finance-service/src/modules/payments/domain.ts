@@ -8,6 +8,50 @@ export class DomainError extends Error {
 }
 
 /**
+ * GAP-FINANCE-EXPENDITURE-ADVANCES-03 (DPDP): roles that may see the NAME of an
+ * individual officer an advance was issued to. The advances list is readable
+ * by every finance reader (including procurement_officer), but a personal
+ * (employee) advance names a natural person and their outstanding balance;
+ * roles outside this set get the name masked. Vendor / other advances name an
+ * organisation and are never masked. Product policy value: kept here, in one
+ * place, so it can be tightened or widened without touching the route.
+ */
+export const ADVANCE_OFFICER_NAME_ROLES = ["finance_officer", "finance_admin", "super_admin", "audit_officer"];
+
+/**
+ * Segregation of duties beyond maker != checker: the officer who PASSED a bill
+ * (the last approver recorded in bill.updatedBy while status is "passed") may
+ * not also release its payment.
+ */
+export function assertPayerNotPasser(billStatus: string, passerId: string | null | undefined, payerId: string): void {
+  if (billStatus === "passed" && passerId && payerId && passerId === payerId) {
+    throw new DomainError(
+      "PAYER_IS_PASSER",
+      "the officer who passed a bill may not also release its payment (segregation of duties)",
+    );
+  }
+}
+
+/** "Asha Verma" -> "A*** V***". Blank input becomes "***". */
+export function maskPersonName(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "***";
+  return parts.map((w) => `${Array.from(w)[0]}***`).join(" ");
+}
+
+/** Mask the beneficiary of personal (employee) advances for roles not entitled to see it. */
+export function maskAdvanceBeneficiaries<T extends { type: string; beneficiary: string; purpose?: string }>(rows: T[], roles: readonly string[]): T[] {
+  if (roles.some((r) => ADVANCE_OFFICER_NAME_ROLES.includes(r))) return rows;
+  // The free-text purpose can name the person ("Tour advance for Asha Verma"),
+  // so it is masked on the same rows as the beneficiary.
+  return rows.map((r) =>
+    r.type === "employee"
+      ? { ...r, beneficiary: maskPersonName(r.beneficiary), ...(r.purpose ? { purpose: "***" } : {}) }
+      : r,
+  );
+}
+
+/**
  * C4 FIX: Segregation of duties — the approver/payer (checker) must differ
  * from the creator (maker). Enforced on bill approve and payment initiate.
  */

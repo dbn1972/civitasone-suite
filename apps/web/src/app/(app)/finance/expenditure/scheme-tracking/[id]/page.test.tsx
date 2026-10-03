@@ -60,4 +60,44 @@ describe("SchemeDetailPage", () => {
     expect(screen.queryByText("PM Gram Sadak Yojana")).not.toBeInTheDocument();
     expect(screen.queryByText(/Ministry of Rural Development/)).not.toBeInTheDocument();
   });
+
+  // GAP-FINANCE-EXPENDITURE-SCHEME-TRACKING-DETAIL-02
+  it("flags over-utilisation and stays exact above 2^53 paise", async () => {
+    getFinanceSchemeByIdMock.mockResolvedValue({ data: { ...SCHEME, outlayMinor: "100", utilisedMinor: "120" }, source: "api" });
+    const { unmount } = render(await SchemeDetailPage({ params: { id: "s1" } }));
+    expect(screen.getByText("120% · Over-utilised")).toBeInTheDocument();
+    unmount();
+    getFinanceSchemeByIdMock.mockResolvedValue({ data: { ...SCHEME, outlayMinor: "9007199254740993", utilisedMinor: "9007199254740993" }, source: "api" });
+    render(await SchemeDetailPage({ params: { id: "s1" } }));
+    expect(screen.getByText("100%")).toBeInTheDocument();
+  });
+
+  it("shows a dash, not 0%, when there is no outlay", async () => {
+    getFinanceSchemeByIdMock.mockResolvedValue({ data: { ...SCHEME, outlayMinor: "0", utilisedMinor: "500" }, source: "api" });
+    render(await SchemeDetailPage({ params: { id: "s1" } }));
+    expect(screen.queryByText("0%")).not.toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+  });
+
+  // GAP-FINANCE-EXPENDITURE-SCHEME-TRACKING-DETAIL-03
+  it("humanizes the status in the stat card and the pill", async () => {
+    getFinanceSchemeByIdMock.mockResolvedValue({ data: { ...SCHEME, status: "on_hold" }, source: "api" });
+    render(await SchemeDetailPage({ params: { id: "s1" } }));
+    expect(screen.queryByText("on_hold")).not.toBeInTheDocument();
+    expect(screen.getAllByText("On Hold").length).toBe(2);
+  });
+
+  // GAP-FINANCE-EXPENDITURE-SCHEME-TRACKING-DETAIL-04
+  it("a failed fetch shows the retryable error state, not 'not available'", async () => {
+    getFinanceSchemeByIdMock.mockResolvedValue({ data: null, source: "error", status: 500 });
+    render(await SchemeDetailPage({ params: { id: "s1" } }));
+    expect(screen.queryByText("Scheme detail not available")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /try again|retry/i })).toBeInTheDocument();
+  });
+
+  it("flags 100.3% on the exact comparison", async () => {
+    getFinanceSchemeByIdMock.mockResolvedValue({ data: { ...SCHEME, outlayMinor: "1000", utilisedMinor: "1003" }, source: "api" });
+    render(await SchemeDetailPage({ params: { id: "s1" } }));
+    expect(screen.getByText("100.3% · Over-utilised")).toBeInTheDocument();
+  });
 });

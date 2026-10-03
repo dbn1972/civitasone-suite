@@ -23,7 +23,8 @@ const inputStyle = { width: "100%", padding: 8, borderRadius: 8, border: "1px so
 export default function NewAdvancePage() {
   const t = useTranslations("expenditureAdvancesNew");
   const router = useRouter();
-  const [form, setForm] = useState({ advanceNo: "", purpose: "", payee: "", amount: "", dueDate: "" });
+  const [form, setForm] = useState({ advanceNo: "", purpose: "", payee: "", type: "employee", amount: "", dueDate: "" });
+  const [payeeError, setPayeeError] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
@@ -41,6 +42,13 @@ export default function NewAdvancePage() {
     setMessage("");
     setIsError(false);
     formError.clear();
+    // GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-03: an advance is issued TO someone;
+    // the register's primary identifier is the payee, so it is not optional.
+    if (!form.payee.trim()) {
+      setPayeeError(t("errorPayee"));
+      return;
+    }
+    setPayeeError("");
     if (rupeesToMinorString(form.amount) === null) {
       setAmountError(t("errorAmount"));
       return;
@@ -62,9 +70,13 @@ export default function NewAdvancePage() {
         method: "POST",
         headers: { "content-type": "application/json", "x-idempotency-key": idempotencyKey },
         body: JSON.stringify({
-          advanceNo: form.advanceNo,
+          advanceNo: form.advanceNo.trim(),
           purpose: form.purpose,
-          payee: form.payee || undefined,
+          payee: form.payee.trim(),
+          // The API's `type` enum (employee | vendor | other) was never sent,
+          // so every advance was silently recorded as "employee"
+          // (GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-06).
+          type: form.type,
           amountMinor,
           currency: "INR",
           dueDate: form.dueDate || undefined,
@@ -106,21 +118,35 @@ export default function NewAdvancePage() {
           <div className="fields">
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="adv-no">{t("labelAdvanceNumber")}</label>
-              <input id="adv-no" required value={form.advanceNo} onChange={(e) => setForm({ ...form, advanceNo: e.target.value })} style={inputStyle} />
+              <input id="adv-no" required aria-required="true" maxLength={64} aria-describedby="adv-no-hint" value={form.advanceNo} onChange={(e) => setForm({ ...form, advanceNo: e.target.value })} style={inputStyle} />
+              <span id="adv-no-hint" style={{ fontSize: 12, color: "var(--ink2)" }}>{t("hintAdvanceNumber")}</span>
               {formError.fieldError("advanceNo") && (
                 <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("advanceNo")}</span>
               )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="adv-payee">{t("labelPayee")}</label>
-              <input id="adv-payee" value={form.payee} onChange={(e) => setForm({ ...form, payee: e.target.value })} style={inputStyle} />
+              <input id="adv-payee" required aria-required="true" maxLength={200} aria-invalid={payeeError ? true : undefined} aria-describedby="adv-payee-help" value={form.payee} onChange={(e) => setForm({ ...form, payee: e.target.value })} style={inputStyle} />
+              <span id="adv-payee-help" style={{ fontSize: 12, color: "var(--ink2)" }}>{t("helpPayee")}</span>
+              {payeeError && <span role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>{payeeError}</span>}
               {formError.fieldError("payee") && (
                 <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("payee")}</span>
               )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
+              <label className="l" htmlFor="adv-type">{t("labelType")}</label>
+              <select id="adv-type" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} style={inputStyle}>
+                <option value="employee">{t("typeEmployee")}</option>
+                <option value="vendor">{t("typeVendor")}</option>
+                <option value="other">{t("typeOther")}</option>
+              </select>
+              {formError.fieldError("type") && (
+                <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("type")}</span>
+              )}
+            </div>
+            <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="adv-amt">{t("labelAmount")}</label>
-              <input id="adv-amt" required type="number" min="0" step="0.01" aria-invalid={amountError ? true : undefined} value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} style={inputStyle} />
+              <input id="adv-amt" required type="text" inputMode="decimal" autoComplete="off" pattern="\d{1,13}(\.\d{1,2})?" aria-invalid={amountError ? true : undefined} value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} style={inputStyle} />
               {amountError && <span role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>{amountError}</span>}
               {formError.fieldError("amountMinor") && (
                 <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("amountMinor")}</span>
@@ -150,7 +176,7 @@ export default function NewAdvancePage() {
         open={confirmOpen}
         title={t("confirmTitle")}
         description={t("confirmDescription", {
-          payee: form.payee || t("confirmNoPayee"),
+          payee: form.payee.trim() || t("confirmNoPayee"),
           amount: formatMoney(rupeesToMinorString(form.amount) ?? "0"),
           dueDate: form.dueDate ? formatIndianDate(form.dueDate) : t("confirmNoDueDate"),
         })}

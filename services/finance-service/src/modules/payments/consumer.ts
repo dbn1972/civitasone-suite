@@ -8,7 +8,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as budgetRepo from "../budget/repo.js";
-import { assertThreeWayMatchPresent, assertThreeWayMatch, assertBillPassed, assertBillRejectable, assertPaymentSubmittable, PAYMENT_SUBMIT_BLOCKED_LIST, assertValidPaymentMode, assertDistinctMakerChecker, nextStage, deviationExceedsTolerance, DEFAULT_THREE_WAY_TOLERANCE_PCT, DomainError } from "./domain.js";
+import { assertThreeWayMatchPresent, assertThreeWayMatch, assertBillPassed, assertBillRejectable, assertPaymentSubmittable, PAYMENT_SUBMIT_BLOCKED_LIST, assertValidPaymentMode, assertDistinctMakerChecker, assertPayerNotPasser, nextStage, deviationExceedsTolerance, DEFAULT_THREE_WAY_TOLERANCE_PCT, DomainError } from "./domain.js";
 import { minorString } from "@civitasone/schemas/money";
 import { assertValidDdoCode } from "../../shared/pfms.js";
 import { assertValidHoAWithMaster } from "../hoa/domain.js";
@@ -377,6 +377,9 @@ export function registerPaymentsConsumers(queue: Queue): void {
       // C4 FIX: Maker-checker on payment initiation — the payer must differ
       // from the bill creator. Prevents one actor from creating AND paying a bill.
       assertDistinctMakerChecker(bill.createdBy, msg.actorId);
+      // The passer (last approver, recorded in updatedBy while status=passed)
+      // must differ from the payer.
+      assertPayerNotPasser(bill.status ?? "pending", bill.updatedBy, msg.actorId);
       // C3 FIX: Payment amount conservation invariant.
       // The payment amount MUST equal the bill's net amount (full payment).
       // Part-payments are not yet supported — reject mismatches to prevent
@@ -480,21 +483,40 @@ export function registerPaymentsConsumers(queue: Queue): void {
       type?: string; amountMinor: number; currency?: string; dueDate?: string;
     };
     const today = new Date().toISOString().slice(0, 10);
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.insertAdvance(tx, {
-        id: p.id, tenantId: p.tenantId, advanceNo: p.advanceNo,
-        // beneficiary is NOT NULL; fall back to the (required) purpose when no payee given.
-        beneficiary: p.payee && p.payee.trim() ? p.payee.trim() : p.purpose,
-        type: p.type ?? "employee",
-        amountMinor: BigInt(p.amountMinor), currency: p.currency ?? "INR",
-        disbursedDate: today,
-        ...(p.dueDate ? { dueDate: p.dueDate } : {}),
-        purpose: p.purpose,
-        status: "active", createdBy: msg.actorId, updatedBy: msg.actorId,
+    // payee is required by createAdvanceBody; a legacy queued message without
+    // one is rejected rather than back-filled from the (possibly PII) purpose.
+    const beneficiary = p.payee?.trim();
+    if (!beneficiary) throw new NonRetryableError("[finance/payments] advanceCreate SCHEMA_VIOLATION: payee is required");
+    try {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        await repo.insertAdvance(tx, {
+          id: p.id, tenantId: p.tenantId, advanceNo: p.advanceNo,
+          beneficiary,
+          type: p.type ?? "employee",
+          amountMinor: BigInt(p.amountMinor), currency: p.currency ?? "INR",
+          disbursedDate: today,
+          ...(p.dueDate ? { dueDate: p.dueDate } : {}),
+          purpose: p.purpose,
+          status: "active", createdBy: msg.actorId, updatedBy: msg.actorId,
+        });
+        await audit(tx, msg, "create", "advance", p.id);
       });
-      await audit(tx, msg, "create", "advance", p.id);
-    });
+    } catch (err) {
+      // UNIQUE (tenant_id, advance_no) -- tenant-wide, not per fiscal year. The
+      // route pre-check narrows this, but two concurrent creates can still
+      // collide. The aborted transaction rolled everything back (including the
+      // inbox marker), so record the rejection in a fresh one: an audit event
+      // with outcome "failure" instead of a silent drop, then stop retrying.
+      if (isUniqueViolation(err)) {
+        await db.transaction(async (tx) => {
+          if (!(await markProcessed(tx, msg.messageId))) return;
+          await audit(tx, msg, "create_rejected_duplicate_advance_no", "advance", p.id, "failure");
+        });
+        return;
+      }
+      throw err;
+    }
     await cache.invalidateResource(msg.tenantId, "advances");
   });
 
@@ -595,10 +617,15 @@ export function registerPaymentsConsumers(queue: Queue): void {
   });
 }
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
+function isUniqueViolation(err: unknown): boolean {
+  const e = err as { code?: unknown; cause?: { code?: unknown } } | null;
+  return e?.code === "23505" || e?.cause?.code === "23505";
+}
+
+async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string, outcome: "success" | "failure" = "success"): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "finance", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "finance", action, resourceType, resourceId, outcome },
   });
 }

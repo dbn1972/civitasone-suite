@@ -193,6 +193,7 @@ const STATUS_MAP: Record<string, PillVariant> = {
   presented: "warn",
   issued: "info", // explicit: this is the neutral starting state, not an unmapped word
 
+
   // Platform admin lists (GAP-ADMIN-ENTITLEMENTS-06, GAP-ADMIN-GATEWAYS-04/05): only
   // unambiguous words. "revoked" entitlement; communication-gateway health. An
   // outage must read red, a degraded gateway amber, a standby one neutral --
@@ -207,6 +208,16 @@ const STATUS_MAP: Record<string, PillVariant> = {
   // draft/active/closed already map above; "evaluated" (rated, awaiting close) is
   // neutral-informational and is listed explicitly so it is a decision, not a fallthrough.
   evaluated: "info",
+  // Guarantee register (treasury.finance_guarantees.status CHECK: active |
+  // partially_released | fully_released | cancelled) and scheme register
+  // (budget.finance_schemes.status CHECK: draft | active | exhausted |
+  // cancelled) -- GAP-FINANCE-EXPENDITURE-GUARANTEES-05 / SCHEME-TRACKING-DETAIL-03.
+  // "active"/"cancelled"/"draft" already map above.
+  "partially released": "warn",
+  "fully released": "mut",
+  released: "mut",
+  exhausted: "warn", // outlay fully drawn down: not an error, but needs attention
+  invoked: "bad",
 };
 // Deliberately NOT added: a generic "flagged" key. tenant-admin/security/SecurityTable.tsx
 // has its own inline outcome->variant mapping that fails closed to "bad" for any

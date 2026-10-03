@@ -1,8 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, StatusPill, Card, EmptyState, LoadErrorState } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { getFinanceSchemeById } from "@/app/_data/loaders";
-import { formatIndianDate, formatMoney } from "@/lib/formatters";
+import { formatIndianDate, formatMoney, humanizeStatus, utilisationPercent, isOverUtilised } from "@/lib/formatters";
 
 /**
  * Scheme detail, wired to GET /v1/finance/schemes/:id (finance-service budget
@@ -13,7 +12,7 @@ import { formatIndianDate, formatMoney } from "@/lib/formatters";
 export default async function SchemeDetailPage({ params }: { params: { id: string } }) {
   const t = await getTranslations("expenditureSchemeDetail");
   const result = await getFinanceSchemeById(params.id);
-  const { data: scheme, source } = result;
+  const { data: scheme } = result;
 
   if (!scheme) {
     if (result.source === "error" && result.status !== 404) {
@@ -36,9 +35,10 @@ export default async function SchemeDetailPage({ params }: { params: { id: strin
     );
   }
 
-  const outlay = Number(scheme.outlayMinor);
-  const utilised = Number(scheme.utilisedMinor);
-  const utilisationPct = outlay > 0 ? Math.round((utilised / outlay) * 100) : 0;
+  // BigInt-safe; null (no positive outlay) renders "—", never a fabricated 0%.
+  const utilisationPct = utilisationPercent(scheme.utilisedMinor, scheme.outlayMinor);
+  // Flag on the exact comparison, not the rounded percentage (100.3% must flag).
+  const overUtilised = isOverUtilised(scheme.utilisedMinor, scheme.outlayMinor);
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -46,13 +46,12 @@ export default async function SchemeDetailPage({ params }: { params: { id: strin
         title={scheme.name}
         subtitle={scheme.funding ?? scheme.code}
         back="/finance/expenditure/scheme-tracking"
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />
       <StatGrid>
         <StatCard icon="₹" iconBg="#ecfdf3" label={t("outlay")} value={formatMoney(scheme.outlayMinor)} />
         <StatCard icon="📤" iconBg="#e7edfd" label={t("utilised")} value={formatMoney(scheme.utilisedMinor)} />
-        <StatCard icon="📊" iconBg="#fffaeb" label={t("statUtilisation")} value={`${utilisationPct}%`} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label={t("status")} value={scheme.status} />
+        <StatCard icon="📊" iconBg="#fffaeb" label={t("statUtilisation")} value={utilisationPct === null ? "—" : overUtilised ? `${utilisationPct}% · ${t("overUtilised")}` : `${utilisationPct}%`} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label={t("status")} value={humanizeStatus(scheme.status)} />
       </StatGrid>
 
       <Card title={t("cardTitle")} padding>

@@ -28,6 +28,7 @@ function fillForm() {
   fireEvent.change(screen.getByLabelText("Advance number"), { target: { value: "ADV-001" } });
   fireEvent.change(screen.getByLabelText("Amount (₹)"), { target: { value: "1000" } });
   fireEvent.change(screen.getByLabelText("Purpose"), { target: { value: "Tour advance" } });
+  fireEvent.change(screen.getByLabelText("Payee"), { target: { value: "R. Sharma" } });
 }
 
 describe("NewAdvancePage", () => {
@@ -108,5 +109,73 @@ describe("NewAdvancePage", () => {
     fireEvent.click(screen.getByRole("button", { name: /create advance/i }));
     expect(await screen.findByText(/at most 2 decimals/i)).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-03
+  it("blocks submission without a payee and sends nothing", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    renderPage(<NewAdvancePage />);
+    fireEvent.change(screen.getByLabelText("Advance number"), { target: { value: "ADV-9" } });
+    fireEvent.change(screen.getByLabelText("Amount (₹)"), { target: { value: "10" } });
+    fireEvent.change(screen.getByLabelText("Purpose"), { target: { value: "Tour" } });
+    fireEvent.click(screen.getByRole("button", { name: /create advance/i }));
+    expect(await screen.findByText(/name of the officer or party/i)).toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Payee")).toBeRequired();
+  });
+
+  // GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-06: the API's `type` enum used to be
+  // omitted, so every advance was stored as "employee".
+  it("sends the chosen advance type and the trimmed payee", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 202 }));
+    renderPage(<NewAdvancePage />);
+    fillForm();
+    fireEvent.change(screen.getByLabelText("Payee"), { target: { value: "  Acme Traders  " } });
+    fireEvent.change(screen.getByLabelText("Advance type"), { target: { value: "vendor" } });
+    fireEvent.click(screen.getByRole("button", { name: /create advance/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Issue advance" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const body = JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string);
+    expect(body).toMatchObject({ type: "vendor", payee: "Acme Traders", purpose: "Tour advance" });
+  });
+
+  // GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-04: exponent / negative forms are rejected.
+  it("rejects exponent and negative amounts", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    renderPage(<NewAdvancePage />);
+    fillForm();
+    for (const bad of ["1e3", "-5", "0"]) {
+      fireEvent.change(screen.getByLabelText("Amount (₹)"), { target: { value: bad } });
+      fireEvent.click(screen.getByRole("button", { name: /create advance/i }));
+      expect(await screen.findByText(/at most 2 decimals/i)).toBeInTheDocument();
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-02: a duplicate number surfaces inline.
+  it("shows the server's duplicate-number message inline on the Advance number field", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ code: "DUPLICATE_ADVANCE_NO", message: "x", fieldErrors: [{ field: "advanceNo", message: "This advance number is already in use. Enter a different number." }] }),
+        { status: 409 },
+      ),
+    );
+    renderPage(<NewAdvancePage />);
+    fillForm();
+    fireEvent.click(screen.getByRole("button", { name: /create advance/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Issue advance" }));
+    expect(await screen.findByText(/already in use/i)).toBeInTheDocument();
+  });
+
+  // GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-05
+  it("a 403 tells the officer they lack permission, not to try again", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("Forbidden", { status: 403 }));
+    renderPage(<NewAdvancePage />);
+    fillForm();
+    fireEvent.click(screen.getByRole("button", { name: /create advance/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Issue advance" }));
+    const alert = await screen.findByText(/don't have permission/i);
+    expect(alert.textContent).not.toMatch(/try again/i);
   });
 });
