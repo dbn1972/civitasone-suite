@@ -25,6 +25,10 @@ export const COMMANDS = {
   apiKeyRotate:  "identity.apikey.rotate",
   apiKeyRevoke:  "identity.apikey.revoke",
   deviceUpsert:  "identity.device.upsert",
+  // GAP-ADMIN-OPERATORS-05: maker-checker for platform operators (operators/commands.ts).
+  operatorRequest: "identity.operator.request",
+  operatorDecide:  "identity.operator.decide",
+  operatorCancel:  "identity.operator.cancel",
 } as const;
 
 export const EVENTS = {

@@ -343,3 +343,78 @@ export async function requestPasswordReset(tenantId: string, email: string, log?
     return { ok: false, reason: String(err) };
   }
 }
+
+type KcLog = { warn: (o: unknown, m: string) => void };
+
+/**
+ * Re-enable a previously disabled realm user (platform-operator reactivation).
+ * The disabling half is deactivateUser(). Best-effort: never throws.
+ */
+export async function enableUser(tenantId: string, email: string, log?: KcLog): Promise<KcResult> {
+  const cfg = readConfig();
+  if (!cfg) return { ok: true, skipped: true, reason: "keycloak admin creds not configured" };
+  try {
+    const token = await getAdminToken(cfg);
+    const existing = await findUser(cfg, token, tenantId, email);
+    if (!existing) return { ok: false, reason: "user not present in keycloak" };
+    if (existing.enabled) return { ok: true, kcUserId: existing.id, reason: "already enabled" };
+    const upd = await fetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}`, {
+      method: "PUT",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ enabled: true }),
+    });
+    if (!upd.ok && upd.status !== 204) throw new Error(`keycloak enable failed: ${upd.status}`);
+    return { ok: true, kcUserId: existing.id };
+  } catch (err) {
+    captureError(err, { service: "identity", event: "keycloak_enable_failed", tenantId, email });
+    log?.warn({ tenantId, email, err: String(err) }, "keycloak enable failed (degraded)");
+    return { ok: false, reason: String(err) };
+  }
+}
+
+/**
+ * Swap realm roles on a federated user (platform-operator role change): remove
+ * `remove`, add `add`, then log the user out so the next token carries the new
+ * roles. Unknown role names are skipped like assignRealmRoles(). Best-effort.
+ */
+export async function replaceRealmRoles(
+  u: { tenantId: string; email: string },
+  remove: string[],
+  add: string[],
+  log?: KcLog,
+): Promise<KcResult> {
+  const cfg = readConfig();
+  if (!cfg) return { ok: true, skipped: true, reason: "keycloak admin creds not configured" };
+  try {
+    const token = await getAdminToken(cfg);
+    const existing = await findUser(cfg, token, u.tenantId, u.email);
+    if (!existing) return { ok: false, reason: "user not present in keycloak" };
+    const lookup = async (names: string[]) => {
+      const out: Array<{ id: string; name: string }> = [];
+      for (const name of names) {
+        const res = await fetch(`${cfg.url}/admin/realms/${cfg.realm}/roles/${encodeURIComponent(name)}`, { headers: { authorization: `Bearer ${token}` } });
+        if (res.status === 200) out.push((await res.json()) as { id: string; name: string });
+        else if (res.status !== 404) throw new Error(`keycloak role lookup failed: ${res.status} (role=${name})`);
+      }
+      return out;
+    };
+    const mapping = `${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}/role-mappings/realm`;
+    const headers = { authorization: `Bearer ${token}`, "content-type": "application/json" };
+    const toRemove = await lookup(remove);
+    if (toRemove.length > 0) {
+      const del = await fetch(mapping, { method: "DELETE", headers, body: JSON.stringify(toRemove) });
+      if (!del.ok && del.status !== 204) throw new Error(`keycloak role-mapping remove failed: ${del.status}`);
+    }
+    const toAdd = await lookup(add);
+    if (toAdd.length > 0) {
+      const post = await fetch(mapping, { method: "POST", headers, body: JSON.stringify(toAdd) });
+      if (!post.ok && post.status !== 204) throw new Error(`keycloak role-mapping assign failed: ${post.status}`);
+    }
+    await fetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}/logout`, { method: "POST", headers: { authorization: `Bearer ${token}` } });
+    return { ok: true, kcUserId: existing.id };
+  } catch (err) {
+    captureError(err, { service: "identity", event: "keycloak_role_replace_failed", tenantId: u.tenantId, email: u.email });
+    log?.warn({ tenantId: u.tenantId, email: u.email, err: String(err) }, "keycloak role replacement failed (degraded)");
+    return { ok: false, reason: String(err) };
+  }
+}

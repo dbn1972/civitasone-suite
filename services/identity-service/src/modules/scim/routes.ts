@@ -20,6 +20,7 @@ import { db, scopedRead } from "../../shared/db.js";
 import { users } from "../users/schema.js";
 import { eq, and, ilike } from "drizzle-orm";
 import * as commands from "./commands.js";
+import * as operatorsRepo from "../operators/repo.js";
 import * as tokenRepo from "./token-repo.js";
 import { sha256Hex, generateScimSecret, isUsable } from "./token-domain.js";
 import { issueScimTokenBody, scimTokenIdParam } from "./token-validators.js";
@@ -27,6 +28,28 @@ import type { ScimTokenRow } from "./schema.js";
 
 const SCIM_SCHEMA_USER = "urn:ietf:params:scim:schemas:core:2.0:User";
 const ADMIN = ["platform_admin", "super_admin", "tenant_admin"];
+
+/**
+ * GAP-ADMIN-OPERATORS-05: a SCIM client must not enable, disable or delete a platform operator -- that needs a
+ * second super admin's approval (Platform Operators > change request). Name / e-mail edits and a no-op
+ * active flag are still accepted, so an IdP that re-sends active=true on every sync is not broken.
+ */
+async function operatorStatusChangeBlocked(tid: string, userId: string, currentStatus: string, requested: string | undefined, isDelete = false): Promise<boolean> {
+  if (!isDelete) {
+    if (requested === undefined) return false;
+    if ((requested === "active") === (currentStatus === "active")) return false;
+  }
+  return (await operatorsRepo.loadOperatorScoped(tid, userId)) !== null;
+}
+
+function scimOperatorConflict(reply: { code: (n: number) => { send: (b: unknown) => unknown } }) {
+  return reply.code(409).send({
+    schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
+    code: "OPERATOR_REQUIRES_APPROVAL",
+    detail: "This account is a platform operator. Its status changes through a platform-operator change request that a second super admin approves.",
+    status: "409",
+  });
+}
 
 // Mirrors commands.ts's SCIM_SYSTEM_ACTOR_ID sentinel convention — used only
 // for the one-time legacy-token migration row (see bootstrapLegacyScimToken),
@@ -309,6 +332,7 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
+    if (await operatorStatusChangeBlocked(tid, id, existing.status, status as string | undefined)) return scimOperatorConflict(reply);
     await commands.scimReplaceUser(tid, correlationId(req), id, patch);
     return reply.code(202).send(
       toScimUser({
@@ -356,6 +380,7 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
+    if (await operatorStatusChangeBlocked(tid, id, existing.status, patch["status"] as string | undefined)) return scimOperatorConflict(reply);
     await commands.scimPatchUser(tid, correlationId(req), id, patch);
     return reply.code(202).send(
       toScimUser({
@@ -387,6 +412,7 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
+    if (await operatorStatusChangeBlocked(tid, id, existing.status, undefined, true)) return scimOperatorConflict(reply);
     await commands.scimDeleteUser(tid, correlationId(req), id);
     return reply.code(202).send({ id, status: "accepted" });
   });

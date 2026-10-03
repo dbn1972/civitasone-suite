@@ -47,8 +47,10 @@ describe("assignRole reserved platform roles", () => {
   it("tenant_admin cannot assign the super_admin role (403) even though it has no permissions", async () => {
     expect((await assign(ROLE_SUPER, ["tenant_admin"])).statusCode).toBe(403);
   });
-  it("platform staff can", async () => {
-    expect((await assign(ROLE_SUPER, ["platform_admin"])).statusCode).toBe(202);
+  it("platform staff cannot assign it directly either: it needs an approved operator change request", async () => {
+    const r = await assign(ROLE_SUPER, ["platform_admin"]);
+    expect(r.statusCode).toBe(409);
+    expect(r.json().code).toBe("OPERATOR_REQUIRES_APPROVAL");
   });
   it("tenant_admin can still assign an ordinary role", async () => {
     expect((await assign(ROLE_PLAIN, ["tenant_admin"])).statusCode).toBe(202);
