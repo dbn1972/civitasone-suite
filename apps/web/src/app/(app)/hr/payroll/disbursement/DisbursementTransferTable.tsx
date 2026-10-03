@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, StatusPill, ConfirmDialog, Masked } from "../../../../_components/ds";
+import { Button, StatusPill, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
-import { formatRupees } from "@/lib/formatters";
-import { isCreditedTransfer, isFailedTransfer, isInFlightTransfer, type TransferRow } from "./transferRows";
+import { formatMoney } from "@/lib/formatters";
+import { isCreditedTransfer, isFailedTransfer, isInFlightTransfer, sumMinor, type TransferRow } from "./transferRows";
+import { RevealAccount } from "./RevealAccount";
 
 type RetryResponse = { data: { id: string; status: string } };
 
@@ -55,7 +56,11 @@ function ProgressRing({
   );
 }
 
-export function DisbursementTransferTable({ transfers }: { transfers: TransferRow[] }) {
+export function DisbursementTransferTable({ transfers, canReveal = false }: {
+  transfers: TransferRow[];
+  /** GAP-PAYROLL-DISBURSEMENT-01: payroll roles may reveal a full account number (audited, with a reason). */
+  canReveal?: boolean;
+}) {
   const t = useTranslations("disbursementTransferTable");
   const router = useRouter();
   const [pendingRetry, setPendingRetry] = useState<TransferRow | null>(null);
@@ -73,7 +78,7 @@ export function DisbursementTransferTable({ transfers }: { transfers: TransferRo
   const done = transfers.filter((tx) => isCreditedTransfer(tx.status)).length;
   const failed = transfers.filter((tx) => isFailedTransfer(tx.status)).length;
   const processing = transfers.filter((tx) => isInFlightTransfer(tx.status)).length;
-  const total = transfers.reduce((sum, tx) => sum + tx.amountRupees, 0);
+  const total = sumMinor(transfers);
   const pct = transfers.length > 0 ? Math.round((done / transfers.length) * 100) : 0;
 
   async function retryTransfer(reason: string) {
@@ -137,7 +142,7 @@ export function DisbursementTransferTable({ transfers }: { transfers: TransferRo
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12, flex: 1 }}>
           <div style={{ background: "var(--infobg)", borderRadius: 10, padding: "12px 16px" }}>
             <p style={{ margin: 0, fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>{t("totalAmountLabel")}</p>
-            <p style={{ margin: "4px 0 0", fontSize: 18, fontWeight: 700 }}>{formatRupees(total)}</p>
+            <p style={{ margin: "4px 0 0", fontSize: 18, fontWeight: 700 }}>{formatMoney(total)}</p>
           </div>
           <div style={{ background: "var(--goodbg)", borderRadius: 10, padding: "12px 16px" }}>
             <p style={{ margin: 0, fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>{t("creditedLabel")}</p>
@@ -172,18 +177,13 @@ export function DisbursementTransferTable({ transfers }: { transfers: TransferRo
                 </td>
                 <td style={{ padding: "10px 12px" }}>
                   <div style={{ fontSize: 12 }}>
-                    {/* GAP-PAYROLL-DISBURSEMENT-01: last 4 only. No reveal control:
-                        there is no audited reveal endpoint to back one (see Masked.tsx). */}
-                    <Masked
-                      kind="account"
-                      value={tx.accountLast4 ? `XXXX${tx.accountLast4}` : null}
-                      ariaLabel={tx.accountLast4 ? t("accountEndingAria", { last4: tx.accountLast4 }) : undefined}
-                      fallback={<span style={{ color: "var(--ink2)" }}>—</span>}
-                    />
+                    {/* GAP-PAYROLL-DISBURSEMENT-01: last 4 by default; the full number
+                        only through the audited, reason-gated reveal. */}
+                    <RevealAccount transferId={tx.id} last4={tx.accountLast4} employeeName={tx.employeeName} canReveal={canReveal} />
                   </div>
                   <div style={{ fontSize: 11, color: "var(--ink2)" }}>{tx.ifsc}</div>
                 </td>
-                <td style={{ padding: "10px 12px", textAlign: "end", fontWeight: 600 }}>{formatRupees(tx.amountRupees)}</td>
+                <td style={{ padding: "10px 12px", textAlign: "end", fontWeight: 600 }}>{formatMoney(tx.amountMinor)}</td>
                 <td style={{ padding: "10px 12px" }}>
                   {tx.nachBatchId
                     ? <span className="mono" style={{ fontSize: 12 }}>{tx.nachBatchId}</span>
@@ -231,7 +231,7 @@ export function DisbursementTransferTable({ transfers }: { transfers: TransferRo
             <>
               {t.rich("retryConfirmDescription", {
                 name: pendingRetry.employeeName,
-                amount: formatRupees(pendingRetry.amountRupees),
+                amount: formatMoney(pendingRetry.amountMinor),
                 strong: (chunks) => <strong>{chunks}</strong>,
               })}
               {pendingRetry.failureReason ? " " + t("retryConfirmFailureReason", { reason: pendingRetry.failureReason }) : null}

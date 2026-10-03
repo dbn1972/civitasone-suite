@@ -6,7 +6,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { decideCombinedEmiCap, decideDisbursal, sumActiveEmiMinor, MAX_COMBINED_LOAN_EMI_PCT_OF_GROSS } from "./policy.js";
+import { checkLoanTerms, decideCombinedEmiCap, decideDisbursal, formatLoanNo, sumActiveEmiMinor, MAX_COMBINED_LOAN_EMI_PCT_OF_GROSS } from "./policy.js";
 
 const AUDIT = "audit.event.record";
 
@@ -14,7 +14,7 @@ export function registerLoansConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.loanCreate, async (msg) => {
     try {
       const p = msg.payload as {
-        id: string; tenantId: string; loanNo: string; employeeId: string;
+        id: string; tenantId: string; loanNo?: string; employeeId: string;
         loanType: string; principalMinor: number; emiMinor: number;
         tenureMonths: number; interestRatePct: number; currency: string;
       };
@@ -56,8 +56,17 @@ export function registerLoansConsumers(queue: Queue): void {
           );
         }
 
-        await insertLoanOrReject(tx, p.loanNo, {
-          id: p.id, tenantId: p.tenantId, loanNo: p.loanNo, employeeId: p.employeeId,
+        // GAP-PAYROLL-LOANS-05: authoritative terms re-check (the route's is a fast pre-check).
+        const terms = checkLoanTerms({
+          principalMinor: BigInt(p.principalMinor), emiMinor: BigInt(p.emiMinor),
+          tenureMonths: p.tenureMonths, interestRatePct: p.interestRatePct,
+        });
+        if (!terms.ok) throw new NonRetryableError(`LOAN_${terms.code}: ${terms.message}`);
+
+        // GAP-PAYROLL-LOANS-05: server-allocated loan number when none was typed.
+        const loanNo = p.loanNo ?? await allocateLoanNo(tx as unknown as { execute: (q: ReturnType<typeof sql>) => Promise<unknown> }, p.tenantId);
+        await insertLoanOrReject(tx, loanNo, {
+          id: p.id, tenantId: p.tenantId, loanNo, employeeId: p.employeeId,
           loanType: p.loanType, principalMinor: BigInt(p.principalMinor),
           outstandingMinor: BigInt(p.principalMinor), emiMinor: BigInt(p.emiMinor),
           tenureMonths: p.tenureMonths, interestRatePct: String(p.interestRatePct),
@@ -117,6 +126,30 @@ export function registerLoansConsumers(queue: Queue): void {
  * NonRetryableError (straight to the DLQ, logged below) instead of a
  * generic error the queue would retry until it gives up.
  */
+/**
+ * Next LN-<year>-<seq> for the tenant. The counter row is incremented in the
+ * same transaction as the loan insert (concurrent creates serialise on it, so
+ * two loans never get the same number); a number already taken by a
+ * hand-typed loan is skipped, never reused.
+ */
+async function allocateLoanNo(tx: { execute: (q: ReturnType<typeof sql>) => Promise<unknown> }, tenantId: string): Promise<string> {
+  const year = Number(new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric" }).format(new Date()));
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const rows = (await tx.execute(sql`
+      INSERT INTO loans.loan_number_counters (tenant_id, year, last_seq)
+      VALUES (${tenantId}::uuid, ${year}, 1)
+      ON CONFLICT (tenant_id, year) DO UPDATE SET last_seq = loans.loan_number_counters.last_seq + 1
+      RETURNING last_seq
+    `)) as unknown as Array<{ last_seq: number }>;
+    const candidate = formatLoanNo(year, rows[0]!.last_seq);
+    const taken = (await tx.execute(sql`
+      SELECT 1 FROM loans.payroll_loans WHERE tenant_id = ${tenantId}::uuid AND loan_no = ${candidate} LIMIT 1
+    `)) as unknown as unknown[];
+    if (taken.length === 0) return candidate;
+  }
+  throw new Error("could not allocate a free loan number");
+}
+
 async function insertLoanOrReject(tx: Parameters<typeof repo.insertLoan>[0], loanNo: string, row: Parameters<typeof repo.insertLoan>[1]): Promise<void> {
   try {
     await repo.insertLoan(tx, row);

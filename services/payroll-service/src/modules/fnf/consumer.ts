@@ -50,7 +50,11 @@ export function registerFnfConsumers(queue: Queue): void {
       eligibleForGratuity?: boolean;
       leaveEncashmentEligible?: boolean;
       /** GAP-PAYROLL-FNF-03: record-derived inputs the clerk overrode, with the reason. */
-      overrides?: { fields: string[]; reason: string };
+      overrides?: { fields: string[]; reason: string; derived?: Record<string, string> };
+      /** GAP-PAYROLL-FNF-03: false when hrms-service could not confirm service length / leave balance. */
+      hrRecordsVerified?: boolean;
+      /** GAP-PAYROLL-FNF-05: death-settlement payee (account already sealed by the route). */
+      nominee?: { name: string; relationship: string; ifsc: string; documentRef: string; accountLast4: string; accountSealed: string };
     };
 
     await db.transaction(async (tx) => {
@@ -152,7 +156,17 @@ export function registerFnfConsumers(queue: Queue): void {
           totalGrossMinor: result.totalGrossMinor.toString(),
           totalExemptMinor: result.totalExemptMinor.toString(),
           ...(p.overrides ? { overrides: p.overrides } : {}),
+          // true only when the compute route cross-checked service length and leave
+          // balance with HRMS; false on drafts created by the separation event path.
+          hrRecordsVerified: p.hrRecordsVerified === true,
         },
+        // Cleared (null) on a non-death settlement so a recompute never keeps a stale payee.
+        nomineeName: p.nominee?.name ?? null,
+        nomineeRelationship: p.nominee?.relationship ?? null,
+        nomineeIfsc: p.nominee?.ifsc ?? null,
+        nomineeAccountLast4: p.nominee?.accountLast4 ?? null,
+        nomineeAccountSealed: p.nominee?.accountSealed ?? null,
+        nomineeDocumentRef: p.nominee?.documentRef ?? null,
       };
 
       const [inserted] = await tx.insert(fnfSettlements).values({

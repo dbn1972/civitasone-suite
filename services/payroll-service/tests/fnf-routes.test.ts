@@ -60,6 +60,12 @@ vi.mock("../src/modules/tax/config.js", () => ({
 
 // Mock the fnf domain module to control computeFnfSettlement
 const mockComputeFnfSettlement = vi.fn();
+vi.mock("../src/shared/hrms-client.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/shared/hrms-client.js")>()),
+  // HRMS confirms the payload's service length / leave balance (the compute route fails closed otherwise).
+  fetchFnfServiceSnapshot: async () => ({ kind: "ok" as const, completedYears: 30, leaveBalanceDays: 300 }),
+}));
+
 vi.mock("../src/modules/fnf/domain.js", () => ({
   computeFnfSettlement: (...args: unknown[]) => mockComputeFnfSettlement(...args),
 }));

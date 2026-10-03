@@ -10,9 +10,9 @@ vi.mock("next/navigation", () => ({
 }));
 
 const EMP_ID = "11111111-1111-4111-8111-111111111111";
-vi.mock("@/lib/entityAdapters/employee", () => ({
-  searchEmployees: vi.fn(async () => [{ id: EMP_ID, label: "Asha Rao (EMP-001)", sublabel: "Finance" }]),
-  resolveEmployees: vi.fn(async () => []),
+vi.mock("@/lib/entityAdapters/payrollEmployee", () => ({
+  searchPayrollEmployees: vi.fn(async () => [{ id: EMP_ID, label: "Asha Rao (EMP-001)", sublabel: "Finance" }]),
+  resolvePayrollEmployees: vi.fn(async () => []),
 }));
 
 import { CreateLoanForm } from "./CreateLoanForm";
@@ -127,6 +127,34 @@ describe("CreateLoanForm", () => {
     expect(body).toMatchObject({ employeeId: EMP_ID, principalMinor: 1000010, emiMinor: 100001, tenureMonths: 12 });
     expect(((init as RequestInit).headers as Record<string, string>)["x-idempotency-key"]).toBeTruthy();
     expect(pushMock).toHaveBeenCalledWith(`/hr/payroll/loans?empId=${EMP_ID}`);
+  });
+
+  it("a blank loan number is omitted from the request and the server-assigned message is shown (GAP-PAYROLL-LOANS-05)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "loan-1", status: "accepted", correlationId: "c1" }), { status: 202 }),
+    );
+    renderForm();
+    await fillFields();
+    fireEvent.change(screen.getByLabelText(/Loan No\./), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create Loan" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent("assigned automatically");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create loan" }));
+    await waitFor(() => expect(screen.getByText(/a loan number is assigned automatically/)).toBeInTheDocument());
+    const [, init] = fetchSpy.mock.calls.find(([url]) => String(url).includes("v1/payroll/loans"))!;
+    expect(Object.keys(JSON.parse(String((init as RequestInit).body)))).not.toContain("loanNo");
+  });
+
+  it("shows the server's EMI-bound rejection instead of a generic failure (GAP-PAYROLL-LOANS-05)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ code: "LOAN_EMI_EXCEEDS_INTEREST_BOUND", message: "EMI x tenure is more than the principal plus simple interest for the tenure: check the EMI" }), { status: 422 }),
+    );
+    renderForm();
+    await fillFields();
+    fireEvent.click(screen.getByRole("button", { name: "Create Loan" }));
+    await waitFor(() => expect(screen.getByText("Create this loan?")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Create loan"));
+    await waitFor(() => expect(screen.getByText(/more than the principal plus simple interest/)).toBeInTheDocument());
   });
 
   it("refreshes instead of navigating when the page already shows that employee", async () => {

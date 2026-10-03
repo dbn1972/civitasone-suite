@@ -41,11 +41,12 @@ async function getSchedule(loanId: string): Promise<LoaderResult<ScheduleInstall
 /**
  * GAP-PAYROLL-LOANS-01: name the searched employee (name + employee code)
  * so the result can be checked against the person intended. Same
- * GET /v1/hrms/employees?ids= lookup as hr/icc/[id]/page.tsx resolveNames.
+ * payroll employee lookup (GET /v1/payroll/employee-lookup?ids=): the HRMS
+ * directory is HR-roles-only, so a payroll_admin would get nothing back.
  */
 async function getEmployeeOption(empId: string): Promise<EntityOption | null> {
   const { data } = await fetchJson<unknown, EmployeeRow[]>(
-    `/api/v1/hrms/employees?ids=${encodeURIComponent(empId)}`,
+    `/api/v1/payroll/employee-lookup?ids=${encodeURIComponent(empId)}`,
     [],
     {
       telemetryKey: "payroll.loans_employee",

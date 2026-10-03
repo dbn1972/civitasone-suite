@@ -11,6 +11,8 @@ import { getTranslations } from "next-intl/server";
 import { SALARY_ADMIN_ROLES } from "./_salaryAdminRoles";
 import { isPrintableSlipStatus } from "@/lib/payroll/statusLabels";
 import { breakdownSlip } from "./slipComponents";
+import { getLetterhead } from "./letterhead";
+import { LetterheadForm } from "./LetterheadForm";
 
 export default async function SalarySlipPage({ params }: { params: { id: string } }) {
   const t = await getTranslations("salarySlipDetail");
@@ -28,7 +30,9 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
   // schema-validated loader (also used by slips/[id]/page.tsx) instead of a
   // private, unvalidated fetch -- both pages now agree on one contract for
   // this one backend endpoint.
-  const { data: slip, source, status } = await getSlipById(params.id);
+  const [{ data: slip, source, status }, { data: letterhead }] = await Promise.all([getSlipById(params.id), getLetterhead()]);
+  // Who may edit the issuing organisation (payroll-service PUT /v1/payroll/letterhead).
+  const canEditLetterhead = roles.some((r) => ["payroll_admin", "super_admin"].includes(r));
   if (status === 403) {
     return <PermissionDenied module="salary slip details" requiredRoles={SALARY_ADMIN_ROLES} />;
   }
@@ -65,20 +69,37 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
 
   return (
     <div className="page-main wrap" style={{ maxWidth: 800 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
-        <PageHeader title={t("title")} back="/hr/payroll/salary-slips" backLabel="Back to Salary Slips" />
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <Link href={`/hr/payroll/slips/${params.id}`} className="btn secondary" style={{ minHeight: 44 }}>{t("dashboardView")}</Link>
-          <PrintButton disabled={!canPrint} disabledReason={canPrint ? undefined : t("printUnavailableNotFinal")} />
-        </div>
-      </div>
+      {/* GAP-PAYROLL-SALARY-SLIPS-DETAIL-04: the header actions live in PageHeader
+          (wraps on a narrow viewport) instead of a hand-built flex row beside it. */}
+      <PageHeader
+        title={t("title")}
+        back="/hr/payroll/salary-slips"
+        backLabel="Back to Salary Slips"
+        actions={
+          <>
+            <Link href={`/hr/payroll/slips/${params.id}`} className="btn secondary" style={{ minHeight: 44 }}>{t("dashboardView")}</Link>
+            <PrintButton disabled={!canPrint} disabledReason={canPrint ? undefined : t("printUnavailableNotFinal")} />
+          </>
+        }
+      />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
 
       <div id="salary-slip" className="salary-slip-print" style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: 12, padding: 32, fontFamily: "system-ui" }}>
-        <div className="print-header" aria-hidden="true">
-          <div className="slip-logo">{t("brandName")}</div>
-          <div className="print-meta">{t("printMeta")}</div>
-        </div>
+        {/* GAP-PAYROLL-SALARY-SLIPS-DETAIL-02: the issuing organisation is the tenant's
+            own (GET /v1/payroll/letterhead). With none configured the slip prints no
+            authority line -- no product name, no "Government of India". */}
+        {letterhead && (
+          <div className="slip-letterhead" style={{ textAlign: "center", marginBottom: 16 }}>
+            <div className="slip-logo" style={{ fontSize: 18, fontWeight: 800 }}>{letterhead.orgName}</div>
+            {letterhead.department && <div style={{ fontSize: 13 }}>{letterhead.department}</div>}
+            {(letterhead.ddoName || letterhead.ddoCode) && (
+              <div style={{ fontSize: 12, color: "var(--color-text-muted)" }}>
+                {t("ddoLine", { name: letterhead.ddoName ?? "—", code: letterhead.ddoCode ?? "—" })}
+              </div>
+            )}
+            {letterhead.address && <div style={{ fontSize: 12, color: "var(--color-text-muted)" }}>{letterhead.address}</div>}
+          </div>
+        )}
         {/* Header */}
         <div style={{ textAlign: "center", marginBottom: 24, borderBottom: "2px solid var(--ink)", paddingBottom: 16 }}>
           <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{t("heading")}</h1>
@@ -176,11 +197,31 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
           <span style={{ fontSize: 20, fontWeight: 800, color: "var(--good)", fontFamily: "monospace" }}>{formatMoney(slip.netMinor)}</span>
         </div>
 
-        {/* Footer */}
-        <p style={{ marginTop: 20, fontSize: 11, color: "var(--color-text-muted)", textAlign: "center" }}>
-          {t("footer")}
-        </p>
+        {/* Footer: a signature block when the tenant's letterhead asks for one,
+            otherwise the system-generated note. */}
+        {letterhead?.showSignatureBlock ? (
+          <div style={{ marginTop: 32, display: "flex", justifyContent: "flex-end" }}>
+            <div style={{ minWidth: 220, textAlign: "center", fontSize: 12 }}>
+              <div style={{ borderTop: "1px solid var(--ink)", paddingTop: 4 }}>
+                {letterhead.signatoryTitle ?? t("signatoryFallback")}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <p style={{ marginTop: 20, fontSize: 11, color: "var(--color-text-muted)", textAlign: "center" }}>
+            {t("footer")}
+          </p>
+        )}
       </div>
+
+      {canEditLetterhead && (
+        <details className="no-print" style={{ marginTop: 20 }}>
+          <summary style={{ cursor: "pointer", fontWeight: 600 }}>{t("letterheadSummary")}</summary>
+          <div style={{ marginTop: 12 }}>
+            <LetterheadForm initial={letterhead} />
+          </div>
+        </details>
+      )}
     </div>
   );
 }

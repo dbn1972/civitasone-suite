@@ -32,6 +32,28 @@ describe("FnFSettlementCards (GAP-PAYROLL-FNF-06)", () => {
     expect(screen.queryByText(/do not add up/)).not.toBeInTheDocument();
   });
 
+  it("GAP-PAYROLL-FNF-05: a death settlement shows its payee with the account's last 4 only", () => {
+    renderCards([{ ...base, separationType: "death", nominee: { name: "Sunita Devi", relationship: "spouse", ifsc: "HDFC0001234", accountLast4: "6789", documentRef: "LHC/2026/0042" } }]);
+    expect(screen.getByText("Payee: Sunita Devi (Spouse) · account ending 6789 · HDFC0001234 · ref LHC/2026/0042")).toBeInTheDocument();
+    expect(document.body.innerHTML).not.toMatch(/\d{9,}\b.*6789/);
+  });
+
+  it("GAP-PAYROLL-FNF-03: shows whether HR records were cross-checked (verified / not cross-checked); nothing when there is no calculation detail", () => {
+    const first = render(<NextIntlClientProvider locale="en" messages={enMessages}><FnFSettlementCards rows={[{ ...base, computationDetail: { hrRecordsVerified: true } }]} /></NextIntlClientProvider>);
+    expect(screen.getByText("HR records verified")).toBeInTheDocument();
+    first.unmount();
+    const second = render(<NextIntlClientProvider locale="en" messages={enMessages}><FnFSettlementCards rows={[{ ...base, computationDetail: { hrRecordsVerified: false } }]} /></NextIntlClientProvider>);
+    expect(screen.getByText("HR records not cross-checked")).toBeInTheDocument();
+    second.unmount();
+    renderCards([base]);
+    expect(screen.queryByText(/HR records/)).not.toBeInTheDocument();
+  });
+
+  it("GAP-PAYROLL-FNF-05: no payee line for an ordinary settlement", () => {
+    renderCards([base]);
+    expect(screen.queryByText(/^Payee:/)).not.toBeInTheDocument();
+  });
+
   it("renders a very large net payable exactly (no float rounding)", () => {
     renderCards([{ ...base, netPayableMinor: "123456789012" }]);
     expect(screen.getByText("₹1,23,45,67,890.12")).toBeInTheDocument();

@@ -147,7 +147,7 @@ describe("POST /v1/payroll/loans — valid payload", () => {
         employeeId: randomUUID(),
         loanType: "personal",
         principalMinor: 5000000,
-        emiMinor: 500000,
+        emiMinor: 450000, // within principal + simple interest (GAP-PAYROLL-LOANS-05)
         tenureMonths: 12,
         interestRatePct: 8,
         currency: "INR",

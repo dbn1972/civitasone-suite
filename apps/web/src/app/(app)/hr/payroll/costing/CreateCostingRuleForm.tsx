@@ -4,7 +4,7 @@ import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
-import { browserJson } from "@/lib/api/browserClient";
+import { browserFetch, errorCodeFromResponse, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { percentToBps } from "@/lib/money";
 import { formatSplitPct, projectedGroupTotal, type CostCenterOption, type CostingRule } from "./costingShared";
 
@@ -88,10 +88,16 @@ export function CreateCostingRuleForm({ costCenters, costCentersAvailable, rules
     try {
       // The POST is async (202 + command id); it does not echo the rule
       // back, so the confirmation uses what was submitted.
-      await browserJson<unknown>("v1/payroll/costing/rules", {
+      const res = await browserFetch("v1/payroll/costing/rules", {
         method: "POST",
         body: JSON.stringify({ employeeGroup: group, costCenterId: center.id, splitPct: split }),
       });
+      if (!res.ok) {
+        // GAP-PAYROLL-COSTING-02: the server refuses a save that would take the group above 100%.
+        const code = await errorCodeFromResponse(res);
+        if (code === "COSTING_SPLIT_EXCEEDS_100") throw new Error(t("serverOver100Error", { group }));
+        throw new Error(await errorMessageFromResponse(res));
+      }
       setConfirmOpen(false);
       setMessage(t("savedMessage", { group, pct: split }));
       setEmployeeGroup("");

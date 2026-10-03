@@ -91,6 +91,22 @@ describe("CreateCostingRuleForm", () => {
     expect(body).toEqual({ employeeGroup: "Group A", costCenterId: CC.id, splitPct: 100 });
   });
 
+  it("explains the server's 422 when a save would take the group above 100% (GAP-PAYROLL-COSTING-02)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ code: "COSTING_SPLIT_EXCEEDS_100", message: "above 100%" }), { status: 422 }),
+    );
+    renderForm();
+    fireEvent.change(screen.getByLabelText(/Employee Group/), { target: { value: "Group A" } });
+    fireEvent.change(screen.getByLabelText(/^Cost Center/), { target: { value: CC.id } });
+    fireEvent.click(screen.getByText("Save Rule"));
+    await waitFor(() => expect(screen.getByText("Save this costing rule?")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Save rule"));
+    await waitFor(() => {
+      expect(screen.getByText("Not saved: this rule would take Group A above 100%. Lower another rule's split first.")).toBeInTheDocument();
+    });
+    expect(refreshMock).not.toHaveBeenCalled();
+  });
+
   it("surfaces a server error on the confirm dialog (error path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));
 

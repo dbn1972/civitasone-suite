@@ -7,6 +7,8 @@
  * puppeteer — for now the HTML download is the production deliverable since
  * browsers can print-to-PDF.
  */
+import { escapeHtml, renderTemplate, safeFilenamePart } from "../../shared/html.js";
+import { loadLetterhead } from "../letterhead/routes.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -25,9 +27,6 @@ function formatAmount(minor: number | bigint): string {
   return (Number(minor) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function renderTemplate(template: string, vars: Record<string, string>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
-}
 
 const DEFAULT_TEMPLATE = `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"/><title>Salary Slip - {{month}}</title>
@@ -75,14 +74,16 @@ export async function payslipDownloadRoutes(app: FastifyInstance): Promise<void>
     const deductions = components.filter((c) => c.type === "deduction");
 
     const earningsRows = earnings
-      .map((e) => `<tr><td>${e.name}</td><td class="amount">${formatAmount(e.amountMinor)}</td></tr>`)
+      .map((e) => `<tr><td>${escapeHtml(e.name)}</td><td class="amount">${formatAmount(e.amountMinor)}</td></tr>`)
       .join("\n");
     const deductionsRows = deductions
-      .map((d) => `<tr><td>${d.name}</td><td class="amount">${formatAmount(d.amountMinor)}</td></tr>`)
+      .map((d) => `<tr><td>${escapeHtml(d.name)}</td><td class="amount">${formatAmount(d.amountMinor)}</td></tr>`)
       .join("\n");
 
     const vars: Record<string, string> = {
-      orgName: "Organization",
+      // GAP-PAYROLL-SALARY-SLIPS-DETAIL-02: the tenant's own issuing organisation
+      // (HTML-escaped: an admin-entered string) -- never a platform default.
+      orgName: (await loadLetterhead(ctx.tenantId))?.orgName ?? "",
       month,
       employeeNo: slip.employeeNo,
       earningsRows,
@@ -92,8 +93,8 @@ export async function payslipDownloadRoutes(app: FastifyInstance): Promise<void>
       netPay: formatAmount(slip.netPayMinor),
     };
 
-    const html = renderTemplate(DEFAULT_TEMPLATE, vars);
-    const filename = `salary-slip-${slip.employeeNo}-${month}.html`;
+    const html = renderTemplate(DEFAULT_TEMPLATE, vars, ["earningsRows", "deductionsRows"]);
+    const filename = `salary-slip-${safeFilenamePart(slip.employeeNo)}-${safeFilenamePart(month)}.html`;
     await publishSlipDownloadAudit(ctx, slip.id, "download");
 
     return reply

@@ -44,6 +44,8 @@ vi.mock("../src/modules/tax/config.js", () => ({ loadTaxConfig: vi.fn() }));
 vi.mock("../src/shared/hrms-client.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/shared/hrms-client.js")>()),
   fetchEmployeeSummaries: (...a: unknown[]) => H.fetchEmployeeSummaries(...a),
+  // HRMS confirms the payload's service length / leave balance (the compute route fails closed otherwise).
+  fetchFnfServiceSnapshot: async () => ({ kind: "ok" as const, completedYears: 20, leaveBalanceDays: 120 }),
 }));
 
 import { buildApp } from "../src/app.js";

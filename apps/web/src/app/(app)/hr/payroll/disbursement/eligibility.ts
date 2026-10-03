@@ -1,7 +1,10 @@
 import type { RunOption } from "./BankFileWizard";
+import { rupeesToMinorString } from "@/lib/money";
 
 // netAmount/grossAmount are RUPEES on the runs-list API (payroll-service
-// queries.listRuns divides the paise aggregate by 100).
+// queries.listRuns divides the paise aggregate by 100). grossMinor/netMinor/
+// deductionsMinor (GAP-PAYROLL-DISBURSEMENT-08) are the same totals in exact
+// integer paise as strings -- money screens use those.
 export type RunRow = {
   id: string;
   runDate: string;
@@ -9,6 +12,7 @@ export type RunRow = {
   employeeCount: number;
   grossAmount: number;
   netAmount: number;
+  netMinor?: string;
   status: "draft" | "processing" | "completed" | "paid" | "failed" | string;
 } & Record<string, unknown>;
 
@@ -21,6 +25,12 @@ export type RunRow = {
  */
 export const BANK_FILE_ELIGIBLE_STATUSES = ["completed", "paid"] as const;
 
+/** Exact paise from the API's string; falls back to the rupee number only for an older payroll-service. */
+export function netMinorOf(r: Pick<RunRow, "netMinor" | "netAmount">): string {
+  if (typeof r.netMinor === "string" && /^-?\d+$/.test(r.netMinor)) return r.netMinor;
+  return rupeesToMinorString(r.netAmount.toFixed(2), { allowZero: true }) ?? "0";
+}
+
 export function eligibleBankFileRuns(runs: RunRow[]): RunOption[] {
   return runs
     .filter((r): r is RunRow & { status: RunOption["status"] } =>
@@ -28,7 +38,7 @@ export function eligibleBankFileRuns(runs: RunRow[]): RunOption[] {
     .map((r) => ({
       id: r.id,
       payPeriod: r.payPeriod,
-      netAmountRupees: r.netAmount,
+      netAmountMinor: netMinorOf(r),
       employeeCount: r.employeeCount,
       status: r.status,
     }));

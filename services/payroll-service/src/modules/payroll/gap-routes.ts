@@ -22,6 +22,7 @@ import { assertElectionWithinPlan } from "./adjustment-guards.js";
 import { isValidIanaTimeZone } from "./validators.js";
 import { resolveVerificationPlan, verifiedDeductionFigures, NO_VERIFIED, istToday } from "../tax/verified-inputs.js";
 import { fetchEmployeeSummaries } from "../../shared/hrms-client.js";
+import { exceedsCap, isValidSplitPct, otherActiveSplitHundredths } from "../costing-rules/split-cap.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES = [...PAYROLL_ROLES, "hr_admin", "finance_officer"];
@@ -396,6 +397,16 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
       costCenterId: z.string().uuid(),
       splitPct: z.number().min(0).max(100).default(100),
     }).parse(req.body);
+    // GAP-PAYROLL-COSTING-02: server-side 2dp + group-cap authority (the
+    // consumer repeats the cap check under a per-group lock).
+    if (!isValidSplitPct(body.splitPct)) {
+      throw new HttpError(422, "COSTING_SPLIT_INVALID", "splitPct must be above 0 and at most 100, with at most 2 decimals");
+    }
+    const others = await scopedRead((tx) => otherActiveSplitHundredths(tx, ctx.tenantId, body.employeeGroup, { costCenterId: body.costCenterId }));
+    if (exceedsCap(others, body.splitPct)) {
+      throw new HttpError(422, "COSTING_SPLIT_EXCEEDS_100",
+        `this rule would take employee group "${body.employeeGroup}" above 100% (other active rules already total ${others / 100}%)`);
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.upsertCostingRule(ctx, body));
   });
 

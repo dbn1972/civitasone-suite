@@ -8,9 +8,9 @@ vi.mock("@/lib/auth/roleGuard", () => ({
   getSessionRoles: () => getSessionRolesMock(),
   PAYROLL_ADMIN_ROLES: ["payroll_admin", "payroll_officer", "super_admin"],
 }));
-vi.mock("@/lib/entityAdapters/employee", () => ({
-  searchEmployees: vi.fn(async () => []),
-  resolveEmployees: vi.fn(async () => []),
+vi.mock("@/lib/entityAdapters/payrollEmployee", () => ({
+  searchPayrollEmployees: vi.fn(async () => []),
+  resolvePayrollEmployees: vi.fn(async () => []),
 }));
 
 const fetchJsonMock = vi.fn();
@@ -401,6 +401,16 @@ describe("eligibleBankFileRuns", () => {
       { ...base, id: "e", status: "paid" },
     ]);
     expect(out.map((r) => [r.id, r.status])).toEqual([["d", "completed"], ["e", "paid"]]);
-    expect(out[0]).toMatchObject({ employeeCount: 3, netAmountRupees: 1 });
+    expect(out[0]).toMatchObject({ employeeCount: 3, netAmountMinor: "100" });
+  });
+
+  // GAP-PAYROLL-DISBURSEMENT-08: exact paise from the API string, never re-derived from a float
+  it("[DISB-08] uses the API's integer-paise net when present; falls back to rupees x 100 only for an older API", () => {
+    const [exact, legacy] = eligibleBankFileRuns([
+      { ...base, id: "x", status: "completed", netAmount: 90000.3, netMinor: "9000030" },
+      { ...base, id: "y", status: "completed", netAmount: 1234.56 },
+    ]);
+    expect(exact!.netAmountMinor).toBe("9000030");
+    expect(legacy!.netAmountMinor).toBe("123456");
   });
 });

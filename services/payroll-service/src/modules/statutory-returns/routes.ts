@@ -1,3 +1,4 @@
+import { loadLatestFilings } from "../return-filings/routes.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
@@ -7,7 +8,7 @@ import type { RequestContext } from "@civitasone/types";
 import { eq, and, inArray } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
-import { payrollTds, payrollNps, payrollTdsNonSalary } from "../statutory/schema.js";
+import { payrollTds, payrollNps, payrollTdsNonSalary, payrollTdsChallan } from "../statutory/schema.js";
 import { perquisiteComponents } from "../tax/schema.js";
 import { payrollRuns } from "../payroll/schema.js";
 import { taxDeclarations } from "../tax/schema.js";
@@ -254,9 +255,21 @@ async function buildForm24Q(
     }
   }
 
+  // GAP-PAYROLL-RETURNS-01: a recorded filing (when/receipt) is the ONLY thing
+  // that makes a quarter "filed"; reconciliation alone never does. challanRef
+  // is the quarter's deposited challan CINs.
+  const filing = (await loadLatestFilings(ctx.tenantId, "24Q", fyRaw)).get(q) ?? null;
+  const challanRows = await scopedRead((tx) => tx.select().from(payrollTdsChallan)
+    .where(and(eq(payrollTdsChallan.tenantId, ctx.tenantId), inArray(payrollTdsChallan.period, months), eq(payrollTdsChallan.formType, "24Q"))));
+  const challanCins = [...new Set(challanRows.map((c) => c.cin).filter((c): c is string => !!c))].sort();
+
   return {
     formType: "24Q",
     fy: fyRaw,
+    filedAt: filing?.filedOn ?? null,
+    filingReceiptNo: filing?.receiptNo ?? null,
+    filingRevision: filing?.revision ?? null,
+    challanRef: challanCins.length > 0 ? challanCins.join(", ") : null,
     assessmentYear: `${endYear}-${String((endYear + 1) % 100).padStart(2, "0")}`,
     quarter: q,
     deductor: employerIdentity(),

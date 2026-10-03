@@ -1380,7 +1380,7 @@
   },
   "createLoanForm": {
     "cardTitle": "Create Loan",
-    "loanNoLabel": "Loan No.",
+    "loanNoLabel": "Loan No. (optional)",
     "loanTypeLabel": "Loan Type",
     "optionPersonal": "Personal",
     "optionVehicle": "Vehicle",
@@ -1405,7 +1405,10 @@
     "rateInvalidError": "Interest rate must be between 0 and 100 with at most 2 decimal places.",
     "emiTooLowError": "EMI × tenure must cover at least the principal.",
     "loanNoTakenError": "Loan number {loanNo} is already in use. Enter a different loan number.",
-    "emiAboveInterestBoundWarning": "Check the EMI: EMI × tenure ({total}) is more than the principal plus simple interest at this rate ({bound}). You can still create the loan."
+    "emiAboveInterestBoundWarning": "Check the EMI: EMI × tenure ({total}) is more than the principal plus simple interest at this rate ({bound}). You can still create the loan.",
+    "loanNoHint": "Leave blank and the next number (LN-year-000001) is assigned automatically.",
+    "submittedMessageAuto": "Loan for {employee} submitted; a loan number is assigned automatically. It is processed in the background and appears in the list once processing finishes — refresh in a few seconds if it is not there yet.",
+    "confirmDescriptionAuto": "Create a loan for <strong>{employee}</strong> with principal {principal}, EMI {emi} over {tenure} month(s). The loan number is assigned automatically."
   },
   "createOffCycleForm": {
     "formTitle": "Create Off-Cycle Run",
@@ -1755,7 +1758,16 @@
     "retryConfirmDescription": "Retry bank transfer for <strong>{name}</strong>, amount <strong>{amount}</strong>. Only retry once the bank has confirmed the earlier transfer failed — retrying a delayed transfer can pay twice. The retry is paid by the next bank file for this run, which carries only queued retries and employees never sent before.",
     "retryConfirmFailureReason": "Previous failure: {reason}",
     "retryReasonLabel": "Reason for retry (recorded in the audit log)",
-    "accountEndingAria": "Account ending {last4}"
+    "accountEndingAria": "Account ending {last4}",
+    "revealBtn": "Reveal",
+    "hideBtn": "Hide",
+    "revealAria": "Reveal full account number for {name}",
+    "revealedAria": "Full account number for {name}",
+    "revealTitle": "Reveal full account number?",
+    "revealConfirm": "Reveal",
+    "revealDescription": "You are about to view the full bank account number of {name}. This access is recorded in the audit log with your name and the reason below. The number hides again after 30 seconds.",
+    "revealReasonLabel": "Reason (recorded in the audit log)",
+    "revealError": "Couldn't reveal the account number. Please try again."
   },
   "dpc": {
     "title": "DPC — Departmental Promotion Committee",
@@ -7098,7 +7110,10 @@
     "loadingSlipDetails": "Loading slip details…",
     "otherComponents": "Other components (not part of net pay)",
     "otherComponentsNote": "Listed for information, e.g. employer contributions. They are not added to earnings or deducted from net pay.",
-    "reconcileNote": "The itemised lines above do not add up to the Gross or Total Deductions shown. Please check this slip with the payroll team."
+    "reconcileNote": "The itemised lines above do not add up to the Gross or Total Deductions shown. Please check this slip with the payroll team.",
+    "ddoLine": "DDO: {name} ({code})",
+    "signatoryFallback": "Authorised signatory",
+    "letterheadSummary": "Slip letterhead (issuing organisation)"
   },
   "salarySlipDashboard": {
     "title": "Salary Slip",
@@ -7146,7 +7161,8 @@
     "esi": "ESI",
     "tds": "TDS",
     "employerContributionNote": "Employer contributions are paid by the employer on your behalf and are not deducted from your pay.",
-    "statutoryUnavailable": "Statutory breakdown not available for this slip."
+    "statutoryUnavailable": "Statutory breakdown not available for this slip.",
+    "breakdownUnavailable": "This slip has no earnings, deductions or statutory breakdown on file. The totals above are still correct."
   },
   "payrollBonus": {
     "title": "Bonus",
@@ -7257,7 +7273,30 @@
     "colGroupTotal": "Group Total",
     "colStatus": "Status",
     "rulesCaption": "Cost-center allocation rules by employee group",
-    "periodInvalidError": "\"{value}\" is not a valid period. Use YYYY-MM with a month from 01 to 12."
+    "periodInvalidError": "\"{value}\" is not a valid period. Use YYYY-MM with a month from 01 to 12.",
+    "colAction": "Action",
+    "editBtn": "Edit split",
+    "deactivateBtn": "Deactivate",
+    "reactivateBtn": "Reactivate",
+    "editAria": "Edit split % for {group}, {center}",
+    "deactivateAria": "Deactivate rule for {group}, {center}",
+    "reactivateAria": "Reactivate rule for {group}, {center}",
+    "editTitle": "Edit split %",
+    "deactivateTitle": "Deactivate this rule?",
+    "reactivateTitle": "Reactivate this rule?",
+    "editConfirm": "Save split",
+    "deactivateConfirm": "Deactivate",
+    "reactivateConfirm": "Reactivate",
+    "editDescription": "Change the share of {group} payroll cost allocated to {center}.",
+    "deactivateDescription": "{group} → {center} stops receiving an allocation and drops out of the costing report and the group total. Past reports are unchanged. You can reactivate it later.",
+    "reactivateDescription": "{group} → {center} starts receiving its split again in the costing report.",
+    "splitInputLabel": "Split %",
+    "splitRangeError": "Split % must be more than 0 and at most 100, with up to 2 decimals.",
+    "projectedTotal": "{group} will total {total} after this change.",
+    "projectedOver": "{group} would total {total} — more than 100%. The server will refuse this change.",
+    "updatedMessage": "Costing rule for {group} updated.",
+    "networkError": "Network error. Please try again.",
+    "serverOver100Error": "Not saved: this would take {group} above 100%. Lower another rule's split first."
   },
   "costingPeriodForm": {
     "periodFormatError": "Enter a period in YYYY-MM format.",
@@ -7282,7 +7321,8 @@
     "noCostCentersMessage": "No active cost centers exist yet. Ask Finance to create one before adding a rule.",
     "costCentersUnavailableMessage": "Cost centers couldn't be loaded, so a rule can't be created right now. Refresh to try again.",
     "groupTotalOk": "{group} will total {total}.",
-    "groupTotalWarning": "{group} will total {total} after this save (must be 100%)."
+    "groupTotalWarning": "{group} will total {total} after this save (must be 100%).",
+    "serverOver100Error": "Not saved: this rule would take {group} above 100%. Lower another rule's split first."
   },
   "payrollCtc": {
     "title": "CTC Component Rules",
@@ -7435,7 +7475,9 @@
     "quarterInvalidFallback": "\"{value}\" is not a valid quarter. Showing {fallback} instead.",
     "downloadUnreconciledTitle": "Download an unreconciled return?",
     "downloadUnreconciledDescription": "TDS deducted does not match the deposited challans for this quarter. Filing this RPU file as-is can lead to TRACES defaults. Download only if you intend to review it.",
-    "downloadAnyway": "Download anyway"
+    "downloadAnyway": "Download anyway",
+    "filedLine": "Filed on {date} — provisional receipt no. {receipt}.",
+    "notFiledLine": "Not filed yet. A quarter reconciled with TRACES is only marked Filed once the filing is recorded below."
   },
   "forceFileButton": {
     "fileAnywayBtn": "File anyway — bypass reconciliation (force)",
@@ -8085,16 +8127,41 @@
     "employeePlaceholder": "Search by name or employee code…",
     "selectedEmployeeFallback": "the selected employee",
     "amountFormatError": "Enter amounts as plain rupees with at most 2 decimal places (e.g. 25000.50).",
-    "overrideReasonError": "Give a reason of at least {min} characters for overriding values taken from HR records.",
+    "overrideReasonError": "Give a reason of at least {min} characters for overriding values taken from HR or payslip records.",
     "overrideToggle": "Override HR record ({value})",
-    "overrideReasonLabel": "Reason for overriding HR records",
+    "overrideReasonLabel": "Reason for overriding HR / payslip records",
     "hrRecordsLoading": "Loading service length and leave balance from HR records…",
     "hrRecordsLoaded": "Completed years and leave balance were filled in from HR records. Tick “Override” to change them.",
     "hrRecordsUnavailable": "Couldn't load HR records for this employee — enter completed years and leave balance manually.",
     "systemEstimateHint": "HR estimate (basic pay only): {amount}",
-    "confirmOverrideLine": "{field}: HR record {system}, entered {entered}",
+    "confirmOverrideLine": "{field}: records say {system}, entered {entered}",
     "directoryForbidden": "Your role can't search the employee directory, so no employee can be picked here. Ask an HR admin to compute this settlement, or to grant you directory access.",
-    "refreshListBtn": "Refresh list"
+    "refreshListBtn": "Refresh list",
+    "payRecordsLoading": "Reading the employee's payslips…",
+    "payRecordsLoaded": "Wages, 10-month average and year-to-date salary and TDS were filled in from {months} finalised payslip(s). They are locked; tick “Override” to change one (a reason is required).",
+    "payRecordsUnavailable": "No finalised payslip was found for this employee up to the separation month, so wages and year-to-date figures must be entered by hand.",
+    "payOverrideToggle": "Override payslip figure ({value})",
+    "overrideRequiredServerError": "These figures differ from the employee's payslips. Use the payslip values, or tick “Override” on each changed figure and give a reason.",
+    "nomineeLegend": "Nominee / legal heir (payee)",
+    "nomineeIntro": "A death settlement is paid to the nominee or legal heir, not to the employee. The bank account is stored encrypted and only its last 4 digits are ever shown.",
+    "nomineeNameLabel": "Payee name",
+    "nomineeRelationshipLabel": "Relationship to the employee",
+    "nomineeRelationshipPlaceholder": "Select relationship",
+    "nomineeRelationship_spouse": "Spouse",
+    "nomineeRelationship_son": "Son",
+    "nomineeRelationship_daughter": "Daughter",
+    "nomineeRelationship_father": "Father",
+    "nomineeRelationship_mother": "Mother",
+    "nomineeRelationship_sibling": "Brother / sister",
+    "nomineeRelationship_other_legal_heir": "Other legal heir",
+    "nomineeAccountLabel": "Payee bank account number",
+    "nomineeIfscLabel": "Payee bank IFSC",
+    "nomineeDocumentLabel": "Legal-heir / succession certificate reference",
+    "nomineeInvalidError": "Enter the payee's name, relationship, a 9–18 digit account number, a valid IFSC (like SBIN0001234) and the certificate reference.",
+    "confirmNomineeLine": "Payee: {name} ({relationship}), account ending {last4}.",
+    "cardNomineeLine": "Payee: {name} ({relationship}) · account ending {last4} · {ifsc} · ref {ref}",
+    "cardHrVerified": "HR records verified",
+    "cardHrUnverified": "HR records not cross-checked"
   },
   "fnFSettlementCard": {
     "lastSalaryLabel": "Last Salary",
@@ -9598,5 +9665,40 @@
     "badPaidOn": "The payment date must not be in the future or before the loan started.",
     "receiptPosted": "The loan receipt is posted to the books.",
     "receiptPending": "The loan receipt journal is awaiting posting."
+  },
+  "recordFilingForm": {
+    "title": "Record the filing",
+    "titleCorrection": "Record a correction statement (revision {revision})",
+    "help": "After filing the e-TDS statement on the TIN-NSDL portal, record the date and the 15-digit provisional receipt number NSDL issued. This is what marks the quarter as Filed.",
+    "filedOnLabel": "Filed on",
+    "receiptLabel": "Provisional receipt number (15 digits)",
+    "noteLabel": "Note (optional)",
+    "saveBtn": "Record filing",
+    "dateError": "Enter the date the statement was filed (not a future date).",
+    "receiptError": "The provisional receipt number is exactly 15 digits.",
+    "receiptTakenError": "This receipt number is already recorded for another statement.",
+    "alreadyRecordedError": "A filing is already recorded for this quarter and revision. Record a correction statement as the next revision.",
+    "savedMessage": "Filing recorded for {quarter} {fy}.",
+    "networkError": "Network error. Please try again.",
+    "confirmTitle": "Record this filing?",
+    "confirmLabel": "Record filing",
+    "confirmDescription": "Mark {quarter} {fy} as filed on {date} with provisional receipt no. {receipt}. This is recorded in the audit log."
+  },
+  "letterheadForm": {
+    "help": "The organisation printed at the top of every salary slip. A slip is a formal document: enter the issuing office exactly as it should appear. Until this is set, slips print no issuing-authority line.",
+    "orgNameLabel": "Organisation name",
+    "departmentLabel": "Department (optional)",
+    "ddoNameLabel": "DDO name (optional)",
+    "ddoCodeLabel": "DDO code (optional)",
+    "addressLabel": "Address (optional)",
+    "signatoryTitleLabel": "Signatory title (optional)",
+    "signatureBlockLabel": "Print a signature block instead of “system-generated, no signature required”",
+    "saveBtn": "Save letterhead",
+    "orgRequiredError": "Enter the organisation name.",
+    "savedMessage": "Letterhead saved. New slips and print previews use it.",
+    "networkError": "Network error. Please try again.",
+    "confirmTitle": "Save slip letterhead?",
+    "confirmLabel": "Save letterhead",
+    "confirmDescription": "Every salary slip will name {orgName} as the issuing organisation. This change is recorded in the audit log."
   }
 }

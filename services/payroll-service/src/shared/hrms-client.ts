@@ -293,6 +293,67 @@ export async function fetchEmployeeSummaries(tenantId: string): Promise<Map<stri
 }
 
 /**
+ * GAP-PAYROLL-LOANS-01: payroll employee lookup. Same internal feed as
+ * fetchEmployeeSummaries but filtered server-side by name / code / ids, so a
+ * search works on tenants larger than the feed's 2000-row cap. Fails OPEN to
+ * an empty Map (display/lookup only), like fetchEmployeeSummaries.
+ */
+export async function searchEmployeeSummaries(
+  tenantId: string,
+  filter: { q?: string | undefined; ids?: string[] | undefined },
+): Promise<Map<string, { fullName: string; departmentName: string; employeeNo: string | null }>> {
+  const params = new URLSearchParams();
+  if (filter.q) params.set("q", filter.q);
+  if (filter.ids && filter.ids.length > 0) params.set("ids", filter.ids.join(","));
+  const url = `${HRMS_URL}/v1/hrms/internal/employee-summaries${params.size > 0 ? `?${params.toString()}` : ""}`;
+  try {
+    const res = await fetch(url, {
+      headers: { "x-internal": "1", "x-service-secret": process.env.INTERNAL_SERVICE_SECRET ?? "", "x-tenant-id": tenantId },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return new Map();
+    const rows = await res.json() as Array<{ id: string; fullName: string; departmentName: string; employeeNo?: string | null }>;
+    return new Map(rows.map((r) => [r.id, { fullName: r.fullName, departmentName: r.departmentName, employeeNo: r.employeeNo ?? null }]));
+  } catch {
+    return new Map();
+  }
+}
+
+/**
+ * GAP-PAYROLL-FNF-03: HR-record-derived F&F inputs for one employee and
+ * separation date. The outcome is explicit so the caller can fail CLOSED:
+ *  - ok: hrms answered with a well-formed body
+ *  - not_found: hrms answered 404 (the employee is not in HR records)
+ *  - unavailable: unreachable, timeout, any other non-2xx, or a malformed body
+ */
+export type FnfServiceSnapshotResult =
+  | { kind: "ok"; completedYears: number; leaveBalanceDays: number }
+  | { kind: "not_found" }
+  | { kind: "unavailable" };
+
+export async function fetchFnfServiceSnapshot(
+  tenantId: string,
+  employeeId: string,
+  separationDate: string,
+): Promise<FnfServiceSnapshotResult> {
+  const url = `${HRMS_URL}/v1/hrms/internal/fnf-service-snapshot?employeeId=${encodeURIComponent(employeeId)}&separationDate=${encodeURIComponent(separationDate)}`;
+  try {
+    const res = await fetch(url, {
+      headers: { "x-internal": "1", "x-service-secret": process.env.INTERNAL_SERVICE_SECRET ?? "", "x-tenant-id": tenantId },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.status === 404) return { kind: "not_found" };
+    if (!res.ok) return { kind: "unavailable" };
+    const body = await res.json() as { completedYears?: unknown; leaveBalanceDays?: unknown };
+    if (typeof body.completedYears !== "number" || typeof body.leaveBalanceDays !== "number"
+        || !Number.isFinite(body.completedYears) || !Number.isFinite(body.leaveBalanceDays)) return { kind: "unavailable" };
+    return { kind: "ok", completedYears: body.completedYears, leaveBalanceDays: body.leaveBalanceDays };
+  } catch {
+    return { kind: "unavailable" };
+  }
+}
+
+/**
  * GAP-PAYROLL-NPS-02: last four characters of each employee's PRAN, keyed by
  * employeeId. hrms-service only ever returns the last four (the full PRAN
  * never crosses the service boundary). Display enrichment only, so this

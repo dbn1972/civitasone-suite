@@ -9,6 +9,8 @@
  * Both the page and the client table import from here.
  */
 
+import { rupeesToMinorString } from "@/lib/money";
+
 /**
  * Ledger status from payroll.disbursement_transfers (payroll-service
  * disbursement-transfers/schema.ts): pending = queued for the next bank file
@@ -39,7 +41,7 @@ export type RawTransferRow = {
   ifsc: string;
   /** Authoritative amount: integer paise as a string. */
   amountPaise?: string;
-  /** Display rupees derived by the API from amountPaise. */
+  /** Display rupees derived by the API from amountPaise (fallback only). */
   amountRupees: number;
   status: TransferStatus | string;
   nachBatchId: string | null;
@@ -52,18 +54,22 @@ export type TransferRow = {
   employeeName: string;
   accountLast4: string | null;
   ifsc: string;
-  amountRupees: number;
+  /** Integer paise as a string (GAP-PAYROLL-DISBURSEMENT-08) -- never a float rupee. */
+  amountMinor: string;
   status: TransferStatus | string;
   nachBatchId: string | null;
   failureReason: string | null;
 };
 
-function rupeesOf(raw: RawTransferRow): number {
+function minorOf(raw: RawTransferRow): string {
   // Prefer the paise string (exact) over the API's derived rupee number.
-  if (typeof raw.amountPaise === "string" && /^-?\d+$/.test(raw.amountPaise)) {
-    return Number(BigInt(raw.amountPaise)) / 100;
-  }
-  return raw.amountRupees;
+  if (typeof raw.amountPaise === "string" && /^-?\d+$/.test(raw.amountPaise)) return raw.amountPaise;
+  return rupeesToMinorString(raw.amountRupees.toFixed(2), { allowZero: true }) ?? "0";
+}
+
+/** Exact integer-paise sum of transfer rows. */
+export function sumMinor(rows: ReadonlyArray<Pick<TransferRow, "amountMinor">>): bigint {
+  return rows.reduce((s, r) => s + BigInt(r.amountMinor), 0n);
 }
 
 /** Server-side reduction of a raw transfer row to the client-safe shape. */
@@ -81,7 +87,7 @@ export function toClientTransferRow(raw: RawTransferRow): TransferRow {
     employeeName: raw.employeeName,
     accountLast4,
     ifsc: raw.ifsc,
-    amountRupees: rupeesOf(raw),
+    amountMinor: minorOf(raw),
     status: raw.status,
     nachBatchId: raw.nachBatchId,
     failureReason: raw.failureReason,

@@ -162,4 +162,26 @@ describe("PayslipDetailPage (dashboard view)", () => {
     expect(downloadEl.closest("a")).toBeNull();
     expect(downloadEl.closest("span")).toHaveAttribute("aria-disabled", "true");
   });
+
+  // GAP-PAYROLL-SLIPS-DETAIL-03: sections with nothing to show are omitted, not
+  // rendered as three identical "not available" cards.
+  it("SLIPS-DETAIL-03: a slip with no breakdown shows ONE note instead of three 'not available' cards", async () => {
+    fetchJsonMock.mockResolvedValueOnce({ data: baseSlip({ components: [], pfEmployeeMinor: 0, pfEmployerMinor: 0 }), source: "api" });
+    renderPage(await PayslipDetailPage({ params: { id: "slip-1" } }));
+    expect(screen.getAllByText(/no earnings, deductions or statutory breakdown on file/)).toHaveLength(1);
+    expect(screen.queryByText("Earnings")).not.toBeInTheDocument();
+    expect(screen.queryByText("Deductions")).not.toBeInTheDocument();
+    expect(screen.queryByText(/not available for this slip/)).not.toBeInTheDocument();
+  });
+
+  it("SLIPS-DETAIL-03: only the sections that have data are shown (earnings-only slip hides deductions and statutory)", async () => {
+    fetchJsonMock.mockResolvedValueOnce({
+      data: baseSlip({ components: [{ code: "BASIC", name: "Basic Pay", type: "earning", amountMinor: 50000 }], pfEmployeeMinor: 0, pfEmployerMinor: 0 }),
+      source: "api",
+    });
+    renderPage(await PayslipDetailPage({ params: { id: "slip-1" } }));
+    expect(screen.getByText("Basic Pay")).toBeInTheDocument();
+    expect(screen.queryByText(/no earnings, deductions or statutory breakdown/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Statutory Contributions")).not.toBeInTheDocument();
+  });
 });

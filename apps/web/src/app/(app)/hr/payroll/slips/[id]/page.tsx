@@ -208,13 +208,7 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
             </tbody>
           </table>
         </Card>
-      ) : (
-        <Card title={t("earningsTitle")} padding>
-          <p style={{ color: "var(--color-text-muted)", fontSize: 14 }}>
-            {t("earningsUnavailable")}
-          </p>
-        </Card>
-      )}
+      ) : null}
 
       {/* Deductions table */}
       {deductions.length > 0 ? (
@@ -242,15 +236,19 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
             </tbody>
           </table>
         </Card>
-      ) : (
-        <Card title={t("deductionsTitle")} padding>
-          <p style={{ color: "var(--color-text-muted)", fontSize: 14 }}>
-            {t("deductionsUnavailable")}
-          </p>
+      ) : null}
+
+      {/* GAP-PAYROLL-SLIPS-DETAIL-03: a section with nothing to show is omitted
+          (it used to render three identical "not available" cards); one note
+          says so when the slip carries no breakdown at all. */}
+      {earnings.length === 0 && deductions.length === 0 && statutoryLines.length === 0 && (
+        <Card padding>
+          <p role="note" style={{ color: "var(--color-text-muted)", fontSize: 14, margin: 0 }}>{t("breakdownUnavailable")}</p>
         </Card>
       )}
 
       {/* Statutory breakdown */}
+      {statutoryLines.length > 0 && (
       <Card title={t("statutoryTitle")} padding>
         {statutoryLines.length > 0 ? (
           <div className="fields">
@@ -271,12 +269,9 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
               </div>
             ))}
           </div>
-        ) : (
-          <p style={{ color: "var(--color-text-muted)", fontSize: 14 }}>
-            {t("statutoryUnavailable")}
-          </p>
-        )}
+        ) : null}
       </Card>
+      )}
     </div>
   );
 }

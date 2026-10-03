@@ -42,7 +42,7 @@ let scheduleResult: { payload: unknown; source: "api" | "error" } | null = null;
 
 function mockApi(loans: Loan[] | "error", employees: unknown[] = [{ id: EMP_ID, name: "Asha Rao", employeeNo: "EMP-001", department: "Finance" }]) {
   fetchJsonMock.mockImplementation(async (url: string, _fallback: unknown, opts?: { mapResponse?: (p: unknown) => unknown }) => {
-    if (url.startsWith("/api/v1/hrms/employees")) {
+    if (url.startsWith("/api/v1/payroll/employee-lookup")) {
       return { data: opts?.mapResponse ? opts.mapResponse({ data: employees }) ?? [] : employees, source: "api" };
     }
     if (url.includes("/schedule")) {

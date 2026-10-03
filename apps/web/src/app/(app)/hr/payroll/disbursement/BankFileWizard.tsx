@@ -4,7 +4,7 @@ import { useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { browserFetch, errorCodeFromResponse } from "@/lib/api/browserClient";
 import { useFormError } from "@/lib/useFormError";
-import { formatRupees, formatIndianDate, daysUntilIST } from "@/lib/formatters";
+import { formatMoney, formatIndianDate, daysUntilIST } from "@/lib/formatters";
 import { Button, ConfirmDialog } from "@/app/_components/ds";
 import { SigningBadge } from "./SigningBadge";
 import { saveResponseAsFile } from "./IssuedBankFilesTable";
@@ -13,12 +13,13 @@ import { saveResponseAsFile } from "./IssuedBankFilesTable";
  * A run eligible for a bank file. API status "completed" == DB "approved"
  * (first file); "paid" == DB "disbursed" (an audited RE-ISSUE) -- see
  * payroll-service queries.ts mapRunStatus and bank-transfer/routes.ts.
- * netAmountRupees is RUPEES (the runs-list API divides by 100).
+ * netAmountMinor is the run's net pay in integer PAISE as a string
+ * (GAP-PAYROLL-DISBURSEMENT-08): money is never carried as a float rupee.
  */
 export type RunOption = {
   id: string;
   payPeriod: string;
-  netAmountRupees: number;
+  netAmountMinor: string;
   employeeCount: number;
   status: "completed" | "paid";
 };
@@ -229,7 +230,7 @@ export function BankFileWizard({
             <select id={runSelectId} className="input" value={runId} onChange={(e) => setRunId(e.target.value)} style={{ maxWidth: 380 }}>
               {runs.map((r) => (
                 <option key={r.id} value={r.id}>
-                  {r.payPeriod} — {formatRupees(r.netAmountRupees)}{r.status === "paid" ? ` (${t("runPaidSuffix")})` : ""}
+                  {r.payPeriod} — {formatMoney(r.netAmountMinor)}{r.status === "paid" ? ` (${t("runPaidSuffix")})` : ""}
                 </option>
               ))}
             </select>
@@ -292,7 +293,7 @@ export function BankFileWizard({
                 {[
                   [t("previewPayPeriod"), selectedRun.payPeriod],
                   [t("previewFormat"), formatLabels[format].label],
-                  [t("previewNetAmount"), formatRupees(selectedRun.netAmountRupees)],
+                  [t("previewNetAmount"), formatMoney(selectedRun.netAmountMinor)],
                   [t("previewRecordCount"), String(selectedRun.employeeCount)],
                   [t("previewRunId"), selectedRun.id],
                 ].map(([k, v]) => (
@@ -438,7 +439,7 @@ export function BankFileWizard({
               {t("confirmDescription", {
                 period: selectedRun.payPeriod,
                 format: formatLabels[format].label,
-                amount: formatRupees(selectedRun.netAmountRupees),
+                amount: formatMoney(selectedRun.netAmountMinor),
                 count: selectedRun.employeeCount,
               })}
               {selectedRun.status === "paid" ? " " + t("confirmReissueWarning") : null}

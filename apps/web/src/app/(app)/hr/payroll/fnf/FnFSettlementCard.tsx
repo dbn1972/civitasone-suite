@@ -44,6 +44,10 @@ export type FnFCardRow = {
   rejectionReason?: string | null;
   paymentReference?: string | null;
   paymentDate?: string | null;
+  /** GAP-PAYROLL-FNF-05: payee of a death settlement (account number is never sent, last 4 only). */
+  /** serializeSettlement's computationDetail; hrRecordsVerified = HRMS cross-checked service length / leave balance (GAP-PAYROLL-FNF-03). */
+  computationDetail?: { hrRecordsVerified?: boolean } | null;
+  nominee?: { name: string; relationship: string | null; ifsc: string | null; accountLast4: string | null; documentRef: string | null } | null;
 };
 
 type Money = string | number | null | undefined;
@@ -113,6 +117,26 @@ function FnFCard({ row, viewer }: { row: FnFCardRow; viewer?: FnfViewer }) {
         <div>
           <div style={{ fontWeight: 700, fontSize: 14 }}>{name}</div>
           <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 2 }}>{meta}</div>
+          {row.computationDetail && typeof row.computationDetail === "object" && (
+            <div style={{ marginTop: 4 }}>
+              {row.computationDetail.hrRecordsVerified === true ? (
+                <span className="pill good" style={{ fontSize: 11 }}>{tf("cardHrVerified")}</span>
+              ) : (
+                <span className="pill warn" role="note" style={{ fontSize: 11 }}>{tf("cardHrUnverified")}</span>
+              )}
+            </div>
+          )}
+          {row.nominee && (
+            <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 2 }}>
+              {tf("cardNomineeLine", {
+                name: row.nominee.name,
+                relationship: row.nominee.relationship ? tf(`nomineeRelationship_${row.nominee.relationship}`) : "—",
+                last4: row.nominee.accountLast4 ?? "—",
+                ifsc: row.nominee.ifsc ?? "—",
+                ref: row.nominee.documentRef ?? "—",
+              })}
+            </div>
+          )}
         </div>
         <StatusPill status={row.status} />
       </div>

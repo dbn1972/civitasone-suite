@@ -7,7 +7,7 @@ import { HttpError } from "../../shared/context.js";
 import { deterministicUuid } from "../../shared/deterministic-id.js";
 import type { CreateLoanBody, DisburseLoanBody } from "./validators.js";
 import * as repo from "./repo.js";
-import { decideCombinedEmiCap, decideDisbursal, sumActiveEmiMinor, MAX_COMBINED_LOAN_EMI_PCT_OF_GROSS } from "./policy.js";
+import { checkLoanTerms, decideCombinedEmiCap, decideDisbursal, sumActiveEmiMinor, MAX_COMBINED_LOAN_EMI_PCT_OF_GROSS } from "./policy.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -36,17 +36,24 @@ export async function createLoan(ctx: RequestContext, body: CreateLoanBody): Pro
   if (ctx.idempotencyKey) {
     const prior = await repo.findLoanById(id, ctx.tenantId);
     if (prior) {
-      if (prior.loanNo !== body.loanNo || prior.employeeId !== body.employeeId) {
+      if ((body.loanNo !== undefined && prior.loanNo !== body.loanNo) || prior.employeeId !== body.employeeId) {
         throw new HttpError(409, "IDEMPOTENCY_KEY_REUSED", "this idempotency key was already used for a different loan");
       }
       return { id, status: "accepted", correlationId: ctx.correlationId };
     }
   }
 
+  // GAP-PAYROLL-LOANS-05: reject nonsensical terms up front (consumer re-checks).
+  const terms = checkLoanTerms({
+    principalMinor: BigInt(body.principalMinor), emiMinor: BigInt(body.emiMinor),
+    tenureMonths: body.tenureMonths, interestRatePct: body.interestRatePct,
+  });
+  if (!terms.ok) throw new HttpError(422, `LOAN_${terms.code}`, terms.message);
+
   const [existingLoans, grossMinor, duplicateLoanId] = await Promise.all([
     repo.findLoansByEmployee(ctx.tenantId, body.employeeId),
     repo.findLatestGrossMinorForEmployee(ctx.tenantId, body.employeeId),
-    repo.findLoanIdByLoanNo(ctx.tenantId, body.loanNo),
+    body.loanNo === undefined ? Promise.resolve(null) : repo.findLoanIdByLoanNo(ctx.tenantId, body.loanNo),
   ]);
   // GAP-PAYROLL-LOANS-05: loan numbers are typed by hand; reject a number
   // already used in this tenant up front. The UNIQUE (tenant_id, loan_no)

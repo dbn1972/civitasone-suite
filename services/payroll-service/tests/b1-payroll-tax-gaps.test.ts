@@ -260,6 +260,8 @@ describe("GAP-PAYROLL-RETURNS-06: 24Q money is exact paise", () => {
     readQueue.push(tdsRows);                               // deducteeWiseTds tds
     readQueue.push([{ id: "run-1", status: "approved" }]); // challan runs
     readQueue.push(tdsRows);                               // challan tds
+    readQueue.push([]);                                    // recorded filings (GAP-PAYROLL-RETURNS-01)
+    readQueue.push([]);                                    // challan CINs for the quarter (challanRef)
     mockFetchPayrollInput.mockResolvedValue({ employees: [{ id: "e1", pan: "ABCDE1234F", fullName: "A" }] });
 
     const r = await app.inject({

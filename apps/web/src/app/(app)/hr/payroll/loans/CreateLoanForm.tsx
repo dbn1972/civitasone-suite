@@ -115,7 +115,7 @@ export function CreateLoanForm({ currentEmpId = "" }: { currentEmpId?: string })
         method: "POST",
         headers: { "x-idempotency-key": idempotencyKeyRef.current },
         body: JSON.stringify({
-          loanNo: v.loanNo,
+          ...(v.loanNo ? { loanNo: v.loanNo } : {}),
           employeeId: v.employeeId,
           loanType,
           // Bounded by MAX_LOAN_MONEY_MINOR (1e10) -- well inside
@@ -131,12 +131,14 @@ export function CreateLoanForm({ currentEmpId = "" }: { currentEmpId?: string })
         const code = await errorCodeFromResponse(res);
         if (code === "LOAN_NO_TAKEN") {
           setFieldErrors({ loanNo: "required" });
-          throw new Error(t("loanNoTakenError", { loanNo: v.loanNo }));
+          throw new Error(t("loanNoTakenError", { loanNo: v.loanNo ?? "" }));
         }
         throw new Error(await errorMessageFromResponse(res));
       }
       setConfirmOpen(false);
-      setMessage(t("submittedMessage", { loanNo: v.loanNo, employee: employee?.label ?? "" }));
+      setMessage(v.loanNo
+        ? t("submittedMessage", { loanNo: v.loanNo, employee: employee?.label ?? "" })
+        : t("submittedMessageAuto", { employee: employee?.label ?? "" }));
       setLoanNo("");
       setEmployeeId(null);
       setEmployee(null);
@@ -162,17 +164,18 @@ export function CreateLoanForm({ currentEmpId = "" }: { currentEmpId?: string })
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={loanNoField} style={{ fontSize: 13, fontWeight: 600 }}>
-              {t("loanNoLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("loanNoLabel")}
             </label>
             <input
               id={loanNoField}
               value={loanNo}
               onChange={(e) => { setLoanNo(e.target.value); clearFieldError("loanNo"); }}
               maxLength={64}
-              aria-required="true"
-              {...invalidProps("loanNo")}
+              aria-describedby={fieldErrors.loanNo ? errId : `${loanNoField}-hint`}
+              aria-invalid={fieldErrors.loanNo ? true : undefined}
               style={inputStyle}
             />
+            <span id={`${loanNoField}-hint`} style={{ fontSize: 12, color: "var(--ink2)" }}>{t("loanNoHint")}</span>
           </div>
           <Field
             id={empIdField}
@@ -181,6 +184,7 @@ export function CreateLoanForm({ currentEmpId = "" }: { currentEmpId?: string })
             error={fieldErrors.employeeId ? t("employeeRequiredError") : undefined}
           >
             <EmployeePicker
+              directory="payroll"
               value={employeeId}
               onChange={(id, option) => {
                 setEmployeeId(id);
@@ -273,8 +277,8 @@ export function CreateLoanForm({ currentEmpId = "" }: { currentEmpId?: string })
         errorMessage={error}
         description={
           <>
-            {t.rich("confirmDescription", {
-              loanNo: validation.ok ? validation.value.loanNo : loanNo,
+            {t.rich(validation.ok && !validation.value.loanNo ? "confirmDescriptionAuto" : "confirmDescription", {
+              loanNo: validation.ok ? validation.value.loanNo ?? "" : loanNo,
               employee: employee?.label ?? "",
               principal: validation.ok ? formatMoney(validation.value.principalMinor) : "",
               emi: validation.ok ? formatMoney(validation.value.emiMinor) : "",

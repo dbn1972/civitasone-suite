@@ -21,7 +21,9 @@ import { eq, and } from "drizzle-orm";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { computeFnfSettlement, type FnfInput } from "./domain.js";
-import { fetchEmployeeSummaries } from "../../shared/hrms-client.js";
+import { PAY_DERIVED_FIELDS, deviatingFields, loadPaySnapshot } from "./pay-snapshot.js";
+import { encryptPii } from "../../shared/pii-crypto.js";
+import { fetchEmployeeSummaries, fetchFnfServiceSnapshot } from "../../shared/hrms-client.js";
 import { deterministicUuid } from "../../shared/deterministic-id.js";
 import {
   FNF_ACTIONS, FNF_SUBMIT_ROLES, FNF_FINANCE_APPROVE_ROLES, FNF_DISBURSE_ROLES, FNF_REJECT_ROLES,
@@ -75,8 +77,29 @@ const ACTION_GATE_ROLES: Record<FnfAction, string[]> = {
 // input. Now a whole, non-negative paise integer string only.
 const minor = () => z.string().regex(/^\d{1,15}$/, "must be a whole number of paise").transform((v) => BigInt(v));
 
-/** Fields the web form pre-fills from HR records and lets the user override (with a reason). */
-export const FNF_OVERRIDABLE_FIELDS = ["completedYears", "leaveBalanceDays"] as const;
+/**
+ * Fields the web form pre-fills from HR / pay records and lets the user
+ * override (with a reason). completedYears / leaveBalanceDays come from
+ * hrms-service's fnf-calculate; the four pay fields are derived HERE from the
+ * employee's finalised payslips (./pay-snapshot.ts) and the server holds the
+ * caller to them: a differing value without an override reason is a 422.
+ */
+export const FNF_OVERRIDABLE_FIELDS = [
+  "completedYears", "leaveBalanceDays", ...PAY_DERIVED_FIELDS,
+] as const;
+
+/** Relationships a death settlement's payee may have to the deceased (free text is not accepted). */
+export const NOMINEE_RELATIONSHIPS = ["spouse", "son", "daughter", "father", "mother", "sibling", "other_legal_heir"] as const;
+
+// GAP-PAYROLL-FNF-05: the payee of a death settlement. Account number is taken
+// as digits only (9-18) and sealed before it leaves this process.
+const nomineeSchema = z.object({
+  name: z.string().trim().min(2).max(128),
+  relationship: z.enum(NOMINEE_RELATIONSHIPS),
+  accountNumber: z.string().trim().regex(/^\d{9,18}$/, "account number is 9-18 digits"),
+  ifsc: z.string().trim().toUpperCase().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, "IFSC looks like SBIN0001234"),
+  documentRef: z.string().trim().min(3).max(64),
+}).strict();
 
 // GAP-PAYROLL-FNF-03: when the clerk overrides a record-derived input, the
 // reason travels with the compute command and is persisted in the
@@ -113,6 +136,14 @@ const computeFnfBody = z.object({
   otherDeductionsMinor: minor().default("0"),
   fyStartYear: z.number().int(),
   overrides: overridesSchema.optional(),
+  nominee: nomineeSchema.optional(),
+}).superRefine((b, ctx) => {
+  if (b.separationType === "death" && !b.nominee) {
+    ctx.addIssue({ code: "custom", path: ["nominee"], message: "a death settlement needs the nominee / legal-heir payee details" });
+  }
+  if (b.separationType !== "death" && b.nominee) {
+    ctx.addIssue({ code: "custom", path: ["nominee"], message: "nominee details apply to a death settlement only" });
+  }
 });
 
 const idParamSchema = z.object({ id: z.string().uuid() });
@@ -161,6 +192,44 @@ export async function fnfRoutes(app: FastifyInstance): Promise<void> {
 
     const body = computeFnfBody.parse(req.body);
 
+    // GAP-PAYROLL-FNF-03: hold the caller to the pay records. Where the
+    // employee has finalised payslips, a wage / average-salary / YTD figure
+    // that differs from them must be an explicit override with a reason;
+    // that reason and the derived values are persisted on the settlement.
+    const snap = await scopedRead((tx) => loadPaySnapshot(tx, ctx.tenantId, body.employeeId, body.separationDate));
+    const deviating: string[] = deviatingFields(snap, body);
+    // The HR-record-derived inputs (service length, leave balance) are held to
+    // hrms-service's own figures the same way. FAIL CLOSED: if HRMS cannot
+    // confirm them (unreachable / malformed) the compute is refused (503) and
+    // nothing is queued; an employee HRMS does not know is a 422. A settlement
+    // pays out money on these inputs, so an unverifiable one is never accepted.
+    const hr = await fetchFnfServiceSnapshot(ctx.tenantId, body.employeeId, body.separationDate);
+    if (hr.kind === "unavailable") {
+      throw new HttpError(503, "FNF_HR_VERIFICATION_UNAVAILABLE",
+        "HR records could not be reached to verify service length and leave balance; try again shortly");
+    }
+    if (hr.kind === "not_found") {
+      throw new HttpError(422, "FNF_EMPLOYEE_NOT_IN_HR", "this employee was not found in HR records");
+    }
+    const hrDerived: Record<string, string> = {};
+    {
+      if (body.completedYears !== hr.completedYears) { deviating.push("completedYears"); hrDerived.completedYears = String(hr.completedYears); }
+      if (body.leaveBalanceDays !== hr.leaveBalanceDays) { deviating.push("leaveBalanceDays"); hrDerived.leaveBalanceDays = String(hr.leaveBalanceDays); }
+    }
+    const covered = new Set<string>(body.overrides?.fields ?? []);
+    const uncovered = deviating.filter((f) => !covered.has(f));
+    if (uncovered.length > 0) {
+      throw new HttpError(422, "FNF_OVERRIDE_REQUIRED",
+        `these inputs differ from the employee's payslips (${uncovered.join(", ")}): use the derived values, or override them with a reason`);
+    }
+    // What the records said for each field the caller overrode: money in paise,
+    // completedYears in years, leaveBalanceDays in days (persisted with the reason).
+    const derivedForAudit: Record<string, string> = { ...hrDerived };
+    for (const f of deviating) {
+      if (f in hrDerived) continue;
+      derivedForAudit[f] = snap[`${f}Minor` as keyof typeof snap] as string;
+    }
+
     const messageId = randomUUID();
     await queue.publish(COMMANDS.fnfCompute, {
       messageId,
@@ -194,11 +263,38 @@ export async function fnfRoutes(app: FastifyInstance): Promise<void> {
         deductions80dMinor: body.deductions80dMinor.toString(),
         otherDeductionsMinor: body.otherDeductionsMinor.toString(),
         fyStartYear: body.fyStartYear,
-        ...(body.overrides ? { overrides: body.overrides } : {}),
+        ...(body.overrides
+          ? { overrides: { ...body.overrides, ...(Object.keys(derivedForAudit).length > 0 ? { derived: derivedForAudit } : {}) } }
+          : {}),
+        hrRecordsVerified: true,
+        ...(body.nominee ? { nominee: {
+          name: body.nominee.name,
+          relationship: body.nominee.relationship,
+          ifsc: body.nominee.ifsc,
+          documentRef: body.nominee.documentRef,
+          accountLast4: body.nominee.accountNumber.slice(-4),
+          // Sealed here so the plaintext number never rides the queue.
+          accountSealed: encryptPii(body.nominee.accountNumber),
+        } } : {}),
       },
     });
 
     return reply.status(202).send({ data: { id: messageId, message: "fnf compute queued", employeeId: body.employeeId } });
+  });
+
+  /**
+   * GET /v1/payroll/fnf/pay-snapshot?employeeId=&separationDate=
+   * GAP-PAYROLL-FNF-03: the pay-record-derived compute inputs (last drawn
+   * wages, 10-month average, FY-to-date salary and TDS) so the compute form
+   * pre-fills them instead of asking a clerk to type them. `available` is
+   * false when the employee has no finalised payslip yet.
+   */
+  app.get("/v1/payroll/fnf/pay-snapshot", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FNF_ROLES);
+    const q = z.object({ employeeId: z.string().uuid(), separationDate: isoDate }).parse(req.query ?? {});
+    const snap = await scopedRead((tx) => loadPaySnapshot(tx, ctx.tenantId, q.employeeId, q.separationDate));
+    return reply.send({ data: snap });
   });
 
   /**
@@ -471,5 +567,16 @@ function serializeSettlement(
     rejectedBy: row.rejectedBy,
     rejectedAt: row.rejectedAt,
     rejectionReason: row.rejectionReason,
+    // GAP-PAYROLL-FNF-05: the death-settlement payee. The account number is
+    // never returned -- last 4 only.
+    nominee: row.nomineeName
+      ? {
+          name: row.nomineeName,
+          relationship: row.nomineeRelationship,
+          ifsc: row.nomineeIfsc,
+          accountLast4: row.nomineeAccountLast4,
+          documentRef: row.nomineeDocumentRef,
+        }
+      : null,
   };
 }

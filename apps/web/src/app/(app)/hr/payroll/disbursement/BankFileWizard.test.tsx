@@ -4,7 +4,7 @@ import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 import { BankFileWizard, type DscStatus, type RunOption, type FormatAvailability } from "./BankFileWizard";
 
-const RUN: RunOption = { id: "r1", payPeriod: "2026-09", netAmountRupees: 450000, employeeCount: 37, status: "completed" };
+const RUN: RunOption = { id: "r1", payPeriod: "2026-09", netAmountMinor: "45000000", employeeCount: 37, status: "completed" };
 const PAID_RUN: RunOption = { ...RUN, id: "r2", status: "paid" };
 const REASON = "September salary NEFT batch for SBI";
 

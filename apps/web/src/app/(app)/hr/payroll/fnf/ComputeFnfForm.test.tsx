@@ -11,9 +11,9 @@ vi.mock("next/navigation", () => ({
 const EMP_ID = "11111111-1111-4111-8111-111111111111";
 type SearchOpts = { onForbidden?: () => void };
 const searchEmployeesMock = vi.fn(async (_q: string, _s?: AbortSignal, _o?: SearchOpts) => [{ id: EMP_ID, label: "Meera Iyer (EMP-0451)" }]);
-vi.mock("@/lib/entityAdapters/employee", () => ({
-  searchEmployees: (q: string, s: AbortSignal, o?: SearchOpts) => searchEmployeesMock(q, s, o),
-  resolveEmployees: async () => [],
+vi.mock("@/lib/entityAdapters/payrollEmployee", () => ({
+  searchPayrollEmployees: (q: string, s: AbortSignal, o?: SearchOpts) => searchEmployeesMock(q, s, o),
+  resolvePayrollEmployees: async () => [],
 }));
 
 import { ComputeFnfForm } from "./ComputeFnfForm";
@@ -26,13 +26,24 @@ const HR_SNAPSHOT = {
   },
 };
 
+// GAP-PAYROLL-FNF-03: GET /v1/payroll/fnf/pay-snapshot (derived from finalised payslips).
+const PAY_SNAPSHOT = {
+  available: true, fyStartYear: 2026, wageMonths: 4, ytdMonths: 4,
+  lastDrawnWagesMinor: "6000000", avgSalaryLast10MonthsMinor: "5950050", salaryYtdMinor: "28000000", tdsYtdMinor: "150000",
+};
 let hrAvailable = true;
 let computeStatus = 202;
+let computeBody: unknown = null;
+let paySnapshot: unknown = { available: false, fyStartYear: 2026, wageMonths: 0, ytdMonths: 0, lastDrawnWagesMinor: "0", avgSalaryLast10MonthsMinor: "0", salaryYtdMinor: "0", tdsYtdMinor: "0" };
 const fetchSpy = vi.fn(async (url: string, _init?: RequestInit) => {
+  if (url.includes("fnf/pay-snapshot")) {
+    return new Response(JSON.stringify({ data: paySnapshot }), { status: 200 });
+  }
   if (url.includes("fnf-calculate")) {
     return hrAvailable ? new Response(JSON.stringify(HR_SNAPSHOT), { status: 200 }) : new Response(null, { status: 503 });
   }
   if (url.includes("fnf/compute")) {
+    if (computeBody) return new Response(JSON.stringify(computeBody), { status: computeStatus });
     return computeStatus === 202
       ? new Response(JSON.stringify({ data: { message: "fnf compute queued", employeeId: EMP_ID } }), { status: 202 })
       : new Response(null, { status: computeStatus });
@@ -70,6 +81,8 @@ describe("ComputeFnfForm", () => {
   beforeEach(() => {
     hrAvailable = true;
     computeStatus = 202;
+    computeBody = null;
+    paySnapshot = { available: false, fyStartYear: 2026, wageMonths: 0, ytdMonths: 0, lastDrawnWagesMinor: "0", avgSalaryLast10MonthsMinor: "0", salaryYtdMinor: "0", tdsYtdMinor: "0" };
     fetchSpy.mockClear();
     refreshMock.mockReset();
     vi.spyOn(globalThis, "fetch").mockImplementation(fetchSpy as unknown as typeof fetch);
@@ -133,10 +146,10 @@ describe("ComputeFnfForm", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(/at least 10 characters/);
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText(/Reason for overriding HR records/), { target: { value: "Service book shows 2 extra years of deputation" } });
+    fireEvent.change(screen.getByLabelText(/Reason for overriding/), { target: { value: "Service book shows 2 extra years of deputation" } });
     fireEvent.click(screen.getByText("Compute Settlement"));
     const dialog = await screen.findByRole("alertdialog");
-    expect(dialog).toHaveTextContent("Completed Years: HR record 25, entered 27");
+    expect(dialog).toHaveTextContent("Completed Years: records say 25, entered 27");
     fireEvent.click(screen.getByText("Compute settlement"));
     await waitFor(() => expect(computeCalls()).toHaveLength(1));
     const body = JSON.parse(String(computeCalls()[0]![1]!.body));
@@ -199,5 +212,141 @@ describe("ComputeFnfForm", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // ── GAP-PAYROLL-FNF-03: pay-record derivation (server holds the caller to it) ──
+  it("GAP-PAYROLL-FNF-03: wages / average / YTD salary / YTD TDS are filled from the payslips, locked, and sent without overrides", async () => {
+    paySnapshot = PAY_SNAPSHOT;
+    renderForm();
+    await pickEmployeeAndDate();
+    await waitFor(() => expect(screen.getByLabelText(/Last Drawn Wages/)).toHaveValue("60000.00"));
+    expect(screen.getByLabelText(/Avg Salary — Last 10 Months/)).toHaveValue("59500.50");
+    expect(screen.getByLabelText(/Salary YTD/)).toHaveValue("280000.00");
+    expect(screen.getByLabelText(/TDS YTD/)).toHaveValue("1500.00");
+    for (const re of [/Last Drawn Wages/, /Avg Salary — Last 10 Months/, /Salary YTD/, /TDS YTD/]) {
+      expect(screen.getByLabelText(re)).toHaveAttribute("readonly");
+    }
+    expect(screen.getByText(/filled in from 4 finalised payslip/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText(/Completed Years/)).toHaveValue(25));
+    fireEvent.click(screen.getByText("Compute Settlement"));
+    await screen.findByRole("alertdialog");
+    fireEvent.click(screen.getByText("Compute settlement"));
+    await waitFor(() => expect(computeCalls()).toHaveLength(1));
+    const body = JSON.parse(String(computeCalls()[0]![1]!.body));
+    expect(body).toMatchObject({ lastDrawnWagesMinor: "6000000", avgSalaryLast10MonthsMinor: "5950050", salaryYtdMinor: "28000000", tdsYtdMinor: "150000", fyStartYear: 2026 });
+    expect(body).not.toHaveProperty("overrides");
+  });
+
+  it("GAP-PAYROLL-FNF-03: overriding a payslip-derived figure needs a reason and is sent as an override of exactly that field", async () => {
+    paySnapshot = PAY_SNAPSHOT;
+    renderForm();
+    await pickEmployeeAndDate();
+    await waitFor(() => expect(screen.getByLabelText(/Salary YTD/)).toHaveValue("280000.00"));
+    await waitFor(() => expect(screen.getByLabelText(/Completed Years/)).toHaveValue(25));
+    fireEvent.click(screen.getByLabelText("Override payslip figure (₹2,80,000.00)"));
+    fireEvent.change(screen.getByLabelText(/Salary YTD/), { target: { value: "300000" } });
+    fireEvent.click(screen.getByText("Compute Settlement"));
+    expect(screen.getByText(/Give a reason of at least 10 characters/)).toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Reason for overriding/), { target: { value: "Arrears of 20,000 paid outside payroll" } });
+    fireEvent.click(screen.getByText("Compute Settlement"));
+    await screen.findByRole("alertdialog");
+    fireEvent.click(screen.getByText("Compute settlement"));
+    await waitFor(() => expect(computeCalls()).toHaveLength(1));
+    const body = JSON.parse(String(computeCalls()[0]![1]!.body));
+    expect(body.salaryYtdMinor).toBe("30000000");
+    expect(body.overrides).toEqual({ fields: ["salaryYtd"], reason: "Arrears of 20,000 paid outside payroll" });
+  });
+
+  it("GAP-PAYROLL-FNF-03: ticking Override but leaving the payslip value unchanged is not an override", async () => {
+    paySnapshot = PAY_SNAPSHOT;
+    renderForm();
+    await pickEmployeeAndDate();
+    await waitFor(() => expect(screen.getByLabelText(/TDS YTD/)).toHaveValue("1500.00"));
+    await waitFor(() => expect(screen.getByLabelText(/Completed Years/)).toHaveValue(25));
+    fireEvent.click(screen.getByLabelText("Override payslip figure (₹1,500.00)"));
+    fireEvent.click(screen.getByText("Compute Settlement"));
+    await screen.findByRole("alertdialog");
+    fireEvent.click(screen.getByText("Compute settlement"));
+    await waitFor(() => expect(computeCalls()).toHaveLength(1));
+    expect(JSON.parse(String(computeCalls()[0]![1]!.body))).not.toHaveProperty("overrides");
+  });
+
+  it("GAP-PAYROLL-FNF-03: the server's 422 FNF_OVERRIDE_REQUIRED is explained, not shown as a generic failure", async () => {
+    computeStatus = 422;
+    computeBody = { code: "FNF_OVERRIDE_REQUIRED", message: "these inputs differ from the employee's payslips (salaryYtd)" };
+    renderForm();
+    await pickEmployeeAndDate();
+    await waitFor(() => expect(screen.getByLabelText(/Completed Years/)).toHaveValue(25));
+    fillMoney();
+    fireEvent.click(screen.getByText("Compute Settlement"));
+    await screen.findByRole("alertdialog");
+    fireEvent.click(screen.getByText("Compute settlement"));
+    await waitFor(() => expect(screen.getByText(/These figures differ from the employee's payslips/)).toBeInTheDocument());
+  });
+
+  // ── GAP-PAYROLL-FNF-05: death settlement payee ──
+  const fillNominee = (over: Record<string, string> = {}) => {
+    const v = { name: "Sunita Devi", rel: "spouse", acct: "50100123456789", ifsc: "hdfc0001234", doc: "LHC/2026/0042", ...over };
+    fireEvent.change(screen.getByLabelText(/Payee name/), { target: { value: v.name } });
+    fireEvent.change(screen.getByLabelText(/Relationship to the employee/), { target: { value: v.rel } });
+    fireEvent.change(screen.getByLabelText(/Payee bank account number/), { target: { value: v.acct } });
+    fireEvent.change(screen.getByLabelText(/Payee bank IFSC/), { target: { value: v.ifsc } });
+    fireEvent.change(screen.getByLabelText(/Legal-heir \/ succession certificate reference/), { target: { value: v.doc } });
+  };
+
+  it("GAP-PAYROLL-FNF-05: nominee fields appear only for a death separation", () => {
+    renderForm();
+    expect(screen.queryByLabelText(/Payee name/)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Separation Type/), { target: { value: "death" } });
+    expect(screen.getByLabelText(/Payee name/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Separation Type/), { target: { value: "resignation" } });
+    expect(screen.queryByLabelText(/Payee name/)).not.toBeInTheDocument();
+  });
+
+  it("GAP-PAYROLL-FNF-05: a death settlement is blocked until the nominee is complete and valid", async () => {
+    renderForm();
+    await pickEmployeeAndDate();
+    await waitFor(() => expect(screen.getByLabelText(/Completed Years/)).toHaveValue(25));
+    fireEvent.change(screen.getByLabelText(/Separation Type/), { target: { value: "death" } });
+    fillMoney();
+    fireEvent.click(screen.getByText("Compute Settlement"));
+    expect(screen.getByText(/Enter the payee's name, relationship/)).toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    fillNominee({ acct: "12345", ifsc: "BAD" });
+    fireEvent.click(screen.getByText("Compute Settlement"));
+    expect(screen.getByLabelText(/Payee bank account number/)).toHaveAttribute("aria-invalid", "true");
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(computeCalls()).toHaveLength(0);
+  });
+
+  it("GAP-PAYROLL-FNF-05: a complete nominee is sent (IFSC upper-cased), and the confirm dialog shows only the account's last 4", async () => {
+    renderForm();
+    await pickEmployeeAndDate();
+    await waitFor(() => expect(screen.getByLabelText(/Completed Years/)).toHaveValue(25));
+    fireEvent.change(screen.getByLabelText(/Separation Type/), { target: { value: "death" } });
+    fillMoney();
+    fillNominee();
+    fireEvent.click(screen.getByText("Compute Settlement"));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent("Payee: Sunita Devi (Spouse), account ending 6789.");
+    expect(dialog.textContent).not.toContain("50100123456789");
+    fireEvent.click(screen.getByText("Compute settlement"));
+    await waitFor(() => expect(computeCalls()).toHaveLength(1));
+    const body = JSON.parse(String(computeCalls()[0]![1]!.body));
+    expect(body.separationType).toBe("death");
+    expect(body.nominee).toEqual({ name: "Sunita Devi", relationship: "spouse", accountNumber: "50100123456789", ifsc: "HDFC0001234", documentRef: "LHC/2026/0042" });
+  });
+
+  it("GAP-PAYROLL-FNF-05: a non-death settlement never sends a nominee", async () => {
+    renderForm();
+    await pickEmployeeAndDate();
+    await waitFor(() => expect(screen.getByLabelText(/Completed Years/)).toHaveValue(25));
+    fillMoney();
+    fireEvent.click(screen.getByText("Compute Settlement"));
+    await screen.findByRole("alertdialog");
+    fireEvent.click(screen.getByText("Compute settlement"));
+    await waitFor(() => expect(computeCalls()).toHaveLength(1));
+    expect(JSON.parse(String(computeCalls()[0]![1]!.body))).not.toHaveProperty("nominee");
   });
 });

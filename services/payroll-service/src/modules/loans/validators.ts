@@ -18,7 +18,9 @@ const MAX_MONEY_MINOR = 10_000_000_000; // ₹10 crore, in paise -- generous rea
 const MAX_TENURE_MONTHS = 360; // 30 years -- also bounds routes.ts's /schedule amortisation loop against the same class of input
 
 export const createLoanBody = z.object({
-  loanNo:         z.string().min(1).max(64),
+  // GAP-PAYROLL-LOANS-05: optional -- when omitted the server allocates the next
+  // LN-<year>-<seq> for the tenant (loans.loan_number_counters, migration 0060).
+  loanNo:         z.string().trim().min(1).max(64).optional(),
   employeeId:     z.string().uuid(),
   loanType:       z.string().max(32).default("personal"),
   principalMinor: z.number().int().positive().max(MAX_MONEY_MINOR),

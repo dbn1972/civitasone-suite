@@ -41,6 +41,8 @@ function renderPage(ui: Awaited<ReturnType<typeof SalarySlipPage>>) {
 describe("SalarySlipPage (printable slip)", () => {
   beforeEach(() => {
     fetchJsonMock.mockReset();
+    // The second loader on the page (GET /v1/payroll/letterhead): none configured unless a test says otherwise.
+    fetchJsonMock.mockResolvedValue({ data: null, source: "api" });
     getSessionRolesMock.mockReset();
     getSessionRolesMock.mockReturnValue(["payroll_admin"]);
   });
@@ -138,5 +140,70 @@ describe("SalarySlipPage (printable slip)", () => {
     fetchJsonMock.mockResolvedValueOnce({ data: baseSlip({ components: [] }), source: "api" });
     renderPage(await SalarySlipPage({ params: { id: "s1" } }));
     expect(screen.queryByText(/do not add up to the Gross/)).not.toBeInTheDocument();
+  });
+
+  // ── GAP-PAYROLL-SALARY-SLIPS-DETAIL-02: the issuing organisation is the tenant's own ──
+  const LH = { orgName: "Directorate of Urban Affairs", department: "Accounts Wing", ddoName: "R. Menon", ddoCode: "DDO-114", address: "Sector 5, Civil Lines", signatoryTitle: "Drawing & Disbursing Officer", showSignatureBlock: true };
+
+  function mockApi(slip: unknown, letterhead: unknown) {
+    fetchJsonMock.mockImplementation(async (url: string) =>
+      String(url).includes("/payroll/letterhead") ? { data: letterhead, source: "api" } : { data: slip, source: "api" });
+  }
+
+  it("DETAIL-02: prints the tenant's own organisation, department, DDO and address -- and never a platform name or 'Government of India'", async () => {
+    mockApi(baseSlip(), LH);
+    renderPage(await SalarySlipPage({ params: { id: "slip-1" } }));
+    expect(screen.getByText("Directorate of Urban Affairs")).toBeInTheDocument();
+    expect(screen.getByText("Accounts Wing")).toBeInTheDocument();
+    expect(screen.getByText("DDO: R. Menon (DDO-114)")).toBeInTheDocument();
+    expect(screen.getByText("Sector 5, Civil Lines")).toBeInTheDocument();
+    expect(screen.queryByText(/Government of India/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/CivitasOne/)).not.toBeInTheDocument();
+  });
+
+  it("DETAIL-02: two tenants print their own names (tenant B differs from tenant A)", async () => {
+    mockApi(baseSlip(), { ...LH, orgName: "Nagar Palika Parishad, Rewa", department: null, ddoName: null, ddoCode: null, address: null, showSignatureBlock: false });
+    renderPage(await SalarySlipPage({ params: { id: "slip-1" } }));
+    expect(screen.getByText("Nagar Palika Parishad, Rewa")).toBeInTheDocument();
+    expect(screen.queryByText("Directorate of Urban Affairs")).not.toBeInTheDocument();
+    expect(screen.queryByText(/^DDO:/)).not.toBeInTheDocument();
+  });
+
+  it("DETAIL-02: with no letterhead configured the slip prints no authority line at all", async () => {
+    mockApi(baseSlip(), null);
+    const { container } = renderPage(await SalarySlipPage({ params: { id: "slip-1" } }));
+    expect(container.querySelector(".slip-letterhead")).toBeNull();
+    expect(screen.queryByText(/Government of India|CivitasOne|HR Management System/)).not.toBeInTheDocument();
+    expect(screen.getByText(/system-generated salary slip/)).toBeInTheDocument();
+  });
+
+  it("DETAIL-02: a configured signature block replaces the 'no signature required' footer", async () => {
+    mockApi(baseSlip(), LH);
+    renderPage(await SalarySlipPage({ params: { id: "slip-1" } }));
+    expect(screen.getByText("Drawing & Disbursing Officer")).toBeInTheDocument();
+    expect(screen.queryByText(/No signature required/)).not.toBeInTheDocument();
+  });
+
+  it("DETAIL-02: only payroll_admin / super_admin get the letterhead editor", async () => {
+    mockApi(baseSlip(), LH);
+    const first = renderPage(await SalarySlipPage({ params: { id: "slip-1" } }));
+    expect(screen.getByText("Slip letterhead (issuing organisation)")).toBeInTheDocument();
+    first.unmount();
+    getSessionRolesMock.mockReturnValue(["hr_admin"]);
+    renderPage(await SalarySlipPage({ params: { id: "slip-1" } }));
+    expect(screen.queryByText("Slip letterhead (issuing organisation)")).not.toBeInTheDocument();
+  });
+
+  // ── GAP-PAYROLL-SALARY-SLIPS-DETAIL-04: header actions are PageHeader's, not a hand-built row ──
+  it("DETAIL-04: the dashboard link and Print button sit inside the page header's actions", async () => {
+    mockApi(baseSlip(), null);
+    const { container } = renderPage(await SalarySlipPage({ params: { id: "slip-1" } }));
+    const header = container.querySelector("header, .ph, [class*='page-header']") ?? container;
+    const link = screen.getByRole("link", { name: "Dashboard View" });
+    const print = screen.getByText("Print / Save PDF").closest("button")!;
+    expect(header.contains(link)).toBe(true);
+    expect(link.parentElement).toBe(print.parentElement);
+    // the old hand-built flex row is gone
+    expect(container.querySelector('div[style*="justify-content: space-between"][style*="margin-bottom: 16px"]')).toBeNull();
   });
 });

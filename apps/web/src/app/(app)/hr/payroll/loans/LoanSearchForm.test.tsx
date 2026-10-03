@@ -10,9 +10,9 @@ vi.mock("next/navigation", () => ({
 
 const EMP_ID = "11111111-1111-4111-8111-111111111111";
 const searchEmployeesMock = vi.fn();
-vi.mock("@/lib/entityAdapters/employee", () => ({
-  searchEmployees: (...a: unknown[]) => searchEmployeesMock(...a),
-  resolveEmployees: vi.fn(async () => []),
+vi.mock("@/lib/entityAdapters/payrollEmployee", () => ({
+  searchPayrollEmployees: (...a: unknown[]) => searchEmployeesMock(...a),
+  resolvePayrollEmployees: vi.fn(async () => []),
 }));
 
 import { LoanSearchForm } from "./LoanSearchForm";

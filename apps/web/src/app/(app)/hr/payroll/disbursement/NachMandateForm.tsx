@@ -7,7 +7,7 @@ import { browserJson, browserFetch } from "@/lib/api/browserClient";
 import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
 import { formatMoney } from "@/lib/formatters";
-import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
+import { searchPayrollEmployees, resolvePayrollEmployees } from "@/lib/entityAdapters/payrollEmployee";
 
 type MandateResult = { umrn?: string; status?: string; message?: string } & Record<string, unknown>;
 
@@ -100,7 +100,7 @@ export function NachMandateForm() {
   }
 
   async function searchAndRemember(query: string, signal: AbortSignal): Promise<EntityOption[]> {
-    const options = await searchEmployees(query, signal);
+    const options = await searchPayrollEmployees(query, signal);
     for (const o of options) employeeLabels.current.set(o.id, o.label);
     return options;
   }
@@ -189,7 +189,7 @@ export function NachMandateForm() {
                 setEmployeeRef(Array.isArray(v) ? v[0] ?? null : v);
               }}
               search={searchAndRemember}
-              resolve={resolveEmployees}
+              resolve={resolvePayrollEmployees}
               placeholder={t("employeePlaceholder")}
               noResultsText={t("employeeNoResults")}
               searchingText={t("employeeSearching")}

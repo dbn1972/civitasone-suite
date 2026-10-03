@@ -5,6 +5,7 @@
  *   GET  /v1/payroll/disbursement/transfers                  list (paginated, run/status filters)
  *   POST /v1/payroll/disbursement/transfers/:id/retry        new pending attempt for a failed/returned row
  *   POST /v1/payroll/disbursement/transfers/:id/reconcile    manual outcome for a non-NACH 'sent' row
+ *   POST /v1/payroll/disbursement/transfers/:id/reveal-account  audited reveal of the full beneficiary account
  *
  * Mutations follow this service's CQRS boundary: the route validates and
  * answers 404/409 synchronously, then publishes a command; consumer.ts does
@@ -16,17 +17,24 @@
  * credit feed, so their rows stay 'sent' until a payroll admin reconciles them
  * here (audited, with a reason). NACH rows are settled by the return file.
  *
- * The full account number is never stored or returned: rows carry only the
- * last 4, surfaced as `accountNumberMasked` ("XXXX1234").
+ * The full account number is never stored or returned by the list: rows carry
+ * only the last 4, surfaced as `accountNumberMasked` ("XXXX1234"). The ONLY way
+ * to see the full number is the reveal endpoint (GAP-PAYROLL-DISBURSEMENT-01):
+ * payroll roles only, a reason is mandatory, and the audit event is published
+ * BEFORE the number is returned -- if the audit cannot be queued the request
+ * fails and nothing is revealed.
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import { and, desc, eq, sql, type SQL } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import { payrollRuns } from "../payroll/schema.js";
 import { disbursementTransfers, TRANSFER_STATUSES, type DisbursementTransferRow } from "./schema.js";
 import { requestTransferReconcile, requestTransferRetry, retryRequestHash, retryTransferId } from "./commands.js";
+import { loadBeneficiaryMaster } from "../bank-transfer/beneficiaries.js";
+import { queue } from "../../shared/infra.js";
 
 /** Mirrors the page gate (PAYROLL_ADMIN_ROLES in apps/web roleGuard.ts) and bank-file's PAYROLL_ROLES. */
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
@@ -47,6 +55,12 @@ const idParamSchema = z.object({ id: z.string().uuid() });
 const reasonSchema = z.string().trim().min(10, "reason must be at least 10 characters").max(500);
 
 const retryBodySchema = z.object({ reason: reasonSchema }).strict();
+
+const revealBodySchema = z.object({ reason: reasonSchema }).strict();
+
+const REVEAL_AUDIT_TOPIC = "audit.event.record";
+/** How long the web client keeps a revealed number on screen (informational; the server stores nothing). */
+export const REVEAL_VISIBLE_SECONDS = 30;
 
 const idempotencyKeySchema = z.string().trim().min(8).max(128);
 
@@ -241,4 +255,57 @@ export async function disbursementTransferRoutes(app: FastifyInstance): Promise<
       data: { id, status: "accepted", outcome: body.outcome, correlationId: ctx.correlationId },
     });
   });
+  /**
+   * Audited reveal of one transfer's full beneficiary account number. The
+   * number is read from the same master the bank file was built from (HRMS
+   * employee master / pensioner master) at request time -- the ledger itself
+   * only ever holds the last 4. 409 BENEFICIARY_CHANGED when the account on
+   * file no longer ends in the digits that were put in the file, so a
+   * reconciling officer is never shown a different account than the one paid.
+   */
+  app.post("/v1/payroll/disbursement/transfers/:id/reveal-account", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, PAYROLL_ROLES);
+    const { id } = idParamSchema.parse(req.params);
+    const { reason } = revealBodySchema.parse(req.body ?? {});
+    const t = disbursementTransfers;
+
+    const row = (await scopedRead((tx) => tx.select().from(t)
+      .where(and(eq(t.id, id), eq(t.tenantId, ctx.tenantId))).limit(1)))[0];
+    if (!row) throw new HttpError(404, "NOT_FOUND", "transfer not found");
+    const run = (await scopedRead((tx) => tx.select().from(payrollRuns)
+      .where(and(eq(payrollRuns.id, row.runId), eq(payrollRuns.tenantId, ctx.tenantId))).limit(1)))[0];
+    if (!run) throw new HttpError(404, "NOT_FOUND", "payroll run not found");
+
+    const master = await loadBeneficiaryMaster(ctx.tenantId, run, scopedRead);
+    const account = master.get(row.employeeId)?.bankAccountNo ?? null;
+    if (!account) throw new HttpError(404, "ACCOUNT_NOT_ON_FILE", "no bank account is on file for this beneficiary");
+    // No recorded tail means nothing proves this is the account that was paid,
+    // so never reveal an unverified number.
+    if (!row.accountLast4) {
+      throw new HttpError(409, "ACCOUNT_UNVERIFIABLE",
+        "this transfer has no recorded account tail, so the account on file cannot be verified against it");
+    }
+    if (!account.endsWith(row.accountLast4)) {
+      throw new HttpError(409, "BENEFICIARY_CHANGED",
+        "the bank account on file no longer matches the account this payment was made to");
+    }
+
+    // Audit first: a reveal that cannot be recorded does not happen.
+    await queue.publish(REVEAL_AUDIT_TOPIC, {
+      messageId: randomUUID(),
+      type: REVEAL_AUDIT_TOPIC,
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+      payload: {
+        service: "payroll", action: "bank_account_revealed", resourceType: "disbursement_transfer", resourceId: id,
+        outcome: "success",
+        // The audit row names the beneficiary and the purpose, never the number.
+        detail: { employeeId: row.employeeId, runId: row.runId, reason, last4: row.accountLast4 },
+      },
+    });
+    return reply
+      .header("cache-control", "no-store")
+      .send({ data: { accountNumber: account, ifsc: row.ifsc, visibleSeconds: REVEAL_VISIBLE_SECONDS } });
+  });
+
 }

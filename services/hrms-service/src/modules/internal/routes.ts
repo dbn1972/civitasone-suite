@@ -11,6 +11,7 @@ import { loadTypeResolver, loadTypeCategoryResolver, attendanceLopApplies } from
 import { loadPayProfileFeedInputs } from "../pay-profile/repo.js";
 import { buildEmployeePayFeed } from "../pay-profile/feed.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
+import { completedYearsOfService, totalLeaveBalanceDays } from "../employee/fnf-service-snapshot.js";
 
 const INTERNAL_ROLES = ["super_admin", "payroll_admin", "hr_admin"];
 
@@ -307,10 +308,25 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     const { scopedRead } = await import("../../shared/db.js");
     const { hrmsEmployees, hrmsDepartments } = await import("../employee/schema.js");
     const { eq, and } = await import("drizzle-orm");
+    // GAP-PAYROLL-LOANS-01: optional server-side filters so payroll's name
+    // lookup is not limited to the first 2000 rows of a large tenant. Both are
+    // additive; with neither the response is exactly what it always was.
+    const f = z.object({ q: z.string().trim().max(100).optional(), ids: z.string().max(2000).optional() }).parse(req.query ?? {});
+    const { ilike, inArray, or } = await import("drizzle-orm");
+    const conds = [eq(hrmsEmployees.tenantId, ctx.tenantId)];
+    if (f.q) {
+      const like = `%${f.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+      conds.push(or(ilike(hrmsEmployees.fullName, like), ilike(hrmsEmployees.employeeNo, like))!);
+    }
+    if (f.ids) {
+      const idList = f.ids.split(",").map((s) => s.trim()).filter((s) => z.string().uuid().safeParse(s).success).slice(0, 50);
+      conds.push(inArray(hrmsEmployees.id, idList.length > 0 ? idList : ["00000000-0000-0000-0000-000000000000"]));
+    }
     const employees = await scopedRead((tx) =>
       tx.select({ id: hrmsEmployees.id, fullName: hrmsEmployees.fullName, employeeNo: hrmsEmployees.employeeNo, departmentId: hrmsEmployees.departmentId })
         .from(hrmsEmployees)
-        .where(eq(hrmsEmployees.tenantId, ctx.tenantId))
+        .where(and(...conds))
+        .orderBy(hrmsEmployees.fullName, hrmsEmployees.id)
         .limit(2000),
     );
     const deptIds = [...new Set(employees.map((e) => e.departmentId))];
@@ -323,6 +339,30 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     // can show a real code instead of a fabricated UUID prefix. Additive --
     // every existing caller ignores unknown fields.
     return reply.send(employees.map((e) => ({ id: e.id, fullName: e.fullName, employeeNo: e.employeeNo, departmentName: deptMap.get(e.departmentId) ?? "" })));
+  });
+
+  // GAP-PAYROLL-FNF-03: HR-record-derived F&F inputs (completed years of
+  // service, leave balance) so payroll-service can hold a compute request to
+  // them server-side instead of trusting what the browser sent. Same formulas
+  // as the F&F calculator (employee/fnf-service-snapshot.ts). Read-only.
+  app.get("/v1/hrms/internal/fnf-service-snapshot", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, INTERNAL_ROLES);
+    const q = z.object({ employeeId: z.string().uuid(), separationDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.query ?? {});
+    const { scopedRead } = await import("../../shared/db.js");
+    const { hrmsEmployees } = await import("../employee/schema.js");
+    const { hrmsLeaveAllocs } = await import("../leave/schema.js");
+    const { eq, and } = await import("drizzle-orm");
+    const emp = (await scopedRead((tx) => tx.select({ dateOfJoining: hrmsEmployees.dateOfJoining }).from(hrmsEmployees)
+      .where(and(eq(hrmsEmployees.id, q.employeeId), eq(hrmsEmployees.tenantId, ctx.tenantId))).limit(1)))[0];
+    if (!emp) throw new HttpError(404, "NOT_FOUND", "employee not found");
+    const allocations = await scopedRead((tx) => tx.select({ balanceDays: hrmsLeaveAllocs.balanceDays, balanceDaysExact: hrmsLeaveAllocs.balanceDaysExact }).from(hrmsLeaveAllocs)
+      .where(and(eq(hrmsLeaveAllocs.tenantId, ctx.tenantId), eq(hrmsLeaveAllocs.employeeId, q.employeeId))));
+    return reply.send({
+      employeeId: q.employeeId,
+      completedYears: completedYearsOfService(emp.dateOfJoining, q.separationDate),
+      leaveBalanceDays: totalLeaveBalanceDays(allocations),
+    });
   });
 
   // GAP-PAYROLL-NPS-02: payroll-service's NPS statutory ledger is per

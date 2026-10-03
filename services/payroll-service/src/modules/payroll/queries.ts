@@ -141,6 +141,16 @@ export async function getRun(id: string, tenantId: string): Promise<PayrollRunRo
  * always Rs.0, and a healthy run's total is always the true sum of its own
  * slip rows, not a possibly-stale column.
  */
+/** Integer-paise run totals as strings (see listRuns). `deductions` is floored at 0 like the rupee field. */
+export function minorTotals(grossMinor: bigint, netMinor: bigint) {
+  const ded = grossMinor - netMinor;
+  return {
+    grossMinor: grossMinor.toString(),
+    netMinor: netMinor.toString(),
+    deductionsMinor: (ded > 0n ? ded : 0n).toString(),
+  };
+}
+
 export async function listRuns(tenantId: string, limit: number, month?: string) {
   const rows = await repo.listRunsByTenant(tenantId, limit, month);
   const runIds = rows.map((r) => r.id);
@@ -155,6 +165,11 @@ export async function listRuns(tenantId: string, limit: number, month?: string) 
       grossAmount: Number(agg.grossMinor) / 100,
       netAmount: Number(agg.netMinor) / 100,
       deductions: Math.max(0, Number(agg.grossMinor - agg.netMinor) / 100),
+      // GAP-PAYROLL-DISBURSEMENT-08: the authoritative integer-paise totals
+      // (strings, bigint-safe) next to the rupee numbers above, so money
+      // screens can render with formatMoney instead of re-deriving paise
+      // from a float. Additive: the rupee fields are unchanged.
+      ...minorTotals(agg.grossMinor, agg.netMinor),
       status: mapRunStatus(r.status),
       // payroll-critical fix: surface why, for a failed run, alongside the
       // now-distinct 'failed' status above (migration 0046). null for every
@@ -185,6 +200,7 @@ export async function getRunDetail(id: string, tenantId: string) {
     grossAmount: Number(grossMinor) / 100,
     netAmount: Number(netMinor) / 100,
     deductions: Math.max(0, Number(grossMinor - netMinor) / 100),
+    ...minorTotals(grossMinor, netMinor),
     status: mapRunStatus(run.status),
     // payroll-critical fix: see the matching field in listRuns above.
     failureReason: run.status === "failed" ? (run.lastError ?? null) : null,
