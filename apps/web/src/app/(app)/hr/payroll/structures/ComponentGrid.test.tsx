@@ -59,16 +59,31 @@ describe("ComponentGrid", () => {
   // component-code substring, presented with no source or date, and DA is a
   // rate FinMin revises quarterly. No API field backs a per-component
   // formula, so it always reads "not configured" now.
-  it("says the calculation rule isn't shown (not 'not configured') instead of a hard-coded rate, even for a DA/HRA code", () => {
+  it("with no configured rule says so, and never shows a hard-coded rate, even for a DA/HRA code", () => {
     renderGrid([
       { id: "c1", code: "DA", name: "Dearness Allowance", componentType: "earning", isTaxable: true },
       { id: "c2", code: "HRA", name: "House Rent Allowance", componentType: "allowance", isTaxable: true },
     ]);
     const formulaButtons = screen.getAllByRole("button", { name: /calculation formula/i });
     fireEvent.focus(formulaButtons[0]);
-    expect(screen.getByRole("tooltip")).toHaveTextContent("Calculation rule isn't shown on this page");
-    expect(screen.getByRole("tooltip")).not.toHaveTextContent(/not configured/i);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("No calculation rule is configured for this component");
     expect(screen.queryByText(/currently 46%/)).not.toBeInTheDocument();
     expect(screen.queryByText(/27%, Y=18%, Z=9%/)).not.toBeInTheDocument();
+  });
+
+  // GAP-PAYROLL-STRUCTURES-03: the tooltip shows only what the API returns for THIS component.
+  it("shows the configured rule from the API (pct of basic / fixed / formula) and labels it as configured, not statutory", () => {
+    renderGrid([
+      { id: "c1", code: "HRA", name: "House Rent Allowance", componentType: "allowance", isTaxable: true, pctOfBasic: "24.00", fixedMinor: null, formula: null },
+      { id: "c2", code: "CONV", name: "Conveyance", componentType: "allowance", isTaxable: false, pctOfBasic: null, fixedMinor: "160000", formula: "MIN(basic*0.1, 2500)" },
+    ]);
+    const buttons = screen.getAllByRole("button", { name: /calculation formula/i });
+    fireEvent.focus(buttons[0]);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Calculated as 24% of basic");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("not a statutory rate");
+    fireEvent.blur(buttons[0]);
+    fireEvent.focus(buttons[1]);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Fixed amount ₹1,600.00");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Formula: MIN(basic*0.1, 2500)");
   });
 });

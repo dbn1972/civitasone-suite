@@ -16,6 +16,9 @@ export interface SubmitDeclarationBody {
   prevEmployerSalaryMinor?: number | undefined;
   otherSourcesIncomeMinor?: number | undefined;
   perquisitesMinor?: number | undefined;
+  landlordName?: string | undefined;
+  /** PAN sealed (encryptPii) by the route; never cleartext on the queue. */
+  landlordPanSealed?: string | undefined;
 }
 
 export interface UpsertExemptionCeilingBody {
@@ -80,4 +83,28 @@ export async function upsertPerquisiteComponent(
     payload: { id, ...body },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function setDeclarationWindow(
+  ctx: RequestContext,
+  body: { fy: string; opensOn?: string | null | undefined; closesOn: string; changeReason: string },
+): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.taxDeclarationWindowSet, {
+    messageId: id, type: COMMANDS.taxDeclarationWindowSet,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, ...body },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function deletePerquisiteComponent(ctx: RequestContext, body: { id: string; reason: string }): Promise<Accepted> {
+  await queue.publish(COMMANDS.perquisiteComponentDelete, {
+    // fresh id: the conditional DELETE is already idempotent, and a deterministic id could swallow a retry
+    messageId: randomUUID(),
+    type: COMMANDS.perquisiteComponentDelete,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { tenantId: ctx.tenantId, ...body },
+  });
+  return { id: body.id, status: "accepted", correlationId: ctx.correlationId };
 }

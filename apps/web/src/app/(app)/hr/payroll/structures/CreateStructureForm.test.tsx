@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
@@ -8,7 +8,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: refreshMock }),
 }));
 
-import { CreateStructureForm } from "./CreateStructureForm";
+import { CreateStructureForm, CREATE_REFRESH_DELAY_MS } from "./CreateStructureForm";
 
 // UX-017: CreateStructureForm now reads its copy through next-intl
 // (useTranslations("createStructureForm")), so every render needs a real
@@ -65,5 +65,44 @@ describe("CreateStructureForm", () => {
       expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
     expect(screen.queryByText(/API_ERROR: 500/)).not.toBeInTheDocument();
+  });
+});
+
+// GAP-PAYROLL-STRUCTURES-05: creation is async (202 + consumer): refresh once more after it settles.
+describe("CreateStructureForm delayed refresh", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    refreshMock.mockReset();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("refreshes immediately and once more after CREATE_REFRESH_DELAY_MS", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ id: "s1", status: "accepted" }), { status: 202 }));
+    renderForm();
+    fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: "Level 10" } });
+    fireEvent.click(screen.getByText("Create Structure"));
+    await waitFor(() => expect(screen.getByText("Create this pay structure?")).toBeInTheDocument());
+    // Fake timers only from here, so the dialog/promise plumbing above runs on real time.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    fireEvent.click(screen.getByText("Create structure"));
+    await vi.waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(CREATE_REFRESH_DELAY_MS + 50);
+    expect(refreshMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not refresh again after unmount (no timer leak)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ id: "s1", status: "accepted" }), { status: 202 }));
+    const { unmount } = render(
+      <NextIntlClientProvider locale="en" messages={enMessages}><CreateStructureForm /></NextIntlClientProvider>,
+    );
+    fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: "Level 11" } });
+    fireEvent.click(screen.getByText("Create Structure"));
+    await waitFor(() => expect(screen.getByText("Create this pay structure?")).toBeInTheDocument());
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    fireEvent.click(screen.getByText("Create structure"));
+    await vi.waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1));
+    unmount();
+    await vi.advanceTimersByTimeAsync(CREATE_REFRESH_DELAY_MS + 50);
+    expect(refreshMock).toHaveBeenCalledTimes(1);
   });
 });

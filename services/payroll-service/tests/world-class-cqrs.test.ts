@@ -92,6 +92,9 @@ const mockPublish = vi.fn().mockResolvedValue(undefined);
 // HrmsUnavailableError (502) before mockPublish is ever invoked.
 vi.mock("../src/shared/hrms-client.js", () => ({
   verifyEmployeeExists: vi.fn(async () => true),
+  // computeBonus verifies the submitted basic against the HRMS basic (review fix): same 80,000 the tests submit.
+  fetchPayrollInput: vi.fn(async () => ({ month: "2026-10", employees: [{ id: EMPLOYEE, basicMinor: "8000000" }], lopDays: {}, overtimeHours: {} })),
+  HrmsUnavailableError: class HrmsUnavailableError extends Error {},
 }));
 
 vi.mock("../src/shared/infra.js", () => ({

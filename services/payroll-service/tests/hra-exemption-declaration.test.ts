@@ -163,7 +163,7 @@ describe("BUG-HRA-1 — old regime: declared rent now produces a real Sec 10(13A
           method: "POST",
           url: "/v1/payroll/tax-declarations",
           headers: { authorization: `Bearer ${token(EMPLOYEE_LOGIN)}` },
-          payload: { fy: FY, regime: "old", section80c: 0, section80d: 0, otherDeductions: 0, rentPaidMinor: RENT_PAID_MINOR },
+          payload: { fy: FY, regime: "old", section80c: 0, section80d: 0, otherDeductions: 0, rentPaidMinor: RENT_PAID_MINOR, landlordPan: "ABCDE1234F" },
         });
         expect(submit.statusCode).toBe(202);
 

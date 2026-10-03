@@ -7,10 +7,11 @@ import { hasAnyRole, TAX_PROOF_VIEWER_ROLES } from "@/lib/payroll/taxProofs";
 import { TaxDeclarationForm } from "./TaxDeclarationForm";
 import { TaxProofsPanel } from "./TaxProofsPanel";
 
-export const metadata = {
-  title: "Tax Declaration",
-  description: "Submit self-declared income tax investments (80C/80D/HRA) and upload supporting documents",
-};
+// GAP-PAYROLL-TAX-DECLARATION-02: metadata is translated (it used to be a hard-coded English constant).
+export async function generateMetadata() {
+  const t = await getTranslations("taxDeclaration");
+  return { title: t("title"), description: t("metaDescription") };
+}
 
 export default async function TaxDeclarationPage() {
   const t = await getTranslations("taxDeclaration");

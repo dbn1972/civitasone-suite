@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { scopeEmployeeId, staffRolesOf } from "../../shared/employee-scope.js";
+import { scopeEmployeeId, staffRolesOf, isRouteStaff } from "../../shared/employee-scope.js";
 import type { RequestContext } from "@civitasone/types";
 import { eq, and, inArray } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
@@ -418,6 +418,7 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
         .sort((a, b) => a.nature.localeCompare(b.nature))
         .map((c, i) => ({
           sl: i + 1,
+          id: c.id,
           nature: c.nature,
           description: c.description,
           valueByEmployerMinor: Number(c.valueByEmployerMinor),
@@ -434,6 +435,30 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
       ];
       totalPerqMinor = perqMinor;
       sourceNote = "Aggregate perquisite from tax declaration (no itemised components ingested).";
+    }
+
+    // GAP-PAYROLL-STATUTORY-PERQUISITE-02: a staff lookup of someone's Form 12BA
+    // (PAN + perquisites) is audited with actor, employee and FY. Published
+    // before the body is sent, so a lookup that cannot be audited is not
+    // delivered. An employee reading their own statement is not audited.
+    if (isRouteStaff(ctx, READER_STAFF_ROLES)) {
+      await queue.publish(AUDIT_TOPIC, {
+        messageId: randomUUID(),
+        type: AUDIT_TOPIC,
+        tenantId: ctx.tenantId,
+        actorId: ctx.actorId,
+        correlationId: ctx.correlationId,
+        schemaVersion: "1.0",
+        payload: {
+          service: "payroll",
+          action: "view_form12ba",
+          resourceType: "form12ba",
+          resourceId: employeeId,
+          outcome: "success",
+          fy,
+          componentCount: comps.length,
+        },
+      });
     }
 
     return reply.send({
@@ -560,6 +585,23 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
       acceptedResponseSchema,
       await taxCommands.upsertPerquisiteComponent(ctx, b),
     );
+  });
+
+  /**
+   * POST /v1/payroll/statutory/perquisite-components/:id/delete
+   * GAP-PAYROLL-STATUTORY-PERQUISITE-06: remove a mistaken component (reason
+   * required; the consumer audits the deleted values). To CORRECT an amount,
+   * re-save the same nature through POST /perquisite-components (upsert).
+   */
+  app.post("/v1/payroll/statutory/perquisite-components/:id/delete", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, STATUTORY_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const { reason } = z.object({ reason: z.string().trim().min(5).max(500) }).parse(req.body ?? {});
+    const exists = await scopedRead((tx) => tx.select({ id: perquisiteComponents.id }).from(perquisiteComponents)
+      .where(and(eq(perquisiteComponents.tenantId, ctx.tenantId), eq(perquisiteComponents.id, id))).limit(1));
+    if (exists.length === 0) throw new HttpError(404, "NOT_FOUND", "perquisite component not found");
+    return sendAccepted(reply, acceptedResponseSchema, await taxCommands.deletePerquisiteComponent(ctx, { id, reason }));
   });
 
   /**

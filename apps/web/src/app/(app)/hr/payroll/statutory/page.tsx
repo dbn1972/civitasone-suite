@@ -112,13 +112,9 @@ export default async function StatutoryHubPage() {
       { title: t("tilePerquisiteTitle"), href: "/hr/payroll/statutory/perquisite", description: t("tilePerquisiteDescription"), icon: "📜" },
       { title: t("tileGpfTitle"), href: "/hr/payroll/gpf", description: t("tileGpfDescription"), icon: "📒" },
       { title: t("tileNpsTitle"), href: "/hr/payroll/nps", description: t("tileNpsDescription"), icon: "🏛️" },
-      // GAP-PAYROLL-STATUTORY-02 (partial): the hub omitted a TDS Returns
-      // (24Q/26Q) tile entirely -- it is reachable from the HR hub
-      // (hr/page.tsx) but not from this statutory hub. Adding the missing
-      // tile is additive and uncontroversial; the separate question of
-      // whether /hr/payroll/statutory/gpf and /nps (orphaned twins of the
-      // two routes linked above) should be deleted or redirected is a
-      // canonical-route decision left OPEN -- see the PR description.
+      // GAP-PAYROLL-STATUTORY-02: TDS Returns (24Q/26Q) tile. The orphaned
+      // /statutory/gpf and /statutory/nps twins redirect to the canonical
+      // /hr/payroll/gpf and /hr/payroll/nps linked above.
       { title: t("tileTdsReturnsTitle"), href: "/hr/payroll/returns", description: t("tileTdsReturnsDescription"), icon: "📄" },
     ];
 

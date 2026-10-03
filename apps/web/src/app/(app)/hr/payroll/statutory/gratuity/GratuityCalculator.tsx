@@ -4,13 +4,18 @@ import React, { useState } from "react";
 import { useTranslations } from "next-intl";
 import { formatMoney } from "@/lib/formatters";
 import { rupeesToMinorString } from "@/lib/money";
-import { completedServiceYears } from "./serviceYears";
-import { GRATUITY_CEILING_PAISE, GRATUITY_DAYS, WORKING_DAYS_PER_MONTH } from "./constants";
+import { GRATUITY_DAYS, WORKING_DAYS_PER_MONTH } from "./constants";
+import { DEFAULT_GRATUITY_RULE, estimateGratuity, type GratuityRuleView } from "./gratuityEstimate";
 
 /** Upper bound on service years the estimator accepts (no real career exceeds it). */
 const MAX_SERVICE_YEARS = 60;
 
-export function GratuityCalculator() {
+/**
+ * `rule` is the tenant's gratuity rule set in force (GAP-PAYROLL-STATUTORY-
+ * GRATUITY-01/04): Payment of Gratuity Act (default) or CCS DCRG, with its
+ * minimum service and ceiling. Omitted => the Payment of Gratuity Act default.
+ */
+export function GratuityCalculator({ rule = DEFAULT_GRATUITY_RULE }: { rule?: GratuityRuleView } = {}) {
   const t = useTranslations("gratuityCalculator");
   const [years, setYears] = useState("");
   const [monthlySalary, setMonthlySalary] = useState(""); // in rupees (as string)
@@ -19,8 +24,6 @@ export function GratuityCalculator() {
   // BigInt(Infinity) throws) and anything beyond a plausible career.
   const parsedYears = parseFloat(years);
   const numYears = Number.isFinite(parsedYears) && parsedYears > 0 ? Math.min(parsedYears, MAX_SERVICE_YEARS) : 0;
-  // GAP-PAYROLL-STATUTORY-GRATUITY-03: a fraction over six months counts as a full year.
-  const completedYears = completedServiceYears(numYears);
 
   // GAP-PAYROLL-STATUTORY-GRATUITY-05 [HUMAN REVIEW: statutory compliance]:
   // integer-paise BigInt math via the shared rupeesToMinorString helper,
@@ -39,14 +42,21 @@ export function GratuityCalculator() {
   // mathematically-correct total by a few paise. perYearMinor below is a
   // display-only figure for the formula trace, deliberately NOT used to
   // derive gratuityRawMinor.
-  const gratuityRawMinor = (salaryMinor * BigInt(GRATUITY_DAYS) * BigInt(completedYears)) / BigInt(WORKING_DAYS_PER_MONTH);
-  const perYearMinor = (salaryMinor * BigInt(GRATUITY_DAYS)) / BigInt(WORKING_DAYS_PER_MONTH);
-  const ceilingMinor = BigInt(GRATUITY_CEILING_PAISE);
-  const gratuityMinor = gratuityRawMinor > ceilingMinor ? ceilingMinor : gratuityRawMinor;
-  const isCapped = gratuityRawMinor > ceilingMinor;
+  // GAP-PAYROLL-STATUTORY-GRATUITY-03/05: Payment-of-Gratuity-Act figures use
+  // the completed-years rule (a part year over six months counts) and a single
+  // final division; DCRG counts completed six-monthly periods. See
+  // gratuityEstimate.ts for the formulas and their citations.
+  const isDcrg = rule.ruleSet === "ccs_dcrg";
+  const est = estimateGratuity(rule, numYears, salaryMinor);
+  const completedYears = est.units;
+  const perYearMinor = est.perUnitMinor;
+  const gratuityRawMinor = est.rawMinor;
+  const ceilingMinor = est.ceilingMinor;
+  const gratuityMinor = est.minor;
+  const isCapped = est.capped;
   const numSalary = Number(salaryMinor) / 100;
-  const hasResult = numYears >= 5 && numSalary > 0;
-  const belowEligibility = numYears > 0 && numYears < 5;
+  const hasResult = numYears >= rule.minServiceYears && numSalary > 0;
+  const belowEligibility = numYears > 0 && numYears < rule.minServiceYears;
 
   return (
     <div
@@ -62,7 +72,7 @@ export function GratuityCalculator() {
         {t("heading")}
       </h3>
       <p style={{ margin: "0 0 10px", fontSize: 12, color: "var(--mut)" }}>
-        {t("description", { ceiling: formatMoney(GRATUITY_CEILING_PAISE) })} {t("roundingNote")}
+        {t(isDcrg ? "descriptionDcrg" : "description", { ceiling: formatMoney(Number(ceilingMinor)) })} {t(isDcrg ? "halfYearsNote" : "roundingNote")}
       </p>
       {/* GAP-PAYROLL-STATUTORY-GRATUITY-05: this calculator is a scratch
           estimator with no link to an actual employee record -- its figure
@@ -135,9 +145,18 @@ export function GratuityCalculator() {
             lineHeight: 1.7,
           }}
         >
-          = ({formatMoney(salaryMinor)} × {GRATUITY_DAYS}) / {WORKING_DAYS_PER_MONTH} × {t("yearsCount", { count: completedYears })}
-          <br />
-          = {formatMoney(perYearMinor)} × {completedYears}
+          {isDcrg ? (
+            <>
+              = {formatMoney(salaryMinor)} × 1/4 × {t("halfYearsCount", { count: completedYears })}
+              <br />= {formatMoney(perYearMinor)} × {completedYears}
+            </>
+          ) : (
+            <>
+              = ({formatMoney(salaryMinor)} × {GRATUITY_DAYS}) / {WORKING_DAYS_PER_MONTH} × {t("yearsCount", { count: completedYears })}
+              <br />
+              = {formatMoney(perYearMinor)} × {completedYears}
+            </>
+          )}
           <br />= {formatMoney(gratuityRawMinor)}
           {isCapped && ` ${t("cappedAtInline", { amount: formatMoney(ceilingMinor) })}`}
         </div>
@@ -159,6 +178,7 @@ export function GratuityCalculator() {
           {t.rich("belowEligibilityMessage", {
             strong: (chunks) => <strong>{chunks}</strong>,
             years: numYears,
+            min: rule.minServiceYears,
           })}
         </div>
       )}
@@ -187,7 +207,7 @@ export function GratuityCalculator() {
           </p>
           {isCapped && (
             <p style={{ margin: "6px 0 0", fontSize: 12, color: "var(--warn, #92400e)" }}>
-              {t("cappedNote", { amount: formatMoney(ceilingMinor) })}
+              {t(isDcrg ? "cappedNoteDcrg" : "cappedNote", { amount: formatMoney(ceilingMinor) })}
             </p>
           )}
         </div>

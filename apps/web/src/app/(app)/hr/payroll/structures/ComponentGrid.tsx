@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { useTranslations } from "next-intl";
+import { formatMoney } from "@/lib/formatters";
 
 interface ComponentRow {
   id: string;
@@ -10,6 +11,10 @@ interface ComponentRow {
   componentType: string;
   isTaxable: boolean;
   structureId?: string | null;
+  /** configured calculation rule (GAP-PAYROLL-STRUCTURES-03); all null = none configured */
+  formula?: string | null;
+  pctOfBasic?: string | number | null;
+  fixedMinor?: string | null;
 }
 
 interface ComponentGridProps {
@@ -90,6 +95,21 @@ function TypeBadge({ type }: { type: string }) {
   );
 }
 
+export type ComponentRule = Pick<ComponentRow, "formula" | "pctOfBasic" | "fixedMinor">;
+
+/**
+ * GAP-PAYROLL-STRUCTURES-03: only what the API returns for THIS component is
+ * described -- no rates of our own. Empty => nothing configured.
+ */
+export function describeRule(rule: ComponentRule): Array<{ kind: "rulePctOfBasic" | "ruleFixed" | "ruleFormula"; values: Record<string, string> }> {
+  const out: Array<{ kind: "rulePctOfBasic" | "ruleFixed" | "ruleFormula"; values: Record<string, string> }> = [];
+  const pct = rule.pctOfBasic == null || rule.pctOfBasic === "" ? null : String(Number(rule.pctOfBasic));
+  if (pct !== null && pct !== "NaN") out.push({ kind: "rulePctOfBasic", values: { pct } });
+  if (rule.fixedMinor != null && /^\d+$/.test(rule.fixedMinor)) out.push({ kind: "ruleFixed", values: { amount: formatMoney(Number(rule.fixedMinor)) } });
+  if (rule.formula && rule.formula.trim()) out.push({ kind: "ruleFormula", values: { formula: rule.formula.trim() } });
+  return out;
+}
+
 function TaxabilityBadge({ taxability }: { taxability: Taxability }) {
   const t = useTranslations("componentGrid");
   const s = TAXABILITY_STYLE[taxability];
@@ -109,8 +129,9 @@ function TaxabilityBadge({ taxability }: { taxability: Taxability }) {
 // formula / pct_of_basic / fixed_minor, but listComponents doesn't expose
 // them, so the tooltip says the rule "isn't shown on this page" -- not that
 // it isn't configured, which would invite needless reconfiguration.
-function FormulaTooltip({ code }: { code: string }) {
+function FormulaTooltip({ code, rule }: { code: string; rule: ComponentRule }) {
   const t = useTranslations("componentGrid");
+  const lines = describeRule(rule);
   const [visible, setVisible] = useState(false);
   return (
     <span style={{ position: "relative", display: "inline-block" }}>
@@ -160,7 +181,14 @@ function FormulaTooltip({ code }: { code: string }) {
             lineHeight: 1.5,
           }}
         >
-          {t("formulaNotConfigured")}
+          {lines.length === 0 ? (
+            t("formulaNotConfigured")
+          ) : (
+            <>
+              {lines.map((l) => <div key={l.kind}>{t(l.kind, l.values)}</div>)}
+              <div style={{ opacity: 0.75, marginTop: 4 }}>{t("ruleSourceNote")}</div>
+            </>
+          )}
         </div>
       )}
     </span>
@@ -275,7 +303,7 @@ export function ComponentGrid({ components }: ComponentGridProps) {
                     <TypeBadge type={c.componentType} />
                   </td>
                   <td style={{ padding: "10px 10px", textAlign: "center" }}>
-                    <FormulaTooltip code={c.code} />
+                    <FormulaTooltip code={c.code} rule={{ formula: c.formula ?? null, pctOfBasic: c.pctOfBasic ?? null, fixedMinor: c.fixedMinor ?? null }} />
                   </td>
                   <td style={{ padding: "10px 10px" }}>
                     <TaxabilityBadge taxability={taxability} />

@@ -8,8 +8,9 @@ import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { PermissionDenied } from "../../../../../_components/PermissionDenied";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
-import { PAYROLL_STATUTORY_ADMIN_ROLES } from "@/lib/auth/workRoles";
-import { GRATUITY_CEILING_PAISE } from "./constants";
+import { PAYROLL_CONFIG_ADMIN_ROLES, PAYROLL_STATUTORY_ADMIN_ROLES } from "@/lib/auth/workRoles";
+import { DEFAULT_GRATUITY_RULE, isGratuityRuleView, type GratuityRuleView } from "./gratuityEstimate";
+import { GratuityRuleForm } from "./GratuityRuleForm";
 
 type GratuityRow = {
   id: string;
@@ -32,6 +33,23 @@ async function getData(): Promise<LoaderResult<GratuityRow[]>> {
   });
 }
 
+/**
+ * GAP-PAYROLL-STATUTORY-GRATUITY-01/04: the rule set (Payment of Gratuity Act
+ * vs CCS DCRG), minimum service and ceiling come from the tenant's
+ * effective-dated rule in payroll-service. When the rule cannot be loaded the
+ * Payment of Gratuity Act default is shown and the page says so (never a
+ * silent assumption).
+ */
+async function getRule(): Promise<LoaderResult<GratuityRuleView>> {
+  return fetchJson<unknown, GratuityRuleView>("/api/v1/payroll/statutory/gratuity/rules", DEFAULT_GRATUITY_RULE, {
+    telemetryKey: "payroll.statutory.gratuity.rules",
+    mapResponse: (p) => {
+      const resolved = (p as { resolved?: unknown } | null)?.resolved;
+      return isGratuityRuleView(resolved) ? resolved : null;
+    },
+  });
+}
+
 export default async function GratuityPage() {
   const t = await getTranslations("gratuity");
   // GAP-PAYROLL-STATUTORY-GRATUITY-02: hr/layout.tsx admits employee/manager to every /hr/payroll/*
@@ -42,7 +60,11 @@ export default async function GratuityPage() {
   if (!roles.some((r) => PAYROLL_STATUTORY_ADMIN_ROLES.includes(r))) {
     return <PermissionDenied module="gratuity register" requiredRoles={PAYROLL_STATUTORY_ADMIN_ROLES} backHref="/hr/payroll/statutory" backLabel={t("errorBackLabel")} />;
   }
-  const result = await getData();
+  const [result, ruleResult] = await Promise.all([getData(), getRule()]);
+  // Defensive: only a well-formed rule is trusted, else the Payment of Gratuity Act default.
+  const rule = isGratuityRuleView(ruleResult.data) ? ruleResult.data : DEFAULT_GRATUITY_RULE;
+  const isDcrg = rule.ruleSet === "ccs_dcrg";
+  const canConfigure = roles.some((r) => (PAYROLL_CONFIG_ADMIN_ROLES as readonly string[]).includes(r));
   // GAP-PAYROLL-STATUTORY-GRATUITY-06: the register API now returns
   // employeeName (best-effort HRMS lookup, same as the GPF/NPS reports);
   // show it, falling back to the id only when HRMS had no name.
@@ -72,7 +94,7 @@ export default async function GratuityPage() {
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
-        subtitle={t("subtitle")}
+        subtitle={t(isDcrg ? "subtitleDcrg" : "subtitle")}
         back="/hr/payroll/statutory" backLabel={t("errorBackLabel")}
       />
       {/* GAP-PAYROLL-STATUTORY-GRATUITY-06: same load-failure signal as the
@@ -87,14 +109,20 @@ export default async function GratuityPage() {
         <StatCard icon="📅" iconBg="var(--panel)" label={t("statAvgYearsOfService")} value={errored ? "—" : avgYears} />
       </StatGrid>
 
-      <GratuityCalculator />
+      {ruleResult.source === "error" && (
+        <p role="status" className="pill warn" style={{ width: "fit-content", marginBottom: 12 }}>{t("ruleLoadFailed")}</p>
+      )}
+      <GratuityCalculator rule={rule} />
+      {canConfigure && <GratuityRuleForm currentRuleSet={rule.ruleSet} />}
 
       <Card title={t("registerCardTitle")}>
         {/* GAP-PAYROLL-STATUTORY-GRATUITY-04: the statutory ceiling was never
             shown next to the register's own amounts, only inside the
             calculator (and only when a result happened to be capped). */}
         <p style={{ margin: "0 0 12px", fontSize: 12, color: "var(--mut)" }}>
-          {t("ceilingNote", { amount: formatMoney(GRATUITY_CEILING_PAISE) })}
+          {isDcrg
+            ? t("ceilingNoteDcrg", { amount: formatMoney(Number(rule.ceilingMinor)), years: rule.minServiceYears })
+            : t("ceilingNote", { amount: formatMoney(Number(rule.ceilingMinor)) })}
         </p>
         {errored ? (
           <div className="pad">

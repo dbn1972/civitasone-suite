@@ -276,5 +276,11 @@ export async function listComponents(tenantId: string, limit: number) {
     componentType: c.componentType,
     isTaxable: c.isTaxable,
     structureId: c.structureId,
+    // GAP-PAYROLL-STRUCTURES-03: the component's CONFIGURED calculation rule,
+    // so the web tooltip shows what is actually configured instead of a
+    // hard-coded rate. null = no rule configured. fixedMinor is a digit string.
+    formula: c.formula ?? null,
+    pctOfBasic: c.pctOfBasic ?? null,
+    fixedMinor: c.fixedMinor != null ? c.fixedMinor.toString() : null,
   }));
 }

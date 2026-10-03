@@ -1,5 +1,8 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "../../../../_components/ds";
+import { ArrearsTable, type ArrearTableColumn, type ArrearTableRow } from "./ArrearsTable";
+import { ArrearPolicyCard } from "./ArrearPolicyCard";
+import { PAYROLL_ARREAR_DECIDER_ROLES, PAYROLL_CONFIG_ADMIN_ROLES } from "@/lib/auth/workRoles";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { getSessionRoles, PAYROLL_REPORT_ROLES } from "@/lib/auth/roleGuard";
 import { summarizeArrears } from "./arrearsSummary";
@@ -29,6 +32,7 @@ type ArrearApiRow = {
   status: string;
   source: string;
   created_at: string;
+  created_by?: string | null;
 } & Record<string, unknown>;
 
 type Row = {
@@ -40,6 +44,7 @@ type Row = {
   difference_minor: number | string;
   reason: string;
   status: string;
+  created_by?: string | null;
 } & Record<string, unknown>;
 
 type DisplayRow = Row & {
@@ -71,6 +76,7 @@ function mapArrearRow(r: ArrearApiRow): Row {
     difference_minor: r.difference_minor ?? 0,
     reason: r.reason ?? "—",
     status: r.status,
+    created_by: r.created_by ?? null,
   };
 }
 
@@ -83,6 +89,24 @@ async function getData(): Promise<LoaderResult<Row[]>> {
     },
   });
   return r;
+}
+
+/**
+ * GAP-PAYROLL-ARREARS-03: whether the tenant requires a second approver for
+ * manual arrears (default true) and the signed-in actor id (to hide Approve
+ * from an arrear's own creator). A failed read falls back to "required", the
+ * conservative reading.
+ */
+async function getApprovalPolicy(): Promise<{ required: boolean; actorId: string | null }> {
+  const r = await fetchJson<unknown, { required: boolean; actorId: string | null }>("/api/v1/payroll/arrears/approval-policy", { required: true, actorId: null }, {
+    telemetryKey: "payroll.arrears.approvalPolicy",
+    mapResponse: (p) => {
+      const o = p as { required?: unknown; actorId?: unknown } | null;
+      return o && typeof o.required === "boolean" ? { required: o.required, actorId: typeof o.actorId === "string" ? o.actorId : null } : null;
+    },
+  });
+  const d = r.data as { required?: unknown; actorId?: unknown } | null;
+  return d && typeof d.required === "boolean" ? { required: d.required, actorId: typeof d.actorId === "string" ? d.actorId : null } : { required: true, actorId: null };
 }
 
 // GAP-PAYROLL-ARREARS-01: component codes the payroll engine itself emits
@@ -111,20 +135,19 @@ export default async function ArrearsPage() {
       </div>
     );
   }
-  const { data: items, source } = await getData();
+  const canDecide = roles.some((r) => (PAYROLL_ARREAR_DECIDER_ROLES as readonly string[]).includes(r));
+  const canConfigure = roles.some((r) => (PAYROLL_CONFIG_ADMIN_ROLES as readonly string[]).includes(r));
+  const [{ data: items, source }, policy] = await Promise.all([
+    getData(),
+    canDecide ? getApprovalPolicy() : Promise.resolve({ required: true, actorId: null as string | null }),
+  ]);
   const errored = source === "error";
 
   // GAP-PAYROLL-ARREARS-01: one batched directory lookup for every employee on
   // the page (not one per row) -- names, not raw UUIDs.
   const names = await resolveEmployeeNames(items.map((i) => i.employee_id));
 
-  const columns: {
-    key: keyof DisplayRow & string;
-    label: string;
-    align?: "left" | "right";
-    cellType?: "status" | "amount";
-    sortable?: boolean;
-  }[] = [
+  const columns: ArrearTableColumn[] = [
     { key: "employee_label", label: t("colEmployee") },
     { key: "component_label", label: t("colArrearType") },
     // Display strings ("Jul 2026") would sort alphabetically; rows arrive
@@ -163,13 +186,14 @@ export default async function ArrearsPage() {
         <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statApprovedPaid")} value={errored ? null : items.filter((i) => i.status === "approved" || i.status === "paid").length} />
         <StatCard icon="💰" iconBg="var(--panel)" label={t("statTotalArrearsAmount")} value={errored ? null : formatMoney(outstandingNetMinor)} />
       </StatGrid>
+      {canConfigure && !errored && <ArrearPolicyCard required={policy.required} />}
       <Card title={t("registerCardTitle")}>
         {errored ? (
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "arrears" })} backHref="/hr/payroll" />
           </div>
         ) : (
-          <DataTable<DisplayRow> columns={columns} rows={rows} sortable filterable filterPlaceholder={t("filterPlaceholder")} pageSize={15} emptyIcon="📋" emptyTitle={t("emptyTitle")} emptyMessage={t("emptyMessage")} />
+          <ArrearsTable columns={columns} rows={rows as ArrearTableRow[]} canDecide={canDecide} actorId={policy.actorId} approvalRequired={policy.required} />
         )}
       </Card>
     </div>

@@ -6,13 +6,14 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
-import { PAYROLL_STATUTORY_ADMIN_ROLES } from "@/lib/auth/workRoles";
+import { PAYROLL_STATUTORY_ADMIN_ROLES, PAYROLL_STATUTORY_WRITE_ROLES } from "@/lib/auth/workRoles";
 import { EmployeeFyLookup } from "./EmployeeFyLookup";
 import { PerquisiteComponentForm } from "./PerquisiteComponentForm";
 import { PerquisiteTable } from "./PerquisiteTable";
 
 type PerquisiteLine = {
   sl: number;
+  id?: string;
   nature: string;
   description?: string;
   valueByEmployerMinor?: number;
@@ -44,7 +45,7 @@ async function getForm12BA(employeeId: string, fy: string): Promise<LoaderResult
   );
 }
 
-export default async function PerquisitePage({ searchParams }: { searchParams?: { employeeId?: string; fy?: string } }) {
+export default async function PerquisitePage({ searchParams }: { searchParams?: { employeeId?: string; fy?: string; edit?: string } }) {
   const t = await getTranslations("perquisite");
 
   // GAP-PAYROLL-STATUTORY-PERQUISITE-02/04: GET form12ba is self-service-
@@ -70,6 +71,8 @@ export default async function PerquisitePage({ searchParams }: { searchParams?: 
   const source = result?.source;
   const status = result?.status;
   const form12ba = result?.data ?? null;
+  // GAP-PAYROLL-STATUTORY-PERQUISITE-06: ?edit=<component id> re-opens the form on that line.
+  const editLine = searchParams?.edit ? form12ba?.perquisites.find((p) => p.id === searchParams.edit) : undefined;
   const perqCount = form12ba?.perquisites?.length ?? 0;
   const totalPerqMinor = form12ba?.totalPerquisitesMinor ?? 0;
   const maxPerqMinor = form12ba && form12ba.perquisites.length > 0
@@ -104,7 +107,17 @@ export default async function PerquisitePage({ searchParams }: { searchParams?: 
 
       <EmployeeFyLookup employeeId={employeeId ?? ""} fy={fy ?? ""} />
 
-      <PerquisiteComponentForm defaultEmployeeId={employeeId ?? ""} defaultFy={fy ?? ""} />
+      <PerquisiteComponentForm
+        key={editLine?.id ?? "new"}
+        defaultEmployeeId={employeeId ?? ""}
+        defaultFy={fy ?? ""}
+        editing={editLine ? {
+          nature: editLine.nature,
+          description: editLine.description ?? "",
+          valueByEmployerMinor: String(editLine.valueByEmployerMinor ?? 0),
+          amountRecoveredMinor: String(editLine.amountRecoveredMinor ?? 0),
+        } : undefined}
+      />
 
       <Card title={t("form12baCardTitle")}>
         {!canLookup ? (
@@ -153,7 +166,7 @@ export default async function PerquisitePage({ searchParams }: { searchParams?: 
                 <div style={{ fontSize: 15, fontWeight: 700 }}>{formatMoney(form12ba.totalPerquisitesMinor)}</div>
               </div>
             </div>
-            <PerquisiteTable perquisites={form12ba.perquisites} />
+            <PerquisiteTable perquisites={form12ba.perquisites} employeeId={form12ba.employee.employeeId || (employeeId ?? "")} fy={form12ba.fy} canModify={roles.some((r) => (PAYROLL_STATUTORY_WRITE_ROLES as readonly string[]).includes(r))} />
             <p style={{ fontSize: 12, color: "var(--ink2)" }}>{form12ba.note}</p>
           </div>
         )}

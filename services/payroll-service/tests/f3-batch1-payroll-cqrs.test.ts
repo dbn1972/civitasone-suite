@@ -51,6 +51,8 @@ const mockEnqueue = vi.fn().mockResolvedValue(undefined);
 const writes: Array<Record<string, unknown>> = [];
 
 const mockTx = {
+  // the perquisite consumer reads the row before/after the upsert for its audit
+  execute: async () => [],
   insert: () => ({
     values: (values: Record<string, unknown>) => {
       writes.push(values);

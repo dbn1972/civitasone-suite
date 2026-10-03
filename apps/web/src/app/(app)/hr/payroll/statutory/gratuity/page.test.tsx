@@ -92,3 +92,48 @@ describe("GratuityPage", () => {
     expect(screen.getByText(/couldn.t load the gratuity register/i)).toBeInTheDocument();
   });
 });
+
+// GAP-PAYROLL-STATUTORY-GRATUITY-01/04: the rule set comes from the tenant's rule, not a constant.
+describe("GratuityPage rule set (per edition)", () => {
+  const route = (rule: unknown, ruleSource = "api") => (path: string) =>
+    Promise.resolve(path.includes("/gratuity/rules") ? { data: rule, source: ruleSource } : { data: [], source: "api" });
+
+  beforeEach(() => {
+    getSessionRolesMock.mockReturnValue(["payroll_admin"]);
+    fetchJsonMock.mockReset();
+  });
+
+  it("a Govt Department (CCS DCRG) tenant sees the DCRG subtitle, ceiling and calculator wording, not the Payment of Gratuity Act", async () => {
+    fetchJsonMock.mockImplementation(route({ ruleSet: "ccs_dcrg", minServiceYears: 5, ceilingMinor: "250000000", source: "tenant" }));
+    renderPage(await GratuityPage());
+    expect(screen.getByText(/Death-cum-retirement gratuity \(DCRG\)/)).toBeInTheDocument();
+    expect(screen.getByText(/DCRG ceiling in force: ₹25,00,000.00/)).toBeInTheDocument();
+    expect(screen.getByText(/Government DCRG under the CCS \(Pension\) Rules/)).toBeInTheDocument();
+    expect(screen.queryByText(/Payment of Gratuity Act ceiling/)).not.toBeInTheDocument();
+  });
+
+  it("with the default rule it keeps the Payment of Gratuity Act wording and the Rs 20 lakh ceiling", async () => {
+    fetchJsonMock.mockImplementation(route({ ruleSet: "pog_act", minServiceYears: 5, ceilingMinor: "200000000", source: "default" }));
+    renderPage(await GratuityPage());
+    expect(screen.getByText(/Payment of Gratuity Act ceiling: ₹20,00,000.00/)).toBeInTheDocument();
+  });
+
+  it("a rule that cannot be loaded falls back to the default AND says so", async () => {
+    fetchJsonMock.mockImplementation(route({ ruleSet: "pog_act", minServiceYears: 5, ceilingMinor: "200000000", source: "default" }, "error"));
+    renderPage(await GratuityPage());
+    expect(screen.getByText(/Could not load this organisation's gratuity rule/)).toBeInTheDocument();
+  });
+
+  it("only payroll_admin / super_admin get the rule-set form", async () => {
+    fetchJsonMock.mockImplementation(route({ ruleSet: "pog_act", minServiceYears: 5, ceilingMinor: "200000000", source: "default" }));
+    renderPage(await GratuityPage());
+    expect(screen.getByText("Gratuity rule set")).toBeInTheDocument();
+  });
+
+  it("an officer reads the register but gets no rule-set form", async () => {
+    getSessionRolesMock.mockReturnValue(["payroll_officer"]);
+    fetchJsonMock.mockImplementation(route({ ruleSet: "pog_act", minServiceYears: 5, ceilingMinor: "200000000", source: "default" }));
+    renderPage(await GratuityPage());
+    expect(screen.queryByText("Gratuity rule set")).not.toBeInTheDocument();
+  });
+});
