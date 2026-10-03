@@ -15,6 +15,8 @@ import * as screeningRepo from "./screening-repo.js";
 import { resolveDeptScope } from "./dept-scope.js";
 import { tenantStorage } from "@civitasone/db";
 import { writeAuditLog } from "../../shared/audit.js";
+import * as editionPolicyRepo from "./edition-policy-repo.js";
+import { REQUISITION_REQUIRED_MESSAGE } from "./edition-policy.js";
 
 const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager"];
@@ -46,6 +48,11 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const body = createJobOpeningBody.parse(req.body);
+    // GAP-RECRUITMENT-NEW-06: Govt editions may only create a vacancy by publishing an approved
+    // requisition (R-RA-0056) -- direct creation would bypass the approval chain. Enforced here, server-side.
+    if ((await editionPolicyRepo.resolvePolicy(ctx.tenantId)).requisitionRequired) {
+      throw new HttpError(409, "REQUISITION_REQUIRED", REQUISITION_REQUIRED_MESSAGE);
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createJobOpening(ctx, body));
   });
 

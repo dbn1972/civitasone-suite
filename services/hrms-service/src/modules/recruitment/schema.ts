@@ -9,6 +9,8 @@ export const hrmsJobOpenings = recruitmentSchema.table("hrms_job_openings", {
   id:            uuid("id").primaryKey().defaultRandom(),
   tenantId:      uuid("tenant_id").notNull(),
   refNo:         text("ref_no").notNull(),
+  // GAP-RECRUITMENT-HOME-05 (0197): advertisement / notification number, unique per tenant when set.
+  advertisementNo: varchar("advertisement_no", { length: 64 }),
   title:         text("title").notNull(),
   departmentId:  uuid("department_id").notNull(),
   designationId: uuid("designation_id"),

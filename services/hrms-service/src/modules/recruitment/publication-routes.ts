@@ -55,12 +55,18 @@ export async function jobPublicationRoutes(app: FastifyInstance): Promise<void> 
       titleAlt: z.string().max(300).optional(),
       descriptionAlt: z.string().max(8000).optional(),
       minExperienceYears: z.coerce.number().int().min(0).max(60).optional(),
+      // GAP-RECRUITMENT-HOME-05: advertisement / notification number; null clears it.
+      advertisementNo: z.union([z.null(), z.string().trim().min(1).max(64)]).optional(),
     }).parse(req.body ?? {});
     const v = await mustVac(ctx.tenantId, id);
     // R-RA-0068: once published (or cancelled) the original advertisement is preserved; changes after that
     // must be recorded as a corrigendum / extension, not edited in place.
     if (v.status === "cancelled" || v.isPublished === true || (v.isPublished as unknown) === "true") {
       throw new HttpError(409, "ADVERTISEMENT_LOCKED", "a published or cancelled advertisement cannot be edited; record a corrigendum instead");
+    }
+    if (typeof body.advertisementNo === "string"
+      && await repo.advertisementNoTaken(ctx.tenantId, body.advertisementNo, id)) {
+      throw new HttpError(409, "DUPLICATE_ADVERTISEMENT_NO", "another vacancy already uses this advertisement number");
     }
     const patch: Record<string, unknown> = { updatedBy: ctx.actorId };
     if (body.feesMinor != null) patch.feesMinor = BigInt(body.feesMinor);
@@ -82,6 +88,7 @@ export async function jobPublicationRoutes(app: FastifyInstance): Promise<void> 
       id,
       // The job-openings list collapses cancelled/rejected into "closed"; the panel needs the real value.
       status: v.status,
+      advertisementNo: v.advertisementNo ?? null,
       applicationDeadline: v.applicationDeadline ?? null,
       feesMinor: v.feesMinor ?? null,
       feeExemption: v.feeExemption ?? null,

@@ -233,6 +233,25 @@ describe("RecruitmentPage (HR-A deep-verify)", () => {
     expect(within(clerk).getByText("Not set")).toBeInTheDocument();
   });
 
+  // GAP-RECRUITMENT-HOME-05 (advertisement number)
+  it("shows the advertisement number column, and no number for a vacancy without one", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce({ data: STATS, source: "api" })
+      .mockResolvedValueOnce({
+        data: [
+          { ...OPENING, advertisementNo: "Advt. 03/2026" },
+          { ...OPENING, id: "job-2", jobTitle: "Clerk", advertisementNo: null },
+        ],
+        source: "api",
+      });
+    render(await RecruitmentPage());
+    expect(screen.getByRole("columnheader", { name: /Advertisement No\./ })).toBeInTheDocument();
+    const je = screen.getByText("Junior Engineer").closest("tr") as HTMLElement;
+    expect(within(je).getByText("Advt. 03/2026")).toBeInTheDocument();
+    const clerk = screen.getByText("Clerk").closest("tr") as HTMLElement;
+    expect(clerk.textContent).not.toContain("Advt.");
+  });
+
   // GAP-RECRUITMENT-HOME-06
   it("renders the careers / talent-pool links with icons, not emoji in the label text", async () => {
     fetchJsonMock

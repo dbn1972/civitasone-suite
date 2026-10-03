@@ -12,6 +12,34 @@ import { formatIndianDate, formatMoney } from "@/lib/formatters";
 type Fee = { status: string; amountMinor?: string; exemptionReason?: string; paidAt?: string };
 type Offer = { id: string; offerNo?: string | null; status: string; offerVersion?: number; grossCtcMinor?: string | null; joiningDate?: string | null };
 
+// GAP-RECRUITMENT-DETAIL-APPLICATIONS-APPLICATION-06: interview scorecards. The service applies the same
+// blind-scoring rule as the per-interview score routes (R-RA-0147), so a blinded interview arrives with no scores.
+type Competency = { competency: string; weight?: number; maxScore: number };
+export type Scorecard = {
+  interviewId: string;
+  roundNumber: number;
+  roundType: string;
+  scheduledDate: string;
+  status: string;
+  competencies: Competency[];
+  cutoffScore: number | null;
+  consolidated: boolean;
+  panelScore: number | null;
+  recommendation: string | null;
+  blinded: boolean;
+  submittedCount: number;
+  panelSize: number;
+  scores: Array<{ interviewer: string; scores: Record<string, number>; overallScore: number | null; comments: string | null }>;
+};
+
+/** "technical 8/10 - communication 7/10" for one interviewer's awarded scores (competency order from the template). */
+export function scoreLine(scores: Record<string, number>, competencies: Competency[]): string {
+  return competencies
+    .filter((c) => typeof scores[c.competency] === "number")
+    .map((c) => `${c.competency} ${scores[c.competency]}/${c.maxScore}`)
+    .join(" · ");
+}
+
 type Section<T> = { state: "loading" } | { state: "ready"; data: T } | { state: "none" } | { state: "error" };
 
 async function loadJson<T>(url: string): Promise<{ ok: true; body: T } | { ok: false; status: number }> {
@@ -29,6 +57,7 @@ export function ApplicationExtras({ appId }: { appId: string }) {
   const base = `/api/proxy/v1/hrms/applications/${encodeURIComponent(appId)}`;
   const [fee, setFee] = useState<Section<Fee>>({ state: "loading" });
   const [offers, setOffers] = useState<Section<Offer[]>>({ state: "loading" });
+  const [cards, setCards] = useState<Section<Scorecard[]>>({ state: "loading" });
 
   const loadFee = useCallback(async () => {
     setFee({ state: "loading" });
@@ -46,10 +75,20 @@ export function ApplicationExtras({ appId }: { appId: string }) {
     setOffers(Array.isArray(list) ? { state: "ready", data: list } : { state: "error" });
   }, [base]);
 
+  const loadCards = useCallback(async () => {
+    setCards({ state: "loading" });
+    const r = await loadJson<{ data?: Scorecard[] }>(`${base}/scorecards`);
+    // 403 = the viewer may not see scorecards (not a failure of the page); anything else non-OK is an error.
+    if (!r.ok) return setCards(r.status === 403 ? { state: "none" } : { state: "error" });
+    const list = r.body.data;
+    setCards(Array.isArray(list) ? { state: "ready", data: list } : { state: "error" });
+  }, [base]);
+
   useEffect(() => {
     void loadFee();
     void loadOffers();
-  }, [loadFee, loadOffers]);
+    void loadCards();
+  }, [loadFee, loadOffers, loadCards]);
 
   const muted = { color: "var(--mut)", fontSize: 14, margin: 0 } as const;
   const retry = (onClick: () => void) => (
@@ -92,6 +131,49 @@ export function ApplicationExtras({ appId }: { appId: string }) {
               ))}
             </ul>
           )}
+        </div>
+      </Card>
+
+      <Card title={t("scorecardsTitle")}>
+        <div style={{ padding: "16px 20px", display: "grid", gap: 16 }}>
+          {cards.state === "loading" && <p style={muted} aria-busy="true">{t("sectionLoading")}</p>}
+          {cards.state === "error" && <p role="alert" style={muted}>{t("scorecardsLoadError")}{retry(() => void loadCards())}</p>}
+          {cards.state === "none" && <p style={muted}>{t("scorecardsRestricted")}</p>}
+          {cards.state === "ready" && cards.data.length === 0 && <p style={muted}>{t("scorecardsNone")}</p>}
+          {cards.state === "ready" && cards.data.map((c) => (
+            <section key={c.interviewId} aria-label={t("scorecardRound", { round: c.roundNumber })} style={{ display: "grid", gap: 8, fontSize: 14 }}>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+                <strong>{t("scorecardRound", { round: c.roundNumber })}</strong>
+                <span style={{ color: "var(--mut)" }}>{c.roundType} · {formatIndianDate(c.scheduledDate)}</span>
+                <StatusPill status={c.status} />
+              </div>
+              {c.blinded ? (
+                <p role="note" style={muted}>{t("scorecardBlinded", { submitted: c.submittedCount, total: c.panelSize })}</p>
+              ) : (
+                <>
+                  <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                    <span>{t("scorecardPanelScore")} {c.panelScore != null ? c.panelScore : t("scorecardNotConsolidated")}</span>
+                    {c.cutoffScore != null && <span style={{ color: "var(--mut)" }}>{t("scorecardCutoff", { cutoff: c.cutoffScore })}</span>}
+                    {c.recommendation && <span>{t("scorecardRecommendation")} <StatusPill status={c.recommendation} /></span>}
+                  </div>
+                  {c.scores.length === 0 ? (
+                    <p style={muted}>{t("scorecardNoScores")}</p>
+                  ) : (
+                    <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6 }}>
+                      {c.scores.map((s, i) => (
+                        <li key={`${c.interviewId}-${i}`}>
+                          <strong>{s.interviewer}</strong>
+                          {s.overallScore != null && <span> · {t("scorecardOverall", { score: s.overallScore })}</span>}
+                          <div style={{ color: "var(--mut)" }}>{scoreLine(s.scores, c.competencies)}</div>
+                          {s.comments && <div>{s.comments}</div>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+            </section>
+          ))}
         </div>
       </Card>
 

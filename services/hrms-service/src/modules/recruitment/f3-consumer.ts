@@ -158,6 +158,17 @@ function toCriteria(body: Record<string, any>): EligibilityCriteria {
  *    are restored, plus a not-found guard so a vanished parent row surfaces as a
  *    failed message rather than a bad write.
  */
+/** SQLSTATE 23505 on the per-tenant advertisement-number unique index (0197), however the driver wraps it. */
+export function isAdvertisementNoConflict(err: unknown): boolean {
+  for (let e: unknown = err, depth = 0; e && typeof e === "object" && depth < 4; e = (e as { cause?: unknown }).cause, depth++) {
+    const o = e as { code?: unknown; constraint_name?: unknown; constraint?: unknown; message?: unknown };
+    if (String(o.code) !== "23505") continue;
+    const name = String(o.constraint_name ?? o.constraint ?? "");
+    return name === "ux_hrms_job_openings_advt_no" || String(o.message ?? "").includes("ux_hrms_job_openings_advt_no");
+  }
+  return false;
+}
+
 export function registerF3_recruitment_Consumers(queue: Queue): void {
   queue.subscribe(COMMANDS.f3RouteWrite, async (msg) => {
     const p = msg.payload as Record<string, any>;
@@ -1173,6 +1184,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             const patch: Record<string, unknown> = { updatedBy: msg.actorId };
             if (body.feesMinor !== undefined) patch.feesMinor = body.feesMinor === null ? null : BigInt(body.feesMinor);
             if (body.minExperienceYears != null) patch.minExperienceYears = Number(body.minExperienceYears);
+            if (body.advertisementNo !== undefined) patch.advertisementNo = body.advertisementNo === null ? null : String(body.advertisementNo).trim();
             for (const k of ["feeExemption", "requiredDocuments", "selectionProcess", "importantDates", "portalScope", "titleAlt", "descriptionAlt"] as const) {
               if (body[k] !== undefined) patch[k] = body[k];
             }
@@ -1853,6 +1865,19 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
         }
       });
     } catch (err) {
+      // GAP-RECRUITMENT-HOME-05: two concurrent PATCHes can both pass the route's duplicate pre-check; the
+      // unique index then rejects the loser with SQLSTATE 23505. That outcome is final (a redelivery would fail
+      // identically), so record it as a terminal, AUDITED failure instead of rethrowing into endless retries.
+      if (op === "recruitment_publication_routes__0" && isAdvertisementNoConflict(err)) {
+        log.warn({ op, messageId: msg.messageId, vacancyId: id }, "advertisement number already used; update rejected");
+        await db.transaction(async (tx) => {
+          if (!(await markProcessed(tx, msg.messageId))) return;
+          await emitAudit(tx, auditCtx, "update", "job_opening_advertisement", id, {
+            outcome: "failure", reason: "DUPLICATE_ADVERTISEMENT_NO", advertisementNo: body.advertisementNo ?? null,
+          });
+        });
+        return;
+      }
       log.error({ err, op, messageId: msg.messageId }, "f3RouteWrite failed");
       throw err;
     }

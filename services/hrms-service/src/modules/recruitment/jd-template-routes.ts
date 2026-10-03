@@ -7,6 +7,8 @@ import { COMMANDS } from "../../topics.js";
 import { createJdTemplateBody, updateJdTemplateBody, idParam } from "./validators.js";
 import * as templateRepo from "./jd-template-repo.js";
 import * as repo from "./repo.js";
+import * as editionPolicyRepo from "./edition-policy-repo.js";
+import { REQUISITION_REQUIRED_MESSAGE } from "./edition-policy.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
@@ -84,6 +86,11 @@ export async function jdTemplateRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id: templateId } = idParam.parse(req.params);
+    // GAP-RECRUITMENT-NEW-06: same edition gate as POST /v1/hrms/job-openings -- a template is just another
+    // way to create a vacancy directly.
+    if ((await editionPolicyRepo.resolvePolicy(ctx.tenantId)).requisitionRequired) {
+      throw new HttpError(409, "REQUISITION_REQUIRED", REQUISITION_REQUIRED_MESSAGE);
+    }
     const tmpl = await templateRepo.findTemplateById(templateId, ctx.tenantId);
     if (!tmpl || tmpl.isArchived) throw new HttpError(404, "NOT_FOUND", "template not found");
 

@@ -191,3 +191,40 @@ describe("VacancyNotificationPanel (GAP-RECRUITMENT-DETAIL-13)", () => {
     expect(screen.queryByLabelText(/Application fee/)).not.toBeInTheDocument();
   });
 });
+
+describe("VacancyNotificationPanel advertisement number (GAP-RECRUITMENT-HOME-05)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("loads the number, sends it only when changed (trimmed), and does not send it when untouched", async () => {
+    const { sent } = mockApi({ ad: { advertisementNo: "Advt. 03/2026" } });
+    renderPanel();
+    const field = await screen.findByLabelText(/Advertisement \/ notification number/);
+    expect(field).toHaveValue("Advt. 03/2026");
+    fireEvent.click(screen.getByRole("button", { name: "Save advertisement" }));
+    await waitFor(() => expect(sent.find((s) => s.method === "PATCH")).toBeTruthy());
+    expect(sent.find((s) => s.method === "PATCH")!.body).not.toHaveProperty("advertisementNo");
+  });
+
+  it("sends the new number trimmed, and null when it is cleared", async () => {
+    const first = mockApi({ ad: { advertisementNo: null } });
+    const { unmount } = renderPanel();
+    fireEvent.change(await screen.findByLabelText(/Advertisement \/ notification number/), { target: { value: "  Advt. 07/2026 " } });
+    fireEvent.click(screen.getByRole("button", { name: "Save advertisement" }));
+    await waitFor(() => expect(first.sent.find((s) => s.method === "PATCH")).toBeTruthy());
+    expect(first.sent.find((s) => s.method === "PATCH")!.body.advertisementNo).toBe("Advt. 07/2026");
+    unmount();
+
+    const second = mockApi({ ad: { advertisementNo: "Advt. 03/2026" } });
+    renderPanel();
+    fireEvent.change(await screen.findByLabelText(/Advertisement \/ notification number/), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save advertisement" }));
+    await waitFor(() => expect(second.sent.find((s) => s.method === "PATCH")).toBeTruthy());
+    expect(second.sent.find((s) => s.method === "PATCH")!.body.advertisementNo).toBeNull();
+  });
+
+  it("is read-only once the vacancy is published", async () => {
+    mockApi({ ad: { advertisementNo: "Advt. 03/2026" } });
+    renderPanel(true);
+    expect(await screen.findByLabelText(/Advertisement \/ notification number/)).toBeDisabled();
+  });
+});
