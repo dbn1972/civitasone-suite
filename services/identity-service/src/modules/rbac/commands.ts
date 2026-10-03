@@ -32,6 +32,17 @@ function mapDomainError(err: unknown): never {
   throw err;
 }
 
+/**
+ * A system role's grant set is fixed. Only platform authority (super_admin /
+ * platform_admin) may change it -- enforced here, not just in the web UI
+ * (GAP-ADMIN-ROLES-05).
+ */
+function assertRoleMutable(ctx: RequestContext, role: { key: string; isSystem: boolean }): void {
+  if (role.isSystem && !hasUnconditionalAuthority(ctx.roles)) {
+    throw new HttpError(403, "SYSTEM_ROLE_READONLY", `role '${role.key}' is a system role; its permissions can only be changed by platform staff`);
+  }
+}
+
 // ── roles ────────────────────────────────────────────────────────────────
 export async function createRole(ctx: RequestContext, body: CreateRoleBody): Promise<Accepted> {
   // SEC C2: reject reserved/system keys (unless unconditional authority) and
@@ -75,6 +86,7 @@ export async function createPermission(ctx: RequestContext, body: CreatePermissi
 export async function grantPermission(ctx: RequestContext, roleId: string, permissionId: string): Promise<Accepted> {
   const role = await scopedRead((tx) => repo.findRoleById(tx, ctx.tenantId, roleId));
   if (!role) throw new HttpError(404, "NOT_FOUND", "role not found");
+  assertRoleMutable(ctx, role);
   const perm = await scopedRead((tx) => repo.findPermissionById(tx, ctx.tenantId, permissionId));
   if (!perm) throw new HttpError(404, "NOT_FOUND", "permission not found");
 
@@ -100,6 +112,7 @@ export async function grantPermission(ctx: RequestContext, roleId: string, permi
 export async function revokePermission(ctx: RequestContext, roleId: string, permissionId: string): Promise<Accepted> {
   const role = await scopedRead((tx) => repo.findRoleById(tx, ctx.tenantId, roleId));
   if (!role) throw new HttpError(404, "NOT_FOUND", "role not found");
+  assertRoleMutable(ctx, role);
   const messageId = randomUUID();
   await queue.publish(COMMANDS.rbacRevokePermission, {
     messageId, type: COMMANDS.rbacRevokePermission, tenantId: ctx.tenantId, actorId: ctx.actorId,

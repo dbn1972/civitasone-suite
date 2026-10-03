@@ -1,4 +1,5 @@
-import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import Link from "next/link";
+import { PageHeader } from "@/app/_components/ds";
 import { getSATenants } from "@/app/_data/loaders";
 import { TenantsTable } from "./TenantsTable";
 import { AdminAccessDenied, sessionHasAnyRole } from "../_components/AdminAccessGate";
@@ -11,26 +12,21 @@ export default async function TenantsPage() {
     return <AdminAccessDenied title="Tenants" area="the tenant directory" roles={PLATFORM_ADMIN_ROLES} />;
   }
   const { data: tenants, source } = await getSATenants();
-  const active = tenants.filter((t) => String(t.status).toLowerCase() === "active").length;
-  const trial = tenants.filter((t) => String(t.status).toLowerCase() === "trial").length;
-  const suspended = tenants.filter((t) => String(t.status).toLowerCase() === "suspended").length;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
-      {/* UX-012: the data-source badge now lives inside TenantsTable,
-          driven by the same useSeededResource call that produces its rows —
-          not a second, independent read of `source` here that could
-          disagree with the table's own cache state (UX-002's pattern). */}
-      <PageHeader title="Tenants" subtitle="All registered tenants with edition, status and usage details." back="/admin" />
-      <StatGrid>
-        <StatCard icon="🏢" iconBg="#eef2ff" label="Total Tenants" value={tenants.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={active} />
-        <StatCard icon="🧪" iconBg="#fffaeb" label="Trial" value={trial} />
-        <StatCard icon="⛔" iconBg="#fce7ee" label="Suspended" value={suspended} />
-      </StatGrid>
-      <Card title="Tenant Directory">
-        <TenantsTable tenants={tenants} source={source === "error" ? "error" : "api"} />
-      </Card>
+      {/* UX-012 / GAP-ADMIN-TENANTS-03: the data-source badge AND the summary tiles live inside
+          TenantsTable, driven by the same useSeededResource call that produces its rows -- not a
+          second, independent read of the server data here that could disagree with the table's
+          own cache state (UX-002's pattern). */}
+      {/* GAP-ADMIN-TENANTS-04: no tenant-create flow exists yet, so only the onboarding queue is linked. */}
+      <PageHeader
+        title="Tenants"
+        subtitle="All registered tenants with edition, status and usage details."
+        back="/admin"
+        actions={<Link className="btn ghost" href="/admin/onboarding">Onboarding queue</Link>}
+      />
+      <TenantsTable tenants={tenants} source={source === "error" ? "error" : "api"} />
     </div>
   );
 }

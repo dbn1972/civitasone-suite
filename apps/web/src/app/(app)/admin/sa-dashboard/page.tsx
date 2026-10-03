@@ -4,6 +4,7 @@ import { getSADashboard, getSAOperationsSnapshot } from "@/app/_data/loaders";
 import { SADashboardTable } from "./SADashboardTable";
 import { AdminAccessDenied, sessionHasAnyRole } from "../_components/AdminAccessGate";
 import { PLATFORM_ADMIN_ROLES } from "@/lib/auth/adminRoles";
+import { tileNotes } from "./saDashboardNotes";
 
 export default async function SaDashboardPage() {
   // GAP-ADMIN-SA-DASHBOARD: platform-operator screen -- gate before any loader runs so an
@@ -43,7 +44,10 @@ export default async function SaDashboardPage() {
   // when PM2 wasn't reachable (pm2Available: false): in that case "online" would
   // mean "unknown", not "confirmed zero".
   const opsSummary = (operations.summary ?? {}) as Record<string, unknown>;
-  const opsUnavailable = opsSource === "error" || operations.pm2Available === false;
+  const opsLoadFailed = opsSource === "error";
+  const pm2Unreachable = !opsLoadFailed && operations.pm2Available === false;
+  const opsUnavailable = opsLoadFailed || pm2Unreachable;
+  const notes = tileNotes({ usersAvailable: dashboard.totalUsers != null, uptimeAvailable });
   const servicesLabel = opsUnavailable
     ? "—"
     : `${Number(opsSummary.onlineProcesses ?? 0)}/${Number(opsSummary.totalProcesses ?? 0)}`;
@@ -52,16 +56,23 @@ export default async function SaDashboardPage() {
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Super Admin Dashboard"
-        subtitle="Platform-wide health, revenue and growth overview."
+        subtitle="Platform-wide tenants, users, uptime and service status."
         back="/admin"
         actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />
+      {opsLoadFailed && <DataSourceBadge source="error" message="Service status could not be loaded" />}
+      {pm2Unreachable && <DataSourceBadge source="error" message="Service manager not reachable" />}
       <StatGrid>
         <StatCard icon="🏢" iconBg="#eef2ff" label="Active Tenants" value={tenants} />
         <StatCard icon="👥" iconBg="#ecfdf3" label="Total Users" value={users} />
         <StatCard icon="💚" iconBg={uptimeAvailable ? "#fffaeb" : "#f2f4f7"} label="Platform Uptime" value={uptime} />
         <StatCard icon="📊" iconBg={opsUnavailable ? "#f2f4f7" : "#eff6ff"} label="Services" value={servicesLabel} />
       </StatGrid>
+      {notes.length > 0 && (
+        <ul aria-label="Unavailable figures" style={{ margin: "0 0 14px", paddingLeft: 18, fontSize: 12.5, color: "var(--mut)" }}>
+          {notes.map((n) => <li key={n}>{n}</li>)}
+        </ul>
+      )}
       <Card title="Platform KPIs">
         <SADashboardTable dashboard={dashboard} source={source === "error" ? "error" : "api"} />
       </Card>

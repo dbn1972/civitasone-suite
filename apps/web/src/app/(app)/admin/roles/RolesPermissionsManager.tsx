@@ -4,6 +4,8 @@ import { Button, ConfirmDialog, PageHeader, StatCard } from "@/app/_components/d
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { AdminRoleSummary, AdminPermissionSummary } from "@/app/_data/loaders";
 import { toHumanError, type MessageKind } from "@/lib/messages";
+import { SkeletonRow } from "@/app/_components/ds/Skeleton";
+import { PERMISSIONS_PAGE_LIMIT, groupPermissions, permissionsTruncated } from "./permissionGroups";
 
 /**
  * Plain-language failure message for a failed role-permissions read/write.
@@ -60,8 +62,11 @@ export function RolesPermissionsManager({
   source: "api" | "error";
 }) {
   const assignableRoles = useMemo(() => roles.filter((r) => !r.isSystem), [roles]);
-  const [selectedRoleId, setSelectedRoleId] = useState<string | null>(assignableRoles[0]?.id ?? null);
+  const [selectedRoleId, setSelectedRoleId] = useState<string | null>(assignableRoles[0]?.id ?? roles[0]?.id ?? null);
   const [loading, setLoading] = useState(false);
+  // The role whose permissions `baseline`/`selected` currently describe; until it
+  // matches the dropdown the checklist must not render (it would flash the previous role's keys).
+  const [loadedRoleId, setLoadedRoleId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [baseline, setBaseline] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -69,6 +74,10 @@ export function RolesPermissionsManager({
   const [saveError, setSaveError] = useState<string | null>(null);
   // GAP-ADMIN-ROLES-02: Save shows the exact grant/revoke diff and asks first.
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // GAP-ADMIN-ROLES-03: switching roles with unsaved toggles asks first.
+  const [pendingRoleId, setPendingRoleId] = useState<string | null | undefined>(undefined);
+  // GAP-ADMIN-ROLES-06: filter over the (grouped) checklist; never alters `selected`.
+  const [filter, setFilter] = useState("");
 
   const selectedRole = roles.find((r) => r.id === selectedRoleId) ?? null;
 
@@ -89,6 +98,7 @@ export function RolesPermissionsManager({
         setBaseline(keys);
         setSelected(new Set(keys));
       }
+      setLoadedRoleId(selectedRoleId);
       setLoading(false);
     });
     return () => { cancelled = true; };
@@ -101,7 +111,22 @@ export function RolesPermissionsManager({
     return n;
   }, [selected, baseline]);
 
+  // GAP-ADMIN-ROLES-03: a closing tab / navigation would also drop the edits.
+  useEffect(() => {
+    if (changedCount === 0) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [changedCount]);
+
+  function handleRoleChange(nextId: string | null) {
+    if (nextId === selectedRoleId) return;
+    if (changedCount > 0) { setPendingRoleId(nextId); return; }
+    setSelectedRoleId(nextId);
+  }
+
   function toggle(key: string) {
+    if (selectedRole?.isSystem) return; // system roles are read-only
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key); else next.add(key);
@@ -133,7 +158,12 @@ export function RolesPermissionsManager({
     setSaveState("saved");
   }
 
-  const totalPermissionsGranted = selected.size;
+  // GAP-ADMIN-ROLES-04: "granted" is what the server holds (baseline); unsaved toggles are shown separately.
+  const totalPermissionsGranted = baseline.size;
+  const truncated = permissionsTruncated(permissions.length);
+  const showLoading = loading || (selectedRoleId !== null && loadedRoleId !== selectedRoleId);
+  const readOnly = Boolean(selectedRole?.isSystem);
+  const groups = useMemo(() => groupPermissions(permissions, filter), [permissions, filter]);
   const grantedKeys = [...selected].filter((k) => !baseline.has(k));
   const revokedKeys = [...baseline].filter((k) => !selected.has(k));
   const permName = (key: string) => permissions.find((p) => p.key === key)?.name ?? key;
@@ -148,10 +178,21 @@ export function RolesPermissionsManager({
       <DataSourceBadge source={source} message="Couldn't load roles or permissions — showing nothing" />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
         <StatCard icon="🔑" iconBg="#f1f5f9" label="Assignable roles" value={assignableRoles.length} />
-        <StatCard icon="🛡️" iconBg="#eff6ff" label="Total permissions" value={permissions.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Granted to selected role" value={selectedRole && !loading && !loadError ? totalPermissionsGranted : null} />
+        <StatCard icon="🛡️" iconBg="#eff6ff" label={truncated ? "Loaded permissions" : "Total permissions"} value={permissions.length} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Granted to selected role" value={selectedRole && !showLoading && !loadError ? totalPermissionsGranted : null} />
         <StatCard icon="🔒" iconBg="#fffbeb" label="System roles (read-only)" value={roles.filter((r) => r.isSystem).length} />
       </div>
+
+      {truncated && (
+        <p role="status" style={{ margin: "0 0 12px", fontSize: 12.5, color: "#92400e" }}>
+          Showing the first {PERMISSIONS_PAGE_LIMIT} permissions. More may exist than are listed here.
+        </p>
+      )}
+      {changedCount > 0 && !showLoading && !loadError && (
+        <p role="status" style={{ margin: "0 0 12px", fontSize: 12.5, color: "var(--mut)" }}>
+          +{changedCount} unsaved {changedCount === 1 ? "change" : "changes"} (not counted as granted until saved).
+        </p>
+      )}
 
       <div className="card">
         <div className="card-h" style={{ flexWrap: "wrap", gap: 12 }}>
@@ -161,7 +202,7 @@ export function RolesPermissionsManager({
               id="role-select"
               className="input"
               value={selectedRoleId ?? ""}
-              onChange={(e) => setSelectedRoleId(e.target.value || null)}
+              onChange={(e) => handleRoleChange(e.target.value || null)}
               style={{ minWidth: 220 }}
             >
               {roles.length === 0 && <option value="">No roles available</option>}
@@ -189,38 +230,60 @@ export function RolesPermissionsManager({
 
         {!selectedRole ? (
           <p style={{ padding: 24, color: "var(--mut)", fontSize: 13 }}>No role selected.</p>
-        ) : selectedRole.isSystem ? (
-          <p style={{ padding: 24, color: "var(--mut)", fontSize: 13 }}>
-            <strong>{selectedRole.name}</strong> is a system role — its permissions are fixed and cannot be edited here.
-          </p>
-        ) : loading ? (
-          <p style={{ padding: 24, color: "var(--mut)", fontSize: 13 }}>Loading current permissions…</p>
+        ) : showLoading ? (
+          <div role="status" aria-label="Loading current permissions" style={{ padding: "12px 16px 20px" }}>
+            <SkeletonRow /><SkeletonRow /><SkeletonRow />
+          </div>
         ) : loadError ? (
           <p role="alert" style={{ padding: 24, color: "#b42318", fontSize: 13 }}>{loadError}</p>
         ) : permissions.length === 0 ? (
           <p style={{ padding: 24, color: "var(--mut)", fontSize: 13 }}>No permissions are defined for this tenant yet.</p>
         ) : (
-          <div style={{ padding: "12px 16px 20px", display: "grid", gap: 8 }}>
-            {permissions.map((perm) => {
-              const checked = selected.has(perm.key);
-              return (
-                <label
-                  key={perm.id}
-                  style={{
-                    display: "flex", alignItems: "flex-start", gap: 12, cursor: "pointer",
-                    padding: "9px 12px", borderRadius: 8,
-                    border: `1.5px solid ${checked ? "#4f46e5" : "var(--line)"}`,
-                    background: checked ? "#eef2ff" : "transparent",
-                  }}
-                >
-                  <input type="checkbox" checked={checked} onChange={() => toggle(perm.key)} style={{ width: 15, height: 15, cursor: "pointer", marginTop: 2 }} />
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{perm.name} <code style={{ fontSize: 11, color: "var(--mut)", fontWeight: 400 }}>{perm.key}</code></div>
-                    {perm.description && <div style={{ fontSize: 11.5, color: "var(--mut)", marginTop: 1 }}>{perm.description}</div>}
-                  </div>
-                </label>
-              );
-            })}
+          <div style={{ padding: "12px 16px 20px", display: "grid", gap: 12 }}>
+            {readOnly && (
+              <p role="note" style={{ margin: 0, fontSize: 13, color: "var(--mut)" }}>
+                <strong>{selectedRole.name}</strong> is a system role — its permissions are fixed and shown here read-only.
+              </p>
+            )}
+            <div>
+              <label htmlFor="perm-filter" style={{ fontWeight: 600, fontSize: 13, marginInlineEnd: 8 }}>Filter permissions:</label>
+              <input id="perm-filter" type="search" className="input" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="e.g. hr" style={{ minWidth: 220 }} />
+            </div>
+            {groups.length === 0 && <p style={{ margin: 0, color: "var(--mut)", fontSize: 13 }}>No permissions match this filter.</p>}
+            {groups.map((group) => (
+              <fieldset key={group.prefix} style={{ border: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
+                <legend style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", color: "var(--mut)", marginBottom: 6 }}>
+                  {group.prefix}
+                  {!readOnly && (
+                    <>
+                      {" "}
+                      <Button type="button" variant="ghost" size="sm" aria-label={`Select all ${group.prefix} permissions`} onClick={() => setSelected((prev) => { const next = new Set(prev); group.items.forEach((p) => next.add(p.key)); return next; })}>Select all</Button>
+                      <Button type="button" variant="ghost" size="sm" aria-label={`Clear all ${group.prefix} permissions`} onClick={() => setSelected((prev) => { const next = new Set(prev); group.items.forEach((p) => next.delete(p.key)); return next; })}>Clear</Button>
+                    </>
+                  )}
+                </legend>
+                {group.items.map((perm) => {
+                  const checked = selected.has(perm.key);
+                  return (
+                    <label
+                      key={perm.id}
+                      style={{
+                        display: "flex", alignItems: "flex-start", gap: 12, cursor: readOnly ? "default" : "pointer",
+                        padding: "9px 12px", borderRadius: 8,
+                        border: `1.5px solid ${checked ? "var(--primary)" : "var(--line)"}`,
+                        background: checked ? "var(--primary-soft)" : "transparent",
+                      }}
+                    >
+                      <input type="checkbox" checked={checked} disabled={readOnly} onChange={() => toggle(perm.key)} style={{ width: 15, height: 15, cursor: readOnly ? "default" : "pointer", marginTop: 2 }} />
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>{perm.name} <code style={{ fontSize: 11, color: "var(--mut)", fontWeight: 400 }}>{perm.key}</code></div>
+                        {perm.description && <div style={{ fontSize: 11.5, color: "var(--mut)", marginTop: 1 }}>{perm.description}</div>}
+                      </div>
+                    </label>
+                  );
+                })}
+              </fieldset>
+            ))}
           </div>
         )}
       </div>
@@ -249,6 +312,15 @@ export function RolesPermissionsManager({
         busy={saveState === "saving"}
         onConfirm={() => void save()}
         onCancel={() => { if (saveState !== "saving") setConfirmOpen(false); }}
+      />
+      <ConfirmDialog
+        open={pendingRoleId !== undefined}
+        danger
+        title={`Discard ${changedCount} unsaved ${changedCount === 1 ? "change" : "changes"}?`}
+        description={`Switching roles will drop your unsaved permission changes for ${selectedRole?.name ?? "this role"}.`}
+        confirmLabel="Discard and switch"
+        onConfirm={() => { const next = pendingRoleId; setPendingRoleId(undefined); if (next !== undefined) setSelectedRoleId(next); }}
+        onCancel={() => setPendingRoleId(undefined)}
       />
     </div>
   );

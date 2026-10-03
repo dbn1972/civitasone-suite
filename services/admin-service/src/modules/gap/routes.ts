@@ -470,10 +470,20 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
       };
     }
 
+    // GAP-ADMIN-ROLES-05: a system-role refusal is the whole request's answer, not one more
+    // per-key failure -- pass identity-service's 403 through so the caller sees it as a 403.
+    const systemRoleRefusal = (res: { status: number; body: unknown }) => {
+      const r = relayError(res.status, res.body);
+      const p = r.payload as { code?: string } | undefined;
+      return r.status === 403 && p?.code === "SYSTEM_ROLE_READONLY" ? r : null;
+    };
+
     for (const key of toGrant) {
       const permId = idByKey.get(key);
       if (!permId) { applied.skipped.push(key); continue; }
       const res = await callUpstream(req, ctx, "POST", identityBaseUrl(), `/identity/rbac/roles/${id}/permissions`, { permissionId: permId });
+      const refusedGrant = systemRoleRefusal(res);
+      if (refusedGrant) return reply.code(refusedGrant.status).send(refusedGrant.payload);
       if (res.status < 200 || res.status >= 300) {
         applied.failed.push({ key, action: "grant", ...describeFailure(res) });
         continue;
@@ -484,6 +494,8 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
       const permId = idByKey.get(key);
       if (!permId) { applied.skipped.push(key); continue; }
       const res = await callUpstream(req, ctx, "DELETE", identityBaseUrl(), `/identity/rbac/roles/${id}/permissions/${permId}`);
+      const refusedRevoke = systemRoleRefusal(res);
+      if (refusedRevoke) return reply.code(refusedRevoke.status).send(refusedRevoke.payload);
       if (res.status < 200 || res.status >= 300) {
         applied.failed.push({ key, action: "revoke", ...describeFailure(res) });
         continue;

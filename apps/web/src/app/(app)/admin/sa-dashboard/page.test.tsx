@@ -69,7 +69,8 @@ describe("SaDashboardPage", () => {
     expect(screen.getByText("Total Users").parentElement).toHaveTextContent("—");
     expect(screen.getByText("Total Users").parentElement).not.toHaveTextContent("0");
     // The KPI table's own honest failure copy is untouched by this fix.
-    expect(screen.getByText("No metrics")).toBeInTheDocument();
+    // (GAP-ADMIN-SA-DASHBOARD-05: a failed fetch now says so instead of "No metrics".)
+    expect(screen.getByText("Couldn't load metrics")).toBeInTheDocument();
   });
 
   it("shows a real online/declared count from the live PM2 operations snapshot even when the separate sa-dashboard API fails", async () => {
@@ -106,5 +107,44 @@ describe("SaDashboardPage", () => {
     mockLoaders({ dashboard: { data: { activeTenants: 0 }, source: "api" } });
     render(await SaDashboardPage());
     expect(screen.getByText("Active Tenants").parentElement).toHaveTextContent("0");
+  });
+});
+
+describe("SaDashboardPage - honest copy and unavailable-figure notes (GAP-ADMIN-SA-DASHBOARD-02/03/04)", () => {
+  beforeEach(() => fetchJsonMock.mockReset());
+
+  it("the subtitle no longer promises revenue or growth", async () => {
+    mockLoaders({ dashboard: { data: { activeTenants: 1 }, source: "api" }, operations: { data: { pm2Available: true, summary: {} }, source: "api" } });
+    render(await SaDashboardPage());
+    expect(screen.queryByText(/revenue/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/tenants, users, uptime and service status/i)).toBeInTheDocument();
+  });
+
+  it("explains in text which tiles are unavailable, not just with a dash", async () => {
+    mockLoaders({ dashboard: { data: { activeTenants: 1 }, source: "api" }, operations: { data: { pm2Available: true, summary: { onlineProcesses: 1, totalProcesses: 1 } }, source: "api" } });
+    render(await SaDashboardPage());
+    expect(screen.getByText(/Total Users and Platform Uptime are not reported by the platform yet/i)).toBeInTheDocument();
+  });
+
+  it("shows no notes or badges when everything is reported", async () => {
+    mockLoaders({
+      dashboard: { data: { activeTenants: 2, totalUsers: 5, uptime: "99.9%" }, source: "api" },
+      operations: { data: { pm2Available: true, summary: { onlineProcesses: 3, totalProcesses: 3 } }, source: "api" },
+    });
+    render(await SaDashboardPage());
+    expect(screen.queryByLabelText("Unavailable figures")).not.toBeInTheDocument();
+    expect(screen.queryByText(/could not be loaded/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/not reachable/i)).not.toBeInTheDocument();
+  });
+
+  it("shows a visible message when the operations fetch fails, distinct from an unreachable service manager", async () => {
+    mockLoaders({ dashboard: { data: { activeTenants: 2, totalUsers: 5, uptime: "99%" }, source: "api" }, operations: { data: {}, source: "error" } });
+    const { unmount } = render(await SaDashboardPage());
+    expect(screen.getAllByText("Service status could not be loaded")).toHaveLength(1); // one message, not a badge plus a note
+    expect(screen.queryByText("Service manager not reachable")).not.toBeInTheDocument();
+    unmount();
+    mockLoaders({ dashboard: { data: { activeTenants: 2, totalUsers: 5, uptime: "99%" }, source: "api" }, operations: { data: { pm2Available: false, summary: {} }, source: "api" } });
+    render(await SaDashboardPage());
+    expect(screen.getAllByText("Service manager not reachable").length).toBeGreaterThan(0);
   });
 });

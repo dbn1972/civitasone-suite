@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { ProvisionStepsTable, type ProvisionStep } from "./ProvisionStepsTable";
 import { AdminAccessDenied, sessionHasAnyRole } from "../_components/AdminAccessGate";
 import { PLATFORM_ADMIN_ROLES } from "@/lib/auth/adminRoles";
 
-type Step = { step: number; name: string; description: string; required: string; [k: string]: unknown };
+type Step = ProvisionStep;
 
 // Static reference: documents the steps a new tenant goes through. There is
 // no provisioning wizard yet (GAP-ADMIN-TENANT-PROVISION-01) -- the page used
@@ -50,19 +51,7 @@ export default function TenantProvisionPage() {
         <StatCard icon="⚙️" iconBg="#fffaeb" label="Optional" value={optional} />
       </StatGrid>
       <Card title="Provisioning Steps (reference)">
-        <DataTable<Step>
-          columns={[
-            { key: "step", label: "Step", align: "center" },
-            { key: "name", label: "Step Name" },
-            { key: "description", label: "Description" },
-            { key: "required", label: "Required" },
-          ]}
-          rows={PROVISIONING_STEPS}
-          sortable
-          emptyIcon="🚀"
-          emptyTitle="No steps"
-          emptyMessage="Provisioning steps not configured."
-        />
+        <ProvisionStepsTable steps={PROVISIONING_STEPS} />
       </Card>
     </div>
   );
