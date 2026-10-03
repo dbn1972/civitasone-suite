@@ -6,6 +6,7 @@ import { MoneyChart } from "../_components/MoneyChart";
 import { toResourceState } from "../../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { formatMoney } from "@/lib/formatters";
+import { reconciliationKey, countNeedingAttention } from "../_components/reconciliation";
 import { getSessionRoles, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
 
 type NpsRow = {
@@ -19,6 +20,7 @@ type NpsRow = {
   // formatMoney renders "—"); 0 = a real zero contribution.
   emp: number | null;
   er: number | null;
+  reconciliation: string;
 } & Record<string, unknown>;
 
 export default async function NpsStatementsPage() {
@@ -48,10 +50,12 @@ export default async function NpsStatementsPage() {
     employeeName: r.employeeName ?? t("unknownEmployee"),
     pran: r.pranLast4 ? maskLast4(r.pranLast4) : "—",
     period: r.period,
+    reconciliation: t(reconciliationKey(r.reconciliation)),
     emp: r.empContribMinor ?? null,
     er: r.erContribMinor ?? null,
   }));
 
+  const attentionCount = errored ? 0 : countNeedingAttention(rows);
   const uniqueEmps = errored ? null : new Set(tableRows.map((r) => r.employeeId)).size;
   // Totals skip missing figures (GAP-PAYROLL-NPS-03) -- unchanged for
   // complete data; rows with a missing figure are counted and surfaced.
@@ -90,6 +94,12 @@ export default async function NpsStatementsPage() {
         <StatCard icon="🧑" iconBg="var(--warnbg)" label={t("statTotalEmployee")} value={errored ? "—" : formatMoney(totalEmp)} />
         <StatCard icon="🏛️" iconBg="var(--panel)" label={t("statTotalEmployer")} value={errored ? "—" : formatMoney(totalEr)} />
       </StatGrid>
+
+      {!errored && attentionCount > 0 && (
+        <p role="note" className="pill warn" style={{ width: "fit-content", margin: "4px 0 12px" }}>
+          {t("reconcileAttentionNote", { count: attentionCount })}
+        </p>
+      )}
 
       {!errored && missingCount > 0 && (
         <p role="note" className="pill warn" style={{ width: "fit-content", margin: "4px 0 12px" }}>
@@ -163,6 +173,7 @@ export default async function NpsStatementsPage() {
               { key: "period", label: t("colPeriod") },
               { key: "emp", label: t("colEmployeeContrib"), align: "right", cellType: "amount" },
               { key: "er", label: t("colEmployerContrib"), align: "right", cellType: "amount" },
+              { key: "reconciliation", label: t("colReconciliation") },
             ]}
             rows={tableRows}
             rowLinkKey="employeeId"

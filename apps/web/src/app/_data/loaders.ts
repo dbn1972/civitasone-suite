@@ -4945,7 +4945,7 @@ export async function getNotificationDeliveries(): Promise<LoaderResult<Notifica
 // payroll-service now enriches from hrms (null when unresolved), and
 // pranLast4 (NPS only) is the last four characters of the PRAN -- the full
 // PRAN never leaves hrms-service.
-export type StatutoryRow = { id: string; employeeId: string; employeeName?: string | null; employeeCode?: string | null; pranLast4?: string | null; period: string; empContribMinor?: number | null; erContribMinor?: number | null; basicMinor?: number };
+export type StatutoryRow = { id: string; employeeId: string; employeeName?: string | null; employeeCode?: string | null; pranLast4?: string | null; period: string; empContribMinor?: number | null; erContribMinor?: number | null; basicMinor?: number; reconciliation?: { status: "match" | "mismatch" | "no_hrms_account" | "hrms_unavailable" } | null };
 
 export async function getGpfStatements(): Promise<LoaderResult<StatutoryRow[]>> {
   return fetchJson<unknown, StatutoryRow[]>("/api/v1/payroll/statutory/gpf", [], {

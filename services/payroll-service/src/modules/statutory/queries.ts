@@ -1,5 +1,7 @@
 import * as repo from "./repo.js";
 import { fetchEmployeeSummaries, fetchNpsPranLast4 } from "../../shared/hrms-client.js";
+import { fetchRetirementAccounts } from "../../shared/hrms-retirement-client.js";
+import { reconcileGpf, reconcileNps, type HrmsCoverage } from "./reconcile.js";
 
 export async function listPfReport(tenantId: string, limit: number, period?: string) {
   // GAP-PAYROLL-STATUTORY-PF-04: same best-effort employeeName enrichment
@@ -68,15 +70,21 @@ export async function listGratuityReport(tenantId: string, limit: number) {
   }));
 }
 
+function coverageOf(accounts: unknown, truncated: boolean | undefined): HrmsCoverage {
+  if (!accounts) return "unavailable";
+  return truncated ? "partial" : "complete";
+}
+
 export async function listGpfReport(tenantId: string, limit: number) {
   // UX-021: enrich with employeeName the same best-effort way payroll/
   // queries.ts#getSlip already does -- fetchEmployeeSummaries fails open to
   // an empty Map on an unreachable HRMS, so this never gates the report.
   // null here just means the frontend falls back to the employeeId it
   // already shows (see hr/payroll/gpf/page.tsx).
-  const [rows, empMap] = await Promise.all([
+  const [rows, empMap, accounts] = await Promise.all([
     repo.listGpfByTenant(tenantId, limit),
     fetchEmployeeSummaries(tenantId),
+    fetchRetirementAccounts(tenantId),
   ]);
   return rows.map((r) => ({
     id: r.id,
@@ -92,15 +100,18 @@ export async function listGpfReport(tenantId: string, limit: number) {
     // format it as a percent.
     contribPct: Number(r.contribPct),
     empContribMinor: Number(r.empContribMinor),
+    // GAP-PAYROLL-STATUTORY-GPF-02: flags divergence from the hrms-service GPF account.
+    reconciliation: reconcileGpf(BigInt(r.empContribMinor), accounts?.gpf.get(r.employeeId), coverageOf(accounts, accounts?.gpfTruncated)),
   }));
 }
 
 export async function listNpsReport(tenantId: string, limit: number) {
   // UX-021: see listGpfReport above -- same best-effort employeeName enrichment.
-  const [rows, empMap, pranMap] = await Promise.all([
+  const [rows, empMap, pranMap, accounts] = await Promise.all([
     repo.listNpsByTenant(tenantId, limit),
     fetchEmployeeSummaries(tenantId),
     fetchNpsPranLast4(tenantId),
+    fetchRetirementAccounts(tenantId),
   ]);
   return rows.map((r) => ({
     id: r.id,
@@ -115,6 +126,8 @@ export async function listNpsReport(tenantId: string, limit: number) {
     erContribPct: r.erContribPct,
     empContribMinor: Number(r.empContribMinor),
     erContribMinor: Number(r.erContribMinor),
+    // GAP-PAYROLL-STATUTORY-NPS-02: flags divergence from the hrms-service NPS account.
+    reconciliation: reconcileNps(Number(r.empContribPct), Number(r.erContribPct), accounts?.nps.get(r.employeeId), coverageOf(accounts, accounts?.npsTruncated)),
   }));
 }
 

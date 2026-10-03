@@ -101,3 +101,31 @@ describe("GpfStatementsPage", () => {
     expect(screen.queryByText("GPF Ledger")).not.toBeInTheDocument();
   });
 });
+
+describe("GpfStatementsPage HRMS reconciliation (GAP-PAYROLL-STATUTORY-GPF-02)", () => {
+  beforeEach(() => {
+    fetchJsonMock.mockReset();
+    getSessionRolesMock.mockReturnValue(["payroll_officer"]);
+  });
+
+  it("shows each row's verdict and a review note when a ledger row differs from the HRMS GPF account", async () => {
+    mockGpf({
+      data: [
+        { id: "g1", employeeId: UUID, employeeName: "Priya Verma", period: "2026-08", empContribMinor: 500000, reconciliation: { status: "match" } },
+        { id: "g2", employeeId: UUID, employeeName: "Ravi Kumar", period: "2026-08", empContribMinor: 500000, reconciliation: { status: "mismatch" } },
+      ],
+      source: "api",
+    });
+    render(await GpfStatementsPage());
+    expect(screen.getByText("Matches HRMS account")).toBeInTheDocument();
+    expect(screen.getByText("Differs from HRMS account")).toBeInTheDocument();
+    expect(screen.getByText(/1 row differs from or has no matching HRMS account/)).toBeInTheDocument();
+  });
+
+  it("makes no claim when the server sent no verdict (HRMS not checked) and shows no review note", async () => {
+    mockGpf({ data: [{ id: "g1", employeeId: UUID, period: "2026-08", empContribMinor: 500000 }], source: "api" });
+    render(await GpfStatementsPage());
+    expect(screen.getByText("HRMS not checked")).toBeInTheDocument();
+    expect(screen.queryByText(/differs from or has no matching HRMS account/)).not.toBeInTheDocument();
+  });
+});

@@ -21,6 +21,7 @@ vi.mock("../src/shared/db.js", async (io) => ({
 
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { MAX_ACCOUNTS } from "../src/modules/internal/retirement-accounts-routes.js";
 
 afterAll(async () => { await (sqlClient as { end: () => Promise<void> }).end(); });
 beforeEach(() => scopedReadMock.mockReset());
@@ -60,6 +61,44 @@ describe("GET /v1/hrms/internal/nps-pran-last4", () => {
   it("is not reachable by a plain employee", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "GET", url: "/v1/hrms/internal/nps-pran-last4", headers: auth(["employee"]) });
+    await app.close();
+    expect(res.statusCode).toBe(403);
+    expect(scopedReadMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /v1/hrms/internal/retirement-accounts (GAP-PAYROLL-STATUTORY-GPF-02 / NPS-02)", () => {
+  it("returns only contribution parameters -- no PRAN, GPF number or balance", async () => {
+    scopedReadMock
+      .mockResolvedValueOnce([{ employeeId: "e1", monthlySubscriptionMinor: 960000n, status: "active" }])
+      .mockResolvedValueOnce([{ employeeId: "e1", empContribPct: "10.00", erContribPct: "14.00", status: "active" }]);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/hrms/internal/retirement-accounts", headers: auth() });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      gpfTruncated: false,
+      npsTruncated: false,
+      gpf: [{ employeeId: "e1", monthlySubscriptionMinor: "960000", status: "active" }],
+      nps: [{ employeeId: "e1", empContribPct: 10, erContribPct: 14, status: "active" }],
+    });
+  });
+
+  it("reports truncation when more than the cap exist, and returns exactly the cap", async () => {
+    const gpfRows = Array.from({ length: MAX_ACCOUNTS + 1 }, (_, i) => ({ employeeId: `e${i}`, monthlySubscriptionMinor: 1n, status: "active" }));
+    scopedReadMock.mockResolvedValueOnce(gpfRows).mockResolvedValueOnce([]);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/hrms/internal/retirement-accounts", headers: auth() });
+    await app.close();
+    const body = res.json();
+    expect(body.gpfTruncated).toBe(true);
+    expect(body.npsTruncated).toBe(false);
+    expect(body.gpf).toHaveLength(MAX_ACCOUNTS);
+  });
+
+  it("is not reachable by a plain employee", async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/hrms/internal/retirement-accounts", headers: auth(["employee"]) });
     await app.close();
     expect(res.statusCode).toBe(403);
     expect(scopedReadMock).not.toHaveBeenCalled();
