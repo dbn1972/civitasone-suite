@@ -245,7 +245,8 @@ describe("OrgHierarchyManager failure + validation", () => {
     fireEvent.change(screen.getByLabelText("New unit code"), { target: { value: "a b!" } });
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
     expect(screen.getByRole("alert")).toHaveTextContent(/Code may only contain/);
-    expect(spy).not.toHaveBeenCalled();
+    // The page's own read of the user directory (head-of-unit names) is a GET; the claim is that nothing is POSTed.
+    expect(spy.mock.calls.filter(([, i]) => (i as RequestInit | undefined)?.method === "POST")).toHaveLength(0);
   });
 
   it("a failed post-save refresh is reported, not swallowed", async () => {
@@ -257,5 +258,130 @@ describe("OrgHierarchyManager failure + validation", () => {
     fireEvent.change(screen.getByLabelText("New unit name"), { target: { value: "New" } });
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/could not be refreshed/);
+  });
+});
+
+// GAP-ADMIN-ORG-03: head of unit + deactivate
+describe("OrgHierarchyManager head of unit and deactivate (GAP-ADMIN-ORG-03)", () => {
+  beforeEach(() => vi.restoreAllMocks());
+  const USERS = [{ id: "11111111-1111-4111-8111-111111111111", name: "Asha Rao" }, { id: "22222222-2222-4222-8222-222222222222", name: "Vikram Shah" }];
+  const headed: AdminOrgUnit = { ...division, headUserId: USERS[0]!.id };
+  const usersOk = () => new Response(JSON.stringify({ data: USERS }), { status: 200 });
+
+  it("shows the head by NAME, never the raw id", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => usersOk());
+    render(<OrgHierarchyManager initialUnits={[dept, headed]} source="api" />);
+    await waitFor(() => expect(screen.getByText(/Head: Asha Rao/)).toBeInTheDocument());
+    expect(screen.queryByText(USERS[0]!.id)).not.toBeInTheDocument();
+  });
+
+  it("an unreachable user directory shows 'Unknown user', not an id, and the tree still works", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("down"));
+    render(<OrgHierarchyManager initialUnits={[dept, headed]} source="api" />);
+    await waitFor(() => expect(screen.getByText(/Head: Unknown user/)).toBeInTheDocument());
+    expect(screen.getByText("Revenue Department")).toBeInTheDocument();
+  });
+
+  it("Set head PATCHes headUserId only after Save, with the chosen person", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async (_u, init) =>
+      (init as RequestInit | undefined)?.method === "PATCH" ? new Response("{}", { status: 202 }) : usersOk());
+    render(<OrgHierarchyManager initialUnits={[dept, division]} source="api" />);
+    await waitFor(() => expect(spy).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "Set head of Assessment Division" }));
+    const dialog = screen.getByRole("alertdialog");
+    await waitFor(() => expect(within(dialog).getByRole("option", { name: "Asha Rao" })).toBeInTheDocument());
+    expect(within(dialog).getByRole("button", { name: "Save head" })).toBeDisabled();
+    expect(patches(spy)).toHaveLength(0);
+    fireEvent.change(within(dialog).getByRole("combobox"), { target: { value: USERS[1]!.id } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save head" }));
+    await waitFor(() => expect(patches(spy)).toHaveLength(1));
+    expect(JSON.parse((patches(spy)[0]![1] as RequestInit).body as string)).toEqual({ headUserId: USERS[1]!.id });
+  });
+
+  it("Deactivate requires a reason, POSTs it once, and says the unit is kept for history", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) =>
+      (init as RequestInit | undefined)?.method === "POST" ? new Response("{}", { status: 202 }) : String(url).includes("/users") ? usersOk() : new Response(JSON.stringify({ data: [dept, { ...section, effectiveTo: "2026-01-01T00:00:00Z" }] }), { status: 200 }));
+    render(<OrgHierarchyManager initialUnits={[dept, section]} source="api" />);
+    fireEvent.click(screen.getByRole("button", { name: "Deactivate Audit Section" }));
+    const dialog = screen.getByRole("alertdialog");
+    expect(within(dialog).getByText(/history is kept/)).toBeInTheDocument();
+    const confirm = within(dialog).getByRole("button", { name: "Deactivate" });
+    expect(confirm).toBeDisabled();
+    fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "Merged into Accounts" } });
+    fireEvent.click(confirm);
+    await waitFor(() => expect(spy.mock.calls.filter(([, i]) => (i as RequestInit | undefined)?.method === "POST")).toHaveLength(1));
+    const post = spy.mock.calls.find(([, i]) => (i as RequestInit | undefined)?.method === "POST")!;
+    expect(post[0]).toBe(`${ORG}/unit-sec-1/deactivate`);
+    expect(JSON.parse((post[1] as RequestInit).body as string)).toEqual({ reason: "Merged into Accounts" });
+  });
+
+  it("a unit with active sub-units cannot be confirmed for deactivation, and says how many", () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => usersOk());
+    render(<OrgHierarchyManager initialUnits={[dept, division, section]} source="api" />);
+    fireEvent.click(screen.getByRole("button", { name: "Deactivate Assessment Division" }));
+    const dialog = screen.getByRole("alertdialog");
+    expect(within(dialog).getByText(/still has 1 active sub-unit/)).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "reason given anyway" } });
+    expect(within(dialog).getByRole("button", { name: "Deactivate" })).toBeDisabled();
+  });
+
+  it("a 409 from the server is explained in plain language inside the dialog", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) =>
+      (init as RequestInit | undefined)?.method === "POST"
+        ? new Response(JSON.stringify({ error: { code: "HAS_ACTIVE_CHILDREN" } }), { status: 409 })
+        : usersOk());
+    render(<OrgHierarchyManager initialUnits={[dept, section]} source="api" />);
+    fireEvent.click(screen.getByRole("button", { name: "Deactivate Audit Section" }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "closing it down" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Deactivate" }));
+    await waitFor(() => expect(within(screen.getByRole("alertdialog")).getByRole("alert")).toHaveTextContent(/still has active sub-units/));
+  });
+
+  it("an inactive unit is marked, dimmed out of the move picker and offers no actions", () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => usersOk());
+    const dead: AdminOrgUnit = { ...other, effectiveTo: "2026-01-01T00:00:00Z" };
+    render(<OrgHierarchyManager initialUnits={[dept, dead]} source="api" />);
+    expect(screen.getByText("Inactive")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Deactivate Works Department" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Move Revenue Department" }));
+    expect(within(screen.getByRole("alertdialog")).queryByRole("option", { name: "Works Department" })).not.toBeInTheDocument();
+  });
+});
+
+describe("OrgHierarchyManager copy and positions override (reviewer follow-up)", () => {
+  beforeEach(() => vi.restoreAllMocks());
+  const usersOk = () => new Response(JSON.stringify({ data: [] }), { status: 200 });
+
+  it("the head dialog does not claim approval routing", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => usersOk());
+    render(<OrgHierarchyManager initialUnits={[dept, division]} source="api" />);
+    fireEvent.click(screen.getByRole("button", { name: "Set head of Assessment Division" }));
+    const text = screen.getByRole("alertdialog").textContent ?? "";
+    expect(text).toMatch(/for display and reporting/);
+    expect(text).toMatch(/does not by itself change who approves/);
+    expect(text).not.toMatch(/route to/);
+  });
+
+  it("a 409 HAS_ACTIVE_POSITIONS asks for an explicit acknowledgement and resends with it", async () => {
+    let call = 0;
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+      if ((init as RequestInit | undefined)?.method !== "POST") return usersOk();
+      call++;
+      return call === 1 ? new Response(JSON.stringify({ error: { code: "HAS_ACTIVE_POSITIONS" } }), { status: 409 }) : new Response("{}", { status: 202 });
+    });
+    render(<OrgHierarchyManager initialUnits={[dept, section]} source="api" />);
+    fireEvent.click(screen.getByRole("button", { name: "Deactivate Audit Section" }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "restructure" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Deactivate" }));
+    await waitFor(() => expect(within(screen.getByRole("alertdialog")).getByRole("alert")).toHaveTextContent(/open positions/));
+    const confirm = within(screen.getByRole("alertdialog")).getByRole("button", { name: "Deactivate" });
+    expect(confirm).toBeDisabled();
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("checkbox"));
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Deactivate" }));
+    await waitFor(() => expect(spy.mock.calls.filter(([, i]) => (i as RequestInit | undefined)?.method === "POST")).toHaveLength(2));
+    const second = spy.mock.calls.filter(([, i]) => (i as RequestInit | undefined)?.method === "POST")[1]!;
+    expect(JSON.parse((second[1] as RequestInit).body as string)).toEqual({ reason: "restructure", acknowledgePositions: true });
   });
 });

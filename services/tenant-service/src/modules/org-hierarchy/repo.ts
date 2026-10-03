@@ -16,6 +16,7 @@ import { eq, and, isNull, sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { orgUnits, type OrgUnitRow } from "./schema.js";
+import { IN_FORCE_SQL } from "./state.js";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -53,6 +54,49 @@ export function findChildren(tenantId: string, parentId: string): Promise<OrgUni
       .where(and(eq(orgUnits.tenantId, tenantId), eq(orgUnits.parentId, parentId)))
       .orderBy(orgUnits.name),
   );
+}
+
+/** Children of `parentId` that are still in force (not end-dated). */
+export function countActiveChildren(tenantId: string, parentId: string): Promise<number> {
+  return scoped(tenantId, async (tx) => {
+    const res = await tx.execute(sql`
+      SELECT count(*)::int AS n FROM tenant.org_units c
+       WHERE c.tenant_id = ${tenantId} AND c.parent_id = ${parentId} AND ${sql.raw(IN_FORCE_SQL("c"))}`);
+    return Number(extractRows(res)[0]?.n ?? 0);
+  });
+}
+
+/** Open positions (active or frozen, not abolished or end-dated) that sit in `unitId`. Deactivating the unit orphans them. */
+export function countActivePositions(tenantId: string, unitId: string): Promise<number> {
+  return scoped(tenantId, async (tx) => {
+    const res = await tx.execute(sql`
+      SELECT count(*)::int AS n FROM tenant.positions p
+       WHERE p.tenant_id = ${tenantId} AND p.org_unit_id = ${unitId}
+         AND p.status <> 'abolished' AND p.effective_to IS NULL`);
+    return Number(extractRows(res)[0]?.n ?? 0);
+  });
+}
+
+/**
+ * GAP-ADMIN-ORG-03: end-date a unit (deactivate). One conditional UPDATE that
+ * succeeds only while the unit is still in force AND has no in-force child, so a
+ * double click or a racing child-create cannot leave an active child under an
+ * inactive parent. Returns the closed row, or null when the condition failed.
+ * Callers hold lockTenantForReparent so the child check and a concurrent create
+ * under this unit serialize.
+ */
+export async function deactivateConditional(tx: Tx, tenantId: string, id: string): Promise<OrgUnitRow | null> {
+  const res = await tx.execute(sql`
+    UPDATE tenant.org_units u
+       SET effective_to = now(), updated_at = now(), version = u.version + 1
+     WHERE u.id = ${id} AND u.tenant_id = ${tenantId} AND ${sql.raw(IN_FORCE_SQL("u"))}
+       AND NOT EXISTS (
+         SELECT 1 FROM tenant.org_units c
+          WHERE c.parent_id = u.id AND c.tenant_id = ${tenantId} AND ${sql.raw(IN_FORCE_SQL("c"))})
+    RETURNING u.*
+  `);
+  const row = extractRows(res)[0];
+  return row ? mapRow(row) : null;
 }
 
 export function findRoots(tenantId: string): Promise<OrgUnitRow[]> {

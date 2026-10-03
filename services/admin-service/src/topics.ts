@@ -15,6 +15,12 @@ export const COMMANDS = {
   tenantLifecycleExecuteDue: "admin.tenant_lifecycle.execute_due",
   // cancel: Payload LifecycleCancelPayload; published by POST .../cancel for a scheduled request.
   tenantLifecycleCancel:     "admin.tenant_lifecycle.cancel",
+  // GAP-ADMIN-ONBOARDING-05/-07, GAP-ADMIN-OPERATORS-06 (platform-ops module).
+  // platformDataAccess: { kind: export|reveal, resource, resourceId?, rowCount?, filtered?, reason?, fields? }.
+  // onboardingCreate / onboardingMove: see platform-ops/commands.ts.
+  platformDataAccess: "admin.platform_data_access.record",
+  onboardingCreate:   "admin.onboarding.create",
+  onboardingMove:     "admin.onboarding.move_stage",
   moduleToggle:       "admin.module.toggle",
   // Platform-wide flag registry (config module — config.admin_feature_flags,
   // global + per-tenant `overrides` jsonb).

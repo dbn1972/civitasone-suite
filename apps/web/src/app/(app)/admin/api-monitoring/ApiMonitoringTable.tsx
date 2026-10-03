@@ -1,20 +1,39 @@
 "use client";
+import { useEffect, useState } from "react";
 import { DataTable, StatGrid, StatCard, LoadErrorState, Card } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
-import { countApiStatuses, type ApiEndpointRow } from "@/lib/admin/monitoring";
+import { formatIndianDateTime as formatDateTimeIST } from "@/lib/formatters";
+import { countApiStatuses, errorRateView, formatLatencyMs, isSnapshotStale, newestCheckedAt, type ApiEndpointRow } from "@/lib/admin/monitoring";
 
 type Row = ApiEndpointRow;
 /** Column keys are checked against the row type: renaming a field breaks tsc here. */
-type ColumnKey = "service" | "endpoint" | "p95Latency" | "errorRate" | "requestsPerMin" | "status";
+type ColumnKey = "service" | "endpoint" | "p95Latency" | "errorRate" | "requestsPerMin" | "status" | "checkedAt";
 
-const COLUMNS: { key: ColumnKey; label: string; align?: "right"; cellType?: "status" }[] = [
+const COLUMNS: {
+  key: ColumnKey; label: string; align?: "right"; cellType?: "status";
+  render?: (r: Row) => React.ReactNode; csv?: (r: Row) => string;
+}[] = [
   { key: "service", label: "Service" },
   { key: "endpoint", label: "Endpoint" },
-  { key: "p95Latency", label: "p95 (ms)", align: "right" },
-  { key: "errorRate", label: "Error Rate" },
+  // GAP-ADMIN-API-MONITORING-06: p95 is milliseconds, error rate is a percentage with a unit and a
+  // text + colour severity cue; both fall back to an em dash rather than a guessed number.
+  { key: "p95Latency", label: "p95", align: "right", render: (r) => formatLatencyMs(r.p95Latency), csv: (r) => formatLatencyMs(r.p95Latency) },
+  {
+    key: "errorRate", label: "Error Rate",
+    render: (r) => {
+      const v = errorRateView(r.errorRate);
+      return <span className={`pill ${v.tone}`} aria-label={v.label}>{v.text}</span>;
+    },
+    csv: (r) => errorRateView(r.errorRate).text,
+  },
   { key: "requestsPerMin", label: "Req/min", align: "right" },
   { key: "status", label: "Status", cellType: "status" },
+  {
+    key: "checkedAt", label: "Last checked",
+    render: (r) => (r.checkedAt ? formatDateTimeIST(r.checkedAt) : "Not reported"),
+    csv: (r) => (r.checkedAt ? formatDateTimeIST(r.checkedAt) : ""),
+  },
 ];
 
 /**
@@ -39,6 +58,11 @@ export function ApiMonitoringTable({
   const noData = provenance === "error-no-data";
   const c = countApiStatuses(rows);
   const stat = (n: number): number | null => (noData ? null : n);
+  // GAP-ADMIN-API-MONITORING-06: say how fresh the snapshot is, in words, so a stale one is not mistaken for live.
+  const checkedAt = newestCheckedAt(rows);
+  const [nowMs, setNowMs] = useState<number | null>(null);
+  useEffect(() => { setNowMs(Date.now()); }, [rows]);
+  const stale = nowMs !== null && isSnapshotStale(checkedAt, nowMs);
 
   return (
     <>
@@ -51,6 +75,13 @@ export function ApiMonitoringTable({
         <StatCard icon="❔" iconBg="#f1f5f9" label="Unknown / other" value={stat(c.other)} />
       </StatGrid>
       <Card title="API Endpoints">
+        {!noData && (
+          <p role="status" style={{ margin: "0 0 8px", fontSize: 12.5, color: stale ? "var(--bad)" : "var(--mut)" }}>
+            {checkedAt
+              ? `Data as of ${formatDateTimeIST(checkedAt)}${stale ? " — this snapshot is more than 5 minutes old and may not reflect the current state." : "."}`
+              : "The monitoring source did not report when this data was measured, so it cannot be confirmed as current."}
+          </p>
+        )}
         {noData ? (
           <LoadErrorState
             result={{ status, errorMessage }}

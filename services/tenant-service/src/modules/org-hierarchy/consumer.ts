@@ -18,6 +18,7 @@ import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import * as repo from "./repo.js";
+import { isUnitInactive } from "./state.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const log = pino({ name: "org-hierarchy-consumer" });
@@ -29,10 +30,16 @@ export function registerOrgHierarchyConsumers(q: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       let level = 1;
       if (p.parentId) {
+        // Serialize with deactivate: a unit cannot gain a child while it is being end-dated.
+        await repo.lockTenantForReparent(tx, p.tenantId);
         const parent = await repo.findByIdTx(tx, p.tenantId, p.parentId);
         if (!parent) {
           log.warn({ id: p.id, parentId: p.parentId }, "org_unit.create: parent not found — rejecting");
           return; // parent must exist within the tenant; drop silently (idempotent)
+        }
+        if (isUnitInactive(parent)) {
+          log.warn({ id: p.id, parentId: p.parentId }, "org_unit.create: parent is deactivated — rejecting");
+          return;
         }
         level = parent.level + 1;
       }
@@ -57,6 +64,7 @@ export function registerOrgHierarchyConsumers(q: Queue): void {
 
       const existing = await repo.findByIdTx(tx, p.tenantId, p.id);
       if (!existing) { log.warn({ id: p.id }, "org_unit.update: not found"); return; }
+      if (isUnitInactive(existing)) { log.warn({ id: p.id }, "org_unit.update: unit is deactivated"); return; }
 
       // Reparent integrity: reject cycles defensively (also enforced at route level).
       let nextLevel: number | undefined;
@@ -70,6 +78,7 @@ export function registerOrgHierarchyConsumers(q: Queue): void {
           }
           const parent = await repo.findByIdTx(tx, p.tenantId, p.parentId);
           if (!parent) { log.warn({ id: p.id, parentId: p.parentId }, "org_unit.update: parent missing"); return; }
+          if (isUnitInactive(parent)) { log.warn({ id: p.id, parentId: p.parentId }, "org_unit.update: parent is deactivated"); return; }
           nextLevel = parent.level + 1;
         }
       }
@@ -89,6 +98,19 @@ export function registerOrgHierarchyConsumers(q: Queue): void {
         ? { oldParentId: existing.parentId, newParentId: p.parentId ?? null, oldLevel: existing.level, newLevel: nextLevel }
         : {};
       await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "tenant", action: "update_org_unit", resourceType: "org_unit", resourceId: p.id, outcome: "success", ...reparentAudit } });
+    }));
+  });
+
+  // GAP-ADMIN-ORG-03: end-date a unit. The conditional UPDATE is the authority (in force + no in-force child);
+  // the audit row records the reason and is written in the same transaction.
+  q.subscribe("tenant.org_unit.deactivate", async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; reason: string; positionsAcknowledged?: boolean };
+    await runWithTenant(msg.tenantId, () => db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await repo.lockTenantForReparent(tx, p.tenantId);
+      const closed = await repo.deactivateConditional(tx, p.tenantId, p.id);
+      if (!closed) { log.warn({ id: p.id }, "org_unit.deactivate: not applied (missing, already inactive, or has active children)"); return; }
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "tenant", action: "deactivate_org_unit", resourceType: "org_unit", resourceId: p.id, outcome: "success", reason: p.reason, ...(p.positionsAcknowledged ? { positionsAcknowledged: true } : {}) } });
     }));
   });
 }

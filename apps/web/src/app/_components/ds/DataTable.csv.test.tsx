@@ -58,3 +58,35 @@ describe("DataTable CSV export", () => {
     expect(csv.split("\n")[1]).toBe("9b2f7c1e-full-id");
   });
 });
+
+describe("DataTable exportGuard (fail-closed export)", () => {
+  afterEach(() => vi.restoreAllMocks());
+  const cols = [{ key: "office" as const, label: "Office" }];
+
+  it("awaits the guard, then downloads when it says ok", async () => {
+    const order: string[] = [];
+    const guard = vi.fn(async (info: { rowCount: number; filter: string }) => { order.push(`guard:${info.rowCount}`); return { ok: true as const }; });
+    URL.createObjectURL = vi.fn(() => { order.push("file"); return "blob:x"; }); URL.revokeObjectURL = vi.fn();
+    render(<DataTable<Row> columns={cols} rows={rows} exportable exportGuard={guard} />);
+    fireEvent.click(screen.getByText("⬇ CSV"));
+    await waitFor(() => expect(order).toEqual(["guard:1", "file"]));
+  });
+
+  it("builds NO file and shows the guard's message when it says not ok", async () => {
+    const made = vi.fn(() => "blob:x");
+    URL.createObjectURL = made; URL.revokeObjectURL = vi.fn();
+    render(<DataTable<Row> columns={cols} rows={rows} exportable exportGuard={async () => ({ ok: false as const, message: "Could not record this export." })} />);
+    fireEvent.click(screen.getByText("⬇ CSV"));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Could not record this export."));
+    expect(made).not.toHaveBeenCalled();
+  });
+
+  it("a guard that throws is treated as not ok", async () => {
+    const made = vi.fn(() => "blob:x");
+    URL.createObjectURL = made; URL.revokeObjectURL = vi.fn();
+    render(<DataTable<Row> columns={cols} rows={rows} exportable exportGuard={async () => { throw new Error("boom"); }} />);
+    fireEvent.click(screen.getByText("⬇ CSV"));
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(made).not.toHaveBeenCalled();
+  });
+});

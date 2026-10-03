@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { ProvisionStepsTable, type ProvisionStep } from "./ProvisionStepsTable";
+import { ProvisionRequestFromUrl } from "./ProvisionRequestFromUrl";
 import { AdminAccessDenied, sessionHasAnyRole } from "../_components/AdminAccessGate";
 import { PLATFORM_ADMIN_ROLES } from "@/lib/auth/adminRoles";
 
@@ -45,6 +46,8 @@ export default function TenantProvisionPage() {
           </Link>
         }
       />
+      {/* GAP-ADMIN-ONBOARDING-07: opened from a queue row (?requestId=), shows which request this visit is for. */}
+      <ProvisionRequestFromUrl />
       <StatGrid>
         <StatCard icon="🚀" iconBg="#eef2ff" label="Total Steps" value={PROVISIONING_STEPS.length} />
         <StatCard icon="✅" iconBg="#ecfdf3" label="Required" value={required} />
