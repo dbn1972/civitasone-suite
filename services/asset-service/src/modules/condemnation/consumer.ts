@@ -16,7 +16,7 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
-import { assertMakerChecker, assertBidMeetsFloor, assertRowUpdated, assertRecommendationPending, assertAuctionable, assertAuctionOpen, assertNoActiveAuction } from "./domain.js";
+import { assertMakerChecker, assertBidMeetsFloor, assertProceedsWithinBid, assertRowUpdated, assertRecommendationPending, assertAuctionable, assertAuctionOpen, assertNoActiveAuction } from "./domain.js";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { condemnationSurveys, condemnationRecommendations, assetAuctions } from "./schema.js";
 import { assetAssets } from "../register/schema.js";
@@ -177,6 +177,7 @@ export function registerCondemnationConsumers(rawQueue: Queue): void {
 
         // Validate bid meets reserve
         assertBidMeetsFloor(BigInt(p.highestBidMinor), auction.reserveValueMinor);
+        assertProceedsWithinBid(BigInt(p.saleProceedsMinor), BigInt(p.highestBidMinor));
 
         // Update auction record -- a stale version must not retire the asset
         // or post the receipt/GL below.

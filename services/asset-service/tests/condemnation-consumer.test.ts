@@ -49,13 +49,16 @@ describe("Condemnation consumer — CQRS behaviour", () => {
     expect(JSON.parse(res.body).status).toBe("accepted");
   });
 
-  it("submits survey with recommendation", async () => {
+  // GAP-ASSETS-CONDEMNATION-08: the routes now check the record before queueing,
+  // so a command against an id with no row is a 404 rather than a silent 202.
+  // (The seeded happy paths live in gap-ml-assets-01.test.ts.)
+  it("submit against an unknown survey is a 404, not an accepted command", async () => {
     const res = await app.inject({
       method: "PATCH", url: `/v1/assets/condemnation-surveys/${surveyId}/submit`,
       headers: { authorization: `Bearer ${token()}` },
       payload: { version: 1, recommendation: "condemn" },
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("creates committee recommendation with ≥2 members", async () => {
@@ -75,13 +78,13 @@ describe("Condemnation consumer — CQRS behaviour", () => {
     expect(res.statusCode).toBe(202);
   });
 
-  it("approves recommendation (maker-checker route accepts 202)", async () => {
+  it("approve against an unknown recommendation is a 404", async () => {
     const res = await app.inject({
       method: "PATCH", url: `/v1/assets/condemnation-recommendations/${recId}/approve`,
       headers: { authorization: `Bearer ${token()}` },
       payload: { version: 1 },
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("creates auction with reserve value", async () => {
@@ -96,7 +99,7 @@ describe("Condemnation consumer — CQRS behaviour", () => {
     expect(res.statusCode).toBe(202);
   });
 
-  it("completes auction with sale proceeds → 202 (triggers finance receipt + asset retirement in consumer)", async () => {
+  it("complete against an unknown auction is a 404", async () => {
     const res = await app.inject({
       method: "PATCH", url: `/v1/assets/auctions/${auctionId}/complete`,
       headers: { authorization: `Bearer ${token()}` },
@@ -105,10 +108,10 @@ describe("Condemnation consumer — CQRS behaviour", () => {
         winnerName: "M/s XYZ Traders", saleProceedsMinor: 65000,
       },
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
-  it("auction with bid below reserve is rejected at validation", async () => {
+  it("a bid-below-reserve completion against an unknown auction is still a 404 (the 422 is covered with a real row)", async () => {
     const res = await app.inject({
       method: "PATCH", url: `/v1/assets/auctions/${randomUUID()}/complete`,
       headers: { authorization: `Bearer ${token()}` },
@@ -117,7 +120,6 @@ describe("Condemnation consumer — CQRS behaviour", () => {
         winnerName: "Cheap Buyer", saleProceedsMinor: 5000,
       },
     });
-    // Route accepts (consumer validates); this just confirms route shape
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 });

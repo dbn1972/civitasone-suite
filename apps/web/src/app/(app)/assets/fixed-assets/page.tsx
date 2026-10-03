@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getFixedAssets } from "../../../_data/loaders";
 import { PageHeader } from "../../../_components/ds";
 import { AssetsTable } from "../list/AssetsTable";
@@ -6,7 +7,7 @@ import { AssetsTable } from "../list/AssetsTable";
 // AssetsTable: stats, offline cache, provenance badge), restricted to type
 // "fixed" -- no second copy of the stats/table code.
 export default async function FixedAssetsPage() {
-  const { data: assets, source } = await getFixedAssets();
+  const { data: assets, source, truncated } = await getFixedAssets();
 
   return (
     <>
@@ -15,8 +16,8 @@ export default async function FixedAssetsPage() {
         subtitle="Fixed assets — capitalised from GRN or registered manually."
         actions={
           <>
-            <a href="/assets/bulk-import" className="btn ghost">Bulk import</a>
-            <a href="/assets/register" className="btn primary">+ Register Asset</a>
+            <Link href="/assets/bulk-import" className="btn ghost">Bulk import</Link>
+            <Link href="/assets/register" className="btn primary">+ Register Asset</Link>
           </>
         }
       />
@@ -34,6 +35,11 @@ export default async function FixedAssetsPage() {
       >
         <span aria-hidden="true">🔗</span> <b>Auto-capitalised from Procurement GRN.</b> Accepted capital goods create asset records here; depreciation posts to Finance.
       </div>
+      {truncated ? (
+        <p role="status" className="banner" style={{ fontSize: 13, color: "var(--warn)", margin: "0 0 12px" }}>
+          Showing the first 5,000 assets only. Narrow the list with the filter, or use a more specific register, to see the rest.
+        </p>
+      ) : null}
       <AssetsTable assets={assets} source={source} cacheKey="assets.fixed" typeFilter="fixed" heading="Fixed asset register" />
     </>
   );

@@ -6,8 +6,8 @@ vi.mock("../../../_data/loaders", () => ({ getAssetById: (id: string) => getAsse
 const rolesMock = vi.fn<() => string[]>(() => ["asset_manager"]);
 vi.mock("@/lib/auth/roleGuard", () => ({ getSessionRoles: () => rolesMock() }));
 vi.mock("./AssetDetailActions", () => ({ AssetDetailActions: () => <div data-testid="actions" /> }));
-vi.mock("./AssetFinancialActions", () => ({ AssetFinancialActions: () => null }));
-vi.mock("../../../_components/RaiseEOfficeNote", () => ({ RaiseEOfficeNote: () => <div data-testid="eoffice" /> }));
+vi.mock("./AssetFinancialActions", () => ({ AssetFinancialActions: () => <div data-testid="financial" /> }));
+vi.mock("../../../_components/RaiseEOfficeNote", () => ({ RaiseEOfficeNote: (p: { notifyPath?: string }) => <div data-testid="eoffice" data-notify={p.notifyPath ?? ""} /> }));
 
 import AssetDetailPage from "./page";
 
@@ -66,5 +66,47 @@ describe("AssetDetailPage sub-fetch failures", () => {
     render(await AssetDetailPage({ params: { id: "a1" } }));
     expect(screen.getByText("Tagged")).toBeInTheDocument();
     expect(screen.getByText("AMC")).toBeInTheDocument();
+  });
+});
+
+// GAP-ASSETS-DETAIL-05 / DETAIL-08
+describe("AssetDetailPage status scope and lifecycle", () => {
+  beforeEach(() => { getAssetByIdMock.mockReset(); rolesMock.mockReturnValue(["asset_manager"]); });
+  const load = (over: Record<string, unknown>) =>
+    getAssetByIdMock.mockResolvedValue({ data: { ...ASSET, ...over }, source: "api", parts: { depreciation: "api", maintenance: "api" } });
+
+  it("offers the financial and eOffice cards for an active asset", async () => {
+    load({});
+    render(await AssetDetailPage({ params: { id: "a1" } }));
+    expect(screen.getByTestId("financial")).toBeInTheDocument();
+    expect(screen.getByTestId("eoffice")).toBeInTheDocument();
+  });
+
+  it("does not pass a notifyPath: the decision returns via asset.disposal.file_decided, and a {} body always 400s", async () => {
+    load({});
+    render(await AssetDetailPage({ params: { id: "a1" } }));
+    expect(screen.getByTestId("eoffice").getAttribute("data-notify")).toBe("");
+  });
+
+  it.each(["disposed", "written_off", "condemned"])("offers neither the financial nor the eOffice disposal card for a %s asset", async (status) => {
+    load({ status });
+    render(await AssetDetailPage({ params: { id: "a1" } }));
+    expect(screen.queryByTestId("financial")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("eoffice")).not.toBeInTheDocument();
+  });
+
+  it("does not mark Tagged or AMC done for an untagged asset that only has a warranty", async () => {
+    load({ warrantyExpiry: "2027-01-01" });
+    const { container } = render(await AssetDetailPage({ params: { id: "a1" } }));
+    const stepClass = (label: string) => screen.getByText(label, { selector: ".t" }).closest("li")?.className;
+    expect(stepClass("Tagged")).toBe("todo");
+    expect(stepClass("AMC")).toBe("todo");
+    expect(container.textContent).toMatch(/Warranty until/);
+  });
+
+  it("marks Tagged done when the asset has a barcode", async () => {
+    load({ barcode: "AST-1-BC" });
+    render(await AssetDetailPage({ params: { id: "a1" } }));
+    expect(screen.getByText("Tagged", { selector: ".t" }).closest("li")?.className).toBe("done");
   });
 });

@@ -77,10 +77,10 @@ export function AssetsTable({ assets, source = "api", cacheKey = "assets.registe
   return (
     <>
       <StatGrid>
-        <StatCard icon="🖥️" iconBg="#fdf0e3" label={typeFilter === "fixed" ? "Fixed Assets" : "Assets"} value={unknown ? null : stats.count.toLocaleString("en-IN")} />
-        <StatCard icon="✅" iconBg="#eff6ff" label="Active / in use" value={unknown ? null : `${stats.activePct}%`} />
-        <StatCard icon="💰" iconBg="#ecfdf3" label="Gross Block" value={unknown ? null : formatMoney(stats.grossBlock)} />
-        <StatCard icon="📉" iconBg="#fffaeb" label="Net Book Value" value={unknown ? null : formatMoney(stats.netBlock)} />
+        <StatCard icon="🖥️" tone="warn" label={typeFilter === "fixed" ? "Fixed Assets" : "Assets"} value={unknown ? null : stats.count.toLocaleString("en-IN")} />
+        <StatCard icon="✅" tone="info" label="Active / in use" value={unknown ? null : `${stats.activePct}%`} />
+        <StatCard icon="💰" tone="good" label="Gross Block" value={unknown ? null : formatMoney(stats.grossBlock)} />
+        <StatCard icon="📉" tone="warn" label="Net Book Value" value={unknown ? null : formatMoney(stats.netBlock)} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h">

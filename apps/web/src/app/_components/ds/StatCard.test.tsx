@@ -110,4 +110,24 @@ describe("StatCard", () => {
       expect(screen.getByText("—")).toBeInTheDocument();
     });
   });
+
+  // GAP-ASSETS-DASHBOARD-02
+  it("renders the whole tile as a keyboard-focusable link when href is set", () => {
+    render(<StatCard icon="🛠️" label="Under Maintenance" value={3} href="/assets/maintenance" />);
+    const link = screen.getByRole("link");
+    expect(link).toHaveAttribute("href", "/assets/maintenance");
+    expect(link).toHaveTextContent("Under Maintenance");
+    expect(link).toHaveTextContent("3");
+  });
+
+  it("stays a plain, non-link tile without href (no change for other pages)", () => {
+    render(<StatCard icon="🛠️" label="Plain" value={3} />);
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  // GAP-ASSETS-DASHBOARD-04
+  it("tone maps to a theme token and wins over the deprecated iconBg", () => {
+    const { container } = render(<StatCard icon="⚠️" label="Due" value={1} tone="bad" iconBg="#fef2f2" />);
+    expect((container.querySelector(".ic") as HTMLElement).style.background).toBe("var(--badbg)");
+  });
 });

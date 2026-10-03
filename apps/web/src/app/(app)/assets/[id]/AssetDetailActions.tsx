@@ -3,8 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useId, useRef, useState } from "react";
 import { Button, ConfirmDialog, useConfirmAction } from "../../../_components/ds";
-import { formatMoney } from "@/lib/formatters";
+import { errorMessageFromResponse } from "@/lib/api/browserClient";
+import { formatMoney, todayIST, addDaysIST } from "@/lib/formatters";
 import { canWriteAssets } from "@/lib/auth/workRoles";
+import { assetActionScope } from "@/lib/assetLifecycle";
+import { isRealCalendarDate } from "@/lib/calendarDate";
 
 type Props = {
   assetId: string;
@@ -77,6 +80,33 @@ function proceedsToMinorString(input: string): string | null {
   return minor.toString();
 }
 
+/** Disposal methods the lifecycle / enterprise routes accept. */
+const DISPOSAL_METHODS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "sale", label: "Sale" },
+  { value: "scrap", label: "Scrap" },
+  { value: "auction", label: "Auction" },
+  { value: "donation", label: "Donation" },
+  { value: "write_off", label: "Write-off" },
+];
+
+/**
+ * GAP-ASSETS-DETAIL-06: the services take proceedsMinor as a JSON number, which
+ * is exact only up to 2^53. Convert a validated paise string to a number only
+ * when that is lossless; null means "too large to send safely".
+ */
+export function safeProceedsNumber(minor: string): number | null {
+  const n = Number(minor);
+  return Number.isSafeInteger(n) && BigInt(n).toString() === minor ? n : null;
+}
+
+/** Frequencies the maintenance plan accepts (service stores a short string). */
+const AMC_FREQUENCIES: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "monthly", label: "Monthly" },
+  { value: "quarterly", label: "Quarterly" },
+  { value: "half_yearly", label: "Half-yearly" },
+  { value: "annual", label: "Annual" },
+];
+
 const inputStyle: React.CSSProperties = { width: "100%", padding: 8, marginBottom: 4, border: "1px solid var(--line)", borderRadius: 8, fontSize: 13 };
 
 export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
@@ -87,12 +117,19 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
   const [tagError, setTagError] = useState("");
   const [toLocation, setToLocation] = useState("");
   const [proceeds, setProceeds] = useState("");
+  const [disposalMethod, setDisposalMethod] = useState("sale");
+  const [requestErrors, setRequestErrors] = useState<Record<string, string>>({});
+  // GAP-ASSETS-DETAIL-04: AMC is parameterised and confirmed, not fired from the click.
+  const [amcFrequency, setAmcFrequency] = useState("annual");
+  const [amcNextDue, setAmcNextDue] = useState(() => addDaysIST(todayIST(), 365));
+  const [amcDescription, setAmcDescription] = useState("AMC plan");
+  const [amcError, setAmcError] = useState("");
 
   // Direct dispose (lifecycle PATCH .../dispose — bypasses the eOffice
   // write-off workflow used by "Request disposal" below). The asset-service
   // consumer still refuses it unless an approved committee write-off exists
   // (GFR Rule 173), and the action card is only rendered for ASSET_WRITE_ROLES.
-  const [directDisposalDate, setDirectDisposalDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [directDisposalDate, setDirectDisposalDate] = useState(() => todayIST());
   const [directDisposalMethod, setDirectDisposalMethod] = useState("sale");
   const [directProceeds, setDirectProceeds] = useState("");
   const [directNotes, setDirectNotes] = useState("");
@@ -101,7 +138,7 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
   // Inter-org transfer (enterprise POST .../inter-org-transfer).
   const [fromOrg, setFromOrg] = useState("");
   const [toOrg, setToOrg] = useState("");
-  const [interOrgDate, setInterOrgDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [interOrgDate, setInterOrgDate] = useState(() => todayIST());
   const [interOrgNotes, setInterOrgNotes] = useState("");
   const [interOrgErrors, setInterOrgErrors] = useState<Record<string, string>>({});
 
@@ -113,6 +150,7 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
   const toOrgErrId = useId();
 
   const directProceedsRef = useRef<HTMLInputElement>(null);
+  const requestProceedsRef = useRef<HTMLInputElement>(null);
   const fromOrgRef = useRef<HTMLInputElement>(null);
   const toOrgRef = useRef<HTMLInputElement>(null);
 
@@ -141,27 +179,30 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
     }
   }
 
-  async function scheduleAmc() {
-    setBusy(true);
-    setMessage("");
-    try {
+  const amcAction = useConfirmAction({
+    onConfirm: async () => {
       const res = await fetch(`/api/proxy/v1/asset/assets/${assetId}/maintenance`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          frequency: "annual",
-          nextDue: new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10),
-          description: "AMC plan",
+          frequency: amcFrequency,
+          nextDue: amcNextDue,
+          description: amcDescription.trim() || "AMC plan",
         }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw new Error(await errorMessageFromResponse(res, "save", "AMC plan"));
       setMessage("AMC plan scheduled.");
       router.refresh();
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : "AMC failed");
-    } finally {
-      setBusy(false);
+    },
+  });
+
+  function openAmcDialog() {
+    if (!isRealCalendarDate(amcNextDue) || amcNextDue < todayIST()) {
+      setAmcError("Choose a first due date that is today or later.");
+      return;
     }
+    setAmcError("");
+    amcAction.trigger();
   }
 
   // Maker-checker: transfer changes custody/location of a government asset.
@@ -173,7 +214,7 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
         body: JSON.stringify({
           fromLocation: "current",
           toLocation: toLocation.trim(),
-          transferDate: new Date().toISOString().slice(0, 10),
+          transferDate: todayIST(),
           reason,
         }),
       });
@@ -186,16 +227,18 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
   // Maker-checker: disposal is GFR-irreversible and posts proceeds to GL.
   const disposeAction = useConfirmAction({
     onConfirm: async (reason) => {
-      const proceedsMinor = proceedsToMinorString(proceeds) ?? "0";
+      const proceedsMinor = safeProceedsNumber(proceedsToMinorString(proceeds) ?? "0");
+      if (proceedsMinor === null) throw new Error("The proceeds amount is too large to submit.");
       const res = await fetch(`/api/proxy/v1/asset/assets/${assetId}/request-disposal`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          disposalDate: new Date().toISOString().slice(0, 10),
-          disposalMethod: "sale",
-          proceedsMinor: Number(proceedsMinor),
+          disposalDate: todayIST(),
+          disposalMethod,
+          proceedsMinor,
           currency: "INR",
-          reason,
+          // asset-service names this field `notes`; a `reason` key is silently dropped.
+          notes: reason,
         }),
       });
       if (!res.ok) throw new Error(await res.text());
@@ -209,7 +252,8 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
   // record's notes (the lifecycle disposeBody has no separate reason field).
   const directDisposeAction = useConfirmAction({
     onConfirm: async (reason) => {
-      const proceedsMinor = proceedsToMinorString(directProceeds) ?? "0";
+      const proceedsMinor = safeProceedsNumber(proceedsToMinorString(directProceeds) ?? "0");
+      if (proceedsMinor === null) throw new Error("The proceeds amount is too large to submit.");
       const why = (reason ?? "").trim();
       const extra = directNotes.trim();
       const notes = extra ? `${why}\n\n${extra}` : why;
@@ -219,7 +263,7 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
         body: JSON.stringify({
           disposalDate: directDisposalDate,
           disposalMethod: directDisposalMethod,
-          proceedsMinor: Number(proceedsMinor),
+          proceedsMinor,
           currency: "INR",
           notes,
         }),
@@ -248,10 +292,23 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
     },
   });
 
+  function validateRequestDisposal(): boolean {
+    const next: Record<string, string> = {};
+    const minor = proceedsToMinorString(proceeds);
+    if (minor === null) next.proceeds = "Enter a valid non-negative proceeds amount (₹) with at most 2 decimals, or leave blank.";
+    else if (safeProceedsNumber(minor) === null) next.proceeds = "That amount is too large to submit.";
+    setRequestErrors(next);
+    if (next.proceeds) { requestProceedsRef.current?.focus(); return false; }
+    return true;
+  }
+
   function validateDirectDispose(): boolean {
     const next: Record<string, string> = {};
-    if (directProceeds.trim() && proceedsToMinorString(directProceeds) === null) {
+    const directMinor = proceedsToMinorString(directProceeds);
+    if (directMinor === null) {
       next.proceeds = "Enter a valid non-negative proceeds amount (₹) with at most 2 decimals, or leave blank.";
+    } else if (safeProceedsNumber(directMinor) === null) {
+      next.proceeds = "That amount is too large to submit.";
     }
     setDirectErrors(next);
     if (next.proceeds) { directProceedsRef.current?.focus(); return false; }
@@ -272,7 +329,9 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
     printAssetTag(tagCode.trim() || barcode || assetId.slice(0, 8));
   }
 
-  if (status === "disposed" || status === "written_off") return null;
+  // GAP-ASSETS-DETAIL-05: the page and this card share assetActionScope().
+  const scope = assetActionScope(status);
+  if (scope === "none") return null;
   if (!canWriteAssets(roles)) return null;
 
   const transferDisabled = busy || !toLocation.trim();
@@ -297,9 +356,16 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
           <Button type="button" variant="ghost" disabled={busy} onClick={printTag}>Print tag</Button>
         </div>
         {tagError ? <p id="asset-tag-code-err" role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{tagError}</p> : null}
+        {scope === "tag-only" ? (
+          <p style={{ fontSize: 12, color: "var(--muted)", margin: 0 }}>
+            This asset is condemned and awaiting auction, so transfer and disposal are handled in the condemnation workflow.
+          </p>
+        ) : null}
+        {scope === "full" ? (<>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <Button type="button" disabled={busy} onClick={() => void scheduleAmc()}>Schedule AMC</Button>
+          <Button type="button" disabled={busy} onClick={openAmcDialog}>Schedule AMC</Button>
         </div>
+        {amcError ? <p role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{amcError}</p> : null}
         <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
           <label htmlFor="asset-transfer-loc" className="sr-only">Transfer to location</label>
           <input id="asset-transfer-loc" value={toLocation} onChange={(e) => setToLocation(e.target.value)} placeholder="Transfer to location" style={inputStyle} />
@@ -307,8 +373,23 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
         </div>
         <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
           <label htmlFor="asset-proceeds" className="sr-only">Disposal proceeds in rupees</label>
-          <input id="asset-proceeds" value={proceeds} onChange={(e) => setProceeds(e.target.value)} inputMode="decimal" placeholder="Disposal proceeds (₹)" style={inputStyle} />
-          <Button type="button" variant="danger" disabled={busy} onClick={disposeAction.trigger}>Request disposal</Button>
+          <label htmlFor="asset-request-method" className="sr-only">Disposal method</label>
+          <select id="asset-request-method" value={disposalMethod} onChange={(e) => setDisposalMethod(e.target.value)} style={inputStyle}>
+            {DISPOSAL_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+          </select>
+          <input
+            id="asset-proceeds"
+            ref={requestProceedsRef}
+            value={proceeds}
+            onChange={(e) => setProceeds(e.target.value)}
+            inputMode="decimal"
+            placeholder="Disposal proceeds (₹), blank for none"
+            aria-invalid={!!requestErrors.proceeds || undefined}
+            aria-describedby={requestErrors.proceeds ? "asset-proceeds-err" : undefined}
+            style={inputStyle}
+          />
+          {requestErrors.proceeds && <p id="asset-proceeds-err" role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: "0 0 4px" }}>{requestErrors.proceeds}</p>}
+          <Button type="button" variant="danger" disabled={busy} onClick={() => { if (validateRequestDisposal()) disposeAction.trigger(); }}>Request disposal</Button>
         </div>
 
         <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
@@ -330,11 +411,7 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
             aria-required="true"
             style={inputStyle}
           >
-            <option value="sale">Sale</option>
-            <option value="scrap">Scrap</option>
-            <option value="auction">Auction</option>
-            <option value="donation">Donation</option>
-            <option value="write_off">Write-off</option>
+            {DISPOSAL_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
           </select>
           <label htmlFor={directProceedsField} className="sr-only">Disposal proceeds in rupees (optional)</label>
           <input
@@ -430,8 +507,32 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
           </Button>
         </div>
 
+        </>) : null}
+
         {message ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good)", margin: 0 }}>{message}</p> : null}
       </div>
+
+      <ConfirmDialog
+        open={amcAction.open}
+        title="Schedule an AMC plan?"
+        description={<>This creates a recurring maintenance schedule for the asset. Check the details below.</>}
+        confirmLabel="Schedule AMC"
+        busy={amcAction.busy}
+        errorMessage={amcAction.error}
+        onConfirm={() => amcAction.confirm()}
+        onCancel={amcAction.cancel}
+      >
+        <div style={{ display: "grid", gap: 8, marginBottom: 8 }}>
+          <label htmlFor="amc-frequency" style={{ fontSize: 13, fontWeight: 600 }}>Frequency</label>
+          <select id="amc-frequency" value={amcFrequency} onChange={(e) => setAmcFrequency(e.target.value)} style={inputStyle}>
+            {AMC_FREQUENCIES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+          </select>
+          <label htmlFor="amc-next-due" style={{ fontSize: 13, fontWeight: 600 }}>First due date</label>
+          <input id="amc-next-due" type="date" min={todayIST()} value={amcNextDue} onChange={(e) => setAmcNextDue(e.target.value)} style={inputStyle} />
+          <label htmlFor="amc-description" style={{ fontSize: 13, fontWeight: 600 }}>Vendor / description</label>
+          <input id="amc-description" value={amcDescription} onChange={(e) => setAmcDescription(e.target.value)} maxLength={200} style={inputStyle} />
+        </div>
+      </ConfirmDialog>
 
       <ConfirmDialog
         open={transferAction.open}
@@ -449,7 +550,7 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
       <ConfirmDialog
         open={disposeAction.open}
         title="Request disposal of this asset?"
-        description={<>Disposal is <b>GFR-irreversible</b>: it removes the asset from the live register, submits a write-off for approval and posts proceeds to the GL. This cannot be undone. Provide a reason to proceed.</>}
+        description={<>Disposal is <b>GFR-irreversible</b>: it removes the asset from the live register, submits a write-off for approval and posts <b>{formatMoney(proceedsToMinorString(proceeds) ?? "0")}</b> proceeds (<b>{DISPOSAL_METHODS.find((m) => m.value === disposalMethod)?.label ?? disposalMethod}</b>) to the GL. This cannot be undone. Provide a reason to proceed.</>}
         confirmLabel="Submit disposal"
         danger
         requireReason

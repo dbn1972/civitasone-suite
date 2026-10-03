@@ -8,6 +8,7 @@ import { AssetFinancialActions } from "./AssetFinancialActions";
 import { RaiseEOfficeNote } from "../../../_components/RaiseEOfficeNote";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { canWriteAssets } from "@/lib/auth/workRoles";
+import { assetActionScope, deriveLifecycle } from "@/lib/assetLifecycle";
 
 export default async function AssetDetailPage({ params }: { params: { id: string } }) {
   const { data: asset, source, parts } = await getAssetById(params.id);
@@ -29,11 +30,19 @@ export default async function AssetDetailPage({ params }: { params: { id: string
     );
   }
 
-  const ext = asset as typeof asset & { barcode?: string };
   // GAP-ASSETS-INFRA-05: roads/drains/buildings are not tagged or under an AMC;
   // those lifecycle steps are movable-asset concepts. The depreciation schedule
   // is kept for infra pending a finance decision (see PR VERIFY list).
   const isInfra = asset.type === "infra";
+  const scope = assetActionScope(asset.status);
+  const lifecycle = deriveLifecycle({
+    status: asset.status,
+    barcode: asset.barcode,
+    warrantyExpiry: asset.warrantyExpiry,
+    maintenanceHistory: asset.maintenanceHistory,
+    purchaseDate: asset.purchaseDate,
+    formatDate: formatIndianDate,
+  });
   const roles = getSessionRoles();
   // GAP-ASSETS-DETAIL-01: each sub-fetch reports its own source.
   const depFailed = parts.depreciation === "error";
@@ -66,8 +75,8 @@ export default async function AssetDetailPage({ params }: { params: { id: string
       />
       <div className="grid g-main" style={{ alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-          <AssetDetailActions assetId={asset.id} barcode={ext.barcode ?? asset.serialNo} status={asset.status} roles={roles} />
-          {asset.status !== "disposed" && asset.status !== "condemned" ? (
+          <AssetDetailActions assetId={asset.id} barcode={asset.barcode} status={asset.status} roles={roles} />
+          {scope === "full" ? (
             <AssetFinancialActions assetId={asset.id} assetCode={asset.assetCode} bookValueMinor={asset.currentValue} />
           ) : null}
           <div className="card">
@@ -75,7 +84,7 @@ export default async function AssetDetailPage({ params }: { params: { id: string
             <div className="fields">
               <div className="fld"><div className="l">Category</div><div className="v">{asset.category}</div></div>
               <div className="fld"><div className="l">Location</div><div className="v">{asset.location ?? "—"}</div></div>
-              <div className="fld"><div className="l">Serial No / Barcode</div><div className="v">{asset.serialNo ?? ext.barcode ?? "—"}</div></div>
+              <div className="fld"><div className="l">Serial No / Barcode</div><div className="v">{asset.serialNo ?? asset.barcode ?? "—"}</div></div>
               <div className="fld"><div className="l">Acquired</div><div className="v">{formatIndianDate(asset.purchaseDate)}</div></div>
               <div className="fld"><div className="l">Purchase cost</div><div className="v">{formatMoney(asset.purchaseCost)}</div></div>
               <div className="fld"><div className="l">Custodian</div><div className="v">{asset.assignedTo ?? "—"}</div></div>
@@ -111,15 +120,11 @@ export default async function AssetDetailPage({ params }: { params: { id: string
             <div className="card-h"><h3>Lifecycle</h3></div>
             <div className="pad">
               <ul className="tl">
-                <li className="done"><div className="t">Acquired (GRN)</div><div className="d">{formatIndianDate(asset.purchaseDate)}</div></li>
-                {!isInfra && (
-                  <li className={asset.status !== "condemned" && asset.status !== "disposed" ? "done" : "todo"}><div className="t">Tagged</div><div className="d"></div></li>
-                )}
-                <li className={asset.status === "in_use" || asset.status === "active" ? "cur" : asset.status === "disposed" || asset.status === "condemned" ? "done" : "todo"}><div className="t">In use</div><div className="d"></div></li>
-                {!isInfra && (
-                  <li className={asset.warrantyExpiry ? "done" : "todo"}><div className="t">AMC</div><div className="d">{asset.warrantyExpiry ? formatIndianDate(asset.warrantyExpiry) : ""}</div></li>
-                )}
-                <li className={asset.status === "disposed" || asset.status === "condemned" ? "done" : "todo"}><div className="t">Disposal</div><div className="d"></div></li>
+                {lifecycle
+                  .filter((step) => !(isInfra && (step.label === "Tagged" || step.label === "AMC")))
+                  .map((step) => (
+                    <li key={step.label} className={step.state}><div className="t">{step.label}</div><div className="d">{step.detail}</div></li>
+                  ))}
               </ul>
             </div>
           </div>
@@ -145,7 +150,7 @@ export default async function AssetDetailPage({ params }: { params: { id: string
         </div>
       </div>
 
-      {canWriteAssets(roles) ? (
+      {canWriteAssets(roles) && scope === "full" ? (
       <RaiseEOfficeNote
         refType="asset_disposal"
         refId={asset.id}
@@ -153,7 +158,6 @@ export default async function AssetDetailPage({ params }: { params: { id: string
         dept={asset.department ?? "Assets"}
         amountMinor={asset.currentValue}
         defaultApprovalChain="file_noting"
-        notifyPath={`/api/proxy/v1/assets/disposals/${asset.id}/submit-approval`}
       />
       ) : null}
     </>

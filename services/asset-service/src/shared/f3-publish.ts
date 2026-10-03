@@ -10,9 +10,11 @@ export async function publishF3Write(
   op: string,
   id: string,
   payload: Record<string, unknown>,
+  /** Caller-supplied stable messageId so a retried request is deduplicated by markProcessed. */
+  opts?: { messageId?: string },
 ): Promise<Accepted> {
   await queue.publish(COMMANDS.f3RouteWrite, {
-    messageId: randomUUID(),
+    messageId: opts?.messageId ?? randomUUID(),
     type: COMMANDS.f3RouteWrite,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,

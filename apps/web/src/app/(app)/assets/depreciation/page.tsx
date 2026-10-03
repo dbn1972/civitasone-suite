@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button, PageHeader, ConfirmDialog, useConfirmAction } from "../../../_components/ds";
 import { todayIST } from "@/lib/formatters";
 import { periodError } from "./period";
+import { errorMessageFromResponse } from "@/lib/api/browserClient";
 
 export default function DepreciationRunPage() {
   const currentMonth = todayIST().slice(0, 7);
@@ -20,7 +21,8 @@ export default function DepreciationRunPage() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ period, depBook, reason }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      // GAP-ASSETS-DEPRECIATION-05: plain copy, never the raw response body.
+      if (!res.ok) throw new Error(await errorMessageFromResponse(res, "save", "depreciation run"));
       const body = (await res.json().catch(() => ({}))) as { id?: unknown };
       const ref = typeof body.id === "string" ? ` Reference ${body.id}.` : "";
       // GAP-ASSETS-DEPRECIATION-01: the service answers 202 Accepted and a
@@ -29,10 +31,12 @@ export default function DepreciationRunPage() {
     },
   });
 
+  // GAP-ASSETS-DEPRECIATION-04: no GL account numbers here -- the account each
+  // book posts to is the Finance chart of accounts' concern and would drift.
   const bookLabel: Record<typeof depBook, string> = {
     all: "all books",
-    company: "the company book (SLM → 5100)",
-    statutory: "the statutory book (WDV → 5101)",
+    company: "the company book (SLM)",
+    statutory: "the statutory book (WDV)",
   };
 
   return (
@@ -56,8 +60,8 @@ export default function DepreciationRunPage() {
             <label className="l" htmlFor="dep-book">Depreciation book</label>
             <select id="dep-book" value={depBook} onChange={(e) => setDepBook(e.target.value as typeof depBook)} style={{ padding: 8, borderRadius: 8, border: "1px solid var(--line)" }}>
               <option value="all">All books</option>
-              <option value="company">Company (SLM → 5100)</option>
-              <option value="statutory">Statutory (WDV → 5101)</option>
+              <option value="company">Company book (SLM)</option>
+              <option value="statutory">Statutory book (WDV)</option>
             </select>
           </div>
           <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start", marginBottom: 12 }}>

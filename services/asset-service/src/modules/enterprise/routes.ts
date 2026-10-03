@@ -8,6 +8,8 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import * as repo from "./repo.js";
 import * as registerRepo from "../register/repo.js";
 import { makeBarcode } from "../register/consumer.js";
+import { uuidV5 } from "../../shared/ids.js";
+import { bulkImportBody, duplicateCodes, summariseCodes, parseIdempotencyKey } from "./bulk-import.js";
 
 const ASSET_ROLES = ["asset_manager", "asset_admin", "super_admin"];
 const READER_ROLES = [...ASSET_ROLES, "audit_officer", "finance_officer"];
@@ -239,13 +241,28 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/assets/bulk/import", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ASSET_ROLES);
-    const body = z.object({
-      assets: z.array(z.object({
-        name: z.string(), code: z.string(), assetType: z.string().default("fixed"),
-        acquisitionCostMinor: z.number().int().nonnegative(), orgUnit: z.string().optional(),
-      })).min(1).max(500),
-    }).parse(req.body);
-    const batchId = randomUUID();
+    const body = bulkImportBody.parse(req.body);
+    // GAP-ASSETS-BULK-IMPORT-04: the key is forwarded by the BFF/gateway as
+    // x-idempotency-key (idempotency-key kept as a fallback for direct callers).
+    // It derives the batch id AND the queue messageId, so a retry is a no-op.
+    const idemKey = parseIdempotencyKey(req.headers["x-idempotency-key"] ?? req.headers["idempotency-key"]);
+    const batchId = idemKey ? uuidV5(`bulk-import:${ctx.tenantId}:${idemKey}`) : randomUUID();
+    // A retry of an already-committed batch gets the original 202 back BEFORE the
+    // duplicate-code preflight (its own codes are now "already in the register").
+    if (idemKey && (await repo.bulkBatchExists(ctx.tenantId, batchId))) {
+      return sendAccepted(reply, acceptedResponseSchema, { id: batchId, status: "accepted", correlationId: ctx.correlationId });
+    }
+    // GAP-ASSETS-BULK-IMPORT-03: a duplicate code would abort the whole batch
+    // asynchronously (UNIQUE(tenant_id, code)) with nothing reaching the clerk,
+    // so reject it up front -- both within the file and against the register.
+    const inFile = duplicateCodes(body.assets.map((a) => a.code));
+    if (inFile.length > 0) {
+      throw new HttpError(409, "DUPLICATE_CODE", `duplicate asset code(s) in the file: ${summariseCodes(inFile)}`);
+    }
+    const existing = await repo.findExistingCodes(ctx.tenantId, body.assets.map((a) => a.code));
+    if (existing.length > 0) {
+      throw new HttpError(409, "DUPLICATE_CODE", `asset code(s) already in the register: ${summariseCodes(existing)}`);
+    }
     const rows = body.assets.map((a) => ({
       id: randomUUID(), tenantId: ctx.tenantId, name: a.name, code: a.code,
       categoryId: DEFAULT_IT_CATEGORY, assetType: a.assetType, barcode: makeBarcode(a.code),
@@ -257,7 +274,7 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
       orgUnit: a.orgUnit ?? null,
       createdBy: ctx.actorId, updatedBy: ctx.actorId,
     }));
-    await publishF3Write(ctx, "bulk_import", batchId, { rows });
+    await publishF3Write(ctx, "bulk_import", batchId, { rows, reason: body.reason }, idemKey ? { messageId: batchId } : undefined);
     return sendAccepted(reply, acceptedResponseSchema, { id: batchId, status: "accepted", correlationId: ctx.correlationId });
   });
 
