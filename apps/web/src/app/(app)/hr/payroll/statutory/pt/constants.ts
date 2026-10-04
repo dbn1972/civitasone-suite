@@ -21,3 +21,8 @@ export const PT_ANNUAL_CAP_MINOR = 250_000;
  * a payroll_officer can read the timeline but not change statutory slabs.
  */
 export const PT_VERSION_ADMIN_ROLES = ["payroll_admin", "super_admin"];
+
+/** Which employees a slab applies to (payroll-service PT_GENDERS). A slab of the employee's own gender wins over an "all" slab. */
+export const PT_GENDERS = ["all", "female", "male"] as const;
+export type PtGender = (typeof PT_GENDERS)[number];
+export const isPtGender = (v: unknown): v is PtGender => v === "all" || v === "female" || v === "male";

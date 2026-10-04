@@ -4,9 +4,9 @@
  * (selected state, its timeline, the selected / current version) so the page
  * itself holds no list-emptiness logic.
  */
-import { PT_NO_UPPER_BOUND_MINOR } from "./constants";
+import { PT_NO_UPPER_BOUND_MINOR, isPtGender, type PtGender } from "./constants";
 
-export type PtApiSlab = { fromMinor: number; toMinor: number; taxMinor: number; februaryTaxMinor: number | null };
+export type PtApiSlab = { fromMinor: number; toMinor: number; taxMinor: number; februaryTaxMinor: number | null; appliesToGender: PtGender };
 export type PtVersionStatus = "past" | "current" | "upcoming";
 export type PtApiVersion = {
   stateCode: string; effectiveFrom: string; effectiveTo: string | null; status: PtVersionStatus;
@@ -51,6 +51,7 @@ export function parsePtPayload(p: unknown): PtVersionsPayload | null {
         slabs: x.slabs.map((sl) => ({
           fromMinor: Number(sl.fromMinor), toMinor: Number(sl.toMinor), taxMinor: Number(sl.taxMinor),
           februaryTaxMinor: sl.februaryTaxMinor == null ? null : Number(sl.februaryTaxMinor),
+          appliesToGender: isPtGender(sl.appliesToGender) ? sl.appliesToGender : "all",
         })),
       });
     }
@@ -65,6 +66,7 @@ export function parsePtPayload(p: unknown): PtVersionsPayload | null {
       slabs: (q.slabs ?? []).map((sl) => ({
         fromMinor: Number(sl.fromMinor), toMinor: Number(sl.toMinor), taxMinor: Number(sl.taxMinor),
         februaryTaxMinor: sl.februaryTaxMinor == null ? null : Number(sl.februaryTaxMinor),
+        appliesToGender: isPtGender(sl.appliesToGender) ? sl.appliesToGender : "all",
       })),
       reason: q.reason ?? null, makerId: q.makerId, createdAt: String(q.createdAt ?? ""),
     });

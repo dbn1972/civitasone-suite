@@ -24,7 +24,7 @@ const FULL: WizardData = {
   fullName: "Priya Sharma", dateOfBirth: "1990-04-02", gender: "female", maritalStatus: "married", bloodGroup: "O+",
   mobile: "9876543210", email: "priya@example.gov.in", employeeNo: "E-1", departmentId: "d1", designationId: "g1",
   grade: "Group-B", dateOfJoining: "2026-01-01", employeeType: "permanent", basicPay: "44900.50",
-  managerId: "m1", workLocation: "Delhi", locationId: "loc-1", shift: "morning", costCenterId: "cc1",
+  managerId: "m1", workLocation: "Delhi", locationId: "loc-1", shift: "morning", costCenterId: "cc1", workStateCode: "MH",
   pan: "ABCDE1234F", aadhaarRef: "ref", bankAccountNo: "1234567890", bankIfsc: "SBIN0001234",
 };
 
@@ -45,6 +45,12 @@ describe("AddEmployeeWizard buildPayload contract", () => {
     for (const gone of ["grade", "costCenter", "workLocation", "pfEnrolled", "esiEnrolled", "ptApplicable"]) {
       expect(body).not.toHaveProperty(gone);
     }
+  });
+
+  it("sends a real state / UT code as workStateCode and drops a blank or unknown one", () => {
+    expect(buildPayload(FULL)).toMatchObject({ workStateCode: "MH" });
+    expect(buildPayload({ ...FULL, workStateCode: "" })).not.toHaveProperty("workStateCode");
+    expect(buildPayload({ ...FULL, workStateCode: "ZZ" })).not.toHaveProperty("workStateCode");
   });
 
   it("omits blank optional fields instead of sending empty strings (which would fail the enums)", () => {

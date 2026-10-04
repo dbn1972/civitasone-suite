@@ -41,6 +41,8 @@ export type WizardData = {
   // which is what the legacy `station` column stores.
   locationId: string;
   shift: "general" | "morning" | "evening" | "night" | "";
+  // ISO state / UT code of the state of employment (professional tax); "" = not recorded.
+  workStateCode: string;
   // GAP-HR-EMPLOYEES-NEW-01: the picked finance cost-centre's id (was free text that never persisted).
   costCenterId: string;
   // Step 4 — Statutory
@@ -71,6 +73,7 @@ export const WIZARD_INIT: WizardData = {
   workLocation: "",
   locationId: "",
   shift: "",
+  workStateCode: "",
   costCenterId: "",
   pan: "",
   aadhaarRef: "",

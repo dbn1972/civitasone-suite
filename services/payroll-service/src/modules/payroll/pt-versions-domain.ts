@@ -30,11 +30,32 @@ export const PT_NO_UPPER_BOUND_MINOR = 999_999_999_999;
  */
 export const PT_ADJUSTMENT_MONTH = 2;
 
-export type PtSlab = { from: bigint; to: bigint; amount: bigint; februaryAmount: bigint | null };
+/** Which employees a slab applies to. Some States' PT Acts set a different slab for women (VERIFY per State). */
+export const PT_GENDERS = ["all", "female", "male"] as const;
+export type PtGender = (typeof PT_GENDERS)[number];
+
+/** `gender` absent (older callers / rows) means "all". */
+export type PtSlab = { from: bigint; to: bigint; amount: bigint; februaryAmount: bigint | null; gender?: PtGender };
+
+/** The employee's HRMS gender as a slab group, or null when missing / not one a PT slab can target ("other", blank, junk). */
+export function normalisePtGender(raw: string | null | undefined): "female" | "male" | null {
+  const g = (raw ?? "").trim().toLowerCase();
+  return g === "female" || g === "male" ? g : null;
+}
+
+/**
+ * True when this employee's gender cannot be used although the slabs in force
+ * ARE gender-specific -- the run then applies the 'all' slabs only and records
+ * a PT_GENDER_UNKNOWN warning. No gender-specific slab = nothing to warn about.
+ */
+export function ptGenderUnresolved(slabs: readonly PtSlab[], rawGender: string | null | undefined): boolean {
+  return normalisePtGender(rawGender) === null && slabs.some((s) => (s.gender ?? "all") !== "all");
+}
 
 /**
  * PT to deduct in `month` (YYYY-MM) for monthly pay `incomeMinor`:
- *   1. the slab whose inclusive range holds the income (none -> 0);
+ *   1. the slab whose inclusive range holds the income (none -> 0); a slab for
+ *      the employee's own gender wins over an 'all' slab;
  *   2. its February amount in February when the state levies a different one,
  *      otherwise the ordinary monthly amount;
  *   3. clamped so the employee's PT for the financial year (what was already
@@ -45,8 +66,14 @@ export type PtSlab = { from: bigint; to: bigint; amount: bigint; februaryAmount:
  */
 export function computePtMonthMinor(
   slabs: readonly PtSlab[], incomeMinor: bigint, month: string, ytdMinor: bigint,
+  rawGender?: string | null,
 ): bigint {
-  const slab = slabs.find((s) => incomeMinor >= s.from && incomeMinor <= s.to);
+  const holds = (s: PtSlab) => incomeMinor >= s.from && incomeMinor <= s.to;
+  // A slab of the employee's own gender that holds the income wins over an 'all' slab;
+  // unknown gender -> 'all' slabs only (the caller records the warning).
+  const gender = normalisePtGender(rawGender);
+  const slab = (gender ? slabs.find((s) => s.gender === gender && holds(s)) : undefined)
+    ?? slabs.find((s) => (s.gender ?? "all") === "all" && holds(s));
   if (!slab) return 0n;
   const isFebruary = Number(month.slice(5, 7)) === PT_ADJUSTMENT_MONTH;
   const due = isFebruary && slab.februaryAmount !== null ? slab.februaryAmount : slab.amount;
@@ -94,6 +121,7 @@ export const ptVersionSlab = z.object({
   // A single month's PT can never exceed the annual cap (Article 276(2)).
   taxMinor: z.number().int().nonnegative().max(cap),
   februaryTaxMinor: z.number().int().nonnegative().max(cap).nullable().optional(),
+  appliesToGender: z.enum(PT_GENDERS).default("all"),
 }).refine((s) => s.toMinor >= s.fromMinor, { message: "toMinor must be >= fromMinor", path: ["toMinor"] });
 
 export const createPtVersionBody = z.object({
@@ -104,17 +132,24 @@ export const createPtVersionBody = z.object({
 });
 export type CreatePtVersionBody = z.infer<typeof createPtVersionBody>;
 
-type Range = { fromMinor: number; toMinor: number };
+type Range = { fromMinor: number; toMinor: number; appliesToGender?: PtGender };
 
-/** First overlap (inclusive ranges) / duplicate start within one slab set, or null. */
+/**
+ * First overlap (inclusive ranges) / duplicate start within one slab set, or null.
+ * Checked per gender group: 'all' slabs must not overlap each other, nor 'female'
+ * slabs each other, nor 'male'; a female slab MAY sit over an 'all' slab (it wins).
+ */
 export function findSlabSetProblem(slabs: readonly Range[]): string | null {
-  const sorted = [...slabs].sort((a, b) => a.fromMinor - b.fromMinor);
-  for (let i = 1; i < sorted.length; i++) {
-    const prev = sorted[i - 1]!;
-    const cur = sorted[i]!;
-    if (cur.fromMinor === prev.fromMinor) return `two slabs start at ${cur.fromMinor}`;
-    if (cur.fromMinor <= prev.toMinor) {
-      return `slab ${prev.fromMinor}-${prev.toMinor} overlaps slab ${cur.fromMinor}-${cur.toMinor}`;
+  for (const group of PT_GENDERS) {
+    const sorted = slabs.filter((s) => (s.appliesToGender ?? "all") === group).sort((a, b) => a.fromMinor - b.fromMinor);
+    const tag = group === "all" ? "" : ` (${group} slabs)`;
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = sorted[i - 1]!;
+      const cur = sorted[i]!;
+      if (cur.fromMinor === prev.fromMinor) return `two slabs start at ${cur.fromMinor}${tag}`;
+      if (cur.fromMinor <= prev.toMinor) {
+        return `slab ${prev.fromMinor}-${prev.toMinor} overlaps slab ${cur.fromMinor}-${cur.toMinor}${tag}`;
+      }
     }
   }
   return null;

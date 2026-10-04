@@ -1,5 +1,6 @@
 "use client";
 
+import { WorkStateSelect } from "../../WorkStateSelect";
 import { useTranslations } from "next-intl";
 import type { WizardData, FieldErrors } from "../wizardTypes";
 import {
@@ -105,6 +106,15 @@ export function Step3({ data, errors: _errors, onChange, onBlur: _onBlur }: Prop
               <option key={value} value={value}>{label}</option>
             ))}
           </select>
+        </div>
+
+        {/* State of employment (professional tax) */}
+        <div style={fieldWrap}>
+          <WorkStateSelect
+            id="w-work-state" value={data.workStateCode} onChange={(v) => onChange("workStateCode", v)}
+            label={t("workStateLabel")} placeholder={t("selectWorkState")} hint={t("workStateHint")}
+            style={inputStyle} labelStyle={labelStyle}
+          />
         </div>
 
         {/* Cost Center */}

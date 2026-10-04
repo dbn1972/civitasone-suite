@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { isIndianStateCode } from "@/lib/india/states";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
@@ -118,6 +119,8 @@ export function buildPayload(data: WizardData): Record<string, unknown> {
   // GAP-HR-EMPLOYEES-NEW-01: the employee's own service grade/group is stored
   // as serviceGrade (the detail API's `grade` is the DESIGNATION's pay grade).
   if (data.grade.trim() !== "") body.serviceGrade = data.grade.trim();
+  // State of employment (professional tax): only a real state / UT code is sent; anything else is dropped.
+  if (isIndianStateCode(data.workStateCode)) body.workStateCode = data.workStateCode;
   // GAP-HR-EMPLOYEES-NEW-02: basicMinor is a real createEmployeeBody field
   // (paise integer) -- every new employee used to be created at basicMinor
   // 0 with no way to set it anywhere in this wizard. rupeesToMinorString

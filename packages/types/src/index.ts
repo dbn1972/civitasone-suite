@@ -996,6 +996,8 @@ export type EmployeeDetail = {
   bloodGroup?: string;
   shift?: string;
   costCenterId?: string;
+  /** State of employment (ISO 3166-2:IN code), the professional-tax state. */
+  workStateCode?: string;
 };
 
 // Procurement types

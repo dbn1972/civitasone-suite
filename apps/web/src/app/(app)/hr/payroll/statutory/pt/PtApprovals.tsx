@@ -119,6 +119,7 @@ export function PtApprovals({ pending, viewerId, canDecide, stateName }: {
                           tax: formatMoney(s.taxMinor),
                         })}
                         {s.februaryTaxMinor != null ? ` ${t("februarySuffix", { amount: formatMoney(s.februaryTaxMinor) })}` : ""}
+                        {s.appliesToGender !== "all" ? ` ${t("genderSuffix", { gender: s.appliesToGender === "female" ? t("genderFemale") : t("genderMale") })}` : ""}
                       </li>
                     ))}
                   </ul>

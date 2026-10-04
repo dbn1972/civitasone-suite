@@ -379,7 +379,7 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
       // GAP-HR-EMPLOYEES-DETAIL-EDIT-03
       reason?: string;
       // GAP-HR-EMPLOYEES-NEW-01
-      serviceGrade?: string; maritalStatus?: string; bloodGroup?: string; shift?: string; costCenterId?: string;
+      serviceGrade?: string; maritalStatus?: string; bloodGroup?: string; shift?: string; costCenterId?: string; workStateCode?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -423,6 +423,7 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
       if (p.bloodGroup    !== undefined) { patch.bloodGroup    = p.bloodGroup;    changedFields.push("bloodGroup"); }
       if (p.shift         !== undefined) { patch.shift         = p.shift;         changedFields.push("shift"); }
       if (p.costCenterId  !== undefined) { patch.costCenterId  = p.costCenterId;  changedFields.push("costCenterId"); }
+      if (p.workStateCode !== undefined) { patch.workStateCode = p.workStateCode; changedFields.push("workStateCode"); }
       if (patch.basicMinor !== undefined) {
         // Concurrency guard: this generic profile-update path lets an HR
         // admin edit basicMinor directly (PATCH /v1/hrms/employees/:id),

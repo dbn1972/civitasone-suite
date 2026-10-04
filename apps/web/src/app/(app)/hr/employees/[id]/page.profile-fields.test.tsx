@@ -17,7 +17,7 @@ import EmployeeDetailPage from "./page";
 const EMP = {
   id: "e1", employeeId: "EMP001", name: "Priya Sharma", department: "Finance", designation: "Section Officer",
   joiningDate: "2020-01-15", status: "confirmed", bankAccountNo: null, bankIfsc: null, pan: null,
-  serviceGrade: "Group-B", maritalStatus: "married", bloodGroup: "O+", shift: "morning",
+  workStateCode: "MH", serviceGrade: "Group-B", maritalStatus: "married", bloodGroup: "O+", shift: "morning",
   costCenterId: "11111111-2222-3333-4444-555555555555",
 };
 
@@ -44,6 +44,12 @@ describe("EmployeeDetailPage profile fields (GAP-HR-EMPLOYEES-NEW-01)", () => {
     expect(screen.getByText("Morning")).toBeInTheDocument();
     expect(screen.getByText("Married")).toBeInTheDocument();
     expect(screen.getByText("O+")).toBeInTheDocument();
+  });
+
+  it("shows the state of employment by name, not its code", async () => {
+    await renderPage(["hr_admin"]);
+    expect(screen.getByText("State of employment (for professional tax)")).toBeInTheDocument();
+    expect(screen.getByText("Maharashtra")).toBeInTheDocument();
   });
 
   it("HR sees the cost centre by NAME, never the raw id", async () => {

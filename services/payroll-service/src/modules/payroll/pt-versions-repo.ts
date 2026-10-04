@@ -5,18 +5,20 @@
  */
 import { sql } from "drizzle-orm";
 import type { db } from "../../shared/db.js";
-import type { PtSlab } from "./pt-versions-domain.js";
+import type { PtGender, PtSlab } from "./pt-versions-domain.js";
 
 type Tx = typeof db;
 
 type SlabRow = {
   state_code: string; slab_from_minor: string | number; slab_to_minor: string | number;
   pt_amount_minor: string | number; february_amount_minor: string | number | null; effective_from: string;
+  applies_to_gender: PtGender;
 };
 
 const toSlab = (r: SlabRow): PtSlab => ({
   from: BigInt(r.slab_from_minor), to: BigInt(r.slab_to_minor), amount: BigInt(r.pt_amount_minor),
   februaryAmount: r.february_amount_minor == null ? null : BigInt(r.february_amount_minor),
+  gender: r.applies_to_gender ?? "all",
 });
 
 /**
@@ -32,7 +34,7 @@ export async function slabsInForce(tx: Tx, tenantId: string, asOf: string, state
     ? sql`AND t.state_code = ANY(${sql`ARRAY[${sql.join(stateCodes.map((s) => sql`${s}`), sql`, `)}]`})`
     : sql``;
   const rows = (await tx.execute(sql`
-    SELECT t.state_code, t.slab_from_minor, t.slab_to_minor, t.pt_amount_minor, t.february_amount_minor,
+    SELECT t.state_code, t.slab_from_minor, t.slab_to_minor, t.pt_amount_minor, t.february_amount_minor, t.applies_to_gender,
            t.effective_from::text AS effective_from
       FROM payroll.payroll_professional_tax t
      WHERE t.tenant_id = ${tenantId}::uuid AND t.is_active = true ${stateFilter}
@@ -40,7 +42,7 @@ export async function slabsInForce(tx: Tx, tenantId: string, asOf: string, state
          SELECT MAX(x.effective_from) FROM payroll.payroll_professional_tax x
           WHERE x.tenant_id = t.tenant_id AND x.state_code = t.state_code AND x.is_active = true
             AND x.effective_from <= ${asOf}::date)
-     ORDER BY t.state_code, t.slab_from_minor
+     ORDER BY t.state_code, t.applies_to_gender, t.slab_from_minor
   `)) as unknown as SlabRow[];
   for (const r of rows) {
     const list = result.get(r.state_code) ?? [];
@@ -84,7 +86,7 @@ export async function latestFinalisedRunMonth(tx: Tx, tenantId: string): Promise
   return rows[0]?.month ?? null;
 }
 
-export type VersionSlab = { fromMinor: number; toMinor: number; taxMinor: number; februaryTaxMinor: number | null };
+export type VersionSlab = { fromMinor: number; toMinor: number; taxMinor: number; februaryTaxMinor: number | null; appliesToGender: PtGender };
 export type StoredVersion = {
   stateCode: string; effectiveFrom: string; legacy: boolean; reason: string | null;
   backDated: boolean; createdBy: string | null; createdAt: string | null; slabs: VersionSlab[];
@@ -95,13 +97,13 @@ export async function listVersions(tx: Tx, tenantId: string, stateCode?: string)
   const stateFilter = stateCode ? sql`AND t.state_code = ${stateCode}` : sql``;
   const rows = (await tx.execute(sql`
     SELECT t.state_code, t.effective_from::text AS effective_from, t.slab_from_minor, t.slab_to_minor,
-           t.pt_amount_minor, t.february_amount_minor,
+           t.pt_amount_minor, t.february_amount_minor, t.applies_to_gender,
            v.source, v.reason, v.back_dated, v.created_by, v.created_at
       FROM payroll.payroll_professional_tax t
       LEFT JOIN payroll.payroll_pt_slab_versions v
         ON v.tenant_id = t.tenant_id AND v.state_code = t.state_code AND v.effective_from = t.effective_from
      WHERE t.tenant_id = ${tenantId}::uuid AND t.is_active = true ${stateFilter}
-     ORDER BY t.state_code, t.effective_from, t.slab_from_minor
+     ORDER BY t.state_code, t.effective_from, t.applies_to_gender, t.slab_from_minor
   `)) as unknown as Array<SlabRow & { source: string | null; reason: string | null; back_dated: boolean | null; created_by: string | null; created_at: string | Date | null }>;
   const out: StoredVersion[] = [];
   for (const r of rows) {
@@ -122,6 +124,7 @@ export async function listVersions(tx: Tx, tenantId: string, stateCode?: string)
       // precision-ok: display read model only; slab paise are <= 999,999,999,999 (< 2^53) and the engine reads BigInt via slabsInForce.
       fromMinor: Number(r.slab_from_minor), toMinor: Number(r.slab_to_minor), taxMinor: Number(r.pt_amount_minor), // precision-ok: see above
       februaryTaxMinor: r.february_amount_minor == null ? null : Number(r.february_amount_minor), // precision-ok: see above
+      appliesToGender: r.applies_to_gender ?? "all",
     });
   }
   return out;
@@ -131,14 +134,14 @@ export async function listVersions(tx: Tx, tenantId: string, stateCode?: string)
 export async function inForceRows(tx: Tx, tenantId: string, asOf: string): Promise<Array<Record<string, unknown>>> {
   return (await tx.execute(sql`
     SELECT t.state_code, t.slab_from_minor, t.slab_to_minor, t.pt_amount_minor, t.february_amount_minor,
-           t.effective_from::text AS effective_from
+           t.applies_to_gender, t.effective_from::text AS effective_from
       FROM payroll.payroll_professional_tax t
      WHERE t.tenant_id = ${tenantId}::uuid AND t.is_active = true
        AND t.effective_from = (
          SELECT MAX(x.effective_from) FROM payroll.payroll_professional_tax x
           WHERE x.tenant_id = t.tenant_id AND x.state_code = t.state_code AND x.is_active = true
             AND x.effective_from <= ${asOf}::date)
-     ORDER BY t.state_code, t.slab_from_minor
+     ORDER BY t.state_code, t.applies_to_gender, t.slab_from_minor
   `)) as unknown as Array<Record<string, unknown>>;
 }
 

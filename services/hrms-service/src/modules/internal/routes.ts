@@ -232,6 +232,10 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
           cityClass: (e.hraCityClass ?? "X") as "X" | "Y" | "Z",
           taxRegime: (e.taxRegime ?? "new") as "old" | "new",
           departmentId: e.departmentId,
+          // Additive: payroll's gender-specific professional-tax slabs read it (null = unknown).
+          gender: e.gender ?? null,
+          // State of employment (ISO 3166-2:IN code), the key of the professional-tax slab set; null = not recorded.
+          stateCode: e.workStateCode ?? null,
           pensionScheme: (e.pensionScheme ?? "NPS") as "GPF" | "NPS" | "EPF",
           paySuspended: paySuspended.has(e.id),
           ...(paySuspended.has(e.id) ? { subsistencePct: Number(paySuspended.get(e.id)!.subsistencePct) } : {}),

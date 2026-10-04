@@ -50,6 +50,7 @@ export async function createEmployee(ctx: RequestContext, body: CreateEmployeeBo
       legalEntityId:  body.legalEntityId ?? null,
       costCenterId:   body.costCenterId ?? null,
       locationId:     body.locationId ?? null,
+      workStateCode:  body.workStateCode ?? null,
       // Previously validated by createEmployeeBody + present as real columns on
       // hrmsEmployees, but never mapped into this insert -- silently discarded on
       // every create (HR-A deep-verify finding). See employee/schema.ts for columns.
@@ -272,6 +273,7 @@ export async function updateEmployee(ctx: RequestContext, id: string, body: Upda
       bloodGroup: body.bloodGroup,
       shift: body.shift,
       costCenterId: body.costCenterId,
+      workStateCode: body.workStateCode,
       // GAP-HR-EMPLOYEES-DETAIL-EDIT-03: routes.ts already enforced that
       // this is present whenever a sensitive field is being changed --
       // threaded through so the consumer's audit trail actually captures it.

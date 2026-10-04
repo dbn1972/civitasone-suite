@@ -45,3 +45,7 @@ export const INDIAN_STATES_UTS: ReadonlyArray<{ code: string; name: string }> = 
 ];
 
 export const INDIAN_STATE_UT_CODES: readonly string[] = INDIAN_STATES_UTS.map((s) => s.code);
+
+/** True for a state / UT code in INDIAN_STATES_UTS (what the HRMS work-state field accepts). */
+export const isIndianStateCode = (code: unknown): code is string =>
+  typeof code === "string" && INDIAN_STATES_UTS.some((s) => s.code === code);

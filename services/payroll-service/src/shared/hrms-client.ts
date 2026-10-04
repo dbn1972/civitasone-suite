@@ -41,6 +41,10 @@ export type PayrollInputEmployee = {
   taxRegime: "old" | "new";
   departmentId: string;
   pensionScheme: "GPF" | "NPS" | "EPF";
+  /** HRMS gender (male | female | other) or null; picks the gender-specific professional-tax slab. */
+  gender?: string | null;
+  /** State of employment (ISO 3166-2:IN code, e.g. MH); professional tax is levied per state. null = not recorded in HRMS. */
+  stateCode?: string | null;
   /**
    * FR 53: true when the employee has an ACTIVE pay-suspension in HRMS's
    * Disciplinary module. The run then pays a subsistence allowance (pay-scale

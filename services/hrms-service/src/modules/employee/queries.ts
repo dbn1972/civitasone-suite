@@ -112,6 +112,8 @@ export async function getEmployeeDetail(id: string, tenantId: string): Promise<E
     ...(emp.bloodGroup     ? { bloodGroup: emp.bloodGroup }           : {}),
     ...(emp.shift          ? { shift: emp.shift }                     : {}),
     ...(emp.costCenterId   ? { costCenterId: emp.costCenterId }       : {}),
+    // State of employment (ISO code), the professional-tax state. Migration 0198.
+    ...(emp.workStateCode  ? { workStateCode: emp.workStateCode }     : {}),
     // HR-A deep-verify finding: confirmationDate is a real column already on
     // `emp` (no extra query), declared on the EmployeeDetail type, and used by
     // the frontend to render a "Service Confirmed" lifecycle event -- but was

@@ -8,6 +8,8 @@ import { Button, ConfirmDialog, EntityPicker, Field } from "@/app/_components/ds
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 import { searchPayStructures, resolvePayStructures } from "@/lib/entityAdapters/payStructure";
 import { useTranslations } from "next-intl";
+import { isIndianStateCode } from "@/lib/india/states";
+import { WorkStateSelect } from "../../WorkStateSelect";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^\+?[\d\s\-()]{7,20}$/;
@@ -65,6 +67,7 @@ export function EditEmployeeForm({ employee }: Props) {
   // resolve a label for, not a name.
   const [managerId, setManagerId] = useState<string | null>(employee.managerId ?? null);
   const [payStructureId, setPayStructureId] = useState<string | null>(employee.payStructureId ?? null);
+  const [workStateCode, setWorkStateCode] = useState(employee.workStateCode ?? "");
 
   // Statutory & financial fields
   const [bankAccountNo, setBankAccountNo] = useState((employee as Record<string,unknown>).bankAccountNo as string ?? "");
@@ -105,6 +108,7 @@ export function EditEmployeeForm({ employee }: Props) {
     email: `${formId}-email`,
     managerId: `${formId}-managerId`,
     payStructureId: `${formId}-payStructureId`,
+    workStateCode: `${formId}-workStateCode`,
     status: `${formId}-status`,
     bankAccountNo: `${formId}-bankAccountNo`,
     bankIfsc: `${formId}-bankIfsc`,
@@ -146,6 +150,10 @@ export function EditEmployeeForm({ employee }: Props) {
     const initialPayStructureId = employee.payStructureId ?? null;
     if (managerId && managerId !== initialManagerId) patch.managerId = managerId;
     if (payStructureId && payStructureId !== initialPayStructureId) patch.payStructureId = payStructureId;
+    // State of employment: sent only when changed to a real state / UT code (the API cannot clear it, like manager).
+    if (workStateCode && workStateCode !== (employee.workStateCode ?? "")) {
+      if (isIndianStateCode(workStateCode)) patch.workStateCode = workStateCode; else errs.add("workStateCode");
+    }
     // Data-corruption fix: bankAccountNo/bankIfsc arrive here pre-masked by
     // the backend (pii-mask.ts maskValue -- "*******1234"), and this state
     // was seeded directly from that masked value above. A plain non-empty
@@ -416,6 +424,15 @@ export function EditEmployeeForm({ employee }: Props) {
               noResultsText={t("pickerNoResults")}
             />
           </Field>
+
+          <div style={{ display: "grid", gap: 4 }}>
+            <WorkStateSelect
+              id={ids.workStateCode} value={workStateCode} onChange={setWorkStateCode}
+              label={t("workStateLabel")} placeholder={t("selectWorkState")} hint={t("workStateHint")}
+              style={inputStyle} labelStyle={labelStyle}
+            />
+            {invalidFields.has("workStateCode") && <span role="alert" style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>{t("workStateInvalid")}</span>}
+          </div>
         </div>
 
 

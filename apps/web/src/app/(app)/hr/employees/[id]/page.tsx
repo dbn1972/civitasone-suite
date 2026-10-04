@@ -10,6 +10,7 @@ import { LifecycleTimeline, type LifecycleEvent } from "../../_components/Lifecy
 import { fetchJson } from "@/app/_data/apiClient";
 import { EmployeePayGroupCard } from "./EmployeePayGroupCard";
 import { getEmployeePayGroup } from "../../payroll/pay-groups/payGroupData";
+import { INDIAN_STATES_UTS } from "@/lib/india/states";
 import { getTranslations } from "next-intl/server";
 
 // GAP-HR-EMPLOYEES-DETAIL-04: GAP-HR-SF-17 (#1658) added batch name
@@ -363,6 +364,12 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
             <div className="fld">
               <span className="l">{t("fieldServiceGrade")}</span>
               <span className="v">{employee.serviceGrade}</span>
+            </div>
+          )}
+          {employee.workStateCode && (
+            <div className="fld">
+              <span className="l">{t("fieldWorkState")}</span>
+              <span className="v">{INDIAN_STATES_UTS.find((s) => s.code === employee.workStateCode)?.name ?? employee.workStateCode}</span>
             </div>
           )}
           {employee.shift && (

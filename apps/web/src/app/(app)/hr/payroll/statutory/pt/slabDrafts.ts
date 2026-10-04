@@ -7,10 +7,10 @@
  * text to paise with no float maths (lib/money).
  */
 import { parseRupeesToPaise } from "@/lib/money";
-import { PT_ANNUAL_CAP_MINOR, PT_NO_UPPER_BOUND_MINOR } from "./constants";
+import { PT_ANNUAL_CAP_MINOR, PT_NO_UPPER_BOUND_MINOR, PT_GENDERS, type PtGender } from "./constants";
 import type { PtApiSlab } from "./viewModel";
 
-export type SlabDraft = { from: string; to: string; tax: string; feb: string };
+export type SlabDraft = { from: string; to: string; tax: string; feb: string; gender: PtGender };
 
 export type SlabIssue = "from" | "to" | "range" | "tax" | "feb" | "cap" | "overlap" | "none";
 export type SlabField = "from" | "to" | "tax" | "feb";
@@ -28,10 +28,11 @@ export function draftFromSlab(s: PtApiSlab): SlabDraft {
     to: s.toMinor >= PT_NO_UPPER_BOUND_MINOR ? "" : rupees(s.toMinor),
     tax: rupees(s.taxMinor),
     feb: s.februaryTaxMinor == null ? "" : rupees(s.februaryTaxMinor),
+    gender: s.appliesToGender ?? "all",
   };
 }
 
-export const blankDraft = (): SlabDraft => ({ from: "", to: "", tax: "", feb: "" });
+export const blankDraft = (): SlabDraft => ({ from: "", to: "", tax: "", feb: "", gender: "all" });
 
 export function checkSlabDrafts(drafts: readonly SlabDraft[]): SlabCheck {
   if (!drafts.some(Boolean)) return { ok: false, issue: "none", row: 0, field: "from" };
@@ -53,20 +54,26 @@ export function checkSlabDrafts(drafts: readonly SlabDraft[]): SlabCheck {
       if (toNumber(f) > PT_ANNUAL_CAP_MINOR) return { ok: false, issue: "cap", row: i, field: "feb" };
       feb = toNumber(f);
     }
-    slabs.push({ fromMinor: toNumber(from), toMinor: toNumber(to), taxMinor: toNumber(tax), februaryTaxMinor: feb });
+    slabs.push({ fromMinor: toNumber(from), toMinor: toNumber(to), taxMinor: toNumber(tax), februaryTaxMinor: feb, appliesToGender: d.gender });
   }
-  const order = slabs.map((s, row) => ({ s, row })).sort((a, b) => a.s.fromMinor - b.s.fromMinor);
-  for (let i = 1; i < order.length; i++) {
-    const prev = order[i - 1]!;
-    const cur = order[i]!;
-    if (cur.s.fromMinor <= prev.s.toMinor) return { ok: false, issue: "overlap", row: cur.row, field: "from" };
+  // Overlap is checked per gender group (all / female / male), as payroll-service does:
+  // a female slab may sit over an "all" slab (it wins), but two slabs of one group may not overlap.
+  for (const group of PT_GENDERS) {
+    const order = slabs.map((s, row) => ({ s, row })).filter((x) => x.s.appliesToGender === group).sort((a, b) => a.s.fromMinor - b.s.fromMinor);
+    for (let i = 1; i < order.length; i++) {
+      const prev = order[i - 1]!;
+      const cur = order[i]!;
+      if (cur.s.fromMinor <= prev.s.toMinor) return { ok: false, issue: "overlap", row: cur.row, field: "from" };
+    }
   }
   return { ok: true, slabs };
 }
 
 /** Gaps in the set (paise ranges no slab covers between the first start and the last end): shown as a warning, never blocked. */
 export function slabGaps(slabs: readonly PtApiSlab[]): Array<{ fromMinor: number; toMinor: number }> {
-  const sorted = [...slabs].sort((a, b) => a.fromMinor - b.fromMinor);
+  // Gaps are judged on the "all" slabs (what an employee with no gender-specific slab is charged); a gender
+  // slab only overrides within its own band.
+  const sorted = slabs.filter((s) => s.appliesToGender === "all").sort((a, b) => a.fromMinor - b.fromMinor);
   const gaps: Array<{ fromMinor: number; toMinor: number }> = [];
   for (let i = 1; i < sorted.length; i++) {
     const prev = sorted[i - 1]!;
