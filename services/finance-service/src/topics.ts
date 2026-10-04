@@ -99,6 +99,15 @@ export const COMMANDS = {
   tdsDeductionRecord: "finance.tds.deduction_record",
   tdsDepositMark: "finance.tds.deposit_mark",
   tdsReturnFile: "finance.tds.return_file",
+  // fp-finance-02 workflows (route -> command -> consumer; each consumer is one transaction)
+  vendorDecide: "finance.vendor.decide",
+  vendorBankChangePropose: "finance.vendor.bank_change_propose",
+  vendorBankChangeDecide: "finance.vendor.bank_change_decide",
+  policyChange: "finance.policy.change",
+  policyChangeDecide: "finance.policy.change_decide",
+  auditParaTransition: "finance.audit_para.transition",
+  instrumentRepresent: "finance.instrument.represent",
+  instrumentMarkStale: "finance.instrument.mark_stale",
 } as const;
 
 export const EVENTS = {

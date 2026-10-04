@@ -7,6 +7,9 @@ import * as paymentsRepo from "../payments/repo.js";
 import * as tdsRepo from "../tds/repo.js";
 import type { VendorRow } from "./schema.js";
 import type { BillRow } from "../payments/schema.js";
+import * as workflow from "./vendor-workflow.js";
+import { getPolicy } from "./policy.js";
+import { maskPan, maskAccountNo, maskPhone, maskEmail } from "./vendor-mask.js";
 
 const READER_ROLES = ["finance_officer", "finance_admin", "super_admin", "audit_officer"];
 // Vendor master is financial system-of-record data (bank account/IFSC feed
@@ -68,9 +71,9 @@ function toVendorSummary(r: VendorRow) {
     id: r.id,
     name: r.name,
     category: r.category,
-    pan: r.pan,
+    pan: maskPan(r.pan),
     gstin: r.gstin,
-    status: r.isActive ? "active" : "inactive",
+    status: r.status,
     ratingDisplay: "Not rated",
   };
 }
@@ -91,23 +94,33 @@ function toVendorSummary(r: VendorRow) {
 // the same masked shape masters/bank-routes.ts uses for the org's own
 // accounts. Keys stay ifsc/bankAccount either way so the frontend's
 // field() probes keep working unchanged — only the value is masked.
-function toVendorDetail(r: VendorRow, showFullBankDetails: boolean) {
+// GAP-FINANCE-VENDORS-DETAIL-01: the READ shape never carries the clear PAN,
+// account number, phone or email, whatever the caller's role -- those are
+// available only through the audited reveal endpoint (vendor-workflow-routes.ts).
+// The create/update ECHO (mode "echo") stays full: it is WRITER-only and returns
+// what that same caller just typed.
+function toVendorDetail(r: VendorRow, showFullBankDetails: boolean, mode: "read" | "echo" = "echo") {
+  const read = mode === "read";
   return {
     id: r.id,
     name: r.name,
     category: r.category,
-    status: r.isActive ? "active" : "inactive",
-    pan: r.pan,
+    status: r.status,
+    pan: read ? maskPan(r.pan) : r.pan,
     gstin: r.gstin,
     address: r.address,
     contactPerson: r.contactPerson,
-    email: r.email,
-    phone: r.phone,
+    email: read ? maskEmail(r.email) : r.email,
+    phone: read ? maskPhone(r.phone) : r.phone,
     bankName: r.bankName,
     ifsc: showFullBankDetails ? r.ifsc : r.ifsc.slice(0, 4) + "XXXXXXX",
-    bankAccount: showFullBankDetails ? r.bankAccountNo : "••••••" + r.bankAccountNo.slice(-4),
+    bankAccount: read || !showFullBankDetails ? maskAccountNo(r.bankAccountNo) : r.bankAccountNo,
     isActive: r.isActive,
     version: r.version,
+    createdBy: r.createdBy,
+    approvedBy: r.approvedBy ?? null,
+    approvedAt: r.approvedAt ?? null,
+    decisionReason: r.decisionReason ?? null,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
   };
@@ -184,7 +197,12 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     const bills = await paymentsRepo.findBillsByVendorAndTenant(id, ctx.tenantId);
     const tdsRows = await tdsRepo.findTdsAmountsByBillIds(ctx.tenantId, bills.map((b) => b.id));
     const tdsByBillId = new Map(tdsRows.map((r) => [r.billId, r.tdsAmountMinor]));
-    return reply.send({ ...toVendorDetail(vendor, showFullBankDetails), bills: toVendorBillHistory(bills, tdsByBillId) });
+    const pendingBankChange = await workflow.getPendingBankChange(ctx.tenantId, id);
+    return reply.send({
+      ...toVendorDetail(vendor, showFullBankDetails, "read"),
+      pendingBankChange,
+      bills: toVendorBillHistory(bills, tdsByBillId),
+    });
   });
 
   app.post("/v1/finance/vendors", async (req, reply) => {
@@ -198,7 +216,7 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     // VERSION_CONFLICT 409 the PATCH handler below already gives.
     let vendor;
     try {
-      vendor = await repo.createVendor(ctx.tenantId, {
+      vendor = await workflow.createVendor(ctx, {
         name: body.name,
         category: body.category,
         pan: body.pan,
@@ -210,15 +228,15 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
         bankName: body.bankName,
         bankAccountNo: body.bankAccount,
         ifsc: body.ifsc,
-      }, ctx.actorId);
+      });
     } catch (e) {
       if (repo.isUniqueViolation(e)) {
         throw new HttpError(409, "DUPLICATE_PAN", `a vendor with PAN ${body.pan} already exists for this tenant`);
       }
       throw e;
     }
-    // Always full detail: this route is already WRITER_ROLES-only.
-    return reply.code(201).send(toVendorDetail(vendor, true));
+    // Masked like every read: the clear values are available only through the audited reveal endpoint.
+    return reply.code(201).send(toVendorDetail(vendor, true, "read"));
   });
 
   app.patch("/v1/finance/vendors/:id", async (req, reply) => {
@@ -228,13 +246,25 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     const { version, bankAccount, ...rest } = updateVendorBody.parse(req.body);
     const existing = await repo.getVendorById(ctx.tenantId, id);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "vendor not found");
+    // GAP-FINANCE-VENDORS-01: a pending / rejected vendor leaves that state only
+    // through approve / reject, never by flipping isActive.
+    if (rest.isActive !== undefined && (existing.status === "pending" || existing.status === "rejected")) {
+      throw new HttpError(409, "VENDOR_NOT_APPROVED", `vendor is '${existing.status}'; use the approval workflow, not activate/deactivate`);
+    }
+    // GAP-FINANCE-VENDORS-DETAIL-04: with maker-checker on, bank details change
+    // only through a bank-change request decided by a different user.
+    const touchesBank = rest.bankName !== undefined || bankAccount !== undefined || rest.ifsc !== undefined;
+    if (touchesBank && existing.status !== "pending" && (await getPolicy(ctx.tenantId)).vendorMakerChecker) {
+      throw new HttpError(409, "BANK_CHANGE_REQUIRES_APPROVAL", "bank details are changed through POST /v1/finance/vendors/:id/bank-change and approved by a different user");
+    }
     const updated = await repo.updateVendor(ctx.tenantId, id, version, {
       ...rest,
       ...(bankAccount !== undefined ? { bankAccountNo: bankAccount } : {}),
+      ...(rest.isActive !== undefined ? { status: rest.isActive ? "active" : "inactive" } : {}),
     }, ctx.actorId);
     if (!updated) throw new HttpError(409, "VERSION_CONFLICT", "vendor was modified by another request; reload and retry");
-    // Always full detail: this route is already WRITER_ROLES-only.
-    return reply.send(toVendorDetail(updated, true));
+    // Masked like every read: the clear values are available only through the audited reveal endpoint.
+    return reply.send(toVendorDetail(updated, true, "read"));
   });
 
   app.setErrorHandler(financeErrorHandler);

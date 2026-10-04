@@ -11,6 +11,12 @@ const insertInstrumentTx = vi.hoisted(() => vi.fn());
 vi.mock("../src/shared/outbox.js", () => ({ enqueue }));
 vi.mock("../src/shared/db.js", () => ({ db: { transaction: async (cb: (tx: unknown) => unknown) => cb({}) } }));
 vi.mock("../src/modules/instruments/repo.js", () => ({ findById, transitionTx, insertInstrumentTx }));
+// presentInstrument now refuses a cheque past its validity horizon (policy-driven, default 3 months); the
+// fixture instrument is dated in 2026, so use a long horizon to keep this lifecycle test independent of today.
+vi.mock("../src/modules/masters/policy.js", () => ({
+  getPolicy: async () => ({ vendorMakerChecker: true, auditParaMakerChecker: true, chequeValidityMonths: 12 }),
+  readPolicyWith: async () => ({ vendorMakerChecker: true, auditParaMakerChecker: true, chequeValidityMonths: 12 }),
+}));
 
 import {
   presentInstrument, clearInstrument, bounceInstrument, issueInstrument, assertInstrumentChecker,

@@ -1,6 +1,10 @@
 import { PageHeader, StatGrid, StatCard, StatusPill, Card, EmptyState, LoadErrorState } from "@/app/_components/ds";
-import { getFinanceAuditParaById } from "@/app/_data/loaders";
-import { formatIndianDate, formatMoney, humanizeStatus } from "@/lib/formatters";
+import { getFinanceActorNames, getFinanceAuditParaById, getFinanceAuditParaEvents } from "@/app/_data/loaders";
+import { formatIndianDate, formatIndianDateTime, formatMoney, humanizeStatus } from "@/lib/formatters";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { actorLabel } from "@/lib/finance/workflowTypes";
+import { AuditParaActions } from "./AuditParaActions";
+import { availableParaActions, hasEvents } from "./auditParaActions";
 import { auditParaTone } from "../auditParaTone";
 
 export default async function AuditParaDetailPage({ params }: { params: { id: string } }) {
@@ -28,6 +32,12 @@ export default async function AuditParaDetailPage({ params }: { params: { id: st
     );
   }
 
+  // GAP-FINANCE-AUDIT-PARAS-DETAIL-04: reply / escalate / settle trail + the actions the user may take.
+  const eventsResult = await getFinanceAuditParaEvents(params.id);
+  const events = eventsResult.data;
+  const names = await getFinanceActorNames(events.map((e) => e.actorId));
+  const actions = availableParaActions(para.status, getSessionRoles());
+
   // GAP-FINANCE-AUDIT-PARAS-DETAIL-02: read the typed FinanceAuditParaSummary
   // contract directly (finance-service audit/routes.ts serialize() returns
   // exactly these fields for the detail endpoint). No alias lists: a backend
@@ -39,6 +49,7 @@ export default async function AuditParaDetailPage({ params }: { params: { id: st
         title={`Audit Para ${para.paraNo}`}
         subtitle={para.dept || undefined}
         back="/finance/audit-paras"
+        actions={actions.length > 0 ? <AuditParaActions id={para.id} paraNo={para.paraNo} actions={actions} /> : null}
       />
       <StatGrid>
         <StatCard icon="₹" iconBg="#fce7ee" label="Amount" value={formatMoney(para.moneyValueMinor)} />
@@ -62,12 +73,22 @@ export default async function AuditParaDetailPage({ params }: { params: { id: st
         </dl>
       </Card>
 
-      <Card title="Observation, reply and timeline" padding>
-        <EmptyState
-          icon="🕒"
-          title="Not captured in the audit register yet"
-          message="The audit register stores the para number, source, department, amount and status. Observation text, department reply, action taken and a history timeline are not recorded by the service yet."
-        />
+      <Card title="Department reply and timeline" padding>
+        {eventsResult.source === "error" ? (
+          <LoadErrorState result={eventsResult} area="audit para history" backHref="/finance/audit-paras" />
+        ) : !hasEvents(events) ? (
+          <EmptyState icon="🕒" title="No reply or action recorded yet" message="A department reply, escalation or settlement will appear here once it is recorded." />
+        ) : (
+          <ol style={{ listStyle: "none", padding: 0, margin: 0 }} aria-label="Audit para timeline">
+            {events.map((e, i) => (
+              <li key={e.id} style={{ display: "grid", gridTemplateColumns: "150px 110px 1fr", gap: 12, padding: "8px 0", borderBottom: i < events.length - 1 ? "1px solid var(--border)" : "none" }}>
+                <span style={{ fontSize: 13, color: "var(--muted)" }}>{formatIndianDateTime(e.createdAt)}</span>
+                <StatusPill status={e.toStatus} variant={auditParaTone(e.toStatus)} />
+                <span style={{ fontSize: 13 }}><strong>{actorLabel(e.actorId, names)}</strong> — {e.note}</span>
+              </li>
+            ))}
+          </ol>
+        )}
       </Card>
     </div>
   );

@@ -15,6 +15,16 @@ function confirmDialog() {
 }
 
 const ACCOUNTS = [{ id: "acc-1", code: "2110", name: "Sundry Creditors" }];
+
+/**
+ * GAP-FINANCE-BUDGET-FORMULATION-NEW-05: the head is chosen with the shared EntityPicker (server search),
+ * not a preloaded <select>: type a query, wait for the matching option, pick it.
+ */
+async function pickHead(query = "2110", label = "2110 · Sundry Creditors") {
+  fireEvent.change(screen.getByLabelText(/Budget head/), { target: { value: query } });
+  fireEvent.mouseDown(await screen.findByText(label));
+  await screen.findByDisplayValue(label);
+}
 // Typed rows as GET /v1/finance/accounts returns them (`type` = accounting nature).
 const TYPED_ACCOUNTS = [
   { id: "acc-exp", code: "3054", name: "Roads and Bridges", type: "expense" },
@@ -38,9 +48,7 @@ describe("NewBudgetEstimatePage", () => {
     });
 
     render(<NewBudgetEstimatePage />);
-    await waitFor(() => expect(screen.getByText("2110 · Sundry Creditors")).toBeInTheDocument());
-
-    fireEvent.change(screen.getByLabelText("Budget head"), { target: { value: "acc-1" } });
+    await pickHead();
     fireEvent.change(screen.getByLabelText("Budget estimate (₹)"), { target: { value: "1000" } });
     fireEvent.click(screen.getByRole("button", { name: /submit estimate/i }));
     confirmDialog();
@@ -61,6 +69,7 @@ describe("NewBudgetEstimatePage", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 503 }));
 
     render(<NewBudgetEstimatePage />);
+    fireEvent.change(screen.getByLabelText(/Budget head/), { target: { value: "2110" } });
 
     const alert = await screen.findByRole("alert");
     await waitFor(() => expect(alert).toHaveTextContent(/couldn't load/i));
@@ -79,6 +88,7 @@ describe("NewBudgetEstimatePage", () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new TypeError("Failed to fetch"));
 
     render(<NewBudgetEstimatePage />);
+    fireEvent.change(screen.getByLabelText(/Budget head/), { target: { value: "2110" } });
 
     const alert = await screen.findByRole("alert");
     await waitFor(() => expect(alert).toHaveTextContent(/check your internet connection/i));
@@ -95,8 +105,7 @@ describe("NewBudgetEstimatePage", () => {
     });
 
     render(<NewBudgetEstimatePage />);
-    await waitFor(() => expect(screen.getByText("2110 · Sundry Creditors")).toBeInTheDocument());
-    fireEvent.change(screen.getByLabelText("Budget head"), { target: { value: "acc-1" } });
+    await pickHead();
     fireEvent.change(screen.getByLabelText("Budget estimate (₹)"), { target: { value: "1000" } });
     fireEvent.click(screen.getByRole("button", { name: /submit estimate/i }));
     confirmDialog();
@@ -105,7 +114,8 @@ describe("NewBudgetEstimatePage", () => {
     // changes its background color, not the ARIA role) -- pre-existing and
     // out of scope for this fix, which is about the message content, not
     // the role.
-    const banner = await screen.findByRole("status");
+    // (The head picker owns its own role="status" live region, so the banner is found by its text.)
+    const banner = (await screen.findByText(/couldn't save/i)).closest(".banner") as HTMLElement;
     await waitFor(() => expect(banner).toHaveTextContent(/couldn't save/i));
     expect(banner.textContent).not.toMatch(/NPE/);
     expect(banner.textContent).not.toMatch(/BudgetService/);
@@ -121,8 +131,7 @@ describe("NewBudgetEstimatePage", () => {
       return new Response(JSON.stringify({}), { status: 202 });
     });
     render(<NewBudgetEstimatePage />);
-    await waitFor(() => expect(screen.getByText("2110 · Sundry Creditors")).toBeInTheDocument());
-    fireEvent.change(screen.getByLabelText("Budget head"), { target: { value: "acc-1" } });
+    await pickHead();
     fireEvent.change(screen.getByLabelText("Budget estimate (₹)"), { target: { value } });
     fireEvent.submit(screen.getByRole("button", { name: /submit estimate/i }).closest("form")!);
     // A valid amount opens the confirm dialog; an invalid one never does.
@@ -156,7 +165,8 @@ describe("NewBudgetEstimatePage", () => {
   it("offers only expenditure heads in the picker", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ data: TYPED_ACCOUNTS }), { status: 200 }));
     render(<NewBudgetEstimatePage />);
-    await waitFor(() => expect(screen.getByText("3054 · Roads and Bridges")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/Budget head/), { target: { value: "0" } });
+    expect(await screen.findByText("3054 · Roads and Bridges")).toBeInTheDocument();
     expect(screen.queryByText("8443 · Civil Deposits")).not.toBeInTheDocument();
     expect(screen.queryByText("8670 · Cheques and Bills")).not.toBeInTheDocument();
   });
@@ -172,8 +182,7 @@ describe("NewBudgetEstimatePage", () => {
       }), { status: 400 });
     });
     render(<NewBudgetEstimatePage />);
-    await waitFor(() => expect(screen.getByText("3054 · Roads and Bridges")).toBeInTheDocument());
-    fireEvent.change(screen.getByLabelText("Budget head"), { target: { value: "acc-exp" } });
+    await pickHead("3054", "3054 · Roads and Bridges");
     fireEvent.change(screen.getByLabelText("Budget estimate (₹)"), { target: { value: "10" } });
     fireEvent.submit(screen.getByRole("button", { name: /submit estimate/i }).closest("form")!);
     confirmDialog();
@@ -196,8 +205,7 @@ describe("NewBudgetEstimatePage -- confirm, idempotency, FY, heads list (NEW-03/
   }
   const posts = (m: { mock: { calls: unknown[][] } }) => m.mock.calls.filter(([u]) => String(u).endsWith("/finance/budgets"));
   async function fill(amount = "1000", fy?: string) {
-    await waitFor(() => expect(screen.getByText("2110 · Sundry Creditors")).toBeInTheDocument());
-    fireEvent.change(screen.getByLabelText("Budget head"), { target: { value: "acc-1" } });
+    await pickHead();
     fireEvent.change(screen.getByLabelText("Budget estimate (₹)"), { target: { value: amount } });
     if (fy) fireEvent.change(screen.getByLabelText("Financial year"), { target: { value: fy } });
   }
@@ -314,29 +322,49 @@ describe("NewBudgetEstimatePage -- confirm, idempotency, FY, heads list (NEW-03/
     }
   });
 
-  it("disables the head select with a loading option while the heads fetch is pending", async () => {
+  it("shows a searching state while the head search is pending and never preloads the heads", async () => {
     let release!: () => void;
-    vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise<Response>((res) => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise<Response>((res) => {
       release = () => res(new Response(JSON.stringify({ data: ACCOUNTS }), { status: 200 }));
     }));
     render(<NewBudgetEstimatePage />);
-    const select = screen.getByLabelText("Budget head");
-    expect(select).toBeDisabled();
-    expect(screen.getByText("Loading heads…")).toBeInTheDocument();
+    // nothing is fetched until the officer types: the picker is a search, not a preloaded (possibly truncated) list
+    expect(fetchMock).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText(/Budget head/), { target: { value: "2110" } });
+    expect(await screen.findByText("Searching heads…")).toBeInTheDocument();
     release();
-    await waitFor(() => expect(select).not.toBeDisabled());
+    expect(await screen.findByText("2110 · Sundry Creditors")).toBeInTheDocument();
   });
 
-  it("shows a truncation hint when the heads response is full, not otherwise", async () => {
-    const full = Array.from({ length: 500 }, (_, i) => ({ id: `a${i}`, code: String(2000 + i), name: `Head ${i}`, type: "expense" }));
+  it("searches on the server with the typed query (bounded), so a large chart is never truncated silently", async () => {
+    const m = mockFetch();
+    render(<NewBudgetEstimatePage />);
+    fireEvent.change(screen.getByLabelText(/Budget head/), { target: { value: "roads & br" } });
+    await screen.findByText("2110 · Sundry Creditors");
+    const url = String(m.mock.calls.find(([u]) => String(u).includes("/finance/accounts"))![0]);
+    expect(url).toContain("q=roads%20%26%20br");
+    expect(url).toContain("limit=50");
+  });
+
+  it("shows a truncation hint when a search returns a full page, not otherwise", async () => {
+    const full = Array.from({ length: 50 }, (_, i) => ({ id: `a${i}`, code: String(2000 + i), name: `Head ${i}`, type: "expense" }));
     mockFetch(full);
     const { unmount } = render(<NewBudgetEstimatePage />);
-    expect(await screen.findByRole("note")).toHaveTextContent(/first 500 heads/i);
+    fireEvent.change(screen.getByLabelText(/Budget head/), { target: { value: "Head" } });
+    expect(await screen.findByRole("note")).toHaveTextContent(/first 50 matches/i);
     unmount();
     vi.restoreAllMocks();
     mockFetch(ACCOUNTS);
     render(<NewBudgetEstimatePage />);
-    await waitFor(() => expect(screen.getByText("2110 · Sundry Creditors")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/Budget head/), { target: { value: "2110" } });
+    await screen.findByText("2110 · Sundry Creditors");
     expect(screen.queryByRole("note")).not.toBeInTheDocument();
+  });
+
+  it("a failed search is shown as a load error, never as 'No matching heads'", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 503 }));
+    render(<NewBudgetEstimatePage />);
+    fireEvent.change(screen.getByLabelText(/Budget head/), { target: { value: "2110" } });
+    expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't load/i);
   });
 });

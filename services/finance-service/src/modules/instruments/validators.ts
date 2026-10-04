@@ -19,8 +19,24 @@ export const bounceInstrumentBody = z.object({
 });
 export type BounceInstrumentBody = z.infer<typeof bounceInstrumentBody>;
 
+/** Cancelling / re-presenting a cheque needs a reason on the record (GAP-FINANCE-TREASURY-CHEQUES-DETAIL-04). */
+export const reasonedInstrumentBody = z.object({
+  reason: z.string().trim().min(5).max(500),
+});
+export type ReasonedInstrumentBody = z.infer<typeof reasonedInstrumentBody>;
+
+/** Mark-stale takes an optional note. */
+export const staleInstrumentBody = z.object({
+  reason: z.string().trim().min(5).max(500).optional(),
+});
+
+/** Audited reveal of the drawn-on account number. */
+export const revealAccountBody = z.object({
+  reason: z.string().trim().min(5).max(300),
+});
+
 export const listInstrumentsQuery = z.object({
-  status: z.enum(["issued", "presented", "cleared", "bounced", "cancelled"]).optional(),
+  status: z.enum(["issued", "presented", "cleared", "bounced", "cancelled", "stale"]).optional(),
   type:   z.enum(["cheque", "dd"]).optional(),
   limit:  z.coerce.number().int().positive().max(200).default(50),
 });

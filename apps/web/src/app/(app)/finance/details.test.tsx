@@ -1,11 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render as rtlRender, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
+
+// The vendor detail renders client components that use next-intl (RevealableValue).
+function render(ui: React.ReactElement) {
+  return rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+}
 
 const loaders = vi.hoisted(() => ({
   getFinanceBillById: vi.fn(),
   getFinancePaymentById: vi.fn(),
   getFinanceVendorById: vi.fn(),
   getFinanceSchemeById: vi.fn(),
+  getFinanceActorNames: vi.fn(),
+  getFinancePaymentContext: vi.fn(),
 }));
 vi.mock("@/app/_data/loaders", () => loaders);
 vi.mock("next-intl/server", () => ({ getTranslations: async () => (key: string) => key }));
@@ -29,7 +38,11 @@ const err404 = { data: null, source: "error" as const, status: 404 };
 const err403 = { data: null, source: "error" as const, status: 403, errorMessage: "no access" };
 
 describe("detail pages: a failed load is not 'not found' (FAILMASK)", () => {
-  beforeEach(() => Object.values(loaders).forEach((m) => m.mockReset()));
+  beforeEach(() => {
+    Object.values(loaders).forEach((m) => m.mockReset());
+    loaders.getFinanceActorNames.mockResolvedValue({});
+    loaders.getFinancePaymentContext.mockResolvedValue({ data: { beneficiary: null, bill: null, approvedBy: null, events: [] }, source: "api" });
+  });
 
   const cases: [string, keyof typeof loaders, () => Promise<React.ReactElement>, RegExp][] = [
     ["bill", "getFinanceBillById", () => BillDetailPage({ params: { id: "b1" } }), /emptyTitleNotFound/],
@@ -64,7 +77,7 @@ describe("detail pages: a failed load is not 'not found' (FAILMASK)", () => {
 });
 
 describe("vendor detail masks PAN and account number (GAP-FINANCE-VENDORS-DETAIL-01)", () => {
-  beforeEach(() => loaders.getFinanceVendorById.mockReset());
+  beforeEach(() => { loaders.getFinanceVendorById.mockReset(); loaders.getFinanceActorNames.mockResolvedValue({}); });
   it("never prints the full PAN or bank account", async () => {
     loaders.getFinanceVendorById.mockResolvedValue({
       data: { name: "Acme", pan: "ABCDE1234F", bankAccount: "123456789012", ifsc: "HDFC0001", bankName: "HDFC", status: "active", bills: [] },

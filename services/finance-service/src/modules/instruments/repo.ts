@@ -60,6 +60,16 @@ export async function findById(tenantId: string, id: string): Promise<Instrument
   });
 }
 
+/** Tx-scoped lookup for the lifecycle commands that decide and write in one transaction. */
+export async function findByIdTx(tx: Writer, tenantId: string, id: string): Promise<InstrumentRow | null> {
+  const rows = await tx
+    .select()
+    .from(financeInstruments)
+    .where(and(eq(financeInstruments.tenantId, tenantId), eq(financeInstruments.id, id)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function findByNumber(tenantId: string, type: string, no: string): Promise<InstrumentRow | null> {
   return scopedRead(async (tx) => {
     const rows = await tx
@@ -111,6 +121,14 @@ export async function listInstruments(
   });
 }
 
+/** Which per-transition actor column each timestamp column pairs with (GAP-FINANCE-TREASURY-CHEQUES-DETAIL-03). */
+const ACTOR_COLUMN = {
+  presentedAt: "presentedBy",
+  clearedAt: "clearedBy",
+  bouncedAt: "bouncedBy",
+  cancelledAt: "cancelledBy",
+} as const;
+
 /**
  * Atomic guarded status transition. The WHERE pins both the id AND the required
  * source status, so the update only fires when the instrument is in a legal
@@ -123,7 +141,7 @@ export async function transition(
   id: string,
   fromStatuses: string[],
   toStatus: string,
-  patch: Partial<Pick<InstrumentRow, "bounceReason">>,
+  patch: Partial<Pick<InstrumentRow, "bounceReason" | "cancelReason">>,
   tsColumn: "presentedAt" | "clearedAt" | "bouncedAt" | "cancelledAt",
   updatedBy: string,
 ): Promise<InstrumentRow | null> {
@@ -137,7 +155,7 @@ export async function transitionTx(
   id: string,
   fromStatuses: string[],
   toStatus: string,
-  patch: Partial<Pick<InstrumentRow, "bounceReason">>,
+  patch: Partial<Pick<InstrumentRow, "bounceReason" | "cancelReason">>,
   tsColumn: "presentedAt" | "clearedAt" | "bouncedAt" | "cancelledAt",
   updatedBy: string,
 ): Promise<InstrumentRow | null> {
@@ -149,7 +167,9 @@ export async function transitionTx(
       updatedBy,
       updatedAt: new Date(),
       version: sql`${financeInstruments.version} + 1`,
+      [ACTOR_COLUMN[tsColumn]]: updatedBy,
       ...(patch.bounceReason !== undefined ? { bounceReason: patch.bounceReason } : {}),
+      ...(patch.cancelReason !== undefined ? { cancelReason: patch.cancelReason } : {}),
     })
     .where(and(
       eq(financeInstruments.tenantId, tenantId),
@@ -158,4 +178,58 @@ export async function transitionTx(
     ))
     .returning();
   return updated[0] ?? null;
+}
+
+/**
+ * bounced -> presented again (GAP-FINANCE-TREASURY-CHEQUES-DETAIL-04). Same guarded-UPDATE shape as
+ * transitionTx: the WHERE pins status = bounced, so a replay or a lost race matches no row. The
+ * ORIGINAL presented_at and the bounce record are kept (the timeline shows both); only the
+ * re-presentation counters move.
+ */
+export async function representTx(tx: Writer, tenantId: string, id: string, reason: string, actorId: string): Promise<InstrumentRow | null> {
+  const now = new Date();
+  const updated = await tx
+    .update(financeInstruments)
+    .set({
+      status: "presented",
+      representCount: sql`${financeInstruments.representCount} + 1`,
+      lastRepresentedAt: now,
+      lastRepresentedBy: actorId,
+      representReason: reason,
+      updatedBy: actorId,
+      updatedAt: now,
+      version: sql`${financeInstruments.version} + 1`,
+    })
+    .where(and(
+      eq(financeInstruments.tenantId, tenantId),
+      eq(financeInstruments.id, id),
+      eq(financeInstruments.status, "bounced"),
+    ))
+    .returning();
+  return updated[0] ?? null;
+}
+
+/** issued -> stale (past the validity horizon, decided by the caller). Guarded on status = issued. */
+export async function staleTx(tx: Writer, tenantId: string, id: string, actorId: string): Promise<InstrumentRow | null> {
+  const now = new Date();
+  const updated = await tx
+    .update(financeInstruments)
+    .set({ status: "stale", staledAt: now, staledBy: actorId, updatedBy: actorId, updatedAt: now, version: sql`${financeInstruments.version} + 1` })
+    .where(and(
+      eq(financeInstruments.tenantId, tenantId),
+      eq(financeInstruments.id, id),
+      eq(financeInstruments.status, "issued"),
+    ))
+    .returning();
+  return updated[0] ?? null;
+}
+
+/** The clear account number behind an instrument's bank id (decrypted). Only the audited reveal path calls this. */
+export async function accountNoForInstrumentTx(tx: Writer, tenantId: string, bankAccountId: string): Promise<string | null> {
+  const rows = await tx
+    .select({ accountNo: financeBanks.accountNo })
+    .from(financeBanks)
+    .where(and(eq(financeBanks.tenantId, tenantId), eq(financeBanks.id, bankAccountId)))
+    .limit(1);
+  return rows[0]?.accountNo ?? null;
 }

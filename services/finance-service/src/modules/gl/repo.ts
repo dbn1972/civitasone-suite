@@ -1,5 +1,6 @@
 import { eq, and, ne, gte, lte, sql, asc } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+import { HttpError } from "../../shared/context.js";
 import { financeJournals, financeLedger, financeJournalLines, type JournalRow, type JournalInsert, type LedgerInsert, type JournalLineInsert } from "./schema.js";
 import { financeHeads } from "../budget/schema.js";
 
@@ -146,4 +147,85 @@ export async function getTrialBalanceByPeriod(tenantId: string, period?: string)
     .where(and(...conditions))
     .groupBy(sql`to_char(${financeLedger.postingDate}, 'YYYY-MM')`)
     .orderBy(sql`to_char(${financeLedger.postingDate}, 'YYYY-MM')`));
+}
+
+export type JournalLinePageFilter = {
+  tenantId: string;
+  from?: string | undefined;   // inclusive ISO date
+  to?: string | undefined;     // inclusive ISO date
+  type?: string | undefined;
+  q?: string | undefined;
+  limit: number;
+  offset: number;
+};
+
+export type JournalLineRow = {
+  journal_id: string; voucher_no: string; type: string; posting_date: string;
+  account_code: string; narration: string | null; debit: string; credit: string;
+};
+
+/**
+ * GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-03: one bounded, server-filtered page of ledger LINES
+ * (journals.lines jsonb unnested) plus totals over the WHOLE filtered set, so the page never needs
+ * the full ledger in the browser. Same journal visibility as listJournalsByTenant (pending_approval
+ * drafts excluded). Stable order: posting date, voucher no, journal id, line position.
+ */
+export async function pageJournalLines(f: JournalLinePageFilter) {
+  const conds = [
+    sql`j.tenant_id = ${f.tenantId}::uuid`,
+    sql`j.status <> 'pending_approval'`,
+  ];
+  if (f.from) conds.push(sql`j.posting_date >= ${f.from}::date`);
+  if (f.to) conds.push(sql`j.posting_date <= ${f.to}::date`);
+  if (f.type) conds.push(sql`j.type = ${f.type}`);
+  const q = f.q?.trim();
+  if (q) {
+    const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    conds.push(sql`(j.voucher_no ILIKE ${like} OR coalesce(ln.elem->>'accountCode', ln.elem->>'account', '') ILIKE ${like} OR coalesce(ln.elem->>'narration', '') ILIKE ${like})`);
+  }
+  const where = sql.join(conds, sql` AND `);
+  const base = sql`
+    FROM gl.finance_journals j
+    CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(j.lines) = 'array' THEN j.lines ELSE '[]'::jsonb END)
+      WITH ORDINALITY AS ln(elem, pos)
+    WHERE ${where} AND coalesce(ln.elem->>'accountCode', ln.elem->>'account', '') <> ''`;
+  return scopedRead(async (tx) => {
+    // Stored amounts must be non-negative integer strings (paise). A malformed row (a decimal, text, a negative) is
+    // reported as a clear data error naming the voucher: never cast (which would 500 or silently round).
+    const bad = await tx.execute(sql`
+      SELECT j.voucher_no,
+             coalesce(nullif(ln.elem->>'debitMinor', ''), nullif(ln.elem->>'debit', ''), '0') AS debit,
+             coalesce(nullif(ln.elem->>'creditMinor', ''), nullif(ln.elem->>'credit', ''), '0') AS credit
+      ${base}
+        AND (coalesce(nullif(ln.elem->>'debitMinor', ''), nullif(ln.elem->>'debit', ''), '0') !~ '^[0-9]{1,38}$'
+          OR coalesce(nullif(ln.elem->>'creditMinor', ''), nullif(ln.elem->>'credit', ''), '0') !~ '^[0-9]{1,38}$')
+      ORDER BY j.posting_date, j.voucher_no LIMIT 1`);
+    const badRow = (bad as unknown as Array<{ voucher_no: string }>)[0];
+    if (badRow) {
+      throw new HttpError(422, "LEDGER_AMOUNT_INVALID", `voucher ${badRow.voucher_no} has a debit or credit that is not a whole number of paise; fix the journal line before this view can total it`);
+    }
+    const rows = await tx.execute(sql`
+      SELECT j.id AS journal_id, j.voucher_no, j.type, j.posting_date::text AS posting_date,
+             coalesce(ln.elem->>'accountCode', ln.elem->>'account') AS account_code,
+             ln.elem->>'narration' AS narration,
+             coalesce(nullif(ln.elem->>'debitMinor', ''), nullif(ln.elem->>'debit', ''), '0')::numeric(40,0)::text AS debit,
+             coalesce(nullif(ln.elem->>'creditMinor', ''), nullif(ln.elem->>'credit', ''), '0')::numeric(40,0)::text AS credit
+      ${base}
+      ORDER BY j.posting_date, j.voucher_no, j.id, ln.pos
+      LIMIT ${f.limit} OFFSET ${f.offset}`);
+    const tot = await tx.execute(sql`
+      SELECT count(*)::int AS lines, count(DISTINCT j.id)::int AS vouchers,
+             count(DISTINCT coalesce(ln.elem->>'accountCode', ln.elem->>'account'))::int AS accounts,
+             coalesce(sum(coalesce(nullif(ln.elem->>'debitMinor', ''), nullif(ln.elem->>'debit', ''), '0')::numeric(40,0)), 0)::text AS debit,
+             coalesce(sum(coalesce(nullif(ln.elem->>'creditMinor', ''), nullif(ln.elem->>'credit', ''), '0')::numeric(40,0)), 0)::text AS credit
+      ${base}`);
+    const t = (tot as unknown as Array<{ lines: number; vouchers: number; accounts: number; debit: string; credit: string }>)[0];
+    return {
+      rows: rows as unknown as JournalLineRow[],
+      totals: {
+        entryLines: t?.lines ?? 0, vouchers: t?.vouchers ?? 0, accountsActive: t?.accounts ?? 0,
+        debitMinor: t?.debit ?? "0", creditMinor: t?.credit ?? "0",
+      },
+    };
+  });
 }
