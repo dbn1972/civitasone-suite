@@ -132,7 +132,8 @@ export function registerIntegrationConsumers(queue: Queue): void {
     // the pool. The generate + write + upload + cleanup steps are the shared
     // sendNachFile path (also used by the signed-batch release).
     const uploaded = await sendNachFile({ pfmsBatchId, agencyCode: prepared.agencyCode, rows: [nachRow] })
-      .then(() => true)
+      // No SFTP gateway configured = nothing was sent. Only a sandbox deployment may treat that as sent.
+      .then((remotePath) => remotePath !== null || !isProductionDeployment())
       .catch((err: unknown) => {
         log.error({ err, pfmsBatchId }, "SFTP upload failed — batch remains in pending state");
         // Do not rethrow: let the batch stay pending for manual retry.

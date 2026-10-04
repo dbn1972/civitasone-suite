@@ -66,3 +66,30 @@ const REFUSALS: Record<string, string> = {
 export function releaseRefusalKey(code: string | null): string | null {
   return code && Object.prototype.hasOwnProperty.call(REFUSALS, code) ? REFUSALS[code]! : null;
 }
+
+/** A signed, unsent batch may have its signature voided (re-sign path for a batch changed after signing). */
+export function canVoid(submissionStatus: string, signing: PfmsSigning): boolean {
+  return submissionStatus === "signed" && signing.status === "signed";
+}
+
+/** A release whose outcome is unknown (the worker died mid-send): an operator must check the gateway and resolve it. */
+export const needsResolve = (submissionStatus: string): boolean => submissionStatus === "send_unknown";
+
+export type PfmsRelease = { startedAt: string | null; lastFailureCode: string | null; lastFailureAt: string | null };
+export function parseRelease(raw: unknown): PfmsRelease {
+  const r = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return { startedAt: str(r.startedAt), lastFailureCode: str(r.lastFailureCode), lastFailureAt: str(r.lastFailureAt) };
+}
+
+/** Why the last release attempt did not send (pfmsBatchesPanel.releaseFailed.*). Unknown code -> the generic one. */
+const FAILURES: Record<string, string> = {
+  SEND_FAILED: "releaseFailedSend",
+  SFTP_NOT_CONFIGURED: "releaseFailedSftp",
+  BATCH_CHANGED_AFTER_SIGNING: "releaseFailedChanged",
+  NO_BENEFICIARIES: "releaseFailedNoBeneficiaries",
+  BATCH_TOO_LARGE: "releaseFailedTooLarge",
+};
+export function releaseFailureKey(code: string | null): string | null {
+  if (!code) return null;
+  return Object.prototype.hasOwnProperty.call(FAILURES, code) ? FAILURES[code]! : "releaseFailedGeneric";
+}

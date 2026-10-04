@@ -112,6 +112,11 @@ export const financePfms = paymentsSchema.table("finance_pfms", {
   dscCanonicalVersion: varchar("dsc_canonical_version", { length: 40 }),
   dscXmldsig:          text("dsc_xmldsig"),
   dscVerifiedAt:       timestamp("dsc_verified_at", { withTimezone: true }),
+  // migration 0092: release bookkeeping (stuck-processing sweeper, maker != checker on resolve, last failure shown in the UI)
+  releaseStartedAt:         timestamp("release_started_at", { withTimezone: true }),
+  releasedBy:               uuid("released_by"),
+  lastReleaseFailureCode:   varchar("last_release_failure_code", { length: 40 }),
+  lastReleaseFailureAt:     timestamp("last_release_failure_at", { withTimezone: true }),
   submissionStatus: varchar("submission_status", { length: 24 }).notNull().default("pending"),
   status:           varchar("status", { length: 24 }).notNull().default("pending"),
   // Which of the two independent PFMS submission mechanisms produced this

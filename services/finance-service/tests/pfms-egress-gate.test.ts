@@ -52,6 +52,21 @@ describe("PFMS egress gate (EFT initiate)", () => {
     expect(blocked[0]!.payload).toMatchObject({ outcome: "denied", details: { code: "UNSIGNED_BATCH" } });
   });
 
+  it("fail closed: an UNSET or unexpected NODE_ENV (empty, staging) also blocks an unsigned batch; PFMS_SANDBOX=true opts a non-production env out", async () => {
+    for (const v of ["", "staging"]) {
+      vi.stubEnv("NODE_ENV", v);
+      const tenant = randomUUID();
+      const row = await initiate(tenant, `EFT-${randomUUID().slice(0, 8)}`);
+      expect(row.submissionStatus, v).toBe("pending");
+      expect(await auditRows(tenant, "send_blocked", row.id), v).toHaveLength(1);
+    }
+    vi.stubEnv("NODE_ENV", "staging");
+    vi.stubEnv("PFMS_SANDBOX", "true");
+    const tenant = randomUUID();
+    const row = await initiate(tenant, `EFT-${randomUUID().slice(0, 8)}`);
+    expect(row.submissionStatus).toBe("file_sent");
+  });
+
   it("outside production the sandbox flow is unchanged: the batch is released (file_sent) and nothing is blocked", async () => {
     const tenant = randomUUID();
     const row = await initiate(tenant, `EFT-${randomUUID().slice(0, 8)}`);

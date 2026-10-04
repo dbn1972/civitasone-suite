@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { canRelease, canSign, parseSigning, releaseRefusalKey } from "./signingStatus";
+import { canRelease, canSign, canVoid, needsResolve, parseRelease, parseSigning, releaseFailureKey, releaseRefusalKey } from "./signingStatus";
 
 describe("parseSigning", () => {
   it("degrades anything unknown to unsigned", () => {
@@ -41,5 +41,23 @@ describe("canRelease / releaseRefusalKey", () => {
     expect(releaseRefusalKey("SOMETHING_NEW")).toBeNull();
     expect(releaseRefusalKey(null)).toBeNull();
     expect(releaseRefusalKey("toString")).toBeNull();
+  });
+});
+
+describe("void / resolve / release-failure helpers", () => {
+  it("void only on a signed, unsent batch; resolve only on send_unknown", () => {
+    expect(canVoid("signed", parseSigning({ status: "signed" }))).toBe(true);
+    expect(canVoid("file_sent", parseSigning({ status: "signed" }))).toBe(false);
+    expect(canVoid("pending", parseSigning({ status: "unsigned" }))).toBe(false);
+    expect(needsResolve("send_unknown")).toBe(true);
+    expect(needsResolve("processing")).toBe(false);
+  });
+  it("parseRelease degrades unknown shapes; releaseFailureKey maps known codes and falls back to the generic one", () => {
+    expect(parseRelease(undefined)).toEqual({ startedAt: null, lastFailureCode: null, lastFailureAt: null });
+    expect(parseRelease({ lastFailureCode: "SEND_FAILED" }).lastFailureCode).toBe("SEND_FAILED");
+    expect(releaseFailureKey("SEND_FAILED")).toBe("releaseFailedSend");
+    expect(releaseFailureKey("BATCH_CHANGED_AFTER_SIGNING")).toBe("releaseFailedChanged");
+    expect(releaseFailureKey("SOMETHING_NEW")).toBe("releaseFailedGeneric");
+    expect(releaseFailureKey(null)).toBeNull();
   });
 });

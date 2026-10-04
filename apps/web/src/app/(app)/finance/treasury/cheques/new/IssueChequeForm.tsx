@@ -10,6 +10,7 @@
  */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSettledRefresh } from "@/lib/finance/useSettledRefresh";
 import { useTranslations } from "next-intl";
 import { Button, ConfirmDialog } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
@@ -28,6 +29,7 @@ function todayIst(): string {
 export function IssueChequeForm() {
   const t = useTranslations("financeChequesNew");
   const router = useRouter();
+  const settle = useSettledRefresh(router);
   const formError = useFormError("cheque");
   const [form, setForm] = useState({ instrumentType: "cheque", instrumentNo: "", bankName: "", payee: "", amount: "", issueDate: "" });
   const [errors, setErrors] = useState<IssueChequeErrors>({});
@@ -69,9 +71,16 @@ export function IssueChequeForm() {
       }
       setDone(true);
       setIdempotencyKey(crypto.randomUUID());
-      setMessage(t("recorded"));
-      router.refresh();
-      setTimeout(() => router.push("/finance/treasury/cheques"), 700);
+      if (res.status === 202) {
+        // Queued, not yet applied: do not claim it is recorded. Re-read until it lands, then go to the list.
+        setMessage(t("queued"));
+        settle();
+        setTimeout(() => router.push("/finance/treasury/cheques"), 5500);
+      } else {
+        setMessage(t("recorded"));
+        router.refresh();
+        setTimeout(() => router.push("/finance/treasury/cheques"), 700);
+      }
     } catch (caught) {
       setConfirmOpen(false);
       setIsError(true);

@@ -51,8 +51,9 @@ export const COMMANDS = {
   periodReopen:         "finance.period.reopen",
   // pfms
   pfmsBatchSign:        "finance.pfms.batch_sign",
-  pfmsBatchSubmit:      "finance.pfms.batch_submit",
   pfmsBatchRelease:     "finance.pfms.batch_release",
+  pfmsReleaseResolve:   "finance.pfms.release_resolve",
+  pfmsSignatureVoid:    "finance.pfms.signature_void",
   // recon (CAP-059)
   reconRun:             "finance.recon.run",
   reconExceptionAction: "finance.recon.exception_action",

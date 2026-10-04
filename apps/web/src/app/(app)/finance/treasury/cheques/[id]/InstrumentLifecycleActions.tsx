@@ -15,6 +15,7 @@
  */
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSettledRefresh } from "@/lib/finance/useSettledRefresh";
 import { ActionButton, ConfirmDialog } from "@/app/_components/ds";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { availableLifecycleActions, type LifecycleAction } from "./lifecycleUi";
@@ -29,6 +30,7 @@ const DONE: Record<LifecycleAction, string> = {
 
 export function InstrumentLifecycleActions({ id, instrumentNo, status = "issued" }: { id: string; instrumentNo: string; status?: string }) {
   const router = useRouter();
+  const settle = useSettledRefresh(router);
   const [note, setNote] = useState<string | null>(null);
   const [bounceOpen, setBounceOpen] = useState(false);
   const [bounceBusy, setBounceBusy] = useState(false);
@@ -56,8 +58,9 @@ export function InstrumentLifecycleActions({ id, instrumentNo, status = "issued"
   }
 
   function done(action: LifecycleAction) {
+    // present / clear / bounce are queued commands (202 when the worker is slow): re-read until the state lands.
     setNote(DONE[action]);
-    router.refresh();
+    settle();
   }
 
   const actions = availableLifecycleActions(status);

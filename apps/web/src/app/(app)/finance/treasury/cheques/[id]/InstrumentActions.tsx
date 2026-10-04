@@ -47,9 +47,10 @@ export function InstrumentActions({ id, instrumentNo, canCancel, canRepresent, c
       throw new Error(await workflowErrorMessage(res, (k) => te(k), res.status === 409 ? "conflict" : "save", "cheque"));
     }
   }
-  // represent / mark-stale answer 202 (queued): re-read until they land. Cancel is applied before it answers.
+  // Every action here is a queued command: the route answers 202 (or, when the worker applies it promptly, the updated
+  // cheque), so none of them can assume it has landed. Re-read until the new state shows.
   const queued = (msg: string) => () => { setNote(msg); settle(); };
-  const done = (msg: string) => () => { setNote(msg); router.refresh(); };
+  const done = queued;
 
   return (
     <>

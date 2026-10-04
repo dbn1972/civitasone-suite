@@ -9,7 +9,8 @@ import { getPfmsTreasuryMode } from "./pfms-client.js";
 import { isEnabled as isPaymentRailEnabled } from "./adapter.js";
 import { fetchUserNames } from "../../shared/identity-client.js";
 import { readSettings } from "../approvals/repo.js";
-import { SENT_STATES, checkReleasable } from "./release.js";
+import { isProductionDeployment } from "./dsc-client.js";
+import { SENT_STATES, checkDistinct, checkReleasable } from "./release.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 const READER_ROLES = [...FINANCE_ROLES, "audit_officer"];
@@ -127,6 +128,12 @@ export async function pfmsRoutes(app: FastifyInstance): Promise<void> {
           batchDigest: r.batchDigest,
           verifiedAt: r.dscVerifiedAt?.toISOString() ?? null,
         },
+        // Release bookkeeping: when an in-flight / ambiguous release started and why the last attempt failed.
+        release: {
+          startedAt: r.releaseStartedAt?.toISOString() ?? null,
+          lastFailureCode: r.lastReleaseFailureCode,
+          lastFailureAt: r.lastReleaseFailureAt?.toISOString() ?? null,
+        },
       })),
     });
   });
@@ -149,6 +156,10 @@ export async function pfmsRoutes(app: FastifyInstance): Promise<void> {
     }
     if (batch.submissionStatus !== "signed" && batch.submissionStatus !== "pending") {
       throw new HttpError(400, "INVALID_STATE", "bank file requires signed or pending batch");
+    }
+    // Production hands out the bank file only for a batch that carries a DSC signature (a pending, unsigned batch has none).
+    if (isProductionDeployment() && !batch.dscSignature) {
+      throw new HttpError(409, "UNSIGNED_BATCH", "the bank file is available only after the batch is DSC-signed");
     }
     // P1-4: build the NEFT advice from REAL finance_payments beneficiaries
     // (real amount / account / ref / DDO), not a hardcoded stub. Account/IFSC
@@ -227,6 +238,48 @@ export async function pfmsRoutes(app: FastifyInstance): Promise<void> {
       if (!check.ok) throw new HttpError(check.status, check.code, check.message);
     }
     return sendAccepted(reply, acceptedResponseSchema, await commands.releaseBatch(ctx, id));
+  });
+
+  /**
+   * Resolve a release whose outcome is unknown (send_unknown): the operator checked the PFMS gateway and confirms the file
+   * was sent (-> file_sent) or was NOT sent (-> signed, may be released again). Reason required; maker != checker against
+   * whoever started the release when the tenant setting is on. Route -> command -> consumer; audited.
+   */
+  app.post("/v1/finance/pfms/batches/:id/resolve-release", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, RELEASE_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const body = z.object({ outcome: z.enum(["sent", "not_sent"]), reason: z.string().trim().min(5).max(500) }).strict().parse(req.body ?? {});
+    const batch = await repo.findPfmsById(id, ctx.tenantId);
+    if (!batch) throw new HttpError(404, "NOT_FOUND", "PFMS batch not found");
+    if (batch.submissionStatus !== "send_unknown") {
+      throw new HttpError(409, "INVALID_STATE", `only a release with an unknown outcome can be resolved (this batch is ${batch.submissionStatus})`);
+    }
+    const settings = await readSettings(ctx.tenantId);
+    const d = checkDistinct(settings.makerCheckerEnabled, batch.releasedBy, ctx.actorId, "the user who started this release cannot also resolve it");
+    if (!d.ok) throw new HttpError(d.status, d.code, d.message);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.resolveRelease(ctx, id, body));
+  });
+
+  /**
+   * Void the signature of a signed, unsent batch (typically one that changed after signing) so it can be signed again.
+   * Reason required; maker != checker against whoever signed when the tenant setting is on; audited with the voided cert.
+   */
+  app.post("/v1/finance/pfms/batches/:id/void-signature", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, RELEASE_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const body = z.object({ reason: z.string().trim().min(5).max(500) }).strict().parse(req.body ?? {});
+    const batch = await repo.findPfmsById(id, ctx.tenantId);
+    if (!batch) throw new HttpError(404, "NOT_FOUND", "PFMS batch not found");
+    if (batch.channel !== "treasury_batch") throw new HttpError(400, "INVALID_CHANNEL", "only treasury batches carry a DSC signature");
+    if (batch.submissionStatus !== "signed") {
+      throw new HttpError(409, "INVALID_STATE", `only a signed, unsent batch can have its signature voided (this batch is ${batch.submissionStatus})`);
+    }
+    const settings = await readSettings(ctx.tenantId);
+    const d = checkDistinct(settings.makerCheckerEnabled, batch.signedBy, ctx.actorId, "the user who signed this batch cannot also void its signature");
+    if (!d.ok) throw new HttpError(d.status, d.code, d.message);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.voidSignature(ctx, id, body));
   });
 
   // A malformed body / query is a 400 VALIDATION_FAILED (not a 500), same handler as the sibling finance modules.
