@@ -3,6 +3,7 @@ import { registerGracefulShutdown, signalReady } from "@civitasone/observability
 import { sql } from "drizzle-orm";
 import { db, sqlClient } from "./shared/db.js";
 import { scannerDb, scannerSqlClient } from "./shared/scanner-db.js";
+import { isSandboxDeployment } from "./shared/deployment-env.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { startOutboxPurge } from "@civitasone/outbox";
@@ -35,6 +36,7 @@ import { registerInstrumentWorkflowConsumers } from "./modules/instruments/comma
 import { registerOrgStructureConsumers }  from "./modules/org-structure/consumer.js";
 import { registerPeriodCloseConsumers }   from "./modules/period-close/consumer.js";
 import { registerPfmsConsumers }          from "./modules/pfms/consumer.js";
+import { registerPfmsReleaseConsumers, sweepStuckReleases } from "./modules/pfms/release.js";
 import { registerRecurringConsumers }     from "./modules/recurring/consumer.js";
 import { registerReportsConsumers }       from "./modules/reports/consumer.js";
 import { registerSubledgerConsumers }     from "./modules/subledger/consumer.js";
@@ -49,7 +51,8 @@ import { registerSimplifiedConsumers } from "./modules/simplified/consumer.js";
 const log = pino({ name: "finance-worker" });
 
 function assertScannerConfigured(): void {
-  if ((process.env.NODE_ENV ?? "") !== "production") return;
+  // Fail-closed: only an explicit sandbox (NODE_ENV development/test, or PFMS_SANDBOX=true outside production) may skip this.
+  if (isSandboxDeployment()) return;
   const scanner = process.env.FINANCE_SCANNER_DATABASE_URL ?? "";
   const primary = process.env.DATABASE_URL ?? "";
   if (!scanner || scanner === primary) {
@@ -104,6 +107,7 @@ registerInstrumentWorkflowConsumers(queue);
 registerOrgStructureConsumers(queue);
 registerPeriodCloseConsumers(queue);
 registerPfmsConsumers(queue);
+registerPfmsReleaseConsumers(queue);
 registerRecurringConsumers(queue);
 registerReportsConsumers(queue);
 registerSubledgerConsumers(queue);
@@ -129,6 +133,18 @@ log.info("finance-service worker: consumers + outbox relay running");
 // finished subscribing every consumer and starting the outbox relay/purge —
 // i.e. it can actually do the job, not just that the process started.
 signalReady();
+
+// H1: a PFMS release whose worker died mid-send is moved to the operator-visible send_unknown state (never auto-resent).
+const releaseSweep = async (): Promise<void> => {
+  try {
+    const n = await sweepStuckReleases();
+    if (n > 0) log.warn({ moved: n }, "PFMS release sweeper: batches moved to send_unknown");
+  } catch (err) {
+    log.error({ err }, "PFMS release sweeper failed");
+  }
+};
+void releaseSweep();
+setInterval(() => void releaseSweep(), 5 * 60_000).unref();
 
 // G6.4: Partition maintenance — auto-create monthly partitions 3 months ahead.
 // Runs daily. Safe to call repeatedly (idempotent, IF NOT EXISTS guards).

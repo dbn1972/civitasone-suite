@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import { resolveContext, requireRole, financeErrorHandler } from "../../shared/context.js";
 import {
   issueInstrumentBody,
@@ -10,6 +10,7 @@ import {
   idParam,
 } from "./validators.js";
 import * as commands from "./commands.js";
+import type { Accepted } from "../../shared/finance-command.js";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 
@@ -17,6 +18,14 @@ const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 const READER_ROLES  = [...FINANCE_ROLES, "audit_officer"];
 /** Who may reveal the drawn-on bank account number (audited, reason required). */
 export const BANK_ACCOUNT_REVEAL_ROLES = ["finance_officer", "finance_admin", "accounts_officer", "super_admin"];
+
+/** The updated instrument (200) once the consumer has applied the command, else 202 Accepted. */
+function sendResult(reply: FastifyReply, result: commands.InstrumentView | Accepted) {
+  if (result.status === "accepted") {
+    return sendAccepted(reply, acceptedResponseSchema, result);
+  }
+  return reply.send(result);
+}
 
 /**
  * Cheque / DD payment instruments — issuance + tenant-scoped status lifecycle
@@ -29,6 +38,8 @@ export async function instrumentRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FINANCE_ROLES);
     const body = issueInstrumentBody.parse(req.body);
     const view = await commands.issueInstrument(ctx, body);
+    // Applied -> the instrument (201, as before). Queued but not yet applied -> 202 Accepted.
+    if (view.status === "accepted") return sendAccepted(reply, acceptedResponseSchema, view);
     return reply.code(201).send(view);
   });
 
@@ -55,14 +66,14 @@ export async function instrumentRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const { id } = idParam.parse(req.params);
-    return reply.send(await commands.presentInstrument(ctx, id));
+    return sendResult(reply, await commands.presentInstrument(ctx, id));
   });
 
   app.post("/v1/finance/instruments/:id/clear", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const { id } = idParam.parse(req.params);
-    return reply.send(await commands.clearInstrument(ctx, id));
+    return sendResult(reply, await commands.clearInstrument(ctx, id));
   });
 
   app.post("/v1/finance/instruments/:id/bounce", async (req, reply) => {
@@ -70,7 +81,7 @@ export async function instrumentRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FINANCE_ROLES);
     const { id } = idParam.parse(req.params);
     const body = bounceInstrumentBody.parse(req.body ?? {});
-    return reply.send(await commands.bounceInstrument(ctx, id, body));
+    return sendResult(reply, await commands.bounceInstrument(ctx, id, body));
   });
 
   app.post("/v1/finance/instruments/:id/cancel", async (req, reply) => {
@@ -78,7 +89,7 @@ export async function instrumentRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FINANCE_ROLES);
     const { id } = idParam.parse(req.params);
     const body = reasonedInstrumentBody.parse(req.body ?? {});
-    return reply.send(await commands.cancelInstrument(ctx, id, body));
+    return sendResult(reply, await commands.cancelInstrument(ctx, id, body));
   });
 
   app.post("/v1/finance/instruments/:id/represent", async (req, reply) => {

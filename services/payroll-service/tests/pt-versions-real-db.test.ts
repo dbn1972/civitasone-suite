@@ -599,3 +599,114 @@ describe("concurrent creation is race-safe", () => {
     expect(new Set(rows.map((r) => r.eff))).toEqual(new Set(["1900-01-01", "2099-04-01", "2099-05-01", "2099-06-01"]));
   }, 60_000);
 });
+
+describe("gender-specific slabs (0086)", () => {
+  const empG = (id: string, state: string, gender: string | null) => ({ ...employee(id, state), gender });
+  const GENDER_SLABS = [
+    { fromMinor: 0, toMinor: 999999999999, taxMinor: 20000 },
+    { fromMinor: 0, toMinor: 999999999999, taxMinor: 0, appliesToGender: "female" },
+  ];
+
+  it("creates a version with gender slabs; the run picks female / male / unknown correctly and warns for unknown", async () => {
+    const { tenant, structure } = await newTenant("MH", [], false);
+    const r = await createVersion(tenant, { stateCode: "MH", effectiveFrom: "2026-12-01", reason: "Gender slab test version", slabs: GENDER_SLABS });
+    expect(r.statusCode).toBe(202);
+    await until(() => versionsOf(tenant, "MH"), (rows) => rows.length === 2);
+    const stored = await q(tenant, sql`SELECT applies_to_gender AS g FROM payroll.payroll_professional_tax WHERE state_code = 'MH' ORDER BY applies_to_gender`);
+    expect(stored.map((x) => x.g)).toEqual(["all", "female"]);
+
+    // a past version is needed for a run: baseline in force, then the gender version from 2099
+    const fem = randomUUID(); const mal = randomUUID(); const unk = randomUUID(); const oth = randomUUID();
+    const run = await runMonth(tenant, structure, "2027-01", [empG(fem, "MH", "female"), empG(mal, "MH", "male"), empG(unk, "MH", null), empG(oth, "MH", "other")]);
+    expect(await ptOf(tenant, run, fem)).toBe(0);
+    expect(await ptOf(tenant, run, mal)).toBe(20000);
+    expect(await ptOf(tenant, run, unk)).toBe(20000);
+    expect(await ptOf(tenant, run, oth)).toBe(20000);
+    const warn = await q(tenant, sql`SELECT payload FROM _outbox.messages WHERE tenant_id = ${tenant}::uuid AND topic = 'audit.event.record'
+      AND payload->>'action' = 'warning' AND payload->>'code' = 'PT_GENDER_UNKNOWN' AND payload->>'resourceId' = ${run}`);
+    expect(warn).toHaveLength(1);
+    expect((warn[0]!.payload as { count: number }).count).toBe(2);
+  }, 120_000);
+
+  it("no warning when the slabs are not gender-specific", async () => {
+    const { tenant, structure } = await newTenant("KA", [{ from: 0, to: 999999999999, amt: 20000 }]);
+    const emp = randomUUID();
+    const run = await runMonth(tenant, structure, "2026-05", [empG(emp, "KA", null)]);
+    expect(await ptOf(tenant, run, emp)).toBe(20000);
+    const warn = await q(tenant, sql`SELECT 1 FROM _outbox.messages WHERE tenant_id = ${tenant}::uuid AND payload->>'code' = 'PT_GENDER_UNKNOWN'`);
+    expect(warn).toHaveLength(0);
+  }, 60_000);
+
+  it("the Article 276(2) cap still clamps a gender slab", async () => {
+    const { tenant, structure } = await newTenant("TN", [], false);
+    await createVersion(tenant, { stateCode: "TN", effectiveFrom: "2026-12-01", reason: "Gender cap test version", slabs: [{ fromMinor: 0, toMinor: 999999999999, taxMinor: 30000, appliesToGender: "female" }, { fromMinor: 0, toMinor: 999999999999, taxMinor: 10000 }] });
+    await until(() => versionsOf(tenant, "TN"), (rows) => rows.length === 2);
+    const emp = randomUUID();
+    await seedFinalised(tenant, structure, emp, "2026-12", 240000);
+    const run = await runMonth(tenant, structure, "2027-01", [empG(emp, "TN", "female")]);
+    expect(await ptOf(tenant, run, emp)).toBe(10000);
+  }, 90_000);
+
+  it("overlap is refused per gender group at the route (female overlapping female) but allowed across groups", async () => {
+    const { tenant } = await newTenant("GJ", [], false);
+    const bad = await createVersion(tenant, { stateCode: "GJ", effectiveFrom: "2099-06-01", slabs: [
+      { fromMinor: 0, toMinor: 100, taxMinor: 0, appliesToGender: "female" }, { fromMinor: 50, toMinor: 200, taxMinor: 0, appliesToGender: "female" }] });
+    expect(bad.statusCode).toBe(422);
+    const ok = await createVersion(tenant, { stateCode: "GJ", effectiveFrom: "2099-06-01", slabs: [
+      { fromMinor: 0, toMinor: 100, taxMinor: 0, appliesToGender: "female" }, { fromMinor: 0, toMinor: 100, taxMinor: 0 }] });
+    expect(ok.statusCode).toBe(202);
+    const badGender = await createVersion(tenant, { stateCode: "GJ", effectiveFrom: "2099-07-01", slabs: [{ fromMinor: 0, toMinor: 100, taxMinor: 0, appliesToGender: "other" }] });
+    expect(badGender.statusCode).toBe(400);
+  }, 60_000);
+
+  it("the version listing carries appliesToGender; legacy slabs read as 'all'", async () => {
+    const { tenant } = await newTenant("RJ", [{ from: 0, to: 999999999999, amt: 100 }], false);
+    await createVersion(tenant, { stateCode: "RJ", effectiveFrom: "2099-01-01", reason: "Gender listing test version", slabs: GENDER_SLABS });
+    await until(() => versionsOf(tenant, "RJ"), (rows) => rows.length === 3);
+    const list = (await app.inject({ method: "GET", url: "/v1/payroll/statutory/pt/versions?stateCode=RJ", headers: hdr(tenant, ["hr_admin"]) })).json() as { states: Array<{ versions: Array<{ slabs: Array<{ appliesToGender: string }> }> }> };
+    const vs = list.states[0]!.versions;
+    expect(vs[0]!.slabs.map((x) => x.appliesToGender)).toEqual(["all"]);
+    expect(vs[1]!.slabs.map((x) => x.appliesToGender).sort()).toEqual(["all", "female"]);
+  }, 60_000);
+});
+
+describe("PT follows the employee's state of employment", () => {
+  const empS = (id: string, state: string | null) => ({ ...employee(id, state ?? ""), stateCode: state });
+  const addState = (tenant: string, state: string, amt: number) => asTenant(tenant, async (tx) => {
+    await tx.execute(sql`INSERT INTO payroll.payroll_pt_slab_versions (tenant_id, state_code, effective_from, reason, source) VALUES (${tenant}::uuid, ${state}, '1900-01-01', 'multi-state test', 'migration')`);
+    await tx.execute(sql`INSERT INTO payroll.payroll_professional_tax (tenant_id, state_code, slab_from_minor, slab_to_minor, pt_amount_minor, effective_from)
+      VALUES (${tenant}::uuid, ${state}, 0, 999999999999, ${amt}, '1900-01-01')`);
+  });
+  const warnings = (tenant: string, run: string, code: string) => q(tenant, sql`SELECT payload FROM _outbox.messages WHERE tenant_id = ${tenant}::uuid
+    AND topic = 'audit.event.record' AND payload->>'action' = 'warning' AND payload->>'code' = ${code} AND payload->>'resourceId' = ${run}`);
+
+  it("two employees in different states get their own state's slabs (state code is case-insensitive); no warning", async () => {
+    const { tenant, structure } = await newTenant("MH", [{ from: 0, to: 999999999999, amt: 20000 }]);
+    await addState(tenant, "KA", 10000);
+    const mh = randomUUID(); const ka = randomUUID();
+    const run = await runMonth(tenant, structure, "2026-05", [empS(mh, "MH"), empS(ka, "ka")]);
+    expect(await ptOf(tenant, run, mh)).toBe(20000);
+    expect(await ptOf(tenant, run, ka)).toBe(10000);
+    expect(await warnings(tenant, run, "PT_STATE_UNKNOWN")).toHaveLength(0);
+  }, 90_000);
+
+  it("a missing state with PT versions in more than one state warns once (PT_STATE_UNKNOWN) and falls back to the tenant-wide slabs", async () => {
+    const { tenant, structure } = await newTenant("MH", [{ from: 0, to: 999999999999, amt: 20000 }]);
+    await addState(tenant, "KA", 10000);
+    const mh = randomUUID(); const none = randomUUID(); const none2 = randomUUID();
+    const run = await runMonth(tenant, structure, "2026-05", [empS(mh, "MH"), empS(none, null), empS(none2, null)]);
+    expect(await ptOf(tenant, run, mh)).toBe(20000);
+    expect([10000, 20000]).toContain(await ptOf(tenant, run, none)); // the tenant-wide fallback, not 0
+    const w = await warnings(tenant, run, "PT_STATE_UNKNOWN");
+    expect(w).toHaveLength(1);
+    expect((w[0]!.payload as { count: number }).count).toBe(2);
+  }, 90_000);
+
+  it("a missing state in a single-state tenant uses that state's slabs and does not warn", async () => {
+    const { tenant, structure } = await newTenant("MH", [{ from: 0, to: 999999999999, amt: 20000 }]);
+    const none = randomUUID();
+    const run = await runMonth(tenant, structure, "2026-05", [empS(none, null)]);
+    expect(await ptOf(tenant, run, none)).toBe(20000);
+    expect(await warnings(tenant, run, "PT_STATE_UNKNOWN")).toHaveLength(0);
+  }, 60_000);
+});

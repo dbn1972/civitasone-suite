@@ -5,14 +5,13 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import * as auditRepo from "../audit/repo.js";
 import * as pfmsRepo from "../pfms/repo.js";
+import { checkBatchSendable } from "../pfms/consumer.js";
+import { isProductionDeployment } from "../pfms/dsc-client.js";
 import * as paymentsRepo from "../payments/repo.js";
 import { minorString } from "@civitasone/schemas/money";
-import { writeFile, unlink } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { pino } from "pino";
-import { generateNACHFile, type BankFileRow } from "./bank-file-generator.js";
-import { uploadBankFile } from "./sftp-egress.js";
+import type { BankFileRow } from "./bank-file-generator.js";
+import { sendNachFile } from "./nach-release.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const log = pino({ name: "finance:integration-consumer" });
@@ -69,7 +68,9 @@ export function registerIntegrationConsumers(queue: Queue): void {
         schemeCode: p.schemeCode?.toUpperCase() ?? null,
         ddoCode,
         submissionStatus: "pending",
-        status: "initiated",
+        // finance_pfms_status_check allows pending|submitted|accepted|rejected|failed ("initiated" is a payments.finance_payments
+        // state and made this insert fail on every real database).
+        status: "pending",
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
       });
@@ -90,6 +91,30 @@ export function registerIntegrationConsumers(queue: Queue): void {
     });
     if (!prepared) return;
 
+    // GAP-FINANCE-PFMS-01: in production an unsigned (or mock/unverifiable) batch is never released to the PFMS
+    // gateway. The batch stays "pending" and the refusal is audited; it is released only after a real DSC signature
+    // is on record and verifies. Outside production this is a no-op, so sandbox flows are unchanged.
+    if (isProductionDeployment()) {
+      const batchRow = await pfmsRepo.findPfmsById(pfmsBatchId, msg.tenantId);
+      const sendable = batchRow
+        ? await checkBatchSendable(batchRow)
+        : { ok: false as const, code: "NOT_FOUND", message: "batch row not found" };
+      if (!sendable.ok) {
+        await db.transaction(async (tx3) => {
+          await enqueue(tx3, {
+            topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: {
+              service: "finance", action: "send_blocked", resourceType: "pfms_batch", resourceId: pfmsBatchId,
+              outcome: "denied", details: { code: sendable.code, message: sendable.message },
+            },
+          });
+        });
+        log.warn({ pfmsBatchId, code: sendable.code }, "PFMS file egress blocked: batch not DSC-signed");
+        return;
+      }
+    }
+
     // ── NACH file generation + SFTP egress — OUTSIDE the DB transaction ─────
     // Resolve real beneficiaries for this PFMS batch (may be empty on first
     // insert since payments rows are linked later; we build from payload).
@@ -101,29 +126,19 @@ export function registerIntegrationConsumers(queue: Queue): void {
       narration: `${p.mode}/${p.pfmsTxnId}`.slice(0, 25),
       paymentDate: new Date().toISOString().slice(0, 10),
     };
-    const nachContent = generateNACHFile([nachRow], {
-      originatorCode: prepared.agencyCode,
-      fileSequenceNo: 1,
-    });
-    const nachFileName = `NACH_${pfmsBatchId}_${Date.now()}.txt`;
-    const localPath = join(tmpdir(), nachFileName);
-    await writeFile(localPath, nachContent, "utf-8");
-    log.info({ pfmsBatchId, nachFileName }, "NACH file generated");
-
     // Upload to SFTP gateway — skipped silently if SFTP_HOST is not set. No DB
     // transaction is open while this network call runs (TX-007): a slow or
     // hanging PFMS gateway can no longer hold a connection/lock or exhaust
-    // the pool.
-    const uploaded = await uploadBankFile(localPath, nachFileName)
-      .then(() => true)
+    // the pool. The generate + write + upload + cleanup steps are the shared
+    // sendNachFile path (also used by the signed-batch release).
+    const uploaded = await sendNachFile({ pfmsBatchId, agencyCode: prepared.agencyCode, rows: [nachRow] })
+      // No SFTP gateway configured = nothing was sent. Only a sandbox deployment may treat that as sent.
+      .then((remotePath) => remotePath !== null || !isProductionDeployment())
       .catch((err: unknown) => {
         log.error({ err, pfmsBatchId }, "SFTP upload failed — batch remains in pending state");
         // Do not rethrow: let the batch stay pending for manual retry.
         return false;
       });
-
-    // Clean up temp file (best-effort).
-    await unlink(localPath).catch(() => undefined);
 
     // Record the upload outcome in its own follow-up write, separate from the
     // transaction above -- this is the only DB write that ever runs after the

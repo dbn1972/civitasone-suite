@@ -357,6 +357,35 @@ export async function platformIntegrationRoutes(app: FastifyInstance): Promise<v
     return reply.code(202).send({ id, status: "accepted", correlationId: ctx.correlationId, data: { id } });
   });
 
+  // ── peer-service resolver (finance DSC signing) ───────────────────────────
+  // Returns the tenant's ACTIVE integration for a category as a NON-SECRET descriptor, so a peer service
+  // can pick the adapter (mock in sandbox, stub/real in production). Secret values never cross this
+  // boundary: only the names of the secret fields that are set. Reachable only over the internal
+  // service path (x-internal + x-service-secret + x-tenant-id, verified by the auth plugin).
+  app.get(`${BASE}/internal/active/:category`, async (req, reply) => {
+    const ctx = resolveContext(req);
+    if (req.headers["x-internal"] !== "1" || ctx.actorType !== "service_account") {
+      throw new HttpError(403, "FORBIDDEN", "internal service call required");
+    }
+    const category = z.enum(INTEGRATION_CATEGORIES).parse((req.params as { category?: string }).category);
+    const row = await repo.findActiveByCategory(ctx.tenantId, category);
+    if (!row) return reply.send({ data: null });
+    const provider = await repo.findProvider(row.providerKey);
+    if (!provider || provider.status === "disabled") return reply.send({ data: null });
+    return reply.send({
+      data: {
+        providerKey: row.providerKey,
+        providerName: provider.name,
+        category: row.category,
+        environment: row.environment,
+        config: row.config ?? {},
+        secretKeysSet: Object.keys(row.secrets ?? {}),
+        endpointUrl: provider.endpoints[row.environment] ?? null,
+        version: row.version,
+      },
+    });
+  });
+
   // ── test connection ────────────────────────────────────────────────────────
   app.post(`${BASE}/tenant/records/:key/test`, async (req, reply) => {
     const ctx = resolveContext(req);

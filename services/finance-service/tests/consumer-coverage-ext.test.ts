@@ -37,6 +37,10 @@ const {
 });
 
 let markProcessedResult = true;
+const INSTRUMENT_ROW = vi.hoisted(() => ({
+  id: "inst-1", instrumentType: "cheque", instrumentNo: "CHQ-1", payee: "Vendor ABC", amountMinor: 1n, status: "issued",
+  createdBy: "other-maker-0000", issueDate: new Date().toISOString().slice(0, 10),
+}));
 
 vi.mock("../src/shared/db.js", () => ({
   scopedRead: dbTransactionFn,
@@ -125,10 +129,17 @@ vi.mock("../src/modules/instruments/repo.js", () => ({
   // and call the tx-scoped variants directly (tenantTransaction re-audit
   // fix) -- without these the mocked module has no such exports and the
   // handlers throw inside the transaction.
-  insertInstrumentTx: vi.fn(async () => undefined),
-  transitionTx: vi.fn(async () => true),
+  // CQRS apply functions (applyIssue / applyTransition) read the row and write with guarded updates:
+  // a presentable, different-maker instrument whose terms match the issue payload below.
+  insertInstrumentTx: vi.fn(async () => ({ row: { ...INSTRUMENT_ROW, amountMinor: 5000000n, payee: "Vendor ABC" }, created: true })),
+  transitionTx: vi.fn(async () => INSTRUMENT_ROW),
+  findByIdTx: vi.fn(async () => INSTRUMENT_ROW),
   // maker-checker lookup (GAP-FINANCE-TREASURY-CHEQUES-03): no stored issuer for these random ids.
   findIssuerTx: vi.fn(async () => null),
+}));
+vi.mock("../src/modules/masters/policy.js", async (orig) => ({
+  ...(await orig<typeof import("../src/modules/masters/policy.js")>()),
+  readPolicyWith: vi.fn(async () => ({ chequeValidityMonths: 120 })),
 }));
 
 // ─── Reappropriation eOffice mocks ──────────────────────────────────────────
@@ -167,7 +178,8 @@ vi.mock("../src/modules/budget/repo.js", () => ({
 // ─── PFMS mocks ──────────────────────────────────────────────────────────────
 vi.mock("../src/modules/pfms/repo.js", () => ({
   findPfmsById: vi.fn(async () => ({
-    id: "pfms-batch-001", submissionStatus: "pending",
+    id: "pfms-batch-001", tenantId: "t", pfmsId: "PFMS-1", type: "salary", currency: "INR", agencyCode: "AG", schemeCode: null,
+    ddoCode: "D1", amountMinor: 100n, submissionStatus: "pending", dscSignature: null, dscMock: false,
   })),
   // Tx-scoped variant (fix/finance-nested-tx-deadlock): the consumer now
   // reads through its own already-open transaction instead of the
@@ -177,7 +189,21 @@ vi.mock("../src/modules/pfms/repo.js", () => ({
     id: "pfms-batch-001", submissionStatus: "pending",
   })),
   updatePfmsBatch: vi.fn(async () => undefined),
+  // GAP-FINANCE-PFMS-01: DSC signing reads the real beneficiaries and uses guarded updates.
+  listRealBeneficiaries: vi.fn(async () => []),
+  signPfmsBatchGuarded: vi.fn(async () => ({ id: "pfms-batch-001" })),
+  submitPfmsBatchGuarded: vi.fn(async () => ({ id: "pfms-batch-001" })),
 }));
+// The tenant DSC integration lives in admin-service; here the sandbox MOCK signer stands in for it.
+vi.mock("../src/modules/pfms/dsc-client.js", async () => {
+  const { createDscSigner } = await import("@civitasone/connector-framework/ports");
+  const signer = createDscSigner({ providerKey: "dsc_test", providerName: "Test DSC", environment: "sandbox", config: {}, secrets: {} });
+  return {
+    DscChannelError: class extends Error { constructor(public code: string, m: string, public permanent: boolean) { super(m); } },
+    isProductionDeployment: () => false,
+    resolveDscSigner: vi.fn(async () => ({ signer, providerKey: "dsc_test", environment: "sandbox", mock: true, signerRef: "slot-1" })),
+  };
+});
 
 // ─── Org-structure schema mock ───────────────────────────────────────────────
 vi.mock("../src/modules/org-structure/schema.js", () => ({
@@ -593,42 +619,24 @@ describe("Reappropriation eOffice decision consumers — coverage", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("PFMS consumers — coverage", () => {
-  it("finance.pfms.batch_sign processes batch signing", async () => {
+  it("finance.pfms.batch_sign signs through the DSC signer and audits the step", async () => {
     const q = new MemoryQueue();
     registerPfmsConsumers(q);
     await q.start();
 
-    await q.publish("finance.pfms.batch_sign", makeMsg("finance.pfms.batch_sign", {
-      id: "pfms-batch-001", tenantId: TENANT,
-      certificateRef: "DSC-CERT-2025-001-ABCDEFGH",
-      signaturePayload: "base64-encoded-payload-data",
-    }));
+    await q.publish("finance.pfms.batch_sign", makeMsg("finance.pfms.batch_sign", { id: "pfms-batch-001", tenantId: TENANT }));
     await settle();
 
+    const repo = await import("../src/modules/pfms/repo.js");
+    expect(repo.signPfmsBatchGuarded).toHaveBeenCalledTimes(1);
+    const fields = (repo.signPfmsBatchGuarded as any).mock.calls.at(-1)[3];
+    expect(fields).toMatchObject({ dscMock: true, dscEnvironment: "sandbox", dscSignerRef: "slot-1", dscCanonicalVersion: "civitas-pfms-batch/v1" });
+    expect(fields.dscCertSerial).toMatch(/^MOCK-/);
+    expect(fields.dscXmldsig).toContain("<SignatureValue>");
     const domainEvts = enqueuedMessages.filter((m) => m.topic === "finance.pfms.batch_signed");
     expect(domainEvts).toHaveLength(1);
     const audits = enqueuedMessages.filter((m) => m.topic === AUDIT_TOPIC);
-    expect(audits.length).toBeGreaterThanOrEqual(1);
-    await q.stop();
-  });
-
-  it("finance.pfms.batch_submit processes batch submission", async () => {
-    const { findPfmsByIdTx } = await import("../src/modules/pfms/repo.js");
-    (findPfmsByIdTx as any).mockResolvedValueOnce({
-      id: "pfms-batch-001", submissionStatus: "signed",
-    });
-
-    const q = new MemoryQueue();
-    registerPfmsConsumers(q);
-    await q.start();
-
-    await q.publish("finance.pfms.batch_submit", makeMsg("finance.pfms.batch_submit", {
-      id: "pfms-batch-001", tenantId: TENANT,
-    }));
-    await settle();
-
-    const domainEvts = enqueuedMessages.filter((m) => m.topic === "finance.pfms.batch_submitted");
-    expect(domainEvts).toHaveLength(1);
+    expect(audits.some((a) => (a.payload as { action: string }).action === "sign")).toBe(true);
     await q.stop();
   });
 
@@ -638,10 +646,7 @@ describe("PFMS consumers — coverage", () => {
     registerPfmsConsumers(q);
     await q.start();
 
-    await q.publish("finance.pfms.batch_sign", makeMsg("finance.pfms.batch_sign", {
-      id: "pfms-batch-001", tenantId: TENANT,
-      certificateRef: "DUP", signaturePayload: "dup",
-    }));
+    await q.publish("finance.pfms.batch_sign", makeMsg("finance.pfms.batch_sign", { id: "pfms-batch-001", tenantId: TENANT }));
     await settle();
 
     expect(enqueuedMessages).toHaveLength(0);

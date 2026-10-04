@@ -9,7 +9,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: 
 import { PtApprovals } from "./PtApprovals";
 import { PtMakerCheckerSetting } from "./PtMakerCheckerSetting";
 
-const slab = { fromMinor: 0, toMinor: 999999999999, taxMinor: 20000, februaryTaxMinor: 30000 };
+const slab = { fromMinor: 0, toMinor: 999999999999, taxMinor: 20000, februaryTaxMinor: 30000, appliesToGender: "all" as const };
 const REQ = "11111111-1111-4111-8111-111111111111";
 const pendingVersion = { id: REQ, kind: "version" as const, stateCode: "MH", effectiveFrom: "2027-04-01", slabs: [slab], reason: null, makerId: "maker-1", createdAt: "2026-10-01T00:00:00Z" };
 
@@ -34,6 +34,13 @@ describe("PtApprovals (maker != checker)", () => {
     expect(screen.getByText(/February: ₹300\.00/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
     expect(screen.queryByText(/maker-1/)).not.toBeInTheDocument();
+  });
+
+  it("a gender-specific slab is labelled in the pending request; an all-employees slab is not", () => {
+    renderApprovals({ pending: [{ ...pendingVersion, slabs: [slab, { ...slab, appliesToGender: "female" as const }] }] });
+    expect(screen.getAllByText(/a month/)).toHaveLength(2);
+    expect(screen.getByText(/\(women only\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/\(men only\)/)).not.toBeInTheDocument();
   });
 
   it("your own request has no approve / reject, only a waiting note", () => {

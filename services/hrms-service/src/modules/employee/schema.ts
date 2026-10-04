@@ -93,6 +93,8 @@ export const hrmsEmployees = employeeSchema.table("hrms_employees", {
   legalEntityId:    uuid("legal_entity_id"),     // finance org.legal_entities
   costCenterId:     uuid("cost_center_id"),      // finance org.cost_centers
   locationId:       uuid("location_id"),         // location-service
+  // ISO 3166-2:IN state / UT code of the state the employee works in (professional tax is levied per state of employment). NULL = not recorded. Migration 0198.
+  workStateCode:    varchar("work_state_code", { length: 4 }),
   // GAP-HR-EMPLOYEES-NEW-01 (migration 0178): collected by the Add Employee
   // wizard but never persisted before.
   serviceGrade:     varchar("service_grade", { length: 64 }),

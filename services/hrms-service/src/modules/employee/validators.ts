@@ -44,6 +44,17 @@ export const MARITAL_STATUSES = ["single", "married", "divorced", "widowed"] as 
 export const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"] as const;
 export const SHIFTS = ["general", "morning", "evening", "night"] as const;
 
+/**
+ * ISO 3166-2:IN state / UT codes (plus the legacy codes still in use). Mirrors the list
+ * payroll-service accepts for professional-tax states; the two services share no code.
+ */
+export const WORK_STATE_CODES = [
+  "AN", "AP", "AR", "AS", "BR", "CH", "CG", "DH", "DL", "GA", "GJ", "HR", "HP", "JK", "JH", "KA", "KL",
+  "LA", "LD", "MP", "MH", "MN", "ML", "MZ", "NL", "OD", "PB", "PY", "RJ", "SK", "TN", "TS", "TR", "UP",
+  "UK", "WB", "OR", "DN", "DD", "UT",
+] as const;
+const workStateCode = z.string().trim().toUpperCase().refine((c) => (WORK_STATE_CODES as readonly string[]).includes(c), "must be an Indian state / UT code, e.g. MH");
+
 export const createEmployeeBody = z.object({
   employeeNo:    z.string().min(1).max(32),
   fullName:      z.string().min(1).max(256),
@@ -69,6 +80,7 @@ export const createEmployeeBody = z.object({
   legalEntityId:  z.string().uuid().optional(),
   costCenterId:   z.string().uuid().optional(),
   locationId:     z.string().uuid().optional(),
+  workStateCode:  workStateCode.optional(),
   // Statutory + engagement-type-specific identifiers (DIC).
   esicIpNumber:   z.string().max(17).optional(),
   uanNumber:      z.string().max(12).optional(),
@@ -143,6 +155,7 @@ export const updateEmployeeBody = z.object({
   bloodGroup:     z.enum(BLOOD_GROUPS).optional(),
   shift:          z.enum(SHIFTS).optional(),
   costCenterId:   z.string().uuid().optional(),
+  workStateCode:  workStateCode.optional(),
   // GAP-HR-EMPLOYEES-DETAIL-EDIT-03: required (by routes.ts, not by this
   // schema -- optional here so a non-sensitive edit, e.g. email alone,
   // never needs one) whenever the patch touches bankAccountNo/bankIfsc/

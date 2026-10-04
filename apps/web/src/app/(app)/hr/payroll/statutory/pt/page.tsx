@@ -67,6 +67,7 @@ export default async function ProfessionalTaxPage({ searchParams }: { searchPara
     toLabel: isOpenEnded(s.toMinor) ? t("noUpperBound") : formatMoney(s.toMinor),
     taxMinor: s.taxMinor,
     februaryLabel: s.februaryTaxMinor == null ? "—" : formatMoney(s.februaryTaxMinor),
+    genderLabel: s.appliesToGender === "female" ? t("genderFemale") : s.appliesToGender === "male" ? t("genderMale") : t("genderAll"),
   }));
   type SlabRow = (typeof slabRows)[number];
   const slabColumns: { key: keyof SlabRow & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
@@ -74,6 +75,7 @@ export default async function ProfessionalTaxPage({ searchParams }: { searchPara
     { key: "toLabel", label: t("colSlabTo"), align: "right" },
     { key: "taxMinor", label: t("colPtAmount"), align: "right", cellType: "amount" },
     { key: "februaryLabel", label: t("colFebAmount"), align: "right" },
+    { key: "genderLabel", label: t("colGender") },
   ];
 
   return (

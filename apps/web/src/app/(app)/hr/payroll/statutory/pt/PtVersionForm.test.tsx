@@ -8,7 +8,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: 
 
 import { PtVersionForm } from "./PtVersionForm";
 
-const base = [{ fromMinor: 0, toMinor: 999999999999, taxMinor: 20000, februaryTaxMinor: null }];
+const base = [{ fromMinor: 0, toMinor: 999999999999, taxMinor: 20000, februaryTaxMinor: null, appliesToGender: "all" as const }];
 
 function renderForm(over: Partial<React.ComponentProps<typeof PtVersionForm>> = {}) {
   render(
@@ -67,9 +67,39 @@ describe("PtVersionForm", () => {
     expect(String(url)).toContain("/api/proxy/v1/payroll/statutory/pt/versions");
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({
       stateCode: "MH", effectiveFrom: "2027-04-01",
-      slabs: [{ fromMinor: 0, toMinor: 999999999999, taxMinor: 25000, februaryTaxMinor: 30000 }],
+      slabs: [{ fromMinor: 0, toMinor: 999999999999, taxMinor: 25000, februaryTaxMinor: 30000, appliesToGender: "all" }],
     });
     expect(refreshMock).toHaveBeenCalled();
+  });
+
+  it("each slab has an Applies to select (default all employees); a chosen gender is sent", async () => {
+    const fetchSpy = acceptThen();
+    renderForm();
+    const select = screen.getByLabelText(/Slab 1 applies to/) as HTMLSelectElement;
+    expect(select).toHaveValue("all");
+    expect(Array.from(select.options).map((o) => o.text)).toEqual(["All employees", "Women", "Men"]);
+    fireEvent.click(screen.getByRole("button", { name: "Add a slab" }));
+    fireEvent.change(screen.getByLabelText(/Slab 2 from/), { target: { value: "0" } });
+    fireEvent.change(screen.getByLabelText(/Slab 2 tax per month/), { target: { value: "0" } });
+    fireEvent.change(screen.getByLabelText(/Slab 2 applies to/), { target: { value: "female" } });
+    fireEvent.change(screen.getByLabelText(/Effective from/), { target: { value: "2027-04-01" } });
+    fireEvent.click(screen.getByRole("button", { name: "Review and save new version" }));
+    await waitFor(() => expect(screen.getByText("Save this new version?")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Save new version" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.slabs.map((x: { appliesToGender: string }) => x.appliesToGender)).toEqual(["all", "female"]);
+  });
+
+  it("two slabs of the same gender that overlap are refused client-side; the same range under another gender is fine", () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    renderForm();
+    fireEvent.click(screen.getByRole("button", { name: "Add a slab" }));
+    fireEvent.change(screen.getByLabelText(/Slab 2 from/), { target: { value: "0" } });
+    fireEvent.change(screen.getByLabelText(/Slab 2 tax per month/), { target: { value: "0" } });
+    fireEvent.click(screen.getByRole("button", { name: "Review and save new version" }));
+    expect(screen.getByText(/overlap/i)).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("a back-dated version needs a reason, which is sent", async () => {

@@ -28,7 +28,7 @@ import { recordRunSuspension, resolveSubsistenceConfig } from "./subsistence-rep
 import { registerFin03Consumers } from "./fin03-consumer.js";
 import { registerPtVersionConsumers } from "./pt-versions-consumer.js";
 import { slabsInForce, ptYtdMinors } from "./pt-versions-repo.js";
-import { computePtMonthMinor, periodEndOf, todayIst, type PtSlab } from "./pt-versions-domain.js";
+import { computePtMonthMinor, periodEndOf, ptGenderUnresolved, todayIst, type PtSlab } from "./pt-versions-domain.js";
 import { registerPayGroupConsumers } from "./pay-group-consumer.js";
 import { claimRunEmployees, findDoubleRunEmployees, resolveMonthMembers } from "./pay-group-repo.js";
 import { receiptRuleViolation } from "./fin03-domain.js";
@@ -1603,7 +1603,11 @@ async function processPayrollRun(
   // on payroll.payroll_professional_tax) instead of routing through
   // scopedRead. Sibling in-loop call (further below) was already correct.
   const ptAsOf = periodEndOf(p.month);
-  const ptSlabsFallback = await scopedRead((tx) => resolvePtSlabs(tx, p.tenantId, undefined, ptAsOf));
+  // Every state with a PT version in force on the period end. The tenant-wide fallback (employees with no
+  // recorded state) is these slabs merged, exactly what resolvePtSlabs(tx, tenant, undefined, asOf) returns.
+  const ptInForceAllStates = await scopedRead((tx) => slabsInForce(tx, p.tenantId, ptAsOf));
+  const ptSlabsFallback = [...ptInForceAllStates.values()].flat().sort((x, y) => (x.from < y.from ? -1 : x.from > y.from ? 1 : 0));
+  const ptMultiState = ptInForceAllStates.size > 1;
   // FORCE-RLS fix: was called with a bare `db` (RLS-blind, see
   // resolveProtectedNetFloorMinor's own doc comment); now routed through scopedRead.
   const protectedNetFloorMinor = await scopedRead((tx) => resolveProtectedNetFloorMinor(tx, p.tenantId));
@@ -1717,15 +1721,29 @@ async function processPayrollRun(
     const tdsYtdByEmployee = await resolveTdsYtdMinorsTx(tx as unknown as typeof db, p.tenantId, runEmployeeIds, fyStart, p.month);
     const distinctStateCodes = [...new Set(
       runEmployees
-        .map((emp) => (emp as { stateCode?: string }).stateCode)
+        .map((emp) => (emp as { stateCode?: string | null }).stateCode?.trim().toUpperCase())
         .filter((s): s is string => !!s),
     )];
     const ptSlabsByState = await resolvePtSlabsByStatesTx(tx as unknown as typeof db, p.tenantId, distinctStateCodes, ptAsOf);
     // Article 276(2): PT already deducted this FY, per employee, for the annual cap.
     const ptYtdByEmployee = await ptYtdMinors(tx as unknown as typeof db, p.tenantId, runEmployeeIds, fyStart, p.month);
 
+    // Gender-specific PT: employees whose gender HRMS does not hold (or holds as a value no slab
+    // targets) while the slabs in force ARE gender-specific are paid on the 'all' slabs only; they
+    // are listed in one run-level warning below so payroll can fix the record and re-run.
+    const ptGenderUnknownEmployees: string[] = [];
+    // PT is per state: with PT versions for more than one state, an employee whose state HRMS does not hold
+    // is charged on the tenant-wide fallback slabs, which is a guess; one run-level warning lists them.
+    const ptStateUnknownEmployees: string[] = [];
+
     for (const emp of runEmployees) {
       const cityClass = emp.cityClass ?? "X";
+      {
+        const empState = (emp as { stateCode?: string | null }).stateCode?.trim().toUpperCase() || undefined;
+        if (!empState && ptMultiState) ptStateUnknownEmployees.push(emp.employeeNo ?? emp.id);
+        const empPtSlabs = empState ? (ptSlabsByState.get(empState) ?? []) : ptSlabsFallback;
+        if (ptGenderUnresolved(empPtSlabs, (emp as { gender?: string | null }).gender)) ptGenderUnknownEmployees.push(emp.employeeNo ?? emp.id);
+      }
       // PAY-PROFILES: which computation applies to this employee (govt_scale
       // when HRMS reports no approved profile -- exactly the pre-PAY-PROFILES
       // inputs). Fails the run closed, naming the employee, when a profile's
@@ -1932,19 +1950,21 @@ async function processPayrollRun(
         hraFloorMinor: plan.hraFloorMinor,
         profileSnapshot: plan.snapshot,
         ptMinor: computePtMonthMinor(
+          // Gender-specific slabs: the employee's HRMS gender picks slabs of that gender over 'all'.
           // H14 FIX: use employee's state_code for PT schedule lookup.
           // Falls back to tenant-level slabs when employee has no state.
           // PERF-021 (Site A): batched pre-fetch (ptSlabsByState) replaces
           // the per-employee resolvePtSlabs query; a state with no slab
           // version in force is absent from the Map, matching resolvePtSlabs's
           // own "no rows for this state" `[]` (never the tenant-wide fallback).
-          (emp as { stateCode?: string }).stateCode
-            ? (ptSlabsByState.get((emp as { stateCode?: string }).stateCode!) ?? [])
+          (emp as { stateCode?: string | null }).stateCode?.trim()
+            ? (ptSlabsByState.get((emp as { stateCode?: string }).stateCode!.trim().toUpperCase()) ?? [])
             : ptSlabsFallback,
           // FR 53: PT on what is actually paid (regular Basic + DA + SA + its DA).
           subsistence ? subsistence.hraSalaryMinor : basicMinor + daMinor,
           p.month,
           ptYtdByEmployee.get(emp.id) ?? 0n,
+          (emp as { gender?: string | null }).gender,
         ),
         taxRegime: decl?.regime ?? emp.taxRegime ?? "new",
         fyStartYear: fyStart,
@@ -2076,6 +2096,22 @@ async function processPayrollRun(
     await rebuildRunRegister(tx as unknown as typeof db, { tenantId: p.tenantId, runId: p.id, period: p.month }, registerDepartments);
     // PAY-PROFILES: the HRA minimum floor is an explicit ops step; record on
     // the run's audit trail when this month was paid without one.
+    if (ptStateUnknownEmployees.length > 0) {
+      await audit(tx, msg, "warning", "payroll_run", p.id, {
+        code: "PT_STATE_UNKNOWN",
+        message: `${ptStateUnknownEmployees.length} employee(s) have no state of employment in HRMS while the tenant has ${p.month} professional-tax slabs for more than one state; they were charged on the tenant-wide fallback slabs`,
+        count: ptStateUnknownEmployees.length,
+        employees: ptStateUnknownEmployees.slice(0, 50),
+      });
+    }
+    if (ptGenderUnknownEmployees.length > 0) {
+      await audit(tx, msg, "warning", "payroll_run", p.id, {
+        code: "PT_GENDER_UNKNOWN",
+        message: `${ptGenderUnknownEmployees.length} employee(s) have no usable gender in HRMS while ${p.month} professional-tax slabs are gender-specific; they were charged on the all-gender slabs only`,
+        count: ptGenderUnknownEmployees.length,
+        employees: ptGenderUnknownEmployees.slice(0, 50),
+      });
+    }
     if (!hraFloorConfigured) {
       await audit(tx, msg, "warning", "payroll_run", p.id, {
         code: "HRA_FLOOR_NOT_CONFIGURED",

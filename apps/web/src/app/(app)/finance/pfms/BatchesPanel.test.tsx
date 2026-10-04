@@ -52,40 +52,117 @@ describe("BatchesPanel", () => {
     expect(screen.getByRole("button", { name: "Download bank file for PFMS batch PFMS-0001" })).toBeInTheDocument();
   });
 
-  it("signs a batch on confirm (happy path)", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ id: "b1", signatureRef: "DSC:abc:def", submissionStatus: "signed" }), { status: 200 }),
+  it("signs a batch on confirm with NO pasted signature fields (the DSC signer produces it server-side)", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "b1", status: "accepted", correlationId: "c1" }), { status: 202 }),
     );
 
     renderPanel({ batches: rows });
     fireEvent.click(screen.getByRole("button", { name: "Sign PFMS batch PFMS-0001" }));
 
     const dialog = await screen.findByRole("alertdialog");
-    fireEvent.change(within(dialog).getByLabelText(/Certificate reference/), { target: { value: "CERT-1" } });
-    fireEvent.change(within(dialog).getByLabelText(/Signature payload/), { target: { value: "payload-bytes" } });
+    expect(within(dialog).queryByLabelText(/Certificate reference/)).toBeNull();
+    expect(within(dialog).queryByLabelText(/Signature payload/)).toBeNull();
     fireEvent.click(within(dialog).getByText("Sign batch"));
 
     await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    const [url, init] = spy.mock.calls[0]!;
+    expect(String(url)).toContain("v1/finance/pfms/b1/sign");
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({});
   });
 
-  it("surfaces a field-specific validation error and focuses the empty cert field when signing without required fields", async () => {
-    renderPanel({ batches: rows });
-    fireEvent.click(screen.getByRole("button", { name: "Sign PFMS batch PFMS-0001" }));
-
-    const dialog = await screen.findByRole("alertdialog");
-    fireEvent.click(within(dialog).getByText("Sign batch"));
-
-    const certInput = within(dialog).getByLabelText(/Certificate reference/);
-    const payloadInput = within(dialog).getByLabelText(/Signature payload/);
-    await waitFor(() => {
-      expect(certInput).toHaveAttribute("aria-invalid", "true");
-      // Focus goes to the first invalid field.
-      expect(certInput).toHaveFocus();
+  it("shows the signing status and certificate info, and labels a mock signature as not legally valid", () => {
+    renderPanel({
+      batches: [
+        { ...rows[0]!, id: "b2", pfmsId: "PFMS-0002", submissionStatus: "signed", signedAt: "2026-10-01T05:00:00Z",
+          signing: { status: "signed", mock: true, certificateSerial: "MOCK-1A2B", signedByName: "A. Officer", algorithm: "MOCK-SHA256withRSA", environment: "sandbox", signedAt: "2026-10-01T05:00:00Z", verifiedAt: null } },
+      ],
     });
-    // Each empty field gets its own field-specific message (not one generic string).
-    expect(within(dialog).getAllByText("Certificate reference is required.").length).toBeGreaterThan(0);
-    expect(within(dialog).getByText("Signature payload is required.")).toBeInTheDocument();
-    expect(payloadInput).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByText("Sandbox test signature, not legally valid")).toBeInTheDocument();
+    expect(screen.getByText("Certificate MOCK-1A2B")).toBeInTheDocument();
+    expect(screen.getByText("Signed by A. Officer")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Sign PFMS batch PFMS-0002" })).toBeNull();
+  });
+
+  const signedRow: PfmsBatchRow = {
+    ...rows[0]!, id: "b3", pfmsId: "PFMS-0003", submissionStatus: "signed", signedAt: "2026-10-01T05:00:00Z",
+    signing: { status: "signed", mock: false, certificateSerial: "SER-9", signedByName: "A. Officer", algorithm: "RSA", environment: "production", signedAt: "2026-10-01T05:00:00Z", verifiedAt: null },
+  };
+
+  it("offers Release to PFMS on a signed batch and posts to the release route", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ id: "b3", status: "accepted" }), { status: 202 }));
+    renderPanel({ batches: [signedRow] });
+    expect(screen.queryByRole("button", { name: "Sign PFMS batch PFMS-0003" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Release PFMS batch PFMS-0003 to PFMS" }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByText("Release batch"));
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    expect(String(spy.mock.calls[0]![0])).toContain("v1/finance/pfms/batches/b3/release");
+    expect((spy.mock.calls[0]![1] as RequestInit).method).toBe("POST");
+  });
+
+  it("shows the specific message for a refusal code (maker-checker)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ code: "MAKER_CHECKER_VIOLATION", message: "x" }), { status: 403 }));
+    renderPanel({ batches: [signedRow] });
+    fireEvent.click(screen.getByRole("button", { name: "Release PFMS batch PFMS-0003 to PFMS" }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByText("Release batch"));
+    expect(await within(dialog).findByText(/You initiated this batch, so you cannot release it/)).toBeInTheDocument();
+    expect(refreshMock).not.toHaveBeenCalled();
+  });
+
+  it("hides Release for a session without a release role, and for a batch already sent", () => {
+    const { unmount } = render(
+      <NextIntlClientProvider locale="en" messages={enMessages}><BatchesPanel batches={[signedRow]} canRelease={false} /></NextIntlClientProvider>,
+    );
+    expect(screen.queryByRole("button", { name: "Release PFMS batch PFMS-0003 to PFMS" })).toBeNull();
+    unmount();
+    renderPanel({ batches: [{ ...signedRow, submissionStatus: "file_sent" }] });
+    expect(screen.queryByRole("button", { name: "Release PFMS batch PFMS-0003 to PFMS" })).toBeNull();
+  });
+
+  const unknownRow: PfmsBatchRow = { ...rows[0]!, id: "b4", pfmsId: "PFMS-0004", submissionStatus: "send_unknown", release: { startedAt: null, lastFailureCode: null, lastFailureAt: null } };
+
+  it("a send_unknown batch shows an operator alert and the two resolve actions, each needing a reason", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ id: "b4", status: "accepted" }), { status: 202 }));
+    renderPanel({ batches: [unknownRow] });
+    expect(screen.getByRole("alert")).toHaveTextContent("Release outcome unknown");
+    expect(screen.queryByRole("button", { name: "Release PFMS batch PFMS-0004 to PFMS" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm PFMS batch PFMS-0004 was not sent" }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: "gateway shows no such file" } });
+    fireEvent.click(within(dialog).getByText("Confirm not sent", { selector: "button" }));
+    await waitFor(() => expect(spy).toHaveBeenCalled());
+    expect(String(spy.mock.calls[0]![0])).toContain("v1/finance/pfms/batches/b4/resolve-release");
+    expect(JSON.parse(String((spy.mock.calls[0]![1] as RequestInit).body))).toEqual({ outcome: "not_sent", reason: "gateway shows no such file" });
+  });
+
+  it("resolve shows the maker-checker message when the server refuses", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ code: "MAKER_CHECKER_VIOLATION" }), { status: 403 }));
+    renderPanel({ batches: [unknownRow] });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm PFMS batch PFMS-0004 was sent" }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: "file is on the gateway" } });
+    fireEvent.click(within(dialog).getByText("Confirm sent", { selector: "button" }));
+    expect(await within(dialog).findByText(/You started this release, so you cannot resolve it/)).toBeInTheDocument();
+  });
+
+  it("a signed batch offers Void signature (reason required) and shows why the last release did not send", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ id: "b3", status: "accepted" }), { status: 202 }));
+    renderPanel({ batches: [{ ...signedRow, release: { startedAt: null, lastFailureCode: "BATCH_CHANGED_AFTER_SIGNING", lastFailureAt: "2026-10-01T06:00:00Z" } }] });
+    expect(screen.getByRole("status", { name: "" })).toBeDefined();
+    expect(screen.getByText(/Last release stopped: the batch changed after it was signed/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Void the signature of PFMS batch PFMS-0003" }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: "batch changed after signing" } });
+    fireEvent.click(within(dialog).getByText("Void signature", { selector: "button" }));
+    await waitFor(() => expect(spy).toHaveBeenCalled());
+    expect(String(spy.mock.calls[0]![0])).toContain("v1/finance/pfms/batches/b3/void-signature");
+  });
+
+  it("an unsigned pending batch shows 'Not signed' and offers Sign", () => {
+    renderPanel({ batches: rows });
+    expect(screen.getByText("Not signed")).toBeInTheDocument();
   });
 
   it("surfaces a server error when the bank-file download fails", async () => {

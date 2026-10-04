@@ -132,6 +132,9 @@ vi.mock("../src/modules/integrations/sftp-egress.js", () => ({
 }));
 
 vi.mock("node:fs/promises", () => ({
+  // nach-release.ts writes the file inside a private mkdtemp directory and removes the directory afterwards
+  mkdtemp: vi.fn(async (prefix: string) => `${prefix}mock`),
+  rm: vi.fn(async () => undefined),
   writeFile: vi.fn(async () => undefined),
   unlink: vi.fn(async () => undefined),
 }));

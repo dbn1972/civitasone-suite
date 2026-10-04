@@ -97,6 +97,26 @@ export const financePfms = paymentsSchema.table("finance_pfms", {
   signedAt:         timestamp("signed_at", { withTimezone: true }),
   signedBy:         uuid("signed_by"),
   signatureRef:     text("signature_ref"),
+  // GAP-FINANCE-PFMS-01 (migration 0090): the DSC signature over the canonical batch, kept so it can be re-verified
+  // before submission. dscMock = the sandbox MOCK signer made it (never a legal signature).
+  batchDigest:         varchar("batch_digest", { length: 64 }),
+  signedInfoHash:      varchar("signed_info_hash", { length: 64 }),
+  dscSignature:        text("dsc_signature"),
+  dscAlgorithm:        varchar("dsc_algorithm", { length: 64 }),
+  dscSignatureMethod:  varchar("dsc_signature_method", { length: 200 }),
+  dscCertSerial:       varchar("dsc_cert_serial", { length: 128 }),
+  dscSignerRef:        varchar("dsc_signer_ref", { length: 256 }),
+  dscProviderKey:      varchar("dsc_provider_key", { length: 64 }),
+  dscEnvironment:      varchar("dsc_environment", { length: 16 }),
+  dscMock:             boolean("dsc_mock").notNull().default(false),
+  dscCanonicalVersion: varchar("dsc_canonical_version", { length: 40 }),
+  dscXmldsig:          text("dsc_xmldsig"),
+  dscVerifiedAt:       timestamp("dsc_verified_at", { withTimezone: true }),
+  // migration 0092: release bookkeeping (stuck-processing sweeper, maker != checker on resolve, last failure shown in the UI)
+  releaseStartedAt:         timestamp("release_started_at", { withTimezone: true }),
+  releasedBy:               uuid("released_by"),
+  lastReleaseFailureCode:   varchar("last_release_failure_code", { length: 40 }),
+  lastReleaseFailureAt:     timestamp("last_release_failure_at", { withTimezone: true }),
   submissionStatus: varchar("submission_status", { length: 24 }).notNull().default("pending"),
   status:           varchar("status", { length: 24 }).notNull().default("pending"),
   // Which of the two independent PFMS submission mechanisms produced this

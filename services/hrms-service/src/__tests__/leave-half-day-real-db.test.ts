@@ -207,6 +207,18 @@ describe("half-day / short leave (GAP-HR-LEAVE-APPLY-05)", () => {
     expect(feed.json().lopDays[EMPLOYEE_ID]).toBe(0.5);
   });
 
+  it("payroll feed carries each employee's HRMS gender and state of employment (null when unset) for per-state, gender-specific PT slabs", async () => {
+    await asTenant((tx) => tx`UPDATE employee.hrms_employees SET gender = 'female', work_state_code = 'MH' WHERE id = ${EMPLOYEE_ID}`);
+    const feed = await app.inject({
+      method: "GET", url: "/v1/hrms/internal/payroll-input?month=2026-10",
+      headers: { authorization: `Bearer ${hrToken}` },
+    });
+    expect(feed.statusCode).toBe(200);
+    const byId = new Map((feed.json().employees as Array<{ id: string; gender: string | null; stateCode: string | null }>).map((e) => [e.id, e]));
+    expect(byId.get(EMPLOYEE_ID)).toMatchObject({ gender: "female", stateCode: "MH" });
+    expect(byId.get(HR_ID)).toMatchObject({ gender: null, stateCode: null });
+  });
+
   it("a whole-day approve + cancel on an integer-only balance never writes balance_days_exact", async () => {
     // EL is not allowed during probation; confirm the seeded employee first.
     await asTenant((tx) => tx`UPDATE employee.hrms_employees SET status = 'confirmed' WHERE id = ${EMPLOYEE_ID}`);

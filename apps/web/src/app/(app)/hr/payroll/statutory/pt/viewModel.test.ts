@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildPtView, parsePtPayload, isOpenEnded, type PtApiVersion } from "./viewModel";
 
-const slab = { fromMinor: 0, toMinor: 999999999999, taxMinor: 20000, februaryTaxMinor: null };
+const slab = { fromMinor: 0, toMinor: 999999999999, taxMinor: 20000, februaryTaxMinor: null, appliesToGender: "all" as const };
 const v = (effectiveFrom: string, status: PtApiVersion["status"], extra: Partial<PtApiVersion> = {}): PtApiVersion => ({
   stateCode: "MH", effectiveFrom, effectiveTo: null, status, legacy: false, reason: null, backDated: false, createdAt: null, slabs: [slab], ...extra,
 });
@@ -68,5 +68,16 @@ describe("isOpenEnded", () => {
     expect(isOpenEnded(999999999999)).toBe(true);
     expect(isOpenEnded(null)).toBe(true);
     expect(isOpenEnded(1500000)).toBe(false);
+  });
+});
+
+describe("appliesToGender parsing", () => {
+  it("defaults a missing or unknown gender to all and keeps female / male", () => {
+    const raw = { ...payload, states: [{ stateCode: "MH", versions: [{ ...v("2025-04-01", "current"), slabs: [
+      { fromMinor: 0, toMinor: 10, taxMinor: 0, februaryTaxMinor: null },
+      { fromMinor: 0, toMinor: 10, taxMinor: 0, februaryTaxMinor: null, appliesToGender: "female" },
+      { fromMinor: 0, toMinor: 10, taxMinor: 0, februaryTaxMinor: null, appliesToGender: "weird" },
+    ] }] }] };
+    expect(parsePtPayload(raw)!.states[0]!.versions[0]!.slabs.map((x) => x.appliesToGender)).toEqual(["all", "female", "all"]);
   });
 });

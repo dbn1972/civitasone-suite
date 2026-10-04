@@ -53,7 +53,7 @@ type AuditableAction = "issue" | "present" | "clear" | "bounce" | "cancel";
 
 /** Audit event for an instrument mutation, enqueued inside the mutation's own transaction. */
 async function auditInstrumentTx(
-  tx: Parameters<typeof enqueue>[0], ctx: RequestContext, action: AuditableAction,
+  tx: Parameters<typeof enqueue>[0], ctx: Actor, action: AuditableAction,
   row: Pick<InstrumentRow, "id" | "instrumentType" | "instrumentNo">, fromStatus: string | null, toStatus: string,
 ): Promise<void> {
   await enqueue(tx, {
@@ -80,39 +80,47 @@ export function assertInstrumentChecker(issuerId: string, actorId: string): void
   }
 }
 
-/** Issue a cheque/DD. Idempotent on (tenant, type, number). */
-export async function issueInstrument(ctx: RequestContext, body: IssueInstrumentBody): Promise<InstrumentView> {
-  const issueDate = body.issueDate ?? new Date().toISOString().slice(0, 10);
-  const { row } = await db.transaction(async (tx) => {
-    const res = await repo.insertInstrumentTx(tx, {
-      tenantId: ctx.tenantId,
-      instrumentType: body.instrumentType,
-      instrumentNo: body.instrumentNo,
-      bankName: body.bankName,
-      payee: body.payee,
-      amountMinor: BigInt(body.amountMinor),
-      currency: body.currency,
-      issueDate,
-      status: "issued",
-      createdBy: ctx.actorId,
-      updatedBy: ctx.actorId,
-      ...(body.bankAccountId ? { bankAccountId: body.bankAccountId } : {}),
-      ...(body.paymentId ? { paymentId: body.paymentId } : {}),
-    });
-    // Only the request that actually creates the row is audited; an idempotent re-issue is not.
-    if (res.created) await auditInstrumentTx(tx, ctx, "issue", res.row, null, "issued");
-    return res;
-  });
-  // Re-issue with mismatched material terms is a conflict, not a silent no-op.
-  if (!sameTerms(row, body)) {
-    throw new HttpError(409, "INSTRUMENT_CONFLICT",
-      `instrument ${body.instrumentType} ${body.instrumentNo} already issued with different terms`);
-  }
-  return serialize(row);
-}
-
+/** Terms that must match for a re-issue of the same instrument number to count as the same instrument. */
 function sameTerms(row: InstrumentRow, body: IssueInstrumentBody): boolean {
   return row.amountMinor === BigInt(body.amountMinor) && row.payee === body.payee;
+}
+
+function conflict(body: IssueInstrumentBody): HttpError {
+  return new HttpError(409, "INSTRUMENT_CONFLICT",
+    `instrument ${body.instrumentType} ${body.instrumentNo} already issued with different terms`);
+}
+
+/**
+ * Issue (consumer side): one transaction -- the idempotency marker is the caller's, the insert is idempotent on
+ * (tenant, type, number), and only the request that actually creates the row is audited. A re-issue with different
+ * material terms is a conflict (409 -> dead-lettered, nothing written).
+ */
+export async function applyIssue(tx: Tx, actor: Actor, body: IssueInstrumentBody): Promise<void> {
+  const issueDate = body.issueDate ?? new Date().toISOString().slice(0, 10);
+  const res = await repo.insertInstrumentTx(tx, {
+    tenantId: actor.tenantId,
+    instrumentType: body.instrumentType,
+    instrumentNo: body.instrumentNo,
+    bankName: body.bankName,
+    payee: body.payee,
+    amountMinor: BigInt(body.amountMinor),
+    currency: body.currency,
+    issueDate,
+    status: "issued",
+    createdBy: actor.actorId,
+    updatedBy: actor.actorId,
+    ...(body.bankAccountId ? { bankAccountId: body.bankAccountId } : {}),
+    ...(body.paymentId ? { paymentId: body.paymentId } : {}),
+  });
+  if (!sameTerms(res.row, body)) throw conflict(body);
+  if (res.created) {
+    await enqueue(tx, {
+      topic: "finance.instrument.issued", eventType: "finance.instrument.issued",
+      tenantId: actor.tenantId, actorId: actor.actorId, correlationId: actor.correlationId,
+      payload: { instrumentNo: body.instrumentNo, instrumentType: body.instrumentType, amountMinor: body.amountMinor },
+    });
+    await auditInstrumentTx(tx, actor, "issue", res.row, null, "issued");
+  }
 }
 
 async function load(ctx: RequestContext, id: string): Promise<InstrumentRow> {
@@ -121,97 +129,131 @@ async function load(ctx: RequestContext, id: string): Promise<InstrumentRow> {
   return row;
 }
 
+export type TransitionAction = "present" | "clear" | "bounce" | "cancel";
+const TRANSITIONS: Record<TransitionAction, { from: string[]; to: string; ts: "presentedAt" | "clearedAt" | "bouncedAt" | "cancelledAt" }> = {
+  present: { from: ["issued"], to: "presented", ts: "presentedAt" },
+  clear: { from: ["issued", "presented"], to: "cleared", ts: "clearedAt" },
+  bounce: { from: ["issued", "presented"], to: "bounced", ts: "bouncedAt" },
+  cancel: { from: ["issued"], to: "cancelled", ts: "cancelledAt" },
+};
+
+function staleError(policyMonths: number, issueDate: string): HttpError {
+  return new HttpError(409, "INSTRUMENT_STALE",
+    `instrument is past its ${policyMonths}-month validity (valid until ${validUntil(issueDate, policyMonths)}); it cannot be presented`);
+}
+
 /**
- * present: issued -> presented. Idempotent (already presented returns the row).
- * Illegal from a terminal state (cleared/bounced/cancelled) -> 409.
+ * Transition (consumer side): ONE guarded UPDATE + audit in the caller's transaction. The WHERE pins the source
+ * status, so a replay or a lost race matches no row: an already-applied transition is an idempotent no-op (no second
+ * audit), anything else is an ILLEGAL_TRANSITION (409). Maker != checker is enforced here too (clear / bounce), so
+ * the queue cannot be used to get around the check the route pre-checks.
+ *   present: issued -> presented (refused once past the validity horizon)
+ *   clear / bounce: issued|presented -> cleared / bounced        cancel: issued -> cancelled (reason mandatory)
  */
-export async function presentInstrument(ctx: RequestContext, id: string): Promise<InstrumentView> {
+export async function applyTransition(
+  tx: Tx, actor: Actor, input: { id: string; action: TransitionAction; reason?: string | undefined },
+): Promise<void> {
+  const t = TRANSITIONS[input.action];
+  if (!t) throw new HttpError(400, "UNKNOWN_ACTION", `unknown instrument action ${String(input.action)}`);
+  const cur = await repo.findByIdTx(tx, actor.tenantId, input.id);
+  if (!cur) throw new HttpError(404, "NOT_FOUND", "instrument not found");
+  if (cur.status === t.to) return; // idempotent
+  if (input.action === "clear" || input.action === "bounce") assertInstrumentChecker(cur.createdBy, actor.actorId);
+  if (input.action === "present") {
+    const policy = await readPolicyWith(tx, actor.tenantId);
+    if (isStale(String(cur.issueDate), policy.chequeValidityMonths, todayIso())) throw staleError(policy.chequeValidityMonths, String(cur.issueDate));
+  }
+  const patch = input.action === "bounce" ? { bounceReason: input.reason ?? "dishonoured" }
+    : input.action === "cancel" ? { cancelReason: input.reason ?? "" } : {};
+  const row = await repo.transitionTx(tx, actor.tenantId, input.id, t.from, t.to, patch, t.ts, actor.actorId);
+  if (!row) {
+    // Lost a race: the winner may have applied this very transition (idempotent replay, no second audit).
+    const latest = await repo.findByIdTx(tx, actor.tenantId, input.id);
+    if (latest?.status === t.to) return;
+    throw illegal(latest?.status ?? cur.status, t.to);
+  }
+  await enqueue(tx, {
+    topic: `finance.instrument.${t.to}`, eventType: `finance.instrument.${t.to}`,
+    tenantId: actor.tenantId, actorId: actor.actorId, correlationId: actor.correlationId,
+    payload: { id: input.id, status: t.to },
+  });
+  await recordAudit(tx, actor, {
+    action: input.action, resourceType: "instrument", resourceId: input.id,
+    details: {
+      instrumentType: row.instrumentType, instrumentNo: row.instrumentNo, fromStatus: cur.status, toStatus: t.to,
+      ...(input.action === "cancel" ? { reason: input.reason } : {}),
+    },
+  });
+}
+
+/**
+ * How long a route waits for its command to be applied before answering 202 instead. The consumer is the only writer;
+ * the wait just lets the route keep its original contract (the updated view) on the normal, prompt path.
+ */
+const APPLY_WAIT_MS = Number(process.env.FINANCE_COMMAND_WAIT_MS ?? 5000);
+
+async function waitFor<T>(probe: () => Promise<T | null>): Promise<T | null> {
+  const deadline = Date.now() + APPLY_WAIT_MS;
+  for (;;) {
+    const hit = await probe();
+    if (hit) return hit;
+    if (Date.now() >= deadline) return null;
+    await new Promise((r) => setTimeout(r, 40));
+  }
+}
+
+/**
+ * Issue a cheque/DD. Route side: read-only pre-checks, then publish; the consumer writes. Idempotent on
+ * (tenant, type, number): an existing instrument with the same terms is returned as-is, with different terms it is a 409.
+ * Returns the view once applied, or Accepted (202) if the consumer has not applied it within the wait.
+ */
+export async function issueInstrument(ctx: RequestContext, body: IssueInstrumentBody): Promise<InstrumentView | Accepted> {
+  const existing = await repo.findByNumber(ctx.tenantId, body.instrumentType, body.instrumentNo);
+  if (existing) {
+    if (!sameTerms(existing, body)) throw conflict(body);
+    return serialize(existing);
+  }
+  const accepted = await publishCommand(ctx, COMMANDS.instrumentIssue, { ...body }, `${body.instrumentType}:${body.instrumentNo}`);
+  const row = await waitFor(() => repo.findByNumber(ctx.tenantId, body.instrumentType, body.instrumentNo));
+  if (!row) return accepted;
+  if (!sameTerms(row, body)) throw conflict(body);
+  return serialize(row);
+}
+
+/** Shared route side of the four status transitions. */
+async function requestTransition(ctx: RequestContext, id: string, action: TransitionAction, reason?: string): Promise<InstrumentView | Accepted> {
+  const t = TRANSITIONS[action];
   const current = await load(ctx, id);
-  if (current.status === "presented") return serialize(current);
-  // consistent with re-present: a cheque past its validity horizon can no longer be presented
-  if (current.status === "issued") {
+  if (current.status === t.to) return serialize(current); // idempotent: nothing to publish
+  if (action === "clear" || action === "bounce") assertInstrumentChecker(current.createdBy, ctx.actorId);
+  if (!t.from.includes(current.status)) throw illegal(current.status, t.to);
+  if (action === "present") {
     const policy = await getPolicy(ctx.tenantId);
-    if (isStale(String(current.issueDate), policy.chequeValidityMonths, todayIso())) {
-      throw new HttpError(409, "INSTRUMENT_STALE",
-        `instrument is past its ${policy.chequeValidityMonths}-month validity (valid until ${validUntil(String(current.issueDate), policy.chequeValidityMonths)}); it cannot be presented`);
-    }
+    if (isStale(String(current.issueDate), policy.chequeValidityMonths, todayIso())) throw staleError(policy.chequeValidityMonths, String(current.issueDate));
   }
-  const updated = await db.transaction(async (tx) => {
-    const row = await repo.transitionTx(tx, ctx.tenantId, id, ["issued"], "presented", {}, "presentedAt", ctx.actorId);
-    if (row) await auditInstrumentTx(tx, ctx, "present", row, current.status, "presented");
-    return row;
+  const accepted = await publishCommand(ctx, COMMANDS.instrumentTransition, { id, action, ...(reason ? { reason } : {}) }, id);
+  const row = await waitFor(async () => {
+    const r = await repo.findById(ctx.tenantId, id);
+    return r && r.status !== current.status ? r : null;
   });
-  if (!updated) throw illegal(current.status, "presented");
-  return serialize(updated);
+  if (!row) return accepted;
+  if (row.status !== t.to) throw illegal(row.status, t.to); // another transition won the race
+  return serialize(row);
 }
 
-/** clear: issued|presented -> cleared. Idempotent. */
-export async function clearInstrument(ctx: RequestContext, id: string): Promise<InstrumentView> {
-  const current = await load(ctx, id);
-  if (current.status === "cleared") return serialize(current);
-  assertInstrumentChecker(current.createdBy, ctx.actorId);
-  const updated = await db.transaction(async (tx) => {
-    const row = await repo.transitionTx(tx, ctx.tenantId, id, ["issued", "presented"], "cleared", {}, "clearedAt", ctx.actorId);
-    if (row) await auditInstrumentTx(tx, ctx, "clear", row, current.status, "cleared");
-    return row;
-  });
-  if (!updated) throw illegal(current.status, "cleared");
-  return serialize(updated);
-}
+/** present: issued -> presented. Idempotent. Illegal from a terminal state -> 409. */
+export const presentInstrument = (ctx: RequestContext, id: string) => requestTransition(ctx, id, "present");
 
-/** bounce: presented -> bounced (dishonoured). Idempotent. */
-export async function bounceInstrument(ctx: RequestContext, id: string, body: BounceInstrumentBody): Promise<InstrumentView> {
-  const current = await load(ctx, id);
-  if (current.status === "bounced") return serialize(current);
-  assertInstrumentChecker(current.createdBy, ctx.actorId);
-  const updated = await db.transaction(async (tx) => {
-    const row = await repo.transitionTx(
-      tx, ctx.tenantId, id, ["issued", "presented"], "bounced",
-      { bounceReason: body.reason ?? "dishonoured" }, "bouncedAt", ctx.actorId,
-    );
-    if (row) await auditInstrumentTx(tx, ctx, "bounce", row, current.status, "bounced");
-    return row;
-  });
-  if (!updated) throw illegal(current.status, "bounced");
-  return serialize(updated);
-}
+/** clear: issued|presented -> cleared. Idempotent. Maker != checker. */
+export const clearInstrument = (ctx: RequestContext, id: string) => requestTransition(ctx, id, "clear");
 
-/**
- * cancel: only an un-presented (issued) instrument may be cancelled/stopped; a reason is mandatory
- * (GAP-FINANCE-TREASURY-CHEQUES-DETAIL-04). Idempotent.
- *
- * The guarded UPDATE and the audit event are written in ONE transaction, so a
- * cancel is audited exactly once: only the request that actually flips
- * issued -> cancelled (the UPDATE's WHERE pins the source status) enqueues the
- * audit.event.record; a replay or a concurrent loser sees the already-cancelled
- * row and writes nothing.
- */
-export async function cancelInstrument(ctx: RequestContext, id: string, body: ReasonedInstrumentBody): Promise<InstrumentView> {
-  const current = await load(ctx, id);
-  if (current.status === "cancelled") return serialize(current);
-  const updated = await db.transaction(async (tx) => {
-    const row = await repo.transitionTx(tx, ctx.tenantId, id, ["issued"], "cancelled", { cancelReason: body.reason }, "cancelledAt", ctx.actorId);
-    if (row) {
-      await enqueue(tx, {
-        topic: "audit.event.record", eventType: "audit.event.record",
-        tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
-        payload: {
-          service: "finance", action: "cancel", resourceType: "instrument", resourceId: id,
-          outcome: "success",
-          details: { instrumentType: row.instrumentType, instrumentNo: row.instrumentNo, fromStatus: current.status, toStatus: "cancelled", reason: body.reason },
-        },
-      });
-    }
-    return row;
-  });
-  if (!updated) {
-    // Lost a race: if the winner cancelled it, this is the idempotent replay (no second audit).
-    const latest = await load(ctx, id);
-    if (latest.status === "cancelled") return serialize(latest);
-    throw illegal(latest.status, "cancelled");
-  }
-  return serialize(updated);
-}
+/** bounce: issued|presented -> bounced (dishonoured). Idempotent. Maker != checker. */
+export const bounceInstrument = (ctx: RequestContext, id: string, body: BounceInstrumentBody) =>
+  requestTransition(ctx, id, "bounce", body.reason);
+
+/** cancel: only an un-presented (issued) instrument; a reason is mandatory (GAP-FINANCE-TREASURY-CHEQUES-DETAIL-04). Idempotent. */
+export const cancelInstrument = (ctx: RequestContext, id: string, body: ReasonedInstrumentBody) =>
+  requestTransition(ctx, id, "cancel", body.reason);
 
 /**
  * re-present: bounced -> presented again, with a reason. Refused once the instrument is past its validity horizon

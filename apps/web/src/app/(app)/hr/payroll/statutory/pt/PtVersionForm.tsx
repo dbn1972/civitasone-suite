@@ -4,7 +4,7 @@ import { UserFacingError } from "@/lib/userFacingError";
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, Card, ConfirmDialog, Field, Input } from "../../../../../_components/ds";
+import { Button, Card, ConfirmDialog, Field, Input, Select } from "../../../../../_components/ds";
 import { browserFetch } from "@/lib/api/browserClient";
 import { useFormError } from "@/lib/useFormError";
 import { useAsyncMutation } from "@/lib/useAsyncMutation";
@@ -13,6 +13,7 @@ import {
   blankDraft, checkSlabDrafts, draftFromSlab, effectiveDateIssue, isBackDated, slabGaps,
   type SlabDraft, type SlabField, type SlabIssue,
 } from "./slabDrafts";
+import { PT_GENDERS, isPtGender } from "./constants";
 import type { PtApiSlab } from "./viewModel";
 
 /**
@@ -60,6 +61,9 @@ export function PtVersionForm({
 
   const setCell = (i: number, field: SlabField, value: string) =>
     setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, [field]: value } : r)));
+  const setGender = (i: number, value: string) =>
+    setRows((rs) => rs.map((r, idx) => (idx === i && isPtGender(value) ? { ...r, gender: value } : r)));
+  const genderLabels = { all: t("genderAll"), female: t("genderFemale"), male: t("genderMale") } as const;
 
   function review(e: React.FormEvent) {
     e.preventDefault();
@@ -158,6 +162,7 @@ export function PtVersionForm({
         <div style={{ display: "grid", gap: 14 }}>
           <p id={`${uid}-title`} style={{ margin: 0, fontSize: 13, color: "var(--mut)" }}>{t("formHint")}</p>
           <p role="note" style={{ margin: 0, fontSize: 13 }}>{t("capNote")}</p>
+          <p role="note" style={{ margin: 0, fontSize: 13 }}>{t("genderNote")}</p>
           {lastFinalisedMonth && earliestEffectiveFrom && (
             <p role="note" className="pill warn" style={{ margin: 0, width: "fit-content" }}>
               {t("finalisedNote", { month: lastFinalisedMonth, date: formatIndianDate(earliestEffectiveFrom) })}
@@ -192,6 +197,11 @@ export function PtVersionForm({
                 </Field>
                 <Field label={t("februaryLabel", { n: i + 1 })} error={fieldError(i, "feb")}>
                   <Input inputMode="decimal" value={r.feb} onChange={(e) => setCell(i, "feb", e.target.value)} style={{ minHeight: 44 }} />
+                </Field>
+                <Field label={t("genderLabel", { n: i + 1 })}>
+                  <Select value={r.gender} onChange={(e) => setGender(i, e.target.value)} style={{ minHeight: 44 }}>
+                    {PT_GENDERS.map((g) => <option key={g} value={g}>{genderLabels[g]}</option>)}
+                  </Select>
                 </Field>
                 <div style={{ alignSelf: "end" }}>
                   <Button
