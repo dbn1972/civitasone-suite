@@ -19,7 +19,6 @@ import { resolveRunStatutoryConfig } from "./consumer.js";
 import * as commands from "./commands.js";
 import { stateRulesBody } from "./state-rules.js";
 import { inForceRows } from "./pt-versions-repo.js";
-import { todayIst } from "./pt-versions-domain.js";
 import { validatePaySchedule, payDatesForMonth, type PayFrequency } from "./fin03-domain.js";
 import { assertElectionWithinPlan } from "./adjustment-guards.js";
 import { isValidIanaTimeZone } from "./validators.js";
