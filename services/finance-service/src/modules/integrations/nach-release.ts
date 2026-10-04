@@ -1,5 +1,4 @@
-import { randomUUID } from "node:crypto";
-import { writeFile, unlink } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pino } from "pino";
@@ -17,20 +16,25 @@ export const releaseFileName = (pfmsBatchId: string): string => `NACH_${pfmsBatc
  *
  * `fileName` is the REMOTE name. Release passes a deterministic one (releaseFileName) so that re-sending after an
  * ambiguous acknowledgement overwrites the same remote file instead of creating a second, differently named file with
- * the same payments. The local temp file always gets a unique name so concurrent calls never clobber each other.
+ * the same payments.
+ *
+ * The file carries beneficiary account data, so it never touches the shared temp directory directly: it is written (mode
+ * 0600) inside a freshly created private directory (mkdtemp, mode 0700) that is unique per call, so concurrent calls
+ * never clobber each other and no other local user can read or pre-create it.
  *
  * Resolves to the remote path written, or null when SFTP is not configured (nothing was sent). Rejects when the upload
- * fails. The temp file is always removed.
+ * fails. The whole private directory is always removed.
  */
 export async function sendNachFile(p: { pfmsBatchId: string; agencyCode: string; rows: BankFileRow[]; fileName?: string }): Promise<string | null> {
   const content = generateNACHFile(p.rows, { originatorCode: p.agencyCode, fileSequenceNo: 1 });
   const remoteName = p.fileName ?? `NACH_${p.pfmsBatchId}_${Date.now()}.txt`;
-  const localPath = join(tmpdir(), `${randomUUID()}_${remoteName}`);
-  await writeFile(localPath, content, "utf-8");
-  log.info({ pfmsBatchId: p.pfmsBatchId, fileName: remoteName }, "NACH file generated");
+  const dir = await mkdtemp(join(tmpdir(), "nach-"));
   try {
+    const localPath = join(dir, remoteName);
+    await writeFile(localPath, content, { encoding: "utf-8", mode: 0o600 });
+    log.info({ pfmsBatchId: p.pfmsBatchId, fileName: remoteName }, "NACH file generated");
     return await uploadBankFile(localPath, remoteName);
   } finally {
-    await unlink(localPath).catch(() => undefined);
+    await rm(dir, { recursive: true, force: true }).catch(() => undefined);
   }
 }
