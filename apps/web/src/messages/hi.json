@@ -5685,6 +5685,17 @@
     "colDdo": "डीडीओ",
     "colStatus": "स्थिति",
     "colActions": "कार्रवाइयाँ",
+    "colSignature": "हस्ताक्षर",
+    "signUnsigned": "हस्ताक्षर नहीं हुआ",
+    "signLegacy": "हस्ताक्षरित (प्रमाणपत्र का रिकॉर्ड नहीं)",
+    "signSigned": "DSC से हस्ताक्षरित",
+    "signMock": "सैंडबॉक्स परीक्षण हस्ताक्षर, कानूनी रूप से मान्य नहीं",
+    "signCert": "प्रमाणपत्र {serial}",
+    "signBy": "हस्ताक्षरकर्ता {name}",
+    "signAlgorithm": "एल्गोरिदम {algorithm}",
+    "signEnvProduction": "प्रोडक्शन चैनल",
+    "signEnvSandbox": "सैंडबॉक्स चैनल",
+    "signVerified": "सत्यापित {when}",
     "filterPlaceholder": "PFMS आईडी, एजेंसी, या योजना से फ़िल्टर करें…"
   },
   "pfmsConfigPanel": {
@@ -5785,17 +5796,31 @@
     "confirmDescription": "<b>{month}</b> के लिए <b>{employeeCount}</b> कर्मचारियों को कवर करते हुए वेतन बिल सबमिट करें ({amount})। इस कार्रवाई को पूर्ववत नहीं किया जा सकता।",
     "amountAboveFallback": "ऊपर दी गई राशि"
   },
+  "pfmsReleaseBatchAction": {
+    "releaseAriaLabel": "PFMS बैच {pfmsId} को PFMS पर जारी करें",
+    "releaseButtonLabel": "PFMS पर जारी करें",
+    "confirmTitle": "PFMS बैच {pfmsId} जारी करें?",
+    "confirmLabel": "बैच जारी करें",
+    "description": "यह हस्ताक्षरित बैच <b>{pfmsId}</b> को PFMS पर भेजता है। इसे पूर्ववत नहीं किया जा सकता।",
+    "checksNote": "भेजने से पहले DSC हस्ताक्षर की बैच की वर्तमान स्थिति से दोबारा जाँच की जाती है। बैच शुरू करने वाला उपयोगकर्ता उसे जारी नहीं कर सकता।",
+    "refusedUnsigned": "इस बैच पर DSC हस्ताक्षर नहीं है। जारी करने से पहले हस्ताक्षर करें।",
+    "refusedMock": "इस बैच पर सैंडबॉक्स परीक्षण हस्ताक्षर है, जिससे प्रोडक्शन में बैच जारी नहीं हो सकता।",
+    "refusedMakerChecker": "यह बैच आपने शुरू किया है, इसलिए आप इसे जारी नहीं कर सकते। किसी अन्य वित्त प्रशासक से कहें।",
+    "refusedChanged": "हस्ताक्षर के बाद बैच बदल गया है। इसे नहीं भेजा जाएगा; दोबारा हस्ताक्षर कराएँ।",
+    "refusedInvalid": "संग्रहीत DSC हस्ताक्षर सत्यापित नहीं होता। बैच नहीं भेजा जाएगा।",
+    "refusedUnverifiable": "DSC हस्ताक्षर को कॉन्फ़िगर किए गए हस्ताक्षर चैनल से अभी सत्यापित नहीं किया जा सकता। बैच नहीं भेजा जाएगा।",
+    "refusedChannel": "केवल ट्रेजरी बैच PFMS पर जारी किए जा सकते हैं।",
+    "refusedNotFound": "यह बैच अब मौजूद नहीं है।"
+  },
   "pfmsSignBatchAction": {
-    "certRequired": "प्रमाणपत्र संदर्भ आवश्यक है।",
-    "payloadRequired": "हस्ताक्षर पेलोड आवश्यक है।",
     "signAriaLabel": "PFMS बैच {pfmsId} पर हस्ताक्षर करें",
-    "signButtonLabel": "हस्ताक्षर करें",
+    "signButtonLabel": "DSC से हस्ताक्षर करें",
     "confirmTitle": "PFMS बैच {pfmsId} पर हस्ताक्षर करें?",
     "confirmLabel": "बैच पर हस्ताक्षर करें",
-    "description": "यह बैच <b>{pfmsId}</b> पर डिजिटल हस्ताक्षर लागू करता है और इसे हस्ताक्षरित के रूप में चिह्नित करता है। इस कार्रवाई को पूर्ववत नहीं किया जा सकता।",
-    "certificateRefLabel": "प्रमाणपत्र संदर्भ",
-    "signaturePayloadLabel": "हस्ताक्षर पेलोड"
+    "description": "यह बैच <b>{pfmsId}</b> पर आपके विभाग के डिजिटल हस्ताक्षर प्रमाणपत्र (DSC) से हस्ताक्षर करता है और इसे हस्ताक्षरित के रूप में चिह्नित करता है। इस कार्रवाई को पूर्ववत नहीं किया जा सकता।",
+    "changeNote": "हस्ताक्षर बैच की सामग्री को कवर करता है। हस्ताक्षर के बाद बैच बदलने पर उसे जमा नहीं किया जाएगा।"
   },
+
   "pfmsSubmitPaymentForm": {
     "referenceIdRequired": "संदर्भ आईडी आवश्यक है।",
     "beneficiaryCodeRequired": "लाभार्थी कोड आवश्यक है।",

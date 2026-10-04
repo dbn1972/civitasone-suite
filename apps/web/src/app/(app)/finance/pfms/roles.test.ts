@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { canDownloadBankFile } from "./roles";
+import { canReleaseBatch, canDownloadBankFile } from "./roles";
 
 describe("canDownloadBankFile (GAP-FINANCE-PFMS-03)", () => {
   it("hides the bank file for audit/budget/procurement roles that the server would 403", () => {
@@ -12,5 +12,15 @@ describe("canDownloadBankFile (GAP-FINANCE-PFMS-03)", () => {
   });
   it("does not hide when the session carries no role claim (server decides)", () => {
     expect(canDownloadBankFile([])).toBe(true);
+  });
+});
+
+describe("canReleaseBatch", () => {
+  it("admins only; fails open when the session carries no role claim", () => {
+    expect(canReleaseBatch(["finance_admin"])).toBe(true);
+    expect(canReleaseBatch(["super_admin"])).toBe(true);
+    expect(canReleaseBatch(["finance_officer"])).toBe(false);
+    expect(canReleaseBatch(["audit_officer"])).toBe(false);
+    expect(canReleaseBatch([])).toBe(true);
   });
 });

@@ -4,6 +4,9 @@ import { useTranslations } from "next-intl";
 import { DataTable, EmptyState } from "../../../_components/ds";
 import { SignBatchAction } from "./SignBatchAction";
 import { BankFileAction } from "./BankFileAction";
+import { SigningCell } from "./SigningCell";
+import { ReleaseBatchAction } from "./ReleaseBatchAction";
+import { canRelease, canSign, parseSigning } from "./signingStatus";
 import { humanizeStatus } from "@/lib/formatters";
 import type { PfmsBatchRow } from "./types";
 
@@ -12,7 +15,7 @@ import type { PfmsBatchRow } from "./types";
  * route registered on finance-service (see PR "## BACKEND FOLLOW-UPS"); batches
  * are created by the payments workflow, not from this console.
  */
-export function BatchesPanel({ batches, canDownloadBankFile = true }: { batches: PfmsBatchRow[]; canDownloadBankFile?: boolean }) {
+export function BatchesPanel({ batches, canDownloadBankFile = true, canRelease: mayRelease = true }: { batches: PfmsBatchRow[]; canDownloadBankFile?: boolean; canRelease?: boolean }) {
   const t = useTranslations("pfmsBatchesPanel");
 
   if (batches.length === 0) {
@@ -36,6 +39,13 @@ export function BatchesPanel({ batches, canDownloadBankFile = true }: { batches:
         { key: "ddoCode", label: t("colDdo") },
         { key: "submissionStatus", label: t("colStatus"), cellType: "status" },
         {
+          // Sign status + certificate info. Only treasury-batch rows are ever signed; an e-Kuber row shows a dash.
+          key: "signing",
+          label: t("colSignature"),
+          sortable: false,
+          render: (row) => (row.channel === "treasury_batch" ? <SigningCell signing={parseSigning(row.signing)} /> : "—"),
+        },
+        {
           key: "id",
           label: t("colActions"),
           sortable: false,
@@ -51,7 +61,10 @@ export function BatchesPanel({ batches, canDownloadBankFile = true }: { batches:
                 {canDownloadBankFile && (
                   <BankFileAction batchId={row.id} pfmsId={row.pfmsId} submissionStatus={row.submissionStatus} />
                 )}
-                {row.submissionStatus !== "signed" && (
+                {mayRelease && canRelease(row.submissionStatus, parseSigning(row.signing)) && (
+                  <ReleaseBatchAction batchId={row.id} pfmsId={row.pfmsId} />
+                )}
+                {canSign(row.submissionStatus, parseSigning(row.signing)) && (
                   <SignBatchAction batchId={row.id} pfmsId={row.pfmsId} />
                 )}
               </div>

@@ -35,6 +35,7 @@ import { registerInstrumentWorkflowConsumers } from "./modules/instruments/comma
 import { registerOrgStructureConsumers }  from "./modules/org-structure/consumer.js";
 import { registerPeriodCloseConsumers }   from "./modules/period-close/consumer.js";
 import { registerPfmsConsumers }          from "./modules/pfms/consumer.js";
+import { registerPfmsReleaseConsumers } from "./modules/pfms/release.js";
 import { registerRecurringConsumers }     from "./modules/recurring/consumer.js";
 import { registerReportsConsumers }       from "./modules/reports/consumer.js";
 import { registerSubledgerConsumers }     from "./modules/subledger/consumer.js";
@@ -104,6 +105,7 @@ registerInstrumentWorkflowConsumers(queue);
 registerOrgStructureConsumers(queue);
 registerPeriodCloseConsumers(queue);
 registerPfmsConsumers(queue);
+registerPfmsReleaseConsumers(queue);
 registerRecurringConsumers(queue);
 registerReportsConsumers(queue);
 registerSubledgerConsumers(queue);

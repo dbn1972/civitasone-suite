@@ -25,6 +25,7 @@ import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { sql } from "drizzle-orm";
 import { scoped } from "./_tenant.js";
+import { startConsumers } from "./_fp02.js";
 import { financeHeads } from "../src/modules/budget/schema.js";
 import { financeLedger, financeJournals } from "../src/modules/gl/schema.js";
 
@@ -267,6 +268,9 @@ describe("Fixed-asset register — reconciles to GL", () => {
 
 describe("Cheque/DD lifecycle — issued -> presented -> cleared | bounced", () => {
   const created: string[] = [];
+  // Issue and every transition are commands now (route -> command -> consumer); the in-process queue runs the real
+  // worker consumers, and the routes keep their contract by answering with the updated instrument once applied.
+  beforeAll(async () => { await startConsumers(); });
 
   async function issue(payee: string, amountMinor: number) {
     const app = await buildApp();

@@ -5,7 +5,7 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney, sumMinor } from "@/lib/formatters";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PfmsConsole } from "./PfmsConsole";
-import { canDownloadBankFile } from "./roles";
+import { canDownloadBankFile, canReleaseBatch } from "./roles";
 import { parsePfmsConfig, type PfmsBatchRow, type PfmsBill, type PfmsConfig, type PfmsDepartment } from "./types";
 
 async function getBatches(): Promise<LoaderResult<PfmsBatchRow[]>> {
@@ -145,7 +145,7 @@ export default async function PfmsOpsConsolePage() {
         </p>
       )}
 
-      <PfmsConsole batches={batches} config={config} departments={departments} bills={bills} canDownloadBankFile={canDownloadBankFile(getSessionRoles())} />
+      <PfmsConsole batches={batches} config={config} departments={departments} bills={bills} canDownloadBankFile={canDownloadBankFile(getSessionRoles())} canRelease={canReleaseBatch(getSessionRoles())} />
     </div>
   );
 }

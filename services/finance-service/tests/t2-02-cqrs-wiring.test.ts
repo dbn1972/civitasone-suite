@@ -54,14 +54,30 @@ describe("T2-02 finance CQRS + scanner-db", () => {
       "finance.vendor.decide", "finance.vendor.bank_change_propose", "finance.vendor.bank_change_decide",
       "finance.policy.change", "finance.policy.change_decide", "finance.audit_para.transition",
       "finance.instrument.represent", "finance.instrument.mark_stale",
+      // GAP-FINANCE-PFMS-01 follow-up: the pre-existing cheque/instrument mutations moved onto CQRS too
+      "finance.instrument.issue", "finance.instrument.transition", "finance.pfms.batch_release",
     ]) expect(topics).toContain(`"${t}"`);
     const worker = readFileSync(resolve(__dirname, "../src/worker.ts"), "utf8");
-    for (const r of ["registerVendorConsumers(queue)", "registerAuditConsumers(queue)", "registerInstrumentWorkflowConsumers(queue)"]) {
+    for (const r of ["registerVendorConsumers(queue)", "registerAuditConsumers(queue)", "registerInstrumentWorkflowConsumers(queue)", "registerInstrumentsConsumers(queue)", "registerPfmsReleaseConsumers(queue)"]) {
       expect(worker).toContain(r);
     }
     // the routes publish through publishCommand (fresh randomUUID messageId), never write
     const cmd = readFileSync(resolve(__dirname, "../src/shared/finance-command.ts"), "utf8");
     expect(cmd).toContain("messageId: randomUUID()");
+  });
+
+  it("cheque / instrument mutations are route -> command -> consumer: the command module has no direct write for them", () => {
+    const cmd = readFileSync(resolve(__dirname, "../src/modules/instruments/commands.ts"), "utf8");
+    // issue / present / clear / bounce / cancel publish; only the consumer-side apply* functions write, through the caller's tx.
+    expect(cmd).toContain("COMMANDS.instrumentIssue");
+    expect(cmd).toContain("COMMANDS.instrumentTransition");
+    expect(cmd).not.toMatch(/\bdb\.(insert|update|delete)\s*\(/);
+    expect(cmd).not.toMatch(/repo\.(insertInstrument|transition)\(/); // the non-Tx repo writers
+    const consumer = readFileSync(resolve(__dirname, "../src/modules/instruments/consumer.ts"), "utf8");
+    expect(consumer).toContain("subscribeApply"); // markProcessed + guarded update + audit in ONE transaction
+    // the only db.transaction left in the module is the synchronous audited account-number reveal (a read that must
+    // commit its audit row before the number is released), not a state mutation
+    expect(cmd.match(/db\.transaction\(/g)).toHaveLength(1);
   });
 
   it("commands publish expected topics", async () => {
