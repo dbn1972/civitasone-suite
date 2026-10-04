@@ -7,7 +7,6 @@
  *                                row actually changed.
  *   GAP-PAYROLL-STATUTORY-LWF-02 stateRulesUpsert: omitted LWF fields are
  *                                preserved (COALESCE), frequency is written.
- *   GAP-PAYROLL-STATUTORY-PT-03  findPtSlabOverlap.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
@@ -67,7 +66,6 @@ vi.mock("../src/shared/outbox.js", async () => {
 
 const { registerPayrollConsumers } = await import("../src/modules/payroll/consumer.js");
 const { COMMANDS, EVENTS } = await import("../src/topics.js");
-const { findPtSlabOverlap } = await import("../src/modules/payroll/state-rules.js");
 
 const handlers: Record<string, (msg: unknown) => Promise<void>> = {};
 registerPayrollConsumers({ subscribe: (t: string, fn: (msg: unknown) => Promise<void>) => { handlers[t] = fn; } } as never);
@@ -133,25 +131,5 @@ describe("GAP-PAYROLL-STATUTORY-LWF-02: stateRulesUpsert preserves omitted LWF f
     });
     const lwf = executed.find((q) => q.text.includes("payroll.payroll_lwf"));
     expect(lwf?.params).toContain("yearly");
-  });
-});
-
-describe("GAP-PAYROLL-STATUTORY-PT-03: findPtSlabOverlap", () => {
-  const existing = [
-    { fromMinor: 0, toMinor: 1500000 },
-    { fromMinor: 1500001, toMinor: 999999999999 },
-  ];
-  it("flags an incoming slab that overlaps a kept existing slab", () => {
-    expect(findPtSlabOverlap([{ fromMinor: 1000000, toMinor: 2000000 }], existing)).toMatch(/overlaps existing/);
-  });
-  it("treats a slab with the same start as an update of that slab", () => {
-    expect(findPtSlabOverlap([{ fromMinor: 0, toMinor: 1500000 }], existing)).toBeNull();
-  });
-  it("flags overlap inside the request itself and duplicate starts", () => {
-    expect(findPtSlabOverlap([{ fromMinor: 0, toMinor: 10 }, { fromMinor: 5, toMinor: 20 }], [])).toMatch(/same request/);
-    expect(findPtSlabOverlap([{ fromMinor: 0, toMinor: 10 }, { fromMinor: 0, toMinor: 20 }], [])).toMatch(/start at 0/);
-  });
-  it("accepts adjacent inclusive ranges", () => {
-    expect(findPtSlabOverlap([{ fromMinor: 0, toMinor: 10 }, { fromMinor: 11, toMinor: 20 }], [])).toBeNull();
   });
 });

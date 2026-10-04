@@ -15,6 +15,7 @@ import { registerSyncFeederConsumers } from "./modules/sync/feeder.js";
 import { registerIdentityTenantOnboardConsumers } from "./modules/tenant-onboard/consumer.js";
 import { registerApiKeyConsumers } from "./modules/apikeys/consumer.js";
 import { registerDeviceConsumers } from "./modules/devices/consumer.js";
+import { registerOperatorConsumers } from "./modules/operators/consumer.js";
 import * as keycloak from "./shared/keycloak.js";
 import { reconcileDueDeactivations, countPending } from "./shared/kc-reconcile.js";
 import { runWithTenant } from "@civitasone/db";
@@ -42,6 +43,7 @@ registerSyncFeederConsumers(queue);
 registerIdentityTenantOnboardConsumers(queue);
 registerApiKeyConsumers(queue);
 registerDeviceConsumers(queue);
+registerOperatorConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 // G7: scheduled outbox purge — remove published messages older than 7 days.

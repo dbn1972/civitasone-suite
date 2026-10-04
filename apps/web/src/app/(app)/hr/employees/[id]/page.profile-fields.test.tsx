@@ -7,7 +7,7 @@ const getEmployeeByIdMock = vi.fn();
 vi.mock("../../../../_data/loaders", () => ({ getEmployeeById: (...a: unknown[]) => getEmployeeByIdMock(...a) }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 let mockRoles: string[] = [];
-vi.mock("@/lib/auth/roleGuard", () => ({ getSessionRoles: () => mockRoles }));
+vi.mock("@/lib/auth/roleGuard", () => ({ getSessionRoles: () => mockRoles, PAYROLL_READER_ROLES: ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer"] }));
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({ fetchJson: (...a: unknown[]) => fetchJsonMock(...a) }));

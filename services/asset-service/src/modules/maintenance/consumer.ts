@@ -4,16 +4,14 @@ import { tenantScoped } from "../../shared/tenant-queue.js";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
-import { uuidV5 } from "../../shared/ids.js";
 import * as repo from "./repo.js";
 import { isUniqueViolation } from "../register/consumer.js";
+import { postMaintenanceOrDefer } from "../enterprise/postings.js";
 
 const log = pino({ name: "asset-maintenance-consumer" });
 const AUDIT_TOPIC = "audit.event.record";
-const GL_TOPIC = "finance.gl.post";
-// 4-digit finance head CODES (resolved by finance via findHeadByCodeTx).
-const MAINTENANCE_EXPENSE_CODE = process.env.ASSET_MAINTENANCE_EXPENSE_CODE ?? "5300";
-const AP_CONTROL_CODE = process.env.ASSET_AP_CONTROL_CODE ?? "2050";
+// No default GL accounts: the maintenance expense / AP control heads are the tenant's asset_settings. If they are not
+// configured the work order is still completed and its journal deferred (ASSET_GL_NOT_CONFIGURED) -- enterprise/postings.ts.
 
 export function registerMaintenanceConsumers(rawQueue: Queue): void {
   // #146 regression fix: run every handler inside the message tenant context so
@@ -93,23 +91,7 @@ export function registerMaintenanceConsumers(rawQueue: Queue): void {
         }
         const costMinor = BigInt(p.costMinor);
         await repo.completeWorkOrder(tx, p.id, p.tenantId, p.completedDate, costMinor, msg.actorId);
-        if (costMinor > 0n) {
-          await enqueue(tx, {
-            topic: GL_TOPIC, eventType: GL_TOPIC,
-            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-            payload: {
-              id: uuidV5(`maintenance:${p.id}`),
-              tenantId: msg.tenantId,
-              type: "asset_maintenance",
-              voucherNo: `MNT/${p.completedDate}/${String(wo.assetId).slice(0, 8)}`,
-              postingDate: p.completedDate,
-              lines: [
-                { accountCode: MAINTENANCE_EXPENSE_CODE, debitMinor: costMinor.toString(), creditMinor: "0" },
-                { accountCode: AP_CONTROL_CODE, debitMinor: "0", creditMinor: costMinor.toString() },
-              ],
-            },
-          });
-        }
+        await postMaintenanceOrDefer(tx, msg, { id: p.id, tenantId: msg.tenantId, assetId: String(wo.assetId), costMinor, completedDate: p.completedDate });
         await audit(tx, msg, "complete", "work_order", p.id);
       });
     } catch (err) {

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { HttpError } from "../../shared/context.js";
+import { assertNotPlatformOperator } from "../operators/commands.js";
 import { COMMANDS, RESOURCE } from "../../topics.js";
 import type { CreateUserBody, UpdateUserBody, StatusBody } from "./validators.js";
 import type { UserView } from "./domain.js";
@@ -53,6 +54,9 @@ export async function changeUserStatus(ctx: RequestContext, id: string, body: St
   if (body.status !== "active" && (await scopedRead((tx) => strandsTenantAdmins(tx as unknown as rbacRepo.Writer, ctx.tenantId, id)))) {
     throw new HttpError(409, "LAST_TENANT_ADMIN", "this is the last active tenant admin; make someone else a tenant admin first");
   }
+  // GAP-ADMIN-OPERATORS-05: ANY status change to a platform operator (suspend, lock, deactivate AND
+  // reactivate) needs a second super admin's approval, so none can be done through this direct route.
+  await assertNotPlatformOperator(ctx.tenantId, id);
   await queue.publish(COMMANDS.deactivateUser, {
     messageId: randomUUID(),
     type: COMMANDS.deactivateUser, tenantId: ctx.tenantId, actorId: ctx.actorId,

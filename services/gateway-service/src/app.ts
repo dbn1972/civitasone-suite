@@ -20,6 +20,7 @@ import {
   createInMemoryQuotaStore,
 } from "./quota-store.js";
 import { registerResponseMetrics } from "./response-metrics.js";
+import { registerApiMetrics } from "./api-metrics.js";
 import { registerScreenManifestRoute } from "./screen-manifest.js";
 import { registerSearchRoute } from "./search-route.js";
 import { proxyFetch, getBreakerStates } from "./upstream-proxy.js";
@@ -489,6 +490,12 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   registerResponseMetrics(app);
+  // GAP-ADMIN-API-MONITORING-06: per-tenant request rollups, batched and published off the request path.
+  // The queue is imported on first flush so a gateway that never flushes (tests, metrics off) opens no connection.
+  registerApiMetrics(app, async (topic, envelope) => {
+    const { queue } = await import("./shared/infra.js");
+    await queue.publish(topic, envelope as never);
+  });
   registerScreenManifestRoute(app);
   registerSearchRoute(app);
 

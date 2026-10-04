@@ -5,6 +5,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 import { strandsTenantAdmins } from "./last-admin.js";
+import * as operatorsRepo from "../operators/repo.js";
 import { assertTransition, type UserView } from "./domain.js";
 import * as keycloak from "../../shared/keycloak.js";
 import { recordPendingDeactivation, resolvePendingDeactivation } from "../../shared/kc-reconcile.js";
@@ -82,6 +83,15 @@ export function registerUserConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const cur = await repo.findByIdTx(tx, msg.tenantId, msg.payload.id);
       if (!cur) throw new Error(`user ${msg.payload.id} not found`);
+      // GAP-ADMIN-OPERATORS-05: the route refuses this for a platform operator; refuse again at apply time so a
+      // command that reached the queue another way cannot change an operator without the approval flow.
+      if (await operatorsRepo.loadOperator(tx as never, msg.tenantId, msg.payload.id)) {
+        await enqueue(tx as Parameters<typeof enqueue>[0], {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { service: "identity", action: "status_change_refused", resourceType: "user", resourceId: msg.payload.id, outcome: "denied", severity: "high", code: "OPERATOR_REQUIRES_APPROVAL", status: msg.payload.status },
+        });
+        return;
+      }
       assertTransition(cur.status, msg.payload.status as UserView["status"]);
       // GAP-ADMIN-USERS-01 (race-safe half): serialise the tenant's admin status changes, then
       // re-check against current state. If this change would strand the tenant it is NOT applied.

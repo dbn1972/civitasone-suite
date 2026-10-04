@@ -239,3 +239,59 @@ describe("unknown GL account code (fp-assets-01)", () => {
     expect(enqueueMock.mock.calls.some((c: any[]) => c[1]?.topic === "finance.gl.rejected")).toBe(false);
   });
 });
+
+describe("every deterministic refusal is reported to the producer (fp-assets-02)", () => {
+  const rejectedEvents = () => enqueueMock.mock.calls.filter((c: any[]) => c[1]?.topic === "finance.gl.rejected").map((c: any[]) => c[1].payload);
+
+  it("a soft-closed period emits finance.gl.rejected with PERIOD_SOFT_CLOSED, posts nothing and does not retry", async () => {
+    getPeriodStatusTxMock.mockResolvedValue("soft_close");
+    const capture = vi.spyOn(observability, "captureError").mockImplementation(() => undefined);
+    const payload = journalPayload({ type: "asset_acquisition", voucherNo: "ACQ/2026-03-01/abcd1234", postingDate: "2026-03-01" });
+    const q = await buildQueue();
+    const err = await q.publish(COMMANDS.journalPost, makeMsg(payload)).then(() => null, (e: unknown) => e);
+    expect(err).toBeInstanceOf(NonRetryableError);
+    expect(insertJournalMock).not.toHaveBeenCalled();
+    const ev = rejectedEvents();
+    expect(ev).toHaveLength(1);
+    expect(ev[0]).toMatchObject({ journalId: payload.id, code: "PERIOD_SOFT_CLOSED" });
+    expect(ev[0].reason).toMatch(/^PERIOD_SOFT_CLOSED: .*2026-03/);
+    expect(capture).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ alert: "GL_JOURNAL_REFUSED", code: "PERIOD_SOFT_CLOSED" }));
+  });
+
+  it("a hard-closed period and a group (non-leaf) account are reported with their own codes", async () => {
+    vi.spyOn(observability, "captureError").mockImplementation(() => undefined);
+    getPeriodStatusTxMock.mockResolvedValue("hard_close");
+    const q = await buildQueue();
+    await q.publish(COMMANDS.journalPost, makeMsg(journalPayload())).catch(() => undefined);
+    expect(rejectedEvents().map((e: any) => e.code)).toEqual(["PERIOD_CLOSED"]);
+
+    enqueueMock.mockClear();
+    getPeriodStatusTxMock.mockResolvedValue("open");
+    hasChildHeadsTxMock.mockResolvedValue(true);
+    await q.publish(COMMANDS.journalPost, makeMsg(journalPayload())).catch(() => undefined);
+    const ev = rejectedEvents();
+    expect(ev).toHaveLength(1);
+    expect(ev[0]).toMatchObject({ code: "NOT_LEAF_ACCOUNT" });
+    expect(ev[0].reason).toMatch(/non-leaf account/);
+  });
+
+  it("a transient failure (no refusal code) is NOT reported as rejected and keeps its retry behaviour", async () => {
+    getPeriodStatusTxMock.mockRejectedValue(new Error("connection terminated unexpectedly"));
+    const q = await buildQueue();
+    const err = await q.publish(COMMANDS.journalPost, makeMsg(journalPayload())).then(() => null, (e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(err).not.toBeInstanceOf(NonRetryableError);
+    expect(rejectedEvents()).toHaveLength(0);
+  });
+
+  it("refusalCode classifies codes, bracketed domain messages and rejects unrelated errors", async () => {
+    const { refusalCode } = await import("../src/modules/gl/refusal.js");
+    expect(refusalCode(new Error("PERIOD_UNKNOWN: cannot post"))).toBe("PERIOD_UNKNOWN");
+    expect(refusalCode(Object.assign(new Error("[NOT_LEAF_ACCOUNT] x"), { code: "NOT_LEAF_ACCOUNT" }))).toBe("NOT_LEAF_ACCOUNT");
+    expect(refusalCode(new Error("[JOURNAL_UNBALANCED] debits != credits"))).toBe("JOURNAL_UNBALANCED");
+    expect(refusalCode(Object.assign(new Error("[BUDGET_EXCEEDED] race"), { code: "BUDGET_EXCEEDED" }))).toBeNull(); // may succeed on retry
+    expect(refusalCode(Object.assign(new Error("boom"), { code: "ECONNREFUSED" }))).toBeNull();
+    expect(refusalCode(null)).toBeNull();
+    expect(refusalCode("PERIOD_CLOSED")).toBeNull();
+  });
+});

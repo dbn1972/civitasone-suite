@@ -9,6 +9,7 @@ vi.mock("../../../_data/loaders", () => ({
 }));
 const rolesMock = vi.fn<() => string[]>(() => ["asset_manager"]);
 vi.mock("@/lib/auth/roleGuard", () => ({ getSessionRoles: () => rolesMock() }));
+vi.mock("../AccountingBanner", () => ({ AccountingBanner: ({ areas }: { areas: string[] }) => <div data-testid="accounting-banner" data-areas={areas.join(",")} /> }));
 vi.mock("./RegisterAssetForm", () => ({ RegisterAssetForm: () => <form aria-label="register form" /> }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 
@@ -27,6 +28,13 @@ describe("RegisterAssetPage", () => {
     render(await RegisterAssetPage());
     expect(screen.getByText("Category setup required")).toBeInTheDocument();
     expect(screen.queryByRole("form", { name: "register form" })).not.toBeInTheDocument();
+  });
+
+  it("shows the accounting banner for asset registration (the asset is saved either way)", async () => {
+    getAssetCategoriesMock.mockResolvedValue({ data: [{ id: "c1", code: "IT", name: "IT", depMethod: "SLM", depRate: 20, usefulLifeYears: 5 }], source: "api" });
+    render(await RegisterAssetPage());
+    expect(screen.getByTestId("accounting-banner")).toHaveAttribute("data-areas", "acquisition");
+    expect(screen.getByRole("form", { name: "register form" })).toBeInTheDocument();
   });
 
   it("shows a load error when categories fail to load", async () => {

@@ -136,6 +136,17 @@ export async function assignRole(ctx: RequestContext, roleId: string, userId: st
     throw new HttpError(403, "FORBIDDEN", `role '${role.key}' can only be assigned by platform staff`);
   }
 
+  // GAP-ADMIN-OPERATORS-05: platform-authority roles are never assigned directly. Self-promotion, promoting an
+  // existing operator and creating a new operator all need a second super admin's approval, so they go through
+  // an operator change request (role_change for an operator, grant for a user who is not one yet).
+  if (isPlatformAuthorityKey(role.key)) {
+    if (userId.toLowerCase() === ctx.actorId.toLowerCase()) {
+      throw new HttpError(409, "SELF_ACTION", "you cannot grant yourself a platform role");
+    }
+    throw new HttpError(409, "OPERATOR_REQUIRES_APPROVAL",
+      "platform roles are granted through a platform-operator change request (grant or role change) that a second super admin approves");
+  }
+
   // Anti-self-escalation: caller must be able to confer everything the role grants.
   const roleperms = await scopedRead((tx) => repo.permissionKeysForRole(tx, ctx.tenantId, roleId));
   try {
@@ -155,6 +166,12 @@ export async function assignRole(ctx: RequestContext, roleId: string, userId: st
 export async function revokeRole(ctx: RequestContext, roleId: string, userId: string, reason?: string): Promise<Accepted> {
   const role = await scopedRead((tx) => repo.findRoleById(tx, ctx.tenantId, roleId));
   if (!role) throw new HttpError(404, "NOT_FOUND", "role not found");
+  // GAP-ADMIN-OPERATORS-05: taking a platform-authority role away from an operator is a role change
+  // that needs a second super admin's approval (it could also remove the last super admin).
+  if (isPlatformAuthorityKey(role.key)) {
+    throw new HttpError(409, "OPERATOR_REQUIRES_APPROVAL",
+      "platform roles are changed through a platform-operator change request that a second super admin approves");
+  }
   // Caller must have authority over the role to revoke it too (no privilege via revoke side-effects).
   if (!hasUnconditionalAuthority(ctx.roles)) {
     const roleperms = await scopedRead((tx) => repo.permissionKeysForRole(tx, ctx.tenantId, roleId));

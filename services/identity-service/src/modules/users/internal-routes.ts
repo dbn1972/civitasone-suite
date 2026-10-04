@@ -2,6 +2,9 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
+import * as rbacRepo from "../rbac/repo.js";
+import { TENANT_ADMIN_ROLE_KEY } from "./domain.js";
+import { scopedRead } from "../../shared/db.js";
 
 const INTERNAL_ROLES = ["super_admin"];
 
@@ -39,6 +42,23 @@ export async function userInternalRoutes(app: FastifyInstance): Promise<void> {
     if (!tenantId) return reply.code(400).send({ code: "MISSING_TENANT" });
     const users = await repo.findByTenantId(tenantId, 2000, 0);
     return reply.send(users.map((u) => ({ id: u.id, name: u.name })));
+  });
+
+  /**
+   * GAP-ADMIN-INVOICES-06: the tenant's ACTIVE tenant_admin users (id, name, email), for platform
+   * notices such as invoice payment reminders. billing-service stores no contact, so it asks here.
+   * Strictly tenant-scoped (the x-tenant-id of the internal call); bounded to 50 rows; nothing else
+   * about the user (status, empCode, MFA) is returned.
+   */
+  app.get("/identity/internal/tenant-admins", async (req, reply) => {
+    // Returns emails, so it uses the strict gate of the single-email lookup below: only a genuine
+    // internal-elevated caller (or super_admin), scoped to the verified tenant of the call.
+    const ctx = resolveContext(req);
+    requireRole(ctx, INTERNAL_ROLES);
+    const tenantId = ctx.tenantId;
+    const holders = await scopedRead((tx) => rbacRepo.activeRoleHolderIds(tx as never, tenantId, TENANT_ADMIN_ROLE_KEY));
+    const contacts = await repo.activeContactsAmong(tenantId, holders);
+    return reply.send(contacts.slice(0, 50));
   });
 
   /**

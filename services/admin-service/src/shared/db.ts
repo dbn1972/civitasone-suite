@@ -32,6 +32,8 @@ import { docSchema as documentGovernanceModule } from "../modules/uploads/doc-sc
 import { schema as orgHierarchyLevelsModule } from "../modules/org-hierarchy-levels/schema.js";
 import { schema as platformOpsModule } from "../modules/platform-ops/schema.js";
 import { schema as tenantSettingsModule } from "../modules/tenant-settings/schema.js";
+import { schema as platformIntegrationsModule } from "../modules/platform-integrations/schema.js";
+import { schema as apiMonitoringModule } from "../modules/api-monitoring/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 // NOTE (Phase 4 coverage-gap closure): custom-domains, webhooks, data-export,
@@ -66,6 +68,8 @@ const SCHEMA = {
   ...orgHierarchyLevelsModule,
   ...platformOpsModule,
   ...tenantSettingsModule,
+  ...platformIntegrationsModule,
+  ...apiMonitoringModule,
   ...outboxSchema,
 };
 

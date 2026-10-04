@@ -16,6 +16,7 @@ import { registerDataExportConsumers } from "./modules/data-export/consumer.js";
 import { registerFeatureFlagConsumers } from "./modules/feature-flags/consumer.js";
 import { registerAuditLogExportConsumers } from "./modules/audit-log-export/consumer.js";
 import { registerPlatformOpsConsumers } from "./modules/platform-ops/consumer.js";
+import { registerApiMonitoringConsumers, startApiMetricsPurge } from "./modules/api-monitoring/consumer.js";
 import { registerUserExportConsumers } from "./modules/user-export/consumer.js";
 import { registerTenantSettingsConsumers } from "./modules/tenant-settings/consumer.js";
 // WC-009: subscriber for the admin.sandbox_refresh.execute command published by
@@ -37,6 +38,7 @@ registerAuditLogExportConsumers(queue);
 registerUserExportConsumers(queue);
 registerPlatformOpsConsumers(queue);
 registerTenantSettingsConsumers(tenantScoped(queue));
+registerApiMonitoringConsumers(queue);
 // handleSandboxRefreshExecute wraps its own work in runWithTenant(), so it does
 // not need the tenantScoped(queue) proxy.
 registerSandboxConsumers(queue);
@@ -53,6 +55,7 @@ import { registerF3_central_config_Consumers } from "./modules/central-config/f3
 import { registerF3_config_Consumers } from "./modules/config/artefact-f3-consumer.js";
 import { registerF3_dept_templates_Consumers } from "./modules/dept-templates/f3-consumer.js";
 import { registerF3_integration_settings_Consumers } from "./modules/integration-settings/f3-consumer.js";
+import { registerPlatformIntegrationConsumers } from "./modules/platform-integrations/consumer.js";
 import { registerF3_uploads_Consumers } from "./modules/uploads/doc-f3-consumer.js";
 import { registerF3_support_Consumers } from "./modules/support/f3-consumer.js";
 import { registerIntegrationOpsConsumers } from "./modules/integration-ops/consumer.js";
@@ -66,6 +69,7 @@ registerF3_central_config_Consumers(tenantScoped(queue));
 registerF3_config_Consumers(tenantScoped(queue));
 registerF3_dept_templates_Consumers(tenantScoped(queue));
 registerF3_integration_settings_Consumers(tenantScoped(queue));
+registerPlatformIntegrationConsumers(tenantScoped(queue));
 registerF3_uploads_Consumers(tenantScoped(queue));
 registerF3_support_Consumers(tenantScoped(queue));
 registerIntegrationOpsConsumers(tenantScoped(queue));
@@ -89,6 +93,8 @@ const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPur
 const breakGlassSweepMs = Number(process.env.BREAK_GLASS_SWEEP_MS ?? 60_000);
 const breakGlassSweeper = startBreakGlassSweeper(breakGlassSweepMs);
 // Executes approved suspensions whose effective time has arrived.
+// GAP-ADMIN-API-MONITORING-06: bounded retention for the gateway metrics rollup.
+const apiMetricsPurge = startApiMetricsPurge();
 const lifecycleSweeper = startLifecycleSweeper(Number(process.env.TENANT_LIFECYCLE_SWEEP_MS ?? 60_000));
 // Run one sweep immediately on boot so grants that expired while the worker was
 // down are closed without waiting a full interval.
@@ -104,6 +110,7 @@ async function shutdown(signal: string): Promise<void> {
   clearInterval(relay);
   clearInterval(breakGlassSweeper);
   clearInterval(lifecycleSweeper);
+  clearInterval(apiMetricsPurge);
   clearInterval(sftpLeadIngest);
   await queue.stop();
   await sqlClient.end();

@@ -13,13 +13,14 @@ import { headObject } from "@civitasone/storage";
 import { receiptRuleViolation, REIMBURSEMENT_ATTACHMENT_MAX_BYTES, REIMBURSEMENT_ATTACHMENT_TYPES } from "./fin03-domain.js";
 import * as repo from "./repo.js";
 import { audit } from "./consumer.js";
+import { createPayGroupRuns, isPayGroupRun } from "./pay-group-commands.js";
 import type {
   CreateStructureBody, CreateRunBody, CreateDdoBody, CreatePensionerBody,
   CreateArrearBody, ComputeBonusBody, CreateReimbursementBody,
   CreateSalaryRevisionBody, UpdateSettingsBody,
 } from "./validators.js";
 
-export type Accepted = { id: string; status: string; correlationId: string };
+export type Accepted = { id: string; status: string; correlationId: string; data?: Record<string, unknown> };
 
 export async function createStructure(ctx: RequestContext, body: CreateStructureBody): Promise<Accepted> {
   const id = randomUUID();
@@ -86,6 +87,11 @@ export async function createRun(ctx: RequestContext, body: CreateRunBody): Promi
       throw new HttpError(400, "STRUCTURE_NOT_FOUND", `payroll structure ${body.structureId} does not exist for this tenant`);
     }
   }
+  // GAP-PAYROLL-PAY-GROUPS-03: pay-group runs (one run per group, members only).
+  if (isPayGroupRun(body)) {
+    const r = await createPayGroupRuns(ctx, body);
+    return { id: r.id, status: "accepted", correlationId: r.correlationId, data: { id: r.id, runIds: r.runIds, skippedEmptyGroups: r.skippedEmptyGroups } };
+  }
   const ddoCode = body.ddoCode ?? null;
   // GAP-PAYROLL-DDOS-03: a deactivated DDO cannot start new runs.
   if (ddoCode) {
@@ -133,6 +139,23 @@ export async function createRun(ctx: RequestContext, body: CreateRunBody): Promi
   if (runType === "regular") {
     await db.transaction(async (tx) => {
       const lockKey = `payroll_run:${ctx.tenantId}:${body.month}:${ddoCode ?? "__ALL__"}:regular`;
+      // GAP-PAYROLL-PAY-GROUPS-03: a whole-tenant run (no DDO, no department)
+      // pays every pay-group member, so it cannot start while a pay-group run
+      // exists for the month. Synchronous 409; the async claim guard remains the
+      // backstop for partial-overlap (DDO / department) legacy runs.
+      if (!ddoCode && !body.departmentId) {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`payroll_run_groups:${ctx.tenantId}:${body.month}`}, 0))`);
+        const grouped = await tx.execute(sql`
+          SELECT id FROM payroll.payroll_runs
+           WHERE tenant_id = ${ctx.tenantId}::uuid AND month = ${body.month} AND run_type = 'regular'
+             AND status NOT IN ('failed', 'cancelled') AND pay_group_id IS NOT NULL
+           LIMIT 1
+        `);
+        if (grouped[0]) {
+          throw new HttpError(409, "EMPLOYEE_ALREADY_IN_RUN",
+            `pay-group runs already exist for ${body.month}; their members cannot also be paid by a whole-tenant run`);
+        }
+      }
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`);
 
       const existing = await tx.execute(sql`
@@ -140,6 +163,7 @@ export async function createRun(ctx: RequestContext, body: CreateRunBody): Promi
         WHERE tenant_id = ${ctx.tenantId}::uuid AND month = ${body.month}
           AND status <> 'failed' AND run_type = 'regular'
           AND COALESCE(ddo_code, '__ALL__') = ${ddoCode ?? "__ALL__"}
+          AND pay_group_id IS NULL
         LIMIT 1
       `);
       if (existing[0]) {
@@ -471,6 +495,8 @@ export type CreatePayGroupInput = {
   payDayOfMonth: number; timezone: string;
   // GAP-PAYROLL-PAY-GROUPS-01
   payWeekday?: number | null | undefined; payLastDay?: boolean | undefined; payWeekParity?: number | null | undefined;
+  // GAP-PAYROLL-PAY-GROUPS-03: the DDO whose bill this is, and the bill type.
+  ddoCode?: string | null | undefined; billType?: string | undefined;
 };
 export async function createPayGroup(ctx: RequestContext, body: CreatePayGroupInput): Promise<Accepted> {
   const id = randomUUID();
@@ -583,11 +609,9 @@ export async function processOffCycle(ctx: RequestContext, offCycleId: string, r
 
 export type UpsertStateRulesInput = {
   stateCode: string;
-  ptSlabs?: Array<{ fromMinor: number; toMinor: number; taxMinor: number }> | undefined;
   lwfEmployee?: number | undefined;
   lwfEmployer?: number | undefined;
   lwfFrequency?: "monthly" | "quarterly" | "half_yearly" | "yearly" | undefined;
-  effectiveFrom?: string | undefined;
 };
 export async function upsertStateRules(ctx: RequestContext, body: UpsertStateRulesInput): Promise<Accepted> {
   await queue.publish(COMMANDS.stateRulesUpsert, {

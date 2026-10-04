@@ -100,7 +100,7 @@ export function ApiMonitoringTable({
             exportFilename="api-monitoring"
             emptyIcon="🔌"
             emptyTitle="No API data"
-            emptyMessage="API monitoring data not available."
+            emptyMessage="No API traffic was recorded in the last 15 minutes. Rows appear here as soon as requests pass through the gateway."
           />
         )}
       </Card>

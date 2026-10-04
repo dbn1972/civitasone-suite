@@ -14,7 +14,31 @@ import { browserFetch, errorMessageFromResponse, errorMessageForStatus } from "@
  * a 403 read as a permission problem and a 400/422 as "values not accepted"
  * instead of the generic save failure (GAP-PAYROLL-STATUTORY-PT-06).
  */
-export type ErrorCodeOptions = { area?: string; statusAware?: boolean };
+export type ErrorCodeOptions = {
+  area?: string;
+  statusAware?: boolean;
+  /** Sent as `x-idempotency-key` so a retried submit cannot double-apply. */
+  idempotencyKey?: string;
+};
+
+/**
+ * The Error thrown for a failed request. `message` is always the clerk-safe
+ * translated/catalogued text; `code` is the backend machine code (never
+ * displayed) and `details` the backend `details` object, for callers that need
+ * structured data from a rejection (e.g. the per-row result of a rejected bulk
+ * assign). Still an `Error`, so every existing `err instanceof Error` caller
+ * is unaffected.
+ */
+export class CodedRequestError extends Error {
+  readonly code: string | undefined;
+  readonly details: unknown;
+  constructor(message: string, code?: string, details?: unknown) {
+    super(message);
+    this.name = "CodedRequestError";
+    this.code = code;
+    this.details = details;
+  }
+}
 
 export async function requestWithErrorCode<T = unknown>(
   method: "POST" | "PATCH" | "PUT",
@@ -23,19 +47,29 @@ export async function requestWithErrorCode<T = unknown>(
   codeMessages: Record<string, string>,
   opts: ErrorCodeOptions = {},
 ): Promise<T> {
-  const res = await browserFetch(path, { method, body: JSON.stringify(body) });
+  const res = await browserFetch(path, {
+    method,
+    body: JSON.stringify(body),
+    ...(opts.idempotencyKey ? { headers: { "x-idempotency-key": opts.idempotencyKey } } : {}),
+  });
   if (res.ok) return (await res.json().catch(() => ({}))) as T;
   let code: string | undefined;
+  let details: unknown;
   try {
-    const parsed = (await res.clone().json()) as { code?: unknown };
+    const parsed = (await res.clone().json()) as { code?: unknown; details?: unknown };
     code = typeof parsed?.code === "string" ? parsed.code : undefined;
+    details = parsed?.details;
   } catch {
     code = undefined;
   }
   if (code && Object.prototype.hasOwnProperty.call(codeMessages, code)) {
-    throw new Error(codeMessages[code]);
+    throw new CodedRequestError(codeMessages[code], code, details);
   }
-  throw new Error(opts.statusAware ? await errorMessageForStatus(res, opts.area) : await errorMessageFromResponse(res, undefined, opts.area));
+  throw new CodedRequestError(
+    opts.statusAware ? await errorMessageForStatus(res, opts.area) : await errorMessageFromResponse(res, undefined, opts.area),
+    code,
+    details,
+  );
 }
 
 export function postWithErrorCode<T = unknown>(
@@ -54,4 +88,13 @@ export function patchWithErrorCode<T = unknown>(
   opts?: ErrorCodeOptions,
 ): Promise<T> {
   return requestWithErrorCode<T>("PATCH", path, body, codeMessages, opts);
+}
+
+export function putWithErrorCode<T = unknown>(
+  path: string,
+  body: unknown,
+  codeMessages: Record<string, string>,
+  opts?: ErrorCodeOptions,
+): Promise<T> {
+  return requestWithErrorCode<T>("PUT", path, body, codeMessages, opts);
 }

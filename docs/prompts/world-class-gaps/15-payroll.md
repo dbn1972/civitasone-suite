@@ -48,7 +48,7 @@ Read all modules: payroll, bank-transfer, tax, statutory, statutory-returns, loa
 ### Gap 4: Multi-State PT/LWF Compliance
 - **What:** Professional Tax and Labour Welfare Fund rules vary by state — auto-apply based on employee's work state
 - **Implement:**
-  - `POST /v1/payroll/statutory/state-rules` — define state-specific PT slabs and LWF rates
+  - `POST /v1/payroll/statutory/state-rules` — define state-specific LWF rates. PT slabs are effective-dated versions: `POST /v1/payroll/statutory/pt/versions` (202 + request id; outcome at `GET .../pt/versions/requests/:id`; a new version is pending until a DIFFERENT payroll_admin/super_admin approves it via `PATCH .../requests/:id/approve|reject`, per the tenant switch `PUT .../pt/settings`, default ON. Turning the switch back ON cancels a pending turn-off request; turning it OFF leaves requests already pending, pending). A version effective mid-month applies to that whole month's run (the run's period end decides)
   - Payroll engine: resolve employee's work_state → apply corresponding PT slab + LWF rate
   - `GET /v1/payroll/statutory/state-rules` — list configured states with their rules
   - `GET /v1/payroll/statutory/pt-register?state=MH&period=2026-06` — PT register for state filing

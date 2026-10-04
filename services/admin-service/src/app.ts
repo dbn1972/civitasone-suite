@@ -31,6 +31,7 @@ import { compositionRoutes } from "./modules/composition/routes.js";
 // World-class-gap sprint: WC-010, WC-009, CR-MOB-01, ORG-07, DM-002.
 import { configArtefactRoutes } from "./modules/config/artefact-routes.js";
 import { sandboxRoutes } from "./modules/sandbox/routes.js";
+import { platformIntegrationRoutes } from "./modules/platform-integrations/routes.js";
 import { mobileTelemetryRoutes } from "./modules/health/mobile-routes.js";
 import { departmentTemplateRoutes } from "./modules/dept-templates/routes.js";
 import { documentGovernanceRoutes } from "./modules/uploads/doc-routes.js";
@@ -38,6 +39,7 @@ import { documentGovernanceRoutes } from "./modules/uploads/doc-routes.js";
 // distinct concept and route path from gap/routes.ts's /v1/admin/org-hierarchy
 // (real org-unit INSTANCES, forwarded to tenant-service).
 import { platformOpsRoutes } from "./modules/platform-ops/routes.js";
+import { apiMonitoringRoutes } from "./modules/api-monitoring/routes.js";
 import { orgHierarchyLevelRoutes } from "./modules/org-hierarchy-levels/routes.js";
 import { tenantSettingsRoutes } from "./modules/tenant-settings/routes.js";
 import { discoveryRoutes } from "./modules/discovery/routes.js";
@@ -104,6 +106,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(platformOpsRoutes);
   await app.register(tenantSettingsRoutes);
   await app.register(discoveryRoutes);
+  await app.register(platformIntegrationRoutes);
+  await app.register(apiMonitoringRoutes);
   const { adminGapRoutes } = await import("./modules/gap/routes.js");
   await app.register(adminGapRoutes);
 

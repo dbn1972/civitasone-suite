@@ -47,6 +47,8 @@ export const payrollRuns = payrollSchema.table("payroll_runs", {
   structureId:     uuid("structure_id").notNull(),
   runType:         varchar("run_type", { length: 16 }).notNull().default("regular"),
   ddoCode:         varchar("ddo_code", { length: 32 }),
+  // GAP-PAYROLL-PAY-GROUPS-03 (migration 0083): NULL = legacy whole-tenant / DDO run.
+  payGroupId:      uuid("pay_group_id"),
   legalEntityId:   uuid("legal_entity_id"),          // cross-service ref to finance org.legal_entities
   totalGrossMinor: bigint("total_gross_minor", { mode: "bigint" }).notNull().default(0n),
   totalNetMinor:   bigint("total_net_minor", { mode: "bigint" }).notNull().default(0n),

@@ -7,7 +7,7 @@ import { roleAssignmentHistory } from "./schema.js";
 import { TENANT_ADMIN_ROLE_KEY } from "../users/domain.js";
 import { strandsTenantAdmins } from "../users/last-admin.js";
 import { lockTenantAdmins } from "../users/repo.js";
-import { assertCanConfer, assertKeyAllowed, DomainError } from "./domain.js";
+import { assertCanConfer, assertKeyAllowed, DomainError, isPlatformAuthorityKey } from "./domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -126,6 +126,11 @@ export function registerRbacConsumers(q: Queue): void {
         await emitRejectionAudit(tx, msg, "assign", "rbac_role_assignment", p.userId, "role no longer exists");
         return;
       }
+      // GAP-ADMIN-OPERATORS-05: platform-authority roles change only through the approved operator flow.
+      if (isPlatformAuthorityKey(lockedRole.key)) {
+        await emitRejectionAudit(tx, msg, "assign", "rbac_role_assignment", p.userId, "platform roles are assigned only through an approved operator change request");
+        return;
+      }
       const callerRoles = p.callerRoles ?? [];
       try {
         const rolePerms = await repo.permissionKeysForRole(tx, msg.tenantId, p.roleId);
@@ -159,6 +164,11 @@ export function registerRbacConsumers(q: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload;
+      const lockedForRevoke = await repo.lockRole(tx, msg.tenantId, p.roleId);
+      if (lockedForRevoke && isPlatformAuthorityKey(lockedForRevoke.key)) {
+        await emitRejectionAudit(tx, msg, "revoke", "rbac_role_assignment", p.userId, "platform roles are revoked only through an approved operator change request");
+        return;
+      }
       const cur = await repo.findAssignment(tx, msg.tenantId, p.roleId, p.userId);
       if (!cur || cur.status !== "active") return; // idempotent / nothing to revoke
       // GAP-ADMIN-USERS-01: serialise with user-status changes (same per-tenant lock), then refuse to

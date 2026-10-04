@@ -66,6 +66,17 @@ export async function activeAmong(tx: Writer, tenantId: string, ids: string[]): 
   return rows.map((r) => r.id);
 }
 
+/** Active users (id, name, email) among these ids, tenant-scoped: the recipients of tenant-admin notices. */
+export async function activeContactsAmong(tenantId: string, ids: string[]): Promise<Array<{ id: string; name: string; email: string }>> {
+  if (ids.length === 0) return [];
+  return scopedRead(async (tx) => {
+    const rows = await tx.select({ id: users.id, name: users.name, email: users.email }).from(users)
+      .where(and(eq(users.tenantId, tenantId), eq(users.status, "active"), inArray(users.id, ids)))
+      .orderBy(asc(users.name), asc(users.id));
+    return rows;
+  });
+}
+
 /** Serialise concurrent status changes of one tenant's admins for the rest of this transaction. */
 export async function lockTenantAdmins(tx: Writer, tenantId: string): Promise<void> {
   await (tx as unknown as { execute: (q: unknown) => Promise<unknown> }).execute(sql`select pg_advisory_xact_lock(hashtext(${"tenant-admins:" + tenantId}))`);

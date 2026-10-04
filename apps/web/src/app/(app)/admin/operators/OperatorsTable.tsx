@@ -1,10 +1,13 @@
 "use client";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { DataTable, StatusPill } from "@/app/_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
 import { AdminRegister } from "../_components/AdminRegister";
 import { platformExportGuard } from "@/lib/admin/platformExport";
 import { operatorAccountStatus } from "./operatorStatus";
+import { OperatorRowActions } from "./OperatorRowActions";
+import { OperatorRequestsPanel } from "./OperatorRequestsPanel";
+import { OperatorGrantButton } from "./OperatorGrantButton";
 import { operatorStats, permissionList, toOperatorRows, twoFaTone, type OperatorRow } from "./operatorRows";
 
 type RawRow = Record<string, unknown>;
@@ -16,6 +19,10 @@ export function OperatorsTable({
   errorStatus,
   errorMessage,
   canExport = false,
+  canManage = false,
+  viewerId = null,
+  viewerRoles = [],
+  actionsLabel = "Actions",
 }: {
   operators: RawRow[];
   source?: "api" | "error";
@@ -23,9 +30,17 @@ export function OperatorsTable({
   errorMessage?: string;
   /** GAP-ADMIN-OPERATORS-06: platform-operator permission to export. Without it there is no Export button. */
   canExport?: boolean;
+  /** GAP-ADMIN-OPERATORS-05: show change requests (suspend / reactivate / role change) and the approvals panel. */
+  canManage?: boolean;
+  /** The signed-in user, to hide actions on your own row and on your own requests (the server enforces both). */
+  viewerId?: string | null;
+  viewerRoles?: readonly string[];
+  /** Translated heading of the actions column (the page passes it from the adminOperators messages). */
+  actionsLabel?: string;
 }) {
   const { data: raw, provenance, offline, cachedAt } = useSeededResource<RawRow[]>("sa.operators", operators, source, (d) => d.length === 0);
   const rows = useMemo(() => toOperatorRows(raw), [raw]);
+  const [tick, setTick] = useState(0);
   const s = operatorStats(rows);
   return (
     // GAP-ADMIN-OPERATORS-03/-04: one data path for cards, badge, failure state and table.
@@ -79,9 +94,25 @@ export function OperatorsTable({
               </span>
             ),
           },
+          ...(canManage
+            ? [{
+                key: "id" as const,
+                label: actionsLabel,
+                csvExclude: true,
+                render: (o: OperatorRow) => (
+                  <OperatorRowActions row={o} viewerId={viewerId} onSent={() => setTick((n) => n + 1)} />
+                ),
+              }]
+            : []),
         ]}
         rows={rows} sortable filterable filterPlaceholder="Search operators…" pageSize={15} exportable={canExport} exportFilename="operators" exportGuard={exportGuard} emptyIcon="👤" emptyTitle="No operators" emptyMessage="No platform operators configured."
       />
+      {canManage && (
+        <div style={{ marginTop: 16 }}>
+          <OperatorGrantButton onSent={() => setTick((n) => n + 1)} />
+          <OperatorRequestsPanel viewerId={viewerId} viewerRoles={viewerRoles} tick={tick} />
+        </div>
+      )}
     </AdminRegister>
   );
 }

@@ -14,7 +14,7 @@ export default async function ApiMonitoringPage() {
       {/* GAP-ADMIN-API-MONITORING-02: the summary cards, the data-source badge and
           the failure state all live in ApiMonitoringTable, driven by the same
           useSeededResource call that produces its rows, so they cannot disagree. */}
-      <PageHeader title="API Monitoring" subtitle="Service endpoint health, latency and error rates." back="/admin" />
+      <PageHeader title="API Monitoring" subtitle="Service endpoint health, latency and error rates over the last 15 minutes of gateway traffic." back="/admin" />
       <ApiMonitoringTable
         endpoints={res.data}
         source={res.source === "error" ? "error" : "api"}

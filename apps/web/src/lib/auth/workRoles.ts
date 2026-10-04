@@ -279,12 +279,20 @@ export function canWriteAssets(roles: readonly string[]): boolean {
 }
 
 /**
- * fp-assets-01: roles asset-service admits on the asset SETTINGS routes (GL heads, capitalisation approval control)
- * and as the capitalisation approver (APPROVER_ROLES in the enterprise routes module). Client gate is UX only.
+ * Roles asset-service admits on the GL-account part of the asset SETTINGS (SETTINGS_ROLES in the enterprise routes
+ * module): GL-head change requests and their approval, GL approval control, "post pending". finance_admin is included
+ * because the GL chart is shared with finance. Client gate is UX only.
  */
+export const ASSET_SETTINGS_ROLES = ["asset_admin", "finance_admin", "super_admin"] as const;
+
+/** The capitalisation approval control (and its OFF request / approval) stays asset_admin / super_admin only (APPROVER_ROLES). */
 export const ASSET_APPROVER_ROLES = ["asset_admin", "super_admin"] as const;
 
 export function canManageAssetSettings(roles: readonly string[]): boolean {
+  return roles.some((r) => (ASSET_SETTINGS_ROLES as readonly string[]).includes(r));
+}
+
+export function canManageAssetCapitalisation(roles: readonly string[]): boolean {
   return roles.some((r) => (ASSET_APPROVER_ROLES as readonly string[]).includes(r));
 }
 

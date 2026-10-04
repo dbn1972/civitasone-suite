@@ -1,5 +1,6 @@
 import type { MaintenanceSummary } from "@civitasone/types";
 import { formatIndianDate, humanizeStatus } from "@/lib/formatters";
+import { journalState, type JournalState } from "../glStatus";
 
 export type MaintenanceRow = {
   assetId: string;
@@ -9,6 +10,8 @@ export type MaintenanceRow = {
   scheduledDate: string;
   vendor: string;
   status: string;
+  /** Finance-side journal state as a label ("Journal posted", "Awaiting accounts", ...); "—" when no journal applies. */
+  journal: string;
 };
 
 /**
@@ -17,7 +20,7 @@ export type MaintenanceRow = {
  * ("Breakdown", not the raw enum) and a formatted scheduled date. The raw status
  * goes to the status pill, which humanises and tones it itself.
  */
-export function buildMaintenanceRows(records: MaintenanceSummary[]): MaintenanceRow[] {
+export function buildMaintenanceRows(records: MaintenanceSummary[], journalLabel: (state: JournalState, error?: string) => string = (s) => s): MaintenanceRow[] {
   return records.map((r) => ({
     assetId: r.assetId,
     assetCode: r.assetCode,
@@ -26,6 +29,7 @@ export function buildMaintenanceRows(records: MaintenanceSummary[]): Maintenance
     scheduledDate: r.scheduledDate && r.scheduledDate !== "—" ? formatIndianDate(r.scheduledDate) : "—",
     vendor: r.vendor ?? "—",
     status: r.status,
+    journal: journalLabel(journalState(r.glPostStatus), r.glPostError),
   }));
 }
 

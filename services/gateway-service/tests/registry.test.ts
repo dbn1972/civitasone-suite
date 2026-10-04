@@ -26,6 +26,15 @@ describe("gateway registry", () => {
     expect(resolved?.route.upstreamPath).toBe("/identity/users");
   });
 
+  it("admin-operators route maps to identity-service /identity/operators (GAP-ADMIN-OPERATORS-05)", () => {
+    const resolved = resolveRoute("/api/v1/admin/operators/requests");
+    expect(resolved?.route.name).toBe("admin-operators");
+    expect(resolved?.route.upstreamPath).toBe("/identity/operators");
+    expect(resolved?.remainder).toBe("/requests");
+    // the sibling admin-service routes are untouched
+    expect(resolveRoute("/api/v1/admin/onboarding")?.route.name).toBe("admin");
+  });
+
   it("maps /api/v1/notification/* to versioned upstream /v1/notification/*", () => {
     const resolved = resolveRoute("/api/v1/notification/experiments");
     expect(resolved?.route.name).toBe("notification-v1");

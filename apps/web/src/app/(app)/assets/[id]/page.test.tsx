@@ -5,6 +5,7 @@ const getAssetByIdMock = vi.fn();
 vi.mock("../../../_data/loaders", () => ({ getAssetById: (id: string) => getAssetByIdMock(id) }));
 const rolesMock = vi.fn<() => string[]>(() => ["asset_manager"]);
 vi.mock("@/lib/auth/roleGuard", () => ({ getSessionRoles: () => rolesMock() }));
+vi.mock("../AccountingBanner", () => ({ AccountingBanner: ({ areas }: { areas: string[] }) => <div data-testid="accounting-banner" data-areas={areas.join(",")} /> }));
 vi.mock("./AssetDetailActions", () => ({ AssetDetailActions: () => <div data-testid="actions" /> }));
 vi.mock("./AssetFinancialActions", () => ({ AssetFinancialActions: () => <div data-testid="financial" /> }));
 vi.mock("../../../_components/RaiseEOfficeNote", () => ({ RaiseEOfficeNote: (p: { notifyPath?: string }) => <div data-testid="eoffice" data-notify={p.notifyPath ?? ""} /> }));
@@ -41,6 +42,20 @@ describe("AssetDetailPage sub-fetch failures", () => {
     render(await AssetDetailPage({ params: { id: "a1" } }));
     expect(screen.getByText("No depreciation schedule")).toBeInTheDocument();
     expect(screen.queryByText("Maintenance history")).not.toBeInTheDocument();
+  });
+
+  // fp-assets-02
+  it("shows the asset's journal state and the impairment / revaluation accounting banner", async () => {
+    getAssetByIdMock.mockResolvedValue({ data: { ...ASSET, glPostStatus: "awaiting_accounts" }, source: "api", parts: { depreciation: "api", maintenance: "api" } });
+    render(await AssetDetailPage({ params: { id: "a1" } }));
+    expect(screen.getByText("Awaiting accounts")).toBeInTheDocument();
+    expect(screen.getByTestId("accounting-banner")).toHaveAttribute("data-areas", "impairment,revaluation");
+  });
+
+  it("shows a dash when no journal applies, and no banner for a terminal asset", async () => {
+    getAssetByIdMock.mockResolvedValue({ data: { ...ASSET, status: "disposed" }, source: "api", parts: { depreciation: "api", maintenance: "api" } });
+    render(await AssetDetailPage({ params: { id: "a1" } }));
+    expect(screen.queryByTestId("accounting-banner")).not.toBeInTheDocument();
   });
 
   // GAP-ASSETS-LOCATIONS-03

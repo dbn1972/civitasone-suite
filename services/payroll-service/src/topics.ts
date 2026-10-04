@@ -82,8 +82,17 @@ export const COMMANDS = {
   returnFilingRecord:     "payroll.return_filing.record",
   // fin-payroll-03 gap batch (fin03-consumer.ts)
   ddoSetActive:           "payroll.ddo.set_active",
+  // GAP-PAYROLL-STATUTORY-PT-04 (pt-versions-consumer.ts)
+  ptVersionCreate:        "payroll.pt_version.create",
+  ptVersionDecide:        "payroll.pt_version.decide",
+  ptCheckerSet:           "payroll.pt_checker.set",
   payGroupUpdate:         "payroll.paygroup.update",
   payGroupSetActive:      "payroll.paygroup.set_active",
+  // GAP-PAYROLL-PAY-GROUPS-03: effective-dated pay-group membership
+  payGroupMemberAssign:   "payroll.paygroup.member.assign",
+  payGroupMemberEnd:      "payroll.paygroup.member.end",
+  payGroupMemberBulkAssign: "payroll.paygroup.member.bulk_assign",
+  payGroupSettingsSet:    "payroll.paygroup.settings.set",
   pensionerSetStatus:     "payroll.pensioner.set_status",
   salaryRevisionDecide:   "payroll.salary_revision.decide",
 } as const;
@@ -118,6 +127,7 @@ export const EVENTS = {
   offCycleCreated:        "payroll.off_cycle.created",
   offCycleProcessed:      "payroll.off_cycle.processed",
   stateRulesUpserted:     "payroll.state_rules.upserted",
+  ptVersionCreated:       "payroll.pt_version.created",
   tdsChallanIngested:     "payroll.tds_challan.ingested",
   dscConfigUpserted:      "payroll.dsc_config.upserted",
   dscConfigRemoved:       "payroll.dsc_config.removed",

@@ -21,6 +21,9 @@ export const COMMANDS = {
   platformDataAccess: "admin.platform_data_access.record",
   onboardingCreate:   "admin.onboarding.create",
   onboardingMove:     "admin.onboarding.move_stage",
+  // GAP-ADMIN-API-MONITORING-06: gateway batches (system telemetry, not audited) and the per-tenant retention setting (audited).
+  apiMetricsIngest:       "admin.api_metrics.ingest",
+  apiMetricsRetentionSet: "admin.api_metrics.retention_set",
   moduleToggle:       "admin.module.toggle",
   // Platform-wide flag registry (config module — config.admin_feature_flags,
   // global + per-tenant `overrides` jsonb).
@@ -133,6 +136,17 @@ export const COMMANDS = {
   dataCorrectionReject: "admin.support.data_correction.reject",
   f3RouteWrite: "admin.f3.route_write",
   deadLetterRecord: "admin.integration_ops.dead_letter.record",
+  // ── platform integrations (eSign / DSC / bank API / PFMS) ──────────────
+  platformIntegrationProviderUpdate: "admin.platform_integration.provider_update",
+  tenantIntegrationSave: "admin.tenant_integration.save",
+  tenantIntegrationDelete: "admin.tenant_integration.delete",
+  tenantIntegrationRecordTest: "admin.tenant_integration.record_test",
+  tenantIntegrationSwitchRequest: "admin.tenant_integration.switch_request",
+  tenantIntegrationSwitchDecide: "admin.tenant_integration.switch_decide",
+  tenantIntegrationRevertSandbox: "admin.tenant_integration.revert_sandbox",
+  tenantIntegrationSettingsUpdate: "admin.tenant_integration.settings_update",
+  tenantIntegrationPolicyRequest: "admin.tenant_integration.policy_request",
+  tenantIntegrationPolicyDecide: "admin.tenant_integration.policy_decide",
 } as const;
 
 export const EVENTS = {

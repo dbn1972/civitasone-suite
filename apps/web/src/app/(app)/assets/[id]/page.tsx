@@ -10,6 +10,9 @@ import { RaiseEOfficeNote } from "../../../_components/RaiseEOfficeNote";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { canWriteAssets } from "@/lib/auth/workRoles";
 import { assetActionScope, deriveLifecycle } from "@/lib/assetLifecycle";
+import { getTranslations } from "next-intl/server";
+import { AccountingBanner } from "../AccountingBanner";
+import { journalKey, journalState, journalTone, rejectionNote } from "../glStatus";
 
 export default async function AssetDetailPage({ params }: { params: { id: string } }) {
   const { data: asset, source, parts } = await getAssetById(params.id);
@@ -65,6 +68,10 @@ export default async function AssetDetailPage({ params }: { params: { id: string
     cost: row.cost,
   }));
 
+  const tGl = await getTranslations("assetsGl");
+  const journal = journalState(asset.glPostStatus);
+  const rejection = journal === "failed" ? rejectionNote(asset.glPostError) : null;
+
   return (
     <>
       {anyFailed && <DataSourceBadge source="error" />}
@@ -74,6 +81,8 @@ export default async function AssetDetailPage({ params }: { params: { id: string
         backLabel="Asset Register"
         actions={<StatusPill status={asset.status.replace(/_/g, " ")} label={asset.status.replace(/_/g, " ")} />}
       />
+      {/* Impairment / revaluation need their own GL accounts; the banner shows when they are not set up. */}
+      {scope === "full" ? <AccountingBanner areas={["impairment", "revaluation"]} /> : null}
       <div className="grid g-main" style={{ alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <AssetDetailActions assetId={asset.id} barcode={asset.barcode} status={asset.status} roles={roles} />
@@ -89,6 +98,13 @@ export default async function AssetDetailPage({ params }: { params: { id: string
               <div className="fld"><div className="l">Acquired</div><div className="v">{formatIndianDate(asset.purchaseDate)}</div></div>
               <div className="fld"><div className="l">Purchase cost</div><div className="v">{formatMoney(asset.purchaseCost)}</div></div>
               <div className="fld"><div className="l">Custodian</div><div className="v">{asset.assignedTo ?? "—"}</div></div>
+              <div className="fld">
+                <div className="l">{tGl("journal")}</div>
+                <div className="v">
+                  {journal === "none" ? "—" : <span className={`pill ${journalTone(journal)}`}>{tGl(journalKey(journal))}</span>}
+                  {rejection ? <p role="alert" style={{ fontSize: 12, margin: "6px 0 0", whiteSpace: "normal" }}>{tGl(rejection.key, { reason: rejection.reason })}</p> : null}
+                </div>
+              </div>
             </div>
           </div>
           <div className="card">
