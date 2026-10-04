@@ -6,7 +6,9 @@ import { SignBatchAction } from "./SignBatchAction";
 import { BankFileAction } from "./BankFileAction";
 import { SigningCell } from "./SigningCell";
 import { ReleaseBatchAction } from "./ReleaseBatchAction";
-import { canRelease, canSign, parseSigning } from "./signingStatus";
+import { ResolveReleaseAction } from "./ResolveReleaseAction";
+import { VoidSignatureAction } from "./VoidSignatureAction";
+import { canRelease, canSign, canVoid, needsResolve, parseRelease, parseSigning, releaseFailureKey } from "./signingStatus";
 import { humanizeStatus } from "@/lib/formatters";
 import type { PfmsBatchRow } from "./types";
 
@@ -64,6 +66,21 @@ export function BatchesPanel({ batches, canDownloadBankFile = true, canRelease: 
                 {mayRelease && canRelease(row.submissionStatus, parseSigning(row.signing)) && (
                   <ReleaseBatchAction batchId={row.id} pfmsId={row.pfmsId} />
                 )}
+                {mayRelease && canVoid(row.submissionStatus, parseSigning(row.signing)) && (
+                  <VoidSignatureAction batchId={row.id} pfmsId={row.pfmsId} />
+                )}
+                {mayRelease && needsResolve(row.submissionStatus) && (
+                  <ResolveReleaseAction batchId={row.id} pfmsId={row.pfmsId} />
+                )}
+                {needsResolve(row.submissionStatus) && (
+                  <span role="alert" className="pill bad" style={{ width: "fit-content" }}>{t("sendUnknownNote")}</span>
+                )}
+                {(() => {
+                  const key = releaseFailureKey(parseRelease(row.release).lastFailureCode);
+                  return key && row.submissionStatus === "signed" ? (
+                    <span role="status" className="pill warn" style={{ width: "fit-content" }}>{t(key)}</span>
+                  ) : null;
+                })()}
                 {canSign(row.submissionStatus, parseSigning(row.signing)) && (
                   <SignBatchAction batchId={row.id} pfmsId={row.pfmsId} />
                 )}

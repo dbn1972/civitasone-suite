@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, lt, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { decryptPii } from "../../shared/pii-crypto.js";
 import { financePfms } from "../payments/schema.js";
@@ -174,24 +174,19 @@ export async function signPfmsBatchGuarded(tx: Writer, id: string, tenantId: str
   return rows[0] ?? null;
 }
 
-/** signed -> submitted, guarded on the signed state (and a signature being on record). */
-export async function submitPfmsBatchGuarded(tx: Writer, id: string, tenantId: string, actorId: string) {
-  const rows = await tx.update(financePfms)
-    .set({ submissionStatus: "submitted", dscVerifiedAt: new Date(), updatedBy: actorId, updatedAt: new Date(), version: sql`${financePfms.version} + 1` })
-    .where(and(
-      eq(financePfms.id, id), eq(financePfms.tenantId, tenantId), eq(financePfms.submissionStatus, "signed"),
-    ))
-    .returning();
-  return rows[0] ?? null;
-}
-
 /**
  * signed -> processing: the single-sender claim of a release. The WHERE pins tenant, treasury channel and the signed
- * state, so of any number of concurrent releases exactly one UPDATE matches and only that one goes on to send.
+ * state, so of any number of concurrent releases exactly one UPDATE matches and only that one goes on to send. Records
+ * when the release started and who started it (the sweeper's clock; maker != checker on resolve).
  */
 export async function claimPfmsRelease(tx: Writer, id: string, tenantId: string, actorId: string) {
+  const now = new Date();
   const rows = await tx.update(financePfms)
-    .set({ submissionStatus: "processing", updatedBy: actorId, updatedAt: new Date(), version: sql`${financePfms.version} + 1` })
+    .set({
+      submissionStatus: "processing", releaseStartedAt: now, releasedBy: actorId,
+      lastReleaseFailureCode: null, lastReleaseFailureAt: null,
+      updatedBy: actorId, updatedAt: now, version: sql`${financePfms.version} + 1`,
+    })
     .where(and(
       eq(financePfms.id, id), eq(financePfms.tenantId, tenantId), eq(financePfms.channel, "treasury_batch"),
       eq(financePfms.submissionStatus, "signed"), sql`${financePfms.dscSignature} IS NOT NULL`,
@@ -200,11 +195,73 @@ export async function claimPfmsRelease(tx: Writer, id: string, tenantId: string,
   return rows[0] ?? null;
 }
 
-/** processing -> file_sent (sent) or back to signed (send failed, so it can be released again). Guarded on processing. */
-export async function finishPfmsRelease(tx: Writer, id: string, tenantId: string, actorId: string, to: "file_sent" | "signed") {
+/**
+ * processing -> file_sent (sent; also stamps dsc_verified_at, the release having verified the signature) or back to
+ * signed (send refused / failed, recording why so the UI can show it). Guarded on processing.
+ */
+export async function finishPfmsRelease(
+  tx: Writer, id: string, tenantId: string, actorId: string,
+  to: { status: "file_sent" } | { status: "signed"; failureCode: string },
+) {
+  const now = new Date();
   const rows = await tx.update(financePfms)
-    .set({ submissionStatus: to, updatedBy: actorId, updatedAt: new Date(), version: sql`${financePfms.version} + 1` })
+    .set({
+      submissionStatus: to.status, releaseStartedAt: null, updatedBy: actorId, updatedAt: now, version: sql`${financePfms.version} + 1`,
+      ...(to.status === "file_sent"
+        ? { dscVerifiedAt: now, lastReleaseFailureCode: null, lastReleaseFailureAt: null }
+        : { lastReleaseFailureCode: to.failureCode, lastReleaseFailureAt: now }),
+    })
     .where(and(eq(financePfms.id, id), eq(financePfms.tenantId, tenantId), eq(financePfms.submissionStatus, "processing")))
+    .returning();
+  return rows[0] ?? null;
+}
+
+/**
+ * processing -> send_unknown, for a release claimed before `cutoff` that never finished (the worker died between the
+ * claim and the final write; the file may or may not have reached the gateway). Guarded on both, so a release that
+ * finished in the meantime is untouched. NEVER re-sends.
+ */
+export async function markPfmsSendUnknown(tx: Writer, id: string, tenantId: string, cutoff: Date) {
+  const now = new Date();
+  const rows = await tx.update(financePfms)
+    .set({ submissionStatus: "send_unknown", updatedAt: now, version: sql`${financePfms.version} + 1` })
+    .where(and(
+      eq(financePfms.id, id), eq(financePfms.tenantId, tenantId), eq(financePfms.channel, "treasury_batch"),
+      eq(financePfms.submissionStatus, "processing"), lt(financePfms.releaseStartedAt, cutoff),
+    ))
+    .returning();
+  return rows[0] ?? null;
+}
+
+/** An operator's decision on a send_unknown batch: confirmed sent -> file_sent, confirmed NOT sent -> signed. Guarded on send_unknown. */
+export async function resolvePfmsRelease(tx: Writer, id: string, tenantId: string, actorId: string, to: "file_sent" | "signed") {
+  const now = new Date();
+  const rows = await tx.update(financePfms)
+    .set({
+      submissionStatus: to, releaseStartedAt: null, updatedBy: actorId, updatedAt: now, version: sql`${financePfms.version} + 1`,
+      ...(to === "file_sent" ? { lastReleaseFailureCode: null, lastReleaseFailureAt: null } : {}),
+    })
+    .where(and(eq(financePfms.id, id), eq(financePfms.tenantId, tenantId), eq(financePfms.submissionStatus, "send_unknown")))
+    .returning();
+  return rows[0] ?? null;
+}
+
+/**
+ * signed -> pending with every signature field cleared, so a batch whose contents changed after signing can be signed
+ * again. Guarded on signed (a sent / in-flight batch can never be un-signed).
+ */
+export async function voidPfmsSignature(tx: Writer, id: string, tenantId: string, actorId: string) {
+  const now = new Date();
+  const rows = await tx.update(financePfms)
+    .set({
+      submissionStatus: "pending", signedAt: null, signedBy: null, signatureRef: null, batchDigest: null, signedInfoHash: null,
+      dscSignature: null, dscAlgorithm: null, dscSignatureMethod: null, dscCertSerial: null, dscSignerRef: null, dscProviderKey: null,
+      dscEnvironment: null, dscMock: false, dscCanonicalVersion: null, dscXmldsig: null, dscVerifiedAt: null,
+      updatedBy: actorId, updatedAt: now, version: sql`${financePfms.version} + 1`,
+    })
+    .where(and(
+      eq(financePfms.id, id), eq(financePfms.tenantId, tenantId), eq(financePfms.channel, "treasury_batch"), eq(financePfms.submissionStatus, "signed"),
+    ))
     .returning();
   return rows[0] ?? null;
 }

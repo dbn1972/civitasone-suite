@@ -55,7 +55,7 @@ describe("T2-02 finance CQRS + scanner-db", () => {
       "finance.policy.change", "finance.policy.change_decide", "finance.audit_para.transition",
       "finance.instrument.represent", "finance.instrument.mark_stale",
       // GAP-FINANCE-PFMS-01 follow-up: the pre-existing cheque/instrument mutations moved onto CQRS too
-      "finance.instrument.issue", "finance.instrument.transition", "finance.pfms.batch_release",
+      "finance.instrument.issue", "finance.instrument.transition", "finance.pfms.batch_release", "finance.pfms.release_resolve", "finance.pfms.signature_void",
     ]) expect(topics).toContain(`"${t}"`);
     const worker = readFileSync(resolve(__dirname, "../src/worker.ts"), "utf8");
     for (const r of ["registerVendorConsumers(queue)", "registerAuditConsumers(queue)", "registerInstrumentWorkflowConsumers(queue)", "registerInstrumentsConsumers(queue)", "registerPfmsReleaseConsumers(queue)"]) {

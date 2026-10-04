@@ -1,4 +1,5 @@
 import { createDscSigner, type AdapterContext, type DscSigner } from "@civitasone/connector-framework/ports";
+import { isProductionDeployment } from "../../shared/deployment-env.js";
 
 /**
  * Resolves the tenant's DSC signer (GAP-FINANCE-PFMS-01).
@@ -14,7 +15,7 @@ const ADMIN_URL = process.env.ADMIN_SERVICE_URL ?? "http://127.0.0.1:3022";
 
 export class DscChannelError extends Error {
   constructor(
-    public readonly code: "DSC_NOT_CONFIGURED" | "DSC_CONFIG_UNAVAILABLE" | "DSC_PRODUCTION_UNAVAILABLE" | "DSC_SIGN_REJECTED",
+    public readonly code: "DSC_NOT_CONFIGURED" | "DSC_SANDBOX_IN_PRODUCTION" | "DSC_CONFIG_UNAVAILABLE" | "DSC_PRODUCTION_UNAVAILABLE" | "DSC_SIGN_REJECTED",
     message: string,
     /** Permanent errors are recorded and not retried; transient ones are retried by the queue. */
     public readonly permanent: boolean,
@@ -32,8 +33,8 @@ export interface DscDescriptor {
   endpointUrl: string | null;
 }
 
-/** A deployed production process (NODE_ENV=production) must never fall back to a sandbox signer on its own. */
-export const isProductionDeployment = (): boolean => process.env.NODE_ENV === "production";
+/** Fail-closed: only an explicit sandbox allowlist is non-production (see shared/deployment-env.ts). */
+export { isProductionDeployment } from "../../shared/deployment-env.js";
 
 export async function fetchDscDescriptor(tenantId: string): Promise<DscDescriptor | null> {
   let res: Response;
@@ -90,5 +91,9 @@ export async function resolveDscSigner(tenantId: string, fetchDescriptor: typeof
     ...(d.endpointUrl ? { endpointUrl: d.endpointUrl } : {}),
   };
   const signer = createDscSigner(ctx);
+  // A production deployment never signs with a mock, whatever the tenant integration says.
+  if (isProductionDeployment() && signer.mock) {
+    throw new DscChannelError("DSC_SANDBOX_IN_PRODUCTION", "this tenant's DSC integration is a sandbox mock, which cannot sign batches in a production deployment", true);
+  }
   return { signer, providerKey: d.providerKey, environment: d.environment, mock: signer.mock, signerRef: signerRefFor(d.config, d.providerKey) };
 }

@@ -640,45 +640,6 @@ describe("PFMS consumers — coverage", () => {
     await q.stop();
   });
 
-  it("finance.pfms.batch_submit verifies the stored signature, then submits", async () => {
-    const { canonicalizeBatch, batchDigestHex, buildSignedInfo, sha256Hex, CANONICAL_VERSION } = await import("../src/modules/pfms/dsc-batch.js");
-    const header = { tenantId: "t", pfmsId: "PFMS-1", type: "salary", currency: "INR", agencyCode: "AG", schemeCode: null, ddoCode: "D1", amountMinor: 100n };
-    const digest = batchDigestHex(canonicalizeBatch(header, []));
-    const hash = sha256Hex(buildSignedInfo({ digestHex: digest, pfmsId: "PFMS-1" }));
-    const { findPfmsById, submitPfmsBatchGuarded } = await import("../src/modules/pfms/repo.js");
-    (findPfmsById as any).mockResolvedValueOnce({
-      id: "pfms-batch-001", ...header, submissionStatus: "signed", batchDigest: digest, signedInfoHash: hash,
-      dscSignature: btoa(`MOCK-DSC|slot-1|${hash}|x`), dscAlgorithm: "MOCK-SHA256withRSA", dscSignatureMethod: null,
-      dscCertSerial: "MOCK-1", dscSignerRef: "slot-1", dscCanonicalVersion: CANONICAL_VERSION, dscMock: true,
-    });
-
-    const q = new MemoryQueue();
-    registerPfmsConsumers(q);
-    await q.start();
-    await q.publish("finance.pfms.batch_submit", makeMsg("finance.pfms.batch_submit", { id: "pfms-batch-001", tenantId: TENANT }));
-    await settle();
-
-    expect(submitPfmsBatchGuarded).toHaveBeenCalledTimes(1);
-    expect(enqueuedMessages.filter((m) => m.topic === "finance.pfms.batch_submitted")).toHaveLength(1);
-    const actions = enqueuedMessages.filter((m) => m.topic === AUDIT_TOPIC).map((a) => (a.payload as { action: string }).action);
-    expect(actions).toEqual(expect.arrayContaining(["verify_signature", "submit"]));
-    await q.stop();
-  });
-
-  it("finance.pfms.batch_submit refuses an unsigned batch and audits the refusal", async () => {
-    const { submitPfmsBatchGuarded } = await import("../src/modules/pfms/repo.js");
-    (submitPfmsBatchGuarded as any).mockClear();
-    const q = new MemoryQueue();
-    registerPfmsConsumers(q);
-    await q.start();
-    await q.publish("finance.pfms.batch_submit", makeMsg("finance.pfms.batch_submit", { id: "pfms-batch-001", tenantId: TENANT }));
-    await settle();
-    expect(submitPfmsBatchGuarded).not.toHaveBeenCalled();
-    const refusal = enqueuedMessages.find((m) => m.topic === AUDIT_TOPIC);
-    expect(refusal?.payload).toMatchObject({ action: "submit", outcome: "failure", details: { code: "UNSIGNED_BATCH" } });
-    await q.stop();
-  });
-
   it("finance.pfms.batch_sign idempotency — duplicate rejected", async () => {
     markProcessedResult = false;
     const q = new MemoryQueue();

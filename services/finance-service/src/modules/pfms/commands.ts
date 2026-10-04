@@ -67,3 +67,25 @@ export async function releaseBatch(ctx: RequestContext, batchId: string): Promis
   });
   return { id: batchId, status: "accepted", correlationId: ctx.correlationId };
 }
+
+/** Operator decision on an ambiguous release (send_unknown): confirmed sent -> file_sent, confirmed not sent -> signed. */
+export async function resolveRelease(ctx: RequestContext, batchId: string, body: { outcome: "sent" | "not_sent"; reason: string }): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.pfmsReleaseResolve, {
+    messageId: id, type: COMMANDS.pfmsReleaseResolve, tenantId: ctx.tenantId, actorId: ctx.actorId,
+    correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id: batchId, tenantId: ctx.tenantId, ...body },
+  });
+  return { id: batchId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/** Void a signature so a batch changed after signing can be signed again. */
+export async function voidSignature(ctx: RequestContext, batchId: string, body: { reason: string }): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.pfmsSignatureVoid, {
+    messageId: id, type: COMMANDS.pfmsSignatureVoid, tenantId: ctx.tenantId, actorId: ctx.actorId,
+    correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id: batchId, tenantId: ctx.tenantId, ...body },
+  });
+  return { id: batchId, status: "accepted", correlationId: ctx.correlationId };
+}

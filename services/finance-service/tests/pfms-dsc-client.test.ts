@@ -35,6 +35,24 @@ describe("resolveDscSigner", () => {
     await expect(resolveDscSigner("t1", async () => null)).rejects.toMatchObject({ code: "DSC_NOT_CONFIGURED", permanent: true });
   });
 
+  it("production with a SANDBOX (mock) integration: no mock signer is ever returned (DSC_SANDBOX_IN_PRODUCTION)", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    await expect(resolveDscSigner("t1", async () => descriptor())).rejects.toMatchObject({ code: "DSC_SANDBOX_IN_PRODUCTION", permanent: true });
+  });
+
+  it("fail closed on NODE_ENV: unset, staging and prod behave as production (no mock fallback, no mock signer)", async () => {
+    for (const v of ["", "staging", "prod"]) {
+      vi.stubEnv("NODE_ENV", v);
+      await expect(resolveDscSigner("t1", async () => null), v).rejects.toMatchObject({ code: "DSC_NOT_CONFIGURED" });
+      await expect(resolveDscSigner("t1", async () => descriptor()), v).rejects.toMatchObject({ code: "DSC_SANDBOX_IN_PRODUCTION" });
+    }
+    vi.stubEnv("NODE_ENV", "staging");
+    vi.stubEnv("PFMS_SANDBOX", "true"); // the explicit opt-in
+    expect(await resolveDscSigner("t1", async () => null)).toMatchObject({ mock: true });
+    vi.stubEnv("NODE_ENV", "production"); // ...which production refuses
+    await expect(resolveDscSigner("t1", async () => null)).rejects.toMatchObject({ code: "DSC_NOT_CONFIGURED" });
+  });
+
   it("an unreachable config lookup is a transient (retryable) error, never a silent sandbox fallback", async () => {
     const err = await resolveDscSigner("t1", async () => { throw new DscChannelError("DSC_CONFIG_UNAVAILABLE", "down", false); }).catch((e) => e);
     expect(err).toMatchObject({ code: "DSC_CONFIG_UNAVAILABLE", permanent: false });

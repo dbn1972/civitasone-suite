@@ -205,44 +205,6 @@ describe("DSC signing of a PFMS batch (real Postgres)", () => {
     expect(await auditRows(tenant, "sign", id)).toHaveLength(1);
   });
 
-  it("submit verifies the stored signature, then submits; both steps are audited", async () => {
-    const tenant = randomUUID();
-    const id = await seedBatch(tenant);
-    await q.publish("finance.pfms.batch_sign", msg(tenant, "finance.pfms.batch_sign", { id }));
-    await q.drain();
-    await q.publish("finance.pfms.batch_submit", msg(tenant, "finance.pfms.batch_submit", { id }));
-    await q.drain();
-    const row = await readBatch(tenant, id);
-    expect(row.submissionStatus).toBe("submitted");
-    expect(row.dscVerifiedAt).toBeInstanceOf(Date);
-    expect(await auditRows(tenant, "verify_signature", id)).toHaveLength(1);
-    expect(await auditRows(tenant, "submit", id)).toHaveLength(1);
-  });
-
-  it("a batch changed after signing is refused at submit (BATCH_CHANGED_AFTER_SIGNING) and stays signed", async () => {
-    const tenant = randomUUID();
-    const id = await seedBatch(tenant);
-    await q.publish("finance.pfms.batch_sign", msg(tenant, "finance.pfms.batch_sign", { id }));
-    await q.drain();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await withTenantScope(db, tenant, (tx: any) => tx.update(financePfms).set({ amountMinor: 999999n }).where(eq(financePfms.id, id)));
-    await q.publish("finance.pfms.batch_submit", msg(tenant, "finance.pfms.batch_submit", { id }));
-    await q.drain();
-    expect((await readBatch(tenant, id)).submissionStatus).toBe("signed");
-    const fails = await auditRows(tenant, "submit", id);
-    expect(fails).toHaveLength(1);
-    expect(fails[0]!.payload).toMatchObject({ outcome: "failure", details: { code: "BATCH_CHANGED_AFTER_SIGNING" } });
-  });
-
-  it("an unsigned batch cannot be submitted", async () => {
-    const tenant = randomUUID();
-    const id = await seedBatch(tenant);
-    await q.publish("finance.pfms.batch_submit", msg(tenant, "finance.pfms.batch_submit", { id }));
-    await q.drain();
-    expect((await readBatch(tenant, id)).submissionStatus).toBe("pending");
-    expect((await auditRows(tenant, "submit", id))[0]!.payload).toMatchObject({ outcome: "failure", details: { code: "UNSIGNED_BATCH" } });
-  });
-
   it("production channel not built yet: the stub's NotImplemented is a recorded refusal, the batch stays unsigned", async () => {
     const tenant = randomUUID();
     const id = await seedBatch(tenant);

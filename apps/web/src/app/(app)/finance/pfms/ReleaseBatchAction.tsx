@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useSettledRefresh } from "@/lib/finance/useSettledRefresh";
 import { useTranslations } from "next-intl";
 import { Button, ConfirmDialog, useConfirmAction } from "../../../_components/ds";
 import { browserFetch, errorCodeFromResponse, errorMessageFromResponse } from "@/lib/api/browserClient";
@@ -20,6 +21,7 @@ interface ReleaseBatchActionProps {
 export function ReleaseBatchAction({ batchId, pfmsId }: ReleaseBatchActionProps) {
   const t = useTranslations("pfmsReleaseBatchAction");
   const router = useRouter();
+  const settle = useSettledRefresh(router);
 
   const { open, busy, error, trigger, cancel, confirm } = useConfirmAction({
     onConfirm: async () => {
@@ -28,7 +30,8 @@ export function ReleaseBatchAction({ batchId, pfmsId }: ReleaseBatchActionProps)
       const key = releaseRefusalKey(await errorCodeFromResponse(res));
       throw new Error(key ? t(key) : await errorMessageFromResponse(res));
     },
-    onSuccess: () => router.refresh(),
+    // 202: the send happens in the worker. Re-read until it lands; a failed send shows on the row (releaseFailed).
+    onSuccess: () => settle(),
   });
 
   return (

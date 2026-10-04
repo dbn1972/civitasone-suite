@@ -19,12 +19,8 @@ export const MAX_BATCH_BENEFICIARIES = 20000;
 type Msg = { messageId: string; tenantId: string; actorId: string; correlationId: string; payload: unknown };
 type PfmsRow = NonNullable<Awaited<ReturnType<typeof repo.findPfmsById>>>;
 
-/** Canonical digest of the batch as it stands now (header row + its real beneficiaries). Reads outside any open transaction. */
-export async function currentBatchDigest(batch: PfmsRow): Promise<{ canonical: string; digest: string; beneficiaryCount: number }> {
-  const beneficiaries = await repo.listRealBeneficiaries(batch.tenantId, batch.pfmsId, MAX_BATCH_BENEFICIARIES + 1);
-  if (beneficiaries.length > MAX_BATCH_BENEFICIARIES) {
-    throw new DscChannelError("DSC_SIGN_REJECTED", `batch has more than ${MAX_BATCH_BENEFICIARIES} beneficiaries; split it before signing`, true);
-  }
+/** Canonical text + digest for a batch header and an EXPLICIT beneficiary set (the exact rows a caller is about to use). */
+export function digestFor(batch: PfmsRow, beneficiaries: Awaited<ReturnType<typeof repo.listRealBeneficiaries>>): { canonical: string; digest: string } {
   const canonical = canonicalizeBatch(
     {
       tenantId: batch.tenantId, pfmsId: batch.pfmsId, type: batch.type, currency: batch.currency,
@@ -32,7 +28,16 @@ export async function currentBatchDigest(batch: PfmsRow): Promise<{ canonical: s
     },
     beneficiaries.map((b) => ({ ref: b.ref, beneficiary: b.beneficiary, account: b.account, ifsc: b.ifsc, amountMinor: b.amountMinor, ddoCode: b.ddoCode })),
   );
-  return { canonical, digest: batchDigestHex(canonical), beneficiaryCount: beneficiaries.length };
+  return { canonical, digest: batchDigestHex(canonical) };
+}
+
+/** Canonical digest of the batch as it stands now (header row + its real beneficiaries). Reads outside any open transaction. */
+export async function currentBatchDigest(batch: PfmsRow): Promise<{ canonical: string; digest: string; beneficiaryCount: number }> {
+  const beneficiaries = await repo.listRealBeneficiaries(batch.tenantId, batch.pfmsId, MAX_BATCH_BENEFICIARIES + 1);
+  if (beneficiaries.length > MAX_BATCH_BENEFICIARIES) {
+    throw new DscChannelError("DSC_SIGN_REJECTED", `batch has more than ${MAX_BATCH_BENEFICIARIES} beneficiaries; split it before signing`, true);
+  }
+  return { ...digestFor(batch, beneficiaries), beneficiaryCount: beneficiaries.length };
 }
 
 export const storedSignatureOf = (b: PfmsRow): StoredSignature => ({
@@ -51,7 +56,10 @@ export async function checkBatchSendable(batch: PfmsRow): Promise<{ ok: true; ve
   if (batch.dscMock) return { ok: false, code: "MOCK_SIGNATURE", message: "a sandbox (mock) signature cannot release a batch in production" };
   const { digest } = await currentBatchDigest(batch);
   const v = verifyStoredSignature(storedSignatureOf(batch), digest, batch.pfmsId);
-  return v.ok ? { ok: true, verify: v } : { ok: false, code: v.code, message: v.message };
+  if (!v.ok) return { ok: false, code: v.code, message: v.message };
+  // Belt and braces: the verifier's own verdict (algorithm MOCK-*), not only the stored flag.
+  if (v.mock) return { ok: false, code: "MOCK_SIGNATURE", message: "a sandbox (mock) signature cannot release a batch in production" };
+  return { ok: true, verify: v };
 }
 
 async function auditStep(
@@ -148,46 +156,6 @@ export function registerPfmsConsumers(queue: Queue): void {
     });
     await cache.invalidateResource(msg.tenantId, "pfms");
     log.info({ id: msg.messageId, applied }, "Processed pfms.batch_sign");
-  });
-
-  queue.subscribe("finance.pfms.batch_submit", async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string };
-    const m = msg as unknown as Msg;
-    const batch = await repo.findPfmsById(p.id, p.tenantId);
-    if (!batch) { await permanent(m, "submit", p.id, "NOT_FOUND", `PFMS batch ${p.id} not found`); return; }
-    if (batch.submissionStatus === "submitted") {
-      await db.transaction(async (tx) => { await markProcessed(tx, msg.messageId); });
-      return; // idempotent
-    }
-    if (batch.submissionStatus !== "signed") {
-      await permanent(m, "submit", p.id, "UNSIGNED_BATCH", `PFMS batch ${p.id} must be signed before submission`);
-      return;
-    }
-    // Verify the STORED signature against the batch as it stands now, before anything is released.
-    const { digest } = await currentBatchDigest(batch);
-    const verdict = verifyStoredSignature(storedSignatureOf(batch), digest, batch.pfmsId);
-    if (!verdict.ok) { await permanent(m, "submit", p.id, verdict.code, verdict.message, { stage: "verify" }); return; }
-    if (isProductionDeployment() && verdict.mock) {
-      await permanent(m, "submit", p.id, "MOCK_SIGNATURE", "a sandbox (mock) signature cannot release a batch in production", { stage: "verify" });
-      return;
-    }
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
-      const row = await repo.submitPfmsBatchGuarded(tx, p.id, p.tenantId, msg.actorId);
-      if (!row) {
-        await auditStep(tx, m, "submit_skipped", p.id, "success", { reason: "batch is no longer in the signed state" });
-        return;
-      }
-      await enqueue(tx, {
-        topic: "finance.pfms.batch_submitted", eventType: "finance.pfms.batch_submitted",
-        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { batchId: p.id },
-      });
-      await auditStep(tx, m, "verify_signature", p.id, "success", { method: verdict.method, mock: verdict.mock, certificateSerial: batch.dscCertSerial });
-      await auditStep(tx, m, "submit", p.id, "success", { mock: verdict.mock });
-    });
-    await cache.invalidateResource(msg.tenantId, "pfms");
-    log.info({ id: msg.messageId }, "Processed pfms.batch_submit");
   });
 }
 
