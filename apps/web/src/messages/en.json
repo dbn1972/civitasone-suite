@@ -4667,6 +4667,17 @@
     "colDdo": "DDO",
     "colStatus": "Status",
     "colActions": "Actions",
+    "colSignature": "Signature",
+    "signUnsigned": "Not signed",
+    "signLegacy": "Signed (no certificate on record)",
+    "signSigned": "Signed with DSC",
+    "signMock": "Sandbox test signature, not legally valid",
+    "signCert": "Certificate {serial}",
+    "signBy": "Signed by {name}",
+    "signAlgorithm": "Algorithm {algorithm}",
+    "signEnvProduction": "Production channel",
+    "signEnvSandbox": "Sandbox channel",
+    "signVerified": "Verified {when}",
     "filterPlaceholder": "Filter by PFMS ID, agency, or scheme…"
   },
   "pfmsConfigPanel": {
@@ -4767,17 +4778,31 @@
     "confirmDescription": "Submit the salary bill for <b>{month}</b> covering <b>{employeeCount}</b> employees ({amount}). This action cannot be undone.",
     "amountAboveFallback": "amount above"
   },
+  "pfmsReleaseBatchAction": {
+    "releaseAriaLabel": "Release PFMS batch {pfmsId} to PFMS",
+    "releaseButtonLabel": "Release to PFMS",
+    "confirmTitle": "Release PFMS batch {pfmsId}?",
+    "confirmLabel": "Release batch",
+    "description": "This sends the signed batch <b>{pfmsId}</b> to PFMS. It cannot be undone.",
+    "checksNote": "Before sending, the DSC signature is re-checked against the batch as it is now. The user who initiated the batch cannot release it.",
+    "refusedUnsigned": "This batch is not DSC-signed. Sign it before releasing.",
+    "refusedMock": "This batch carries a sandbox test signature, which cannot release a batch in production.",
+    "refusedMakerChecker": "You initiated this batch, so you cannot release it. Ask another finance administrator.",
+    "refusedChanged": "The batch was changed after it was signed. It will not be sent; have it signed again.",
+    "refusedInvalid": "The stored DSC signature does not verify. The batch will not be sent.",
+    "refusedUnverifiable": "The DSC signature cannot be verified with the configured signing channel yet. The batch will not be sent.",
+    "refusedChannel": "Only treasury batches can be released to PFMS.",
+    "refusedNotFound": "This batch no longer exists."
+  },
   "pfmsSignBatchAction": {
-    "certRequired": "Certificate reference is required.",
-    "payloadRequired": "Signature payload is required.",
     "signAriaLabel": "Sign PFMS batch {pfmsId}",
-    "signButtonLabel": "Sign",
+    "signButtonLabel": "Sign with DSC",
     "confirmTitle": "Sign PFMS batch {pfmsId}?",
     "confirmLabel": "Sign batch",
-    "description": "This applies a digital signature to batch <b>{pfmsId}</b> and marks it signed. This action cannot be undone.",
-    "certificateRefLabel": "Certificate reference",
-    "signaturePayloadLabel": "Signature payload"
+    "description": "This signs batch <b>{pfmsId}</b> with your department's digital signature certificate (DSC) and marks it signed. This action cannot be undone.",
+    "changeNote": "The signature covers the batch contents. If the batch changes after signing, it will not be submitted."
   },
+
   "pfmsSubmitPaymentForm": {
     "referenceIdRequired": "Reference ID is required.",
     "beneficiaryCodeRequired": "Beneficiary code is required.",

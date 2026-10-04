@@ -317,7 +317,7 @@ describe("PFMS Adapter — enabled (mocked fetch)", () => {
         method: "POST",
         url: `/v1/finance/pfms/${row.id}/sign`,
         headers: { authorization: `Bearer ${token}` },
-        payload: { certificateRef: "cert-1", signaturePayload: "payload-1" },
+        payload: {},
       });
       expect(signRes.statusCode).toBe(400);
       expect(signRes.json().code).toBe("INVALID_CHANNEL");

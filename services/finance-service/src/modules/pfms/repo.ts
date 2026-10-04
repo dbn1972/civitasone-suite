@@ -154,6 +154,61 @@ export async function listRealBeneficiaries(tenantId: string, pfmsId: string, li
   }));
 }
 
+export type DscSignatureFields = Pick<typeof financePfms.$inferInsert,
+  "signedAt" | "signedBy" | "signatureRef" | "batchDigest" | "signedInfoHash" | "dscSignature" | "dscAlgorithm" | "dscSignatureMethod"
+  | "dscCertSerial" | "dscSignerRef" | "dscProviderKey" | "dscEnvironment" | "dscMock" | "dscCanonicalVersion" | "dscXmldsig" | "updatedBy">;
+
+/**
+ * pending -> signed, guarded. The WHERE pins the tenant, the treasury channel, submission_status = 'pending' AND no
+ * signature on record, so of two concurrent signers exactly one row update matches (the loser gets null and writes
+ * nothing). Returns the signed row or null.
+ */
+export async function signPfmsBatchGuarded(tx: Writer, id: string, tenantId: string, f: DscSignatureFields) {
+  const rows = await tx.update(financePfms)
+    .set({ ...f, submissionStatus: "signed", updatedAt: new Date(), version: sql`${financePfms.version} + 1` })
+    .where(and(
+      eq(financePfms.id, id), eq(financePfms.tenantId, tenantId), eq(financePfms.channel, "treasury_batch"),
+      eq(financePfms.submissionStatus, "pending"), sql`${financePfms.dscSignature} IS NULL`,
+    ))
+    .returning();
+  return rows[0] ?? null;
+}
+
+/** signed -> submitted, guarded on the signed state (and a signature being on record). */
+export async function submitPfmsBatchGuarded(tx: Writer, id: string, tenantId: string, actorId: string) {
+  const rows = await tx.update(financePfms)
+    .set({ submissionStatus: "submitted", dscVerifiedAt: new Date(), updatedBy: actorId, updatedAt: new Date(), version: sql`${financePfms.version} + 1` })
+    .where(and(
+      eq(financePfms.id, id), eq(financePfms.tenantId, tenantId), eq(financePfms.submissionStatus, "signed"),
+    ))
+    .returning();
+  return rows[0] ?? null;
+}
+
+/**
+ * signed -> processing: the single-sender claim of a release. The WHERE pins tenant, treasury channel and the signed
+ * state, so of any number of concurrent releases exactly one UPDATE matches and only that one goes on to send.
+ */
+export async function claimPfmsRelease(tx: Writer, id: string, tenantId: string, actorId: string) {
+  const rows = await tx.update(financePfms)
+    .set({ submissionStatus: "processing", updatedBy: actorId, updatedAt: new Date(), version: sql`${financePfms.version} + 1` })
+    .where(and(
+      eq(financePfms.id, id), eq(financePfms.tenantId, tenantId), eq(financePfms.channel, "treasury_batch"),
+      eq(financePfms.submissionStatus, "signed"), sql`${financePfms.dscSignature} IS NOT NULL`,
+    ))
+    .returning();
+  return rows[0] ?? null;
+}
+
+/** processing -> file_sent (sent) or back to signed (send failed, so it can be released again). Guarded on processing. */
+export async function finishPfmsRelease(tx: Writer, id: string, tenantId: string, actorId: string, to: "file_sent" | "signed") {
+  const rows = await tx.update(financePfms)
+    .set({ submissionStatus: to, updatedBy: actorId, updatedAt: new Date(), version: sql`${financePfms.version} + 1` })
+    .where(and(eq(financePfms.id, id), eq(financePfms.tenantId, tenantId), eq(financePfms.submissionStatus, "processing")))
+    .returning();
+  return rows[0] ?? null;
+}
+
 export async function updatePfmsBatch(tx: Writer, id: string, patch: Partial<typeof financePfms.$inferInsert>): Promise<void> {
   await tx.update(financePfms).set({ ...patch, updatedAt: new Date() }).where(eq(financePfms.id, id));
 }

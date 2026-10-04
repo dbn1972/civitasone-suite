@@ -7,6 +7,7 @@ import { queue } from "../src/shared/infra.js";
 import { registerVendorConsumers } from "../src/modules/masters/vendor-commands.js";
 import { registerAuditConsumers } from "../src/modules/audit/commands.js";
 import { registerInstrumentWorkflowConsumers } from "../src/modules/instruments/commands.js";
+import { registerInstrumentsConsumers } from "../src/modules/instruments/consumer.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr"; // gitleaks:allow
 
@@ -22,6 +23,7 @@ export async function startConsumers(): Promise<void> {
   registerVendorConsumers(queue);
   registerAuditConsumers(queue);
   registerInstrumentWorkflowConsumers(queue);
+  registerInstrumentsConsumers(queue);
   await queue.start();
   started = true;
 }

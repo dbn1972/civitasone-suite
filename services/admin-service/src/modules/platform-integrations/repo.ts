@@ -20,6 +20,7 @@ import {
   type SwitchRequestInsert,
   type TenantIntegrationSettingsRow,
   type EndpointMap,
+  type IntegrationCategory,
   type ProviderStatus,
   type IntegrationEnvironment,
 } from "./schema.js";
@@ -123,6 +124,18 @@ export async function findIntegration(tenantId: string, providerKey: string): Pr
 export async function findIntegrationTx(tx: Writer, tenantId: string, providerKey: string): Promise<TenantIntegrationRow | undefined> {
   const rows = await tx.select().from(tenantIntegrations)
     .where(and(eq(tenantIntegrations.tenantId, tenantId), eq(tenantIntegrations.providerKey, providerKey))).limit(1);
+  return rows[0];
+}
+
+/**
+ * The tenant's ACTIVE integration for a category: enabled, newest-updated first (deterministic when a
+ * tenant has configured more than one provider of the same kind). Used by the peer-service resolver
+ * (finance DSC signing); the caller strips secrets before anything leaves this service.
+ */
+export async function findActiveByCategory(tenantId: string, category: IntegrationCategory): Promise<TenantIntegrationRow | undefined> {
+  const rows = await scopedRead((tx) => tx.select().from(tenantIntegrations)
+    .where(and(eq(tenantIntegrations.tenantId, tenantId), eq(tenantIntegrations.category, category), eq(tenantIntegrations.enabled, true)))
+    .orderBy(desc(tenantIntegrations.updatedAt), asc(tenantIntegrations.providerKey)).limit(1));
   return rows[0];
 }
 

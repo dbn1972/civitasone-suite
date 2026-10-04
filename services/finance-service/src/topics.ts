@@ -52,6 +52,7 @@ export const COMMANDS = {
   // pfms
   pfmsBatchSign:        "finance.pfms.batch_sign",
   pfmsBatchSubmit:      "finance.pfms.batch_submit",
+  pfmsBatchRelease:     "finance.pfms.batch_release",
   // recon (CAP-059)
   reconRun:             "finance.recon.run",
   reconExceptionAction: "finance.recon.exception_action",
@@ -106,6 +107,8 @@ export const COMMANDS = {
   policyChange: "finance.policy.change",
   policyChangeDecide: "finance.policy.change_decide",
   auditParaTransition: "finance.audit_para.transition",
+  instrumentIssue: "finance.instrument.issue",
+  instrumentTransition: "finance.instrument.transition",
   instrumentRepresent: "finance.instrument.represent",
   instrumentMarkStale: "finance.instrument.mark_stale",
 } as const;

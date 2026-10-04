@@ -2179,6 +2179,9 @@ importers:
       '@civitasone/circuit-breaker':
         specifier: workspace:*
         version: link:../../packages/circuit-breaker
+      '@civitasone/connector-framework':
+        specifier: workspace:*
+        version: link:../../packages/connector-framework
       '@civitasone/db':
         specifier: workspace:*
         version: link:../../packages/db
