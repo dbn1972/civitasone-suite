@@ -2,6 +2,7 @@ import { eq, ne, and, sql, inArray, count, desc } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { listRunSuspensions, type RunSuspensionSummary } from "./subsistence-repo.js";
 import { inForceRows } from "./pt-versions-repo.js";
+import { countWarningsByRun } from "./run-warnings.js";
 import { todayIst } from "./pt-versions-domain.js";
 import {
   payrollStructures, payrollComponents, payrollRuns, payrollSlips,
@@ -39,6 +40,11 @@ export async function listRunsByTenant(tenantId: string, limit = 50, month?: str
       : eq(payrollRuns.tenantId, tenantId))
     .orderBy(desc(payrollRuns.month))
     .limit(limit));
+}
+
+/** Number of recorded run warnings per run id (runs without any are absent). */
+export async function countWarningsByRunIds(runIds: readonly string[], tenantId: string): Promise<Map<string, number>> {
+  return scopedRead((tx) => countWarningsByRun(tx as never, tenantId, runIds));
 }
 
 export async function listStructuresByTenant(tenantId: string, limit = 50) {

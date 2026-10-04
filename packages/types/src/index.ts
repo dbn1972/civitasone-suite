@@ -878,6 +878,8 @@ export type PayrollRunDetail = {
   netAmount: number;
   deductions: number;
   status: "draft" | "processing" | "completed" | "paid" | "disbursed" | "failed";
+  /** Number of run warnings recorded for this run (0 / absent = none). */
+  warningCount?: number;
 };
 
 export type PayrollRunFullDetail = PayrollRunDetail & {

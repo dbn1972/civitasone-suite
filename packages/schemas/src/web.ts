@@ -838,6 +838,8 @@ export const PayrollRunDetailSchema = z.object({
   // null for every other status or when no reason was recorded.
   status: z.enum(["draft", "processing", "completed", "paid", "failed"]),
   failureReason: z.string().nullable().optional(),
+  // Number of run warnings recorded for this run (GET /v1/payroll/runs/:id/warnings); optional for older payloads.
+  warningCount: z.number().int().nonnegative().optional(),
 });
 export const PayrollRunDetailListSchema = z.array(PayrollRunDetailSchema);
 

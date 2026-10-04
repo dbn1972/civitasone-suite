@@ -4397,6 +4397,8 @@
     "runsCardTitle": "Payroll Runs"
   },
   "payrollRunsTable": {
+    "colWarnings": "Warnings",
+    "warningBadge": "{count, plural, one {# warning} other {# warnings}}",
     "colPeriod": "Period",
     "colEmployees": "Employees",
     "colGross": "Gross Pay",
@@ -11231,5 +11233,30 @@
     "button": "⬇ Export CSV",
     "exporting": "Exporting…",
     "failed": "The export could not be completed. Nothing was downloaded; try again."
+  },
+  "runWarnings": {
+    "title": "Warnings",
+    "loading": "Loading run warnings…",
+    "none": "No warnings: this run had everything it needed.",
+    "retry": "Try again",
+    "loadArea": "the run warnings",
+    "PT_STATE_UNKNOWN": {
+      "title": "Professional tax state not set",
+      "body": "{count, plural, one {# employee has} other {# employees have}} no state of employment in HR while professional tax slabs exist for more than one state. They were charged on the tenant-wide slabs, which may be wrong. Set their state and run again."
+    },
+    "PT_GENDER_UNKNOWN": {
+      "title": "Gender not recorded for gender-specific professional tax",
+      "body": "{count, plural, one {# employee has} other {# employees have}} no usable gender in HR while the professional tax slabs are gender-specific. They were charged on the all-employees slabs only. Record their gender and run again."
+    },
+    "HRA_FLOOR_NOT_CONFIGURED": {
+      "title": "HRA minimum floor not configured",
+      "body": "No HRA minimum floor is configured for this month, so government-scale HRA was paid at the plain slab. Set the floor in the pay-profile allowance rules (an administrator step) and run again."
+    },
+    "unknown": {
+      "title": "Run warning",
+      "body": "Warning {code} was recorded for this run ({count, plural, one {# employee} other {# employees}} affected)."
+    },
+    "affectedEmployees": "Showing {shown} of {count}. Open an employee to fix it:",
+    "fixEmployee": "Employee {no}"
   }
 }

@@ -122,3 +122,19 @@ describe("PayrollRunsTable — COMP-019 (rupee/paise unit-convention regression)
     expectRupeeGroundTruthDisplayed(screen, 410000000n); // sampleRuns[0].netAmount = Rs 41,00,000
   });
 });
+
+describe("PayrollRunsTable run-warning badge", () => {
+  it("shows a badge for a run with warnings and a dash for one without", () => {
+    mockedHook.mockReturnValue({
+      data: [
+        { id: "run-1", payPeriod: "2026-08", employeeCount: 1, grossAmount: 10, netAmount: 9, status: "paid", warningCount: 2 },
+        { id: "run-2", payPeriod: "2026-07", employeeCount: 1, grossAmount: 10, netAmount: 9, status: "paid", warningCount: 0 },
+      ] as never,
+      fromCache: false, provenance: "live", offline: false, cachedAt: null,
+    } as never);
+    renderTable({ runs: [] as never });
+    expect(screen.getByText("2 warnings")).toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText("0 warnings")).not.toBeInTheDocument();
+  });
+});

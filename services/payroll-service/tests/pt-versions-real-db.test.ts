@@ -710,3 +710,51 @@ describe("PT follows the employee's state of employment", () => {
     expect(await warnings(tenant, run, "PT_STATE_UNKNOWN")).toHaveLength(0);
   }, 60_000);
 });
+
+describe("run warnings are persisted on the run and served by GET /runs/:id/warnings (0087)", () => {
+  const emp = (id: string, state: string | null, gender: string | null) => ({ ...employee(id, state ?? ""), stateCode: state, gender });
+  const warningsOf = async (tenant: string, run: string, roles = ["hr_admin"]) =>
+    app.inject({ method: "GET", url: `/v1/payroll/runs/${run}/warnings`, headers: hdr(tenant, roles) });
+
+  it("a run with unknown state and unknown gender persists both (+ the HRA floor notice) and the endpoint returns them", async () => {
+    const { tenant, structure } = await newTenant("MH", [{ from: 0, to: 999999999999, amt: 20000 }]);
+    await asTenant(tenant, async (tx) => {
+      // a second state (multi-state tenant) and a female slab (gender-specific slabs in force)
+      await tx.execute(sql`INSERT INTO payroll.payroll_pt_slab_versions (tenant_id, state_code, effective_from, reason, source) VALUES (${tenant}::uuid, 'KA', '1900-01-01', 'warnings test', 'migration')`);
+      await tx.execute(sql`INSERT INTO payroll.payroll_professional_tax (tenant_id, state_code, slab_from_minor, slab_to_minor, pt_amount_minor, effective_from) VALUES (${tenant}::uuid, 'KA', 0, 999999999999, 10000, '1900-01-01')`);
+      await tx.execute(sql`INSERT INTO payroll.payroll_professional_tax (tenant_id, state_code, slab_from_minor, slab_to_minor, pt_amount_minor, applies_to_gender, effective_from) VALUES (${tenant}::uuid, 'MH', 0, 999999999999, 0, 'female', '1900-01-01')`);
+    });
+    const a = randomUUID(); const b = randomUUID(); const c = randomUUID();
+    const run = await runMonth(tenant, structure, "2026-05", [emp(a, "MH", null), emp(b, null, "female"), emp(c, "KA", "male")]);
+
+    const rows = await q(tenant, sql`SELECT code, count, sample FROM payroll.payroll_run_warnings WHERE run_id = ${run}::uuid ORDER BY code`);
+    expect(rows.map((r) => r.code)).toEqual(["HRA_FLOOR_NOT_CONFIGURED", "PT_GENDER_UNKNOWN", "PT_STATE_UNKNOWN"]);
+
+    const res = await warningsOf(tenant, run);
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { runId: string; warnings: Array<{ code: string; count: number; sample: Array<{ employeeId: string; employeeNo: string }> }> };
+    const by = new Map(body.warnings.map((w) => [w.code, w]));
+    expect(by.get("PT_GENDER_UNKNOWN")).toMatchObject({ count: 1, sample: [{ employeeId: a, employeeNo: `E-${a.slice(0, 6)}` }] });
+    expect(by.get("PT_STATE_UNKNOWN")).toMatchObject({ count: 1, sample: [{ employeeId: b }] });
+    expect(by.get("HRA_FLOOR_NOT_CONFIGURED")).toMatchObject({ count: 0, sample: [] });
+
+    // the runs list carries the count for the badge
+    const list = await app.inject({ method: "GET", url: "/v1/payroll/runs?limit=5", headers: hdr(tenant, ["hr_admin"]) });
+    expect((list.json() as Array<{ id: string; warningCount: number }>).find((r) => r.id === run)?.warningCount).toBe(3);
+
+    // access: same roles as run detail; another tenant cannot see it; unknown run is 404
+    expect((await warningsOf(tenant, run, ["employee"])).statusCode).toBe(403);
+    const other = await newTenant("MH", []);
+    expect((await warningsOf(other.tenant, run)).statusCode).toBe(404);
+    expect((await warningsOf(tenant, randomUUID())).statusCode).toBe(404);
+  }, 120_000);
+
+  it("a single-state, non-gender tenant with a state on every employee records no PT warnings", async () => {
+    const { tenant, structure } = await newTenant("MH", [{ from: 0, to: 999999999999, amt: 20000 }]);
+    const a = randomUUID();
+    const run = await runMonth(tenant, structure, "2026-05", [emp(a, "MH", null)]);
+    const codes = ((await warningsOf(tenant, run)).json() as { warnings: Array<{ code: string }> }).warnings.map((w) => w.code);
+    expect(codes).not.toContain("PT_STATE_UNKNOWN");
+    expect(codes).not.toContain("PT_GENDER_UNKNOWN");
+  }, 90_000);
+});

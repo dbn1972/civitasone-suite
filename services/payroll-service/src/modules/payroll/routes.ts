@@ -12,6 +12,7 @@ import { sql } from "drizzle-orm";
 import { resolveActorEmployeeId, HrmsUnavailableError } from "../../shared/hrms-client.js";
 import { lockedThroughMonth } from "../pay-profiles/rules-api.js";
 import { maskPpoNo } from "./fin03-domain.js";
+import { listRunWarnings } from "./run-warnings.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES  = [...PAYROLL_ROLES, "hr_admin", "finance_officer"];
@@ -61,6 +62,20 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
     const run = await queries.getRunDetail(id, ctx.tenantId);
     if (!run) throw new HttpError(404, "NOT_FOUND", "run not found");
     sendValidated(reply, PayrollRunFullDetailSchema, run);
+  });
+
+  // Non-blocking warnings the run engine recorded for this run (PT_STATE_UNKNOWN, PT_GENDER_UNKNOWN,
+  // HRA_FLOOR_NOT_CONFIGURED). Same roles as the run detail; employee numbers only, no other PII.
+  app.get("/v1/payroll/runs/:id/warnings", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const out = await scopedRead(async (tx) => {
+      const exists = (await tx.execute(sql`SELECT 1 FROM payroll.payroll_runs WHERE id = ${id}::uuid AND tenant_id = ${ctx.tenantId}::uuid`)) as unknown as unknown[];
+      return exists.length === 0 ? null : listRunWarnings(tx as never, ctx.tenantId, id);
+    });
+    if (!out) throw new HttpError(404, "NOT_FOUND", "run not found");
+    return reply.send({ runId: id, warnings: out });
   });
 
   app.get("/v1/payroll/salary-slips", async (req, reply) => {

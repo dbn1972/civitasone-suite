@@ -10,6 +10,7 @@ import { PayrollRunStepper } from "./PayrollRunStepper";
 import { MonthOverMonthCards } from "./MonthOverMonthCards";
 import { ExceptionPanel, deriveExceptions } from "./ExceptionPanel";
 import { SalarySlipsClientTable } from "./SalarySlipsClientTable";
+import { RunWarningsPanel } from "./RunWarningsPanel";
 import { getSessionRoles, PAYROLL_ADMIN_ROLES, PAYROLL_READER_ROLES, PAYROLL_REPORT_ROLES } from "@/lib/auth/roleGuard";
 import { getTranslations } from "next-intl/server";
 
@@ -154,6 +155,9 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
 
       {/* Exception panel (amber warning) */}
       <ExceptionPanel exceptions={exceptions} />
+
+      {/* Warnings the run engine recorded (PT state / gender unknown, HRA floor not configured) */}
+      <RunWarningsPanel runId={run.id} />
 
       {/* Payroll lifecycle actions */}
       <PayrollRunActions

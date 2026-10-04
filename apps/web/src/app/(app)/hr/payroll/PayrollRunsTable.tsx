@@ -30,6 +30,8 @@ export function PayrollRunsTable({ runs, source = "api", canAdminister = false }
     // i18n. `render` (checked before cellType by DataTable's cellValue())
     // keeps the pill's color keyed off the real `status` while giving it a
     // translated `label` explicitly, via this table's own i18n status map.
+    // Run warnings (PT state / gender unknown, HRA floor not configured): a badge, detail on the run page.
+    { key: "warningCount", label: t("colWarnings"), render: (r) => ((r.warningCount ?? 0) > 0 ? <StatusPill status="warning" label={t("warningBadge", { count: r.warningCount ?? 0 })} variant="warn" /> : "—") },
     { key: "status", label: t("colStatus"), render: (r) => <StatusPill status={r.status} label={payrollRunStatusLabel(r.status, t)} variant={payrollRunStatusVariant(r.status)} /> },
   ];
 

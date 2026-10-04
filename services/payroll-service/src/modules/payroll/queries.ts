@@ -155,6 +155,7 @@ export async function listRuns(tenantId: string, limit: number, month?: string) 
   const rows = await repo.listRunsByTenant(tenantId, limit, month);
   const runIds = rows.map((r) => r.id);
   const aggByRun = await repo.aggregateSlipsByRunIds(runIds, tenantId);
+  const warningsByRun = await repo.countWarningsByRunIds(runIds, tenantId);
   return rows.map((r) => {
     const agg = aggByRun.get(r.id) ?? { employeeCount: 0, grossMinor: 0n, netMinor: 0n };
     return {
@@ -175,6 +176,8 @@ export async function listRuns(tenantId: string, limit: number, month?: string) 
       // now-distinct 'failed' status above (migration 0046). null for every
       // other status and for a failed run that predates this column.
       failureReason: r.status === "failed" ? (r.lastError ?? null) : null,
+      // How many run warnings were recorded (detail: GET /runs/:id/warnings). 0 = none.
+      warningCount: warningsByRun.get(r.id) ?? 0,
     };
   });
 }

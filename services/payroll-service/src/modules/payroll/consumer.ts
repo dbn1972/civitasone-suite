@@ -28,6 +28,7 @@ import { recordRunSuspension, resolveSubsistenceConfig } from "./subsistence-rep
 import { registerFin03Consumers } from "./fin03-consumer.js";
 import { registerPtVersionConsumers } from "./pt-versions-consumer.js";
 import { slabsInForce, ptYtdMinors } from "./pt-versions-repo.js";
+import { replaceRunWarnings, RUN_WARNING_SAMPLE_CAP } from "./run-warnings.js";
 import { computePtMonthMinor, periodEndOf, ptGenderUnresolved, todayIst, type PtSlab } from "./pt-versions-domain.js";
 import { registerPayGroupConsumers } from "./pay-group-consumer.js";
 import { claimRunEmployees, findDoubleRunEmployees, resolveMonthMembers } from "./pay-group-repo.js";
@@ -1731,18 +1732,18 @@ async function processPayrollRun(
     // Gender-specific PT: employees whose gender HRMS does not hold (or holds as a value no slab
     // targets) while the slabs in force ARE gender-specific are paid on the 'all' slabs only; they
     // are listed in one run-level warning below so payroll can fix the record and re-run.
-    const ptGenderUnknownEmployees: string[] = [];
+    const ptGenderUnknownEmployees: Array<{ employeeId: string; employeeNo: string }> = [];
     // PT is per state: with PT versions for more than one state, an employee whose state HRMS does not hold
     // is charged on the tenant-wide fallback slabs, which is a guess; one run-level warning lists them.
-    const ptStateUnknownEmployees: string[] = [];
+    const ptStateUnknownEmployees: Array<{ employeeId: string; employeeNo: string }> = [];
 
     for (const emp of runEmployees) {
       const cityClass = emp.cityClass ?? "X";
       {
         const empState = (emp as { stateCode?: string | null }).stateCode?.trim().toUpperCase() || undefined;
-        if (!empState && ptMultiState) ptStateUnknownEmployees.push(emp.employeeNo ?? emp.id);
+        if (!empState && ptMultiState) ptStateUnknownEmployees.push({ employeeId: emp.id, employeeNo: emp.employeeNo ?? emp.id });
         const empPtSlabs = empState ? (ptSlabsByState.get(empState) ?? []) : ptSlabsFallback;
-        if (ptGenderUnresolved(empPtSlabs, (emp as { gender?: string | null }).gender)) ptGenderUnknownEmployees.push(emp.employeeNo ?? emp.id);
+        if (ptGenderUnresolved(empPtSlabs, (emp as { gender?: string | null }).gender)) ptGenderUnknownEmployees.push({ employeeId: emp.id, employeeNo: emp.employeeNo ?? emp.id });
       }
       // PAY-PROFILES: which computation applies to this employee (govt_scale
       // when HRMS reports no approved profile -- exactly the pre-PAY-PROFILES
@@ -2101,7 +2102,7 @@ async function processPayrollRun(
         code: "PT_STATE_UNKNOWN",
         message: `${ptStateUnknownEmployees.length} employee(s) have no state of employment in HRMS while the tenant has ${p.month} professional-tax slabs for more than one state; they were charged on the tenant-wide fallback slabs`,
         count: ptStateUnknownEmployees.length,
-        employees: ptStateUnknownEmployees.slice(0, 50),
+        employees: ptStateUnknownEmployees.slice(0, RUN_WARNING_SAMPLE_CAP).map((e) => e.employeeNo),
       });
     }
     if (ptGenderUnknownEmployees.length > 0) {
@@ -2109,7 +2110,7 @@ async function processPayrollRun(
         code: "PT_GENDER_UNKNOWN",
         message: `${ptGenderUnknownEmployees.length} employee(s) have no usable gender in HRMS while ${p.month} professional-tax slabs are gender-specific; they were charged on the all-gender slabs only`,
         count: ptGenderUnknownEmployees.length,
-        employees: ptGenderUnknownEmployees.slice(0, 50),
+        employees: ptGenderUnknownEmployees.slice(0, RUN_WARNING_SAMPLE_CAP).map((e) => e.employeeNo),
       });
     }
     if (!hraFloorConfigured) {
@@ -2118,6 +2119,13 @@ async function processPayrollRun(
         message: `no HRA minimum floor is configured for ${p.month}; government-scale HRA was paid at the plain slab`,
       });
     }
+    // Persist the same warnings on the run (rebuilt whole per pass, same transaction) so the run detail
+    // page and the runs list can show them. The audit events above stay as they are.
+    await replaceRunWarnings(tx as unknown as typeof db, p.tenantId, p.id, [
+      ...(ptStateUnknownEmployees.length > 0 ? [{ code: "PT_STATE_UNKNOWN", count: ptStateUnknownEmployees.length, sample: ptStateUnknownEmployees }] : []),
+      ...(ptGenderUnknownEmployees.length > 0 ? [{ code: "PT_GENDER_UNKNOWN", count: ptGenderUnknownEmployees.length, sample: ptGenderUnknownEmployees }] : []),
+      ...(!hraFloorConfigured ? [{ code: "HRA_FLOOR_NOT_CONFIGURED", count: 0, sample: [] }] : []),
+    ]);
     await audit(tx, msg, "rebuild", "payroll_register", p.id);
   });
 }

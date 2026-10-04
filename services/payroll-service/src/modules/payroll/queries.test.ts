@@ -10,6 +10,7 @@ vi.mock("./repo.js", () => ({
   findRunById: (...args: unknown[]) => findRunById(...args),
   listSlipsByRun: (...args: unknown[]) => listSlipsByRun(...args),
   listRunSuspensionsByRun: async () => [],
+  countWarningsByRunIds: async () => new Map<string, number>(),
 }));
 
 vi.mock("../../shared/infra.js", () => ({
