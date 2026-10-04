@@ -12,7 +12,8 @@ import { strandsTenantAdmins } from "../users/last-admin.js";
 import * as usersRepo from "../users/repo.js";
 import type * as rbacRepo from "../rbac/repo.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
-import { SCIM_INACTIVE_STATUS } from "../users/domain.js";
+import { z } from "zod";
+import { SCIM_INACTIVE_STATUS, USER_STATUSES } from "../users/domain.js";
 
 const AUDIT = "audit.event.record";
 
@@ -36,12 +37,14 @@ export function registerScimConsumers(rawQueue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         const p = msg.payload;
+        // The CHECK is the last line of defence; validate the command first so a bad status fails fast with a clear error.
+        const status = z.enum(USER_STATUSES).parse(p.status);
         await tx.insert(users).values({
           id: p.id,
           tenantId: p.tenantId,
           email: p.email,
           name: p.name,
-          status: p.status,
+          status,
           createdBy: msg.actorId,
           updatedBy: msg.actorId,
         });
@@ -125,6 +128,18 @@ export function registerScimConsumers(rawQueue: Queue): void {
     },
   );
 
+  // Audit-only: a SCIM request the route refused with a 409 (the route cannot write, so it publishes this).
+  q.subscribe<{ id: string; tenantId: string; code: string; requested: string }>(COMMANDS.scimRefusalAudit, async (msg) => {
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const p = msg.payload;
+      await enqueue(tx as Parameters<typeof enqueue>[0], {
+        topic: "audit.event.record", eventType: "audit.event.record", tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { service: "identity", action: "scim_status_refused", resourceType: "user", resourceId: p.id, outcome: "denied", severity: "high", code: p.code, status: p.requested },
+      });
+    });
+  });
+
   q.subscribe<{ id: string; tenantId: string }>(COMMANDS.scimUserDelete, async (msg) => {
     let kcEmail: string | null = null;
     await db.transaction(async (tx) => {
@@ -184,7 +199,7 @@ async function guardScimStatus(tx: unknown, msg: { tenantId: string; actorId: st
   const next = patch["status"];
   if (next === undefined) return { patch, deactivateEmail: null };
   const [cur] = await (tx as typeof db).select({ status: users.status, email: users.email }).from(users)
-    .where(and(eq(users.id, userId), eq(users.tenantId, msg.tenantId))).limit(1);
+    .where(and(eq(users.id, userId), eq(users.tenantId, msg.tenantId))).limit(1).for("update");
   const rest = { ...patch };
   delete rest["status"];
   if (!cur || cur.status === next) return { patch: rest, deactivateEmail: null };

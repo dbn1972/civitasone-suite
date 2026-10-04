@@ -92,7 +92,16 @@ export function registerUserConsumers(rawQueue: Queue): void {
         });
         return;
       }
-      assertTransition(cur.status, msg.payload.status as UserView["status"]);
+      try {
+        assertTransition(cur.status, msg.payload.status as UserView["status"]);
+      } catch (err) {
+        // An impossible transition (e.g. out of deactivated) is a refusal, not a retryable fault: audit it as denied and stop.
+        await enqueue(tx as Parameters<typeof enqueue>[0], {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { service: "identity", action: "status_change", resourceType: "user", resourceId: msg.payload.id, outcome: "denied", severity: "high", reason: "INVALID_TRANSITION", from: cur.status, status: msg.payload.status, detail: String(err instanceof Error ? err.message : err) },
+        });
+        return;
+      }
       // GAP-ADMIN-USERS-01 (race-safe half): serialise the tenant's admin status changes, then
       // re-check against current state. If this change would strand the tenant it is NOT applied.
       if (msg.payload.status !== "active" && cur.status === "active") {

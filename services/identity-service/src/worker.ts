@@ -10,6 +10,7 @@ import { registerSessionConsumers } from "./modules/sessions/consumer.js";
 import { reapExpiredSessions }      from "./modules/sessions/repo.js";
 import { sweepExpiredGrants }       from "./modules/breakglass/repo.js";
 import { registerMfaConsumers }     from "./modules/mfa/consumer.js";
+import { scannerDb } from "./shared/scanner-db.js";
 import { registerScimConsumers }    from "./modules/scim/consumer.js";
 import { registerSyncFeederConsumers } from "./modules/sync/feeder.js";
 import { registerIdentityTenantOnboardConsumers } from "./modules/tenant-onboard/consumer.js";
@@ -77,10 +78,10 @@ bgSweeper.unref?.();
 const KC_RECONCILE_INTERVAL_MS = Number(process.env.KC_RECONCILE_INTERVAL_MS ?? 60000);
 const kcReconciler = setInterval(() => {
   void reconcileDueDeactivations(db, (tenantId, email) => keycloak.deactivateUser(tenantId, email, log))
-    .then(async ({ reconciled, retried }) => {
-      if (reconciled > 0 || retried > 0) {
-        const pending = await countPending(db).catch(() => -1);
-        log.warn({ reconciled, retried, pending }, "keycloak deactivation reconciler pass");
+    .then(async ({ reconciled, retried, failed }) => {
+      if (reconciled > 0 || retried > 0 || failed > 0) {
+        const pending = await countPending(scannerDb).catch(() => -1);
+        log.warn({ reconciled, retried, failed, pending }, "keycloak deactivation reconciler pass");
       }
     })
     .catch((err) => log.error({ err: String(err) }, "keycloak reconciler failed"));

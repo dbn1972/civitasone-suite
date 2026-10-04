@@ -36,7 +36,8 @@ async function asTenant<R>(fn: (q: typeof sqlClient) => Promise<R>): Promise<R> 
   })) as R;
 }
 async function seed() {
-  await sqlClient`DELETE FROM _outbox.messages WHERE tenant_id = ${T}`;
+  // Scoped to this file's users: other suites share the SCIM tenant and run in parallel, so never wipe the whole tenant outbox.
+  await sqlClient`DELETE FROM _outbox.messages WHERE tenant_id = ${T} AND payload::text LIKE ${'%' + T.slice(0, 24) + '00000000095%'}`;
   await asTenant(async (q) => {
     await q`DELETE FROM identity_kc_reconciliations WHERE user_id IN (${ADMIN}, ${U1}, ${U2}, ${U3}, ${U4})`;
     await q`DELETE FROM users.users WHERE id IN (${ADMIN}, ${U1}, ${U2}, ${U3}, ${U4})`;
@@ -265,5 +266,72 @@ describe("SCIM refuses to deactivate the last active tenant admin", () => {
     expect((await app.inject({ method: "DELETE", url: url(U2), headers: scimHdr })).statusCode).toBe(202);
     await drain();
     expect(await status(U2)).toBe("deactivated");
+  });
+});
+
+// ── refusal audits, concurrency, transition audit, create validation ─────────
+const auditsFor = async (resourceId: string) => (await sqlClient<Array<{ payload: unknown }>>`SELECT payload FROM _outbox.messages WHERE tenant_id = ${T} AND topic = 'audit.event.record'`)
+  .map((r) => (typeof r.payload === "string" ? JSON.parse(r.payload) : r.payload) as Record<string, unknown>)
+  .filter((a) => a.resourceId === resourceId);
+
+describe("route-level SCIM refusals are audited", () => {
+  const ROLE = id(41);
+  afterEach(() => asTenant(async (q) => {
+    await q`DELETE FROM rbac.role_assignments WHERE tenant_id = ${T} AND role_id = ${ROLE}`;
+    await q`DELETE FROM rbac.roles WHERE id = ${ROLE}`;
+  }));
+
+  it("USER_DEACTIVATED (PATCH active=true) and LAST_TENANT_ADMIN (DELETE) each write a denied audit event through the outbox", async () => {
+    await asTenant(async (q) => {
+      await q`UPDATE users.users SET status = 'deactivated' WHERE id = ${U2}`;
+      await q`INSERT INTO rbac.roles (id, tenant_id, key, name, is_system, created_by, updated_by) VALUES (${ROLE}, ${T}, 'tenant_admin', 'Tenant Admin', true, ${ADMIN}, ${ADMIN})`;
+      await q`INSERT INTO rbac.role_assignments (tenant_id, role_id, user_id, created_by, updated_by) VALUES (${T}, ${ROLE}, ${U1}, ${ADMIN}, ${ADMIN})`;
+    });
+    expect((await app.inject({ method: "PATCH", url: url(U2), headers: scimHdr, payload: { Operations: [{ op: "replace", path: "active", value: true }] } })).statusCode).toBe(409);
+    expect((await app.inject({ method: "DELETE", url: url(U1), headers: scimHdr })).statusCode).toBe(409);
+    await drain();
+    expect(await auditsFor(U2)).toEqual(expect.arrayContaining([expect.objectContaining({ action: "scim_status_refused", outcome: "denied", code: "USER_DEACTIVATED" })]));
+    expect(await auditsFor(U1)).toEqual(expect.arrayContaining([expect.objectContaining({ action: "scim_status_refused", outcome: "denied", code: "LAST_TENANT_ADMIN" })]));
+  });
+});
+
+describe("last tenant admin lock is race-safe", () => {
+  const ROLE = id(42);
+  afterEach(() => asTenant(async (q) => {
+    await q`DELETE FROM rbac.role_assignments WHERE tenant_id = ${T} AND role_id = ${ROLE}`;
+    await q`DELETE FROM rbac.roles WHERE id = ${ROLE}`;
+  }));
+
+  it("two concurrent SCIM deactivations of the last two tenant admins leave exactly one active", async () => {
+    await asTenant(async (q) => {
+      await q`INSERT INTO rbac.roles (id, tenant_id, key, name, is_system, created_by, updated_by) VALUES (${ROLE}, ${T}, 'tenant_admin', 'Tenant Admin', true, ${ADMIN}, ${ADMIN})`;
+      for (const uid of [U1, U2]) await q`INSERT INTO rbac.role_assignments (tenant_id, role_id, user_id, created_by, updated_by) VALUES (${T}, ${ROLE}, ${uid}, ${ADMIN}, ${ADMIN})`;
+    });
+    const env = (uid: string) => ({ messageId: randomUUID(), type: COMMANDS.scimUserPatch, tenantId: T, actorId: ADMIN, correlationId: randomUUID(), schemaVersion: "1.0", payload: { id: uid, tenantId: T, patch: { status: "deactivated" } } });
+    await Promise.all([queue.publish(COMMANDS.scimUserPatch, env(U1)), queue.publish(COMMANDS.scimUserPatch, env(U2))]);
+    await drain();
+    const after = [await status(U1), await status(U2)];
+    expect(after.filter((s) => s === "active")).toHaveLength(1);
+    expect(after.filter((s) => s === "deactivated")).toHaveLength(1);
+  });
+});
+
+describe("status route consumer audits an impossible transition", () => {
+  it("deactivated -> active is refused with a denied INVALID_TRANSITION audit instead of a bare throw", async () => {
+    await asTenant(async (q) => { await q`UPDATE users.users SET status = 'deactivated' WHERE id = ${U4}`; });
+    await queue.publish(COMMANDS.deactivateUser, { messageId: randomUUID(), type: COMMANDS.deactivateUser, tenantId: T, actorId: ADMIN, correlationId: randomUUID(), schemaVersion: "1.0", payload: { id: U4, status: "active" } });
+    await drain();
+    expect(await status(U4)).toBe("deactivated");
+    expect(await auditsFor(U4)).toEqual(expect.arrayContaining([expect.objectContaining({ action: "status_change", outcome: "denied", reason: "INVALID_TRANSITION" })]));
+  });
+});
+
+describe("SCIM create validates the status", () => {
+  it("a create command with a status outside the vocabulary fails before touching the database", async () => {
+    const newId = randomUUID();
+    await queue.publish(COMMANDS.scimUserCreate, { messageId: randomUUID(), type: COMMANDS.scimUserCreate, tenantId: T, actorId: ADMIN, correlationId: randomUUID(), schemaVersion: "1.0", payload: { id: newId, tenantId: T, email: `${newId}@dept.gov.in`, name: "Bad Status", status: "disabled" } });
+    await drain();
+    const rows = await asTenant(async (q) => q`SELECT id FROM users.users WHERE id = ${newId}`);
+    expect(rows).toHaveLength(0);
   });
 });

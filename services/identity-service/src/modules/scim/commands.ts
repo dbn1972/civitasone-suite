@@ -107,3 +107,17 @@ export async function scimDeleteUser(
   );
   return { id, status: "accepted", correlationId };
 }
+
+/** Audit a SCIM request the route refused (operator approval / deactivated / last tenant admin). The consumer writes the denied event via the outbox. */
+export async function scimAuditRefusal(
+  tenantId: string,
+  correlationId: string,
+  userId: string,
+  code: string,
+  requested: string,
+): Promise<void> {
+  await queue.publish(
+    COMMANDS.scimRefusalAudit,
+    envelope(COMMANDS.scimRefusalAudit, tenantId, SCIM_SYSTEM_ACTOR_ID, correlationId, randomUUID(), { id: userId, tenantId, code, requested }),
+  );
+}

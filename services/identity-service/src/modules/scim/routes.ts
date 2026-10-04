@@ -361,9 +361,9 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    if (await operatorStatusChangeBlocked(tid, id, existing.status, status as string | undefined)) return scimOperatorConflict(reply);
-    if (status === "active" && existing.status === "deactivated") return scimDeactivatedConflict(reply);
-    if (await lastTenantAdminBlocked(tid, id, status as string | undefined)) return scimLastAdminConflict(reply);
+    if (await operatorStatusChangeBlocked(tid, id, existing.status, status as string | undefined)) { await commands.scimAuditRefusal(tid, correlationId(req), id, "OPERATOR_REQUIRES_APPROVAL", status ?? ""); return scimOperatorConflict(reply); }
+    if (status === "active" && existing.status === "deactivated") { await commands.scimAuditRefusal(tid, correlationId(req), id, "USER_DEACTIVATED", status); return scimDeactivatedConflict(reply); }
+    if (await lastTenantAdminBlocked(tid, id, status as string | undefined)) { await commands.scimAuditRefusal(tid, correlationId(req), id, "LAST_TENANT_ADMIN", status ?? ""); return scimLastAdminConflict(reply); }
     await commands.scimReplaceUser(tid, correlationId(req), id, patch);
     return reply.code(202).send(
       toScimUser({
@@ -411,9 +411,9 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    if (await operatorStatusChangeBlocked(tid, id, existing.status, patch["status"] as string | undefined)) return scimOperatorConflict(reply);
-    if (patch["status"] === "active" && existing.status === "deactivated") return scimDeactivatedConflict(reply);
-    if (await lastTenantAdminBlocked(tid, id, patch["status"] as string | undefined)) return scimLastAdminConflict(reply);
+    if (await operatorStatusChangeBlocked(tid, id, existing.status, patch["status"] as string | undefined)) { await commands.scimAuditRefusal(tid, correlationId(req), id, "OPERATOR_REQUIRES_APPROVAL", String(patch["status"] ?? "")); return scimOperatorConflict(reply); }
+    if (patch["status"] === "active" && existing.status === "deactivated") { await commands.scimAuditRefusal(tid, correlationId(req), id, "USER_DEACTIVATED", "active"); return scimDeactivatedConflict(reply); }
+    if (await lastTenantAdminBlocked(tid, id, patch["status"] as string | undefined)) { await commands.scimAuditRefusal(tid, correlationId(req), id, "LAST_TENANT_ADMIN", String(patch["status"] ?? "")); return scimLastAdminConflict(reply); }
     await commands.scimPatchUser(tid, correlationId(req), id, patch);
     return reply.code(202).send(
       toScimUser({
@@ -445,8 +445,8 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    if (await operatorStatusChangeBlocked(tid, id, existing.status, undefined, true)) return scimOperatorConflict(reply);
-    if (await lastTenantAdminBlocked(tid, id, undefined, true)) return scimLastAdminConflict(reply);
+    if (await operatorStatusChangeBlocked(tid, id, existing.status, undefined, true)) { await commands.scimAuditRefusal(tid, correlationId(req), id, "OPERATOR_REQUIRES_APPROVAL", "delete"); return scimOperatorConflict(reply); }
+    if (await lastTenantAdminBlocked(tid, id, undefined, true)) { await commands.scimAuditRefusal(tid, correlationId(req), id, "LAST_TENANT_ADMIN", "delete"); return scimLastAdminConflict(reply); }
     await commands.scimDeleteUser(tid, correlationId(req), id);
     return reply.code(202).send({ id, status: "accepted" });
   });

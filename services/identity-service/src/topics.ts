@@ -14,6 +14,8 @@ export const COMMANDS = {
   scimUserReplace: "identity.scim.user.replace",
   scimUserPatch:   "identity.scim.user.patch",
   scimUserDelete:  "identity.scim.user.delete",
+  // A SCIM request refused at the route (409): the route cannot write the audit row itself, so it publishes this.
+  scimRefusalAudit: "identity.scim.refusal.audit",
   // RBAC (wave 2)
   rbacCreateRole:        "identity.rbac.role.create",
   rbacCreatePermission:  "identity.rbac.permission.create",
