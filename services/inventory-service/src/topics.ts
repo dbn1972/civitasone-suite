@@ -20,6 +20,9 @@ export const COMMANDS = {
   binSetStatus:     "inventory.bin.set_status",
   // Per-tenant inventory policy (QC maker-checker)
   settingsUpdate:   "inventory.settings.update",
+  // Cross-reference between an inventory item and a stock-service item
+  itemLinkCreate:   "inventory.item_link.create",
+  itemLinkRemove:   "inventory.item_link.remove",
   // Reservations/allocations (SVC-054)
   reservationCreate:  "inventory.reservation.create",
   reservationRelease: "inventory.reservation.release",
@@ -90,6 +93,10 @@ export const EVENTS = {
   binCreated:        "inventory.bin.created",
   /** Emitted when a bin location is activated or deactivated. */
   binStatusChanged:  "inventory.bin.status_changed",
+  /** Emitted when an inventory item is linked to a stock-service item. */
+  itemLinked:        "inventory.item.linked",
+  /** Emitted when an inventory item <-> stock item link is removed. */
+  itemUnlinked:      "inventory.item.unlinked",
   /** Emitted when a tenant inventory policy setting changes. */
   settingsUpdated:   "inventory.settings.updated",
   /** Emitted when stock is reserved against an indent/PO. */

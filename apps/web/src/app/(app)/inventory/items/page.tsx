@@ -1,9 +1,11 @@
 import { PageHeader } from "@/app/_components/ds";
 import { getInventoryItems } from "../_data";
+import { getItemLinks } from "../_dataLinks";
 import { ItemsTable } from "../ItemsTable";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { INVENTORY_WRITE_ROLES, getSessionRoles } from "@/lib/auth/roleGuard";
+import { getTranslations } from "next-intl/server";
+import { INVENTORY_ITEM_LINK_ROLES, INVENTORY_WRITE_ROLES, getSessionRoles } from "@/lib/auth/roleGuard";
 
 export const dynamic = "force-dynamic";
 
@@ -11,8 +13,12 @@ export const dynamic = "force-dynamic";
 // ItemsTable so they all read ONE useSeededResource call -- this page no longer
 // derives zero-filled stats from a failed fetch.
 export default async function InventoryItemsPage() {
-  const { data, source } = await getInventoryItems();
+  const t = await getTranslations("inventoryLink");
+  const [{ data, source }, linksRes] = await Promise.all([getInventoryItems(), getItemLinks()]);
+  // null when the links could not be read: the table then claims nothing about link status.
+  const linkedItemIds = linksRes.source === "error" ? null : linksRes.data.map((l) => l.inventoryItemId);
   const canCreate = getSessionRoles().some((r) => INVENTORY_WRITE_ROLES.includes(r));
+  const canLink = getSessionRoles().some((r) => INVENTORY_ITEM_LINK_ROLES.includes(r));
 
   return (
     <>
@@ -22,9 +28,14 @@ export default async function InventoryItemsPage() {
       <PageHeader
         title="Item Master"
         subtitle="Catalogued stock items with categories, units and reorder policy."
-        actions={canCreate ? <Link href="/inventory/items/new" className="btn primary">+ New item</Link> : undefined}
+        actions={
+          <>
+            {canLink ? <Link href="/inventory/items/unlinked" className="btn">{t("detail.unlinkedItemsReport")}</Link> : null}
+            {canCreate ? <Link href="/inventory/items/new" className="btn primary">+ New item</Link> : null}
+          </>
+        }
       />
-      <ItemsTable items={data} source={source} />
+      <ItemsTable items={data} source={source} linkedItemIds={linkedItemIds} />
     </>
   );
 }

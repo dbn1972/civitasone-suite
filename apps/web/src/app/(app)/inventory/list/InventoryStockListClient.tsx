@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { formatMoney } from "@/lib/formatters";
-import { DataTable, Segmented, EmptyState, Card } from "@/app/_components/ds";
+import { useTranslations } from "next-intl";
+import { DataTable, Segmented, EmptyState, Card, StatusPill } from "@/app/_components/ds";
+import { linkState } from "../linkHelpers";
+import { ItemFinder } from "./ItemFinder";
 
 type StockItem = {
   id: string;
@@ -18,6 +21,8 @@ type StockItem = {
 
 interface Props {
   items: StockItem[];
+  /** Stock item ids that are linked to an item master entry; null when the links could not be loaded. */
+  linkedStockIds?: string[] | null;
 }
 
 const COLUMNS = [
@@ -35,15 +40,30 @@ const COLUMNS = [
 
 const SEG_OPTIONS = ["All items", "Low stock"];
 
-export function InventoryStockListClient({ items }: Props) {
+export function InventoryStockListClient({ items, linkedStockIds = null }: Props) {
+  const t = useTranslations("inventoryLink");
   const [active, setActive] = useState("All items");
+  const linked = linkedStockIds === null ? null : new Set(linkedStockIds);
 
   const filtered = active === "Low stock" ? items.filter((i) => i.isLowStock === true) : items;
 
-  const rows: Array<StockItem & { stockStatus: "Low Stock" | "OK" | "Unknown" }> = filtered.map((i) => ({
+  const rows: Array<StockItem & { stockStatus: "Low Stock" | "OK" | "Unknown"; itemLink: string }> = filtered.map((i) => ({
     ...i,
     stockStatus: i.isLowStock === null ? "Unknown" : i.isLowStock ? "Low Stock" : "OK",
+    itemLink: linkState(i.id, linked),
   }));
+
+  const columns = [
+    ...COLUMNS.slice(0, -1),
+    {
+      key: "itemLink" as const,
+      label: t("badge.column"),
+      render: (r: { itemLink: string }) => (
+        <StatusPill status={r.itemLink === "linked" ? "active" : "info"} label={t(`badge.${r.itemLink as "linked" | "unlinked" | "unknown"}`)} />
+      ),
+    },
+    COLUMNS[COLUMNS.length - 1]!,
+  ];
 
   return (
     <Card
@@ -54,6 +74,7 @@ export function InventoryStockListClient({ items }: Props) {
         </div>
       }
     >
+      <ItemFinder />
       {items.length === 0 ? (
         <EmptyState
           icon="📦"
@@ -62,7 +83,7 @@ export function InventoryStockListClient({ items }: Props) {
         />
       ) : (
         <DataTable
-          columns={COLUMNS}
+          columns={columns}
           rows={rows}
           rowLinkPrefix="/inventory/"
           rowLinkKey="id"

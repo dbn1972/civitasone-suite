@@ -10076,5 +10076,112 @@
     "tenantRegion": "Region",
     "tenantForbidden": "Your account is not permitted to view tenant configuration.",
     "tenantUnavailable": "Tenant configuration is not available right now."
+  },
+  "inventoryLink": {
+    "kind": {
+          "linked": "Linked item",
+          "inventory_only": "Item master only, not linked to stock",
+          "stock_only": "Stock register only, not linked"
+    },
+    "picker": {
+          "placeholder": "Search by code or name…",
+          "searching": "Searching…",
+          "noResults": "No matching items",
+          "clear": "Clear",
+          "clearAriaLabel": "Clear selected item",
+          "ariaLabel": "Search items"
+    },
+    "badge": {
+          "linked": "Linked",
+          "unlinked": "Not linked",
+          "unknown": "Link status unavailable",
+          "column": "Stock link"
+    },
+    "finder": {
+          "label": "Find an item",
+          "hint": "Searches the item master and the stock register together. A linked item appears once."
+    },
+    "detail": {
+          "heading": "Stock register link",
+          "linkedTo": "Linked to stock register item {code} · {name}",
+          "openStock": "Open stock register entry",
+          "onHand": "On-hand quantity",
+          "stockValue": "Stock value",
+          "byWarehouse": "By warehouse",
+          "warehouse": "Warehouse",
+          "qty": "Quantity",
+          "rate": "Rate",
+          "value": "Value",
+          "noBalances": "No stock has been received for this item yet.",
+          "stockUnavailable": "Stock balances could not be loaded right now. The link itself is in place; try again shortly.",
+          "notLinked": "This item is not linked to a stock register item, so no stock balances are shown. It is listed in the unlinked items report.",
+          "suggestionTitle": "Suggested match (same code)",
+          "suggestionBody": "Stock register item {code} · {name} has the same code as this item.",
+          "confirmLink": "Confirm link",
+          "chooseLabel": "Link to a stock register item",
+          "choosePlaceholder": "Search stock register items not yet linked…",
+          "linkAction": "Link items",
+          "unlink": "Remove link",
+          "unlinkTitle": "Remove this link?",
+          "unlinkBody": "Both records are kept exactly as they are. Only the link between the item master entry and the stock register entry is removed.",
+          "linkQueued": "Link submitted. It will appear here in a moment.",
+          "unlinkQueued": "Link removal submitted.",
+          "unlinkedItemsReport": "Review unlinked items",
+          "sku": "SKU",
+          "category": "Category",
+          "unit": "Unit",
+          "type": "Type",
+          "reorderLevel": "Reorder level",
+          "reorderQty": "Reorder quantity",
+          "stdCost": "Standard cost",
+          "hsn": "HSN code",
+          "itemNotFound": "Item not found",
+          "itemNotFoundBody": "This item could not be found. It may have been removed, or you may not have access to it.",
+          "browseItems": "Browse the item master"
+    },
+    "register": {
+          "heading": "Item master link",
+          "linkedTo": "Linked to item master entry {code} · {name}",
+          "openItem": "Open item master entry",
+          "notLinked": "Not linked to an item master entry. It exists in the stock register only.",
+          "unavailable": "The link to the item master could not be loaded.",
+          "review": "Review unlinked items"
+    },
+    "report": {
+          "title": "Unlinked items",
+          "subtitle": "Items that exist in only one of the two item masters. Linking is a cross-reference: no item, id or stock record is changed or merged.",
+          "back": "Item Master",
+          "inventoryTotal": "Item master items",
+          "inventoryUnlinked": "Not linked to stock",
+          "stockUnlinked": "Stock register items not linked",
+          "suggestions": "Exact code matches to confirm",
+          "ambiguous": "Matches needing manual review",
+          "stockUnavailable": "The stock register could not be read, so only item master items are listed below.",
+          "truncated": "Only the first part of a long list is shown.",
+          "suggestionsHeading": "Suggested matches (same code)",
+          "suggestionsHint": "The item master SKU equals the stock register code. Confirm each pair to link it.",
+          "inventoryOnlyHeading": "Item master items with no stock register link",
+          "stockOnlyHeading": "Stock register items with no item master link",
+          "colSku": "SKU",
+          "colCode": "Code",
+          "colName": "Name",
+          "colInventoryItem": "Item master item",
+          "colStockItem": "Stock register item",
+          "colHasSuggestion": "Suggested match",
+          "yes": "Yes",
+          "none": "None",
+          "confirm": "Confirm link",
+          "confirmed": "Link submitted. Refresh in a moment to see it removed from this list.",
+          "noSuggestions": "No exact code matches are waiting to be confirmed.",
+          "noInventoryOnly": "Every item master item is linked to a stock register item.",
+          "noStockOnly": "Every stock register item is linked to an item master item.",
+          "notAllowed": "You do not have permission to review or change item links. Contact your administrator if you think this is a mistake.",
+          "loadFailed": "unlinked items"
+    },
+    "errors": {
+          "link": "The link could not be saved.",
+          "unlink": "The link could not be removed.",
+          "network": "Network error. Please try again."
+    }
   }
 }

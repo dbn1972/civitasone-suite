@@ -8,6 +8,7 @@ import {
   LoadErrorState,
 } from "../../../_components/ds";
 import { PrintExportButton } from "../../stock/_components/PrintExportButton";
+import { RegisterLinkCard } from "../RegisterLinkCard";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 
 const LEDGER_COLUMNS = [
@@ -98,6 +99,7 @@ export default async function StockItemDetailPage({
       />
       <div className="grid g-main" style={{ alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          <RegisterLinkCard stockItemId={params.id} />
           <div className="card">
             <div className="card-h">
               <h3>Details</h3>
