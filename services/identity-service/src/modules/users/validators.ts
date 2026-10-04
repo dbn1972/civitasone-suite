@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { USER_STATUSES } from "./domain.js";
 
 export const createUserBody = z.object({
   email:   z.string().email().max(254),
@@ -16,7 +17,7 @@ export const updateUserBody = z.object({
 export type UpdateUserBody = z.infer<typeof updateUserBody>;
 
 export const statusBody = z.object({
-  status: z.enum(["active", "suspended", "locked", "deactivated"]),
+  status: z.enum(USER_STATUSES),
   reason: z.string().min(3).max(500).optional(),
 });
 export type StatusBody = z.infer<typeof statusBody>;
@@ -32,7 +33,7 @@ export const tenantIdQuery = z.object({
 export const userSearchQuery = z.object({
   tenantId: z.string().uuid(),
   q:        z.string().trim().max(100).optional(),
-  status:   z.enum(["active", "suspended", "locked", "deactivated"]).optional(),
+  status:   z.enum(USER_STATUSES).optional(),
   limit:    z.coerce.number().int().min(1).max(200).default(25),
   offset:   z.coerce.number().int().min(0).default(0),
 });

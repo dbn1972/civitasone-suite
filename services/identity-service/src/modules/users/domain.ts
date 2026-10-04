@@ -1,5 +1,11 @@
 export type UserStatus = "active" | "suspended" | "locked" | "deactivated";
 
+/** The one stored vocabulary for users.users.status; mirrors users_status_check (migrations 0015/0027). */
+export const USER_STATUSES = ["active", "suspended", "locked", "deactivated"] as const satisfies readonly UserStatus[];
+
+/** What a SCIM active=false (PATCH/PUT) or DELETE stores. SCIM has no "disabled" state of its own. */
+export const SCIM_INACTIVE_STATUS = "deactivated" satisfies UserStatus;
+
 export type UserView = {
   id: string;
   tenantId: string;

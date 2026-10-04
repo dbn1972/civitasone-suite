@@ -8,7 +8,7 @@ import { strandsTenantAdmins } from "./last-admin.js";
 import * as operatorsRepo from "../operators/repo.js";
 import { assertTransition, type UserView } from "./domain.js";
 import * as keycloak from "../../shared/keycloak.js";
-import { recordPendingDeactivation, resolvePendingDeactivation } from "../../shared/kc-reconcile.js";
+import { recordPendingDeactivation, deprovisionInKeycloak } from "../../shared/kc-reconcile.js";
 import { pino } from "pino";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 
@@ -128,17 +128,7 @@ export function registerUserConsumers(rawQueue: Queue): void {
     // the DB write — but failure is NOT silently dropped: the pending row above
     // keeps it on the reconciler's retry queue until it succeeds.
     if (deactivatedEmail) {
-      void keycloak.deactivateUser(msg.tenantId, deactivatedEmail, kcLog)
-        .then(async (r) => {
-          if (r.skipped) return;
-          kcLog.info({ userId: msg.payload.id, result: r }, "keycloak deactivate");
-          if (r.ok) {
-            await resolvePendingDeactivation(msg.tenantId, msg.payload.id);
-          } else {
-            kcLog.warn({ userId: msg.payload.id, reason: r.reason }, "keycloak deactivate failed — left for reconciler");
-          }
-        })
-        .catch((err) => kcLog.error({ userId: msg.payload.id, err: String(err) }, "keycloak deactivate threw — left for reconciler"));
+      await deprovisionInKeycloak(msg.tenantId, msg.payload.id, deactivatedEmail, kcLog);
     }
   });
 

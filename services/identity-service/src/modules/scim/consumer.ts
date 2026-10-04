@@ -5,6 +5,14 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { users } from "../users/schema.js";
 import * as operatorsRepo from "../operators/repo.js";
+import * as keycloak from "../../shared/keycloak.js";
+import { recordPendingDeactivation, deprovisionInKeycloak } from "../../shared/kc-reconcile.js";
+import { pino } from "pino";
+import { strandsTenantAdmins } from "../users/last-admin.js";
+import * as usersRepo from "../users/repo.js";
+import type * as rbacRepo from "../rbac/repo.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
+import { SCIM_INACTIVE_STATUS } from "../users/domain.js";
 
 const AUDIT = "audit.event.record";
 
@@ -17,7 +25,11 @@ const AUDIT = "audit.event.record";
 // which now publishes a real UUID system-actor sentinel as actorId instead
 // of that same literal).
 
-export function registerScimConsumers(q: Queue): void {
+const kcLog = pino({ name: "identity-scim-keycloak" });
+
+export function registerScimConsumers(rawQueue: Queue): void {
+  // Tenant-scoped like the users consumers, so the post-commit Keycloak outcome write (outside the transaction) runs under RLS context.
+  const q = tenantScoped(rawQueue);
   q.subscribe<{ id: string; tenantId: string; email: string; name: string; status: string }>(
     COMMANDS.scimUserCreate,
     async (msg) => {
@@ -62,10 +74,13 @@ export function registerScimConsumers(q: Queue): void {
   q.subscribe<{ id: string; tenantId: string; patch: Record<string, unknown> }>(
     COMMANDS.scimUserReplace,
     async (msg) => {
+      let kcEmail: string | null = null;
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         const p = msg.payload;
-        const patch = await withoutOperatorStatus(tx, msg, p.id, p.patch);
+        const guarded = await guardScimStatus(tx, msg, p.id, await withoutOperatorStatus(tx, msg, p.id, p.patch));
+        const patch = guarded.patch;
+        kcEmail = guarded.deactivateEmail;
         await tx
           .update(users)
           .set({ ...patch, updatedBy: msg.actorId, updatedAt: new Date() })
@@ -79,16 +94,20 @@ export function registerScimConsumers(q: Queue): void {
           payload: { userId: p.id },
         });
       });
+      if (kcEmail) await deprovisionInKeycloak(msg.tenantId, msg.payload.id, kcEmail, kcLog);
     },
   );
 
   q.subscribe<{ id: string; tenantId: string; patch: Record<string, unknown> }>(
     COMMANDS.scimUserPatch,
     async (msg) => {
+      let kcEmail: string | null = null;
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         const p = msg.payload;
-        const patch = await withoutOperatorStatus(tx, msg, p.id, p.patch);
+        const guarded = await guardScimStatus(tx, msg, p.id, await withoutOperatorStatus(tx, msg, p.id, p.patch));
+        const patch = guarded.patch;
+        kcEmail = guarded.deactivateEmail;
         await tx
           .update(users)
           .set({ ...patch, updatedBy: msg.actorId, updatedAt: new Date() })
@@ -102,10 +121,12 @@ export function registerScimConsumers(q: Queue): void {
           payload: { userId: p.id },
         });
       });
+      if (kcEmail) await deprovisionInKeycloak(msg.tenantId, msg.payload.id, kcEmail, kcLog);
     },
   );
 
   q.subscribe<{ id: string; tenantId: string }>(COMMANDS.scimUserDelete, async (msg) => {
+    let kcEmail: string | null = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload;
@@ -113,9 +134,12 @@ export function registerScimConsumers(q: Queue): void {
         await refusedAudit(tx, msg, p.id, "delete");
         return;
       }
+      const guarded = await guardScimStatus(tx, msg, p.id, { status: SCIM_INACTIVE_STATUS });
+      if (guarded.patch["status"] === undefined) return; // already deactivated (or no such user): idempotent no-op
+      kcEmail = guarded.deactivateEmail;
       await tx
         .update(users)
-        .set({ status: "disabled", updatedBy: msg.actorId, updatedAt: new Date() })
+        .set({ status: SCIM_INACTIVE_STATUS, updatedBy: msg.actorId, updatedAt: new Date() })
         .where(and(eq(users.id, p.id), eq(users.tenantId, p.tenantId)));
       await enqueue(tx as Parameters<typeof enqueue>[0], {
         topic: EVENTS.userDeactivated,
@@ -123,9 +147,10 @@ export function registerScimConsumers(q: Queue): void {
         tenantId: msg.tenantId,
         actorId: msg.actorId,
         correlationId: msg.correlationId,
-        payload: { userId: p.id, status: "disabled" },
+        payload: { userId: p.id, status: SCIM_INACTIVE_STATUS },
       });
     });
+    if (kcEmail) await deprovisionInKeycloak(msg.tenantId, msg.payload.id, kcEmail, kcLog);
   });
 }
 
@@ -147,4 +172,48 @@ async function refusedAudit(tx: unknown, msg: { tenantId: string; actorId: strin
     topic: "audit.event.record", eventType: "audit.event.record", tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
     payload: { service: "identity", action: `scim_${what}_refused`, resourceType: "user", resourceId: userId, outcome: "denied", severity: "high", code: "OPERATOR_REQUIRES_APPROVAL" },
   });
+}
+
+/**
+ * users.status is a state machine in which deactivated is terminal (users/domain.ts ALLOWED). A SCIM status change
+ * therefore (a) is dropped when it would not change anything, (b) is REFUSED, with a denied audit event, when the user is
+ * already deactivated, and (c) when it deactivates, records the durable Keycloak reconciliation obligation in the same
+ * transaction. Returns the email to deprovision in Keycloak after commit, if any.
+ */
+async function guardScimStatus(tx: unknown, msg: { tenantId: string; actorId: string; correlationId: string }, userId: string, patch: Record<string, unknown>): Promise<{ patch: Record<string, unknown>; deactivateEmail: string | null }> {
+  const next = patch["status"];
+  if (next === undefined) return { patch, deactivateEmail: null };
+  const [cur] = await (tx as typeof db).select({ status: users.status, email: users.email }).from(users)
+    .where(and(eq(users.id, userId), eq(users.tenantId, msg.tenantId))).limit(1);
+  const rest = { ...patch };
+  delete rest["status"];
+  if (!cur || cur.status === next) return { patch: rest, deactivateEmail: null };
+  if (cur.status === "deactivated") {
+    await enqueue(tx as Parameters<typeof enqueue>[0], {
+      topic: "audit.event.record", eventType: "audit.event.record", tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+      payload: { service: "identity", action: "scim_status_refused", resourceType: "user", resourceId: userId, outcome: "denied", severity: "high", code: "USER_DEACTIVATED", status: next },
+    });
+    return { patch: rest, deactivateEmail: null };
+  }
+  if (next !== SCIM_INACTIVE_STATUS) return { patch, deactivateEmail: null };
+  // GAP-ADMIN-USERS-01 (#1839): same race-safe guard as the status route -- serialise the tenant's admin changes under the
+  // shared advisory lock, then re-check against current state. A refused change is not applied and is audited.
+  if (cur.status === "active") {
+    await usersRepo.lockTenantAdmins(tx as usersRepo.Writer, msg.tenantId);
+    if (await strandsTenantAdmins(tx as rbacRepo.Writer, msg.tenantId, userId)) {
+      await enqueue(tx as Parameters<typeof enqueue>[0], {
+        topic: "audit.event.record", eventType: "audit.event.record", tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { service: "identity", action: "status_change", resourceType: "user", resourceId: userId, outcome: "denied", reason: "LAST_TENANT_ADMIN", severity: "high" },
+      });
+      return { patch: rest, deactivateEmail: null };
+    }
+  }
+  let deactivateEmail: string | null = null;
+  if (keycloak.isKeycloakEnabled()) {
+    deactivateEmail = cur.email;
+    await recordPendingDeactivation(tx as { insert: typeof db.insert }, {
+      tenantId: msg.tenantId, userId, email: cur.email, correlationId: msg.correlationId, lastError: "pending initial keycloak deactivate",
+    });
+  }
+  return { patch, deactivateEmail };
 }
