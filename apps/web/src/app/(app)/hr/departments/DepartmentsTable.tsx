@@ -362,8 +362,8 @@ export function DepartmentsTable({ depts, canEdit }: { depts: Dept[]; canEdit: b
       setLocalDepts((prev) =>
         prev.map((d) => (d.id === id ? { ...d, code: editCode, name: editName, ...(parentChanged ? { parentId: newParentId } : {}) } : d)),
       );
-    } catch {
-      setRowError(formError.fromException("save").message);
+    } catch (caught) {
+      setRowError(formError.fromException("save", caught).message);
     } finally {
       setSaving(false);
       try { router.refresh(); } catch { /* ignore */ }
@@ -383,8 +383,8 @@ export function DepartmentsTable({ depts, canEdit }: { depts: Dept[]; canEdit: b
       }
       setDeleteTarget(null);
       setLocalDepts((prev) => prev.filter((d) => d.id !== id));
-    } catch {
-      setDeleteError(formError.fromException("save").message);
+    } catch (caught) {
+      setDeleteError(formError.fromException("save", caught).message);
     } finally {
       setDeletingId(null);
       try { router.refresh(); } catch { /* ignore */ }

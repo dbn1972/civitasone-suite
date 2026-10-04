@@ -30,6 +30,7 @@
  * to resolve it is out of this GAP's scope).
  */
 
+import { UserFacingError } from "@/lib/userFacingError";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useToast } from "@/app/_components/ds/Toast";
@@ -188,7 +189,7 @@ export function PromoteWithApproval() {
         });
         if (!subRes.ok) {
           const resolved = await formError.fromResponse(subRes, "save");
-          throw new Error(resolved.message);
+          throw UserFacingError.from(resolved);
         }
         const sub = (await subRes.json()) as { id?: string };
         if (!sub.id) throw new Error(t("errMissingIdFallback"));
@@ -222,7 +223,7 @@ export function PromoteWithApproval() {
       });
       if (!raiseRes.ok) {
         const resolved = await formError.fromResponse(raiseRes, "save");
-        throw new Error(resolved.message);
+        throw UserFacingError.from(resolved);
       }
       const file = (await raiseRes.json()) as { fileNo?: string };
       toast.success(

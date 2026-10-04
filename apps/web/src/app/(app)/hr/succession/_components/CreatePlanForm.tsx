@@ -6,6 +6,7 @@
  * only rendered by the server page for an HR-role session in the first
  * place (see succession/page.tsx's PermissionDenied gate).
  */
+import { UserFacingError } from "@/lib/userFacingError";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -53,7 +54,7 @@ export function CreatePlanForm({ departments, roles }: { departments: Department
       });
       if (!res.ok) {
         const resolved = await formError.fromResponse(res, "save");
-        throw new Error(resolved.message);
+        throw UserFacingError.from(resolved);
       }
       toast.success(t("roleAddedToast"));
       setRoleRef("");
@@ -97,7 +98,7 @@ export function CreatePlanForm({ departments, roles }: { departments: Department
       });
       if (!res.ok) {
         const resolved = await formError.fromResponse(res, "save");
-        throw new Error(resolved.message);
+        throw UserFacingError.from(resolved);
       }
       toast.success(t("nomineeAddedToast"));
       setEmployeeId(null);

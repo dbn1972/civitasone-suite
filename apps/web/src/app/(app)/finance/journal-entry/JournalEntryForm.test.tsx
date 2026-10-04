@@ -161,7 +161,7 @@ describe("JournalEntryForm", () => {
     // the first one findByRole would grab.
     await waitFor(async () => {
       const alerts = await screen.findAllByRole("alert");
-      expect(alerts.some((a) => /couldn't save/i.test(a.textContent ?? ""))).toBe(true);
+      expect(alerts.some((a) => /This journal entry was changed by someone else\. Refresh to see the latest version, then try again\./.test(a.textContent ?? ""))).toBe(true);
     });
     const alerts = screen.getAllByRole("alert");
     for (const alert of alerts) {

@@ -43,9 +43,9 @@ export function CreateReportForm({ defaultReportType = "" }: { defaultReportType
       }
       router.push("/reports/list");
       router.refresh();
-    } catch {
+    } catch (caught) {
       setStatus("error");
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     }
   }
 

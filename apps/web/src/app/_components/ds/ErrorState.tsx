@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ACTION_LABELS, type HumanError, type SafeAction } from "@/lib/messages";
+import { formatReference } from "@/lib/errorCatalogue";
 import { Button } from "./Button";
 
 /**
@@ -18,8 +19,11 @@ export function ErrorState({
   onBack,
   backHref,
   helpHref = "/help",
+  reference,
 }: {
   error: HumanError;
+  /** Support reference (correlation / request id); shown as a quiet secondary line. */
+  reference?: string | null;
   onRetry?: () => void;
   onBack?: () => void;
   backHref?: string;
@@ -53,6 +57,13 @@ export function ErrorState({
               </Button>
             ) : null;
           }
+          if (action === "signin") {
+            return (
+              <Link key={action} href="/auth/login" className="btn primary">
+                {ACTION_LABELS.signin}
+              </Link>
+            );
+          }
           // help
           return (
             <Link key={action} href={helpHref} className="btn ghost">
@@ -61,6 +72,9 @@ export function ErrorState({
           );
         })}
       </div>
+      {formatReference(reference) && (
+        <p style={{ fontSize: 12, color: "var(--mut)", marginTop: 8 }}>{formatReference(reference)}</p>
+      )}
     </div>
   );
 }

@@ -1,9 +1,21 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { ERROR_CATALOGUE, getClientLocale, resolveHumanError, type ErrorLocale } from "@/lib/errorCatalogue";
 
 type Props = {
+  /** Kept for caller compatibility; the standard 403 copy does not name the module. */
   module?: string;
+  /** Kept for caller compatibility; internal role slugs are never shown. */
   requiredRoles?: string[];
+  /**
+   * The service's own free-text reason. It is NEVER rendered (it can carry role
+   * slugs and ownership detail); in development it is logged to the console.
+   */
   reason?: string;
+  /** The service's machine-readable code (e.g. SELF_APPROVAL_FORBIDDEN, MAKER_CHECKER) for a specific message. */
+  code?: string;
   /**
    * GAP-HR-ID-CARDS-07: the CTA was hard-wired to /dashboard, so a denied
    * user browsing within e.g. /hr always left the HR area entirely instead
@@ -15,37 +27,33 @@ type Props = {
   backLabel?: string;
 };
 
-function sentence(text: string): string {
-  const trimmed = text.trim();
-  if (!trimmed) return "";
-  const capitalized = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
-  return /[.!?]$/.test(capitalized) ? capitalized : `${capitalized}.`;
-}
+/**
+ * "Access restricted" card for a 403. Copy comes from the app-wide error
+ * standard (apps/web/docs/ERROR-MESSAGES.md): the standard 403 sentences, or a
+ * domain-code message (self-approval, maker-checker) when the service sent a
+ * known code. Server render is English; the user's locale is applied after
+ * hydration so markup matches.
+ */
+export function PermissionDenied({ reason, code, backHref = "/dashboard", backLabel = "Return to command center" }: Props) {
+  const [locale, setLocale] = useState<ErrorLocale>("en");
+  useEffect(() => {
+    setLocale(getClientLocale());
+  }, []);
+  useEffect(() => {
+    if (reason && process.env.NODE_ENV !== "production") {
+      // eslint-disable-next-line no-console -- dev-only diagnostic; the reason is never shown to the user
+      console.warn("[PermissionDenied] backend reason (not shown):", reason);
+    }
+  }, [reason]);
 
-export function PermissionDenied({ module, requiredRoles, reason, backHref = "/dashboard", backLabel = "Return to command center" }: Props) {
+  const human = resolveHumanError({ status: 403, code, ctx: { locale } });
   return (
     <div className="card" style={{ maxWidth: 480, margin: "40px auto" }}>
       <div className="pad" style={{ textAlign: "center" }}>
         <div style={{ fontSize: 40, marginBottom: 12 }} aria-hidden>🔒</div>
-        <h2 style={{ margin: "0 0 8px" }}>Access restricted</h2>
+        <h2 style={{ margin: "0 0 8px" }}>{ERROR_CATALOGUE[locale].accessRestricted}</h2>
         <p style={{ fontSize: 14, color: "var(--muted)", margin: "0 0 16px" }}>
-          {reason ? (
-            // `reason` is the backend's own HttpError message for THIS specific
-            // request (e.g. "managers may only view their own direct reports'
-            // records") — always already a clerk-safe, specific sentence (see
-            // apiClient.ts's `errorMessage` doc comment), so it takes priority
-            // over the generic module/requiredRoles copy below when present:
-            // it reflects exactly what was actually checked, not a static
-            // guess at it.
-            sentence(reason)
-          ) : (
-            <>
-              {module
-                ? `You don’t have permission to view ${module}.`
-                : "You don’t have permission to view this page."}
-              {requiredRoles?.length ? ` Required: ${requiredRoles.join(", ")}.` : ""}
-            </>
-          )}
+          {human.what} {human.next}
         </p>
         <Link href={backHref} className="btn primary">{backLabel}</Link>
       </div>

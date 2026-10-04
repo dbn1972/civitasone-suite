@@ -37,7 +37,7 @@ describe("FetchBillForm", () => {
     fireEvent.click(screen.getByRole("button", { name: "Fetch Bill" }));
 
     await waitFor(() => {
-      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
+      expect(screen.getByText(/You don't have permission to do this\. Ask your administrator if you need access\./)).toBeInTheDocument();
     });
     expect(screen.queryByText(/BBPS_DISABLED: BBPS not enabled/)).not.toBeInTheDocument();
   });

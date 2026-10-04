@@ -104,6 +104,6 @@ describe("CreateCorrectionForm", () => {
     const dialog = await screen.findByRole("alertdialog");
     fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: "Pay fixation per CPC order" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Record correction" }));
-    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Some details weren't accepted\. Check what you entered and try again\./)).toBeInTheDocument());
   });
 });

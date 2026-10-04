@@ -1,5 +1,6 @@
 "use client";
 
+import { UserFacingError } from "@/lib/userFacingError";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast, Button } from "@/app/_components/ds";
@@ -262,7 +263,7 @@ export function MasterCreateForm({
       });
 
       if (res.status !== 202) {
-        throw new Error((await formError.fromResponse(res, "save")).message);
+        throw UserFacingError.from(await formError.fromResponse(res, "save"));
       }
 
       toast.success("Created. Changes will reflect shortly.");

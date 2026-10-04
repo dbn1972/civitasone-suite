@@ -73,7 +73,7 @@ describe("grant application actions (COMP-012)", () => {
     mockFetchOnce(422, { code: "VALIDATION_FAILED", message: "financialScore must be <= 100" });
     await expect(
       scoreApplication("app-1", { reviewerRef: "rev-1", technicalScore: 80, financialScore: 999 }),
-    ).rejects.toThrow(/couldn't save/i);
+    ).rejects.toThrow("Some details weren't accepted. Check what you entered and try again.");
     await expect(
       scoreApplication("app-1", { reviewerRef: "rev-1", technicalScore: 80, financialScore: 999 }),
     ).rejects.not.toThrow(/VALIDATION_FAILED|financialScore must be/);

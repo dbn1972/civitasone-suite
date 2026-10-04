@@ -252,9 +252,9 @@ export function TaxDeclarationForm() {
       setExistingStatus("submitted");
       setUpdatedAt(new Date().toISOString());
       if (landlordPan.trim()) { setLandlordPanMasked(`${landlordPan.trim().toUpperCase().slice(0, 5)}****${landlordPan.trim().toUpperCase().slice(-1)}`); setLandlordPan(""); }
-    } catch {
+    } catch (caught) {
       setTone("bad");
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

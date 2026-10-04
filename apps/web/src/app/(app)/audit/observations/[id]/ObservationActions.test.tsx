@@ -49,7 +49,7 @@ describe("ObservationActions", () => {
     fireEvent.change(screen.getByLabelText(/Reason \/ ATN reference/), { target: { value: "ATN-441" } });
     fireEvent.click(screen.getByRole("button", { name: "Confirm & record" }));
 
-    expect(await screen.findByText(/couldn't save/i)).toBeInTheDocument();
+    expect(await screen.findByText(/This observation action was changed by someone else\. Refresh to see the latest version, then try again\./)).toBeInTheDocument();
     expect(screen.queryByText(/observation already closed/)).not.toBeInTheDocument();
     expect(refreshMock).not.toHaveBeenCalled();
   });

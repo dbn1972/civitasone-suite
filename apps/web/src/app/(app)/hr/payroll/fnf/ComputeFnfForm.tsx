@@ -456,7 +456,7 @@ export function ComputeFnfForm() {
           setError(t("overrideRequiredServerError"));
           return;
         }
-        setError(formError.fromException("save").message);
+        setError((await formError.fromResponse(res, "save")).message);
         return;
       }
       const body = (await res.json().catch(() => null)) as { data?: { message?: string } } | null;
@@ -465,8 +465,8 @@ export function ComputeFnfForm() {
       router.refresh();
       setPollTicks(0);
       setPolling(true);
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

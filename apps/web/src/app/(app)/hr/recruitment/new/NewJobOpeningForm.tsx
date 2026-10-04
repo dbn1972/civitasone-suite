@@ -329,9 +329,9 @@ export function NewJobOpeningForm() {
       // race it off-screen).
       setStatus("success");
       setMessage(t("submitSuccessMessage"));
-    } catch {
+    } catch (caught) {
       setStatus("error");
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     }
   }
 

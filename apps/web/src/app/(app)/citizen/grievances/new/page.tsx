@@ -62,9 +62,9 @@ export default function RegisterGrievancePage() {
       }
       router.push("/citizen/grievances");
       router.refresh();
-    } catch {
+    } catch (caught) {
       setStatus("error");
-      formError.fromException("save");
+      formError.fromException("save", caught);
     }
   }
 

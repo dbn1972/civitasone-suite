@@ -98,8 +98,8 @@ export function ProviderDrawer({ provider, onClose, onChanged }: { provider: Pla
       const { settled } = await pollUntil(() => readProvider(provider.key), (p) => p.version > before);
       setNotice(settled ? t("platform.drawer.saved") : t("platform.drawer.stillApplying"));
       await onChanged();
-    } catch {
-      formError.fromException("save");
+    } catch (caught) {
+      formError.fromException("save", caught);
     } finally {
       setBusy(false);
     }

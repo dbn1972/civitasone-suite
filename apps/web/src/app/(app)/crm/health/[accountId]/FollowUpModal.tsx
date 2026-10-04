@@ -98,8 +98,8 @@ export function FollowUpModal({ accountId, onClose }: Props) {
       const { data } = (await res.json()) as { data: { id: string } };
       setOpen(false);
       router.push(`/crm/service-requests/${data.id}`);
-    } catch {
-      formError.fromException("save");
+    } catch (caught) {
+      formError.fromException("save", caught);
       setSaving(false);
     }
   }

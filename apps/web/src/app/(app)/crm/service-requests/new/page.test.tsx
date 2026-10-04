@@ -50,7 +50,7 @@ describe("NewServiceRequestPage", () => {
     fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: "Need birth certificate" } });
     fireEvent.click(screen.getByRole("button", { name: "Submit Request" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't save/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Some details weren't accepted\. Check what you entered and try again\./);
     expect(screen.queryByText("Service type required")).not.toBeInTheDocument();
     expect(pushMock).not.toHaveBeenCalled();
   });

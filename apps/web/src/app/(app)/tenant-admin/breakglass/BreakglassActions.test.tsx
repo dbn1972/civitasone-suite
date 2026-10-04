@@ -25,7 +25,7 @@ describe("BreakglassActions — UX-016 clerk-safe errors", () => {
     const confirmBtn = Array.from(dialog.querySelectorAll("button")).find((b) => b.textContent === "Close session");
     fireEvent.click(confirmBtn!);
 
-    await waitFor(() => expect(dialog.textContent).toMatch(/couldn't save/i));
+    await waitFor(() => expect(dialog.textContent).toMatch(/This break-glass session was changed by someone else\. Refresh to see the latest version, then try again\./));
     expect(dialog.textContent).not.toMatch(/already closed by another/i);
     expect(dialog.textContent).not.toMatch(/\b409\b/);
   });

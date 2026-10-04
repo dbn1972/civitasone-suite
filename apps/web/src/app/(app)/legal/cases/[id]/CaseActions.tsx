@@ -1,5 +1,6 @@
 "use client";
 
+import { UserFacingError } from "@/lib/userFacingError";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -84,8 +85,8 @@ export function CaseActions({ caseId }: { caseId: string }) {
       close();
       router.refresh();
       return true;
-    } catch {
-      setMessage(formError.fromException("save").message);
+    } catch (caught) {
+      setMessage(formError.fromException("save", caught).message);
       return false;
     } finally {
       setBusy(false);
@@ -105,7 +106,7 @@ export function CaseActions({ caseId }: { caseId: string }) {
         }),
       });
       if (!res.ok) {
-        throw new Error((await formError.fromResponse(res, "save")).message);
+        throw UserFacingError.from(await formError.fromResponse(res, "save"));
       }
     },
     onSuccess: () => {

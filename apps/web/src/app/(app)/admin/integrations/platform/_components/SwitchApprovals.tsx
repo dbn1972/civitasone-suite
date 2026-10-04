@@ -63,8 +63,8 @@ export function SwitchApprovals({
         : decision === "reject" ? t("tenant.pending.rejected") : t("tenant.pending.cancelled"));
       setActive(null);
       await onChanged();
-    } catch {
-      formError.fromException("save");
+    } catch (caught) {
+      formError.fromException("save", caught);
     } finally {
       setBusy(false);
     }

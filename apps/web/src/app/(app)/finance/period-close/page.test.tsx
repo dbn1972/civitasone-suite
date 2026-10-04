@@ -58,7 +58,7 @@ describe("PeriodCloseCockpitPage", () => {
     const ui = await PeriodCloseCockpitPage();
     render(ui);
 
-    expect(screen.getByText("We couldn't load accounting periods.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load the accounting periods because of a problem on our side.")).toBeInTheDocument();
     expect(screen.queryByText("No periods tracked yet")).not.toBeInTheDocument();
     expect(screen.queryByText("Soft-Close a Period")).not.toBeInTheDocument();
     expect(screen.queryByText("Hard-Closed")).not.toBeInTheDocument();

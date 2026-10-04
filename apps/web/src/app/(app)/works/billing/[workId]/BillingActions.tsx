@@ -75,8 +75,8 @@ export function BillingActions({ bills }: BillingActionsProps) {
       );
       setBillDialog(null);
       setTimeout(() => router.refresh(), 600);
-    } catch {
-      setBillError(billFormError.fromException("save").message);
+    } catch (caught) {
+      setBillError(billFormError.fromException("save", caught).message);
     } finally {
       setBillBusy(false);
     }
@@ -120,8 +120,8 @@ export function BillingActions({ bills }: BillingActionsProps) {
       setMbDialog(false);
       setMbId("");
       setTimeout(() => router.refresh(), 600);
-    } catch {
-      setMbError(mbFormError.fromException("save").message);
+    } catch (caught) {
+      setMbError(mbFormError.fromException("save", caught).message);
     } finally {
       setMbBusy(false);
     }

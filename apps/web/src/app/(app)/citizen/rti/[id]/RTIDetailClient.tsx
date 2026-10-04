@@ -1,4 +1,5 @@
 "use client";
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -63,7 +64,7 @@ export function RTIDetailClient({
     try {
       const res = await fetch(`/api/proxy/v1/citizen/rti/${id}`, { cache: "no-store", signal });
       if (res.status === 404) { setRti(null); return; }
-      if (!res.ok) throw new Error((await res.text()) || "Failed to load RTI application.");
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "load");
       setRti((await res.json()) as RtiDetail);
     } catch (e) {
       if (e instanceof Error && e.name === "AbortError") return;
@@ -100,7 +101,7 @@ export function RTIDetailClient({
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ responseUrl }),
     });
-    if (!res.ok) throw new Error((await res.text()) || "Could not record the response.");
+    if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
   }
 
   async function fileAppeal(e: React.FormEvent) {
@@ -113,7 +114,7 @@ export function RTIDetailClient({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ appealType: appeal.appealType, grounds: appeal.grounds }),
       });
-      if (!res.ok) throw new Error((await res.text()) || "Could not file the appeal.");
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       setShowAppeal(false);
       setAppeal({ appealType: "first", grounds: "" });
       afterMutate("Appeal submitted. It will appear once processed.");

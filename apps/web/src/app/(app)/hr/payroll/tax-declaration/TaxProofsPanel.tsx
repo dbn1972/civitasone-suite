@@ -97,8 +97,8 @@ export function TaxProofsPanel({ fy }: { fy: string }) {
       // The row is created by an async consumer: refresh now and again shortly after.
       await load();
       setTimeout(() => void load(), 1500);
-    } catch {
-      setMessage({ text: formError.fromException("save").message, tone: "bad" });
+    } catch (caught) {
+      setMessage({ text: formError.fromException("save", caught).message, tone: "bad" });
     } finally {
       setBusyLine(null);
     }
@@ -127,8 +127,8 @@ export function TaxProofsPanel({ fy }: { fy: string }) {
         await load();
         setTimeout(() => void load(), 1500);
       }
-    } catch {
-      setMessage({ text: formError.fromException("save").message, tone: "bad" });
+    } catch (caught) {
+      setMessage({ text: formError.fromException("save", caught).message, tone: "bad" });
     } finally {
       setRemoving(false);
       setRemoveTarget(null);

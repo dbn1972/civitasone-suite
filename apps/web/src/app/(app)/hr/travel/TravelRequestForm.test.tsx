@@ -63,7 +63,7 @@ describe("TravelRequestForm — UX-016 clerk-safe errors", () => {
     openAndFillForm();
 
     const alert = await screen.findByRole("alert");
-    await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+    await waitFor(() => expect(alert).toHaveTextContent(/Some details weren't accepted\. Check what you entered and try again\./));
     expect(alert.textContent).not.toMatch(/travel-service/);
   });
 });

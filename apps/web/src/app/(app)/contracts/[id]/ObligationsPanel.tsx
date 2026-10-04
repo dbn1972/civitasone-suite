@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ActionButton } from "../../../_components/ds";
@@ -55,7 +56,7 @@ export function ObligationsPanel({ contractId, obligations }: Props) {
         }),
       });
       if (res.status !== 202 && !res.ok) {
-        throw new Error((await res.text()) || "Create obligation failed");
+        throw await userFacingErrorFromResponse(res, "save");
       }
       setMessage("Obligation creation accepted (queued).");
       setTitle("");
@@ -86,7 +87,7 @@ export function ObligationsPanel({ contractId, obligations }: Props) {
         body: JSON.stringify({ status: nextStatus, version }),
       });
       if (res.status !== 202 && !res.ok) {
-        throw new Error((await res.text()) || "Update obligation failed");
+        throw await userFacingErrorFromResponse(res, "save");
       }
       setMessage(`Obligation status update to "${STATUS_LABEL[nextStatus] ?? nextStatus}" accepted (queued).`);
       router.refresh();

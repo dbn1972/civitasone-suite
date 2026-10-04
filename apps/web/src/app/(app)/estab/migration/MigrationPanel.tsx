@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useCallback, useEffect, useState } from "react";
 import { Button, DataTable, StatusPill } from "../../../_components/ds";
 
@@ -29,7 +30,7 @@ export function MigrationPanel() {
     setLoading(true);
     try {
       const res = await fetch("/api/proxy/v1/estab/migration?limit=100", { signal });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       setRows(((await res.json()) as { data?: MigrationRow[] }).data ?? []);
       setError("");
     } catch (err) {
@@ -65,7 +66,7 @@ export function MigrationPanel() {
           ...(form.scanRef.trim() ? { scanRef: form.scanRef.trim() } : {}),
         }),
       });
-      if (!res.ok) throw new Error((await res.text()) || "Register failed");
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       setMessage("Legacy file registered.");
       setForm({ ...EMPTY });
       setTimeout(() => void load(), 800);

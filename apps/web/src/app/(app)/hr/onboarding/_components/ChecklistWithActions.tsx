@@ -52,9 +52,9 @@ export function ChecklistWithActions({ steps: initialSteps }: ChecklistWithActio
       // bar / overdue counts on this page pick up the real committed state
       // rather than only ever showing the optimistic local view.
       setTimeout(() => router.refresh(), 1000);
-    } catch {
+    } catch (caught) {
       setSteps(previous);
-      setError(formError.fromException("save").message);
+      setError(formError.fromException("save", caught).message);
     }
   }
 

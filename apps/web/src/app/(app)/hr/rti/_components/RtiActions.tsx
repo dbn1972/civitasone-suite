@@ -37,8 +37,8 @@ function useRtiAction(path: string) {
       setOpen(false);
       router.refresh();
       return true;
-    } catch {
-      err.fromException("save");
+    } catch (caught) {
+      err.fromException("save", caught);
       return false;
     } finally {
       setBusy(false);

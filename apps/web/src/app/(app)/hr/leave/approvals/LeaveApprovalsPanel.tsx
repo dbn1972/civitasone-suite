@@ -1,5 +1,6 @@
 "use client";
 
+import { UserFacingError } from "@/lib/userFacingError";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PageHeader, Card, DataTable, ConfirmDialog, EmptyState, ErrorState, Button } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
@@ -86,7 +87,7 @@ export function LeaveApprovalsPanel() {
       if (!taskRes.ok) {
         const resolved = await formError.fromResponse(taskRes, "load");
         setSource("error");
-        throw new Error(resolved.message);
+        throw UserFacingError.from(resolved);
       }
       const taskBody = (await taskRes.json()) as { data?: WorkflowTask[] } | WorkflowTask[];
       const taskRows = Array.isArray(taskBody) ? taskBody : taskBody.data ?? [];
@@ -116,7 +117,7 @@ export function LeaveApprovalsPanel() {
         const resolved = await formError.fromResponse(leaveRes, "load");
         setEnrichError(resolved.message);
       } else {
-        setEnrichError(formError.fromException("load").message);
+        setEnrichError(formError.fromException("load", new TypeError("no response")).message);
       }
     } catch (e) {
       // A signal abort (component unmounted, e.g. the user navigated away
@@ -126,7 +127,7 @@ export function LeaveApprovalsPanel() {
       // whatever the user navigated to instead.
       if (e instanceof Error && e.name === "AbortError") return;
       setSource("error");
-      setError(formError.fromException("load").message);
+      setError(formError.fromException("load", e).message);
     } finally {
       if (!silent) setLoading(false);
     }
@@ -196,8 +197,8 @@ export function LeaveApprovalsPanel() {
       // rejects the decision, this background refresh restores the row.
       setTasks((prev) => prev.filter((wt) => wt.id !== task.id));
       void loadTasks(undefined, true);
-    } catch {
-      setDialogError(formError.fromException("save").message);
+    } catch (caught) {
+      setDialogError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

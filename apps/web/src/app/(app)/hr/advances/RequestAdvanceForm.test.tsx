@@ -79,7 +79,7 @@ describe("RequestAdvanceForm — UX-016 clerk-safe errors", () => {
     await openAndFillForm();
 
     const alert = await screen.findByRole("alert");
-    await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+    await waitFor(() => expect(alert).toHaveTextContent(/This advance request was changed by someone else\. Refresh to see the latest version, then try again\./));
     expect(alert.textContent).not.toMatch(/duplicate advance request/);
   });
 

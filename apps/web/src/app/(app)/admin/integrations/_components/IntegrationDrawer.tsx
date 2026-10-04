@@ -109,7 +109,7 @@ export function IntegrationDrawer({
       // since this effect re-fires on every env switch) a newer load for a
       // different environment scope has already superseded this one.
       if (err instanceof Error && err.name === "AbortError") return;
-      setError(formError.fromException("load").message);
+      setError(formError.fromException("load", err).message);
       setDetail(null);
       setLoadFailed(true);
     } finally {
@@ -180,8 +180,8 @@ export function IntegrationDrawer({
       setNote("");
       onChanged();
       await load(env);
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }
@@ -207,8 +207,8 @@ export function IntegrationDrawer({
       setSuccess(action === "approve" ? "Change approved and applied." : "Change rejected.");
       onChanged();
       await load(env);
-    } catch {
-      setDecisionError(formError.fromException("save").message);
+    } catch (caught) {
+      setDecisionError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }
@@ -233,8 +233,8 @@ export function IntegrationDrawer({
         setTestResult({ ok: Boolean(body.ok), status: body.status ?? "failed", error: body.error ?? null, detail: body.detail ?? null });
       }
       onChanged();
-    } catch {
-      setTestResult({ ok: false, status: "failed", error: formError.fromException("load").message, detail: null });
+    } catch (caught) {
+      setTestResult({ ok: false, status: "failed", error: formError.fromException("load", caught).message, detail: null });
     } finally {
       setTesting(false);
     }

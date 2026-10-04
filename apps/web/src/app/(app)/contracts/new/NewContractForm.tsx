@@ -103,9 +103,9 @@ export function NewContractForm() {
       setStatus("success");
       setMessage("Contract created successfully.");
       router.push("/contracts/list");
-    } catch {
+    } catch (caught) {
       setStatus("error");
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     }
   }
 

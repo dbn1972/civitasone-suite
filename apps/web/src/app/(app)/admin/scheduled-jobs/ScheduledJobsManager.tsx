@@ -273,9 +273,9 @@ export function ScheduledJobsManager({ initialJobs, source, targets = null }: { 
       }
       setShowModal(false);
       await refresh();
-    } catch {
+    } catch (caught) {
       setSaving(false);
-      setError(formError.fromException("save").message);
+      setError(formError.fromException("save", caught).message);
     }
   }
 

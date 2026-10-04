@@ -1,5 +1,6 @@
 "use client";
 
+import { UserFacingError } from "@/lib/userFacingError";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -30,7 +31,7 @@ export function LocationRowActions({ id, name, archived = false }: { id: string;
       const code = await res.clone().json().then((b: { code?: string }) => b.code ?? null).catch(() => null);
       if (code === "HAS_ACTIVE_CHILDREN") throw new Error(t("errHasActiveChildren"));
       if (code === "ALREADY_ARCHIVED") throw new Error(t("errAlreadyArchived"));
-      throw new Error((await formError.fromResponse(res, "save")).message);
+      throw UserFacingError.from(await formError.fromResponse(res, "save"));
     }
     router.refresh();
   }

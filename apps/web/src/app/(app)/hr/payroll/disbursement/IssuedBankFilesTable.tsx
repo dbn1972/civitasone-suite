@@ -42,8 +42,8 @@ export function IssuedBankFilesTable({ files }: { files: IssuedFile[] }) {
         return;
       }
       await saveResponseAsFile(res, `${f.fileName}.sig`);
-    } catch {
-      setError(formError.fromException("load").message);
+    } catch (caught) {
+      setError(formError.fromException("load", caught).message);
     } finally {
       setBusyId(null);
     }

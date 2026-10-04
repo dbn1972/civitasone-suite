@@ -99,7 +99,7 @@ describe("ProposalEditToggle — UX-016 clerk-safe errors", () => {
     fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
 
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toMatch(/couldn't save/i);
+    expect(alert.textContent).toMatch(/This proposal was changed by someone else\. Refresh to see the latest version, then try again\./);
     expect(alert.textContent).not.toMatch(/409/);
   });
 

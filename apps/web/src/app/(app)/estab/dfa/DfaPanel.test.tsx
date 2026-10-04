@@ -74,7 +74,7 @@ describe("DfaPanel — UX-016 clerk-safe errors", () => {
     expect(document.body.textContent).not.toMatch(/\b500\b/);
   });
 
-  it("propagates a clerk-safe message (prefixed with the action) when a lifecycle action fails", async () => {
+  it("propagates a clerk-safe message (no raw action slug prefix) when a lifecycle action fails", async () => {
     const dfa = {
       id: "dfa-2", dfaNo: "DFA-002", communicationType: "letter", subject: "Test 2",
       status: "draft", editable: true, recipientName: null, updatedAt: "2026-08-17T00:00:00Z",
@@ -93,5 +93,6 @@ describe("DfaPanel — UX-016 clerk-safe errors", () => {
 
     await waitFor(() => expect(dialog.textContent).toMatch(/couldn't save/i));
     expect(dialog.textContent).not.toMatch(/\b503\b/);
+    expect(dialog.textContent).not.toMatch(/\bsubmit: /);
   });
 });

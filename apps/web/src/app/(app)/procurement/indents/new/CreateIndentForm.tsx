@@ -101,8 +101,8 @@ export function CreateIndentForm({
       setMessage("Indent submitted for approval via workflow.");
       router.push("/procurement/indents");
       router.refresh();
-    } catch {
-      setStatus("error"); formError.fromException("save");
+    } catch (caught) {
+      setStatus("error"); formError.fromException("save", caught);
     }
   }
 

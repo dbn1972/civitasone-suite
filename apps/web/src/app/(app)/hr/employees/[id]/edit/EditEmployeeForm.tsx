@@ -246,9 +246,9 @@ export function EditEmployeeForm({ employee }: Props) {
         router.push(`/hr/employees/${employee.id}`);
         router.refresh();
       }, 1200);
-    } catch {
+    } catch (caught) {
       setTone("error");
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
       setBusy(false);
     }
   }

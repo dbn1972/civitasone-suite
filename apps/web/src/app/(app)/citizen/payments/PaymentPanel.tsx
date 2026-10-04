@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -27,7 +28,7 @@ export function PaymentPanel({ schedules }: { schedules: Array<{ id: string; nam
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ applicationId, scheduleId, subject: {} }),
       });
-      if (!res.ok) throw new Error((await res.text()) || "Could not record payment.");
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       const body = await res.json();
       setMessage(`Receipt ${body.receiptNo} issued for ${body.currency} ${body.amount}.`);
       router.refresh();

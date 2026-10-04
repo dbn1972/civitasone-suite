@@ -70,8 +70,8 @@ export function ApplicationFeeDialog({ applicationId, applicantName, onClose }: 
       setPaymentRef("");
       await read();
       setTimeout(() => { if (mounted.current) void read(); }, 1200);
-    } catch {
-      setMessage({ kind: "error", text: formError.fromException("save").message });
+    } catch (caught) {
+      setMessage({ kind: "error", text: formError.fromException("save", caught).message });
     } finally {
       if (mounted.current) setBusy(false);
     }

@@ -35,8 +35,8 @@ export function RecordHearingForm({ complaintId }: { complaintId: string }) {
       setNotes("");
       setFinding("");
       router.refresh();
-    } catch {
-      err.fromException("save");
+    } catch (caught) {
+      err.fromException("save", caught);
     } finally {
       setBusy(false);
     }

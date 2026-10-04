@@ -62,8 +62,8 @@ export function FileAttachments({ fileId, attachments }: Props) {
       setPending(null);
       setMessage("Attachment uploaded.");
       router.refresh();
-    } catch {
-      setMessage(formError.fromException("save").message);
+    } catch (caught) {
+      setMessage(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

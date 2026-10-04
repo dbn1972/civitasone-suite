@@ -87,7 +87,7 @@ export default function NewBudgetEstimatePage() {
       return options;
     } catch (err) {
       if (signal.aborted || (err instanceof DOMException && err.name === "AbortError")) throw err;
-      setLoadError(formError.fromException("load").message);
+      setLoadError(formError.fromException("load", err).message);
       return [];
     }
     // formError.fromResponse/fromException are stable (see useFormError); the wrapping object is not read here.
@@ -140,10 +140,10 @@ export default function NewBudgetEstimatePage() {
       router.refresh();
       // Long enough to read; the link below goes there immediately.
       redirectTimer.current = setTimeout(() => router.push(listHref), REDIRECT_DELAY_MS);
-    } catch {
+    } catch (caught) {
       setConfirmMinor(null);
       setIsError(true);
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     } finally {
       inFlight.current = false;
       setBusy(false);

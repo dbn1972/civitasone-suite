@@ -99,7 +99,7 @@ describe("decideMerge", () => {
       ),
     );
 
-    await expect(decideMerge(CANDIDATE.id, "approve")).rejects.toThrow(/couldn't save/i);
+    await expect(decideMerge(CANDIDATE.id, "approve")).rejects.toThrow("This information was changed by someone else. Refresh to see the latest version, then try again.");
     await expect(decideMerge(CANDIDATE.id, "approve")).rejects.not.toThrow(
       /ALREADY_DECIDED|already approved/,
     );

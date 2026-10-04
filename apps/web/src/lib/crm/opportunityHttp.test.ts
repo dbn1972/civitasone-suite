@@ -34,7 +34,7 @@ describe("opportunity HTTP client (OP-001..006)", () => {
     fetchMock.mockResolvedValueOnce(res({}, { status: 200 }));
     await expect(op.deletePipeline("p1")).resolves.toBeUndefined();
     fetchMock.mockResolvedValueOnce(res({ code: "CONFLICT", message: "in use" }, { status: 409 }));
-    await expect(op.deletePipeline("p1")).rejects.toThrow(/couldn't save/i);
+    await expect(op.deletePipeline("p1")).rejects.toThrow("This information was changed by someone else. Refresh to see the latest version, then try again.");
     fetchMock.mockResolvedValueOnce(res({ code: "CONFLICT", message: "in use" }, { status: 409 }));
     await expect(op.deletePipeline("p1")).rejects.not.toThrow(/CONFLICT/);
   });
@@ -52,7 +52,7 @@ describe("opportunity HTTP client (OP-001..006)", () => {
     fetchMock.mockResolvedValueOnce(res({ code: "MANDATORY_STAGE_FIELDS_MISSING", fields: ["nextStep"] }, { status: 422 }));
     await expect(op.changeOpportunityStage("d1", "propose", 1)).rejects.toBeInstanceOf(op.MandatoryFieldsError);
     fetchMock.mockResolvedValueOnce(res({ code: "FORBIDDEN", message: "no" }, { status: 403 }));
-    await expect(op.changeOpportunityStage("d1", "propose", 1)).rejects.toThrow(/couldn't save/i);
+    await expect(op.changeOpportunityStage("d1", "propose", 1)).rejects.toThrow("You don't have permission to do this. Ask your administrator if you need access.");
     fetchMock.mockResolvedValueOnce(res({ code: "FORBIDDEN", message: "no" }, { status: 403 }));
     await expect(op.changeOpportunityStage("d1", "propose", 1)).rejects.not.toThrow(/FORBIDDEN/);
   });

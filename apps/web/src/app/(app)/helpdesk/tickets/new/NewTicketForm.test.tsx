@@ -60,7 +60,7 @@ describe("NewTicketForm (citizen-facing)", () => {
     fireEvent.change(screen.getByLabelText(/description/i), { target: { value: "x" } });
     fireEvent.click(screen.getByRole("button", { name: "Submit ticket" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't save/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Some details weren't accepted\. Check what you entered and try again\./);
     expect(screen.queryByText(/VALIDATION_FAILED/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Description is required\./)).not.toBeInTheDocument();
     expect(pushMock).not.toHaveBeenCalled();

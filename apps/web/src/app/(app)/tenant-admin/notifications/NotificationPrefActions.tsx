@@ -91,8 +91,8 @@ export function NotificationPrefActions({ prefs }: { prefs: Pref[] }) {
       }
       setStatus(`${okVerb} ${ids.length} preference${ids.length === 1 ? "" : "s"}.`);
       router.refresh();
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

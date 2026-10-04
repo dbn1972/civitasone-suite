@@ -80,8 +80,8 @@ export function BankFileSigningForm({ settings }: { settings: SigningSettings })
       setConfirmOpen(false);
       setMessage(t("savedMessage"));
       router.refresh();
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

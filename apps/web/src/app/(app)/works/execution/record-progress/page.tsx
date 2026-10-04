@@ -132,8 +132,8 @@ function RecordProgressForm() {
       setMessage("Progress recorded.");
       toast.success("Progress recorded.");
       setTimeout(() => router.push(workId ? `/works/execution/${workId}` : "/works/execution"), 600);
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

@@ -80,7 +80,7 @@ describe("PredictionHistory", () => {
       await waitFor(() => {
         expect(screen.getByRole("alert")).toBeInTheDocument();
       });
-      expect(screen.getByRole("alert")).toHaveTextContent(/couldn't load/i);
+      expect(screen.getByRole("alert")).toHaveTextContent(/We couldn't load the prediction history\. Check your internet connection and try again in a few minutes\./);
     });
   });
 

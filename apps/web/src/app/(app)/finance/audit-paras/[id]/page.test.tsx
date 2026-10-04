@@ -87,6 +87,6 @@ describe("AuditParaDetailPage (GAP-FINANCE-AUDIT-PARAS-DETAIL-03/05)", () => {
     getEvents.mockResolvedValue({ source: "error", status: 503, data: [] });
     render(await AuditParaDetailPage({ params: { id: "p1" } }));
     expect(screen.queryByText("No reply or action recorded yet")).not.toBeInTheDocument();
-    expect(screen.getByText(/couldn't load audit para history/i)).toBeInTheDocument();
+    expect(screen.getByText(/We couldn't load the audit para history because of a problem on our side\./)).toBeInTheDocument();
   });
 });

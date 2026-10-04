@@ -58,7 +58,7 @@ describe("NewVehiclePage — vehicle create (L1/L2)", () => {
     fireEvent.change(screen.getByLabelText(/Make .* model/), { target: { value: "Toyota Innova" } });
     fireEvent.click(screen.getByRole("button", { name: "Add Vehicle" }));
 
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/couldn't save/i));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/This vehicle was changed by someone else\. Refresh to see the latest version, then try again\./));
     expect(screen.getByRole("alert").textContent).not.toMatch(/already registered/i);
     expect(screen.getByRole("alert").textContent).not.toMatch(/\b409\b/);
   });

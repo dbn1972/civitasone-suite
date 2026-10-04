@@ -185,8 +185,8 @@ export function BankFileWizard({
       if (isSigned && issuance && (fmt === "pgp_detached" || fmt === "pkcs7_detached")) {
         await downloadSignatureFor(issuance, fn);
       }
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

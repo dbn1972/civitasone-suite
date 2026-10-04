@@ -72,10 +72,10 @@ export function IssueChequeForm() {
       setMessage(t("recorded"));
       router.refresh();
       setTimeout(() => router.push("/finance/treasury/cheques"), 700);
-    } catch {
+    } catch (caught) {
       setConfirmOpen(false);
       setIsError(true);
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

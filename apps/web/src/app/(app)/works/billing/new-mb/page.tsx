@@ -58,8 +58,8 @@ function NewMbForm() {
       setMessage("Created.");
       toast.success("Measurement book issued.");
       setTimeout(() => router.push(form.workId.trim() ? `/works/billing/${form.workId.trim()}` : "/works/billing"), 600);
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

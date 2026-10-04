@@ -70,8 +70,8 @@ export function ForceFileButton({ fy, quarter }: { fy: string; quarter: string }
       });
       toast.success(t("filedToast", { fy, quarter }));
       setOpen(false);
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

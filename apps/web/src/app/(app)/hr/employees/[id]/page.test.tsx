@@ -66,7 +66,7 @@ describe("EmployeeDetailPage", () => {
 
     expect(screen.getByRole("heading", { name: "Access restricted" })).toBeInTheDocument();
     expect(
-      screen.getByText("Managers may only view their own direct reports' records."),
+      screen.getByText(/You don't have permission to do this\. Ask your administrator if you need access\./),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
   });

@@ -106,7 +106,7 @@ describe("ReappropriateWithApproval (GAP-FINANCE-BUDGET-ALLOCATION-03)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Review and submit" }));
     fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Submit to eOffice" }));
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent(/couldn't save/i);
+    expect(alert).toHaveTextContent(/Some details weren't accepted\. Check what you entered and try again\./);
     expect(alert.textContent).not.toMatch(/VALIDATION_FAILED|stack|400/);
     expect(calls.some((c) => c.url.includes("from-module"))).toBe(false);
   });

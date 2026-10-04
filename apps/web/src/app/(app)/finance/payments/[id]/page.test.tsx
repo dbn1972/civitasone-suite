@@ -166,7 +166,7 @@ describe("PaymentDetailPage", () => {
     getByIdMock.mockResolvedValue(payment({ status: "initiated" }));
     getContextMock.mockResolvedValue({ data: null, source: "error", status: 503 });
     render(await PaymentDetailPage({ params: { id: ID } }));
-    expect(screen.getByText(/couldn't load payment history/i)).toBeInTheDocument();
+    expect(screen.getByText(/We couldn't load the payment history because of a problem on our side\./)).toBeInTheDocument();
     expect(screen.queryByText("No history recorded")).not.toBeInTheDocument();
     expect(screen.getAllByText("₹1,00,00,000.00").length).toBeGreaterThan(0);
   });

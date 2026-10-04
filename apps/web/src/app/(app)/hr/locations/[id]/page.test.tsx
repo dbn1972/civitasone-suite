@@ -104,7 +104,8 @@ describe("/hr/locations/[id]", () => {
   it("shows the access-restricted message on a 403 from the employees API", async () => {
     route({ data: hierarchy, source: "api" }, { data: { data: [], total: 0, limit: 25, offset: 0, unlinkedCount: 0 }, source: "error", status: 403, errorMessage: "requires one of: hr_admin, hr_officer, super_admin" });
     await renderPage();
-    expect(screen.getByText(/requires one of: hr_admin, hr_officer, super_admin/i)).toBeInTheDocument();
+    expect(screen.getByText(/You don't have permission to do this\. Ask your administrator if you need access\./)).toBeInTheDocument();
+    expect(screen.queryByText(/hr_admin/)).not.toBeInTheDocument();
   });
 
   it("404 from the hierarchy call renders not-found; other failures render the error state", async () => {

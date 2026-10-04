@@ -180,9 +180,9 @@ export function AllocateLeaveForm() {
       // still selected.
       setTotalDays("");
       setEmployeeId(null);
-    } catch {
+    } catch (caught) {
       setStatus("error");
-      setSubmitError(formError.fromException("save").message);
+      setSubmitError(formError.fromException("save", caught).message);
     }
   }
 

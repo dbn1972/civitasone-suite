@@ -114,8 +114,8 @@ export default function SelectionListsPage() {
         setTimeout(() => { if (mounted.current && selectedId) { void loadDetail(selectedId); void loadLists(); } }, 1200);
       }
       return null;
-    } catch {
-      const text = formError.fromException("save").message;
+    } catch (caught) {
+      const text = formError.fromException("save", caught).message;
       setMessage({ kind: "error", text });
       return text;
     } finally {

@@ -79,8 +79,8 @@ export function OfferWorkflowDialog({ applicationId, applicantName, onClose, onC
       setMessage({ kind: "ok", text: okText });
       reloadAfterWrite();
       return true;
-    } catch {
-      setMessage({ kind: "error", text: formError.fromException("save").message });
+    } catch (caught) {
+      setMessage({ kind: "error", text: formError.fromException("save", caught).message });
       return false;
     } finally {
       if (mounted.current) setBusy(false);

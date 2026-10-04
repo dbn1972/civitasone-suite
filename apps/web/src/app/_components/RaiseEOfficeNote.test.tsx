@@ -281,7 +281,7 @@ describe("RaiseEOfficeNote classification, error mapping and notify warning", ()
     mockAll({ submit: new Response(JSON.stringify({ code: "VALIDATION", message: "approvalChain invalid", stack: "at x" }), { status: 400 }) });
     render(<RaiseEOfficeNote {...props} />);
     await fillAndSubmit();
-    const msg = await screen.findByText(/couldn't save/i);
+    const msg = await screen.findByText(/Some details weren't accepted\. Check what you entered and try again\./);
     expect(msg.textContent).not.toMatch(/VALIDATION|approvalChain|stack|\{/);
   });
 

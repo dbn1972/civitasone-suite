@@ -123,8 +123,8 @@ export function OrgConfigPage({ initialLevels, source }: { initialLevels: OrgLev
         return;
       }
       setNotice("Org hierarchy saved.");
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
       setConfirmSave(false);

@@ -62,7 +62,7 @@ describe("LeavePoliciesPage — UX-016 clerk-safe errors", () => {
     // Scoped to the toHumanError "area" text (not just /couldn't load/i) since
     // the page's own DataSourceBadge also shows a generic "Couldn't load —
     // showing nothing" pill on this same error state.
-    await waitFor(() => expect(screen.getByText(/couldn't load leave policy/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/We couldn't load the leave policy because of a problem on our side\. Try again in a few minutes\./)).toBeInTheDocument());
     expect(screen.queryByText(/\b500\b/)).not.toBeInTheDocument();
   });
 

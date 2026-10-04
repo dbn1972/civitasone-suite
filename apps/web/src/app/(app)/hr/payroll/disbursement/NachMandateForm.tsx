@@ -167,8 +167,8 @@ export function NachMandateForm() {
       }
       const body = (await res.json()) as { data: MandateResult };
       setStatusResult(body.data);
-    } catch {
-      setStatusError(formError.fromException("unknownStatus").message);
+    } catch (caught) {
+      setStatusError(formError.fromException("unknownStatus", caught).message);
     } finally {
       setStatusBusy(false);
     }

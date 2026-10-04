@@ -1,5 +1,6 @@
 "use client";
 
+import { UserFacingError } from "@/lib/userFacingError";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
@@ -26,7 +27,7 @@ export function DocumentPanel() {
 
   async function post<T>(path: string, body: unknown): Promise<T> {
     const res = await fetch(`/api/proxy${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-    if (!res.ok) throw new Error((await formError.fromResponse(res, "save")).message);
+    if (!res.ok) throw UserFacingError.from(await formError.fromResponse(res, "save"));
     return (await res.json()) as T;
   }
 
@@ -37,7 +38,7 @@ export function DocumentPanel() {
         ? { applicationId, serviceId, docType }
         : { applicationId, serviceId, docType, docUri: `digilocker://${docType}` };
       setUploaded(await post<Uploaded>(`/v1/citizen/documents/${source === "upload" ? "upload" : "digilocker-fetch"}`, body));
-    } catch { setError(formError.fromException("save").message); } finally { setBusy(false); }
+    } catch (caught) { setError(formError.fromException("save", caught).message); } finally { setBusy(false); }
   }
 
   async function loadChecklist(e: React.FormEvent) {
@@ -46,9 +47,9 @@ export function DocumentPanel() {
     try {
       const qs = new URLSearchParams({ serviceId, ...(applicationId ? { applicationId } : {}) });
       const res = await fetch(`/api/proxy/v1/citizen/documents/checklist?${qs.toString()}`);
-      if (!res.ok) throw new Error((await formError.fromResponse(res, "load")).message);
+      if (!res.ok) throw UserFacingError.from(await formError.fromResponse(res, "load"));
       setChecklist((await res.json()) as Checklist);
-    } catch { setError(formError.fromException("load").message); } finally { setBusy(false); }
+    } catch (caught) { setError(formError.fromException("load", caught).message); } finally { setBusy(false); }
   }
 
   return (

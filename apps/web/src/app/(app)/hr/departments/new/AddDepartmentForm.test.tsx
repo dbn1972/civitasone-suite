@@ -53,6 +53,23 @@ describe("AddDepartmentForm — UX-016 clerk-safe errors", () => {
     expect(await screen.findByText("Department code already exists.")).toBeInTheDocument();
   });
 
+  it("shows a GOV.UK-style error summary with a link to the offending field, and a quiet reference", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({ code: "VALIDATION_FAILED", fieldErrors: [{ field: "code", message: "Department code already exists." }] }),
+        { status: 400, headers: { "content-type": "application/json", "x-request-id": "req_ab12" } },
+      ),
+    );
+    fillAndSubmit();
+
+    const summary = await screen.findByTestId("error-summary");
+    expect(summary).toHaveTextContent("Some details need changing. Check the highlighted fields and try again.");
+    const link = screen.getAllByRole("link", { name: "Department code already exists." })[0];
+    expect(link.getAttribute("href")).toMatch(/^#/);
+    expect(summary).toHaveTextContent("Reference: req_ab12");
+    expect(summary).toHaveFocus();
+  });
+
   /**
    * GAP-HR-DEPARTMENTS-NEW-02: a duplicate code now 409s synchronously
    * (masters-routes.ts); the field error renders under Code exactly like the

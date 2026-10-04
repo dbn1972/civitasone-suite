@@ -39,8 +39,8 @@ export function DisburseButton({ schemeId, releaseId, releaseNo }: DisburseButto
       setBusy(false);
       setOpen(false);
       router.refresh();
-    } catch {
-      setErrorMessage(formError.fromException("save").message);
+    } catch (caught) {
+      setErrorMessage(formError.fromException("save", caught).message);
       setBusy(false);
     }
   }

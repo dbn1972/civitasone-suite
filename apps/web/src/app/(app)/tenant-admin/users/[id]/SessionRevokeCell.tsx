@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "../../../../_components/ds";
@@ -21,7 +22,7 @@ export function SessionRevokeCell({ sessionId, active }: Props) {
     setError("");
     try {
       const res = await fetch(`/api/proxy/identity/sessions/${sessionId}`, { method: "DELETE" });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed");

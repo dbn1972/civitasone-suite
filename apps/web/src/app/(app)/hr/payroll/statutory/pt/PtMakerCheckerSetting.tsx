@@ -1,5 +1,6 @@
 "use client";
 
+import { UserFacingError } from "@/lib/userFacingError";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -32,10 +33,10 @@ export function PtMakerCheckerSetting({ enabled, offPending }: { enabled: boolea
           method: "PUT",
           body: JSON.stringify({ makerCheckerEnabled: wanted.current.enabled, ...(wanted.current.reason ? { reason: wanted.current.reason } : {}) }),
         });
-      } catch {
-        throw new Error(formError.fromException("save").message);
+      } catch (caught) {
+        throw UserFacingError.from(formError.fromException("save", caught));
       }
-      if (!res.ok) throw new Error((await formError.fromResponse(res, "save")).message);
+      if (!res.ok) throw UserFacingError.from(await formError.fromResponse(res, "save"));
       return (await res.json()) as { id: string };
     },
     // The switch change is visible in the versions read model: ON flips the flag; OFF shows up as a pending request.

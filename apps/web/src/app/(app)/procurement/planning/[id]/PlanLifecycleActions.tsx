@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
 import { ActionButton } from "@/app/_components/ds";
 
@@ -27,7 +28,7 @@ export function PlanLifecycleActions({ planId, status }: { planId: string; statu
       headers: { "content-type": "application/json" },
       body: JSON.stringify(reason ? { notes: reason } : {}),
     });
-    if (!res.ok) throw new Error((await res.text()) || "Could not submit the plan.");
+    if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
   }
 
   async function approve(reason?: string): Promise<void> {
@@ -36,7 +37,7 @@ export function PlanLifecycleActions({ planId, status }: { planId: string; statu
       headers: { "content-type": "application/json" },
       body: JSON.stringify(reason ? { notes: reason } : {}),
     });
-    if (!res.ok) throw new Error((await res.text()) || "Could not approve the plan.");
+    if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
   }
 
   async function reject(reason?: string): Promise<void> {
@@ -48,7 +49,7 @@ export function PlanLifecycleActions({ planId, status }: { planId: string; statu
       // typed, so `reason` is guaranteed non-empty here in practice.
       body: JSON.stringify({ reason: reason ?? "" }),
     });
-    if (!res.ok) throw new Error((await res.text()) || "Could not reject the plan.");
+    if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
   }
 
   if (status === "draft") {

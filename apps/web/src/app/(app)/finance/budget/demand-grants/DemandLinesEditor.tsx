@@ -62,9 +62,9 @@ export function DemandLinesEditor({
       setIsError(false);
       setMessage("Head-wise lines saved. They appear here once processed.");
       router.refresh();
-    } catch {
+    } catch (caught) {
       setIsError(true);
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

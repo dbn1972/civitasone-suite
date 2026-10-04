@@ -125,8 +125,8 @@ export function GOIReservationCard({ jobOpeningId, totalVacancies, hiredByCatego
       setEditing(false);
       setMessage({ kind: "ok", text: t("rosterSaved") });
       await loadRoster();
-    } catch {
-      setMessage({ kind: "error", text: formError.fromException("save").message });
+    } catch (caught) {
+      setMessage({ kind: "error", text: formError.fromException("save", caught).message });
     } finally {
       setBusy(false);
     }
@@ -152,8 +152,8 @@ export function GOIReservationCard({ jobOpeningId, totalVacancies, hiredByCatego
       }
       setMessage({ kind: "ok", text: t("rosterApproved") });
       await loadRoster();
-    } catch {
-      setMessage({ kind: "error", text: formError.fromException("save").message });
+    } catch (caught) {
+      setMessage({ kind: "error", text: formError.fromException("save", caught).message });
     } finally {
       setBusy(false);
     }

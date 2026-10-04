@@ -1,5 +1,6 @@
 "use client";
 
+import { UserFacingError } from "@/lib/userFacingError";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -41,8 +42,8 @@ export function ItemLinkActions({
       toast.success(t("detail.linkQueued"));
       setPicked(null);
       refreshSoon();
-    } catch {
-      setMessage(formError.fromException("save").message);
+    } catch (caught) {
+      setMessage(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }
@@ -50,7 +51,7 @@ export function ItemLinkActions({
 
   async function removeLink(id: string) {
     const res = await deleteItemLink(id);
-    if (!res.ok) throw new Error((await formError.fromResponse(res, "save")).message);
+    if (!res.ok) throw UserFacingError.from(await formError.fromResponse(res, "save"));
   }
 
   if (link) {

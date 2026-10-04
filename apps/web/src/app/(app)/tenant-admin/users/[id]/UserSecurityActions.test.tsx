@@ -20,7 +20,7 @@ describe("UserSecurityActions — UX-016 clerk-safe errors", () => {
     render(<UserSecurityActions userId="u-1" />);
     fireEvent.click(screen.getByRole("button", { name: "Reset password" }));
 
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/couldn't save/i));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/We couldn't find this security action\. It may have been removed or the link may be wrong\./));
     expect(screen.getByRole("alert").textContent).not.toMatch(/user not found in realm/i);
     expect(screen.getByRole("alert").textContent).not.toMatch(/\b404\b/);
   });

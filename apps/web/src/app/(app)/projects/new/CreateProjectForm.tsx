@@ -91,9 +91,9 @@ export function CreateProjectForm() {
       }
       router.push("/projects/list");
       router.refresh();
-    } catch {
+    } catch (caught) {
       setStatus("error");
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     }
   }
 

@@ -45,6 +45,7 @@
  * extra request. `EXITED_STATUSES` still keeps an already-exited employee
  * out of the picker list too.
  */
+import { UserFacingError } from "@/lib/userFacingError";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -164,7 +165,7 @@ export function InitiateSeparationAction({
     });
     if (!res.ok) {
       const resolved = await formError.fromResponse(res, "save");
-      throw new Error(resolved.message);
+      throw UserFacingError.from(resolved);
     }
   }
 

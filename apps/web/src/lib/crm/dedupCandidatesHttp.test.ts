@@ -35,7 +35,7 @@ describe("dedupCandidates HTTP client (DQ-001)", () => {
 
   it("mergeDedupPair throws a clerk-safe message on failure, never the server's raw code/message (UX-020)", async () => {
     fetchMock.mockResolvedValueOnce(res({ code: "NOT_FOUND", message: "contact not found" }, { status: 404 }));
-    await expect(dedup.mergeDedupPair("left-1", "right-2")).rejects.toThrow(/couldn't load/i);
+    await expect(dedup.mergeDedupPair("left-1", "right-2")).rejects.toThrow("We couldn't find this information. It may have been removed or the link may be wrong.");
     fetchMock.mockResolvedValueOnce(res({ code: "NOT_FOUND", message: "contact not found" }, { status: 404 }));
     await expect(dedup.mergeDedupPair("left-1", "right-2")).rejects.not.toThrow(/NOT_FOUND|contact not found/);
   });
