@@ -176,7 +176,7 @@ describe("SCIM via x-internal — Users CRUD", () => {
       headers: { ...internalHeaders, authorization: `Bearer ${process.env.SCIM_BEARER_TOKEN}` },
     });
     // F3 async: the route publishes a delete/deactivate command and returns
-    // 202 with { id, status: "accepted" } — soft-delete (status: "disabled")
+    // 202 with { id, status: "accepted" } — soft-delete (status: "deactivated")
     // happens in the consumer, not synchronously, so there is no 204.
     expect(res.statusCode).toBe(202);
     expect(res.json()).toMatchObject({ id: createdUserId, status: "accepted" });

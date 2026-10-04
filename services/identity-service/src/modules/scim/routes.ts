@@ -21,6 +21,9 @@ import { users } from "../users/schema.js";
 import { eq, and, ilike } from "drizzle-orm";
 import * as commands from "./commands.js";
 import * as operatorsRepo from "../operators/repo.js";
+import { strandsTenantAdmins } from "../users/last-admin.js";
+import type * as rbacRepo from "../rbac/repo.js";
+import { SCIM_INACTIVE_STATUS } from "../users/domain.js";
 import * as tokenRepo from "./token-repo.js";
 import { sha256Hex, generateScimSecret, isUsable } from "./token-domain.js";
 import { issueScimTokenBody, scimTokenIdParam } from "./token-validators.js";
@@ -40,6 +43,32 @@ async function operatorStatusChangeBlocked(tid: string, userId: string, currentS
     if ((requested === "active") === (currentStatus === "active")) return false;
   }
   return (await operatorsRepo.loadOperatorScoped(tid, userId)) !== null;
+}
+
+/** deactivated is terminal in the user state machine; an IdP cannot resurrect it through active=true. */
+function scimDeactivatedConflict(reply: { code: (n: number) => { send: (b: unknown) => unknown } }) {
+  return reply.code(409).send({
+    schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
+    scimType: "mutability",
+    detail: "This user is deactivated. A deactivated account cannot be re-enabled through SCIM; create a new user instead.",
+    status: "409",
+  });
+}
+
+/** GAP-ADMIN-USERS-01 (#1839) for SCIM: deactivating or deleting the tenant's last active tenant admin is refused. */
+async function lastTenantAdminBlocked(tid: string, userId: string, requested: string | undefined, isDelete = false): Promise<boolean> {
+  if (!isDelete && requested !== SCIM_INACTIVE_STATUS) return false;
+  return scopedRead((tx) => strandsTenantAdmins(tx as unknown as rbacRepo.Writer, tid, userId));
+}
+
+function scimLastAdminConflict(reply: { code: (n: number) => { send: (b: unknown) => unknown } }) {
+  return reply.code(409).send({
+    schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
+    scimType: "invalidValue",
+    code: "LAST_TENANT_ADMIN",
+    detail: "This is the last active tenant admin. Make someone else a tenant admin before deactivating or deleting this user.",
+    status: "409",
+  });
 }
 
 function scimOperatorConflict(reply: { code: (n: number) => { send: (b: unknown) => unknown } }) {
@@ -310,7 +339,7 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
     const email = body.userName ?? body.emails?.[0]?.value;
     const name =
       body.name?.formatted ?? [body.name?.givenName, body.name?.familyName].filter(Boolean).join(" ");
-    const status = body.active === false ? "disabled" : body.active === true ? "active" : undefined;
+    const status = body.active === false ? SCIM_INACTIVE_STATUS : body.active === true ? "active" : undefined;
 
     const patch: Record<string, unknown> = {};
     if (email) patch["email"] = email;
@@ -333,6 +362,8 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
     }
 
     if (await operatorStatusChangeBlocked(tid, id, existing.status, status as string | undefined)) return scimOperatorConflict(reply);
+    if (status === "active" && existing.status === "deactivated") return scimDeactivatedConflict(reply);
+    if (await lastTenantAdminBlocked(tid, id, status as string | undefined)) return scimLastAdminConflict(reply);
     await commands.scimReplaceUser(tid, correlationId(req), id, patch);
     return reply.code(202).send(
       toScimUser({
@@ -355,7 +386,7 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
 
     for (const op of ops) {
       if (op.op === "replace" && op.path === "active" && op.value === false) {
-        patch["status"] = "disabled";
+        patch["status"] = SCIM_INACTIVE_STATUS;
       } else if (op.op === "replace" && op.path === "active" && op.value === true) {
         patch["status"] = "active";
       } else if (op.op === "replace" && op.path === "userName" && typeof op.value === "string") {
@@ -381,6 +412,8 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
     }
 
     if (await operatorStatusChangeBlocked(tid, id, existing.status, patch["status"] as string | undefined)) return scimOperatorConflict(reply);
+    if (patch["status"] === "active" && existing.status === "deactivated") return scimDeactivatedConflict(reply);
+    if (await lastTenantAdminBlocked(tid, id, patch["status"] as string | undefined)) return scimLastAdminConflict(reply);
     await commands.scimPatchUser(tid, correlationId(req), id, patch);
     return reply.code(202).send(
       toScimUser({
@@ -413,6 +446,7 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
     }
 
     if (await operatorStatusChangeBlocked(tid, id, existing.status, undefined, true)) return scimOperatorConflict(reply);
+    if (await lastTenantAdminBlocked(tid, id, undefined, true)) return scimLastAdminConflict(reply);
     await commands.scimDeleteUser(tid, correlationId(req), id);
     return reply.code(202).send({ id, status: "accepted" });
   });

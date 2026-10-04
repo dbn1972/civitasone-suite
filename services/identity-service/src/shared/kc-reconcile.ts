@@ -11,6 +11,7 @@
 import { pgTable, uuid, varchar, integer, text, timestamp } from "drizzle-orm/pg-core";
 import { and, eq, lte, sql } from "drizzle-orm";
 import type { Db } from "./db.js";
+import * as keycloak from "./keycloak.js";
 
 export const kcReconciliations = pgTable("identity_kc_reconciliations", {
   id:            uuid("id").primaryKey().defaultRandom(),
@@ -75,14 +76,18 @@ export async function markReconciled(database: Db, id: string): Promise<void> {
  */
 export async function resolvePendingDeactivation(tenantId: string, userId: string): Promise<void> {
   const { db } = await import("./db.js");
-  await db.update(kcReconciliations)
-    .set({ status: "reconciled", updatedAt: new Date() })
-    .where(and(
-      eq(kcReconciliations.tenantId, tenantId),
-      eq(kcReconciliations.userId, userId),
-      eq(kcReconciliations.action, "deactivate"),
-      eq(kcReconciliations.status, "pending"),
-    ));
+  // Inside a transaction: only db.transaction sets the tenant GUC, and a bare db.update under the row-level-security
+  // policy matches zero rows, which left every resolved obligation pending and re-disabled by the reconciler.
+  await db.transaction(async (tx) => {
+    await tx.update(kcReconciliations)
+      .set({ status: "reconciled", updatedAt: new Date() })
+      .where(and(
+        eq(kcReconciliations.tenantId, tenantId),
+        eq(kcReconciliations.userId, userId),
+        eq(kcReconciliations.action, "deactivate"),
+        eq(kcReconciliations.status, "pending"),
+      ));
+  });
 }
 
 /** Record a retry failure with exponential backoff on next_attempt_at. */
@@ -138,4 +143,23 @@ export async function reconcileDueDeactivations(
     }
   }
   return { reconciled, retried };
+}
+
+type KcLog = { info: (o: unknown, m: string) => void; warn: (o: unknown, m: string) => void; error: (o: unknown, m: string) => void };
+
+/**
+ * Post-commit Keycloak deprovision shared by every deactivation path (status route and SCIM): disable the
+ * realm user and log out all their sessions. The outcome is recorded: success resolves the pending row written in
+ * the deactivating transaction; failure (or a throw) leaves it pending so reconcileDueDeactivations retries it.
+ */
+export async function deprovisionInKeycloak(tenantId: string, userId: string, email: string, log: KcLog): Promise<void> {
+  try {
+    const r = await keycloak.deactivateUser(tenantId, email, log);
+    if (r.skipped) return;
+    log.info({ userId, result: r }, "keycloak deactivate");
+    if (r.ok) await resolvePendingDeactivation(tenantId, userId);
+    else log.warn({ userId, reason: r.reason }, "keycloak deactivate failed — left for reconciler");
+  } catch (err) {
+    log.error({ userId, err: String(err) }, "keycloak deactivate threw — left for reconciler");
+  }
 }
