@@ -82,3 +82,24 @@ describe("NpsStatementsPage", () => {
     expect(screen.getByText("NPS Ledger")).toBeInTheDocument();
   });
 });
+
+describe("NpsStatementsPage HRMS reconciliation (GAP-PAYROLL-STATUTORY-NPS-02)", () => {
+  beforeEach(() => {
+    fetchJsonMock.mockReset();
+    getSessionRolesMock.mockReturnValue(["payroll_admin"]);
+  });
+
+  it("flags a row whose contribution percentages differ from the HRMS NPS account, and one with no account", async () => {
+    mockNps({
+      data: [
+        { id: "n1", employeeId: UUID, employeeName: "Ravi Kumar", period: "2026-08", empContribMinor: 500000, erContribMinor: 700000, reconciliation: { status: "mismatch" } },
+        { id: "n2", employeeId: UUID, employeeName: "Anita Rao", period: "2026-08", empContribMinor: 500000, erContribMinor: 700000, reconciliation: { status: "no_hrms_account" } },
+      ],
+      source: "api",
+    });
+    render(await NpsStatementsPage());
+    expect(screen.getByText("Differs from HRMS account")).toBeInTheDocument();
+    expect(screen.getByText("No HRMS account")).toBeInTheDocument();
+    expect(screen.getByText(/2 rows differ from or have no matching HRMS account/)).toBeInTheDocument();
+  });
+});
