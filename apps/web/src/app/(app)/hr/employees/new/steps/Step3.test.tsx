@@ -45,3 +45,14 @@ describe("Step3 work location (GAP-HR-LOCATIONS-03)", () => {
     expect(screen.getByLabelText(/not in the list/i)).toBeDisabled();
   });
 });
+
+describe("Step3 state of employment (professional tax)", () => {
+  it("is an optional select over the state list and reports the chosen code", () => {
+    const onChange = renderStep(WIZARD_INIT);
+    const sel = screen.getByLabelText("State of employment (for professional tax)") as HTMLSelectElement;
+    expect(sel).toHaveValue("");
+    expect(Array.from(sel.options).map((o) => o.value)).toContain("MH");
+    fireEvent.change(sel, { target: { value: "MH" } });
+    expect(onChange).toHaveBeenCalledWith("workStateCode", "MH");
+  });
+});

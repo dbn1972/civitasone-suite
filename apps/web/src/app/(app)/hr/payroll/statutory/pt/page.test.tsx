@@ -28,7 +28,7 @@ function renderPage(ui: React.ReactElement) {
   );
 }
 
-const slab = { fromMinor: 0, toMinor: 999999999999, taxMinor: 20000, februaryTaxMinor: null };
+const slab = { fromMinor: 0, toMinor: 999999999999, taxMinor: 20000, februaryTaxMinor: null, appliesToGender: "all" };
 const pendingVersion = { id: "11111111-1111-4111-8111-111111111111", kind: "version", stateCode: "MH", effectiveFrom: "2027-04-01", slabs: [slab], reason: "Revised Schedule", makerId: "maker-1", createdAt: "2026-10-01T00:00:00Z" };
 const payload = {
   today: "2026-10-03", viewerId: "viewer-9", makerChecker: true, pending: [] as unknown[], lastFinalisedMonth: "2026-08", earliestEffectiveFrom: "2026-09-01",
@@ -40,7 +40,7 @@ const payload = {
     ],
   }],
 };
-const loaded = (data = payload) => fetchJsonMock.mockImplementation((_p: string, _e: unknown, opts: { mapResponse: (x: unknown) => unknown }) => Promise.resolve({ data: opts.mapResponse(data), source: "api" }));
+const loaded = (data: unknown = payload) => fetchJsonMock.mockImplementation((_p: string, _e: unknown, opts: { mapResponse: (x: unknown) => unknown }) => Promise.resolve({ data: opts.mapResponse(data), source: "api" }));
 
 describe("ProfessionalTaxPage (versioned slabs)", () => {
   beforeEach(() => {
@@ -69,6 +69,17 @@ describe("ProfessionalTaxPage (versioned slabs)", () => {
     // February amount of the selected (current) version
     expect(screen.getByText(/300\.00/)).toBeInTheDocument();
     expect(screen.getByText(/This version is read-only/)).toBeInTheDocument();
+  });
+
+  it("the in-force slab view has a Applies to column naming the gender of each slab", async () => {
+    const withGender = { ...payload, states: [{ stateCode: "MH", versions: [
+      { ...payload.states[0]!.versions[1]!, slabs: [{ ...slab, taxMinor: 20000 }, { ...slab, taxMinor: 0, appliesToGender: "female" }] },
+    ] }] };
+    loaded(withGender);
+    renderPage(await ProfessionalTaxPage({ searchParams: { state: "MH" } }));
+    expect(screen.getByRole("columnheader", { name: "Applies to" })).toBeInTheDocument();
+    expect(screen.getAllByRole("cell", { name: "Women" })).toHaveLength(1);
+    expect(screen.getAllByRole("cell", { name: "All employees" })).toHaveLength(1);
   });
 
   it("?version= shows a past version read-only with its recorded reason", async () => {

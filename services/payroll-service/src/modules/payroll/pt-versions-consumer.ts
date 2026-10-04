@@ -87,9 +87,10 @@ async function writeVersion(
   for (const s of v.slabs) {
     await exec(tx, sql`
       INSERT INTO payroll.payroll_professional_tax
-        (tenant_id, state_code, slab_from_minor, slab_to_minor, pt_amount_minor, february_amount_minor, effective_from, is_active)
+        (tenant_id, state_code, slab_from_minor, slab_to_minor, pt_amount_minor, february_amount_minor, applies_to_gender, effective_from, is_active)
       VALUES (${v.tenantId}::uuid, ${v.stateCode}, ${s.fromMinor.toString()}::bigint, ${s.toMinor.toString()}::bigint,
               ${s.taxMinor.toString()}::bigint, ${s.februaryTaxMinor == null ? null : s.februaryTaxMinor.toString()}::bigint,
+              ${s.appliesToGender ?? "all"},
               ${v.effectiveFrom}::date, true)`);
   }
   await enqueue(tx, {

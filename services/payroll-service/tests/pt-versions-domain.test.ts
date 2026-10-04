@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   PT_ANNUAL_CAP_MINOR, computePtMonthMinor, periodEndOf, dayAfter, dayBefore, todayIst,
-  findSlabSetProblem, checkNewVersion, buildTimeline, createPtVersionBody, type PtSlab,
+  findSlabSetProblem, checkNewVersion, buildTimeline, createPtVersionBody, ptGenderUnresolved, normalisePtGender, type PtSlab,
 } from "../src/modules/payroll/pt-versions-domain.js";
 
 const flat = (amount: bigint, februaryAmount: bigint | null = null): PtSlab[] => [{ from: 0n, to: 999_999_999_999n, amount, februaryAmount }];
@@ -113,5 +113,69 @@ describe("buildTimeline", () => {
     expect(buildTimeline([{ effectiveFrom: "1900-01-01", legacy: true }], "2026-10-03")).toEqual([
       { effectiveFrom: "1900-01-01", legacy: true, effectiveTo: null, status: "current" },
     ]);
+  });
+});
+
+describe("gender-specific slabs", () => {
+  const slabs: PtSlab[] = [
+    { from: 0n, to: 2_500_000n, amount: 0n, februaryAmount: null, gender: "female" },
+    { from: 0n, to: 1_000_000n, amount: 0n, februaryAmount: null, gender: "all" },
+    { from: 1_000_001n, to: 999_999_999_999n, amount: 20_000n, februaryAmount: 30_000n, gender: "all" },
+  ];
+
+  it("a slab of the employee's own gender wins over an 'all' slab", () => {
+    expect(computePtMonthMinor(slabs, 2_000_000n, "2026-07", 0n, "female")).toBe(0n);
+    expect(computePtMonthMinor(slabs, 2_000_000n, "2026-07", 0n, "male")).toBe(20_000n);
+    expect(computePtMonthMinor(slabs, 2_000_000n, "2026-07", 0n, "Female")).toBe(0n);
+  });
+
+  it("falls back to an 'all' slab where the gender group has none for that income", () => {
+    expect(computePtMonthMinor(slabs, 3_000_000n, "2026-07", 0n, "female")).toBe(20_000n);
+  });
+
+  it("missing / unknown gender uses 'all' slabs only", () => {
+    for (const g of [undefined, null, "", "other", "x"]) {
+      expect(computePtMonthMinor(slabs, 2_000_000n, "2026-07", 0n, g)).toBe(20_000n);
+    }
+    // a female-only slab never applies to an unknown-gender employee
+    expect(computePtMonthMinor([slabs[0]!], 100n, "2026-07", 0n, null)).toBe(0n);
+    expect(computePtMonthMinor([{ ...slabs[0]!, amount: 5_000n }], 100n, "2026-07", 0n, null)).toBe(0n);
+  });
+
+  it("slabs without a gender behave as 'all' (existing rows / callers)", () => {
+    expect(computePtMonthMinor(flat(20_000n), 100n, "2026-07", 0n, "female")).toBe(20_000n);
+  });
+
+  it("the February amount and the Article 276(2) cap still apply to a gender slab", () => {
+    const f: PtSlab[] = [{ from: 0n, to: 999_999_999_999n, amount: 20_000n, februaryAmount: 30_000n, gender: "female" }];
+    expect(computePtMonthMinor(f, 100n, "2027-02", 0n, "female")).toBe(30_000n);
+    expect(computePtMonthMinor(f, 100n, "2027-01", 0n, "female")).toBe(20_000n);
+    expect(computePtMonthMinor(f, 100n, "2027-02", 245_000n, "female")).toBe(5_000n);
+  });
+
+  it("normalisePtGender / ptGenderUnresolved", () => {
+    expect(normalisePtGender(" MALE ")).toBe("male");
+    expect(normalisePtGender("other")).toBeNull();
+    expect(ptGenderUnresolved(slabs, null)).toBe(true);
+    expect(ptGenderUnresolved(slabs, "other")).toBe(true);
+    expect(ptGenderUnresolved(slabs, "female")).toBe(false);
+    expect(ptGenderUnresolved(flat(100n), null)).toBe(false); // no gender-specific slab: nothing to warn about
+  });
+
+  it("overlap is validated per gender group", () => {
+    const r = (fromMinor: number, toMinor: number, appliesToGender?: "all" | "female" | "male") => ({ fromMinor, toMinor, ...(appliesToGender ? { appliesToGender } : {}) });
+    // the same range in different groups is fine
+    expect(findSlabSetProblem([r(0, 100, "all"), r(0, 100, "female"), r(0, 100, "male")])).toBeNull();
+    expect(findSlabSetProblem([r(0, 100), r(101, 200, "female"), r(50, 150, "female")])).toMatch(/overlaps.*female/);
+    expect(findSlabSetProblem([r(0, 100, "male"), r(100, 200, "male")])).toMatch(/male/);
+    expect(findSlabSetProblem([r(0, 100), r(50, 150, "all")])).toMatch(/overlaps/);
+    expect(findSlabSetProblem([r(0, 100, "female"), r(0, 50, "female")])).toMatch(/two slabs start at 0 \(female/);
+  });
+
+  it("the create body defaults appliesToGender to 'all' and rejects other values", () => {
+    const base = { stateCode: "MH", effectiveFrom: "2099-01-01", slabs: [{ fromMinor: 0, toMinor: 10, taxMinor: 0 }] };
+    expect(createPtVersionBody.parse(base).slabs[0]!.appliesToGender).toBe("all");
+    expect(createPtVersionBody.parse({ ...base, slabs: [{ ...base.slabs[0]!, appliesToGender: "female" }] }).slabs[0]!.appliesToGender).toBe("female");
+    expect(() => createPtVersionBody.parse({ ...base, slabs: [{ ...base.slabs[0]!, appliesToGender: "other" }] })).toThrow();
   });
 });

@@ -1066,6 +1066,8 @@ export const EmployeeDetailSchema = z.object({
   bloodGroup: z.string().optional(),
   shift: z.string().optional(),
   costCenterId: z.string().optional(),
+  // State of employment (ISO 3166-2:IN code); professional tax is levied per state. hrms migration 0198.
+  workStateCode: z.string().optional(),
 });
 
 type OrgChartNodeType = {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { INDIAN_STATES_UTS } from "@/lib/india/states";
 import { useTranslations } from "next-intl";
 import { resolveEmployees } from "@/lib/entityAdapters/employee";
 import { resolveCostCenters } from "@/lib/entityAdapters/costCenter";
@@ -54,6 +55,11 @@ const SECTION_HDR: React.CSSProperties = {
   justifyContent: "space-between",
   alignItems: "center",
   marginBottom: 12,
+};
+
+const stateLabel = (code: string): string => {
+  const s = INDIAN_STATES_UTS.find((x) => x.code === code);
+  return s ? `${s.name} (${s.code})` : "";
 };
 
 export function Step5({ data, departments, designations, submitting, onGoToStep }: Props) {
@@ -170,6 +176,7 @@ export function Step5({ data, departments, designations, submitting, onGoToStep 
         <Row label={t("reportingManagerId")} value={managerName || (data.managerId ? "…" : "")} />
         <Row label={t("workLocation")} value={data.workLocation} />
         <Row label={t("shift")} value={data.shift ? SHIFT_LABELS[data.shift] : ""} />
+        <Row label={t("workState")} value={stateLabel(data.workStateCode)} />
         <Row label={t("costCenter")} value={costCenterName || (data.costCenterId ? "…" : "")} />
       </section>
 
