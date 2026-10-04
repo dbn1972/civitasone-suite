@@ -3,7 +3,7 @@ import { registerGracefulShutdown, signalReady } from "@civitasone/observability
 import { sql } from "drizzle-orm";
 import { db, sqlClient } from "./shared/db.js";
 import { scannerDb, scannerSqlClient } from "./shared/scanner-db.js";
-import { isSandboxDeployment } from "./shared/deployment-env.js";
+import { scannerConfigProblem } from "./shared/deployment-env.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { startOutboxPurge } from "@civitasone/outbox";
@@ -51,16 +51,9 @@ import { registerSimplifiedConsumers } from "./modules/simplified/consumer.js";
 const log = pino({ name: "finance-worker" });
 
 function assertScannerConfigured(): void {
-  // Fail-closed: only an explicit sandbox (NODE_ENV development/test, or PFMS_SANDBOX=true outside production) may skip this.
-  if (isSandboxDeployment()) return;
-  const scanner = process.env.FINANCE_SCANNER_DATABASE_URL ?? "";
-  const primary = process.env.DATABASE_URL ?? "";
-  if (!scanner || scanner === primary) {
-    throw new Error(
-      "FINANCE_SCANNER_DATABASE_URL must be set and distinct from DATABASE_URL in production " +
-        "(BYPASSRLS scanner role required for outbox relay/purge under FORCE RLS)",
-    );
-  }
+  // Fail-closed (shared/deployment-env.ts): only an explicit sandbox may skip this. The message names the variable to set.
+  const problem = scannerConfigProblem();
+  if (problem) throw new Error(problem);
 }
 
 assertScannerConfigured();

@@ -239,13 +239,13 @@ const stuckMinutes = (): number => {
 
 type StuckRef = { id: string; tenantId: string };
 
-/** Cross-tenant READ of releases claimed before the cutoff and never finished (finance_scanner role; migration 0092 grants SELECT). */
+/** Cross-tenant READ of releases claimed before the cutoff and never finished (a legacy row with no release_started_at counts from its updated_at, so the sweeper does not depend on migration 0093) (finance_scanner role; migration 0092 grants SELECT). */
 async function findStuckViaScanner(cutoff: Date): Promise<StuckRef[]> {
   const { scannerSqlClient } = await import("../../shared/scanner-db.js");
   const rows = await scannerSqlClient<{ id: string; tenant_id: string }[]>`
     SELECT id, tenant_id FROM payments.finance_pfms
-    WHERE submission_status = 'processing' AND channel = 'treasury_batch' AND release_started_at IS NOT NULL AND release_started_at < ${cutoff}
-    ORDER BY release_started_at ASC LIMIT 200`;
+    WHERE submission_status = 'processing' AND channel = 'treasury_batch' AND COALESCE(release_started_at, updated_at) < ${cutoff}
+    ORDER BY COALESCE(release_started_at, updated_at) ASC LIMIT 200`;
   return rows.map((r) => ({ id: r.id, tenantId: r.tenant_id }));
 }
 

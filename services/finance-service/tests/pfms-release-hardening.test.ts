@@ -181,6 +181,30 @@ describe("PFMS release hardening", () => {
     expect((await auditRows(t, "release_skipped", id)).length).toBe(1);
   });
 
+  it("sweeper: a LEGACY processing treasury row (NULL release_started_at, old updated_at) is swept to send_unknown without any backfill", async () => {
+    const t = randomUUID();
+    const legacy = await seed(t);
+    const ekuber = await seed(t);
+    await scoped(t, (tx) => tx.execute(sql`UPDATE payments.finance_pfms SET submission_status = 'processing', release_started_at = NULL, released_by = NULL,
+      updated_at = now() - interval '3 hours' WHERE id = ${legacy.id}::uuid`));
+    await scoped(t, (tx) => tx.execute(sql`UPDATE payments.finance_pfms SET submission_status = 'processing', channel = 'ekuber_adapter', release_started_at = NULL,
+      updated_at = now() - interval '3 hours' WHERE id = ${ekuber.id}::uuid`));
+    // the finder mirrors findStuckViaScanner's predicate (the scanner role itself is not available under finance_svc)
+    const finder = async (cutoff: Date) => {
+      const rows = await scoped(t, (tx) => tx.execute(sql`SELECT id, tenant_id FROM payments.finance_pfms WHERE tenant_id = ${t}::uuid AND submission_status = 'processing'
+        AND channel = 'treasury_batch' AND COALESCE(release_started_at, updated_at) < ${cutoff.toISOString()}::timestamptz`));
+      return (rows as unknown as Array<{ id: string; tenant_id: string }>).map((r) => ({ id: r.id, tenantId: r.tenant_id }));
+    };
+    expect(await sweepStuckReleases({ olderThanMinutes: 30, findStuck: finder })).toBe(1);
+    expect((await row(t, legacy.id)).submissionStatus).toBe("send_unknown");
+    expect((await row(t, ekuber.id)).submissionStatus).toBe("processing"); // not a treasury release: left alone
+    expect(sftp.names).toHaveLength(0);
+    // a LEGACY row that is recent is not swept
+    const recent = await seed(t);
+    await scoped(t, (tx) => tx.execute(sql`UPDATE payments.finance_pfms SET submission_status = 'processing', release_started_at = NULL, updated_at = now() WHERE id = ${recent.id}::uuid`));
+    expect(await sweepStuckReleases({ olderThanMinutes: 30, findStuck: finder })).toBe(0);
+  });
+
   it("sweeper leaves a recent release and every other state alone", async () => {
     const t = randomUUID();
     const recent = await seed(t);

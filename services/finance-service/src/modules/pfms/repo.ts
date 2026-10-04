@@ -1,4 +1,4 @@
-import { and, eq, lt, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { decryptPii } from "../../shared/pii-crypto.js";
 import { financePfms } from "../payments/schema.js";
@@ -227,7 +227,8 @@ export async function markPfmsSendUnknown(tx: Writer, id: string, tenantId: stri
     .set({ submissionStatus: "send_unknown", updatedAt: now, version: sql`${financePfms.version} + 1` })
     .where(and(
       eq(financePfms.id, id), eq(financePfms.tenantId, tenantId), eq(financePfms.channel, "treasury_batch"),
-      eq(financePfms.submissionStatus, "processing"), lt(financePfms.releaseStartedAt, cutoff),
+      eq(financePfms.submissionStatus, "processing"), // a legacy row from before migration 0092 has no release_started_at: its last update is the best start time
+      sql`COALESCE(${financePfms.releaseStartedAt}, ${financePfms.updatedAt}) < ${cutoff.toISOString()}::timestamptz`,
     ))
     .returning();
   return rows[0] ?? null;
