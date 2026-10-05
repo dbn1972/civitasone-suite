@@ -66,7 +66,20 @@ export default async function ControlTowerPage() {
       />
       <StatGrid>
         <StatCard icon="🗺️" iconBg="#e0f2fe" label="Regions" value={regions.length.toLocaleString("en-IN")} />
-        <StatCard icon="🚨" iconBg="#fee2e2" label="Exception volume" value={totalExceptionCount(exceptions).toLocaleString("en-IN")} />
+        {/*
+          GAP-CRM-CONTROL-TOWER-05: this is the sum of each exception
+          category's count, not a distinct record count — one account can be
+          dormant AND overdue and be counted in both. Label it as a count of
+          items and spell the overlap out in the hint so it is not read as a
+          number of unique records.
+        */}
+        <StatCard
+          icon="🚨"
+          iconBg="#fee2e2"
+          label="Open exception items"
+          hint="Total across all exception categories. An account can appear in more than one category, so this is not a count of unique records."
+          value={totalExceptionCount(exceptions).toLocaleString("en-IN")}
+        />
       </StatGrid>
 
       <Card title={t("pipelineByRegion")}>

@@ -22,6 +22,8 @@ import {
   getAccountRelationships,
   getTaskEscalationRules,
   getOverdueTasks,
+  snoozeTask,
+  reassignTask,
   getEscalationRoles,
   getEscalationUsers,
   getLinkedAccounts,
@@ -346,7 +348,19 @@ describe("loaders + mutations", () => {
     fetchMock.mockResolvedValueOnce(res({ data: [] }));
     await getOverdueTasks();
     expect(fetchMock.mock.calls[0][0]).toContain("limit=50");
-    expect(fetchMock.mock.calls[0][0]).toContain("overdue=true");
+    // GAP-CRM-TASK-ESCALATION-06: the dedicated overdue-tasks route (the old
+    // subject-less /v1/crm/activities query 400s server-side).
+    expect(fetchMock.mock.calls[0][0]).toBe("v1/crm/activities/overdue-tasks?limit=50");
+  });
+
+  it("snoozeTask and reassignTask PATCH the activity with a reason", async () => {
+    fetchMock.mockResolvedValueOnce(res({}, 202));
+    await snoozeTask("t1", "2099-01-01", "Citizen asked to call later");
+    expect(fetchMock.mock.calls[0][0]).toBe("v1/crm/activities/t1");
+    expect(JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body))).toEqual({ dueDate: "2099-01-01", reason: "Citizen asked to call later" });
+    fetchMock.mockResolvedValueOnce(res({}, 202));
+    await reassignTask("t1", "u-2", "Original owner on leave");
+    expect(JSON.parse(String((fetchMock.mock.calls[1][1] as RequestInit).body))).toEqual({ ownerId: "u-2", reason: "Original owner on leave" });
   });
 
   it("createCommunication / createAddress / createContactRole / connectLinkedAccount hit the right paths", async () => {

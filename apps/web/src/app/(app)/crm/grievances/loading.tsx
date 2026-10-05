@@ -1,11 +1,22 @@
-export default function Loading() {
+import { SkeletonBar, SkeletonTable } from "../../../_components/ds/Skeleton";
+
+/**
+ * GAP-CRM-GRIEVANCES-07: the loaded page leads with a StatGrid of stat tiles
+ * above the register table, but the old skeleton rendered only a breadcrumb,
+ * a title bar and a single h-80 block — so the tile row and table shifted
+ * down on load. This skeleton now mirrors the real layout (breadcrumb +
+ * title + the four-tile row + filter bar + table rows) using the ds Skeleton
+ * primitives, which are built on theme tokens (--line2/--line/--panel) so the
+ * dark-mode skeleton is not a light-grey block.
+ */
+export default function GrievancesLoading() {
   return (
-    <div className="min-h-screen p-6 md:p-8">
-      <div className="mx-auto max-w-7xl animate-pulse space-y-5">
-        <div className="h-4 w-44 rounded bg-slate-200" />
-        <div className="h-9 w-52 rounded bg-slate-200" />
-        <div className="h-80 rounded-xl bg-slate-200" />
-      </div>
+    <div style={{ padding: "4px 0", display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* breadcrumb + title */}
+      <SkeletonBar w={160} h={13} />
+      <SkeletonBar w={220} h={28} />
+      {/* four stat tiles + filter bar + table rows (mirrors the loaded page) */}
+      <SkeletonTable rows={8} />
     </div>
   );
 }

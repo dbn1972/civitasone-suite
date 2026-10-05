@@ -119,14 +119,19 @@ export function ContactsTable({ contacts, source = "api", filtered = false }: { 
             // (high/medium/low) column beside it.
             { key: "temperature", label: t("colTemperature") },
             { key: "priority", label: "Priority" },
-            { key: "segment", label: "Segment" },
-            { key: "expectedValue", label: "Expected Value", align: "right" },
+            // GAP-CRM-CONTACTS-08: on phones (<640px) the 11-column table is
+            // unreadable, so the secondary columns are hidden there (still in
+            // the DOM + CSV); name/phone/status/priority stay visible.
+            { key: "segment", label: "Segment", hideOnMobile: true },
+            { key: "expectedValue", label: "Expected Value", align: "right", hideOnMobile: true },
             { key: "email", label: "Email" },
-            { key: "lastActivity", label: "Last Activity" },
-            { key: "tags", label: "Tags" },
+            { key: "lastActivity", label: "Last Activity", hideOnMobile: true },
+            { key: "tags", label: "Tags", hideOnMobile: true },
           ]}
           rows={tableRows}
-          rowHref={(row) => (row.id ? `/crm/contacts/${row.id}` : "")}
+          // GAP-CRM-CONTACTS-08: return undefined (not "") for an id-less row so
+          // the type is honest; DataTable renders it as a non-clickable row.
+          rowHref={(row) => (row.id ? `/crm/contacts/${row.id}` : undefined)}
           sortable
           filterable
           filterPlaceholder="Filter contacts…"

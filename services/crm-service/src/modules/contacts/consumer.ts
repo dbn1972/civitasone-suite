@@ -41,6 +41,9 @@ export function registerContactConsumers(rawQueue: Queue): void {
         ownerId: p.ownerId, accountId: p.accountId,
         tags: p.tags, marketingConsent: p.marketingConsent,
         consentDate: p.consentDate, lastActivityAt: p.lastActivityAt ? new Date(p.lastActivityAt) : null,
+        consentPurpose: p.consentPurpose ?? null,
+        consentChannel: p.consentChannel ?? null,
+        consentUpdatedAt: p.consentUpdatedAt ? new Date(p.consentUpdatedAt) : null,
         status: p.status, createdBy: msg.actorId, updatedBy: msg.actorId, version: 1,
         leadNo,
       });
@@ -79,7 +82,18 @@ export function registerContactConsumers(rawQueue: Queue): void {
       if (p.tags !== undefined) patch.tags = p.tags;
       if (p.marketingConsent !== undefined) {
         patch.marketingConsent = p.marketingConsent;
-        if (p.marketingConsent) patch.consentDate = new Date().toISOString().slice(0, 10);
+        // GAP-CRM-CONTACTS-DETAIL-EDIT-07: a consent STATE change is timestamped
+        // precisely; granting also records the purpose + channel it was captured
+        // through, withdrawing clears them (the artefact describes a live consent).
+        patch.consentUpdatedAt = new Date();
+        if (p.marketingConsent) {
+          patch.consentDate = new Date().toISOString().slice(0, 10);
+          if (p.consentPurpose !== undefined) patch.consentPurpose = p.consentPurpose;
+          if (p.consentChannel !== undefined) patch.consentChannel = p.consentChannel;
+        } else {
+          patch.consentPurpose = null;
+          patch.consentChannel = null;
+        }
       }
       if (p.status !== undefined) patch.status = p.status;
       await repo.update(tx, p.id, p.tenantId, patch, msg.actorId);

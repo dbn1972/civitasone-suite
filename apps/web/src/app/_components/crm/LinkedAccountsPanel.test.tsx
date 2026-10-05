@@ -140,4 +140,16 @@ describe("LinkedAccountsPanel (AC-004)", () => {
     expect(await screen.findByText(/already connected/i)).toBeInTheDocument();
     expect(aa.connectLinkedAccount).not.toHaveBeenCalled();
   });
+
+  // GAP-CRM-LINKED-ACCOUNTS-05: on a failed load the DataSourceBadge appears
+  // exactly once (card header), not twice (header + inline in the error row).
+  it("shows exactly one DataSourceBadge on a failed load", async () => {
+    vi.mocked(aa.getLinkedAccounts).mockResolvedValue({ data: [], source: "error" });
+    render(<LinkedAccountsPanel />);
+    await waitFor(() => expect(screen.getByText(/connections unavailable/i)).toBeInTheDocument());
+    const badges = screen.getAllByText("Couldn't load — showing nothing");
+    expect(badges).toHaveLength(1);
+    // The Retry affordance remains in the error row.
+    expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
+  });
 });

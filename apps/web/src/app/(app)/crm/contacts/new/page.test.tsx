@@ -11,6 +11,7 @@ function render(ui: ReactElement) {
     </NextIntlClientProvider>,
   );
 }
+import { renderWithIntl } from "@/lib/testUtils/intl";
 import NewContactPage from "./page";
 import * as dq from "@/lib/crm/dataQuality";
 import type { DuplicateCandidate } from "@/lib/crm/dataQuality";
@@ -34,11 +35,35 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
+describe("NewContactPage lead status + placeholders (GAP-CRM-CONTACTS-NEW-05 / -06)", () => {
+  it("offers 'Disqualified' as a selectable lead status using the canonical label", () => {
+    renderWithIntl(<NewContactPage />);
+    const select = screen.getByLabelText("Lead status") as HTMLSelectElement;
+    const options = Array.from(select.options).map((o) => ({ value: o.value, label: o.textContent }));
+    expect(options).toContainEqual({ value: "disqualified", label: "Disqualified" });
+    // Canonical shared labels (not "Engaged/Inactive Stakeholder").
+    expect(options).toContainEqual({ value: "qualified", label: "Qualified" });
+    expect(options).toContainEqual({ value: "unqualified", label: "Unqualified" });
+    expect(select.textContent).not.toMatch(/Stakeholder/);
+  });
+
+  it("uses neutral/Odisha placeholders, not Karnataka-specific examples", () => {
+    renderWithIntl(<NewContactPage />);
+    expect(screen.getByPlaceholderText("Bhubaneswar")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("751001")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("21ABCDE1234F1Z5")).toBeInTheDocument();
+    // No Karnataka (29/560001/Bengaluru) examples remain.
+    expect(screen.queryByPlaceholderText("Bengaluru")).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("560001")).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("29ABCDE1234F1Z5")).not.toBeInTheDocument();
+  });
+});
+
 describe("NewContactPage duplicate-check (DQ-001 findings 1,2,5)", () => {
   it("resets the 'continue anyway' acknowledgement when a dedup field is edited afterwards", async () => {
     vi.mocked(dq.duplicateCheck).mockResolvedValue([cand]);
 
-    render(<NewContactPage />);
+    renderWithIntl(<NewContactPage />);
     fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Asha" } });
     const email = screen.getByLabelText("Email");
     fireEvent.change(email, { target: { value: "asha@x.in" } });
@@ -68,7 +93,7 @@ describe("NewContactPage duplicate-check (DQ-001 findings 1,2,5)", () => {
       .mockReturnValueOnce(slow)
       .mockResolvedValueOnce([]);
 
-    render(<NewContactPage />);
+    renderWithIntl(<NewContactPage />);
     fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Asha" } });
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "asha@x.in" } });
     fireEvent.change(screen.getByLabelText(/phone/i), { target: { value: "9900000000" } });
@@ -86,7 +111,7 @@ describe("NewContactPage duplicate-check (DQ-001 findings 1,2,5)", () => {
     vi.mocked(dq.duplicateCheck).mockRejectedValue(new Error("network"));
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({ id: "new-1" }) });
 
-    render(<NewContactPage />);
+    renderWithIntl(<NewContactPage />);
     fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Asha" } });
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "asha@x.in" } });
     fireEvent.blur(screen.getByLabelText("Email"));
@@ -105,7 +130,7 @@ describe("NewContactPage error + duplicate-submit (GAP-CRM-CONTACTS-NEW-01 / -04
       status: 422,
       json: async () => ({ code: "MANDATORY_FIELDS_MISSING", message: "missing mandatory field(s): city" }),
     });
-    render(<NewContactPage />);
+    renderWithIntl(<NewContactPage />);
     fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Asha" } });
     fireEvent.click(screen.getByRole("button", { name: /create contact/i }));
     const alert = await screen.findByRole("alert");
@@ -122,7 +147,7 @@ describe("NewContactPage error + duplicate-submit (GAP-CRM-CONTACTS-NEW-01 / -04
     const pushSpy = vi.fn();
     // Replace the router push used by the component via a module mock.
     fetchMock.mockResolvedValue({ ok: true, status: 201, json: async () => ({}) });
-    render(<NewContactPage />);
+    renderWithIntl(<NewContactPage />);
     fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Asha" } });
     fireEvent.click(screen.getByRole("button", { name: /create contact/i }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/proxy/v1/crm/contacts", expect.anything()));
@@ -136,16 +161,39 @@ describe("NewContactPage error + duplicate-submit (GAP-CRM-CONTACTS-NEW-01 / -04
 
 describe("NewContactPage DPDP + account link (GAP-CRM-CONTACTS-NEW-03 / -02)", () => {
   it("GAP-CRM-CONTACTS-NEW-03: consent is DPDP-only wording with a PAN/GSTIN notice", () => {
-    render(<NewContactPage />);
+    renderWithIntl(<NewContactPage />);
     expect(screen.getByText(/DPDP Act, 2023/)).toBeInTheDocument();
     expect(screen.queryByText(/GDPR/)).not.toBeInTheDocument();
     expect(screen.getByText(/Personal data collected for KYC\/tax/i)).toBeInTheDocument();
   });
 
   it("GAP-CRM-CONTACTS-NEW-02: offers an account picker plus a free-text organisation fallback", () => {
-    render(<NewContactPage />);
+    renderWithIntl(<NewContactPage />);
     expect(screen.getByLabelText("Link to an existing account")).toBeInTheDocument();
     // With no account linked, the free-text organisation input is the fallback.
     expect(screen.getByPlaceholderText("Or type a new organisation")).toBeInTheDocument();
+  });
+
+  // GAP-CRM-CONTACTS-DETAIL-EDIT-07: the create form uses the same consent
+  // record control as the edit form, so a grant can't reach crm-service (which
+  // now requires purpose + channel) without them.
+  it("blocks a consent grant without purpose/channel, then sends both", async () => {
+    vi.mocked(dq.duplicateCheck).mockResolvedValue([]);
+    fetchMock.mockResolvedValue({ ok: true, status: 202, json: async () => ({ id: "c-1" }) });
+    renderWithIntl(<NewContactPage />);
+    fireEvent.change(screen.getByLabelText(/^full name/i), { target: { value: "Asha Rao" } });
+    fireEvent.click(screen.getByLabelText(/I consent to marketing communications/i));
+    fireEvent.click(screen.getByRole("button", { name: /create contact/i }));
+    expect(await screen.findByText(/choose the purpose and how consent was captured/i)).toBeInTheDocument();
+    expect(fetchMock.mock.calls.filter((c) => c[0] === "/api/proxy/v1/crm/contacts")).toHaveLength(0);
+
+    fireEvent.change(screen.getByLabelText(/^purpose/i), { target: { value: "marketing" } });
+    fireEvent.change(screen.getByLabelText(/^captured via/i), { target: { value: "in_person" } });
+    fireEvent.click(screen.getByRole("button", { name: /create contact/i }));
+    await waitFor(() => expect(fetchMock.mock.calls.some((c) => c[0] === "/api/proxy/v1/crm/contacts")).toBe(true));
+    const post = fetchMock.mock.calls.find((c) => c[0] === "/api/proxy/v1/crm/contacts")!;
+    expect(JSON.parse((post[1] as RequestInit).body as string)).toMatchObject({
+      marketingConsent: true, consentPurpose: "marketing", consentChannel: "in_person",
+    });
   });
 });

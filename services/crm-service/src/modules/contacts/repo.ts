@@ -32,6 +32,9 @@ function toView(r: ContactRow): ContactView {
     tags: (r.tags as string[]) ?? [],
     marketingConsent: r.marketingConsent,
     consentDate: r.consentDate ?? null,
+    consentPurpose: r.consentPurpose ?? null,
+    consentChannel: r.consentChannel ?? null,
+    consentUpdatedAt: r.consentUpdatedAt?.toISOString() ?? null,
     lastActivityAt: r.lastActivityAt?.toISOString() ?? null,
     status: r.status,
     version: r.version,
@@ -76,6 +79,16 @@ export async function findDetail(id: string, tenantId: string): Promise<ContactD
     ...(contact.expectedValueMinor ? { expectedValueMinor: contact.expectedValueMinor } : {}),
     leadStatus: contact.leadStatus,
     marketingConsent: contact.marketingConsent,
+    // GAP-CRM-CONTACTS-DETAIL-EDIT-07: round-trip the DPDP consent record and the
+    // editable identifiers so the edit form seeds them (and does not blank them).
+    ...(contact.consentPurpose ? { consentPurpose: contact.consentPurpose } : {}),
+    ...(contact.consentChannel ? { consentChannel: contact.consentChannel } : {}),
+    ...(contact.consentDate ? { consentDate: contact.consentDate } : {}),
+    ...(contact.consentUpdatedAt ? { consentUpdatedAt: contact.consentUpdatedAt } : {}),
+    ...(contact.gstin ? { gstin: contact.gstin } : {}),
+    ...(contact.pan ? { pan: contact.pan } : {}),
+    ...(contact.pincode ? { pincode: contact.pincode } : {}),
+    ...(contact.leadSource ? { leadSource: contact.leadSource } : {}),
     ...(contact.lastActivityAt ? { lastActivityDate: contact.lastActivityAt.slice(0, 10) } : {}),
     tags: contact.tags,
     deals: dealRows.map((d) => ({

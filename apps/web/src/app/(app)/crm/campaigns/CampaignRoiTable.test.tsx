@@ -48,3 +48,13 @@ describe("CampaignRoiTable naming (GAP-CRM-CAMPAIGNS-01)", () => {
     expect(screen.getByPlaceholderText("Filter by campaign name")).toBeInTheDocument();
   });
 });
+
+describe("CampaignRoiTable export notice (GAP-CRM-CAMPAIGNS-05)", () => {
+  it("shows a policy notice next to the CSV export button", () => {
+    render(<CampaignRoiTable rows={[row({ name: "Diwali Outreach" })]} />);
+    expect(screen.getByRole("button", { name: /CSV/ })).toBeInTheDocument();
+    expect(
+      screen.getByText(/Exports leave the system; handle spend and revenue figures per policy\./),
+    ).toBeInTheDocument();
+  });
+});

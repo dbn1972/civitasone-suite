@@ -22,7 +22,8 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { Button, ConfirmDialog, EmptyState, ErrorState, Masked } from "../../../../_components/ds";
+import { Button, ConfirmDialog, EmptyState, ErrorState, Masked, StatusPill } from "../../../../_components/ds";
+import { formatIndianDateTime } from "@/lib/formatters";
 import {
   advanceStage,
   recordKyc,
@@ -33,8 +34,8 @@ import {
   nextStageOptions,
   isOnboardingStage,
   isKycStatus,
-  STAGE_META,
-  KYC_META,
+  stagePillVariant,
+  kycPillVariant,
   isTerminalStage,
   CANCELLATION_REASON_MIN_LENGTH,
   isValidCancellationReason,
@@ -46,10 +47,13 @@ import {
   type OnbSource,
 } from "@/lib/crm/onboarding";
 
+/**
+ * GAP-CRM-ONBOARDING-DETAIL-07: use the shared IST date-time formatter instead
+ * of the ad-hoc toLocaleString('en-IN') (browser timezone, with seconds) so
+ * timestamps match the rest of the app ("dd Mon yyyy, hh:mm", Asia/Kolkata).
+ */
 function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString("en-IN");
+  return formatIndianDateTime(iso);
 }
 
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
@@ -122,6 +126,31 @@ export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; ca
     void load(mountedRef.current);
   }, [load]);
 
+  /**
+   * GAP-CRM-ONBOARDING-DETAIL-06: an accepted (HTTP 202) mutation is applied
+   * ASYNCHRONOUSLY, so an immediate reload can still read the OLD stage/KYC/
+   * version — the clerk then sees a success message beside stale values. Poll
+   * getOnboardingCase up to `tries` times (every `delayMs`) until the case's
+   * version advances past the one we acted on, then update. Returns once the
+   * change lands or the budget is exhausted; the caller clears `pending` after.
+   */
+  const [pending, setPending] = useState(false);
+  const pollUntilChanged = useCallback(
+    async (priorVersion: number, tries = 3, delayMs = 2000) => {
+      for (let i = 0; i < tries; i++) {
+        await new Promise((r) => setTimeout(r, delayMs));
+        if (!mountedRef.current.alive) return;
+        const [{ data, source: s }, lookups] = await Promise.all([getOnboardingCase(id), getOnboardingLookups()]);
+        if (!mountedRef.current.alive) return;
+        const resolved = data ? resolveCaseNames([data], lookups)[0] ?? data : null;
+        setItem(resolved);
+        setSource(s);
+        if (resolved && resolved.version > priorVersion) return; // change landed
+      }
+    },
+    [id],
+  );
+
   const isError = source === "error";
   const isLoading = source === "loading";
 
@@ -159,6 +188,7 @@ export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; ca
     setKycError("");
     try {
       const trimmedRef = kycReference.trim();
+      const priorVersion = item.version;
       const result = await recordKyc(item.id, {
         status: kycTarget,
         ...(trimmedRef ? { reference: trimmedRef } : {}),
@@ -172,13 +202,29 @@ export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; ca
       setKycConfirm(false);
       setKycTarget("");
       setKycReference("");
-      reload();
+      // GAP-CRM-ONBOARDING-DETAIL-06: a 202 is applied asynchronously; poll
+      // until the version advances (panels disabled meanwhile) instead of
+      // reloading once into a stale read. A synchronous (200) result is already
+      // applied, so a single reload is enough.
+      if (result.accepted) {
+        setPending(true);
+        try {
+          await pollUntilChanged(priorVersion);
+        } finally {
+          if (mountedRef.current.alive) {
+            setPending(false);
+            setKycMessage(t("kycRecordedAs", { status: kycText(kycTarget) }));
+          }
+        }
+      } else {
+        reload();
+      }
     } catch (e) {
       setKycError(formError.fromException("save", e).message);
     } finally {
       setKycBusy(false);
     }
-  }, [item, kycTarget, kycReference, reload, t, kycText, formError]);
+  }, [item, kycTarget, kycReference, reload, t, kycText, formError, pollUntilChanged]);
 
   // ---- Stage ----
   const stage: OnboardingStage | null =
@@ -213,6 +259,7 @@ export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; ca
       setStageBusy(true);
       setStageError("");
       try {
+        const priorVersion = item.version;
         const result = await advanceStage(item.id, {
           toStage: stageTarget,
           ...(selectedOption?.requiresReason && reason ? { reason } : {}),
@@ -225,7 +272,22 @@ export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; ca
         );
         setStageConfirm(false);
         setStageTarget("");
-        reload();
+        // GAP-CRM-ONBOARDING-DETAIL-06: poll an accepted (202) change until the
+        // version advances (panels disabled meanwhile) rather than reloading
+        // once into a stale read; a 200 is already applied.
+        if (result.accepted) {
+          setPending(true);
+          try {
+            await pollUntilChanged(priorVersion);
+          } finally {
+            if (mountedRef.current.alive) {
+              setPending(false);
+              setStageMessage(t("stageMovedTo", { stage: stageText(stageTarget) }));
+            }
+          }
+        } else {
+          reload();
+        }
       } catch (e) {
         // Never silent — but since UX-020, e.message is already the
         // clerk-safe catalogued string errorMessageFromResponse built, not
@@ -236,7 +298,7 @@ export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; ca
         setStageBusy(false);
       }
     },
-    [item, stageTarget, selectedOption, reload, t, stageText, formError],
+    [item, stageTarget, selectedOption, reload, t, stageText, formError, pollUntilChanged],
   );
 
   if (isLoading) {
@@ -282,8 +344,6 @@ export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; ca
     );
   }
 
-  const sm = isOnboardingStage(item.stage) ? STAGE_META[item.stage] : null;
-  const km = isKycStatus(item.kycStatus) ? KYC_META[item.kycStatus] : null;
   const terminal = stage ? isTerminalStage(stage) : false;
   // GAP-CRM-ONBOARDING-DETAIL-01: name the customer being onboarded. Prefer the
   // deal name, fall back to the account name; the opaque id is kept only as a
@@ -292,6 +352,19 @@ export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; ca
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
+      {/* GAP-CRM-ONBOARDING-DETAIL-06: while an accepted (202) change is still
+          settling, show a pending banner and a manual Refresh fallback so a
+          clerk is never left looking at stale values with a success message,
+          and both action panels are disabled above to prevent a version-
+          conflict double submit. */}
+      {pending ? (
+        <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)", margin: 0, display: "flex", alignItems: "center", gap: 10 }}>
+          Pending update — applying your change…
+          <button type="button" className="btn" style={{ fontSize: 13 }} onClick={reload}>
+            Refresh now
+          </button>
+        </p>
+      ) : null}
       <div className="card">
         <div className="card-h">
           <h3>{t("heading", { name: customerName ?? t("unnamedCase") })}</h3>
@@ -302,10 +375,10 @@ export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; ca
             <span style={{ fontFamily: "monospace", fontSize: 12, color: "var(--muted)" }}>{item.id}</span>
           </Field>
           <Field label={t("stage")}>
-            <span aria-hidden="true">{sm ? sm.icon : "•"}</span> {stageText(item.stage)}
+            <StagePill stage={item.stage} label={stageText(item.stage)} />
           </Field>
           <Field label={t("kycStatus")}>
-            <span aria-hidden="true">{km ? km.icon : "•"}</span> {kycText(item.kycStatus)}
+            <KycPill status={item.kycStatus} label={kycText(item.kycStatus)} />
           </Field>
           <Field label={t("account")}>
             {item.accountId ? (
@@ -333,7 +406,10 @@ export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; ca
           <Field label={t("completed")}>{fmtDate(item.completedAt)}</Field>
           <Field label={t("created")}>{fmtDate(item.createdAt)}</Field>
           <Field label={t("updated")}>{fmtDate(item.updatedAt)}</Field>
-          <Field label={t("version")}>{String(item.version)}</Field>
+          {/* GAP-CRM-ONBOARDING-DETAIL-07: the raw version number is an internal
+              optimistic-lock counter, not clerk-facing. It is still read from
+              `item.version` for the concurrency guard on mutations, but no
+              longer shown in the visible grid. */}
           {item.cancellationReason ? (
             <Field label={t("cancellationReason")}>{item.cancellationReason}</Field>
           ) : null}
@@ -399,7 +475,7 @@ export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; ca
                 </div>
               ) : null}
               <div>
-                <Button onClick={beginKyc} style={{ minHeight: 44 }}>
+                <Button onClick={beginKyc} style={{ minHeight: 44 }} disabled={pending || kycBusy}>
                   {t("recordKycOutcome")}
                 </Button>
               </div>
@@ -466,7 +542,7 @@ export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; ca
                 ) : null}
               </div>
               <div>
-                <Button onClick={beginStage} style={{ minHeight: 44 }}>
+                <Button onClick={beginStage} style={{ minHeight: 44 }} disabled={pending || stageBusy}>
                   {t("applyStageChange")}
                 </Button>
               </div>
@@ -531,4 +607,17 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <div style={{ fontSize: 14 }}>{children}</div>
     </div>
   );
+}
+
+/**
+ * GAP-CRM-ONBOARDING-06 / -DETAIL-07: stage/KYC rendered as theme-safe tone
+ * pills (StatusPill with an explicit variant from the stage/KYC tone) instead
+ * of cross-platform-inconsistent emoji glyphs.
+ */
+function StagePill({ stage, label }: { stage: string; label: string }) {
+  return <StatusPill status={stage} label={label} variant={stagePillVariant(stage)} />;
+}
+
+function KycPill({ status, label }: { status: string; label: string }) {
+  return <StatusPill status={status} label={label} variant={kycPillVariant(status)} />;
 }

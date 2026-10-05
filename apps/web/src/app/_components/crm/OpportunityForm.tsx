@@ -35,6 +35,9 @@ interface OpportunityFormProps {
   initialAccountLabel?: string;
 }
 
+/** Mirrors the crm-service cap on quantity (deals/validators.ts MAX_QUANTITY). */
+const MAX_QUANTITY = 100_000_000;
+
 const inputStyle = { padding: 8, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)", width: "100%" } as const;
 
 /**
@@ -85,9 +88,9 @@ export function OpportunityForm({ opportunity, onSaved, initialAccountId, initia
   const [valueRupees, setValueRupees] = useState(
     opportunity ? (BigInt(opportunity.valueMinor || "0") / 100n).toString() + "." + (BigInt(opportunity.valueMinor || "0") % 100n).toString().padStart(2, "0") : "",
   );
-  const [probability, setProbability] = useState(opportunity ? String(opportunity.probability) : "");
+  const [probability, setProbability] = useState(opportunity && typeof opportunity.probability === "number" ? String(opportunity.probability) : "");
   const [product, setProduct] = useState(opportunity?.product ?? "");
-  const [quantity, setQuantity] = useState(opportunity ? String(opportunity.quantity) : "");
+  const [quantity, setQuantity] = useState(opportunity && typeof opportunity.quantity === "number" ? String(opportunity.quantity) : "");
   const [competitors, setCompetitors] = useState((opportunity?.competitors ?? []).join(", "));
   const [nextStep, setNextStep] = useState(opportunity?.nextStep ?? "");
   const [expectedCloseDate, setExpectedCloseDate] = useState(opportunity?.expectedCloseDate?.slice(0, 10) ?? "");
@@ -97,6 +100,11 @@ export function OpportunityForm({ opportunity, onSaved, initialAccountId, initia
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [missing, setMissing] = useState<string[]>([]);
+  // GAP-CRM-OPPORTUNITIES-NEW-05: the Name field must not announce itself invalid
+  // on first render (before the user has typed). Track whether it has been blurred
+  // and whether a submit was attempted; only then does an empty name read invalid.
+  const [nameTouched, setNameTouched] = useState(false);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
   const formId = useId();
 
   const initialOptions = useMemo<EntityOption[]>(
@@ -137,7 +145,7 @@ export function OpportunityForm({ opportunity, onSaved, initialAccountId, initia
   const probNum = Number(probability);
   const probValid = probability.trim() === "" || (Number.isFinite(probNum) && probNum >= 0 && probNum <= 100);
   const qtyNum = Number(quantity);
-  const qtyValid = quantity.trim() === "" || (Number.isInteger(qtyNum) && qtyNum >= 0);
+  const qtyValid = quantity.trim() === "" || (Number.isInteger(qtyNum) && qtyNum >= 0 && qtyNum <= MAX_QUANTITY);
 
   // On a fresh create, once we've saved we must NOT allow a second submit — that is the
   // duplicate-deal bug (GAP-CRM-OPPORTUNITIES-NEW-01). `saved` latches true after the
@@ -166,6 +174,7 @@ export function OpportunityForm({ opportunity, onSaved, initialAccountId, initia
     setMessage("");
     setError("");
     setMissing([]);
+    setSubmitAttempted(true);
     if (!canSubmit) {
       if (!valueValid) setError("Enter the deal value as a plain rupee amount (max 2 decimals).");
       else if (!probValid) setError("Probability must be a whole number between 0 and 100.");
@@ -179,9 +188,12 @@ export function OpportunityForm({ opportunity, onSaved, initialAccountId, initia
       pipelineId,
       stage,
       valueMinor: valueMinor ?? "0",
-      probability: probability.trim() === "" ? 0 : probNum,
+      // GAP-CRM-OPPORTUNITIES-NEW-06: omit probability/quantity when left blank
+      // so an untouched form does not persist a real-looking 0 (which would
+      // zero a deal's forecast weighting). The backend applies its own default.
+      ...(probability.trim() === "" ? {} : { probability: probNum }),
       product: product.trim(),
-      quantity: quantity.trim() === "" ? 0 : qtyNum,
+      ...(quantity.trim() === "" ? {} : { quantity: qtyNum }),
       competitors: competitors.split(",").map((c) => c.trim()).filter((c) => c.length > 0),
       nextStep: nextStep.trim(),
       expectedCloseDate,
@@ -260,7 +272,22 @@ export function OpportunityForm({ opportunity, onSaved, initialAccountId, initia
       <div style={{ display: "grid", gap: 12, padding: 12, maxWidth: 720 }}>
         <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
           Name
-          <input aria-label="Opportunity name" value={name} aria-invalid={name.trim() ? undefined : true} onChange={(e) => setName(e.target.value)} style={inputStyle} placeholder="e.g. State datacentre refresh" />
+          <input
+            aria-label="Opportunity name"
+            value={name}
+            aria-required={true}
+            aria-invalid={(nameTouched || submitAttempted) && !name.trim() ? true : undefined}
+            aria-describedby={(nameTouched || submitAttempted) && !name.trim() ? `${formId}-name-error` : undefined}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={() => setNameTouched(true)}
+            style={inputStyle}
+            placeholder="e.g. State datacentre refresh"
+          />
+          {(nameTouched || submitAttempted) && !name.trim() ? (
+            <span id={`${formId}-name-error`} role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>
+              Enter an opportunity name.
+            </span>
+          ) : null}
         </label>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -350,6 +377,7 @@ export function OpportunityForm({ opportunity, onSaved, initialAccountId, initia
               aria-label="Quantity"
               type="number"
               min={0}
+              max={MAX_QUANTITY}
               value={quantity}
               aria-invalid={!qtyValid || isMissing("quantity") ? true : undefined}
               onChange={(e) => setQuantity(e.target.value)}

@@ -107,4 +107,24 @@ describe("AccountHealthPage FAILMASK guard (GAP-CRM-HEALTH-01)", () => {
 
     expect(screen.getByText("Call First").nextElementSibling).toHaveTextContent("Bharat Steel");
   });
+
+  // GAP-CRM-HEALTH-06 — the stat tiles use theme tokens (StatCard `tone`), not
+  // hard-coded light-pastel hex iconBg values that stay pale in dark mode.
+  it("renders stat-tile icon backgrounds from theme tokens, with no literal hex", async () => {
+    getWatchlistMock.mockResolvedValue({
+      data: [{ accountId: "a", score: 10, band: "critical", computedAt: "2026-08-01T00:00:00Z" }],
+      source: "api",
+    });
+    getAccountsMock.mockResolvedValue({ data: [], source: "api" });
+
+    const ui = await AccountHealthPage();
+    const { container } = render(ui);
+
+    const html = container.innerHTML;
+    for (const hex of ["#fee2e2", "#fef3c7", "#e0f2fe", "#fce7f3"]) {
+      expect(html).not.toContain(hex);
+    }
+    // The bad-tone tile paints its icon box with the --badbg token.
+    expect(html).toContain("var(--badbg)");
+  });
 });

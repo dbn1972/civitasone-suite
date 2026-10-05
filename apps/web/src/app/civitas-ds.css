@@ -132,6 +132,11 @@ a{color:inherit;text-decoration:none}
 
 /* tables */
 .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+/* GAP-CRM-CONTACTS-08: opt-in per-column visibility — a column marked
+   hideOnMobile (DataTable) is dropped below 640px so a wide table (e.g. the
+   11-column contacts list) stays readable on a phone without horizontal
+   scrolling for every field. Additive: no existing table passes the flag. */
+@media(max-width:640px){.tbl .dt-hide-mobile{display:none}}
 .tbl{width:100%;border-collapse:collapse;font-size:13.5px}
 .tbl th{text-align:left;color:var(--ink2);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;
   padding:11px 18px;background:var(--bg);border-bottom:1px solid var(--line)}

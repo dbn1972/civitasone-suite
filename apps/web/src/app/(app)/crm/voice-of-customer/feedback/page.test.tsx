@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { renderWithIntl } from "@/lib/testUtils/intl";
 import { render, screen, fireEvent, within, waitFor } from "@testing-library/react";
 
 import CitizenFeedbackPage from "./page";
@@ -125,5 +126,14 @@ describe("CitizenFeedbackPage (GAP-CRM-VOICE-OF-CUSTOMER-FEEDBACK-05 — wired)"
   it("has no required consent checkbox (notice, not a checkbox)", () => {
     render(withIntl(<CitizenFeedbackPage />));
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+  });
+
+  // GAP-CRM-VOICE-OF-CUSTOMER-FEEDBACK-06 (COPY): the module name is "Voice of
+  // Citizen" everywhere. The feedback form links back to it with that label and
+  // never uses the old "Voice Of Customer" wording.
+  it("links back to 'Voice of Citizen' and never says 'Voice Of Customer'", () => {
+    renderWithIntl(<CitizenFeedbackPage />);
+    expect(screen.getByRole("link", { name: /voice of citizen/i })).toBeInTheDocument();
+    expect(screen.queryByText(/voice of customer/i)).not.toBeInTheDocument();
   });
 });

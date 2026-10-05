@@ -245,10 +245,13 @@ describe("DQ-002 merge generalization", () => {
     expect(dupAfter.statusCode).toBe(404);
 
     // Primary survives and adopted the duplicate's company + GSTIN.
-    const primAfter = await get(`/v1/crm/contacts/${primaryId}`);
+    // GSTIN is PII: the clear value is only returned to admin roles; a plain crm_user sees it masked.
+    const primAfter = await get(`/v1/crm/contacts/${primaryId}`, ["crm_admin"]);
     expect(primAfter.statusCode).toBe(200);
     expect(primAfter.json().company).toBe("Dup Company");
     expect(primAfter.json().gstin).toBe("29ABCDE1234F1Z5");
+    const primMasked = await get(`/v1/crm/contacts/${primaryId}`);
+    expect(primMasked.json().gstin).toBe("***********F1Z5");
 
     // Activity was reassigned to the primary.
     const detail = await get(`/v1/crm/contacts/${primaryId}/detail`);

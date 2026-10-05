@@ -71,25 +71,28 @@ export default async function AccountHealthPage() {
         actions={<a className="btn" href="/crm/accounts">{t("allAccounts")}</a>}
       />
       <StatGrid>
+        {/* GAP-CRM-HEALTH-06: use the StatCard `tone` prop (theme tokens that
+            follow dark mode) instead of hard-coded light-pastel hex iconBg
+            values, which stayed pale/illegible in dark mode. */}
         <StatCard
           icon="🚨"
-          iconBg="#fee2e2"
+          tone="bad"
           label={t("critical")}
           value={summary.critical.toLocaleString("en-IN")}
         />
         <StatCard
           icon="⚠️"
-          iconBg="#fef3c7"
+          tone="warn"
           label={t("atRisk")}
           value={summary.atRisk.toLocaleString("en-IN")}
         />
         <StatCard
           icon="📉"
-          iconBg="#e0f2fe"
+          tone="info"
           label={t("averageScore")}
           value={summary.total > 0 ? `${summary.averageScore}/100` : "—"}
         />
-        <StatCard icon="📞" iconBg="#fce7f3" label={t("callFirst")} value={worstName} />
+        <StatCard icon="📞" tone="neutral" label={t("callFirst")} value={worstName} />
       </StatGrid>
 
       <Card title={t("watchlist")}>

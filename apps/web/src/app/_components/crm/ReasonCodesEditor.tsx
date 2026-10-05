@@ -40,6 +40,7 @@ import {
   validateReasonCodes,
   ConfigConflictError,
   REASON_CODE_TARGET_STATUSES,
+  REASON_CODE_STATUS_LABELS,
   type LeadReasonCode,
   type ReasonCodeRowError,
   type LqSource,
@@ -175,7 +176,7 @@ export function ReasonCodesEditor() {
   return (
     <div className="card">
       <div className="card-h">
-        <h3 id={headingId}>Reason codes</h3>
+        <h3 id={headingId}>{t("title")}</h3>
       </div>
       {lastChangedAt ? (
         <p style={{ fontSize: 12, color: "var(--muted)", padding: "0 12px" }}>
@@ -194,6 +195,7 @@ export function ReasonCodesEditor() {
           message="Add reason codes so status changes (disqualify, re-open…) capture a consistent, auditable reason."
         />
       ) : (
+        <div style={{ overflowX: "auto" }}>
         <table className="tbl" aria-labelledby={headingId}>
           <thead>
             <tr>
@@ -242,7 +244,7 @@ export function ReasonCodesEditor() {
                       onChange={(e) => update(idx, { appliesToStatus: e.target.value })}
                       style={cellInput}
                     >
-                      {REASON_CODE_TARGET_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                      {REASON_CODE_TARGET_STATUSES.map((s) => <option key={s} value={s}>{REASON_CODE_STATUS_LABELS[s]}</option>)}
                     </select>
                     {err?.appliesToStatus ? <span style={{ display: "block", fontSize: 11, color: "#b42318" }}>{err.appliesToStatus}</span> : null}
                   </td>
@@ -260,6 +262,7 @@ export function ReasonCodesEditor() {
             })}
           </tbody>
         </table>
+        </div>
       )}
 
       <p style={{ fontSize: 12, color: "var(--muted)", padding: "0 12px" }}>

@@ -29,11 +29,26 @@ const mockActivities = [
 
 beforeEach(() => mocked.mockReset());
 
-describe("Stakeholder Interactions page (GoI redesign)", () => {
-  it("renders heading Stakeholder Interactions", async () => {
+describe("Activities page (GAP-CRM-ACTIVITIES-08 vocabulary)", () => {
+  it("renders heading 'Activities' (matching the hub/nav/URL, not 'Stakeholder Interactions')", async () => {
     mocked.mockResolvedValue({ data: mockActivities, source: "api" });
     render(await Page({ searchParams: {} }));
-    expect(screen.getByText("Stakeholder Interactions")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Activities" })).toBeInTheDocument();
+    expect(screen.queryByText("Stakeholder Interactions")).not.toBeInTheDocument();
+  });
+
+  it("labels the total stat 'Total Activities', not 'Total Interactions'", async () => {
+    mocked.mockResolvedValue({ data: mockActivities, source: "api" });
+    render(await Page({ searchParams: {} }));
+    expect(screen.getByText("Total Activities")).toBeInTheDocument();
+    expect(screen.queryByText("Total Interactions")).not.toBeInTheDocument();
+  });
+
+  it("renders an en subtitle with no hard-coded Devanagari (GAP-CRM-ACCOUNTS-07)", async () => {
+    mocked.mockResolvedValue({ data: mockActivities, source: "api" });
+    render(await Page({ searchParams: {} }));
+    const subtitle = screen.getByText(/Calls, meetings/);
+    expect(/[\u0900-\u097F]/.test(subtitle.textContent ?? "")).toBe(false);
   });
 
   it("shows overdue count (3) when activities have status overdue", async () => {

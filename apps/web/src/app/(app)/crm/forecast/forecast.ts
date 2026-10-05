@@ -9,6 +9,14 @@ import type { CRMForecast, CRMForecastStage } from "@civitasone/types";
 
 export type ProbabilityBand = "low" | "medium" | "high";
 
+/**
+ * GAP-CRM-FORECAST-05: the band thresholds are exported so the table legend can
+ * show them to the user (previously the 30 / 70 cut-offs were hard-coded in two
+ * places and never surfaced). The single source of truth for "what counts as a
+ * likely stage".
+ */
+export const PROBABILITY_BAND_THRESHOLDS = { high: 70, medium: 30 } as const;
+
 export interface RankedForecastStage extends CRMForecastStage {
   /** Share of the weighted total contributed by this stage, to two decimals. */
   sharePct: number;
@@ -41,8 +49,8 @@ export function stageSharePct(weightedTotalMinor: string, totalForecastMinor: st
  * likely stage" decision is reviewable and testable in one place.
  */
 export function probabilityBand(probability: number): ProbabilityBand {
-  if (probability >= 70) return "high";
-  if (probability >= 30) return "medium";
+  if (probability >= PROBABILITY_BAND_THRESHOLDS.high) return "high";
+  if (probability >= PROBABILITY_BAND_THRESHOLDS.medium) return "medium";
   return "low";
 }
 

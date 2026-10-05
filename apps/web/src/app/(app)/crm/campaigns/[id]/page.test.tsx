@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
+import { renderWithIntl } from "@/lib/testUtils/intl";
 import type { CRMCampaignRoi } from "@civitasone/types";
 
 vi.mock("../../../../_data/loaders", () => ({ getCrmCampaignRoi: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 
 import Page from "./page";
 import { getCrmCampaignRoi } from "../../../../_data/loaders";
@@ -30,7 +32,7 @@ beforeEach(() => mocked.mockReset());
 describe("Campaign detail page", () => {
   it("GAP-CRM-CAMPAIGNS-DETAIL-01: shows the campaign name as the h1 when present", async () => {
     mocked.mockResolvedValue({ data: campaign({ name: "Diwali Push" }), source: "api" });
-    render(await Page({ params: { id: "7f3a1c2e-0000-4000-8000-000000000000" } }));
+    renderWithIntl(await Page({ params: { id: "7f3a1c2e-0000-4000-8000-000000000000" } }));
 
     expect(screen.getByRole("heading", { name: "Diwali Push" })).toBeInTheDocument();
     // the full UUID is no longer the title
@@ -39,7 +41,7 @@ describe("Campaign detail page", () => {
 
   it("GAP-CRM-CAMPAIGNS-DETAIL-01: falls back to 'Campaign' + short id when no name", async () => {
     mocked.mockResolvedValue({ data: campaign(), source: "api" });
-    render(await Page({ params: { id: "7f3a1c2e-0000-4000-8000-000000000000" } }));
+    renderWithIntl(await Page({ params: { id: "7f3a1c2e-0000-4000-8000-000000000000" } }));
 
     expect(screen.getByRole("heading", { name: "Campaign" })).toBeInTheDocument();
     expect(screen.getByText(/Campaign 7f3a1c2e · INR/)).toBeInTheDocument();
@@ -47,7 +49,7 @@ describe("Campaign detail page", () => {
 
   it("GAP-CRM-CAMPAIGNS-DETAIL-02: a 404 shows the empty state, no retry", async () => {
     mocked.mockResolvedValue({ data: null, source: "error", status: 404 });
-    render(await Page({ params: { id: "x" } }));
+    renderWithIntl(await Page({ params: { id: "x" } }));
 
     expect(screen.getByText("No performance recorded")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /try again/i })).not.toBeInTheDocument();
@@ -55,7 +57,7 @@ describe("Campaign detail page", () => {
 
   it("GAP-CRM-CAMPAIGNS-DETAIL-02: a 500 shows the retry error state, not 'no figures'", async () => {
     mocked.mockResolvedValue({ data: null, source: "error", status: 500 });
-    render(await Page({ params: { id: "x" } }));
+    renderWithIntl(await Page({ params: { id: "x" } }));
 
     expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
     expect(screen.queryByText("No performance recorded")).not.toBeInTheDocument();
@@ -63,7 +65,7 @@ describe("Campaign detail page", () => {
 
   it("GAP-CRM-CAMPAIGNS-DETAIL-02: a 403 shows a permission-denied state", async () => {
     mocked.mockResolvedValue({ data: null, source: "error", status: 403, errorMessage: "requires crm_admin" });
-    render(await Page({ params: { id: "x" } }));
+    renderWithIntl(await Page({ params: { id: "x" } }));
 
     expect(screen.queryByText("No performance recorded")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /access restricted/i })).toBeInTheDocument();
@@ -71,10 +73,18 @@ describe("Campaign detail page", () => {
 
   it("GAP-CRM-CAMPAIGNS-DETAIL-03: formats amounts in a non-INR currency without ₹", async () => {
     mocked.mockResolvedValue({ data: campaign({ currency: "USD" }), source: "api" });
-    render(await Page({ params: { id: "x" } }));
+    renderWithIntl(await Page({ params: { id: "x" } }));
 
     // Spend 100000 cents == $1,000.00
     expect(screen.getByText("$1,000.00")).toBeInTheDocument();
     expect(screen.queryByText(/₹/)).not.toBeInTheDocument();
+  });
+
+  it("GAP-CRM-CAMPAIGNS-DETAIL-04: offers a form to post a reporting period", async () => {
+    mocked.mockResolvedValue({ data: campaign(), source: "api" });
+    renderWithIntl(await Page({ params: { id: "7f3a1c2e-0000-4000-8000-000000000000" } }));
+
+    expect(screen.getByRole("form", { name: /post a reporting period/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /post period/i })).toBeInTheDocument();
   });
 });

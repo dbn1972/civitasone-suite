@@ -195,3 +195,25 @@ describe("ContactsTable empty/error states (GAP-CRM-CONTACTS-05)", () => {
     expect(screen.getByText(/couldn't load your contacts/i)).toBeInTheDocument();
   });
 });
+
+describe("ContactsTable responsive + id-less rows (GAP-CRM-CONTACTS-08)", () => {
+  it("renders an id-less row as a non-clickable row (no row link/button)", () => {
+    render(<ContactsTable contacts={[{ name: "No Id Contact" }]} />);
+    // The name is shown...
+    expect(screen.getByText("No Id Contact")).toBeInTheDocument();
+    // ...but there is no row button/link, because rowHref returns undefined.
+    expect(screen.queryByRole("button", { name: /Open No Id Contact/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Open No Id Contact/ })).not.toBeInTheDocument();
+  });
+
+  it("marks secondary columns to hide on mobile (dt-hide-mobile class)", () => {
+    render(<ContactsTable contacts={[{ id: "c1", name: "Asha Rao", tags: ["vip"] }]} />);
+    const segmentHeader = screen.getByRole("columnheader", { name: "Segment" });
+    expect(segmentHeader.className).toContain("dt-hide-mobile");
+    const tagsHeader = screen.getByRole("columnheader", { name: "Tags" });
+    expect(tagsHeader.className).toContain("dt-hide-mobile");
+    // A primary column stays visible on mobile.
+    const nameHeader = screen.getByRole("columnheader", { name: "Name" });
+    expect(nameHeader.className).not.toContain("dt-hide-mobile");
+  });
+});

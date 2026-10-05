@@ -537,6 +537,19 @@ export interface LeadReasonCode {
 export const REASON_CODE_TARGET_STATUSES = ["nurture", "recycled", "disqualified", "new", "qualified"] as const;
 export type ReasonCodeTargetStatus = (typeof REASON_CODE_TARGET_STATUSES)[number];
 
+/**
+ * GAP-CRM-LEAD-REASON-CODES-05 (COPY): human labels for the reason-code target
+ * statuses. The select used to print the raw enum ("disqualified"); the value
+ * stays the raw enum but the option text shows the title-cased label.
+ */
+export const REASON_CODE_STATUS_LABELS: Record<ReasonCodeTargetStatus, string> = {
+  nurture: "Nurture",
+  recycled: "Recycled",
+  disqualified: "Disqualified",
+  new: "New",
+  qualified: "Qualified",
+};
+
 /** code must be non-empty lowercase snake_case, matching the backend regex. */
 export const REASON_CODE_PATTERN = /^[a-z0-9_]+$/;
 

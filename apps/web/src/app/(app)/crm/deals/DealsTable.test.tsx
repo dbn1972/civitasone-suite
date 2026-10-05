@@ -28,6 +28,8 @@ type Deal = {
   stage: string;
   status: string;
   owner: string;
+  closeDate?: string | null;
+  probability?: number;
 };
 
 function seed(data: Deal[], provenance: "live" | "cached" | "error-no-data") {
@@ -144,5 +146,30 @@ describe("DealsTable", () => {
     render(<DealsTable deals={DEALS} source="api" />);
     expect(screen.getByRole("columnheader", { name: /Contact \/ Company/i })).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: /^Account$/i })).not.toBeInTheDocument();
+  });
+
+  // GAP-CRM-DEALS-07: 'Expected close' and 'Probability' columns are shown.
+  it("shows 'Expected close' and 'Probability' columns with mapped values", () => {
+    const withDates: Deal[] = [
+      { id: "1", dealName: "Open A", contactId: "c1", contactName: "Officer A", amount: "5000000", stage: "prospecting", status: "open", owner: "U1", closeDate: "2026-03-31", probability: 40 },
+    ];
+    seed(withDates, "live");
+    render(<DealsTable deals={withDates} source="api" />);
+    expect(screen.getByRole("columnheader", { name: /Expected close/i })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /^Probability$/i })).toBeInTheDocument();
+    const table = screen.getByRole("table");
+    // formatIndianDate renders the ISO date in a human form; probability as "40%".
+    expect(within(table).getByText("40%")).toBeInTheDocument();
+  });
+
+  it("renders '—' for a deal with no expected close date (GAP-CRM-DEALS-07)", () => {
+    const undated: Deal[] = [
+      { id: "1", dealName: "Open A", contactId: "c1", contactName: "Officer A", amount: "5000000", stage: "prospecting", status: "open", owner: "U1", probability: 0 },
+    ];
+    seed(undated, "live");
+    render(<DealsTable deals={undated} source="api" />);
+    const table = screen.getByRole("table");
+    expect(within(table).getByText("—")).toBeInTheDocument();
+    expect(within(table).getByText("0%")).toBeInTheDocument();
   });
 });

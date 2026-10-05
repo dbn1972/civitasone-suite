@@ -326,6 +326,38 @@ describe("activity completion", () => {
     expect(r[0]?.status).toBe("completed");
     expect(r[0]?.completed_at).not.toBeNull();
   });
+
+  // GAP-CRM-TASK-ESCALATION-06 — snooze: the updateActivity command now applies
+  // a new dueDate so a manager can push an overdue task out from the alerts
+  // list. Fails on the old consumer/repo which ignored dueDate.
+  it("snoozes a task by applying a new dueDate", { timeout: 10000 }, async () => {
+    const id = randomUUID();
+    await drive(COMMANDS.createActivity, {
+      messageId: id, type: COMMANDS.createActivity, tenantId: TENANT_A,
+      payload: {
+        id, tenantId: TENANT_A, actorName: "Tester", text: "Overdue call",
+        contactId: null, dealId: null, type: "task", subject: "Call",
+        status: "open", dueDate: "2020-01-01", completedAt: null,
+        createdAt: new Date().toISOString(),
+      },
+    }, async () => {
+      const r = await tenantQuery(TENANT_A).select("select 1 from crm.activities where id = $1", [id]);
+      return r.length > 0;
+    });
+
+    await drive(COMMANDS.updateActivity, {
+      messageId: randomUUID(), type: COMMANDS.updateActivity, tenantId: TENANT_A,
+      payload: { id, tenantId: TENANT_A, dueDate: "2099-12-31" },
+    }, async () => {
+      const r = await tenantQuery(TENANT_A).select("select due_date from crm.activities where id = $1", [id]);
+      return String(r[0]?.due_date ?? "").startsWith("2099-12-31");
+    });
+
+    const r = await tenantQuery(TENANT_A).select("select status, due_date from crm.activities where id = $1", [id]);
+    // Status is untouched; only the due date moved out.
+    expect(r[0]?.status).toBe("open");
+    expect(String(r[0]?.due_date)).toContain("2099-12-31");
+  });
 });
 
 describe("dashboard excludes deleted + cache invalidation", () => {

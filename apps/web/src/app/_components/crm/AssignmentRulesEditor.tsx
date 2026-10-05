@@ -40,18 +40,63 @@ interface RuleRow extends Omit<AssignmentRule, "criteria"> {
   origEnabled?: boolean;
   /** Selected fallback owner as {id,name} so the picker shows a name, not a raw id (GAP-CRM-ASSIGNMENT-RULES-02). */
   fallbackOwner: Owner | null;
+  /**
+   * GAP-CRM-ASSIGNMENT-RULES-06: the row's last loaded/saved comparable values,
+   * so the UI can mark unsaved rows, disable Save when unchanged, offer Discard,
+   * and merge only the saved row after a PUT/POST instead of reloading the whole
+   * chain (which wiped unsaved edits in other rows). Absent for a new row.
+   */
+  saved?: RuleSnapshot;
+}
+
+interface RuleSnapshot {
+  name: string;
+  ruleType: RuleType;
+  criteriaText: string;
+  ordinal: number;
+  enabled: boolean;
+  fallbackOwnerId: string;
+}
+
+function snapshotOf(row: RuleRow): RuleSnapshot {
+  return {
+    name: row.name,
+    ruleType: row.ruleType,
+    criteriaText: row.criteriaText,
+    ordinal: row.ordinal,
+    enabled: row.enabled,
+    fallbackOwnerId: row.fallbackOwner?.id ?? "",
+  };
+}
+
+/** A row differs from its last-saved snapshot (a new row is always dirty). */
+function isRuleDirty(row: RuleRow): boolean {
+  if (!row.saved) return true;
+  const s = snapshotOf(row);
+  return (
+    s.name !== row.saved.name ||
+    s.ruleType !== row.saved.ruleType ||
+    s.criteriaText !== row.saved.criteriaText ||
+    s.ordinal !== row.saved.ordinal ||
+    s.enabled !== row.saved.enabled ||
+    s.fallbackOwnerId !== row.saved.fallbackOwnerId
+  );
 }
 
 let SEQ = 0;
 function toRow(r: AssignmentRule): RuleRow {
   const { criteria, ...rest } = r;
-  return {
+  const criteriaText = criteria && Object.keys(criteria).length > 0 ? JSON.stringify(criteria) : "";
+  const row: RuleRow = {
     ...rest,
     key: r.id ?? `new-${SEQ++}`,
-    criteriaText: criteria && Object.keys(criteria).length > 0 ? JSON.stringify(criteria) : "",
+    criteriaText,
     origEnabled: r.id ? r.enabled : undefined,
     fallbackOwner: r.fallbackOwnerId ? { id: r.fallbackOwnerId, name: r.fallbackOwnerId } : null,
   };
+  // Only persisted rows get a baseline snapshot; a new row stays dirty.
+  if (r.id) row.saved = snapshotOf(row);
+  return row;
 }
 
 function sanitizeInt(raw: string): number {
@@ -249,21 +294,76 @@ export function AssignmentRulesEditor() {
     const rule = toRule(row);
     setBusyKey(row.key);
     try {
-      if (row.id) await updateAssignmentRule(row.id, rule);
-      else await createAssignmentRule(rule);
-      setMessage(`Rule “${rule.name}” saved.`);
-      const { ok } = await load();
-      // Keep the just-saved row's edits visible if the reload itself failed.
-      if (!ok) {
+      if (row.id) {
+        await updateAssignmentRule(row.id, rule);
+        setMessage(`Rule “${rule.name}” saved.`);
+        // GAP-CRM-ASSIGNMENT-RULES-06: update ONLY this row's snapshot (mark it
+        // clean) rather than load()-ing the whole chain, which discarded unsaved
+        // edits in other rows.
         setRows((prev) =>
-          prev.map((r) => (r.key === row.key ? { ...r, origEnabled: row.enabled } : r)),
+          prev.map((r) => {
+            if (r.key !== row.key) return r;
+            const next: RuleRow = { ...r, origEnabled: r.enabled };
+            next.saved = snapshotOf(next);
+            return next;
+          }),
         );
+      } else {
+        // A brand-new row has no server id yet; the create API returns void, so
+        // reload to pick up the id — but MERGE: keep every OTHER row that still
+        // has unsaved edits, replacing only clean rows with server data
+        // (GAP-CRM-ASSIGNMENT-RULES-06).
+        await createAssignmentRule(rule);
+        setMessage(`Rule “${rule.name}” saved.`);
+        const { data, source: s } = await getAssignmentRules();
+        if (s === "error") {
+          // Reload failed; keep the row but mark it clean so it is not lost.
+          setRows((prev) =>
+            prev.map((r) => {
+              if (r.key !== row.key) return r;
+              const next: RuleRow = { ...r, origEnabled: r.enabled };
+              next.saved = snapshotOf(next);
+              return next;
+            }),
+          );
+        } else {
+          const serverRows = data.map(toRow);
+          setRows((prev) => {
+            // Preserve other rows that still have unsaved edits.
+            const dirtyOthers = prev.filter((r) => r.key !== row.key && isRuleDirty(r));
+            return [...serverRows, ...dirtyOthers];
+          });
+        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save the rule.");
     } finally {
       setBusyKey(null);
     }
+  }
+
+  /** GAP-CRM-ASSIGNMENT-RULES-06: revert a row to its saved snapshot. */
+  function discardRow(row: RuleRow) {
+    if (!row.saved) {
+      setRows((prev) => prev.filter((r) => r.key !== row.key));
+      return;
+    }
+    const snap = row.saved;
+    setRows((prev) =>
+      prev.map((r) =>
+        r.key === row.key
+          ? {
+              ...r,
+              name: snap.name,
+              ruleType: snap.ruleType,
+              criteriaText: snap.criteriaText,
+              ordinal: snap.ordinal,
+              enabled: snap.enabled,
+              fallbackOwner: snap.fallbackOwnerId ? { id: snap.fallbackOwnerId, name: snap.fallbackOwnerId } : null,
+            }
+          : r,
+      ),
+    );
   }
 
   async function confirmDelete(row: RuleRow) {
@@ -350,8 +450,9 @@ export function AssignmentRulesEditor() {
                 const cErr = criteriaError(row, t);
                 const criteriaOk = cErr === null;
                 const busy = busyKey === row.key;
+                const dirty = isRuleDirty(row);
                 return (
-                  <tr key={row.key}>
+                  <tr key={row.key} data-dirty={dirty ? "true" : undefined}>
                     <td className="num">
                       <label className="sr-only" htmlFor={`${headingId}-ord-${row.key}`}>Order for rule {n}</label>
                       <input
@@ -379,6 +480,9 @@ export function AssignmentRulesEditor() {
                         placeholder="e.g. West-zone reps"
                         style={inputStyle}
                       />
+                      {dirty ? (
+                        <span className="pill warn" style={{ display: "inline-block", marginTop: 4, fontSize: 11 }}>Unsaved</span>
+                      ) : null}
                     </td>
                     <td>
                       <label className="sr-only" htmlFor={`${headingId}-type-${row.key}`}>Strategy for rule {n}</label>
@@ -455,9 +559,14 @@ export function AssignmentRulesEditor() {
                         <Button type="button" variant="ghost" size="sm" onClick={() => void move(row, "down")} disabled={busy || i === rows.length - 1 || !row.id} aria-label={t("moveRuleDown", { n })}>
                           ↓
                         </Button>
-                        <Button type="button" size="sm" onClick={() => void saveRow(row)} disabled={busy || hasDup}>
+                        <Button type="button" size="sm" onClick={() => void saveRow(row)} disabled={busy || hasDup || !dirty}>
                           {busy ? "…" : row.id ? "Save" : "Create"}
                         </Button>
+                        {dirty ? (
+                          <Button type="button" variant="ghost" size="sm" onClick={() => discardRow(row)} disabled={busy} aria-label={`Discard changes to rule ${n}`}>
+                            Discard
+                          </Button>
+                        ) : null}
                         <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmKey(row.key)} disabled={busy} aria-label={`Delete rule ${n}`}>
                           Delete
                         </Button>

@@ -5,8 +5,15 @@
  * Operators see flagged contact pairs side-by-side with a confidence score.
  * Fields that differ between the two contacts are highlighted amber so the
  * mismatch is obvious at a glance. Each pair can be:
- *   - Merged    — PATCH /v1/crm/contacts/:leftId/merge  { mergeIntoId }
+ *   - Merged    — POST  /v1/crm/contacts/merge  { primaryId, duplicateId }
  *   - Dismissed — PATCH /v1/crm/contacts/dedup-candidates/:pairId/dismiss
+ *
+ * GAP-CRM-DEDUP-CANDIDATES-05: the merge call is a POST to /v1/crm/contacts/merge
+ * with { primaryId, duplicateId } (see lib/crm/dedupCandidates.ts), NOT the
+ * PATCH /:leftId/merge { mergeIntoId } this comment used to claim. The list
+ * (dedup-candidates) and dismiss endpoints are not yet implemented server-side
+ * (see dedupCandidates.ts for the full writeup); getDedupCandidates fails closed
+ * to a DataSourceBadge error state rather than a fabricated "data is clean".
  *
  * On a failed API load the page shows DataSourceBadge rather than an empty
  * state that could be mistaken for "data is clean".
@@ -27,19 +34,35 @@ import { maskEmail, maskPhone } from "@/app/_components/ds";
 
 // ─── Confidence badge ─────────────────────────────────────────────────────────
 
+/**
+ * GAP-CRM-DEDUP-CANDIDATES-06: a HIGH confidence means "very likely the same
+ * person" — it should read as a strong, actionable signal, not an alarm. The
+ * old mapping painted a 92% match red (danger) and a weak match green (success),
+ * which inverted the meaning. Now high = an emphasis (brand) colour, medium =
+ * amber, low = muted; and a non-colour text cue ("High match"/"Medium
+ * match"/"Low match") carries the same information for anyone who can't
+ * distinguish the colours.
+ */
 function confidenceClass(score: number): string {
   if (score >= 80) return "conf-high";
   if (score >= 60) return "conf-mid";
   return "conf-low";
 }
 
+function confidenceLabel(score: number): string {
+  if (score >= 80) return "High match";
+  if (score >= 60) return "Medium match";
+  return "Low match";
+}
+
 function ConfidenceBadge({ score }: { score: number }) {
   return (
     <span
       className={`conf-badge ${confidenceClass(score)}`}
-      aria-label={`Confidence ${score}%`}
+      aria-label={`${confidenceLabel(score)}, confidence ${score}%`}
     >
-      {score}%
+      <span className="conf-label">{confidenceLabel(score)}</span>
+      <span className="conf-pct">{score}%</span>
     </span>
   );
 }
@@ -427,15 +450,24 @@ const STYLES = `
 .conf-badge {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   font-size: .75rem;
   font-weight: 700;
   padding: 2px 10px;
   border-radius: 9999px;
   letter-spacing: .02em;
 }
-.conf-high { background:#fef2f2; color:#b91c1c; }
-.conf-mid  { background:#fffbeb; color:#92400e; }
-.conf-low  { background:#f0fdf4; color:#166534; }
+.conf-badge .conf-pct { font-variant-numeric: tabular-nums; }
+/*
+  GAP-CRM-DEDUP-CANDIDATES-06: high match = strong EMPHASIS (brand/info), not
+  danger-red; medium = amber; low = muted. Colours come from design tokens that
+  the .dark theme (civitas-ds.css) already redefines, so manual dark mode works
+  without a prefers-color-scheme block. The "High/Medium/Low match" text label
+  is the non-colour cue.
+*/
+.conf-high { background:var(--infobg,#eff6ff); color:var(--info,#1d4ed8); }
+.conf-mid  { background:var(--warnbg,#fffbeb); color:var(--warn,#92400e); }
+.conf-low  { background:var(--surface-2,#f1f5f9); color:var(--muted,#6b7280); }
 
 .dedup-toolbar { display:flex; align-items:center; justify-content:space-between;
                  gap:12px; flex-wrap:wrap; margin:4px 0 12px; }
@@ -466,9 +498,9 @@ const STYLES = `
                      align-self:center; }
 .dedup-field-val   { padding:5px 6px; border-radius:4px; font-size:.875rem;
                      color:var(--text,#111); word-break:break-word; }
-.dedup-diff        { background:#fffbeb; outline:1px solid #fde68a; font-weight:500; }
+.dedup-diff        { background:var(--warnbg,#fffbeb); outline:1px solid var(--warnbd,#fde68a); font-weight:500; }
 .dedup-actions     { display:flex; gap:10px; flex-wrap:wrap; }
-.dedup-alert       { background:#fef2f2; border:1px solid #fecaca; color:#b91c1c;
+.dedup-alert       { background:var(--badbg,#fef2f2); border:1px solid var(--badbd,#fecaca); color:var(--bad,#b91c1c);
                      border-radius:8px; padding:10px 14px; font-size:.875rem;
                      margin-bottom:12px; }
 .dedup-skeletons   { display:flex; flex-direction:column; gap:16px; margin-top:8px; }
@@ -476,11 +508,4 @@ const STYLES = `
                      background:var(--surface-2,#f1f5f9);
                      animation:dc-pulse 1.4s ease-in-out infinite; }
 @keyframes dc-pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
-@media (prefers-color-scheme:dark) {
-  .conf-high  { background:#450a0a; color:#fca5a5; }
-  .conf-mid   { background:#451a03; color:#fcd34d; }
-  .conf-low   { background:#052e16; color:#86efac; }
-  .dedup-diff { background:#422006; outline-color:#92400e; }
-  .dedup-alert{ background:#450a0a; border-color:#7f1d1d; color:#fca5a5; }
-}
 `;

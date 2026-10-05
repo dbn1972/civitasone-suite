@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { renderWithIntl } from "@/lib/testUtils/intl";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 import { OnboardingList } from "./OnboardingList";
@@ -170,5 +171,50 @@ describe("OnboardingList (P1-9)", () => {
     await waitFor(() => expect(screen.getAllByText(/couldn.t load/i).length).toBeGreaterThan(0));
     expect(screen.getByText(/couldn't be loaded/i)).toBeInTheDocument();
     expect(screen.queryByText(/No onboarding cases/i)).not.toBeInTheDocument();
+  });
+
+  // GAP-CRM-ONBOARDING-04 — on error, exactly ONE data-source badge, plus a
+  // working Retry that re-runs the fetch.
+  it("renders a single data-source badge and a working Retry on error", async () => {
+    vi.mocked(onb.getOnboardingCases)
+      .mockResolvedValueOnce({ data: [], source: "error" })
+      .mockResolvedValue({ data: cases, source: "api" });
+    renderWithIntl(<OnboardingList />);
+    const retry = await screen.findByRole("button", { name: /retry/i });
+    // Only one data-source badge is rendered (the filter-row one), not two.
+    expect(screen.getAllByText(/Couldn't load — showing nothing/i).length).toBe(1);
+    fireEvent.click(retry);
+    await waitFor(() => expect(screen.getByRole("link", { name: /Unnamed case/ })).toBeInTheDocument());
+    expect(onb.getOnboardingCases).toHaveBeenCalledTimes(2);
+  });
+
+  // GAP-CRM-ONBOARDING-05 — the Updated cell uses the shared IST "dd Mon yyyy"
+  // formatter, not toLocaleString('en-IN') (dd/mm/yyyy with seconds).
+  it("formats the Updated date with the shared IST formatter", async () => {
+    vi.mocked(onb.getOnboardingCases).mockResolvedValue({
+      data: [caseOf({ id: "a0000000-0000-0000-0000-000000000000", dealName: "Alpha", updatedAt: "2026-08-02T06:00:00Z" })],
+      source: "api",
+    });
+    renderWithIntl(<OnboardingList />);
+    // "02 Aug 2026, ..." — never the old "02/08/2026, ..:..:.. am" shape.
+    await waitFor(() => expect(screen.getByText(/02 Aug 2026/)).toBeInTheDocument());
+    expect(screen.queryByText(/02\/08\/2026/)).not.toBeInTheDocument();
+  });
+
+  // GAP-CRM-ONBOARDING-06 — stage/KYC render as theme-safe tone pills, not
+  // emoji glyphs.
+  it("renders stage and KYC as tone pills without emoji glyphs", async () => {
+    vi.mocked(onb.getOnboardingCases).mockResolvedValue({
+      data: [caseOf({ id: "a0000000-0000-0000-0000-000000000000", dealName: "Alpha", stage: "cancelled", kycStatus: "rejected" })],
+      source: "api",
+    });
+    const { container } = renderWithIntl(<OnboardingList />);
+    await waitFor(() => expect(screen.getByRole("link", { name: "Alpha" })).toBeInTheDocument());
+    // Pills exist (cancelled → bad, rejected → bad).
+    expect(container.querySelectorAll(".pill.bad").length).toBeGreaterThanOrEqual(2);
+    // The onboarding emoji glyphs are gone from the rendered output.
+    for (const glyph of ["🚫", "⛔", "🆕", "📄"]) {
+      expect(container.innerHTML).not.toContain(glyph);
+    }
   });
 });

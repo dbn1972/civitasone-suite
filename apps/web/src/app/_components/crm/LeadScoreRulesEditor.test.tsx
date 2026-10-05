@@ -1,4 +1,5 @@
 import { NextIntlClientProvider } from "next-intl";
+import { renderWithIntl } from "@/lib/testUtils/intl";
 import enMessages from "@/messages/en.json";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
@@ -70,6 +71,7 @@ describe("LeadScoreRulesEditor (LQ-002 admin)", () => {
     await waitFor(() => expect(screen.getByText(/no scoring rules yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add rule/i }));
     fireEvent.change(screen.getByLabelText(/attribute for rule 1/i), { target: { value: "company" } });
+    fireEvent.change(screen.getByLabelText(/weight for rule 1/i), { target: { value: "10" } });
     fireEvent.change(screen.getByLabelText(/params json for rule 1/i), { target: { value: '{"present":80,"absent":10}' } });
     fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
     await confirmSave();
@@ -203,5 +205,41 @@ describe("LeadScoreRulesEditor (LQ-002 admin)", () => {
     fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
     await confirmSave();
     expect(await screen.findByText(/changed by another admin/i)).toBeInTheDocument();
+  });
+
+  // GAP-CRM-LEAD-SCORING-06: a new rule starts with a blank (NaN) weight — the
+  // weight input is aria-invalid and Save is blocked until a number is typed.
+  it("starts a new rule with a blank weight that is aria-invalid and blocks save", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [], source: "api" });
+    renderWithIntl(<LeadScoreRulesEditor />);
+    await waitFor(() => expect(screen.getByText(/no scoring rules yet/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /add rule/i }));
+    const weight = screen.getByLabelText(/weight for rule 1/i);
+    expect(weight).toHaveValue(null); // blank, not 1
+    expect(weight).toHaveAttribute("aria-invalid", "true");
+    fireEvent.change(screen.getByLabelText(/attribute for rule 1/i), { target: { value: "company" } });
+    fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    expect(await screen.findByText(/needs an attribute, a whole-number weight/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /save and re-score/i })).not.toBeInTheDocument();
+    expect(lq.saveScoreRules).not.toHaveBeenCalled();
+  });
+
+  // GAP-CRM-LEAD-SCORING-07: removing a loaded rule then Save surfaces the
+  // removed-rule count in the confirm dialog.
+  it("shows how many rules will be removed in the save confirm", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({
+      data: [
+        { ...rule, attribute: "leadSource", weight: 30 },
+        { ...rule, attribute: "company", weight: 10, scoreFnType: "presence", params: {} },
+      ],
+      source: "api",
+    });
+    vi.mocked(lq.saveScoreRules).mockResolvedValue(undefined);
+    renderWithIntl(<LeadScoreRulesEditor />);
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    fireEvent.click(screen.getAllByRole("button", { name: /remove rule/i })[1]!);
+    fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent(/1 rule will be removed/i);
   });
 });

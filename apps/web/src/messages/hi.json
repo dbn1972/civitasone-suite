@@ -1650,13 +1650,199 @@
     "orderNoRequiredError": "इस संशोधन को स्वीकृत करने वाला आदेश क्रमांक दर्ज करें।"
   },
   "crm": {
+    "loading": {
+      "account": "खाता लोड हो रहा है…",
+      "contact": "संपर्क लोड हो रहा है",
+      "dashboardTitle": "सीआरएम डैशबोर्ड",
+      "escalationRulesTitle": "लीड एस्केलेशन नियम",
+      "escalationRules": "एस्केलेशन नियम लोड हो रहे हैं…",
+      "form": "फ़ॉर्म लोड हो रहा है…",
+      "leadFormsTitle": "वेबसाइट लीड फ़ॉर्म",
+      "leadFormsSubtitle": "सार्वजनिक फ़ॉर्म कुंजियाँ जो वेबसाइट प्रस्तुतियों को यूटीएम एट्रिब्यूशन और सहमति जाँच के साथ सीआरएम लीड में बदलती हैं।",
+      "backCrm": "सीआरएम",
+      "leadReasonCodesTitle": "लीड चरण कारण",
+      "leadReasonCodesSubtitle": "लीड की स्थिति बदलने पर दर्ज किए जाने वाले कारण कोड प्रबंधित करें (अयोग्य ठहराना, पुनः खोलना, …)।",
+      "reasonCodes": "कारण कोड लोड हो रहे हैं…",
+      "leadScoringTitle": "लीड स्कोरिंग",
+      "leadScoringSubtitle": "स्वचालित लीड स्कोर तय करने वाले भारित नियम कॉन्फ़िगर करें।",
+      "scoringRules": "स्कोरिंग नियम लोड हो रहे हैं…",
+      "linkedAccountsTitle": "जुड़े हुए खाते",
+      "onboarding": "ऑनबोर्डिंग मामले लोड हो रहे हैं…",
+      "editOpportunityTitle": "अवसर संपादित करें",
+      "stageAgeingTitle": "चरण अवधि",
+      "rtiNewTitle": "नया आरटीआई अनुरोध",
+      "rtiNewSubtitle": "सूचना का अधिकार अधिनियम 2005 के अंतर्गत अनुरोध दर्ज करें।",
+      "backRti": "आरटीआई अनुरोध",
+      "rtiForm": "आरटीआई अनुरोध फ़ॉर्म लोड हो रहा है…",
+      "serviceRequest": "सेवा अनुरोध लोड हो रहा है…",
+      "serviceRequestTitle": "सेवा अनुरोध",
+      "backServiceRequests": "सेवा अनुरोध",
+      "requestDetails": "अनुरोध विवरण",
+      "descriptionTitle": "विवरण",
+      "statusTitle": "स्थिति",
+      "serviceRequests": "सेवा अनुरोध लोड हो रहे हैं…",
+      "serviceRequestsSubtitle": "नागरिक सेवा अनुरोध — प्राप्ति से समापन तक ट्रैक करें।",
+      "newServiceRequest": "नया सेवा अनुरोध फ़ॉर्म लोड हो रहा है…",
+      "newServiceRequestTitle": "नया सेवा अनुरोध",
+      "customFields": "कस्टम फ़ील्ड लोड हो रहे हैं…",
+      "dataQuality": "डेटा गुणवत्ता लोड हो रही है…",
+      "agentWorkloadTitle": "एजेंट कार्यभार",
+      "assignmentDirectoryTitle": "असाइनमेंट निर्देशिका",
+      "assignmentRulesTitle": "असाइनमेंट नियम"
+    },
+    "dealsNew": {
+      "title": "नई सहभागिता",
+      "subtitle": "एक सहभागिता बनाएँ और उसे पाइपलाइन में रखें।",
+      "backLabel": "सहभागिताएँ",
+      "errorBack": "वापस",
+      "created": "सहभागिता बनाई गई।",
+      "createdToast": "सहभागिता सफलतापूर्वक बनाई गई।",
+      "nameLabel": "सहभागिता का नाम",
+      "namePlaceholder": "उदा. राज्यव्यापी एलएमएस रोलआउट",
+      "nameRequired": "सहभागिता का नाम दर्ज करें।",
+      "amountInvalid": "मान्य राशि दर्ज करें (रुपये, दशमलव के बाद अधिकतम 2 अंक)।",
+      "valueLabel": "मूल्य (₹)",
+      "valuePlaceholder": "उदा. 1234567.89",
+      "valuePreview": "{value} के रूप में संग्रहीत होगा",
+      "valueHint": "मान्य रुपये की राशि दर्ज करें (दशमलव के बाद अधिकतम 2 अंक)।",
+      "stageLabel": "चरण",
+      "contactLabel": "संपर्क (वैकल्पिक)",
+      "contactPlaceholder": "नाम या संगठन से संपर्क खोजें…",
+      "contactHint": "किसी मौजूदा संपर्क को जोड़ें, या बिना संपर्क के सौदा बनाने के लिए खाली छोड़ें।",
+      "closeLabel": "अपेक्षित समापन तिथि (वैकल्पिक)",
+      "probabilityLabel": "संभावना (%)",
+      "creating": "बनाया जा रहा है…",
+      "create": "सहभागिता बनाएँ"
+    },
+    "consent": {
+      "incompleteNew": "सहेजने से पहले उद्देश्य चुनें और यह भी कि सहमति किस माध्यम से दर्ज की गई।",
+      "incompleteEdit": "उद्देश्य और वह माध्यम चुनें जिससे यह सहमति दर्ज की गई।",
+      "legend": "विपणन सहमति (डीपीडीपी अधिनियम, 2023)",
+      "grant": "मैं विपणन संचार के लिए सहमत हूँ",
+      "purposeLabel": "उद्देश्य *",
+      "selectPurpose": "उद्देश्य चुनें…",
+      "channelLabel": "दर्ज करने का माध्यम *",
+      "selectChannel": "माध्यम चुनें…",
+      "lastRecorded": "अंतिम बार दर्ज: {when}।",
+      "purposes": {
+        "marketing": "विपणन संचार",
+        "transactional": "लेन-देन संबंधी संदेश",
+        "service_updates": "सेवा अपडेट",
+        "research": "शोध / सर्वेक्षण"
+      },
+      "channels": {
+        "web_form": "वेब फ़ॉर्म",
+        "email": "ईमेल",
+        "phone": "फ़ोन",
+        "in_person": "व्यक्तिगत रूप से",
+        "import": "थोक आयात"
+      }
+    },
+    "postPeriod": {
+      "title": "रिपोर्टिंग अवधि दर्ज करें",
+      "periodStart": "अवधि प्रारंभ",
+      "periodEnd": "अवधि समाप्ति (वैकल्पिक)",
+      "spend": "व्यय ({currency})",
+      "revenue": "राजस्व ({currency})",
+      "responses": "प्रतिक्रियाएँ",
+      "post": "अवधि दर्ज करें",
+      "posting": "दर्ज किया जा रहा है…",
+      "submitted": "अवधि जमा हो गई। प्रसंस्करण पूरा होने पर आँकड़े दिखाई देंगे।"
+    },
+    "editOpportunity": {
+      "title": "अवसर संपादित करें",
+      "subtitle": "मूल्य, संभावना, उत्पाद, मात्रा, प्रतिस्पर्धी, अगला कदम और अपेक्षित समापन तिथि अद्यतन करें।",
+      "backLabel": "अवसर",
+      "loading": "अवसर लोड हो रहा है…",
+      "loadFailedTitle": "यह अवसर लोड नहीं हो सका",
+      "loadFailedMessage": "यह आमतौर पर अस्थायी होता है। फिर से प्रयास करें।",
+      "retry": "पुनः प्रयास करें",
+      "notFoundTitle": "अवसर नहीं मिला",
+      "notFoundMessage": "यह अवसर मौजूद नहीं है या हटा दिया गया है।",
+      "back": "अवसरों पर वापस जाएँ"
+    },
+    "dealDetail": {
+      "title": "सहभागिता विवरण",
+      "notFoundTitle": "सहभागिता नहीं मिली",
+      "notFoundMessage": "यह सहभागिता मौजूद नहीं है या हटा दी गई है।"
+    },
     "title": "नागरिक सेवाएं",
+    "dashboard": {
+      "title": "सीआरएम डैशबोर्ड",
+      "subtitle": "सरकारी हितधारक और विक्रेता संपर्क पंजी"
+    },
+    "dataQuality": {
+      "title": "डेटा गुणवत्ता"
+    },
     "grievances": "शिकायतें",
     "requests": "अनुरोध",
     "complaints": "शिकायत",
     "status": "स्थिति",
     "resolved": "हल",
     "open": "खुला",
+    "hub": {
+      "title": "सीआरएम",
+      "subtitle": "पाइपलाइन और ग्राहक संचालन कार्यस्थल।",
+      "sections": {
+        "core": "मुख्य",
+        "pipeline": "सहभागिता पाइपलाइन",
+        "service": "सेवा और सहभागिता",
+        "products": "उत्पाद और मूल्य निर्धारण",
+        "configuration": "विन्यास"
+      },
+      "tiles": {
+        "dashboard": { "title": "डैशबोर्ड", "description": "अवलोकन मीट्रिक और गतिविधि" },
+        "contacts": { "title": "संपर्क", "description": "विक्रेता, लाभार्थी और हितधारक संपर्क" },
+        "accounts": { "title": "खाते", "description": "संगठन और संस्थान" },
+        "deals": { "title": "विक्रेता / हितधारक सहभागिताएँ", "description": "सहभागिताएँ और खरीद अवसर" },
+        "activities": { "title": "गतिविधियाँ", "description": "कॉल, बैठकें और अनुवर्ती कार्य" },
+        "pipelineBoard": { "title": "पाइपलाइन बोर्ड", "description": "डील चरणों का विज़ुअल कानबान" },
+        "pipelines": { "title": "सहभागिता पाइपलाइनें", "description": "पाइपलाइन चरण विन्यस्त करें" },
+        "opportunities": { "title": "अवसर", "description": "अवसर फ़नल ट्रैक करें" },
+        "ageing": { "title": "चरण आयु", "description": "पुराने अवसरों के अलर्ट" },
+        "forecast": { "title": "खरीद पाइपलाइन पूर्वानुमान", "description": "पाइपलाइन खरीद अनुमान" },
+        "quotations": { "title": "कोटेशन", "description": "कोट और प्रस्ताव" },
+        "onboarding": { "title": "ग्राहक ऑनबोर्डिंग", "description": "डील-पश्चात ऑनबोर्डिंग वर्कफ़्लो" },
+        "grievances": { "title": "शिकायतें", "description": "नागरिक और विक्रेता शिकायत ट्रैकिंग" },
+        "serviceRequests": { "title": "सेवा अनुरोध", "description": "सहायता अनुरोध और समाधान" },
+        "campaigns": { "title": "अभियान", "description": "आउटरीच अभियान प्रदर्शन" },
+        "voiceOfCustomer": { "title": "नागरिक की आवाज़", "description": "प्रतिक्रिया और भावना" },
+        "health": { "title": "खाता स्वास्थ्य", "description": "संबंध स्वास्थ्य स्कोर" },
+        "controlTower": { "title": "कंट्रोल टावर", "description": "रीयल-टाइम संचालन अवलोकन" },
+        "leadForms": { "title": "वेबसाइट लीड फ़ॉर्म", "description": "सार्वजनिक फ़ॉर्म प्रस्तुतियाँ" },
+        "products": { "title": "उत्पाद सूची", "description": "सेवाएँ और पेशकश" },
+        "priceBooks": { "title": "मूल्य पुस्तिकाएँ", "description": "दर कार्ड और मूल्य स्तर" },
+        "documents": { "title": "दस्तावेज़", "description": "साझा दस्तावेज़ और अनुलग्नक" },
+        "documentTypes": { "title": "दस्तावेज़ प्रकार", "description": "दस्तावेज़ वर्गीकरण" },
+        "serviceTypes": { "title": "सेवा प्रकार", "description": "सेवा-अनुरोध वर्गीकरण" },
+        "grievanceCategories": { "title": "शिकायत श्रेणियाँ", "description": "शिकायत वर्गीकरण" },
+        "customFields": { "title": "कस्टम फ़ील्ड", "description": "डेटा मॉडल का विस्तार करें" },
+        "dedupRules": { "title": "मिलान नियम", "description": "डीडुप्लिकेशन तर्क" },
+        "leadScoring": { "title": "लीड स्कोरिंग", "description": "स्वचालित लीड प्राथमिकता" },
+        "qualificationFrameworks": { "title": "योग्यता फ़्रेमवर्क", "description": "डील योग्यता मानदंड" },
+        "leadReasonCodes": { "title": "लीड चरण कारण", "description": "चरण परिवर्तन कारण" },
+        "assignmentRules": { "title": "असाइनमेंट नियम", "description": "स्वतः-असाइन तर्क" },
+        "assignmentDirectory": { "title": "असाइनमेंट निर्देशिका", "description": "एजेंट मैपिंग" },
+        "agentWorkload": { "title": "एजेंट कार्यभार", "description": "क्षमता और उपयोग" },
+        "escalationRules": { "title": "एस्केलेशन नियम", "description": "एसएलए उल्लंघन एस्केलेशन" },
+        "taskEscalation": { "title": "कार्य एस्केलेशन", "description": "अतिदेय कार्य रूटिंग" },
+        "linkedAccounts": { "title": "जुड़े खाते", "description": "बाहरी एकीकरण" },
+        "dataQuality": { "title": "डेटा गुणवत्ता", "description": "डेटा पूर्णता स्कोरिंग" }
+      }
+    },
+    "accounts": {
+      "subtitle": "संगठन मास्टर — विभाग, पीएसयू, विक्रेता और संस्थागत खाते उनके रिपोर्टिंग पदानुक्रम के साथ • संगठन पंजी"
+    },
+    "activities": {
+      "title": "गतिविधियाँ",
+      "subtitle": "नागरिकों, विक्रेताओं और सरकारी अधिकारियों के साथ कॉल, बैठकें, स्थल दौरे और पत्राचार • अन्तःक्रियाएँ",
+      "statTotal": "कुल गतिविधियाँ",
+      "logButton": "+ गतिविधि दर्ज करें",
+      "logHeading": "एक गतिविधि दर्ज करें",
+      "logSaved": "गतिविधि दर्ज की गई।",
+      "tableHeading": "गतिविधियाँ",
+      "emptyTitle": "अभी तक कोई गतिविधि नहीं"
+    },
     "health": {
       "title": "खाता स्वास्थ्य",
       "subtitle": "जोखिम या गंभीर के रूप में अंकित खाते, तात्कालिकता के क्रम में।",
@@ -11790,6 +11976,7 @@
     "unresolvedAccount": "खाता {id}"
   },
   "crmAccountHealthDetail": {
+    "recomputedAt": "{when} को गणना की गई। रात्रिकालीन स्वास्थ्य-स्कोरिंग संग्रहीत मान को संकेतों के अनुरूप कर देती है।",
     "titleWithId": "खाता स्वास्थ्य · {id}",
     "noScoreTitle": "अभी तक कोई स्वास्थ्य स्कोर नहीं",
     "noScoreMessage": "इस खाते को स्कोर नहीं किया गया है। इसके स्वास्थ्य संकेत एकत्र होने और पुनर्गणना चलने के बाद स्कोर दिखाई देगा।",
@@ -11957,11 +12144,15 @@
     "typeChangeConfirm": "प्रकार बदलें"
   },
   "crmDataQualityView": {
+    "openRecord": "{kind} खोलें {id}",
+    "kindContact": "संपर्क रिकॉर्ड",
+    "kindAccount": "खाता रिकॉर्ड",
     "unnamedRecord": "अनाम अभिलेख",
     "distributionBarAria": "{label}: रिकॉर्ड का {pct}"
   },
   "crmDealDetail": {
     "steps": {
+      "qualification": "योग्यता निर्धारण",
       "prospecting": "संभावना की खोज",
       "proposal": "प्रस्ताव",
       "negotiation": "वार्ता",
@@ -11977,6 +12168,18 @@
     "loadArea": "यह सौदा"
   },
   "crmDedupRulesEditor": {
+    "field": {
+      "email": "ईमेल",
+      "phone": "फ़ोन",
+      "gstin": "जीएसटीआईएन",
+      "pan": "पैन",
+      "name": "नाम",
+      "company": "कंपनी"
+    },
+    "match": {
+      "exact": "सटीक मिलान",
+      "fuzzy": "अनुमानित मिलान"
+    },
     "invalidNumbers": "भार और सीमा-मान 0 से 100 तक की पूर्ण संख्याएँ होनी चाहिए। सहेजने से पहले चिह्नित नियमों को ठीक करें।",
     "notLoaded": "नियम लोड नहीं हो सके, इसलिए उन्हें अभी सहेजा नहीं जा सकता। पहले लोड को पुनः प्रयास करें।",
     "heading": "मिलान नियम",
@@ -12053,6 +12256,7 @@
     "closeDescription": "प्रशासनिक बंदी — शिकायत को DISPOSED चिह्नित किया जाता है। इसके लिए प्रशासक अधिकार आवश्यक हैं।"
   },
   "crmGrievancesList": {
+    "statFirstAppeal": "प्रथम अपील (इस पृष्ठ पर)",
     "showing": "{total} में से {from}–{to} दिखाए जा रहे हैं",
     "pagesAriaLabel": "शिकायत रजिस्टर के पृष्ठ",
     "previous": "← पिछला",
@@ -12159,6 +12363,7 @@
     "exportConfirmLabel": "CSV डाउनलोड करें"
   },
   "crmLeadScoreRulesEditor": {
+    "removedRules": "{count, plural, one {# नियम हटाया जाएगा और किसी भी लीड स्कोर में योगदान नहीं देगा।} other {# नियम हटाए जाएँगे और किसी भी लीड स्कोर में योगदान नहीं देंगे।}}",
     "heading": "स्कोरिंग नियम",
     "paramsMustBeObject": "पैरामीटर एक JSON ऑब्जेक्ट होने चाहिए।",
     "conflictChanged": "ये स्कोरिंग नियम किसी अन्य प्रशासक द्वारा बदले गए हैं। नवीनतम देखने के लिए पुनः लोड करें, फिर अपने बदलाव दोबारा लागू करें।",
@@ -12188,6 +12393,7 @@
     "retry": "पुनः प्रयास करें"
   },
   "crmOnboardingList": {
+    "retry": "पुनः प्रयास करें",
     "colCustomerDeal": "ग्राहक / सौदा",
     "unnamedCase": "अनाम प्रकरण",
     "ref": "संदर्भ {id}",
@@ -12246,6 +12452,26 @@
     "undatedNote": "{count} {count, plural, one {डील की} other {डील की}} कोई समापन तिथि नहीं है और {count, plural, one {उसे} other {उन्हें}} यहाँ नहीं दिखाया गया है।"
   },
   "crmOverdueTaskAlerts": {
+    "statLabel": "विलंबित कार्य",
+    "tableHeading": "विलंबित खुले कार्य",
+    "loading": "विलंबित कार्य लोड हो रहे हैं…",
+    "unavailable": "— विलंबित कार्य अभी उपलब्ध नहीं हैं।",
+    "thisTask": "यह कार्य",
+    "reasonLabel": "कारण (ऑडिट ट्रेल में दर्ज होगा)",
+    "reasonShort": "कम से कम {min} अक्षर।",
+    "cancel": "रद्द करें",
+    "reassign": "पुनः सौंपें",
+    "reassigning": "पुनः सौंपा जा रहा है…",
+    "reassignTitle": "कार्य पुनः सौंपें",
+    "reassignIntro": "<strong>{subject}</strong> किसी और को सौंपें।",
+    "noUsersToReassign": "पुनः सौंपने के लिए कोई अन्य उपयोगकर्ता उपलब्ध नहीं",
+    "newOwner": "नया स्वामी",
+    "selectUser": "उपयोगकर्ता चुनें…",
+    "snooze": "स्थगित करें",
+    "snoozing": "स्थगित किया जा रहा है…",
+    "snoozeTitle": "कार्य स्थगित करें",
+    "snoozeIntro": "<strong>{subject}</strong> की नियत तिथि आगे के किसी दिन पर ले जाएँ।",
+    "newDueDate": "नई नियत तिथि",
     "ownerUnavailable": "सौंपा गया (नाम उपलब्ध नहीं)",
     "emptyTitle": "कुछ भी अतिदेय नहीं",
     "emptyMessage": "कोई भी खुला कार्य अपनी नियत समय-सीमा से आगे नहीं है।",
@@ -12315,6 +12541,11 @@
     "resolveFailed": "मूल्य पुस्तिका अभी निर्धारित नहीं हो सकी। फिर से निर्धारित करने का प्रयास करें।"
   },
   "crmProductCatalogueEditor": {
+    "currency": "मुद्रा",
+    "skuPlaceholder": "एसकेयू",
+    "duplicateCode": "डुप्लिकेट कोड — कोड अद्वितीय होने चाहिए।",
+    "codeUsed": "उत्पाद कोड “{code}” पहले से किसी अन्य उत्पाद में उपयोग हो रहा है — कोड अद्वितीय होने चाहिए।",
+    "currencyForProduct": "उत्पाद {n} की मुद्रा",
     "colLastChanged": "अंतिम बदलाव",
     "lastChangedAria": "उत्पाद {n} का अंतिम बदलाव",
     "unknownUser": "अज्ञात",
@@ -12352,6 +12583,8 @@
     "colActions": "कार्रवाइयाँ"
   },
   "crmQualificationFrameworksEditor": {
+    "added": "नया फ्रेमवर्क जोड़ा गया — नीचे उसका नाम दर्ज करें।",
+    "namePlaceholder": "उदा. बीएएनटी — सरकारी बिक्री",
     "colQuestion": "प्रश्न",
     "colWeight": "भार",
     "colShare": "हिस्सा",
@@ -12437,6 +12670,7 @@
     "quotationAccepted": "कोटेशन स्वीकृत किया गया।"
   },
   "crmReasonCodesEditor": {
+    "title": "लीड चरण कारण",
     "heading": "कारण कोड",
     "conflictChanged": "ये कारण कोड किसी अन्य प्रशासक द्वारा बदले गए हैं। नवीनतम देखने के लिए पुनः लोड करें, फिर अपने बदलाव दोबारा लागू करें।",
     "couldNotSave": "कारण कोड सहेजे नहीं जा सके।",
@@ -12663,6 +12897,7 @@
     "priority_low": "निम्न"
   },
   "crmServiceRequestNew": {
+    "phoneHint": "10 अंकों का मोबाइल नंबर दर्ज करें।",
     "contactRequired": "नागरिक से इस अनुरोध के संबंध में संपर्क करने के लिए फ़ोन नंबर या ईमेल दर्ज करें।",
     "dpdpNote": "संपर्क विवरण केवल इस अनुरोध को संसाधित करने और अद्यतन करने के लिए एकत्र किए जाते हैं (डिजिटल व्यक्तिगत डेटा संरक्षण अधिनियम, 2023)। नागरिक से संपर्क हो सके, इसके लिए फ़ोन या ईमेल में से कम से कम एक दें।",
     "phone": "फ़ोन",
@@ -13083,6 +13318,7 @@
     }
   },
   "crmGrievanceDetail": {
+    "assignedId": "सौंपा गया (आईडी {id}…)",
     "title": "शिकायत",
     "backLabel": "शिकायतें",
     "notFoundTitle": "शिकायत नहीं मिली",

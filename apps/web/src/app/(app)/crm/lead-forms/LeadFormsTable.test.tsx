@@ -108,3 +108,46 @@ describe("LeadFormsTable (GAP-CRM-LEAD-FORMS-01)", () => {
     expect(screen.getByText(/lets anyone post leads into this tenant/i)).toBeInTheDocument();
   });
 });
+
+describe("LeadFormsTable (GAP-CRM-LEAD-FORMS-05)", () => {
+  it("shows every allowed origin via a title tooltip on the collapsed summary", () => {
+    render(
+      <LeadFormsTable
+        rows={[form({ allowedOrigins: ["https://a.gov.in", "https://b.gov.in", "https://c.gov.in"] })]}
+      />,
+    );
+    const cell = screen.getByText("https://a.gov.in +2 more");
+    expect(cell).toHaveAttribute("title", "https://a.gov.in\nhttps://b.gov.in\nhttps://c.gov.in");
+  });
+
+  it("copies the absolute submit URL to the clipboard", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    render(<LeadFormsTable rows={[form({ formKey: "k".repeat(64) })]} />);
+    fireEvent.click(screen.getByRole("button", { name: /copy url/i }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    const copied = writeText.mock.calls[0]![0] as string;
+    expect(copied).toContain("/api/v1/crm/public/leads/" + "k".repeat(64));
+    expect(copied).toMatch(/^https?:\/\//);
+    expect(await screen.findByRole("button", { name: /copied/i })).toBeInTheDocument();
+  });
+
+  it("reveals an embed snippet containing the absolute action URL", () => {
+    render(<LeadFormsTable rows={[form({ formKey: "m".repeat(64) })]} />);
+    fireEvent.click(screen.getByRole("button", { name: /embed snippet/i }));
+    expect(screen.getByText(/<form method="POST"/)).toBeInTheDocument();
+  });
+
+  it("filters rows by name", () => {
+    render(
+      <LeadFormsTable
+        rows={[form({ id: "f1", name: "Homepage contact" }), form({ id: "f2", name: "Careers enquiry" })]}
+      />,
+    );
+    expect(screen.getByText("Homepage contact")).toBeInTheDocument();
+    expect(screen.getByText("Careers enquiry")).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(/filter by form/i), { target: { value: "Careers" } });
+    expect(screen.queryByText("Homepage contact")).not.toBeInTheDocument();
+    expect(screen.getByText("Careers enquiry")).toBeInTheDocument();
+  });
+});

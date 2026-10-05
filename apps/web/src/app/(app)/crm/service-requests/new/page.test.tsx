@@ -225,4 +225,60 @@ describe("NewServiceRequestPage", () => {
     const body = JSON.parse((call![1] as RequestInit).body as string);
     expect(body.contactId).toBe("ct-9");
   });
+
+  // GAP-CRM-SERVICE-REQUESTS-NEW-05: a malformed phone is blocked client-side
+  // with a per-field error, and no request is sent.
+  it("blocks a malformed phone and does not POST", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: "x" } }), { status: 201 }),
+    );
+
+    render(<NewServiceRequestPage />);
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Meera Devi" } });
+    fireEvent.change(screen.getByLabelText(/service type/i), { target: { value: "Birth Certificate" } });
+    fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: "Need birth certificate" } });
+    fireEvent.change(screen.getByLabelText(/^Phone/), { target: { value: "12345" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit Request" }));
+
+    expect(await screen.findByText(/valid 10-digit Indian mobile number/i)).toBeInTheDocument();
+    expect(postCall(fetchSpy)).toBeUndefined();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  // GAP-CRM-SERVICE-REQUESTS-NEW-05: a +91-prefixed, spaced mobile is accepted
+  // and normalised to its 10 digits before sending.
+  it("accepts a +91-prefixed mobile and sends the normalised 10 digits", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: "sr-norm" } }), { status: 201 }),
+    );
+
+    render(<NewServiceRequestPage />);
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Meera Devi" } });
+    fireEvent.change(screen.getByLabelText(/service type/i), { target: { value: "Birth Certificate" } });
+    fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: "Need birth certificate" } });
+    fireEvent.change(screen.getByLabelText(/^Phone/), { target: { value: "+91 98765 43210" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit Request" }));
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/crm/service-requests/sr-norm"));
+    const [, init] = postCall(fetchSpy)!;
+    expect(JSON.parse((init as RequestInit).body as string).citizenPhone).toBe("9876543210");
+  });
+
+  // GAP-CRM-SERVICE-REQUESTS-NEW-05: a malformed email is blocked (native email
+  // constraint and the JS guard both prevent the request).
+  it("blocks a malformed email and does not POST", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: "x" } }), { status: 201 }),
+    );
+
+    render(<NewServiceRequestPage />);
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Meera Devi" } });
+    fireEvent.change(screen.getByLabelText(/service type/i), { target: { value: "Birth Certificate" } });
+    fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: "Need birth certificate" } });
+    fireEvent.change(screen.getByLabelText(/^Email/), { target: { value: "not-an-email" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit Request" }));
+
+    await waitFor(() => expect(pushMock).not.toHaveBeenCalled());
+    expect(postCall(fetchSpy)).toBeUndefined();
+  });
 });

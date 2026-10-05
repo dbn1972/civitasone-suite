@@ -107,13 +107,21 @@ interface Column<T> {
    * find in the file (GAP-ADMIN-DEVICES-03).
    */
   csvExclude?: boolean;
+  /**
+   * Opt-in, GAP-CRM-CONTACTS-08: hide this column below 640px (phones) via the
+   * `.dt-hide-mobile` class (see civitas-ds.css). The column still exists in
+   * the DOM and in the CSV export — it is only visually hidden on small
+   * screens so a wide table keeps its most important columns readable without
+   * horizontal scrolling. Off by default; every existing column is unaffected.
+   */
+  hideOnMobile?: boolean;
 }
 
 interface DataTableProps<T extends Record<string, unknown>> {
   columns: Column<T>[];
   rows: T[];
-  /** Client-only row link builder */
-  rowHref?: (row: T) => string;
+  /** Client-only row link builder (return undefined/"" for a row with no link) */
+  rowHref?: (row: T) => string | undefined;
   /** Server-safe: link first column to `${rowLinkPrefix}${row[rowLinkKey]}` (no link when that value is empty; prefix may be "" for a full-path key) */
   rowLinkKey?: keyof T & string;
   rowLinkPrefix?: string;
@@ -179,6 +187,15 @@ interface DataTableProps<T extends Record<string, unknown>> {
   exportGuard?: (info: { rowCount: number; filter: string }) => Promise<{ ok: true } | { ok: false; message: string }>;
   /** GAP-HR-LOANS-02: when set, the CSV button opens a confirm dialog first (e.g. a sensitive-data notice). */
   exportConfirm?: { title: string; description: string; confirmLabel?: string };
+  /**
+   * GAP-CRM-CAMPAIGNS-05: short policy notice shown next to the CSV button
+   * (and as its title tooltip) warning that an export leaves the system, for
+   * finance/PII-adjacent tables whose CSV is not otherwise audited. Purely
+   * informational — it does not gate the download (use `exportGuard` for a
+   * fail-closed, audited export). Omitted by default so existing exports are
+   * unchanged.
+   */
+  exportNotice?: string;
   /** Screen-reader-only <caption> describing the table's purpose/scope. */
   caption?: string;
   /**
@@ -360,6 +377,7 @@ export function DataTable<T extends Record<string, unknown>>({
   onExport,
   exportGuard,
   exportConfirm,
+  exportNotice,
   caption,
   mobileStack = false,
   rowKey,
@@ -532,9 +550,14 @@ export function DataTable<T extends Record<string, unknown>>({
             </div>
           )}
           {exportable && sorted.length > 0 && (
-            <Button variant="ghost" size="sm" disabled={exportBusy} onClick={exportConfirm ? () => setExportConfirmOpen(true) : () => void downloadCsv()} style={{ whiteSpace: "nowrap" }}>
+            <Button variant="ghost" size="sm" disabled={exportBusy} title={exportNotice} onClick={exportConfirm ? () => setExportConfirmOpen(true) : () => void downloadCsv()} style={{ whiteSpace: "nowrap" }}>
               ⬇ CSV
             </Button>
+          )}
+          {exportable && sorted.length > 0 && exportNotice && (
+            <span className="dt-export-notice" role="note" style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "normal" }}>
+              {exportNotice}
+            </span>
           )}
           {exportConfirm && (
             <ConfirmDialog
@@ -587,7 +610,7 @@ export function DataTable<T extends Record<string, unknown>>({
                     scope="col"
                     style={{ textAlign: col.align ?? "left" }}
                     aria-sort={canSort ? ariaSortFor(col.key) : undefined}
-                    className={canSort ? "sortable" : undefined}
+                    className={[canSort ? "sortable" : "", col.hideOnMobile ? "dt-hide-mobile" : ""].filter(Boolean).join(" ") || undefined}
                     onClick={canSort ? () => toggleSort(col.key) : undefined}
                     onKeyDown={
                       canSort
@@ -634,7 +657,7 @@ export function DataTable<T extends Record<string, unknown>>({
                     return (
                       <td
                         key={col.key}
-                        className={col.align === "right" ? "num" : undefined}
+                        className={[col.align === "right" ? "num" : "", col.hideOnMobile ? "dt-hide-mobile" : ""].filter(Boolean).join(" ") || undefined}
                         // Always present (harmless when unstyled): the CSS
                         // attribute selector that turns this into a visible
                         // label only fires under .tbl--stack (mobileStack),

@@ -60,8 +60,42 @@ async function assertNotReferencedByRules(
   }
 }
 
+/**
+ * GAP-CRM-ESCALATION-RULES-05: refuse a duplicate lead-escalation rule (same
+ * trigger + threshold + recipient) synchronously, before enqueueing the CQRS
+ * command, so the admin gets an immediate 409 rather than a silently-dropped
+ * async write. The unique index uq_escalation_rules_dedupe (migration 0106) is
+ * the hard DB backstop; this pre-check mirrors assertNotReferencedByRules above
+ * so the UI sees a 409 it can map to a clear message. `excludeId` lets a PUT
+ * update a rule without colliding with itself.
+ */
+async function assertNoDuplicateEscalationRule(
+  tenantId: string,
+  body: v.UpsertEscalationRuleBody,
+  excludeId?: string,
+): Promise<void> {
+  const rows = (await scopedRead((tx) => tx.execute(sql`
+    SELECT count(*)::int AS count
+    FROM crm.escalation_rules
+    WHERE tenant_id = ${tenantId}
+      AND trigger = ${body.trigger}
+      AND threshold_minutes = ${body.thresholdMinutes}
+      AND COALESCE(recipient_role, '') = ${body.recipientRole ?? ""}
+      AND COALESCE(recipient_id, '00000000-0000-0000-0000-000000000000'::uuid)
+          = ${body.recipientId ?? "00000000-0000-0000-0000-000000000000"}::uuid
+      AND (${excludeId ?? null}::uuid IS NULL OR id <> ${excludeId ?? null}::uuid)
+  `))) as unknown as Array<{ count: number }>;
+  if ((rows[0]?.count ?? 0) > 0) {
+    throw new HttpError(
+      409,
+      "DUPLICATE_RULE",
+      "a rule with the same trigger, threshold and recipient already exists",
+    );
+  }
+}
+
 export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
-  // ── Assignment rules ───────────────────────────────────────────────────────
+  // ── Assignment rules ────────────────────────────────────────────────────────
   app.get("/v1/crm/assignment-rules", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
@@ -213,12 +247,14 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/crm/escalation-rules", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
     const body = v.upsertEscalationRuleBody.parse(req.body);
+    await assertNoDuplicateEscalationRule(ctx.tenantId, body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.upsertEscalationRule(ctx, body));
   });
   app.put("/v1/crm/escalation-rules/:id", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
     const { id } = v.idParam.parse(req.params);
     const body = v.upsertEscalationRuleBody.parse(req.body);
+    await assertNoDuplicateEscalationRule(ctx.tenantId, body, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateEscalationRule(ctx, id, body));
   });
   app.delete("/v1/crm/escalation-rules/:id", async (req, reply) => {

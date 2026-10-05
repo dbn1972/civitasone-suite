@@ -1,4 +1,5 @@
 import { NextIntlClientProvider } from "next-intl";
+import { renderWithIntl } from "@/lib/testUtils/intl";
 import enMessages from "@/messages/en.json";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
@@ -43,14 +44,14 @@ beforeEach(() => {
 describe("ProductCatalogueEditor (QP-001)", () => {
   it("shows the saved-info badge on a failed load", async () => {
     vi.mocked(qp.getProducts).mockResolvedValue({ data: [], source: "error" });
-    render(<ProductCatalogueEditor />);
+    renderWithIntl(<ProductCatalogueEditor />);
     await waitFor(() => expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument());
   });
 
   it("creates a product converting rupees to paise and % to bps", async () => {
     vi.mocked(qp.getProducts).mockResolvedValue({ data: [], source: "api" });
     vi.mocked(qp.createProduct).mockResolvedValue(undefined);
-    render(<ProductCatalogueEditor />);
+    renderWithIntl(<ProductCatalogueEditor />);
     await waitFor(() => expect(screen.getByText(/no products yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add product/i }));
     fireEvent.change(screen.getByLabelText(/code for product 1/i), { target: { value: "SRV-2" } });
@@ -66,7 +67,7 @@ describe("ProductCatalogueEditor (QP-001)", () => {
 
   it("blocks a product with an invalid price", async () => {
     vi.mocked(qp.getProducts).mockResolvedValue({ data: [], source: "api" });
-    render(<ProductCatalogueEditor />);
+    renderWithIntl(<ProductCatalogueEditor />);
     await waitFor(() => expect(screen.getByText(/no products yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add product/i }));
     fireEvent.change(screen.getByLabelText(/code for product 1/i), { target: { value: "X" } });
@@ -80,7 +81,7 @@ describe("ProductCatalogueEditor (QP-001)", () => {
   it("updates an existing product via PUT", async () => {
     vi.mocked(qp.getProducts).mockResolvedValue({ data: [product], source: "api" });
     vi.mocked(qp.updateProduct).mockResolvedValue(undefined);
-    render(<ProductCatalogueEditor />);
+    renderWithIntl(<ProductCatalogueEditor />);
     await waitFor(() => expect(screen.getByDisplayValue("Rack server")).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText(/name for product 1/i), { target: { value: "Rack server v2" } });
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
@@ -93,7 +94,7 @@ describe("ProductCatalogueEditor (QP-001)", () => {
       data: [{ ...product, updatedBy: "priya.admin", updatedAt: "2026-03-01T09:00:00.000Z" }],
       source: "api",
     });
-    render(<ProductCatalogueEditor />);
+    renderWithIntl(<ProductCatalogueEditor />);
     await waitFor(() => expect(screen.getByDisplayValue("Rack server")).toBeInTheDocument());
     const cell = screen.getByLabelText(/last changed for product 1/i);
     expect(cell).toHaveTextContent("priya.admin");
@@ -103,7 +104,7 @@ describe("ProductCatalogueEditor (QP-001)", () => {
   // must warn and steer the admin to soft-disable instead.
   it("warns about references and recommends disabling in the delete dialog", async () => {
     vi.mocked(qp.getProducts).mockResolvedValue({ data: [product], source: "api" });
-    render(<ProductCatalogueEditor />);
+    renderWithIntl(<ProductCatalogueEditor />);
     await waitFor(() => expect(screen.getByDisplayValue("Rack server")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /delete product 1/i }));
     const dialog = await screen.findByRole("alertdialog");
@@ -117,7 +118,7 @@ describe("ProductCatalogueEditor (QP-001)", () => {
   // a custom rate above the 100% cap is rejected outright.
   it("offers GST slabs (no stray 81) and blocks a custom tax above 100%", async () => {
     vi.mocked(qp.getProducts).mockResolvedValue({ data: [], source: "api" });
-    render(<ProductCatalogueEditor />);
+    renderWithIntl(<ProductCatalogueEditor />);
     await waitFor(() => expect(screen.getByText(/no products yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add product/i }));
     const slab = screen.getByLabelText(/^tax percent for product 1/i) as HTMLSelectElement;
@@ -138,7 +139,7 @@ describe("ProductCatalogueEditor (QP-001)", () => {
   // GAP-CRM-PRODUCTS-03: a blank price can no longer save as a silent ₹0.00.
   it("blocks a blank price instead of saving a ₹0.00 product", async () => {
     vi.mocked(qp.getProducts).mockResolvedValue({ data: [], source: "api" });
-    render(<ProductCatalogueEditor />);
+    renderWithIntl(<ProductCatalogueEditor />);
     await waitFor(() => expect(screen.getByText(/no products yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add product/i }));
     fireEvent.change(screen.getByLabelText(/code for product 1/i), { target: { value: "X" } });
@@ -154,7 +155,7 @@ describe("ProductCatalogueEditor (QP-001)", () => {
   it("requires a confirm before saving a typed ₹0 price", async () => {
     vi.mocked(qp.getProducts).mockResolvedValue({ data: [], source: "api" });
     vi.mocked(qp.createProduct).mockResolvedValue(undefined);
-    render(<ProductCatalogueEditor />);
+    renderWithIntl(<ProductCatalogueEditor />);
     await waitFor(() => expect(screen.getByText(/no products yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add product/i }));
     fireEvent.change(screen.getByLabelText(/code for product 1/i), { target: { value: "FREE" } });
@@ -172,7 +173,7 @@ describe("ProductCatalogueEditor (QP-001)", () => {
   // GAP-CRM-PRODUCTS-05: Active-to before Active-from is blocked.
   it("blocks Active to earlier than Active from", async () => {
     vi.mocked(qp.getProducts).mockResolvedValue({ data: [product], source: "api" });
-    render(<ProductCatalogueEditor />);
+    renderWithIntl(<ProductCatalogueEditor />);
     await waitFor(() => expect(screen.getByDisplayValue("Rack server")).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText(/active from for product 1/i), { target: { value: "2026-06-01" } });
     fireEvent.change(screen.getByLabelText(/active to for product 1/i), { target: { value: "2026-05-01" } });
@@ -186,10 +187,39 @@ describe("ProductCatalogueEditor (QP-001)", () => {
   // claim "Live" from an unsaved edit.
   it("marks a toggled row Unsaved and reads 'Live after save' rather than 'Live'", async () => {
     vi.mocked(qp.getProducts).mockResolvedValue({ data: [{ ...product, enabled: false }], source: "api" });
-    render(<ProductCatalogueEditor />);
+    renderWithIntl(<ProductCatalogueEditor />);
     await waitFor(() => expect(screen.getByDisplayValue("Rack server")).toBeInTheDocument());
     fireEvent.click(screen.getByLabelText(/enable product 1/i));
     expect(screen.getByLabelText(/unsaved changes for product 1/i)).toBeInTheDocument();
     expect(screen.getByText(/live after save/i)).toBeInTheDocument();
+  });
+
+  // GAP-CRM-PRODUCTS-06: a duplicate code (case-insensitive) is flagged and
+  // blocks Save (the backend has a unique (tenant, code) index).
+  it("flags a duplicate product code and blocks save", async () => {
+    vi.mocked(qp.getProducts).mockResolvedValue({
+      data: [
+        { ...product, id: "pr1", code: "SRV-1", name: "Rack server" },
+        { ...product, id: "pr2", code: "srv-1", name: "Other server" },
+      ],
+      source: "api",
+    });
+    renderWithIntl(<ProductCatalogueEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("Rack server")).toBeInTheDocument());
+    // Both rows show the duplicate-code message (case-insensitive match).
+    expect(screen.getAllByText(/duplicate code/i).length).toBeGreaterThanOrEqual(2);
+    fireEvent.click(screen.getAllByRole("button", { name: /^save$/i })[0]!);
+    expect(await screen.findByText(/is already used by another product/i)).toBeInTheDocument();
+    expect(qp.updateProduct).not.toHaveBeenCalled();
+  });
+
+  // GAP-CRM-PRODUCTS-06: currency is visible per row (constrained to INR —
+  // decision recorded, no multi-currency money formatter yet).
+  it("shows the currency per product row", async () => {
+    vi.mocked(qp.getProducts).mockResolvedValue({ data: [product], source: "api" });
+    renderWithIntl(<ProductCatalogueEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("Rack server")).toBeInTheDocument());
+    const currency = screen.getByLabelText(/currency for product 1/i);
+    expect(currency).toHaveTextContent("INR");
   });
 });

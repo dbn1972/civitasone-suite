@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { renderWithIntl } from "@/lib/testUtils/intl";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
@@ -22,6 +23,16 @@ describe("GrievanceActions", () => {
     render(<NextIntlClientProvider locale="en" messages={enMessages}><GrievanceActions id={GRIEVANCE_ID} status="DISPOSED" /></NextIntlClientProvider>);
     expect(screen.getByText(/disposed — no further action available/)).toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  // GAP-CRM-GRIEVANCES-DETAIL-08 — the `{!disposed && …}` guard around Resolve
+  // was dead code (the terminal branch already returns above). A non-terminal
+  // grievance must always offer Forward, First Appeal and Resolve.
+  it("shows Forward, First Appeal and Resolve for a non-terminal grievance (dead guard removed)", () => {
+    renderWithIntl(<GrievanceActions id={GRIEVANCE_ID} status="REGISTERED" />);
+    expect(screen.getByRole("button", { name: "Forward" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "First Appeal" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Resolve" })).toBeInTheDocument();
   });
 
   // Regression test for the CRITICAL bug: every grievance action called

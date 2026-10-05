@@ -50,11 +50,49 @@ const FIELD: React.CSSProperties = {
 
 const LABEL: React.CSSProperties = { display: "flex", flexDirection: "column", gap: 4, fontSize: 14 };
 
+/**
+ * GAP-CRM-SERVICE-REQUESTS-NEW-05: validate the citizen phone as an Indian
+ * 10-digit mobile (optionally +91 / 0 prefixed, spaces/hyphens tolerated)
+ * before filing — a free-form tel input with maxLength 32 and no pattern let a
+ * clearly-wrong "12345" through to the server. Email format is checked too. The
+ * server remains authoritative. Decision (recorded in report): mobile-only
+ * (landlines/STD rejected) to match the acceptance; relax to STD if the desk
+ * needs it.
+ */
+const INDIAN_MOBILE_RE = /^(?:\+?91[-\s]?|0)?[6-9]\d{9}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** @returns an error string, or null when valid / blank (phone is optional alone). */
+function phoneFormatError(raw: string): string | null {
+  const value = raw.trim();
+  if (!value) return null;
+  const normalised = value.replace(/[-\s]/g, "");
+  if (INDIAN_MOBILE_RE.test(normalised)) return null;
+  return "Enter a valid 10-digit Indian mobile number (optionally +91).";
+}
+
+function emailFormatError(raw: string): string | null {
+  const value = raw.trim();
+  if (!value) return null;
+  return EMAIL_RE.test(value) ? null : "Enter a valid email address.";
+}
+
+/** Normalise an Indian mobile to its 10 digits (drops +91 / 0 and spacing). */
+function normaliseMobile(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length === 12 && digits.startsWith("91")) return digits.slice(2);
+  if (digits.length === 11 && digits.startsWith("0")) return digits.slice(1);
+  return digits;
+}
+
 export default function NewServiceRequestPage() {
   const t = useTranslations("crmServiceRequestNew");
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [contactError, setContactError] = useState<string | null>(null);
+  // GAP-CRM-SERVICE-REQUESTS-NEW-05: per-field format errors for phone/email.
+  const [phoneMsg, setPhoneMsg] = useState<string | null>(null);
+  const [emailMsg, setEmailMsg] = useState<string | null>(null);
   // GAP-CRM-SERVICE-REQUESTS-NEW-04: optionally link an existing contact.
   const [contactId, setContactId] = useState<string | null>(null);
   const [contactLabel, setContactLabel] = useState<string>("");
@@ -82,9 +120,24 @@ export default function NewServiceRequestPage() {
     e.preventDefault();
     formError.clear();
     setContactError(null);
+    setPhoneMsg(null);
+    setEmailMsg(null);
     const fd = new FormData(e.currentTarget);
-    const citizenPhone = (fd.get("citizenPhone") as string | null)?.trim() || undefined;
-    const citizenEmail = (fd.get("citizenEmail") as string | null)?.trim() || undefined;
+    const citizenPhoneRaw = (fd.get("citizenPhone") as string | null)?.trim() || "";
+    const citizenEmailRaw = (fd.get("citizenEmail") as string | null)?.trim() || "";
+
+    // GAP-CRM-SERVICE-REQUESTS-NEW-05: block a clearly-wrong phone/email before
+    // the write, with per-field messages.
+    const pErr = phoneFormatError(citizenPhoneRaw);
+    const eErr = emailFormatError(citizenEmailRaw);
+    if (pErr) setPhoneMsg(pErr);
+    if (eErr) setEmailMsg(eErr);
+    if (pErr || eErr) return;
+
+    // Send the normalised 10-digit mobile (drops +91 / 0 / spacing) so the
+    // stored value is consistent; email is sent trimmed.
+    const citizenPhone = citizenPhoneRaw ? normaliseMobile(citizenPhoneRaw) : undefined;
+    const citizenEmail = citizenEmailRaw || undefined;
 
     // GAP-CRM-SERVICE-REQUESTS-NEW-01 (DPDP + reachability): a request filed with
     // neither phone nor email leaves no way to reach the citizen. Require at
@@ -189,13 +242,39 @@ export default function NewServiceRequestPage() {
                   <span style={{ color: "var(--ink)" }}>
                     {t("phone")} <span style={{ color: "var(--ink2)", fontWeight: 400 }}>{t("phoneOrEmailRequired")}</span>
                   </span>
-                  <input name="citizenPhone" type="tel" maxLength={32} placeholder={t("phonePlaceholder")} style={FIELD} aria-invalid={contactError ? true : undefined} />
+                  <input
+                    name="citizenPhone"
+                    type="tel"
+                    inputMode="tel"
+                    maxLength={15}
+                    placeholder={t("phonePlaceholder")}
+                    style={FIELD}
+                    aria-invalid={phoneMsg || contactError ? true : undefined}
+                    onChange={() => phoneMsg && setPhoneMsg(null)}
+                  />
+                  <span style={{ fontSize: 12, color: "var(--ink2)" }}>{t("phoneHint")}</span>
+                  {phoneMsg && <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{phoneMsg}</span>}
+                  {formError.fieldError("citizenPhone") && (
+                    <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("citizenPhone")}</span>
+                  )}
                 </label>
                 <label style={LABEL}>
                   <span style={{ color: "var(--ink)" }}>
                     {t("email")} <span style={{ color: "var(--ink2)", fontWeight: 400 }}>{t("phoneOrEmailRequired")}</span>
                   </span>
-                  <input name="citizenEmail" type="email" maxLength={320} placeholder={t("emailPlaceholder")} style={FIELD} aria-invalid={contactError ? true : undefined} />
+                  <input
+                    name="citizenEmail"
+                    type="email"
+                    maxLength={320}
+                    placeholder={t("emailPlaceholder")}
+                    style={FIELD}
+                    aria-invalid={emailMsg || contactError ? true : undefined}
+                    onChange={() => emailMsg && setEmailMsg(null)}
+                  />
+                  {emailMsg && <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{emailMsg}</span>}
+                  {formError.fieldError("citizenEmail") && (
+                    <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("citizenEmail")}</span>
+                  )}
                 </label>
               </div>
               {contactError && (

@@ -248,4 +248,44 @@ describe("OnboardingDetail (P1-9)", () => {
     await waitFor(() => expect(screen.getByText(/•••• 7890/)).toBeInTheDocument());
     expect(screen.queryByText("1234567890")).not.toBeInTheDocument();
   });
+
+  // GAP-CRM-ONBOARDING-DETAIL-07: the raw version number is no longer shown in
+  // the visible grid (it is still used internally for the optimistic lock —
+  // proven by the version:2 asserted on the advance/kyc calls above).
+  it("does not show the raw Version field in the grid", async () => {
+    vi.mocked(onb.getOnboardingCase).mockResolvedValue({ data: caseAt("verification", "submitted"), source: "api" });
+    render(<OnboardingDetail id="c1" />);
+    await waitFor(() => expect(screen.getByText(/Onboarding —/)).toBeInTheDocument());
+    // The "Version" field label is gone from the detail grid.
+    expect(screen.queryByText("Version")).not.toBeInTheDocument();
+  });
+
+  // GAP-CRM-ONBOARDING-DETAIL-06: an accepted (202) change is applied
+  // asynchronously; the detail polls until the version advances rather than
+  // reloading once into a stale read, and shows a Pending banner meanwhile.
+  it("polls after a 202 until the version advances, then settles", { timeout: 20000 }, async () => {
+    vi.mocked(onb.getOnboardingCase)
+      // initial load
+      .mockResolvedValueOnce({ data: caseAt("initiated", "pending"), source: "api" })
+      // first poll: still the OLD version (stale)
+      .mockResolvedValueOnce({ data: caseAt("initiated", "pending"), source: "api" })
+      // second poll: version advanced + stage changed
+      .mockResolvedValue({ data: { ...caseAt("documents_submitted", "pending"), version: 3 }, source: "api" });
+    vi.mocked(onb.advanceStage).mockResolvedValue({ accepted: true });
+
+    render(<OnboardingDetail id="c1" />);
+    fireEvent.change(await screen.findByLabelText(/move to/i), { target: { value: "documents_submitted" } });
+    fireEvent.click(screen.getByRole("button", { name: /apply stage change/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /confirm change/i }));
+
+    await waitFor(() => expect(onb.advanceStage).toHaveBeenCalled());
+    // Pending banner appears while polling.
+    expect(await screen.findByText(/Pending update/i)).toBeInTheDocument();
+    // After the two 2s poll intervals the change lands: banner gone, success shown.
+    await waitFor(() => expect(screen.queryByText(/Pending update/i)).not.toBeInTheDocument(), { timeout: 15000 });
+    expect(screen.getByText(/Case moved to "Documents submitted"/i)).toBeInTheDocument();
+    // Three getOnboardingCase calls: initial + 2 polls.
+    expect(vi.mocked(onb.getOnboardingCase).mock.calls.length).toBeGreaterThanOrEqual(3);
+  });
 });

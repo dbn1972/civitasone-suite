@@ -62,14 +62,26 @@ export function registerActivityConsumers(queue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.updateActivity, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; status?: string; completedAt?: string | null };
+    const p = msg.payload as {
+      id: string; tenantId: string; status?: string; completedAt?: string | null;
+      dueDate?: string; ownerId?: string; reason?: string;
+    };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const fields: Parameters<typeof repo.updateActivity>[3] = {};
       if (p.status !== undefined) fields.status = p.status;
       if (p.completedAt !== undefined) fields.completedAt = p.completedAt ? new Date(p.completedAt) : null;
+      if (p.dueDate !== undefined) fields.dueDate = p.dueDate;
+      if (p.ownerId !== undefined) fields.ownerId = p.ownerId;
       await repo.updateActivity(tx, p.id, p.tenantId, fields);
-      await emit(tx, msg, EVENTS.activityUpdated, { activityId: p.id, status: p.status }, "update", p.id);
+      // GAP-CRM-TASK-ESCALATION-06: snooze/reassign carry their reason and the
+      // changed fields onto the audit event (ids + dates only, no PII).
+      const action = p.ownerId !== undefined ? "reassign" : p.dueDate !== undefined ? "snooze" : "update";
+      await emit(tx, msg, EVENTS.activityUpdated, { activityId: p.id, status: p.status }, action, p.id, {
+        ...(p.dueDate !== undefined ? { dueDate: p.dueDate } : {}),
+        ...(p.ownerId !== undefined ? { ownerId: p.ownerId } : {}),
+        ...(p.reason !== undefined ? { reason: p.reason } : {}),
+      });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE, p.id));
     await cache.invalidateResource(msg.tenantId, RESOURCE);
@@ -145,6 +157,7 @@ async function emit(
   payload: Record<string, unknown>,
   action: string,
   resourceId: string,
+  auditDetails: Record<string, unknown> = {},
 ): Promise<void> {
   const t = tx as Parameters<typeof enqueue>[0];
   await enqueue(t, {
@@ -155,7 +168,7 @@ async function emit(
   await enqueue(t, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "crm", action, resourceType: "activity", resourceId, outcome: "success" },
+    payload: { service: "crm", action, resourceType: "activity", resourceId, outcome: "success", ...auditDetails },
   });
 }
 

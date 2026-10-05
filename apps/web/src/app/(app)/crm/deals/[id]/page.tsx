@@ -1,4 +1,5 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import Link from "next/link";
 import { PageHeader, StatusPill, EmptyState } from "../../../../_components/ds";
 import { RefreshErrorState } from "../../../../_components/ds/RefreshErrorState";
 import { getDealById } from "../../../../_data/loaders";
@@ -10,6 +11,7 @@ import { getSessionRoles, hasAnyRole, CRM_OPPORTUNITY_CLOSE_ROLES } from "@/lib/
 
 export default async function Page({ params }: { params: { id: string } }) {
   const { data: deal, source, status } = await getDealById(params.id);
+  const tNf = await getTranslations("crm.dealDetail");
 
   if (!deal) {
     // GAP-CRM-DEALS-DETAIL-02: distinguish a genuinely-missing deal from an
@@ -36,8 +38,8 @@ export default async function Page({ params }: { params: { id: string } }) {
     }
     return (
       <>
-        <PageHeader title="Deal Detail" back="/crm/deals" />
-        <EmptyState icon="🎯" title="Deal not found" message="This deal does not exist or has been removed." />
+        <PageHeader title={tNf("title")} back="/crm/deals" />
+        <EmptyState icon="🎯" title={tNf("notFoundTitle")} message={tNf("notFoundMessage")} />
       </>
     );
   }
@@ -54,7 +56,12 @@ export default async function Page({ params }: { params: { id: string } }) {
   // neutral 'Closed' todo. A non-colour text cue ("Lost"/"Won") is added to the terminal
   // step so the state is conveyed without relying on colour alone (WCAG 1.4.1).
   const t = await getTranslations("crmDealDetail");
-  const OPEN_PATH = ["prospecting", "proposal", "negotiation"] as const;
+  // GAP-CRM-DEALS-DETAIL-07: 'qualification' is a real open stage in the deal
+  // vocabulary (apiMappers.DEAL_STAGES keeps it as-is) but was missing from this
+  // open path, so a qualification deal fell back to the index-0 'Prospecting'
+  // guard — the current marker landed on the wrong step. Include it between
+  // prospecting and proposal so such a deal shows 'Qualification' as current.
+  const OPEN_PATH = ["prospecting", "qualification", "proposal", "negotiation"] as const;
   const isWon = deal.status === "won";
   const isLost = deal.status === "lost";
   const terminal: { key: string; label: string; cue?: string; cueTone?: "won" | "lost" } = isWon
@@ -77,7 +84,7 @@ export default async function Page({ params }: { params: { id: string } }) {
   return (
     <>
       <PageHeader
-        title={`Deal ${deal.dealName}`}
+        title={`Engagement ${deal.dealName}`}
         subtitle="Stakeholder Engagement System: leads, deals and pipeline."
         back="/crm/deals"
         actions={
@@ -94,9 +101,22 @@ export default async function Page({ params }: { params: { id: string } }) {
       <div className="grid g-main" style={{ alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <div className="card">
-            <div className="card-h"><h3>Deal Details</h3></div>
+            <div className="card-h"><h3>Engagement Details</h3></div>
             <div className="fields">
-              <div className="fld"><div className="l">Account</div><div className="v">{deal.contactName ?? "—"}</div></div>
+              {/* GAP-CRM-DEALS-DETAIL-05: the value is contactName ?? company (a
+                  person OR an organisation), so the label is "Contact /
+                  Organisation", not "Account". When a contactId is known the
+                  name links to the contact record; otherwise it is plain text. */}
+              <div className="fld">
+                <div className="l">Contact / Organisation</div>
+                <div className="v">
+                  {deal.contactId ? (
+                    <Link href={`/crm/contacts/${deal.contactId}`}>{deal.contactName ?? "—"}</Link>
+                  ) : (
+                    deal.contactName ?? "—"
+                  )}
+                </div>
+              </div>
               <div className="fld"><div className="l">Value</div><div className="v">{formatMoney(deal.amount)}</div></div>
               <div className="fld"><div className="l">Stage</div><div className="v"><StatusPill status={deal.stage} label={deal.stage.replace(/_/g, " ")} /></div></div>
               <div className="fld"><div className="l">Status</div><div className="v"><StatusPill status={deal.status} /></div></div>
@@ -117,7 +137,7 @@ export default async function Page({ params }: { params: { id: string } }) {
                       {step.label}
                       {step.cue ? <span className="sr-only"> — {step.cue}</span> : null}
                       {step.cue ? (
-                        <span aria-hidden="true" style={{ marginInlineStart: 6, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4, color: step.cueTone === "lost" ? "#b42318" : "#047857" }}>
+                        <span aria-hidden="true" style={{ marginInlineStart: 6, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4, color: step.cueTone === "lost" ? "var(--bad)" : "var(--good)" }}>
                           {step.cue}
                         </span>
                       ) : null}
@@ -127,13 +147,10 @@ export default async function Page({ params }: { params: { id: string } }) {
               </ul>
             </div>
           </div>
-          <div className="card">
-            <div className="card-h"><h3>Parties</h3></div>
-            <div className="fields">
-              <div className="fld"><div className="l">Account</div><div className="v">{deal.contactName ?? "—"}</div></div>
-              <div className="fld"><div className="l">Owner</div><div className="v">{deal.owner}</div></div>
-            </div>
-          </div>
+          {/* GAP-CRM-DEALS-DETAIL-05: the former "Parties" card duplicated the
+              Account and Owner already shown in Engagement Details (neither
+              linked), so it was removed. The contact/organisation link now lives
+              once, in Engagement Details above. */}
         </div>
       </div>
     </>

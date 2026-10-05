@@ -118,4 +118,51 @@ describe("GrievanceDetailPage", () => {
     expect(screen.getAllByText("Grievance not found").length).toBeGreaterThan(0);
     expect(screen.queryByText(/couldn't load/i)).not.toBeInTheDocument();
   });
+
+  // GAP-CRM-GRIEVANCES-DETAIL-08 — assignedTo is an identity-service UUID, not a
+  // name. It must never be printed verbatim as if it were a person's name.
+  it("does not print a raw assignee UUID verbatim in the Assigned To row", async () => {
+    const assigneeId = "11111111-2222-4333-8444-555555555555";
+    fetchJsonMock.mockResolvedValue({ data: grievance({ assignedTo: assigneeId }), source: "api" });
+    const ui = await GrievanceDetailPage({ params: { id: ID } });
+    render(ui);
+
+    expect(screen.queryByText(assigneeId)).not.toBeInTheDocument();
+    expect(screen.getByText(/Assigned \(ID 11111111…\)/)).toBeInTheDocument();
+  });
+
+  it("shows 'Unassigned' when there is no assignee", async () => {
+    fetchJsonMock.mockResolvedValue({ data: grievance({ assignedTo: undefined }), source: "api" });
+    const ui = await GrievanceDetailPage({ params: { id: ID } });
+    render(ui);
+    expect(screen.getByText("Unassigned")).toBeInTheDocument();
+  });
+
+  // GAP-CRM-GRIEVANCES-DETAIL-08 acceptance: an assigned grievance shows the
+  // person's NAME, resolved through the identity users endpoint.
+  it("shows the assignee's name resolved from identity, not the id", async () => {
+    const assigneeId = "11111111-2222-4333-8444-555555555555";
+    fetchJsonMock.mockImplementation(async (url: string, _fallback: unknown, opts?: { mapResponse?: (p: unknown) => unknown }) => {
+      if (url === `/api/identity/users/${assigneeId}`) {
+        const payload = { data: { id: assigneeId, name: "Sunita Mohanty", email: "sunita@example.gov.in" } };
+        return { data: opts?.mapResponse ? opts.mapResponse(payload) : payload, source: "api" };
+      }
+      return { data: grievance({ assignedTo: assigneeId }), source: "api" };
+    });
+    render(await GrievanceDetailPage({ params: { id: ID } }));
+    expect(screen.getByText("Sunita Mohanty")).toBeInTheDocument();
+    expect(screen.queryByText(/Assigned \(ID/)).not.toBeInTheDocument();
+    expect(screen.queryByText(assigneeId)).not.toBeInTheDocument();
+  });
+
+  it("falls back to the short id label when identity refuses the lookup (e.g. 403)", async () => {
+    const assigneeId = "11111111-2222-4333-8444-555555555555";
+    fetchJsonMock.mockImplementation(async (url: string) =>
+      url.startsWith("/api/identity/users/")
+        ? { data: null, source: "error", status: 403 }
+        : { data: grievance({ assignedTo: assigneeId }), source: "api" },
+    );
+    render(await GrievanceDetailPage({ params: { id: ID } }));
+    expect(screen.getByText(/Assigned \(ID 11111111…\)/)).toBeInTheDocument();
+  });
 });

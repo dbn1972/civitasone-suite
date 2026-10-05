@@ -79,13 +79,31 @@ describe("DedupCandidatesPage", () => {
     expect(screen.getByText("65%")).toBeInTheDocument();
     expect(screen.getByText("45%")).toBeInTheDocument();
 
-    // Confidence badge aria-labels
-    expect(screen.getByLabelText("Confidence 85%")).toBeInTheDocument();
-    expect(screen.getByLabelText("Confidence 65%")).toBeInTheDocument();
-    expect(screen.getByLabelText("Confidence 45%")).toBeInTheDocument();
+    // Confidence badge aria-labels (GAP-CRM-DEDUP-CANDIDATES-06: now carry a
+    // non-colour "High/Medium/Low match" cue alongside the percentage)
+    expect(screen.getByLabelText("High match, confidence 85%")).toBeInTheDocument();
+    expect(screen.getByLabelText("Medium match, confidence 65%")).toBeInTheDocument();
+    expect(screen.getByLabelText("Low match, confidence 45%")).toBeInTheDocument();
 
     // Contact names appear
     expect(screen.getAllByText("Priya Sharma").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("GAP-CRM-DEDUP-CANDIDATES-06: a high match reads as a strong 'High match' (emphasis), not a danger alarm", async () => {
+    vi.mocked(api.getDedupCandidates).mockResolvedValue({
+      data: [{ ...PAIR, confidence: 92 }],
+      source: "api",
+    });
+    render(<DedupCandidatesPage />);
+
+    await waitFor(() => expect(screen.getByText("92%")).toBeInTheDocument());
+    // non-colour text cue present
+    expect(screen.getByText("High match")).toBeInTheDocument();
+    // the badge carries the emphasis class, not a danger/low-match one
+    const badge = screen.getByText("92%").closest(".conf-badge");
+    expect(badge).not.toBeNull();
+    expect(badge?.classList.contains("conf-high")).toBe(true);
+    expect(badge?.classList.contains("conf-low")).toBe(false);
   });
 
   it("shows the merge confirm dialog when Merge button is clicked", async () => {

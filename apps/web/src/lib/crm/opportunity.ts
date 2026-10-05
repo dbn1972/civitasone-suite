@@ -229,9 +229,16 @@ export interface Opportunity {
   stage: string;
   /** Minor units (paise), as a string — never a float. */
   valueMinor: string;
-  probability: number;
+  /**
+   * GAP-CRM-OPPORTUNITIES-NEW-06: optional. An untouched create form must not
+   * send 0 (indistinguishable from a real 0% deal that zeroes forecast
+   * weighting); the key is omitted when blank so the backend applies its own
+   * default (or the stage's configured probability).
+   */
+  probability?: number;
   product: string;
-  quantity: number;
+  /** GAP-CRM-OPPORTUNITIES-NEW-06: optional for the same reason as probability. */
+  quantity?: number;
   competitors: string[];
   nextStep: string;
   expectedCloseDate: string;
@@ -340,6 +347,22 @@ export async function updateOpportunity(id: string, opp: Opportunity): Promise<v
   // PATCH, not PUT: the service registers `app.patch("/v1/crm/deals/:id")`.
   const res = await browserFetch(`v1/crm/deals/${id}`, { method: "PATCH", body: JSON.stringify(opp) });
   if (!res.ok) await throwStageError(res);
+}
+
+/**
+ * GAP-CRM-OPPORTUNITIES-06: load a single opportunity for the detail/edit route,
+ * over GET /v1/crm/deals/:id (the same single-record endpoint the deals detail
+ * page uses). Returns source:"error" on any failure so the page can show a
+ * retriable error rather than an empty edit form.
+ */
+export async function getOpportunity(id: string): Promise<LoaderResult<Opportunity | null>> {
+  try {
+    const res = await browserFetch(`v1/crm/deals/${id}`);
+    if (!res.ok) return { data: null, source: "error" };
+    return { data: normaliseOpportunity(await res.json()), source: "api" };
+  } catch {
+    return { data: null, source: "error" };
+  }
 }
 
 /**

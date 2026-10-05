@@ -15,12 +15,14 @@ import { paginatedSchema } from "@civitasone/schemas/common";
 // own per-stage name length cap) so "no value" / absurdly long values still 400.
 const dealStage = z.string().min(1).max(100);
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+/** Largest accepted quantity: well inside the int4 column, so an absurd value is a 400, never a 500. */
+export const MAX_QUANTITY = 100_000_000;
 const competitors = z.array(z.string().min(1).max(160)).max(50);
 
 // OP-003 opportunity attributes, all optional on create.
 const opportunityFields = {
   product: z.string().min(1).max(160).optional(),
-  quantity: z.number().int().min(0).optional(),
+  quantity: z.number().int().min(0).max(MAX_QUANTITY).optional(),
   competitors: competitors.optional(),
   nextStep: z.string().max(2000).optional(),
   expectedCloseDate: isoDate.optional(),
@@ -60,7 +62,7 @@ export const updateDealBody = z.object({
   closeDate: isoDate.nullable().optional(),
   contactId: z.string().uuid().nullable().optional(),
   product: z.string().min(1).max(160).nullable().optional(),
-  quantity: z.number().int().min(0).nullable().optional(),
+  quantity: z.number().int().min(0).max(MAX_QUANTITY).nullable().optional(),
   competitors: competitors.optional(),
   nextStep: z.string().max(2000).nullable().optional(),
   expectedCloseDate: isoDate.nullable().optional(),

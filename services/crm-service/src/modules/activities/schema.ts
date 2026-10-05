@@ -19,6 +19,9 @@ export const activities = crmSchema.table("activities", {
   remindAt: timestamp("remind_at", { withTimezone: true }),
   location: text("location"),
   completedAt: timestamp("completed_at", { withTimezone: true }),
+  // GAP-CRM-TASK-ESCALATION-06 (0107): identity user responsible for a task;
+  // NULL = the creator (readers use COALESCE(owner_id, created_by)).
+  ownerId: uuid("owner_id"),
   version: integer("version").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),

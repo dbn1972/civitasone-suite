@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { CRMLeadCaptureForm } from "@civitasone/types";
-import { formHealth, originSummary, publicSubmitPath, rankForms, HEALTH_LABEL, CONSENT_GAP_NOTE } from "./leadForms";
+import { formHealth, originSummary, originTitle, absoluteSubmitUrl, embedSnippet, publicSubmitPath, rankForms, HEALTH_LABEL, CONSENT_GAP_NOTE } from "./leadForms";
 
 function form(overrides: Partial<CRMLeadCaptureForm> = {}): CRMLeadCaptureForm {
   return {
@@ -51,6 +51,37 @@ describe("originSummary", () => {
     expect(originSummary([])).toBe("Any origin");
     expect(originSummary(["https://a.gov.in"])).toBe("https://a.gov.in");
     expect(originSummary(["https://a.gov.in", "https://b.gov.in"])).toBe("https://a.gov.in +1 more");
+  });
+});
+
+// GAP-CRM-LEAD-FORMS-05: the collapsed summary is backed by a full title list,
+// and operators can copy an absolute URL / embed snippet.
+describe("originTitle", () => {
+  it("lists every allowed origin one per line, or 'Any origin' when empty", () => {
+    expect(originTitle([])).toBe("Any origin");
+    expect(originTitle(["https://a.gov.in", "https://b.gov.in"])).toBe("https://a.gov.in\nhttps://b.gov.in");
+  });
+});
+
+describe("absoluteSubmitUrl", () => {
+  it("joins the browser origin with the gateway submit path", () => {
+    expect(absoluteSubmitUrl("https://portal.gov.in", "key123")).toBe(
+      "https://portal.gov.in/api/v1/crm/public/leads/key123",
+    );
+  });
+  it("does not double a trailing slash on the origin", () => {
+    expect(absoluteSubmitUrl("https://portal.gov.in/", "key123")).toBe(
+      "https://portal.gov.in/api/v1/crm/public/leads/key123",
+    );
+  });
+});
+
+describe("embedSnippet", () => {
+  it("embeds the absolute action URL and a consent checkbox", () => {
+    const snippet = embedSnippet("https://portal.gov.in", "key123");
+    expect(snippet).toContain('action="https://portal.gov.in/api/v1/crm/public/leads/key123"');
+    expect(snippet).toContain('name="consent"');
+    expect(snippet).toContain("<form");
   });
 });
 

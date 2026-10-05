@@ -26,6 +26,12 @@ const FIELD_OPTIONS: DedupField[] = ["email", "phone", "gstin", "pan", "name", "
 const MATCH_OPTIONS: DedupMatchType[] = ["exact", "fuzzy"];
 
 /**
+ * GAP-CRM-DEDUP-RULES-06: human labels for the field/match-type selects so a
+ * clerk reads "GSTIN"/"Exact match" instead of the raw enum tokens
+ * "gstin"/"exact". The <option value> stays the enum the backend expects.
+ */
+
+/**
  * Coerce a numeric-input string to a finite integer 0-100 so a partial or
  * invalid entry ("", "-", "1.5", "abc") never lands something the backend
  * rejects. services/crm-service dedup-routes.ts requires both weight and
@@ -266,13 +272,13 @@ export function DedupRulesEditor() {
         </p>
       ) : null}
       {message ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", padding: "0 12px" }}>{message}</p>
+        <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good, #047857)", padding: "0 12px" }}>{message}</p>
       ) : null}
       {error ? (
-        <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", padding: "0 12px" }}>{error}</p>
+        <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--bad, #b42318)", padding: "0 12px" }}>{error}</p>
       ) : null}
       {dirty ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#92400e", padding: "0 12px" }}>
+        <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--warn, #92400e)", padding: "0 12px" }}>
           {t("unsavedChanges")}
         </p>
       ) : null}
@@ -316,7 +322,7 @@ export function DedupRulesEditor() {
                     onChange={(e) => update(idx, { field: e.target.value as DedupField })}
                     style={{ padding: 6, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)" }}
                   >
-                    {FIELD_OPTIONS.map((f) => <option key={f} value={f}>{f}</option>)}
+                    {FIELD_OPTIONS.map((f) => <option key={f} value={f}>{t(`field.${f}`)}</option>)}
                   </select>
                 </td>
                 <td>
@@ -327,7 +333,7 @@ export function DedupRulesEditor() {
                     onChange={(e) => update(idx, { matchType: e.target.value as DedupMatchType })}
                     style={{ padding: 6, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)" }}
                   >
-                    {MATCH_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
+                    {MATCH_OPTIONS.map((m) => <option key={m} value={m}>{t(`match.${m}`)}</option>)}
                   </select>
                 </td>
                 <td className="num">

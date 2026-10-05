@@ -11,6 +11,7 @@ import { useTranslations } from "next-intl";
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState, Button } from "../ds";
+import { ErrorState } from "../ds/ErrorState";
 import {
   getDocumentTypes,
   createDocumentType,
@@ -109,12 +110,36 @@ export function DocumentTypesEditor() {
       if (row.id) await updateDocumentType(row.id, payload);
       else await createDocumentType(payload);
       setMessage(`Document type “${payload.name}” saved.`);
-      await load();
+      // GAP-CRM-DOCUMENT-TYPES-06: do NOT reload the whole list here — load()
+      // flips source to "loading" and replaces every row with server data,
+      // discarding unsaved edits/new rows in OTHER cards. Instead refetch
+      // quietly and merge back only the row that was just saved (picking up a
+      // new row's server id/key), leaving every other row's local state intact.
+      await mergeSavedRow(row, payload);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save the document type.");
     } finally {
       setBusyKey(null);
     }
+  }
+
+  /**
+   * GAP-CRM-DOCUMENT-TYPES-06: after a save, refetch the catalogue silently (no
+   * "loading" state, no wholesale row replacement) and update only the saved
+   * row from the server — matched by id (existing) or by code (a new row, so it
+   * adopts the server id and its key becomes stable). All other rows keep their
+   * current local edits.
+   */
+  async function mergeSavedRow(saved: Row, payload: DocumentType) {
+    const { data, source: s } = await getDocumentTypes();
+    if (s === "error") return; // keep local state; the success message stands
+    const serverMatch = saved.id
+      ? data.find((t) => t.id === saved.id)
+      : data.find((t) => t.code.trim().toLowerCase() === payload.code.trim().toLowerCase());
+    if (!serverMatch) return;
+    setRows((prev) =>
+      prev.map((r) => (r.key === saved.key ? { ...toRow(serverMatch) } : r)),
+    );
   }
 
   async function doDelete(row: Row, reason?: string) {
@@ -129,7 +154,10 @@ export function DocumentTypesEditor() {
       await deleteDocumentType(row.id, reason);
       setMessage(`Document type “${row.name}” deleted.`);
       setConfirmKey(null);
-      await load();
+      // GAP-CRM-DOCUMENT-TYPES-06: drop only the deleted row from local state;
+      // a full load() would flip to "loading" and wipe unsaved edits in other
+      // cards. The server is the authority; this stays consistent with it.
+      setRows((prev) => prev.filter((r) => r.key !== row.key));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not delete the document type.");
     } finally {
@@ -146,15 +174,24 @@ export function DocumentTypesEditor() {
         {source === "error" ? <DataSourceBadge source="error" /> : null}
       </div>
       <div className="pad" style={{ display: "grid", gap: 14 }}>
-        {message ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", margin: 0 }}>{message}</p> : null}
-        {error ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", margin: 0 }}>{error}</p> : null}
+        {message ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good)", margin: 0 }}>{message}</p> : null}
+        {error ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--bad)", margin: 0 }}>{error}</p> : null}
 
         {source === "loading" ? (
           <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>Loading document types…</p>
         ) : source === "error" ? (
-          <p role="alert" style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
-            — Document types unavailable right now. <DataSourceBadge source="error" />
-          </p>
+          // GAP-CRM-DOCUMENT-TYPES-04: a single data-source signal + a REAL
+          // retry (re-runs this client fetch) — the header badge above already
+          // marks the error, so no second inline badge. router.refresh would
+          // not re-run this client load, so Retry calls load() directly.
+          <ErrorState
+            error={{
+              what: "We couldn't load the document types.",
+              next: "This is usually temporary — try again.",
+              actions: ["retry"],
+            }}
+            onRetry={() => void load()}
+          />
         ) : rows.length === 0 ? (
           <EmptyState icon="🗂️" title="No document types yet" message="Add the first document type below." />
         ) : (
@@ -164,7 +201,7 @@ export function DocumentTypesEditor() {
               const appliesErrId = `${headingId}-applies-err-${row.key}`;
               return (
               <li key={row.key} className="card" style={{ padding: 12, boxShadow: "none", border: "1px solid var(--line)" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 10 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10 }}>
                   <label style={{ display: "grid", gap: 4 }}>
                     <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>Code</span>
                     <input value={row.code} onChange={(e) => update(row.key, { code: e.target.value })} style={inputStyle} aria-label="Document type code" />
@@ -189,7 +226,7 @@ export function DocumentTypesEditor() {
                     ))}
                   </div>
                   {errors.appliesTo ? (
-                    <p id={appliesErrId} role="alert" style={{ fontSize: 12, color: "#b42318", margin: "6px 0 0" }}>{errors.appliesTo}</p>
+                    <p id={appliesErrId} role="alert" style={{ fontSize: 12, color: "var(--bad)", margin: "6px 0 0" }}>{errors.appliesTo}</p>
                   ) : (
                     <p style={{ fontSize: 11, color: "var(--muted)", margin: "6px 0 0" }}>{t("selectAtLeastOne")}</p>
                   )}

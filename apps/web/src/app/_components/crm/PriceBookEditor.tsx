@@ -138,13 +138,34 @@ export function PriceBookEditor() {
   }
 
   function draftValid(d: PriceBook): boolean {
+    return draftInvalidReason(d) === null;
+  }
+
+  /**
+   * GAP-CRM-PRICE-BOOKS-06: a single source of truth for why Save is disabled,
+   * shown as inline text beside the button (aria-describedby) rather than a
+   * silently-disabled button. Aligned with save(): a blank price is INVALID
+   * here too (the old draftValid defaulted blank to "0.01" and passed, then
+   * save() rejected it — the button enabled and errored later).
+   */
+  function draftInvalidReason(d: PriceBook): string | null {
+    if (d.name.trim().length === 0) return "A price book needs a name.";
     const chosen = entries.map((e) => e.productId.trim()).filter(Boolean);
-    const noDupes = new Set(chosen).size === chosen.length;
-    return (
-      d.name.trim().length > 0 &&
-      noDupes &&
-      entries.every((e) => e.productId.trim().length > 0 && rupeesToMinorString(e.priceRupees.trim() || "0.01") !== null)
-    );
+    if (new Set(chosen).size !== chosen.length) return "Each product can appear only once — remove the duplicate row.";
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i]!;
+      if (e.productId.trim().length === 0) return `Entry ${i + 1} needs a product.`;
+      if (e.priceRupees.trim().length === 0) return `Entry ${i + 1} needs a price.`;
+      if (rupeesToMinorString(e.priceRupees.trim()) === null) return `Entry ${i + 1} needs a valid rupee price (max 2 decimals).`;
+    }
+    return null;
+  }
+
+  /** True when a given entry's price is blank or invalid (drives aria-invalid). */
+  function entryPriceInvalid(e: EntryRow): boolean {
+    const t = e.priceRupees.trim();
+    if (t.length === 0) return true;
+    return rupeesToMinorString(t) === null;
   }
 
   async function save() {
@@ -359,6 +380,7 @@ export function PriceBookEditor() {
                       id={`${headingId}-ent-price-${idx}`}
                       inputMode="decimal"
                       value={e.priceRupees}
+                      aria-invalid={entryPriceInvalid(e) ? true : undefined}
                       onChange={(ev) => setEntries((prev) => prev.map((r, i) => (i === idx ? { ...r, priceRupees: ev.target.value } : r)))}
                       style={{ ...inputStyle, textAlign: "end" }}
                       placeholder="0.00"
@@ -377,10 +399,23 @@ export function PriceBookEditor() {
                 <Button type="button" variant="ghost" onClick={() => setDraft(null)} disabled={busy}>
                   Cancel
                 </Button>
-                <Button type="button" onClick={() => void save()} disabled={busy || !draftValid(draft)}>
+                <Button
+                  type="button"
+                  onClick={() => void save()}
+                  disabled={busy || !draftValid(draft)}
+                  aria-describedby={draftInvalidReason(draft) ? `${headingId}-save-reason` : undefined}
+                >
                   {busy ? "Saving…" : draft.id ? "Save book" : "Create book"}
                 </Button>
               </div>
+              {draftInvalidReason(draft) ? (
+                <p
+                  id={`${headingId}-save-reason`}
+                  style={{ fontSize: 12, color: "var(--muted)", margin: "6px 0 0", textAlign: "end" }}
+                >
+                  {draftInvalidReason(draft)}
+                </p>
+              ) : null}
             </fieldset>
           )}
         </div>

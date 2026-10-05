@@ -140,3 +140,49 @@ export function SkeletonTable({ rows = 8 }: { rows?: number }) {
     </div>
   );
 }
+
+/**
+ * TileHubSkeleton — loading placeholder for a nav-tile hub page (e.g. the
+ * CRM hub). Mirrors the loaded layout: a header bar plus `sections` groups,
+ * each with a short section-label bar and a grid of tile placeholders.
+ * Renders no stat row, and no page-level background/min-height wrapper, so
+ * it inherits the app-shell padding instead of double-padding
+ * (GAP-CRM-HOME-04).
+ */
+export function TileHubSkeleton({
+  sections = 5,
+  tilesPerSection = 6,
+}: {
+  sections?: number;
+  tilesPerSection?: number;
+}) {
+  return (
+    <div aria-busy="true" aria-label="Loading…" className="animate-pulse space-y-6">
+      {/* header */}
+      <div className="space-y-2">
+        <Bar w={180} h={28} />
+        <Bar w={300} h={14} />
+      </div>
+      {Array.from({ length: sections }).map((_, s) => (
+        <div key={s} className="space-y-3">
+          {/* section label */}
+          <Bar w={120} h={11} />
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, 1fr)",
+              gap: 12,
+            }}
+          >
+            {Array.from({ length: tilesPerSection }).map((_, i) => (
+              <div
+                key={i}
+                style={{ ...SHIMMER_BASE, height: 96, borderRadius: 12 }}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}

@@ -39,4 +39,21 @@ describe("dedupCandidates HTTP client (DQ-001)", () => {
     fetchMock.mockResolvedValueOnce(res({ code: "NOT_FOUND", message: "contact not found" }, { status: 404 }));
     await expect(dedup.mergeDedupPair("left-1", "right-2")).rejects.not.toThrow(/NOT_FOUND|contact not found/);
   });
+
+  it("GAP-CRM-DEDUP-CANDIDATES-07: all calls use the module 'v1/...' convention and resolve to a single-slash proxy path", async () => {
+    fetchMock.mockResolvedValueOnce(res({ data: [] }));
+    await dedup.getDedupCandidates();
+    fetchMock.mockResolvedValueOnce(res({ id: "x" }, { status: 202 }));
+    await dedup.mergeDedupPair("a", "b");
+    fetchMock.mockResolvedValueOnce(res({}, { status: 202 }));
+    await dedup.dismissDedupPair("pair-1");
+
+    const urls = fetchMock.mock.calls.map((c) => String((c as [string])[0]));
+    for (const u of urls) {
+      // browserFetch strips a single leading slash and prefixes /api/proxy/, so
+      // the final path must be exactly /api/proxy/v1/... with no // after proxy.
+      expect(u).toContain("/api/proxy/v1/crm/contacts/");
+      expect(u).not.toContain("/api/proxy//");
+    }
+  });
 });

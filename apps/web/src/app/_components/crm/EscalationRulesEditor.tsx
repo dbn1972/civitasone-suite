@@ -40,10 +40,29 @@ function toRow(r: EscalationRule): Row {
   return { ...r, key: r.id ?? `new-${SEQ++}` };
 }
 
-function sanitizeInt(raw: string): number {
-  const n = Number(raw);
-  return Number.isInteger(n) && n > 0 ? n : Number.NaN;
+/**
+ * GAP-CRM-ESCALATION-RULES-04: humanise a minutes threshold as a plain-language
+ * preview (the value is always stored in minutes). 1440 -> "1 day"; 1560 ->
+ * "1 day 2 hours"; 90 -> "1 hour 30 minutes"; 45 -> "45 minutes".
+ */
+function humanizeMinutes(total: number): string {
+  if (!Number.isInteger(total) || total <= 0) return "—";
+  const days = Math.floor(total / 1440);
+  const hours = Math.floor((total % 1440) / 60);
+  const minutes = total % 60;
+  const parts: string[] = [];
+  if (days) parts.push(`${days} day${days === 1 ? "" : "s"}`);
+  if (hours) parts.push(`${hours} hour${hours === 1 ? "" : "s"}`);
+  if (minutes) parts.push(`${minutes} minute${minutes === 1 ? "" : "s"}`);
+  return parts.join(" ");
 }
+
+/** GAP-CRM-ESCALATION-RULES-04: unit options for the threshold input. */
+const THRESHOLD_UNITS: ReadonlyArray<{ key: "minutes" | "hours" | "days"; label: string; factor: number }> = [
+  { key: "minutes", label: "minutes", factor: 1 },
+  { key: "hours", label: "hours", factor: 60 },
+  { key: "days", label: "days", factor: 1440 },
+];
 
 /**
  * A rule needs a positive threshold and a recipient (role OR user). When the
@@ -52,8 +71,11 @@ function sanitizeInt(raw: string): number {
  * (GAP-CRM-ESCALATION-RULES-01). When the directory is unavailable we fall back
  * to "non-empty" so the editor still works.
  */
+/** Mirrors the crm-service cap on thresholdMinutes (assignment/validators.ts). */
+const MAX_THRESHOLD_MINUTES = 100_000;
+
 function rowValid(row: Row, roles: EscalationRole[], users: EscalationUser[]): boolean {
-  if (!Number.isInteger(row.thresholdMinutes) || row.thresholdMinutes <= 0) return false;
+  if (!Number.isInteger(row.thresholdMinutes) || row.thresholdMinutes <= 0 || row.thresholdMinutes > MAX_THRESHOLD_MINUTES) return false;
   const role = row.recipientRole.trim();
   const uid = row.recipientId.trim();
   if (!role && !uid) return false;
@@ -74,6 +96,10 @@ export function EscalationRulesEditor() {
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
   const [roles, setRoles] = useState<EscalationRole[]>([]);
   const [users, setUsers] = useState<EscalationUser[]>([]);
+  // GAP-CRM-ESCALATION-RULES-04: per-row display unit for the threshold input.
+  // The stored value is always minutes; this only changes how the admin types
+  // and reads it. Keyed by row.key; defaults to minutes when absent.
+  const [thresholdUnit, setThresholdUnit] = useState<Record<string, "minutes" | "hours" | "days">>({});
   const headingId = useId();
 
   /**
@@ -147,6 +173,23 @@ export function EscalationRulesEditor() {
       setError(t("ruleNeedsThresholdRecipient"));
       return;
     }
+    // GAP-CRM-ESCALATION-RULES-05: block a duplicate rule (same trigger +
+    // threshold + recipient) against the rows already on screen, so two
+    // identical rules can't both fire (and double-notify / double-reassign).
+    // The server enforces the same uniqueness (migration 0105) and 409s, but
+    // catching it here gives an immediate, inline message.
+    const isDuplicate = rows.some(
+      (r) =>
+        r.key !== row.key &&
+        r.trigger === row.trigger &&
+        r.thresholdMinutes === row.thresholdMinutes &&
+        r.recipientRole.trim() === row.recipientRole.trim() &&
+        r.recipientId.trim() === row.recipientId.trim(),
+    );
+    if (isDuplicate) {
+      setError("A rule with the same trigger, threshold and recipient already exists. Edit the existing rule instead.");
+      return;
+    }
     const rule: EscalationRule = {
       ...(row.id ? { id: row.id } : {}),
       trigger: row.trigger,
@@ -205,6 +248,20 @@ export function EscalationRulesEditor() {
   const confirmRow = rows.find((r) => r.key === confirmKey) ?? null;
   const isError = source === "error";
 
+  // GAP-CRM-ESCALATION-RULES-05: present the rules sorted by trigger, then by
+  // threshold ascending, so when several rules could match a lead the admin can
+  // see the order the shortest threshold fires first. Unsaved ('new-') rows are
+  // kept at the end so a row being typed doesn't jump around mid-edit.
+  const sortedRows = [...rows].sort((a, b) => {
+    const aNew = !a.id ? 1 : 0;
+    const bNew = !b.id ? 1 : 0;
+    if (aNew !== bNew) return aNew - bNew;
+    if (a.trigger !== b.trigger) return a.trigger.localeCompare(b.trigger);
+    const at = Number.isInteger(a.thresholdMinutes) ? a.thresholdMinutes : Number.MAX_SAFE_INTEGER;
+    const bt = Number.isInteger(b.thresholdMinutes) ? b.thresholdMinutes : Number.MAX_SAFE_INTEGER;
+    return at - bt;
+  });
+
   return (
     <div className="card">
       <div className="card-h">
@@ -228,6 +285,17 @@ export function EscalationRulesEditor() {
           message="Add a rule to escalate leads that sit unaccepted or unattended beyond a time threshold."
         />
       ) : (
+        // GAP-CRM-ESCALATION-RULES-06: wrap the 7-column table in .tbl-wrap so
+        // it scrolls horizontally inside the card on narrow viewports instead
+        // of overflowing the card / page.
+        <>
+        {/* GAP-CRM-ESCALATION-RULES-05: precedence note — rows are shown sorted
+            by trigger then shortest threshold first, which is the order they
+            fire when more than one rule matches a lead. */}
+        <p style={{ fontSize: 12, color: "var(--muted)", padding: "0 12px 4px" }}>
+          Rules are listed by trigger, then shortest threshold first. When more than one rule matches a lead, the shortest threshold escalates first.
+        </p>
+        <div className="tbl-wrap">
         <table className="tbl" aria-labelledby={headingId}>
           <thead>
             <tr>
@@ -241,10 +309,10 @@ export function EscalationRulesEditor() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, i) => {
+            {sortedRows.map((row, i) => {
               const n = i + 1;
               const busy = busyKey === row.key;
-              const threshOk = Number.isInteger(row.thresholdMinutes) && row.thresholdMinutes > 0;
+              const threshOk = Number.isInteger(row.thresholdMinutes) && row.thresholdMinutes > 0 && row.thresholdMinutes <= MAX_THRESHOLD_MINUTES;
               return (
                 <tr key={row.key}>
                   <td>
@@ -259,15 +327,48 @@ export function EscalationRulesEditor() {
                     </select>
                   </td>
                   <td className="num">
-                    <label className="sr-only" htmlFor={`${headingId}-th-${row.key}`}>Threshold minutes for rule {n}</label>
-                    <input
-                      id={`${headingId}-th-${row.key}`}
-                      type="number" min={1} step={1}
-                      value={Number.isInteger(row.thresholdMinutes) ? row.thresholdMinutes : ""}
-                      aria-invalid={threshOk ? undefined : true}
-                      onChange={(e) => update(row.key, { thresholdMinutes: sanitizeInt(e.target.value) })}
-                      style={{ ...inputStyle, width: 90, textAlign: "right" }}
-                    />
+                    <label className="sr-only" htmlFor={`${headingId}-th-${row.key}`}>Threshold for rule {n}</label>
+                    {/* GAP-CRM-ESCALATION-RULES-04: numeric input + unit select
+                        (minutes/hours/days). The stored value stays in minutes;
+                        the unit only scales what the admin types. A humanised
+                        preview shows the resolved duration. */}
+                    {(() => {
+                      const unit = thresholdUnit[row.key] ?? "minutes";
+                      const factor = THRESHOLD_UNITS.find((u) => u.key === unit)?.factor ?? 1;
+                      const shown = Number.isInteger(row.thresholdMinutes) && row.thresholdMinutes > 0
+                        ? row.thresholdMinutes / factor
+                        : "";
+                      return (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <input
+                              id={`${headingId}-th-${row.key}`}
+                              type="number" min={1} max={Math.floor(MAX_THRESHOLD_MINUTES / factor)} step={unit === "minutes" ? 1 : "any"}
+                              value={Number.isInteger(Number(shown)) ? shown : (shown === "" ? "" : Number(shown))}
+                              aria-invalid={threshOk ? undefined : true}
+                              onChange={(e) => {
+                                const raw = Number(e.target.value);
+                                const minutes = Number.isFinite(raw) && raw > 0 ? Math.round(raw * factor) : Number.NaN;
+                                update(row.key, { thresholdMinutes: minutes });
+                              }}
+                              style={{ ...inputStyle, width: 80, textAlign: "end" }}
+                            />
+                            <label className="sr-only" htmlFor={`${headingId}-unit-${row.key}`}>Threshold unit for rule {n}</label>
+                            <select
+                              id={`${headingId}-unit-${row.key}`}
+                              value={unit}
+                              onChange={(e) => setThresholdUnit((prev) => ({ ...prev, [row.key]: e.target.value as "minutes" | "hours" | "days" }))}
+                              style={{ ...inputStyle, width: 96 }}
+                            >
+                              {THRESHOLD_UNITS.map((u) => <option key={u.key} value={u.key}>{u.label}</option>)}
+                            </select>
+                          </div>
+                          <span style={{ fontSize: 11, color: "var(--muted)" }} aria-live="polite">
+                            = {humanizeMinutes(row.thresholdMinutes)}
+                          </span>
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td>
                     <label className="sr-only" htmlFor={`${headingId}-role-${row.key}`}>Recipient role for rule {n}</label>
@@ -315,6 +416,15 @@ export function EscalationRulesEditor() {
                       <input type="checkbox" checked={row.reassign} onChange={(e) => update(row.key, { reassign: e.target.checked })} aria-label={`Reassign on escalation for rule ${n}`} />
                       {row.reassign ? "Yes" : "No"}
                     </label>
+                    {/* GAP-CRM-ESCALATION-RULES-04: explain what Reassign does.
+                        Per the scheduler (crm-service assignment/scheduler.ts),
+                        when on the lead is handed to the rule's configured
+                        escalation owner; when off (or no owner is configured)
+                        the lead is only flagged as escalated and the recipient
+                        above is notified. */}
+                    <span style={{ display: "block", fontSize: 11, color: "var(--muted)", marginTop: 2, maxWidth: 160 }}>
+                      When on, the lead is reassigned to the rule&apos;s escalation owner; otherwise it is only flagged and the recipient is notified.
+                    </span>
                   </td>
                   <td>
                     <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}>
@@ -338,6 +448,8 @@ export function EscalationRulesEditor() {
             })}
           </tbody>
         </table>
+        </div>
+        </>
       )}
 
       <div style={{ display: "flex", gap: 8, padding: 12 }}>

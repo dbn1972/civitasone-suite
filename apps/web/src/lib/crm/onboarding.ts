@@ -191,6 +191,31 @@ export function kycLabel(status: string): string {
   return isKycStatus(status) ? KYC_LABELS[status] : status;
 }
 
+/**
+ * GAP-CRM-ONBOARDING-06 / -DETAIL-07: map a STAGE_META/KYC_META `tone` to a
+ * shared StatusPill variant, so stage/KYC render as theme-safe tone pills
+ * rather than cross-platform-inconsistent emoji glyphs. The `.pill` variants
+ * (good/warn/bad/mut/info) follow the theme in both light and dark mode.
+ */
+export type OnbPillVariant = "good" | "warn" | "mut" | "bad" | "info";
+const TONE_TO_PILL: Record<string, OnbPillVariant> = {
+  success: "good",
+  danger: "bad",
+  warn: "warn",
+  info: "info",
+  neutral: "mut",
+};
+
+export function stagePillVariant(stage: string): OnbPillVariant {
+  const tone = isOnboardingStage(stage) ? STAGE_META[stage].tone : "neutral";
+  return TONE_TO_PILL[tone] ?? "info";
+}
+
+export function kycPillVariant(status: string): OnbPillVariant {
+  const tone = isKycStatus(status) ? KYC_META[status].tone : "neutral";
+  return TONE_TO_PILL[tone] ?? "info";
+}
+
 /* ================================================================= model === */
 
 export interface OnboardingCase {

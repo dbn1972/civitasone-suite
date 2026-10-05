@@ -272,6 +272,9 @@ export default function ImportContactsPage() {
         ...(c.company ? { company: c.company } : {}),
         leadStatus: c.leadStatus,
         marketingConsent: c.marketingConsent,
+        // DPDP consent record: the CSV column is marketing consent, captured via
+        // this import (crm-service requires purpose + channel on a grant).
+        ...(c.marketingConsent ? { consentPurpose: "marketing", consentChannel: "import" } : {}),
       }));
       // GAP-CRM-CONTACTS-IMPORT-05: chunk into batches of CHUNK_SIZE (the
       // backend bulk endpoint caps a request at 500) and aggregate the result.

@@ -1668,13 +1668,199 @@
     "orderNoRequiredError": "Enter the order number that sanctions this revision."
   },
   "crm": {
+    "loading": {
+      "account": "Loading account…",
+      "contact": "Loading contact",
+      "dashboardTitle": "CRM Dashboard",
+      "escalationRulesTitle": "Lead Escalation Rules",
+      "escalationRules": "Loading escalation rules…",
+      "form": "Loading form…",
+      "leadFormsTitle": "Website Lead Forms",
+      "leadFormsSubtitle": "Public form keys that turn website submissions into CRM leads with UTM attribution and consent checks.",
+      "backCrm": "CRM",
+      "leadReasonCodesTitle": "Lead Stage Reasons",
+      "leadReasonCodesSubtitle": "Manage the reason codes captured when a lead changes status (disqualify, re-open, …).",
+      "reasonCodes": "Loading reason codes…",
+      "leadScoringTitle": "Lead Scoring",
+      "leadScoringSubtitle": "Configure the weighted rules that drive automatic lead scores.",
+      "scoringRules": "Loading scoring rules…",
+      "linkedAccountsTitle": "Connected Accounts",
+      "onboarding": "Loading onboarding cases…",
+      "editOpportunityTitle": "Edit Opportunity",
+      "stageAgeingTitle": "Stage Ageing",
+      "rtiNewTitle": "New RTI Request",
+      "rtiNewSubtitle": "Log a Right to Information Act 2005 request.",
+      "backRti": "RTI Requests",
+      "rtiForm": "Loading the RTI request form…",
+      "serviceRequest": "Loading the service request…",
+      "serviceRequestTitle": "Service Request",
+      "backServiceRequests": "Service Requests",
+      "requestDetails": "Request details",
+      "descriptionTitle": "Description",
+      "statusTitle": "Status",
+      "serviceRequests": "Loading service requests…",
+      "serviceRequestsSubtitle": "Citizen service requests — track from intake to closure.",
+      "newServiceRequest": "Loading the new service request form…",
+      "newServiceRequestTitle": "New Service Request",
+      "customFields": "Loading custom fields…",
+      "dataQuality": "Loading data quality…",
+      "agentWorkloadTitle": "Agent Workload",
+      "assignmentDirectoryTitle": "Assignment Directory",
+      "assignmentRulesTitle": "Assignment Rules"
+    },
+    "dealsNew": {
+      "title": "New Engagement",
+      "subtitle": "Create an engagement and place it on the pipeline.",
+      "backLabel": "Engagements",
+      "errorBack": "Back",
+      "created": "Engagement created.",
+      "createdToast": "Engagement created successfully.",
+      "nameLabel": "Engagement name",
+      "namePlaceholder": "e.g. Statewide LMS rollout",
+      "nameRequired": "Enter an engagement name.",
+      "amountInvalid": "Enter a valid amount (rupees, up to 2 decimal places).",
+      "valueLabel": "Value (₹)",
+      "valuePlaceholder": "e.g. 1234567.89",
+      "valuePreview": "Will be stored as {value}",
+      "valueHint": "Enter a valid rupee amount (up to 2 decimal places).",
+      "stageLabel": "Stage",
+      "contactLabel": "Contact (optional)",
+      "contactPlaceholder": "Search contacts by name or organisation…",
+      "contactHint": "Link an existing contact, or leave blank to create the deal without one.",
+      "closeLabel": "Expected close date (optional)",
+      "probabilityLabel": "Probability (%)",
+      "creating": "Creating…",
+      "create": "Create engagement"
+    },
+    "consent": {
+      "incompleteNew": "Choose the purpose and how consent was captured before saving.",
+      "incompleteEdit": "Select a purpose and the channel this consent was captured through.",
+      "legend": "Marketing consent (DPDP Act, 2023)",
+      "grant": "I consent to marketing communications",
+      "purposeLabel": "Purpose *",
+      "selectPurpose": "Select a purpose…",
+      "channelLabel": "Captured via *",
+      "selectChannel": "Select a channel…",
+      "lastRecorded": "Last recorded {when}.",
+      "purposes": {
+        "marketing": "Marketing communications",
+        "transactional": "Transactional messages",
+        "service_updates": "Service updates",
+        "research": "Research / surveys"
+      },
+      "channels": {
+        "web_form": "Web form",
+        "email": "Email",
+        "phone": "Phone",
+        "in_person": "In person",
+        "import": "Bulk import"
+      }
+    },
+    "postPeriod": {
+      "title": "Post a reporting period",
+      "periodStart": "Period start",
+      "periodEnd": "Period end (optional)",
+      "spend": "Spend ({currency})",
+      "revenue": "Revenue ({currency})",
+      "responses": "Responses",
+      "post": "Post period",
+      "posting": "Posting…",
+      "submitted": "Period submitted. Figures will appear once processing completes."
+    },
+    "editOpportunity": {
+      "title": "Edit Opportunity",
+      "subtitle": "Update value, probability, product, quantity, competitors, next step and expected close date.",
+      "backLabel": "Opportunities",
+      "loading": "Loading opportunity…",
+      "loadFailedTitle": "Couldn't load this opportunity",
+      "loadFailedMessage": "This is usually temporary. Try again.",
+      "retry": "Retry",
+      "notFoundTitle": "Opportunity not found",
+      "notFoundMessage": "This opportunity does not exist or has been removed.",
+      "back": "Back to opportunities"
+    },
+    "dealDetail": {
+      "title": "Engagement Detail",
+      "notFoundTitle": "Engagement not found",
+      "notFoundMessage": "This engagement does not exist or has been removed."
+    },
     "title": "Citizen Services",
+    "dashboard": {
+      "title": "CRM Dashboard",
+      "subtitle": "Government stakeholder and vendor interaction register"
+    },
+    "dataQuality": {
+      "title": "Data Quality"
+    },
     "grievances": "Grievances",
     "requests": "Requests",
     "complaints": "Complaints",
     "status": "Status",
     "resolved": "Resolved",
     "open": "Open",
+    "hub": {
+      "title": "CRM",
+      "subtitle": "Pipeline and customer operations workspace.",
+      "sections": {
+        "core": "Core",
+        "pipeline": "Engagement Pipeline",
+        "service": "Service & Engagement",
+        "products": "Products & Pricing",
+        "configuration": "Configuration"
+      },
+      "tiles": {
+        "dashboard": { "title": "Dashboard", "description": "Overview metrics and activity" },
+        "contacts": { "title": "Contacts", "description": "Vendor, beneficiary, and stakeholder contacts" },
+        "accounts": { "title": "Accounts", "description": "Organisations and institutions" },
+        "deals": { "title": "Vendor / Stakeholder Engagements", "description": "Engagements and procurement opportunities" },
+        "activities": { "title": "Activities", "description": "Calls, meetings, and follow-ups" },
+        "pipelineBoard": { "title": "Pipeline Board", "description": "Visual kanban of deal stages" },
+        "pipelines": { "title": "Engagement Pipelines", "description": "Configure pipeline stages" },
+        "opportunities": { "title": "Opportunities", "description": "Track opportunity funnel" },
+        "ageing": { "title": "Stage Ageing", "description": "Stale opportunity alerts" },
+        "forecast": { "title": "Procurement Pipeline Forecast", "description": "Pipeline procurement projections" },
+        "quotations": { "title": "Quotations", "description": "Quotes and proposals" },
+        "onboarding": { "title": "Customer Onboarding", "description": "Post-deal onboarding workflows" },
+        "grievances": { "title": "Grievances", "description": "Citizen and vendor grievance tracking" },
+        "serviceRequests": { "title": "Service Requests", "description": "Support requests and resolutions" },
+        "campaigns": { "title": "Campaigns", "description": "Outreach campaign performance" },
+        "voiceOfCustomer": { "title": "Voice of Citizen", "description": "Feedback and sentiment" },
+        "health": { "title": "Account Health", "description": "Relationship health scores" },
+        "controlTower": { "title": "Control Tower", "description": "Real-time operations overview" },
+        "leadForms": { "title": "Website Lead Forms", "description": "Public form submissions" },
+        "products": { "title": "Product Catalogue", "description": "Services and offerings" },
+        "priceBooks": { "title": "Price Books", "description": "Rate cards and pricing tiers" },
+        "documents": { "title": "Documents", "description": "Shared documents and attachments" },
+        "documentTypes": { "title": "Document Types", "description": "Document classification" },
+        "serviceTypes": { "title": "Service Types", "description": "Service-request taxonomy" },
+        "grievanceCategories": { "title": "Grievance Categories", "description": "Grievance taxonomy" },
+        "customFields": { "title": "Custom Fields", "description": "Extend data model" },
+        "dedupRules": { "title": "Matching Rules", "description": "Deduplication logic" },
+        "leadScoring": { "title": "Lead Scoring", "description": "Automated lead prioritisation" },
+        "qualificationFrameworks": { "title": "Qualification Frameworks", "description": "Deal qualification criteria" },
+        "leadReasonCodes": { "title": "Lead Stage Reasons", "description": "Stage transition reasons" },
+        "assignmentRules": { "title": "Assignment Rules", "description": "Auto-assign logic" },
+        "assignmentDirectory": { "title": "Assignment Directory", "description": "Agent mapping" },
+        "agentWorkload": { "title": "Agent Workload", "description": "Capacity and utilisation" },
+        "escalationRules": { "title": "Escalation Rules", "description": "SLA breach escalation" },
+        "taskEscalation": { "title": "Task Escalation", "description": "Overdue task routing" },
+        "linkedAccounts": { "title": "Connected Accounts", "description": "External integrations" },
+        "dataQuality": { "title": "Data Quality", "description": "Data completeness scoring" }
+      }
+    },
+    "accounts": {
+      "subtitle": "Organisation master — departments, PSUs, vendors and institutional accounts with their reporting hierarchy."
+    },
+    "activities": {
+      "title": "Activities",
+      "subtitle": "Calls, meetings, site visits and correspondence with citizens, vendors and government officials.",
+      "statTotal": "Total Activities",
+      "logButton": "+ Log Activity",
+      "logHeading": "Log an activity",
+      "logSaved": "Activity logged.",
+      "tableHeading": "Activities",
+      "emptyTitle": "No activities yet"
+    },
     "health": {
       "title": "Account Health",
       "subtitle": "Accounts scored at risk or critical, ordered by urgency.",
@@ -12293,6 +12479,7 @@
     "unresolvedAccount": "Account {id}"
   },
   "crmAccountHealthDetail": {
+    "recomputedAt": "Computed {when}. The nightly health-scoring run brings the stored value back in line with the signals.",
     "titleWithId": "Account health · {id}",
     "noScoreTitle": "No health score yet",
     "noScoreMessage": "This account has not been scored. A score appears once the health signals for it have been collected and a recompute has run.",
@@ -12460,11 +12647,15 @@
     "typeChangeConfirm": "Change type"
   },
   "crmDataQualityView": {
+    "openRecord": "Open {kind} {id}",
+    "kindContact": "contact record",
+    "kindAccount": "account record",
     "unnamedRecord": "Unnamed record",
     "distributionBarAria": "{label}: {pct} of records"
   },
   "crmDealDetail": {
     "steps": {
+      "qualification": "Qualification",
       "prospecting": "Prospecting",
       "proposal": "Proposal",
       "negotiation": "Negotiation",
@@ -12480,6 +12671,18 @@
     "loadArea": "this deal"
   },
   "crmDedupRulesEditor": {
+    "field": {
+      "email": "Email",
+      "phone": "Phone",
+      "gstin": "GSTIN",
+      "pan": "PAN",
+      "name": "Name",
+      "company": "Company"
+    },
+    "match": {
+      "exact": "Exact match",
+      "fuzzy": "Fuzzy match"
+    },
     "invalidNumbers": "Weight and threshold must be whole numbers from 0 to 100. Fix the highlighted rules before saving.",
     "notLoaded": "Rules could not be loaded, so they cannot be saved yet. Retry the load first.",
     "heading": "Matching rules",
@@ -12556,6 +12759,7 @@
     "closeDescription": "Administrative closure — grievance is marked DISPOSED. Requires administrator rights."
   },
   "crmGrievancesList": {
+    "statFirstAppeal": "First appeal (this page)",
     "showing": "Showing {from}–{to} of {total}",
     "pagesAriaLabel": "Grievance register pages",
     "previous": "← Previous",
@@ -12662,6 +12866,7 @@
     "exportConfirmLabel": "Download CSV"
   },
   "crmLeadScoreRulesEditor": {
+    "removedRules": "{count, plural, one {# rule will be removed and will no longer contribute to any lead score.} other {# rules will be removed and will no longer contribute to any lead score.}}",
     "heading": "Scoring rules",
     "paramsMustBeObject": "Params must be a JSON object.",
     "conflictChanged": "These scoring rules were changed by another admin. Reload to see the latest, then re-apply your changes.",
@@ -12691,6 +12896,7 @@
     "retry": "Retry"
   },
   "crmOnboardingList": {
+    "retry": "Retry",
     "colCustomerDeal": "Customer / Deal",
     "unnamedCase": "Unnamed case",
     "ref": "Ref {id}",
@@ -12749,6 +12955,26 @@
     "undatedNote": "{count} {count, plural, one {deal has} other {deals have}} no close date and {count, plural, one {is} other {are}} not shown here."
   },
   "crmOverdueTaskAlerts": {
+    "statLabel": "Overdue tasks",
+    "tableHeading": "Overdue open tasks",
+    "loading": "Loading overdue tasks…",
+    "unavailable": "— Overdue tasks unavailable right now.",
+    "thisTask": "this task",
+    "reasonLabel": "Reason (recorded in the audit trail)",
+    "reasonShort": "At least {min} characters.",
+    "cancel": "Cancel",
+    "reassign": "Reassign",
+    "reassigning": "Reassigning…",
+    "reassignTitle": "Reassign task",
+    "reassignIntro": "Give <strong>{subject}</strong> to someone else.",
+    "noUsersToReassign": "No other users available to reassign to",
+    "newOwner": "New owner",
+    "selectUser": "Select a user…",
+    "snooze": "Snooze",
+    "snoozing": "Snoozing…",
+    "snoozeTitle": "Snooze task",
+    "snoozeIntro": "Push the due date for <strong>{subject}</strong> to a later day.",
+    "newDueDate": "New due date",
     "ownerUnavailable": "Assigned (name unavailable)",
     "emptyTitle": "Nothing overdue",
     "emptyMessage": "No open tasks are past their due time.",
@@ -12818,6 +13044,11 @@
     "resolveFailed": "Couldn’t resolve the price book just now. Try Resolve again."
   },
   "crmProductCatalogueEditor": {
+    "currency": "Currency",
+    "skuPlaceholder": "SKU",
+    "duplicateCode": "Duplicate code — codes must be unique.",
+    "codeUsed": "Product code “{code}” is already used by another product — codes must be unique.",
+    "currencyForProduct": "Currency for product {n}",
     "colLastChanged": "Last changed",
     "lastChangedAria": "Last changed for product {n}",
     "unknownUser": "Unknown",
@@ -12855,6 +13086,8 @@
     "colActions": "Actions"
   },
   "crmQualificationFrameworksEditor": {
+    "added": "New framework added — enter its name below.",
+    "namePlaceholder": "e.g. BANT — Government sales",
     "colQuestion": "Question",
     "colWeight": "Weight",
     "colShare": "Share",
@@ -12940,6 +13173,7 @@
     "quotationAccepted": "Quotation accepted."
   },
   "crmReasonCodesEditor": {
+    "title": "Lead Stage Reasons",
     "heading": "Reason codes",
     "conflictChanged": "These reason codes were changed by another admin. Reload to see the latest, then re-apply your changes.",
     "couldNotSave": "Could not save the reason codes.",
@@ -13166,6 +13400,7 @@
     "priority_low": "Low"
   },
   "crmServiceRequestNew": {
+    "phoneHint": "Enter a 10-digit mobile number.",
     "contactRequired": "Enter a phone number or an email so the citizen can be contacted about this request.",
     "dpdpNote": "Contact details are collected only to process and update this request (Digital Personal Data Protection Act, 2023). Provide at least one of phone or email so the citizen can be reached.",
     "phone": "Phone",
@@ -13586,6 +13821,7 @@
     }
   },
   "crmGrievanceDetail": {
+    "assignedId": "Assigned (ID {id}…)",
     "title": "Grievance",
     "backLabel": "Grievances",
     "notFoundTitle": "Grievance not found",

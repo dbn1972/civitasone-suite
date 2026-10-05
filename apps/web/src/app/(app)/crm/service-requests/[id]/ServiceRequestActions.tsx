@@ -110,6 +110,7 @@ export function ServiceRequestActions({
           confirmDescription={t("markPendingDescription")}
           requireReason
           reasonLabel={t("markPendingReason")}
+          minReasonLength={10}
           onConfirm={(reason) => setStatus("pending", reason)}
         />
       )}
@@ -121,18 +122,27 @@ export function ServiceRequestActions({
           confirmDescription={t("resolveDescription")}
           requireReason
           reasonLabel={t("resolveReason")}
+          minReasonLength={10}
           onConfirm={(reason) => setStatus("resolved", reason)}
         />
       )}
-      <ActionButton
-        label={t("close")}
-        danger
-        confirmTitle={t("closeTitle")}
-        confirmDescription={t("closeDescription")}
-        requireReason
-        reasonLabel={t("closeReason")}
-        onConfirm={(reason) => setStatus("closed", reason)}
-      />
+      {/* GAP-CRM-SERVICE-REQUESTS-DETAIL-06: Close is hidden while the request
+          is still 'open' (never worked). It must be started/resolved first, or
+          cancelled if withdrawn — a never-worked request should not be "closed".
+          A mandatory, ≥10-char closing remark is required to avoid one-character
+          sign-offs. */}
+      {status !== "open" && (
+        <ActionButton
+          label={t("close")}
+          danger
+          confirmTitle={t("closeTitle")}
+          confirmDescription={t("closeDescription")}
+          requireReason
+          reasonLabel={t("closeReason")}
+          minReasonLength={10}
+          onConfirm={(reason) => setStatus("closed", reason)}
+        />
+      )}
       {/* GAP-CRM-SERVICE-REQUESTS-DETAIL-05: "cancelled" is a supported terminal
           state (service STATUS enum + closed_at handling), but nothing set it.
           Offer Cancel as a danger action with a mandatory reason; it is distinct
@@ -144,6 +154,7 @@ export function ServiceRequestActions({
         confirmDescription={t("cancelDescription")}
         requireReason
         reasonLabel={t("cancelReason")}
+        minReasonLength={10}
         onConfirm={(reason) => setStatus("cancelled", reason)}
       />
     </div>

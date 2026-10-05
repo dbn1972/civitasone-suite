@@ -1293,6 +1293,16 @@ export type ContactDetail = {
   city?: string;
   leadStatus?: string;
   marketingConsent?: boolean;
+  /** GAP-CRM-CONTACTS-DETAIL-EDIT-07: DPDP consent record + editable identifiers
+   *  so the edit form can seed and update them, not just capture at creation. */
+  consentPurpose?: string | null;
+  consentChannel?: string | null;
+  consentDate?: string | null;
+  consentUpdatedAt?: string | null;
+  gstin?: string | null;
+  pan?: string | null;
+  pincode?: string | null;
+  leadSource?: string | null;
   lastActivityDate?: string;
   /** LQ-003 classification / segmentation. */
   temperature?: string;

@@ -74,7 +74,9 @@ function SlaBadge({ status, dueAt }: { status: string; dueAt: string | null }) {
 }
 
 // ---------------------------------------------------------------------------
-// Section label
+// Section label — GAP-CRM-RTI-06: shared via @/lib/crm/rti so the table, the
+// detail page and the new-request form can never drift. The full statutory
+// label is used everywhere so all three screens read identically.
 // ---------------------------------------------------------------------------
 
 function sectionLabel(s: string, t: (key: string) => string) {

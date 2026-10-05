@@ -39,6 +39,45 @@ function fmt(dt?: string) {
   });
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * GAP-CRM-GRIEVANCES-DETAIL-08: assignedTo is an identity-service user id
+ * (crm.grievances.assigned_to is a UUID), not a person's name. Show a name when
+ * resolved, else a short "Assigned (ID …)" label rather than a raw UUID.
+ */
+function formatAssignee(t: (key: string, values?: Record<string, string>) => string, assignedTo?: string, assigneeName?: string | null): string {
+  if (!assignedTo) return t("unassigned");
+  if (assigneeName) return assigneeName;
+  if (UUID_RE.test(assignedTo)) return t("assignedId", { id: assignedTo.slice(0, 8) });
+  return assignedTo;
+}
+
+/**
+ * GAP-CRM-GRIEVANCES-DETAIL-08: resolve `assignedTo` to a display name through
+ * the identity users endpoint. If identity refuses (403 for a non-admin) or
+ * fails, fall back to the short label rather than printing a raw UUID.
+ */
+async function resolveAssigneeName(assignedTo?: string): Promise<string | null> {
+  if (!assignedTo || !UUID_RE.test(assignedTo)) return null;
+  const res = await fetchJson<unknown, string | null>(`/api/identity/users/${assignedTo}`, null, {
+    revalidateSeconds: 300,
+    telemetryKey: "crm.grievance.assignee",
+    mapResponse: (p) => {
+      const r = (p && typeof p === "object" && "data" in (p as object) ? (p as { data: unknown }).data : p) as
+        | Record<string, unknown>
+        | null;
+      if (!r || typeof r !== "object") return null;
+      for (const k of ["name", "displayName", "fullName", "email"]) {
+        const v = r[k];
+        if (typeof v === "string" && v.trim()) return v.trim();
+      }
+      return null;
+    },
+  });
+  return res.source === "api" && typeof res.data === "string" ? res.data : null;
+}
+
 function PriorityBadge({ priority, label }: { priority: string; label: string }) {
   const color =
     priority === "urgent" ? "var(--bad)"
@@ -123,6 +162,7 @@ export default async function GrievanceDetailPage({
   );
   const g = result.data;
   const source = result.source;
+  const assigneeName = await resolveAssigneeName(g?.assignedTo);
 
   const roles = getSessionRoles();
   // GAP-CRM-GRIEVANCES-DETAIL-02: the server decides whether to offer Close.
@@ -211,7 +251,7 @@ export default async function GrievanceDetailPage({
               <dt style={{ color: "var(--ink2)" }}>{t("status")}</dt>
               <dd><StatusPill status={g.status} /></dd>
               <dt style={{ color: "var(--ink2)" }}>{t("assignedTo")}</dt>
-              <dd>{g.assignedTo ?? t("unassigned")}</dd>
+              <dd>{formatAssignee(t, g.assignedTo, assigneeName)}</dd>
               <dt style={{ color: "var(--ink2)" }}>{t("dueBy")}</dt>
               <dd>{fmt(g.dueAt)}</dd>
               {/* GAP-CRM-GRIEVANCES-DETAIL-04: show the department a grievance

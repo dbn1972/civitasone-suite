@@ -169,4 +169,84 @@ describe("PipelineEditor (OP-002)", () => {
     fireEvent.click(help);
     expect(await screen.findByText(/requires an explicit review/i)).toBeInTheDocument();
   });
+
+  // GAP-CRM-PIPELINES-06: a NEW stage's persisted key is slugified from its name
+  // (not an opaque stage_N), so a stage named "Proposal" saves with key "proposal".
+  it("derives a new stage's key from its name on save (not stage_N)", async () => {
+    vi.mocked(op.getPipelines).mockResolvedValue({ data: [], source: "api" });
+    vi.mocked(op.createPipeline).mockResolvedValue(undefined);
+    render(<PipelineEditor />);
+    await waitFor(() => expect(screen.getByText(/no pipelines yet/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /new pipeline/i }));
+    fireEvent.change(screen.getByLabelText(/pipeline name/i), { target: { value: "Sales" } });
+    fireEvent.change(screen.getByLabelText(/stage 1 name/i), { target: { value: "Proposal" } });
+    fireEvent.click(screen.getByRole("button", { name: /create pipeline/i }));
+    await waitFor(() => expect(op.createPipeline).toHaveBeenCalled());
+    const payload = vi.mocked(op.createPipeline).mock.calls[0][0];
+    expect(payload.stages[0].key).toBe("proposal");
+    expect(payload.stages[0].key).not.toMatch(/^stage_/);
+    expect(payload.stages[0].key).not.toMatch(/^__new_/);
+  });
+
+  // GAP-CRM-PIPELINES-06: renaming an ALREADY-PERSISTED stage must NOT change its
+  // key (keys are immutable once saved, so stage limits keyed to them never orphan).
+  it("keeps a persisted stage's key unchanged when it is renamed", async () => {
+    vi.mocked(op.getPipelines).mockResolvedValue({ data: [pipeline], source: "api" });
+    vi.mocked(op.updatePipeline).mockResolvedValue(undefined);
+    render(<PipelineEditor />);
+    await waitFor(() => expect(screen.getByText("Enterprise")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
+    // Rename the stage "Qualify" (persisted key "qual") to "Discovery".
+    fireEvent.change(screen.getByLabelText(/stage 1 name/i), { target: { value: "Discovery" } });
+    fireEvent.click(screen.getByRole("button", { name: /save pipeline/i }));
+    await waitFor(() => expect(op.updatePipeline).toHaveBeenCalled());
+    const payload = vi.mocked(op.updatePipeline).mock.calls[0][1];
+    expect(payload.stages[0].name).toBe("Discovery");
+    // Key is still "qual", NOT re-slugified to "discovery".
+    expect(payload.stages[0].key).toBe("qual");
+  });
+
+  // GAP-CRM-PIPELINES-05: switching to Edit on another pipeline while the current
+  // draft has unsaved edits prompts a discard confirm rather than silently losing them.
+  it("warns before discarding an unsaved draft when editing another pipeline", async () => {
+    const two: op.Pipeline[] = [
+      pipeline,
+      { id: "p2", name: "SMB", enabled: true, stages: [{ key: "s1", name: "Lead", mandatoryFields: [], gate: false }] },
+    ];
+    vi.mocked(op.getPipelines).mockResolvedValue({ data: two, source: "api" });
+    render(<PipelineEditor />);
+    await waitFor(() => expect(screen.getByText("Enterprise")).toBeInTheDocument());
+    // Edit the first pipeline and make it dirty.
+    fireEvent.click(screen.getAllByRole("button", { name: /^edit$/i })[0]);
+    fireEvent.change(screen.getByLabelText(/pipeline name/i), { target: { value: "Enterprise CHANGED" } });
+    // Now click Edit on the second pipeline -> discard confirm appears.
+    fireEvent.click(screen.getAllByRole("button", { name: /^edit$/i })[1]);
+    expect(await screen.findByText(/discard unsaved changes/i)).toBeInTheDocument();
+    // Cancelling keeps the dirty draft intact.
+    fireEvent.click(screen.getByRole("button", { name: /keep editing/i }));
+    expect((screen.getByLabelText(/pipeline name/i) as HTMLInputElement).value).toBe("Enterprise CHANGED");
+  });
+
+  it("does NOT warn when switching editors with no unsaved changes", async () => {
+    const two: op.Pipeline[] = [
+      pipeline,
+      { id: "p2", name: "SMB", enabled: true, stages: [{ key: "s1", name: "Lead", mandatoryFields: [], gate: false }] },
+    ];
+    vi.mocked(op.getPipelines).mockResolvedValue({ data: two, source: "api" });
+    render(<PipelineEditor />);
+    await waitFor(() => expect(screen.getByText("Enterprise")).toBeInTheDocument());
+    fireEvent.click(screen.getAllByRole("button", { name: /^edit$/i })[0]);
+    // No edits made; switching to the other pipeline must open it directly.
+    fireEvent.click(screen.getAllByRole("button", { name: /^edit$/i })[1]);
+    expect(screen.queryByText(/discard unsaved changes/i)).not.toBeInTheDocument();
+    expect((screen.getByLabelText(/pipeline name/i) as HTMLInputElement).value).toBe("SMB");
+  });
+
+  it("focuses the pipeline name input when an editor opens (GAP-CRM-PIPELINES-05)", async () => {
+    vi.mocked(op.getPipelines).mockResolvedValue({ data: [pipeline], source: "api" });
+    render(<PipelineEditor />);
+    await waitFor(() => expect(screen.getByText("Enterprise")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
+    await waitFor(() => expect(screen.getByLabelText(/pipeline name/i)).toHaveFocus());
+  });
 });

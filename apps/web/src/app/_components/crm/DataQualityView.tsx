@@ -30,7 +30,13 @@ const FILTER_LABEL: Record<DqFilter, string> = {
   stale: "Stale records",
 };
 
-/** Drill-down link base per entity so a record row opens its detail page. */
+/**
+ * Drill-down link base per entity so a record row opens its detail page.
+ * GAP-CRM-DATA-QUALITY-04: there is no separate /crm/leads/:id screen — a lead
+ * is stored as a contact in crm-service, so a flagged lead opens its CONTACT
+ * record (same as the contacts scope). The row link title spells this out so
+ * the two scopes are not read as two datasets that happen to share a screen.
+ */
 const DETAIL_BASE: Record<DqEntity, string> = {
   contacts: "/crm/contacts/",
   leads: "/crm/contacts/",
@@ -157,6 +163,20 @@ export function DataQualityView() {
 
       <div className="card" style={{ marginTop: 12 }}>
         <div className="card-h"><h3>{FILTER_LABEL[filter]} — {ENTITY_LABEL[entity]}</h3></div>
+        {/*
+          GAP-CRM-DATA-QUALITY-06: the quality score was shown as a bare
+          percentage with no explanation of how it is derived or what each
+          filter means. Describe them in plain language. Exact field weights
+          and freshness windows are configured server-side; this states the
+          general definition rather than inventing specific thresholds.
+        */}
+        <p style={{ fontSize: 12, color: "var(--muted)", padding: "0 12px", margin: "4px 0" }}>
+          Quality score is the share of a record&apos;s expected fields that are present and valid
+          (100% = complete and well-formed). <strong>Missing data</strong> = required fields left
+          blank; <strong>Invalid format</strong> = fields that fail format checks (e.g. phone, PIN,
+          GSTIN, PAN); <strong>Stale records</strong> = records not updated within the office&apos;s
+          freshness window.
+        </p>
         {isLoading || recordsReloading ? (
           <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)", padding: 12 }}>Loading records…</p>
         ) : isError ? (
@@ -178,7 +198,7 @@ export function DataQualityView() {
               {records.map((r) => (
                 <tr key={r.id}>
                   <td>
-                    <a href={`${DETAIL_BASE[entity]}${r.id}`} title={r.id}>
+                    <a href={`${DETAIL_BASE[entity]}${r.id}`} title={t("openRecord", { kind: t(entity === "accounts" ? "kindAccount" : "kindContact"), id: r.id })}>
                       {r.name ?? t("unnamedRecord")}
                     </a>
                     <div style={{ fontSize: 11, color: "var(--muted)" }}>{r.id}</div>

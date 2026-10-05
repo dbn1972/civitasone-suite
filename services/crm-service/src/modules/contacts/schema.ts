@@ -61,6 +61,14 @@ export const contacts = crmSchema.table("contacts", {
   tags: jsonb("tags").$type<string[]>().notNull().default([]),
   marketingConsent: boolean("marketing_consent").notNull().default(false),
   consentDate: date("consent_date"),
+  // GAP-CRM-CONTACTS-DETAIL-EDIT-07: DPDP consent record — the purpose consent
+  // was given for and the channel it was captured through, plus the exact
+  // instant the consent state last changed (consent_date is a bare date).
+  // All nullable (migration 0105); the application requires purpose+channel
+  // when consent is GRANTED, the DB stays permissive for prior/import rows.
+  consentPurpose: varchar("consent_purpose", { length: 32 }),
+  consentChannel: varchar("consent_channel", { length: 16 }),
+  consentUpdatedAt: timestamp("consent_updated_at", { withTimezone: true }),
   // LM-002 attribution (migration 0038). All nullable: a lead captured before
   // LM-002, or one that arrived by phone, genuinely has no campaign attribution and
   // inventing a placeholder would corrupt campaign ROI reporting.
@@ -153,6 +161,9 @@ export type ContactView = {
   tags: string[];
   marketingConsent: boolean;
   consentDate: string | null;
+  consentPurpose: string | null;
+  consentChannel: string | null;
+  consentUpdatedAt: string | null;
   lastActivityAt: string | null;
   status: string;
   version: number;
@@ -179,6 +190,18 @@ export type ContactDetailView = {
   expectedValueMinor?: string;
   leadStatus?: string;
   marketingConsent?: boolean;
+  /** GAP-CRM-CONTACTS-DETAIL-EDIT-07: DPDP consent record so the edit form can
+   *  seed the ConsentField (purpose/channel) and show the last-recorded time. */
+  consentPurpose?: string;
+  consentChannel?: string;
+  consentDate?: string;
+  consentUpdatedAt?: string;
+  /** GAP-CRM-CONTACTS-DETAIL-EDIT-07: editable business identifiers + lead source
+   *  seeded into the edit form (the New form captures these at creation). */
+  gstin?: string;
+  pan?: string;
+  pincode?: string;
+  leadSource?: string;
   lastActivityDate?: string;
   tags: string[];
   deals: Array<{ id: string; dealName: string; stage: string; amount: number }>;

@@ -1,14 +1,15 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
 import { MergeButton } from "../../../_components/crm/MergeButton";
 import type { MergeOption } from "../../../_components/crm/MergeDialog";
 import { getCrmAccounts } from "../../../_data/loaders";
-import { getTranslations } from "next-intl/server";
 import { AccountsTable } from "./AccountsTable";
 import { AccountHierarchy } from "./AccountHierarchy";
 import { NewAccountForm } from "./NewAccountForm";
 import { countSubsidiaries } from "./hierarchy";
 
 export default async function Page() {
+  const tl = await getTranslations("crm.accounts");
   const { data: accounts, source, truncated, pageLimit = 200, total = null } = await getCrmAccounts();
 
   const t = await getTranslations("crmAccountsPage");
@@ -38,7 +39,7 @@ export default async function Page() {
     <>
       <PageHeader
         title="Accounts"
-        subtitle="Organisation master — departments, PSUs, vendors and institutional accounts with their reporting hierarchy • संगठन पंजी"
+        subtitle={tl("subtitle")}
         back="/crm"
         backLabel="CRM"
         actions={<NewAccountForm accounts={accounts} />}

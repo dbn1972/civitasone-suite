@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { DataTable, Segmented, EmptyState, StatCard, StatGrid } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
-import { formatMoney, humanizeStatus } from "@/lib/formatters";
+import { formatMoney, formatIndianDate, humanizeStatus } from "@/lib/formatters";
 
 type Deal = {
   id: string;
@@ -18,6 +18,10 @@ type Deal = {
   stage: string;
   status: string;
   owner: string;
+  // GAP-CRM-DEALS-07: close date (ISO) and win probability are mapped by
+  // mapDealSummaries but were never surfaced; expose them so the table can.
+  closeDate?: string | null;
+  probability?: number;
 } & Record<string, unknown>;
 
 type DealRow = {
@@ -30,6 +34,9 @@ type DealRow = {
   amount: string;
   stage: string;
   owner: string;
+  // GAP-CRM-DEALS-07: 'Expected close' (formatted) and 'Probability' columns.
+  closeDate: string;
+  probability: number;
 };
 
 // GAP-CRM-DEALS-01: the Stage column is driven by a canonical-key -> label map
@@ -119,27 +126,16 @@ export function DealsTable({ deals, source = "api" }: { deals: Deal[]; source?: 
       amount: d.amount,
       stage: stageLabel(d.stage, (k) => t(k)),
       owner: d.owner,
+      // GAP-CRM-DEALS-07: Indian-formatted expected close date ("—" when none),
+      // and the win probability as a whole-number percentage.
+      closeDate: d.closeDate ? formatIndianDate(d.closeDate) : "—",
+      probability: typeof d.probability === "number" ? d.probability : 0,
     }));
 
-  function exportCsv() {
-    const header = ["Engagement", t("contactCompany"), "Value", "Stage", "Owner"];
-    const lines = tableRows.map((r) =>
-      [r.dealName, r.account, formatMoney(r.amount), r.stage, r.owner]
-        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
-        .join(","),
-    );
-    const csv = [header.join(","), ...lines].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `engagements-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-  // Keep a reference so an accidental unused-var lint never fires if the inline
-  // DataTable export is used instead; exportCsv remains available for callers.
-  void exportCsv;
+  // GAP-CRM-DEALS-06: a bespoke exportCsv() used to live here. It was dead code
+  // (nothing referenced it) that duplicated DataTable's own CSV export — the
+  // working export is the DataTable `exportable` button below, which formats
+  // money via formatMoney. The dead function has been removed.
 
   // GAP-CRM-DEALS-05: the column shows contactName ?? company (a person or an
   // organisation), so it is "Contact / Company", not "Account", and the name
@@ -191,6 +187,8 @@ export function DealsTable({ deals, source = "api" }: { deals: Deal[]; source?: 
               { key: "account", label: t("contactCompany"), render: contactCell },
               { key: "amount", label: "Value", align: "right", cellType: "amount" },
               { key: "stage", label: "Stage", cellType: "status" },
+              { key: "closeDate", label: "Expected close" },
+              { key: "probability", label: "Probability", align: "right", render: (row) => `${row.probability}%` },
               { key: "owner", label: "Owner" },
             ]}
             rows={tableRows}

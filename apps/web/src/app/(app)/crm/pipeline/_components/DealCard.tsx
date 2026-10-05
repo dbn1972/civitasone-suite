@@ -44,7 +44,7 @@ export function DealCard({ deal, isMoving, isDragging, onDragStart, onKeyboardMo
       onKeyDown={handleKeyDown}
       tabIndex={0}
       role="button"
-      aria-label={`Engagement: ${deal.name}, value ${deal.valueDisplay}, likelihood ${deal.probability}%, ${deal.contactName ? `assignee ${deal.contactName}` : "unassigned"}. Use left and right arrow keys to move between stages.`}
+      aria-label={`Engagement: ${deal.name}, value ${deal.valueDisplay}, likelihood ${deal.probability}%, ${deal.contactName ? `assignee ${deal.contactName}` : "unassigned"}. Use left and right arrow keys to move between stages; Tab to the engagement name and press Enter to open its record.`}
       aria-roledescription="draggable engagement card"
       className={`cursor-grab rounded-lg border p-3 shadow-sm transition-all select-none ${
         isDragging
@@ -55,11 +55,15 @@ export function DealCard({ deal, isMoving, isDragging, onDragStart, onKeyboardMo
       } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1`}
     >
       {/* Engagement name */}
+      {/* GAP-CRM-PIPELINE-06: the link was tabIndex={-1}, so keyboard users
+          could move a card but never open its record. It is now in the tab
+          order (Tab reaches it, Enter navigates). stopPropagation keeps a click
+          on the link from also triggering the card, and the card's own keydown
+          only handles arrow keys, so focus on the link does not conflict. */}
       <a
         href={`/crm/deals/${deal.id}`}
-        className="text-sm font-medium text-slate-900 hover:text-blue-700 hover:underline"
+        className="text-sm font-medium text-slate-900 hover:text-blue-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
         onClick={(e) => e.stopPropagation()}
-        tabIndex={-1}
         draggable={false}
       >
         {deal.name}

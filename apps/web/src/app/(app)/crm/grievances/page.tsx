@@ -98,7 +98,7 @@ export default async function GrievancesPage({ searchParams }: { searchParams?: 
 
       <StatGrid>
         <StatCard icon="🔴" iconBg="color-mix(in srgb, var(--bad) 12%, transparent)" label={t("statOpen")} value={stat(open)} />
-        <StatCard icon="⚠️" iconBg="color-mix(in srgb, var(--warn) 15%, transparent)" label={t("statEscalated")} value={stat(escalated)} />
+        <StatCard icon="⚠️" iconBg="color-mix(in srgb, var(--warn) 15%, transparent)" label={t("statFirstAppeal")} value={stat(escalated)} />
         <StatCard icon="⏰" iconBg="color-mix(in srgb, var(--bad) 12%, transparent)" label={t("statOverdue")} value={stat(overdue)} />
         <StatCard icon="✅" iconBg="color-mix(in srgb, var(--good) 12%, transparent)" label={t("statResolved")} value={stat(resolved)} />
         <StatCard icon="📋" iconBg="color-mix(in srgb, var(--ink2) 10%, transparent)" label={t("statTotal")} value={stat(data.total)} />

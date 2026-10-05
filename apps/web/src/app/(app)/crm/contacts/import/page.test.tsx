@@ -45,6 +45,24 @@ describe("ImportContactsPage", () => {
     expect(browserFetchMock).not.toHaveBeenCalled();
   });
 
+  // GAP-CRM-CONTACTS-IMPORT-06: skipped rows are listed with their line number
+  // AND a specific reason, not just a bare count.
+  it("lists a blank-name row with its line number and the reason 'Missing name'", () => {
+    renderPage();
+    fireEvent.change(screen.getByLabelText("CSV data"), {
+      // Two good rows then a blank-name row at data line 3.
+      target: { value: `${HEADER}\nAsha Rao,,9900000000,,new,\nBimal Roy,,9800000000,,new,\n,,9700000000,,new,` },
+    });
+    expect(screen.getByRole("heading", { name: /Rejected rows \(1\)/ })).toBeInTheDocument();
+    // The reason is shown explicitly...
+    expect(screen.getByText("Missing name.")).toBeInTheDocument();
+    // ...alongside the line number 3 in the rejected-rows table.
+    const rejectedHeading = screen.getByRole("heading", { name: /Rejected rows/ });
+    const card = rejectedHeading.closest(".card") as HTMLElement;
+    expect(card).not.toBeNull();
+    expect(card.textContent).toContain("3");
+  });
+
   // GAP-CRM-CONTACTS-IMPORT-01: invalid rows are rejected, not posted.
   it("rejects an invalid-email and bad lead-status row and keeps them out of the preview", () => {
     renderPage();
@@ -78,7 +96,8 @@ describe("ImportContactsPage", () => {
     const [, options] = browserFetchMock.mock.calls[0];
     const sent = JSON.parse((options as { body: string }).body) as { contacts: Array<Record<string, unknown>> };
     expect(sent.contacts).toEqual([
-      { name: "Asha Rao", company: "Acme", leadStatus: "customer", marketingConsent: true },
+      // DPDP consent record: a consenting CSV row carries purpose=marketing, channel=import.
+      { name: "Asha Rao", company: "Acme", leadStatus: "customer", marketingConsent: true, consentPurpose: "marketing", consentChannel: "import" },
     ]);
   });
 

@@ -45,4 +45,23 @@ describe("Control tower page", () => {
     expect(screen.getByText("Control tower unavailable")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /try again/i })).not.toBeInTheDocument();
   });
+
+  it("GAP-CRM-CONTROL-TOWER-05: labels the total as a count of items, not 'Exception volume'", async () => {
+    mocked.mockResolvedValue({
+      data: {
+        ...tower,
+        exceptions: [
+          { id: "a", kind: "dormant_account", label: "Dormant", severity: "high", count: 3, href: "/crm/accounts" },
+          { id: "b", kind: "aged_lead", label: "Overdue", severity: "medium", count: 2, href: "/crm/accounts" },
+        ],
+      },
+      source: "api",
+    });
+    render(await Page());
+
+    expect(screen.getByText("Open exception items")).toBeInTheDocument();
+    expect(screen.queryByText("Exception volume")).not.toBeInTheDocument();
+    // still the sum of category counts (3 + 2)
+    expect(screen.getByText("5")).toBeInTheDocument();
+  });
 });

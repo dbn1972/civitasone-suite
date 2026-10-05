@@ -30,7 +30,10 @@ export const FIELD_TYPES: CfFieldType[] = ["text", "number", "date", "boolean", 
 export const ENTITY_TYPE_LABELS: Record<CfEntityType, string> = {
   leads: "Leads",
   contacts: "Contacts",
-  deals: "Deals",
+  // GAP-CRM-CUSTOM-FIELDS-07: the Deals screen + dashboard call these
+  // "Engagements"; use that canonical term here too (the API key stays
+  // "deals"). Decision (M03): align on "Engagements" per the deals surface.
+  deals: "Engagements",
 };
 
 export const FIELD_TYPE_LABELS: Record<CfFieldType, string> = {
@@ -233,13 +236,30 @@ export function buildValidationSchema(draft: CustomFieldDraft): CustomFieldValid
 /**
  * Validate a draft. fieldName is always required (it is the label/key). A
  * select / multi_select field must carry at least one non-empty option.
+ *
+ * GAP-CRM-CUSTOM-FIELDS-05: when `siblings` is passed (the other drafts for the
+ * same entity), a case-insensitive, trimmed duplicate field name is rejected
+ * client-side ("A field with this name already exists.") so an admin sees it
+ * inline instead of only via the server's 409 at save. A draft never clashes
+ * with itself: siblings are compared by id (an existing row) or object identity
+ * (a new, unsaved row). The server check stays authoritative.
  */
-export function validateDraft(draft: CustomFieldDraft): DraftErrors {
+export function validateDraft(draft: CustomFieldDraft, siblings: CustomFieldDraft[] = []): DraftErrors {
   const errors: DraftErrors = {};
-  if (draft.fieldName.trim().length === 0) {
+  const trimmedName = draft.fieldName.trim();
+  if (trimmedName.length === 0) {
     errors.fieldName = "Enter a field name.";
-  } else if (draft.fieldName.trim().length > 64) {
+  } else if (trimmedName.length > 64) {
     errors.fieldName = "Field name must be 64 characters or fewer.";
+  } else {
+    const key = trimmedName.toLowerCase();
+    const clash = siblings.some((s) => {
+      // Skip self: same id (existing) or the very same draft object (new row).
+      if (s === draft) return false;
+      if (draft.id && s.id && s.id === draft.id) return false;
+      return s.fieldName.trim().toLowerCase() === key;
+    });
+    if (clash) errors.fieldName = "A field with this name already exists.";
   }
   if (fieldTypeHasOptions(draft.fieldType)) {
     const opts = draft.options.map((o) => o.trim()).filter((o) => o.length > 0);
@@ -248,8 +268,8 @@ export function validateDraft(draft: CustomFieldDraft): DraftErrors {
   return errors;
 }
 
-export function isDraftValid(draft: CustomFieldDraft): boolean {
-  return Object.keys(validateDraft(draft)).length === 0;
+export function isDraftValid(draft: CustomFieldDraft, siblings: CustomFieldDraft[] = []): boolean {
+  return Object.keys(validateDraft(draft, siblings)).length === 0;
 }
 
 // ---------------------------------------------------------------------------

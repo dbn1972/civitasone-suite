@@ -60,4 +60,16 @@ describe("findExpiringDocuments", () => {
     const docs = [{ documentId: "d1", subjectType: "x", subjectId: "x1", docTypeCode: "y", expiryDate: null }];
     expect(findExpiringDocuments(docs, NOW, 365).length).toBe(0);
   });
+
+  // GAP-CRM-DOCUMENTS-05: the Documents page copy states expiry is flagged
+  // "within 30 days (configurable)". Pin the 30-day boundary so the copy and
+  // the behaviour stay in agreement: a doc exactly 30 days out is included, one
+  // 31 days out is not. (The scheduler's default horizon is 30 — see
+  // alert-scheduler.ts expiryHorizonDays(): CRM_DOC_EXPIRY_ALERT_DAYS ?? 30.)
+  it("includes a doc exactly 30 days out and excludes one 31 days out (30-day UI claim)", () => {
+    const at30 = [{ documentId: "d30", subjectType: "contact", subjectId: "c1", docTypeCode: "kyc", expiryDate: "2026-08-14" }];
+    const at31 = [{ documentId: "d31", subjectType: "contact", subjectId: "c1", docTypeCode: "kyc", expiryDate: "2026-08-15" }];
+    expect(findExpiringDocuments(at30, NOW, 30).length).toBe(1);
+    expect(findExpiringDocuments(at31, NOW, 30).length).toBe(0);
+  });
 });

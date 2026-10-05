@@ -33,11 +33,23 @@ function resolveSegment(raw?: string): Segment {
   return match ?? "All";
 }
 
+// GAP-CRM-ACTIVITIES-07: a segment filter that yields zero rows must say which
+// segment is empty, not fall back to DataTable's generic "No records found".
+const SEGMENT_EMPTY: Record<Segment, { title: string; message: string }> = {
+  All: { title: "No activities", message: "No activities match the current view." },
+  Today: { title: "Nothing due today", message: "No activities are due today." },
+  Overdue: { title: "No overdue activities", message: "Nothing is past its due date — you're caught up." },
+};
+
 export function ActivitiesTable({
   activities,
   initialSegment,
   source = "api",
   today,
+  heading = "Activities",
+  emptyTitle = "No activities yet",
+  emptyMessage = "Schedule your first call, meeting, site visit, or correspondence.",
+  filterPlaceholder = "Filter activities…",
 }: {
   activities: CRMActivityEntry[];
   initialSegment?: string;
@@ -48,6 +60,12 @@ export function ActivitiesTable({
    * UTC date (GAP-CRM-ACTIVITIES-03). Falls back to an IST compute if omitted.
    */
   today?: string;
+  /** GAP-CRM-ACTIVITIES-08: screen-name copy passed from the server page so
+   * this client component stays provider-free while using next-intl text. */
+  heading?: string;
+  emptyTitle?: string;
+  emptyMessage?: string;
+  filterPlaceholder?: string;
 }) {
   const [segment, setSegment] = useState<string>(resolveSegment(initialSegment));
   const tType = useTranslations("crmActivityTypes");
@@ -66,10 +84,11 @@ export function ActivitiesTable({
     );
   }
 
+  const activeSegment = resolveSegment(segment);
   const tableRows: ActivityRow[] = activities
     .filter((a) => {
-      if (segment === "Today") return istDatePart(a.dueDate) === todayDate;
-      if (segment === "Overdue") return a.status === "overdue";
+      if (activeSegment === "Today") return istDatePart(a.dueDate) === todayDate;
+      if (activeSegment === "Overdue") return a.status === "overdue";
       return true;
     })
     .map((a) => ({
@@ -82,14 +101,16 @@ export function ActivitiesTable({
       status: a.status,
     }));
 
+  const segmentEmpty = SEGMENT_EMPTY[activeSegment];
+
   return (
     <div className="card">
       <div className="card-h">
-        <h3>Interactions</h3>
+        <h3>{heading}</h3>
         <Segmented options={[...SEGMENTS]} value={segment} onChange={setSegment} />
       </div>
       {activities.length === 0 ? (
-        <EmptyState icon="◈" title="No interactions yet" message="Schedule your first call, meeting, site visit, or correspondence." />
+        <EmptyState icon="◈" title={emptyTitle} message={emptyMessage} />
       ) : (
         <DataTable<ActivityRow>
           columns={[
@@ -102,6 +123,12 @@ export function ActivitiesTable({
           ]}
           rows={tableRows}
           sortable
+          filterable
+          filterPlaceholder={filterPlaceholder}
+          pageSize={25}
+          emptyIcon="◈"
+          emptyTitle={segmentEmpty.title}
+          emptyMessage={segmentEmpty.message}
         />
       )}
     </div>

@@ -146,8 +146,26 @@ export function ProductCatalogueEditor() {
     if (from && to) return to >= from;
     return true;
   }
+  /**
+   * GAP-CRM-PRODUCTS-06: a product code must be unique within the catalogue
+   * (the backend enforces a (tenant, code) unique index; without a client check
+   * a second row with the same code only fails on the server round-trip).
+   * Case-insensitive, matching the server's lower() index.
+   */
+  function duplicateCode(row: Row): boolean {
+    const code = row.code.trim().toLowerCase();
+    if (code === "") return false;
+    return rows.some((r) => r.key !== row.key && r.code.trim().toLowerCase() === code);
+  }
   function rowValid(row: Row): boolean {
-    return row.name.trim().length > 0 && row.code.trim().length > 0 && priceMinorOf(row) !== null && taxBpsOf(row) !== null && datesValid(row);
+    return (
+      row.name.trim().length > 0 &&
+      row.code.trim().length > 0 &&
+      !duplicateCode(row) &&
+      priceMinorOf(row) !== null &&
+      taxBpsOf(row) !== null &&
+      datesValid(row)
+    );
   }
 
   function buildPayload(row: Row, priceMinor: string, taxRateBps: number): Product {
@@ -188,6 +206,8 @@ export function ProductCatalogueEditor() {
     if (!rowValid(row) || priceMinor === null || taxRateBps === null) {
       if (!datesValid(row)) {
         setError(t("activeToBeforeFrom", { name: row.name || row.code || t("newLabel") }));
+      } else if (duplicateCode(row)) {
+        setError(t("codeUsed", { code: row.code.trim() }));
       } else {
         setError(t("needsFields", { name: row.name || row.code || t("newLabel"), max: MAX_TAX_PERCENT }));
       }
@@ -277,6 +297,7 @@ export function ProductCatalogueEditor() {
                 <th>Category</th>
                 <th>Unit</th>
                 <th style={{ width: 120 }}>Price (₹)</th>
+                <th style={{ width: 70 }}>{t("currency")}</th>
                 <th style={{ width: 140 }}>{t("colTax")}</th>
                 <th>Active from</th>
                 <th>Active to</th>
@@ -304,7 +325,8 @@ export function ProductCatalogueEditor() {
                   <tr key={row.key}>
                     <td data-label={t("colCode")}>
                       <label className="sr-only" htmlFor={`${headingId}-code-${row.key}`}>Code for product {n}</label>
-                      <input id={`${headingId}-code-${row.key}`} value={row.code} aria-invalid={row.code.trim() ? undefined : true} onChange={(e) => update(row.key, { code: e.target.value })} style={inputStyle} placeholder="SKU" />
+                      <input id={`${headingId}-code-${row.key}`} value={row.code} aria-invalid={row.code.trim() && !duplicateCode(row) ? undefined : true} onChange={(e) => update(row.key, { code: e.target.value })} style={inputStyle} placeholder={t("skuPlaceholder")} />
+                      {duplicateCode(row) ? <span style={{ display: "block", fontSize: 11, color: "#b42318" }}>{t("duplicateCode")}</span> : null}
                     </td>
                     <td data-label={t("colName")}>
                       <label className="sr-only" htmlFor={`${headingId}-name-${row.key}`}>Name for product {n}</label>
@@ -323,7 +345,15 @@ export function ProductCatalogueEditor() {
                       <input id={`${headingId}-price-${row.key}`} inputMode="decimal" value={row.priceRupees} aria-invalid={priceOk ? undefined : true} onChange={(e) => update(row.key, { priceRupees: e.target.value })} style={{ ...inputStyle, textAlign: "end" }} placeholder="0.00" />
                       {row.priceRupees.trim() && priceOk ? <span style={{ fontSize: 11, color: "var(--muted)" }}>{formatMoney(priceMinorOf(row)!)}</span> : null}
                     </td>
-                    <td data-label={t("colTax")}>
+                    <td data-label={t("currency")}>
+                      {/* GAP-CRM-PRODUCTS-06 (DECISION): currency is shown per row but
+                          constrained to INR. formatMoney always renders ₹ and no
+                          multi-currency money formatter exists yet (same decision as
+                          GAP-CRM-PRICE-BOOKS-04), so a selectable currency would
+                          display rupee amounts under a foreign code. Recorded in report. */}
+                      <span style={{ fontSize: 13 }} aria-label={t("currencyForProduct", { n })}>{row.currency?.trim() || "INR"}</span>
+                    </td>
+                    <td data-label="Tax">
                       <label className="sr-only" htmlFor={`${headingId}-tax-${row.key}`}>Tax percent for product {n}</label>
                       <select
                         id={`${headingId}-tax-${row.key}`}

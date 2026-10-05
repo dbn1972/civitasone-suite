@@ -11,27 +11,10 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
-import { Button } from "@/app/_components/ds";
-
-const OVERLAY: React.CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(0,0,0,0.45)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  zIndex: 9999,
-};
+import { Button, Modal } from "@/app/_components/ds";
 
 const DIALOG: React.CSSProperties = {
-  background: "var(--panel)",
-  border: "1px solid var(--line)",
-  borderRadius: "calc(var(--r) * 2)",
-  padding: "28px 32px",
-  width: "min(520px, 92vw)",
-  maxHeight: "90vh",
-  overflowY: "auto",
-  boxShadow: "0 16px 48px rgba(0,0,0,0.18)",
+  padding: 0,
 };
 
 const FIELD: React.CSSProperties = {
@@ -63,12 +46,18 @@ interface Props {
    */
   accountName?: string | null;
   onClose?: () => void;
+  /**
+   * GAP-CRM-HEALTH-05: open the dialog on mount — used when the watchlist's
+   * per-row "Log follow-up" link deep-links here with ?followUp=1, so the
+   * clerk lands straight in the form prefilled with this account.
+   */
+  defaultOpen?: boolean;
 }
 
-export function FollowUpModal({ accountId, accountName, onClose }: Props) {
+export function FollowUpModal({ accountId, accountName, onClose, defaultOpen = false }: Props) {
   const t = useTranslations("crmFollowUpModal");
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [saving, setSaving] = useState(false);
   const formError = useFormError("service request");
 
@@ -119,71 +108,42 @@ export function FollowUpModal({ accountId, accountName, onClose }: Props) {
         {t("createFollowUp")}
       </Button>
 
-      {open && (
-        <div
-          style={OVERLAY}
-          role="presentation"
-          onClick={(e) => { if (e.target === e.currentTarget && !saving) { setOpen(false); onClose?.(); } }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label={t("dialogAriaLabel")}
-            style={DIALOG}
-          >
-            <div
+      {/* GAP-CRM-HEALTH-ACCOUNTID-06: the dialog shell is now the shared ds
+          Modal primitive (document.body portal, focus moved in + trapped,
+          ESC-to-close, background made inert) instead of a hand-rolled
+          position:fixed overlay with no focus trap. The form body is passed as
+          children; the overlay only closes while not saving. */}
+      <Modal
+        open={open}
+        onClose={() => { if (!saving) { setOpen(false); onClose?.(); } }}
+        closeOnOverlayClick={!saving}
+        size="md"
+        title={t("createFollowUp")}
+      >
+        <div style={DIALOG}>
+            <p
               style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 20,
+                margin: "0 0 20px",
+                fontSize: 13,
+                color: "var(--mut)",
               }}
             >
-              <div>
-                <h2 style={{ margin: 0, fontSize: 18, color: "var(--ink)" }}>
-                  {t("createFollowUp")}
-                </h2>
-                <p
+              {t("accountLabel")}
+              {accountName ? (
+                <strong style={{ color: "var(--ink)" }}>{accountName}</strong>
+              ) : (
+                <code
                   style={{
-                    margin: "4px 0 0",
-                    fontSize: 13,
-                    color: "var(--mut)",
+                    fontSize: 12,
+                    background: "var(--bg)",
+                    padding: "1px 6px",
+                    borderRadius: 4,
                   }}
                 >
-                  {t("accountLabel")}
-                  {accountName ? (
-                    <strong style={{ color: "var(--ink)" }}>{accountName}</strong>
-                  ) : (
-                    <code
-                      style={{
-                        fontSize: 12,
-                        background: "var(--bg)",
-                        padding: "1px 6px",
-                        borderRadius: 4,
-                      }}
-                    >
-                      {accountId}
-                    </code>
-                  )}
-                </p>
-              </div>
-              <button
-                type="button"
-                aria-label={t("closeDialog")}
-                onClick={() => setOpen(false)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  fontSize: 22,
-                  color: "var(--mut)",
-                  lineHeight: 1,
-                  padding: 4,
-                }}
-              >
-                ✕
-              </button>
-            </div>
+                  {accountId}
+                </code>
+              )}
+            </p>
 
             {formError.message && (
               <div
@@ -330,9 +290,8 @@ export function FollowUpModal({ accountId, accountName, onClose }: Props) {
                 </Button>
               </div>
             </form>
-          </div>
         </div>
-      )}
+      </Modal>
     </>
   );
 }

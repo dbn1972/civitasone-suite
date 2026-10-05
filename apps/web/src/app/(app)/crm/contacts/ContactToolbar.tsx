@@ -119,11 +119,19 @@ export function ContactToolbar({ canExport = false, exportQuery = {}, initialSea
           style={{ flex: 1, minWidth: 200, padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" }}
           onKeyDown={(e) => { if (e.key === "Enter") applyFilters(); }}
         />
-        <select value={segment} onChange={(e) => setSegment(e.target.value as typeof segment)} aria-label="Filter contacts by segment" style={{ padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" }}>
-          <option value="all">All</option>
-          <option value="mine">Mine</option>
-          <option value="recent">Recent</option>
-        </select>
+        {/* GAP-CRM-CONTACTS-07: this is the view-mode selector (All/Mine/Recent),
+            distinct from the classification "segment" in LeadFilters. Labelled
+            "View" so the two filter mechanisms don't both read as "segment".
+            The backend/URL key stays `segment` (see applyFilters) so bookmarked
+            ?segment= URLs keep working. */}
+        <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+          <span>View</span>
+          <select value={segment} onChange={(e) => setSegment(e.target.value as typeof segment)} aria-label="Filter contacts by view" style={{ padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" }}>
+            <option value="all">All</option>
+            <option value="mine">Mine</option>
+            <option value="recent">Recent</option>
+          </select>
+        </label>
         <Button variant="ghost" onClick={applyFilters} style={{ minHeight: 44 }}>Search</Button>
         {/* GAP-CRM-CONTACTS-04: one-click reset of search + segment + classification filters. */}
         {(search.trim() || segment !== "all" || Object.keys(exportQuery).length > 0) ? (

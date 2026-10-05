@@ -62,3 +62,24 @@ describe("CRM hub vocabulary (GAP-CRM-HOME-02)", () => {
     expect(screen.getByText("Engagement Pipelines")).toBeInTheDocument();
   });
 });
+
+describe("CRM hub i18n (GAP-CRM-HOME-03)", () => {
+  beforeEach(() => mockRoles.mockReturnValue(["crm_admin"]));
+
+  it("renders the subtitle, section headings and tiles from the crm.hub message tree", async () => {
+    render(await Page());
+    // Subtitle resolved via t('subtitle'), not a hard-coded literal.
+    expect(screen.getByText("Pipeline and customer operations workspace.")).toBeInTheDocument();
+    // Section headings resolved via t('sections.*').
+    expect(screen.getByText("Core")).toBeInTheDocument();
+    expect(screen.getByText("Service & Engagement")).toBeInTheDocument();
+    // A representative tile from each resolves via t('tiles.*').
+    expect(screen.getByText("Account Health")).toBeInTheDocument();
+  });
+
+  it("uses the module name 'CRM' for the hub title, not 'Citizen Services'", async () => {
+    render(await Page());
+    expect(screen.getByRole("heading", { level: 1, name: "CRM" })).toBeInTheDocument();
+    expect(screen.queryByText("Citizen Services")).not.toBeInTheDocument();
+  });
+});

@@ -119,6 +119,34 @@ describe("qualification framework CRUD", () => {
     expect(got.statusCode).toBe(404);
   });
 
+  // GAP-CRM-QUALIFICATION-FRAMEWORKS-05: the delete dialog promises "This is
+  // recorded in the audit trail" — verify the DELETE handler actually emits
+  // exactly one audit event (action=delete, resourceId, actor) inside the
+  // transaction, and the framework is gone afterwards.
+  it("emits exactly one audit event on DELETE (action, resourceId, actor) and the framework is gone", async () => {
+    const id = (await createFramework()).json().data.id;
+    const res = await call("DELETE", `/v1/crm/qualification-frameworks/${id}`);
+    expect(res.statusCode).toBe(200);
+
+    const rows = (await scoped(TENANT, (tx) => tx`
+      SELECT payload, actor_id AS "actorId"
+      FROM _outbox.messages
+      WHERE tenant_id = ${TENANT}
+        AND event_type = 'audit.event.record'
+        AND payload->>'resourceId' = ${id}
+        AND payload->>'action' = 'qualification_framework_delete'
+    `)) as unknown as Array<{ payload: Record<string, unknown>; actorId: string }>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.payload.resourceType).toBe("qualification_framework");
+    expect(rows[0]!.payload.resourceId).toBe(id);
+    expect(rows[0]!.payload.outcome).toBe("success");
+    expect(rows[0]!.actorId).toBe(ACTOR);
+
+    // The framework is no longer listed.
+    const got = await call("GET", `/v1/crm/qualification-frameworks/${id}`);
+    expect(got.statusCode).toBe(404);
+  });
+
   it("404s an unknown framework on GET/PUT/DELETE", async () => {
     const missing = randomUUID();
     expect((await call("GET", `/v1/crm/qualification-frameworks/${missing}`)).statusCode).toBe(404);
