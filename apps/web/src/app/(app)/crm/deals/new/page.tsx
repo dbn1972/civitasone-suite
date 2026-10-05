@@ -2,18 +2,24 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useFormError } from "@/lib/useFormError";
 import { useToast } from "@/app/_components/ds/Toast";
 import { Button, PageHeader } from "@/app/_components/ds";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 
 type ContactOption = { id: string; name: string };
 
+// GAP-CRM-DEALS-NEW-01: a deal may only be CREATED in an open stage. Won/Lost are
+// terminal outcomes of the governed close flow (POST /v1/crm/deals/:id/close, which
+// requires a reason — min 10 chars for a loss — and writes the audit trail), enforced
+// by DealDetailActions on the detail page. Offering "Won"/"Lost" here let a deal be
+// created straight into a closed state with no reason and no confirmation, bypassing
+// that governance entirely. There is no back-dating/import use case on this manual
+// capture screen, so the safe default is to drop the terminal options outright.
 const STAGES = [
   { value: "Lead", label: "Lead" },
   { value: "Proposal", label: "Proposal" },
   { value: "Negotiation", label: "Negotiation" },
-  { value: "Won", label: "Won" },
-  { value: "Lost", label: "Lost" },
 ] as const;
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
@@ -34,6 +40,7 @@ export default function NewDealPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const formError = useFormError("deal");
 
   useEffect(() => {
     let active = true;
@@ -82,7 +89,7 @@ export default function NewDealPage() {
       toast.success("Deal created successfully.");
       setTimeout(() => router.push("/crm/deals"), 600);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create the deal.");
+      setError(formError.fromException("save", err).message);
     } finally {
       setBusy(false);
     }

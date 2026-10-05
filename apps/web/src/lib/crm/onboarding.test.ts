@@ -236,4 +236,40 @@ describe("onboarding HTTP client", () => {
     await expect(onb.recordKyc("c1", { status: "submitted" })).rejects.toThrow("Some details weren't accepted. Check what you entered and try again.");
     await expect(onb.recordKyc("c1", { status: "submitted" })).rejects.not.toThrow(/INVALID_KYC_TRANSITION/);
   });
+
+  // GAP-CRM-ONBOARDING-01 — deal/account name resolution for the list.
+  it("getOnboardingLookups builds id→name maps from the deals + accounts lists", async () => {
+    fetchMock
+      .mockResolvedValueOnce(res({ data: [{ id: "d1", name: "Acme renewal" }, { id: "d2", name: "Beta expansion" }] }))
+      .mockResolvedValueOnce(res({ data: [{ id: "a1", name: "Acme Corp" }] }));
+    const lk = await onb.getOnboardingLookups();
+    expect(lk.dealNames).toEqual({ d1: "Acme renewal", d2: "Beta expansion" });
+    expect(lk.accountNames).toEqual({ a1: "Acme Corp" });
+  });
+
+  it("getOnboardingLookups degrades to empty maps when a lookup fails (names left to resolve to null)", async () => {
+    fetchMock.mockResolvedValueOnce(res({}, { status: 500 })).mockRejectedValueOnce(new Error("network"));
+    const lk = await onb.getOnboardingLookups();
+    expect(lk.dealNames).toEqual({});
+    expect(lk.accountNames).toEqual({});
+  });
+
+  it("resolveCaseNames fills deal/account names and never leaves a UUID as a name", () => {
+    const base = {
+      id: "c1", dealId: "d1", accountId: "a1", stage: "verification", kycStatus: "submitted",
+      kycReference: null, kycVerifiedAt: null, completedAt: null, cancellationReason: null,
+      createdAt: "", updatedAt: "", version: 1, accountName: null, dealName: null,
+    } as onb.OnboardingCase;
+    const [resolved] = onb.resolveCaseNames([base], {
+      dealNames: { d1: "Acme renewal" },
+      accountNames: { a1: "Acme Corp" },
+    });
+    expect(resolved.dealName).toBe("Acme renewal");
+    expect(resolved.accountName).toBe("Acme Corp");
+
+    // An unknown id resolves to null (the UI then shows a label, never the id).
+    const [unresolved] = onb.resolveCaseNames([base], { dealNames: {}, accountNames: {} });
+    expect(unresolved.dealName).toBeNull();
+    expect(unresolved.accountName).toBeNull();
+  });
 });

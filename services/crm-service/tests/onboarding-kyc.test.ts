@@ -292,11 +292,22 @@ describe("onboarding trigger — a won deal opens a case", () => {
     expect(opened!.accountId).toBe(ACCOUNT_A);
   });
 
-  it("opens a case when a deal is moved to the Won stage directly", async () => {
+  it("refuses to win a deal via a plain stage change (422 USE_CLOSE_ENDPOINT); only /close opens the case", async () => {
+    // GAP-CRM-OPPORTUNITIES-01: Won/Lost are reachable only through the governed close
+    // flow. A PATCH /stage into Won is rejected and must not open an onboarding case.
     const moved = await call("PATCH", `/v1/crm/deals/${DEAL_STAGE}/stage`, {
       payload: { stage: "Won", version: 1 },
     });
-    expect(moved.statusCode).toBe(202);
+    expect(moved.statusCode).toBe(422);
+    expect(moved.json().code).toBe("USE_CLOSE_ENDPOINT");
+    await relayTenantEvents(TENANT_A);
+    expect(await caseForDeal(DEAL_STAGE), "a rejected stage move must not open a case").toBeUndefined();
+
+    // Closing it properly does open the case (the cancellation suite below relies on it).
+    const closed = await call("POST", `/v1/crm/deals/${DEAL_STAGE}/close`, {
+      payload: { outcome: "won", closedValue: "250000" },
+    });
+    expect(closed.statusCode).toBe(202);
     await relayTenantEvents(TENANT_A);
 
     const opened = await caseForDeal(DEAL_STAGE);

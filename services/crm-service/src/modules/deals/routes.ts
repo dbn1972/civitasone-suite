@@ -8,7 +8,7 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import * as pipelineRepo from "../pipelines/repo.js";
-import { missingMandatoryFields, findStage, skippedGateStage } from "./stage-gate.js";
+import { missingMandatoryFields, findStage, skippedGateStage, isTerminalStage } from "./stage-gate.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
 
@@ -140,6 +140,22 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CRM_ROLES);
     const { id } = idParam.parse(req.params);
     const body = updateDealStageBody.parse(req.body);
+
+    // OP-006 / GAP-CRM-OPPORTUNITIES-01: a plain stage change must NOT be able to close a
+    // deal. Won/Lost are terminal outcomes reached only via the governed close flow
+    // (POST /v1/crm/deals/:id/close), which captures the mandatory reason/competitor and
+    // emits the close audit event; this route has no reason field at all. Reject a move
+    // into a terminal stage with 422 USE_CLOSE_ENDPOINT so the client opens the Close
+    // dialog instead of silently closing a deal with no reason (which corrupts win/loss
+    // analytics). Enforced by stage NAME so it applies whether or not a pipeline is
+    // scoped. Backward moves OFF Won/Lost target a non-terminal stage and are unaffected.
+    if (isTerminalStage(body.stage)) {
+      throw new HttpError(
+        422,
+        "USE_CLOSE_ENDPOINT",
+        `stage '${body.stage}' is terminal; close the deal via POST /v1/crm/deals/:id/close with an outcome and reason`,
+      );
+    }
 
     // Load the deal to evaluate the gate. When it is missing we do NOT reject here — the
     // stage command is still accepted and the consumer records the version_conflict /

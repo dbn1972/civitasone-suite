@@ -52,7 +52,46 @@ describe("AC-004 linked accounts + synced items (framework)", () => {
     linkedId = list.data[0].id;
   });
 
-  it("links an external email to a contact record", async () => {
+  // GAP-CRM-LINKED-ACCOUNTS-01 (DPDP, fail-closed). A linked account is created
+  // by typing an email address only — there is no OAuth/consent exchange — so it
+  // stays 'pending'. Until ownership is verified (status flips to 'connected' via
+  // a provider consent flow this service does not yet implement), NOTHING may be
+  // synced into CRM against it; otherwise any CRM user could ingest a third
+  // party's mailbox metadata just by typing their address. Enforced server-side.
+  it("refuses to sync any external item into a PENDING (unconsented) linked account", async () => {
+    const res = await inject("POST", "/v1/crm/synced-items", {
+      linkedAccountId: linkedId, kind: "email", externalId: "msg-abc-1", subjectType: "contact", subjectId: SUBJECT,
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("LINKED_ACCOUNT_NOT_CONSENTED");
+    // ...and crucially, nothing was ingested.
+    const items = (await inject("GET", `/v1/crm/synced-items?subjectType=contact&subjectId=${SUBJECT}`)).json();
+    expect(items.data.length).toBe(0);
+  });
+
+  // The DB trigger (migration 0095) is the backstop below the route: even a
+  // direct write (consumer, future connector, ad-hoc SQL) cannot attach an item
+  // to a non-connected account. This asserts the invariant at the storage layer.
+  it("the DB itself rejects a synced item for a pending account (defense in depth)", async () => {
+    await expect(
+      sqlClient.begin(async (tx) => {
+        await tx`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
+        await tx`
+          INSERT INTO crm.synced_items (tenant_id, linked_account_id, kind, external_id, subject_type, subject_id, created_by)
+          VALUES (${TENANT}, ${linkedId}, 'email', 'direct-write-1', 'contact', ${SUBJECT}, ${ACTOR})
+        `;
+      }),
+    ).rejects.toThrow(/not connected|verified ownership/i);
+  });
+
+  it("allows syncing once ownership is verified (account connected via consent)", async () => {
+    // Simulate the deferred OAuth/consent flow completing: the account becomes
+    // 'connected'. Only then may items sync.
+    await sqlClient.begin(async (tx) => {
+      await tx`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
+      await tx`UPDATE crm.linked_accounts SET status = 'connected' WHERE id = ${linkedId} AND tenant_id = ${TENANT}`;
+    });
+
     const res = await inject("POST", "/v1/crm/synced-items", {
       linkedAccountId: linkedId, kind: "email", externalId: "msg-abc-1", subjectType: "contact", subjectId: SUBJECT,
     });

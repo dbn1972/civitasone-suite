@@ -8,8 +8,10 @@
  * Money is converted with rupeesToMinorString and shown back with formatMoney.
  */
 import { useEffect, useId, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { Button } from "../ds";
+import { Button, EntityPicker, type EntityOption } from "../ds";
+import { browserFetch } from "@/lib/api/browserClient";
 import { rupeesToMinorString } from "@/lib/money";
 import { formatMoney } from "@/lib/formatters";
 import {
@@ -26,18 +28,60 @@ import {
 
 interface OpportunityFormProps {
   opportunity?: Opportunity;
-  onSaved?: () => void;
+  onSaved?: (id: string | null) => void;
+  /** Prefill the account link (e.g. from `/crm/opportunities/new?accountId=…`). */
+  initialAccountId?: string;
+  /** Pre-known label for `initialAccountId` so the picker shows a name immediately. */
+  initialAccountLabel?: string;
 }
 
 const inputStyle = { padding: 8, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)", width: "100%" } as const;
 
-export function OpportunityForm({ opportunity, onSaved }: OpportunityFormProps) {
+/**
+ * Account search for the EntityPicker. Accounts are listed from the existing
+ * `GET /v1/crm/accounts` endpoint; the result is filtered client-side on the typed
+ * query (the list endpoint has no server-side search param). Returns [] on any failure
+ * so the picker degrades to "no results" rather than throwing.
+ */
+async function searchAccounts(query: string, signal: AbortSignal): Promise<EntityOption[]> {
+  try {
+    const res = await browserFetch("v1/crm/accounts", { signal });
+    if (!res.ok) return [];
+    const body = (await res.json()) as { data?: Array<{ id?: string; name?: string }> };
+    const q = query.trim().toLowerCase();
+    return (body.data ?? [])
+      .filter((a): a is { id: string; name: string } => Boolean(a.id && a.name))
+      .filter((a) => (q ? a.name.toLowerCase().includes(q) : true))
+      .slice(0, 20)
+      .map((a) => ({ id: a.id, label: a.name }));
+  } catch {
+    return [];
+  }
+}
+
+async function resolveAccounts(ids: string[]): Promise<EntityOption[]> {
+  try {
+    const res = await browserFetch("v1/crm/accounts", {});
+    if (!res.ok) return [];
+    const body = (await res.json()) as { data?: Array<{ id?: string; name?: string }> };
+    const want = new Set(ids);
+    return (body.data ?? [])
+      .filter((a): a is { id: string; name: string } => Boolean(a.id && a.name && want.has(a.id)))
+      .map((a) => ({ id: a.id, label: a.name }));
+  } catch {
+    return [];
+  }
+}
+
+export function OpportunityForm({ opportunity, onSaved, initialAccountId, initialAccountLabel }: OpportunityFormProps) {
+  const t = useTranslations("crmOpportunityForm");
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [source, setSource] = useState<OpSource | "loading">("loading");
 
   const [name, setName] = useState(opportunity?.name ?? "");
   const [pipelineId, setPipelineId] = useState(opportunity?.pipelineId ?? "");
   const [stage, setStage] = useState(opportunity?.stage ?? "");
+  const [accountId, setAccountId] = useState<string | null>(opportunity?.accountId ?? initialAccountId ?? null);
   const [valueRupees, setValueRupees] = useState(
     opportunity ? (BigInt(opportunity.valueMinor || "0") / 100n).toString() + "." + (BigInt(opportunity.valueMinor || "0") % 100n).toString().padStart(2, "0") : "",
   );
@@ -49,10 +93,16 @@ export function OpportunityForm({ opportunity, onSaved }: OpportunityFormProps) 
   const [expectedCloseDate, setExpectedCloseDate] = useState(opportunity?.expectedCloseDate?.slice(0, 10) ?? "");
 
   const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [missing, setMissing] = useState<string[]>([]);
   const formId = useId();
+
+  const initialOptions = useMemo<EntityOption[]>(
+    () => (initialAccountId && initialAccountLabel ? [{ id: initialAccountId, label: initialAccountLabel }] : []),
+    [initialAccountId, initialAccountLabel],
+  );
 
   useEffect(() => {
     let live = true;
@@ -89,8 +139,28 @@ export function OpportunityForm({ opportunity, onSaved }: OpportunityFormProps) 
   const qtyNum = Number(quantity);
   const qtyValid = quantity.trim() === "" || (Number.isInteger(qtyNum) && qtyNum >= 0);
 
+  // On a fresh create, once we've saved we must NOT allow a second submit — that is the
+  // duplicate-deal bug (GAP-CRM-OPPORTUNITIES-NEW-01). `saved` latches true after the
+  // first successful create and gates the Create button until the user resets the form.
   const canSubmit =
-    name.trim().length > 0 && pipelineId.length > 0 && stage.length > 0 && valueValid && probValid && qtyValid && !busy;
+    name.trim().length > 0 && pipelineId.length > 0 && stage.length > 0 && valueValid && probValid && qtyValid && !busy && !saved;
+
+  function resetForNext() {
+    setName("");
+    setStage(selectedPipeline?.stages[0]?.key ?? "");
+    setAccountId(null);
+    setValueRupees("");
+    setProbability("");
+    setProduct("");
+    setQuantity("");
+    setCompetitors("");
+    setNextStep("");
+    setExpectedCloseDate("");
+    setSaved(false);
+    setMessage("");
+    setError("");
+    setMissing([]);
+  }
 
   async function submit() {
     setMessage("");
@@ -115,14 +185,23 @@ export function OpportunityForm({ opportunity, onSaved }: OpportunityFormProps) 
       competitors: competitors.split(",").map((c) => c.trim()).filter((c) => c.length > 0),
       nextStep: nextStep.trim(),
       expectedCloseDate,
-      ...(opportunity?.accountId ? { accountId: opportunity.accountId } : {}),
+      // Link the opportunity to an account when one is chosen. On edit, fall back to the
+      // record's existing accountId so a save never silently unlinks it.
+      ...(accountId ? { accountId } : opportunity?.accountId ? { accountId: opportunity.accountId } : {}),
     };
     setBusy(true);
     try {
-      if (opportunity?.id) await updateOpportunity(opportunity.id, payload);
-      else await createOpportunity(payload);
-      setMessage(`Opportunity “${payload.name}” saved.`);
-      onSaved?.();
+      if (opportunity?.id) {
+        await updateOpportunity(opportunity.id, payload);
+        setMessage(t("saved", { name: payload.name }));
+        onSaved?.(opportunity.id);
+      } else {
+        const id = await createOpportunity(payload);
+        // Latch saved=true so a second Create click can't POST a duplicate deal.
+        setSaved(true);
+        setMessage(t("created", { name: payload.name }));
+        onSaved?.(id);
+      }
     } catch (e) {
       if (e instanceof MandatoryFieldsError) {
         setMissing(e.missingFields);
@@ -201,6 +280,22 @@ export function OpportunityForm({ opportunity, onSaved }: OpportunityFormProps) 
           </label>
         </div>
 
+        <div style={{ fontSize: 13, display: "grid", gap: 4 }}>
+          <span aria-hidden="true">{t("accountLabel")}</span>
+          <EntityPicker
+            aria-label={t("accountAria")}
+            value={accountId}
+            onChange={(v) => setAccountId(typeof v === "string" ? v : null)}
+            search={searchAccounts}
+            resolve={resolveAccounts}
+            initialOptions={initialOptions}
+            placeholder={t("accountPlaceholder")}
+          />
+          <span style={{ fontSize: 12, color: "var(--muted)" }}>
+            {t("accountHint")}
+          </span>
+        </div>
+
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
           <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
             Value (₹){isMissing("value") ? " *" : ""}
@@ -265,9 +360,14 @@ export function OpportunityForm({ opportunity, onSaved }: OpportunityFormProps) 
         </label>
 
         <div style={{ display: "flex", gap: 8 }}>
-          <Button type="button" onClick={() => void submit()} disabled={busy} aria-busy={busy}>
-            {busy ? "Saving…" : opportunity ? "Save opportunity" : "Create opportunity"}
+          <Button type="button" onClick={() => void submit()} disabled={busy || saved} aria-busy={busy}>
+            {busy ? t("saving") : saved ? t("createdStatus") : opportunity ? t("saveOpportunity") : t("createOpportunity")}
           </Button>
+          {saved && !opportunity ? (
+            <Button type="button" variant="ghost" onClick={resetForNext}>
+              {t("createAnother")}
+            </Button>
+          ) : null}
         </div>
       </div>
     </div>

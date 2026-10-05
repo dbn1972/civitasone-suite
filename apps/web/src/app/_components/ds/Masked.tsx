@@ -12,7 +12,7 @@
  * directly inside a Server Component (e.g. perquisite/page.tsx) with no
  * client-boundary wrapper required.
  */
-export type MaskedKind = "pan" | "account" | "last4";
+export type MaskedKind = "pan" | "account" | "last4" | "phone" | "email";
 
 /**
  * GAP-PAYROLL-PENSIONERS-NEW-02 / GAP-PAYROLL-NPS-02: show only the last four
@@ -43,6 +43,46 @@ export function maskPan(value: string): string {
 }
 
 /**
+ * GAP-CRM-CONTACTS-02 / GAP-CRM-CONTACTS-DETAIL-02: mask an Indian phone number
+ * for DPDP, keeping only the last 3 digits ("98XXXXX210"). The leading 2 digits
+ * are kept for recognisability; everything in between is X-ed. Non-digit
+ * characters are stripped first. Values too short to mask meaningfully are
+ * masked in full.
+ *
+ *   maskPhone("9876543210") -> "98XXXXX210"
+ */
+export function maskPhone(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length < 7) return "X".repeat(Math.max(digits.length, 4));
+  const head = digits.slice(0, 2);
+  const tail = digits.slice(-3);
+  const middle = "X".repeat(digits.length - 5);
+  return `${head}${middle}${tail}`;
+}
+
+/**
+ * GAP-CRM-CONTACTS-02 / GAP-CRM-CONTACTS-DETAIL-02: mask an email, showing only
+ * the first character of the local part and the first character of each domain
+ * label ("asha@dept.gov.in" -> "a***@d***.g**.i*"). Anything that is not a
+ * plausible email (no "@") is masked in full.
+ *
+ *   maskEmail("asha@example.com") -> "a***@e***.c**"
+ */
+export function maskEmail(value: string): string {
+  const v = value.trim();
+  const at = v.indexOf("@");
+  if (at <= 0 || at === v.length - 1) return "*".repeat(Math.min(Math.max(v.length, 4), 10));
+  const local = v.slice(0, at);
+  const domain = v.slice(at + 1);
+  const maskedLocal = `${local[0]}***`;
+  const maskedDomain = domain
+    .split(".")
+    .map((label) => (label ? `${label[0]}${"*".repeat(Math.max(label.length - 1, 1))}` : ""))
+    .join(".");
+  return `${maskedLocal}@${maskedDomain}`;
+}
+
+/**
  * GAP-PAYROLL-DISBURSEMENT-01: bank account numbers show only the last 4
  * digits ("••••1234"). Values of 4 characters or fewer are masked in full --
  * there is nothing safe to show.
@@ -66,7 +106,16 @@ export interface MaskedProps {
 
 export function Masked({ value, kind, fallback = null, className, ariaLabel }: MaskedProps) {
   if (!value) return <>{fallback}</>;
-  const masked = kind === "pan" ? maskPan(value) : kind === "account" ? maskAccount(value) : maskLast4(value);
+  const masked =
+    kind === "pan"
+      ? maskPan(value)
+      : kind === "account"
+        ? maskAccount(value)
+        : kind === "phone"
+          ? maskPhone(value)
+          : kind === "email"
+            ? maskEmail(value)
+            : maskLast4(value);
   return (
     <span className={className} style={{ fontFamily: "monospace" }} aria-label={ariaLabel}>
       {masked}

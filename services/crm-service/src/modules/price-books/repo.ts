@@ -15,9 +15,15 @@ export interface PriceBookView {
   priority: number;
   enabled: boolean;
   version: number;
+  // GAP-CRM-PRICE-BOOKS-01: surface audit metadata so the editor can show
+  // which version is in force and who last changed a price and when. The
+  // columns have existed since 0064_price_books.sql; the list/detail SELECT
+  // simply never carried them.
+  updatedAt: string;
+  updatedBy: string;
 }
 
-const COLS = sql`id, name, segment, currency, geography, channel, priority, enabled, version`;
+const COLS = sql`id, name, segment, currency, geography, channel, priority, enabled, version, updated_at AS "updatedAt", updated_by AS "updatedBy"`;
 
 export async function findById(tenantId: string, id: string): Promise<PriceBookView | null> {
   const rows = await scopedRead(async (tx) => tx.execute(sql`

@@ -635,7 +635,10 @@ describe("PATCH /v1/crm/deals/:id/stage", () => {
     const res = await app.inject({
       method: "PATCH", url: `/v1/crm/deals/${VALID_UUID}/stage`,
       headers: authHeader(["crm_user"]),
-      payload: { stage: "Won", version: 1 },
+      // A non-terminal stage: moving a deal to Won/Lost via a plain stage change is now
+      // rejected (422 USE_CLOSE_ENDPOINT) — closing goes through POST /close. See
+      // GAP-CRM-OPPORTUNITIES-01 (op-opportunity-http.test.ts / pipelines-deals.test.ts).
+      payload: { stage: "Proposal", version: 1 },
     });
     expect(res.statusCode).toBe(202);
   });

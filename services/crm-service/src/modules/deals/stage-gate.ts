@@ -170,6 +170,21 @@ export interface DerivedStageFields {
 }
 
 /**
+ * The terminal stage names: entering either CLOSES the deal (Won => won, Lost => lost),
+ * which is exactly what {@link deriveStageFields} encodes. A deal must reach these ONLY
+ * through the governed close flow (POST /v1/crm/deals/:id/close), which captures the
+ * mandatory reason / competitor and emits the close audit event — never through a plain
+ * stage change (PATCH /v1/crm/deals/:id/stage), which has no reason field at all. The
+ * stage route rejects a move into one of these with 422 USE_CLOSE_ENDPOINT.
+ */
+export const TERMINAL_STAGE_NAMES = ["Won", "Lost"] as const;
+
+/** True when `stageName` is a terminal (deal-closing) stage. */
+export function isTerminalStage(stageName: string): boolean {
+  return (TERMINAL_STAGE_NAMES as readonly string[]).includes(stageName);
+}
+
+/**
  * Single source of truth for the status/probability/closed_at a deal must carry once it
  * enters `targetStageName`. Call this from every code path that changes a deal's stage —
  * a forward walk, a backward/reopen move, or a deal with no pipeline configured at all —

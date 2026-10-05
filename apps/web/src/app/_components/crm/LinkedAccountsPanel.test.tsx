@@ -1,3 +1,5 @@
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { LinkedAccountsPanel } from "./LinkedAccountsPanel";
@@ -19,20 +21,32 @@ beforeEach(() => {
 describe("LinkedAccountsPanel (AC-004)", () => {
   it("is explicit that live sync is not switched on", async () => {
     vi.mocked(aa.getLinkedAccounts).mockResolvedValue({ data: [], source: "api" });
-    render(<LinkedAccountsPanel />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><LinkedAccountsPanel /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByText(/no connected accounts/i)).toBeInTheDocument());
     expect(screen.getByText(/live two-way sync is not/i)).toBeInTheDocument();
   });
 
+  // GAP-CRM-LINKED-ACCOUNTS-01: typing an email alone is not proof of ownership;
+  // the copy must say nothing syncs until the provider verifies ownership via its
+  // own consent (OAuth) step, matching the server's fail-closed enforcement.
+  it("states that nothing syncs until the provider verifies mailbox ownership (consent/OAuth)", async () => {
+    vi.mocked(aa.getLinkedAccounts).mockResolvedValue({ data: [], source: "api" });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><LinkedAccountsPanel /></NextIntlClientProvider>);
+    await waitFor(() => expect(screen.getByText(/no connected accounts/i)).toBeInTheDocument());
+    expect(screen.getByText(/prove you own\s+that mailbox or calendar/i)).toBeInTheDocument();
+    expect(screen.getByText(/verifies ownership through its\s+own consent \(sign-in \/ OAuth\) step/i)).toBeInTheDocument();
+    expect(screen.getByText(/Digital Personal Data Protection Act, 2023/i)).toBeInTheDocument();
+  });
+
   it("shows the saved-info badge on a failed load", async () => {
     vi.mocked(aa.getLinkedAccounts).mockResolvedValue({ data: [], source: "error" });
-    render(<LinkedAccountsPanel />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><LinkedAccountsPanel /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getAllByText(/couldn.t load/i)[0]).toBeInTheDocument());
   });
 
   it("blocks connect for an invalid email", async () => {
     vi.mocked(aa.getLinkedAccounts).mockResolvedValue({ data: [], source: "api" });
-    render(<LinkedAccountsPanel />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><LinkedAccountsPanel /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByText(/no connected accounts/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /connect provider/i }));
     expect(await screen.findByText(/enter the mailbox or calendar email/i)).toBeInTheDocument();
@@ -42,7 +56,7 @@ describe("LinkedAccountsPanel (AC-004)", () => {
   it("connects a provider as pending then reloads", async () => {
     vi.mocked(aa.getLinkedAccounts).mockResolvedValue({ data: [], source: "api" });
     vi.mocked(aa.connectLinkedAccount).mockResolvedValue(undefined);
-    render(<LinkedAccountsPanel />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><LinkedAccountsPanel /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByText(/no connected accounts/i)).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText(/provider/i), { target: { value: "o365" } });
     fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: "me@dept.gov.in" } });
@@ -54,7 +68,7 @@ describe("LinkedAccountsPanel (AC-004)", () => {
   it("disconnects an account via ConfirmDialog", async () => {
     vi.mocked(aa.getLinkedAccounts).mockResolvedValue({ data: [acct], source: "api" });
     vi.mocked(aa.deleteLinkedAccount).mockResolvedValue(undefined);
-    render(<LinkedAccountsPanel />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><LinkedAccountsPanel /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByText("a@b.com")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /disconnect a@b.com/i }));
     const dialog = await screen.findByRole("alertdialog");

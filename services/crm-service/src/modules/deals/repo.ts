@@ -1,4 +1,4 @@
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and, sql, inArray } from "drizzle-orm";
 import { pino } from "pino";
 import { tenantTransaction } from "@civitasone/db";
 import { db } from "../../shared/db.js";
@@ -146,7 +146,14 @@ export async function resolveTargetStage(
   return findStage(pipelineRows[0]?.stages ?? null, { stageName });
 }
 
+/** Shared lock on the pipeline row so pipeline stage-removal/delete (FOR UPDATE) serializes with deal writes. */
+async function lockPipelineShared(tx: Writer, pipelineId: string | null | undefined, tenantId: string): Promise<void> {
+  if (!pipelineId) return;
+  await (tx as typeof db).execute(sql`SELECT 1 FROM crm.pipelines WHERE id = ${pipelineId}::uuid AND tenant_id = ${tenantId}::uuid FOR SHARE`);
+}
+
 export async function insert(tx: Writer, row: DealInsert): Promise<void> {
+  await lockPipelineShared(tx, row.pipelineId, row.tenantId);
   // stage_id is derived the SAME way as every other stage-writing path — never the raw,
   // client-supplied stageId a create request may carry. routes.ts's POST /v1/crm/deals
   // handler calls findStage() to run the mandatory-fields gate on create, but that
@@ -176,6 +183,7 @@ export async function updateStageWithVersion(
     .limit(1);
   if (!current[0]) return { updated: false };
 
+  await lockPipelineShared(tx, current[0].pipelineId, tenantId);
   const previousStage = current[0].stage;
   const now = new Date();
 
@@ -465,6 +473,53 @@ export async function stageAgeingExceeding(tenantId: string, pipelineId?: string
     ORDER BY "daysOverLimit" DESC
   `)) as unknown as StageAgeingRow[];
   return rows;
+}
+
+/**
+ * GAP-CRM-PIPELINES-01: count the OPEN deals a pipeline still holds, so the pipelines
+ * module can refuse (409) to delete a pipeline that would orphan live deals. "Open"
+ * excludes soft-deleted/cancelled rows AND already-closed deals (close_outcome set):
+ * a historical won/lost deal referencing the pipeline is not "live" and must not block
+ * an administrative delete. Each query stays strictly within crm.deals (this module's
+ * own schema) and is scoped to the caller-verified tenantId, matching every other read
+ * here — same `tenantTransaction`/FORCE RLS rationale as `findById`.
+ */
+export async function countOpenDealsByPipeline(tenantId: string, pipelineId: string): Promise<number> {
+  const rows = await tenantTransaction(db, tenantId, (tx) => (tx as typeof db)
+    .select({ n: sql<number>`count(*)::int` })
+    .from(deals)
+    .where(and(
+      eq(deals.tenantId, tenantId),
+      eq(deals.pipelineId, pipelineId),
+      sql`${deals.status} NOT IN ('deleted','cancelled')`,
+      sql`${deals.closeOutcome} IS NULL`,
+    )));
+  return rows[0]?.n ?? 0;
+}
+
+/**
+ * GAP-CRM-PIPELINES-01: count the OPEN deals currently sitting in any of `stageNames`
+ * within a pipeline, so removing a stage that still has deals can be refused (409)
+ * instead of silently orphaning them. Same scope/"open" semantics as
+ * {@link countOpenDealsByPipeline}.
+ */
+export async function countOpenDealsInStages(
+  tenantId: string,
+  pipelineId: string,
+  stageNames: string[],
+): Promise<number> {
+  if (stageNames.length === 0) return 0;
+  const rows = await tenantTransaction(db, tenantId, (tx) => (tx as typeof db)
+    .select({ n: sql<number>`count(*)::int` })
+    .from(deals)
+    .where(and(
+      eq(deals.tenantId, tenantId),
+      eq(deals.pipelineId, pipelineId),
+      inArray(deals.stage, stageNames),
+      sql`${deals.status} NOT IN ('deleted','cancelled')`,
+      sql`${deals.closeOutcome} IS NULL`,
+    )));
+  return rows[0]?.n ?? 0;
 }
 
 /** OP-004: deals grouped for a kanban board — one bucket per stage. */

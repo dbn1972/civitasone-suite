@@ -56,7 +56,7 @@ export type { ConfidenceBarProps } from "./ConfidenceBar";
 export { PredictionHistory } from "./PredictionHistory";
 export type { PredictionHistoryProps, PredictionHistoryEntry } from "./PredictionHistory";
 export { SkeletonRow, SkeletonCard, SkeletonTable, SkeletonBar } from "./Skeleton";
-export { Masked, maskAccount, maskLast4 } from "./Masked";
+export { Masked, maskAccount, maskLast4, maskPhone, maskEmail } from "./Masked";
 export type { MaskedProps, MaskedKind } from "./Masked";
 export { RevealableValue } from "./RevealableValue";
 export type { RevealableValueProps } from "./RevealableValue";

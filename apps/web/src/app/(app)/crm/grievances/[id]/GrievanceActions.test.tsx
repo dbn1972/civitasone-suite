@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -17,7 +19,7 @@ describe("GrievanceActions", () => {
   });
 
   it("renders a terminal message and no action buttons once DISPOSED", () => {
-    render(<GrievanceActions id={GRIEVANCE_ID} status="DISPOSED" />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><GrievanceActions id={GRIEVANCE_ID} status="DISPOSED" /></NextIntlClientProvider>);
     expect(screen.getByText(/disposed — no further action available/)).toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
@@ -32,7 +34,7 @@ describe("GrievanceActions", () => {
       new Response(JSON.stringify({ data: { id: GRIEVANCE_ID } }), { status: 200 }),
     );
 
-    render(<GrievanceActions id={GRIEVANCE_ID} status="REGISTERED" />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><GrievanceActions id={GRIEVANCE_ID} status="REGISTERED" /></NextIntlClientProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Forward" }));
 
     await waitFor(() => expect(screen.getByText("Forward this grievance?")).toBeInTheDocument());
@@ -53,7 +55,7 @@ describe("GrievanceActions", () => {
       new Response(JSON.stringify({ data: { id: GRIEVANCE_ID } }), { status: 200 }),
     );
 
-    render(<GrievanceActions id={GRIEVANCE_ID} status="ATTENDED" />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><GrievanceActions id={GRIEVANCE_ID} status="ATTENDED" /></NextIntlClientProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Resolve" }));
     await waitFor(() => expect(screen.getByText("Resolve this grievance?")).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText("Resolution"), { target: { value: "Pipe repaired" } });
@@ -73,7 +75,7 @@ describe("GrievanceActions", () => {
       new Response(JSON.stringify({ data: { id: GRIEVANCE_ID } }), { status: 200 }),
     );
 
-    render(<GrievanceActions id={GRIEVANCE_ID} status="ATTENDED" />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><GrievanceActions id={GRIEVANCE_ID} status="ATTENDED" /></NextIntlClientProvider>);
     fireEvent.click(screen.getByRole("button", { name: "First Appeal" }));
     await waitFor(() => expect(screen.getByText("File a first appeal?")).toBeInTheDocument());
 
@@ -90,7 +92,7 @@ describe("GrievanceActions", () => {
   it("closes (danger action) to the correct proxied endpoint", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
 
-    render(<GrievanceActions id={GRIEVANCE_ID} status="ATTENDED" />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><GrievanceActions id={GRIEVANCE_ID} status="ATTENDED" /></NextIntlClientProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     await waitFor(() => expect(screen.getByText("Close this grievance?")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
@@ -108,7 +110,7 @@ describe("GrievanceActions", () => {
       new Response(JSON.stringify({ message: "Grievance already disposed" }), { status: 409 }),
     );
 
-    render(<GrievanceActions id={GRIEVANCE_ID} status="ATTENDED" />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><GrievanceActions id={GRIEVANCE_ID} status="ATTENDED" /></NextIntlClientProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     await waitFor(() => expect(screen.getByText("Close this grievance?")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
@@ -116,5 +118,45 @@ describe("GrievanceActions", () => {
     expect(await screen.findByText(/couldn't save/i)).toBeInTheDocument();
     expect(screen.queryByText("Grievance already disposed")).not.toBeInTheDocument();
     expect(refreshMock).not.toHaveBeenCalled();
+  });
+
+  // GAP-CRM-GRIEVANCES-DETAIL-01 — concurrency guard. The version rendered by
+  // the page must travel on the PATCH as an If-Match header; before the fix no
+  // version was ever sent, so two clerks silently overwrote each other.
+  it("sends the grievance version as If-Match on a lifecycle action", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: GRIEVANCE_ID } }), { status: 200 }),
+    );
+
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><GrievanceActions id={GRIEVANCE_ID} status="REGISTERED" version={7} /></NextIntlClientProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Forward" }));
+    await waitFor(() => expect(screen.getByText("Forward this grievance?")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Department / Office"), { target: { value: "Water Board" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    const [, init] = fetchSpy.mock.calls[0];
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers["If-Match"]).toBe("7");
+  });
+
+  // A 412 (failed If-Match precondition) is a version conflict, not a generic
+  // save error: it must show the dedicated "changed by someone else" copy AND
+  // refresh the page to pull in the latest version. A business-rule 409 (tested
+  // above) must still NOT refresh — the two are deliberately kept distinct.
+  it("surfaces a conflict message and refreshes on a 412 version conflict", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ code: "VERSION_CONFLICT" }), { status: 412 }),
+    );
+
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><GrievanceActions id={GRIEVANCE_ID} status="ATTENDED" version={3} /></NextIntlClientProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Resolve" }));
+    await waitFor(() => expect(screen.getByText("Resolve this grievance?")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Resolution"), { target: { value: "Pipe repaired" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+
+    expect(await screen.findByText(/changed by someone else/i)).toBeInTheDocument();
+    expect(screen.queryByText(/couldn't save/i)).not.toBeInTheDocument();
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
   });
 });

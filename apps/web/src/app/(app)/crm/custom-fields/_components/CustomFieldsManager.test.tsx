@@ -1,7 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { CustomFieldsManager } from "./CustomFieldsManager";
 import * as cf from "@/lib/crm/customFields";
+
+function render(ui: ReactElement) {
+  return rtlRender(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
 
 vi.mock("@/lib/crm/customFields", async (orig) => {
   const actual = await orig<typeof import("@/lib/crm/customFields")>();
@@ -178,5 +189,62 @@ describe("CustomFieldsManager", () => {
     const survivingThirdOption = screen.getAllByLabelText(/^Option \d+$/)[1]!;
     expect(survivingThirdOption).toHaveValue("West");
     expect(document.activeElement).toBe(survivingThirdOption);
+  });
+
+  describe("sensitive-field controls (GAP-CRM-CUSTOM-FIELDS-01)", () => {
+    async function addBlankField() {
+      vi.mocked(cf.listCustomFields).mockResolvedValue({ data: [], source: "api" });
+      render(<CustomFieldsManager />);
+      await waitFor(() => expect(screen.getByText(/no custom fields yet/i)).toBeInTheDocument());
+      fireEvent.click(screen.getByRole("button", { name: /add custom field/i }));
+    }
+
+    it("warns and pre-ticks Sensitive when a field is named like a statutory identifier", async () => {
+      await addBlankField();
+      const sensitive = screen.getByLabelText(/sensitive \(mask on records\)/i);
+      expect(sensitive).not.toBeChecked();
+      expect(screen.queryByText(/looks like a statutory identifier/i)).not.toBeInTheDocument();
+
+      fireEvent.change(screen.getByLabelText(/custom field name/i), { target: { value: "Aadhaar" } });
+
+      expect(screen.getByText(/looks like a statutory identifier/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/sensitive \(mask on records\)/i)).toBeChecked();
+      // role-visibility picker appears once the field is sensitive
+      expect(screen.getByLabelText(/visible to crm_admin/i)).toBeInTheDocument();
+    });
+
+    it("does not pre-tick Sensitive for an ordinary field name", async () => {
+      await addBlankField();
+      fireEvent.change(screen.getByLabelText(/custom field name/i), { target: { value: "Nickname" } });
+      expect(screen.getByLabelText(/sensitive \(mask on records\)/i)).not.toBeChecked();
+      expect(screen.queryByText(/looks like a statutory identifier/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/visible to crm_admin/i)).not.toBeInTheDocument();
+    });
+
+    it("sends sensitive + visibleToRoles in the saved definition", async () => {
+      vi.mocked(cf.createCustomField).mockResolvedValue(undefined);
+      await addBlankField();
+      fireEvent.change(screen.getByLabelText(/custom field name/i), { target: { value: "PAN" } });
+      fireEvent.click(screen.getByLabelText(/visible to crm_admin/i));
+      fireEvent.click(screen.getByRole("button", { name: /^Save$/i }));
+
+      await waitFor(() => expect(cf.createCustomField).toHaveBeenCalledTimes(1));
+      const draft = vi.mocked(cf.createCustomField).mock.calls[0]![0];
+      expect(draft.sensitive).toBe(true);
+      expect(draft.visibleToRoles).toEqual(["crm_admin"]);
+      expect(cf.buildValidationSchema(draft)).toEqual({ sensitive: true, visibleToRoles: ["crm_admin"] });
+    });
+
+    it("loads an existing sensitive field with its flag and roles ticked", async () => {
+      vi.mocked(cf.listCustomFields).mockResolvedValue({
+        data: [field({ fieldName: "Passport No", fieldType: "text", validationSchema: { sensitive: true, visibleToRoles: ["super_admin"] } })],
+        source: "api",
+      });
+      render(<CustomFieldsManager />);
+      expect(await screen.findByDisplayValue("Passport No")).toBeInTheDocument();
+      expect(screen.getByLabelText(/sensitive \(mask on records\)/i)).toBeChecked();
+      expect(screen.getByLabelText(/visible to super_admin/i)).toBeChecked();
+      expect(screen.getByLabelText(/visible to crm_admin/i)).not.toBeChecked();
+    });
   });
 });

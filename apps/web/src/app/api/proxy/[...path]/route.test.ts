@@ -4,7 +4,7 @@ vi.mock("next/headers", () => ({
   cookies: () => ({ get: () => ({ value: "test-token" }) }),
 }));
 
-import { GET, POST } from "./route";
+import { GET, POST, PATCH } from "./route";
 
 /**
  * GAP-PAYROLL-DISBURSEMENT-02/03: the BFF proxy used `upstream.text()` and
@@ -80,5 +80,29 @@ describe("BFF proxy idempotency header allow-list", () => {
     const sent = fetchMock.mock.calls[0]![1].headers as Record<string, string>;
     expect(sent["x-idempotency-key"]).toBe("k-12345678");
     expect(sent["idempotency-key"]).toBeUndefined();
+  });
+});
+
+// GAP-CRM-GRIEVANCES-DETAIL-01: the proxy allow-list must forward If-Match so a
+// grievance lifecycle PATCH can carry its optimistic-concurrency version
+// upstream. Before the fix the header was silently dropped at the BFF.
+describe("BFF proxy If-Match header allow-list", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockResolvedValue(new Response("{}", { status: 200, headers: { "content-type": "application/json" } }));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("forwards If-Match upstream on a grievance lifecycle PATCH", async () => {
+    await PATCH(
+      new Request("http://localhost/api/proxy/v1/crm/grievances/g-1/resolve", {
+        method: "PATCH", body: "{}", headers: { "If-Match": "7" },
+      }),
+      { params: { path: ["v1", "crm", "grievances", "g-1", "resolve"] } },
+    );
+    const sent = fetchMock.mock.calls[0]![1].headers as Record<string, string>;
+    expect(sent["if-match"]).toBe("7");
   });
 });

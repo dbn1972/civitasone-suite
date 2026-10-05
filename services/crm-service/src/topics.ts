@@ -448,6 +448,13 @@ export const EVENTS = {
   campaignApproved: "crm.campaign.approved",
   /** A pending campaign was rejected, optionally with a reason. */
   campaignRejected: "crm.campaign.rejected",
+  // -- GAP-CRM-RTI-DETAIL-01: RTI appeal chain (payloads carry no PII) --
+  /** The First Appellate Authority's order on a first appeal was recorded. */
+  rtiFirstAppealDecided: "crm.rti.first_appeal_decided",
+  /** A second appeal to the Information Commission was recorded. */
+  rtiSecondAppealRecorded: "crm.rti.second_appeal_recorded",
+  /** An RTI request was disposed (closed). */
+  rtiDisposed: "crm.rti.disposed",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */

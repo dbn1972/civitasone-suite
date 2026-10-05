@@ -81,6 +81,14 @@ describe("normaliseReport", () => {
     const r = normaliseReport({ distribution: [{ label: "80-100%", count: 5 }] });
     expect(r.distribution[0]).toEqual({ label: "80-100%", count: 5 });
   });
+  it("carries a record's display name when present (GAP-CRM-DATA-QUALITY-01)", () => {
+    const r = normaliseReport({ records: [{ id: "u-1", score: 0.4, issues: [], name: "Acme Pvt Ltd" }] });
+    expect(r.records[0]).toEqual({ id: "u-1", score: 0.4, issues: [], name: "Acme Pvt Ltd" });
+  });
+  it("omits name (not empty string) when the backend does not send one", () => {
+    const r = normaliseReport({ records: [{ id: "u-2", score: 0.4, issues: [] }] });
+    expect(r.records[0].name).toBeUndefined();
+  });
 });
 
 describe("client calls", () => {

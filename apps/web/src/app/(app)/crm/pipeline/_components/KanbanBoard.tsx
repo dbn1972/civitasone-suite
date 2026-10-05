@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useSeededResource } from "@/lib/sync/resource";
 import { useFormError } from "@/lib/useFormError";
-import { EmptyState } from "../../../../_components/ds";
+import { ConfirmDialog, EmptyState } from "../../../../_components/ds";
 import type { PipelineDealCard, PipelineView } from "../../../../_data/loaders";
 import { DealCard } from "./DealCard";
 import { StageColumn } from "./StageColumn";
@@ -39,7 +40,17 @@ type MoveError = {
   message: string;
 };
 
+type StageLike = { id: string; name: string; probability: number; ordinal: number };
+
+type PendingMove = {
+  deal: PipelineDealCard;
+  targetStage: StageLike;
+  /** Whether to overwrite the deal's own probability with the stage default. */
+  acceptStageProbability: boolean;
+};
+
 export function KanbanBoard({ pipeline, deals: serverDeals, source }: Props) {
+  const t = useTranslations("crmKanbanBoard");
   const { data: deals, fromCache, offline, cachedAt } = useSeededResource<PipelineDealCard[]>(
     "crm.pipeline.deals",
     serverDeals,
@@ -56,6 +67,8 @@ export function KanbanBoard({ pipeline, deals: serverDeals, source }: Props) {
   const [dropTargetStage, setDropTargetStage] = useState<string | null>(null);
   const [moveError, setMoveError] = useState<MoveError | null>(null);
   const [movingDealId, setMovingDealId] = useState<string | null>(null);
+  const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
   const announcerRef = useRef<HTMLDivElement>(null);
   const formError = useFormError("deal");
 
@@ -88,25 +101,40 @@ export function KanbanBoard({ pipeline, deals: serverDeals, source }: Props) {
     setDropTargetStage(null);
   }, []);
 
-  const moveDealToStage = useCallback(async (dealId: string, targetStageId: string) => {
+  // GAP-CRM-PIPELINE-02: a drop/keyboard move no longer PATCHes immediately. It opens a
+  // ConfirmDialog first (parity with /crm/opportunities, which already confirms the move
+  // and shows the stage change) and only commits on confirm. No optimistic update and no
+  // network call happen until then, so a cancel leaves the card exactly where it was.
+  const requestMove = useCallback((dealId: string, targetStageId: string) => {
     const deal = localDeals.find((d) => d.id === dealId);
     if (!deal) return;
-
     const targetStage = stages.find((s) => s.id === targetStageId);
     if (!targetStage) return;
+    // Same-stage drop is a no-op — never prompt for it.
+    if (deal.stageId === targetStageId || deal.stage === targetStage.name) return;
+    setMoveError(null);
+    setPendingMove({
+      deal,
+      targetStage,
+      // Default: only adopt the stage's probability when the deal has none of its own
+      // (0/unset). A deal that already carries a probability keeps it unless the user
+      // ticks "use the stage's default probability" in the dialog — we never silently
+      // overwrite a hand-set probability with the stage default.
+      acceptStageProbability: !deal.probability,
+    });
+  }, [localDeals, stages]);
 
-    // If dropping on same stage, no-op
-    if (deal.stageId === targetStageId || deal.stage === targetStage.name) {
-      return;
-    }
-
-    // Optimistic update
+  const commitMove = useCallback(async (move: PendingMove) => {
+    const { deal, targetStage, acceptStageProbability } = move;
+    setConfirmBusy(true);
     setMovingDealId(deal.id);
     const previousDeals = [...localDeals];
+    // Only change probability optimistically when we're actually going to send it.
+    const sendProbability = acceptStageProbability;
     setLocalDeals((prev) =>
       prev.map((d) =>
         d.id === deal.id
-          ? { ...d, stageId: targetStageId, stage: targetStage.name, probability: targetStage.probability }
+          ? { ...d, stageId: targetStage.id, stage: targetStage.name, probability: sendProbability ? targetStage.probability : d.probability }
           : d,
       ),
     );
@@ -119,18 +147,19 @@ export function KanbanBoard({ pipeline, deals: serverDeals, source }: Props) {
         body: JSON.stringify({
           stage: targetStage.name,
           // Only a real pipeline's stages have a uuid id — DEFAULT_STAGES' ids
-          // ("lead", "proposal", ...) are synthetic and would fail the
-          // backend's z.string().uuid() check on this field, 400ing every move
-          // for a deal that has no pipeline. Move-by-name alone still works:
-          // routes.ts falls back to matching by stage name when stageId is absent.
-          ...(hasRealPipeline ? { stageId: targetStageId } : {}),
-          probability: targetStage.probability,
+          // ("lead", "proposal", ...) are synthetic and would fail the backend's
+          // z.string().uuid() check. Move-by-name alone still works.
+          ...(hasRealPipeline ? { stageId: targetStage.id } : {}),
+          // GAP-CRM-PIPELINE-02: probability is sent ONLY when the user accepted the
+          // stage default; otherwise it is omitted entirely so the backend keeps the
+          // deal's own probability (the stage-change consumer leaves it as-is when no
+          // probability is supplied for a non-terminal stage).
+          ...(sendProbability ? { probability: targetStage.probability } : {}),
           version: deal.version,
         }),
       });
 
       if (!res.ok) {
-        // Revert on failure
         setLocalDeals(previousDeals);
         if (res.status === 409) {
           setMoveError({
@@ -144,7 +173,6 @@ export function KanbanBoard({ pipeline, deals: serverDeals, source }: Props) {
           announce(`Move failed for engagement ${deal.name}: ${resolved.message}`);
         }
       } else {
-        // Success — increment version locally
         setLocalDeals((prev) =>
           prev.map((d) =>
             d.id === deal.id ? { ...d, version: d.version + 1 } : d,
@@ -159,21 +187,18 @@ export function KanbanBoard({ pipeline, deals: serverDeals, source }: Props) {
       announce(`Move failed for engagement ${deal.name}: network error.`);
     } finally {
       setMovingDealId(null);
+      setConfirmBusy(false);
+      setPendingMove(null);
     }
-    // formError.fromResponse is stable (useCallback'd on a fixed `area`
-    // string inside useFormError) even though the wrapping `formError`
-    // object literal isn't, so omitting it here is safe and avoids
-    // re-creating moveDealToStage every render (see hr/leave/approvals/
-    // LeaveApprovalsPanel.tsx for the same, first-established pattern).
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- formError.fromResponse/fromException/clear are stable (useCallback'd on a fixed area string in useFormError); the wrapping object is recreated every render but isn't read here.
-  }, [localDeals, stages, hasRealPipeline, announce]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- formError.fromResponse/fromException/clear are stable (useCallback'd on a fixed area string in useFormError); the wrapping object is recreated every render but isn't read here.
+  }, [localDeals, hasRealPipeline, announce]);
 
-  const handleDrop = useCallback(async (targetStageId: string) => {
+  const handleDrop = useCallback((targetStageId: string) => {
     if (!draggedDealId) return;
     setDraggedDealId(null);
     setDropTargetStage(null);
-    await moveDealToStage(draggedDealId, targetStageId);
-  }, [draggedDealId, moveDealToStage]);
+    requestMove(draggedDealId, targetStageId);
+  }, [draggedDealId, requestMove]);
 
   /**
    * Keyboard-based stage move for accessibility (WCAG 2.2 AA).
@@ -196,13 +221,35 @@ export function KanbanBoard({ pipeline, deals: serverDeals, source }: Props) {
     }
 
     const targetStage = stages[newIdx];
-    await moveDealToStage(dealId, targetStage.id);
-  }, [localDeals, stages, moveDealToStage, announce]);
+    requestMove(dealId, targetStage.id);
+  }, [localDeals, stages, requestMove, announce]);
 
   const cacheNote =
     offline || fromCache
       ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
       : null;
+
+  // GAP-CRM-PIPELINE-01: an outage must not read as "an empty pipeline". When the load
+  // errored AND there is nothing cached to fall back on, show an error state with a
+  // Retry — never the "No deals / Create Deal" empty state (which fabricates "empty" as
+  // fact). A cached copy (fromCache/offline) still renders the board below, with the
+  // cacheNote banner, so going offline is not treated as an error.
+  if (localDeals.length === 0 && source === "error" && !fromCache && !offline) {
+    return (
+      <div className="card">
+        <EmptyState
+          icon="⚠️"
+          title={t("loadErrorTitle")}
+          message={t("loadErrorMessage")}
+          action={
+            <button type="button" className="btn primary" onClick={() => window.location.reload()}>
+              {t("retry")}
+            </button>
+          }
+        />
+      </div>
+    );
+  }
 
   if (localDeals.length === 0 && stages.length > 0) {
     return (
@@ -291,6 +338,54 @@ export function KanbanBoard({ pipeline, deals: serverDeals, source }: Props) {
           );
         })}
       </div>
+
+      {/* GAP-CRM-PIPELINE-02: confirm a stage move before it is committed. No PATCH is
+          issued until the user confirms; cancelling leaves the card where it was. When
+          the deal already has its own probability and the target stage has a different
+          default, offer a checkbox to adopt the stage default — otherwise the deal keeps
+          its probability. */}
+      <ConfirmDialog
+        open={pendingMove !== null}
+        title={
+          pendingMove
+            ? t("moveTitle", { name: pendingMove.deal.name, stage: pendingMove.targetStage.name })
+            : ""
+        }
+        description={
+          pendingMove ? (
+            <div style={{ display: "grid", gap: 8 }}>
+              <p style={{ margin: 0 }}>
+                {t.rich("moveDescription", {
+                  stage: pendingMove.targetStage.name,
+                  strong: (chunks) => <strong>{chunks}</strong>,
+                })}
+              </p>
+              {pendingMove.deal.probability && pendingMove.deal.probability !== pendingMove.targetStage.probability ? (
+                <label style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 13 }}>
+                  <input
+                    type="checkbox"
+                    checked={pendingMove.acceptStageProbability}
+                    onChange={(e) =>
+                      setPendingMove((m) => (m ? { ...m, acceptStageProbability: e.target.checked } : m))
+                    }
+                  />
+                  {t("replaceProbability", {
+                    current: pendingMove.deal.probability,
+                    stageDefault: pendingMove.targetStage.probability,
+                  })}
+                </label>
+              ) : null}
+            </div>
+          ) : null
+        }
+        confirmLabel={t("moveConfirm")}
+        busy={confirmBusy}
+        onCancel={() => {
+          setPendingMove(null);
+          announce(t("moveCancelled"));
+        }}
+        onConfirm={() => pendingMove && void commitMove(pendingMove)}
+      />
     </div>
   );
 }

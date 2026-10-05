@@ -141,7 +141,7 @@ export default async function GrievanceDetailPage({
         subtitle={g.subject}
         back="/crm/grievances"
         backLabel="Grievances"
-        actions={<GrievanceActions id={g.id} status={g.status} />}
+        actions={<GrievanceActions id={g.id} status={g.status} version={g.version} />}
       />
       {source === "error" && <DataSourceBadge source={source} />}
 

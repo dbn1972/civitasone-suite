@@ -2,12 +2,25 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button, PageHeader } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { rupeesToMinorString } from "@/lib/money";
+import { todayIST } from "@/lib/formatters";
 
 const RTI_SECTIONS = [
   { value: "s.6",  label: "§6 — Information Request" },
   { value: "s.11", label: "§11 — Third-party Information" },
+] as const;
+
+// GAP-CRM-RTI-NEW-02: mode-of-receipt vocabulary mirrors crm-service's
+// rti_requests_mode_check constraint (migration 0096).
+const RTI_MODES = [
+  { value: "online",    labelKey: "modeOnline" },
+  { value: "post",      labelKey: "modePost" },
+  { value: "email",     labelKey: "modeEmail" },
+  { value: "in_person", labelKey: "modeInPerson" },
+  { value: "by_hand",   labelKey: "modeByHand" },
 ] as const;
 
 const SAMPLE_DEPARTMENTS = [
@@ -21,29 +34,75 @@ const SAMPLE_DEPARTMENTS = [
   "Other",
 ];
 
+// GAP-CRM-RTI-NEW-03: a contact must be either an Indian 10-digit mobile
+// (optionally +91 / 0 prefixed) or an email. Validated client-side so a
+// typo'd contact is caught before filing; the server remains the authority.
+const INDIAN_MOBILE_RE = /^(?:\+?91[-\s]?|0)?[6-9]\d{9}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function contactError(raw: string, t: (key: string) => string): string | null {
+  const value = raw.trim();
+  if (!value) return null; // contact is optional
+  const normalisedMobile = value.replace(/[-\s]/g, "");
+  if (INDIAN_MOBILE_RE.test(normalisedMobile) || EMAIL_RE.test(value)) return null;
+  return t("contactInvalid");
+}
+
 export default function NewRtiPage() {
+  const t = useTranslations("crmRtiNew");
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const formError = useFormError("RTI request");
+  const [contactMsg, setContactMsg] = useState<string | null>(null);
+  const [feeMsg, setFeeMsg] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setSaving(true);
     formError.clear();
+    setContactMsg(null);
+    setFeeMsg(null);
+
     const fd = new FormData(e.currentTarget);
 
-    const feeAmountRaw = fd.get("feeAmount");
+    // GAP-CRM-RTI-NEW-03: validate contact format before submit.
+    const contactRaw = String(fd.get("applicantContact") ?? "");
+    const cErr = contactError(contactRaw, t);
+    if (cErr) {
+      setContactMsg(cErr);
+      return;
+    }
+
+    // GAP-CRM-RTI-NEW-01: send the fee as paise (bigint minor units), not a
+    // rupees JSON float. rupeesToMinorString rejects >2 decimals rather than
+    // silently rounding a statutory fee.
+    const feeAmountRaw = String(fd.get("feeAmount") ?? "").trim();
+    let feeAmountMinor: string | undefined;
+    if (feeAmountRaw) {
+      const minor = rupeesToMinorString(feeAmountRaw, { allowZero: true });
+      if (minor === null) {
+        setFeeMsg(t("feeInvalid"));
+        return;
+      }
+      feeAmountMinor = minor;
+    }
+
+    const receivedDate = String(fd.get("receivedDate") ?? "").trim();
+    const mode = String(fd.get("mode") ?? "").trim();
+
     const body = {
       section:          fd.get("section"),
       departmentRef:    fd.get("departmentRef"),
       applicantName:    fd.get("applicantName"),
-      applicantContact: fd.get("applicantContact") || undefined,
+      applicantContact: contactRaw.trim() || undefined,
       subject:          fd.get("subject"),
       description:      fd.get("description"),
       feePaid:          fd.get("feePaid") === "true",
-      feeAmount:        feeAmountRaw ? Number(feeAmountRaw) : undefined,
+      ...(feeAmountMinor !== undefined ? { feeAmountMinor } : {}),
+      ...(receivedDate ? { receivedDate } : {}),
+      ...(mode ? { mode } : {}),
     };
 
+    setSaving(true);
     try {
       const res = await fetch("/api/proxy/v1/crm/rti", {
         method: "POST",
@@ -87,6 +146,8 @@ export default function NewRtiPage() {
       {" "}*
     </span>
   );
+
+  const today = todayIST();
 
   return (
     <>
@@ -172,6 +233,41 @@ export default function NewRtiPage() {
                 </label>
               </div>
 
+              {/* GAP-CRM-RTI-NEW-02: date & mode of receipt. The 30-day
+                  statutory clock runs from the date the request was actually
+                  received, not when this register entry is filed. */}
+              <div
+                style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}
+              >
+                <label style={labelStyle}>
+                  <span>{t("dateOfReceipt")}</span>
+                  <input
+                    name="receivedDate"
+                    type="date"
+                    max={today}
+                    style={fieldStyle}
+                  />
+                  <span style={{ fontSize: 12, color: "var(--ink2)" }}>
+                    {t("dateOfReceiptHint")}
+                  </span>
+                  {formError.fieldError("receivedDate") && (
+                    <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("receivedDate")}</span>
+                  )}
+                </label>
+
+                <label style={labelStyle}>
+                  <span>{t("modeOfReceipt")}</span>
+                  <select name="mode" defaultValue="" style={fieldStyle}>
+                    <option value="">{t("selectMode")}</option>
+                    {RTI_MODES.map((m) => (
+                      <option key={m.value} value={m.value}>
+                        {t(m.labelKey)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
               <label style={labelStyle}>
                 <span>Subject{req}</span>
                 <input
@@ -208,6 +304,24 @@ export default function NewRtiPage() {
             <legend style={{ fontWeight: 600, marginBottom: 12, color: "var(--ink)" }}>
               Applicant Details
             </legend>
+            {/* GAP-CRM-RTI-NEW-03: DPDP purpose / lawful-basis notice. This is
+                an officer-side register entry on behalf of an applicant, so
+                the control is a processing notice (not a consent checkbox).
+                The exact legal wording is pending DPO/legal sign-off (see
+                report). */}
+            <p
+              style={{
+                margin: "0 0 12px",
+                fontSize: 12,
+                color: "var(--ink2)",
+                lineHeight: 1.5,
+                padding: "8px 12px",
+                background: "color-mix(in srgb, var(--ink2) 6%, transparent)",
+                borderRadius: "var(--r)",
+              }}
+            >
+              {t("dpdpNotice")}
+            </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <label style={labelStyle}>
                 <span>Full Name{req}</span>
@@ -228,9 +342,14 @@ export default function NewRtiPage() {
                 <input
                   name="applicantContact"
                   maxLength={200}
-                  placeholder="Phone number or email"
+                  placeholder={t("contactPlaceholder")}
+                  aria-invalid={contactMsg ? true : undefined}
+                  onChange={() => contactMsg && setContactMsg(null)}
                   style={fieldStyle}
                 />
+                {contactMsg && (
+                  <span style={{ fontSize: 12, color: "var(--bad)" }}>{contactMsg}</span>
+                )}
               </label>
             </div>
           </fieldset>
@@ -253,12 +372,16 @@ export default function NewRtiPage() {
                 <span>Fee Amount (INR)</span>
                 <input
                   name="feeAmount"
-                  type="number"
-                  min="0"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   placeholder="e.g. 10.00"
+                  aria-invalid={feeMsg ? true : undefined}
+                  onChange={() => feeMsg && setFeeMsg(null)}
                   style={fieldStyle}
                 />
+                {feeMsg && (
+                  <span style={{ fontSize: 12, color: "var(--bad)" }}>{feeMsg}</span>
+                )}
               </label>
             </div>
           </fieldset>

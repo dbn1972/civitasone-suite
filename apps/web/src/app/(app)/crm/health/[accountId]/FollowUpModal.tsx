@@ -7,6 +7,7 @@
  * request subject, then POSTs to /api/v1/crm/service-requests.
  * Redirects to the new SR on success.
  */
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
@@ -54,10 +55,18 @@ const LABEL: React.CSSProperties = {
 
 interface Props {
   accountId: string;
+  /**
+   * GAP-CRM-HEALTH-ACCOUNTID-01: the human-readable account name, resolved by
+   * the server page from crm-service. Shown in the dialog header so a clerk can
+   * confirm the target before creating a service request, instead of the raw
+   * UUID the dialog used to print. Optional: falls back to the id when unknown.
+   */
+  accountName?: string | null;
   onClose?: () => void;
 }
 
-export function FollowUpModal({ accountId, onClose }: Props) {
+export function FollowUpModal({ accountId, accountName, onClose }: Props) {
+  const t = useTranslations("crmFollowUpModal");
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -142,16 +151,20 @@ export function FollowUpModal({ accountId, onClose }: Props) {
                   }}
                 >
                   {"Account: "}
-                  <code
-                    style={{
-                      fontSize: 12,
-                      background: "var(--bg)",
-                      padding: "1px 6px",
-                      borderRadius: 4,
-                    }}
-                  >
-                    {accountId}
-                  </code>
+                  {accountName ? (
+                    <strong style={{ color: "var(--ink)" }}>{accountName}</strong>
+                  ) : (
+                    <code
+                      style={{
+                        fontSize: 12,
+                        background: "var(--bg)",
+                        padding: "1px 6px",
+                        borderRadius: 4,
+                      }}
+                    >
+                      {accountId}
+                    </code>
+                  )}
                 </p>
               </div>
               <button
@@ -262,7 +275,7 @@ export function FollowUpModal({ accountId, onClose }: Props) {
                   name="subject"
                   required
                   maxLength={500}
-                  defaultValue={`Account health follow-up — ${accountId}`}
+                  defaultValue={t("defaultSubject", { account: accountName ?? accountId })}
                   style={FIELD}
                 />
                 {formError.fieldError("subject") && (

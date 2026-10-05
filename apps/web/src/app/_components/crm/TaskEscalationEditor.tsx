@@ -8,6 +8,7 @@
  * saved-info badge, never an empty rule-set presented as fact.
  */
 import { useEffect, useId, useState } from "react";
+import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState, Button } from "../ds";
 import {
@@ -15,7 +16,12 @@ import {
   createTaskEscalationRule,
   updateTaskEscalationRule,
   deleteTaskEscalationRule,
+  getEscalationRoles,
+  getEscalationUsers,
+  getOverdueTasks,
   type TaskEscalationRule,
+  type EscalationRole,
+  type EscalationUser,
   type AaSource,
 } from "@/lib/crm/activityAccount";
 
@@ -39,12 +45,19 @@ const inputStyle = { padding: 6, minHeight: 40, borderRadius: 8, border: "1px so
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
 
 export function TaskEscalationEditor() {
+  const t = useTranslations("crmTaskEscalationEditor");
   const [rows, setRows] = useState<Row[]>([]);
   const [source, setSource] = useState<AaSource | "loading">("loading");
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
+  // GAP-CRM-TASK-ESCALATION-01: the tenant's roles + users back the pickers so a
+  // rule can only target a real role / user, and `overdueCount` powers the
+  // preview line that tells a clerk how many tasks a rule matches right now.
+  const [roles, setRoles] = useState<EscalationRole[]>([]);
+  const [users, setUsers] = useState<EscalationUser[]>([]);
+  const [overdueCount, setOverdueCount] = useState<number | null>(null);
   const headingId = useId();
 
   async function load(isLive: () => boolean = () => true) {
@@ -58,6 +71,16 @@ export function TaskEscalationEditor() {
   useEffect(() => {
     let live = true;
     void load(() => live);
+    // Directory + overdue count for the pickers and the preview line. Failures
+    // here are non-fatal: the editor still works, the preview just omits a count.
+    void Promise.all([getEscalationRoles(), getEscalationUsers(), getOverdueTasks()]).then(
+      ([r, u, o]) => {
+        if (!live) return;
+        setRoles(r.data);
+        setUsers(u.data);
+        setOverdueCount(o.source === "error" ? null : o.data.length);
+      },
+    );
     return () => {
       live = false;
     };
@@ -69,6 +92,19 @@ export function TaskEscalationEditor() {
 
   function addRule() {
     setRows((prev) => [...prev, toRow({ thresholdMinutes: 1440, managerRole: "", managerId: "", enabled: true })]);
+  }
+
+  /** Display name for a saved rule's manager, flagging one that no longer exists. */
+  function managerSummary(row: Row): { text: string; missing: boolean } {
+    if (row.managerId.trim()) {
+      const u = users.find((x) => x.id === row.managerId.trim());
+      return u ? { text: u.name, missing: false } : { text: t("unknownUser"), missing: true };
+    }
+    if (row.managerRole.trim()) {
+      const r = roles.find((x) => x.key === row.managerRole.trim());
+      return r ? { text: r.label, missing: false } : { text: t("unknownRole", { role: row.managerRole.trim() }), missing: true };
+    }
+    return { text: t("noManager"), missing: true };
   }
 
   async function saveRow(row: Row) {
@@ -134,7 +170,9 @@ export function TaskEscalationEditor() {
         {rows.length === 0 ? (
           <EmptyState icon="⏰" title="No task-escalation rules yet" message="Add a rule so overdue tasks reach a manager." />
         ) : (
-          rows.map((row, i) => (
+          rows.map((row, i) => {
+            const summary = managerSummary(row);
+            return (
             <fieldset key={row.key} style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 12, display: "grid", gap: 10, margin: 0 }}>
               <legend style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)", padding: "0 6px" }}>Rule {i + 1}</legend>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
@@ -152,14 +190,66 @@ export function TaskEscalationEditor() {
                   />
                 </div>
                 <div>
+                  {/* GAP-CRM-TASK-ESCALATION-01: a SELECT fed by the tenant's
+                      roles, not free text — a mistyped role can no longer save
+                      and escalate to nobody. Clearing the role is allowed (so a
+                      user-targeted rule can drop it). */}
                   <label htmlFor={`${row.key}-mr`} style={labelStyle}>Manager role</label>
-                  <input id={`${row.key}-mr`} aria-label={`Manager role for rule ${i + 1}`} value={row.managerRole} onChange={(e) => update(row.key, { managerRole: e.target.value })} placeholder="e.g. sales_manager" aria-invalid={row.managerRole.trim() || row.managerId.trim() ? undefined : true} style={inputStyle} />
+                  <select
+                    id={`${row.key}-mr`}
+                    aria-label={t("managerRoleAria", { n: i + 1 })}
+                    value={row.managerRole}
+                    onChange={(e) => update(row.key, { managerRole: e.target.value })}
+                    aria-invalid={row.managerRole.trim() || row.managerId.trim() ? undefined : true}
+                    style={inputStyle}
+                  >
+                    <option value="">{t("noRole")}</option>
+                    {/* Keep a saved-but-unknown role selectable so an existing
+                        rule referencing a deleted role still round-trips and is
+                        flagged below rather than silently cleared. */}
+                    {row.managerRole && !roles.some((r) => r.key === row.managerRole) && (
+                      <option value={row.managerRole}>{t("unknownRole", { role: row.managerRole })}</option>
+                    )}
+                    {roles.map((r) => (
+                      <option key={r.key} value={r.key}>{r.label}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
+                  {/* A searchable user picker (SELECT over the tenant directory)
+                      storing the user id, not free text. */}
                   <label htmlFor={`${row.key}-mi`} style={labelStyle}>Manager user</label>
-                  <input id={`${row.key}-mi`} aria-label={`Manager user for rule ${i + 1}`} value={row.managerId} onChange={(e) => update(row.key, { managerId: e.target.value })} placeholder="user id (optional)" aria-invalid={row.managerRole.trim() || row.managerId.trim() ? undefined : true} style={inputStyle} />
+                  <select
+                    id={`${row.key}-mi`}
+                    aria-label={t("managerUserAria", { n: i + 1 })}
+                    value={row.managerId}
+                    onChange={(e) => update(row.key, { managerId: e.target.value })}
+                    aria-invalid={row.managerRole.trim() || row.managerId.trim() ? undefined : true}
+                    style={inputStyle}
+                  >
+                    <option value="">{t("noSpecificUser")}</option>
+                    {row.managerId && !users.some((u) => u.id === row.managerId) && (
+                      <option value={row.managerId}>{t("unknownUser")}</option>
+                    )}
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>{u.name}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
+              {/* Resolved manager name + a preview of what the rule will do. */}
+              <p style={{ fontSize: 12, margin: 0, color: summary.missing ? "#b42318" : "var(--muted)" }}>
+                {summary.missing
+                  ? t.rich("escalatesMissing", { name: summary.text, strong: (chunks) => <strong>{chunks}</strong> })
+                  : overdueCount !== null
+                    ? t.rich("escalatesWithCount", {
+                        name: summary.text,
+                        count: overdueCount,
+                        formatted: overdueCount.toLocaleString("en-IN"),
+                        strong: (chunks) => <strong>{chunks}</strong>,
+                      })
+                    : t.rich("escalates", { name: summary.text, strong: (chunks) => <strong>{chunks}</strong> })}
+              </p>
               <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
                 <input type="checkbox" checked={row.enabled} aria-label={`Enable rule ${i + 1}`} onChange={(e) => update(row.key, { enabled: e.target.checked })} />
                 Enabled
@@ -173,7 +263,8 @@ export function TaskEscalationEditor() {
                 </Button>
               </div>
             </fieldset>
-          ))
+            );
+          })
         )}
         <div>
           <Button type="button" onClick={addRule} style={{ minHeight: 44 }}>+ Add task-escalation rule</Button>

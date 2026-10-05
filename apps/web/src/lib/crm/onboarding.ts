@@ -205,6 +205,18 @@ export interface OnboardingCase {
   createdAt: string;
   updatedAt: string;
   version: number;
+  /**
+   * GAP-CRM-ONBOARDING-01: human-readable deal / account names so a clerk can
+   * tell cases apart without opening each one. The onboarding module stores
+   * only opaque ids and (by L2 module isolation) never joins to the deals /
+   * accounts modules, so the backend list cannot return these without a
+   * forbidden cross-module join — they are resolved in the web layer
+   * (resolveCaseNames) from the deals and accounts list endpoints. A backend
+   * that later supplies them inline is tolerated too (normaliseCase reads them
+   * when present).
+   */
+  accountName: string | null;
+  dealName: string | null;
 }
 
 function str(v: unknown): string {
@@ -247,6 +259,8 @@ export function normaliseCase(raw: unknown): OnboardingCase | null {
     createdAt: str(r.createdAt),
     updatedAt: str(r.updatedAt),
     version: num(r.version),
+    accountName: nullableStr(r.accountName),
+    dealName: nullableStr(r.dealName),
   };
 }
 
@@ -292,6 +306,52 @@ export async function getOnboardingCase(id: string): Promise<LoaderResult<Onboar
 }
 
 /* ============================================================= mutations === */
+
+/**
+ * GAP-CRM-ONBOARDING-01 — deal/account name lookup.
+ *
+ * The onboarding module stores only opaque ids and never joins to the deals or
+ * accounts modules (L2 isolation), so names are resolved in the web layer from
+ * the deals + accounts list endpoints and merged onto the cases client-side.
+ */
+export interface OnboardingLookups {
+  dealNames: Record<string, string>;
+  accountNames: Record<string, string>;
+}
+
+function namesFromList(raw: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const item of toArray(raw)) {
+    if (!item || typeof item !== "object") continue;
+    const r = item as Record<string, unknown>;
+    const id = str(r.id);
+    const name = str(r.name);
+    if (id && name) out[id] = name;
+  }
+  return out;
+}
+
+/** Fetch the deal + account name maps used to label onboarding rows. */
+export async function getOnboardingLookups(): Promise<OnboardingLookups> {
+  const [dealsRes, accountsRes] = await Promise.allSettled([
+    browserFetch("v1/crm/deals?limit=500"),
+    browserFetch("v1/crm/accounts?limit=500"),
+  ]);
+  const dealNames =
+    dealsRes.status === "fulfilled" && dealsRes.value.ok ? namesFromList(await dealsRes.value.json()) : {};
+  const accountNames =
+    accountsRes.status === "fulfilled" && accountsRes.value.ok ? namesFromList(await accountsRes.value.json()) : {};
+  return { dealNames, accountNames };
+}
+
+/** Merge resolved names onto cases; a missing name is left null (never a UUID). */
+export function resolveCaseNames(cases: OnboardingCase[], lookups: OnboardingLookups): OnboardingCase[] {
+  return cases.map((c) => ({
+    ...c,
+    dealName: c.dealName ?? lookups.dealNames[c.dealId] ?? null,
+    accountName: c.accountName ?? (c.accountId ? lookups.accountNames[c.accountId] ?? null : null),
+  }));
+}
 
 export interface AdvanceStageInput {
   toStage: OnboardingStage;

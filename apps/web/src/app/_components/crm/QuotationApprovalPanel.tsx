@@ -1,20 +1,30 @@
 "use client";
 /**
- * QuotationApprovalPanel — QP-004. Request and grant approvals for a
+ * QuotationApprovalPanel — QP-004. Request and decide approvals for a
  * quotation's discounts / deviations. The parent QuotationBuilder blocks the
  * Send/Finalize action while any approval is unapproved (the backend enforces
  * this with 422 APPROVAL_REQUIRED, surfaced honestly — never a fake send). A
  * failed load shows the saved-info badge rather than an empty "all approved".
+ *
+ * Maker-checker (GAP-CRM-QUOTATIONS-01): Approve/Reject are only offered when
+ * the user holds a quotation-approve role (`canApprove`, from the verified
+ * session) AND is not the requester of that row (`requestedBy !== currentUserId`).
+ * The server (quotation-approval-routes.ts decide) remains the authority on
+ * role; the UI merely stops offering a control that would 403 or that would let
+ * a requester self-approve. Reject requires a reason (ConfirmDialog).
  */
 import { useEffect, useId, useState } from "react";
+import { useTranslations } from "next-intl";
+import { useFormError } from "@/lib/useFormError";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { EmptyState, Button } from "../ds";
+import { ConfirmDialog, EmptyState, Button } from "../ds";
 import { formatBps } from "@/lib/formatters";
 import { percentToBps } from "@/lib/money";
 import {
   getApprovals,
   requestApproval,
   approveApproval,
+  rejectApproval,
   APPROVAL_TYPES,
   APPROVAL_TYPE_LABELS,
   type ApprovalRequest,
@@ -26,6 +36,14 @@ interface QuotationApprovalPanelProps {
   quotationId: string;
   /** Notifies the parent whether a blocking (unapproved) approval exists. */
   onBlockingChange?: (blocking: boolean) => void;
+  /**
+   * Whether the signed-in user may decide approvals (holds a
+   * quotation-approve role, from the verified session). The server stays the
+   * authority; this only decides whether Approve/Reject are offered.
+   */
+  canApprove?: boolean;
+  /** Signed-in user id, for the maker-checker self-approval hide. */
+  currentUserId?: string | null;
 }
 
 const inputStyle = { padding: 6, minHeight: 36, borderRadius: 8, border: "1px solid var(--line)", width: "100%" } as const;
@@ -34,7 +52,23 @@ function isApproved(a: ApprovalRequest): boolean {
   return a.status.toLowerCase() === "approved";
 }
 
-export function QuotationApprovalPanel({ quotationId, onBlockingChange }: QuotationApprovalPanelProps) {
+function isRejected(a: ApprovalRequest): boolean {
+  const s = a.status.toLowerCase();
+  return s === "rejected" || s === "denied";
+}
+
+/** A row still awaiting a decision (not approved and not rejected). */
+function isPending(a: ApprovalRequest): boolean {
+  return !isApproved(a) && !isRejected(a);
+}
+
+export function QuotationApprovalPanel({
+  quotationId,
+  onBlockingChange,
+  canApprove = false,
+  currentUserId = null,
+}: QuotationApprovalPanelProps) {
+  const t = useTranslations("crmQuotationApprovalPanel");
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
   const [source, setSource] = useState<QpSource | "loading">("loading");
   const [type, setType] = useState<ApprovalType>("discount");
@@ -43,6 +77,8 @@ export function QuotationApprovalPanel({ quotationId, onBlockingChange }: Quotat
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const formError = useFormError("quotation approval");
+  const [rejectId, setRejectId] = useState<string | null>(null);
   const headingId = useId();
 
   async function load(isLive: () => boolean = () => true) {
@@ -51,7 +87,7 @@ export function QuotationApprovalPanel({ quotationId, onBlockingChange }: Quotat
     if (!isLive()) return;
     setApprovals(data);
     setSource(s);
-    onBlockingChange?.(data.some((a) => !isApproved(a)));
+    onBlockingChange?.(data.some((a) => isPending(a)));
   }
   // Reload whenever the quotation changes. onBlockingChange is a stable setState
   // reference from the parent, so it is safe to include in the dependency list.
@@ -88,7 +124,7 @@ export function QuotationApprovalPanel({ quotationId, onBlockingChange }: Quotat
       setPercent("");
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not request the approval.");
+      setError(formError.fromException("save", e).message);
     } finally {
       setBusy(false);
     }
@@ -103,13 +139,37 @@ export function QuotationApprovalPanel({ quotationId, onBlockingChange }: Quotat
       setMessage("Approval granted.");
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not grant the approval.");
+      setError(formError.fromException("save", e).message);
     } finally {
       setBusy(false);
     }
   }
 
-  const blocking = approvals.some((a) => !isApproved(a));
+  async function doReject(approvalId: string, rejectReason?: string) {
+    setBusy(true);
+    setError("");
+    try {
+      await rejectApproval(approvalId, rejectReason);
+      setMessage(t("rejected"));
+      await load();
+    } catch (e) {
+      setError(formError.fromException("save", e).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** May the current user decide THIS row? Approve-role AND not the requester. */
+  function canDecide(a: ApprovalRequest): boolean {
+    if (!canApprove) return false;
+    // Maker-checker: never let the requester decide their own request. Only
+    // enforced when the API returns a requester and we know who is signed in;
+    // the server remains the ultimate authority (see panel header).
+    if (a.requestedBy && currentUserId && a.requestedBy === currentUserId) return false;
+    return true;
+  }
+
+  const blocking = approvals.some((a) => isPending(a));
 
   return (
     <div className="card">
@@ -141,6 +201,10 @@ export function QuotationApprovalPanel({ quotationId, onBlockingChange }: Quotat
             <p role="status" style={{ fontSize: 13, color: "#b42318", padding: "0 12px", fontWeight: 600 }}>
               Sending is blocked until every approval is granted.
             </p>
+          ) : approvals.some((a) => isRejected(a)) ? (
+            <p role="status" style={{ fontSize: 13, color: "#b45309", padding: "0 12px" }}>
+              {t("rejectedNotice")}
+            </p>
           ) : (
             <p role="status" style={{ fontSize: 13, color: "#047857", padding: "0 12px" }}>
               All approvals granted — this quotation can be sent.
@@ -159,21 +223,51 @@ export function QuotationApprovalPanel({ quotationId, onBlockingChange }: Quotat
               </tr>
             </thead>
             <tbody>
-              {approvals.map((a) => (
-                <tr key={a.id ?? `${a.type}-${a.reason}`}>
-                  <td>{APPROVAL_TYPE_LABELS[a.type]}</td>
-                  <td>{a.amountBps !== undefined ? formatBps(a.amountBps) : "—"}</td>
-                  <td>{a.reason}</td>
-                  <td>{isApproved(a) ? <span style={{ color: "#047857" }}>Approved</span> : <span style={{ color: "#b42318" }}>{a.status || "Pending"}</span>}</td>
-                  <td>
-                    {isApproved(a) ? null : (
-                      <Button type="button" size="sm" onClick={() => void grant(a)} disabled={busy}>
-                        Approve
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {approvals.map((a) => {
+                const pending = isPending(a);
+                const decidable = pending && canDecide(a);
+                const mine = Boolean(a.requestedBy && currentUserId && a.requestedBy === currentUserId);
+                return (
+                  <tr key={a.id ?? `${a.type}-${a.reason}`}>
+                    <td>{APPROVAL_TYPE_LABELS[a.type]}</td>
+                    <td>{a.amountBps !== undefined ? formatBps(a.amountBps) : "—"}</td>
+                    <td>{a.reason}</td>
+                    <td>
+                      {isApproved(a) ? (
+                        <span style={{ color: "#047857" }}>Approved</span>
+                      ) : isRejected(a) ? (
+                        <span style={{ color: "#b42318", fontWeight: 600 }}>{t("statusRejected")}</span>
+                      ) : (
+                        <span style={{ color: "#b45309" }}>{a.status || t("statusPending")}</span>
+                      )}
+                    </td>
+                    <td>
+                      {pending ? (
+                        decidable ? (
+                          <div style={{ display: "inline-flex", gap: 6 }}>
+                            <Button type="button" size="sm" onClick={() => void grant(a)} disabled={busy}>
+                              {t("approve")}
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="danger"
+                              onClick={() => { if (a.id) setRejectId(a.id); }}
+                              disabled={busy || !a.id}
+                            >
+                              {t("reject")}
+                            </Button>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: 12, color: "var(--muted)" }}>
+                            {mine ? t("awaitingOther") : t("awaitingApprover")}
+                          </span>
+                        )
+                      ) : null}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </>
@@ -209,6 +303,23 @@ export function QuotationApprovalPanel({ quotationId, onBlockingChange }: Quotat
           </Button>
         </div>
       </fieldset>
+
+      <ConfirmDialog
+        open={rejectId !== null}
+        danger
+        requireReason
+        reasonLabel={t("rejectReasonLabel")}
+        title={t("rejectTitle")}
+        description={t("rejectDescription")}
+        confirmLabel={t("rejectConfirm")}
+        busy={busy}
+        onCancel={() => setRejectId(null)}
+        onConfirm={(rejectReason) => {
+          const id = rejectId;
+          setRejectId(null);
+          if (id) void doReject(id, rejectReason);
+        }}
+      />
     </div>
   );
 }

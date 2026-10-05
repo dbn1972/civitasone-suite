@@ -1,6 +1,7 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { Card, DataTable, EmptyState, PageHeader, StatCard, StatGrid } from "../../../../_components/ds";
 import { getCrmCampaignRoi } from "../../../../_data/loaders";
+import { getTranslations } from "next-intl/server";
 import { formatMoney } from "@/lib/formatters";
 import { formatRoiPercent, orderPeriods, periodLabel } from "../campaigns";
 
@@ -17,6 +18,7 @@ type PeriodRow = {
 };
 
 export default async function CampaignRoiPage({ params }: { params: { id: string } }) {
+  const t = await getTranslations("crmCampaignDetail");
   const { data: campaign, source } = await getCrmCampaignRoi(params.id);
 
   if (!campaign) {
@@ -46,8 +48,12 @@ export default async function CampaignRoiPage({ params }: { params: { id: string
   return (
     <>
       <PageHeader
-        title="Campaign Performance"
-        subtitle={`Campaign ${campaign.campaignId} · ${campaign.currency}`}
+        title={campaign.name ?? t("performanceTitle")}
+        subtitle={
+          campaign.name
+            ? t("subtitleNamed", { id: campaign.campaignId, currency: campaign.currency })
+            : `${campaign.campaignId} · ${campaign.currency}`
+        }
         back="/crm/campaigns"
         backLabel="Campaigns"
       />

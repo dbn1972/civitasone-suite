@@ -1,16 +1,46 @@
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { Card, PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { getTranslations } from "next-intl/server";
+import { Card, PageHeader, RefreshErrorState, StatCard, StatGrid } from "../../../_components/ds";
 import { getAccountHealthWatchlist, getCrmAccounts } from "../../../_data/loaders";
 import { BAND_LABEL, byUrgency, summariseWatchlist, withAccountNames } from "./health";
 import { WatchlistTable } from "./WatchlistTable";
 
 export default async function AccountHealthPage() {
+  const t = await getTranslations("crmAccountHealth");
   const [{ data: watchlist, source: healthSource }, { data: accounts, source: accountSource }] =
     await Promise.all([getAccountHealthWatchlist(), getCrmAccounts()]);
 
   // Account names come from crm-service while scores come from
   // recommendation-service, so the join happens here rather than in either API.
   const source = healthSource === "error" || accountSource === "error" ? "error" : "api";
+
+  // GAP-CRM-HEALTH-01 (FAILMASK): on a failed load the watchlist loader returns
+  // [], which the summary turned into Critical=0 / At risk=0 and the table
+  // rendered as "Every scored account is currently healthy or thriving" — a
+  // false all-clear on the one screen whose entire job is to surface risk. Fail
+  // closed instead: show an explicit retry state and render NO zeros and NO
+  // "healthy" table. A legitimately empty API result is still a real empty list
+  // (handled below), not an error.
+  if (source === "error") {
+    return (
+      <>
+        <PageHeader
+          title={t("title")}
+          subtitle={t("subtitle")}
+          back="/crm"
+          actions={<a className="btn" href="/crm/accounts">{t("allAccounts")}</a>}
+        />
+        <RefreshErrorState
+          error={{
+            what: t("loadErrorWhat"),
+            next: t("loadErrorNext"),
+            actions: ["retry", "back"],
+          }}
+          backHref="/crm"
+        />
+      </>
+    );
+  }
+
   const summary = summariseWatchlist(watchlist);
   const entries = byUrgency(withAccountNames(watchlist, accounts));
   const worstName = summary.worst
@@ -20,12 +50,11 @@ export default async function AccountHealthPage() {
   return (
     <>
       <PageHeader
-        title="Account Health"
-        subtitle="Accounts scored at risk or critical, ordered by urgency."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/crm"
-        actions={<a className="btn" href="/crm/accounts">All Accounts</a>}
+        actions={<a className="btn" href="/crm/accounts">{t("allAccounts")}</a>}
       />
-      {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
         <StatCard
           icon="🚨"

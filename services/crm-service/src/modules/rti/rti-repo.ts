@@ -4,8 +4,10 @@
  * All mutations go through scopedRead (GUC-scoped connection, RLS enforced).
  * The calling route is responsible for extracting tenantId / actorId from ctx.
  */
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
+import { emitWithAudit } from "../../shared/route-audit.js";
+import { EVENTS } from "../../topics.js";
 
 // ---------------------------------------------------------------------------
 // Shared types
@@ -46,6 +48,12 @@ export type RtiCreateData = {
   description: string;
   feePaid?: boolean;
   feeAmount?: number;
+  /** GAP-CRM-RTI-NEW-01: application fee in minor units (paise), bigint-safe string. Preferred. */
+  feeAmountMinor?: string;
+  /** GAP-CRM-RTI-NEW-02: date of physical receipt (YYYY-MM-DD). Omitted -> now(). */
+  receivedDate?: string;
+  /** GAP-CRM-RTI-NEW-02: mode of receipt (online|post|email|in_person|by_hand). */
+  mode?: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -80,8 +88,10 @@ export async function getRtiList(
              r.applicant_contact   AS "applicantContact",
              r.subject,
              r.status,
+             r.mode,
              r.fee_paid            AS "feePaid",
              r.fee_amount          AS "feeAmount",
+             r.fee_amount_minor    AS "feeAmountMinor",
              r.received_at         AS "receivedAt",
              r.due_at              AS "dueAt",
              r.first_appeal_due_at AS "firstAppealDueAt",
@@ -124,13 +134,22 @@ export async function getRtiById(
              r.subject,
              r.description,
              r.status,
+             r.mode,
              r.fee_paid            AS "feePaid",
              r.fee_amount          AS "feeAmount",
+             r.fee_amount_minor    AS "feeAmountMinor",
              r.received_at         AS "receivedAt",
              r.due_at              AS "dueAt",
              r.first_appeal_due_at AS "firstAppealDueAt",
              r.responded_at        AS "respondedAt",
              r.response_text       AS "responseText",
+             r.first_appeal_order      AS "firstAppealOrder",
+             r.first_appeal_outcome    AS "firstAppealOutcome",
+             r.first_appeal_decided_at AS "firstAppealDecidedAt",
+             r.second_appeal_at        AS "secondAppealAt",
+             r.second_appeal_ref       AS "secondAppealRef",
+             r.disposed_at             AS "disposedAt",
+             r.disposal_reason         AS "disposalReason",
              r.created_by          AS "createdBy",
              r.created_at          AS "createdAt",
              r.updated_at          AS "updatedAt"
@@ -143,14 +162,78 @@ export async function getRtiById(
   return rows[0] ?? null;
 }
 
+/** fee_amount is numeric(10,2): max 99,999,999.99 rupees = 9,999,999,999 paise. */
+export const MAX_FEE_MINOR = 9_999_999_999n;
+
+export type FeeResolution =
+  | { ok: true; feeAmount?: number; feeAmountMinor?: string }
+  | { ok: false; code: "FEE_OUT_OF_RANGE" | "FEE_AMOUNT_MISMATCH"; message: string };
+
+/**
+ * Validate and reconcile the two fee inputs. Out-of-range values (which would
+ * overflow numeric(10,2)/bigint and 500) and disagreeing feeAmount (rupees) /
+ * feeAmountMinor (paise) are rejected; a lone input is passed through.
+ */
+export function resolveFee(feeAmount: number | undefined, feeAmountMinor: string | number | undefined): FeeResolution {
+  let minor: bigint | undefined;
+  if (feeAmountMinor !== undefined) {
+    const raw = String(feeAmountMinor);
+    if (!/^\d+$/.test(raw) || BigInt(raw) > MAX_FEE_MINOR) {
+      return { ok: false, code: "FEE_OUT_OF_RANGE", message: "feeAmountMinor must be a non-negative integer of at most 9999999999 paise" };
+    }
+    minor = BigInt(raw);
+  }
+  let fromRupees: bigint | undefined;
+  if (feeAmount !== undefined) {
+    if (!Number.isFinite(feeAmount) || feeAmount < 0 || feeAmount > 99_999_999.99) {
+      return { ok: false, code: "FEE_OUT_OF_RANGE", message: "feeAmount must be between 0 and 99999999.99 rupees" };
+    }
+    fromRupees = BigInt(Math.round(feeAmount * 100));
+  }
+  if (minor !== undefined && fromRupees !== undefined && minor !== fromRupees) {
+    return { ok: false, code: "FEE_AMOUNT_MISMATCH", message: "feeAmount and feeAmountMinor disagree; send one, or values that match exactly" };
+  }
+  return {
+    ok: true,
+    ...(feeAmount !== undefined ? { feeAmount } : {}),
+    ...(minor !== undefined ? { feeAmountMinor: minor.toString() } : {}),
+  };
+}
+
 export async function createRti(data: RtiCreateData): Promise<RtiRow> {
+  // GAP-CRM-RTI-NEW-02: when a date of receipt is supplied, received_at is set
+  // to that calendar day at UTC midnight -- the same UTC basis the generated
+  // due_at column uses, so due_at = receivedDate + 30 days exactly. When
+  // omitted, the column default (now()) applies. mode is nullable.
+  const receivedAtExpr = data.receivedDate
+    ? sql`(${data.receivedDate}::date AT TIME ZONE 'UTC')`
+    : sql`now()`;
+
+  // GAP-CRM-RTI-NEW-01: fee_amount_minor (paise) is the source of truth. If the
+  // caller sent paise, use it directly and derive the legacy rupees column from
+  // it (minor/100). If only the legacy rupees number was sent, store it and
+  // derive paise (round(rupees*100)). Either way both columns stay consistent
+  // during the expand phase; the paise column never loses precision.
+  const feeMinorExpr =
+    data.feeAmountMinor !== undefined
+      ? sql`${data.feeAmountMinor}::bigint`
+      : data.feeAmount !== undefined
+        ? sql`round(${data.feeAmount}::numeric * 100)::bigint`
+        : sql`NULL`;
+  const feeRupeesExpr =
+    data.feeAmount !== undefined
+      ? sql`${data.feeAmount}::numeric(10,2)`
+      : data.feeAmountMinor !== undefined
+        ? sql`(${data.feeAmountMinor}::numeric / 100)::numeric(10,2)`
+        : sql`NULL`;
+
   const rows = (await scopedRead((tx) =>
     tx.execute(sql`
       INSERT INTO crm.rti_requests (
         tenant_id, reference_no, section, department_ref,
         applicant_name, applicant_contact,
         subject, description,
-        fee_paid, fee_amount, created_by
+        fee_paid, fee_amount, fee_amount_minor, received_at, mode, created_by
       ) VALUES (
         ${data.tenantId}::uuid,
         ${data.referenceNo},
@@ -161,7 +244,10 @@ export async function createRti(data: RtiCreateData): Promise<RtiRow> {
         ${data.subject},
         ${data.description},
         ${data.feePaid ?? false},
-        ${data.feeAmount ?? null},
+        ${feeRupeesExpr},
+        ${feeMinorExpr},
+        ${receivedAtExpr},
+        ${data.mode ?? null},
         ${data.actorId}::uuid
       )
       RETURNING id,
@@ -171,6 +257,10 @@ export async function createRti(data: RtiCreateData): Promise<RtiRow> {
                 applicant_name AS "applicantName",
                 subject,
                 status,
+                mode,
+                fee_paid         AS "feePaid",
+                fee_amount       AS "feeAmount",
+                fee_amount_minor AS "feeAmountMinor",
                 received_at    AS "receivedAt",
                 due_at         AS "dueAt",
                 created_at     AS "createdAt"
@@ -252,4 +342,137 @@ export async function firstAppeal(
   )) as unknown as RtiRow[];
 
   return rows[0] ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// GAP-CRM-RTI-DETAIL-01: appeal chain (FAA decision -> second appeal -> disposal)
+//
+// Each transition is a guarded UPDATE (the WHERE clause is the state machine:
+// zero rows updated means the request is not in a state that allows it) and
+// emits its domain + audit event in the SAME transaction, so the statutory
+// trail commits or rolls back with the row. Event payloads carry no PII.
+// ---------------------------------------------------------------------------
+
+export const FIRST_APPEAL_OUTCOMES = ["allowed", "partly_allowed", "dismissed"] as const;
+export type FirstAppealOutcome = (typeof FIRST_APPEAL_OUTCOMES)[number];
+
+type AuditCtx = Parameters<typeof emitWithAudit>[1];
+
+async function transition(
+  ctx: AuditCtx,
+  id: string,
+  action: string,
+  eventType: string,
+  update: SQL,
+  extraPayload: Record<string, unknown> = {},
+): Promise<RtiRow | null> {
+  return scopedRead(async (tx) => {
+    const rows = (await tx.execute(update)) as unknown as RtiRow[];
+    const row = rows[0];
+    if (!row) return null;
+    await emitWithAudit(tx, ctx, {
+      eventType,
+      action,
+      resourceType: "rti_request",
+      resourceId: id,
+      payload: { rtiId: id, status: row["status"], ...extraPayload },
+    });
+    return row;
+  });
+}
+
+/** s.19(1)/(6): record the First Appellate Authority's order. Once only. */
+export function decideFirstAppeal(
+  ctx: AuditCtx,
+  id: string,
+  outcome: FirstAppealOutcome,
+  orderText: string,
+): Promise<RtiRow | null> {
+  return transition(
+    ctx,
+    id,
+    "decide_first_appeal",
+    EVENTS.rtiFirstAppealDecided,
+    sql`
+      UPDATE crm.rti_requests
+      SET first_appeal_order      = ${orderText},
+          first_appeal_outcome    = ${outcome},
+          first_appeal_decided_at = now(),
+          first_appeal_decided_by = ${ctx.actorId}::uuid,
+          updated_at              = now()
+      WHERE id        = ${id}::uuid
+        AND tenant_id = ${ctx.tenantId}
+        AND status    = 'FIRST_APPEAL'
+        AND first_appeal_decided_at IS NULL
+      RETURNING id, status,
+                first_appeal_outcome    AS "firstAppealOutcome",
+                first_appeal_decided_at AS "firstAppealDecidedAt",
+                updated_at              AS "updatedAt"
+    `,
+    { outcome },
+  );
+}
+
+/**
+ * s.19(3): record that a second appeal has been filed with the Information
+ * Commission. Lies against the FAA's decision OR its failure to decide, so it
+ * is allowed from FIRST_APPEAL whether or not a decision is on record.
+ */
+export function recordSecondAppeal(
+  ctx: AuditCtx,
+  id: string,
+  ref: string,
+): Promise<RtiRow | null> {
+  return transition(
+    ctx,
+    id,
+    "record_second_appeal",
+    EVENTS.rtiSecondAppealRecorded,
+    sql`
+      UPDATE crm.rti_requests
+      SET status            = 'SECOND_APPEAL',
+          second_appeal_at  = now(),
+          second_appeal_ref = ${ref},
+          updated_at        = now()
+      WHERE id        = ${id}::uuid
+        AND tenant_id = ${ctx.tenantId}
+        AND status    = 'FIRST_APPEAL'
+      RETURNING id, status,
+                second_appeal_at AS "secondAppealAt",
+                updated_at       AS "updatedAt"
+    `,
+  );
+}
+
+/**
+ * Close the request. Allowed once the FAA has decided (and no second appeal
+ * followed) or after a second appeal. An undecided first appeal cannot be
+ * disposed — that would close a statutory appeal with no order on record.
+ */
+export function disposeRti(
+  ctx: AuditCtx,
+  id: string,
+  reason: string,
+): Promise<RtiRow | null> {
+  return transition(
+    ctx,
+    id,
+    "dispose",
+    EVENTS.rtiDisposed,
+    sql`
+      UPDATE crm.rti_requests
+      SET status          = 'DISPOSED',
+          disposed_at     = now(),
+          disposal_reason = ${reason},
+          disposed_by     = ${ctx.actorId}::uuid,
+          updated_at      = now()
+      WHERE id        = ${id}::uuid
+        AND tenant_id = ${ctx.tenantId}
+        AND (status = 'SECOND_APPEAL'
+             OR (status = 'FIRST_APPEAL' AND first_appeal_decided_at IS NOT NULL))
+      RETURNING id, status,
+                disposed_at AS "disposedAt",
+                updated_at  AS "updatedAt"
+    `,
+  );
 }

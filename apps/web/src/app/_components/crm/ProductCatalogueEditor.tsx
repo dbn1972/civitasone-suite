@@ -6,12 +6,19 @@
  * rupeesToMinorString (no float); an invalid price blocks the row. Only enabled,
  * in-window products are selectable in the quotation builder (see QP-003). A
  * failed load shows the saved-info badge and never fabricates an empty catalogue.
+ *
+ * GAP-CRM-PRODUCTS-01: prices/tax flow straight into quotations, so this screen
+ * is admin-gated by (app)/crm/products/layout.tsx (a plain crm_user is bounced
+ * to /crm). A "Last changed" column surfaces updatedBy/updatedAt when the API
+ * returns them, and Delete warns that the product may feed existing quotations
+ * / price books and steers the admin to soft-disable (Enabled off) instead.
  */
 import { useEffect, useId, useState } from "react";
+import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState, Button } from "../ds";
 import { rupeesToMinorString, percentToBps } from "@/lib/money";
-import { formatMoney, formatBps } from "@/lib/formatters";
+import { formatMoney, formatBps, formatIndianDate } from "@/lib/formatters";
 import {
   getProducts,
   createProduct,
@@ -40,6 +47,7 @@ function blank(): Product {
 }
 
 export function ProductCatalogueEditor() {
+  const t = useTranslations("crmProductCatalogueEditor");
   const [rows, setRows] = useState<Row[]>([]);
   const [source, setSource] = useState<QpSource | "loading">("loading");
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -180,6 +188,7 @@ export function ProductCatalogueEditor() {
                 <th>Active from</th>
                 <th>Active to</th>
                 <th>Enabled</th>
+                <th>{t("colLastChanged")}</th>
                 <th>
                   <span className="sr-only">Actions</span>
                 </th>
@@ -214,12 +223,12 @@ export function ProductCatalogueEditor() {
                     </td>
                     <td>
                       <label className="sr-only" htmlFor={`${headingId}-price-${row.key}`}>Price for product {n}</label>
-                      <input id={`${headingId}-price-${row.key}`} inputMode="decimal" value={row.priceRupees} aria-invalid={priceOk ? undefined : true} onChange={(e) => update(row.key, { priceRupees: e.target.value })} style={{ ...inputStyle, textAlign: "right" }} placeholder="0.00" />
+                      <input id={`${headingId}-price-${row.key}`} inputMode="decimal" value={row.priceRupees} aria-invalid={priceOk ? undefined : true} onChange={(e) => update(row.key, { priceRupees: e.target.value })} style={{ ...inputStyle, textAlign: "end" }} placeholder="0.00" />
                       {row.priceRupees.trim() && priceOk ? <span style={{ fontSize: 11, color: "var(--muted)" }}>{formatMoney(priceMinorOf(row)!)}</span> : null}
                     </td>
                     <td>
                       <label className="sr-only" htmlFor={`${headingId}-tax-${row.key}`}>Tax percent for product {n}</label>
-                      <input id={`${headingId}-tax-${row.key}`} inputMode="decimal" value={row.taxPercent} aria-invalid={taxOk ? undefined : true} onChange={(e) => update(row.key, { taxPercent: e.target.value })} style={{ ...inputStyle, textAlign: "right" }} placeholder="18" />
+                      <input id={`${headingId}-tax-${row.key}`} inputMode="decimal" value={row.taxPercent} aria-invalid={taxOk ? undefined : true} onChange={(e) => update(row.key, { taxPercent: e.target.value })} style={{ ...inputStyle, textAlign: "end" }} placeholder="18" />
                       {row.taxPercent.trim() && taxOk ? <span style={{ fontSize: 11, color: "var(--muted)" }}>{formatBps(taxBpsOf(row)!)}</span> : null}
                     </td>
                     <td>
@@ -235,6 +244,16 @@ export function ProductCatalogueEditor() {
                         <input type="checkbox" checked={row.enabled} onChange={(e) => update(row.key, { enabled: e.target.checked })} aria-label={`Enable product ${n}`} />
                         {selectable ? "Live" : "Off"}
                       </label>
+                    </td>
+                    <td style={{ fontSize: 12, color: "var(--muted)" }}>
+                      {row.id && (row.updatedAt || row.updatedBy) ? (
+                        <span aria-label={t("lastChangedAria", { n })}>
+                          {row.updatedBy ? row.updatedBy : t("unknownUser")}
+                          {row.updatedAt ? ` · ${formatIndianDate(row.updatedAt)}` : ""}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
                     </td>
                     <td>
                       <div style={{ display: "flex", gap: 6 }}>
@@ -264,8 +283,17 @@ export function ProductCatalogueEditor() {
         open={confirmRow !== null}
         danger
         title={confirmRow ? `Delete product “${confirmRow.name || confirmRow.code || "(new)"}”?` : ""}
-        description="The product will no longer be quotable. This cannot be undone."
-        confirmLabel="Delete product"
+        description={
+          <>
+            <p style={{ margin: "0 0 8px" }}>
+              {t("deleteWarning")}
+            </p>
+            <p style={{ margin: 0, fontWeight: 600 }}>
+              {t.rich("deletePrefer", { em: (chunks) => <em>{chunks}</em> })}
+            </p>
+          </>
+        }
+        confirmLabel={t("deleteAnyway")}
         busy={confirmRow ? busyKey === confirmRow.key : false}
         onCancel={() => setConfirmKey(null)}
         onConfirm={() => confirmRow && void doDelete(confirmRow)}

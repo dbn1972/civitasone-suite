@@ -1,3 +1,5 @@
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QuotationBuilder } from "./QuotationBuilder";
@@ -59,13 +61,13 @@ beforeEach(() => {
 describe("QuotationBuilder (QP-003/004/005)", () => {
   it("shows the saved-info badge on a failed load", async () => {
     vi.mocked(qp.getQuotations).mockResolvedValue({ data: [], source: "error" });
-    render(<QuotationBuilder />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><QuotationBuilder /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument());
   });
 
   it("builds a line and computes the grand total with tax via money.ts", async () => {
     vi.mocked(qp.createQuotation).mockResolvedValue(undefined);
-    render(<QuotationBuilder />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><QuotationBuilder /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByText(/no quotations yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /new quotation/i }));
     fireEvent.click(screen.getByRole("button", { name: /add line/i }));
@@ -81,7 +83,7 @@ describe("QuotationBuilder (QP-003/004/005)", () => {
   });
 
   it("blocks save on an invalid tax %, shows '—' preview and flags the field, never coercing to 0", async () => {
-    render(<QuotationBuilder />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><QuotationBuilder /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByText(/no quotations yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /new quotation/i }));
     fireEvent.click(screen.getByRole("button", { name: /add line/i }));
@@ -106,7 +108,7 @@ describe("QuotationBuilder (QP-003/004/005)", () => {
   it("surfaces 422 APPROVAL_REQUIRED honestly and never fakes a send", async () => {
     vi.mocked(qp.getQuotations).mockResolvedValue({ data: [quote], source: "api" });
     vi.mocked(qp.sendQuotation).mockRejectedValue(new qp.ApprovalRequiredError("This quotation has an unapproved discount or deviation. Get approval before sending."));
-    render(<QuotationBuilder />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><QuotationBuilder /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByText(/^standard$/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /^open$/i }));
     await waitFor(() => expect(screen.getByRole("button", { name: /send \/ finalize/i })).toBeInTheDocument());
@@ -118,7 +120,7 @@ describe("QuotationBuilder (QP-003/004/005)", () => {
   it("convert-to-order is gated behind a ConfirmDialog", async () => {
     vi.mocked(qp.getQuotations).mockResolvedValue({ data: [quote], source: "api" });
     vi.mocked(qp.convertToOrder).mockResolvedValue(undefined);
-    render(<QuotationBuilder />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><QuotationBuilder /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByText(/^standard$/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /^open$/i }));
     fireEvent.click(await screen.findByRole("button", { name: /convert to order/i }));
@@ -126,5 +128,37 @@ describe("QuotationBuilder (QP-003/004/005)", () => {
     const confirm = await screen.findAllByRole("button", { name: /convert to order/i });
     fireEvent.click(confirm[confirm.length - 1]);
     await waitFor(() => expect(qp.convertToOrder).toHaveBeenCalledWith("q1"));
+  });
+
+  // GAP-CRM-QUOTATIONS-02: the list must distinguish two "standard v1" quotes.
+  it("lists quote ref, account, opportunity and created date so rows are distinguishable", async () => {
+    const a: qp.Quotation = {
+      id: "qa", quoteRef: "QTN/2026/AAA111", accountId: "acc-1", opportunityId: "deal-1",
+      createdAt: "2026-02-03T10:00:00.000Z", template: "standard", version: 1, status: "draft", lines: [],
+    };
+    const b: qp.Quotation = {
+      id: "qb", quoteRef: "QTN/2026/BBB222", accountId: "acc-2", opportunityId: "deal-2",
+      createdAt: "2026-02-04T10:00:00.000Z", template: "standard", version: 1, status: "draft", lines: [],
+    };
+    vi.mocked(qp.getQuotations).mockResolvedValue({ data: [a, b], source: "api" });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><QuotationBuilder /></NextIntlClientProvider>);
+    await waitFor(() => expect(screen.getByText("QTN/2026/AAA111")).toBeInTheDocument());
+    expect(screen.getByText("QTN/2026/BBB222")).toBeInTheDocument();
+    expect(screen.getByText("acc-1")).toBeInTheDocument();
+    expect(screen.getByText("deal-2")).toBeInTheDocument();
+  });
+
+  it("carries the chosen opportunity (dealId) when a quotation is created from scratch", async () => {
+    vi.mocked(qp.createQuotation).mockResolvedValue(undefined);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><QuotationBuilder /></NextIntlClientProvider>);
+    await waitFor(() => expect(screen.getByText(/no quotations yet/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /new quotation/i }));
+    fireEvent.change(screen.getByLabelText(/opportunity id/i), { target: { value: "deal-xyz" } });
+    fireEvent.click(screen.getByRole("button", { name: /add line/i }));
+    fireEvent.change(screen.getByLabelText(/product for line 1/i), { target: { value: "pr1" } });
+    fireEvent.change(screen.getByLabelText(/quantity for line 1/i), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: /create quotation/i }));
+    await waitFor(() => expect(qp.createQuotation).toHaveBeenCalled());
+    expect(vi.mocked(qp.createQuotation).mock.calls[0][0].opportunityId).toBe("deal-xyz");
   });
 });

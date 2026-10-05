@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import type { CRMActivityEntry } from "@civitasone/types";
 import { DataTable, Segmented, EmptyState } from "../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
+import { activityTypeLabel } from "./activityTypes";
 
 type ActivityRow = {
   id: string;
@@ -37,6 +39,7 @@ export function ActivitiesTable({
   initialSegment?: string;
 }) {
   const [segment, setSegment] = useState<string>(resolveSegment(initialSegment));
+  const tType = useTranslations("crmActivityTypes");
   const today = new Date().toISOString().slice(0, 10);
 
   const tableRows: ActivityRow[] = activities
@@ -47,7 +50,7 @@ export function ActivitiesTable({
     })
     .map((a) => ({
       id: a.id,
-      type: a.type,
+      type: activityTypeLabel(a.type, tType),
       subject: a.subject,
       relatedTo: a.relatedTo ?? "—",
       dueDate: a.dueDate ? formatIndianDate(a.dueDate) : "—",

@@ -2,6 +2,17 @@ import { getTranslations } from "next-intl/server";
 import type { NavTile } from "@civitasone/types";
 import { LinkTiles } from "../../_components/LinkTiles";
 import { PageHeader } from "../../_components/ds";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+
+/**
+ * Roles allowed to see the admin-config section (and reach the gated routes
+ * behind it, e.g. Agent Workload). Mirrors the ALLOWED_ROLES in the CRM
+ * admin-config layouts (assignment-rules, agent-workload, …) so the hub tiles
+ * and the route guards agree (GAP-CRM-AGENT-WORKLOAD-01).
+ */
+const CRM_ADMIN_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
+
+const CONFIGURATION_HEADING = "Configuration";
 
 const sections = [
 	{
@@ -48,7 +59,7 @@ const sections = [
 		] as NavTile[],
 	},
 	{
-		heading: "Configuration",
+		heading: CONFIGURATION_HEADING,
 		tiles: [
 			{ title: "Custom Fields", href: "/crm/custom-fields", description: "Extend data model" },
 			{ title: "Matching Rules", href: "/crm/dedup-rules", description: "Deduplication logic" },
@@ -68,6 +79,14 @@ const sections = [
 
 export default async function Page() {
 	const t = await getTranslations("crm");
+	// The Configuration section links to platform-wide admin-config routes
+	// (each gated by its own layout). Non-admins are redirected if they open
+	// one, so don't surface the tiles to them in the first place
+	// (GAP-CRM-AGENT-WORKLOAD-01).
+	const isAdmin = getSessionRoles().some((r) => CRM_ADMIN_ROLES.includes(r));
+	const visibleSections = sections.filter(
+		(section) => isAdmin || section.heading !== CONFIGURATION_HEADING,
+	);
 	return (
 		<>
 			<PageHeader
@@ -75,7 +94,7 @@ export default async function Page() {
 				subtitle="Pipeline and customer operations workspace."
 			/>
 			<div className="space-y-6">
-				{sections.map((section) => (
+				{visibleSections.map((section) => (
 					<section key={section.heading} aria-labelledby={"crm-section-" + section.heading.toLowerCase().replace(/\s+/g, "-")}>
 						<h2
 							id={"crm-section-" + section.heading.toLowerCase().replace(/\s+/g, "-")}

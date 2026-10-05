@@ -8,6 +8,7 @@
  * saved-info badge and never fabricate an empty chain as fact.
  */
 import { useEffect, useId, useState } from "react";
+import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState, Button } from "../ds";
 import {
@@ -21,6 +22,7 @@ import {
   type RuleType,
   type AsSource,
 } from "@/lib/crm/assignment";
+import { validateCriteria, summariseCriteria } from "@/lib/crm/assignmentCriteria";
 
 /** Row state keeps criteria as raw text so a half-typed JSON never crashes state. */
 interface RuleRow extends Omit<AssignmentRule, "criteria"> {
@@ -56,18 +58,37 @@ function parseCriteria(text: string): Record<string, unknown> | null {
   }
 }
 
+/**
+ * The per-strategy problem with a row's criteria, or null when it is valid.
+ * Covers both "not parseable JSON object" and "wrong shape for this strategy".
+ */
+type Translate = ReturnType<typeof useTranslations>;
+
+function criteriaError(row: RuleRow, t: Translate): string | null {
+  const parsed = parseCriteria(row.criteriaText);
+  if (parsed === null) return t("criteriaNotObject", { example: '{"territory":"west","ownerId":"…"}' });
+  const v = validateCriteria(row.ruleType, parsed);
+  return v.ok ? null : (v.error ?? t("criteriaInvalidFallback"));
+}
+
+function criteriaValid(row: RuleRow): boolean {
+  const parsed = parseCriteria(row.criteriaText);
+  return parsed !== null && validateCriteria(row.ruleType, parsed).ok;
+}
+
 function rowValid(row: RuleRow): boolean {
   return (
     row.name.trim().length > 0 &&
     Number.isInteger(row.ordinal) &&
     row.ordinal >= 0 &&
-    parseCriteria(row.criteriaText) !== null
+    criteriaValid(row)
   );
 }
 
 const inputStyle = { padding: 6, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)", width: "100%" } as const;
 
 export function AssignmentRulesEditor() {
+  const t = useTranslations("crmAssignmentRulesEditor");
   const [rows, setRows] = useState<RuleRow[]>([]);
   const [source, setSource] = useState<AsSource | "loading">("loading");
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -105,7 +126,13 @@ export function AssignmentRulesEditor() {
     setMessage("");
     setError("");
     if (!rowValid(row)) {
-      setError(`Rule “${row.name || "(unnamed)"}” needs a name, a whole-number order and valid JSON criteria.`);
+      const cErr = criteriaError(row, t);
+      const ruleName = row.name || t("unnamed");
+      setError(
+        cErr
+          ? t("ruleCriteriaError", { name: ruleName, error: cErr })
+          : t("ruleNeedsNameOrder", { name: ruleName }),
+      );
       return;
     }
     const rule: AssignmentRule = {
@@ -197,7 +224,9 @@ export function AssignmentRulesEditor() {
                 // n follows the visible (ordinal-sorted) row position so sr-only
                 // labels match what the user sees, not the unsorted source order.
                 const n = i + 1;
-                const criteriaOk = parseCriteria(row.criteriaText) !== null;
+                const parsedCriteria = parseCriteria(row.criteriaText);
+                const cErr = criteriaError(row, t);
+                const criteriaOk = cErr === null;
                 const busy = busyKey === row.key;
                 return (
                   <tr key={row.key}>
@@ -209,7 +238,7 @@ export function AssignmentRulesEditor() {
                         value={Number.isInteger(row.ordinal) ? row.ordinal : ""}
                         aria-invalid={Number.isInteger(row.ordinal) ? undefined : true}
                         onChange={(e) => update(row.key, { ordinal: sanitizeInt(e.target.value) })}
-                        style={{ ...inputStyle, width: 60, textAlign: "right" }}
+                        style={{ ...inputStyle, width: 60, textAlign: "end" }}
                       />
                     </td>
                     <td>
@@ -231,7 +260,7 @@ export function AssignmentRulesEditor() {
                         onChange={(e) => update(row.key, { ruleType: e.target.value as RuleType })}
                         style={inputStyle}
                       >
-                        {RULE_TYPES.map((t) => <option key={t} value={t}>{RULE_TYPE_LABELS[t]}</option>)}
+                        {RULE_TYPES.map((rt) => <option key={rt} value={rt}>{RULE_TYPE_LABELS[rt]}</option>)}
                       </select>
                     </td>
                     <td>
@@ -240,10 +269,26 @@ export function AssignmentRulesEditor() {
                         id={`${headingId}-crit-${row.key}`}
                         value={row.criteriaText}
                         aria-invalid={criteriaOk ? undefined : true}
+                        aria-describedby={criteriaOk ? undefined : `${headingId}-crit-err-${row.key}`}
                         onChange={(e) => update(row.key, { criteriaText: e.target.value })}
-                        placeholder='{"region":"west"}'
+                        placeholder='{"territory":"west","ownerId":"…"}'
                         style={{ ...inputStyle, minWidth: 160 }}
                       />
+                      {criteriaOk ? (
+                        parsedCriteria ? (
+                          <p style={{ fontSize: 11, color: "var(--muted)", margin: "4px 0 0" }}>
+                            {summariseCriteria(row.ruleType, parsedCriteria)}
+                          </p>
+                        ) : null
+                      ) : (
+                        <p
+                          id={`${headingId}-crit-err-${row.key}`}
+                          role="alert"
+                          style={{ fontSize: 11, color: "#b42318", margin: "4px 0 0" }}
+                        >
+                          {cErr}
+                        </p>
+                      )}
                     </td>
                     <td>
                       <label className="sr-only" htmlFor={`${headingId}-fb-${row.key}`}>Fallback owner for rule {n}</label>

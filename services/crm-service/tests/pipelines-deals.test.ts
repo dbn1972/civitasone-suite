@@ -344,7 +344,11 @@ describe("Deal Stage Transition with Optimistic Locking", () => {
     expect(res.statusCode).toBe(202);
   });
 
-  it("PATCH /v1/crm/deals/:id/stage — accepts valid stage with stageId → 202", async () => {
+  // GAP-CRM-OPPORTUNITIES-01: moving a deal into a terminal stage (Won/Lost) via a plain
+  // stage change is now rejected with 422 USE_CLOSE_ENDPOINT — closing must go through
+  // POST /v1/crm/deals/:id/close (outcome + reason). This replaces the old assertion that
+  // a stage move to "Won" was accepted (which let a deal close with no reason).
+  it("PATCH /v1/crm/deals/:id/stage — rejects a move into a terminal stage (422 USE_CLOSE_ENDPOINT)", async () => {
     const stageId = randomUUID();
     const res = await app.inject({
       method: "PATCH",
@@ -352,8 +356,19 @@ describe("Deal Stage Transition with Optimistic Locking", () => {
       headers: { authorization: `Bearer ${token()}` },
       payload: { stage: "Won", stageId, version: 1 },
     });
-    expect(res.statusCode).toBe(202);
-    expect(res.json().status).toBe("accepted");
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("USE_CLOSE_ENDPOINT");
+  });
+
+  it("PATCH /v1/crm/deals/:id/stage — rejects a move into 'Lost' too (422 USE_CLOSE_ENDPOINT)", async () => {
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/crm/deals/${randomUUID()}/stage`,
+      headers: { authorization: `Bearer ${token()}` },
+      payload: { stage: "Lost", version: 1 },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("USE_CLOSE_ENDPOINT");
   });
 
   it("PATCH /v1/crm/deals/:id/stage — returns 403 for unauthorized role", async () => {

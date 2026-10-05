@@ -174,18 +174,46 @@ export async function createPipeline(pipeline: Pipeline): Promise<void> {
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
 }
 
+/**
+ * GAP-CRM-PIPELINES-01: the service refuses (409) to delete a pipeline, or to drop a
+ * populated stage, while open deals still reference it — codes PIPELINE_IN_USE /
+ * STAGE_IN_USE, with a human message that names the count. For those referential
+ * conflicts we surface the SERVER's message verbatim (it carries the count the UI must
+ * show); any other failure falls back to the clerk-safe catalogue copy.
+ */
+const REFERENTIAL_CONFLICT_CODES = ["PIPELINE_IN_USE", "STAGE_IN_USE"];
+
+async function pipelineConflictMessage(res: Response): Promise<string> {
+  try {
+    const body = (await res.clone().json()) as { code?: unknown; message?: unknown } | null;
+    if (
+      res.status === 409 &&
+      body &&
+      typeof body.code === "string" &&
+      REFERENTIAL_CONFLICT_CODES.includes(body.code) &&
+      typeof body.message === "string" &&
+      body.message.length > 0
+    ) {
+      return body.message;
+    }
+  } catch {
+    /* fall through to the catalogue message */
+  }
+  return errorMessageFromResponse(res);
+}
+
 export async function updatePipeline(id: string, pipeline: Pipeline): Promise<void> {
   // PATCH, not PUT: the service registers `app.patch("/v1/crm/pipelines/:id")`.
   const res = await browserFetch(`v1/crm/pipelines/${id}`, {
     method: "PATCH",
     body: JSON.stringify(pipeline),
   });
-  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  if (!res.ok) throw new Error(await pipelineConflictMessage(res));
 }
 
 export async function deletePipeline(id: string): Promise<void> {
   const res = await browserFetch(`v1/crm/pipelines/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  if (!res.ok) throw new Error(await pipelineConflictMessage(res));
 }
 
 /* ============================================================ OP-003 types == */
@@ -290,9 +318,18 @@ async function throwStageError(res: Response): Promise<never> {
   throw new Error(await errorMessageFromResponse(res));
 }
 
-export async function createOpportunity(opp: Opportunity): Promise<void> {
+export async function createOpportunity(opp: Opportunity): Promise<string | null> {
   const res = await browserFetch("v1/crm/deals", { method: "POST", body: JSON.stringify(opp) });
   if (!res.ok) await throwStageError(res);
+  // The command path returns 202 { id, status, correlationId }. Surface the id so the
+  // caller can navigate to the new record (and so a second Create click can be blocked
+  // once we know a deal was already created) — GAP-CRM-OPPORTUNITIES-NEW-01.
+  try {
+    const body = (await res.json()) as { id?: unknown };
+    return typeof body.id === "string" ? body.id : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function updateOpportunity(id: string, opp: Opportunity): Promise<void> {

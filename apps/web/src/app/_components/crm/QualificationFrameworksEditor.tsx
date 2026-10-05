@@ -7,6 +7,7 @@
  * and never fabricate an empty framework set as fact (source==="error").
  */
 import { useEffect, useId, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState, Button } from "../ds";
 import {
@@ -39,6 +40,7 @@ function blankFramework(): QualificationFramework {
 }
 
 export function QualificationFrameworksEditor() {
+  const t = useTranslations("crmQualificationFrameworksEditor");
   const [frameworks, setFrameworks] = useState<QualificationFramework[]>([]);
   const [source, setSource] = useState<LqSource | "loading">("loading");
   const [busyIdx, setBusyIdx] = useState<number | null>(null);
@@ -208,7 +210,7 @@ export function QualificationFrameworksEditor() {
                 </div>
                 <div>
                   <label style={{ ...labelStyle, marginTop: 24 }}>
-                    <input type="checkbox" checked={fw.active} onChange={(e) => update(fi, { active: e.target.checked })} style={{ marginRight: 6 }} />
+                    <input type="checkbox" checked={fw.active} onChange={(e) => update(fi, { active: e.target.checked })} style={{ marginInlineEnd: 6 }} />
                     Active
                   </label>
                 </div>
@@ -222,39 +224,78 @@ export function QualificationFrameworksEditor() {
                 {fw.questions.length === 0 ? (
                   <p style={{ fontSize: 13, color: "var(--muted)" }}>No questions yet.</p>
                 ) : (
-                  <table className="tbl">
-                    <thead>
-                      <tr>
-                        <th>Question</th>
-                        <th style={{ textAlign: "right" }}>Weight</th>
-                        <th><span className="sr-only">Actions</span></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {fw.questions.map((q, qi) => (
-                        <tr key={q.id ?? questionKeyFor(fi, qi)}>
-                          <td>
-                            <label className="sr-only" htmlFor={`${headingId}-q-${fi}-${qi}`}>Question {qi + 1} text</label>
-                            <input id={`${headingId}-q-${fi}-${qi}`} value={q.text} onChange={(e) => updateQuestion(fi, qi, { text: e.target.value })} style={inputStyle} />
-                          </td>
-                          <td className="num">
-                            <label className="sr-only" htmlFor={`${headingId}-w-${fi}-${qi}`}>Question {qi + 1} weight</label>
-                            <input
-                              id={`${headingId}-w-${fi}-${qi}`}
-                              type="number" min={0} max={100} step={1}
-                              value={Number.isFinite(q.weight) ? q.weight : ""}
-                              aria-invalid={Number.isFinite(q.weight) ? undefined : true}
-                              onChange={(e) => updateQuestion(fi, qi, { weight: sanitizeNumber(e.target.value) })}
-                              style={{ width: 80, padding: 6, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)", textAlign: "right" }}
-                            />
-                          </td>
-                          <td>
-                            <Button type="button" variant="ghost" size="sm" onClick={() => removeQuestion(fi, qi)} aria-label={`Remove question ${qi + 1}`}>Remove</Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  (() => {
+                    // Weights are relative, not a running total out of 100 — two
+                    // admins can build frameworks summing to 60 and 240 with no
+                    // cue. Show the sum and each question's share of it so the
+                    // relative impact is visible. A zero total means no question
+                    // can ever move the score, so warn (non-blocking).
+                    const totalWeight = fw.questions.reduce(
+                      (sum, q) => sum + (Number.isFinite(q.weight) ? q.weight : 0),
+                      0,
+                    );
+                    const sharePct = (w: number) =>
+                      totalWeight > 0 && Number.isFinite(w) ? Math.round((w / totalWeight) * 1000) / 10 : 0;
+                    return (
+                      <>
+                        <table className="tbl">
+                          <thead>
+                            <tr>
+                              <th>{t("colQuestion")}</th>
+                              <th style={{ textAlign: "end" }}>{t("colWeight")}</th>
+                              <th style={{ textAlign: "end" }}>{t("colShare")}</th>
+                              <th><span className="sr-only">{t("colActions")}</span></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {fw.questions.map((q, qi) => (
+                              <tr key={q.id ?? questionKeyFor(fi, qi)}>
+                                <td>
+                                  <label className="sr-only" htmlFor={`${headingId}-q-${fi}-${qi}`}>{t("questionTextLabel", { n: qi + 1 })}</label>
+                                  <input id={`${headingId}-q-${fi}-${qi}`} value={q.text} onChange={(e) => updateQuestion(fi, qi, { text: e.target.value })} style={inputStyle} />
+                                </td>
+                                <td className="num">
+                                  <label className="sr-only" htmlFor={`${headingId}-w-${fi}-${qi}`}>{t("questionWeightLabel", { n: qi + 1 })}</label>
+                                  <input
+                                    id={`${headingId}-w-${fi}-${qi}`}
+                                    type="number" min={0} max={100} step={1}
+                                    value={Number.isFinite(q.weight) ? q.weight : ""}
+                                    aria-invalid={Number.isFinite(q.weight) ? undefined : true}
+                                    onChange={(e) => updateQuestion(fi, qi, { weight: sanitizeNumber(e.target.value) })}
+                                    style={{ width: 80, padding: 6, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)", textAlign: "end" }}
+                                  />
+                                </td>
+                                <td className="num" aria-label={t("questionShareAria", { n: qi + 1 })} style={{ color: "var(--muted)", fontSize: 13 }}>
+                                  {totalWeight > 0 ? `${sharePct(q.weight)}%` : "—"}
+                                </td>
+                                <td>
+                                  <Button type="button" variant="ghost" size="sm" onClick={() => removeQuestion(fi, qi)} aria-label={t("removeQuestionAria", { n: qi + 1 })}>{t("remove")}</Button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot>
+                            <tr>
+                              <th scope="row" style={{ textAlign: "start" }}>
+                                {t("totalWeight")}
+                                <span style={{ display: "block", fontWeight: 400, fontSize: 12, color: "var(--muted)" }}>
+                                  {t("weightsRelative", { total: totalWeight })}
+                                </span>
+                              </th>
+                              <td className="num" aria-label={t("totalWeightValueAria")}>{totalWeight}</td>
+                              <td className="num" style={{ color: "var(--muted)", fontSize: 13 }}>{totalWeight > 0 ? "100%" : "—"}</td>
+                              <td />
+                            </tr>
+                          </tfoot>
+                        </table>
+                        {totalWeight === 0 ? (
+                          <p role="status" style={{ fontSize: 13, color: "#b45309", marginTop: 6 }}>
+                            {t("zeroTotalWarning")}
+                          </p>
+                        ) : null}
+                      </>
+                    );
+                  })()
                 )}
               </div>
 

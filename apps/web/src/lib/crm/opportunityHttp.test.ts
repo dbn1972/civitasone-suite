@@ -39,6 +39,16 @@ describe("opportunity HTTP client (OP-001..006)", () => {
     await expect(op.deletePipeline("p1")).rejects.not.toThrow(/CONFLICT/);
   });
 
+  // GAP-CRM-PIPELINES-01: the referential-conflict 409s (PIPELINE_IN_USE / STAGE_IN_USE)
+  // carry a count the UI must show, so their server message is surfaced verbatim —
+  // unlike a generic 409, which maps to clerk-safe catalogue copy.
+  it("surfaces the server message for referential 409s (PIPELINE_IN_USE / STAGE_IN_USE)", async () => {
+    fetchMock.mockResolvedValueOnce(res({ code: "PIPELINE_IN_USE", message: "cannot delete pipeline: 5 open deal(s) still reference it" }, { status: 409 }));
+    await expect(op.deletePipeline("p1")).rejects.toThrow(/5 open deal\(s\) still reference it/);
+    fetchMock.mockResolvedValueOnce(res({ code: "STAGE_IN_USE", message: "cannot remove stage(s) Alpha: 3 open deal(s) still reference them" }, { status: 409 }));
+    await expect(op.updatePipeline("p1", { name: "A", stages: [], enabled: true })).rejects.toThrow(/Alpha: 3 open deal\(s\)/);
+  });
+
   it("createOpportunity surfaces a 422 MANDATORY_STAGE_FIELDS_MISSING as MandatoryFieldsError", async () => {
     fetchMock.mockResolvedValueOnce(
       res({ code: "MANDATORY_STAGE_FIELDS_MISSING", missingFields: ["value", "product"] }, { status: 422 }),
@@ -46,6 +56,14 @@ describe("opportunity HTTP client (OP-001..006)", () => {
     await expect(
       op.createOpportunity({ name: "x", pipelineId: "p1", stage: "s", valueMinor: "0", probability: 0, product: "", quantity: 0, competitors: [], nextStep: "", expectedCloseDate: "" }),
     ).rejects.toMatchObject({ name: "MandatoryFieldsError", missingFields: ["value", "product"] });
+  });
+
+  // GAP-CRM-OPPORTUNITIES-NEW-01: the created id must be returned so the caller can
+  // navigate away (and block a duplicate second submit).
+  it("createOpportunity returns the created id from the 202 body", async () => {
+    fetchMock.mockResolvedValueOnce(res({ id: "deal-77", status: "accepted" }, { status: 202 }));
+    const id = await op.createOpportunity({ name: "x", pipelineId: "p1", stage: "s", valueMinor: "0", probability: 0, product: "", quantity: 0, competitors: [], nextStep: "", expectedCloseDate: "" });
+    expect(id).toBe("deal-77");
   });
 
   it("changeOpportunityStage throws MandatoryFieldsError on 422 and a generic error otherwise", async () => {

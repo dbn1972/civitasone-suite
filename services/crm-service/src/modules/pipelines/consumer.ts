@@ -45,6 +45,16 @@ export function registerPipelineConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Race guard: re-check under a pipeline row lock (the route pre-check is only a fast 409).
+      if (p.stages !== undefined) {
+        const current = await repo.stagesOfTx(tx, p.id, p.tenantId);
+        const keep = new Set(p.stages.map((x) => x.name));
+        const removed = (current ?? []).map((x) => x.name).filter((n) => !keep.has(n));
+        if (removed.length > 0 && (await repo.lockAndCountOpenDeals(tx, p.id, p.tenantId, removed)) > 0) {
+          await emitAudit(tx, msg, "update", p.id, "rejected_stage_in_use");
+          return;
+        }
+      }
       const updated = await repo.updateWithVersion(
         tx, p.id, p.tenantId, p.version,
         {
@@ -70,6 +80,10 @@ export function registerPipelineConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      if ((await repo.lockAndCountOpenDeals(tx, p.id, p.tenantId)) > 0) {
+        await emitAudit(tx, msg, "delete", p.id, "rejected_pipeline_in_use");
+        return;
+      }
       await repo.softDelete(tx, p.id, p.tenantId, msg.actorId);
       await emit(tx, msg, EVENTS.pipelineDeleted, { pipelineId: p.id }, "delete", p.id);
     });

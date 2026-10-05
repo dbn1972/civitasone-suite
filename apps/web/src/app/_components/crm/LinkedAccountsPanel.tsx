@@ -7,6 +7,7 @@
  * disconnected via ConfirmDialog. A failed load shows the saved-info badge.
  */
 import { useEffect, useId, useState } from "react";
+import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState, Button } from "../ds";
 import {
@@ -33,6 +34,7 @@ const STATUS_LABEL: Record<LinkedStatus, string> = {
 };
 
 export function LinkedAccountsPanel() {
+  const t = useTranslations("crmLinkedAccountsPanel");
   const [accounts, setAccounts] = useState<LinkedAccount[]>([]);
   const [source, setSource] = useState<AaSource | "loading">("loading");
   const [provider, setProvider] = useState<LinkedProvider>("google");
@@ -106,6 +108,9 @@ export function LinkedAccountsPanel() {
           Connecting a provider registers it for future sync of emails, meetings and tasks. Live two-way sync is not
           switched on yet, so connections stay <strong>pending</strong> and no items are imported.
         </p>
+        <p style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
+          {t.rich("ownershipNotice", { strong: (chunks) => <strong>{chunks}</strong> })}
+        </p>
 
         <form onSubmit={connect} aria-labelledby={headingId} style={{ display: "grid", gap: 10 }}>
           <div>
@@ -155,7 +160,7 @@ export function LinkedAccountsPanel() {
                     <td>{LINKED_PROVIDER_LABELS[a.provider]}</td>
                     <td style={{ fontSize: 13 }}>{a.externalEmail || "—"}</td>
                     <td><span className="pill info">{STATUS_LABEL[a.status]}</span></td>
-                    <td style={{ textAlign: "right" }}>
+                    <td style={{ textAlign: "end" }}>
                       <Button type="button" variant="danger" aria-label={`Disconnect ${a.externalEmail || a.provider}`} disabled={busy || !a.id} onClick={() => a.id && setConfirmId(a.id)} style={{ minHeight: 36 }}>
                         Disconnect
                       </Button>

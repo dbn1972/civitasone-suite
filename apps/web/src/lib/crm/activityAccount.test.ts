@@ -7,6 +7,8 @@ import {
   normaliseRelationships,
   normaliseTaskEscalationRules,
   normaliseOverdueTasks,
+  normaliseEscalationRoles,
+  normaliseEscalationUsers,
   normaliseLinkedAccounts,
   normalise360,
   getActivities,
@@ -20,6 +22,8 @@ import {
   getAccountRelationships,
   getTaskEscalationRules,
   getOverdueTasks,
+  getEscalationRoles,
+  getEscalationUsers,
   getLinkedAccounts,
   connectLinkedAccount,
   getContact360,
@@ -123,6 +127,59 @@ describe("normalisers", () => {
     );
     expect(out.map((t) => t.id)).toEqual(["t2", "t1"]);
     expect(out[0].ageMinutes).toBe(1440);
+  });
+
+  // GAP-CRM-TASK-ESCALATION-02 (IDLEAK): `owner` is a display name ONLY. An
+  // opaque owner id must land on `ownerId`, never on `owner` — the old code did
+  // owner ?? actorName ?? ownerId, leaking a UUID into the rendered Owner cell.
+  it("normaliseOverdueTasks keeps an opaque owner id out of the display `owner`", () => {
+    const now = Date.parse("2026-08-04T12:00:00Z");
+    const out = normaliseOverdueTasks(
+      {
+        activities: [
+          { id: "t1", type: "task", status: "open", subject: "named", dueAt: "2026-08-03T10:00:00Z", actorName: "Priya Nair", ownerId: "uuid-1" },
+          { id: "t2", type: "task", status: "open", subject: "id only", dueAt: "2026-08-03T11:00:00Z", ownerId: "9f1c0b2a-1111-2222-3333-444455556666" },
+        ],
+      },
+      now,
+    );
+    const named = out.find((t) => t.id === "t1")!;
+    const idOnly = out.find((t) => t.id === "t2")!;
+    // Named task: display name from actorName, id preserved separately.
+    expect(named.owner).toBe("Priya Nair");
+    expect(named.ownerId).toBe("uuid-1");
+    // Id-only task: NO display name (so the UI never prints the id as a name).
+    expect(idOnly.owner).toBeUndefined();
+    expect(idOnly.ownerId).toBe("9f1c0b2a-1111-2222-3333-444455556666");
+  });
+
+  // GAP-CRM-TASK-ESCALATION-01 — role/user directory normalisers for the picker.
+  it("normaliseEscalationRoles reads key+label and tolerates a {roles} wrapper", () => {
+    const out = normaliseEscalationRoles({
+      roles: [
+        { key: "sales_manager", label: "Sales Manager" },
+        { name: "ops_manager" },
+        { nope: true },
+      ],
+    });
+    expect(out).toEqual([
+      { key: "sales_manager", label: "Sales Manager" },
+      { key: "ops_manager", label: "ops_manager" },
+    ]);
+  });
+
+  it("normaliseEscalationUsers keeps the id and a name (never drops the id)", () => {
+    const out = normaliseEscalationUsers({
+      users: [
+        { id: "u-1", name: "Priya Nair" },
+        { id: "u-2", email: "arjun@gov.in" },
+        { name: "no id" },
+      ],
+    });
+    expect(out).toEqual([
+      { id: "u-1", name: "Priya Nair" },
+      { id: "u-2", name: "arjun@gov.in" },
+    ]);
   });
 
   it("normaliseLinkedAccounts: drops unknown provider, coerces status", () => {
@@ -267,6 +324,29 @@ describe("loaders + mutations", () => {
       fetchMock.mockResolvedValueOnce(res({}, 500));
       expect((await loader()).source).toBe("error");
     }
+  });
+
+  // GAP-CRM-TASK-ESCALATION-01 / -02 — directory loaders + bounded overdue request.
+  it("getEscalationRoles / getEscalationUsers hit the directory endpoints and gate errors", async () => {
+    fetchMock.mockResolvedValueOnce(res({ data: [{ key: "sales_manager", label: "Sales Manager" }] }));
+    const roles = await getEscalationRoles();
+    expect(fetchMock.mock.calls[0][0]).toBe("policy/roles");
+    expect(roles.data).toHaveLength(1);
+
+    fetchMock.mockResolvedValueOnce(res({ data: [{ id: "u-1", name: "Priya Nair" }] }));
+    const users = await getEscalationUsers();
+    expect(fetchMock.mock.calls[1][0]).toBe("identity/users?limit=500");
+    expect(users.data[0].id).toBe("u-1");
+
+    fetchMock.mockResolvedValueOnce(res({}, 500));
+    expect((await getEscalationRoles()).source).toBe("error");
+  });
+
+  it("getOverdueTasks caps the request at 50 so the alert table can't grow unbounded", async () => {
+    fetchMock.mockResolvedValueOnce(res({ data: [] }));
+    await getOverdueTasks();
+    expect(fetchMock.mock.calls[0][0]).toContain("limit=50");
+    expect(fetchMock.mock.calls[0][0]).toContain("overdue=true");
   });
 
   it("createCommunication / createAddress / createContactRole / connectLinkedAccount hit the right paths", async () => {

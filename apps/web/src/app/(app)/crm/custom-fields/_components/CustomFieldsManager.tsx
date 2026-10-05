@@ -15,6 +15,8 @@
  * ConfirmDialog.
  */
 import { useEffect, useId, useRef, useState } from "react";
+import { useFormError } from "@/lib/useFormError";
+import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { Button, ConfirmDialog, EmptyState, Segmented } from "../../../../_components/ds";
 import {
@@ -26,6 +28,7 @@ import {
   blankDraft,
   validateDraft,
   fieldTypeHasOptions,
+  looksSensitive,
   ENTITY_TYPES,
   ENTITY_TYPE_LABELS,
   FIELD_TYPES,
@@ -38,6 +41,15 @@ import {
 
 const inputStyle = { padding: 6, minHeight: 36, borderRadius: 8, border: "1px solid var(--line)", width: "100%" } as const;
 
+/**
+ * Roles selectable as "who may see a sensitive field's value in the clear".
+ * Mirrors the CRM admin/PII role set (lib/auth/roleGuard CRM_PII_READ_ROLES) but
+ * declared locally — this is a "use client" component and must not import
+ * roleGuard (which pulls in next/headers). The server remains the authority for
+ * actually stripping values; this list only drives the definition UI.
+ */
+const VISIBILITY_ROLE_OPTIONS = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"] as const;
+
 interface Row extends CustomFieldDraft {
   key: string;
 }
@@ -47,6 +59,7 @@ function toRow(d: CustomFieldDraft): Row {
 }
 
 export function CustomFieldsManager() {
+  const t = useTranslations("crmCustomFieldsManager");
   const [entity, setEntity] = useState<CfEntityType>("leads");
   const [rows, setRows] = useState<Row[]>([]);
   const [source, setSource] = useState<CfSource | "loading">("loading");
@@ -54,6 +67,7 @@ export function CustomFieldsManager() {
   const [attempted, setAttempted] = useState<Record<string, boolean>>({});
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const formError = useFormError("custom field");
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
   const headingId = useId();
   const errBaseId = useId();
@@ -152,7 +166,7 @@ export function CustomFieldsManager() {
       setMessage(`Custom field “${row.fieldName.trim()}” saved.`);
       await load(entity, gen);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save the custom field.");
+      setError(formError.fromException("save", e).message);
     } finally {
       setBusyKey(null);
     }
@@ -175,7 +189,7 @@ export function CustomFieldsManager() {
       setMessage(`Custom field “${row.fieldName}” deleted.`);
       await load(entity, gen);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not delete the custom field.");
+      setError(formError.fromException("save", e).message);
     } finally {
       setBusyKey(null);
     }
@@ -230,7 +244,15 @@ export function CustomFieldsManager() {
                       <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>Field name</span>
                       <input
                         value={row.fieldName}
-                        onChange={(e) => update(row.key, { fieldName: e.target.value })}
+                        onChange={(e) => {
+                          const fieldName = e.target.value;
+                          // Default sensitive ON the first time a PII-looking
+                          // name is entered; never force it back off (the admin
+                          // can untick deliberately). GAP-CRM-CUSTOM-FIELDS-01.
+                          const patch: Partial<Row> = { fieldName };
+                          if (!row.sensitive && looksSensitive(fieldName)) patch.sensitive = true;
+                          update(row.key, patch);
+                        }}
                         style={inputStyle}
                         aria-label="Custom field name"
                         aria-required="true"
@@ -296,6 +318,15 @@ export function CustomFieldsManager() {
                       <input type="checkbox" checked={row.required} onChange={(e) => update(row.key, { required: e.target.checked })} />
                       Required
                     </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13 }}>
+                      <input
+                        type="checkbox"
+                        checked={row.sensitive}
+                        onChange={(e) => update(row.key, { sensitive: e.target.checked })}
+                        aria-label={t("sensitiveLabel")}
+                      />
+                      {t("sensitiveLabel")}
+                    </label>
                     <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
                       <span style={{ color: "var(--muted)" }}>Order</span>
                       <input
@@ -308,6 +339,42 @@ export function CustomFieldsManager() {
                       />
                     </label>
                   </div>
+
+                  {looksSensitive(row.fieldName) ? (
+                    <p role="alert" style={{ fontSize: 12, color: "#b45309", margin: "8px 0 0" }}>
+                      {t("sensitiveWarning")}
+                    </p>
+                  ) : null}
+
+                  {row.sensitive ? (
+                    <fieldset style={{ border: "1px solid var(--line)", borderRadius: 8, margin: "8px 0 0", padding: "6px 10px 10px" }}>
+                      <legend style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600, padding: "0 4px" }}>
+                        {t("visibleToRolesLegend")}
+                      </legend>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }} aria-label={t("visibleToRolesGroupLabel")}>
+                        {VISIBILITY_ROLE_OPTIONS.map((roleName) => {
+                          const checked = row.visibleToRoles.includes(roleName);
+                          return (
+                            <label key={roleName} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13 }}>
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                aria-label={t("visibleToRole", { role: roleName })}
+                                onChange={(e) =>
+                                  update(row.key, {
+                                    visibleToRoles: e.target.checked
+                                      ? [...row.visibleToRoles, roleName]
+                                      : row.visibleToRoles.filter((r) => r !== roleName),
+                                  })
+                                }
+                              />
+                              {roleName}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </fieldset>
+                  ) : null}
 
                   <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                     <Button type="button" style={{ minHeight: 40 }} disabled={busyKey === row.key} onClick={() => save(row)}>

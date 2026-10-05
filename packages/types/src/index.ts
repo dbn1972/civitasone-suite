@@ -306,6 +306,13 @@ export interface CRMCampaignRoiFigures {
 /** One campaign's aggregated performance across all its reporting periods. */
 export interface CRMCampaignRoiSummaryRow extends CRMCampaignRoiFigures {
   campaignId: string;
+  /**
+   * Human campaign name so a marketing officer can tell campaigns apart
+   * instead of reading raw UUIDs (GAP-CRM-CAMPAIGNS-01). Optional: supplied by
+   * the backend once roi-summary joins the campaign name; the UI falls back to
+   * the id until then.
+   */
+  name?: string;
   currency: string;
   /** How many reporting periods were folded into these figures. */
   periods: number;
@@ -321,6 +328,8 @@ export interface CRMCampaignRoiPeriod extends CRMCampaignRoiFigures {
 /** A campaign's totals plus its per-period breakdown. */
 export interface CRMCampaignRoi extends CRMCampaignRoiFigures {
   campaignId: string;
+  /** Human campaign name (GAP-CRM-CAMPAIGNS-01); optional until the backend joins it. */
+  name?: string;
   currency: string;
   periods: CRMCampaignRoiPeriod[];
 }
@@ -1285,7 +1294,7 @@ export type ContactDetail = {
 
 export type CRMActivityEntry = {
   id: string;
-  type: "call" | "meeting" | "email" | "task" | "note";
+  type: "call" | "meeting" | "email" | "task" | "note" | "appointment" | "reminder" | "complaint";
   subject: string;
   relatedTo?: string;
   relatedType?: "contact" | "deal" | "other";

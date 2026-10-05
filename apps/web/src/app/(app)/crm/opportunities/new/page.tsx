@@ -1,5 +1,5 @@
 import { PageHeader } from "../../../../_components/ds";
-import { OpportunityForm } from "../../../../_components/crm/OpportunityForm";
+import { NewOpportunityClient } from "./NewOpportunityClient";
 
 /** OP-003 — create an opportunity with value/probability/product/etc. */
 export default function Page() {
@@ -11,7 +11,7 @@ export default function Page() {
         back="/crm/opportunities"
         backLabel="Opportunities"
       />
-      <OpportunityForm />
+      <NewOpportunityClient />
     </>
   );
 }

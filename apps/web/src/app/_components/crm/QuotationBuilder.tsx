@@ -9,6 +9,7 @@
  * honestly (QP-004) — we never fake a successful send. Embeds the approval panel.
  */
 import { useEffect, useId, useState } from "react";
+import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState, Button } from "../ds";
 import { rupeesToMinorString, percentToBps } from "@/lib/money";
@@ -90,7 +91,20 @@ function toLine(l: LineDraft): QuotationLine | null {
   };
 }
 
-export function QuotationBuilder() {
+interface QuotationBuilderProps {
+  /**
+   * Whether the signed-in user holds a quotation-approve role
+   * (CRM_QUOTATION_APPROVE_ROLES), from the verified session on the server
+   * page. The server stays the authority; this only decides whether the
+   * Approve/Reject controls are offered. GAP-CRM-QUOTATIONS-01.
+   */
+  canApprove?: boolean;
+  /** Signed-in user id (JWT sub), for the maker-checker self-approval hide. */
+  currentUserId?: string | null;
+}
+
+export function QuotationBuilder({ canApprove = false, currentUserId = null }: QuotationBuilderProps = {}) {
+  const t = useTranslations("crmQuotationBuilder");
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [source, setSource] = useState<QpSource | "loading">("loading");
   const [products, setProducts] = useState<Product[]>([]);
@@ -99,6 +113,11 @@ export function QuotationBuilder() {
 
   const [template, setTemplate] = useState<string>("standard");
   const [lines, setLines] = useState<LineDraft[]>([]);
+  // Account / opportunity for a quote built from scratch (an opened quote
+  // carries its own; see save()). dealId must be a UUID server-side, so these
+  // are only sent when non-empty. GAP-CRM-QUOTATIONS-02.
+  const [newAccountId, setNewAccountId] = useState("");
+  const [newOpportunityId, setNewOpportunityId] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -159,6 +178,8 @@ export function QuotationBuilder() {
     setIsNew(true);
     setTemplate("standard");
     setLines([]);
+    setNewAccountId("");
+    setNewOpportunityId("");
     setMessage("");
     setError("");
     setVersions([]);
@@ -223,8 +244,11 @@ export function QuotationBuilder() {
     }
     const payload: Quotation = {
       ...(selected?.id ? { id: selected.id } : {}),
-      ...(selected?.accountId ? { accountId: selected.accountId } : {}),
-      ...(selected?.opportunityId ? { opportunityId: selected.opportunityId } : {}),
+      // Account / opportunity: carried over from an opened quote, else the
+      // from-scratch pickers. dealId (opportunityId) links the quote to a
+      // customer so two "standard v1" quotes aren't indistinguishable.
+      ...((selected?.accountId ?? (newAccountId.trim() || undefined)) ? { accountId: selected?.accountId ?? newAccountId.trim() } : {}),
+      ...((selected?.opportunityId ?? (newOpportunityId.trim() || undefined)) ? { opportunityId: selected?.opportunityId ?? newOpportunityId.trim() } : {}),
       // Carry the ref forward so an edit stays on the same quotation series
       // instead of minting a second one.
       ...(selected?.quoteRef ? { quoteRef: selected.quoteRef } : {}),
@@ -311,8 +335,12 @@ export function QuotationBuilder() {
           <table className="tbl" aria-labelledby={headingId}>
             <thead>
               <tr>
+                <th>{t("colQuoteRef")}</th>
                 <th>Template</th>
                 <th className="num">Version</th>
+                <th>{t("colAccount")}</th>
+                <th>{t("colOpportunity")}</th>
+                <th>{t("colCreated")}</th>
                 <th className="num">Lines</th>
                 <th className="num">Total</th>
                 <th>Status</th>
@@ -324,8 +352,12 @@ export function QuotationBuilder() {
             <tbody>
               {quotations.map((q) => (
                 <tr key={q.id}>
+                  <td>{q.quoteRef || "—"}</td>
                   <td>{q.template || "standard"}</td>
                   <td className="num">v{q.version}</td>
+                  <td>{q.accountId || "—"}</td>
+                  <td>{q.opportunityId || "—"}</td>
+                  <td>{q.createdAt ? formatIndianDate(q.createdAt) : "—"}</td>
                   <td className="num">{q.lines.length}</td>
                   <td className="num">{formatMoney(quotationTotalMinor(q.lines))}</td>
                   <td>{q.status}</td>
@@ -383,6 +415,40 @@ export function QuotationBuilder() {
             {resolvedBook ? <span style={{ fontSize: 12, color: "var(--muted)" }}>Applicable book: {resolvedBook.name}</span> : null}
           </div>
 
+          {isNew && !selected?.id ? (
+            <div style={{ display: "flex", gap: 12, padding: "0 12px 12px", flexWrap: "wrap", alignItems: "end" }}>
+              <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
+                {t("opportunityLabel")}
+                <input
+                  aria-label={t("opportunityAria")}
+                  value={newOpportunityId}
+                  onChange={(e) => setNewOpportunityId(e.target.value)}
+                  style={inputStyle}
+                  placeholder={t("opportunityPlaceholder")}
+                />
+              </label>
+              <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
+                {t("accountLabel")}
+                <input
+                  aria-label={t("accountAria")}
+                  value={newAccountId}
+                  onChange={(e) => setNewAccountId(e.target.value)}
+                  style={inputStyle}
+                  placeholder={t("accountPlaceholder")}
+                />
+              </label>
+              <span style={{ fontSize: 12, color: "var(--muted)", maxWidth: 280 }}>
+                {t("linkHint")}
+              </span>
+            </div>
+          ) : selected?.id ? (
+            <p style={{ fontSize: 12, color: "var(--muted)", padding: "0 12px 8px" }}>
+              {selected.quoteRef ? <>{t.rich("refLine", { ref: selected.quoteRef, strong: (chunks) => <strong>{chunks}</strong> })} </> : null}
+              {selected.accountId ? <>{t("accountLine", { id: selected.accountId })} </> : null}
+              {selected.opportunityId ? <>{t("opportunityLine", { id: selected.opportunityId })}</> : null}
+            </p>
+          ) : null}
+
           <div style={{ overflowX: "auto" }}>
             <table className="tbl">
               <thead>
@@ -425,15 +491,15 @@ export function QuotationBuilder() {
                       </td>
                       <td>
                         <label className="sr-only" htmlFor={`${headingId}-qty-${idx}`}>Quantity for line {n}</label>
-                        <input id={`${headingId}-qty-${idx}`} type="number" min={1} step={1} value={l.quantity} onChange={(e) => setLines((prev) => prev.map((r, i) => (i === idx ? { ...r, quantity: e.target.value } : r)))} style={{ ...inputStyle, textAlign: "right" }} />
+                        <input id={`${headingId}-qty-${idx}`} type="number" min={1} step={1} value={l.quantity} onChange={(e) => setLines((prev) => prev.map((r, i) => (i === idx ? { ...r, quantity: e.target.value } : r)))} style={{ ...inputStyle, textAlign: "end" }} />
                       </td>
                       <td>
                         <label className="sr-only" htmlFor={`${headingId}-price-${idx}`}>Unit price for line {n}</label>
-                        <input id={`${headingId}-price-${idx}`} inputMode="decimal" value={l.unitPriceRupees} aria-invalid={priceOk ? undefined : true} onChange={(e) => setLines((prev) => prev.map((r, i) => (i === idx ? { ...r, unitPriceRupees: e.target.value } : r)))} style={{ ...inputStyle, textAlign: "right" }} />
+                        <input id={`${headingId}-price-${idx}`} inputMode="decimal" value={l.unitPriceRupees} aria-invalid={priceOk ? undefined : true} onChange={(e) => setLines((prev) => prev.map((r, i) => (i === idx ? { ...r, unitPriceRupees: e.target.value } : r)))} style={{ ...inputStyle, textAlign: "end" }} />
                       </td>
                       <td>
                         <label className="sr-only" htmlFor={`${headingId}-tax-${idx}`}>Tax percent for line {n}</label>
-                        <input id={`${headingId}-tax-${idx}`} inputMode="decimal" value={l.taxPercent} aria-invalid={taxOk ? undefined : true} onChange={(e) => setLines((prev) => prev.map((r, i) => (i === idx ? { ...r, taxPercent: e.target.value } : r)))} style={{ ...inputStyle, textAlign: "right" }} />
+                        <input id={`${headingId}-tax-${idx}`} inputMode="decimal" value={l.taxPercent} aria-invalid={taxOk ? undefined : true} onChange={(e) => setLines((prev) => prev.map((r, i) => (i === idx ? { ...r, taxPercent: e.target.value } : r)))} style={{ ...inputStyle, textAlign: "end" }} />
                       </td>
                       <td className="num">{net !== null ? formatMoney(net) : "—"}</td>
                       <td className="num">{tax !== null ? formatMoney(tax) : "—"}</td>
@@ -457,7 +523,7 @@ export function QuotationBuilder() {
               {lines.length > 0 ? (
                 <tfoot>
                   <tr>
-                    <td colSpan={6} style={{ textAlign: "right", fontWeight: 600 }}>
+                    <td colSpan={6} style={{ textAlign: "end", fontWeight: 600 }}>
                       Grand total
                     </td>
                     <td className="num" style={{ fontWeight: 700 }}>
@@ -532,7 +598,14 @@ export function QuotationBuilder() {
       ) : null}
 
       {/* QP-004 approvals — the gate on Send */}
-      {selected?.id ? <QuotationApprovalPanel quotationId={selected.id} onBlockingChange={setBlocking} /> : null}
+      {selected?.id ? (
+        <QuotationApprovalPanel
+          quotationId={selected.id}
+          onBlockingChange={setBlocking}
+          canApprove={canApprove}
+          currentUserId={currentUserId}
+        />
+      ) : null}
 
       <ConfirmDialog
         open={confirmConvert}

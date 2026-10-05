@@ -142,3 +142,36 @@ export async function stagesOf(id: string, tenantId: string): Promise<PipelineRo
     .limit(1));
   return rows[0]?.stages ?? null;
 }
+
+/**
+ * Race guard for STAGE_IN_USE / PIPELINE_IN_USE. Takes a row lock on the pipeline
+ * (FOR UPDATE) inside the consumer transaction, then counts open deals. Deal
+ * create / stage-move take FOR SHARE on the same row, so a deal cannot slip in
+ * between this check and the write. `stageNames` undefined = whole pipeline.
+ */
+export async function lockAndCountOpenDeals(
+  tx: Writer,
+  pipelineId: string,
+  tenantId: string,
+  stageNames?: string[],
+): Promise<number> {
+  const t = tx as typeof db;
+  await t.execute(sql`SELECT 1 FROM crm.pipelines WHERE id = ${pipelineId}::uuid AND tenant_id = ${tenantId}::uuid FOR UPDATE`);
+  if (stageNames && stageNames.length === 0) return 0;
+  const stageFilter = stageNames
+    ? sql`AND stage IN (${sql.join(stageNames.map((n) => sql`${n}`), sql`, `)})`
+    : sql``;
+  const rows = (await t.execute(sql`
+    SELECT count(*)::int AS n FROM crm.deals
+     WHERE tenant_id = ${tenantId}::uuid AND pipeline_id = ${pipelineId}::uuid
+       AND status NOT IN ('deleted','cancelled') AND close_outcome IS NULL ${stageFilter}`)) as unknown as Array<{ n: number }>;
+  return rows[0]?.n ?? 0;
+}
+
+export async function stagesOfTx(tx: Writer, id: string, tenantId: string): Promise<PipelineRow["stages"] | null> {
+  const rows = await (tx as typeof db).select({ stages: pipelines.stages })
+    .from(pipelines)
+    .where(and(eq(pipelines.id, id), eq(pipelines.tenantId, tenantId), sql`${pipelines.status} <> 'deleted'`))
+    .limit(1);
+  return rows[0]?.stages ?? null;
+}

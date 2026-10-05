@@ -6,10 +6,13 @@
  * empty list as fact. Status is shown as icon+label (not colour-only).
  */
 import { useEffect, useId, useState } from "react";
+import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { EmptyState } from "../../../_components/ds";
 import {
   getOnboardingCases,
+  getOnboardingLookups,
+  resolveCaseNames,
   ONBOARDING_STAGES,
   STAGE_LABELS,
   STAGE_META,
@@ -32,6 +35,7 @@ function shortId(id: string): string {
 }
 
 export function OnboardingList() {
+  const t = useTranslations("crmOnboardingList");
   const [stage, setStage] = useState<OnboardingStage | "">("");
   const [cases, setCases] = useState<OnboardingCase[]>([]);
   const [source, setSource] = useState<OnbSource | "loading">("loading");
@@ -40,11 +44,17 @@ export function OnboardingList() {
   useEffect(() => {
     let alive = true;
     setSource("loading");
-    void getOnboardingCases(stage ? { stage } : {}).then(({ data, source: s }) => {
-      if (!alive) return;
-      setCases(data);
-      setSource(s);
-    });
+    // GAP-CRM-ONBOARDING-01: resolve deal/account names alongside the cases so a
+    // row is identified by its customer, not an 8-char UUID fragment. The name
+    // maps come from the deals/accounts list endpoints (the onboarding module
+    // cannot join to them); a failed lookup just leaves names null.
+    void Promise.all([getOnboardingCases(stage ? { stage } : {}), getOnboardingLookups()]).then(
+      ([{ data, source: s }, lookups]) => {
+        if (!alive) return;
+        setCases(resolveCaseNames(data, lookups));
+        setSource(s);
+      },
+    );
     return () => {
       alive = false;
     };
@@ -97,7 +107,7 @@ export function OnboardingList() {
           <table className="tbl">
             <thead>
               <tr>
-                <th>Case</th>
+                <th>{t("colCustomerDeal")}</th>
                 <th>Stage</th>
                 <th>KYC</th>
                 <th>Account</th>
@@ -108,10 +118,14 @@ export function OnboardingList() {
               {cases.map((c) => {
                 const sm = STAGE_META[c.stage as OnboardingStage];
                 const km = KYC_META[c.kycStatus as keyof typeof KYC_META];
+                // Primary label: the deal/customer name; the short ref stays as a
+                // muted secondary line for support lookups — never the primary id.
+                const primary = c.dealName ?? c.accountName ?? t("unnamedCase");
                 return (
                   <tr key={c.id}>
                     <td>
-                      <a href={`/crm/onboarding/${c.id}`}>{shortId(c.id)}</a>
+                      <a href={`/crm/onboarding/${c.id}`}>{primary}</a>
+                      <div style={{ fontSize: 11, color: "var(--muted)" }}>{t("ref", { id: shortId(c.id) })}</div>
                     </td>
                     <td>
                       <span aria-hidden="true">{sm ? sm.icon : "•"}</span> {stageLabel(c.stage)}
@@ -119,7 +133,7 @@ export function OnboardingList() {
                     <td>
                       <span aria-hidden="true">{km ? km.icon : "•"}</span> {kycLabel(c.kycStatus)}
                     </td>
-                    <td style={{ fontSize: 13 }}>{c.accountId ? shortId(c.accountId) : "—"}</td>
+                    <td style={{ fontSize: 13 }}>{c.accountName ?? (c.accountId ? shortId(c.accountId) : "—")}</td>
                     <td style={{ fontSize: 13 }}>{fmtDate(c.updatedAt)}</td>
                   </tr>
                 );
