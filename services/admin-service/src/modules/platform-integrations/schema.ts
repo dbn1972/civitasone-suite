@@ -27,7 +27,7 @@ import {
 
 export const platformIntegrationsSchema = pgSchema("platform_integrations");
 
-export const INTEGRATION_CATEGORIES = ["esign", "dsc", "bank_api", "pfms"] as const;
+export const INTEGRATION_CATEGORIES = ["esign", "dsc", "bank_api", "pfms", "ocr"] as const;
 export type IntegrationCategory = (typeof INTEGRATION_CATEGORIES)[number];
 export const PROVIDER_STATUSES = ["available", "beta", "disabled"] as const;
 export type ProviderStatus = (typeof PROVIDER_STATUSES)[number];

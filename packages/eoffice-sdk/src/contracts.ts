@@ -155,3 +155,60 @@ export const resolvedApproval = z.object({
   steps: z.array(z.object({ role: z.string(), label: z.string() })),
 });
 export type ResolvedApproval = z.infer<typeof resolvedApproval>;
+
+// ─── Bulk-scan link target (GAP-ADMIN-BULK-SCAN-02) ───────────────────────────
+// Mirrors @civitasone/scan-link lookupCandidateSchema for the eoffice_file target
+// (kept local so the SDK stays dependency-light; scan-link tests pin the shape).
+
+export const scanLookupQuery = z
+  .object({
+    fileNo: z.string().trim().min(1).max(100).optional(),
+    subject: z.string().trim().min(1).max(300).optional(),
+  })
+  .refine((q) => q.fileNo !== undefined || q.subject !== undefined, { message: "fileNo or subject is required" });
+export type ScanLookupQuery = z.input<typeof scanLookupQuery>;
+
+export const scanLookupCandidate = z.object({
+  target: z.literal("eoffice_file"),
+  targetId: z.string().uuid(),
+  label: z.string().max(300),
+  amountMinor: z.string().nullable(),
+  reference: z.string().nullable(),
+  confidence: z.number().min(0).max(1),
+});
+export type ScanLookupCandidate = z.infer<typeof scanLookupCandidate>;
+export const scanLookupResponse = z.object({ data: z.array(scanLookupCandidate).max(20) });
+
+export const clearanceCheckQuery = z.object({
+  fileId: z.string().uuid(),
+  userId: z.string().uuid(),
+  roles: z.array(z.string().min(1)).max(30),
+});
+export type ClearanceCheckQuery = z.input<typeof clearanceCheckQuery>;
+export const clearanceCheckResponse = z.object({
+  data: z.object({ allowed: z.boolean(), reason: z.string().nullable() }),
+});
+export type ClearanceCheckResult = z.infer<typeof clearanceCheckResponse>["data"];
+
+export const SCANNED_DOCUMENT_STATES = ["linked", "unlinked"] as const;
+/** PII-masked metadata of a scanned document filed on an eFile (never the file bytes). */
+export const scannedDocument = z.object({
+  id: z.string().uuid(),
+  linkId: z.string().uuid(),
+  documentId: z.string().uuid(),
+  batchId: z.string().uuid(),
+  fileName: z.string(),
+  mimeType: z.string().nullable(),
+  docType: z.string(),
+  pageCount: z.number().int().nonnegative(),
+  ocrConfidence: z.number().min(0).max(1).nullable(),
+  piiFlags: z.array(z.string()),
+  textPreviewMasked: z.string().nullable(),
+  state: z.enum(SCANNED_DOCUMENT_STATES),
+  unlinkReason: z.string().nullable(),
+  linkedBy: z.string().uuid(),
+  approvedBy: z.string().uuid().nullable(),
+  filedAt: z.string(),
+});
+export type ScannedDocument = z.infer<typeof scannedDocument>;
+export const scannedDocumentsResponse = z.object({ data: z.array(scannedDocument) });

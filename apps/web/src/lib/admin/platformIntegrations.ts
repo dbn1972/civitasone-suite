@@ -1,6 +1,6 @@
 /**
  * Pure helpers + wire types for the platform-integration screens (eSign, DSC,
- * bank API, PFMS): the super-admin catalogue at /admin/platform/integrations and
+ * bank API, PFMS, OCR): the super-admin catalogue at /admin/platform/integrations and
  * the tenant configuration at /admin/integrations/platform.
  *
  * Mirrors admin-service modules/platform-integrations. Everything here is pure
@@ -8,7 +8,7 @@
  * emptiness checks out of page files.
  */
 
-export const CATEGORIES = ["esign", "dsc", "bank_api", "pfms"] as const;
+export const CATEGORIES = ["esign", "dsc", "bank_api", "pfms", "ocr"] as const;
 export type IntegrationCategory = (typeof CATEGORIES)[number];
 export type IntegrationEnv = "sandbox" | "production";
 export type ProviderStatus = "available" | "beta" | "disabled";

@@ -14,6 +14,7 @@ import { schema as quartersModule }    from "../modules/quarters/schema.js";
 import { schema as fleetModule }       from "../modules/fleet/schema.js";
 import { schema as spacesModule }      from "../modules/spaces/schema.js";
 import { schema as consumablesModule } from "../modules/consumables/schema.js";
+import { schema as scanLinkModule }    from "../modules/scan-link/schema.js";
 import { outboxSchema }               from "./outbox.js";
 
 const url = process.env.DATABASE_URL;
@@ -24,7 +25,7 @@ export const sqlClient = createSqlClient(url);
 const ESTAB_SCHEMA = {
   ...filesModule, ...committeeModule, ...assetsModule, ...facilitiesModule, ...legalModule,
   ...approvalRulesModule, ...dfaModule, ...handoverModule, ...migrationModule, ...operatorsModule,
-  ...quartersModule, ...fleetModule, ...spacesModule, ...consumablesModule,
+  ...quartersModule, ...fleetModule, ...spacesModule, ...consumablesModule, ...scanLinkModule,
   ...outboxSchema,
 };
 

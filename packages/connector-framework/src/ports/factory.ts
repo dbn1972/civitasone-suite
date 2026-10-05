@@ -30,6 +30,7 @@ export function createAdapter(category: PlatformIntegrationCategory, ctx: Adapte
     case "dsc": return sandbox ? new MockDscSigner(ctx, opts) : new RealDscStub(ctx);
     case "bank_api": return sandbox ? new MockBankApi(ctx, opts) : new RealBankStub(ctx);
     case "pfms": return sandbox ? new MockGenericAdapter(ctx) : new RealGenericStub(ctx);
+    case "ocr": return sandbox ? new MockGenericAdapter(ctx) : new RealGenericStub(ctx);
   }
 }
 

@@ -3,6 +3,7 @@ import { schema as filesModule }    from "../modules/files/schema.js";
 import { schema as foldersModule }  from "../modules/folders/schema.js";
 import { schema as workflowModule } from "../modules/workflow/schema.js";
 import { schema as sharingModule }  from "../modules/sharing/schema.js";
+import { schema as bulkScanModule } from "../modules/bulk-scan/schema.js";
 import { outboxSchema }             from "./outbox.js";
 
 const SCHEMA = {
@@ -10,6 +11,7 @@ const SCHEMA = {
   ...foldersModule,
   ...workflowModule,
   ...sharingModule,
+  ...bulkScanModule,
   ...outboxSchema,
 };
 

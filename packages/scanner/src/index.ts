@@ -5,6 +5,11 @@
  * file buffers against a ClamAV REST endpoint. Fail-open on scanner
  * unavailability (availability > blocking on a missing scanner).
  *
+ * IMPORTANT: scanFile FAILS OPEN on a 200 reply. Any HTTP 200 whose JSON does not say `infected:true` / `status:"infected"`
+ * is reported "clean" (a proxy or a differently shaped body therefore passes). Callers that must fail closed (document
+ * bulk-scan) layer positive-clean verification on top (services/document-service bulk-scan/scan-strict.ts requires an
+ * explicit `infected:false` / `status:"clean"|"ok"`). Do not rely on this client alone for a safety gate.
+ *
  * Env vars:
  *   CLAMAV_URL        — ClamAV REST scan endpoint (default http://localhost:3310/scan)
  *   CLAMAV_TIMEOUT_MS — Request timeout in ms (default 10000)

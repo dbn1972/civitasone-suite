@@ -304,6 +304,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(medicalClaimsRoutes);
   const { outsourcedRoutes } = await import("./modules/outsourced/routes.js");
   await app.register(outsourcedRoutes);
+  // GAP-ADMIN-BULK-SCAN-02: scan-link target (lookup + scanned-documents read).
+  const { scanLinkRoutes } = await import("./modules/employee/scan-link-routes.js");
+  await app.register(scanLinkRoutes);
   const { workforcePlanningRoutes } = await import("./modules/workforce-planning/routes.js");
   await app.register(workforcePlanningRoutes);
   const { aiPredictionsRoutes } = await import("./modules/ai-predictions/routes.js");

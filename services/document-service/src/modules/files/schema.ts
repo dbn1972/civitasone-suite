@@ -27,6 +27,8 @@ export const fileVersions = domainSchema.table("file_versions", {
   version:    integer("version").notNull(),
   storageKey: varchar("storage_key", { length: 1000 }),
   sizeBytes:  bigint("size_bytes", { mode: "number" }),
+  /** original | searchable_pdf | ocr_text | structured_json (migration 0009). */
+  kind:       varchar("kind", { length: 24 }).notNull().default("original"),
   createdBy:  uuid("created_by").notNull(),
   createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

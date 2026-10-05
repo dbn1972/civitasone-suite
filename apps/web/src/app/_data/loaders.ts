@@ -1,6 +1,8 @@
 import type { z } from "zod";
 import { GL_JOURNAL_LIMIT } from "@/lib/financeLimits";
 import { pathSeg } from "@/lib/pathSegment";
+import { mapEstabScannedDocuments, estabScannedDocumentsPath, type EstabScannedDocument } from "@/lib/estab/scannedDocuments";
+import { mapScannedDocuments, scannedDocumentsPath, type ScannedDocument, type ScannedDocumentsKind } from "@/lib/finance/scannedDocuments";
 import type { AuditParaEvent, GlLinesPagination, GlLinesTotals, PaymentContext } from "@/lib/finance/workflowTypes";
 import { HR_AUDIT_SERVICES } from "@/app/(app)/hr/audit-log/auditResource";
 import type {
@@ -6564,4 +6566,26 @@ export async function getInvoiceOpsData(id: string, includeSettings: boolean): P
       : Promise.resolve({ data: null, source: "api" as const }),
   ]);
   return { payments: p.source === "error" ? null : p.data, reminders: r.source === "error" ? null : r.data, settings: st.source === "error" ? null : st.data };
+}
+
+/**
+ * GAP-ADMIN-BULK-SCAN-02: scanned bills / vouchers / receipts linked to a finance payment, bill or voucher
+ * (masked metadata only; paise stay base-10 strings). A failed load is source:"error", never an empty list.
+ */
+export async function getFinanceScannedDocuments(kind: ScannedDocumentsKind, id: string): Promise<LoaderResult<ScannedDocument[]>> {
+  return fetchJson<unknown, ScannedDocument[]>(scannedDocumentsPath(kind, id), [], {
+    telemetryKey: "finance.scanned-documents",
+    mapResponse: mapScannedDocuments,
+  });
+}
+
+/**
+ * GAP-ADMIN-BULK-SCAN-02: scanned letters / orders filed onto an eOffice file (masked metadata only).
+ * A failed load is source:"error", never an empty list.
+ */
+export async function getEstabScannedDocuments(fileId: string): Promise<LoaderResult<EstabScannedDocument[]>> {
+  return fetchJson<unknown, EstabScannedDocument[]>(estabScannedDocumentsPath(fileId), [], {
+    telemetryKey: "estab.file.scanned-documents",
+    mapResponse: mapEstabScannedDocuments,
+  });
 }

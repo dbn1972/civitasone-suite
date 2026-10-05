@@ -36,6 +36,7 @@ import { registerGpfConsumers }        from "./modules/gpf/consumer.js";
 import { registerHolidayConsumers }    from "./modules/holidays/consumer.js";
 import { registerIdCardConsumers }     from "./modules/id-cards/consumer.js";
 import { registerMedicalConsumers }    from "./modules/medical/consumer.js";
+import { registerScanLinkConsumers } from "./modules/employee/scan-link-consumer.js";
 import { registerOutsourcedConsumers } from "./modules/outsourced/consumer.js";
 import { registerPayMatrixConsumers }  from "./modules/pay-matrix/consumer.js";
 import { registerPensionConsumers }    from "./modules/pension/consumer.js";
@@ -118,6 +119,8 @@ registerHolidayConsumers(queue);
 registerIdCardConsumers(queue);
 registerMedicalConsumers(queue);
 registerOutsourcedConsumers(queue);
+// GAP-ADMIN-BULK-SCAN-02: hr_employee scan-link target (document-service bulk-scan filing).
+registerScanLinkConsumers(queue);
 registerPayMatrixConsumers(queue);
 registerPensionConsumers(queue);
 registerReservationConsumers(queue);

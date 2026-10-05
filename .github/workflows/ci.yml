@@ -153,6 +153,9 @@ jobs:
       # no fallback default, so any other value here 401s that test.
       COURT_CAPTCHA_DEV_TOKEN: test-captcha-ok
       COURT_PII_KEY: ci-test-court-pii-key-32-chars-min
+      # Un-skips the document-service tests that need the bootstrapping superuser (the BYPASSRLS document_scanner
+      # cross-tenant discovery + its fairness tests). `civitas` is the postgres image's POSTGRES_USER (a superuser).
+      BULK_SCAN_TEST_SUPERUSER_URL: postgres://civitas:civitas_test@localhost:5435/civitas_document
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

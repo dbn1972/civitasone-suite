@@ -12,7 +12,7 @@
  * The package carries NO runtime dependencies so any service can import it.
  */
 
-export type PlatformIntegrationCategory = "esign" | "dsc" | "bank_api" | "pfms";
+export type PlatformIntegrationCategory = "esign" | "dsc" | "bank_api" | "pfms" | "ocr";
 export type AdapterEnvironment = "sandbox" | "production";
 
 /** Everything an adapter needs to run, already decrypted by the caller. */

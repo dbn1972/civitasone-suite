@@ -132,6 +132,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   const { reconRoutes } = await import("./modules/recon/routes.js");
   await app.register(reconRoutes);
 
+  const { scanLinkRoutes } = await import("./modules/scan-link/routes.js");
+  await app.register(scanLinkRoutes);
+
   registerSchemaErrorHandler(app, HttpError);
 
   return app;

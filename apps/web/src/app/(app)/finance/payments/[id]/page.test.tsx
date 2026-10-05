@@ -16,6 +16,8 @@ vi.mock("next/navigation", () => ({
   notFound: () => notFoundMock(),
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
+// Async server component with its own loader + tests (ScannedDocumentsSection.test.tsx).
+vi.mock("../../_components/scanned/ScannedDocumentsSection", () => ({ ScannedDocumentsSection: () => null }));
 vi.mock("@/app/_components/RaiseEOfficeNote", () => ({
   RaiseEOfficeNote: () => <button type="button">Raise for approval</button>,
 }));

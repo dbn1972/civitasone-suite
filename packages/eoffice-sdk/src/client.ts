@@ -16,6 +16,16 @@ import {
   acceptedResult,
   fileByRefResult,
   resolvedApproval,
+  scanLookupQuery,
+  clearanceCheckQuery,
+  clearanceCheckResponse,
+  type ClearanceCheckQuery,
+  type ClearanceCheckResult,
+  scanLookupResponse,
+  scannedDocumentsResponse,
+  type ScanLookupQuery,
+  type ScanLookupCandidate,
+  type ScannedDocument,
   type RaiseFileInput,
   type AcceptedResult,
   type FileByRef,
@@ -127,6 +137,44 @@ export class EOfficeClient {
     const env = json as { data?: unknown };
     if (env.data == null) return null;
     return resolvedApproval.parse(env.data);
+  }
+
+  /**
+   * Candidate eFiles for a scanned letter/order (bulk-scan auto-match). Exact file number
+   * scores 1.0; subject matches score lower. Tenant scoped, max 10, read-only.
+   * Internal route: service-account only (x-internal + service secret); a user token is refused with 403.
+   */
+  async lookupScanTargets(query: ScanLookupQuery): Promise<ScanLookupCandidate[]> {
+    const q = scanLookupQuery.parse(query);
+    const qs = new URLSearchParams();
+    if (q.fileNo !== undefined) qs.set("fileNo", q.fileNo);
+    if (q.subject !== undefined) qs.set("subject", q.subject);
+    const json = await this.request("GET", `/internal/v1/scan-link/lookup?${qs.toString()}`);
+    return scanLookupResponse.parse(json).data;
+  }
+
+  /**
+   * Would this user (id + roles) be cleared to view the eFile? Same rule as the eFile detail route.
+   * Needs a service-account token; an unknown / other-tenant file is {allowed:false, reason:"TARGET_NOT_FOUND"}.
+   */
+  async checkClearance(query: ClearanceCheckQuery): Promise<ClearanceCheckResult> {
+    const q = clearanceCheckQuery.parse(query);
+    const qs = new URLSearchParams({ fileId: q.fileId, userId: q.userId, roles: q.roles.join(",") });
+    const json = await this.request("GET", `/internal/v1/scan-link/clearance?${qs.toString()}`);
+    return clearanceCheckResponse.parse(json).data;
+  }
+
+  /** Scanned documents filed on an eFile (masked metadata; linked only unless state is given). */
+  async listScannedDocuments(
+    fileId: string,
+    opts: { state?: "linked" | "unlinked" | "all"; limit?: number } = {},
+  ): Promise<ScannedDocument[]> {
+    const qs = new URLSearchParams();
+    if (opts.state) qs.set("state", opts.state);
+    if (opts.limit !== undefined) qs.set("limit", String(opts.limit));
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    const json = await this.request("GET", `/v1/estab/files/${encodeURIComponent(fileId)}/scanned-documents${suffix}`);
+    return scannedDocumentsResponse.parse(json).data;
   }
 
   private async resolveToken(): Promise<string> {

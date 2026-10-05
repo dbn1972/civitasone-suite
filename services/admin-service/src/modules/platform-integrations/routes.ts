@@ -43,6 +43,7 @@ import {
   inactiveSecretKeys,
   isAvailableToTenant,
   maskedSecrets,
+  ocrAvailability,
   missingRequired,
   parseFields,
   touchesSensitive,
@@ -252,6 +253,18 @@ export async function platformIntegrationRoutes(app: FastifyInstance): Promise<v
       .filter((p) => canUseCategory(p.category, ctx.roles) && isAvailableToTenant(p, ctx.tenantId, edition))
       .map((p) => ({ ...serializeProviderForTenant(p), configured: configured.has(p.key) }));
     return reply.send({ data });
+  });
+
+  /**
+   * Service-to-service (document-service bulk scan): which OCR engines this tenant may use. Read only; secrets are
+   * never returned. authPlugin grants the service context only for x-internal + the shared secret; a user token never
+   * reaches the data, whatever roles it carries.
+   */
+  app.get("/internal/v1/platform-integrations/ocr/availability", async (req, reply) => {
+    const ctx = resolveContext(req);
+    if (ctx.actorType !== "service_account" || req.headers["x-internal"] !== "1") throw new HttpError(403, "FORBIDDEN", "internal service call required");
+    const [rows, edition, mine] = await Promise.all([repo.listProviders(), repo.tenantEdition(ctx.tenantId), repo.listIntegrations(ctx.tenantId)]);
+    return reply.send({ data: ocrAvailability(rows, mine.filter((r) => r.category === "ocr"), ctx.tenantId, edition) });
   });
 
   app.get(`${BASE}/tenant/records`, async (req, reply) => {
