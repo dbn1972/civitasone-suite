@@ -34,6 +34,7 @@ export async function listContacts(
   isAdmin = false,
 ): Promise<{ data: ContactView[]; pagination: { hasMore: boolean; pageSize: number; cursor?: string } }> {
   const cacheKey = `list:${limit}:${offset}:${filters.search ?? ""}:${filters.leadStatus ?? ""}:${filters.segment ?? "all"}:${filters.ownerId ?? ""}` +
+    `:${filters.accountId ?? ""}` +
     `:${filters.temperature ?? ""}:${filters.priority ?? ""}:${filters.segmentName ?? ""}:${filters.product ?? ""}:${filters.region ?? ""}:${filters.leadSource ?? ""}:${filters.contactStatus ?? ""}:${filters.expectedValueMin ?? ""}:${filters.expectedValueMax ?? ""}`;
   // Cache holds CLEARTEXT; masking is applied per-response by role so the
   // same cached page serves both admin (clear) and non-admin (masked) callers.
@@ -59,4 +60,50 @@ export async function exportContacts(tenantId: string, isAdmin = false, limit = 
 
 export async function listAccounts(tenantId: string, limit = 50, offset = 0) {
   return repo.listAccounts(tenantId, limit, offset);
+}
+
+/** GAP-CRM-CONTACTS-IMPORT-04: a bulk-import batch's outcome for the status
+ *  endpoint. No PII — only counts + per-row { index, reason }. */
+export async function getImportBatch(batchId: string, tenantId: string) {
+  return repo.getImportBatch(batchId, tenantId);
+}
+
+/**
+ * GAP-CRM-SERVICE-REQUESTS-NEW-04 / GAP-CRM-DEALS-NEW-04: contact lookup for the
+ * SR/deal pickers. Returns id + display name + MASKED phone/email only (never
+ * the raw PII) regardless of caller role, so the picker is safe to show to any
+ * CRM user and never becomes a PII-exfiltration path.
+ */
+export async function lookupContacts(
+  tenantId: string,
+  q: string,
+  limit: number,
+): Promise<Array<{ id: string; name: string; company: string | null; email: string | null; phone: string | null }>> {
+  const rows = await repo.lookup(tenantId, q, limit);
+  // Always mask: the lookup is a convenience picker, not an export path.
+  return rows.map(maskView).map((v) => ({
+    id: v.id,
+    name: v.name,
+    company: v.company,
+    email: v.email,
+    phone: v.phone,
+  }));
+}
+
+/**
+ * GAP-CRM-ACCOUNTS-02: the page of accounts PLUS the tenant-wide total, so the
+ * accounts screen can honestly show "Showing N of M" and label its derived
+ * stats as partial when the page is capped — rather than inferring a total from
+ * a full page (which silently undercounts).
+ */
+export async function listAccountsWithTotal(
+  tenantId: string,
+  limit = 50,
+  offset = 0,
+): Promise<{ data: Awaited<ReturnType<typeof repo.listAccounts>>; total: number }> {
+  const [data, total] = await Promise.all([
+    repo.listAccounts(tenantId, limit, offset),
+    repo.countAccounts(tenantId),
+  ]);
+  return { data, total };
 }

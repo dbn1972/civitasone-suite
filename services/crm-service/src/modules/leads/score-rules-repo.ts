@@ -4,6 +4,7 @@
  */
 import { eq, and, desc, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+import { HttpError } from "../../shared/context.js";
 import { enqueue } from "../../shared/outbox.js";
 import {
   leadScoreRules,
@@ -76,6 +77,55 @@ export async function getRuleViews(tenantId: string, actorId: string): Promise<S
   return rows.map(toView);
 }
 
+/**
+ * GAP-CRM-LEAD-SCORING-05 — list-level optimistic-concurrency metadata, derived
+ * from `SUM(version)` across the tenant's rows (every upsert bumps a row's
+ * version by at least 1, so the sum strictly increases on any change). No schema
+ * change required.
+ */
+export interface ScoreRulesListMeta {
+  version: string;
+  updatedBy: string | null;
+  updatedAt: string | null;
+}
+export interface ScoreRulesList {
+  rules: ScoreRuleView[];
+  meta: ScoreRulesListMeta;
+}
+
+type VersionRow = { version: string | number | null; updatedBy: string | null; updatedAt: Date | string | null };
+
+async function readListMeta(
+  tx: { execute: (q: ReturnType<typeof sql>) => Promise<unknown> },
+  tenantId: string,
+  lock: boolean,
+): Promise<ScoreRulesListMeta> {
+  if (lock) {
+    await tx.execute(sql`SELECT id FROM crm.lead_score_rules WHERE tenant_id = ${tenantId} FOR UPDATE`);
+  }
+  const rows = (await tx.execute(sql`
+    SELECT COALESCE(SUM(version), 0)::text AS version,
+           (SELECT updated_by FROM crm.lead_score_rules WHERE tenant_id = ${tenantId} ORDER BY updated_at DESC LIMIT 1) AS "updatedBy",
+           (SELECT updated_at FROM crm.lead_score_rules WHERE tenant_id = ${tenantId} ORDER BY updated_at DESC LIMIT 1) AS "updatedAt"
+    FROM crm.lead_score_rules
+    WHERE tenant_id = ${tenantId}
+  `)) as unknown as VersionRow[];
+  const r = rows[0];
+  const updatedAt = r?.updatedAt ?? null;
+  return {
+    version: String(r?.version ?? "0"),
+    updatedBy: r?.updatedBy ?? null,
+    updatedAt: updatedAt instanceof Date ? updatedAt.toISOString() : updatedAt,
+  };
+}
+
+/** Admin GET view plus the list-level concurrency token (seeds on first read). */
+export async function getRuleViewsList(tenantId: string, actorId: string): Promise<ScoreRulesList> {
+  const rules = await getRuleViews(tenantId, actorId);
+  const meta = await scopedRead((tx) => readListMeta(tx, tenantId, false));
+  return { rules, meta };
+}
+
 /** Executable ScoringRules for the scorer, from the tenant's configuration. */
 export async function getScoringRules(tenantId: string, actorId: string): Promise<ScoringRule[]> {
   return toScoringRules(await getStoredRules(tenantId, actorId));
@@ -129,14 +179,32 @@ export interface RuleUpsert {
   enabled: boolean;
 }
 
-/** Upsert rules by (tenant, attribute); a partial PUT is additive. Audited. */
+/**
+ * Upsert rules by (tenant, attribute); a partial PUT is additive. Audited.
+ *
+ * GAP-CRM-LEAD-SCORING-05 optimistic concurrency: when `expectedVersion` is
+ * supplied, the tenant's rows are locked (`FOR UPDATE`) and the list version
+ * re-read inside the write transaction before any mutation; a mismatch throws
+ * 409 VERSION_CONFLICT and the transaction rolls back untouched.
+ */
 export async function upsertRules(
   tenantId: string,
   rules: RuleUpsert[],
   actorId: string,
   correlationId: string,
-): Promise<ScoreRuleView[]> {
+  expectedVersion?: string,
+): Promise<ScoreRulesList> {
   await db.transaction(async (tx) => {
+    if (expectedVersion !== undefined) {
+      const current = await readListMeta(tx as unknown as { execute: (q: ReturnType<typeof sql>) => Promise<unknown> }, tenantId, true);
+      if (current.version !== expectedVersion) {
+        throw new HttpError(
+          409,
+          "VERSION_CONFLICT",
+          "These scoring rules were changed by another admin. Reload to see the latest, then re-apply your changes.",
+        );
+      }
+    }
     for (const r of rules) {
       await tx.insert(leadScoreRules).values({
         tenantId,
@@ -176,7 +244,7 @@ export async function upsertRules(
       },
     });
   });
-  return getRuleViews(tenantId, actorId);
+  return getRuleViewsList(tenantId, actorId);
 }
 
 // ── Score history ───────────────────────────────────────────────────────────────

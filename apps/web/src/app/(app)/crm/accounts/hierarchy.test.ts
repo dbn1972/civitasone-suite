@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { CRMAccountSummary } from "@civitasone/types";
-import { buildAccountTree, countSubsidiaries } from "./hierarchy";
+import { buildAccountTree, countSubsidiaries, collectDescendantIds } from "./hierarchy";
 
 function account(id: string, name: string, parentId: string | null = null): CRMAccountSummary {
   return { id, name, industry: null, website: null, parentId, contactCount: 0 };
@@ -59,5 +59,33 @@ describe("countSubsidiaries", () => {
     ];
 
     expect(countSubsidiaries(accounts)).toBe(1);
+  });
+});
+
+describe("collectDescendantIds (GAP-CRM-ACCOUNTS-DETAIL-03)", () => {
+  const accounts = [
+    account("a", "Head Office"),
+    account("b", "Regional", "a"),
+    account("c", "Branch", "b"),
+    account("d", "Other Top"),
+  ];
+
+  it("returns the full subtree, excluding the root itself", () => {
+    const d = collectDescendantIds(accounts, "a");
+    expect(d.has("b")).toBe(true);
+    expect(d.has("c")).toBe(true);
+    expect(d.has("a")).toBe(false);
+    expect(d.has("d")).toBe(false);
+    expect(d.size).toBe(2);
+  });
+
+  it("returns an empty set for a leaf", () => {
+    expect(collectDescendantIds(accounts, "c").size).toBe(0);
+  });
+
+  it("is cycle-safe", () => {
+    const cyclic = [account("x", "X", "y"), account("y", "Y", "x")];
+    // Should terminate and not throw.
+    expect(() => collectDescendantIds(cyclic, "x")).not.toThrow();
   });
 });

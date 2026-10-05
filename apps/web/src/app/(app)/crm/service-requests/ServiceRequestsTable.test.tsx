@@ -85,3 +85,63 @@ describe("ServiceRequestsTable — GAP-CRM-SERVICE-REQUESTS-02 (export gate)", (
     expect(screen.getByRole("button", { name: /csv/i })).toBeInTheDocument();
   });
 });
+
+describe("ServiceRequestsTable — GAP-CRM-SERVICE-REQUESTS-03 (owner + overdue)", () => {
+  const past = "2000-01-01T00:00:00.000Z";
+  const future = "2999-01-01T00:00:00.000Z";
+
+  it("shows an Overdue pill for an open request whose due date has passed", () => {
+    renderTable({
+      requests: [{ ...rows[0], id: "sr-od", status: "open", dueAt: past }],
+    });
+    expect(screen.getByText("Overdue")).toBeInTheDocument();
+  });
+
+  it("does NOT show Overdue for a resolved request even with a past due date", () => {
+    renderTable({
+      requests: [{ ...rows[0], id: "sr-res", status: "resolved", dueAt: past }],
+    });
+    expect(screen.queryByText("Overdue")).not.toBeInTheDocument();
+  });
+
+  it("does NOT show Overdue when the due date is still in the future", () => {
+    renderTable({
+      requests: [{ ...rows[0], id: "sr-fut", status: "open", dueAt: future }],
+    });
+    expect(screen.queryByText("Overdue")).not.toBeInTheDocument();
+  });
+
+  it("shows ownership status rather than a raw uuid", () => {
+    renderTable({
+      requests: [
+        { ...rows[0], id: "sr-owned", assignedTo: "11111111-2222-4333-8444-555566667777" },
+        { ...rows[0], id: "sr-unowned", assignedTo: null },
+      ],
+    });
+    expect(screen.getByText("Assigned")).toBeInTheDocument();
+    expect(screen.getByText("Unassigned")).toBeInTheDocument();
+    expect(
+      screen.queryByText("11111111-2222-4333-8444-555566667777"),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe("ServiceRequestsTable — GAP-CRM-SERVICE-REQUESTS-04 (priority distinct)", () => {
+  it("renders Normal and Low as distinct, labelled badges", () => {
+    const { container } = renderTable({
+      requests: [
+        { ...rows[0], id: "sr-n", priority: "normal" },
+        { ...rows[0], id: "sr-l", priority: "low" },
+      ],
+    });
+    expect(screen.getByText("Normal")).toBeInTheDocument();
+    expect(screen.getByText("Low")).toBeInTheDocument();
+    // Low is an outlined (transparent) chip; Normal is a filled neutral chip —
+    // their backgrounds must differ so they are not colour-identical.
+    const normal = screen.getByText("Normal");
+    const low = screen.getByText("Low");
+    expect(normal.getAttribute("style")).not.toEqual(low.getAttribute("style"));
+    expect(low.getAttribute("style")).toContain("transparent");
+    void container;
+  });
+});

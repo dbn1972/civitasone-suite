@@ -1,18 +1,42 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, StatusPill, EmptyState } from "../../../../_components/ds";
+import { RefreshErrorState } from "../../../../_components/ds/RefreshErrorState";
 import { getDealById } from "../../../../_data/loaders";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
+import { toHumanError } from "@/lib/messages";
 import { DealDetailActions } from "./DealDetailActions";
+import { getSessionRoles, hasAnyRole, CRM_OPPORTUNITY_CLOSE_ROLES } from "@/lib/auth/roleGuard";
 
 export default async function Page({ params }: { params: { id: string } }) {
-  const { data: deal, source } = await getDealById(params.id);
+  const { data: deal, source, status } = await getDealById(params.id);
 
   if (!deal) {
+    // GAP-CRM-DEALS-DETAIL-02: distinguish a genuinely-missing deal from an
+    // outage. getDealById returns source:"error" for BOTH a real 404 (and a
+    // 200 whose body carried no such deal, mapped to null) AND a transient
+    // failure (5xx, 401, network). Only 404 / 200-null read as "removed";
+    // everything else is a retriable load failure, so we must not tell the
+    // clerk the deal "does not exist" when the real cause is the service
+    // being down (that reads as an irreversible deletion). Mirrors the
+    // RefreshErrorState pattern used on rti / service-requests detail pages.
+    const notFound = source !== "error" || status === 404 || status === 200;
+    if (!notFound) {
+      const tErr = await getTranslations("crmDealDetail");
+      return (
+        <>
+          <PageHeader title={tErr("detailTitle")} back="/crm/deals" />
+          <RefreshErrorState
+            error={toHumanError("load", { area: tErr("loadArea") })}
+            backHref="/crm/deals"
+            source={{ status, area: tErr("loadArea") }}
+          />
+        </>
+      );
+    }
     return (
       <>
         <PageHeader title="Deal Detail" back="/crm/deals" />
-        {source === "error" && <DataSourceBadge source={source} />}
         <EmptyState icon="🎯" title="Deal not found" message="This deal does not exist or has been removed." />
       </>
     );
@@ -62,6 +86,7 @@ export default async function Page({ params }: { params: { id: string } }) {
             dealName={deal.dealName}
             {...(deal.contactId ? { contactId: deal.contactId } : {})}
             status={deal.status}
+            canClose={hasAnyRole(getSessionRoles(), CRM_OPPORTUNITY_CLOSE_ROLES)}
           />
         }
       />

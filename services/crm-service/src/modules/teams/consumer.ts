@@ -30,7 +30,7 @@ export function registerTeamConsumers(queue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.updateAgentCapacity, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; agentId: string; maxLeads?: number; available?: boolean; onLeave?: boolean };
+    const p = msg.payload as { id: string; tenantId: string; agentId: string; maxLeads?: number; available?: boolean; onLeave?: boolean; reason?: string };
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
@@ -55,6 +55,15 @@ export function registerTeamConsumers(queue: Queue): void {
           payload: {
             service: "crm", action: "agent_capacity_update", resourceType: "agent_workload", resourceId: p.agentId,
             outcome: updated.length > 0 ? "success" : "rejected_agent_not_found",
+            // GAP-CRM-AGENT-WORKLOAD-04: capture the change reason (and the new
+            // values) so a routing change has a visible audit trail with the
+            // actor's justification. Null when the caller sent none.
+            metadata: {
+              reason: p.reason ?? null,
+              ...(p.maxLeads !== undefined ? { maxLeads: p.maxLeads } : {}),
+              ...(p.available !== undefined ? { available: p.available } : {}),
+              ...(p.onLeave !== undefined ? { onLeave: p.onLeave } : {}),
+            },
           },
         });
       });

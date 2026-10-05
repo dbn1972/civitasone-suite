@@ -378,3 +378,21 @@ describe("platform monitoring and edition statuses", () => {
     expect(pillTone(status)).toBe(tone);
   });
 });
+
+// GAP-CRM-SERVICE-REQUESTS-04: service-request lifecycle words must not share
+// the neutral "info" blue. "in_progress" (underscore) normalises to "in
+// progress" (warn); "resolved" is a successful terminal state (good). Note:
+// "cancelled" is deliberately LEFT at the app-wide "bad" tone (recruitment /
+// finance callers depend on it) rather than recoloured to "mut" for this one
+// screen — a conservative choice recorded in the M09 report.
+describe("CRM service-request statuses", () => {
+  it.each([
+    ["in_progress", "warn"],
+    ["in progress", "warn"],
+    ["resolved", "good"],
+    ["open", "good"],
+    ["pending", "warn"],
+  ])("%s -> %s", (status, tone) => {
+    expect(pillTone(status)).toBe(tone);
+  });
+});

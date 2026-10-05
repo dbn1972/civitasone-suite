@@ -1,13 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
-vi.mock("next-intl/server", () => ({
-  getTranslations: async () => (key: string) => key,
-}));
+vi.mock("next-intl/server", async () => {
+  const { createTranslator } = await import("next-intl");
+  const messages = (await import("@/messages/en.json")).default;
+  return {
+    getTranslations: async (namespace: string) => createTranslator({ locale: "en", messages, namespace: namespace as never }),
+  };
+});
 
 const mockRoles = vi.fn<() => string[]>();
 vi.mock("@/lib/auth/roleGuard", () => ({
   getSessionRoles: () => mockRoles(),
+  CRM_ADMIN_ROLES: ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"],
 }));
 
 // LinkTiles renders the tiles; keep it real-ish but light.
@@ -36,5 +41,24 @@ describe("CRM hub Configuration gating (GAP-CRM-AGENT-WORKLOAD-01)", () => {
     render(await Page());
     expect(screen.getByText("Agent Workload")).toBeInTheDocument();
     expect(screen.getByText("Configuration")).toBeInTheDocument();
+  });
+});
+
+describe("CRM hub vocabulary (GAP-CRM-HOME-02)", () => {
+  beforeEach(() => mockRoles.mockReturnValue(["crm_admin"]));
+
+  it("labels the Engagements tile to match the destination page title, not 'Deals'", async () => {
+    render(await Page());
+    // deals/page.tsx renders PageHeader title "Vendor / Stakeholder Engagements".
+    expect(screen.getByText("Vendor / Stakeholder Engagements")).toBeInTheDocument();
+    expect(screen.queryByText("Deals")).not.toBeInTheDocument();
+  });
+
+  it("uses no 'Sales' wording anywhere in the hub", async () => {
+    render(await Page());
+    expect(screen.queryByText(/Sales/i)).not.toBeInTheDocument();
+    // Section heading and pipeline tile reworded to the engagement vocabulary.
+    expect(screen.getByText("Engagement Pipeline")).toBeInTheDocument();
+    expect(screen.getByText("Engagement Pipelines")).toBeInTheDocument();
   });
 });

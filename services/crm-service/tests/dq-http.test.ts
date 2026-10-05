@@ -135,6 +135,68 @@ describe("DQ-001 dedup rules + duplicate-check", () => {
     expect(res.statusCode).toBe(403);
   });
 
+  // ── GAP-CRM-DEDUP-RULES-02: list-level optimistic concurrency ──────────────
+  describe("optimistic concurrency (GAP-CRM-DEDUP-RULES-02)", () => {
+    it("GET returns a list-level version + last-changed metadata", async () => {
+      const res = await get("/v1/crm/dedup-rules", ["crm_admin"]);
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(typeof body.version).toBe("string");
+      expect(body.version.length).toBeGreaterThan(0);
+      // ETag mirrors the body version so If-Match works.
+      expect(res.headers.etag).toBe(body.version);
+      // Seeded defaults were created by this actor, so updatedBy is populated.
+      expect(body.meta).toBeDefined();
+      expect(body.meta.updatedBy).toBeTruthy();
+      expect(body.meta.updatedAt).toBeTruthy();
+    });
+
+    it("a stale version PUT returns 409 VERSION_CONFLICT and does not overwrite", async () => {
+      // Both writers load the same version.
+      const loaded = await get("/v1/crm/dedup-rules", ["crm_admin"]);
+      const staleVersion: string = loaded.json().version;
+
+      // Writer 1 wins with the current version.
+      const w1 = await put("/v1/crm/dedup-rules", {
+        rules: [{ field: "email", matchType: "exact", weight: 41, threshold: 100, enabled: true }],
+        version: staleVersion,
+      });
+      expect(w1.statusCode).toBe(200);
+      expect(w1.json().version).not.toBe(staleVersion); // version advanced
+
+      // Writer 2 submits with the now-stale version → 409, no overwrite.
+      const w2 = await put("/v1/crm/dedup-rules", {
+        rules: [{ field: "email", matchType: "exact", weight: 99, threshold: 100, enabled: true }],
+        version: staleVersion,
+      });
+      expect(w2.statusCode).toBe(409);
+      expect(w2.json().code).toBe("VERSION_CONFLICT");
+
+      // Writer 1's value survived; writer 2's 99 was NOT applied.
+      const after = await get("/v1/crm/dedup-rules", ["crm_admin"]);
+      const email = after.json().data.find((r: { field: string }) => r.field === "email");
+      expect(email.weight).toBe(41);
+    });
+
+    it("a PUT with the current version succeeds and advances the version", async () => {
+      const loaded = await get("/v1/crm/dedup-rules", ["crm_admin"]);
+      const v: string = loaded.json().version;
+      const res = await put("/v1/crm/dedup-rules", {
+        rules: [{ field: "phone", matchType: "exact", weight: 33, threshold: 100, enabled: true }],
+        version: v,
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().version).not.toBe(v);
+    });
+
+    it("a PUT with no version still succeeds (back-compat, last-write-wins)", async () => {
+      const res = await put("/v1/crm/dedup-rules", {
+        rules: [{ field: "pan", matchType: "exact", weight: 44, threshold: 100, enabled: true }],
+      });
+      expect(res.statusCode).toBe(200);
+    });
+  });
+
   it("POST /v1/crm/contacts/duplicate-check returns ranked candidates", async () => {
     // GSTIN is a plaintext business identifier (unlike email/phone which are
     // AES-GCM encrypted), so it is the reliable exact-match signal to assert on.

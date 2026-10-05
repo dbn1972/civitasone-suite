@@ -448,6 +448,31 @@ describe("PATCH /v1/crm/teams/agents/:agentId/capacity", () => {
     expect(audits[0]!.outcome).toBe("rejected_agent_not_found");
   });
 
+  it("records the change reason on the capacity audit event (GAP-CRM-AGENT-WORKLOAD-04)", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/crm/teams/agents/${AGENT_ID}/capacity`,
+      headers: headers(),
+      payload: { available: false, reason: "Agent on long leave" },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(202);
+    await drainQueue();
+
+    const audits = await scoped((tx) => tx<Array<{ payload: { action: string; metadata?: { reason?: string | null; available?: boolean } } }>>`
+      SELECT payload FROM _outbox.messages
+      WHERE tenant_id = ${TENANT} AND event_type = 'audit.event.record'
+        AND payload->>'resourceId' = ${AGENT_ID}
+        AND payload->>'action' = 'agent_capacity_update'
+      ORDER BY created_at DESC
+      LIMIT 1
+    `);
+    expect(audits).toHaveLength(1);
+    expect(audits[0]!.payload.metadata?.reason).toBe("Agent on long leave");
+    expect(audits[0]!.payload.metadata?.available).toBe(false);
+  });
+
   it("returns 404 for non-existent agent", async () => {
     const app = await buildApp();
     const res = await app.inject({

@@ -544,7 +544,10 @@ export function mapDealSummaries(payload: unknown): DealSummary[] | null {
       contactId: toText(row.contactId) ?? undefined,
       contactName: toText(row.contactName) ?? toText(row.company) ?? undefined,
       stage,
-      amount: (parseMinor(row.valueMinor) ?? 0) || (parseMinor(row.amount) ?? 0),
+      // GAP-CRM-DEALS-04: keep money as an exact paise digit string (never a JS
+      // number). Prefer valueMinor; fall back to a legacy `amount` field; "0"
+      // only when both are genuinely absent/unparseable.
+      amount: parseMinorString(row.valueMinor) ?? parseMinorString(row.amount) ?? "0",
       owner: toText(row.owner) ?? "—",
       closeDate: toText(row.closeDate) ?? undefined,
       probability: typeof row.probability === "number" ? row.probability : 0,

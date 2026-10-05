@@ -102,7 +102,10 @@ describe("CustomFieldsManager", () => {
   });
 
   it("creates a valid field then reloads", async () => {
-    vi.mocked(cf.listCustomFields).mockResolvedValue({ data: [], source: "api" });
+    // Initial load empty; the post-create reload reflects the new field.
+    vi.mocked(cf.listCustomFields)
+      .mockResolvedValueOnce({ data: [], source: "api" })
+      .mockResolvedValue({ data: [field({ id: "p1", fieldName: "Priority", fieldType: "text", validationSchema: null })], source: "api" });
     vi.mocked(cf.createCustomField).mockResolvedValue();
     render(<CustomFieldsManager />);
     await waitFor(() => expect(screen.getByText(/no custom fields yet/i)).toBeInTheDocument());
@@ -113,18 +116,91 @@ describe("CustomFieldsManager", () => {
     expect(vi.mocked(cf.createCustomField).mock.calls[0][0]).toMatchObject({
       entityType: "leads", fieldName: "Priority", fieldType: "text",
     });
-    expect(vi.mocked(cf.listCustomFields)).toHaveBeenCalledTimes(2);
+    // Reloaded once more and the "saved" line appears (the field is reflected).
+    await waitFor(() => expect(vi.mocked(cf.listCustomFields).mock.calls.length).toBeGreaterThanOrEqual(2));
+    await waitFor(() => expect(screen.getByText(/“Priority” saved\./i)).toBeInTheDocument());
   });
 
-  it("deletes an existing field through the confirm dialog", async () => {
+  // GAP-CRM-CUSTOM-FIELDS-03 — save is a 202; if the reloaded list does not yet
+  // contain the field, the copy must say "submitted", not "saved", and the
+  // local draft must not vanish.
+  it("says 'submitted' (not 'saved') while the create has not yet landed", async () => {
+    vi.useFakeTimers();
+    try {
+      // Every list call returns empty, so the field never appears → "submitted".
+      vi.mocked(cf.listCustomFields).mockResolvedValue({ data: [], source: "api" });
+      vi.mocked(cf.createCustomField).mockResolvedValue();
+      render(<CustomFieldsManager />);
+      await vi.advanceTimersByTimeAsync(0);
+      fireEvent.click(screen.getByRole("button", { name: /add custom field/i }));
+      fireEvent.change(screen.getByLabelText(/custom field name/i), { target: { value: "Priority" } });
+      fireEvent.click(screen.getByRole("button", { name: /^Save$/i }));
+      // Advance through all poll delays (500+1000+2000).
+      await vi.advanceTimersByTimeAsync(4000);
+      expect(screen.getByText(/submitted; it may take a moment/i)).toBeInTheDocument();
+      // The local draft row is still present (not lost over the stale list).
+      expect((screen.getByLabelText(/custom field name/i) as HTMLInputElement).value).toBe("Priority");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("deletes an existing field through the confirm dialog after typing its name (GAP-CRM-CUSTOM-FIELDS-04)", async () => {
     vi.mocked(cf.listCustomFields).mockResolvedValue({ data: [field()], source: "api" });
     vi.mocked(cf.deleteCustomField).mockResolvedValue();
     render(<CustomFieldsManager />);
     await screen.findByDisplayValue("Region");
     fireEvent.click(screen.getByRole("button", { name: /^Delete$/i }));
     const dialog = await screen.findByRole("alertdialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: /^Delete$/i }));
+    // The copy must state the outcome for values already captured.
+    expect(within(dialog).getByText(/permanently deleted/i)).toBeInTheDocument();
+    // Confirm is blocked until the field name is typed.
+    const confirmBtn = within(dialog).getByRole("button", { name: /^Delete$/i });
+    expect(confirmBtn).toBeDisabled();
+    fireEvent.change(within(dialog).getByLabelText(/type the field name to confirm/i), { target: { value: "Region" } });
+    expect(confirmBtn).not.toBeDisabled();
+    fireEvent.click(confirmBtn);
     await waitFor(() => expect(cf.deleteCustomField).toHaveBeenCalledWith("f1"));
+  });
+
+  // GAP-CRM-CUSTOM-FIELDS-02 — changing a saved field's type must warn inline
+  // and confirm before the PATCH; editing the name alone saves without a dialog.
+  it("confirms before changing a saved field's type, and warns inline", async () => {
+    vi.mocked(cf.listCustomFields).mockResolvedValue({
+      data: [field({ fieldName: "Score", fieldType: "text", validationSchema: null })],
+      source: "api",
+    });
+    vi.mocked(cf.updateCustomField).mockResolvedValue();
+    render(<CustomFieldsManager />);
+    await screen.findByDisplayValue("Score");
+    // Change the type from text to number.
+    fireEvent.change(screen.getByLabelText(/custom field type/i), { target: { value: "number" } });
+    expect(screen.getByText(/may make values already captured/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Save$/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText(/change this field's type/i)).toBeInTheDocument();
+    // Cancel makes no PATCH.
+    fireEvent.click(within(dialog).getByRole("button", { name: /cancel/i }));
+    expect(cf.updateCustomField).not.toHaveBeenCalled();
+    // Save again and confirm -> PATCH goes through.
+    fireEvent.click(screen.getByRole("button", { name: /^Save$/i }));
+    const dialog2 = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog2).getByRole("button", { name: /change type/i }));
+    await waitFor(() => expect(cf.updateCustomField).toHaveBeenCalledWith("f1", expect.objectContaining({ fieldType: "number" })));
+  });
+
+  it("saves a name-only edit on a saved field without a type-change dialog (GAP-CRM-CUSTOM-FIELDS-02)", async () => {
+    vi.mocked(cf.listCustomFields).mockResolvedValue({
+      data: [field({ fieldName: "Score", fieldType: "text", validationSchema: null })],
+      source: "api",
+    });
+    vi.mocked(cf.updateCustomField).mockResolvedValue();
+    render(<CustomFieldsManager />);
+    await screen.findByDisplayValue("Score");
+    fireEvent.change(screen.getByDisplayValue("Score"), { target: { value: "Lead score" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Save$/i }));
+    await waitFor(() => expect(cf.updateCustomField).toHaveBeenCalledWith("f1", expect.objectContaining({ fieldName: "Lead score", fieldType: "text" })));
+    expect(screen.queryByText(/change this field's type/i)).not.toBeInTheDocument();
   });
 
   it("does not overwrite a newly-selected entity when a mutation from the old entity resolves late", async () => {

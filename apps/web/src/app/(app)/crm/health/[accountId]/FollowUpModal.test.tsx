@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider as __Intl } from "next-intl";
+import __enMessages from "@/messages/en.json";
+function render(ui: React.ReactElement) {
+  return rtlRender(<__Intl locale="en" messages={__enMessages}>{ui}</__Intl>);
+}
 
 const pushMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -93,5 +98,29 @@ describe("FollowUpModal", () => {
     render(withIntl(<FollowUpModal accountId={ACCOUNT_ID} accountName={null} />));
     fireEvent.click(screen.getByRole("button", { name: "Create Follow-up" }));
     expect(screen.getByText(ACCOUNT_ID)).toBeInTheDocument();
+  });
+
+  // GAP-CRM-HEALTH-ACCOUNTID-03 — the service-type list must contain only
+  // account-relevant types; the citizen-service connection types mis-typed the
+  // created record.
+  it("offers only account-relevant service types", () => {
+    render(<FollowUpModal accountId={ACCOUNT_ID} accountName="Bharat Steel" />);
+    fireEvent.click(screen.getByRole("button", { name: "Create Follow-up" }));
+
+    expect(screen.getByRole("option", { name: "Account Health Follow-up" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Renewal Support" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Escalation" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /New Water Connection/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /New Electricity Connection/i })).not.toBeInTheDocument();
+  });
+
+  // GAP-CRM-HEALTH-ACCOUNTID-04 — with no name resolved, the default subject
+  // falls back to "this account", never the raw UUID.
+  it("defaults the subject to 'this account' (no raw id) when no name is resolved", () => {
+    render(<FollowUpModal accountId={ACCOUNT_ID} accountName={null} />);
+    fireEvent.click(screen.getByRole("button", { name: "Create Follow-up" }));
+    const subject = screen.getByLabelText(/subject/i) as HTMLInputElement;
+    expect(subject.value).toContain("this account");
+    expect(subject.value).not.toContain(ACCOUNT_ID);
   });
 });

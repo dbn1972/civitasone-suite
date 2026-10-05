@@ -8,6 +8,9 @@ vi.mock("../../../../_data/loaders", () => ({
   getCrmAccountChildren: vi.fn(),
 }));
 
+// RefreshErrorState (rendered for partial side-load failures) uses router.refresh().
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
+
 const mockRoles = vi.fn<() => string[]>();
 vi.mock("@/lib/auth/roleGuard", async (orig) => {
   const actual = await orig<typeof import("@/lib/auth/roleGuard")>();
@@ -44,7 +47,7 @@ const mAccounts = vi.mocked(getCrmAccounts);
 const mAncestors = vi.mocked(getCrmAccountAncestors);
 const mChildren = vi.mocked(getCrmAccountChildren);
 
-const account = { id: "acc-99", name: "Deep Link Co", industry: "Energy", website: null, parentId: null, contactCount: 2 } as never;
+const account: Record<string, unknown> = { id: "acc-99", name: "Deep Link Co", industry: "Energy", website: null, parentId: null, contactCount: 2 };
 
 beforeEach(() => {
   docPanelProps.length = 0;
@@ -62,7 +65,7 @@ describe("Account detail page (GAP-CRM-ACCOUNTS-DETAIL-01)", () => {
   it("renders detail for an account resolved by id even though the default list page omits it", async () => {
     // getCrmAccount resolves it (queries at max page size); the default list is
     // empty (simulating the account being beyond the first 50 rows).
-    mAccount.mockResolvedValue({ data: account, source: "api" });
+    mAccount.mockResolvedValue({ data: account as never, source: "api" });
     mAccounts.mockResolvedValue({ data: [], source: "api" });
     mAncestors.mockResolvedValue({ data: [], source: "api" });
     mChildren.mockResolvedValue({ data: [], source: "api" });
@@ -95,7 +98,7 @@ describe("Account detail page (GAP-CRM-ACCOUNTS-DETAIL-01)", () => {
 
 describe("Account detail document verify gating (GAP-CRM-ACCOUNTS-DETAIL-02)", () => {
   beforeEach(() => {
-    mAccount.mockResolvedValue({ data: account, source: "api" });
+    mAccount.mockResolvedValue({ data: account as never, source: "api" });
     mAccounts.mockResolvedValue({ data: [], source: "api" });
     mAncestors.mockResolvedValue({ data: [], source: "api" });
     mChildren.mockResolvedValue({ data: [], source: "api" });
@@ -111,5 +114,52 @@ describe("Account detail document verify gating (GAP-CRM-ACCOUNTS-DETAIL-02)", (
     mockRoles.mockReturnValue(["crm_admin"]);
     render(await Page({ params: { id: "acc-99" } }));
     expect(screen.getByTestId("docs").dataset.canVerify).toBe("true");
+  });
+});
+
+describe("Account detail partial failure (GAP-CRM-ACCOUNTS-DETAIL-04)", () => {
+  it("renders the account and an inline retry when only children fail", async () => {
+    mAccount.mockResolvedValue({ data: account as never, source: "api" });
+    mAccounts.mockResolvedValue({ data: [], source: "api" });
+    mAncestors.mockResolvedValue({ data: [], source: "api" });
+    mChildren.mockResolvedValue({ data: [], source: "error", status: 503 });
+
+    render(await Page({ params: { id: "acc-99" } }));
+    // The loaded account is NOT replaced by a full-page error.
+    expect(screen.getAllByText("Deep Link Co").length).toBeGreaterThan(0);
+    // The Child Accounts card offers a retry rather than a false "No child accounts".
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.queryByText("No child accounts")).not.toBeInTheDocument();
+  });
+});
+
+describe("Account detail website hardening (GAP-CRM-ACCOUNTS-DETAIL-05)", () => {
+  beforeEach(() => {
+    mAccounts.mockResolvedValue({ data: [], source: "api" });
+    mAncestors.mockResolvedValue({ data: [], source: "api" });
+    mChildren.mockResolvedValue({ data: [], source: "api" });
+    mockRoles.mockReturnValue(["crm_admin"]);
+  });
+
+  it("does not render a javascript: website as a link", async () => {
+    mAccount.mockResolvedValue({
+      data: { ...account, website: "javascript:alert(1)" } as never,
+      source: "api",
+    });
+    render(await Page({ params: { id: "acc-99" } }));
+    // The raw value is shown as text, never as an href.
+    const link = screen.queryByRole("link", { name: "javascript:alert(1)" });
+    expect(link).not.toBeInTheDocument();
+    expect(screen.getByText("javascript:alert(1)")).toBeInTheDocument();
+  });
+
+  it("renders a bare domain as an https link", async () => {
+    mAccount.mockResolvedValue({
+      data: { ...account, website: "ndma.gov.in" } as never,
+      source: "api",
+    });
+    render(await Page({ params: { id: "acc-99" } }));
+    const link = screen.getByRole("link", { name: "ndma.gov.in" });
+    expect(link).toHaveAttribute("href", "https://ndma.gov.in/");
   });
 });

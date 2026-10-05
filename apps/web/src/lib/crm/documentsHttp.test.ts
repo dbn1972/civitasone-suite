@@ -230,3 +230,47 @@ describe("pure helpers", () => {
     expect(kinds).not.toContain("missing:off"); // disabled type ignored
   });
 });
+
+describe("getDocumentRegister (GAP-CRM-DOCUMENTS-02)", () => {
+  it("sends the active filters and parses document rows + total", async () => {
+    fetchMock.mockResolvedValueOnce(
+      res({
+        data: [
+          { kind: "document", subjectType: "contact", subjectId: "c1", id: "d1", title: "PAN", scanStatus: "infected", expiryDate: "2026-01-01" },
+        ],
+        meta: { total: 7 },
+      }),
+    );
+    const r = await dm.getDocumentRegister({ scanStatus: "infected", expiringWithinDays: 30, subjectType: "contact", page: 2, limit: 25 });
+    expect(r.source).toBe("api");
+    expect(r.total).toBe(7);
+    expect(r.rows[0]).toMatchObject({ kind: "document", subjectId: "c1", scanStatus: "infected" });
+    // The request carried every filter.
+    const url = String(fetchMock.mock.calls[0]![0]);
+    expect(url).toContain("scanStatus=infected");
+    expect(url).toContain("expiringWithinDays=30");
+    expect(url).toContain("subjectType=contact");
+    expect(url).toContain("page=2");
+    expect(url).toContain("limit=25");
+  });
+
+  it("parses missing-mandatory rows", async () => {
+    fetchMock.mockResolvedValueOnce(
+      res({
+        data: [{ kind: "missing_mandatory", subjectType: "account", subjectId: "a1", docTypeCode: "gst", docTypeName: "GST" }],
+        meta: { total: 1 },
+      }),
+    );
+    const r = await dm.getDocumentRegister({ missingMandatory: true });
+    expect(r.rows[0]).toMatchObject({ kind: "missing_mandatory", docTypeCode: "gst", docTypeName: "GST" });
+    expect(String(fetchMock.mock.calls[0]![0])).toContain("missingMandatory=true");
+  });
+
+  it("returns source:'error' on a failed load rather than a fabricated empty set", async () => {
+    fetchMock.mockResolvedValueOnce(res({}, { status: 500 }));
+    const r = await dm.getDocumentRegister();
+    expect(r.source).toBe("error");
+    expect(r.rows).toEqual([]);
+    expect(r.total).toBe(0);
+  });
+});

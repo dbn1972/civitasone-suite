@@ -1,19 +1,27 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader } from "../../../_components/ds";
 import { TaskEscalationEditor } from "../../../_components/crm/TaskEscalationEditor";
-import { OverdueTaskAlerts } from "../../../_components/crm/OverdueTaskAlerts";
 
-/** AC-005 — task-escalation configuration + overdue-task alerts. Role-gated via this route's own layout.tsx (admin-only), not just the broad CRM layout. */
-export default function Page() {
+/**
+ * AC-005 — task-escalation CONFIGURATION. Admin-only via this route's own
+ * layout.tsx. The overdue-task MONITORING list used to live here too, which
+ * meant a manager without crm_admin could not see it; it now has its own
+ * manager-visible route at /crm/overdue-tasks (GAP-CRM-TASK-ESCALATION-03).
+ */
+export default async function Page() {
+  const t = await getTranslations("crmTaskEscalationPage");
   return (
     <>
       <PageHeader
-        title="Task Escalation"
-        subtitle="Escalate overdue tasks to a manager, and watch what is already overdue."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/crm"
-        backLabel="CRM"
+        backLabel={t("backLabel")}
       />
       <div style={{ display: "grid", gap: 18 }}>
-        <OverdueTaskAlerts />
+        <p style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
+          {t("watchingOverduePrefix")} <a href="/crm/overdue-tasks">{t("overdueTasksLink")}</a> {t("watchingOverdueSuffix")}
+        </p>
         <TaskEscalationEditor />
       </div>
     </>

@@ -11,9 +11,11 @@ type Props = {
   dealName: string;
   contactId?: string;
   status: string;
+  /** Server close endpoint is admin-only (CRM_OPPORTUNITY_CLOSE_ROLES); hide Won/Lost for others. */
+  canClose?: boolean;
 };
 
-export function DealDetailActions({ dealId, dealName, contactId, status }: Props) {
+export function DealDetailActions({ dealId, dealName, contactId, status, canClose = true }: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -81,6 +83,8 @@ export function DealDetailActions({ dealId, dealName, contactId, status }: Props
       <Button onClick={() => setShowActivity((v) => !v)}>
         Log Activity
       </Button>
+      {canClose ? (
+      <>
       <ActionButton
         label="Mark Won"
         className="btn ghost"
@@ -113,6 +117,8 @@ export function DealDetailActions({ dealId, dealName, contactId, status }: Props
           router.refresh();
         }}
       />
+      </>
+      ) : null}
       {showActivity ? (
         <div className="card" style={{ marginTop: 16 }}>
           <form onSubmit={logActivity} className="pad">

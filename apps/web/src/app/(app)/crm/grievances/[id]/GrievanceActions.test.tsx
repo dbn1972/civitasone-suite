@@ -92,7 +92,7 @@ describe("GrievanceActions", () => {
   it("closes (danger action) to the correct proxied endpoint", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
 
-    render(<NextIntlClientProvider locale="en" messages={enMessages}><GrievanceActions id={GRIEVANCE_ID} status="ATTENDED" /></NextIntlClientProvider>);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><GrievanceActions id={GRIEVANCE_ID} status="ATTENDED" canClose /></NextIntlClientProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     await waitFor(() => expect(screen.getByText("Close this grievance?")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
@@ -102,21 +102,78 @@ describe("GrievanceActions", () => {
     expect(url).toBe(`/api/proxy/v1/crm/grievances/${GRIEVANCE_ID}/close`);
   });
 
-  // UX-016: this used to surface the backend's raw `message` field (or a
-  // bare `HTTP ${status}` fallback) verbatim in the dialog. It must now show
-  // only the catalogued, clerk-safe copy — never the raw server text.
-  it("surfaces a clerk-safe error inside the dialog instead of the raw server text, and does not refresh", async () => {
+  // GAP-CRM-GRIEVANCES-DETAIL-02 — Close is admin-only. Without canClose the
+  // button must not render at all; a non-admin used to see it, confirm, then
+  // get a generic "couldn't save" message.
+  it("does not render the Close button when canClose is false", () => {
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><GrievanceActions id={GRIEVANCE_ID} status="ATTENDED" /></NextIntlClientProvider>);
+    expect(screen.queryByRole("button", { name: "Close" })).not.toBeInTheDocument();
+    // The non-admin can still forward/appeal/resolve.
+    expect(screen.getByRole("button", { name: "Forward" })).toBeInTheDocument();
+  });
+
+  it("renders the Close button when canClose is true", () => {
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><GrievanceActions id={GRIEVANCE_ID} status="ATTENDED" canClose /></NextIntlClientProvider>);
+    expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
+  });
+
+  // GAP-CRM-GRIEVANCES-DETAIL-03 — a 403 permission refusal must read as a
+  // permission problem, not a transient "couldn't save". The status digits are
+  // never shown.
+  it("shows a permission message (not a retry message) on a 403, and does not refresh", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ message: "Grievance already disposed" }), { status: 409 }),
+      new Response(JSON.stringify({ message: "requires crm_admin" }), { status: 403 }),
     );
 
-    render(<NextIntlClientProvider locale="en" messages={enMessages}><GrievanceActions id={GRIEVANCE_ID} status="ATTENDED" /></NextIntlClientProvider>);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><GrievanceActions id={GRIEVANCE_ID} status="ATTENDED" canClose /></NextIntlClientProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.getByText("Close this grievance?")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+
+    expect(await screen.findByText(/don't have permission/i)).toBeInTheDocument();
+    expect(screen.queryByText(/couldn't save/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("requires crm_admin")).not.toBeInTheDocument();
+    expect(screen.queryByText(/403/)).not.toBeInTheDocument();
+    expect(refreshMock).not.toHaveBeenCalled();
+  });
+
+  // GAP-CRM-GRIEVANCES-DETAIL-03 — a 409 business-rule conflict reads as a
+  // conflict ("still in use elsewhere") and refreshes the page to show the real
+  // state, distinct from both the 403 and the generic save error.
+  it("shows a conflict message and refreshes on a 409", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ message: "already disposed" }), { status: 409 }),
+    );
+
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><GrievanceActions id={GRIEVANCE_ID} status="ATTENDED" canClose /></NextIntlClientProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.getByText("Close this grievance?")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+
+    expect(await screen.findByText(/still in use elsewhere/i)).toBeInTheDocument();
+    expect(screen.queryByText(/couldn't save/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("already disposed")).not.toBeInTheDocument();
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+  });
+
+  // UX-016: this used to surface the backend's raw `message` field (or a
+  // bare `HTTP ${status}` fallback) verbatim in the dialog. It must now show
+  // only the catalogued, clerk-safe copy — never the raw server text. Uses a
+  // 5xx here: GAP-CRM-GRIEVANCES-DETAIL-03 now gives 403/409 their own distinct
+  // copy (covered by dedicated tests), while every other failure keeps the
+  // generic "couldn't save" message and does not refresh.
+  it("surfaces a clerk-safe error inside the dialog instead of the raw server text, and does not refresh", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ message: "Internal boom" }), { status: 500 }),
+    );
+
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><GrievanceActions id={GRIEVANCE_ID} status="ATTENDED" canClose /></NextIntlClientProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     await waitFor(() => expect(screen.getByText("Close this grievance?")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
 
     expect(await screen.findByText(/couldn't save/i)).toBeInTheDocument();
-    expect(screen.queryByText("Grievance already disposed")).not.toBeInTheDocument();
+    expect(screen.queryByText("Internal boom")).not.toBeInTheDocument();
     expect(refreshMock).not.toHaveBeenCalled();
   });
 

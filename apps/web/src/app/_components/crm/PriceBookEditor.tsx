@@ -27,6 +27,7 @@ import {
   deletePriceBook,
   resolvePriceBook,
   getProducts,
+  isProductSelectable,
   type PriceBook,
   type PriceBookEntry,
   type Product,
@@ -34,6 +35,20 @@ import {
 } from "@/lib/crm/quotation";
 
 const inputStyle = { padding: 6, minHeight: 36, borderRadius: 8, border: "1px solid var(--line)", width: "100%" } as const;
+
+/**
+ * GAP-CRM-PRICE-BOOKS-04: the backend accepts any 3-letter currency, but every
+ * price is entered in rupees and formatMoney always renders ₹, so a non-INR book
+ * would display rupee amounts under a foreign code. Until multi-currency money
+ * formatting exists, the currency is constrained to a supported set (INR only)
+ * via a disabled-ish select rather than free text. Decision recorded in the report.
+ */
+const SUPPORTED_CURRENCIES = ["INR"] as const;
+
+/** Unique, sorted, non-empty values of a book field across the loaded books. */
+function usedValues(books: PriceBook[], pick: (b: PriceBook) => string): string[] {
+  return Array.from(new Set(books.map(pick).map((v) => v.trim()).filter(Boolean))).sort();
+}
 
 interface EntryRow {
   /** Stable per-row key (never the array index) so removing a row reconciles correctly. */
@@ -123,7 +138,13 @@ export function PriceBookEditor() {
   }
 
   function draftValid(d: PriceBook): boolean {
-    return d.name.trim().length > 0 && entries.every((e) => e.productId.trim().length > 0 && rupeesToMinorString(e.priceRupees.trim() || "0.01") !== null);
+    const chosen = entries.map((e) => e.productId.trim()).filter(Boolean);
+    const noDupes = new Set(chosen).size === chosen.length;
+    return (
+      d.name.trim().length > 0 &&
+      noDupes &&
+      entries.every((e) => e.productId.trim().length > 0 && rupeesToMinorString(e.priceRupees.trim() || "0.01") !== null)
+    );
   }
 
   async function save() {
@@ -132,8 +153,14 @@ export function PriceBookEditor() {
     setError("");
     // Validate every entry price.
     const outEntries: PriceBookEntry[] = [];
+    const seenProducts = new Set<string>();
     for (const e of entries) {
       if (!e.productId.trim()) continue;
+      if (seenProducts.has(e.productId.trim())) {
+        setError(t("duplicateProduct"));
+        return;
+      }
+      seenProducts.add(e.productId.trim());
       const minor = rupeesToMinorString(e.priceRupees.trim());
       if (minor === null) {
         setError("Every price-book entry needs a valid rupee price (max 2 decimals).");
@@ -201,6 +228,18 @@ export function PriceBookEditor() {
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
+      {/* GAP-CRM-PRICE-BOOKS-02: suggest values already used in existing books so a
+          typo (which would make a book that can never resolve) is easy to avoid.
+          No backend master list of segments/geographies/channels exists yet. */}
+      <datalist id={`${headingId}-segments`}>
+        {usedValues(books, (b) => b.segment).map((v) => <option key={v} value={v} />)}
+      </datalist>
+      <datalist id={`${headingId}-geographies`}>
+        {usedValues(books, (b) => b.geography).map((v) => <option key={v} value={v} />)}
+      </datalist>
+      <datalist id={`${headingId}-channels`}>
+        {usedValues(books, (b) => b.channel).map((v) => <option key={v} value={v} />)}
+      </datalist>
       <div className="card">
         <div className="card-h">
           <h3 id={headingId}>Price books</h3>
@@ -267,19 +306,21 @@ export function PriceBookEditor() {
                 </label>
                 <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
                   Segment
-                  <input aria-label="Segment" value={draft.segment} onChange={(e) => setDraft({ ...draft, segment: e.target.value })} style={inputStyle} placeholder="government" />
+                  <input aria-label={t("segment")} list={`${headingId}-segments`} value={draft.segment} onChange={(e) => setDraft({ ...draft, segment: e.target.value })} style={inputStyle} placeholder={t("segmentPlaceholder")} />
                 </label>
                 <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
                   Currency
-                  <input aria-label="Currency" value={draft.currency} onChange={(e) => setDraft({ ...draft, currency: e.target.value })} style={inputStyle} />
+                  <select aria-label={t("currency")} value={SUPPORTED_CURRENCIES.includes(draft.currency as (typeof SUPPORTED_CURRENCIES)[number]) ? draft.currency : "INR"} onChange={(e) => setDraft({ ...draft, currency: e.target.value })} style={inputStyle}>
+                    {SUPPORTED_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
                 </label>
                 <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
                   Geography
-                  <input aria-label="Geography" value={draft.geography} onChange={(e) => setDraft({ ...draft, geography: e.target.value })} style={inputStyle} placeholder="north" />
+                  <input aria-label={t("geography")} list={`${headingId}-geographies`} value={draft.geography} onChange={(e) => setDraft({ ...draft, geography: e.target.value })} style={inputStyle} placeholder={t("geographyPlaceholder")} />
                 </label>
                 <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
                   Channel
-                  <input aria-label="Channel" value={draft.channel} onChange={(e) => setDraft({ ...draft, channel: e.target.value })} style={inputStyle} placeholder="direct" />
+                  <input aria-label={t("channel")} list={`${headingId}-channels`} value={draft.channel} onChange={(e) => setDraft({ ...draft, channel: e.target.value })} style={inputStyle} placeholder={t("channelPlaceholder")} />
                 </label>
                 <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, marginTop: 24 }}>
                   <input type="checkbox" checked={draft.enabled} onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })} />
@@ -299,11 +340,19 @@ export function PriceBookEditor() {
                       style={inputStyle}
                     >
                       <option value="">Select product…</option>
-                      {products.map((p) => (
-                        <option key={p.id ?? p.code} value={p.id ?? ""}>
-                          {p.name} ({p.code})
-                        </option>
-                      ))}
+                      {products.map((p) => {
+                        const pid = p.id ?? "";
+                        // Hide a product already used in another entry (but keep this
+                        // row's own current selection visible), and flag inactive ones.
+                        const usedElsewhere = pid !== "" && pid !== e.productId && entries.some((r, i) => i !== idx && r.productId === pid);
+                        if (usedElsewhere) return null;
+                        const selectable = isProductSelectable(p);
+                        return (
+                          <option key={p.id ?? p.code} value={pid} disabled={!selectable && pid !== e.productId}>
+                            {p.name} ({p.code}){selectable ? "" : ` ${t("inactiveSuffix")}`}
+                          </option>
+                        );
+                      })}
                     </select>
                     <label className="sr-only" htmlFor={`${headingId}-ent-price-${idx}`}>Price for entry {idx + 1}</label>
                     <input
@@ -346,19 +395,21 @@ export function PriceBookEditor() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr) auto", gap: 8, padding: 12, alignItems: "end" }}>
           <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
             Segment
-            <input aria-label="Resolve segment" value={rSegment} onChange={(e) => setRSegment(e.target.value)} style={inputStyle} />
+            <input aria-label={t("resolveSegment")} list={`${headingId}-segments`} value={rSegment} onChange={(e) => setRSegment(e.target.value)} style={inputStyle} />
           </label>
           <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
             Currency
-            <input aria-label="Resolve currency" value={rCurrency} onChange={(e) => setRCurrency(e.target.value)} style={inputStyle} />
+            <select aria-label={t("resolveCurrency")} value={SUPPORTED_CURRENCIES.includes(rCurrency as (typeof SUPPORTED_CURRENCIES)[number]) ? rCurrency : "INR"} onChange={(e) => setRCurrency(e.target.value)} style={inputStyle}>
+              {SUPPORTED_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
           </label>
           <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
             Geography
-            <input aria-label="Resolve geography" value={rGeography} onChange={(e) => setRGeography(e.target.value)} style={inputStyle} />
+            <input aria-label={t("resolveGeography")} list={`${headingId}-geographies`} value={rGeography} onChange={(e) => setRGeography(e.target.value)} style={inputStyle} />
           </label>
           <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
             Channel
-            <input aria-label="Resolve channel" value={rChannel} onChange={(e) => setRChannel(e.target.value)} style={inputStyle} />
+            <input aria-label={t("resolveChannel")} list={`${headingId}-channels`} value={rChannel} onChange={(e) => setRChannel(e.target.value)} style={inputStyle} />
           </label>
           <Button type="button" onClick={() => void runResolve()} disabled={resolveSource === "loading"}>
             {resolveSource === "loading" ? "Resolving…" : "Resolve"}
@@ -368,7 +419,7 @@ export function PriceBookEditor() {
           {resolveSource === "idle" ? (
             <span style={{ color: "var(--muted)" }}>Enter criteria and resolve to see the applicable book.</span>
           ) : resolveSource === "error" ? (
-            <span style={{ color: "var(--muted)" }}>— Could not resolve. Showing saved information.</span>
+            <span role="alert" style={{ color: "#b42318" }}>{t("resolveFailed")}</span>
           ) : resolved ? (
             <span>
               Applicable book: <strong>{resolved.name}</strong>{" "}

@@ -68,7 +68,8 @@ describe("OpportunityViews (OP-004)", () => {
     // confirm dialog appears; nothing called yet
     expect(op.changeOpportunityStage).not.toHaveBeenCalled();
     fireEvent.click(await screen.findByRole("button", { name: /^move$/i }));
-    await waitFor(() => expect(op.changeOpportunityStage).toHaveBeenCalledWith("d1", "propose", 3));
+    // GAP-CRM-OPPORTUNITIES-02: the stage NAME is sent (the server matches by name), not the derived key.
+    await waitFor(() => expect(op.changeOpportunityStage).toHaveBeenCalledWith("d1", "Propose", 3, undefined));
   });
 
   it("surfaces a blocked stage move (422 mandatory fields) in the dialog", async () => {
@@ -80,10 +81,11 @@ describe("OpportunityViews (OP-004)", () => {
     expect(await screen.findByText(/Propose needs:.*Deal value/i)).toBeInTheDocument();
   });
 
-  it("gates the board on a failed fetch with the saved-info badge", async () => {
+  it("gates the board on a failed fetch with a titled error and retry", async () => {
     vi.mocked(op.getKanban).mockResolvedValue({ data: [], source: "error" });
     render(<NextIntlClientProvider locale="en" messages={enMessages}><OpportunityViews /></NextIntlClientProvider>);
-    await waitFor(() => expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/couldn.t load the board/i)).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
   });
 
   it("switches to the list view and can open the close dialog", async () => {
@@ -137,5 +139,50 @@ describe("OpportunityViews (OP-004)", () => {
     expect(proposeOption?.disabled).toBe(false);
     // A "Close…" affordance is offered for the open deal instead.
     expect(screen.getByRole("button", { name: /close…/i })).toBeInTheDocument();
+  });
+
+  // GAP-CRM-OPPORTUNITIES-03: closing is restricted to CRM admins. A crm_user
+  // (canClose=false) must not be offered the Close control on any row.
+  it("hides the Close control when canClose is false (list view)", async () => {
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><OpportunityViews canClose={false} /></NextIntlClientProvider>);
+    await waitFor(() => expect(screen.getByText("Datacentre")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("tab", { name: "List" }));
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /^close$/i })).not.toBeInTheDocument();
+  });
+
+  it("hides the board Close… control when canClose is false", async () => {
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><OpportunityViews canClose={false} /></NextIntlClientProvider>);
+    await waitFor(() => expect(screen.getByText("Datacentre")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /close…/i })).not.toBeInTheDocument();
+  });
+
+  // GAP-CRM-OPPORTUNITIES-04: a failed view shows a titled error with a working
+  // Retry that re-runs the same fetch, not a bare "—" empty state.
+  it("shows a Retry on a failed board load that re-fetches and renders data", async () => {
+    vi.mocked(op.getKanban).mockResolvedValue({ data: [], source: "error" });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><OpportunityViews /></NextIntlClientProvider>);
+    const retry = await screen.findByRole("button", { name: /retry/i });
+    expect(screen.getByText(/couldn't load the board/i)).toBeInTheDocument();
+    vi.mocked(op.getKanban).mockResolvedValue({ data: [{ stage: "qual", stageName: "Qualify", deals: [deal] }], source: "api" });
+    fireEvent.click(retry);
+    await waitFor(() => expect(screen.getByText("Datacentre")).toBeInTheDocument());
+  });
+
+  // GAP-CRM-OPPORTUNITIES-05: switching Board -> Calendar derives from the already
+  // loaded board and issues no second kanban/calendar fetch; undated deals are noted.
+  it("derives the calendar from the board without a second fetch and notes undated deals", async () => {
+    const dated = { ...deal, id: "d1", expectedCloseDate: "2026-09-01" };
+    const undated = { ...deal, id: "d2", name: "No date deal", expectedCloseDate: "" };
+    vi.mocked(op.getKanban).mockResolvedValue({ data: [{ stage: "qual", stageName: "Qualify", deals: [dated, undated] }], source: "api" });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><OpportunityViews /></NextIntlClientProvider>);
+    await waitFor(() => expect(screen.getByText("Datacentre")).toBeInTheDocument());
+    const kanbanCallsBefore = vi.mocked(op.getKanban).mock.calls.length;
+    fireEvent.click(screen.getByRole("tab", { name: "Calendar" }));
+    await waitFor(() => expect(screen.getByText(/01 Sep 2026/)).toBeInTheDocument());
+    // No dedicated calendar fetch and no extra kanban fetch for the calendar view.
+    expect(op.getCalendar).not.toHaveBeenCalled();
+    expect(vi.mocked(op.getKanban).mock.calls.length).toBe(kanbanCallsBefore);
+    expect(screen.getByText(/1 deal has no close date/i)).toBeInTheDocument();
   });
 });

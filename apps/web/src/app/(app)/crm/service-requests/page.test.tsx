@@ -33,12 +33,12 @@ function withIntl(ui: React.ReactElement) {
   );
 }
 
-function mockRows(n: number, total: number) {
+function mockRows(n: number, total: number, statusCounts: Record<string, number> = {}) {
   const rows = Array.from({ length: n }, (_, i) => ({
     id: `sr-${i}`, referenceNo: `R${i}`, citizenName: "X", serviceType: "Birth Certificate",
     subject: "s", priority: "normal", status: "open", assignedTo: null, dueAt: null, createdAt: null,
   }));
-  getList.mockResolvedValue({ data: { rows, total }, source: "api" });
+  getList.mockResolvedValue({ data: { rows, total, statusCounts }, source: "api" });
 }
 
 beforeEach(() => {
@@ -68,6 +68,24 @@ describe("ServiceRequestsPage — GAP-CRM-SERVICE-REQUESTS-01 (server pagination
     mockRows(1, 1);
     render(withIntl(await Page({ searchParams: { page: "-3" } })));
     expect(getList).toHaveBeenCalledWith(expect.objectContaining({ page: 1 }));
+  });
+});
+
+describe("ServiceRequestsPage — GAP-CRM-SERVICE-REQUESTS-05 (summary tiles)", () => {
+  it("shows server-side status counts that sum to the total, with no '(this page)' labels and a Cancelled tile", async () => {
+    // 15 loaded but a register of 132: counts come from the server, not the page.
+    mockRows(15, 132, { open: 40, in_progress: 20, pending: 30, resolved: 12, closed: 20, cancelled: 10 });
+    render(await Page({ searchParams: {} }));
+
+    // Open/In Progress = 40+20 = 60; Pending = 30; Closed/Resolved = 20+12 = 32; Cancelled = 10.
+    // 60 + 30 + 32 + 10 = 132 = total.
+    expect(screen.getByText("Open / In Progress")).toBeInTheDocument();
+    expect(screen.getByText("Cancelled")).toBeInTheDocument();
+    expect(screen.queryByText(/\(this page\)/)).not.toBeInTheDocument();
+    expect(screen.getByText("60")).toBeInTheDocument();
+    expect(screen.getByText("30")).toBeInTheDocument();
+    expect(screen.getByText("32")).toBeInTheDocument();
+    expect(screen.getByText("10")).toBeInTheDocument();
   });
 });
 

@@ -5,6 +5,9 @@ export const answerTypeEnum = z.enum(["bool", "select", "number"]);
 
 /** A question as supplied on framework create/update. */
 export const questionInput = z.object({
+  // Existing question id: the question is updated in place so previously submitted
+  // lead answers (keyed by question id) stay attached. Omit for a new question.
+  id: z.string().uuid().optional(),
   prompt: z.string().min(1).max(400),
   answerType: answerTypeEnum.default("bool"),
   weight: z.number().int().min(0).max(100).default(0),
@@ -29,7 +32,15 @@ export const updateFrameworkBody = z.object({
   active: z.boolean().optional(),
   // When present, REPLACES the framework's question set wholesale.
   questions: z.array(questionInput).max(50).optional(),
-}).refine((b) => Object.keys(b).length > 0, { message: "at least one field is required" });
+  // GAP-CRM-QUALIFICATION-FRAMEWORKS-02: optimistic concurrency. When the client
+  // sends the `version` it read, a stale write (another admin already saved) is
+  // rejected with 409 rather than silently clobbering their change (and, since a
+  // questions-replace deletes+reinserts, silently orphaning the losing edit).
+  // Optional for backward compatibility; `version` alone is not a mutation.
+  version: z.number().int().nonnegative().optional(),
+}).refine((b) => Object.keys(b).filter((k) => k !== "version").length > 0, {
+  message: "at least one field is required",
+});
 export type UpdateFrameworkBody = z.infer<typeof updateFrameworkBody>;
 
 export const listFrameworksQuery = z.object({

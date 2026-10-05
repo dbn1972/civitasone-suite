@@ -1,5 +1,5 @@
 import { fetchJson } from "../../../../_data/apiClient";
-import { PageHeader, StatusPill, Card } from "../../../../_components/ds";
+import { PageHeader, StatusPill, Card, LoadErrorState, EmptyState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { RtiActions } from "./RtiActions";
 import { formatMoney } from "@/lib/formatters";
@@ -76,9 +76,9 @@ function fmt(dt?: string) {
   });
 }
 
-const SECTION_LABEL: Record<string, string> = {
-  "s.6": "§6 — Information Request",
-  "s.11": "§11 — Third-party Information",
+const SECTION_KEY: Record<string, string> = {
+  "s.6": "section6",
+  "s.11": "section11",
 };
 
 // crm-service's RTI route ACL (rti-route.ts CRM_ROLES). A user outside this
@@ -126,7 +126,7 @@ export default async function RtiDetailPage({
   const roles = getSessionRoles();
   const canAct = roles.some((role) => CRM_RTI_ROLES.includes(role));
   const canDecide = roles.some((role) => RTI_APPELLATE_ROLES.includes(role));
-  const { data: r, source } = await fetchJson<unknown, RtiDetail | null>(
+  const result = await fetchJson<unknown, RtiDetail | null>(
     `/api/v1/crm/rti/${params.id}`,
     null,
     { revalidateSeconds: 0, telemetryKey: "crm.rti.detail",
@@ -138,15 +138,33 @@ export default async function RtiDetailPage({
       },
     },
   );
+  const r = result.data;
+  const source = result.source;
+
+  // GAP-CRM-GRIEVANCES-DETAIL-07 (also RTI): an outage must not be titled as a
+  // missing record. Only a real 404 (or a successful empty body) is "not
+  // found"; every other failure gets the status-aware retry/permission state.
+  if (!r && source === "error" && result.status !== 404) {
+    return (
+      <>
+        <PageHeader title={t("title")} back="/crm/rti" backLabel={t("backLabel")} />
+        <LoadErrorState result={result} area="RTI request" backHref="/crm/rti" />
+      </>
+    );
+  }
 
   if (!r) {
     return (
       <>
-        <PageHeader title="RTI Request Not Found" back="/crm/rti" backLabel="RTI Applications" />
-        {source === "error" && <DataSourceBadge source={source} />}
-        <p style={{ color: "var(--ink2)", padding: "24px 0" }}>
-          The RTI request could not be loaded.
-        </p>
+        <PageHeader title={t("notFoundTitle")} back="/crm/rti" backLabel={t("backLabel")} />
+        <Card>
+          <EmptyState
+            icon="📭"
+            title={t("notFoundTitle")}
+            message={t("notFoundMessage")}
+            action={<a className="btn" href="/crm/rti">{t("backToApplications")}</a>}
+          />
+        </Card>
       </>
     );
   }
@@ -154,10 +172,10 @@ export default async function RtiDetailPage({
   return (
     <>
       <PageHeader
-        title={r.referenceNo ?? "RTI Request"}
+        title={r.referenceNo ?? t("title")}
         subtitle={r.subject}
         back="/crm/rti"
-        backLabel="RTI Applications"
+        backLabel={t("backLabel")}
         actions={
           <RtiActions
             id={r.id}
@@ -167,15 +185,16 @@ export default async function RtiDetailPage({
             firstAppealDueAt={r.firstAppealDueAt ?? null}
             firstAppealDecidedAt={r.firstAppealDecidedAt ?? null}
             disposedAt={r.disposedAt ?? null}
+            receivedAt={r.receivedAt ?? r.createdAt ?? null}
           />
         }
       />
       {source === "error" && <DataSourceBadge source={source} />}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20 }}>
+      <div className="detail-split">
         {/* Main column */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <Card title="RTI Request Details">
+          <Card title={t("detailsCard")}>
             <dl
               style={{
                 display: "grid",
@@ -185,30 +204,30 @@ export default async function RtiDetailPage({
                 margin: "12px 16px",
               }}
             >
-              <dt style={{ color: "var(--ink2)" }}>Reference</dt>
+              <dt style={{ color: "var(--ink2)" }}>{t("reference")}</dt>
               <dd><code style={{ fontSize: 13 }}>{r.referenceNo ?? "—"}</code></dd>
-              <dt style={{ color: "var(--ink2)" }}>Section</dt>
-              <dd>{SECTION_LABEL[r.section] ?? r.section}</dd>
-              <dt style={{ color: "var(--ink2)" }}>Status</dt>
+              <dt style={{ color: "var(--ink2)" }}>{t("section")}</dt>
+              <dd>{SECTION_KEY[r.section] ? t(SECTION_KEY[r.section]) : r.section}</dd>
+              <dt style={{ color: "var(--ink2)" }}>{t("status")}</dt>
               <dd><StatusPill status={r.status} /></dd>
-              <dt style={{ color: "var(--ink2)" }}>Department</dt>
+              <dt style={{ color: "var(--ink2)" }}>{t("department")}</dt>
               <dd>{r.departmentRef}</dd>
-              <dt style={{ color: "var(--ink2)" }}>Fee</dt>
+              <dt style={{ color: "var(--ink2)" }}>{t("fee")}</dt>
               <dd>{feeDisplay(r, t)}</dd>
               <dt style={{ color: "var(--ink2)" }}>{t("modeOfReceipt")}</dt>
               <dd>{r.mode ? (MODE_KEY[r.mode] ? t(MODE_KEY[r.mode]) : r.mode) : "—"}</dd>
-              <dt style={{ color: "var(--ink2)" }}>Received</dt>
+              <dt style={{ color: "var(--ink2)" }}>{t("received")}</dt>
               <dd>{fmt(r.receivedAt ?? r.createdAt)}</dd>
-              <dt style={{ color: "var(--ink2)" }}>Response Due</dt>
+              <dt style={{ color: "var(--ink2)" }}>{t("responseDue")}</dt>
               <dd>{fmt(r.dueAt)}</dd>
-              <dt style={{ color: "var(--ink2)" }}>First-Appeal Due</dt>
+              <dt style={{ color: "var(--ink2)" }}>{t("firstAppealDue")}</dt>
               <dd>{fmt(r.firstAppealDueAt)}</dd>
-              <dt style={{ color: "var(--ink2)" }}>Last Updated</dt>
+              <dt style={{ color: "var(--ink2)" }}>{t("lastUpdated")}</dt>
               <dd>{fmt(r.updatedAt)}</dd>
             </dl>
           </Card>
 
-          <Card title="Information Requested">
+          <Card title={t("informationRequested")}>
             <p
               style={{
                 margin: "12px 16px",
@@ -223,7 +242,7 @@ export default async function RtiDetailPage({
           </Card>
 
           {r.responseText && (
-            <Card title="Response">
+            <Card title={t("responseCard")}>
               <p
                 style={{
                   margin: "12px 16px 4px",
@@ -237,7 +256,7 @@ export default async function RtiDetailPage({
               </p>
               {r.respondedAt && (
                 <p style={{ margin: "0 16px 12px", fontSize: 12, color: "var(--ink2)" }}>
-                  Responded {fmt(r.respondedAt)}
+                  {t("responded", { date: fmt(r.respondedAt) })}
                 </p>
               )}
             </Card>
@@ -288,7 +307,7 @@ export default async function RtiDetailPage({
 
         {/* Sidebar */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <Card title="Applicant">
+          <Card title={t("applicantCard")}>
             <dl
               style={{
                 display: "grid",
@@ -298,9 +317,9 @@ export default async function RtiDetailPage({
                 margin: "12px 16px",
               }}
             >
-              <dt style={{ color: "var(--ink2)" }}>Name</dt>
+              <dt style={{ color: "var(--ink2)" }}>{t("name")}</dt>
               <dd style={{ fontWeight: 600 }}>{r.applicantName}</dd>
-              <dt style={{ color: "var(--ink2)" }}>Contact</dt>
+              <dt style={{ color: "var(--ink2)" }}>{t("contact")}</dt>
               <dd style={{ wordBreak: "break-all" }}>
                 {r.applicantContact
                   ? canAct

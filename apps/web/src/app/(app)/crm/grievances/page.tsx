@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, LoadErrorState } from "../../../_components/ds";
 import { getCrmGrievances } from "../../../_data/loaders";
+import { getSessionRoles, hasAnyRole, CRM_CONTACTS_EXPORT_ROLES } from "@/lib/auth/roleGuard";
 import { GrievancesTable } from "./GrievancesTable";
+import { GrievanceFilters } from "./GrievanceFilters";
 
 type SP = { status?: string; priority?: string; search?: string; page?: string };
 
@@ -22,13 +24,19 @@ export default async function GrievancesPage({ searchParams }: { searchParams?: 
   // to the loader, and a Prev/Next pager under the table walks `data.total`.
   const t = await getTranslations("crmGrievancesList");
   const page = Math.max(1, Number(searchParams?.page) || 1);
-  const { data, source } = await getCrmGrievances({
+  const result = await getCrmGrievances({
     ...(searchParams?.status ? { status: searchParams.status } : {}),
     ...(searchParams?.priority ? { priority: searchParams.priority } : {}),
     ...(searchParams?.search ? { search: searchParams.search } : {}),
     page,
     limit: PAGE_SIZE,
   });
+  const { data, source } = result;
+
+  // GAP-CRM-GRIEVANCES-05: the register CSV carries citizen names (PII), so the
+  // export control is only offered to roles with a need-to-know (DPDP data
+  // minimisation). Decided server-side from the session roles.
+  const canExport = hasAnyRole(getSessionRoles(), CRM_CONTACTS_EXPORT_ROLES);
 
   const rows = data.rows;
   const total = data.total;
@@ -61,17 +69,24 @@ export default async function GrievancesPage({ searchParams }: { searchParams?: 
   const open = rows.filter((r) => r.status === "REGISTERED" || r.status === "FORWARDED" || r.status === "ATTENDED").length;
   const escalated = rows.filter((r) => r.status === "APPEAL").length;
   const resolved = rows.filter((r) => r.status === "DISPOSED").length;
+  // GAP-CRM-GRIEVANCES-04: count of grievances on this page past their disposal
+  // deadline and not yet disposed. Labelled "this page" like the other derived
+  // tiles since it is computed from the fetched rows, not the whole register.
+  const now = Date.now();
+  const overdue = rows.filter(
+    (r) => r.status !== "DISPOSED" && r.dueAt != null && !Number.isNaN(Date.parse(r.dueAt)) && Date.parse(r.dueAt) < now,
+  ).length;
   const stat = (n: number) => (source === "error" ? "—" : n.toLocaleString("en-IN"));
 
   return (
     <>
       <PageHeader
-        title="Grievances"
-        subtitle="Citizen complaints and grievance register — log, assign, escalate, and resolve."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/crm"
         actions={
           <Link href="/crm/grievances/new" className="btn primary">
-            + New Grievance
+            {t("newGrievance")}
           </Link>
         }
       />
@@ -82,60 +97,79 @@ export default async function GrievancesPage({ searchParams }: { searchParams?: 
           `stat()` "—" fallback above is unrelated and unchanged. */}
 
       <StatGrid>
-        <StatCard icon="🔴" iconBg="color-mix(in srgb, var(--bad) 12%, transparent)" label="Open (this page)" value={stat(open)} />
-        <StatCard icon="⚠️" iconBg="color-mix(in srgb, var(--warn) 15%, transparent)" label="Escalated (this page)" value={stat(escalated)} />
-        <StatCard icon="✅" iconBg="color-mix(in srgb, var(--good) 12%, transparent)" label="Resolved / Closed (this page)" value={stat(resolved)} />
-        <StatCard icon="📋" iconBg="color-mix(in srgb, var(--ink2) 10%, transparent)" label="Total Grievances" value={stat(data.total)} />
+        <StatCard icon="🔴" iconBg="color-mix(in srgb, var(--bad) 12%, transparent)" label={t("statOpen")} value={stat(open)} />
+        <StatCard icon="⚠️" iconBg="color-mix(in srgb, var(--warn) 15%, transparent)" label={t("statEscalated")} value={stat(escalated)} />
+        <StatCard icon="⏰" iconBg="color-mix(in srgb, var(--bad) 12%, transparent)" label={t("statOverdue")} value={stat(overdue)} />
+        <StatCard icon="✅" iconBg="color-mix(in srgb, var(--good) 12%, transparent)" label={t("statResolved")} value={stat(resolved)} />
+        <StatCard icon="📋" iconBg="color-mix(in srgb, var(--ink2) 10%, transparent)" label={t("statTotal")} value={stat(data.total)} />
       </StatGrid>
 
-      {/* GAP-CRM-GRIEVANCES-01: honest whole-register window. `total` is the
-          server figure; `firstRow`-`lastRow` describe the rows on this page. */}
-      {source !== "error" && total > 0 && (
-        <p style={{ fontSize: 13, color: "var(--ink2)", margin: "4px 0 8px" }}>
-          {t("showing", {
-            from: firstRow.toLocaleString("en-IN"),
-            to: lastRow.toLocaleString("en-IN"),
-            total: total.toLocaleString("en-IN"),
-          })}
-        </p>
-      )}
+      {/* GAP-CRM-GRIEVANCES-02: server-side filter controls. Status/priority/
+          search are forwarded to the API; the client control writes the URL
+          and resets to page 1. */}
+      <GrievanceFilters
+        status={searchParams?.status ?? ""}
+        priority={searchParams?.priority ?? ""}
+        search={searchParams?.search ?? ""}
+      />
 
-      <GrievancesTable grievances={rows} source={source === "error" ? "error" : "api"} page={currentPage} pageSize={PAGE_SIZE} />
+      {/* GAP-CRM-GRIEVANCES-03: on an outage, render an explicit retry error
+          state instead of the table's "No grievances yet" first-use copy, which
+          reads as an empty register and contradicts the "—" tiles above. */}
+      {source === "error" ? (
+        <LoadErrorState result={result} area="grievances" backHref="/crm" />
+      ) : (
+        <>
+          {/* GAP-CRM-GRIEVANCES-01: honest whole-register window. `total` is the
+              server figure; `firstRow`-`lastRow` describe the rows on this page. */}
+          {total > 0 && (
+            <p style={{ fontSize: 13, color: "var(--ink2)", margin: "4px 0 8px" }}>
+              {t("showing", {
+                from: firstRow.toLocaleString("en-IN"),
+                to: lastRow.toLocaleString("en-IN"),
+                total: total.toLocaleString("en-IN"),
+              })}
+            </p>
+          )}
 
-      {/* Server-driven pager: the DataTable's own 15-row client pager only ever
-          saw the current API page (<=50 rows), so pages 51+ were unreachable.
-          These are plain links that re-run the server fetch for the next page,
-          preserving the active filters. */}
-      {source !== "error" && pageCount > 1 && (
-        <nav
-          aria-label={t("pagesAriaLabel")}
-          style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, margin: "16px 0" }}
-        >
-          {currentPage > 1 ? (
-            <Link href={pageHref(currentPage - 1)} className="btn" rel="prev">
-              {t("previous")}
-            </Link>
-          ) : (
-            <span className="btn" aria-disabled="true" style={{ opacity: 0.5, pointerEvents: "none" }}>
-              {t("previous")}
-            </span>
+          <GrievancesTable grievances={rows} source="api" page={currentPage} pageSize={PAGE_SIZE} canExport={canExport} />
+
+          {/* Server-driven pager: the DataTable's own 15-row client pager only ever
+              saw the current API page (<=50 rows), so pages 51+ were unreachable.
+              These are plain links that re-run the server fetch for the next page,
+              preserving the active filters. */}
+          {pageCount > 1 && (
+            <nav
+              aria-label={t("pagesAriaLabel")}
+              style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, margin: "16px 0" }}
+            >
+              {currentPage > 1 ? (
+                <Link href={pageHref(currentPage - 1)} className="btn" rel="prev">
+                  {t("previous")}
+                </Link>
+              ) : (
+                <span className="btn" aria-disabled="true" style={{ opacity: 0.5, pointerEvents: "none" }}>
+                  {t("previous")}
+                </span>
+              )}
+              <span aria-live="polite" style={{ fontSize: 13, color: "var(--ink2)" }}>
+                {t("pageOf", {
+                  page: currentPage.toLocaleString("en-IN"),
+                  pages: pageCount.toLocaleString("en-IN"),
+                })}
+              </span>
+              {currentPage < pageCount ? (
+                <Link href={pageHref(currentPage + 1)} className="btn" rel="next">
+                  {t("next")}
+                </Link>
+              ) : (
+                <span className="btn" aria-disabled="true" style={{ opacity: 0.5, pointerEvents: "none" }}>
+                  {t("next")}
+                </span>
+              )}
+            </nav>
           )}
-          <span aria-live="polite" style={{ fontSize: 13, color: "var(--ink2)" }}>
-            {t("pageOf", {
-              page: currentPage.toLocaleString("en-IN"),
-              pages: pageCount.toLocaleString("en-IN"),
-            })}
-          </span>
-          {currentPage < pageCount ? (
-            <Link href={pageHref(currentPage + 1)} className="btn" rel="next">
-              {t("next")}
-            </Link>
-          ) : (
-            <span className="btn" aria-disabled="true" style={{ opacity: 0.5, pointerEvents: "none" }}>
-              {t("next")}
-            </span>
-          )}
-        </nav>
+        </>
       )}
     </>
   );

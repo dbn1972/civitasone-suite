@@ -1,5 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
+
+function render(ui: ReactElement) {
+  return rtlRender(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
 import DedupCandidatesPage from "./page";
 import * as api from "@/lib/crm/dedupCandidates";
 
@@ -91,7 +102,7 @@ describe("DedupCandidatesPage", () => {
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
 
     // Click the Merge button
-    const mergeBtn = screen.getByRole("button", { name: /merge.*keep left/i });
+    const mergeBtn = screen.getByRole("button", { name: /merge → keep/i });
     fireEvent.click(mergeBtn);
 
     // Dialog appears with correct warning text
@@ -114,15 +125,19 @@ describe("DedupCandidatesPage", () => {
     await waitFor(() => expect(screen.getByText("85%")).toBeInTheDocument());
 
     // Open dialog
-    fireEvent.click(screen.getByRole("button", { name: /merge.*keep left/i }));
+    fireEvent.click(screen.getByRole("button", { name: /merge → keep/i }));
     await screen.findByRole("alertdialog");
+
+    // GAP-CRM-DEDUP-CANDIDATES-02: a reason (>=10 chars) is required to confirm
+    const reason = screen.getByLabelText(/reason for merge/i);
+    fireEvent.change(reason, { target: { value: "confirmed duplicate record" } });
 
     // Confirm merge
     const confirmBtn = screen.getByRole("button", { name: /^merge$/i });
     fireEvent.click(confirmBtn);
 
     await waitFor(() =>
-      expect(api.mergeDedupPair).toHaveBeenCalledWith("aaa-111", "bbb-222"),
+      expect(api.mergeDedupPair).toHaveBeenCalledWith("aaa-111", "bbb-222", "confirmed duplicate record"),
     );
 
     // Dialog closed and pair removed from list
@@ -132,7 +147,29 @@ describe("DedupCandidatesPage", () => {
     expect(screen.queryByText("85%")).not.toBeInTheDocument();
   });
 
-  it("removes the pair when Dismiss pair is clicked", async () => {
+  it("GAP-CRM-DEDUP-CANDIDATES-02: Swap makes the right contact the primary in the POST body", async () => {
+    vi.mocked(api.getDedupCandidates).mockResolvedValue({ data: [PAIR], source: "api" });
+    vi.mocked(api.mergeDedupPair).mockResolvedValue(undefined);
+
+    render(<DedupCandidatesPage />);
+    await waitFor(() => expect(screen.getByText("85%")).toBeInTheDocument());
+
+    // Swap sides, then merge
+    fireEvent.click(screen.getByRole("button", { name: /swap/i }));
+    fireEvent.click(screen.getByRole("button", { name: /merge → keep/i }));
+    await screen.findByRole("alertdialog");
+    fireEvent.change(screen.getByLabelText(/reason for merge/i), {
+      target: { value: "right record is the better source" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^merge$/i }));
+
+    // right (bbb-222) is now primary, left (aaa-111) is the duplicate
+    await waitFor(() =>
+      expect(api.mergeDedupPair).toHaveBeenCalledWith("bbb-222", "aaa-111", "right record is the better source"),
+    );
+  });
+
+  it("GAP-CRM-DEDUP-CANDIDATES-03: Dismiss opens a confirm and calls no API until confirmed", async () => {
     vi.mocked(api.getDedupCandidates).mockResolvedValue({
       data: [PAIR],
       source: "api",
@@ -144,10 +181,53 @@ describe("DedupCandidatesPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /dismiss pair/i }));
 
-    await waitFor(() =>
-      expect(api.dismissDedupPair).toHaveBeenCalledWith("pair-001"),
-    );
+    // confirmation dialog appears; no API call yet
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent(/will not surface again/i);
+    expect(api.dismissDedupPair).not.toHaveBeenCalled();
+
+    // confirm
+    fireEvent.click(within(dialog).getByRole("button", { name: /^dismiss pair$/i }));
+    await waitFor(() => expect(api.dismissDedupPair).toHaveBeenCalledWith("pair-001", undefined));
     await waitFor(() => expect(screen.queryByText("85%")).not.toBeInTheDocument());
+  });
+
+  it("GAP-CRM-DEDUP-CANDIDATES-03: cancelling the dismiss confirm leaves the pair", async () => {
+    vi.mocked(api.getDedupCandidates).mockResolvedValue({ data: [PAIR], source: "api" });
+
+    render(<DedupCandidatesPage />);
+    await waitFor(() => expect(screen.getByText("85%")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /dismiss pair/i }));
+    await screen.findByRole("alertdialog");
+    fireEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
+
+    expect(api.dismissDedupPair).not.toHaveBeenCalled();
+    expect(screen.getByText("85%")).toBeInTheDocument();
+  });
+
+  it("GAP-CRM-DEDUP-CANDIDATES-04: sorts pairs highest-confidence first and filters by confidence", async () => {
+    vi.mocked(api.getDedupCandidates).mockResolvedValue({
+      data: [PAIR_LOW, PAIR_MID, PAIR],
+      source: "api",
+    });
+
+    render(<DedupCandidatesPage />);
+    await waitFor(() => expect(screen.getByText("85%")).toBeInTheDocument());
+
+    // highest confidence card renders first in DOM
+    const badges = screen.getAllByText(/^\d+%$/).map((el) => el.textContent);
+    expect(badges[0]).toBe("85%");
+
+    // header shows the total
+    expect(screen.getByText(/3 of 3 pairs/i)).toBeInTheDocument();
+
+    // filter to 80%+ hides the 65% and 45% pairs
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "80" } });
+    expect(screen.getByText("85%")).toBeInTheDocument();
+    expect(screen.queryByText("65%")).not.toBeInTheDocument();
+    expect(screen.queryByText("45%")).not.toBeInTheDocument();
+    expect(screen.getByText(/1 of 3 pairs/i)).toBeInTheDocument();
   });
 
   it("renders the empty state when no pairs are returned", async () => {

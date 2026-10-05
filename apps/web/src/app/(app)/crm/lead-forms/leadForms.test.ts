@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { CRMLeadCaptureForm } from "@civitasone/types";
-import { formHealth, originSummary, publicSubmitPath, rankForms } from "./leadForms";
+import { formHealth, originSummary, publicSubmitPath, rankForms, HEALTH_LABEL, CONSENT_GAP_NOTE } from "./leadForms";
 
 function form(overrides: Partial<CRMLeadCaptureForm> = {}): CRMLeadCaptureForm {
   return {
@@ -51,5 +51,20 @@ describe("originSummary", () => {
     expect(originSummary([])).toBe("Any origin");
     expect(originSummary(["https://a.gov.in"])).toBe("https://a.gov.in");
     expect(originSummary(["https://a.gov.in", "https://b.gov.in"])).toBe("https://a.gov.in +1 more");
+  });
+});
+
+// GAP-CRM-LEAD-FORMS-03: human labels; the raw "unlawful" enum is never shown.
+describe("HEALTH_LABEL", () => {
+  it("maps the health enum to human labels and never exposes 'unlawful'", () => {
+    expect(HEALTH_LABEL.live).toBe("Live");
+    expect(HEALTH_LABEL.paused).toBe("Paused");
+    expect(HEALTH_LABEL.unlawful).toBe("Consent not required");
+    expect(Object.values(HEALTH_LABEL)).not.toContain("unlawful");
+  });
+
+  it("provides a DPDP consent-gap note referencing the DPDP Act", () => {
+    expect(CONSENT_GAP_NOTE).toMatch(/consent/i);
+    expect(CONSENT_GAP_NOTE).toMatch(/DPDP/);
   });
 });

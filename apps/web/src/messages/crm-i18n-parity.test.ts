@@ -19,7 +19,9 @@ function flatten(t: Tree, prefix = ""): Record<string, string> {
   return out;
 }
 function placeholders(s: string): string[] {
-  return [...new Set([...s.matchAll(/\{(\w+)/g)].map((m) => m[1]!))].sort();
+  // ICU argument names only: `{name}` / `{name, plural, ...}`. A plural/select branch body
+  // (`one {star}`, `other {stars}`) is translated text, not an argument, and differs per language.
+  return [...new Set([...s.matchAll(/(?<!(?:\b(?:zero|one|two|few|many|other|up)|=\d+)\s*)\{(\w+)\s*[,}]/g)].map((m) => m[1]!))].sort();
 }
 
 const enRoot = en as unknown as Tree;

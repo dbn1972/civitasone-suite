@@ -1,9 +1,18 @@
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { TaskEscalationEditor } from "./TaskEscalationEditor";
 import * as aa from "@/lib/crm/activityAccount";
+import type { ReactElement } from "react";
+
+function render(ui: ReactElement) {
+  return rtlRender(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
 
 vi.mock("@/lib/crm/activityAccount", async (orig) => {
   const actual = await orig<typeof import("@/lib/crm/activityAccount")>();
@@ -49,14 +58,14 @@ beforeEach(() => {
 describe("TaskEscalationEditor (AC-005)", () => {
   it("shows the saved-info badge on a failed load", async () => {
     vi.mocked(aa.getTaskEscalationRules).mockResolvedValue({ data: [], source: "error" });
-    render(<NextIntlClientProvider locale="en" messages={enMessages}><TaskEscalationEditor /></NextIntlClientProvider>);
+    render(<TaskEscalationEditor />);
     await waitFor(() => expect(screen.getAllByText(/couldn.t load/i)[0]).toBeInTheDocument());
     expect(screen.getByText(/no task-escalation rules yet/i)).toBeInTheDocument();
   });
 
   it("blocks create when no manager is set", async () => {
     vi.mocked(aa.getTaskEscalationRules).mockResolvedValue({ data: [], source: "api" });
-    render(<NextIntlClientProvider locale="en" messages={enMessages}><TaskEscalationEditor /></NextIntlClientProvider>);
+    render(<TaskEscalationEditor />);
     await waitFor(() => expect(screen.getByText(/no task-escalation rules yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add task-escalation rule/i }));
     fireEvent.click(screen.getByRole("button", { name: /create/i }));
@@ -67,18 +76,53 @@ describe("TaskEscalationEditor (AC-005)", () => {
   it("creates a rule with threshold + a picked manager role (stored as a key)", async () => {
     vi.mocked(aa.getTaskEscalationRules).mockResolvedValue({ data: [], source: "api" });
     vi.mocked(aa.createTaskEscalationRule).mockResolvedValue(undefined);
-    render(<NextIntlClientProvider locale="en" messages={enMessages}><TaskEscalationEditor /></NextIntlClientProvider>);
+    render(<TaskEscalationEditor />);
     await waitFor(() => expect(screen.getByText(/no task-escalation rules yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add task-escalation rule/i }));
     // The role picker is populated from the tenant directory.
     await waitFor(() =>
       expect(within(screen.getByLabelText(/manager role for rule 1/i)).getByRole("option", { name: "Operations Manager" })).toBeInTheDocument(),
     );
-    fireEvent.change(screen.getByLabelText(/threshold minutes for rule 1/i), { target: { value: "600" } });
+    fireEvent.change(screen.getByLabelText(/threshold unit for rule 1/i), { target: { value: "minutes" } });
+    fireEvent.change(screen.getByLabelText(/threshold value for rule 1/i), { target: { value: "600" } });
     fireEvent.change(screen.getByLabelText(/manager role for rule 1/i), { target: { value: "ops_manager" } });
     fireEvent.click(screen.getByRole("button", { name: /create/i }));
     await waitFor(() => expect(aa.createTaskEscalationRule).toHaveBeenCalled());
     expect(vi.mocked(aa.createTaskEscalationRule).mock.calls[0][0]).toMatchObject({ thresholdMinutes: 600, managerRole: "ops_manager" });
+  });
+
+  // GAP-CRM-TASK-ESCALATION-05 — entering a value in days converts to minutes.
+  it("converts the threshold from the chosen unit to minutes, and echoes it", async () => {
+    vi.mocked(aa.getTaskEscalationRules).mockResolvedValue({ data: [], source: "api" });
+    vi.mocked(aa.createTaskEscalationRule).mockResolvedValue(undefined);
+    render(<TaskEscalationEditor />);
+    await waitFor(() => expect(screen.getByText(/no task-escalation rules yet/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /add task-escalation rule/i }));
+    fireEvent.change(screen.getByLabelText(/threshold unit for rule 1/i), { target: { value: "days" } });
+    fireEvent.change(screen.getByLabelText(/threshold value for rule 1/i), { target: { value: "2" } });
+    expect(screen.getByText("= 2 days")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/manager role for rule 1/i), { target: { value: "ops_manager" } });
+    fireEvent.click(screen.getByRole("button", { name: /create/i }));
+    await waitFor(() => expect(aa.createTaskEscalationRule).toHaveBeenCalled());
+    expect(vi.mocked(aa.createTaskEscalationRule).mock.calls[0][0]).toMatchObject({ thresholdMinutes: 2880 });
+  });
+
+  // GAP-CRM-TASK-ESCALATION-05 — two enabled rules with the same threshold AND
+  // manager are rejected with an inline message.
+  it("blocks a duplicate enabled rule (same threshold + manager)", async () => {
+    vi.mocked(aa.getTaskEscalationRules).mockResolvedValue({
+      data: [{ id: "e1", thresholdMinutes: 1440, managerRole: "sales_manager", managerId: "", enabled: true }],
+      source: "api",
+    });
+    render(<TaskEscalationEditor />);
+    await waitFor(() => expect(screen.getByLabelText(/manager role for rule 1/i)).toBeInTheDocument());
+    // Add a second rule identical to the first (1440 min = 1 day, sales_manager).
+    fireEvent.click(screen.getByRole("button", { name: /add task-escalation rule/i }));
+    // New rule defaults to 1440 min; set its role to the same manager.
+    fireEvent.change(screen.getByLabelText(/manager role for rule 2/i), { target: { value: "sales_manager" } });
+    fireEvent.click(screen.getAllByRole("button", { name: /create/i })[0]);
+    expect(await screen.findByText(/already escalates to this manager at the same threshold/i)).toBeInTheDocument();
+    expect(aa.createTaskEscalationRule).not.toHaveBeenCalled();
   });
 
   // GAP-CRM-TASK-ESCALATION-01 — the manager role is now a SELECT fed by the
@@ -86,7 +130,7 @@ describe("TaskEscalationEditor (AC-005)", () => {
   // offers real role keys, so an unknown role can never be submitted.
   it("the manager role picker offers only real roles — free text cannot be entered", async () => {
     vi.mocked(aa.getTaskEscalationRules).mockResolvedValue({ data: [], source: "api" });
-    render(<NextIntlClientProvider locale="en" messages={enMessages}><TaskEscalationEditor /></NextIntlClientProvider>);
+    render(<TaskEscalationEditor />);
     await waitFor(() => expect(screen.getByText(/no task-escalation rules yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add task-escalation rule/i }));
     const roleSelect = (await screen.findByLabelText(/manager role for rule 1/i)) as HTMLSelectElement;
@@ -101,7 +145,7 @@ describe("TaskEscalationEditor (AC-005)", () => {
   it("picks a manager user by id and shows the resolved name + overdue preview", async () => {
     vi.mocked(aa.getTaskEscalationRules).mockResolvedValue({ data: [], source: "api" });
     vi.mocked(aa.createTaskEscalationRule).mockResolvedValue(undefined);
-    render(<NextIntlClientProvider locale="en" messages={enMessages}><TaskEscalationEditor /></NextIntlClientProvider>);
+    render(<TaskEscalationEditor />);
     await waitFor(() => expect(screen.getByText(/no task-escalation rules yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add task-escalation rule/i }));
     await waitFor(() =>
@@ -123,7 +167,7 @@ describe("TaskEscalationEditor (AC-005)", () => {
       data: [{ id: "e9", thresholdMinutes: 60, managerRole: "ghost_role", managerId: "", enabled: true }],
       source: "api",
     });
-    render(<NextIntlClientProvider locale="en" messages={enMessages}><TaskEscalationEditor /></NextIntlClientProvider>);
+    render(<TaskEscalationEditor />);
     await waitFor(() => expect(screen.getByText(/fix this before it can escalate/i)).toBeInTheDocument());
     expect(screen.getByText(/Escalates to/)).toHaveTextContent('Unknown role "ghost_role"');
   });
@@ -131,7 +175,7 @@ describe("TaskEscalationEditor (AC-005)", () => {
   it("deletes a rule via ConfirmDialog", async () => {
     vi.mocked(aa.getTaskEscalationRules).mockResolvedValue({ data: [rule], source: "api" });
     vi.mocked(aa.deleteTaskEscalationRule).mockResolvedValue(undefined);
-    render(<NextIntlClientProvider locale="en" messages={enMessages}><TaskEscalationEditor /></NextIntlClientProvider>);
+    render(<TaskEscalationEditor />);
     await waitFor(() => expect(screen.getByLabelText(/manager role for rule 1/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /delete rule 1/i }));
     const dialog = await screen.findByRole("alertdialog");

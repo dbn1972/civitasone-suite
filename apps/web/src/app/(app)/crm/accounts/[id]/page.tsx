@@ -4,6 +4,8 @@ import { getSessionRoles, hasAnyRole, CRM_VERIFY_ROLES } from "@/lib/auth/roleGu
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
 import { hierarchyState } from "./hierarchyState";
+import { safeExternalUrl } from "@/lib/url";
+import { collectDescendantIds } from "../hierarchy";
 import { AccountParentForm } from "./AccountParentForm";
 import { Customer360Panel } from "../../../../_components/crm/Customer360Panel";
 import { AccountRelationshipsEditor } from "../../../../_components/crm/AccountRelationshipsEditor";
@@ -81,6 +83,11 @@ export default async function Page({ params }: { params: { id: string } }) {
   // server stays the authority (GAP-CRM-ACCOUNTS-DETAIL-02).
   const canVerify = hasAnyRole(getSessionRoles(), CRM_VERIFY_ROLES);
 
+  // GAP-CRM-ACCOUNTS-DETAIL-05: never put a stored website straight into href.
+  // A "javascript:"/"data:" value would execute on click and a bare domain
+  // would become a relative in-app link. Render plain text when unsafe.
+  const safeWebsite = safeExternalUrl(account.website);
+
   return (
     <>
       <PageHeader
@@ -93,7 +100,14 @@ export default async function Page({ params }: { params: { id: string } }) {
             accountId={account.id}
             accountName={account.name}
             currentParentId={account.parentId}
-            options={accounts.filter((a) => a.id !== account.id)}
+            options={(() => {
+              // GAP-CRM-ACCOUNTS-DETAIL-03: exclude the account itself AND its
+              // descendants, so a move that would create a cycle can't even be
+              // selected (the server 422 CYCLE_DETECTED stays as a backstop).
+              const descendants = collectDescendantIds(accounts, account.id);
+              return accounts.filter((a) => a.id !== account.id && !descendants.has(a.id));
+            })()}
+            subtreeSize={collectDescendantIds(accounts, account.id).size}
           />
         }
       />
@@ -109,7 +123,13 @@ export default async function Page({ params }: { params: { id: string } }) {
               {account.website ? (
                 <div className="fld">
                   <div className="l">Website</div>
-                  <div className="v"><a href={account.website} rel="noreferrer noopener" target="_blank">{account.website}</a></div>
+                  <div className="v">
+                    {safeWebsite ? (
+                      <a href={safeWebsite} rel="noreferrer noopener" target="_blank">{account.website}</a>
+                    ) : (
+                      <span>{account.website}</span>
+                    )}
+                  </div>
                 </div>
               ) : null}
               <div className="fld"><div className="l">Reports to</div><div className="v">{parentName ?? "Top level"}</div></div>
@@ -120,7 +140,7 @@ export default async function Page({ params }: { params: { id: string } }) {
           <div className="card">
             <div className="card-h"><h3>Child Accounts</h3></div>
             {childState === "error" ? (
-              <RefreshErrorState error={toHumanError("load", { area: "child accounts" })} />
+              <RefreshErrorState error={toHumanError("load", { area: "child accounts" })} backHref="/crm/accounts" />
             ) : childState === "empty" ? (
               <EmptyState icon="🌳" title="No child accounts" message="Attach another account to this one to build the hierarchy." />
             ) : (
@@ -139,7 +159,7 @@ export default async function Page({ params }: { params: { id: string } }) {
             <div className="card-h"><h3>Reporting Line</h3></div>
             <div className="pad">
               {ancestorState === "error" ? (
-                <RefreshErrorState error={toHumanError("load", { area: "reporting line" })} />
+                <RefreshErrorState error={toHumanError("load", { area: t("reportingLineArea") })} backHref="/crm/accounts" />
               ) : ancestorState === "empty" ? (
                 <p style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>This is a top-level account.</p>
               ) : (
@@ -169,7 +189,7 @@ export default async function Page({ params }: { params: { id: string } }) {
                   ? "No contacts are linked to this account yet."
                   : `${account.contactCount} contact${account.contactCount === 1 ? "" : "s"} linked to this account.`}
               </p>
-              <a className="btn ghost" href={`/crm/contacts?search=${encodeURIComponent(account.name)}`} style={{ minHeight: 44, display: "inline-flex", alignItems: "center" }}>
+              <a className="btn ghost" href={`/crm/contacts?accountId=${encodeURIComponent(account.id)}&accountName=${encodeURIComponent(account.name)}`} style={{ minHeight: 44, display: "inline-flex", alignItems: "center" }}>
                 View contacts
               </a>
             </div>

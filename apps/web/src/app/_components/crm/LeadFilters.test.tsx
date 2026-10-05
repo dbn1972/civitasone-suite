@@ -2,11 +2,20 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 
 const push = vi.fn();
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+// useSearchParams returns the current URL params so apply/clear can preserve the
+// toolbar's own keys (GAP-CRM-CONTACTS-04). Default: empty.
+let currentParams = new URLSearchParams();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push }),
+  useSearchParams: () => currentParams,
+}));
 
 import { LeadFilters } from "./LeadFilters";
 
-beforeEach(() => push.mockReset());
+beforeEach(() => {
+  push.mockReset();
+  currentParams = new URLSearchParams();
+});
 
 describe("LeadFilters (LQ-003)", () => {
   it("pushes selected classification filters onto the URL query", () => {
@@ -38,5 +47,26 @@ describe("LeadFilters (LQ-003)", () => {
     fireEvent.click(screen.getByRole("button", { name: /clear/i }));
     expect(push).toHaveBeenCalledWith("/crm/contacts");
     expect(screen.getByLabelText("Temperature")).toHaveValue("");
+  });
+
+  it("GAP-CRM-CONTACTS-04: apply preserves the toolbar's search/segment keys", () => {
+    currentParams = new URLSearchParams("search=sharma&segment=mine");
+    render(<LeadFilters initial={{}} />);
+    fireEvent.change(screen.getByLabelText("Priority"), { target: { value: "high" } });
+    fireEvent.click(screen.getByRole("button", { name: /apply filters/i }));
+    const url = push.mock.calls[0][0] as string;
+    expect(url).toContain("search=sharma");
+    expect(url).toContain("segment=mine");
+    expect(url).toContain("priority=high");
+  });
+
+  it("GAP-CRM-CONTACTS-04: clear keeps search/segment, drops classification", () => {
+    currentParams = new URLSearchParams("search=sharma&segment=mine&temperature=hot");
+    render(<LeadFilters initial={{ temperature: "hot" }} />);
+    fireEvent.click(screen.getByRole("button", { name: /clear/i }));
+    const url = push.mock.calls[0][0] as string;
+    expect(url).toContain("search=sharma");
+    expect(url).toContain("segment=mine");
+    expect(url).not.toContain("temperature=hot");
   });
 });

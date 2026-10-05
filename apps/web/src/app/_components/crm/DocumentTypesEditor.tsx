@@ -7,6 +7,7 @@
  * badge and never fabricates an empty catalogue. Delete goes through
  * ConfirmDialog.
  */
+import { useTranslations } from "next-intl";
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState, Button } from "../ds";
@@ -15,6 +16,8 @@ import {
   createDocumentType,
   updateDocumentType,
   deleteDocumentType,
+  validateDocumentType,
+  isDocumentTypeValid,
   SUBJECT_TYPES,
   SUBJECT_TYPE_LABELS,
   type DocumentType,
@@ -36,12 +39,14 @@ function blank(): DocumentType {
 }
 
 export function DocumentTypesEditor() {
+  const t = useTranslations("crmDocumentTypesEditor");
   const [rows, setRows] = useState<Row[]>([]);
   const [source, setSource] = useState<DmSource | "loading">("loading");
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
+  const [attempted, setAttempted] = useState<Record<string, boolean>>({});
   const headingId = useId();
 
   async function load(isLive: () => boolean = () => true) {
@@ -75,14 +80,18 @@ export function DocumentTypesEditor() {
     setRows((prev) => [...prev, toRow(blank())]);
   }
   function rowValid(row: Row): boolean {
-    return row.code.trim().length > 0 && row.name.trim().length > 0;
+    return isDocumentTypeValid(row);
   }
 
   async function save(row: Row) {
     setMessage("");
     setError("");
-    if (!rowValid(row)) {
-      setError(`Document type “${row.name || row.code || "(new)"}” needs a code and a name.`);
+    setAttempted((a) => ({ ...a, [row.key]: true }));
+    const errors = validateDocumentType(row);
+    if (Object.keys(errors).length > 0) {
+      setError(
+        t("validationError", { name: row.name || row.code || t("newLabel"), error: errors.code ?? errors.name ?? errors.appliesTo ?? "" }),
+      );
       return;
     }
     const payload: DocumentType = {
@@ -108,7 +117,7 @@ export function DocumentTypesEditor() {
     }
   }
 
-  async function doDelete(row: Row) {
+  async function doDelete(row: Row, reason?: string) {
     if (!row.id) {
       setRows((prev) => prev.filter((r) => r.key !== row.key));
       setConfirmKey(null);
@@ -117,7 +126,7 @@ export function DocumentTypesEditor() {
     setBusyKey(row.key);
     setError("");
     try {
-      await deleteDocumentType(row.id);
+      await deleteDocumentType(row.id, reason);
       setMessage(`Document type “${row.name}” deleted.`);
       setConfirmKey(null);
       await load();
@@ -150,7 +159,10 @@ export function DocumentTypesEditor() {
           <EmptyState icon="🗂️" title="No document types yet" message="Add the first document type below." />
         ) : (
           <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 12 }} aria-label="Document types">
-            {rows.map((row) => (
+            {rows.map((row) => {
+              const errors = attempted[row.key] ? validateDocumentType(row) : {};
+              const appliesErrId = `${headingId}-applies-err-${row.key}`;
+              return (
               <li key={row.key} className="card" style={{ padding: 12, boxShadow: "none", border: "1px solid var(--line)" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 10 }}>
                   <label style={{ display: "grid", gap: 4 }}>
@@ -162,7 +174,11 @@ export function DocumentTypesEditor() {
                     <input value={row.name} onChange={(e) => update(row.key, { name: e.target.value })} style={inputStyle} aria-label="Document type name" />
                   </label>
                 </div>
-                <fieldset style={{ border: "1px solid var(--line)", borderRadius: 8, margin: "10px 0 0", padding: "6px 10px 10px" }}>
+                <fieldset
+                  style={{ border: "1px solid var(--line)", borderRadius: 8, margin: "10px 0 0", padding: "6px 10px 10px" }}
+                  aria-invalid={errors.appliesTo ? true : undefined}
+                  aria-describedby={errors.appliesTo ? appliesErrId : undefined}
+                >
                   <legend style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600, padding: "0 4px" }}>Applies to</legend>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
                     {SUBJECT_TYPES.map((st) => (
@@ -172,6 +188,11 @@ export function DocumentTypesEditor() {
                       </label>
                     ))}
                   </div>
+                  {errors.appliesTo ? (
+                    <p id={appliesErrId} role="alert" style={{ fontSize: 12, color: "#b42318", margin: "6px 0 0" }}>{errors.appliesTo}</p>
+                  ) : (
+                    <p style={{ fontSize: 11, color: "var(--muted)", margin: "6px 0 0" }}>{t("selectAtLeastOne")}</p>
+                  )}
                 </fieldset>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginTop: 10 }}>
                   <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13 }}>
@@ -191,6 +212,11 @@ export function DocumentTypesEditor() {
                     Enabled
                   </label>
                 </div>
+                {row.mandatory ? (
+                  <p style={{ fontSize: 11, color: "var(--muted)", margin: "6px 0 0" }}>
+                    {t("mandatoryHelp")}
+                  </p>
+                ) : null}
                 <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                   <Button type="button" style={{ minHeight: 40 }} disabled={busyKey === row.key || !rowValid(row)} onClick={() => save(row)}>
                     {busyKey === row.key ? "Saving…" : "Save"}
@@ -200,7 +226,8 @@ export function DocumentTypesEditor() {
                   </Button>
                 </div>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
 
@@ -216,11 +243,17 @@ export function DocumentTypesEditor() {
       <ConfirmDialog
         open={confirmKey !== null}
         title="Delete this document type?"
-        description={confirmRow ? `“${confirmRow.name || confirmRow.code}” will no longer be selectable for new uploads.` : ""}
+        description={
+          confirmRow
+            ? t("deleteDescription", { name: confirmRow.name || confirmRow.code })
+            : ""
+        }
         confirmLabel="Delete"
         danger
+        requireReason
+        reasonLabel={t("deleteReasonLabel")}
         busy={busyKey === confirmKey}
-        onConfirm={() => confirmRow && doDelete(confirmRow)}
+        onConfirm={(reason) => confirmRow && doDelete(confirmRow, reason)}
         onCancel={() => setConfirmKey(null)}
       />
     </div>

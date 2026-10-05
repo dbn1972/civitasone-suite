@@ -70,7 +70,10 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, dealsListSchema, await queries.listDeals(ctx.tenantId, q.limit, q.offset));
+    // GAP-CRM-PIPELINE-05: optional pipelineId scopes the board to one pipeline;
+    // the response's pagination.total lets the UI show "N of M" accurately.
+    const { pipelineId } = pipelineScopeQuery.parse(req.query ?? {});
+    sendValidated(reply, dealsListSchema, await queries.listDeals(ctx.tenantId, q.limit, q.offset, pipelineId));
   });
 
   // OP-005: stage-ageing dashboard — opportunities exceeding their configured stage limit.

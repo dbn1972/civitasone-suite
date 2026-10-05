@@ -10,6 +10,11 @@ import type { FetchJsonOptions, LoaderResult } from "@/app/_data/apiClient";
 // naive mock that returns a canned {data, source} pair would bypass
 // mapResponse entirely and prove nothing.
 const rawPayload = vi.fn<() => unknown>();
+// GAP-CRM-DEALS-DETAIL-02: the page now branches on the LoaderResult.status to
+// tell a genuine not-found (404 / 200-null) apart from a transient outage
+// (5xx / network). This lets a test drive that status; raw===undefined keeps
+// the previous behaviour (source:"error" with whatever status is set here).
+let nextStatus: number | undefined;
 vi.mock("@/app/_data/apiClient", async (orig) => {
   const actual = await orig<typeof import("@/app/_data/apiClient")>();
   return {
@@ -20,11 +25,18 @@ vi.mock("@/app/_data/apiClient", async (orig) => {
       options: FetchJsonOptions<TApi, TOutput>,
     ): Promise<LoaderResult<TOutput>> => {
       const raw = rawPayload();
-      if (raw === undefined) return { data: empty, source: "error" };
+      if (raw === undefined) return { data: empty, source: "error", status: nextStatus };
       const mapped = options.mapResponse(raw as TApi);
-      return mapped === null ? { data: empty, source: "error" } : { data: mapped, source: "api" };
+      return mapped === null
+        ? { data: empty, source: "error", status: nextStatus }
+        : { data: mapped, source: "api" };
     },
   };
+});
+let sessionRoles: string[] = ["crm_admin"];
+vi.mock("@/lib/auth/roleGuard", async (orig) => {
+  const actual = await orig<typeof import("@/lib/auth/roleGuard")>();
+  return { ...actual, getSessionRoles: () => sessionRoles };
 });
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -52,6 +64,8 @@ const RAW_DEAL = {
 describe("Deal detail page (getDealById regression)", () => {
   beforeEach(() => {
     rawPayload.mockReset();
+    nextStatus = undefined;
+    sessionRoles = ["crm_admin"];
   });
 
   // Regression test for the CRITICAL bug: getDealById used
@@ -78,13 +92,72 @@ describe("Deal detail page (getDealById regression)", () => {
     expect(screen.getByText("proposal")).toBeInTheDocument();
   });
 
+  // The server close endpoint is admin-only; the UI must not offer Won/Lost to crm_user.
+  it("offers Mark Won / Mark Lost to CRM admins", async () => {
+    rawPayload.mockReturnValue(RAW_DEAL);
+    render(await DealDetailPage({ params: { id: RAW_DEAL.id } }));
+    expect(screen.getByRole("button", { name: /mark won/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /mark lost/i })).toBeInTheDocument();
+  });
+
+  it("hides Mark Won / Mark Lost from a plain crm_user", async () => {
+    sessionRoles = ["crm_user"];
+    rawPayload.mockReturnValue(RAW_DEAL);
+    render(await DealDetailPage({ params: { id: RAW_DEAL.id } }));
+    expect(screen.queryByRole("button", { name: /mark won/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /mark lost/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /log activity/i })).toBeInTheDocument();
+  });
+
   it("still shows a real not-found for a genuinely missing deal", async () => {
     rawPayload.mockReturnValue(null);
+    nextStatus = 404; // backend's own 404 for a missing deal
 
     const ui = await DealDetailPage({ params: { id: "00000000-0000-0000-0000-000000000000" } });
     render(ui);
 
     expect(screen.getByText("Deal not found")).toBeInTheDocument();
+  });
+
+  // GAP-CRM-DEALS-DETAIL-02: a 200 that carried no such deal (mapped to null)
+  // also reads as a genuine not-found, not an outage.
+  it("shows not-found when a 200 response carried no deal", async () => {
+    rawPayload.mockReturnValue(null);
+    nextStatus = 200;
+
+    const ui = await DealDetailPage({ params: { id: "00000000-0000-0000-0000-000000000000" } });
+    render(ui);
+
+    expect(screen.getByText("Deal not found")).toBeInTheDocument();
+  });
+
+  // GAP-CRM-DEALS-DETAIL-02: a 5xx must NOT read as a deletion — it is a
+  // transient outage, so the page shows the retriable error state (Try again),
+  // never "This deal does not exist or has been removed".
+  it("shows a retriable error (not 'not found') on a 500 outage", async () => {
+    rawPayload.mockReturnValue(undefined);
+    nextStatus = 500;
+
+    const ui = await DealDetailPage({ params: { id: RAW_DEAL.id } });
+    render(ui);
+
+    expect(screen.queryByText("Deal not found")).not.toBeInTheDocument();
+    expect(screen.queryByText("This deal does not exist or has been removed.")).not.toBeInTheDocument();
+    // RefreshErrorState offers a "Try again" retry affordance.
+    expect(screen.getByRole("button", { name: /Try again/i })).toBeInTheDocument();
+  });
+
+  // A thrown network failure (no status at all) is likewise an outage, not a
+  // deletion.
+  it("shows a retriable error on a network failure with no status", async () => {
+    rawPayload.mockReturnValue(undefined);
+    nextStatus = undefined;
+
+    const ui = await DealDetailPage({ params: { id: RAW_DEAL.id } });
+    render(ui);
+
+    expect(screen.queryByText("Deal not found")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Try again/i })).toBeInTheDocument();
   });
 
   // GAP-CRM-DEALS-DETAIL-01: a LOST deal must show the open path complete, 'Closed

@@ -2,6 +2,7 @@ import { PageHeader, StatCard, StatGrid, maskEmail, maskPhone } from "../../../_
 import { MergeButton } from "../../../_components/crm/MergeButton";
 import { LeadFilters } from "../../../_components/crm/LeadFilters";
 import type { MergeOption } from "../../../_components/crm/MergeDialog";
+import { getTranslations } from "next-intl/server";
 import { getCrmContacts } from "../../../_data/loaders";
 import { getSessionRoles, hasAnyRole, CRM_PII_READ_ROLES, CRM_CONTACTS_EXPORT_ROLES } from "@/lib/auth/roleGuard";
 import { ContactToolbar } from "./ContactToolbar";
@@ -19,9 +20,18 @@ type SP = {
   region?: string;
   status?: string;
   source?: string;
+  /**
+   * GAP-CRM-ACCOUNTS-DETAIL-06: exact owning-account filter, set by the account
+   * detail page's "View contacts" link. `accountName` is an optional display
+   * label for the filter chip (the list API returns the account as a name
+   * string, so the id alone can't be labelled).
+   */
+  accountId?: string;
+  accountName?: string;
 };
 
 export default async function Page({ searchParams }: { searchParams?: SP }) {
+  const t = await getTranslations("crmContactsPage");
   const { data: contacts, source } = await getCrmContacts({
     search: searchParams?.search,
     segment: searchParams?.segment,
@@ -32,6 +42,7 @@ export default async function Page({ searchParams }: { searchParams?: SP }) {
     region: searchParams?.region,
     status: searchParams?.status,
     source: searchParams?.source,
+    accountId: searchParams?.accountId,
   });
 
   // Never fabricate a 0 count when the list load failed — show "—" instead.
@@ -48,6 +59,13 @@ export default async function Page({ searchParams }: { searchParams?: SP }) {
   for (const [key, value] of Object.entries(searchParams ?? {})) {
     if (typeof value === "string" && value.trim()) exportQuery[key] = value;
   }
+  // GAP-CRM-CONTACTS-05: any active search/filter means an empty result is a
+  // "no matches" state, not an empty master. GAP-CRM-CONTACTS-04: seed the
+  // toolbar controls from the URL so they aren't blank after a search/reload.
+  const filtered = Object.keys(exportQuery).length > 0;
+  const segmentParam = searchParams?.segment;
+  const initialSegment: "all" | "mine" | "recent" =
+    segmentParam === "mine" || segmentParam === "recent" ? segmentParam : "all";
 
   // DPDP: mask on the SERVER, before the rows become client props / the offline
   // seed cache. Only CRM_PII_READ_ROLES ever receive clear phone/email.
@@ -85,7 +103,13 @@ export default async function Page({ searchParams }: { searchParams?: SP }) {
         <span aria-hidden="true" className="text-base leading-snug">🛡</span>
         <span>Personal data in this registry is protected under the Digital Personal Data Protection Act, 2023. Access is role-scoped and logged.</span>
       </div>
-      <ContactToolbar canExport={canExport} exportQuery={exportQuery} />
+      <ContactToolbar canExport={canExport} exportQuery={exportQuery} initialSearch={searchParams?.search ?? ""} initialSegment={initialSegment} />
+      {searchParams?.accountId ? (
+        <div role="status" style={{ display: "inline-flex", alignItems: "center", gap: 8, margin: "8px 0", padding: "6px 12px", borderRadius: 999, background: "#eef2ff", fontSize: 13 }}>
+          <span>{searchParams.accountName ? t("filteredToAccountNamed", { name: searchParams.accountName }) : t("filteredToAccount")}</span>
+          <a href="/crm/contacts" aria-label={t("clearAccountFilterAria")} style={{ fontWeight: 600 }}>{t("clearAccountFilter")}</a>
+        </div>
+      ) : null}
       <LeadFilters
         initial={{
           temperature: searchParams?.temperature,
@@ -108,7 +132,7 @@ export default async function Page({ searchParams }: { searchParams?: SP }) {
         <StatCard icon="◉" iconBg="#fffbeb" label="With Priority Tag" value={stat(contacts.filter(c => Boolean(c.priority)).length)} />
         <StatCard icon="◈" iconBg="#eef2ff" label="Reachable by Email" value={stat(contacts.filter(c => c.email).length)} />
       </StatGrid>
-      <ContactsTable contacts={safeContacts} source={source} />
+      <ContactsTable contacts={safeContacts} source={source} filtered={filtered} />
     </>
   );
 }

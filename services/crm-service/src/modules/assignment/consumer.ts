@@ -330,7 +330,7 @@ function registerTargetConsumers(queue: Queue): void {
   });
   queue.subscribe(COMMANDS.deleteAssignmentQueue, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
-    await simpleInsert(msg, () => sql`DELETE FROM crm.assignment_queues WHERE id = ${p.id} AND tenant_id = ${p.tenantId}`, "assignment_queue", p.id, "assignment_queue_delete");
+    await simpleInsert(msg, () => guardedDelete(sql.raw("crm.assignment_queues"), p), "assignment_queue", p.id, "assignment_queue_delete", true);
   });
 
   queue.subscribe(COMMANDS.createTerritory, async (msg) => {
@@ -353,7 +353,7 @@ function registerTargetConsumers(queue: Queue): void {
   });
   queue.subscribe(COMMANDS.deleteTerritory, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
-    await simpleInsert(msg, () => sql`DELETE FROM crm.territories WHERE id = ${p.id} AND tenant_id = ${p.tenantId}`, "territory", p.id, "territory_delete");
+    await simpleInsert(msg, () => guardedDelete(sql.raw("crm.territories"), p), "territory", p.id, "territory_delete", true);
   });
 
   queue.subscribe(COMMANDS.createPartner, async (msg) => {
@@ -375,7 +375,7 @@ function registerTargetConsumers(queue: Queue): void {
   });
   queue.subscribe(COMMANDS.deletePartner, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
-    await simpleInsert(msg, () => sql`DELETE FROM crm.partners WHERE id = ${p.id} AND tenant_id = ${p.tenantId}`, "partner", p.id, "partner_delete");
+    await simpleInsert(msg, () => guardedDelete(sql.raw("crm.partners"), p), "partner", p.id, "partner_delete", true);
   });
 
   queue.subscribe(COMMANDS.createBranch, async (msg) => {
@@ -397,22 +397,39 @@ function registerTargetConsumers(queue: Queue): void {
   });
   queue.subscribe(COMMANDS.deleteBranch, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
-    await simpleInsert(msg, () => sql`DELETE FROM crm.branches WHERE id = ${p.id} AND tenant_id = ${p.tenantId}`, "branch", p.id, "branch_delete");
+    await simpleInsert(msg, () => guardedDelete(sql.raw("crm.branches"), p), "branch", p.id, "branch_delete", true);
   });
 }
 
 /** Shared write+audit path for the AS-002 config tables. */
+/**
+ * GAP-CRM-ASSIGNMENT-DIRECTORY-04: the route pre-checks "still referenced by a rule", but a
+ * rule created between that check and this consumer would be orphaned. Re-check atomically
+ * here: the DELETE only matches when no assignment rule references the target id.
+ */
+function guardedDelete(table: ReturnType<typeof sql.raw>, p: { id: string; tenantId: string }): ReturnType<typeof sql> {
+  return sql`DELETE FROM ${table} t WHERE t.id = ${p.id} AND t.tenant_id = ${p.tenantId}
+    AND NOT EXISTS (
+      SELECT 1 FROM crm.assignment_rules r
+      WHERE r.tenant_id = ${p.tenantId} AND r.criteria::text LIKE ${"%" + p.id + "%"}
+    )
+    RETURNING t.id`;
+}
+
 async function simpleInsert(
   msg: { messageId: string; tenantId: string; actorId: string; correlationId: string },
   stmt: () => ReturnType<typeof sql>,
   resourceType: string,
   resourceId: string,
   action: string,
+  /** The statement ends in RETURNING id; when it matched no row, write no audit event. */
+  requireRow = false,
 ): Promise<void> {
   try {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await tx.execute(stmt());
+      const res = (await tx.execute(stmt())) as unknown as unknown[];
+      if (requireRow && res.length === 0) return;
       await enqueue(tx, {
         topic: AUDIT, eventType: AUDIT, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { service: "crm", action, resourceType, resourceId, outcome: "success" },

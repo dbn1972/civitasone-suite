@@ -110,18 +110,19 @@ describe("KanbanBoard", () => {
   it("shows empty state when no deals exist", () => {
     render(<KanbanBoard pipeline={PIPELINE} deals={[]} source="api" />);
 
-    expect(screen.getByText("No deals in pipeline")).toBeInTheDocument();
-    expect(screen.getByText("Create Deal")).toBeInTheDocument();
+    // GAP-CRM-PIPELINE-04: empty-state copy uses "Engagement" vocabulary.
+    expect(screen.getByText("No engagements in pipeline")).toBeInTheDocument();
+    expect(screen.getByText("New Engagement")).toBeInTheDocument();
   });
 
   // GAP-CRM-PIPELINE-01: on a failed load with nothing cached, the board must NOT read
-  // as "No deals in pipeline / Create Deal" (which fabricates empty as fact) — it shows
-  // an error state with Retry instead.
-  it("shows an error state, not the empty 'No deals' state, when source='error' and no deals", () => {
+  // as the empty state (which fabricates empty as fact) — it shows an error state with
+  // Retry instead.
+  it("shows an error state, not the empty state, when source='error' and no deals", () => {
     render(<KanbanBoard pipeline={PIPELINE} deals={[]} source="error" />);
 
-    expect(screen.queryByText("No deals in pipeline")).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Create Deal" })).not.toBeInTheDocument();
+    expect(screen.queryByText("No engagements in pipeline")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "New Engagement" })).not.toBeInTheDocument();
     expect(screen.getByText(/couldn't be loaded/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
   });
@@ -329,6 +330,95 @@ describe("KanbanBoard", () => {
     // Lead stage: 1 deal
     const leadRegion = screen.getByRole("region", { name: /Lead stage/i });
     expect(leadRegion).toBeInTheDocument();
-    expect(leadRegion.textContent).toContain("1 deal");
+    expect(leadRegion.textContent).toMatch(/1 (deal|engagement)/);
+  });
+
+  // GAP-CRM-OPPORTUNITIES-02: the pipeline board now offers a pipeline picker
+  // (parity with the opportunities board) when more than one pipeline exists.
+  // Selecting another pipeline swaps the visible stage columns.
+  it("offers a pipeline picker and switches stage columns on change", () => {
+    const second: PipelineView = {
+      id: "pipe-2",
+      name: "Govt Pipeline",
+      stages: [
+        { id: "g-intake", name: "Intake", probability: 20, ordinal: 0 },
+        { id: "g-tender", name: "Tender", probability: 50, ordinal: 1 },
+      ],
+      status: "active",
+    };
+    render(<KanbanBoard pipeline={PIPELINE} pipelines={[PIPELINE, second]} deals={DEALS} source="api" />);
+
+    const picker = screen.getByLabelText("Pipeline") as HTMLSelectElement;
+    expect(picker).toBeInTheDocument();
+    // Default pipeline's stages are shown.
+    expect(screen.getByText("Proposal")).toBeInTheDocument();
+    // Switch to the second pipeline — its stages replace the columns.
+    fireEvent.change(picker, { target: { value: "pipe-2" } });
+    expect(screen.getByText("Intake")).toBeInTheDocument();
+    expect(screen.getByText("Tender")).toBeInTheDocument();
+    expect(screen.queryByText("Proposal")).not.toBeInTheDocument();
+  });
+
+  it("hides the pipeline picker when only one pipeline exists", () => {
+    render(<KanbanBoard pipeline={PIPELINE} pipelines={[PIPELINE]} deals={DEALS} source="api" />);
+    expect(screen.queryByLabelText("Pipeline")).not.toBeInTheDocument();
+  });
+
+  // GAP-CRM-OPPORTUNITIES-02: both boards go through one client function, so a
+  // Kanban move sends the same route, verb and payload keys as the list view's
+  // changeOpportunityStage for the same move.
+  describe("one stage-move contract with the opportunity list (GAP-CRM-OPPORTUNITIES-02)", () => {
+    function okResponse() {
+      return new Response(JSON.stringify({ accepted: true }), { status: 202 });
+    }
+
+    it("sends the same PATCH as changeOpportunityStage for the same move", async () => {
+      const { changeOpportunityStage } = await import("@/lib/crm/opportunity");
+      const fetchSpy = vi.fn().mockImplementation(async () => okResponse());
+      global.fetch = fetchSpy;
+
+      // List-view path (OpportunityViews passes the stage name + stage id).
+      await changeOpportunityStage("deal-1", "Proposal", 1, "stage-proposal");
+      // Kanban path — deal-1 already has its own probability (10), so none is sent.
+      render(<KanbanBoard pipeline={PIPELINE} deals={DEALS} source="api" />);
+      await act(async () => {
+        fireEvent.keyDown(screen.getByRole("button", { name: /Enterprise License/i }), { key: "ArrowRight" });
+      });
+      await act(async () => {
+        fireEvent.click(await screen.findByRole("button", { name: /^move$/i }));
+      });
+      await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
+
+      const [listUrl, listInit] = fetchSpy.mock.calls[0];
+      const [boardUrl, boardInit] = fetchSpy.mock.calls[1];
+      expect(boardUrl).toBe(listUrl);
+      expect(boardUrl).toBe("/api/proxy/v1/crm/deals/deal-1/stage");
+      expect((boardInit as RequestInit).method).toBe((listInit as RequestInit).method);
+      expect(JSON.parse((boardInit as RequestInit).body as string)).toEqual(
+        JSON.parse((listInit as RequestInit).body as string),
+      );
+    });
+
+    it("names the missing mandatory fields when the stage gate rejects a drag move (422)", async () => {
+      global.fetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ code: "MANDATORY_STAGE_FIELDS_MISSING", missingFields: ["closeDate", "valueMinor"] }),
+          { status: 422 },
+        ),
+      );
+      render(<KanbanBoard pipeline={PIPELINE} deals={DEALS} source="api" />);
+      await act(async () => {
+        fireEvent.keyDown(screen.getByRole("button", { name: /Enterprise License/i }), { key: "ArrowRight" });
+      });
+      await act(async () => {
+        fireEvent.click(await screen.findByRole("button", { name: /^move$/i }));
+      });
+      await waitFor(() => {
+        const alert = screen.getByRole("alert");
+        expect(alert.textContent).toMatch(/needs more information/i);
+        expect(alert.textContent).toContain("closeDate");
+        expect(alert.textContent).toContain("valueMinor");
+      });
+    });
   });
 });

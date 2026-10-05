@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider as __Intl } from "next-intl";
+import __enMessages from "@/messages/en.json";
+function render(ui: React.ReactElement) {
+  return rtlRender(<__Intl locale="en" messages={__enMessages}>{ui}</__Intl>);
+}
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 
@@ -151,14 +156,39 @@ describe("RtiActions", () => {
     render(<NextIntlClientProvider locale="en" messages={enMessages}><RtiActions id={RTI_ID} status="RECEIVED" /></NextIntlClientProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Forward" }));
     await waitFor(() => expect(screen.getByText("Forward this RTI request?")).toBeInTheDocument());
-    fireEvent.change(screen.getByLabelText("Department / Office"), { target: { value: "Dept of Revenue" } });
+    // GAP-CRM-RTI-DETAIL-04: the target is chosen from the shared authority list.
+    fireEvent.change(screen.getByLabelText("Public authority to transfer to"), {
+      target: { value: "Department of Revenue" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
 
     await waitFor(() => expect(refreshMock).toHaveBeenCalled());
     const [url, init] = fetchSpy.mock.calls[0];
     expect(url).toBe(`/api/proxy/v1/crm/rti/${RTI_ID}/forward`);
     expect((init as RequestInit).method).toBe("PATCH");
-    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ departmentRef: "Dept of Revenue" });
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ departmentRef: "Department of Revenue" });
+  });
+
+  // GAP-CRM-RTI-DETAIL-04: forwarding without selecting an authority is blocked.
+  it("blocks Forward until a public authority is selected", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    render(<RtiActions id={RTI_ID} status="RECEIVED" />);
+    fireEvent.click(screen.getByRole("button", { name: "Forward" }));
+    await waitFor(() => expect(screen.getByText("Forward this RTI request?")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    expect(await screen.findByText(/Select the public authority/i)).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(refreshMock).not.toHaveBeenCalled();
+  });
+
+  // GAP-CRM-RTI-DETAIL-04: a warning appears when the s.6(3) 5-day transfer
+  // window has already passed.
+  it("warns when the s.6(3) transfer window has passed", async () => {
+    const longAgo = new Date(Date.now() - 20 * 86_400_000).toISOString();
+    render(<RtiActions id={RTI_ID} status="RECEIVED" receivedAt={longAgo} />);
+    fireEvent.click(screen.getByRole("button", { name: "Forward" }));
+    await waitFor(() => expect(screen.getByText("Forward this RTI request?")).toBeInTheDocument());
+    expect(screen.getByText(/s\.6\(3\) requires a transfer within 5 days/i)).toBeInTheDocument();
   });
 
   it("records a response within the statutory deadline via the proxied endpoint", async () => {
@@ -227,7 +257,9 @@ describe("RtiActions", () => {
     render(<NextIntlClientProvider locale="en" messages={enMessages}><RtiActions id={RTI_ID} status="RECEIVED" /></NextIntlClientProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Forward" }));
     await waitFor(() => expect(screen.getByText("Forward this RTI request?")).toBeInTheDocument());
-    fireEvent.change(screen.getByLabelText("Department / Office"), { target: { value: "Dept of Revenue" } });
+    fireEvent.change(screen.getByLabelText("Public authority to transfer to"), {
+      target: { value: "Department of Revenue" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
 
     expect(await screen.findByText(/couldn't save/i)).toBeInTheDocument();

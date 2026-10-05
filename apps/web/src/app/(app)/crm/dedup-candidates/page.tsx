@@ -12,6 +12,7 @@
  * state that could be mistaken for "data is clean".
  */
 import { useCallback, useEffect, useId, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button, PageHeader, EmptyState, ConfirmDialog } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import {
@@ -85,22 +86,31 @@ function fmt(key: keyof DedupContactSnapshot, v: string | null | undefined): str
 
 interface PairCardProps {
   pair: DedupPair;
+  /** True when the reviewer swapped sides, so `right` is the record kept (primary). */
+  swapped: boolean;
   busyPairId: string | null;
   onMerge: (pair: DedupPair) => void;
   onDismiss: (pair: DedupPair) => void;
+  onSwap: (pair: DedupPair) => void;
 }
 
-function PairCard({ pair, busyPairId, onMerge, onDismiss }: PairCardProps) {
+function PairCard({ pair, swapped, busyPairId, onMerge, onDismiss, onSwap }: PairCardProps) {
+  const t = useTranslations("crmDedupCandidates");
   const headingId = useId();
   const busy = busyPairId === pair.pairId;
+
+  // GAP-CRM-DEDUP-CANDIDATES-02: the reviewer can swap which record is kept.
+  // `keep` is the surviving (primary) record; `from` is merged into it.
+  const keep = swapped ? pair.right : pair.left;
+  const from = swapped ? pair.left : pair.right;
 
   return (
     <article className="dedup-card" aria-labelledby={headingId}>
       <div className="dedup-card-header">
         <h2 className="dedup-card-title" id={headingId}>
-          <span className="dedup-name">{pair.left.name ?? "Unnamed"}</span>
+          <span className="dedup-name">{keep.name ?? t("unnamed")}</span>
           <span className="dedup-vs" aria-hidden="true">vs</span>
-          <span className="dedup-name">{pair.right.name ?? "Unnamed"}</span>
+          <span className="dedup-name">{from.name ?? t("unnamed")}</span>
         </h2>
         <ConfidenceBadge score={pair.confidence} />
       </div>
@@ -108,14 +118,14 @@ function PairCard({ pair, busyPairId, onMerge, onDismiss }: PairCardProps) {
       <div className="dedup-grid" role="table" aria-label="Field comparison">
         <div className="dedup-grid-row dedup-thead" role="row">
           <div role="columnheader" />
-          <div role="columnheader">Keep (left)</div>
-          <div role="columnheader">Merge from (right)</div>
+          <div role="columnheader">{t("colKeep")}</div>
+          <div role="columnheader">{t("colMergeFrom")}</div>
         </div>
 
         {FIELDS.map(({ key, label }) => {
           const diff = differs(
-            pair.left[key] as string | null,
-            pair.right[key] as string | null,
+            keep[key] as string | null,
+            from[key] as string | null,
           );
           return (
             <div key={key} className="dedup-grid-row" role="row">
@@ -125,13 +135,13 @@ function PairCard({ pair, busyPairId, onMerge, onDismiss }: PairCardProps) {
                 className={diff ? "dedup-field-val dedup-diff" : "dedup-field-val"}
                 title={diff ? "Values differ" : undefined}
               >
-                {fmt(key, pair.left[key] as string | null)}
+                {fmt(key, keep[key] as string | null)}
               </div>
               <div
                 role="cell"
                 className={diff ? "dedup-field-val dedup-diff" : "dedup-field-val"}
               >
-                {fmt(key, pair.right[key] as string | null)}
+                {fmt(key, from[key] as string | null)}
               </div>
             </div>
           );
@@ -145,7 +155,15 @@ function PairCard({ pair, busyPairId, onMerge, onDismiss }: PairCardProps) {
           disabled={busy}
           loading={busy}
         >
-          {busy ? "Working…" : "Merge → keep left"}
+          {busy ? t("working") : t("mergeKeep", { name: keep.name ?? t("primaryFallback") })}
+        </Button>
+        <Button
+          variant="ghost"
+          onClick={() => onSwap(pair)}
+          disabled={busy}
+          aria-label={t("swapAria")}
+        >
+          {t("swapSides")}
         </Button>
         <Button
           variant="ghost"
@@ -162,15 +180,29 @@ function PairCard({ pair, busyPairId, onMerge, onDismiss }: PairCardProps) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DedupCandidatesPage() {
+  const t = useTranslations("crmDedupCandidates");
   const [pairs, setPairs]      = useState<DedupPair[]>([]);
   const [source, setSource]    = useState<DedupSource | "loading">("loading");
-  const [busyPairId, setBusy]  = useState<string | null>(null);
   const [actionErr, setActErr] = useState<string | null>(null);
+
+  // GAP-CRM-DEDUP-CANDIDATES-02: which pairs the reviewer swapped (right kept).
+  const [swapped, setSwapped] = useState<Record<string, boolean>>({});
+
+  // GAP-CRM-DEDUP-CANDIDATES-04: client-side confidence filter (no backend
+  // paging yet; the list is sorted highest-confidence first so the strongest
+  // matches are reviewed first and a long queue can be narrowed).
+  const [minConfidence, setMinConfidence] = useState(0);
 
   // Merge confirm state
   const [mergeTarget, setMergeTarget] = useState<DedupPair | null>(null);
   const [mergeBusy, setMergeBusy]     = useState(false);
   const [mergeError, setMergeError]   = useState<string | null>(null);
+
+  // GAP-CRM-DEDUP-CANDIDATES-03: dismiss now goes through a confirmation, so a
+  // mis-click can't permanently hide a real duplicate with no undo.
+  const [dismissTarget, setDismissTarget] = useState<DedupPair | null>(null);
+  const [dismissBusy, setDismissBusy]     = useState(false);
+  const [dismissError, setDismissError]   = useState<string | null>(null);
 
   const load = useCallback(async (isLive: () => boolean = () => true) => {
     setSource("loading");
@@ -186,16 +218,32 @@ export default function DedupCandidatesPage() {
     return () => { live = false; };
   }, [load]);
 
-  async function handleDismiss(pair: DedupPair) {
-    setBusy(pair.pairId);
+  function toggleSwap(pair: DedupPair) {
+    setSwapped((prev) => ({ ...prev, [pair.pairId]: !prev[pair.pairId] }));
+  }
+
+  function openDismiss(pair: DedupPair) {
+    setDismissTarget(pair);
+    setDismissError(null);
+  }
+
+  function closeDismiss() {
+    if (!dismissBusy) { setDismissTarget(null); setDismissError(null); }
+  }
+
+  async function confirmDismiss(reason?: string) {
+    if (!dismissTarget) return;
+    setDismissBusy(true);
+    setDismissError(null);
     setActErr(null);
     try {
-      await dismissDedupPair(pair.pairId);
-      setPairs((prev) => prev.filter((p) => p.pairId !== pair.pairId));
+      await dismissDedupPair(dismissTarget.pairId, reason);
+      setPairs((prev) => prev.filter((p) => p.pairId !== dismissTarget.pairId));
+      setDismissTarget(null);
     } catch (err) {
-      setActErr(err instanceof Error ? err.message : "Dismiss failed");
+      setDismissError(err instanceof Error ? err.message : t("dismissFailed"));
     } finally {
-      setBusy(null);
+      setDismissBusy(false);
     }
   }
 
@@ -208,12 +256,15 @@ export default function DedupCandidatesPage() {
     if (!mergeBusy) { setMergeTarget(null); setMergeError(null); }
   }
 
-  async function confirmMerge() {
+  async function confirmMerge(reason?: string) {
     if (!mergeTarget) return;
+    const isSwapped = swapped[mergeTarget.pairId] ?? false;
+    const primary = isSwapped ? mergeTarget.right : mergeTarget.left;
+    const duplicate = isSwapped ? mergeTarget.left : mergeTarget.right;
     setMergeBusy(true);
     setMergeError(null);
     try {
-      await mergeDedupPair(mergeTarget.left.id, mergeTarget.right.id);
+      await mergeDedupPair(primary.id, duplicate.id, reason);
       setPairs((prev) => prev.filter((p) => p.pairId !== mergeTarget.pairId));
       setMergeTarget(null);
     } catch (err) {
@@ -224,6 +275,17 @@ export default function DedupCandidatesPage() {
   }
 
   const loading = source === "loading";
+
+  // Highest-confidence first (GAP-CRM-DEDUP-CANDIDATES-04), then apply the filter.
+  const sortedPairs = [...pairs].sort((a, b) => b.confidence - a.confidence);
+  const visiblePairs = sortedPairs.filter((p) => p.confidence >= minConfidence);
+
+  const mergeKeepName = mergeTarget
+    ? (swapped[mergeTarget.pairId] ? mergeTarget.right : mergeTarget.left).name ?? t("primaryContact")
+    : t("primaryContact");
+  const mergeFromName = mergeTarget
+    ? (swapped[mergeTarget.pairId] ? mergeTarget.left : mergeTarget.right).name ?? t("otherContact")
+    : t("otherContact");
 
   return (
     <>
@@ -254,6 +316,26 @@ export default function DedupCandidatesPage() {
         </div>
       )}
 
+      {!loading && source !== "error" && pairs.length > 0 && (
+        <div className="dedup-toolbar">
+          <span className="dedup-count">
+            {t("pairCount", { visible: visiblePairs.length.toLocaleString("en-IN"), total: pairs.length.toLocaleString("en-IN"), n: pairs.length })}
+          </span>
+          <label className="dedup-filter">
+            <span>{t("minConfidence")}</span>
+            <select
+              value={String(minConfidence)}
+              onChange={(e) => setMinConfidence(Number(e.target.value))}
+            >
+              <option value="0">{t("confidenceAll")}</option>
+              <option value="60">60%+</option>
+              <option value="80">80%+</option>
+              <option value="90">90%+</option>
+            </select>
+          </label>
+        </div>
+      )}
+
       {loading && (
         <div aria-label="Loading duplicate candidates" className="dedup-skeletons">
           {[0, 1, 2].map((i) => (
@@ -263,34 +345,36 @@ export default function DedupCandidatesPage() {
       )}
 
       {!loading && (
-        // UX-013: restructured from a flat `&&` chain (pairs.length === 0 &&
-        // source !== "error") into explicit nested ternaries. Behaviour is
-        // unchanged -- this only makes the error-gate structurally visible
-        // to empty-vs-error-guard.mjs, whose connectivity check walks
-        // ternary/if ancestors but does not inspect every operand of an
-        // arbitrary `&&` chain.
         source === "error" ? null : pairs.length === 0 ? (
           <EmptyState
             icon="✓"
             title="No duplicate candidates found — data is clean"
             message="No flagged contact pairs at this time."
           />
+        ) : visiblePairs.length === 0 ? (
+          <EmptyState
+            icon="🔎"
+            title={t("noMatchTitle")}
+            message={t("noMatchMessage")}
+          />
         ) : null
       )}
 
-      {!loading && pairs.length > 0 && (
+      {!loading && visiblePairs.length > 0 && (
         <div
           className="dedup-list"
           role="list"
-          aria-label={`${pairs.length} duplicate candidate pair${pairs.length === 1 ? "" : "s"}`}
+          aria-label={t("listAria", { countText: String(visiblePairs.length), n: visiblePairs.length })}
         >
-          {pairs.map((pair) => (
+          {visiblePairs.map((pair) => (
             <div key={pair.pairId} role="listitem">
               <PairCard
                 pair={pair}
-                busyPairId={busyPairId}
+                swapped={swapped[pair.pairId] ?? false}
+                busyPairId={null}
                 onMerge={openMerge}
-                onDismiss={handleDismiss}
+                onDismiss={openDismiss}
+                onSwap={toggleSwap}
               />
             </div>
           ))}
@@ -302,15 +386,36 @@ export default function DedupCandidatesPage() {
         title="Merge contacts?"
         description={
           mergeTarget
-            ? `This will permanently merge ${mergeTarget.right.name ?? "the right contact"} into ${mergeTarget.left.name ?? "the left contact"}. This cannot be undone.`
+            ? t("mergeDescription", { from: mergeFromName, keep: mergeKeepName })
             : undefined
         }
         confirmLabel="Merge"
         danger
+        requireReason
+        minReasonLength={10}
+        reasonLabel={t("mergeReasonLabel")}
         busy={mergeBusy}
         errorMessage={mergeError ?? undefined}
-        onConfirm={() => void confirmMerge()}
+        onConfirm={(reason) => void confirmMerge(reason)}
         onCancel={closeMerge}
+      />
+
+      <ConfirmDialog
+        open={dismissTarget !== null}
+        title={t("dismissTitle")}
+        description={
+          dismissTarget
+            ? t("dismissDescription")
+            : undefined
+        }
+        confirmLabel={t("dismissConfirm")}
+        danger
+        optionalReason
+        reasonLabel={t("dismissReasonLabel")}
+        busy={dismissBusy}
+        errorMessage={dismissError ?? undefined}
+        onConfirm={(reason) => void confirmDismiss(reason)}
+        onCancel={closeDismiss}
       />
     </>
   );
@@ -332,8 +437,15 @@ const STYLES = `
 .conf-mid  { background:#fffbeb; color:#92400e; }
 .conf-low  { background:#f0fdf4; color:#166534; }
 
-.dedup-list  { display: flex; flex-direction: column; gap: 0; }
-.dedup-card  { background:var(--surface,#fff); border:1px solid var(--line,#e5e7eb);
+.dedup-toolbar { display:flex; align-items:center; justify-content:space-between;
+                 gap:12px; flex-wrap:wrap; margin:4px 0 12px; }
+.dedup-count   { font-size:.8rem; color:var(--muted,#6b7280); font-weight:600; }
+.dedup-filter  { display:flex; align-items:center; gap:8px; font-size:.8rem;
+                 color:var(--muted,#6b7280); }
+.dedup-filter select { padding:6px 8px; min-height:36px; border-radius:8px;
+                 border:1px solid var(--line,#e5e7eb); }
+
+.dedup-list  { display: flex; flex-direction: column; gap: 0; }.dedup-card  { background:var(--surface,#fff); border:1px solid var(--line,#e5e7eb);
                border-radius:12px; padding:20px 24px; margin-bottom:16px; }
 .dedup-card-header { display:flex; align-items:center; justify-content:space-between;
                      gap:12px; margin-bottom:16px; flex-wrap:wrap; }

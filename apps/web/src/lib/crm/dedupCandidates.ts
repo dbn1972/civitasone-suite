@@ -63,19 +63,35 @@ export async function getDedupCandidates(): Promise<{ data: DedupPair[]; source:
  * empty fields backfilled from the right; right (`duplicateId`) is soft-deleted
  * and its children reassigned — see contacts/merge-consumer.ts's
  * buildContactMergePatch for exactly what gets carried over.
+ *
+ * GAP-CRM-DEDUP-CANDIDATES-02: an optional reviewer `reason` is forwarded when
+ * supplied. The merge is irreversible, so capturing why it was approved aids the
+ * audit trail; the field is additive and ignored by a backend that does not yet
+ * read it.
  */
-export async function mergeDedupPair(leftId: string, rightId: string): Promise<void> {
+export async function mergeDedupPair(leftId: string, rightId: string, reason?: string): Promise<void> {
   const res = await browserFetch("/v1/crm/contacts/merge", {
     method: "POST",
-    body: JSON.stringify({ primaryId: leftId, duplicateId: rightId }),
+    body: JSON.stringify({
+      primaryId: leftId,
+      duplicateId: rightId,
+      ...(reason && reason.trim() ? { reason: reason.trim() } : {}),
+    }),
   });
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
 }
 
-/** Dismiss a flagged pair — they will not surface again as duplicates. */
-export async function dismissDedupPair(pairId: string): Promise<void> {
+/**
+ * Dismiss a flagged pair — they will not surface again as duplicates.
+ *
+ * GAP-CRM-DEDUP-CANDIDATES-03: an optional `reason` is forwarded when supplied.
+ * Dismissing permanently hides a potential duplicate, so a short note is useful
+ * for review; additive and ignored by a backend that does not read it.
+ */
+export async function dismissDedupPair(pairId: string, reason?: string): Promise<void> {
   const res = await browserFetch(`/v1/crm/contacts/dedup-candidates/${pairId}/dismiss`, {
     method: "PATCH",
+    ...(reason && reason.trim() ? { body: JSON.stringify({ reason: reason.trim() }) } : {}),
   });
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
 }

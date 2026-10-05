@@ -18,26 +18,28 @@
  * and an explicit message, never a fabricated blank case as fact.
  */
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import Link from "next/link";
+import { useTranslations } from "next-intl";
+import { useFormError } from "@/lib/useFormError";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { Button, ConfirmDialog, EmptyState } from "../../../../_components/ds";
+import { Button, ConfirmDialog, EmptyState, ErrorState, Masked } from "../../../../_components/ds";
 import {
   advanceStage,
   recordKyc,
   getOnboardingCase,
+  getOnboardingLookups,
+  resolveCaseNames,
   allowedNextKycStatuses,
   nextStageOptions,
   isOnboardingStage,
   isKycStatus,
   STAGE_META,
   KYC_META,
-  KYC_LABELS,
-  STAGE_LABELS,
-  stageLabel,
-  kycLabel,
   isTerminalStage,
   CANCELLATION_REASON_MIN_LENGTH,
   isValidCancellationReason,
   type OnboardingCase,
+  type OnboardingLookups,
   type OnboardingStage,
   type KycStatus,
   type NextStageOption,
@@ -53,12 +55,17 @@ function fmtDate(iso: string | null): string {
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
 
-export function OnboardingDetail({ id }: { id: string }) {
+export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; canApproveKyc?: boolean }) {
+  const t = useTranslations("crmOnboardingDetail");
+  const formError = useFormError("onboarding case");
+  const stageText = useCallback((s: string): string => (isOnboardingStage(s) ? t(`stage_${s}`) : s), [t]);
+  const kycText = useCallback((s: string): string => (isKycStatus(s) ? t(`kyc_${s}`) : s), [t]);
   const [item, setItem] = useState<OnboardingCase | null>(null);
   const [source, setSource] = useState<OnbSource | "loading">("loading");
 
   // KYC panel state.
   const [kycTarget, setKycTarget] = useState<KycStatus | "">("");
+  const [kycReference, setKycReference] = useState("");
   const [kycConfirm, setKycConfirm] = useState(false);
   const [kycBusy, setKycBusy] = useState(false);
   const [kycError, setKycError] = useState("");
@@ -87,11 +94,18 @@ export function OnboardingDetail({ id }: { id: string }) {
   const load = useCallback(
     (signal?: { alive: boolean }) => {
       setSource("loading");
-      return getOnboardingCase(id).then(({ data, source: s }) => {
-        if (signal && !signal.alive) return;
-        setItem(data);
-        setSource(s);
-      });
+      // GAP-CRM-ONBOARDING-DETAIL-01: resolve the deal/account NAMES alongside
+      // the case so the customer being onboarded is named, not shown as a raw
+      // UUID. The onboarding module stores only opaque ids and never joins to
+      // the deals/accounts modules (L2 isolation), so names are resolved in the
+      // web layer from the list endpoints; a failed lookup just leaves names null.
+      return Promise.all([getOnboardingCase(id), getOnboardingLookups()]).then(
+        ([{ data, source: s }, lookups]: [{ data: OnboardingCase | null; source: OnbSource }, OnboardingLookups]) => {
+          if (signal && !signal.alive) return;
+          setItem(data ? resolveCaseNames([data], lookups)[0] ?? data : null);
+          setSource(s);
+        },
+      );
     },
     [id],
   );
@@ -114,38 +128,57 @@ export function OnboardingDetail({ id }: { id: string }) {
   // ---- KYC ----
   const kycStatus: KycStatus | null =
     item && isKycStatus(item.kycStatus) ? item.kycStatus : null;
-  const kycNextOptions = kycStatus ? allowedNextKycStatuses(kycStatus) : [];
+  // GAP-CRM-ONBOARDING-DETAIL-03: a non-approver may only move KYC to
+  // "submitted"; verified/rejected are approver-only (crm-service 403s them).
+  // Hide those options rather than let the clerk pick an outcome that will be
+  // refused only after the confirm dialog. The server stays the authority.
+  const kycNextOptions = (kycStatus ? allowedNextKycStatuses(kycStatus) : []).filter(
+    (s) => canApproveKyc || (s !== "verified" && s !== "rejected"),
+  );
 
   const beginKyc = useCallback(() => {
     setKycError("");
     setKycMessage("");
     if (!kycTarget) {
-      setKycError("Choose a KYC outcome to record.");
+      setKycError(t("chooseKycOutcome"));
+      return;
+    }
+    // GAP-CRM-ONBOARDING-DETAIL-02: a KYC reference (the provider's opaque
+    // check id) must be captured when the outcome is "verified" — the record
+    // is incomplete without it. It is optional for "submitted"/"rejected".
+    if (kycTarget === "verified" && kycReference.trim().length === 0) {
+      setKycError(t("kycReferenceRequiredError"));
       return;
     }
     setKycConfirm(true);
-  }, [kycTarget]);
+  }, [kycTarget, kycReference, t]);
 
   const applyKyc = useCallback(async () => {
     if (!item || !kycTarget) return;
     setKycBusy(true);
     setKycError("");
     try {
-      const result = await recordKyc(item.id, { status: kycTarget, version: item.version });
+      const trimmedRef = kycReference.trim();
+      const result = await recordKyc(item.id, {
+        status: kycTarget,
+        ...(trimmedRef ? { reference: trimmedRef } : {}),
+        version: item.version,
+      });
       setKycMessage(
         result.accepted
-          ? "KYC outcome submitted — it may take a moment to take effect."
-          : `KYC recorded as "${KYC_LABELS[kycTarget]}".`,
+          ? t("kycSubmitted")
+          : t("kycRecordedAs", { status: kycText(kycTarget) }),
       );
       setKycConfirm(false);
       setKycTarget("");
+      setKycReference("");
       reload();
     } catch (e) {
-      setKycError(e instanceof Error ? e.message : "Could not record the KYC outcome.");
+      setKycError(formError.fromException("save", e).message);
     } finally {
       setKycBusy(false);
     }
-  }, [item, kycTarget, reload]);
+  }, [item, kycTarget, kycReference, reload, t, kycText, formError]);
 
   // ---- Stage ----
   const stage: OnboardingStage | null =
@@ -158,17 +191,15 @@ export function OnboardingDetail({ id }: { id: string }) {
     setStageError("");
     setStageMessage("");
     if (!stageTarget) {
-      setStageError("Choose a stage to move this case to.");
+      setStageError(t("chooseStage"));
       return;
     }
     if (selectedOption?.kycBlocked) {
-      setStageError(
-        "This case can't be completed until KYC is verified. Record a verified KYC outcome first.",
-      );
+      setStageError(t("completeNeedsKyc"));
       return;
     }
     setStageConfirm(true);
-  }, [stageTarget, selectedOption]);
+  }, [stageTarget, selectedOption, t]);
 
   const applyStage = useCallback(
     async (reason?: string) => {
@@ -176,9 +207,7 @@ export function OnboardingDetail({ id }: { id: string }) {
       // Guard the cancellation-reason minimum on the client too, so the dialog
       // doesn't submit a value the BE will 400 (REASON_REQUIRED).
       if (selectedOption?.requiresReason && !isValidCancellationReason(reason)) {
-        setStageError(
-          `A cancellation reason of at least ${CANCELLATION_REASON_MIN_LENGTH} characters is required.`,
-        );
+        setStageError(t("cancellationReasonRequired", { min: CANCELLATION_REASON_MIN_LENGTH }));
         return;
       }
       setStageBusy(true);
@@ -191,8 +220,8 @@ export function OnboardingDetail({ id }: { id: string }) {
         });
         setStageMessage(
           result.accepted
-            ? "Stage change submitted — it may take a moment to take effect."
-            : `Case moved to "${STAGE_LABELS[stageTarget]}".`,
+            ? t("stageSubmitted")
+            : t("stageMovedTo", { stage: stageText(stageTarget) }),
         );
         setStageConfirm(false);
         setStageTarget("");
@@ -202,67 +231,111 @@ export function OnboardingDetail({ id }: { id: string }) {
         // clerk-safe catalogued string errorMessageFromResponse built, not
         // the backend's raw 422 code/text (INVALID_TRANSITION /
         // KYC_NOT_VERIFIED).
-        setStageError(e instanceof Error ? e.message : "Could not change the stage.");
+        setStageError(formError.fromException("save", e).message);
       } finally {
         setStageBusy(false);
       }
     },
-    [item, stageTarget, selectedOption, reload],
+    [item, stageTarget, selectedOption, reload, t, stageText, formError],
   );
 
   if (isLoading) {
     return (
       <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)", padding: 12 }}>
-        Loading onboarding case…
+        {t("loading")}
       </p>
     );
   }
 
   if (!item) {
+    // GAP-CRM-ONBOARDING-DETAIL-04: a failed load now offers a working Retry
+    // (reload) instead of telling the clerk to "try again" with no control.
+    // A genuine 404 is kept distinct — it is not retryable, so it gets a back
+    // link to the register, not a retry button.
+    if (isError) {
+      return (
+        <>
+          <DataSourceBadge source="error" />
+          <ErrorState
+            error={{
+              what: t("loadErrorWhat"),
+              next: t("loadErrorNext"),
+              actions: ["retry", "back"],
+            }}
+            onRetry={reload}
+            backHref="/crm/onboarding"
+          />
+        </>
+      );
+    }
     return (
-      <>
-        {isError ? <DataSourceBadge source="error" /> : null}
-        <EmptyState
-          icon="📋"
-          title={isError ? "Onboarding case couldn't be loaded" : "Onboarding case not found"}
-          message={
-            isError
-              ? "Live data couldn't be reached. Try again in a moment."
-              : "This case does not exist or has been removed."
-          }
-        />
-      </>
+      <EmptyState
+        icon="📋"
+        title={t("notFoundTitle")}
+        message={t("notFoundMessage")}
+        action={
+          <Link href="/crm/onboarding" className="btn ghost">
+            {t("backToOnboarding")}
+          </Link>
+        }
+      />
     );
   }
 
   const sm = isOnboardingStage(item.stage) ? STAGE_META[item.stage] : null;
   const km = isKycStatus(item.kycStatus) ? KYC_META[item.kycStatus] : null;
   const terminal = stage ? isTerminalStage(stage) : false;
+  // GAP-CRM-ONBOARDING-DETAIL-01: name the customer being onboarded. Prefer the
+  // deal name, fall back to the account name; the opaque id is kept only as a
+  // small muted "Ref" for support lookups, never as the primary heading.
+  const customerName = item.dealName ?? item.accountName ?? null;
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
       <div className="card">
         <div className="card-h">
-          <h3>Case {item.id}</h3>
+          <h3>{t("heading", { name: customerName ?? t("unnamedCase") })}</h3>
           {isError ? <DataSourceBadge source="error" /> : null}
         </div>
         <div className="pad" style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
-          <Field label="Stage">
-            <span aria-hidden="true">{sm ? sm.icon : "•"}</span> {stageLabel(item.stage)}
+          <Field label={t("ref")}>
+            <span style={{ fontFamily: "monospace", fontSize: 12, color: "var(--muted)" }}>{item.id}</span>
           </Field>
-          <Field label="KYC status">
-            <span aria-hidden="true">{km ? km.icon : "•"}</span> {kycLabel(item.kycStatus)}
+          <Field label={t("stage")}>
+            <span aria-hidden="true">{sm ? sm.icon : "•"}</span> {stageText(item.stage)}
           </Field>
-          <Field label="Account">{item.accountId ?? "—"}</Field>
-          <Field label="Deal">{item.dealId || "—"}</Field>
-          <Field label="KYC reference">{item.kycReference ?? "—"}</Field>
-          <Field label="KYC verified">{fmtDate(item.kycVerifiedAt)}</Field>
-          <Field label="Completed">{fmtDate(item.completedAt)}</Field>
-          <Field label="Created">{fmtDate(item.createdAt)}</Field>
-          <Field label="Updated">{fmtDate(item.updatedAt)}</Field>
-          <Field label="Version">{String(item.version)}</Field>
+          <Field label={t("kycStatus")}>
+            <span aria-hidden="true">{km ? km.icon : "•"}</span> {kycText(item.kycStatus)}
+          </Field>
+          <Field label={t("account")}>
+            {item.accountId ? (
+              <Link href={`/crm/accounts/${item.accountId}`}>{item.accountName ?? t("viewAccount")}</Link>
+            ) : (
+              "—"
+            )}
+          </Field>
+          <Field label={t("deal")}>
+            {item.dealId ? (
+              <Link href={`/crm/deals/${item.dealId}`}>{item.dealName ?? t("viewDeal")}</Link>
+            ) : (
+              "—"
+            )}
+          </Field>
+          <Field label={t("kycReference")}>
+            {/* GAP-CRM-ONBOARDING-DETAIL-05: the KYC reference is a DPDP-sensitive
+                identifier, so it is masked (all but last 4) by default for every
+                viewer. An audited reveal is a backend-dependent follow-up (there
+                is no read-access-log endpoint for onboarding yet, and a reveal
+                with no real audit behind it is worse than none). */}
+            <Masked value={item.kycReference} kind="last4" fallback="—" ariaLabel={t("kycReference")} />
+          </Field>
+          <Field label={t("kycVerified")}>{fmtDate(item.kycVerifiedAt)}</Field>
+          <Field label={t("completed")}>{fmtDate(item.completedAt)}</Field>
+          <Field label={t("created")}>{fmtDate(item.createdAt)}</Field>
+          <Field label={t("updated")}>{fmtDate(item.updatedAt)}</Field>
+          <Field label={t("version")}>{String(item.version)}</Field>
           {item.cancellationReason ? (
-            <Field label="Cancellation reason">{item.cancellationReason}</Field>
+            <Field label={t("cancellationReason")}>{item.cancellationReason}</Field>
           ) : null}
         </div>
       </div>
@@ -270,22 +343,25 @@ export function OnboardingDetail({ id }: { id: string }) {
       {/* KYC panel */}
       <div className="card">
         <div className="card-h">
-          <h3 id={`${kycId}-h`}>Record KYC outcome</h3>
+          <h3 id={`${kycId}-h`}>{t("recordKycOutcome")}</h3>
         </div>
         <div className="pad" style={{ display: "grid", gap: 14 }}>
           <p style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
-            Current KYC status: <strong>{kycLabel(item.kycStatus)}</strong>. Marking KYC verified or rejected
-            requires an approver role.
+            {t.rich("currentKyc", {
+              status: kycText(item.kycStatus),
+              strong: (chunks) => <strong>{chunks}</strong>,
+            })}{" "}
+            {canApproveKyc ? t("kycApproverYes") : t("kycApproverNo")}
           </p>
           {kycNextOptions.length === 0 ? (
             <p style={{ fontSize: 13, color: "var(--muted)" }}>
-              KYC status “{kycLabel(item.kycStatus)}” is final — no further KYC changes are available.
+              {t("kycFinal", { status: kycText(item.kycStatus) })}
             </p>
           ) : (
             <>
               <div>
                 <label htmlFor={`${kycId}-target`} style={labelStyle}>
-                  New KYC outcome
+                  {t("newKycOutcome")}
                 </label>
                 <select
                   id={`${kycId}-target`}
@@ -294,17 +370,37 @@ export function OnboardingDetail({ id }: { id: string }) {
                   aria-invalid={kycError && !kycTarget ? "true" : "false"}
                   style={inputStyle}
                 >
-                  <option value="">Select outcome…</option>
+                  <option value="">{t("selectOutcome")}</option>
                   {kycNextOptions.map((s) => (
                     <option key={s} value={s}>
-                      {KYC_LABELS[s]}
+                      {kycText(s)}
                     </option>
                   ))}
                 </select>
               </div>
+              {/* GAP-CRM-ONBOARDING-DETAIL-02: capture the KYC reference (the
+                  provider's opaque check id). Required for a verified outcome;
+                  optional for submitted/rejected. */}
+              {kycTarget === "submitted" || kycTarget === "verified" || kycTarget === "rejected" ? (
+                <div>
+                  <label htmlFor={`${kycId}-ref`} style={labelStyle}>
+                    {kycTarget === "verified" ? t("kycReferenceRequired") : t("kycReferenceOptional")}
+                  </label>
+                  <input
+                    id={`${kycId}-ref`}
+                    type="text"
+                    value={kycReference}
+                    maxLength={120}
+                    onChange={(e) => setKycReference(e.target.value)}
+                    placeholder={t("kycReferencePlaceholder")}
+                    aria-invalid={kycError && kycTarget === "verified" && !kycReference.trim() ? "true" : "false"}
+                    style={inputStyle}
+                  />
+                </div>
+              ) : null}
               <div>
                 <Button onClick={beginKyc} style={{ minHeight: 44 }}>
-                  Record KYC outcome
+                  {t("recordKycOutcome")}
                 </Button>
               </div>
             </>
@@ -325,22 +421,24 @@ export function OnboardingDetail({ id }: { id: string }) {
       {/* Stage transition panel */}
       <div className="card">
         <div className="card-h">
-          <h3 id={`${stageId}-h`}>Change stage</h3>
+          <h3 id={`${stageId}-h`}>{t("changeStage")}</h3>
         </div>
         <div className="pad" style={{ display: "grid", gap: 14 }}>
           <p style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
-            Current stage: <strong>{stageLabel(item.stage)}</strong>. Only the moves the onboarding workflow
-            allows are shown.
+            {t.rich("currentStage", {
+              stage: stageText(item.stage),
+              strong: (chunks) => <strong>{chunks}</strong>,
+            })}
           </p>
           {terminal || stageOptions.length === 0 ? (
             <p style={{ fontSize: 13, color: "var(--muted)" }}>
-              “{stageLabel(item.stage)}” is a final stage — no further changes are available.
+              {t("stageFinal", { stage: stageText(item.stage) })}
             </p>
           ) : (
             <>
               <div>
                 <label htmlFor={`${stageId}-target`} style={labelStyle}>
-                  Move to
+                  {t("moveTo")}
                 </label>
                 <select
                   id={`${stageId}-target`}
@@ -349,28 +447,27 @@ export function OnboardingDetail({ id }: { id: string }) {
                   aria-invalid={stageError && !stageTarget ? "true" : "false"}
                   style={inputStyle}
                 >
-                  <option value="">Select stage…</option>
+                  <option value="">{t("selectStage")}</option>
                   {stageOptions.map((o) => (
                     <option key={o.stage} value={o.stage} disabled={o.kycBlocked}>
-                      {STAGE_LABELS[o.stage]}
-                      {o.kycBlocked ? " — needs verified KYC" : ""}
+                      {o.kycBlocked ? t("stageNeedsKyc", { stage: stageText(o.stage) }) : stageText(o.stage)}
                     </option>
                   ))}
                 </select>
                 {selectedOption?.kycBlocked ? (
                   <p role="alert" style={{ fontSize: 12, color: "#b42318", marginTop: 4 }}>
-                    Completion is gated: KYC must be verified first.
+                    {t("completionGated")}
                   </p>
                 ) : null}
                 {selectedOption?.requiresReason ? (
                   <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
-                    Cancelling requires a reason of at least {CANCELLATION_REASON_MIN_LENGTH} characters.
+                    {t("cancelNeedsReason", { min: CANCELLATION_REASON_MIN_LENGTH })}
                   </p>
                 ) : null}
               </div>
               <div>
                 <Button onClick={beginStage} style={{ minHeight: 44 }}>
-                  Apply stage change
+                  {t("applyStageChange")}
                 </Button>
               </div>
             </>
@@ -390,9 +487,13 @@ export function OnboardingDetail({ id }: { id: string }) {
 
       <ConfirmDialog
         open={kycConfirm}
-        title={kycTarget ? `Record KYC as "${KYC_LABELS[kycTarget]}"?` : "Record KYC outcome?"}
-        description="This KYC outcome is recorded against the onboarding case and drives the completion gate."
-        confirmLabel="Record outcome"
+        title={kycTarget ? t("confirmKycTitle", { status: kycText(kycTarget) }) : t("confirmKycTitleDefault")}
+        description={
+          kycReference.trim()
+            ? t("confirmKycDescriptionRef", { reference: kycReference.trim() })
+            : t("confirmKycDescription")
+        }
+        confirmLabel={t("recordOutcome")}
         danger={kycTarget === "rejected"}
         busy={kycBusy}
         errorMessage={kycError || undefined}
@@ -402,18 +503,18 @@ export function OnboardingDetail({ id }: { id: string }) {
 
       <ConfirmDialog
         open={stageConfirm}
-        title={stageTarget ? `Move case to "${STAGE_LABELS[stageTarget]}"?` : "Change stage?"}
+        title={stageTarget ? t("confirmStageTitle", { stage: stageText(stageTarget) }) : t("confirmStageTitleDefault")}
         description={
           selectedOption?.requiresReason
-            ? "Cancelling an onboarding is recorded with the reason below and cannot be undone."
+            ? t("confirmCancelDescription")
             : stageTarget === "completed"
-              ? "Completing onboarding hands the customer a live account. This cannot be undone."
-              : "This stage change is recorded against the onboarding case."
+              ? t("confirmCompleteDescription")
+              : t("confirmStageDescription")
         }
-        confirmLabel={stageTarget === "cancelled" ? "Cancel onboarding" : "Confirm change"}
+        confirmLabel={stageTarget === "cancelled" ? t("cancelOnboarding") : t("confirmChange")}
         danger={stageTarget === "cancelled" || stageTarget === "completed"}
         requireReason={selectedOption?.requiresReason ?? false}
-        reasonLabel={`Cancellation reason (min ${CANCELLATION_REASON_MIN_LENGTH} characters)`}
+        reasonLabel={t("cancellationReasonLabel", { min: CANCELLATION_REASON_MIN_LENGTH })}
         busy={stageBusy}
         errorMessage={stageError || undefined}
         onCancel={() => setStageConfirm(false)}

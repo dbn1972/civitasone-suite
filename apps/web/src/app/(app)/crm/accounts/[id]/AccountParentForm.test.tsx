@@ -1,5 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
+
+function render(ui: ReactElement) {
+  return rtlRender(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
 import type { CRMAccountSummary } from "@civitasone/types";
 
 const refreshMock = vi.fn();
@@ -22,6 +33,10 @@ function renderForm() {
 async function openAndSave() {
   fireEvent.click(screen.getByRole("button", { name: "Change Parent" }));
   fireEvent.click(screen.getByRole("button", { name: "Save hierarchy" }));
+  // GAP-CRM-ACCOUNTS-DETAIL-03: Save now opens a ConfirmDialog; confirm it to
+  // actually perform the move.
+  await waitFor(() => expect(screen.getByRole("button", { name: "Move account" })).toBeInTheDocument());
+  fireEvent.click(screen.getByRole("button", { name: "Move account" }));
 }
 
 describe("AccountParentForm", () => {
@@ -107,5 +122,29 @@ describe("AccountParentForm", () => {
       ).toBeInTheDocument(),
     );
     expect(refreshMock).toHaveBeenCalledTimes(1);
+  });
+
+  // GAP-CRM-ACCOUNTS-DETAIL-03
+  it("asks for confirmation before sending the PATCH", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+    render(
+      <AccountParentForm accountId="acc-1" accountName="Test Account" currentParentId={null} options={OPTIONS} subtreeSize={3} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Change Parent" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save hierarchy" }));
+    // Dialog is shown; no request yet.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Move account" })).toBeInTheDocument());
+    expect(screen.getByText(/3 sub-accounts/)).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("cancelling the confirm makes no request", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+    renderForm();
+    fireEvent.click(screen.getByRole("button", { name: "Change Parent" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save hierarchy" }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

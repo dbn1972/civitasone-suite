@@ -16,7 +16,8 @@
  * message (errorMessageFromResponse, UX-020), not the backend's raw 422
  * code/reason text.
  */
-import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
+import { browserFetch, errorMessageFromResponse, UserFacingError } from "@/lib/api/browserClient";
+import { referenceFromHeaders } from "@/lib/errorCatalogue";
 
 export type OnbSource = "api" | "error" | "not-found";
 
@@ -275,12 +276,22 @@ export function normaliseCases(raw: unknown): OnboardingCase[] {
 export interface ListFilters {
   stage?: OnboardingStage;
   accountId?: string;
+  /**
+   * GAP-CRM-ONBOARDING-02: page size (backend caps it at 200 — shared
+   * list-query MAX_PAGE_SIZE; a larger value is clamped server-side) and the
+   * 1-based page. The list route accepts both; the UI pages client-side over
+   * the fetched set, so it requests a full page here.
+   */
+  limit?: number;
+  page?: number;
 }
 
 export async function getOnboardingCases(filters: ListFilters = {}): Promise<LoaderResult<OnboardingCase[]>> {
   const params = new URLSearchParams();
   if (filters.stage) params.set("stage", filters.stage);
   if (filters.accountId) params.set("accountId", filters.accountId);
+  if (filters.limit !== undefined) params.set("limit", String(filters.limit));
+  if (filters.page !== undefined) params.set("page", String(filters.page));
   const qs = params.toString();
   try {
     const res = await browserFetch(`v1/crm/onboarding-cases${qs ? `?${qs}` : ""}`);
@@ -379,7 +390,7 @@ export async function advanceStage(id: string, input: AdvanceStageInput): Promis
     method: "POST",
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  if (!res.ok) throw new UserFacingError(await errorMessageFromResponse(res), referenceFromHeaders(res.headers));
   return { accepted: res.status === 202 };
 }
 
@@ -404,6 +415,6 @@ export async function recordKyc(id: string, input: RecordKycInput): Promise<Muta
     method: "POST",
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  if (!res.ok) throw new UserFacingError(await errorMessageFromResponse(res), referenceFromHeaders(res.headers));
   return { accepted: res.status === 202 };
 }

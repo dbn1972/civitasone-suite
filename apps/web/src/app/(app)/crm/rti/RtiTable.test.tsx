@@ -1,5 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render as rtlRender, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
+
+function render(ui: ReactElement) {
+  return rtlRender(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
 
 vi.mock("@/lib/sync/resource", () => ({ useSeededResource: vi.fn() }));
 vi.mock("@/lib/formatters", async () => {
@@ -81,5 +92,68 @@ describe("RtiTable SlaBadge honours status (GAP-CRM-RTI-01)", () => {
     seed(rows);
     render(<RtiTable rows={rows} />);
     expect(screen.getByText(/\d+d left/)).toBeInTheDocument();
+  });
+});
+
+describe("RtiTable status pill (GAP-CRM-RTI-03)", () => {
+  beforeEach(() => mockedHook.mockReset());
+
+  it("humanises FIRST_APPEAL ('First Appeal') with a warn tone, not the raw enum", () => {
+    const rows = [row("1", "FIRST_APPEAL", "2026-10-20T00:00:00.000Z")];
+    seed(rows);
+    render(<RtiTable rows={rows} />);
+    const pill = screen.getByText("First Appeal");
+    expect(pill).toBeInTheDocument();
+    expect(pill.className).toContain("warn");
+    // The raw enum is never printed.
+    expect(screen.queryByText("FIRST_APPEAL")).not.toBeInTheDocument();
+  });
+
+  it("renders RESPONDED as a good-tone 'Responded' pill", () => {
+    const rows = [row("1", "RESPONDED", "2026-09-01T00:00:00.000Z")];
+    seed(rows);
+    render(<RtiTable rows={rows} />);
+    const pill = screen.getByText("Responded");
+    expect(pill.className).toContain("good");
+  });
+});
+
+describe("RtiTable applicant PII masking (GAP-CRM-RTI-04)", () => {
+  beforeEach(() => mockedHook.mockReset());
+
+  function namedRow(name: string): CrmRtiRow {
+    return { ...row("1", "RECEIVED", "2026-10-20T00:00:00.000Z"), applicantName: name };
+  }
+
+  it("masks the applicant name for a viewer without PII-read permission", () => {
+    const rows = [namedRow("Anil Sharma")];
+    seed(rows);
+    render(<RtiTable rows={rows} canRevealPii={false} />);
+    expect(screen.queryByText("Anil Sharma")).not.toBeInTheDocument();
+    expect(screen.getByText(/^Anil S/)).toBeInTheDocument();
+    expect(screen.getByText(/•/)).toBeInTheDocument();
+  });
+
+  it("shows the full applicant name to a PII-read viewer", () => {
+    const rows = [namedRow("Anil Sharma")];
+    seed(rows);
+    render(<RtiTable rows={rows} canRevealPii />);
+    expect(screen.getByText("Anil Sharma")).toBeInTheDocument();
+  });
+});
+
+describe("RtiTable empty copy (GAP-CRM-RTI-05)", () => {
+  beforeEach(() => mockedHook.mockReset());
+
+  it("says 'none recorded yet' when there are no rows and no filters", () => {
+    seed([]);
+    render(<RtiTable rows={[]} hasFilters={false} />);
+    expect(screen.getByText(/No RTI requests recorded yet/i)).toBeInTheDocument();
+  });
+
+  it("says 'none match the filters' when a filter is active", () => {
+    seed([]);
+    render(<RtiTable rows={[]} hasFilters />);
+    expect(screen.getByText(/match the current filters/i)).toBeInTheDocument();
   });
 });

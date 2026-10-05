@@ -57,8 +57,8 @@ describe("quotation HTTP client (QP-001..005)", () => {
     expect((await qp.getQuotation("q1")).data?.id).toBe("q1");
     fetchMock.mockResolvedValueOnce(res({ id: "q1" }, { status: 201 }));
     await expect(qp.createQuotation({ template: "standard", version: 1, status: "draft", lines: [] })).resolves.toBeUndefined();
-    fetchMock.mockResolvedValueOnce(res({}));
-    await expect(qp.updateQuotation("q1", { template: "standard", version: 1, status: "draft", lines: [] })).resolves.toBeUndefined();
+    fetchMock.mockResolvedValueOnce(res({ id: "q2" }, { status: 202 }));
+    await expect(qp.updateQuotation("q1", { template: "standard", version: 1, status: "draft", lines: [] })).resolves.toEqual({ id: "q2" });
     fetchMock.mockResolvedValueOnce(res({ code: "APPROVAL_REQUIRED", message: "blocked" }, { status: 422 }));
     await expect(qp.sendQuotation("q1")).rejects.toBeInstanceOf(qp.ApprovalRequiredError);
     fetchMock.mockResolvedValueOnce(res({ code: "BAD", message: "x" }, { status: 400 }));

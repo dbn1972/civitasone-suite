@@ -9,6 +9,10 @@ import {
   classificationBody,
   internalBulkImportBody,
   deleteContactBody,
+  importBatchParam,
+  contactLookupQuery,
+  importBatchSchema,
+  contactLookupSchema,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -52,6 +56,7 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
       ...(q.search ? { search: q.search } : {}),
       ...(q.leadStatus ? { leadStatus: q.leadStatus } : {}),
       ...(q.ownerId ? { ownerId: q.ownerId } : {}),
+      ...(q.accountId ? { accountId: q.accountId } : {}),
       ...(q.temperature ? { temperature: q.temperature } : {}),
       ...(q.priority ? { priority: q.priority } : {}),
       ...(q.segmentName ? { segmentName: q.segmentName } : {}),
@@ -85,6 +90,33 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const body = bulkImportBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.bulkImportContacts(ctx, body));
+  });
+
+  // GAP-CRM-CONTACTS-IMPORT-04: bulk-import job status/result. The import page
+  // polls this after POSTing a batch; the consumer persists per-batch outcomes
+  // in the same transaction as the writes. 404 until the batch has been
+  // processed (the UI treats that as "still processing"). Admin-only, matching
+  // who may run the import. The response carries NO PII — only counts and
+  // per-row { index, reason }.
+  app.get("/v1/crm/contacts/import/:batchId", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    const { batchId } = importBatchParam.parse(req.params);
+    const batch = await queries.getImportBatch(batchId, ctx.tenantId);
+    if (!batch) throw new HttpError(404, "NOT_FOUND", "import batch not found");
+    return sendValidated(reply, importBatchSchema, batch);
+  });
+
+  // GAP-CRM-SERVICE-REQUESTS-NEW-04 / GAP-CRM-DEALS-NEW-04: lightweight contact
+  // lookup for the SR/deal EntityPickers. Returns id + display name + MASKED
+  // phone/email only (never raw PII, regardless of role) so it is safe to show
+  // to any CRM user and never becomes an exfiltration path.
+  app.get("/v1/crm/contacts/lookup", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CRM_ROLES);
+    const q = contactLookupQuery.parse(req.query);
+    const data = await queries.lookupContacts(ctx.tenantId, q.q ?? "", q.limit);
+    return sendValidated(reply, contactLookupSchema, { data });
   });
 
   // External-Lead SFTP ingestion (BRD §9 #12 / LM-005): service-to-service bulk
@@ -187,7 +219,10 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const q = listContactsQuery.parse(req.query);
-    sendValidated(reply, accountsListSchema, { data: await queries.listAccounts(ctx.tenantId, q.limit, q.offset) });
+    // GAP-CRM-ACCOUNTS-02: return the tenant-wide active-account total alongside
+    // the (capped) page so the UI can show "N of M" and flag partial stats.
+    const { data, total } = await queries.listAccountsWithTotal(ctx.tenantId, q.limit, q.offset);
+    sendValidated(reply, accountsListSchema, { data, meta: { total } });
   });
 
   app.post("/v1/crm/accounts", async (req, reply) => {

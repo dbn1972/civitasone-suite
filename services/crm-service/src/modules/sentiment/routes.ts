@@ -14,11 +14,16 @@ import {
   requireRole,
   HttpError,
 } from "../../shared/context.js";
+import { hasAnyRole } from "@civitasone/auth";
+import type { RequestContext } from "@civitasone/types";
 import { listQuery, windowOf, listEnvelope } from "../../shared/list-query.js";
 import { POLARITIES } from "./domain.js";
 import * as queries from "./queries.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
+
+/** Mirrors the web gate (CRM_VIGILANCE_ROLES in apps/web roleGuard.ts). */
+export const CRM_VIGILANCE_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
 
 const polarityEnum = z.enum(["positive", "neutral", "negative"]);
 
@@ -45,6 +50,10 @@ function assertOrderedRange(from?: string, to?: string): void {
   }
 }
 
+function canSeeSensitive(ctx: RequestContext): boolean {
+  return hasAnyRole(ctx, CRM_VIGILANCE_ROLES);
+}
+
 export async function sentimentRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/crm/sentiment/summary", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -52,7 +61,7 @@ export async function sentimentRoutes(app: FastifyInstance): Promise<void> {
     const q = filterQuery.parse(req.query ?? {});
     assertOrderedRange(q.from, q.to);
 
-    const summary = await queries.getVocSummary(ctx.tenantId, q);
+    const summary = await queries.getVocSummary(ctx.tenantId, { ...q, excludeSensitive: !canSeeSensitive(ctx) });
     return reply.send({ data: { ...summary, polarities: POLARITIES } });
   });
 
@@ -67,7 +76,7 @@ export async function sentimentRoutes(app: FastifyInstance): Promise<void> {
       ctx.tenantId,
       w.pageSize,
       w.offset,
-      q,
+      { ...q, excludeSensitive: !canSeeSensitive(ctx) },
     );
     return reply.send(listEnvelope(rows, w, total));
   });

@@ -69,6 +69,44 @@ describe("parseContactCsv (GAP-CRM-CONTACTS-IMPORT-01)", () => {
   });
 });
 
+describe("parseContactCsv RFC-4180 (GAP-CRM-CONTACTS-IMPORT-03)", () => {
+  it("keeps a quoted comma inside one field (company is not split)", () => {
+    const csv = `${HEADER}\nAsha Rao,,,"Housing & Urban Development, Odisha",new,`;
+    const { rows, rejected } = parseContactCsv(csv);
+    expect(rejected).toHaveLength(0);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].company).toBe("Housing & Urban Development, Odisha");
+  });
+
+  it("handles escaped quotes inside a quoted field", () => {
+    const csv = `${HEADER}\nAsha,,,"ACME ""Pvt"" Ltd",new,`;
+    const { rows } = parseContactCsv(csv);
+    expect(rows[0].company).toBe('ACME "Pvt" Ltd');
+  });
+
+  it("keeps the first row when there is NO header (header-less file)", () => {
+    // First row is real data, not a header — must not be dropped.
+    const csv = `Asha Rao,,9900000000,Acme,new,\nBimal,,,Beta,customer,`;
+    const { rows } = parseContactCsv(csv);
+    expect(rows.map((r) => r.name)).toEqual(["Asha Rao", "Bimal"]);
+  });
+
+  it("strips the trailing \\r from CRLF input", () => {
+    const csv = `${HEADER}\r\nAsha,,,Acme,new,\r\n`;
+    const { rows, rejected } = parseContactCsv(csv);
+    expect(rejected).toHaveLength(0);
+    expect(rows[0].company).toBe("Acme");
+    expect(rows[0].leadStatus).toBe("new"); // no trailing \r corrupting the status
+  });
+
+  it("rejects a row with more columns than expected (unquoted comma)", () => {
+    // 7 unquoted fields > 6 columns.
+    const csv = `${HEADER}\nAsha,,,Housing, Urban Dept,new,`;
+    const { rejected } = parseContactCsv(csv);
+    expect(rejected).toEqual([{ line: 1, reason: expect.stringContaining("Too many columns") }]);
+  });
+});
+
 describe("field validators", () => {
   it("isValidMobile accepts a 10-digit 6-9 leading number and rejects others", () => {
     expect(isValidMobile("9900000000")).toBe(true);

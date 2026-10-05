@@ -1,15 +1,26 @@
 "use client";
 /**
  * AgentWorkloadEditor — AS-003 admin. Set each agent's lead capacity and
- * availability. Reads the roster (with live open-lead counts) on mount and PUTs
- * capacity per agent. `maxLeads` is NaN-guarded so a half-typed value never
- * lands in a PUT. Open-lead counts are gated on the load source: when the load
- * fails (source==="error") we show "—" + DataSourceBadge rather than a
- * fabricated 0 workload.
+ * availability. Reads the roster (with live open-lead counts) on mount and
+ * PATCHes capacity per agent.
+ *
+ * - GAP-CRM-AGENT-WORKLOAD-02: saving one row no longer blows away unsaved
+ *   edits on other rows. After a successful PATCH we merge the saved agent's
+ *   server-normalised values back into just that row (a background refetch
+ *   that never flips the whole table into the "Loading…" state), and keep every
+ *   other row's local edits.
+ * - GAP-CRM-AGENT-WORKLOAD-03: `maxLeads` stays NaN until the admin types a
+ *   value (a missing value is never silently PATCHed as 0, which the engine
+ *   reads as "receives no new leads"); the column header carries a HelpTip
+ *   documenting what 0 means, and a 0 shows a "Blocked" hint.
+ * - GAP-CRM-AGENT-WORKLOAD-04: a risky change (going unavailable, on leave, or
+ *   lowering max leads) opens a ConfirmDialog that requires a reason, which is
+ *   sent to the backend (recorded on the capacity audit event).
  */
-import { useEffect, useId, useState } from "react";
+import { useTranslations } from "next-intl";
+import { useEffect, useId, useRef, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { EmptyState, Button } from "../ds";
+import { EmptyState, Button, HelpTip, ConfirmDialog } from "../ds";
 import {
   getAgents,
   updateAgentCapacity,
@@ -25,25 +36,48 @@ function sanitizeInt(raw: string): number {
 
 const inputStyle = { padding: 6, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)" } as const;
 
+/** Does moving from `before` to `after` need an explicit reason? */
+function needsReason(before: AgentWorkload | undefined, after: AgentWorkload): boolean {
+  if (!before) return false;
+  if (before.available && !after.available) return true; // going unavailable
+  if (!before.onLeave && after.onLeave) return true; // going on leave
+  if (
+    Number.isFinite(before.maxLeads) &&
+    Number.isFinite(after.maxLeads) &&
+    after.maxLeads < before.maxLeads
+  ) {
+    return true; // lowering capacity
+  }
+  return false;
+}
+
 export function AgentWorkloadEditor() {
+  const t = useTranslations("crmAgentWorkloadEditor");
   const [agents, setAgents] = useState<AgentWorkload[]>([]);
   const [source, setSource] = useState<AsSource | "loading">("loading");
+  // Server-truth snapshot per agentId, used to detect dirty rows and risky
+  // changes without re-reading the whole table.
+  const [saved, setSaved] = useState<Record<string, AgentWorkload>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [confirmFor, setConfirmFor] = useState<AgentWorkload | null>(null);
+  const firstLoad = useRef(true);
   const headingId = useId();
 
-  async function load(isLive: () => boolean = () => true) {
+  async function initialLoad(isLive: () => boolean = () => true) {
     setSource("loading");
     const { data, source: s } = await getAgents();
     if (!isLive()) return;
     setAgents(data);
+    setSaved(Object.fromEntries(data.map((a) => [a.agentId, a])));
     setSource(s);
+    firstLoad.current = false;
   }
 
   useEffect(() => {
     let live = true;
-    void load(() => live);
+    void initialLoad(() => live);
     return () => { live = false; };
   }, []);
 
@@ -53,23 +87,32 @@ export function AgentWorkloadEditor() {
     setAgents((prev) => prev.map((a) => (a.agentId === agentId ? { ...a, ...patch } : a)));
   }
 
-  async function save(agent: AgentWorkload) {
+  /**
+   * Background refetch that updates ONLY the saved row's server values and the
+   * snapshot, preserving unsaved edits on every other row. Never sets
+   * source="loading" (which would unmount the table and discard edits).
+   */
+  async function refreshSavedRow(agentId: string) {
+    const { data, source: s } = await getAgents();
+    if (s !== "api") return; // keep local state on a failed refresh
+    const serverRow = data.find((a) => a.agentId === agentId);
+    if (!serverRow) return;
+    setAgents((prev) => prev.map((a) => (a.agentId === agentId ? serverRow : a)));
+    setSaved((prev) => ({ ...prev, [agentId]: serverRow }));
+  }
+
+  async function performSave(agent: AgentWorkload, reason?: string) {
+    setBusyId(agent.agentId);
     setMessage("");
     setError("");
-    if (!Number.isInteger(agent.maxLeads) || agent.maxLeads < 0) {
-      setError(`${agent.name} needs a whole-number lead capacity of 0 or more.`);
-      return;
-    }
-    setBusyId(agent.agentId);
     try {
       await updateAgentCapacity(agent.agentId, {
         maxLeads: agent.maxLeads,
         available: agent.available,
         onLeave: agent.onLeave,
+        ...(reason ? { reason } : {}),
       });
-      // Reload from the server so the row reflects server truth (e.g. a field
-      // the backend normalised or ignored), never optimistic local state.
-      await load();
+      await refreshSavedRow(agent.agentId);
       setMessage(`${agent.name}'s capacity saved.`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save the capacity.");
@@ -78,7 +121,21 @@ export function AgentWorkloadEditor() {
     }
   }
 
-  if (source === "loading") {
+  function requestSave(agent: AgentWorkload) {
+    setMessage("");
+    setError("");
+    if (!Number.isInteger(agent.maxLeads) || agent.maxLeads < 0) {
+      setError(t("needsWholeNumber", { name: agent.name }));
+      return;
+    }
+    if (needsReason(saved[agent.agentId], agent)) {
+      setConfirmFor(agent);
+      return;
+    }
+    void performSave(agent);
+  }
+
+  if (source === "loading" && firstLoad.current) {
     return (
       <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)" }}>
         Loading agent workload…
@@ -107,7 +164,14 @@ export function AgentWorkloadEditor() {
             <tr>
               <th>Agent</th>
               <th style={{ textAlign: "right" }}>Open leads</th>
-              <th style={{ textAlign: "right" }}>Max leads</th>
+              <th style={{ textAlign: "right" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end" }}>
+                  {t("maxLeads")}
+                  <HelpTip term={t("maxLeads")}>
+                    {t("maxLeadsHelp")}
+                  </HelpTip>
+                </span>
+              </th>
               <th>Available</th>
               <th>On leave</th>
               <th><span className="sr-only">Actions</span></th>
@@ -117,7 +181,9 @@ export function AgentWorkloadEditor() {
             {agents.map((a, i) => {
               const n = i + 1;
               const busy = busyId === a.agentId;
+              const maxMissing = !Number.isInteger(a.maxLeads);
               const over = !isError && Number.isFinite(a.maxLeads) && a.maxLeads > 0 && a.activeLeads > a.maxLeads;
+              const blocked = Number.isInteger(a.maxLeads) && a.maxLeads === 0;
               return (
                 <tr key={a.agentId}>
                   <td>{a.name}</td>
@@ -134,10 +200,16 @@ export function AgentWorkloadEditor() {
                       id={`${headingId}-max-${a.agentId}`}
                       type="number" min={0} step={1}
                       value={Number.isInteger(a.maxLeads) ? a.maxLeads : ""}
-                      aria-invalid={Number.isInteger(a.maxLeads) ? undefined : true}
+                      aria-invalid={maxMissing ? true : undefined}
                       onChange={(e) => update(a.agentId, { maxLeads: sanitizeInt(e.target.value) })}
                       style={{ ...inputStyle, width: 80, textAlign: "right" }}
                     />
+                    {blocked ? (
+                      <span className="pill warn" style={{ display: "block", marginTop: 4, fontSize: 11 }}>{t("blockedNoNewLeads")}</span>
+                    ) : null}
+                    {maxMissing ? (
+                      <span style={{ display: "block", marginTop: 4, fontSize: 11, color: "#b45309" }}>{t("enterCapacity")}</span>
+                    ) : null}
                   </td>
                   <td>
                     <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}>
@@ -152,7 +224,7 @@ export function AgentWorkloadEditor() {
                     </label>
                   </td>
                   <td>
-                    <Button type="button" size="sm" onClick={() => void save(a)} disabled={busy}>
+                    <Button type="button" size="sm" onClick={() => requestSave(a)} disabled={busy || maxMissing}>
                       {busy ? "Saving…" : "Save"}
                     </Button>
                   </td>
@@ -162,6 +234,28 @@ export function AgentWorkloadEditor() {
           </tbody>
         </table>
       )}
+
+      <ConfirmDialog
+        open={confirmFor !== null}
+        title={t("confirmRoutingChange")}
+        description={
+          confirmFor ? (
+            <p style={{ margin: 0 }}>
+              {t.rich("routingChangeDescription", { name: confirmFor.name, strong: (chunks) => <strong>{chunks}</strong> })}
+            </p>
+          ) : null
+        }
+        requireReason
+        minReasonLength={5}
+        confirmLabel={t("saveChange")}
+        busy={busyId !== null}
+        onConfirm={(reason) => {
+          const agent = confirmFor;
+          setConfirmFor(null);
+          if (agent) void performSave(agent, reason);
+        }}
+        onCancel={() => setConfirmFor(null)}
+      />
     </div>
   );
 }

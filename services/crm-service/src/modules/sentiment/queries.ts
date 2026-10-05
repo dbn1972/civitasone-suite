@@ -13,6 +13,7 @@ export interface SentimentFilters {
   to?: string | undefined;
   polarity?: string | undefined;
   activityType?: string | undefined;
+  excludeSensitive?: boolean | undefined;
 }
 
 function toRepoFilters(f: SentimentFilters): repo.ListFilters {
@@ -21,11 +22,12 @@ function toRepoFilters(f: SentimentFilters): repo.ListFilters {
     to: f.to ? new Date(f.to) : undefined,
     polarity: f.polarity,
     activityType: f.activityType,
+    excludeSensitive: f.excludeSensitive,
   };
 }
 
 function variantOf(f: SentimentFilters): string {
-  return `${f.from ?? "*"}:${f.to ?? "*"}:${f.polarity ?? "*"}:${f.activityType ?? "*"}`;
+  return `${f.from ?? "*"}:${f.to ?? "*"}:${f.polarity ?? "*"}:${f.activityType ?? "*"}:${f.excludeSensitive ? "restricted" : "full"}`;
 }
 
 export async function listSentiments(

@@ -131,6 +131,19 @@ export const INVENTORY_SETTINGS_ROLES = ["inventory_admin", "super_admin"];
 export const INVENTORY_ITEM_LINK_ROLES = ["inventory_manager", "inventory_admin", "super_admin"];
 
 /**
+ * Roles that may reach the CRM platform-wide admin-config routes (Custom
+ * Fields, Matching/Dedup Rules, Lead Scoring, Qualification Frameworks, Lead
+ * Stage Reasons, Assignment Rules, Assignment Directory, Agent Workload,
+ * Escalation Rules, Task Escalation, Document Types). Every one of those route
+ * layouts gates on this same set, and the CRM hub (page.tsx) hides the whole
+ * Configuration section from anyone outside it, so the tiles and the route
+ * guards agree (GAP-CRM-HOME-01 / GAP-CRM-AGENT-WORKLOAD-01). The server
+ * remains the authority; this is defence-in-depth + UX. A plain crm_user is
+ * deliberately excluded.
+ */
+export const CRM_ADMIN_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
+
+/**
  * Roles permitted to approve/reject a quotation discount or deviation
  * exception. Mirrors crm-service's ADMIN_ROLES in
  * modules/deals/quotation-approval-routes.ts (the POST
@@ -140,6 +153,19 @@ export const INVENTORY_ITEM_LINK_ROLES = ["inventory_manager", "inventory_admin"
  * requester's own row (maker-checker). GAP-CRM-QUOTATIONS-01.
  */
 export const CRM_QUOTATION_APPROVE_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
+
+/**
+ * Roles permitted to see vigilance-sensitive Voice-of-Citizen themes
+ * (staff conduct, integrity/corruption concerns) and to export them
+ * (GAP-CRM-VOICE-OF-CUSTOMER-05). DECISION (safest default, pending vigilance/
+ * DPO confirmation — flagged for HUMAN REVIEW): these aggregates can implicate
+ * named staff and are vigilance material, so a plain crm_user must NOT see or
+ * export them. Restricted to CRM admins. The sentiment summary API should
+ * enforce the same filter server-side so this is not client-only; until it
+ * does, this UI gate is defence-in-depth and the restricted rows/export are
+ * omitted for unauthorised viewers with the totals labelled accordingly.
+ */
+export const CRM_VIGILANCE_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
 
 /**
  * Roles permitted to read full contact PII (phone/email in the clear) rather
@@ -168,6 +194,50 @@ export const CRM_CONTACTS_EXPORT_ROLES = ["crm_admin", "admin", "super_admin", "
  * 403 others); this only decides whether the UI offers the control.
  */
 export const CRM_VERIFY_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
+
+/**
+ * Roles permitted to close (won/lost/cancelled/on_hold) an opportunity
+ * (GAP-CRM-OPPORTUNITIES-03). Closing a deal is irreversible and feeds revenue
+ * reporting, so the base crm_user must not be offered the Close control on every
+ * open row — it is restricted to CRM admins (the safest default; the gap left
+ * owner-vs-admin open and owner scoping is not knowable client-side). The server
+ * remains the authority — the close endpoint must 403 others; this only decides
+ * whether the UI offers the control.
+ */
+export const CRM_OPPORTUNITY_CLOSE_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
+
+/**
+ * Roles permitted to administer tenant-wide CRM configuration that drives
+ * alerts/behaviour for everyone — e.g. stage day-limits on /crm/opportunity-ageing
+ * (GAP-CRM-OPPORTUNITY-AGEING-05). The ageing *view* stays useful to every
+ * crm_user (managers chase stalled deals), but the Save/Delete limits config is
+ * admin-only. Mirrors the admin role list used by the task-escalation and
+ * qualification-frameworks layouts. The server remains the authority (the
+ * stage-limits write endpoints must 403 non-admins); this only decides whether
+ * the UI offers the config controls.
+ */
+export const CRM_CONFIG_ADMIN_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
+
+/**
+ * Roles permitted to sign off (or reject) a customer-onboarding KYC check
+ * (GAP-CRM-ONBOARDING-DETAIL-03). Mirrors crm-service's KYC_APPROVER_ROLES in
+ * modules/onboarding/routes.ts (the POST /v1/crm/onboarding-cases/:id/kyc gate
+ * for a "verified"/"rejected" outcome; the server stays the authority and 403s
+ * others). Recording a KYC outcome as "submitted" needs only a CRM write role;
+ * only verification/rejection is an approver action, so the UI hides those two
+ * outcomes from a non-approver rather than letting them hit a guaranteed 403.
+ */
+export const CRM_KYC_APPROVER_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
+
+/**
+ * GAP-CRM-GRIEVANCES-DETAIL-02: roles permitted to administratively close
+ * (dispose) a grievance. Mirrors crm-service's ADMIN_ROLES in
+ * modules/grievances/routes.ts (the PATCH /v1/crm/grievances/:id/close gate;
+ * the server stays the authority and 403s others). The base crm_user is 403'd
+ * by that endpoint, so the UI must not offer the Close control to them — hiding
+ * it is a UX courtesy, not the security boundary.
+ */
+export const CRM_GRIEVANCE_CLOSE_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
 
 /** True when any of the session roles is in `allowed`. Pure; for UI gating. */
 export function hasAnyRole(sessionRoles: string[], allowed: string[]): boolean {

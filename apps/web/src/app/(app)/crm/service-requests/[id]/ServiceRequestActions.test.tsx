@@ -1,5 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
+
+function render(ui: ReactElement) {
+  return rtlRender(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -122,5 +133,69 @@ describe("ServiceRequestActions", () => {
     expect(await screen.findByText(/couldn't save/i)).toBeInTheDocument();
     expect(screen.queryByText("request already closed")).not.toBeInTheDocument();
     expect(refreshMock).not.toHaveBeenCalled();
+  });
+
+  // GAP-CRM-SERVICE-REQUESTS-DETAIL-03: the PATCH must carry the version the
+  // page read, so the server can reject a stale write.
+  it("includes the fetched version in the PATCH body", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: SR_ID } }), { status: 200 }),
+    );
+
+    render(<ServiceRequestActions id={SR_ID} status="open" version={7} />);
+    fireEvent.click(screen.getByRole("button", { name: "Start work" }));
+    await waitFor(() => expect(screen.getByText("Move to in progress?")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    const [, init] = fetchSpy.mock.calls[0];
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      status: "in_progress",
+      version: 7,
+    });
+  });
+
+  // GAP-CRM-SERVICE-REQUESTS-DETAIL-03: a VERSION_CONFLICT (someone else changed
+  // the request) must show a reload message and refresh — not the generic error.
+  it("on a VERSION_CONFLICT shows a reload message and refreshes", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ error: { code: "VERSION_CONFLICT" } }), { status: 409 }),
+    );
+
+    render(<ServiceRequestActions id={SR_ID} status="open" version={2} />);
+    fireEvent.click(screen.getByRole("button", { name: "Start work" }));
+    await waitFor(() => expect(screen.getByText("Move to in progress?")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+
+    expect(await screen.findByText(/someone else changed this request/i)).toBeInTheDocument();
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+  });
+
+  // GAP-CRM-SERVICE-REQUESTS-DETAIL-05: Cancel sends status=cancelled with a reason.
+  it("cancels a request (status=cancelled) with a mandatory reason", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: SR_ID } }), { status: 200 }),
+    );
+
+    render(<ServiceRequestActions id={SR_ID} status="open" version={1} />);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel request" }));
+    await waitFor(() => expect(screen.getByText("Cancel this request?")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Reason for cancellation"), { target: { value: "Filed in error" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    const [, init] = fetchSpy.mock.calls[0];
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      status: "cancelled",
+      statusNote: "Filed in error",
+      version: 1,
+    });
+  });
+
+  // GAP-CRM-SERVICE-REQUESTS-DETAIL-05: a cancelled request is terminal.
+  it("renders a terminal message once cancelled", () => {
+    render(<ServiceRequestActions id={SR_ID} status="cancelled" />);
+    expect(screen.getByText(/This request is cancelled — no further action available/)).toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 });

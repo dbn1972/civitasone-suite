@@ -5,7 +5,7 @@
  * the server component forwards to the list loader so filtering happens
  * server-side (single source of truth = the URL).
  */
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { Button } from "../ds";
 import { TEMPERATURES, PRIORITIES, LEAD_STATUSES } from "@/lib/crm/leadQualification";
@@ -28,6 +28,7 @@ const labelStyle = { display: "block", fontSize: 11, color: "var(--muted)", marg
 
 export function LeadFilters({ initial }: { initial: Partial<LeadFilterValues> }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [v, setV] = useState<LeadFilterValues>({
     temperature: initial.temperature ?? "",
     priority: initial.priority ?? "",
@@ -43,17 +44,24 @@ export function LeadFilters({ initial }: { initial: Partial<LeadFilterValues> })
   }
 
   function apply() {
-    const params = new URLSearchParams();
+    // GAP-CRM-CONTACTS-04: start from the CURRENT URL so the toolbar's own keys
+    // (search, segment view-mode) survive; set/delete only this control's keys.
+    const params = new URLSearchParams(searchParams?.toString() ?? "");
     (Object.keys(v) as Array<keyof LeadFilterValues>).forEach((k) => {
       const val = v[k].trim();
       if (val) params.set(k, val);
+      else params.delete(k);
     });
     router.push(params.toString() ? `/crm/contacts?${params.toString()}` : "/crm/contacts");
   }
 
   function clear() {
+    // Clear only the classification filters this control owns; leave the
+    // toolbar's search/segment in place (its own Clear drops everything).
     setV({ temperature: "", priority: "", segmentName: "", product: "", region: "", status: "", source: "" });
-    router.push("/crm/contacts");
+    const params = new URLSearchParams(searchParams?.toString() ?? "");
+    (["temperature", "priority", "segmentName", "product", "region", "status", "source"] as const).forEach((k) => params.delete(k));
+    router.push(params.toString() ? `/crm/contacts?${params.toString()}` : "/crm/contacts");
   }
 
   return (

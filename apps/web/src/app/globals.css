@@ -22,3 +22,23 @@ body {
   background: var(--civitas-color-surface-muted);
   color: var(--civitas-color-text);
 }
+
+/*
+ * GAP-CRM-GRIEVANCES-DETAIL-06: a responsive two-column "main + 320px sidebar"
+ * layout for CRM detail pages. These pages previously used an inline
+ * `grid-template-columns: 1fr 320px` with no breakpoint, so on a phone the
+ * main column collapsed to a ~20px sliver. An inline style cannot be overridden
+ * by a media query, so the breakpoint has to live in the stylesheet. minmax(0,
+ * 1fr) stops long unbreakable content (reference codes, email addresses) from
+ * forcing the grid wider than the viewport.
+ */
+.detail-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 20px;
+}
+@media (max-width: 900px) {
+  .detail-split {
+    grid-template-columns: 1fr;
+  }
+}

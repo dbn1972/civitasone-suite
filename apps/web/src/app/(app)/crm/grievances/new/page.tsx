@@ -1,29 +1,91 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button, PageHeader } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import {
+  getGrievanceCategories,
+  grievanceCategoryOptions,
+  DEFAULT_GRIEVANCE_CATEGORIES,
+} from "@/lib/crm/grievanceCategories";
 
-const CATEGORIES = [
-  "Water Supply", "Electricity", "Roads & Infrastructure",
-  "Sanitation", "Health Services", "Education",
-  "Public Safety", "Revenue & Land Records", "Other",
-];
+/**
+ * GAP-CRM-GRIEVANCES-NEW-03: the authoritative category list is now the
+ * per-tenant grievance-category master (crm.grievance_categories, admin page
+ * /crm/grievance-categories). These nine CPGRAMS-aligned categories are kept
+ * here ONLY as the documented fallback used when the tenant has configured no
+ * active categories or the master fails to load — so the select is never empty
+ * and no deploy is needed to add a category. Exported for backward compatibility
+ * with any callers that referenced the previous constant.
+ */
+const GRIEVANCE_CATEGORIES = DEFAULT_GRIEVANCE_CATEGORIES.map((c) => c.label);
+
+// GAP-CRM-GRIEVANCES-NEW-01: lightweight client-side validation so an invalid
+// phone/email is caught before the request is sent (the server remains the
+// authority). Indian mobile (10 digits, optional +91) or a general international
+// form; email is a standard shape. Both optional — an empty value is allowed.
+const PHONE_RE = /^(?:\+?91[-\s]?)?[6-9]\d{9}$|^\+?\d{7,15}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function NewGrievancePage() {
+  const t = useTranslations("crmGrievanceNew");
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const formError = useFormError("grievance");
+  // GAP-CRM-GRIEVANCES-NEW-03: load the per-tenant category master and fall back
+  // to the labelled CPGRAMS-aligned list when none is configured / it fails.
+  const [categories, setCategories] = useState<string[]>(GRIEVANCE_CATEGORIES);
+  const [categoriesFellBack, setCategoriesFellBack] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      const result = await getGrievanceCategories();
+      if (!live) return;
+      const { labels, fellBack } = grievanceCategoryOptions(result);
+      setCategories(labels);
+      setCategoriesFellBack(fellBack);
+    })();
+    return () => {
+      live = false;
+    };
+  }, []);
+  // GAP-CRM-GRIEVANCES-NEW-02: client-side inline errors for phone/email, keyed
+  // by field name, shown beside the field just like the server ones.
+  const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
+
+  function validateContact(phone: string, email: string): Record<string, string> {
+    const errs: Record<string, string> = {};
+    if (phone.trim() && !PHONE_RE.test(phone.trim())) {
+      errs.citizenPhone = t("invalidPhone");
+    }
+    if (email.trim() && !EMAIL_RE.test(email.trim())) {
+      errs.citizenEmail = t("invalidEmail");
+    }
+    return errs;
+  }
+
+  // Field error from either the client check or the server response.
+  function fieldErr(name: string): string | undefined {
+    return clientErrors[name] ?? formError.fieldError(name) ?? undefined;
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const phone = (fd.get("citizenPhone") as string) ?? "";
+    const email = (fd.get("citizenEmail") as string) ?? "";
+    const contactErrors = validateContact(phone, email);
+    setClientErrors(contactErrors);
+    if (Object.keys(contactErrors).length > 0) return;
+
     setSaving(true);
     formError.clear();
-    const fd = new FormData(e.currentTarget);
     const body = {
       citizenName:  fd.get("citizenName"),
-      citizenPhone: fd.get("citizenPhone") || undefined,
-      citizenEmail: fd.get("citizenEmail") || undefined,
+      citizenPhone: phone.trim() || undefined,
+      citizenEmail: email.trim() || undefined,
       category:     fd.get("category"),
       subject:      fd.get("subject"),
       description:  fd.get("description") || undefined,
@@ -52,10 +114,10 @@ export default function NewGrievancePage() {
   return (
     <>
       <PageHeader
-        title="New Grievance"
-        subtitle="Log a citizen grievance or complaint."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/crm/grievances"
-        backLabel="Grievances"
+        backLabel={t("backLabel")}
       />
       <div
         style={{
@@ -85,18 +147,24 @@ export default function NewGrievancePage() {
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
             <legend style={{ fontWeight: 600, marginBottom: 12, color: "var(--ink)" }}>
-              Citizen Details
+              {t("citizenDetails")}
             </legend>
+            {/* GAP-CRM-GRIEVANCES-NEW-01: DPDP purpose/retention notice. Phone and
+                email are personal data; collected only to respond to this
+                grievance. Final wording to be confirmed with the DPO. */}
+            <p style={{ fontSize: 12, color: "var(--ink2)", lineHeight: 1.5, margin: "0 0 12px" }}>
+              {t("dpdpNotice")}
+            </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 14 }}>
                 <span style={{ color: "var(--ink)" }}>
-                  Full Name <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
+                  {t("fullName")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
                 </span>
                 <input
                   name="citizenName"
                   required
                   maxLength={200}
-                  placeholder="Enter citizen's full name"
+                  placeholder={t("fullNamePlaceholder")}
                   style={{
                     padding: "8px 12px",
                     border: "1px solid var(--line)",
@@ -112,12 +180,14 @@ export default function NewGrievancePage() {
               </label>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 14 }}>
-                  <span style={{ color: "var(--ink)" }}>Phone</span>
+                  <span style={{ color: "var(--ink)" }}>{t("phone")}</span>
                   <input
                     name="citizenPhone"
                     type="tel"
                     maxLength={32}
-                    placeholder="e.g. 9876543210"
+                    placeholder={t("phonePlaceholder")}
+                    aria-invalid={fieldErr("citizenPhone") ? true : undefined}
+                    aria-describedby={fieldErr("citizenPhone") ? "citizenPhone-error" : undefined}
                     style={{
                       padding: "8px 12px",
                       border: "1px solid var(--line)",
@@ -127,14 +197,19 @@ export default function NewGrievancePage() {
                       fontSize: 14,
                     }}
                   />
+                  {fieldErr("citizenPhone") && (
+                    <span id="citizenPhone-error" style={{ fontSize: 12, color: "var(--bad)" }}>{fieldErr("citizenPhone")}</span>
+                  )}
                 </label>
                 <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 14 }}>
-                  <span style={{ color: "var(--ink)" }}>Email</span>
+                  <span style={{ color: "var(--ink)" }}>{t("email")}</span>
                   <input
                     name="citizenEmail"
                     type="email"
                     maxLength={320}
-                    placeholder="citizen@example.com"
+                    placeholder={t("emailPlaceholder")}
+                    aria-invalid={fieldErr("citizenEmail") ? true : undefined}
+                    aria-describedby={fieldErr("citizenEmail") ? "citizenEmail-error" : undefined}
                     style={{
                       padding: "8px 12px",
                       border: "1px solid var(--line)",
@@ -144,6 +219,9 @@ export default function NewGrievancePage() {
                       fontSize: 14,
                     }}
                   />
+                  {fieldErr("citizenEmail") && (
+                    <span id="citizenEmail-error" style={{ fontSize: 12, color: "var(--bad)" }}>{fieldErr("citizenEmail")}</span>
+                  )}
                 </label>
               </div>
             </div>
@@ -151,13 +229,13 @@ export default function NewGrievancePage() {
 
           <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
             <legend style={{ fontWeight: 600, marginBottom: 12, color: "var(--ink)" }}>
-              Grievance Details
+              {t("grievanceDetails")}
             </legend>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 14 }}>
                   <span style={{ color: "var(--ink)" }}>
-                    Category <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
+                    {t("category")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
                   </span>
                   <select
                     name="category"
@@ -171,17 +249,22 @@ export default function NewGrievancePage() {
                       fontSize: 14,
                     }}
                   >
-                    <option value="">Select category…</option>
-                    {CATEGORIES.map((c) => (
+                    <option value="">{t("selectCategory")}</option>
+                    {categories.map((c) => (
                       <option key={c} value={c}>{c}</option>
                     ))}
                   </select>
+                  {categoriesFellBack && (
+                    <span role="note" style={{ fontSize: 12, color: "var(--ink2)" }}>
+                      {t("standardCategoryNote")}
+                    </span>
+                  )}
                   {formError.fieldError("category") && (
                     <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("category")}</span>
                   )}
                 </label>
                 <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 14 }}>
-                  <span style={{ color: "var(--ink)" }}>Priority</span>
+                  <span style={{ color: "var(--ink)" }}>{t("priority")}</span>
                   <select
                     name="priority"
                     defaultValue="normal"
@@ -194,22 +277,25 @@ export default function NewGrievancePage() {
                       fontSize: 14,
                     }}
                   >
-                    <option value="low">Low</option>
-                    <option value="normal">Normal</option>
-                    <option value="high">High</option>
-                    <option value="urgent">Urgent</option>
+                    <option value="low">{t("priorityLow")}</option>
+                    <option value="normal">{t("priorityNormal")}</option>
+                    <option value="high">{t("priorityHigh")}</option>
+                    <option value="urgent">{t("priorityUrgent")}</option>
                   </select>
+                  {fieldErr("priority") && (
+                    <span style={{ fontSize: 12, color: "var(--bad)" }}>{fieldErr("priority")}</span>
+                  )}
                 </label>
               </div>
               <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 14 }}>
                 <span style={{ color: "var(--ink)" }}>
-                  Subject <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
+                  {t("subject")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
                 </span>
                 <input
                   name="subject"
                   required
                   maxLength={500}
-                  placeholder="Brief one-line description of the issue"
+                  placeholder={t("subjectPlaceholder")}
                   style={{
                     padding: "8px 12px",
                     border: "1px solid var(--line)",
@@ -224,12 +310,12 @@ export default function NewGrievancePage() {
                 )}
               </label>
               <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 14 }}>
-                <span style={{ color: "var(--ink)" }}>Description</span>
+                <span style={{ color: "var(--ink)" }}>{t("description")}</span>
                 <textarea
                   name="description"
                   rows={4}
                   maxLength={5000}
-                  placeholder="Detailed description of the grievance…"
+                  placeholder={t("descriptionPlaceholder")}
                   style={{
                     padding: "8px 12px",
                     border: "1px solid var(--line)",
@@ -248,9 +334,9 @@ export default function NewGrievancePage() {
           </fieldset>
 
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
-            <a href="/crm/grievances" className="btn">Cancel</a>
+            <a href="/crm/grievances" className="btn">{t("cancel")}</a>
             <Button type="submit" disabled={saving} loading={saving}>
-              {saving ? "Saving…" : "Submit Grievance"}
+              {saving ? t("saving") : t("submit")}
             </Button>
           </div>
         </form>

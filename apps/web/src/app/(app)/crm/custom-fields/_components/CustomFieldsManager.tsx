@@ -52,10 +52,12 @@ const VISIBILITY_ROLE_OPTIONS = ["crm_admin", "admin", "super_admin", "platform_
 
 interface Row extends CustomFieldDraft {
   key: string;
+  /** The field type as last persisted, to warn when a saved field's type changes (GAP-CRM-CUSTOM-FIELDS-02). */
+  origFieldType?: CfFieldType;
 }
 let SEQ = 0;
 function toRow(d: CustomFieldDraft): Row {
-  return { ...d, key: d.id ?? `new-${SEQ++}` };
+  return { ...d, key: d.id ?? `new-${SEQ++}`, origFieldType: d.id ? d.fieldType : undefined };
 }
 
 export function CustomFieldsManager() {
@@ -69,6 +71,10 @@ export function CustomFieldsManager() {
   const [error, setError] = useState("");
   const formError = useFormError("custom field");
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
+  /** A saved row whose field-type change is awaiting confirmation (GAP-CRM-CUSTOM-FIELDS-02). */
+  const [typeChangeKey, setTypeChangeKey] = useState<string | null>(null);
+  /** Typed field-name confirmation for a destructive delete (GAP-CRM-CUSTOM-FIELDS-04). */
+  const [deleteNameInput, setDeleteNameInput] = useState("");
   const headingId = useId();
   const errBaseId = useId();
 
@@ -155,16 +161,59 @@ export function CustomFieldsManager() {
       setError(errors.fieldName ?? errors.options ?? "Fix the highlighted fields.");
       return;
     }
+    // GAP-CRM-CUSTOM-FIELDS-02: changing a saved field's type can invalidate
+    // values already captured on records — confirm before persisting.
+    if (row.id && row.origFieldType !== undefined && row.origFieldType !== row.fieldType) {
+      setTypeChangeKey(row.key);
+      return;
+    }
+    await doSave(row);
+  }
+
+  /**
+   * Poll the catalogue until the saved field is reflected, then set the success
+   * line. Save is a 202 (queue-backed) write, so the row may not appear on the
+   * first reload — the copy says "submitted" and the local draft is kept
+   * meanwhile, never claiming "saved" over a stale list (GAP-CRM-CUSTOM-FIELDS-03).
+   */
+  async function reloadUntilReflected(row: Row, gen: number): Promise<boolean> {
+    const delays = [500, 1000, 2000];
+    for (let attempt = 0; attempt <= delays.length; attempt++) {
+      const { data, source } = await listCustomFields(entity);
+      if (gen !== genRef.current || !mountedRef.current) return false;
+      if (source === "error") return false;
+      const name = row.fieldName.trim().toLowerCase();
+      const present = row.id
+        ? data.some((f) => f.id === row.id && f.fieldType === row.fieldType)
+        : data.some((f) => f.fieldName.trim().toLowerCase() === name);
+      if (present) {
+        const nextRows = data.map((f) => toRow(toDraft(f)));
+        setRows(nextRows);
+        setOptionRowIds(
+          Object.fromEntries(nextRows.map((r) => [r.key, r.options.map(() => nextOptionRowId.current++)])),
+        );
+        setSource(source);
+        return true;
+      }
+      if (attempt < delays.length) await new Promise((r) => setTimeout(r, delays[attempt]));
+    }
+    return false;
+  }
+
+  async function doSave(row: Row) {
     const gen = genRef.current;
     setBusyKey(row.key);
     try {
       if (row.id) await updateCustomField(row.id, row);
       else await createCustomField(row);
-      // If the admin switched entity type during the mutation, the switch
-      // effect now owns the view — don't overwrite it with this entity's data.
       if (gen !== genRef.current) return;
-      setMessage(`Custom field “${row.fieldName.trim()}” saved.`);
-      await load(entity, gen);
+      const reflected = await reloadUntilReflected(row, gen);
+      if (gen !== genRef.current) return;
+      setMessage(
+        reflected
+          ? t("savedMessage", { name: row.fieldName.trim() })
+          : t("submittedMessage", { name: row.fieldName.trim() }),
+      );
     } catch (e) {
       setError(formError.fromException("save", e).message);
     } finally {
@@ -196,6 +245,7 @@ export function CustomFieldsManager() {
   }
 
   const confirmRow = rows.find((r) => r.key === confirmKey) ?? null;
+  const typeChangeRow = rows.find((r) => r.key === typeChangeKey) ?? null;
 
   return (
     <div className="card">
@@ -275,6 +325,11 @@ export function CustomFieldsManager() {
                           <option key={t} value={t}>{FIELD_TYPE_LABELS[t]}</option>
                         ))}
                       </select>
+                      {row.id && row.origFieldType !== undefined && row.origFieldType !== row.fieldType ? (
+                        <span role="alert" style={{ fontSize: 12, color: "#b45309" }}>
+                          {t("typeChangeWarning")}
+                        </span>
+                      ) : null}
                     </label>
                   </div>
 
@@ -380,7 +435,7 @@ export function CustomFieldsManager() {
                     <Button type="button" style={{ minHeight: 40 }} disabled={busyKey === row.key} onClick={() => save(row)}>
                       {busyKey === row.key ? "Saving…" : "Save"}
                     </Button>
-                    <Button type="button" variant="danger" style={{ minHeight: 40 }} disabled={busyKey === row.key} onClick={() => setConfirmKey(row.key)}>
+                    <Button type="button" variant="danger" style={{ minHeight: 40 }} disabled={busyKey === row.key} onClick={() => { setDeleteNameInput(""); setConfirmKey(row.key); }}>
                       Delete
                     </Button>
                   </div>
@@ -403,15 +458,56 @@ export function CustomFieldsManager() {
         open={confirmKey !== null}
         title="Delete this custom field?"
         description={
-          confirmRow
-            ? `“${confirmRow.fieldName || "(new field)"}” will be removed from ${ENTITY_TYPE_LABELS[entity].toLowerCase()}. This cannot be undone.`
-            : ""
+          confirmRow ? (
+            <>
+              <p style={{ margin: "0 0 8px" }}>
+                {t("deleteDescription", { name: confirmRow.fieldName || t("newFieldName"), entity: ENTITY_TYPE_LABELS[entity].toLowerCase() })}
+              </p>
+              {confirmRow.id ? (
+                <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
+                  <span>{t.rich("typeNameToConfirm", { name: confirmRow.fieldName, strong: (chunks) => <strong>{chunks}</strong> })}</span>
+                  <input
+                    value={deleteNameInput}
+                    onChange={(e) => setDeleteNameInput(e.target.value)}
+                    aria-label={t("typeNameAria")}
+                    style={inputStyle}
+                  />
+                </label>
+              ) : null}
+            </>
+          ) : (
+            ""
+          )
         }
         confirmLabel="Delete"
         danger
         busy={busyKey === confirmKey}
+        blockConfirm={!!confirmRow?.id && deleteNameInput.trim() !== (confirmRow?.fieldName ?? "").trim()}
         onConfirm={() => confirmRow && doDelete(confirmRow)}
-        onCancel={() => setConfirmKey(null)}
+        onCancel={() => { setConfirmKey(null); setDeleteNameInput(""); }}
+      />
+
+      <ConfirmDialog
+        open={typeChangeKey !== null}
+        title={t("typeChangeTitle")}
+        description={
+          typeChangeRow
+            ? t("typeChangeDescription", {
+                name: typeChangeRow.fieldName,
+                from: FIELD_TYPE_LABELS[typeChangeRow.origFieldType ?? typeChangeRow.fieldType],
+                to: FIELD_TYPE_LABELS[typeChangeRow.fieldType],
+              })
+            : ""
+        }
+        confirmLabel={t("typeChangeConfirm")}
+        danger
+        busy={busyKey === typeChangeKey}
+        onConfirm={() => {
+          if (!typeChangeRow) return;
+          setTypeChangeKey(null);
+          void doSave(typeChangeRow);
+        }}
+        onCancel={() => setTypeChangeKey(null)}
       />
     </div>
   );

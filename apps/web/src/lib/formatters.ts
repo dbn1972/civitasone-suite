@@ -30,6 +30,20 @@ function datePartsInZone(d: Date, timeZone: string): string {
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
+/**
+ * The IST calendar-date part of a value that may be a bare date ("2026-03-11")
+ * or a full ISO instant ("2026-03-10T19:00:00.000Z"). A bare date names a day
+ * and is returned as-is; an instant is resolved to its IST day. Lets a "due
+ * today" comparison (GAP-CRM-ACTIVITIES-03) work whether the backend sends a
+ * date or a timestamp. Pairs with the existing todayIST() below.
+ */
+export function istDatePart(value: string | null | undefined): string | null {
+  if (!value) return null;
+  if (isBareCalendarDate(value)) return value;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : datePartsInZone(d, IST_TIME_ZONE);
+}
+
 // Fixed 3-letter month table for "dd Mon yyyy" display -- deliberately NOT
 // `toLocaleDateString(..., { month: "short" })`. Recent CLDR English data
 // renders September as "Sept" (four letters) while every other month stays
@@ -482,6 +496,88 @@ export function formatMoney(minorUnits: bigint | number | string | null | undefi
 
   const paiseStr = paise.toString().padStart(2, "0");
   return `${negative ? "-" : ""}₹${grouped}.${paiseStr}`;
+}
+
+/**
+ * GAP-CRM-CAMPAIGNS-DETAIL-03: format money held in MINOR units in a SPECIFIC
+ * ISO-4217 currency. `formatMoney` hard-codes ₹ and the Indian lakh/crore
+ * grouping, so passing a USD or EUR amount through it prints a rupee symbol on
+ * a foreign figure. Use this wherever the amount carries its own currency code
+ * (campaign ROI rows carry `currency`).
+ *
+ * The minor-unit exponent is taken from the currency itself (most are 2, JPY/KRW
+ * are 0, some Gulf currencies are 3) via Intl, so the paise/cents split is right
+ * for the currency rather than always assuming 2. INR output matches formatMoney
+ * (₹ + en-IN grouping). An unknown 3-letter code falls back to 2 decimals and the
+ * code as the symbol rather than throwing; null/empty/unparseable renders "—"
+ * (same UX-006 convention as formatMoney).
+ *
+ *   formatMoneyIn("12345", "USD") -> "$123.45"
+ *   formatMoneyIn("12345", "INR") -> "₹123.45"
+ *   formatMoneyIn("12345", "JPY") -> "¥12,345"
+ *   formatMoneyIn(null, "USD")    -> "—"
+ */
+export function formatMoneyIn(
+  minorUnits: bigint | number | string | null | undefined,
+  currency: string | null | undefined,
+): string {
+  const code = (currency ?? "").trim().toUpperCase();
+  // No/invalid currency code: fall back to the INR formatter's "—" / ₹ behaviour.
+  if (!/^[A-Z]{3}$/.test(code)) return formatMoney(minorUnits);
+  if (code === "INR") return formatMoney(minorUnits);
+  if (minorUnits === null || minorUnits === undefined || minorUnits === "") return "—";
+
+  let minor: bigint;
+  try {
+    if (typeof minorUnits === "bigint") {
+      minor = minorUnits;
+    } else if (typeof minorUnits === "number") {
+      if (!Number.isFinite(minorUnits)) return "—";
+      minor = BigInt(Math.round(minorUnits));
+    } else {
+      const trimmed = minorUnits.trim();
+      if (trimmed === "") return "—";
+      if (/^[+-]?\d+$/.test(trimmed)) minor = BigInt(trimmed);
+      else {
+        const n = Number(trimmed);
+        if (!Number.isFinite(n)) return "—";
+        minor = BigInt(Math.round(n));
+      }
+    }
+  } catch {
+    return "—";
+  }
+
+  // Minor-unit exponent for the currency (2 for most, 0 for JPY, 3 for e.g. KWD).
+  let fractionDigits = 2;
+  try {
+    const resolved = new Intl.NumberFormat("en", { style: "currency", currency: code }).resolvedOptions();
+    if (typeof resolved.maximumFractionDigits === "number") fractionDigits = resolved.maximumFractionDigits;
+  } catch {
+    fractionDigits = 2;
+  }
+
+  const negative = minor < 0n;
+  const abs = negative ? -minor : minor;
+  const divisor = 10n ** BigInt(fractionDigits);
+  // major.minor as a Number is only used by Intl for grouping/symbol; the exact
+  // integer split is done in BigInt above so no paise are lost before display.
+  const major = abs / divisor;
+  const fraction = abs % divisor;
+  const asNumber = Number(`${major}.${fraction.toString().padStart(fractionDigits, "0")}`);
+  try {
+    const formatted = new Intl.NumberFormat("en", {
+      style: "currency",
+      currency: code,
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
+    }).format(asNumber);
+    return negative ? `-${formatted}` : formatted;
+  } catch {
+    // Unknown code: show the code as a prefix rather than a wrong symbol.
+    const fractionStr = fractionDigits > 0 ? `.${fraction.toString().padStart(fractionDigits, "0")}` : "";
+    return `${negative ? "-" : ""}${code} ${major.toString()}${fractionStr}`;
+  }
 }
 
 /**

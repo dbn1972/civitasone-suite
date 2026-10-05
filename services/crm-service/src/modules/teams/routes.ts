@@ -41,6 +41,10 @@ const updateCapacityBody = z.object({
   // manual `available` switch (e.g. HRMS-driven leave). Engine exclusion already
   // reads the column; this makes it settable.
   onLeave: z.boolean().optional(),
+  // GAP-CRM-AGENT-WORKLOAD-04: optional change reason for risky capacity
+  // changes (unavailable / on leave / lowering max leads). Recorded on the
+  // agent_capacity_update audit event. Optional to keep older callers working.
+  reason: z.string().trim().max(500).optional(),
 }).refine((b) => b.maxLeads !== undefined || b.available !== undefined || b.onLeave !== undefined, {
   message: "at least one of maxLeads, available or onLeave is required",
 });

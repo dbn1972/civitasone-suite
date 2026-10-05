@@ -57,11 +57,40 @@ describe("mapCRMActivityEntries (GAP-CRM-ACTIVITIES-01)", () => {
     expect(out?.[0].subject).toBe("Legacy visit");
   });
 
-  it("still drops rows missing an id or subject", () => {
+  it("still drops rows missing an id or subject (but returns [] not null)", () => {
     const out = mapCRMActivityEntries([
-      { type: "call", status: "open", owner: "A" },
-      { id: "2", type: "call", status: "open", owner: "A" },
+      { type: "call", status: "open", owner: "A" }, // no id
+      { id: "2", type: "call", status: "open", owner: "A" }, // no subject
     ]);
-    expect(out).toBeNull();
+    // GAP-CRM-ACTIVITIES-04: a valid array with no mappable rows is still a
+    // valid (empty) list, not an error.
+    expect(out).toEqual([]);
+  });
+});
+
+describe("mapCRMActivityEntries empty/status handling (GAP-CRM-ACTIVITIES-04)", () => {
+  it("returns [] (not null) for an empty but valid array", () => {
+    expect(mapCRMActivityEntries([])).toEqual([]);
+  });
+
+  it("returns null only for a non-array payload", () => {
+    expect(mapCRMActivityEntries({ not: "an array" })).toBeNull();
+    expect(mapCRMActivityEntries(null)).toBeNull();
+  });
+
+  it("keeps a cancelled activity", () => {
+    const out = mapCRMActivityEntries([
+      { id: "1", type: "task", subject: "Dropped task", status: "cancelled", owner: "A" },
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out?.[0].status).toBe("cancelled");
+  });
+
+  it("coerces an unknown status to 'open' instead of dropping the row", () => {
+    const out = mapCRMActivityEntries([
+      { id: "1", type: "task", subject: "In progress", status: "in_progress", owner: "A" },
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out?.[0].status).toBe("open");
   });
 });

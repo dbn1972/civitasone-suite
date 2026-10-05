@@ -8,6 +8,9 @@ vi.mock("../../../_data/loaders", () => ({
 vi.mock("./PipelineFilter", () => ({
   PipelineFilter: () => <div data-testid="pipeline-filter" />,
 }));
+vi.mock("./PeriodFilter", () => ({
+  PeriodFilter: () => <div data-testid="period-filter" />,
+}));
 vi.mock("./StageBreakdownTable", () => ({
   StageBreakdownTable: () => <div data-testid="stage-table" />,
 }));
@@ -73,5 +76,35 @@ describe("ForecastPage — GoI redesign", () => {
   it("renders pipeline filter", async () => {
     render(await ForecastPage({}));
     expect(screen.getByTestId("pipeline-filter")).toBeInTheDocument();
+  });
+
+  // GAP-CRM-FORECAST-01: a failed forecast load must NOT render ₹0.00 tiles / "No
+  // forecast yet"; it shows an error state and omits the money tiles.
+  it("shows an error state (no ₹0.00 tiles) when the forecast fetch fails", async () => {
+    mockedForecast.mockResolvedValue({
+      data: { totalForecastMinor: "0", dealCount: 0, stages: [] },
+      source: "error" as const,
+      status: 500,
+    } as never);
+    render(await ForecastPage({}));
+    expect(screen.queryByText("Weighted Forecast")).not.toBeInTheDocument();
+    expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("stage-table")).not.toBeInTheDocument();
+  });
+
+  // GAP-CRM-FORECAST-03: a chosen FY quarter is resolved to a close-date window
+  // passed to the loader, and named in the subtitle.
+  it("passes the period's close-date window to the loader and names it in the subtitle", async () => {
+    render(await ForecastPage({ searchParams: { period: "fy2026-q2" } }));
+    expect(mockedForecast).toHaveBeenCalledWith(
+      undefined,
+      { closeDateFrom: "2026-07-01", closeDateTo: "2026-09-30" },
+    );
+    expect(screen.getByText(/Q2 \(Jul–Sep\)/)).toBeInTheDocument();
+  });
+
+  it("renders the period filter", async () => {
+    render(await ForecastPage({}));
+    expect(screen.getByTestId("period-filter")).toBeInTheDocument();
   });
 });

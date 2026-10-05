@@ -2,6 +2,7 @@
 
 import type { DragEvent, ReactNode } from "react";
 import { useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { formatMoney } from "@/lib/formatters";
 
 type Props = {
@@ -29,6 +30,7 @@ export function StageColumn({
   onDrop,
   children,
 }: Props) {
+  const t = useTranslations("crmStageColumn");
   const handleDragOver = useCallback(
     (e: DragEvent<HTMLDivElement>) => {
       e.preventDefault();
@@ -71,7 +73,7 @@ export function StageColumn({
           : "border-slate-200"
       }`}
       role="region"
-      aria-label={`${stageName} stage — ${dealCount} deals, ${formatMoney(totalValue)} value`}
+      aria-label={t("ariaLabel", { name: stageName, count: dealCount, value: formatMoney(totalValue) })}
       onDragOver={handleDragOver}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
@@ -82,7 +84,7 @@ export function StageColumn({
         <div>
           <h3 className="text-sm font-semibold text-slate-900">{stageName}</h3>
           <p className="text-xs text-slate-500">
-            {dealCount} deal{dealCount !== 1 ? "s" : ""} · {probability}% prob
+            {t("summary", { count: dealCount, probability })}
           </p>
         </div>
         <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
@@ -95,7 +97,7 @@ export function StageColumn({
         {children}
         {dealCount === 0 && (
           <div className="flex flex-1 items-center justify-center text-center text-xs text-slate-400">
-            Drop deals here
+            {t("dropHere")}
           </div>
         )}
       </div>

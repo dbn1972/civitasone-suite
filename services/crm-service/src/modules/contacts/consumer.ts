@@ -220,6 +220,22 @@ export function registerContactConsumers(rawQueue: Queue): void {
         { batchId: p.batchId, total: p.contacts.length, inserted, skipped, errored, skippedRows },
         "bulk_import", p.batchId,
       );
+      // GAP-CRM-CONTACTS-IMPORT-04: persist the per-batch outcome in the SAME
+      // transaction as the writes so GET /import/:batchId can never observe a
+      // half-applied batch. `rejected` = duplicate-skips + hard errors; the
+      // per-row list carries only the row index + a coarse machine reason
+      // (duplicate_email | error) — no PII (name/email/phone) is stored.
+      await repo.recordImportBatchTx(tx, {
+        batchId: p.batchId,
+        tenantId: p.tenantId,
+        status: "completed",
+        total: p.contacts.length,
+        accepted: inserted,
+        rejected: skipped + errored,
+        errored,
+        rejectedRows: skippedRows.map((r) => ({ index: r.index, reason: r.reason })),
+        createdBy: msg.actorId,
+      });
     });
     await cache.invalidateResource(msg.tenantId, RESOURCE);
     await invalidateDashboard(msg.tenantId);

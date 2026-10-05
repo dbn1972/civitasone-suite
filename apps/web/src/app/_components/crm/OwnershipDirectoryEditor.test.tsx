@@ -1,7 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { OwnershipDirectoryEditor } from "./OwnershipDirectoryEditor";
 import * as as from "@/lib/crm/assignment";
+
+function render(ui: React.ReactElement) {
+  return rtlRender(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
 
 vi.mock("@/lib/crm/assignment", async (orig) => {
   const actual = await orig<typeof import("@/lib/crm/assignment")>();
@@ -21,11 +31,24 @@ beforeEach(() => {
 });
 
 describe("OwnershipDirectoryEditor (AS-002 admin)", () => {
-  it("loads the first tab (queues) and shows the saved-info badge on error", async () => {
+  it("on a failed load shows a retry and no '+ Add' / empty-state (GAP-CRM-ASSIGNMENT-DIRECTORY-02)", async () => {
     vi.mocked(as.getResources).mockResolvedValue({ data: [], source: "error" });
     render(<OwnershipDirectoryEditor />);
-    await waitFor(() => expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/We couldn't load queues/i)).toBeInTheDocument());
     expect(as.getResources).toHaveBeenCalledWith("assignment-queues");
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.queryByText(/No queues yet/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /add queue/i })).not.toBeInTheDocument();
+  });
+
+  it("retrying after an error loads the rows (GAP-CRM-ASSIGNMENT-DIRECTORY-02)", async () => {
+    vi.mocked(as.getResources)
+      .mockResolvedValueOnce({ data: [], source: "error" })
+      .mockResolvedValueOnce({ data: [{ id: "q1", name: "Inbound", description: "", enabled: true }], source: "api" });
+    render(<OwnershipDirectoryEditor />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(screen.getByDisplayValue("Inbound")).toBeInTheDocument());
   });
 
   it("switches tab and loads the matching resource", async () => {
@@ -79,5 +102,49 @@ describe("OwnershipDirectoryEditor (AS-002 admin)", () => {
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
     expect(await screen.findByText(/conflict/i)).toBeInTheDocument();
     expect(screen.queryByText(/saved/i)).not.toBeInTheDocument();
+  });
+
+  // GAP-CRM-ASSIGNMENT-DIRECTORY-01
+  it("uses correct singular copy on the Territories tab (not 'territorie')", async () => {
+    vi.mocked(as.getResources).mockResolvedValue({ data: [], source: "api" });
+    render(<OwnershipDirectoryEditor />);
+    await waitFor(() => expect(as.getResources).toHaveBeenCalledWith("assignment-queues"));
+    fireEvent.click(screen.getByRole("tab", { name: /territories/i }));
+    await waitFor(() => expect(as.getResources).toHaveBeenCalledWith("territories"));
+    expect(screen.getByRole("button", { name: "+ Add territory" })).toBeInTheDocument();
+    expect(screen.queryByText(/territorie\b/i)).not.toBeInTheDocument();
+    // The placeholder is correct too.
+    fireEvent.click(screen.getByRole("button", { name: "+ Add territory" }));
+    expect(screen.getByPlaceholderText("Territory name")).toBeInTheDocument();
+  });
+
+  it("uses correct singular copy on the Branches tab (not 'branche')", async () => {
+    vi.mocked(as.getResources).mockResolvedValue({ data: [], source: "api" });
+    render(<OwnershipDirectoryEditor />);
+    await waitFor(() => expect(as.getResources).toHaveBeenCalledWith("assignment-queues"));
+    fireEvent.click(screen.getByRole("tab", { name: /branches/i }));
+    await waitFor(() => expect(as.getResources).toHaveBeenCalledWith("branches"));
+    expect(screen.getByRole("button", { name: "+ Add branch" })).toBeInTheDocument();
+    expect(screen.queryByText(/branche\b/i)).not.toBeInTheDocument();
+  });
+
+  // GAP-CRM-ASSIGNMENT-DIRECTORY-03
+  it("re-sends unmodelled extra fields unchanged on save", async () => {
+    vi.mocked(as.getResources).mockResolvedValue({
+      data: [{ id: "t1", name: "North", description: "", enabled: true, extra: { code: "N1", region: "North" } }] as never,
+      source: "api",
+    });
+    vi.mocked(as.updateResource).mockResolvedValue(undefined);
+    render(<OwnershipDirectoryEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("North")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/name for entry 1/i), { target: { value: "North Zone" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    await waitFor(() =>
+      expect(as.updateResource).toHaveBeenCalledWith(
+        "assignment-queues",
+        "t1",
+        expect.objectContaining({ name: "North Zone", code: "N1", region: "North" }),
+      ),
+    );
   });
 });

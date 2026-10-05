@@ -1,29 +1,43 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, PageHeader } from "../../../../_components/ds";
+import { Button, PageHeader, EntityPicker, type EntityOption } from "../../../../_components/ds";
+import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { useFormError } from "@/lib/useFormError";
+import { getServiceTypes, serviceTypeOptions, DEFAULT_SERVICE_TYPES } from "@/lib/crm/serviceTypes";
+
+/**
+ * GAP-CRM-SERVICE-REQUESTS-NEW-04: async server-side contact search for linking a
+ * request to an existing CRM contact, over GET /v1/crm/contacts/lookup?q= (id +
+ * display name + masked phone/email only). The request's POST already accepts an
+ * optional contactId (crm-service service-requests createBody.contactId); linking
+ * is optional and never blocks logging the request.
+ */
+async function searchContacts(query: string, signal: AbortSignal): Promise<EntityOption[]> {
+  const q = query.trim();
+  const res = await browserFetch(`v1/crm/contacts/lookup?q=${encodeURIComponent(q)}&limit=10`, { signal });
+  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  const body = (await res.json()) as { data?: Array<{ id?: string; name?: string; email?: string | null; phone?: string | null }> };
+  return (body.data ?? [])
+    .filter((c): c is { id: string; name: string; email?: string | null; phone?: string | null } => Boolean(c.id && c.name))
+    .map((c) => ({ id: c.id, label: c.name, ...(c.email || c.phone ? { sublabel: [c.phone, c.email].filter(Boolean).join(" · ") } : {}) }));
+}
 
 /**
  * Service types a citizen can raise a request against. Kept alongside the
  * grievance categories rather than shared with them: a grievance is a complaint
  * about a service already delivered, a request asks for one to be delivered, and
  * the two taxonomies diverge in practice.
+ *
+ * GAP-CRM-SERVICE-REQUESTS-NEW-02: the authoritative list is now the per-tenant
+ * service-type master (crm.service_types, admin page /crm/service-types). This
+ * constant is kept ONLY as the labelled fallback used when the tenant has
+ * configured no active types or the master fails to load — so the select is
+ * never empty and no deploy is needed to add a type.
  */
-const SERVICE_TYPES = [
-  "New Water Connection",
-  "New Electricity Connection",
-  "Birth Certificate",
-  "Death Certificate",
-  "Property Mutation",
-  "Trade Licence",
-  "Building Permission",
-  "Waste Collection",
-  "Street Light Installation",
-  "Other",
-];
+const SERVICE_TYPES_FALLBACK = DEFAULT_SERVICE_TYPES.map((t) => t.label);
 
 const FIELD: React.CSSProperties = {
   padding: "8px 12px",
@@ -41,7 +55,28 @@ export default function NewServiceRequestPage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [contactError, setContactError] = useState<string | null>(null);
+  // GAP-CRM-SERVICE-REQUESTS-NEW-04: optionally link an existing contact.
+  const [contactId, setContactId] = useState<string | null>(null);
+  const [contactLabel, setContactLabel] = useState<string>("");
   const formError = useFormError("service request");
+  // GAP-CRM-SERVICE-REQUESTS-NEW-02: load the per-tenant service-type master and
+  // fall back to the labelled standard list when none is configured / it fails.
+  const [serviceTypes, setServiceTypes] = useState<string[]>(SERVICE_TYPES_FALLBACK);
+  const [typesFellBack, setTypesFellBack] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      const result = await getServiceTypes();
+      if (!live) return;
+      const { labels, fellBack } = serviceTypeOptions(result);
+      setServiceTypes(labels);
+      setTypesFellBack(fellBack);
+    })();
+    return () => {
+      live = false;
+    };
+  }, []);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -68,6 +103,17 @@ export default function NewServiceRequestPage() {
       subject: fd.get("subject"),
       description: fd.get("description") || undefined,
       priority: fd.get("priority"),
+      // GAP-CRM-SERVICE-REQUESTS-NEW-04: link to an existing CRM contact when
+      // one was chosen, so a repeat caller is tied to their record rather than
+      // creating an unrelated row. Optional — omitted when none selected.
+      ...(contactId ? { contactId } : {}),
+      // GAP-CRM-SERVICE-REQUESTS-NEW-03: record how the request was received and,
+      // when known, a target resolution date. Both optional; omitted when blank.
+      intakeChannel: (fd.get("intakeChannel") as string | null) || undefined,
+      dueAt: (() => {
+        const d = (fd.get("dueAt") as string | null)?.trim();
+        return d ? new Date(`${d}T00:00:00.000Z`).toISOString() : undefined;
+      })(),
     };
 
     try {
@@ -92,10 +138,10 @@ export default function NewServiceRequestPage() {
   return (
     <>
       <PageHeader
-        title="New Service Request"
-        subtitle="Log a citizen service request."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/crm/service-requests"
-        backLabel="Service Requests"
+        backLabel={t("backLabel")}
       />
       <div
         style={{
@@ -124,16 +170,16 @@ export default function NewServiceRequestPage() {
         )}
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
-            <legend style={{ fontWeight: 600, marginBottom: 12, color: "var(--ink)" }}>Citizen Details</legend>
+            <legend style={{ fontWeight: 600, marginBottom: 12, color: "var(--ink)" }}>{t("citizenDetails")}</legend>
             <p role="note" style={{ fontSize: 12, color: "var(--ink2)", margin: "0 0 12px" }}>
               {t("dpdpNote")}
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <label style={LABEL}>
                 <span style={{ color: "var(--ink)" }}>
-                  Full Name <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
+                  {t("fullName")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
                 </span>
-                <input name="citizenName" required maxLength={200} placeholder="Enter citizen's full name" style={FIELD} />
+                <input name="citizenName" required maxLength={200} placeholder={t("fullNamePlaceholder")} style={FIELD} />
                 {formError.fieldError("citizenName") && (
                   <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("citizenName")}</span>
                 )}
@@ -143,65 +189,123 @@ export default function NewServiceRequestPage() {
                   <span style={{ color: "var(--ink)" }}>
                     {t("phone")} <span style={{ color: "var(--ink2)", fontWeight: 400 }}>{t("phoneOrEmailRequired")}</span>
                   </span>
-                  <input name="citizenPhone" type="tel" maxLength={32} placeholder="e.g. 9876543210" style={FIELD} aria-invalid={contactError ? true : undefined} />
+                  <input name="citizenPhone" type="tel" maxLength={32} placeholder={t("phonePlaceholder")} style={FIELD} aria-invalid={contactError ? true : undefined} />
                 </label>
                 <label style={LABEL}>
                   <span style={{ color: "var(--ink)" }}>
                     {t("email")} <span style={{ color: "var(--ink2)", fontWeight: 400 }}>{t("phoneOrEmailRequired")}</span>
                   </span>
-                  <input name="citizenEmail" type="email" maxLength={320} placeholder="citizen@example.com" style={FIELD} aria-invalid={contactError ? true : undefined} />
+                  <input name="citizenEmail" type="email" maxLength={320} placeholder={t("emailPlaceholder")} style={FIELD} aria-invalid={contactError ? true : undefined} />
                 </label>
               </div>
               {contactError && (
                 <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{contactError}</span>
               )}
+              {/* GAP-CRM-SERVICE-REQUESTS-NEW-04: optionally link to an existing
+                  CRM contact via async server search, so a repeat caller is tied
+                  to their record. A "possible existing contact" hint nudges the
+                  clerk to link rather than create a duplicate — but linking is
+                  never required to log the request. */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ color: "var(--ink)", fontSize: 14 }}>
+                  {t("linkContact")} <span style={{ color: "var(--ink2)", fontWeight: 400 }}>{t("optional")}</span>
+                </span>
+                <EntityPicker
+                  aria-label={t("linkContactAriaLabel")}
+                  value={contactId}
+                  onChange={(v) => {
+                    const id = typeof v === "string" ? v : null;
+                    setContactId(id);
+                    if (!id) setContactLabel("");
+                  }}
+                  search={searchContacts}
+                  initialOptions={contactId && contactLabel ? [{ id: contactId, label: contactLabel }] : undefined}
+                  placeholder={t("searchContactsPlaceholder")}
+                />
+                {contactId ? (
+                  <span role="note" style={{ fontSize: 12, color: "var(--ink2)" }}>
+                    {t("linkedNote")}
+                  </span>
+                ) : (
+                  <span role="note" style={{ fontSize: 12, color: "var(--ink2)" }}>
+                    {t("possibleContactNote")}
+                  </span>
+                )}
+              </div>
             </div>
           </fieldset>
 
           <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
-            <legend style={{ fontWeight: 600, marginBottom: 12, color: "var(--ink)" }}>Request Details</legend>
+            <legend style={{ fontWeight: 600, marginBottom: 12, color: "var(--ink)" }}>{t("requestDetails")}</legend>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <label style={LABEL}>
                   <span style={{ color: "var(--ink)" }}>
-                    Service Type <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
+                    {t("serviceType")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
                   </span>
                   <select name="serviceType" required style={FIELD}>
-                    <option value="">Select service type…</option>
-                    {SERVICE_TYPES.map((s) => (
+                    <option value="">{t("selectServiceType")}</option>
+                    {serviceTypes.map((s) => (
                       <option key={s} value={s}>{s}</option>
                     ))}
                   </select>
+                  {typesFellBack && (
+                    <span role="note" style={{ fontSize: 12, color: "var(--ink2)" }}>
+                      {t("standardTypesNote")}
+                    </span>
+                  )}
                   {formError.fieldError("serviceType") && (
                     <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("serviceType")}</span>
                   )}
                 </label>
                 <label style={LABEL}>
-                  <span style={{ color: "var(--ink)" }}>Priority</span>
+                  <span style={{ color: "var(--ink)" }}>{t("priority")}</span>
                   <select name="priority" defaultValue="normal" style={FIELD}>
-                    <option value="low">Low</option>
-                    <option value="normal">Normal</option>
-                    <option value="high">High</option>
-                    <option value="urgent">Urgent</option>
+                    <option value="low">{t("priorityLow")}</option>
+                    <option value="normal">{t("priorityNormal")}</option>
+                    <option value="high">{t("priorityHigh")}</option>
+                    <option value="urgent">{t("priorityUrgent")}</option>
                   </select>
+                </label>
+              </div>
+              {/* GAP-CRM-SERVICE-REQUESTS-NEW-03: capture intake channel and an
+                  optional target resolution date so a request can be tracked for
+                  SLA/channel reporting instead of defaulting to an unknown source. */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <label style={LABEL}>
+                  <span style={{ color: "var(--ink)" }}>{t("receivedVia")}</span>
+                  <select name="intakeChannel" defaultValue="" style={FIELD}>
+                    <option value="">{t("channelNotSpecified")}</option>
+                    <option value="walk_in">{t("channelWalkIn")}</option>
+                    <option value="phone">{t("channelPhone")}</option>
+                    <option value="portal">{t("channelPortal")}</option>
+                    <option value="email">{t("channelEmail")}</option>
+                    <option value="letter">{t("channelLetter")}</option>
+                  </select>
+                </label>
+                <label style={LABEL}>
+                  <span style={{ color: "var(--ink)" }}>
+                    {t("targetDate")} <span style={{ color: "var(--ink2)", fontWeight: 400 }}>{t("optional")}</span>
+                  </span>
+                  <input name="dueAt" type="date" style={FIELD} />
                 </label>
               </div>
               <label style={LABEL}>
                 <span style={{ color: "var(--ink)" }}>
-                  Subject <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
+                  {t("subject")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
                 </span>
-                <input name="subject" required maxLength={500} placeholder="Brief one-line description of the request" style={FIELD} />
+                <input name="subject" required maxLength={500} placeholder={t("subjectPlaceholder")} style={FIELD} />
                 {formError.fieldError("subject") && (
                   <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("subject")}</span>
                 )}
               </label>
               <label style={LABEL}>
-                <span style={{ color: "var(--ink)" }}>Description</span>
+                <span style={{ color: "var(--ink)" }}>{t("description")}</span>
                 <textarea
                   name="description"
                   rows={4}
                   maxLength={5000}
-                  placeholder="Detailed description of the service request…"
+                  placeholder={t("descriptionPlaceholder")}
                   style={{ ...FIELD, resize: "vertical" }}
                 />
                 {formError.fieldError("description") && (
@@ -212,9 +316,9 @@ export default function NewServiceRequestPage() {
           </fieldset>
 
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
-            <a href="/crm/service-requests" className="btn">Cancel</a>
+            <a href="/crm/service-requests" className="btn">{t("cancel")}</a>
             <Button type="submit" disabled={saving} loading={saving}>
-              {saving ? "Saving…" : "Submit Request"}
+              {saving ? t("saving") : t("submit")}
             </Button>
           </div>
         </form>

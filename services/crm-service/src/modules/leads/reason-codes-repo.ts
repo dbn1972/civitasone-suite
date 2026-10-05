@@ -4,6 +4,7 @@
  */
 import { eq, and, asc, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+import { HttpError } from "../../shared/context.js";
 import { enqueue } from "../../shared/outbox.js";
 import { leadReasonCodes, type LeadReasonCodeRow } from "./reason-codes-schema.js";
 
@@ -74,6 +75,55 @@ export async function getCodes(tenantId: string, actorId: string): Promise<Reaso
 }
 
 /**
+ * GAP-CRM-LEAD-REASON-CODES-04 — list-level optimistic-concurrency metadata,
+ * derived from `SUM(version)` across the tenant's rows (every upsert bumps a
+ * row's version by at least 1, so the sum strictly increases on any change).
+ * No schema change required.
+ */
+export interface ReasonCodesListMeta {
+  version: string;
+  updatedBy: string | null;
+  updatedAt: string | null;
+}
+export interface ReasonCodesList {
+  codes: ReasonCodeView[];
+  meta: ReasonCodesListMeta;
+}
+
+type VersionRow = { version: string | number | null; updatedBy: string | null; updatedAt: Date | string | null };
+
+async function readListMeta(
+  tx: { execute: (q: ReturnType<typeof sql>) => Promise<unknown> },
+  tenantId: string,
+  lock: boolean,
+): Promise<ReasonCodesListMeta> {
+  if (lock) {
+    await tx.execute(sql`SELECT id FROM crm.lead_reason_codes WHERE tenant_id = ${tenantId} FOR UPDATE`);
+  }
+  const rows = (await tx.execute(sql`
+    SELECT COALESCE(SUM(version), 0)::text AS version,
+           (SELECT updated_by FROM crm.lead_reason_codes WHERE tenant_id = ${tenantId} ORDER BY updated_at DESC LIMIT 1) AS "updatedBy",
+           (SELECT updated_at FROM crm.lead_reason_codes WHERE tenant_id = ${tenantId} ORDER BY updated_at DESC LIMIT 1) AS "updatedAt"
+    FROM crm.lead_reason_codes
+    WHERE tenant_id = ${tenantId}
+  `)) as unknown as VersionRow[];
+  const r = rows[0];
+  const updatedAt = r?.updatedAt ?? null;
+  return {
+    version: String(r?.version ?? "0"),
+    updatedBy: r?.updatedBy ?? null,
+    updatedAt: updatedAt instanceof Date ? updatedAt.toISOString() : updatedAt,
+  };
+}
+
+/** The tenant's codes plus the list-level concurrency token (seeds on first read). */
+export async function getCodesList(tenantId: string, actorId: string): Promise<ReasonCodesList> {
+  const codes = await getCodes(tenantId, actorId);
+  const meta = await scopedRead((tx) => readListMeta(tx, tenantId, false));
+  return { codes, meta };
+}
+
+/**
  * Is `code` a valid, active reason code for a transition to `targetStatus`?
  * Seeds defaults first so a brand-new tenant can transition immediately.
  */
@@ -99,18 +149,36 @@ export interface ReasonCodeUpsert {
   active: boolean;
 }
 
-/** Upsert reason codes by (tenant, status, code); a partial PUT is additive. Audited. */
+/**
+ * Upsert reason codes by (tenant, status, code); a partial PUT is additive. Audited.
+ *
+ * GAP-CRM-LEAD-REASON-CODES-04 optimistic concurrency: when `expectedVersion`
+ * is supplied, the tenant's rows are locked (`FOR UPDATE`) and the list version
+ * re-read inside the write transaction before any mutation; a mismatch throws
+ * 409 VERSION_CONFLICT and the transaction rolls back untouched.
+ */
 export async function upsertCodes(
   tenantId: string,
   codes: ReasonCodeUpsert[],
   actorId: string,
   correlationId: string,
-): Promise<ReasonCodeView[]> {
+  expectedVersion?: string,
+): Promise<ReasonCodesList> {
   // Ensure the built-in defaults exist even when a tenant's very first interaction
   // with the catalog is a custom PUT (idempotent — ON CONFLICT DO NOTHING), so
   // adding a custom code never leaves the default codes unavailable for transitions.
   await seedDefaults(tenantId, actorId);
   await db.transaction(async (tx) => {
+    if (expectedVersion !== undefined) {
+      const current = await readListMeta(tx as unknown as { execute: (q: ReturnType<typeof sql>) => Promise<unknown> }, tenantId, true);
+      if (current.version !== expectedVersion) {
+        throw new HttpError(
+          409,
+          "VERSION_CONFLICT",
+          "These reason codes were changed by another admin. Reload to see the latest, then re-apply your changes.",
+        );
+      }
+    }
     for (const c of codes) {
       await tx.insert(leadReasonCodes).values({
         tenantId,
@@ -147,5 +215,5 @@ export async function upsertCodes(
       },
     });
   });
-  return getCodes(tenantId, actorId);
+  return getCodesList(tenantId, actorId);
 }

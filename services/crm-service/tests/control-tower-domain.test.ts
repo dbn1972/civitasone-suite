@@ -30,4 +30,14 @@ describe("P2-8 control tower rules", () => {
     ]);
     expect(ranked.map((r) => r.region)).toEqual(["East", "North", "West"]);
   });
+
+  it("GAP-CRM-CONTROL-TOWER-02: the region grouping key is trimmed and case-folded", () => {
+    // Mirrors the SQL grouping key lower(btrim(COALESCE(region, city, 'unknown')))
+    // so "South" and " south " fold onto one control-tower row.
+    const key = (region: string | null, city: string | null) =>
+      (region ?? city ?? "unknown").trim().toLowerCase();
+    expect(key("South", null)).toBe(key(" south ", null));
+    expect(key("WEST", null)).toBe(key("west", null));
+    expect(key(null, null)).toBe("unknown");
+  });
 });

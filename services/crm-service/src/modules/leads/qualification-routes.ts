@@ -73,7 +73,26 @@ export async function qualificationRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { id } = frameworkIdParam.parse(req.params);
     const body = updateFrameworkBody.parse(req.body);
-    const framework = await repo.updateFramework(ctx.tenantId, ctx.actorId, ctx.correlationId, id, body);
+    let framework: Awaited<ReturnType<typeof repo.updateFramework>>;
+    try {
+      framework = await repo.updateFramework(ctx.tenantId, ctx.actorId, ctx.correlationId, id, body);
+    } catch (e) {
+      if (e instanceof repo.QuestionInUseError) {
+        throw new HttpError(
+          409,
+          "QUESTION_HAS_ANSWERS",
+          "a question you removed already has answers on leads; keep it (set weight 0 to retire its effect) instead of deleting it",
+        );
+      }
+      throw e;
+    }
+    if (framework === "conflict") {
+      throw new HttpError(
+        409,
+        "VERSION_CONFLICT",
+        "framework was changed by someone else; reload and try again",
+      );
+    }
     if (!framework) throw new HttpError(404, "NOT_FOUND", "framework not found");
     return reply.send({ data: framework });
   });

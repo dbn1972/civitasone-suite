@@ -65,4 +65,48 @@ describe("Accounts list page", () => {
     render(await Page());
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(4);
   });
+
+  // GAP-CRM-ACCOUNTS-02: a full page means the endpoint capped the list and the
+  // counts are of the loaded page only — say so instead of presenting a page
+  // count as the whole-master total.
+  it("shows a 'Showing the first N accounts' hint and partial stat labels when truncated", async () => {
+    mocked.mockResolvedValue({
+      data: sampleAccounts as never,
+      source: "api",
+      truncated: true,
+      pageLimit: 200,
+    } as never);
+    render(await Page());
+    expect(screen.getByText(/Showing the first 200 accounts/i)).toBeInTheDocument();
+    expect(screen.getByText("Total Accounts (in loaded accounts)")).toBeInTheDocument();
+  });
+
+  it("does not show the truncation hint when the page is not full", async () => {
+    mocked.mockResolvedValue({
+      data: sampleAccounts as never,
+      source: "api",
+      truncated: false,
+      pageLimit: 200,
+    } as never);
+    render(await Page());
+    expect(screen.queryByText(/Showing the first/i)).not.toBeInTheDocument();
+    expect(screen.getByText("Total Accounts")).toBeInTheDocument();
+  });
+
+  // GAP-CRM-ACCOUNTS-02 (wave2): with a real server total greater than the loaded
+  // page, the page shows an exact "Showing N of M accounts" and the Total Accounts
+  // tile reports M, not the page count.
+  it("shows 'Showing N of M accounts' and the real total when the backend returns meta.total", async () => {
+    mocked.mockResolvedValue({
+      data: sampleAccounts as never,
+      source: "api",
+      truncated: true,
+      pageLimit: 200,
+      total: 120,
+    } as never);
+    render(await Page());
+    expect(screen.getByText(/Showing 2 of 120 accounts/i)).toBeInTheDocument();
+    // Total Accounts tile shows the authoritative total.
+    expect(screen.getByText("120")).toBeInTheDocument();
+  });
 });

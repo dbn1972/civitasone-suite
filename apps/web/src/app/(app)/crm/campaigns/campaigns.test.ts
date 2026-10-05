@@ -65,6 +65,31 @@ describe("portfolioTotals", () => {
     expect(totals.roiBasisPoints).toBeNull();
   });
 
+  it("excludes no-spend campaigns from the ROI numerator (GAP-CRM-CAMPAIGNS-04)", () => {
+    // A costed campaign at +100% ROI next to a no-spend campaign carrying ₹500 of
+    // attributed revenue. The headline revenue still counts both, but ROI must
+    // reflect only the measured campaign (100%), not be lifted by the free revenue.
+    const totals = portfolioTotals([
+      summaryRow({ campaignId: "measured", costMinor: "100", revenueMinor: "200" }),
+      summaryRow({ campaignId: "unmeasured", costMinor: "0", revenueMinor: "500" }),
+    ]);
+
+    expect(totals.roiBasisPoints).toBe("10000");
+    expect(totals.revenueMinor).toBe("700");
+    expect(totals.unmeasuredCampaigns).toBe(1);
+    expect(totals.unmeasuredRevenueMinor).toBe("500");
+  });
+
+  it("reports ROI as null when every campaign is unmeasured (GAP-CRM-CAMPAIGNS-04)", () => {
+    const totals = portfolioTotals([
+      summaryRow({ campaignId: "a", costMinor: "0", revenueMinor: "100" }),
+      summaryRow({ campaignId: "b", costMinor: "0", revenueMinor: "200" }),
+    ]);
+    expect(totals.roiBasisPoints).toBeNull();
+    expect(totals.unmeasuredCampaigns).toBe(2);
+    expect(totals.unmeasuredRevenueMinor).toBe("300");
+  });
+
   it("returns a zeroed portfolio for no campaigns", () => {
     expect(portfolioTotals([])).toEqual({
       campaigns: 0,
@@ -73,6 +98,8 @@ describe("portfolioTotals", () => {
       netMinor: "0",
       responses: 0,
       roiBasisPoints: null,
+      unmeasuredCampaigns: 0,
+      unmeasuredRevenueMinor: "0",
     });
   });
 

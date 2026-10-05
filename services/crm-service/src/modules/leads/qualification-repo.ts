@@ -191,35 +191,85 @@ export async function createFramework(
   return (await getFramework(tenantId, id))!;
 }
 
+/** Thrown inside the update transaction (rolls it back) when a removed question has lead answers. */
+export class QuestionInUseError extends Error {
+  constructor() {
+    super("a removed question already has lead answers");
+    this.name = "QuestionInUseError";
+  }
+}
+
 export async function updateFramework(
   tenantId: string,
   actorId: string,
   correlationId: string,
   id: string,
-  body: { name?: string | undefined; businessLine?: string | null | undefined; active?: boolean | undefined; questions?: QuestionInput[] | undefined },
-): Promise<FrameworkView | null> {
-  const existed = await db.transaction(async (tx) => {
+  body: { name?: string | undefined; businessLine?: string | null | undefined; active?: boolean | undefined; questions?: QuestionInput[] | undefined; version?: number | undefined },
+): Promise<FrameworkView | null | "conflict"> {
+  const result = await db.transaction(async (tx) => {
+    // GAP-CRM-QUALIFICATION-FRAMEWORKS-02: when a version was supplied, scope the
+    // update to that row version so a stale write touches zero rows; we then
+    // disambiguate a genuine 404 from a version conflict before returning.
+    const conds = [eq(qualificationFrameworks.tenantId, tenantId), eq(qualificationFrameworks.id, id)];
+    if (body.version !== undefined) conds.push(eq(qualificationFrameworks.version, body.version));
+
     const set: Record<string, unknown> = { updatedAt: new Date(), updatedBy: actorId, version: sql`${qualificationFrameworks.version} + 1` };
     if (body.name !== undefined) set.name = body.name;
     if (body.businessLine !== undefined) set.businessLine = body.businessLine;
     if (body.active !== undefined) set.active = body.active;
     const updated = await tx.update(qualificationFrameworks)
       .set(set)
-      .where(and(eq(qualificationFrameworks.tenantId, tenantId), eq(qualificationFrameworks.id, id)))
+      .where(and(...conds))
       .returning({ id: qualificationFrameworks.id });
-    if (updated.length === 0) return false;
-    // A present questions array replaces the whole set (delete + reinsert).
-    if (body.questions !== undefined) {
-      await tx.delete(qualificationQuestions)
-        .where(and(eq(qualificationQuestions.tenantId, tenantId), eq(qualificationQuestions.frameworkId, id)));
-      if (body.questions.length > 0) {
-        await insertQuestions(tx as typeof db, tenantId, id, actorId, body.questions);
+    if (updated.length === 0) {
+      // Distinguish not-found from stale version so the caller can 409 vs 404.
+      if (body.version !== undefined) {
+        const existing = await tx.select({ id: qualificationFrameworks.id })
+          .from(qualificationFrameworks)
+          .where(and(eq(qualificationFrameworks.tenantId, tenantId), eq(qualificationFrameworks.id, id)))
+          .limit(1);
+        if (existing.length > 0) return "conflict" as const;
       }
+      return "notfound" as const;
+    }
+    // A present questions array is the NEW full set. Questions carrying an existing id are
+    // updated in place (so submitted lead answers, keyed by question id, stay attached);
+    // the rest are inserted. A question that is dropped while leads have already answered
+    // it is REFUSED (409 QUESTION_HAS_ANSWERS) rather than silently deleting those answers.
+    if (body.questions !== undefined) {
+      const existing = await tx.select({ id: qualificationQuestions.id })
+        .from(qualificationQuestions)
+        .where(and(eq(qualificationQuestions.tenantId, tenantId), eq(qualificationQuestions.frameworkId, id)));
+      const keep = new Set(body.questions.map((q) => q.id).filter((v): v is string => !!v));
+      const removed = existing.map((e) => e.id).filter((qid) => !keep.has(qid));
+      if (removed.length > 0) {
+        const answered = await tx.execute(sql`
+          SELECT 1 FROM crm.lead_qualifications lq
+          WHERE lq.tenant_id = ${tenantId} AND lq.framework_id = ${id}
+            AND lq.answers ?| ARRAY[${sql.join(removed.map((r) => sql`${r}`), sql`, `)}]::text[]
+          LIMIT 1`) as unknown as unknown[];
+        if (answered.length > 0) throw new QuestionInUseError();
+        await tx.delete(qualificationQuestions)
+          .where(and(eq(qualificationQuestions.tenantId, tenantId), eq(qualificationQuestions.frameworkId, id), inArray(qualificationQuestions.id, removed)));
+      }
+      const existingIds = new Set(existing.map((e) => e.id));
+      const fresh: QuestionInput[] = [];
+      for (const q of body.questions) {
+        if (q.id && existingIds.has(q.id)) {
+          await tx.update(qualificationQuestions)
+            .set({ prompt: q.prompt, answerType: q.answerType, weight: q.weight, outcomeRule: q.outcomeRule, order: q.order, updatedAt: new Date(), updatedBy: actorId, version: sql`${qualificationQuestions.version} + 1` })
+            .where(and(eq(qualificationQuestions.tenantId, tenantId), eq(qualificationQuestions.id, q.id), eq(qualificationQuestions.frameworkId, id)));
+        } else {
+          fresh.push(q);
+        }
+      }
+      if (fresh.length > 0) await insertQuestions(tx as typeof db, tenantId, id, actorId, fresh);
     }
     await auditFramework(tx as Parameters<typeof enqueue>[0], tenantId, actorId, correlationId, "qualification_framework_update", id);
-    return true;
+    return "ok" as const;
   });
-  if (!existed) return null;
+  if (result === "notfound") return null;
+  if (result === "conflict") return "conflict";
   return getFramework(tenantId, id);
 }
 

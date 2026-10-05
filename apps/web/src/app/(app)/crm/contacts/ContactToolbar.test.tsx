@@ -3,8 +3,11 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 
+const pushMock = vi.fn();
+let currentParams = new URLSearchParams();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ push: pushMock, refresh: vi.fn() }),
+  useSearchParams: () => currentParams,
 }));
 
 const browserFetchMock = vi.fn();
@@ -30,6 +33,8 @@ function renderToolbar(props: Parameters<typeof ContactToolbar>[0]) {
 describe("ContactToolbar export (GAP-CRM-CONTACTS-01)", () => {
   beforeEach(() => {
     browserFetchMock.mockReset();
+    pushMock.mockReset();
+    currentParams = new URLSearchParams();
     // jsdom lacks these; the export triggers a client-side CSV download.
     (URL as unknown as { createObjectURL: () => string }).createObjectURL = () => "blob:mock";
     (URL as unknown as { revokeObjectURL: () => void }).revokeObjectURL = () => {};
@@ -72,5 +77,36 @@ describe("ContactToolbar export (GAP-CRM-CONTACTS-01)", () => {
   it("labels the control 'Export all contacts' when no filter is active", () => {
     renderToolbar({ canExport: true, exportQuery: {} });
     expect(screen.getByRole("button", { name: "Export all contacts" })).toBeInTheDocument();
+  });
+});
+
+describe("ContactToolbar filter state (GAP-CRM-CONTACTS-04)", () => {
+  beforeEach(() => {
+    browserFetchMock.mockReset();
+    pushMock.mockReset();
+    currentParams = new URLSearchParams();
+  });
+
+  it("seeds the search box from the URL (not blank after a search)", () => {
+    renderToolbar({ initialSearch: "sharma" });
+    expect(screen.getByLabelText(/Search contacts/i)).toHaveValue("sharma");
+  });
+
+  it("preserves the classification filters already on the URL when applying a search", () => {
+    currentParams = new URLSearchParams("priority=high&temperature=hot");
+    renderToolbar({ initialSearch: "" });
+    fireEvent.change(screen.getByLabelText(/Search contacts/i), { target: { value: "sharma" } });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    const url = pushMock.mock.calls[0][0] as string;
+    expect(url).toContain("search=sharma");
+    expect(url).toContain("priority=high");
+    expect(url).toContain("temperature=hot");
+  });
+
+  it("Clear filters resets everything to the unfiltered list", () => {
+    currentParams = new URLSearchParams("priority=high");
+    renderToolbar({ initialSearch: "sharma", exportQuery: { search: "sharma", priority: "high" } });
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(pushMock).toHaveBeenCalledWith("/crm/contacts");
   });
 });

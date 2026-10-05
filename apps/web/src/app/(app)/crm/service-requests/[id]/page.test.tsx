@@ -97,3 +97,33 @@ describe("ServiceRequestDetailPage — DETAIL-02 (PII masking, DPDP)", () => {
     expect(screen.getByText("asha.rao@example.gov.in")).toBeInTheDocument();
   });
 });
+
+describe("ServiceRequestDetailPage — DETAIL-05 (owner + overdue)", () => {
+  const past = "2000-01-01T00:00:00.000Z";
+  const future = "2999-01-01T00:00:00.000Z";
+
+  it("shows an Overdue indicator when an open request's due date has passed", async () => {
+    mockDetail({ status: "open", dueAt: past });
+    render(await Page({ params: { id: "sr-1" } }));
+    expect(screen.getByText(/Overdue/)).toBeInTheDocument();
+  });
+
+  it("does NOT show Overdue for a resolved request with a past due date", async () => {
+    mockDetail({ status: "resolved", resolution: "done", resolvedAt: past, dueAt: past });
+    render(await Page({ params: { id: "sr-1" } }));
+    expect(screen.queryByText(/Overdue/)).not.toBeInTheDocument();
+  });
+
+  it("does NOT show Overdue when the due date is in the future", async () => {
+    mockDetail({ status: "open", dueAt: future });
+    render(await Page({ params: { id: "sr-1" } }));
+    expect(screen.queryByText(/Overdue/)).not.toBeInTheDocument();
+  });
+
+  it("shows an 'Assigned to' field with Unassigned when there is no owner", async () => {
+    mockDetail({ status: "open", assignedTo: null });
+    render(await Page({ params: { id: "sr-1" } }));
+    expect(screen.getByText("Assigned to")).toBeInTheDocument();
+    expect(screen.getByText("Unassigned")).toBeInTheDocument();
+  });
+});

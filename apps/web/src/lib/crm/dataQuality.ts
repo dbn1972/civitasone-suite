@@ -185,22 +185,66 @@ export function normaliseRules(raw: unknown): DedupRule[] {
   return out;
 }
 
-export async function getDedupRules(): Promise<LoaderResult<DedupRule[]>> {
+export async function getDedupRules(): Promise<LoaderResult<DedupRule[]> & { version?: string; updatedBy?: string; updatedAt?: string }> {
   try {
     const res = await browserFetch("v1/crm/dedup-rules");
     if (!res.ok) return { data: [], source: "error" };
-    return { data: normaliseRules(await res.json()), source: "api" };
+    const body = (await res.json()) as unknown;
+    // GAP-CRM-DEDUP-RULES-02: capture an optimistic-concurrency token when the
+    // backend sends one (ETag header or a `version` in the body), so the editor
+    // can send it back on PUT and detect a concurrent edit. Older backends that
+    // send neither are handled transparently (no token -> no If-Match).
+    const etag = res.headers?.get("etag") ?? undefined;
+    const obj = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+    const bodyVersion =
+      "version" in obj ? String((obj as { version?: unknown }).version ?? "") : undefined;
+    const version = etag ?? (bodyVersion && bodyVersion.length > 0 ? bodyVersion : undefined);
+    // "Last changed by/at" metadata, when the backend provides it.
+    const meta = obj.meta && typeof obj.meta === "object" ? (obj.meta as Record<string, unknown>) : {};
+    const updatedBy = typeof meta.updatedBy === "string" && meta.updatedBy.length > 0 ? meta.updatedBy : undefined;
+    const updatedAt = typeof meta.updatedAt === "string" && meta.updatedAt.length > 0 ? meta.updatedAt : undefined;
+    return {
+      data: normaliseRules(body),
+      source: "api",
+      ...(version ? { version } : {}),
+      ...(updatedBy ? { updatedBy } : {}),
+      ...(updatedAt ? { updatedAt } : {}),
+    };
   } catch {
     return { data: [], source: "error" };
   }
 }
 
-export async function saveDedupRules(rules: DedupRule[]): Promise<void> {
+/** Thrown by saveDedupRules when the rules were changed by someone else since load. */
+export class DedupRulesConflictError extends Error {
+  constructor(message = "The matching rules were changed by someone else.") {
+    super(message);
+    this.name = "DedupRulesConflictError";
+  }
+}
+
+export async function saveDedupRules(rules: DedupRule[], version?: string): Promise<string | undefined> {
   const res = await browserFetch("v1/crm/dedup-rules", {
     method: "PUT",
-    body: JSON.stringify({ rules }),
+    // GAP-CRM-DEDUP-RULES-02: send the version as If-Match so the backend can
+    // reject a stale write (409) instead of silently overwriting a concurrent
+    // admin's change (last-write-wins).
+    ...(version ? { headers: { "If-Match": version } } : {}),
+    body: JSON.stringify({ rules, ...(version ? { version } : {}) }),
   });
+  if (res.status === 409) {
+    throw new DedupRulesConflictError(await errorMessageFromResponse(res));
+  }
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  // Return the advanced version so the editor can keep saving without a reload.
+  const etag = res.headers?.get("etag") ?? undefined;
+  if (etag) return etag;
+  try {
+    const body = (await res.json()) as { version?: unknown };
+    return typeof body.version === "string" ? body.version : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** DQ-002: merge is async (202). Body is { primaryId, duplicateId }. */

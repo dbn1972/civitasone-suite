@@ -1,9 +1,12 @@
+import { useTranslations } from "next-intl";
+
 export default function Loading() {
+  const t = useTranslations("crmVoiceOfCitizenLoading");
   return (
     <div className="page-main" aria-labelledby="page-heading">
       <div className="ph">
         <div>
-          <h1 id="page-heading">Voice Of Customer</h1>
+          <h1 id="page-heading">{t("title")}</h1>
         </div>
       </div>
       <div className="animate-pulse" style={{ display: "grid", gap: 16 }}>

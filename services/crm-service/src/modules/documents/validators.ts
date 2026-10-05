@@ -74,6 +74,31 @@ export type ScanResultBody = z.infer<typeof scanResultBody>;
 
 export const idParam = z.object({ id: z.string().uuid() });
 
+/**
+ * GAP-CRM-DOCUMENTS-02 — cross-record document register query.
+ *
+ * A paged, tenant-scoped view across every record's documents (not one subject),
+ * so a clerk can answer "what is expiring / infected / missing" without opening
+ * each record. Filters are all optional and additive:
+ *   • scanStatus          — only documents in that malware-scan state
+ *   • expiringWithinDays  — current docs with an expiry_date within N days
+ *                           (0 = already expired; includes past-due)
+ *   • missingMandatory    — surface (subjectType, subjectId) pairs that are
+ *                           missing a mandatory enabled document type.
+ *   • subjectType         — narrow to one record kind
+ * Paged with page/limit (shared list-query clamp, max 200).
+ */
+export const registerQuery = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  subjectType: z.enum(SUBJECT_TYPES).optional(),
+  scanStatus: z.enum(["pending", "clean", "infected", "error"]).optional(),
+  expiringWithinDays: z.coerce.number().int().min(0).max(3650).optional(),
+  // z.coerce.boolean() parses the string "false" as true; match the literal.
+  missingMandatory: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
+});
+export type RegisterQuery = z.infer<typeof registerQuery>;
+
 // ── DM-002 document_types admin ─────────────────────────────────────────────
 
 // A document type can genuinely apply to more than one subject type (e.g. a PAN card

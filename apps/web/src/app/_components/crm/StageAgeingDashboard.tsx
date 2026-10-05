@@ -8,6 +8,7 @@
  */
 import { useEffect, useId, useState } from "react";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState, Button } from "../ds";
 import {
@@ -33,7 +34,7 @@ function toRow(l: StageLimit): LimitRow {
   return { ...l, key: l.id ?? `new-${SEQ++}` };
 }
 
-export function StageAgeingDashboard() {
+export function StageAgeingDashboard({ canConfig = true }: { canConfig?: boolean } = {}) {
   const t = useTranslations("crmStageAgeingDashboard");
   const [rows, setRows] = useState<StageAgeingRow[]>([]);
   const [ageingSource, setAgeingSource] = useState<OpSource | "loading">("loading");
@@ -84,12 +85,16 @@ export function StageAgeingDashboard() {
   useEffect(() => {
     let live = true;
     void loadAgeing(() => live);
-    void loadLimits(() => live);
-    void loadPipelines(() => live);
+    // Only the admin config card reads/writes stage limits; skip the fetch (which
+    // would 403 for a non-admin) when the config card is hidden.
+    if (canConfig) {
+      void loadLimits(() => live);
+      void loadPipelines(() => live);
+    }
     return () => {
       live = false;
     };
-  }, []);
+  }, [canConfig]);
 
   function update(key: string, patch: Partial<LimitRow>) {
     setLimits((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
@@ -174,7 +179,16 @@ export function StageAgeingDashboard() {
             Loading ageing…
           </p>
         ) : ageingSource === "error" ? (
-          <EmptyState icon="⏳" title="—" message="Ageing could not be loaded. Showing saved information." />
+          <EmptyState
+            icon="⏳"
+            title={t("ageingLoadErrorTitle")}
+            message={t("ageingLoadErrorMessage")}
+            action={
+              <Button type="button" onClick={() => void loadAgeing()}>
+                {t("retry")}
+              </Button>
+            }
+          />
         ) : rows.length === 0 ? (
           <EmptyState icon="✅" title="No breaches" message="No opportunities are past their configured stage limit." />
         ) : (
@@ -182,6 +196,7 @@ export function StageAgeingDashboard() {
             <thead>
               <tr>
                 <th>Opportunity</th>
+                <th>{t("colOwner")}</th>
                 <th>Stage</th>
                 <th className="num">Days in stage</th>
                 <th className="num">Limit</th>
@@ -194,7 +209,13 @@ export function StageAgeingDashboard() {
                 .sort((a, b) => b.exceededBy - a.exceededBy)
                 .map((r) => (
                   <tr key={r.id}>
-                    <td>{r.name}</td>
+                    <td>
+                      {/* GAP-CRM-OPPORTUNITY-AGEING-03: link the breach to its record so a
+                          manager can open it directly. The deal detail route is
+                          /crm/deals/:id (as used by DealCard). */}
+                      {r.id ? <Link href={`/crm/deals/${r.id}`}>{r.name}</Link> : r.name}
+                    </td>
+                    <td>{r.ownerName ?? "—"}</td>
                     <td>{r.stageName}</td>
                     <td className="num">{r.daysInStage}</td>
                     <td className="num">{r.limitDays}</td>
@@ -209,6 +230,11 @@ export function StageAgeingDashboard() {
       </div>
 
       {/* -------------------------------------------------- limits config -- */}
+      {/* GAP-CRM-OPPORTUNITY-AGEING-05: the ageing list above stays visible to every
+          crm_user (managers need to chase stalled deals), but the Save/Delete limits
+          config drives the alert for the whole tenant and is admin-only. The server
+          remains the authority on the stage-limits write endpoints. */}
+      {canConfig ? (
       <div className="card">
         <div className="card-h">
           <h3>Stage day limits</h3>
@@ -237,6 +263,7 @@ export function StageAgeingDashboard() {
                 <th>{t("colPipeline")}</th>
                 <th>Stage</th>
                 <th style={{ width: 140 }}>Limit (days)</th>
+                <th style={{ width: 120 }}>{t("colEnabled")}</th>
                 <th>
                   <span className="sr-only">Actions</span>
                 </th>
@@ -318,6 +345,21 @@ export function StageAgeingDashboard() {
                       />
                     </td>
                     <td>
+                      {/* GAP-CRM-OPPORTUNITY-AGEING-02: a limit can be paused, not only
+                          deleted. The toggle is bound to the row's `enabled` flag, which
+                          the save payload already carries — so saving no longer silently
+                          re-enables a server-disabled limit. */}
+                      <label style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 13 }}>
+                        <input
+                          type="checkbox"
+                          checked={row.enabled ?? true}
+                          aria-label={t("enabledForLimit", { n })}
+                          onChange={(e) => update(row.key, { enabled: e.target.checked })}
+                        />
+                        {(row.enabled ?? true) ? t("enabled") : <span style={{ color: "var(--muted)" }}>{t("paused")}</span>}
+                      </label>
+                    </td>
+                    <td>
                       <div style={{ display: "flex", gap: 6 }}>
                         <Button type="button" size="sm" onClick={() => void saveLimit(row)} disabled={busy}>
                           {busy ? "…" : row.id ? "Save" : "Create"}
@@ -339,6 +381,7 @@ export function StageAgeingDashboard() {
           </Button>
         </div>
       </div>
+      ) : null}
 
       <ConfirmDialog
         open={confirmRow !== null}

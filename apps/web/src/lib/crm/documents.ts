@@ -14,6 +14,7 @@
  * reported rather than silently mis-rendered.
  */
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
+import { z } from "zod";
 
 export type DmSource = "api" | "error";
 
@@ -333,6 +334,101 @@ export async function deleteDocument(id: string): Promise<void> {
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
 }
 
+/* ------------------------------------------ DM-002 cross-record register ---- */
+
+/** GAP-CRM-DOCUMENTS-02: one row of the cross-record document register. */
+export interface RegisterRow {
+  kind: "document" | "missing_mandatory";
+  subjectType: string;
+  subjectId: string;
+  /** Document rows: */
+  id?: string;
+  docType?: string;
+  title?: string;
+  filename?: string;
+  scanStatus?: ScanStatus;
+  verificationStatus?: VerificationStatus;
+  expiryDate?: string;
+  version?: number;
+  /** Missing-mandatory rows: */
+  docTypeCode?: string;
+  docTypeName?: string;
+}
+
+export interface RegisterResult {
+  rows: RegisterRow[];
+  total: number;
+  source: DmSource;
+}
+
+export interface RegisterFilters {
+  subjectType?: string;
+  scanStatus?: ScanStatus;
+  expiringWithinDays?: number;
+  missingMandatory?: boolean;
+  page?: number;
+  limit?: number;
+}
+
+function normRegisterRow(raw: unknown): RegisterRow | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const kind = r.kind === "missing_mandatory" ? "missing_mandatory" : "document";
+  const subjectType = str(r.subjectType);
+  const subjectId = str(r.subjectId);
+  if (!subjectType || !subjectId) return null;
+  if (kind === "missing_mandatory") {
+    return {
+      kind,
+      subjectType,
+      subjectId,
+      docTypeCode: optStr(r.docTypeCode),
+      docTypeName: optStr(r.docTypeName),
+    };
+  }
+  return {
+    kind,
+    subjectType,
+    subjectId,
+    id: optStr(r.id),
+    docType: optStr(r.docType),
+    title: optStr(r.title),
+    filename: optStr(r.filename),
+    scanStatus: normScan(r.scanStatus),
+    verificationStatus: normVerification(r.verificationStatus),
+    expiryDate: optStr(r.expiryDate),
+    version: optNum(r.version),
+  };
+}
+
+/**
+ * GAP-CRM-DOCUMENTS-02: the cross-record register. Returns rows + total so the
+ * page can page and link each row to its subject record. Returns source:"error"
+ * on failure so the UI shows a LoadErrorState rather than a fabricated empty set.
+ */
+export async function getDocumentRegister(filters: RegisterFilters = {}): Promise<RegisterResult> {
+  try {
+    const params = new URLSearchParams();
+    if (filters.subjectType) params.set("subjectType", filters.subjectType);
+    if (filters.scanStatus) params.set("scanStatus", filters.scanStatus);
+    if (filters.expiringWithinDays !== undefined) params.set("expiringWithinDays", String(filters.expiringWithinDays));
+    if (filters.missingMandatory) params.set("missingMandatory", "true");
+    if (filters.page) params.set("page", String(filters.page));
+    if (filters.limit) params.set("limit", String(filters.limit));
+    const qs = params.toString();
+    const res = await browserFetch(`v1/crm/documents/register${qs ? `?${qs}` : ""}`);
+    if (!res.ok) return { rows: [], total: 0, source: "error" };
+    const body = (await res.json()) as Record<string, unknown>;
+    const rows = toArray(body, "documents")
+      .map(normRegisterRow)
+      .filter((r): r is RegisterRow => r !== null);
+    const meta = (body.meta ?? {}) as Record<string, unknown>;
+    return { rows, total: num(meta.total) || rows.length, source: "api" };
+  } catch {
+    return { rows: [], total: 0, source: "error" };
+  }
+}
+
 /* ============================================================ DM-002 types == */
 
 export interface DocumentType {
@@ -389,6 +485,51 @@ export async function getDocumentTypes(): Promise<LoaderResult<DocumentType[]>> 
   }
 }
 
+/**
+ * GAP-CRM-DOCUMENT-TYPES-02: validate a document-type draft at the UI boundary.
+ * A type must have a code and a name, and must apply to at least one record
+ * type — an empty "Applies to" (especially combined with "Mandatory") would
+ * flag nothing / apply to nothing. DECISION: we block an empty appliesTo rather
+ * than treat it as "all", the conservative choice, because the backend's
+ * meaning of an empty set is unverifiable here (crm-service documents module
+ * opaque). If the backend confirms empty === all, relax `appliesTo` to optional.
+ */
+export const documentTypeSchema = z.object({
+  code: z.string().trim().min(1, "Enter a code."),
+  name: z.string().trim().min(1, "Enter a name."),
+  appliesTo: z
+    .array(z.enum(SUBJECT_TYPES))
+    .min(1, "Select at least one record type."),
+  mandatory: z.boolean(),
+  expiryRequired: z.boolean(),
+  verificationRequired: z.boolean(),
+  enabled: z.boolean(),
+});
+
+export interface DocumentTypeErrors {
+  code?: string;
+  name?: string;
+  appliesTo?: string;
+}
+
+/** Field-keyed errors for a draft, or an empty object when valid. */
+export function validateDocumentType(t: DocumentType): DocumentTypeErrors {
+  const parsed = documentTypeSchema.safeParse(t);
+  if (parsed.success) return {};
+  const errors: DocumentTypeErrors = {};
+  for (const issue of parsed.error.issues) {
+    const key = issue.path[0];
+    if (key === "code" && !errors.code) errors.code = issue.message;
+    else if (key === "name" && !errors.name) errors.name = issue.message;
+    else if (key === "appliesTo" && !errors.appliesTo) errors.appliesTo = issue.message;
+  }
+  return errors;
+}
+
+export function isDocumentTypeValid(t: DocumentType): boolean {
+  return documentTypeSchema.safeParse(t).success;
+}
+
 export async function createDocumentType(t: DocumentType): Promise<void> {
   const res = await browserFetch("v1/crm/document-types", { method: "POST", body: JSON.stringify(t) });
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
@@ -399,8 +540,14 @@ export async function updateDocumentType(id: string, t: DocumentType): Promise<v
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
 }
 
-export async function deleteDocumentType(id: string): Promise<void> {
-  const res = await browserFetch(`v1/crm/document-types/${id}`, { method: "DELETE" });
+export async function deleteDocumentType(id: string, reason?: string): Promise<void> {
+  // GAP-CRM-DOCUMENT-TYPES-03: pass a deletion reason for the audit trail when
+  // the admin supplies one. Additive — a backend that ignores the body still
+  // works; the server remains responsible for emitting the audit event.
+  const res = await browserFetch(`v1/crm/document-types/${id}`, {
+    method: "DELETE",
+    ...(reason && reason.trim() ? { body: JSON.stringify({ reason: reason.trim() }) } : {}),
+  });
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
 }
 

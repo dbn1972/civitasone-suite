@@ -8,12 +8,16 @@
  */
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useFormError } from "@/lib/useFormError";
+import { z } from "zod";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState, Button } from "../ds";
 import {
   getFrameworks,
   createFramework,
   updateFramework,
+  FrameworkConflictError,
+  QuestionHasAnswersError,
   deleteFramework,
   type QualificationFramework,
   type QualQuestion,
@@ -24,15 +28,35 @@ const inputStyle = { width: "100%", padding: 8, minHeight: 40, borderRadius: 8, 
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
 
 /**
- * services/crm-service leads/qualification-validators.ts requires a
- * question's weight to be z.number().int().min(0).max(100) -- round + clamp
- * here so a partial or fractional entry (this input allowed any 0.5-stepped
- * value with no upper bound) never lands something the backend rejects.
+ * GAP-CRM-QUALIFICATION-FRAMEWORKS-03: a zod schema at the form boundary,
+ * mirroring services/crm-service leads/qualification-validators.ts (name/line
+ * required; at least one question; each question needs non-empty trimmed text
+ * and an integer weight 0–100). The server stays authoritative; this stops an
+ * empty question text or a blank/NaN weight being POSTed (and then silently
+ * dropped / coerced to 0).
  */
-function sanitizeNumber(raw: string): number {
+function makeFrameworkSchema(t: ReturnType<typeof useTranslations>) {
+  const questionSchema = z.object({
+    text: z.string().trim().min(1, t("questionTextRequired")),
+    weight: z.number({ invalid_type_error: t("weightRequired") }).int(t("weightWhole")).min(0, t("weightRange")).max(100, t("weightRange")),
+  });
+  return z.object({
+    name: z.string().trim().min(1, t("nameRequired")),
+    businessLine: z.string().trim().min(1, t("businessLineRequired")),
+    questions: z.array(questionSchema).min(1, t("addAtLeastOneQuestion")),
+  });
+}
+
+/**
+ * Parse a weight input. A blank/non-numeric entry becomes NaN (an explicit
+ * "not set") rather than silently 0, so the schema can reject it on save; a
+ * valid number is rounded and clamped to the backend's 0–100 integer range.
+ */
+function parseWeight(raw: string): number {
+  if (raw.trim() === "") return NaN;
   const n = Math.round(Number(raw));
-  if (!Number.isFinite(n) || n < 0) return 0;
-  return Math.min(100, n);
+  if (!Number.isFinite(n)) return NaN;
+  return Math.min(100, Math.max(0, n));
 }
 
 function blankFramework(): QualificationFramework {
@@ -41,12 +65,18 @@ function blankFramework(): QualificationFramework {
 
 export function QualificationFrameworksEditor() {
   const t = useTranslations("crmQualificationFrameworksEditor");
+  const formError = useFormError("framework");
   const [frameworks, setFrameworks] = useState<QualificationFramework[]>([]);
   const [source, setSource] = useState<LqSource | "loading">("loading");
   const [busyIdx, setBusyIdx] = useState<number | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  // True after a 409 VERSION_CONFLICT: offer a one-click reload of the latest version.
+  const [stale, setStale] = useState(false);
   const [confirmIdx, setConfirmIdx] = useState<number | null>(null);
+  // GAP-CRM-QUALIFICATION-FRAMEWORKS-03: per-question validation messages for the
+  // framework currently being saved (scoped to that framework's index).
+  const [fieldErrors, setFieldErrors] = useState<{ fi: number; q: Record<number, string> } | null>(null);
   const headingId = useId();
 
   // Stable per-row React keys, independent of array position -- see
@@ -114,19 +144,50 @@ export function QualificationFrameworksEditor() {
   async function save(idx: number) {
     setMessage("");
     setError("");
-    const fw = frameworks[idx];
-    if (!fw.name.trim() || !fw.businessLine.trim()) {
-      setError("A framework needs a name and a business line before it can be saved.");
+    setStale(false);
+    setFieldErrors(null);
+    // GAP-CRM-QUALIFICATION-FRAMEWORKS-04: business line is an open vocabulary (no
+    // canonical list exists in web or crm-service). Normalise it (trim + lowercase)
+    // on save so a case/whitespace typo doesn't silently stop the framework matching
+    // a lead; getFrameworks() lowercases the query the same way.
+    const normalisedLine = frameworks[idx].businessLine.trim().toLowerCase();
+    const fw = { ...frameworks[idx], businessLine: normalisedLine };
+    if (normalisedLine !== frameworks[idx].businessLine) {
+      update(idx, { businessLine: normalisedLine });
+    }
+    const parsed = makeFrameworkSchema(t).safeParse(fw);
+    if (!parsed.success) {
+      // Map issues to a per-question message where possible; show the first
+      // framework-level issue as the headline error.
+      const qErrors: Record<number, string> = {};
+      let headline = "";
+      for (const issue of parsed.error.issues) {
+        if (issue.path[0] === "questions" && typeof issue.path[1] === "number") {
+          qErrors[issue.path[1] as number] = issue.message;
+        } else if (!headline) {
+          headline = issue.message;
+        }
+      }
+      setFieldErrors({ fi: idx, q: qErrors });
+      setError(headline || t("fixHighlighted"));
       return;
     }
     setBusyIdx(idx);
     try {
       if (fw.id) await updateFramework(fw.id, fw);
       else await createFramework(fw);
-      setMessage(`Framework "${fw.name}" saved.`);
+      setMessage(t("saved", { name: fw.name }));
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save the framework.");
+      // 409s carry a plain-language message (changed by someone else / in-use question).
+      setError(
+        e instanceof FrameworkConflictError
+          ? t("conflict")
+          : e instanceof QuestionHasAnswersError
+            ? t("questionHasAnswers")
+            : formError.fromException("save", e).message,
+      );
+      setStale(e instanceof FrameworkConflictError);
     } finally {
       setBusyIdx(null);
     }
@@ -174,6 +235,22 @@ export function QualificationFrameworksEditor() {
         </div>
         {message ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", padding: "0 12px" }}>{message}</p> : null}
         {error ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", padding: "0 12px" }}>{error}</p> : null}
+        {stale ? (
+          <div style={{ padding: "0 12px 8px" }}>
+            <Button type="button" onClick={() => { setStale(false); setError(""); void load(); }}>
+              {t("reloadLatest")}
+            </Button>
+          </div>
+        ) : null}
+        {/* GAP-CRM-QUALIFICATION-FRAMEWORKS-04: suggest the business lines already in
+            use so admins reuse an existing canonical value instead of typing a variant. */}
+        <datalist id={`${headingId}-bl-options`}>
+          {Array.from(new Set(frameworks.map((f) => f.businessLine.trim()).filter((b) => b.length > 0)))
+            .sort()
+            .map((b) => (
+              <option key={b} value={b} />
+            ))}
+        </datalist>
         <div className="pad">
           <Button
             type="button"
@@ -206,7 +283,10 @@ export function QualificationFrameworksEditor() {
                 </div>
                 <div>
                   <label htmlFor={`${headingId}-bl-${fi}`} style={labelStyle}>Business line</label>
-                  <input id={`${headingId}-bl-${fi}`} value={fw.businessLine} onChange={(e) => update(fi, { businessLine: e.target.value })} placeholder="e.g. government, psu" style={inputStyle} />
+                  <input id={`${headingId}-bl-${fi}`} list={`${headingId}-bl-options`} value={fw.businessLine} onChange={(e) => update(fi, { businessLine: e.target.value })} placeholder={t("businessLinePlaceholder")} style={inputStyle} />
+                  <span style={{ fontSize: 11, color: "var(--muted)" }}>
+                    {t("businessLineHelp")}
+                  </span>
                 </div>
                 <div>
                   <label style={{ ...labelStyle, marginTop: 24 }}>
@@ -248,11 +328,14 @@ export function QualificationFrameworksEditor() {
                             </tr>
                           </thead>
                           <tbody>
-                            {fw.questions.map((q, qi) => (
+                            {fw.questions.map((q, qi) => {
+                              const qError = fieldErrors && fieldErrors.fi === fi ? fieldErrors.q[qi] : undefined;
+                              return (
                               <tr key={q.id ?? questionKeyFor(fi, qi)}>
                                 <td>
                                   <label className="sr-only" htmlFor={`${headingId}-q-${fi}-${qi}`}>{t("questionTextLabel", { n: qi + 1 })}</label>
-                                  <input id={`${headingId}-q-${fi}-${qi}`} value={q.text} onChange={(e) => updateQuestion(fi, qi, { text: e.target.value })} style={inputStyle} />
+                                  <input id={`${headingId}-q-${fi}-${qi}`} value={q.text} aria-invalid={qError ? true : undefined} onChange={(e) => updateQuestion(fi, qi, { text: e.target.value })} style={inputStyle} />
+                                  {qError ? <p role="alert" style={{ fontSize: 11, color: "#b42318", margin: "4px 0 0" }}>{qError}</p> : null}
                                 </td>
                                 <td className="num">
                                   <label className="sr-only" htmlFor={`${headingId}-w-${fi}-${qi}`}>{t("questionWeightLabel", { n: qi + 1 })}</label>
@@ -260,8 +343,8 @@ export function QualificationFrameworksEditor() {
                                     id={`${headingId}-w-${fi}-${qi}`}
                                     type="number" min={0} max={100} step={1}
                                     value={Number.isFinite(q.weight) ? q.weight : ""}
-                                    aria-invalid={Number.isFinite(q.weight) ? undefined : true}
-                                    onChange={(e) => updateQuestion(fi, qi, { weight: sanitizeNumber(e.target.value) })}
+                                    aria-invalid={Number.isFinite(q.weight) && !qError ? undefined : true}
+                                    onChange={(e) => updateQuestion(fi, qi, { weight: parseWeight(e.target.value) })}
                                     style={{ width: 80, padding: 6, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)", textAlign: "end" }}
                                   />
                                 </td>
@@ -272,7 +355,8 @@ export function QualificationFrameworksEditor() {
                                   <Button type="button" variant="ghost" size="sm" onClick={() => removeQuestion(fi, qi)} aria-label={t("removeQuestionAria", { n: qi + 1 })}>{t("remove")}</Button>
                                 </td>
                               </tr>
-                            ))}
+                              );
+                            })}
                           </tbody>
                           <tfoot>
                             <tr>

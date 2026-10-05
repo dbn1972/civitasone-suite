@@ -7,16 +7,22 @@ import { DataTable, StatusPill, Button } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { CrmServiceRequestRow } from "../../../_data/loaders";
+import { PriorityBadge } from "./PriorityBadge";
 
-const PRIORITY_TONE: Record<string, string> = {
-  urgent: "var(--bad)",
-  high: "var(--warn)",
-  normal: "var(--ink2)",
-  low: "var(--ink2)",
-};
+/**
+ * GAP-CRM-SERVICE-REQUESTS-03: a request is "overdue" when it has a due date in
+ * the past AND it is still in a workable state (open/in_progress/pending). A
+ * resolved/closed/cancelled request is never overdue, however old its due date.
+ */
+const WORKABLE = new Set(["open", "in_progress", "pending"]);
+function isOverdue(dueAt: string | null, status: string): boolean {
+  if (!dueAt || !WORKABLE.has(status)) return false;
+  const due = new Date(dueAt).getTime();
+  return Number.isFinite(due) && due < Date.now();
+}
 
-function titleCase(v: string): string {
-  return v.charAt(0).toUpperCase() + v.slice(1);
+function fmtDate(dt: string | null): string {
+  return dt ? new Date(dt).toLocaleDateString("en-IN") : "—";
 }
 
 /**
@@ -63,6 +69,10 @@ export function ServiceRequestsTable({
   queryKey?: string;
 }) {
   const t = useTranslations("crmServiceRequestsTable");
+  const priorityText = (p: string): string | undefined => {
+    const k = (p ?? "normal").toLowerCase();
+    return k === "urgent" || k === "high" || k === "normal" || k === "low" ? t(`priority_${k}`) : undefined;
+  };
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -92,37 +102,64 @@ export function ServiceRequestsTable({
         columns={[
           {
             key: "referenceNo",
-            label: "Ref No.",
+            label: t("colRefNo"),
             render: (r) => (
               <code style={{ fontSize: 12, color: "var(--ink2)" }}>{r.referenceNo ?? "—"}</code>
             ),
           },
-          { key: "citizenName", label: "Citizen", render: (r) => r.citizenName ?? "—" },
-          { key: "serviceType", label: "Service Type", render: (r) => r.serviceType ?? "—" },
-          { key: "subject", label: "Subject", render: (r) => r.subject ?? "—" },
+          { key: "citizenName", label: t("colCitizen"), render: (r) => r.citizenName ?? "—" },
+          { key: "serviceType", label: t("colServiceType"), render: (r) => r.serviceType ?? "—" },
+          { key: "subject", label: t("colSubject"), render: (r) => r.subject ?? "—" },
           {
             key: "priority",
-            label: "Priority",
+            label: t("colPriority"),
+            render: (r) => <PriorityBadge priority={r.priority} label={priorityText(r.priority)} />,
+          },
+          {
+            key: "status",
+            label: t("colStatus"),
+            render: (r) =>
+              isOverdue(r.dueAt, r.status) ? (
+                <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                  <StatusPill status={r.status} />
+                  <StatusPill status="overdue" label={t("overdue")} variant="bad" />
+                </span>
+              ) : (
+                <StatusPill status={r.status} />
+              ),
+          },
+          {
+            key: "assignedTo",
+            label: t("colAssignedTo"),
+            // We only hold the owner's opaque id here, not a display name (there
+            // is no CRM assignee directory loader to resolve it, and showing a
+            // raw uuid is worse than useless to a desk officer). Show whether the
+            // request is owned at all; GAP-CRM-SERVICE-REQUESTS-03.
+            render: (r) =>
+              r.assignedTo ? (
+                t("assigned")
+              ) : (
+                <span style={{ color: "var(--ink2)" }}>{t("unassigned")}</span>
+              ),
+          },
+          {
+            key: "dueAt",
+            label: t("colDue"),
             render: (r) => (
               <span
                 style={{
-                  display: "inline-block",
-                  padding: "2px 8px",
-                  borderRadius: 4,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: "var(--bg)",
-                  background: PRIORITY_TONE[r.priority] ?? "var(--ink2)",
+                  color: isOverdue(r.dueAt, r.status) ? "var(--bad)" : "var(--ink2)",
+                  fontSize: 13,
+                  fontWeight: isOverdue(r.dueAt, r.status) ? 600 : 400,
                 }}
               >
-                {titleCase(r.priority)}
+                {fmtDate(r.dueAt)}
               </span>
             ),
           },
-          { key: "status", label: "Status", render: (r) => <StatusPill status={r.status} /> },
           {
             key: "createdAt",
-            label: "Logged",
+            label: t("colLogged"),
             render: (r) => (
               <span style={{ color: "var(--ink2)", fontSize: 13 }}>
                 {r.createdAt ? new Date(r.createdAt).toLocaleDateString("en-IN") : "—"}
@@ -135,7 +172,7 @@ export function ServiceRequestsTable({
             csvExclude: true,
             render: (r) => (
               <Link href={`/crm/service-requests/${r.id}`} className="btn" style={{ fontSize: 13 }}>
-                View
+                {t("view")}
               </Link>
             ),
           },

@@ -4,6 +4,7 @@ import { PageHeader, StatusPill, Card } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { ServiceRequestActions } from "./ServiceRequestActions";
+import { PriorityBadge } from "../PriorityBadge";
 
 /**
  * GAP-CRM-SERVICE-REQUESTS-DETAIL-02 (DPDP): a citizen's phone and email are
@@ -61,23 +62,16 @@ function fmt(dt?: string) {
   return new Date(dt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
 }
 
-function PriorityBadge({ priority }: { priority: string }) {
-  const color = priority === "urgent" ? "var(--bad)" : priority === "high" ? "var(--warn)" : "var(--ink2)";
-  return (
-    <span
-      style={{
-        display: "inline-block",
-        padding: "2px 8px",
-        borderRadius: 4,
-        fontSize: 12,
-        fontWeight: 600,
-        color: "var(--bg)",
-        background: color,
-      }}
-    >
-      {priority.charAt(0).toUpperCase() + priority.slice(1)}
-    </span>
-  );
+/**
+ * GAP-CRM-SERVICE-REQUESTS-DETAIL-05: a request is overdue when its due date is
+ * in the past and it is still workable (not resolved/closed/cancelled).
+ */
+const WORKABLE = new Set(["open", "in_progress", "pending"]);
+function overdueDays(dueAt: string | undefined, status: string): number | null {
+  if (!dueAt || !WORKABLE.has(status)) return null;
+  const due = new Date(dueAt).getTime();
+  if (!Number.isFinite(due) || due >= Date.now()) return null;
+  return Math.floor((Date.now() - due) / 86_400_000);
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -104,38 +98,43 @@ export default async function ServiceRequestDetailPage({ params }: { params: { i
     },
   );
 
+  const t = await getTranslations("crmServiceRequestDetail");
+
   if (!r) {
     return (
       <>
         <PageHeader
-          title="Service request not found"
-          subtitle="This request may have been removed, or you may not have access to it."
+          title={t("notFoundTitle")}
+          subtitle={t("notFoundSubtitle")}
           back="/crm/service-requests"
-          backLabel="Service Requests"
+          backLabel={t("backLabel")}
         />
         {source === "error" && <DataSourceBadge source={source} />}
       </>
     );
   }
 
-  const t = await getTranslations("crmServiceRequestDetail");
   const roles = getSessionRoles();
+  const priorityKey = (r.priority ?? "normal").toLowerCase();
+  const priorityLabel = ["urgent", "high", "normal", "low"].includes(priorityKey)
+    ? t(`priority_${priorityKey}`)
+    : undefined;
   const canRevealPii = PII_REVEAL_ROLES.some((role) => roles.includes(role));
 
   return (
     <>
       <PageHeader
-        title={r.referenceNo ?? "Service Request"}
+        title={r.referenceNo ?? t("title")}
         subtitle={r.subject}
         back="/crm/service-requests"
-        backLabel="Service Requests"
-        actions={<ServiceRequestActions id={r.id} status={r.status} />}
+        backLabel={t("backLabel")}
+        actions={<ServiceRequestActions id={r.id} status={r.status} version={r.version} />}
       />
       {source === "error" && <DataSourceBadge source={source} />}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20 }}>
+      <div className="detail-split">
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <Card title="Request Details">
+          <Card title={t("detailsCard")}>
             <dl
               style={{
                 display: "grid",
@@ -145,10 +144,32 @@ export default async function ServiceRequestDetailPage({ params }: { params: { i
                 margin: 0,
               }}
             >
-              <Field label="Service Type">{r.serviceType ?? "—"}</Field>
-              <Field label="Priority"><PriorityBadge priority={r.priority ?? "normal"} /></Field>
-              <Field label="Status"><StatusPill status={r.status ?? "open"} /></Field>
-              <Field label="Due">{fmt(r.dueAt)}</Field>
+              <Field label={t("serviceType")}>{r.serviceType ?? "—"}</Field>
+              <Field label={t("priority")}><PriorityBadge priority={r.priority ?? "normal"} label={priorityLabel} /></Field>
+              <Field label={t("status")}><StatusPill status={r.status ?? "open"} /></Field>
+              <Field label={t("assignedTo")}>
+                {r.assignedTo ? (
+                  t("assigned")
+                ) : (
+                  <span style={{ color: "var(--ink2)" }}>{t("unassigned")}</span>
+                )}
+              </Field>
+              <Field label={t("due")}>
+                {(() => {
+                  const od = overdueDays(r.dueAt, r.status ?? "open");
+                  if (od === null) return fmt(r.dueAt);
+                  return (
+                    <span style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                      <span>{fmt(r.dueAt)}</span>
+                      <StatusPill
+                        status="overdue"
+                        label={od === 0 ? t("overdue") : t("overdueBy", { days: od })}
+                        variant="bad"
+                      />
+                    </span>
+                  );
+                })()}
+              </Field>
             </dl>
             {r.description ? (
               <p style={{ marginTop: 16, fontSize: 14, color: "var(--ink)", whiteSpace: "pre-wrap" }}>
@@ -164,7 +185,7 @@ export default async function ServiceRequestDetailPage({ params }: { params: { i
               and a Close's remarks live in their own card below, driven by
               statusNote — never mislabelled as a resolution. */}
           {r.resolution && (r.status === "resolved" || r.status === "closed") ? (
-            <Card title="Resolution">
+            <Card title={t("resolutionCard")}>
               <p style={{ fontSize: 14, color: "var(--ink)", whiteSpace: "pre-wrap", margin: 0 }}>
                 {r.resolution}
               </p>
@@ -186,15 +207,15 @@ export default async function ServiceRequestDetailPage({ params }: { params: { i
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <Card title="Citizen">
+          <Card title={t("citizenCard")}>
             <dl style={{ display: "flex", flexDirection: "column", gap: 12, margin: 0 }}>
-              <Field label="Name">{r.citizenName ?? "—"}</Field>
-              <Field label="Phone">
+              <Field label={t("name")}>{r.citizenName ?? "—"}</Field>
+              <Field label={t("phone")}>
                 <span style={{ fontFamily: "monospace" }}>
                   {canRevealPii ? (r.citizenPhone ?? "—") : maskPhone(r.citizenPhone)}
                 </span>
               </Field>
-              <Field label="Email">
+              <Field label={t("email")}>
                 <span style={{ fontFamily: "monospace" }}>
                   {canRevealPii ? (r.citizenEmail ?? "—") : maskEmail(r.citizenEmail)}
                 </span>
@@ -206,10 +227,10 @@ export default async function ServiceRequestDetailPage({ params }: { params: { i
               ) : null}
             </dl>
           </Card>
-          <Card title="Audit">
+          <Card title={t("auditCard")}>
             <dl style={{ display: "flex", flexDirection: "column", gap: 12, margin: 0 }}>
-              <Field label="Logged">{fmt(r.createdAt)}</Field>
-              <Field label="Last updated">{fmt(r.updatedAt)}</Field>
+              <Field label={t("logged")}>{fmt(r.createdAt)}</Field>
+              <Field label={t("lastUpdated")}>{fmt(r.updatedAt)}</Field>
             </dl>
           </Card>
         </div>

@@ -130,6 +130,23 @@ export const COMMANDS = {
    * customer's words are not broadcast to every consumer of activity events (DPDP).
    */
   analyseSentiment: "crm.sentiment.analyse",
+  /**
+   * Record a citizen's self-reported service rating (1-5) + optional comment,
+   * optionally regarding a service request (GAP-CRM-VOICE-OF-CUSTOMER-FEEDBACK-05).
+   * Payload: { id, tenantId, rating, comment, serviceRequestId, submissionType }.
+   * The ONLY citizen-feedback write path. Comment is free text — never logged, and
+   * only shown unmasked to CRM admins. Kept distinct from analyseSentiment so a
+   * citizen's own rating is never mixed into the model-scored sentiment aggregate.
+   */
+  recordCitizenFeedback: "crm.citizen_feedback.record",
+  /** Service-type master admin writes (GAP-CRM-SERVICE-REQUESTS-NEW-02). Payload carries { id, tenantId, ... }. */
+  createServiceType: "crm.service_type.create",
+  updateServiceType: "crm.service_type.update",
+  deleteServiceType: "crm.service_type.delete",
+  /** Grievance-category master admin writes (GAP-CRM-GRIEVANCES-NEW-03). */
+  createGrievanceCategory: "crm.grievance_category.create",
+  updateGrievanceCategory: "crm.grievance_category.update",
+  deleteGrievanceCategory: "crm.grievance_category.delete",
   /** Set lead classification (temperature/priority/segment/product/region/expected value) (LQ-003). */
   classifyContact: "crm.contact.classify",
   /** Submit a qualification framework's answers for a lead -> compute outcome+score (LQ-001). */
@@ -377,6 +394,13 @@ export const EVENTS = {
    * Payload: { activityId, polarity, score, themes, model } — never the text.
    */
   sentimentScored: "crm.interaction.sentiment_scored",
+
+  /**
+   * A citizen recorded a service rating (GAP-CRM-VOICE-OF-CUSTOMER-FEEDBACK-05).
+   * Payload: { feedbackId, rating, serviceRequestId } — NEVER the comment text
+   * (the comment is PII the citizen typed and stays out of the event stream).
+   */
+  citizenFeedbackRecorded: "crm.citizen_feedback.recorded",
 
   /** Lead classification fields changed (LQ-003). Payload: { contactId, fields }. */
   contactClassified: "crm.contact.classified",

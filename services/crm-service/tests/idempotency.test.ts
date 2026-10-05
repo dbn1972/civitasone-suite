@@ -41,7 +41,7 @@ const baseCtx: RequestContext = {
 
 function headers(idempotencyKey?: string): Record<string, string> {
   const h: Record<string, string> = {
-    authorization: `Bearer ${signToken({ sub: ACTOR, tid: TENANT, roles: ["crm_user"], sid: "sess-idem" }, SECRET)}`,
+    authorization: `Bearer ${signToken({ sub: ACTOR, tid: TENANT, roles: ["crm_admin"], sid: "sess-idem" }, SECRET)}`,
     "x-tenant-id": TENANT,
   };
   if (idempotencyKey) h["x-idempotency-key"] = idempotencyKey;
@@ -92,6 +92,7 @@ async function cleanup(): Promise<void> {
     await tx`DELETE FROM crm.next_actions WHERE tenant_id = ${TENANT}`;
     await tx`DELETE FROM crm.tenders WHERE tenant_id = ${TENANT}`;
     await tx`DELETE FROM crm.deals WHERE tenant_id = ${TENANT}`;
+    await tx`DELETE FROM crm.accounts WHERE tenant_id = ${TENANT}`.catch(() => {});
     await tx`DELETE FROM _outbox.messages WHERE tenant_id = ${TENANT}`;
   }).catch(() => {});
 }
@@ -185,6 +186,22 @@ describe("R2 idempotency — POST /v1/crm/deals", () => {
     await runWithTenant(TENANT, () => handler(msg));
 
     expect(await dealIdsNamed("Idem Redelivered Deal")).toEqual([id]);
+  });
+});
+
+describe("R2 idempotency — POST /v1/crm/accounts (GAP-CRM-ACCOUNTS-04)", () => {
+  it("a double-submitted New Account form with one key creates exactly one account", async () => {
+    const name = `Idem Account ${RUN.slice(0, 8)}`;
+    const [first, second] = await doubleSubmit("/v1/crm/accounts", { name }, `${RUN}:account-create`);
+    expect(first.statusCode).toBe(202);
+    expect(second.statusCode).toBe(202);
+    expect(second.json().id).toBe(first.json().id);
+
+    await drainQueue();
+    const rows = await scoped((tx) => tx`
+      SELECT id FROM crm.accounts WHERE tenant_id = ${TENANT} AND name = ${name}
+    `) as unknown as Array<{ id: string }>;
+    expect(rows.map((r) => r.id)).toEqual([first.json().id]);
   });
 });
 

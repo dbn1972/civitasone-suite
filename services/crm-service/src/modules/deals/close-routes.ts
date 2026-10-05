@@ -26,7 +26,9 @@ import * as repo from "./repo.js";
 import * as pipelineRepo from "../pipelines/repo.js";
 import { missingMandatoryFields, findStage, skippedGateStage } from "./stage-gate.js";
 
-const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
+// Closing a deal is an admin action: mirrors CRM_OPPORTUNITY_CLOSE_ROLES in the web roleGuard
+// (crm_user may no longer close; the UI already hides the control from them).
+const CLOSE_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
 const ADMIN_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
 const idParam = z.object({ id: z.string().uuid() });
 
@@ -64,7 +66,7 @@ export async function closeRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/crm/deals/:id/close", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, CRM_ROLES);
+    requireRole(ctx, CLOSE_ROLES);
     const { id } = idParam.parse(req.params);
     const body = closeDealBody.parse(req.body);
 

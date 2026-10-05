@@ -1,9 +1,18 @@
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { QualificationFrameworksEditor } from "./QualificationFrameworksEditor";
 import * as lq from "@/lib/crm/leadQualification";
+import type { ReactElement } from "react";
+
+function render(ui: ReactElement) {
+  return rtlRender(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
 
 vi.mock("@/lib/crm/leadQualification", async (orig) => {
   const actual = await orig<typeof import("@/lib/crm/leadQualification")>();
@@ -31,44 +40,111 @@ beforeEach(() => {
 describe("QualificationFrameworksEditor (LQ-001 admin)", () => {
   it("shows the saved-info badge on a failed load", async () => {
     vi.mocked(lq.getFrameworks).mockResolvedValue({ data: [], source: "error" });
-    render(<NextIntlClientProvider locale="en" messages={enMessages}><QualificationFrameworksEditor /></NextIntlClientProvider>);
+    render(<QualificationFrameworksEditor />);
     await waitFor(() => expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument());
     expect(screen.getByText(/no frameworks yet/i)).toBeInTheDocument();
   });
 
-  it("adds a new framework, requires name + business line, then creates it", async () => {
+  it("adds a new framework, requires name + business line + a question, then creates it", async () => {
     vi.mocked(lq.getFrameworks).mockResolvedValue({ data: [], source: "api" });
     vi.mocked(lq.createFramework).mockResolvedValue(undefined);
-    render(<NextIntlClientProvider locale="en" messages={enMessages}><QualificationFrameworksEditor /></NextIntlClientProvider>);
+    render(<QualificationFrameworksEditor />);
     await waitFor(() => expect(screen.getByText(/no frameworks yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add framework/i }));
 
     // Save without a name → validation error, no create call.
     fireEvent.click(screen.getByRole("button", { name: /save framework/i }));
-    expect(await screen.findByText(/needs a name and a business line/i)).toBeInTheDocument();
+    expect(await screen.findByText(/framework name is required/i)).toBeInTheDocument();
     expect(lq.createFramework).not.toHaveBeenCalled();
 
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "MEDDIC" } });
-    fireEvent.change(screen.getByLabelText("Business line"), { target: { value: "psu" } });
+    fireEvent.change(screen.getByLabelText("Business line"), { target: { value: "PSU" } });
+
+    // Still blocked: a framework needs at least one question.
+    fireEvent.click(screen.getByRole("button", { name: /save framework/i }));
+    expect(await screen.findByText(/at least one question/i)).toBeInTheDocument();
+    expect(lq.createFramework).not.toHaveBeenCalled();
+
+    // Add a question with text + weight, then it saves (business line normalised).
+    fireEvent.click(screen.getByRole("button", { name: /add question/i }));
+    fireEvent.change(screen.getByLabelText(/question 1 text/i), { target: { value: "Has budget?" } });
     fireEvent.click(screen.getByRole("button", { name: /save framework/i }));
     await waitFor(() => expect(lq.createFramework).toHaveBeenCalled());
     expect(vi.mocked(lq.createFramework).mock.calls[0][0]).toMatchObject({ name: "MEDDIC", businessLine: "psu" });
   });
 
+  // GAP-CRM-QUALIFICATION-FRAMEWORKS-03: an empty question text is rejected, not POSTed.
+  it("blocks a blank question text and does not call createFramework", async () => {
+    vi.mocked(lq.getFrameworks).mockResolvedValue({ data: [], source: "api" });
+    render(<QualificationFrameworksEditor />);
+    await waitFor(() => expect(screen.getByText(/no frameworks yet/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /add framework/i }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "BANT" } });
+    fireEvent.change(screen.getByLabelText("Business line"), { target: { value: "government" } });
+    fireEvent.click(screen.getByRole("button", { name: /add question/i }));
+    // Leave the question text blank; save.
+    fireEvent.click(screen.getByRole("button", { name: /save framework/i }));
+    expect(await screen.findByText(/question text is required/i)).toBeInTheDocument();
+    expect(lq.createFramework).not.toHaveBeenCalled();
+  });
+
+  // GAP-CRM-QUALIFICATION-FRAMEWORKS-03: a blank weight is an error, not silently 0.
+  it("blocks a blank weight (not sent as 0)", async () => {
+    vi.mocked(lq.getFrameworks).mockResolvedValue({ data: [], source: "api" });
+    render(<QualificationFrameworksEditor />);
+    await waitFor(() => expect(screen.getByText(/no frameworks yet/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /add framework/i }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "BANT" } });
+    fireEvent.change(screen.getByLabelText("Business line"), { target: { value: "government" } });
+    fireEvent.click(screen.getByRole("button", { name: /add question/i }));
+    fireEvent.change(screen.getByLabelText(/question 1 text/i), { target: { value: "Has budget?" } });
+    // Clear the weight to blank → NaN, must be rejected.
+    fireEvent.change(screen.getByLabelText(/question 1 weight/i), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: /save framework/i }));
+    expect(await screen.findByText(/weight is required/i)).toBeInTheDocument();
+    expect(lq.createFramework).not.toHaveBeenCalled();
+  });
+
   it("adds a question to a loaded framework and saves via update", async () => {
     vi.mocked(lq.getFrameworks).mockResolvedValue({ data: [fw], source: "api" });
     vi.mocked(lq.updateFramework).mockResolvedValue(undefined);
-    render(<NextIntlClientProvider locale="en" messages={enMessages}><QualificationFrameworksEditor /></NextIntlClientProvider>);
+    render(<QualificationFrameworksEditor />);
     await waitFor(() => expect(screen.getByDisplayValue("BANT")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add question/i }));
+    // The new question needs text (empty text is now rejected by the schema).
+    fireEvent.change(screen.getByLabelText(/question 2 text/i), { target: { value: "Has authority?" } });
     fireEvent.click(screen.getByRole("button", { name: /save framework/i }));
     await waitFor(() => expect(lq.updateFramework).toHaveBeenCalledWith("f1", expect.objectContaining({ id: "f1" })));
     expect(vi.mocked(lq.updateFramework).mock.calls[0][1].questions.length).toBe(2);
   });
 
+  // GAP-CRM-QUALIFICATION-FRAMEWORKS-02: a 409 tells the admin, in plain words, to reload.
+  it("shows a changed-by-someone-else message with a reload button on a 409 conflict", async () => {
+    vi.mocked(lq.getFrameworks).mockResolvedValue({ data: [{ ...fw, version: 2 }], source: "api" });
+    vi.mocked(lq.updateFramework).mockRejectedValue(new lq.FrameworkConflictError());
+    render(<QualificationFrameworksEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("BANT")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /save framework/i }));
+    expect(await screen.findByText(/changed by someone else/i)).toBeInTheDocument();
+    expect(vi.mocked(lq.updateFramework).mock.calls[0][1]).toMatchObject({ version: 2 });
+    const callsBefore = vi.mocked(lq.getFrameworks).mock.calls.length;
+    fireEvent.click(screen.getByRole("button", { name: /reload latest version/i }));
+    await waitFor(() => expect(vi.mocked(lq.getFrameworks).mock.calls.length).toBeGreaterThan(callsBefore));
+  });
+
+  it("shows the in-use message (no reload button) when a removed question has answers", async () => {
+    vi.mocked(lq.getFrameworks).mockResolvedValue({ data: [fw], source: "api" });
+    vi.mocked(lq.updateFramework).mockRejectedValue(new lq.QuestionHasAnswersError());
+    render(<QualificationFrameworksEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("BANT")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /save framework/i }));
+    expect(await screen.findByText(/already been answered on leads/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /reload latest version/i })).not.toBeInTheDocument();
+  });
+
   it("deletes a saved framework after ConfirmDialog confirmation", async () => {    vi.mocked(lq.getFrameworks).mockResolvedValue({ data: [fw], source: "api" });
     vi.mocked(lq.deleteFramework).mockResolvedValue(undefined);
-    render(<NextIntlClientProvider locale="en" messages={enMessages}><QualificationFrameworksEditor /></NextIntlClientProvider>);
+    render(<QualificationFrameworksEditor />);
     await waitFor(() => expect(screen.getByDisplayValue("BANT")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     const dialog = await screen.findByRole("alertdialog");
@@ -85,7 +161,7 @@ describe("QualificationFrameworksEditor (LQ-001 admin)", () => {
       ],
     };
     vi.mocked(lq.getFrameworks).mockResolvedValue({ data: [weighted], source: "api" });
-    render(<NextIntlClientProvider locale="en" messages={enMessages}><QualificationFrameworksEditor /></NextIntlClientProvider>);
+    render(<QualificationFrameworksEditor />);
     await waitFor(() => expect(screen.getByDisplayValue("Weighted")).toBeInTheDocument());
 
     // Total weight row (20 + 30 = 50) with the relative-weights hint.
@@ -115,7 +191,7 @@ describe("QualificationFrameworksEditor (LQ-001 admin)", () => {
   // keys on its real id and isn't affected.
   it("keeps an unsaved framework's own value and focus attached to it after an earlier unsaved framework is removed", async () => {
     vi.mocked(lq.getFrameworks).mockResolvedValue({ data: [], source: "api" });
-    render(<NextIntlClientProvider locale="en" messages={enMessages}><QualificationFrameworksEditor /></NextIntlClientProvider>);
+    render(<QualificationFrameworksEditor />);
     await waitFor(() => expect(screen.getByText(/no frameworks yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add framework/i }));
     fireEvent.click(screen.getByRole("button", { name: /add framework/i }));
@@ -140,7 +216,7 @@ describe("QualificationFrameworksEditor (LQ-001 admin)", () => {
   // question list was fully index-keyed -- same hazard, one level deeper.
   it("keeps a question's own value and focus attached to it after an earlier question is removed", async () => {
     vi.mocked(lq.getFrameworks).mockResolvedValue({ data: [fw], source: "api" });
-    render(<NextIntlClientProvider locale="en" messages={enMessages}><QualificationFrameworksEditor /></NextIntlClientProvider>);
+    render(<QualificationFrameworksEditor />);
     await waitFor(() => expect(screen.getByDisplayValue("BANT")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add question/i }));
     fireEvent.click(screen.getByRole("button", { name: /add question/i }));

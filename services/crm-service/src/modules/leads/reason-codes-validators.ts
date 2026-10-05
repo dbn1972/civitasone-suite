@@ -12,5 +12,8 @@ export const reasonCodeSchema = z.object({
 
 export const putReasonCodesBody = z.object({
   codes: z.array(reasonCodeSchema).min(1).max(50),
+  // GAP-CRM-LEAD-REASON-CODES-04: optional list-level optimistic-concurrency
+  // token. Also accepted via the If-Match header; the header takes precedence.
+  version: z.string().min(1).optional(),
 });
 export type PutReasonCodesBody = z.infer<typeof putReasonCodesBody>;

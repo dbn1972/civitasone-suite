@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render as rtlRender, screen } from "@testing-library/react";
+import { NextIntlClientProvider as __Intl } from "next-intl";
+import __enMessages from "@/messages/en.json";
+function render(ui: React.ReactElement) {
+  return rtlRender(<__Intl locale="en" messages={__enMessages}>{ui}</__Intl>);
+}
 
 const getBreakdownMock = vi.fn();
 const getAccountsMock = vi.fn();
@@ -72,5 +77,54 @@ describe("AccountHealthDetailPage title (GAP-CRM-HEALTH-ACCOUNTID-01)", () => {
     render(withIntl(ui));
 
     expect(screen.getByRole("heading", { name: /Account health · 11111111/ })).toBeInTheDocument();
+  });
+
+  // GAP-CRM-HEALTH-ACCOUNTID-02 — a 5xx/network error shows a retry state, not
+  // "This account has not been scored".
+  it("renders a retry error state (not 'not scored') on a 500", async () => {
+    getBreakdownMock.mockResolvedValue({ data: null, source: "error", status: 500 });
+    getAccountsMock.mockResolvedValue({ data: [], source: "api" });
+
+    const ui = await AccountHealthDetailPage({ params: { accountId: ACCOUNT_ID } });
+    render(ui);
+
+    expect(screen.queryByText(/has not been scored/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("No health score yet")).not.toBeInTheDocument();
+    // RefreshErrorState offers a "Try again" affordance.
+    expect(screen.getAllByText(/Try again/i).length).toBeGreaterThan(0);
+  });
+
+  it("renders the 'not scored yet' empty state on a 404", async () => {
+    getBreakdownMock.mockResolvedValue({ data: null, source: "error", status: 404 });
+    getAccountsMock.mockResolvedValue({ data: [], source: "api" });
+
+    const ui = await AccountHealthDetailPage({ params: { accountId: ACCOUNT_ID } });
+    render(ui);
+
+    expect(screen.getByText("No health score yet")).toBeInTheDocument();
+    // Not the retry error state.
+    expect(screen.queryByText(/Try again/i)).not.toBeInTheDocument();
+  });
+
+  // GAP-CRM-HEALTH-ACCOUNTID-05 — contribution carries a "pts" unit and the
+  // Data Quality column exposes a Clamped explanation.
+  it("formats contribution with a pts unit and offers a Clamped explanation", async () => {
+    getBreakdownMock.mockResolvedValue({
+      data: {
+        ...breakdown(),
+        contributingFactors: [
+          { signal: "productUsage", value: 72, weight: 0.25, contribution: 18, clamped: true },
+        ],
+      },
+      source: "api",
+    });
+    getAccountsMock.mockResolvedValue({ data: [account(ACCOUNT_ID, "Bharat Steel")], source: "api" });
+
+    const ui = await AccountHealthDetailPage({ params: { accountId: ACCOUNT_ID } });
+    render(ui);
+
+    expect(screen.getByText(/\+18 pts/)).toBeInTheDocument();
+    // The Clamped help affordance is present.
+    expect(screen.getByRole("button", { name: /What is Clamped/i })).toBeInTheDocument();
   });
 });

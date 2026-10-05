@@ -1,7 +1,8 @@
-import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { PageHeader, EmptyState, DataTable, maskPhone, maskEmail } from "../../../../_components/ds";
+import { getTranslations } from "next-intl/server";
+import { PageHeader, EmptyState, maskPhone, maskEmail } from "../../../../_components/ds";
+import { LoadErrorState } from "../../../../_components/ds/LoadErrorState";
 import { getContactById } from "../../../../_data/loaders";
-import { getSessionRoles, hasAnyRole, CRM_PII_READ_ROLES, CRM_VERIFY_ROLES } from "@/lib/auth/roleGuard";
+import { getSessionRoles, hasAnyRole, CRM_PII_READ_ROLES, CRM_VERIFY_ROLES, CRM_ADMIN_ROLES } from "@/lib/auth/roleGuard";
 import { formatIndianDate } from "@/lib/formatters";
 import { ContactDetailActions } from "./ContactDetailActions";
 import { QualifyPanel } from "../../../../_components/crm/QualifyPanel";
@@ -18,13 +19,25 @@ import { DocumentsPanel } from "../../../../_components/crm/DocumentsPanel";
 import { DocumentAlertsView } from "../../../../_components/crm/DocumentAlertsView";
 
 export default async function Page({ params }: { params: { id: string } }) {
-  const { data: contact, source } = await getContactById(params.id);
+  const { data: contact, source, status, errorMessage } = await getContactById(params.id);
 
   if (!contact) {
+    // GAP-CRM-CONTACTS-DETAIL-05: a failed fetch (5xx/network/403) and a real
+    // 404 used to render the SAME "Contact not found" with only a tiny badge.
+    // Only a genuine 404 is "not found"; anything else is a transient failure
+    // that must offer Retry (and a 403 its own access-restricted copy).
+    if (source === "error" && status !== 404) {
+      const tErr = await getTranslations("crmContactDetailPage");
+      return (
+        <>
+          <PageHeader title={tErr("title")} back="/crm/contacts" backLabel={tErr("backLabel")} />
+          <LoadErrorState result={{ status, errorMessage }} area={tErr("loadArea")} backHref="/crm/contacts" backLabel={tErr("backLabel")} />
+        </>
+      );
+    }
     return (
       <>
         <PageHeader title="Contact Detail" back="/crm/contacts" backLabel="Contacts" />
-        {source === "error" && <DataSourceBadge source={source} />}
         <EmptyState icon="👤" title="Contact not found" message="This contact does not exist or has been removed." />
       </>
     );
@@ -36,6 +49,10 @@ export default async function Page({ params }: { params: { id: string } }) {
   // Document verify/reject is an approval control restricted to CRM admins
   // (GAP-CRM-ACCOUNTS-DETAIL-02); the server stays the authority.
   const canVerify = hasAnyRole(getSessionRoles(), CRM_VERIFY_ROLES);
+  // GAP-CRM-CONTACTS-DETAIL-03: Delete is admin-only server-side (crm-service
+  // DELETE requires crm_admin|super_admin). Hide the control from roles that
+  // would only get a 403 after typing a deletion reason; server stays authority.
+  const canDelete = hasAnyRole(getSessionRoles(), CRM_ADMIN_ROLES);
   const phoneDisplay = contact.phone ? (canViewPii ? contact.phone : maskPhone(contact.phone)) : null;
   const emailDisplay = contact.email ? (canViewPii ? contact.email : maskEmail(contact.email)) : null;
 
@@ -54,9 +71,8 @@ export default async function Page({ params }: { params: { id: string } }) {
         subtitle={contact.designation ?? contact.organization ?? "CRM Contact"}
         back="/crm/contacts"
         backLabel="Contacts"
-        actions={<ContactDetailActions contactId={contact.id} name={contact.name} />}
+        actions={<ContactDetailActions contactId={contact.id} name={contact.name} canDelete={canDelete} />}
       />
-      {source === "error" && <DataSourceBadge source={source} />}
       <div className="grid g-main" style={{ alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <div className="card">
@@ -99,26 +115,11 @@ export default async function Page({ params }: { params: { id: string } }) {
           <DocumentAlertsView subjectType="contact" subjectId={contact.id} />
           <DocumentsPanel subjectType="contact" subjectId={contact.id} canVerify={canVerify} />
 
-          {contact.deals.length > 0 && (
-            <div className="card">
-              <div className="card-h"><h3>Related Deals</h3></div>
-              <DataTable
-                columns={[
-                  { key: "dealName", label: "Deal Name" },
-                  { key: "stage", label: "Stage", cellType: "status" },
-                  { key: "amount", label: "Amount", align: "right", cellType: "amount" },
-                ]}
-                rows={contact.deals.map((deal) => ({
-                  id: deal.id,
-                  dealName: deal.dealName,
-                  stage: deal.stage.replace(/_/g, " "),
-                  amount: deal.amount,
-                }))}
-                rowLinkKey="id"
-                rowLinkPrefix="/crm/deals/"
-              />
-            </div>
-          )}
+          {/* GAP-CRM-CONTACTS-DETAIL-04: the page-level "Related Deals" card
+              (from contact.deals) was removed — Customer360Panel above renders
+              the richer Deals block (links to /crm/deals/{id}, handles
+              error/empty, and shows quotations) from the 360 aggregate, so the
+              two could disagree. Single source of truth is the 360 panel. */}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <LeadTransitionControl leadId={contact.id} currentStatus={contact.leadStatus ?? "new"} />
@@ -133,21 +134,10 @@ export default async function Page({ params }: { params: { id: string } }) {
               </div>
             </div>
           )}
-          {contact.activityTimeline.length > 0 && (
-            <div className="card">
-              <div className="card-h"><h3>Activity Timeline</h3></div>
-              <div className="pad">
-                <ul className="tl">
-                  {contact.activityTimeline.map((a) => (
-                    <li key={a.id} className={a.status === "completed" ? "done" : "cur"}>
-                      <div className="t">{a.type} — {a.subject}</div>
-                      {a.dueDate && <div className="d">{formatIndianDate(a.dueDate)}</div>}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          )}
+          {/* GAP-CRM-CONTACTS-DETAIL-04: the page-level "Activity Timeline"
+              card (from contact.activityTimeline) was removed — the
+              ActivityFeed panel above is the single source of truth for
+              activity, so the two payloads can no longer disagree. */}
         </div>
       </div>
     </>

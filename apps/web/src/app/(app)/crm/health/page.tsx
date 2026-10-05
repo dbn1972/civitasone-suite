@@ -1,11 +1,17 @@
 import { getTranslations } from "next-intl/server";
 import { Card, PageHeader, RefreshErrorState, StatCard, StatGrid } from "../../../_components/ds";
 import { getAccountHealthWatchlist, getCrmAccounts } from "../../../_data/loaders";
-import { BAND_LABEL, byUrgency, summariseWatchlist, withAccountNames } from "./health";
+import { byUrgency, summariseWatchlist, withAccountNames } from "./health";
 import { WatchlistTable } from "./WatchlistTable";
 
+// GAP-CRM-HEALTH-02: the watchlist loader requests at this cap. When the API
+// returns exactly this many rows the list is (probably) truncated, so counts
+// and the average describe only the first `WATCHLIST_CAP` at-risk accounts.
+const WATCHLIST_CAP = 100;
+
 export default async function AccountHealthPage() {
-  const t = await getTranslations("crmAccountHealth");
+  const t = await getTranslations("crm.health");
+  const tErr = await getTranslations("crmAccountHealth");
   const [{ data: watchlist, source: healthSource }, { data: accounts, source: accountSource }] =
     await Promise.all([getAccountHealthWatchlist(), getCrmAccounts()]);
 
@@ -31,8 +37,8 @@ export default async function AccountHealthPage() {
         />
         <RefreshErrorState
           error={{
-            what: t("loadErrorWhat"),
-            next: t("loadErrorNext"),
+            what: tErr("loadErrorWhat"),
+            next: tErr("loadErrorNext"),
             actions: ["retry", "back"],
           }}
           backHref="/crm"
@@ -42,10 +48,19 @@ export default async function AccountHealthPage() {
   }
 
   const summary = summariseWatchlist(watchlist);
-  const entries = byUrgency(withAccountNames(watchlist, accounts));
-  const worstName = summary.worst
-    ? entries.find((e) => e.accountId === summary.worst?.accountId)?.accountName ?? "—"
-    : "—";
+  const entries = byUrgency(withAccountNames(watchlist, accounts, (id) => tErr("unresolvedAccount", { id })));
+  // GAP-CRM-HEALTH-03: "Call First" prefers the worst-scoring account that has a
+  // resolved name, so a row whose account could not be looked up never shows as
+  // a bare, unidentifiable suggestion. Falls back to the worst entry (with its
+  // id-suffix label) only if every at-risk account is unresolved.
+  const worstEntry = summary.worst
+    ? entries.find((e) => e.accountId === summary.worst?.accountId)
+    : undefined;
+  const callFirst = entries.find((e) => !e.unresolved) ?? worstEntry;
+  const worstName = callFirst?.accountName ?? "—";
+
+  // GAP-CRM-HEALTH-02: the list is capped; when it comes back full, say so.
+  const truncated = watchlist.length >= WATCHLIST_CAP;
 
   return (
     <>
@@ -59,25 +74,30 @@ export default async function AccountHealthPage() {
         <StatCard
           icon="🚨"
           iconBg="#fee2e2"
-          label={BAND_LABEL.critical}
+          label={t("critical")}
           value={summary.critical.toLocaleString("en-IN")}
         />
         <StatCard
           icon="⚠️"
           iconBg="#fef3c7"
-          label={BAND_LABEL.at_risk}
+          label={t("atRisk")}
           value={summary.atRisk.toLocaleString("en-IN")}
         />
         <StatCard
           icon="📉"
           iconBg="#e0f2fe"
-          label="Average Score"
+          label={t("averageScore")}
           value={summary.total > 0 ? `${summary.averageScore}/100` : "—"}
         />
-        <StatCard icon="📞" iconBg="#fce7f3" label="Call First" value={worstName} />
+        <StatCard icon="📞" iconBg="#fce7f3" label={t("callFirst")} value={worstName} />
       </StatGrid>
 
-      <Card title="Watchlist">
+      <Card title={t("watchlist")}>
+        {truncated && (
+          <p style={{ fontSize: 13, color: "var(--ink2)", margin: "4px 16px 0" }}>
+            {t("truncated", { count: WATCHLIST_CAP })}
+          </p>
+        )}
         <WatchlistTable entries={entries} />
       </Card>
     </>

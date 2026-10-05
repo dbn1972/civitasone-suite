@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { UserFacingError } from "@/lib/userFacingError";
 import {
   normaliseFrameworks,
   normaliseQuestions,
@@ -14,6 +15,9 @@ import {
   getFrameworks,
   createFramework,
   updateFramework,
+  frameworkToWire,
+  FrameworkConflictError,
+  QuestionHasAnswersError,
   deleteFramework,
   saveScoreRules,
   getScoreHistory,
@@ -49,15 +53,15 @@ describe("leadQualification normalisers", () => {
     expect(b.active).toBe(true);
   });
 
-  it("normaliseScoreRules coerces numbers, defaults fn to linear, drops attribute-less rows", () => {
+  it("normaliseScoreRules coerces numbers, defaults fn to presence, drops attribute-less rows", () => {
     const out = normaliseScoreRules([
-      { attribute: "industry", weight: "5", scoreFnType: "step", params: { a: 1 } },
+      { attribute: "industry", weight: "5", scoreFnType: "map", params: { a: 1 } },
       { attribute: "x", scoreFnType: "bogus" },
       { weight: 1 },
     ]);
     expect(out).toHaveLength(2);
-    expect(out[0]).toMatchObject({ attribute: "industry", weight: 5, scoreFnType: "step" });
-    expect(out[1].scoreFnType).toBe("linear");
+    expect(out[0]).toMatchObject({ attribute: "industry", weight: 5, scoreFnType: "map" });
+    expect(out[1].scoreFnType).toBe("presence");
   });
 
   it("normaliseScoreRules reads {rules} envelope and enabled default", () => {
@@ -140,6 +144,71 @@ describe("leadQualification client calls", () => {
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ targetStatus: "contacted", reason: "voicemail" });
   });
 
+  // GAP-CRM-QUALIFICATION-FRAMEWORKS-02 (web half): version + question ids on PUT, 409 handling.
+  it("normaliseFrameworks keeps the server version, and questions accept the server's prompt field", () => {
+    const [fw] = normaliseFrameworks([
+      { id: "f1", name: "BANT", businessLine: "gov", version: 4, questions: [{ id: "q1", prompt: "Budget?", weight: 3 }] },
+    ]);
+    expect(fw.version).toBe(4);
+    expect(fw.questions[0]).toMatchObject({ id: "q1", text: "Budget?", weight: 3 });
+  });
+
+  it("updateFramework PUTs the version and each existing question id in the server's wire shape", async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+    await updateFramework("f1", {
+      id: "f1", name: "BANT", businessLine: "gov", active: true, version: 7,
+      questions: [{ id: "q1", text: "Budget?", weight: 2 }, { text: "New one", weight: 1 }],
+    });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.version).toBe(7);
+    expect(body.questions[0]).toMatchObject({ id: "q1", prompt: "Budget?", weight: 2, order: 0 });
+    expect(body.questions[1]).not.toHaveProperty("id");
+    expect(body.questions[1]).toMatchObject({ prompt: "New one", order: 1 });
+  });
+
+  it("updateFramework maps 409 VERSION_CONFLICT to a plain-language reload message", async () => {
+    fetchMock.mockResolvedValue({
+      ok: false, status: 409,
+      clone: () => ({ json: async () => ({ code: "VERSION_CONFLICT", message: "x" }) }),
+    });
+    const fw = { id: "f1", name: "A", businessLine: "g", active: true, version: 1, questions: [] };
+    await expect(updateFramework("f1", fw)).rejects.toBeInstanceOf(FrameworkConflictError);
+    await expect(updateFramework("f1", fw)).rejects.toThrow(/changed by someone else/i);
+  });
+
+  it("updateFramework maps 409 QUESTION_HAS_ANSWERS to an in-use message", async () => {
+    fetchMock.mockResolvedValue({
+      ok: false, status: 409,
+      clone: () => ({ json: async () => ({ code: "QUESTION_HAS_ANSWERS", message: "x" }) }),
+    });
+    await expect(
+      updateFramework("f1", { id: "f1", name: "A", businessLine: "g", active: true, questions: [] }),
+    ).rejects.toBeInstanceOf(QuestionHasAnswersError);
+  });
+
+  it("create/updateFramework throw a UserFacingError (clerk-safe message + support reference) on a non-409 failure", async () => {
+    const failing = {
+      ok: false, status: 500,
+      headers: new Headers({ "x-correlation-id": "REF-1234" }),
+      clone: () => ({ json: async () => ({ code: "INTERNAL", message: "stack trace boom" }) }),
+    };
+    const fw = { id: "f1", name: "A", businessLine: "g", active: true, questions: [] };
+    fetchMock.mockResolvedValue(failing);
+    for (const call of [() => createFramework(fw), () => updateFramework("f1", fw)]) {
+      const err = await call().catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(UserFacingError);
+      expect((err as Error).message).not.toMatch(/boom|INTERNAL|500/);
+    }
+  });
+
+  it("frameworkToWire emits a select question with an option score map", () => {
+    const w = frameworkToWire({
+      name: "A", businessLine: "g", active: true,
+      questions: [{ text: "Size?", weight: 1, options: [{ label: "Big", value: "big", score: 90 }] }],
+    }) as { questions: Array<Record<string, unknown>> };
+    expect(w.questions[0]).toMatchObject({ answerType: "select", outcomeRule: { options: { big: 90 } } });
+  });
+
   it("qualifyLead posts and normalises the outcome", async () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({ outcome: "qualified", score: 88 }) });
     const out = await qualifyLead("l1", { frameworkId: "f1", answers: { q1: "y" } });
@@ -195,6 +264,16 @@ describe("leadQualification framework + rule + reason CRUD calls", () => {
     expect((await getFrameworks()).source).toBe("error");
   });
 
+  // GAP-CRM-QUALIFICATION-FRAMEWORKS-04: the businessLine query is normalised
+  // (trim + lowercase) so a lead's "Government " still matches a framework
+  // stored as "government".
+  it("getFrameworks lowercases and trims the businessLine query", async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ([]) });
+    await getFrameworks("  Government ");
+    expect(fetchMock.mock.calls[0][0]).toContain("businessLine=government");
+    expect(fetchMock.mock.calls[0][0]).not.toContain("Government");
+  });
+
   it("createFramework POSTs and throws a clerk-safe message on failure, never the server's raw code/message (UX-020)", async () => {
     fetchMock.mockResolvedValueOnce(ok);
     await createFramework({ name: "F", businessLine: "gov", active: true, questions: [] });
@@ -224,7 +303,7 @@ describe("leadQualification framework + rule + reason CRUD calls", () => {
 
   it("saveScoreRules PUTs a { rules } envelope", async () => {
     fetchMock.mockResolvedValue(ok);
-    await saveScoreRules([{ attribute: "a", weight: 1, scoreFnType: "linear", params: {}, enabled: true }]);
+    await saveScoreRules([{ attribute: "a", weight: 1, scoreFnType: "presence", params: {}, enabled: true }]);
     expect(fetchMock.mock.calls[0][1].method).toBe("PUT");
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toHaveProperty("rules");
   });

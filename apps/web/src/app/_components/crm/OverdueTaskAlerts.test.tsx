@@ -1,9 +1,20 @@
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
-import { OverdueTaskAlerts } from "./OverdueTaskAlerts";
+import { render as rtlRender, screen, waitFor } from "@testing-library/react";
+import { OverdueTaskAlerts, subjectHref } from "./OverdueTaskAlerts";
 import * as aa from "@/lib/crm/activityAccount";
+
+import type { ReactElement } from "react";
+
+function render(ui: ReactElement) {
+  return rtlRender(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
+
 
 vi.mock("@/lib/crm/activityAccount", async (orig) => {
   const actual = await orig<typeof import("@/lib/crm/activityAccount")>();
@@ -71,5 +82,33 @@ describe("OverdueTaskAlerts (AC-005)", () => {
     expect(screen.getByText("Task 49")).toBeInTheDocument();
     expect(screen.queryByText("Task 50")).not.toBeInTheDocument();
     expect(screen.getByText(/Page 1 of 3/)).toBeInTheDocument();
+  });
+
+  // GAP-CRM-TASK-ESCALATION-04 — a task on a deal must link to the deal, not a
+  // contact; a lead (no detail route) must render as plain text, not a bad link.
+  it("subjectHref routes each subject type to its own detail page", () => {
+    expect(subjectHref("account", "a1")).toBe("/crm/accounts/a1");
+    expect(subjectHref("contact", "c1")).toBe("/crm/contacts/c1");
+    expect(subjectHref("deal", "d1")).toBe("/crm/deals/d1");
+    // No /crm/leads/[id] route exists — must not fabricate a wrong link.
+    expect(subjectHref("lead", "l1")).toBeNull();
+    expect(subjectHref("unknown", "x1")).toBeNull();
+    expect(subjectHref("account", "")).toBeNull();
+  });
+
+  it("links a deal task to the deal page, and renders a lead task as plain text (GAP-CRM-TASK-ESCALATION-04)", async () => {
+    vi.mocked(aa.getOverdueTasks).mockResolvedValue({
+      data: [
+        { id: "t1", subject: "Close deal", dueAt: "2026-08-03T12:00:00Z", ageMinutes: 100, subjectType: "deal", subjectId: "d1" },
+        { id: "t2", subject: "Qualify lead", dueAt: "2026-08-03T12:00:00Z", ageMinutes: 90, subjectType: "lead", subjectId: "l1" },
+      ],
+      source: "api",
+    });
+    render(<OverdueTaskAlerts />);
+    const dealLink = await screen.findByRole("link", { name: "Close deal" });
+    expect(dealLink).toHaveAttribute("href", "/crm/deals/d1");
+    // The lead task has no link.
+    expect(screen.queryByRole("link", { name: "Qualify lead" })).not.toBeInTheDocument();
+    expect(screen.getByText("Qualify lead")).toBeInTheDocument();
   });
 });

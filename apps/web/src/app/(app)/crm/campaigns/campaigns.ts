@@ -20,6 +20,15 @@ export interface PortfolioTotals {
   responses: number;
   /** Portfolio ROI in basis points, or null when nothing was spent. */
   roiBasisPoints: string | null;
+  /**
+   * How many campaigns carried revenue but no recorded spend (GAP-CRM-CAMPAIGNS-04).
+   * Their revenue is still counted in `revenueMinor` for the headline total but is
+   * excluded from the ROI numerator so an un-costed campaign cannot inflate the
+   * portfolio return.
+   */
+  unmeasuredCampaigns: number;
+  /** Revenue (paise string) attributed to the unmeasured campaigns, for the ROI caveat note. */
+  unmeasuredRevenueMinor: string;
 }
 
 function toBigInt(value: string | null | undefined): bigint {
@@ -40,10 +49,26 @@ export function portfolioTotals(rows: CRMCampaignRoiSummaryRow[]): PortfolioTota
   let cost = 0n;
   let revenue = 0n;
   let responses = 0;
+  // Measured = campaigns with recorded spend. ROI is computed only from these so
+  // a campaign that has revenue but no cost entered yet (roiVerdict 'unmeasured')
+  // cannot lift the portfolio return above what the costed campaigns actually earned.
+  let measuredCost = 0n;
+  let measuredRevenue = 0n;
+  let unmeasuredCampaigns = 0;
+  let unmeasuredRevenue = 0n;
   for (const row of rows) {
-    cost += toBigInt(row.costMinor);
-    revenue += toBigInt(row.revenueMinor);
+    const rowCost = toBigInt(row.costMinor);
+    const rowRevenue = toBigInt(row.revenueMinor);
+    cost += rowCost;
+    revenue += rowRevenue;
     responses += row.responses;
+    if (rowCost > 0n) {
+      measuredCost += rowCost;
+      measuredRevenue += rowRevenue;
+    } else {
+      unmeasuredCampaigns += 1;
+      unmeasuredRevenue += rowRevenue;
+    }
   }
   return {
     campaigns: rows.length,
@@ -51,7 +76,10 @@ export function portfolioTotals(rows: CRMCampaignRoiSummaryRow[]): PortfolioTota
     revenueMinor: revenue.toString(),
     netMinor: (revenue - cost).toString(),
     responses,
-    roiBasisPoints: cost === 0n ? null : (((revenue - cost) * 10000n) / cost).toString(),
+    roiBasisPoints:
+      measuredCost === 0n ? null : (((measuredRevenue - measuredCost) * 10000n) / measuredCost).toString(),
+    unmeasuredCampaigns,
+    unmeasuredRevenueMinor: unmeasuredRevenue.toString(),
   };
 }
 

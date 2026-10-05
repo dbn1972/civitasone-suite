@@ -1,28 +1,45 @@
 "use client";
 /**
- * OnboardingList — P1-9. Lists customer onboarding cases with a stage filter.
+ * OnboardingList — P1-9. Lists customer onboarding cases.
+ *
+ * GAP-CRM-ONBOARDING-02: the hand-rolled <table> is replaced by the shared
+ * ds/DataTable, so the register gets client-side sort (every column), a search
+ * box, and pagination (25/page) — matching every other CRM list and keeping a
+ * long case list usable. The backend list endpoint caps a page at 200 rows
+ * (shared list-query MAX_PAGE_SIZE) and defaults to 50; this view fetches a
+ * larger page (up to the cap) and paginates it client-side for sort/search to
+ * work across the whole fetched set.
+ *
+ * GAP-CRM-ONBOARDING-03: a KYC-status filter (the completion gate) and an
+ * "Age in stage" column (days since updatedAt) with an Overdue pill past the
+ * SLA threshold, so a case stuck in a stage is visible at a glance.
+ *
  * Every read is gated on source==="error": on a failed load we render the
- * saved-info badge and an explicit "couldn't load" row, never a fabricated
+ * saved-info badge and an explicit "couldn't load" message, never a fabricated
  * empty list as fact. Status is shown as icon+label (not colour-only).
  */
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useMemo, useState, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { EmptyState } from "../../../_components/ds";
+import { DataTable } from "../../../_components/ds";
 import {
   getOnboardingCases,
   getOnboardingLookups,
   resolveCaseNames,
   ONBOARDING_STAGES,
-  STAGE_LABELS,
+  KYC_STATUSES,
   STAGE_META,
   KYC_META,
-  kycLabel,
-  stageLabel,
+  isOnboardingStage,
+  isKycStatus,
   type OnboardingCase,
   type OnboardingStage,
+  type KycStatus,
   type OnbSource,
 } from "@/lib/crm/onboarding";
+
+/** Case rows older than this (in their current stage) are flagged Overdue. */
+export const ONBOARDING_STAGE_SLA_DAYS = 7;
 
 function fmtDate(iso: string): string {
   if (!iso) return "—";
@@ -34,27 +51,54 @@ function shortId(id: string): string {
   return id.length > 8 ? `${id.slice(0, 8)}…` : id || "—";
 }
 
+/** Whole days since `iso` (never negative), or null when the date is unusable. */
+export function daysSince(iso: string, now: number = Date.now()): number | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return Math.max(0, Math.floor((now - d.getTime()) / 86_400_000));
+}
+
+interface Row extends Record<string, unknown> {
+  id: string;
+  customer: string;
+  ref: string;
+  stage: string;
+  stageSort: string;
+  kyc: string;
+  kycSort: string;
+  account: string;
+  updated: string;
+  updatedSort: number;
+  ageDays: number | null;
+}
+
 export function OnboardingList() {
   const t = useTranslations("crmOnboardingList");
+  const stageText = useCallback((s: string): string => (isOnboardingStage(s) ? t(`stage_${s}`) : s), [t]);
+  const kycText = useCallback((s: string): string => (isKycStatus(s) ? t(`kyc_${s}`) : s), [t]);
   const [stage, setStage] = useState<OnboardingStage | "">("");
+  const [kyc, setKyc] = useState<KycStatus | "">("");
   const [cases, setCases] = useState<OnboardingCase[]>([]);
   const [source, setSource] = useState<OnbSource | "loading">("loading");
-  const filterId = useId();
+  const stageFilterId = useId();
+  const kycFilterId = useId();
 
   useEffect(() => {
     let alive = true;
     setSource("loading");
     // GAP-CRM-ONBOARDING-01: resolve deal/account names alongside the cases so a
-    // row is identified by its customer, not an 8-char UUID fragment. The name
-    // maps come from the deals/accounts list endpoints (the onboarding module
-    // cannot join to them); a failed lookup just leaves names null.
-    void Promise.all([getOnboardingCases(stage ? { stage } : {}), getOnboardingLookups()]).then(
-      ([{ data, source: s }, lookups]) => {
-        if (!alive) return;
-        setCases(resolveCaseNames(data, lookups));
-        setSource(s);
-      },
-    );
+    // row is identified by its customer, not an 8-char UUID fragment.
+    // GAP-CRM-ONBOARDING-02: ask the backend for a full page (its 200-row cap)
+    // so client-side sort/search/paging operate over the whole set, not just 50.
+    void Promise.all([
+      getOnboardingCases({ ...(stage ? { stage } : {}), limit: 200 }),
+      getOnboardingLookups(),
+    ]).then(([{ data, source: s }, lookups]) => {
+      if (!alive) return;
+      setCases(resolveCaseNames(data, lookups));
+      setSource(s);
+    });
     return () => {
       alive = false;
     };
@@ -63,83 +107,160 @@ export function OnboardingList() {
   const isError = source === "error";
   const isLoading = source === "loading";
 
+  // GAP-CRM-ONBOARDING-03: KYC status filter is applied client-side (the
+  // onboarding list endpoint filters by stage/accountId only, not KYC).
+  const filteredCases = useMemo(
+    () => (kyc ? cases.filter((c) => c.kycStatus === kyc) : cases),
+    [cases, kyc],
+  );
+
+  const rows: Row[] = useMemo(() => {
+    const now = Date.now();
+    return filteredCases.map((c) => {
+      const age = daysSince(c.updatedAt, now);
+      return {
+        id: c.id,
+        customer: c.dealName ?? c.accountName ?? t("unnamedCase"),
+        ref: shortId(c.id),
+        stage: c.stage,
+        stageSort: stageText(c.stage),
+        kyc: c.kycStatus,
+        kycSort: kycText(c.kycStatus),
+        account: c.accountName ?? (c.accountId ? shortId(c.accountId) : "—"),
+        updated: c.updatedAt,
+        updatedSort: new Date(c.updatedAt).getTime() || 0,
+        ageDays: age,
+      };
+    });
+  }, [filteredCases, t, stageText, kycText]);
+
   return (
     <>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
-        <label htmlFor={filterId} style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>
-          Stage
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>
+          <span id={`${stageFilterId}-l`}>{t("stage")}</span>
+          <select
+            aria-labelledby={`${stageFilterId}-l`}
+            value={stage}
+            onChange={(e) => setStage(e.target.value as OnboardingStage | "")}
+            style={{ padding: 8, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)" }}
+          >
+            <option value="">{t("allStages")}</option>
+            {ONBOARDING_STAGES.map((s) => (
+              <option key={s} value={s}>
+                {stageText(s)}
+              </option>
+            ))}
+          </select>
         </label>
-        <select
-          id={filterId}
-          value={stage}
-          onChange={(e) => setStage(e.target.value as OnboardingStage | "")}
-          style={{ padding: 8, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)" }}
-        >
-          <option value="">All stages</option>
-          {ONBOARDING_STAGES.map((s) => (
-            <option key={s} value={s}>
-              {STAGE_LABELS[s]}
-            </option>
-          ))}
-        </select>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>
+          <span id={`${kycFilterId}-l`}>{t("kycStatus")}</span>
+          <select
+            aria-labelledby={`${kycFilterId}-l`}
+            value={kyc}
+            onChange={(e) => setKyc(e.target.value as KycStatus | "")}
+            style={{ padding: 8, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)" }}
+          >
+            <option value="">{t("allKyc")}</option>
+            {KYC_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {kycText(s)}
+              </option>
+            ))}
+          </select>
+        </label>
         {isError ? <DataSourceBadge source="error" /> : null}
       </div>
 
       <div className="card">
         <div className="card-h">
-          <h3>Onboarding cases</h3>
+          <h3>{t("onboardingCases")}</h3>
         </div>
         {isLoading ? (
           <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)", padding: 12 }}>
-            Loading cases…
+            {t("loadingCases")}
           </p>
         ) : isError ? (
           <p role="alert" style={{ fontSize: 13, color: "var(--muted)", padding: 12 }}>
-            — Onboarding cases couldn&apos;t be loaded right now. <DataSourceBadge source="error" />
+            {t("loadError")} <DataSourceBadge source="error" />
           </p>
-        ) : cases.length === 0 ? (
-          <EmptyState
-            icon="📋"
-            title="No onboarding cases"
-            message={stage ? `No cases in the "${STAGE_LABELS[stage as OnboardingStage]}" stage.` : "Cases appear here once a deal is won."}
-          />
         ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>{t("colCustomerDeal")}</th>
-                <th>Stage</th>
-                <th>KYC</th>
-                <th>Account</th>
-                <th>Updated</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cases.map((c) => {
-                const sm = STAGE_META[c.stage as OnboardingStage];
-                const km = KYC_META[c.kycStatus as keyof typeof KYC_META];
-                // Primary label: the deal/customer name; the short ref stays as a
-                // muted secondary line for support lookups — never the primary id.
-                const primary = c.dealName ?? c.accountName ?? t("unnamedCase");
-                return (
-                  <tr key={c.id}>
-                    <td>
-                      <a href={`/crm/onboarding/${c.id}`}>{primary}</a>
-                      <div style={{ fontSize: 11, color: "var(--muted)" }}>{t("ref", { id: shortId(c.id) })}</div>
-                    </td>
-                    <td>
-                      <span aria-hidden="true">{sm ? sm.icon : "•"}</span> {stageLabel(c.stage)}
-                    </td>
-                    <td>
-                      <span aria-hidden="true">{km ? km.icon : "•"}</span> {kycLabel(c.kycStatus)}
-                    </td>
-                    <td style={{ fontSize: 13 }}>{c.accountName ?? (c.accountId ? shortId(c.accountId) : "—")}</td>
-                    <td style={{ fontSize: 13 }}>{fmtDate(c.updatedAt)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <DataTable<Row>
+            columns={[
+              {
+                key: "customer",
+                label: t("colCustomerDeal"),
+                render: (r) => (
+                  <>
+                    <a href={`/crm/onboarding/${r.id}`}>{r.customer}</a>
+                    <div style={{ fontSize: 11, color: "var(--muted)" }}>{t("ref", { id: r.ref })}</div>
+                  </>
+                ),
+              },
+              {
+                key: "stageSort",
+                label: t("stage"),
+                render: (r) => {
+                  const sm = STAGE_META[r.stage as OnboardingStage];
+                  return (
+                    <>
+                      <span aria-hidden="true">{sm ? sm.icon : "•"}</span> {stageText(r.stage)}
+                    </>
+                  );
+                },
+              },
+              {
+                key: "kycSort",
+                label: t("colKyc"),
+                render: (r) => {
+                  const km = KYC_META[r.kyc as KycStatus];
+                  return (
+                    <>
+                      <span aria-hidden="true">{km ? km.icon : "•"}</span> {kycText(r.kyc)}
+                    </>
+                  );
+                },
+              },
+              { key: "account", label: t("colAccount") },
+              {
+                key: "ageDays",
+                label: t("colAgeInStage"),
+                align: "right",
+                render: (r) => {
+                  if (r.ageDays === null) return <span>—</span>;
+                  const overdue = r.ageDays >= ONBOARDING_STAGE_SLA_DAYS;
+                  return (
+                    <span
+                      className={overdue ? "pill bad" : undefined}
+                      title={overdue ? t("overdueTitle", { days: r.ageDays, sla: ONBOARDING_STAGE_SLA_DAYS }) : undefined}
+                    >
+                      {overdue ? t("ageOverdue", { days: r.ageDays }) : t("ageDays", { days: r.ageDays })}
+                    </span>
+                  );
+                },
+              },
+              {
+                key: "updatedSort",
+                label: t("colUpdated"),
+                render: (r) => <span style={{ fontSize: 13 }}>{fmtDate(r.updated)}</span>,
+              },
+            ]}
+            rows={rows}
+            sortable
+            filterable
+            filterPlaceholder={t("filterPlaceholder")}
+            filterKeys={["customer", "account", "ref"]}
+            pageSize={25}
+            emptyIcon="📋"
+            emptyTitle={t("emptyTitle")}
+            emptyMessage={
+              stage
+                ? t("emptyInStage", { stage: stageText(stage) })
+                : kyc
+                  ? t("emptyWithKyc", { status: kycText(kyc) })
+                  : t("emptyDefault")
+            }
+          />
         )}
       </div>
     </>

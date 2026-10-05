@@ -7,7 +7,7 @@ import { DataTable, StatusPill, Button, ConfirmDialog } from "../../../_componen
 import { LeadFormEditor } from "../../../_components/crm/LeadFormEditor";
 import type { CRMLeadCaptureForm } from "@civitasone/types";
 import { setLeadFormEnabled, setLeadFormConsent } from "@/lib/crm/leadForms";
-import { formHealth, originSummary, publicSubmitPath } from "./leadForms";
+import { formHealth, originSummary, publicSubmitPath, type FormHealth } from "./leadForms";
 
 type Row = {
   id: string;
@@ -94,9 +94,12 @@ export function LeadFormsTable({ rows }: { rows: CRMLeadCaptureForm[] }) {
       name: form.name,
       health,
       submitUrl: publicSubmitPath(form.formKey),
-      origins: originSummary(form.allowedOrigins),
+      origins: originSummary(form.allowedOrigins, {
+        any: t("anyOrigin"),
+        more: (count) => t("originsMore", { count }),
+      }),
       source: form.defaultLeadSource ?? "—",
-      rate: `${form.maxPerMinute}/min`,
+      rate: t("ratePerMinute", { rate: form.maxPerMinute }),
       form,
     };
   });
@@ -129,7 +132,14 @@ export function LeadFormsTable({ rows }: { rows: CRMLeadCaptureForm[] }) {
           {
             key: "health",
             label: t("colStatus"),
-            render: (row) => <StatusPill status={row.health} label={row.health} />,
+            // GAP-CRM-LEAD-FORMS-03: show the human label, never the raw
+            // "unlawful" enum, and give it an explicit tone (consent gap = bad)
+            // rather than StatusPill's neutral "info" fallback for an unmapped word.
+            render: (row) => {
+              const h = row.health as FormHealth;
+              const tone = h === "unlawful" ? "bad" : h === "paused" ? "mut" : "good";
+              return <StatusPill status={row.health} label={h === "live" || h === "paused" || h === "unlawful" ? t(`health_${h}`) : row.health} variant={tone} />;
+            },
           },
           { key: "submitUrl", label: t("colSubmitUrl") },
           { key: "origins", label: t("colOrigins") },
@@ -159,6 +169,11 @@ export function LeadFormsTable({ rows }: { rows: CRMLeadCaptureForm[] }) {
         sortable
         exportable
         exportFilename="crm-lead-capture-forms"
+        exportConfirm={{
+          title: t("exportTitle"),
+          description: t("exportDescription"),
+          confirmLabel: t("exportConfirmLabel"),
+        }}
         emptyIcon="🌐"
         emptyTitle={t("emptyTitle")}
         emptyMessage={t("emptyMessage")}
