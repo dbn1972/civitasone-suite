@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button, PageHeader } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
@@ -36,19 +37,33 @@ const FIELD: React.CSSProperties = {
 const LABEL: React.CSSProperties = { display: "flex", flexDirection: "column", gap: 4, fontSize: 14 };
 
 export default function NewServiceRequestPage() {
+  const t = useTranslations("crmServiceRequestNew");
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  const [contactError, setContactError] = useState<string | null>(null);
   const formError = useFormError("service request");
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setSaving(true);
     formError.clear();
+    setContactError(null);
     const fd = new FormData(e.currentTarget);
+    const citizenPhone = (fd.get("citizenPhone") as string | null)?.trim() || undefined;
+    const citizenEmail = (fd.get("citizenEmail") as string | null)?.trim() || undefined;
+
+    // GAP-CRM-SERVICE-REQUESTS-NEW-01 (DPDP + reachability): a request filed with
+    // neither phone nor email leaves no way to reach the citizen. Require at
+    // least one, client-side, before we attempt the write.
+    if (!citizenPhone && !citizenEmail) {
+      setContactError(t("contactRequired"));
+      return;
+    }
+
+    setSaving(true);
     const body = {
       citizenName: fd.get("citizenName"),
-      citizenPhone: fd.get("citizenPhone") || undefined,
-      citizenEmail: fd.get("citizenEmail") || undefined,
+      citizenPhone,
+      citizenEmail,
       serviceType: fd.get("serviceType"),
       subject: fd.get("subject"),
       description: fd.get("description") || undefined,
@@ -110,6 +125,9 @@ export default function NewServiceRequestPage() {
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
             <legend style={{ fontWeight: 600, marginBottom: 12, color: "var(--ink)" }}>Citizen Details</legend>
+            <p role="note" style={{ fontSize: 12, color: "var(--ink2)", margin: "0 0 12px" }}>
+              {t("dpdpNote")}
+            </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <label style={LABEL}>
                 <span style={{ color: "var(--ink)" }}>
@@ -122,14 +140,21 @@ export default function NewServiceRequestPage() {
               </label>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <label style={LABEL}>
-                  <span style={{ color: "var(--ink)" }}>Phone</span>
-                  <input name="citizenPhone" type="tel" maxLength={32} placeholder="e.g. 9876543210" style={FIELD} />
+                  <span style={{ color: "var(--ink)" }}>
+                    {t("phone")} <span style={{ color: "var(--ink2)", fontWeight: 400 }}>{t("phoneOrEmailRequired")}</span>
+                  </span>
+                  <input name="citizenPhone" type="tel" maxLength={32} placeholder="e.g. 9876543210" style={FIELD} aria-invalid={contactError ? true : undefined} />
                 </label>
                 <label style={LABEL}>
-                  <span style={{ color: "var(--ink)" }}>Email</span>
-                  <input name="citizenEmail" type="email" maxLength={320} placeholder="citizen@example.com" style={FIELD} />
+                  <span style={{ color: "var(--ink)" }}>
+                    {t("email")} <span style={{ color: "var(--ink2)", fontWeight: 400 }}>{t("phoneOrEmailRequired")}</span>
+                  </span>
+                  <input name="citizenEmail" type="email" maxLength={320} placeholder="citizen@example.com" style={FIELD} aria-invalid={contactError ? true : undefined} />
                 </label>
               </div>
+              {contactError && (
+                <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{contactError}</span>
+              )}
             </div>
           </fieldset>
 

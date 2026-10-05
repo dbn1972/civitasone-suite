@@ -27,12 +27,21 @@ function titleCase(v: string): string {
 export function GrievancesTable({
   grievances,
   source = "api",
+  page = 1,
+  pageSize = 50,
 }: {
   grievances: CrmGrievanceRow[];
   source?: "api" | "error";
+  /** 1-based server page — part of the cache key so pages don't overwrite each other. */
+  page?: number;
+  /** API page size; the client pager is sized to match so it never sub-paginates a page. */
+  pageSize?: number;
 }) {
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<CrmGrievanceRow[]>(
-    "crm.grievances",
+    // GAP-CRM-GRIEVANCES-01: scope the offline cache per server page, otherwise
+    // navigating to page 2 would overwrite page 1's cached rows under the same
+    // key (and vice-versa), so an offline reader could never get back to page 1.
+    `crm.grievances:p${page}`,
     grievances,
     source,
     (d) => d.length === 0,
@@ -101,7 +110,7 @@ export function GrievancesTable({
         sortable
         filterable
         filterPlaceholder="Search reference, citizen, subject…"
-        pageSize={15}
+        pageSize={pageSize}
         exportable
         exportFilename="grievances"
         emptyIcon="📭"

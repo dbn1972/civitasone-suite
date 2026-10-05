@@ -1,3 +1,5 @@
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { PipelineEditor } from "./PipelineEditor";
@@ -25,14 +27,14 @@ beforeEach(() => {
 describe("PipelineEditor (OP-002)", () => {
   it("shows the saved-info badge on a failed load", async () => {
     vi.mocked(op.getPipelines).mockResolvedValue({ data: [], source: "error" });
-    render(<PipelineEditor />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><PipelineEditor /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument());
   });
 
   it("creates a pipeline with a stage and its mandatory field", async () => {
     vi.mocked(op.getPipelines).mockResolvedValue({ data: [], source: "api" });
     vi.mocked(op.createPipeline).mockResolvedValue(undefined);
-    render(<PipelineEditor />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><PipelineEditor /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByText(/no pipelines yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /new pipeline/i }));
     fireEvent.change(screen.getByLabelText(/pipeline name/i), { target: { value: "SMB" } });
@@ -47,7 +49,7 @@ describe("PipelineEditor (OP-002)", () => {
 
   it("blocks save when the pipeline name is empty", async () => {
     vi.mocked(op.getPipelines).mockResolvedValue({ data: [], source: "api" });
-    render(<PipelineEditor />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><PipelineEditor /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByText(/no pipelines yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /new pipeline/i }));
     fireEvent.click(screen.getByRole("button", { name: /create pipeline/i }));
@@ -58,7 +60,7 @@ describe("PipelineEditor (OP-002)", () => {
   it("edits and updates an existing pipeline via PUT", async () => {
     vi.mocked(op.getPipelines).mockResolvedValue({ data: [pipeline], source: "api" });
     vi.mocked(op.updatePipeline).mockResolvedValue(undefined);
-    render(<PipelineEditor />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><PipelineEditor /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByText("Enterprise")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
     fireEvent.change(screen.getByLabelText(/pipeline name/i), { target: { value: "Enterprise Plus" } });
@@ -69,10 +71,33 @@ describe("PipelineEditor (OP-002)", () => {
   it("deletes a pipeline only after confirmation", async () => {
     vi.mocked(op.getPipelines).mockResolvedValue({ data: [pipeline], source: "api" });
     vi.mocked(op.deletePipeline).mockResolvedValue(undefined);
-    render(<PipelineEditor />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><PipelineEditor /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByText("Enterprise")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /delete pipeline enterprise/i }));
     fireEvent.click(await screen.findByRole("button", { name: /^delete pipeline$/i }));
     await waitFor(() => expect(op.deletePipeline).toHaveBeenCalledWith("p1"));
+  });
+
+  // GAP-CRM-PIPELINES-01: when the server refuses the delete (409) because open deals
+  // still reference the pipeline, the editor surfaces the server's count message rather
+  // than silently succeeding.
+  it("surfaces the server's deal-count message when deletion is refused (409)", async () => {
+    vi.mocked(op.getPipelines).mockResolvedValue({ data: [pipeline], source: "api" });
+    vi.mocked(op.deletePipeline).mockRejectedValue(new Error("cannot delete pipeline: 5 open deal(s) still reference it"));
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><PipelineEditor /></NextIntlClientProvider>);
+    await waitFor(() => expect(screen.getByText("Enterprise")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /delete pipeline enterprise/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /^delete pipeline$/i }));
+    expect(await screen.findByText(/5 open deal\(s\) still reference it/i)).toBeInTheDocument();
+    // The pipeline is still listed (delete did not succeed).
+    expect(screen.getByText("Enterprise")).toBeInTheDocument();
+  });
+
+  it("warns in the delete confirm text that open deals block deletion", async () => {
+    vi.mocked(op.getPipelines).mockResolvedValue({ data: [pipeline], source: "api" });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><PipelineEditor /></NextIntlClientProvider>);
+    await waitFor(() => expect(screen.getByText("Enterprise")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /delete pipeline enterprise/i }));
+    expect(await screen.findByText(/the delete will be refused/i)).toBeInTheDocument();
   });
 });

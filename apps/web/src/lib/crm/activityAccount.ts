@@ -228,6 +228,70 @@ export async function getTaskEscalationRules(): Promise<LoaderResult<TaskEscalat
   }
 }
 
+/* -- GAP-CRM-TASK-ESCALATION-01: role + user pickers for escalation targets -- */
+
+/** A selectable manager role (from policy-service). */
+export interface EscalationRole {
+  key: string;
+  label: string;
+}
+
+/** A selectable manager user (from identity-service). */
+export interface EscalationUser {
+  id: string;
+  name: string;
+}
+
+export function normaliseEscalationRoles(raw: unknown): EscalationRole[] {
+  const out: EscalationRole[] = [];
+  for (const item of toArray(raw, "roles")) {
+    if (!item || typeof item !== "object") continue;
+    const r = item as Record<string, unknown>;
+    const key = str(r.key) || str(r.name) || str(r.id);
+    if (!key) continue;
+    out.push({ key, label: str(r.label) || str(r.name) || key });
+  }
+  return out;
+}
+
+export function normaliseEscalationUsers(raw: unknown): EscalationUser[] {
+  const out: EscalationUser[] = [];
+  for (const item of toArray(raw, "users")) {
+    if (!item || typeof item !== "object") continue;
+    const r = item as Record<string, unknown>;
+    const id = str(r.id);
+    if (!id) continue;
+    out.push({ id, name: str(r.name) || str(r.email) || id });
+  }
+  return out;
+}
+
+/**
+ * GAP-CRM-TASK-ESCALATION-01: the tenant's assignable roles. A free-text role
+ * input let a mistyped role save as valid so tasks escalated to nobody; the
+ * editor now picks from this list and stores the role key.
+ */
+export async function getEscalationRoles(): Promise<LoaderResult<EscalationRole[]>> {
+  try {
+    const res = await browserFetch("policy/roles");
+    if (!res.ok) return { data: [], source: "error" };
+    return { data: normaliseEscalationRoles(await res.json()), source: "api" };
+  } catch {
+    return { data: [], source: "error" };
+  }
+}
+
+/** The tenant's users, for the manager user picker (stores the user id). */
+export async function getEscalationUsers(): Promise<LoaderResult<EscalationUser[]>> {
+  try {
+    const res = await browserFetch("identity/users?limit=500");
+    if (!res.ok) return { data: [], source: "error" };
+    return { data: normaliseEscalationUsers(await res.json()), source: "api" };
+  } catch {
+    return { data: [], source: "error" };
+  }
+}
+
 export async function createTaskEscalationRule(rule: TaskEscalationRule): Promise<void> {
   const res = await browserFetch("v1/crm/task-escalation-rules", {
     method: "POST",
@@ -254,7 +318,10 @@ export interface OverdueTask {
   subject: string;
   dueAt: string;
   ageMinutes: number;
+  /** Display name only — never an opaque id. Undefined when only an id is known. */
   owner?: string;
+  /** The raw owner id, kept separate so it is never rendered as a name (GAP-CRM-TASK-ESCALATION-02). */
+  ownerId?: string;
   subjectType?: string;
   subjectId?: string;
 }
@@ -276,12 +343,20 @@ export function normaliseOverdueTasks(raw: unknown, now: number = Date.now()): O
     if (!dueAt) continue;
     const dueMs = Date.parse(dueAt);
     if (Number.isFinite(dueMs) && dueMs >= now) continue; // not yet overdue
+    // GAP-CRM-TASK-ESCALATION-02 (IDLEAK): the Owner column used to fall back
+    // owner → actorName → ownerId, so an opaque UUID was printed as the owner
+    // when the API sent no name. Keep the id separate: `owner` is a display
+    // name ONLY (owner/actorName); `ownerId` carries the raw id for an optional
+    // name lookup, and is never rendered verbatim.
+    const ownerName = optStr(r.owner) ?? optStr(r.actorName);
+    const ownerId = optStr(r.ownerId);
     out.push({
       id,
       subject: str(r.subject) || str(r.text).slice(0, 80),
       dueAt,
       ageMinutes: minutesSince(dueAt, now),
-      ...(optStr(r.owner ?? r.actorName ?? r.ownerId) ? { owner: str(r.owner ?? r.actorName ?? r.ownerId) } : {}),
+      ...(ownerName ? { owner: ownerName } : {}),
+      ...(ownerId ? { ownerId } : {}),
       ...(optStr(r.subjectType) ? { subjectType: str(r.subjectType) } : {}),
       ...(optStr(r.subjectId) ? { subjectId: str(r.subjectId) } : {}),
     });
@@ -291,7 +366,10 @@ export function normaliseOverdueTasks(raw: unknown, now: number = Date.now()): O
 
 export async function getOverdueTasks(): Promise<LoaderResult<OverdueTask[]>> {
   try {
-    const res = await browserFetch("v1/crm/activities?type=task&status=open&overdue=true");
+    // GAP-CRM-TASK-ESCALATION-02: cap the request so the alert table can't grow
+    // unbounded. The worst-aged sort is applied server-side (overdue=true) and
+    // re-applied here; 50 is the display cap the UI pages against.
+    const res = await browserFetch("v1/crm/activities?type=task&status=open&overdue=true&limit=50&page=1");
     if (!res.ok) return { data: [], source: "error" };
     return { data: normaliseOverdueTasks(await res.json()), source: "api" };
   } catch {

@@ -1570,6 +1570,30 @@ export async function getCrmAccounts(): Promise<LoaderResult<CRMAccountSummary[]
   });
 }
 
+/**
+ * Resolve a single account by id for the detail page (GAP-CRM-ACCOUNTS-DETAIL-01).
+ *
+ * crm-service has no GET /v1/crm/accounts/:id yet (the by-id endpoint is tracked
+ * under GAP-CRM-ACCOUNTS-DETAIL-03), only a capped list. The detail page used to
+ * resolve the account with accounts.find() over the DEFAULT list page (50 rows),
+ * so a valid deep link to any account beyond the first page rendered
+ * "Account not found". This loader queries the list at the server's maximum page
+ * size (limit=200) so accounts beyond the default page resolve. The account's
+ * EXISTENCE is confirmed authoritatively by the /ancestors endpoint (which loads
+ * every tenant account and 404s on an unknown id), so the page can tell "beyond
+ * the max page" apart from "truly does not exist". Returns the summary when it is
+ * within the max page, else null (caller falls back to existence via ancestors).
+ */
+export async function getCrmAccount(id: string): Promise<LoaderResult<CRMAccountSummary | null>> {
+  const result = await fetchJson("/api/v1/crm/accounts?limit=200", [] as CRMAccountSummary[], {
+    revalidateSeconds: 30,
+    telemetryKey: "crm.account_lookup",
+    responseSchema: crmAccountsListSchema,
+    mapResponse: mapCrmAccounts,
+  });
+  return { ...result, data: result.data.find((a) => a.id === id) ?? null };
+}
+
 /** Parent chain for an account, ordered nearest parent → root. */
 export async function getCrmAccountAncestors(id: string): Promise<LoaderResult<CRMAccountNode[]>> {
   return fetchJson(`/api/v1/crm/accounts/${id}/ancestors`, [] as CRMAccountNode[], {
@@ -1730,6 +1754,8 @@ export type CrmRtiRow = {
   status: string;
   feePaid: boolean;
   feeAmount: number | null;
+  feeAmountMinor: string | null;
+  mode: string | null;
   receivedAt: string | null;
   dueAt: string | null;
   firstAppealDueAt: string | null;
@@ -1766,6 +1792,13 @@ export async function getCrmRti(
           status: toText(r.status) ?? "RECEIVED",
           feePaid: r.feePaid === true,
           feeAmount: typeof r.feeAmount === "number" ? r.feeAmount : null,
+          feeAmountMinor:
+            typeof r.feeAmountMinor === "string"
+              ? r.feeAmountMinor
+              : typeof r.feeAmountMinor === "number"
+                ? String(r.feeAmountMinor)
+                : null,
+          mode: toText(r.mode),
           receivedAt: toText(r.receivedAt),
           dueAt: toText(r.dueAt),
           firstAppealDueAt: toText(r.firstAppealDueAt),
@@ -3628,21 +3661,28 @@ export async function getContactById(id: string): Promise<LoaderResult<ContactDe
   });
 }
 
-function mapCRMActivityEntries(payload: unknown): CRMActivityEntry[] | null {
+export function mapCRMActivityEntries(payload: unknown): CRMActivityEntry[] | null {
   const rows = getArrayPayload(payload);
   if (!rows) return null;
   const mapped: CRMActivityEntry[] = [];
-  const validTypes = new Set(["call", "meeting", "email", "task", "note"]);
+  // Must match the backend create/list enum (crm-service activities validators)
+  // and CRMActivityEntry['type']. Previously only five of these were accepted,
+  // so a saved appointment/reminder/complaint was silently dropped from the
+  // list and every stat (GAP-CRM-ACTIVITIES-01).
+  const validTypes = new Set(["call", "meeting", "email", "task", "note", "appointment", "reminder", "complaint"]);
   const validStatuses = new Set(["open", "overdue", "completed", "cancelled"]);
   for (const row of rows) {
     if (!isRecord(row)) continue;
     const id = toText(row.id);
-    const type = toText(row.type) ?? "task";
+    const rawType = toText(row.type) ?? "task";
+    // Keep the row rather than discarding it: an unrecognised type falls back
+    // to "note" so a record is never silently lost from the list/counts.
+    const type = validTypes.has(rawType) ? rawType : "note";
     const subject = toText(row.subject) ?? toText(row.text);
     const owner = toText(row.owner) ?? toText(row.actorName) ?? toText(row.actor) ?? "—";
     const status = toText(row.status) ?? "open";
     if (!id || !subject) continue;
-    if (!validTypes.has(type) || !validStatuses.has(status)) continue;
+    if (!validStatuses.has(status)) continue;
     mapped.push({
       id,
       type: type as CRMActivityEntry["type"],

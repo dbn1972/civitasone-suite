@@ -1,6 +1,9 @@
+import { getTranslations } from "next-intl/server";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { Card, PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { Card, PageHeader, RefreshErrorState, StatCard, StatGrid } from "../../../_components/ds";
 import { getCrmSentimentSummary } from "../../../_data/loaders";
+import { toHumanError } from "@/lib/messages";
+import { PeriodFilter } from "./PeriodFilter";
 import { ThemeTable } from "./ThemeTable";
 import {
   MOOD_ICON,
@@ -13,8 +16,30 @@ import {
   topConcern,
 } from "./voc";
 
-export default async function VoiceOfCitizenPage() {
-  const { data: summary, source } = await getCrmSentimentSummary();
+/** ISO yyyy-mm-dd (what the date inputs / presets produce). */
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Keep only a well-formed window. An invalid or inverted range (from > to) is
+ * dropped entirely rather than sent to the server — the page then shows the
+ * full aggregate and a validation note, never a half-applied filter.
+ */
+function parseRange(sp?: { from?: string; to?: string }): { range: { from?: string; to?: string }; invalid: boolean } {
+  const from = sp?.from && ISO_DATE.test(sp.from) ? sp.from : undefined;
+  const to = sp?.to && ISO_DATE.test(sp.to) ? sp.to : undefined;
+  const malformed = (sp?.from != null && sp.from !== "" && !from) || (sp?.to != null && sp.to !== "" && !to);
+  if (from && to && from > to) return { range: {}, invalid: true };
+  return { range: { ...(from ? { from } : {}), ...(to ? { to } : {}) }, invalid: malformed };
+}
+
+export default async function VoiceOfCitizenPage({
+  searchParams,
+}: {
+  searchParams?: { from?: string; to?: string };
+}) {
+  const t = await getTranslations("crmVoiceOfCitizen");
+  const { range, invalid } = parseRange(searchParams);
+  const { data: summary, source } = await getCrmSentimentSummary(range);
 
   // The loader falls back to an all-zero summary on a failed fetch (there's no
   // sensible non-zero default for an aggregate), so every figure below must be
@@ -24,23 +49,39 @@ export default async function VoiceOfCitizenPage() {
   const mood = moodOf(summary);
   const themes = rankThemes(summary);
   const concern = topConcern(summary);
+  const windowLabel =
+    range.from || range.to
+      ? t("windowRange", { from: range.from ?? t("earliest"), to: range.to ?? t("today") })
+      : t("windowAll");
 
   return (
     <>
       <PageHeader
         title="Voice of Citizen"
-        subtitle="What citizens and stakeholders are saying — every logged interaction is scored for sentiment and grouped by theme • नागरिक प्रतिक्रिया"
+        subtitle={t("subtitle", { window: windowLabel })}
         back="/crm"
         actions={
-          <a className="btn" href="/crm/activities">
-            All Interactions
-          </a>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <PeriodFilter from={range.from} to={range.to} />
+            <a className="btn" href="/crm/voice-of-customer/feedback">
+              {t("feedbackForm")}
+            </a>
+            <a className="btn" href="/crm/activities">
+              All Interactions
+            </a>
+          </div>
         }
       />
       <div role="note" aria-label="Data protection notice" className="flex items-start gap-2.5 mt-2 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
         <span aria-hidden="true" className="text-base leading-snug">🛡</span>
         <span>Citizen feedback is anonymised in aggregate reporting. Individual feedback access is subject to DPDP Act 2023 provisions.</span>
       </div>
+      {invalid && (
+        <div role="alert" className="flex items-start gap-2.5 mt-2 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+          <span aria-hidden="true">⚠</span>
+          <span>{t("invalidPeriod")}</span>
+        </div>
+      )}
       {source === "error" && <DataSourceBadge source={source} />}
 
       <StatGrid>
@@ -70,12 +111,10 @@ export default async function VoiceOfCitizenPage() {
         />
       </StatGrid>
 
-      {summary.truncated && (
+      {summary.truncated && !isError && (
         <Card title="Partial window">
           <p>
-            More interactions have been scored than this summary can scan in one
-            pass, so the figures below cover the most recent activity only.
-            Narrow the period to read an exact figure.
+            {t("partialWindowBody")}
           </p>
         </Card>
       )}
@@ -110,7 +149,15 @@ export default async function VoiceOfCitizenPage() {
       </Card>
 
       <Card title="Key Feedback Themes">
-        <ThemeTable themes={themes} />
+        {isError ? (
+          <RefreshErrorState
+            error={toHumanError("load", { area: "citizen feedback themes" })}
+            backHref="/crm"
+            source={{ area: "citizen feedback themes" }}
+          />
+        ) : (
+          <ThemeTable themes={themes} />
+        )}
       </Card>
     </>
   );

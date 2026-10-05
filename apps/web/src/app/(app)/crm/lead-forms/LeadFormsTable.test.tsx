@@ -1,0 +1,82 @@
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { LeadFormsTable } from "./LeadFormsTable";
+import type { CRMLeadCaptureForm } from "@civitasone/types";
+import * as client from "@/lib/crm/leadForms";
+
+const refreshMock = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: refreshMock }),
+}));
+
+vi.mock("@/lib/crm/leadForms", async (orig) => {
+  const actual = await orig<typeof import("@/lib/crm/leadForms")>();
+  return { ...actual, createLeadForm: vi.fn(), updateLeadForm: vi.fn(), setLeadFormEnabled: vi.fn(), setLeadFormConsent: vi.fn() };
+});
+
+function form(partial: Partial<CRMLeadCaptureForm> = {}): CRMLeadCaptureForm {
+  return {
+    id: "f1", tenantId: "t1", formKey: "a".repeat(64), name: "Homepage contact",
+    enabled: true, requireConsent: true, allowedOrigins: ["https://example.gov.in"],
+    defaultLeadSource: "public_form", campaignId: null, maxPerMinute: 60, version: 1,
+    createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", ...partial,
+  };
+}
+
+beforeEach(() => {
+  refreshMock.mockReset();
+  vi.mocked(client.createLeadForm).mockReset();
+  vi.mocked(client.updateLeadForm).mockReset();
+  vi.mocked(client.setLeadFormEnabled).mockReset();
+  vi.mocked(client.setLeadFormConsent).mockReset();
+});
+
+describe("LeadFormsTable (GAP-CRM-LEAD-FORMS-01)", () => {
+  it("registers a form and shows the minted public key", async () => {
+    vi.mocked(client.createLeadForm).mockResolvedValue({ formKey: "b".repeat(64) });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><LeadFormsTable rows={[]} /></NextIntlClientProvider>);
+    fireEvent.click(screen.getByRole("button", { name: /register form/i }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(/^name$/i), { target: { value: "New form" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /register form/i }));
+    await waitFor(() => expect(client.createLeadForm).toHaveBeenCalledWith(expect.objectContaining({ name: "New form" })));
+    expect(await screen.findByText(new RegExp("b".repeat(10)))).toBeInTheDocument();
+    expect(refreshMock).toHaveBeenCalled();
+  });
+
+  it("edits an existing form via PATCH", async () => {
+    vi.mocked(client.updateLeadForm).mockResolvedValue(undefined);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><LeadFormsTable rows={[form()]} /></NextIntlClientProvider>);
+    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(/^name$/i), { target: { value: "Renamed" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /save form/i }));
+    await waitFor(() => expect(client.updateLeadForm).toHaveBeenCalledWith("f1", expect.objectContaining({ name: "Renamed" })));
+  });
+
+  it("pauses an enabled form", async () => {
+    vi.mocked(client.setLeadFormEnabled).mockResolvedValue(undefined);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><LeadFormsTable rows={[form({ enabled: true })]} /></NextIntlClientProvider>);
+    fireEvent.click(screen.getByRole("button", { name: /^pause$/i }));
+    await waitFor(() => expect(client.setLeadFormEnabled).toHaveBeenCalledWith("f1", false));
+    expect(await screen.findByText(/form paused/i)).toBeInTheDocument();
+  });
+
+  it("offers Fix consent only on an unlawful form and sets requireConsent", async () => {
+    vi.mocked(client.setLeadFormConsent).mockResolvedValue(undefined);
+    // enabled + requireConsent:false => unlawful
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><LeadFormsTable rows={[form({ requireConsent: false })]} /></NextIntlClientProvider>);
+    fireEvent.click(screen.getByRole("button", { name: /fix consent/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /require consent/i }));
+    await waitFor(() => expect(client.setLeadFormConsent).toHaveBeenCalledWith("f1", true));
+    expect(await screen.findByText(/consent is now required/i)).toBeInTheDocument();
+  });
+
+  it("does not offer Fix consent on a lawful form", () => {
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><LeadFormsTable rows={[form({ requireConsent: true })]} /></NextIntlClientProvider>);
+    expect(screen.queryByRole("button", { name: /fix consent/i })).not.toBeInTheDocument();
+  });
+});

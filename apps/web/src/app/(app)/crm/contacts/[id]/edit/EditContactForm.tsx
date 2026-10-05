@@ -2,11 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { rupeesToMinorString } from "@/lib/money";
-import { saveClassification, LEAD_STATUSES, type ClassificationPatch, type Temperature, type Priority } from "@/lib/crm/leadQualification";
+import { saveClassification, type ClassificationPatch, type Temperature, type Priority } from "@/lib/crm/leadQualification";
+import { buildContactPatch, isEmptyPatch } from "@/lib/crm/contactPatch";
 import { ClassificationFields, type ClassificationFormValue } from "../../../../../_components/crm/ClassificationFields";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { Button } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 import { ArrowLeft } from "lucide-react";
 
 type Initial = {
@@ -26,7 +29,9 @@ type Initial = {
   expectedValueMinor?: string;
 };
 
-type Props = { params: { id: string }; initial: Initial };
+/** Masked email/phone shown as placeholders when the viewer may not read PII (server-masked). */
+type MaskedPii = { email?: string; phone?: string; hint: string };
+type Props = { params: { id: string }; initial: Initial; maskedPii?: MaskedPii };
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
@@ -48,7 +53,7 @@ function isPriority(v: string): v is Priority {
   return v === "high" || v === "medium" || v === "low";
 }
 
-export default function EditContactForm({ params, initial }: Props) {
+export default function EditContactForm({ params, initial, maskedPii }: Props) {
   const router = useRouter();
   const [form, setForm] = useState({
     name: initial.name,
@@ -57,7 +62,6 @@ export default function EditContactForm({ params, initial }: Props) {
     company: initial.organization ?? "",
     designation: initial.designation ?? "",
     city: initial.city ?? "",
-    leadStatus: initial.leadStatus ?? "new",
     marketingConsent: initial.marketingConsent ?? false,
   });
   const [classification, setClassification] = useState<ClassificationFormValue>({
@@ -72,6 +76,8 @@ export default function EditContactForm({ params, initial }: Props) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const formError = useFormError("contact");
+  const t = useTranslations("crmEditContactForm");
 
   function updateClassification(patch: Partial<ClassificationFormValue>) {
     setClassification((c) => ({ ...c, ...patch }));
@@ -118,26 +124,48 @@ export default function EditContactForm({ params, initial }: Props) {
 
     setBusy(true);
     try {
-      const res = await browserFetch(`v1/crm/contacts/${params.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({
+      // GAP-CRM-CONTACTS-DETAIL-EDIT-01: send only changed fields, mapping a
+      // cleared field to explicit null (DPDP correction/erasure). leadStatus is
+      // deliberately NOT part of this patch — see GAP-CRM-CONTACTS-DETAIL-EDIT-02
+      // (status changes must go through the governed LeadTransitionControl).
+      const corePatch = buildContactPatch(
+        {
+          name: initial.name,
+          email: initial.email,
+          phone: initial.phone,
+          company: initial.organization,
+          designation: initial.designation,
+          city: initial.city,
+        },
+        {
           name: form.name,
-          email: form.email || undefined,
-          phone: form.phone || undefined,
-          company: form.company || undefined,
-          designation: form.designation || undefined,
-          city: form.city || undefined,
-          leadStatus: form.leadStatus,
-          marketingConsent: form.marketingConsent,
-        }),
-      });
-      if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+          email: form.email,
+          phone: form.phone,
+          company: form.company,
+          designation: form.designation,
+          city: form.city,
+        },
+      );
+      // Marketing consent only when it actually changed.
+      const consentChanged = form.marketingConsent !== (initial.marketingConsent ?? false);
+      const body: Record<string, unknown> = { ...corePatch };
+      if (consentChanged) body.marketingConsent = form.marketingConsent;
+
+      // Skip the core PATCH entirely when nothing core/consent changed, but
+      // still persist a classification change below.
+      if (!isEmptyPatch(corePatch) || consentChanged) {
+        const res = await browserFetch(`v1/crm/contacts/${params.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+      }
       // LQ-003: persist classification on its dedicated endpoint.
       await saveClassification(params.id, classificationPatch);
       setMessage("Contact updated.");
       setTimeout(() => router.push(`/crm/contacts/${params.id}`), 500);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not update the contact.");
+      setError(formError.fromException("save", e).message);
     } finally {
       setBusy(false);
     }
@@ -161,11 +189,12 @@ export default function EditContactForm({ params, initial }: Props) {
           </div>
           <div>
             <label htmlFor="edit-email" style={labelStyle}>Email</label>
-            <input id="edit-email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} style={inputStyle} />
+            <input id="edit-email" type="email" value={form.email} placeholder={maskedPii?.email} aria-describedby={maskedPii ? "edit-pii-hint" : undefined} onChange={(e) => setForm({ ...form, email: e.target.value })} style={inputStyle} />
           </div>
           <div>
             <label htmlFor="edit-phone" style={labelStyle}>Phone</label>
-            <input id="edit-phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} style={inputStyle} />
+            <input id="edit-phone" value={form.phone} placeholder={maskedPii?.phone} aria-describedby={maskedPii ? "edit-pii-hint" : undefined} onChange={(e) => setForm({ ...form, phone: e.target.value })} style={inputStyle} />
+            {maskedPii ? <p id="edit-pii-hint" style={{ margin: "4px 0 0", fontSize: 12, color: "var(--muted)" }}>{maskedPii.hint}</p> : null}
           </div>
           <div>
             <label htmlFor="edit-company" style={labelStyle}>Organisation</label>
@@ -180,12 +209,17 @@ export default function EditContactForm({ params, initial }: Props) {
             <input id="edit-city" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} style={inputStyle} />
           </div>
           <div>
-            <label htmlFor="edit-leadStatus" style={labelStyle}>Lead status</label>
-            <select id="edit-leadStatus" value={form.leadStatus} onChange={(e) => setForm({ ...form, leadStatus: e.target.value })} style={inputStyle}>
-              {LEAD_STATUSES.map((s) => (
-                <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
-              ))}
-            </select>
+            <span style={labelStyle}>{t("leadStatus")}</span>
+            {/* GAP-CRM-CONTACTS-DETAIL-EDIT-02: status changes are governed
+                (reason/transition rules + audit) and must go through the
+                Change lead status control on the contact page, not this
+                generic edit form. Shown read-only here. */}
+            <p style={{ margin: 0, display: "flex", alignItems: "baseline", gap: 10 }}>
+              <span style={{ fontWeight: 600 }}>
+                {(initial.leadStatus ?? "new").charAt(0).toUpperCase() + (initial.leadStatus ?? "new").slice(1)}
+              </span>
+              <a className="link" href={`/crm/contacts/${params.id}`}>{t("changeStatus")}</a>
+            </p>
           </div>
 
           <ClassificationFields value={classification} onChange={updateClassification} expectedValueError={evError} />

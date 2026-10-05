@@ -30,11 +30,21 @@ export function ServiceRequestActions({ id, status }: { id: string; status: stri
 
   const terminal = status === "closed" || status === "cancelled";
 
-  async function setStatus(next: string, resolution?: string) {
+  async function setStatus(next: string, reason?: string) {
+    // GAP-CRM-SERVICE-REQUESTS-DETAIL-01: `resolution` means strictly "how the
+    // request was fulfilled" and is only sent on resolve. Every other
+    // transition's reason (what a pending request is waiting on; closing
+    // remarks) goes under `statusNote`, so a Close never overwrites a genuine
+    // resolution and a pending request never shows a bogus "Resolution" card.
+    const body: Record<string, unknown> = { status: next };
+    if (reason) {
+      if (next === "resolved") body.resolution = reason;
+      else body.statusNote = reason;
+    }
     const res = await fetch(`/api/proxy/v1/crm/service-requests/${id}/status`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: next, ...(resolution ? { resolution } : {}) }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) {
       throw new Error(serviceRequestActionError());

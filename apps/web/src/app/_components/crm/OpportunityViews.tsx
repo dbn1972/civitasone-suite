@@ -8,6 +8,7 @@
  * fabricated empty board. The list also launches the OP-006 close dialog.
  */
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState, Tabs, Button } from "../ds";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
@@ -33,6 +34,17 @@ import {
 type View = "Board" | "List" | "Calendar" | "Funnel";
 const VIEWS: View[] = ["Board", "List", "Calendar", "Funnel"];
 
+/**
+ * GAP-CRM-OPPORTUNITIES-01: terminal stage names close a deal. The backend rejects a
+ * plain stage move into them (422 USE_CLOSE_ENDPOINT) — closing must go through the
+ * governed /close flow (outcome + reason). Kept in sync with crm-service's
+ * TERMINAL_STAGE_NAMES (deals/stage-gate.ts).
+ */
+const TERMINAL_STAGE_NAMES = ["Won", "Lost"];
+function isTerminalStageName(name: string): boolean {
+  return TERMINAL_STAGE_NAMES.includes(name);
+}
+
 interface PendingMove {
   deal: Opportunity;
   toStage: string;
@@ -40,6 +52,7 @@ interface PendingMove {
 }
 
 export function OpportunityViews() {
+  const t = useTranslations("crmOpportunityViews");
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [pipelineSource, setPipelineSource] = useState<OpSource | "loading">("loading");
   const [pipelineId, setPipelineId] = useState("");
@@ -233,12 +246,26 @@ export function OpportunityViews() {
                             }}
                             style={{ padding: 4, borderRadius: 6, border: "1px solid var(--line)" }}
                           >
-                            {selectedPipeline.stages.map((s) => (
-                              <option key={s.key} value={s.key}>
-                                {s.name}
-                              </option>
-                            ))}
+                            {/* GAP-CRM-OPPORTUNITIES-01: terminal stages (Won/Lost) are
+                                NOT offered here — the backend rejects a plain stage move
+                                into them (422 USE_CLOSE_ENDPOINT). Closing goes through
+                                the Close dialog (below), which captures outcome + reason.
+                                The current stage is always kept as an option so the
+                                select has a valid selected value even when it is terminal
+                                (e.g. an already-closed card still shown on the board). */}
+                            {selectedPipeline.stages
+                              .filter((s) => !isTerminalStageName(s.name) || s.key === col.stage)
+                              .map((s) => (
+                                <option key={s.key} value={s.key} disabled={isTerminalStageName(s.name)}>
+                                  {s.name}
+                                </option>
+                              ))}
                           </select>
+                          {!d.outcome && d.status !== "closed" ? (
+                            <Button type="button" variant="ghost" size="sm" onClick={() => setCloseTarget(d)} style={{ marginTop: 4 }}>
+                              {t("close")}
+                            </Button>
+                          ) : null}
                         </label>
                       ) : null}
                     </div>

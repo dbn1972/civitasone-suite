@@ -9,22 +9,24 @@
  * After any action we refresh so the assignment log/ageing panel reflects it.
  */
 import { useId, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog, Segmented, Button } from "../ds";
+import { OwnerPicker, type Owner } from "./OwnerPicker";
 import { assignLead, acceptLead, transferOwnership } from "@/lib/crm/assignment";
 
 type Pending = "assign" | "accept" | "transfer" | null;
 
-const inputStyle = { width: "100%", padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
 
 const ASSIGN_MODES = ["Run rules", "Specific owner"] as const;
 
 export function LeadAssignmentControl({ leadId }: { leadId: string }) {
   const router = useRouter();
+  const t = useTranslations("crmLeadAssignmentControl");
   const [assignMode, setAssignMode] = useState<string>(ASSIGN_MODES[0]);
-  const [assignOwner, setAssignOwner] = useState("");
-  const [transferOwner, setTransferOwner] = useState("");
+  const [assignOwner, setAssignOwner] = useState<Owner | null>(null);
+  const [transferOwner, setTransferOwner] = useState<Owner | null>(null);
   const [pending, setPending] = useState<Pending>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -36,8 +38,8 @@ export function LeadAssignmentControl({ leadId }: { leadId: string }) {
   function beginAssign() {
     setError("");
     setMessage("");
-    if (bySpecificOwner && !assignOwner.trim()) {
-      setError("Enter the owner id to assign this lead to.");
+    if (bySpecificOwner && !assignOwner) {
+      setError(t("chooseAssignOwner"));
       return;
     }
     setPending("assign");
@@ -46,8 +48,8 @@ export function LeadAssignmentControl({ leadId }: { leadId: string }) {
   function beginTransfer() {
     setError("");
     setMessage("");
-    if (!transferOwner.trim()) {
-      setError("Enter the owner id to transfer this lead to.");
+    if (!transferOwner) {
+      setError(t("chooseTransferOwner"));
       return;
     }
     setPending("transfer");
@@ -59,29 +61,29 @@ export function LeadAssignmentControl({ leadId }: { leadId: string }) {
     try {
       let accepted = false;
       if (pending === "assign") {
-        const r = await assignLead(leadId, bySpecificOwner ? { ownerId: assignOwner.trim() } : { runRules: true });
+        const r = await assignLead(leadId, bySpecificOwner && assignOwner ? { ownerId: assignOwner.id } : { runRules: true });
         accepted = r.accepted;
         setMessage(
           accepted
             ? "Assignment submitted — it may take a moment to take effect."
-            : bySpecificOwner
-              ? `Lead assigned to ${assignOwner.trim()}.`
+            : bySpecificOwner && assignOwner
+              ? t("assignedTo", { name: assignOwner.name })
               : "Lead assigned by the rule chain.",
         );
-        setAssignOwner("");
+        setAssignOwner(null);
       } else if (pending === "accept") {
         const r = await acceptLead(leadId);
         accepted = r.accepted;
         setMessage(accepted ? "Acceptance submitted — it may take a moment to take effect." : "Lead accepted.");
       } else if (pending === "transfer") {
-        const r = await transferOwnership(leadId, transferOwner.trim(), (reason ?? "").trim());
+        const r = await transferOwnership(leadId, transferOwner?.id ?? "", (reason ?? "").trim());
         accepted = r.accepted;
         setMessage(
           accepted
             ? "Transfer submitted — it may take a moment to take effect."
-            : `Ownership transferred to ${transferOwner.trim()}.`,
+            : t("transferredTo", { name: transferOwner?.name ?? "" }),
         );
-        setTransferOwner("");
+        setTransferOwner(null);
       }
       setPending(null);
       router.refresh();
@@ -94,7 +96,7 @@ export function LeadAssignmentControl({ leadId }: { leadId: string }) {
 
   const dialog = {
     assign: {
-      title: bySpecificOwner ? `Assign lead to ${assignOwner.trim()}?` : "Assign this lead by rules?",
+      title: bySpecificOwner && assignOwner ? t("assignTitleOwner", { name: assignOwner.name }) : t("assignTitleRules"),
       description: bySpecificOwner
         ? "The lead's owner will change and the assignment will be recorded in the audit log."
         : "The configured rule chain will pick an owner. The result is recorded in the audit log.",
@@ -106,7 +108,7 @@ export function LeadAssignmentControl({ leadId }: { leadId: string }) {
       confirmLabel: "Accept lead",
     },
     transfer: {
-      title: `Transfer ownership to ${transferOwner.trim()}?`,
+      title: t("transferTitle", { name: transferOwner?.name ?? "" }),
       description: "The current owner will lose the lead. This is recorded in the audit log.",
       confirmLabel: "Transfer lead",
     },
@@ -123,15 +125,12 @@ export function LeadAssignmentControl({ leadId }: { leadId: string }) {
           <Segmented options={[...ASSIGN_MODES]} value={assignMode} onChange={setAssignMode} />
           {bySpecificOwner ? (
             <div>
-              <label htmlFor={`${headingId}-owner`} style={labelStyle}>Owner id</label>
-              <input
+              <label htmlFor={`${headingId}-owner`} style={labelStyle}>{t("owner")}</label>
+              <OwnerPicker
                 id={`${headingId}-owner`}
+                aria-label={t("assignOwnerAria")}
                 value={assignOwner}
-                onChange={(e) => setAssignOwner(e.target.value)}
-                placeholder="owner id"
-                aria-required="true"
-                aria-invalid={assignOwner.trim() ? undefined : true}
-                style={inputStyle}
+                onChange={setAssignOwner}
               />
             </div>
           ) : (
@@ -163,15 +162,12 @@ export function LeadAssignmentControl({ leadId }: { leadId: string }) {
         <section aria-label="Transfer ownership" style={{ display: "grid", gap: 8, borderTop: "1px solid var(--line)", paddingTop: 14 }}>
           <div style={labelStyle}>Transfer ownership</div>
           <div>
-            <label htmlFor={`${headingId}-transfer`} style={labelStyle}>Transfer to owner id</label>
-            <input
+            <label htmlFor={`${headingId}-transfer`} style={labelStyle}>{t("transferToOwner")}</label>
+            <OwnerPicker
               id={`${headingId}-transfer`}
+              aria-label={t("transferOwnerAria")}
               value={transferOwner}
-              onChange={(e) => setTransferOwner(e.target.value)}
-              placeholder="owner id"
-              aria-required="true"
-              aria-invalid={transferOwner.trim() ? undefined : true}
-              style={inputStyle}
+              onChange={setTransferOwner}
             />
           </div>
           <div>

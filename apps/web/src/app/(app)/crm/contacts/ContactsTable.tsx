@@ -47,8 +47,11 @@ export function ContactsTable({ contacts, source = "api" }: { contacts: Contact[
     ...(c.id ? { id: c.id } : {}),
     name: c.name,
     account: c.account ?? "—",
-    phone: c.phone ?? "—",
-    email: c.email ?? "—",
+    // GAP-CRM-CONTACTS-02: DPDP — phone/email arrive ALREADY masked by the server
+    // page for non-privileged roles (page.tsx), so the clear value is never in
+    // props, the offline seed cache or the DOM for them. Shown as received.
+    phone: c.phone || "—",
+    email: c.email || "—",
     leadStatus: c.leadStatus ?? "—",
     temperature: c.temperature ?? "—",
     priority: c.priority ?? "—",

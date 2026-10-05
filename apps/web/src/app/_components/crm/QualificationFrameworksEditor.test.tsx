@@ -1,3 +1,5 @@
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { QualificationFrameworksEditor } from "./QualificationFrameworksEditor";
@@ -29,7 +31,7 @@ beforeEach(() => {
 describe("QualificationFrameworksEditor (LQ-001 admin)", () => {
   it("shows the saved-info badge on a failed load", async () => {
     vi.mocked(lq.getFrameworks).mockResolvedValue({ data: [], source: "error" });
-    render(<QualificationFrameworksEditor />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><QualificationFrameworksEditor /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument());
     expect(screen.getByText(/no frameworks yet/i)).toBeInTheDocument();
   });
@@ -37,7 +39,7 @@ describe("QualificationFrameworksEditor (LQ-001 admin)", () => {
   it("adds a new framework, requires name + business line, then creates it", async () => {
     vi.mocked(lq.getFrameworks).mockResolvedValue({ data: [], source: "api" });
     vi.mocked(lq.createFramework).mockResolvedValue(undefined);
-    render(<QualificationFrameworksEditor />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><QualificationFrameworksEditor /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByText(/no frameworks yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add framework/i }));
 
@@ -56,7 +58,7 @@ describe("QualificationFrameworksEditor (LQ-001 admin)", () => {
   it("adds a question to a loaded framework and saves via update", async () => {
     vi.mocked(lq.getFrameworks).mockResolvedValue({ data: [fw], source: "api" });
     vi.mocked(lq.updateFramework).mockResolvedValue(undefined);
-    render(<QualificationFrameworksEditor />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><QualificationFrameworksEditor /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByDisplayValue("BANT")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add question/i }));
     fireEvent.click(screen.getByRole("button", { name: /save framework/i }));
@@ -64,15 +66,44 @@ describe("QualificationFrameworksEditor (LQ-001 admin)", () => {
     expect(vi.mocked(lq.updateFramework).mock.calls[0][1].questions.length).toBe(2);
   });
 
-  it("deletes a saved framework after ConfirmDialog confirmation", async () => {
-    vi.mocked(lq.getFrameworks).mockResolvedValue({ data: [fw], source: "api" });
+  it("deletes a saved framework after ConfirmDialog confirmation", async () => {    vi.mocked(lq.getFrameworks).mockResolvedValue({ data: [fw], source: "api" });
     vi.mocked(lq.deleteFramework).mockResolvedValue(undefined);
-    render(<QualificationFrameworksEditor />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><QualificationFrameworksEditor /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByDisplayValue("BANT")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     const dialog = await screen.findByRole("alertdialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /delete framework/i }));
     await waitFor(() => expect(lq.deleteFramework).toHaveBeenCalledWith("f1"));
+  });
+
+  it("shows total weight and per-question share, with a warning when total is 0", async () => {
+    const weighted: lq.QualificationFramework = {
+      id: "fw2", name: "Weighted", businessLine: "government", active: true,
+      questions: [
+        { id: "qa", text: "Budget?", weight: 20 },
+        { id: "qb", text: "Authority?", weight: 30 },
+      ],
+    };
+    vi.mocked(lq.getFrameworks).mockResolvedValue({ data: [weighted], source: "api" });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><QualificationFrameworksEditor /></NextIntlClientProvider>);
+    await waitFor(() => expect(screen.getByDisplayValue("Weighted")).toBeInTheDocument());
+
+    // Total weight row (20 + 30 = 50) with the relative-weights hint.
+    expect(screen.getByLabelText("Total weight value")).toHaveTextContent("50");
+    expect(screen.getByText(/weights are relative; total 50/i)).toBeInTheDocument();
+
+    // Shares: 20/50 = 40%, 30/50 = 60%.
+    expect(screen.getByLabelText("Question 1 share")).toHaveTextContent("40%");
+    expect(screen.getByLabelText("Question 2 share")).toHaveTextContent("60%");
+
+    // No zero-total warning when weights are present.
+    expect(screen.queryByText(/no question can influence/i)).not.toBeInTheDocument();
+
+    // Drop both weights to 0 → total 0 → warning appears and total updates live.
+    fireEvent.change(screen.getByLabelText(/question 1 weight/i), { target: { value: "0" } });
+    fireEvent.change(screen.getByLabelText(/question 2 weight/i), { target: { value: "0" } });
+    expect(screen.getByLabelText("Total weight value")).toHaveTextContent("0");
+    expect(await screen.findByText(/no question can influence/i)).toBeInTheDocument();
   });
 
   // Row identity (outer list): an unsaved framework fell back to
@@ -84,7 +115,7 @@ describe("QualificationFrameworksEditor (LQ-001 admin)", () => {
   // keys on its real id and isn't affected.
   it("keeps an unsaved framework's own value and focus attached to it after an earlier unsaved framework is removed", async () => {
     vi.mocked(lq.getFrameworks).mockResolvedValue({ data: [], source: "api" });
-    render(<QualificationFrameworksEditor />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><QualificationFrameworksEditor /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByText(/no frameworks yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add framework/i }));
     fireEvent.click(screen.getByRole("button", { name: /add framework/i }));
@@ -109,7 +140,7 @@ describe("QualificationFrameworksEditor (LQ-001 admin)", () => {
   // question list was fully index-keyed -- same hazard, one level deeper.
   it("keeps a question's own value and focus attached to it after an earlier question is removed", async () => {
     vi.mocked(lq.getFrameworks).mockResolvedValue({ data: [fw], source: "api" });
-    render(<QualificationFrameworksEditor />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><QualificationFrameworksEditor /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByDisplayValue("BANT")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add question/i }));
     fireEvent.click(screen.getByRole("button", { name: /add question/i }));

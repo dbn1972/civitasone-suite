@@ -8,6 +8,7 @@
  * the saved-info badge and never fabricates an empty pipeline list as fact.
  */
 import { useEffect, useId, useState } from "react";
+import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState, Button } from "../ds";
 import {
@@ -34,6 +35,7 @@ function blankPipeline(): Pipeline {
 }
 
 export function PipelineEditor() {
+  const t = useTranslations("crmPipelineEditor");
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [source, setSource] = useState<OpSource | "loading">("loading");
   const [draft, setDraft] = useState<Pipeline | null>(null);
@@ -274,6 +276,7 @@ export function PipelineEditor() {
                       onClick={() => removeStage(idx)}
                       disabled={draft.stages.length <= 1}
                       aria-label={`Remove stage ${idx + 1}`}
+                      title={draft.id ? t("removeStageHint") : undefined}
                     >
                       ✕
                     </Button>
@@ -343,7 +346,7 @@ export function PipelineEditor() {
         open={confirmDelete !== null}
         danger
         title={confirmDelete ? `Delete pipeline “${confirmDelete.name}”?` : ""}
-        description="Opportunities can no longer use this pipeline. This cannot be undone."
+        description={t("deleteDescription")}
         confirmLabel="Delete pipeline"
         busy={busy}
         onCancel={() => setConfirmDelete(null)}

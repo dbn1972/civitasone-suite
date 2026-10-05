@@ -3,11 +3,16 @@
  * ReasonCodesEditor — LQ-004 admin. Manage the controlled list of lead
  * status-change reason codes surfaced by the transition picker. GET on mount,
  * PUT on save; a row needs a code before it can be persisted. On a failed load
- * we show the saved-info badge and never fabricate an empty list as fact.
+ * we show a recoverable ErrorState (never the editor) so an errored load can
+ * never be saved back as an empty list — saving {codes:[]} from a failed load
+ * would erase the tenant's whole reason taxonomy. We never fabricate an empty
+ * list as fact.
  */
 import { useEffect, useId, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { EmptyState, Button } from "../ds";
+import { EmptyState, Button, ErrorState } from "../ds";
+import { toHumanError } from "@/lib/messages";
 import {
   getReasonCodes,
   saveReasonCodes,
@@ -21,6 +26,7 @@ const STATUS_OPTIONS = ["", ...LEAD_STATUSES];
 const cellInput = { padding: 6, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)" } as const;
 
 export function ReasonCodesEditor() {
+  const t = useTranslations("crmReasonCodesEditor");
   const [codes, setCodes] = useState<LeadReasonCode[]>([]);
   const [source, setSource] = useState<LqSource | "loading">("loading");
   const [busy, setBusy] = useState(false);
@@ -92,11 +98,25 @@ export function ReasonCodesEditor() {
     );
   }
 
+  // A failed load must never fall through to the editor: saving from an
+  // errored view would PUT {codes:[]} and erase the tenant's whole reason
+  // taxonomy. Show a recoverable error with no Save/Add instead.
+  if (source === "error") {
+    return (
+      <div className="card">
+        <div className="card-h">
+          <h3 id={headingId}>{t("heading")}</h3>
+          <DataSourceBadge source="error" />
+        </div>
+        <ErrorState error={toHumanError("load", { area: "reason codes" })} onRetry={() => void load()} />
+      </div>
+    );
+  }
+
   return (
     <div className="card">
       <div className="card-h">
         <h3 id={headingId}>Reason codes</h3>
-        {source === "error" ? <DataSourceBadge source="error" /> : null}
       </div>
       {message ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", padding: "0 12px" }}>{message}</p> : null}
       {error ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", padding: "0 12px" }}>{error}</p> : null}

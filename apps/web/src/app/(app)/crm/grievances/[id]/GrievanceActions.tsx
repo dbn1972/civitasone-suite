@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { ActionButton } from "../../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 
@@ -36,7 +37,8 @@ function grievanceActionError(): string {
  * The legacy /escalate alias remains on the backend for backward compatibility.
  * The UI uses /first-appeal to match CPGRAMS portal terminology.
  */
-export function GrievanceActions({ id, status }: { id: string; status: string }) {
+export function GrievanceActions({ id, status, version }: { id: string; status: string; version?: number }) {
+  const t = useTranslations("crmGrievanceActions");
   const router = useRouter();
 
   // DISPOSED is the only terminal state in CPGRAMS (covers both resolved + closed)
@@ -46,9 +48,23 @@ export function GrievanceActions({ id, status }: { id: string; status: string })
   async function patch(action: string, payload?: Record<string, unknown>) {
     const res = await fetch(`/api/proxy/v1/crm/grievances/${id}/${action}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        // GAP-CRM-GRIEVANCES-DETAIL-01: optimistic-concurrency guard. Two clerks
+        // acting on the same grievance used to silently overwrite each other —
+        // no version was ever sent. We send the version we rendered as If-Match
+        // so the server can reject a stale write with 412. Harmless if the
+        // backend doesn't yet enforce it (the header is simply ignored).
+        ...(version !== undefined ? { "If-Match": String(version) } : {}),
+      },
       ...(payload ? { body: JSON.stringify(payload) } : {}),
     });
+    if (res.status === 412) {
+      // Pull the page back in line with the server before surfacing the
+      // conflict, so the clerk retries against the latest version.
+      router.refresh();
+      throw new Error(t("conflict"));
+    }
     if (!res.ok) {
       throw new Error(grievanceActionError());
     }

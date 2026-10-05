@@ -1,8 +1,9 @@
-import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, maskEmail, maskPhone } from "../../../_components/ds";
 import { MergeButton } from "../../../_components/crm/MergeButton";
 import { LeadFilters } from "../../../_components/crm/LeadFilters";
 import type { MergeOption } from "../../../_components/crm/MergeDialog";
 import { getCrmContacts } from "../../../_data/loaders";
+import { getSessionRoles, hasAnyRole, CRM_PII_READ_ROLES, CRM_CONTACTS_EXPORT_ROLES } from "@/lib/auth/roleGuard";
 import { ContactToolbar } from "./ContactToolbar";
 import { ContactsTable } from "./ContactsTable";
 
@@ -36,7 +37,29 @@ export default async function Page({ searchParams }: { searchParams?: SP }) {
   // Never fabricate a 0 count when the list load failed — show "—" instead.
   const stat = (n: number) => (source === "error" ? "—" : n.toLocaleString("en-IN"));
 
-  const mergeOptions: MergeOption[] = contacts
+  // GAP-CRM-CONTACTS-02: DPDP — the base crm_user sees masked phone/email; only
+  // privileged roles see the clear value. Computed server-side from the session.
+  const sessionRoles = getSessionRoles();
+  const canViewPii = hasAnyRole(sessionRoles, CRM_PII_READ_ROLES);
+  // GAP-CRM-CONTACTS-01: only permitted roles may bulk-export, and the export
+  // must respect the active filters rather than dumping the whole registry.
+  const canExport = hasAnyRole(sessionRoles, CRM_CONTACTS_EXPORT_ROLES);
+  const exportQuery: Record<string, string> = {};
+  for (const [key, value] of Object.entries(searchParams ?? {})) {
+    if (typeof value === "string" && value.trim()) exportQuery[key] = value;
+  }
+
+  // DPDP: mask on the SERVER, before the rows become client props / the offline
+  // seed cache. Only CRM_PII_READ_ROLES ever receive clear phone/email.
+  const safeContacts = canViewPii
+    ? contacts
+    : contacts.map((c) => ({
+        ...c,
+        phone: c.phone ? maskPhone(c.phone) : c.phone,
+        email: c.email ? maskEmail(c.email) : c.email,
+      }));
+
+  const mergeOptions: MergeOption[] = safeContacts
     .filter((c): c is typeof c & { id: string } => Boolean(c.id))
     .map((c) => ({
       id: c.id,
@@ -62,7 +85,7 @@ export default async function Page({ searchParams }: { searchParams?: SP }) {
         <span aria-hidden="true" className="text-base leading-snug">🛡</span>
         <span>Personal data in this registry is protected under the Digital Personal Data Protection Act, 2023. Access is role-scoped and logged.</span>
       </div>
-      <ContactToolbar />
+      <ContactToolbar canExport={canExport} exportQuery={exportQuery} />
       <LeadFilters
         initial={{
           temperature: searchParams?.temperature,
@@ -85,7 +108,7 @@ export default async function Page({ searchParams }: { searchParams?: SP }) {
         <StatCard icon="◉" iconBg="#fffbeb" label="With Priority Tag" value={stat(contacts.filter(c => Boolean(c.priority)).length)} />
         <StatCard icon="◈" iconBg="#eef2ff" label="Reachable by Email" value={stat(contacts.filter(c => c.email).length)} />
       </StatGrid>
-      <ContactsTable contacts={contacts} source={source} />
+      <ContactsTable contacts={safeContacts} source={source} />
     </>
   );
 }

@@ -6,8 +6,9 @@
  * fabricated zero. Ageing is shown in plain words (e.g. "2d 3h").
  */
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { StatGrid, StatCard, EmptyState } from "../ds";
+import { StatGrid, StatCard, EmptyState, DataTable } from "../ds";
 import { getOverdueTasks, formatAgeing, type OverdueTask, type AaSource } from "@/lib/crm/activityAccount";
 
 function fmtDateTime(iso: string): string {
@@ -23,7 +24,19 @@ function subjectHref(subjectType: string, subjectId: string): string {
   return `/crm/contacts/${subjectId}`;
 }
 
+/**
+ * GAP-CRM-TASK-ESCALATION-02 (IDLEAK): the Owner cell must never print a raw
+ * owner id. Show the display name when known; when only an id exists, say so
+ * plainly rather than leaking the UUID.
+ */
+function ownerLabel(task: OverdueTask, t: ReturnType<typeof useTranslations>): string {
+  if (task.owner) return task.owner;
+  if (task.ownerId) return t("ownerUnavailable");
+  return "—";
+}
+
 export function OverdueTaskAlerts() {
+  const t = useTranslations("crmOverdueTaskAlerts");
   const [tasks, setTasks] = useState<OverdueTask[]>([]);
   const [source, setSource] = useState<AaSource | "loading">("loading");
 
@@ -65,29 +78,38 @@ export function OverdueTaskAlerts() {
             — Overdue tasks unavailable right now. <DataSourceBadge source="error" />
           </p>
         ) : tasks.length === 0 ? (
-          <EmptyState icon="✅" title="Nothing overdue" message="No open tasks are past their due time." />
+          <EmptyState icon="✅" title={t("emptyTitle")} message={t("emptyMessage")} />
         ) : (
-          <table className="tbl">
-            <thead>
-              <tr><th>Task</th><th>Due</th><th>Overdue by</th><th>Owner</th></tr>
-            </thead>
-            <tbody>
-              {tasks.map((t) => (
-                <tr key={t.id}>
-                  <td>
-                    {t.subjectType && t.subjectId ? (
-                      <a href={subjectHref(t.subjectType, t.subjectId)}>{t.subject || "Task"}</a>
-                    ) : (
-                      t.subject || "Task"
-                    )}
-                  </td>
-                  <td style={{ fontSize: 13 }}>{fmtDateTime(t.dueAt)}</td>
-                  <td><span className="pill" style={{ background: "#fef2f2", color: "#b42318" }}>{formatAgeing(t.ageMinutes)}</span></td>
-                  <td style={{ fontSize: 13 }}>{t.owner ?? "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          // GAP-CRM-TASK-ESCALATION-02: paginate (50/page) so a large overdue
+          // backlog can't render an unbounded table; Owner is masked, never a raw id.
+          <DataTable<OverdueTask & Record<string, unknown>>
+            rows={tasks as Array<OverdueTask & Record<string, unknown>>}
+            pageSize={50}
+            columns={[
+              {
+                key: "subject",
+                label: t("colTask"),
+                render: (task) =>
+                  task.subjectType && task.subjectId ? (
+                    <a href={subjectHref(task.subjectType, task.subjectId)}>{task.subject || t("taskFallback")}</a>
+                  ) : (
+                    task.subject || t("taskFallback")
+                  ),
+              },
+              { key: "dueAt", label: t("colDue"), render: (task) => fmtDateTime(task.dueAt) },
+              {
+                key: "ageMinutes",
+                label: t("colOverdueBy"),
+                render: (task) => (
+                  <span className="pill" style={{ background: "#fef2f2", color: "#b42318" }}>{formatAgeing(task.ageMinutes)}</span>
+                ),
+              },
+              { key: "owner", label: t("colOwner"), render: (task) => ownerLabel(task, t) },
+            ]}
+            emptyIcon="✅"
+            emptyTitle={t("emptyTitle")}
+            emptyMessage={t("emptyMessage")}
+          />
         )}
       </div>
     </div>

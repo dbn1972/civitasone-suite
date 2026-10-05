@@ -63,6 +63,27 @@ describe("ServiceRequestActions", () => {
       resolution: "Certificate issued",
     });
   });
+  // GAP-CRM-SERVICE-REQUESTS-DETAIL-01: a Mark-pending reason is a waiting note,
+  // not a resolution — it must be sent as `statusNote`, never `resolution`.
+  it("marks pending with the reason under statusNote (not resolution)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: SR_ID } }), { status: 200 }),
+    );
+
+    render(<ServiceRequestActions id={SR_ID} status="in_progress" />);
+    fireEvent.click(screen.getByRole("button", { name: "Mark pending" }));
+    await waitFor(() => expect(screen.getByText("Mark this request pending?")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("What is it waiting on?"), { target: { value: "Awaiting citizen documents" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    const [, init] = fetchSpy.mock.calls[0];
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      status: "pending",
+      statusNote: "Awaiting citizen documents",
+    });
+  });
+
 
   it("closes (danger action) via the correct proxied endpoint", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -80,7 +101,7 @@ describe("ServiceRequestActions", () => {
     expect(url).toBe(`/api/proxy/v1/crm/service-requests/${SR_ID}/status`);
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({
       status: "closed",
-      resolution: "Duplicate request",
+      statusNote: "Duplicate request",
     });
   });
 

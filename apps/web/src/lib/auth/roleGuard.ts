@@ -129,3 +129,47 @@ export const INVENTORY_SETTINGS_ROLES = ["inventory_admin", "super_admin"];
  * (GAP-INVENTORY-DETAIL-04 / GAP-INVENTORY-LIST-02); the service stays the real gate.
  */
 export const INVENTORY_ITEM_LINK_ROLES = ["inventory_manager", "inventory_admin", "super_admin"];
+
+/**
+ * Roles permitted to approve/reject a quotation discount or deviation
+ * exception. Mirrors crm-service's ADMIN_ROLES in
+ * modules/deals/quotation-approval-routes.ts (the POST
+ * /v1/crm/quotation-approvals/:id/decide gate; the server stays the
+ * authority). A plain crm_user who merely raised the request must not be
+ * offered Approve/Reject — the panel also hides those controls on the
+ * requester's own row (maker-checker). GAP-CRM-QUOTATIONS-01.
+ */
+export const CRM_QUOTATION_APPROVE_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
+
+/**
+ * Roles permitted to read full contact PII (phone/email in the clear) rather
+ * than the masked form (GAP-CRM-CONTACTS-02 / GAP-CRM-CONTACTS-DETAIL-02).
+ * DPDP: the base crm_user sees masked values; only privileged/admin roles see
+ * the clear value. The server remains the authority — this only decides what
+ * the UI renders. NOTE (HUMAN REVIEW): true redaction requires the contacts
+ * API to omit the clear value for roles outside this set; UI masking alone is
+ * cosmetic until that backend change lands.
+ */
+export const CRM_PII_READ_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
+
+/**
+ * Roles permitted to bulk-export contacts (name/phone/email egress)
+ * (GAP-CRM-CONTACTS-01). Narrower than general CRM access: the base crm_user
+ * must not be able to download the whole registry. Mirrors the PII-read set.
+ */
+export const CRM_CONTACTS_EXPORT_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
+
+/**
+ * Roles permitted to verify/reject uploaded account & contact documents
+ * (GAP-CRM-ACCOUNTS-DETAIL-02). Document verification is an approval control,
+ * so it is restricted to CRM admins rather than every crm_user — the detail
+ * pages previously passed canVerify unconditionally, showing Verify/Reject to
+ * every crm_user. The server remains the authority (the verify endpoint must
+ * 403 others); this only decides whether the UI offers the control.
+ */
+export const CRM_VERIFY_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
+
+/** True when any of the session roles is in `allowed`. Pure; for UI gating. */
+export function hasAnyRole(sessionRoles: string[], allowed: string[]): boolean {
+  return allowed.some((r) => sessionRoles.includes(r));
+}

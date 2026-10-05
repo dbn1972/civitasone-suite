@@ -23,6 +23,8 @@ function caseAt(stage: onb.OnboardingStage, kycStatus: onb.KycStatus): onb.Onboa
     createdAt: "2026-08-01T00:00:00Z",
     updatedAt: "2026-08-02T00:00:00Z",
     version: 2,
+    accountName: null,
+    dealName: null,
   };
 }
 

@@ -47,10 +47,21 @@ export function fieldTypeHasOptions(t: CfFieldType): boolean {
   return t === "select" || t === "multi_select";
 }
 
-/** Free-form validation blob; we only interpret required + options. */
+/** Free-form validation blob; we only interpret required + options + sensitivity. */
 export interface CustomFieldValidation {
   required?: boolean;
   options?: string[];
+  /**
+   * DPDP: marks a field whose VALUES must be masked on records and stripped
+   * server-side for roles outside `visibleToRoles` (GAP-CRM-CUSTOM-FIELDS-01).
+   * Stored inside the free-form validationSchema blob — there is no dedicated
+   * column server-side. Backend enforcement is required for real protection;
+   * this flag is the definition the UI (and, in follow-up, the record renderer)
+   * reads.
+   */
+  sensitive?: boolean;
+  /** Roles permitted to see a sensitive field's value in the clear. */
+  visibleToRoles?: string[];
   [k: string]: unknown;
 }
 
@@ -75,6 +86,10 @@ export interface CustomFieldDraft {
   required: boolean;
   options: string[];
   ordinal: number;
+  /** DPDP: mask this field's values on records (GAP-CRM-CUSTOM-FIELDS-01). */
+  sensitive: boolean;
+  /** Roles allowed to see a sensitive field's clear value. */
+  visibleToRoles: string[];
 }
 
 export interface LoaderResult<T> {
@@ -113,6 +128,29 @@ export function optionsFromValidation(v: CustomFieldValidation | null | undefine
 
 export function requiredFromValidation(v: CustomFieldValidation | null | undefined): boolean {
   return !!(v && typeof v === "object" && (v as CustomFieldValidation).required === true);
+}
+
+export function sensitiveFromValidation(v: CustomFieldValidation | null | undefined): boolean {
+  return !!(v && typeof v === "object" && (v as CustomFieldValidation).sensitive === true);
+}
+
+export function visibleToRolesFromValidation(v: CustomFieldValidation | null | undefined): string[] {
+  if (!v || typeof v !== "object") return [];
+  const raw = (v as CustomFieldValidation).visibleToRoles;
+  if (!Array.isArray(raw)) return [];
+  return raw.map(str).map((s) => s.trim()).filter((s) => s.length > 0);
+}
+
+/**
+ * Field names that look like statutory PII identifiers (Aadhaar, PAN, passport,
+ * ration card, bank account) — DPDP high-risk. When a new field's name matches,
+ * the UI warns and defaults `sensitive` on so an admin cannot silently create an
+ * unmasked Aadhaar/PAN text field (GAP-CRM-CUSTOM-FIELDS-01).
+ */
+export const SENSITIVE_NAME_PATTERN = /aadhaar|aadhar|\bpan\b|passport|ration|bank|account\s*no|voter|driving\s*licen/i;
+
+export function looksSensitive(fieldName: string): boolean {
+  return SENSITIVE_NAME_PATTERN.test(fieldName);
 }
 
 /** Normalise one raw record (camel or snake case) into a CustomField, or null. */
@@ -167,11 +205,13 @@ export function toDraft(f: CustomField): CustomFieldDraft {
     required: requiredFromValidation(f.validationSchema),
     options: optionsFromValidation(f.validationSchema),
     ordinal: f.ordinal,
+    sensitive: sensitiveFromValidation(f.validationSchema),
+    visibleToRoles: visibleToRolesFromValidation(f.validationSchema),
   };
 }
 
 export function blankDraft(entityType: CfEntityType, ordinal = 0): CustomFieldDraft {
-  return { entityType, fieldName: "", fieldType: "text", required: false, options: [], ordinal };
+  return { entityType, fieldName: "", fieldType: "text", required: false, options: [], ordinal, sensitive: false, visibleToRoles: [] };
 }
 
 /** Build the validationSchema blob a mutation sends, or null when empty. */
@@ -181,6 +221,11 @@ export function buildValidationSchema(draft: CustomFieldDraft): CustomFieldValid
   if (fieldTypeHasOptions(draft.fieldType)) {
     const opts = draft.options.map((o) => o.trim()).filter((o) => o.length > 0);
     if (opts.length > 0) out.options = opts;
+  }
+  if (draft.sensitive) {
+    out.sensitive = true;
+    const roles = draft.visibleToRoles.map((r) => r.trim()).filter((r) => r.length > 0);
+    if (roles.length > 0) out.visibleToRoles = roles;
   }
   return Object.keys(out).length > 0 ? out : null;
 }

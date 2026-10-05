@@ -2,8 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useFormError } from "@/lib/useFormError";
+import { useTranslations } from "next-intl";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { Button } from "@/app/_components/ds";
+import { LOGGABLE_ACTIVITY_TYPES } from "./activityTypes";
 
 type ContactOption = { id: string; name: string };
 
@@ -12,12 +15,14 @@ const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marg
 
 export function LogActivityButton() {
   const router = useRouter();
+  const tType = useTranslations("crmActivityTypes");
   const [open, setOpen] = useState(false);
   const [contacts, setContacts] = useState<ContactOption[]>([]);
   const [form, setForm] = useState({ contactId: "", type: "call", subject: "", text: "", dueDate: "" });
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const formError = useFormError("interaction");
 
   useEffect(() => {
     if (!open) return;
@@ -65,7 +70,7 @@ export function LogActivityButton() {
       setOpen(false);
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not log the interaction.");
+      setError(formError.fromException("save", err).message);
     } finally {
       setBusy(false);
     }
@@ -89,12 +94,9 @@ export function LogActivityButton() {
             </select>
             <label htmlFor="act-type" style={labelStyle}>Type</label>
             <select id="act-type" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} style={inputStyle}>
-              <option value="call">Call</option>
-              <option value="meeting">Meeting</option>
-              <option value="email">Email</option>
-              <option value="task">Task</option>
-              <option value="note">Note</option>
-              <option value="site_visit">Site Visit</option>
+              {LOGGABLE_ACTIVITY_TYPES.map((type) => (
+                <option key={type} value={type}>{tType(type)}</option>
+              ))}
             </select>
             <label htmlFor="act-subject" style={labelStyle}>Subject</label>
             <input id="act-subject" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} placeholder="Short summary" style={inputStyle} />
@@ -105,7 +107,7 @@ export function LogActivityButton() {
             <Button type="submit" disabled={busy} loading={busy} style={{ minHeight: 44 }}>
               {busy ? "Saving…" : "Save interaction"}
             </Button>
-            <Button type="button" variant="ghost" style={{ marginLeft: 8, minHeight: 44 }} onClick={() => setOpen(false)}>
+            <Button type="button" variant="ghost" style={{ marginInlineStart: 8, minHeight: 44 }} onClick={() => setOpen(false)}>
               Cancel
             </Button>
           </form>

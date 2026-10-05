@@ -63,9 +63,26 @@ export async function integrationRoutes(app: FastifyInstance): Promise<void> {
     const body = linkSyncedItemBody.parse(req.body);
     // The linked account must exist in this tenant before we attach items to it.
     const la = (await scopedRead((tx) => tx.execute(sql`
-      SELECT id FROM crm.linked_accounts WHERE id = ${body.linkedAccountId} AND tenant_id = ${ctx.tenantId}
-    `))) as unknown as Array<{ id: string }>;
+      SELECT id, status FROM crm.linked_accounts WHERE id = ${body.linkedAccountId} AND tenant_id = ${ctx.tenantId}
+    `))) as unknown as Array<{ id: string; status: string }>;
     if (la.length === 0) throw new HttpError(404, "NOT_FOUND", "linked account not found");
+    // GAP-CRM-LINKED-ACCOUNTS-01 (DPDP, fail-closed): a mailbox/calendar is
+    // registered by typing an email address only — there is no OAuth/consent or
+    // proof-of-ownership exchange in this service (live provider sync is
+    // deferred), so such an account can only ever be status='pending'. Nothing
+    // may sync *into* CRM against it until that account is actually CONNECTED
+    // (ownership proven via a provider consent flow that flips it to
+    // 'connected'). Allowing items to attach to a 'pending' link would let any
+    // CRM user ingest a third party's mailbox metadata by just typing their
+    // address — a DPDP breach. Enforced here, server-side, reading the live DB
+    // row — never trusting the caller or the client UI.
+    if (la[0]!.status !== "connected") {
+      throw new HttpError(
+        409,
+        "LINKED_ACCOUNT_NOT_CONSENTED",
+        "This mailbox or calendar is still pending. It cannot sync into CRM until its ownership is verified through the provider's consent (OAuth) flow.",
+      );
+    }
     const id = commandId(ctx, `${COMMANDS.linkSyncedItem}:${body.linkedAccountId}:${body.externalId}`);
     return sendAccepted(reply, acceptedResponseSchema, await commands.linkSyncedItem(ctx, id, body));
   });

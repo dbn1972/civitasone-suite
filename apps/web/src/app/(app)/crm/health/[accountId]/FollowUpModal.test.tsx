@@ -7,6 +7,16 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { FollowUpModal } from "./FollowUpModal";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
+
+function withIntl(ui: React.ReactElement) {
+  return (
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>
+  );
+}
 
 const ACCOUNT_ID = "acct-0001";
 
@@ -25,7 +35,7 @@ describe("FollowUpModal", () => {
       new Response(JSON.stringify({ data: { id: "sr-followup-1" } }), { status: 201 }),
     );
 
-    render(<FollowUpModal accountId={ACCOUNT_ID} />);
+    render(withIntl(<FollowUpModal accountId={ACCOUNT_ID} />));
     fireEvent.click(screen.getByRole("button", { name: "Create Follow-up" }));
 
     fireEvent.change(screen.getByLabelText(/contact name/i), { target: { value: "Suresh Rao" } });
@@ -51,7 +61,7 @@ describe("FollowUpModal", () => {
       new Response(JSON.stringify({ message: "subject is required" }), { status: 422 }),
     );
 
-    render(<FollowUpModal accountId={ACCOUNT_ID} />);
+    render(withIntl(<FollowUpModal accountId={ACCOUNT_ID} />));
     fireEvent.click(screen.getByRole("button", { name: "Create Follow-up" }));
     fireEvent.change(screen.getByLabelText(/contact name/i), { target: { value: "Suresh Rao" } });
     fireEvent.change(screen.getByLabelText(/service type/i), { target: { value: "Renewal Support" } });
@@ -60,5 +70,28 @@ describe("FollowUpModal", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/Some details weren't accepted\. Check what you entered and try again\./);
     expect(screen.queryByText("subject is required")).not.toBeInTheDocument();
     expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  // GAP-CRM-HEALTH-ACCOUNTID-01 — the dialog used to label the account with its
+  // raw UUID, so a clerk could not confirm which account they were acting on.
+  // With a resolved name it must show the name, not the id.
+  it("shows the resolved account name in the dialog header, not the raw id", () => {
+    render(withIntl(<FollowUpModal accountId={ACCOUNT_ID} accountName="Bharat Steel Ltd" />));
+    fireEvent.click(screen.getByRole("button", { name: "Create Follow-up" }));
+
+    expect(screen.getByText("Bharat Steel Ltd")).toBeInTheDocument();
+    expect(screen.queryByText(ACCOUNT_ID)).not.toBeInTheDocument();
+    // The default subject also carries the name rather than the opaque id.
+    const subject = screen.getByLabelText(/subject/i) as HTMLInputElement;
+    expect(subject.value).toContain("Bharat Steel Ltd");
+    expect(subject.value).not.toContain(ACCOUNT_ID);
+  });
+
+  // Fallback: with no name resolved the dialog still renders, showing the id so
+  // the clerk at least has a reference.
+  it("falls back to the account id when no name is available", () => {
+    render(withIntl(<FollowUpModal accountId={ACCOUNT_ID} accountName={null} />));
+    fireEvent.click(screen.getByRole("button", { name: "Create Follow-up" }));
+    expect(screen.getByText(ACCOUNT_ID)).toBeInTheDocument();
   });
 });

@@ -53,6 +53,12 @@ export interface DqRecord {
   id: string;
   score: number;
   issues: string[];
+  /**
+   * Human display name (contact/account name) so a data steward can recognise
+   * the record instead of a bare UUID (GAP-CRM-DATA-QUALITY-01). Optional: the
+   * backend must include it per entity; until then the UI falls back gracefully.
+   */
+  name?: string;
 }
 
 export interface DataQualityReport {
@@ -228,6 +234,7 @@ export function normaliseReport(raw: unknown): DataQualityReport {
             id: String(rec.id ?? ""),
             score: num(rec.score),
             issues: Array.isArray(rec.issues) ? rec.issues.map(String) : [],
+            ...(typeof rec.name === "string" && rec.name.trim().length > 0 ? { name: rec.name } : {}),
           }))
       : [],
   };

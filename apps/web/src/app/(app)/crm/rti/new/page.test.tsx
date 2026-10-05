@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const pushMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -23,7 +25,7 @@ describe("NewRtiPage", () => {
       new Response(JSON.stringify({ data: { id: "new-rti-1" } }), { status: 201 }),
     );
 
-    render(<NewRtiPage />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><NewRtiPage /></NextIntlClientProvider>);
     fireEvent.change(screen.getByLabelText(/^section/i), { target: { value: "s.6" } });
     fireEvent.change(screen.getByLabelText(/department \/ public authority/i), { target: { value: "Ministry of Finance" } });
     fireEvent.change(screen.getByLabelText(/^subject/i), { target: { value: "Copy of sanctioned budget" } });
@@ -51,7 +53,7 @@ describe("NewRtiPage", () => {
       new Response(JSON.stringify({ message: "Description is required" }), { status: 422 }),
     );
 
-    render(<NewRtiPage />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><NewRtiPage /></NextIntlClientProvider>);
     fireEvent.change(screen.getByLabelText(/^section/i), { target: { value: "s.6" } });
     fireEvent.change(screen.getByLabelText(/department \/ public authority/i), { target: { value: "Ministry of Finance" } });
     fireEvent.change(screen.getByLabelText(/^subject/i), { target: { value: "Copy of sanctioned budget" } });
@@ -62,5 +64,95 @@ describe("NewRtiPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/Some details weren't accepted\. Check what you entered and try again\./);
     expect(screen.queryByText("Description is required")).not.toBeInTheDocument();
     expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  function fillRequired() {
+    fireEvent.change(screen.getByLabelText(/^section/i), { target: { value: "s.6" } });
+    fireEvent.change(screen.getByLabelText(/department \/ public authority/i), { target: { value: "Ministry of Finance" } });
+    fireEvent.change(screen.getByLabelText(/^subject/i), { target: { value: "Copy of sanctioned budget" } });
+    fireEvent.change(screen.getByLabelText(/description \/ particulars sought/i), { target: { value: "Please provide the FY26 budget breakup." } });
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Anil Sharma" } });
+  }
+
+  // GAP-CRM-RTI-NEW-02: a received date and mode of receipt are collected and
+  // sent, so the 30-day clock starts from the real date of receipt.
+  it("sends receivedDate and mode of receipt when supplied", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: "r1" } }), { status: 201 }),
+    );
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><NewRtiPage /></NextIntlClientProvider>);
+    fillRequired();
+    fireEvent.change(screen.getByLabelText(/date of receipt/i), { target: { value: "2026-09-20" } });
+    fireEvent.change(screen.getByLabelText(/mode of receipt/i), { target: { value: "post" } });
+    fireEvent.click(screen.getByRole("button", { name: "File RTI Request" }));
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/crm/rti/r1"));
+    const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.receivedDate).toBe("2026-09-20");
+    expect(body.mode).toBe("post");
+  });
+
+  // GAP-CRM-RTI-NEW-01: the fee is sent as paise (feeAmountMinor), not a rupees
+  // JSON float. 10.10 -> "1010", and the legacy rupees `feeAmount` is gone.
+  it("sends the fee as paise (feeAmountMinor), never a rupees float", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: "r2" } }), { status: 201 }),
+    );
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><NewRtiPage /></NextIntlClientProvider>);
+    fillRequired();
+    fireEvent.change(screen.getByLabelText(/fee amount/i), { target: { value: "10.10" } });
+    fireEvent.click(screen.getByRole("button", { name: "File RTI Request" }));
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/crm/rti/r2"));
+    const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.feeAmountMinor).toBe("1010");
+    expect(body.feeAmount).toBeUndefined();
+  });
+
+  // GAP-CRM-RTI-NEW-01: a sub-paise fee (3+ decimals) is rejected client-side
+  // rather than silently rounded.
+  it("blocks a fee with more than 2 decimals and does not submit", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><NewRtiPage /></NextIntlClientProvider>);
+    fillRequired();
+    fireEvent.change(screen.getByLabelText(/fee amount/i), { target: { value: "1.005" } });
+    fireEvent.click(screen.getByRole("button", { name: "File RTI Request" }));
+
+    expect(await screen.findByText(/up to 2 decimal places/i)).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  // GAP-CRM-RTI-NEW-03: an invalid contact is caught before submit.
+  it("blocks an invalid contact and does not submit", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><NewRtiPage /></NextIntlClientProvider>);
+    fillRequired();
+    fireEvent.change(screen.getByLabelText(/contact \(phone \/ email\)/i), { target: { value: "abc" } });
+    fireEvent.click(screen.getByRole("button", { name: "File RTI Request" }));
+
+    expect(await screen.findByText(/valid 10-digit Indian mobile number or an email/i)).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it("accepts a valid Indian mobile and a valid email as contact", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: "r3" } }), { status: 201 }),
+    );
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><NewRtiPage /></NextIntlClientProvider>);
+    fillRequired();
+    fireEvent.change(screen.getByLabelText(/contact \(phone \/ email\)/i), { target: { value: "9876500000" } });
+    fireEvent.click(screen.getByRole("button", { name: "File RTI Request" }));
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/crm/rti/r3"));
+    const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.applicantContact).toBe("9876500000");
+  });
+
+  // GAP-CRM-RTI-NEW-03: a DPDP purpose / lawful-basis notice is visible.
+  it("shows a DPDP purpose notice in the Applicant Details section", () => {
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><NewRtiPage /></NextIntlClientProvider>);
+    expect(screen.getByText(/used only to process this request under the/i)).toBeInTheDocument();
+    expect(screen.getByText(/DPDP Act 2023/)).toBeInTheDocument();
   });
 });

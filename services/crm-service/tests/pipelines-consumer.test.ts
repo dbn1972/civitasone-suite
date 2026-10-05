@@ -164,3 +164,51 @@ describe("crm.pipeline.* consumers apply pipeline writes", () => {
     expect(types).toContain("audit.event.record");
   });
 });
+
+describe("pipeline STAGE_IN_USE / PIPELINE_IN_USE race guard (consumer re-check)", () => {
+  async function insertOpenDeal(pipelineId: string, stage: string): Promise<void> {
+    await scoped((tx) => tx`
+      INSERT INTO crm.deals (id, tenant_id, pipeline_id, name, stage, value_minor, currency, status, stage_entered_at, created_by, updated_by, version)
+      VALUES (${randomUUID()}, ${TENANT}, ${pipelineId}, 'Raced Deal', ${stage}, 100000, 'INR', 'active', now(), ${ACTOR}, ${ACTOR}, 1)`);
+  }
+  async function auditOutcomes(id: string): Promise<string[]> {
+    const rows = await scoped((tx) => tx<Array<{ outcome: string }>>`
+      SELECT payload->>'outcome' AS outcome FROM _outbox.messages
+       WHERE tenant_id = ${TENANT} AND event_type = 'audit.event.record' AND payload->>'resourceId' = ${id}`);
+    return rows.map((r) => r.outcome);
+  }
+
+  it("refuses a stage removal when a deal lands between the route check and the consumer (audited)", async () => {
+    const id = await createPipeline("Race Stage Pipeline", 4);
+    const current = (await scoped((tx) => tx<Array<{ stages: Array<{ id: string; name: string; probability: number; ordinal: number }> }>>`
+      SELECT stages FROM crm.pipelines WHERE id = ${id} AND tenant_id = ${TENANT}`))[0]!.stages;
+    const kept = current.slice(0, 3).map((s, i) => ({ ...s, ordinal: i }));
+    const removedName = current[3]!.name;
+
+    // Route pre-check passes (no deals yet) -> 202 and the command is queued ...
+    const res = await app.inject({ method: "PATCH", url: `/v1/crm/pipelines/${id}`, headers: auth(), payload: { version: 1, stages: kept } });
+    expect(res.statusCode).toBe(202);
+    // ... then a deal lands in the stage being removed BEFORE the consumer runs.
+    await insertOpenDeal(id, removedName);
+    await drainQueue();
+
+    const row = (await scoped((tx) => tx<Array<{ stages: unknown[]; version: number }>>`
+      SELECT stages, version FROM crm.pipelines WHERE id = ${id} AND tenant_id = ${TENANT}`))[0]!;
+    expect(row.stages).toHaveLength(4); // not applied
+    expect(row.version).toBe(1);
+    expect(await auditOutcomes(id)).toContain("rejected_stage_in_use");
+  });
+
+  it("refuses a pipeline delete when a deal lands between the route check and the consumer (audited)", async () => {
+    const id = await createPipeline("Race Delete Pipeline", 4);
+    const res = await app.inject({ method: "DELETE", url: `/v1/crm/pipelines/${id}`, headers: auth() });
+    expect(res.statusCode).toBe(202);
+    await insertOpenDeal(id, "Stage 1");
+    await drainQueue();
+
+    const row = (await scoped((tx) => tx<Array<{ status: string }>>`
+      SELECT status FROM crm.pipelines WHERE id = ${id} AND tenant_id = ${TENANT}`))[0]!;
+    expect(row.status).toBe("active");
+    expect(await auditOutcomes(id)).toContain("rejected_pipeline_in_use");
+  });
+});

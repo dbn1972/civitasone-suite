@@ -192,4 +192,25 @@ describe("DedupCandidatesPage", () => {
     const diffCells = document.querySelectorAll(".dedup-diff");
     expect(diffCells.length).toBeGreaterThan(0);
   });
+
+  it("masks email and phone by default and never shows the raw PII (GAP-CRM-DEDUP-CANDIDATES-01)", async () => {
+    vi.mocked(api.getDedupCandidates).mockResolvedValue({
+      data: [PAIR],
+      source: "api",
+    });
+
+    render(<DedupCandidatesPage />);
+    await waitFor(() => expect(screen.getByText("85%")).toBeInTheDocument());
+
+    // The full email/phone of either contact must not appear in the clear.
+    expect(screen.queryByText("priya@example.com")).not.toBeInTheDocument();
+    expect(screen.queryByText("priya.s@example.com")).not.toBeInTheDocument();
+    expect(screen.queryByText("+91-9876543210")).not.toBeInTheDocument();
+    // A masked form is shown instead (first char of local part + masked domain).
+    expect(screen.getAllByText("p***@e******.c**").length).toBeGreaterThanOrEqual(1);
+    // Name/company stay clear so the pair is still recognisable (minimisation,
+    // not blanket hiding).
+    expect(screen.getAllByText("Priya Sharma").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("Infosys").length).toBeGreaterThanOrEqual(2);
+  });
 });

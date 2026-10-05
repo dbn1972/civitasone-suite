@@ -33,7 +33,14 @@ const listParams = listQuery.extend({
 
 const updateStatusBody = z.object({
   status: z.enum(STATUS),
+  // `resolution` means strictly "how the request was fulfilled" and is only
+  // meaningful on resolve. `statusNote` carries the non-resolution reason for
+  // other transitions (what a pending request is waiting on; closing remarks).
+  // Keeping them distinct stops a Close from overwriting a genuine resolution
+  // and stops a pending request from showing a bogus "Resolution" card
+  // (GAP-CRM-SERVICE-REQUESTS-DETAIL-01).
   resolution: z.string().max(5000).optional(),
+  statusNote: z.string().max(5000).optional(),
   assignedTo: z.string().uuid().optional(),
 });
 
@@ -125,7 +132,7 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
              r.citizen_phone AS "citizenPhone", r.citizen_email AS "citizenEmail",
              r.service_type AS "serviceType", r.subject, r.description,
              r.priority, r.status, r.assigned_to AS "assignedTo",
-             r.contact_id AS "contactId", r.resolution,
+             r.contact_id AS "contactId", r.resolution, r.status_note AS "statusNote",
              r.due_at AS "dueAt", r.resolved_at AS "resolvedAt",
              r.closed_at AS "closedAt",
              r.created_at AS "createdAt", r.updated_at AS "updatedAt",
@@ -153,6 +160,7 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
       UPDATE crm.service_requests
       SET status = ${body.status},
           resolution = COALESCE(${body.resolution ?? null}, resolution),
+          status_note = COALESCE(${body.statusNote ?? null}, status_note),
           assigned_to = COALESCE(${body.assignedTo ?? null}::uuid, assigned_to),
           resolved_at = CASE WHEN ${body.status} = 'resolved' AND resolved_at IS NULL THEN now() ELSE resolved_at END,
           closed_at   = CASE WHEN ${body.status} IN ('closed', 'cancelled') AND closed_at IS NULL THEN now() ELSE closed_at END,
@@ -160,7 +168,7 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
       WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
         AND status NOT IN ('closed', 'cancelled')
       RETURNING id, status, assigned_to AS "assignedTo", resolved_at AS "resolvedAt",
-                closed_at AS "closedAt", version
+                closed_at AS "closedAt", resolution, status_note AS "statusNote", version
     `))) as unknown as Array<Record<string, unknown>>;
 
     if (rows.length === 0)

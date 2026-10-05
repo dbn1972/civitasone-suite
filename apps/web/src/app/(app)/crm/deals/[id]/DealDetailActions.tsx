@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useFormError } from "@/lib/useFormError";
 import { ActionButton, Button } from "../../../../_components/ds";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 
@@ -17,6 +18,7 @@ export function DealDetailActions({ dealId, dealName, contactId, status }: Props
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const formError = useFormError("activity");
   const [showActivity, setShowActivity] = useState(false);
   const [activity, setActivity] = useState({ type: "call", subject: "", text: "" });
 
@@ -68,7 +70,7 @@ export function DealDetailActions({ dealId, dealName, contactId, status }: Props
       setActivity({ type: "call", subject: "", text: "" });
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not log activity.");
+      setError(formError.fromException("save", err).message);
     } finally {
       setBusy(false);
     }

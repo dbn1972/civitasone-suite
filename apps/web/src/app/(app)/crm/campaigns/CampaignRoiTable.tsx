@@ -1,11 +1,13 @@
 "use client";
 import type { CRMCampaignRoiSummaryRow } from "@civitasone/types";
+import { useTranslations } from "next-intl";
 import { DataTable, StatusPill } from "../../../_components/ds";
 import { formatMoney } from "@/lib/formatters";
 import { formatRoiPercent, roiVerdict, type RoiVerdict } from "./campaigns";
 
 type CampaignRow = {
   campaignId: string;
+  name: string;
   verdict: RoiVerdict;
   costMinor: string;
   revenueMinor: string;
@@ -24,8 +26,10 @@ const VERDICT_LABEL: Record<RoiVerdict, string> = {
 };
 
 export function CampaignRoiTable({ rows }: { rows: CRMCampaignRoiSummaryRow[] }) {
+  const t = useTranslations("crmCampaignRoiTable");
   const tableRows: CampaignRow[] = rows.map((row) => ({
     campaignId: row.campaignId,
+    name: row.name ?? t("unnamedCampaign"),
     verdict: roiVerdict(row),
     costMinor: row.costMinor,
     revenueMinor: row.revenueMinor,
@@ -39,7 +43,16 @@ export function CampaignRoiTable({ rows }: { rows: CRMCampaignRoiSummaryRow[] })
   return (
     <DataTable<CampaignRow>
       columns={[
-        { key: "campaignId", label: "Campaign" },
+        {
+          key: "name",
+          label: t("colCampaign"),
+          render: (row) => (
+            <div>
+              <div>{row.name}</div>
+              <div style={{ fontSize: 11, color: "var(--muted)" }}>{row.campaignId}</div>
+            </div>
+          ),
+        },
         {
           key: "verdict",
           label: "Outcome",
@@ -62,7 +75,7 @@ export function CampaignRoiTable({ rows }: { rows: CRMCampaignRoiSummaryRow[] })
       rowHref={(row) => `/crm/campaigns/${row.campaignId}`}
       sortable
       filterable
-      filterPlaceholder="Filter by campaign"
+      filterPlaceholder={t("filterPlaceholder")}
       exportable
       exportFilename="crm-campaign-roi"
       emptyIcon="📣"

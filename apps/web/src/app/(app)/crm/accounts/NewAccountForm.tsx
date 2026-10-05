@@ -3,6 +3,7 @@
 import type { CRMAccountSummary } from "@civitasone/types";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useFormError } from "@/lib/useFormError";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { Button } from "@/app/_components/ds";
 
@@ -20,6 +21,7 @@ export function NewAccountForm({ accounts }: { accounts: CRMAccountSummary[] }) 
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const formError = useFormError("account");
   const [form, setForm] = useState({ name: "", industry: "", website: "", parentId: "" });
 
   async function submit(e: React.FormEvent) {
@@ -57,7 +59,7 @@ export function NewAccountForm({ accounts }: { accounts: CRMAccountSummary[] }) 
       setForm({ name: "", industry: "", website: "", parentId: "" });
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not create the account.");
+      setError(formError.fromException("save", e).message);
     } finally {
       setBusy(false);
     }

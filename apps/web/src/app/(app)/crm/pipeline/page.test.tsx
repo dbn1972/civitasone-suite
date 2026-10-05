@@ -63,4 +63,15 @@ describe("Pipeline Page", () => {
     render(await PipelinePage());
     expect(screen.getByTestId("kanban")).toBeInTheDocument();
   });
+
+  // GAP-CRM-PIPELINE-01: on a failed load the StatCards must show "—", never fabricated
+  // 0 / ₹0.00 / 0% figures that read as a real (empty) pipeline.
+  it("shows '—' stat values on a failed load, not zeros", async () => {
+    vi.mocked(getPipelineDeals).mockResolvedValue({ data: [], source: "error" });
+    render(await PipelinePage());
+    // Four stat cards, all em-dash.
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(4);
+    expect(screen.queryByText("0%")).not.toBeInTheDocument();
+    expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
+  });
 });

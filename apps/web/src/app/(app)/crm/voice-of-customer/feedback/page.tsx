@@ -20,6 +20,7 @@
  * /citizen/feedback stub) but submission is disabled with a plain-language notice
  * instead of silently failing.
  */
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { Button, PageHeader } from "../../../../_components/ds";
 
@@ -90,6 +91,7 @@ function StarRating({
 const RATING_LABELS = ["Poor", "Fair", "Good", "Very Good", "Excellent"];
 
 export default function CitizenFeedbackPage() {
+  const t = useTranslations("crmCitizenFeedback");
   const [rating, setRating] = useState(0);
 
   /**
@@ -106,7 +108,7 @@ export default function CitizenFeedbackPage() {
     <>
       <PageHeader
         title="Citizen Feedback"
-        subtitle="Rate the service and share your experience. Your response is confidential."
+        subtitle={t("subtitle")}
         back="/crm/voice-of-customer"
         backLabel="Voice of Citizen"
       />
@@ -212,38 +214,33 @@ export default function CitizenFeedbackPage() {
             </div>
           </div>
 
-          {/* DPDP consent */}
-          <label
+          {/* DPDP notice (not a consent control).
+             GAP-CRM-VOICE-OF-CUSTOMER-FEEDBACK-01/-03: this used to be a
+             *required* consent checkbox. Collecting (or appearing to collect)
+             consent for data that is then discarded is itself a DPDP-notice
+             risk — a respondent would reasonably believe their feedback and
+             consent were recorded when nothing is stored at all. Until the
+             ingestion backend exists (endpoint + storage + audit + a real,
+             versioned consent record), there is no consent to take, so this is
+             a plain notice of the terms that WILL apply once submission is
+             switched on — never a checkbox that implies agreement now. */}
+          <div
+            role="note"
+            aria-label={t("noticeAria")}
             style={{
               display: "flex",
               alignItems: "flex-start",
               gap: 8,
               fontSize: 13,
               color: "var(--mut)",
-              cursor: "pointer",
               lineHeight: 1.5,
             }}
           >
-            <input
-              type="checkbox"
-              name="dpdpConsent"
-              required
-              style={{ marginTop: 2, flexShrink: 0 }}
-            />
+            <span aria-hidden="true">🛡</span>
             <span>
-              I consent to the collection and processing of my feedback data in
-              accordance with the{" "}
-              <strong>Digital Personal Data Protection Act, 2023 (DPDP Act)</strong>.
-              This data will be used solely to improve public service delivery and
-              will not be shared with third parties without further consent.{" "}
-              <span
-                aria-hidden="true"
-                style={{ color: "var(--bad)", fontWeight: 600 }}
-              >
-                *
-              </span>
+              {t.rich("notice", { strong: (chunks) => <strong>{chunks}</strong> })}
             </span>
-          </label>
+          </div>
 
           <div
             style={{

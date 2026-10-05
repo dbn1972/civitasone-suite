@@ -12146,5 +12146,507 @@
       "clearanceUnavailable": "The clearance check is temporarily unavailable, so the download cannot be confirmed right now. Try again in a moment.",
       "variantUnavailable": "This version of the document is not available."
     }
+  },
+  "crmContactEdit": {
+    "piiHiddenHint": "Hidden for your role. Leave blank to keep the current value, or type a new one to replace it."
+  },
+  "crmAccountDetail": {
+    "notFoundTitle": "Account not found",
+    "notFoundMessage": "This account does not exist or is no longer active.",
+    "unavailableTitle": "Account detail unavailable",
+    "unavailableMessage": "This account exists but could not be loaded here yet. Open it from the Accounts list."
+  },
+  "crmAccountHealth": {
+    "title": "Account Health",
+    "subtitle": "Accounts scored at risk or critical, ordered by urgency.",
+    "allAccounts": "All Accounts",
+    "loadErrorWhat": "Account health could not be loaded.",
+    "loadErrorNext": "Retry, or open All Accounts to review accounts directly."
+  },
+  "crmAccountHealthDetail": {
+    "titleWithId": "Account health · {id}"
+  },
+  "crmActivityTypes": {
+    "call": "Call",
+    "meeting": "Meeting",
+    "email": "Email",
+    "task": "Task",
+    "note": "Note",
+    "appointment": "Appointment",
+    "reminder": "Reminder",
+    "complaint": "Complaint"
+  },
+  "crmAssignmentRulesEditor": {
+    "criteriaNotObject": "Criteria must be a JSON object, e.g. {example}.",
+    "criteriaInvalidFallback": "Invalid criteria for this strategy.",
+    "unnamed": "(unnamed)",
+    "ruleCriteriaError": "Rule “{name}” — {error}",
+    "ruleNeedsNameOrder": "Rule “{name}” needs a name and a whole-number order."
+  },
+  "crmCampaignDetail": {
+    "performanceTitle": "Campaign Performance",
+    "subtitleNamed": "Campaign {id} · {currency}"
+  },
+  "crmCampaignRoiTable": {
+    "unnamedCampaign": "Unnamed campaign",
+    "colCampaign": "Campaign",
+    "filterPlaceholder": "Filter by campaign name"
+  },
+  "crmCitizenFeedback": {
+    "subtitle": "Preview of the citizen feedback form. Submission is not yet connected, so nothing entered here is collected or stored.",
+    "noticeAria": "Data protection notice",
+    "notice": "When this form goes live, feedback will be collected and processed under the <strong>Digital Personal Data Protection Act, 2023 (DPDP Act)</strong> solely to improve public service delivery, and you will be asked to give consent at that point. Because submission is not connected yet, no consent is taken and nothing you type here is collected or stored."
+  },
+  "crmContactToolbar": {
+    "exportFiltered": "Export filtered",
+    "exportAll": "Export all contacts",
+    "confirmTitleFiltered": "Export the filtered contacts?",
+    "confirmTitleAll": "Export all contacts?",
+    "confirmDescription": "This downloads contact personal data (name, phone, email). The export is logged against your account and the purpose you give below.",
+    "confirmLabel": "Export CSV",
+    "reasonLabel": "Purpose of this export"
+  },
+  "crmContactsImport": {
+    "noValidRows": "No valid rows to import.",
+    "subtitle": "Bulk load — CSV columns: name, email, phone, company, leadStatus, marketingConsent. Rows with an invalid email, phone or lead status are rejected; marketing consent defaults to No when the column is blank.",
+    "csvData": "CSV data",
+    "downloadTemplate": "Download template",
+    "readySummary": "{valid, plural, one {# valid row} other {# valid rows}} ready{rejected, plural, =0 {} one { · # row rejected} other { · # rows rejected}}.",
+    "duplicatesFound": "{count, plural, one {# possible duplicate} other {# possible duplicates}} already in the registry.",
+    "matchedLine": "{name} — matches on {fields}",
+    "importAnyway": "Import anyway (I have reviewed the possible duplicates).",
+    "importing": "Importing…",
+    "checking": "Checking for duplicates…",
+    "importButton": "Import {count, plural, one {# contact} other {# contacts}}",
+    "rejectedHeading": "Rejected rows ({count})",
+    "colLine": "Line",
+    "colReason": "Reason",
+    "colMarketingConsent": "Marketing Consent",
+    "yes": "Yes",
+    "no": "No",
+    "confirmTitle": "Import {count, plural, one {# contact} other {# contacts}}?",
+    "confirmDescription": "{count, plural, one {# contact} other {# contacts}} will be created in this office's registry. This action is logged.",
+    "confirmLabel": "Import contacts"
+  },
+  "crmCustomFieldsManager": {
+    "sensitiveLabel": "Sensitive (mask on records)",
+    "sensitiveWarning": "⚠ This looks like a statutory identifier (Aadhaar, PAN, passport, bank account). Under DPDP its value must be masked and restricted — “Sensitive” has been pre-selected. Choose which roles may see it in the clear below.",
+    "visibleToRolesLegend": "Visible to roles (others see a masked value)",
+    "visibleToRolesGroupLabel": "Roles that may see the clear value",
+    "visibleToRole": "Visible to {role}"
+  },
+  "crmDataQualityView": {
+    "unnamedRecord": "Unnamed record"
+  },
+  "crmDealDetail": {
+    "steps": {
+      "prospecting": "Prospecting",
+      "proposal": "Proposal",
+      "negotiation": "Negotiation",
+      "closedWon": "Closed Won",
+      "closedLost": "Closed Lost",
+      "closed": "Closed"
+    },
+    "cues": {
+      "won": "Won",
+      "lost": "Lost"
+    }
+  },
+  "crmDedupRulesEditor": {
+    "invalidNumbers": "Weight and threshold must be whole numbers from 0 to 100. Fix the highlighted rules before saving.",
+    "notLoaded": "Rules could not be loaded, so they cannot be saved yet. Retry the load first.",
+    "heading": "Matching rules",
+    "confirmEmptyTitle": "Save with no matching rules?",
+    "confirmEmptyDescription": "This clears every deduplication rule for the office. Duplicate detection will stop until new rules are added. This cannot be undone.",
+    "confirmEmptyConfirm": "Clear all rules"
+  },
+  "crmEditContactForm": {
+    "leadStatus": "Lead status",
+    "changeStatus": "Change status"
+  },
+  "crmFollowUpModal": {
+    "defaultSubject": "Account health follow-up — {account}"
+  },
+  "crmGrievanceActions": {
+    "conflict": "This grievance was changed by someone else. The latest version has been loaded — review it and try again."
+  },
+  "crmGrievancesList": {
+    "showing": "Showing {from}–{to} of {total}",
+    "pagesAriaLabel": "Grievance register pages",
+    "previous": "← Previous",
+    "next": "Next →",
+    "pageOf": "Page {page} of {pages}"
+  },
+  "crmKanbanBoard": {
+    "loadErrorTitle": "Pipeline couldn't be loaded",
+    "loadErrorMessage": "This is usually temporary. Refresh to try again — we won't show an empty board as if there were no deals.",
+    "retry": "Retry",
+    "moveTitle": "Move “{name}” to {stage}?",
+    "moveDescription": "This changes the engagement's stage to <strong>{stage}</strong>.",
+    "replaceProbability": "Replace this deal's likelihood ({current}%) with the stage default ({stageDefault}%)",
+    "moveConfirm": "Move",
+    "moveCancelled": "Move cancelled."
+  },
+  "crmLeadAssignmentControl": {
+    "chooseAssignOwner": "Choose the owner to assign this lead to.",
+    "chooseTransferOwner": "Choose the owner to transfer this lead to.",
+    "assignedTo": "Lead assigned to {name}.",
+    "transferredTo": "Ownership transferred to {name}.",
+    "assignTitleOwner": "Assign lead to {name}?",
+    "assignTitleRules": "Assign this lead by rules?",
+    "transferTitle": "Transfer ownership to {name}?",
+    "owner": "Owner",
+    "assignOwnerAria": "Owner to assign this lead to",
+    "transferToOwner": "Transfer to owner",
+    "transferOwnerAria": "Owner to transfer this lead to"
+  },
+  "crmLeadFormEditor": {
+    "checkFields": "Check the highlighted fields.",
+    "editTitle": "Edit “{name}”",
+    "registerTitle": "Register a lead-capture form",
+    "editHint": "Amend the policy for this public form. The public key is unchanged.",
+    "registerHint": "Registering mints a public key that landing pages POST to. Require consent to keep marketing capture lawful (DPDP).",
+    "name": "Name",
+    "namePlaceholder": "Contact us — homepage",
+    "origins": "Allowed origins (one per line; blank = any)",
+    "defaultSource": "Default lead source",
+    "maxPerMinute": "Max submissions / minute",
+    "requireConsentAria": "Require consent",
+    "requireConsentLabel": "Require explicit consent on every submission (recommended — keeps marketing capture lawful)",
+    "cancel": "Cancel",
+    "saving": "Saving…",
+    "saveForm": "Save form",
+    "registerForm": "Register form"
+  },
+  "crmLeadFormsTable": {
+    "saved": "Form saved.",
+    "paused": "Form paused.",
+    "resumed": "Form resumed.",
+    "consentFixed": "Consent is now required — the form is lawful.",
+    "registerForm": "Register form",
+    "registered": "Form registered. Its public submit URL is <code>{path}</code> — embed this on your landing page.",
+    "colForm": "Form",
+    "colStatus": "Status",
+    "colSubmitUrl": "Public submit URL",
+    "colOrigins": "Allowed origins",
+    "colSource": "Default source",
+    "colRate": "Rate limit",
+    "colActions": "Actions",
+    "edit": "Edit",
+    "pause": "Pause",
+    "enable": "Enable",
+    "fixConsent": "Fix consent",
+    "emptyTitle": "No website forms registered",
+    "emptyMessage": "Register a lead-capture form to mint a public key that landing pages can POST to.",
+    "confirmTitle": "Require consent on “{name}”?",
+    "confirmDescription": "This form currently accepts submissions without explicit consent, which is an unlawful-capture risk under DPDP. Requiring consent makes it lawful; submissions without consent will be refused.",
+    "confirmLabel": "Require consent"
+  },
+  "crmLeadScoreRulesEditor": {
+    "heading": "Scoring rules"
+  },
+  "crmLinkedAccountsPanel": {
+    "ownershipNotice": "Typing an email address only records your request to connect it — it does <strong>not</strong> prove you own that mailbox or calendar. Nothing will ever sync into CRM until the provider verifies ownership through its own consent (sign-in / OAuth) step, which keeps someone else’s inbox from being linked by mistake (Digital Personal Data Protection Act, 2023)."
+  },
+  "crmOnboardingList": {
+    "colCustomerDeal": "Customer / Deal",
+    "unnamedCase": "Unnamed case",
+    "ref": "Ref {id}"
+  },
+  "crmOpportunityForm": {
+    "saved": "Opportunity “{name}” saved.",
+    "created": "Opportunity “{name}” created.",
+    "accountLabel": "Account (optional)",
+    "accountAria": "Account",
+    "accountPlaceholder": "Search accounts…",
+    "accountHint": "Link this opportunity to an account so it appears in account-level views.",
+    "saving": "Saving…",
+    "createdStatus": "Created",
+    "saveOpportunity": "Save opportunity",
+    "createOpportunity": "Create opportunity",
+    "createAnother": "Create another"
+  },
+  "crmOpportunityViews": {
+    "close": "Close…"
+  },
+  "crmOverdueTaskAlerts": {
+    "ownerUnavailable": "Assigned (name unavailable)",
+    "emptyTitle": "Nothing overdue",
+    "emptyMessage": "No open tasks are past their due time.",
+    "colTask": "Task",
+    "taskFallback": "Task",
+    "colDue": "Due",
+    "colOverdueBy": "Overdue by",
+    "colOwner": "Owner"
+  },
+  "crmOwnerPicker": {
+    "onLeave": "On leave",
+    "searchPlaceholder": "Search by name…"
+  },
+  "crmPeriodFilter": {
+    "ariaLabel": "Reporting period",
+    "period": "Period",
+    "preset": {
+      "days7": "7 days",
+      "days30": "30 days",
+      "days90": "90 days",
+      "all": "All",
+      "custom": "Custom"
+    }
+  },
+  "crmPipelineEditor": {
+    "removeStageHint": "Removing a stage that still has open deals will be refused on save until those deals are moved.",
+    "deleteDescription": "Opportunities can no longer use this pipeline. If any open deals still sit in it, the delete will be refused and you’ll be told how many — move or close those deals first. This cannot be undone."
+  },
+  "crmPriceBookEditor": {
+    "lastChangedAria": "Last changed for {name}",
+    "lastChangedByOn": "Last changed by {by} on {date} (IST)",
+    "lastChangedBy": "Last changed by {by}",
+    "lastChangedOn": "Last changed on {date} (IST)",
+    "editReasonLabel": "Why are you changing this live price book?",
+    "editTitle": "Edit the live price book “{name}”?",
+    "editDescription": "This book is live. Changing a price here changes the price every quotation built afterwards resolves — quotations already captured keep their saved price. A new version is recorded with your name against this change.",
+    "editConfirm": "Edit prices"
+  },
+  "crmProductCatalogueEditor": {
+    "colLastChanged": "Last changed",
+    "lastChangedAria": "Last changed for product {n}",
+    "unknownUser": "Unknown",
+    "deleteWarning": "This product may be referenced by existing quotations and price books. Deleting it can leave those documents pointing at a product that no longer exists, and it cannot be undone.",
+    "deletePrefer": "Prefer turning the product <em>Off</em> (unticking Enabled) instead — that stops it being quoted while keeping it on existing documents.",
+    "deleteAnyway": "Delete anyway"
+  },
+  "crmQualificationFrameworksEditor": {
+    "colQuestion": "Question",
+    "colWeight": "Weight",
+    "colShare": "Share",
+    "colActions": "Actions",
+    "questionTextLabel": "Question {n} text",
+    "questionWeightLabel": "Question {n} weight",
+    "questionShareAria": "Question {n} share",
+    "removeQuestionAria": "Remove question {n}",
+    "remove": "Remove",
+    "totalWeight": "Total weight",
+    "weightsRelative": "Weights are relative; total {total}",
+    "totalWeightValueAria": "Total weight value",
+    "zeroTotalWarning": "Total weight is 0 — no question can influence whether a lead qualifies. Give at least one question a weight."
+  },
+  "crmQuotationApprovalPanel": {
+    "rejected": "Approval rejected.",
+    "rejectedNotice": "A request was rejected. Revise the quotation and raise a new approval before sending.",
+    "statusRejected": "Rejected",
+    "statusPending": "Pending",
+    "approve": "Approve",
+    "reject": "Reject",
+    "awaitingOther": "Awaiting another approver (you raised this)",
+    "awaitingApprover": "Awaiting an approver",
+    "rejectReasonLabel": "Reason for rejection",
+    "rejectTitle": "Reject this approval request?",
+    "rejectDescription": "The discount / deviation request will be marked rejected. The requester can raise a new request if needed. This is recorded in the audit trail.",
+    "rejectConfirm": "Reject request"
+  },
+  "crmQuotationBuilder": {
+    "colQuoteRef": "Quote ref",
+    "colAccount": "Account",
+    "colOpportunity": "Opportunity",
+    "colCreated": "Created",
+    "opportunityLabel": "Opportunity (deal) id",
+    "opportunityAria": "Opportunity id",
+    "opportunityPlaceholder": "Link to a deal so the quote isn't orphaned",
+    "accountLabel": "Account id (optional)",
+    "accountAria": "Account id",
+    "accountPlaceholder": "Customer account",
+    "linkHint": "Linking an opportunity ties this quotation to a customer so two “standard v1” quotes aren’t indistinguishable.",
+    "refLine": "Ref <strong>{ref}</strong>.",
+    "accountLine": "Account {id}.",
+    "opportunityLine": "Opportunity {id}."
+  },
+  "crmReasonCodesEditor": {
+    "heading": "Reason codes"
+  },
+  "crmRtiActions": {
+    "noPermission": "You do not have permission to act on RTI requests.",
+    "disposedOn": "This RTI request is disposed (on {date}). It is a closed, read-only record.",
+    "disposed": "This RTI request is disposed. It is a closed, read-only record.",
+    "faaOrderRecorded": "The First Appellate Authority's order was recorded on {date}. The applicant may file a second appeal with the Information Commission under s.19(3), or the request can be disposed.",
+    "faaPending": "A first appeal is decided by the First Appellate Authority (FAA) under s.19(1) of the RTI Act.",
+    "secondAppealInfo": "A second appeal lies with the Information Commission (CIC/SIC) under s.19(3). Dispose of the request once the Commission has decided.",
+    "needsAdmin": "Recording the FAA decision or disposing the request needs a CRM administrator.",
+    "decisionDue": "First-appeal decision due: {date}",
+    "recordFaaDecision": "Record FAA decision",
+    "recordFaaConfirmTitle": "Record the First Appellate Authority's decision?",
+    "recordFaaConfirmBody": "The order becomes part of the statutory record and can be recorded only once.",
+    "outcomeLabel": "Outcome",
+    "outcomeAllowed": "Appeal allowed",
+    "outcomePartlyAllowed": "Appeal partly allowed",
+    "outcomeDismissed": "Appeal dismissed",
+    "appellateOrderLabel": "Text of the appellate order",
+    "recordSecondAppeal": "Record second appeal",
+    "secondAppealConfirmTitle": "Record a second appeal to the Information Commission?",
+    "secondAppealConfirmBody": "Use this when the applicant has filed a second appeal under s.19(3) — against the FAA's order, or because no order was made in time. Enter the Commission's case / diary number.",
+    "commissionRefLabel": "Commission reference",
+    "dispose": "Dispose",
+    "disposeConfirmTitle": "Dispose of this RTI request?",
+    "disposeConfirmBody": "Closes the request. A disposed RTI is a read-only statutory record and cannot be reopened here. State why it is being closed (e.g. information furnished as ordered, appeal withdrawn).",
+    "disposeReasonLabel": "Reason for disposal",
+    "noFurtherAction": "No further action is available here for this status.",
+    "forward": "Forward",
+    "forwardConfirmTitle": "Forward this RTI request?",
+    "forwardConfirmBody": "Transfers the request to another department under s.6(3) of the RTI Act. The statutory response clock does not reset.",
+    "forwardReasonLabel": "Department / Office",
+    "respond": "Respond",
+    "respondConfirmTitle": "Record the response to this RTI request?",
+    "respondConfirmBody": "Records the CPIO's response to the applicant. Make sure this is submitted within the 30-day statutory deadline. Review the wording below before sending — it becomes part of the statutory record.",
+    "respondReasonLabel": "Response to applicant",
+    "firstAppeal": "First Appeal",
+    "firstAppealConfirmTitle": "Raise a first appeal?",
+    "firstAppealConfirmBody": "Escalates this request to first appeal under s.19 of the RTI Act. Only trigger this on the applicant's behalf."
+  },
+  "crmRtiDetail": {
+    "modeOnline": "Online / RTI portal",
+    "modePost": "By post",
+    "modeEmail": "Email",
+    "modeInPerson": "In person",
+    "modeByHand": "By hand",
+    "feeNotPaid": "Not paid",
+    "feePaid": "Paid",
+    "feePaidAmount": "Paid — {amount}",
+    "outcomeAllowed": "Appeal allowed",
+    "outcomePartlyAllowed": "Appeal partly allowed",
+    "outcomeDismissed": "Appeal dismissed",
+    "modeOfReceipt": "Mode of Receipt",
+    "appealDisposalTitle": "Appeal & Disposal",
+    "faaDecision": "FAA Decision",
+    "appellateOrder": "Appellate Order",
+    "secondAppeal": "Second Appeal",
+    "secondAppealRecorded": "{ref} — recorded {date}",
+    "disposed": "Disposed",
+    "disposalReason": "Disposal Reason",
+    "applicantDataNoticeLogged": "Personal data of the RTI applicant. Access is logged.",
+    "applicantDataNoticeMasked": "Personal data of the RTI applicant. Masked — you do not have permission to view the full contact."
+  },
+  "crmRtiFilters": {
+    "statusAll": "All statuses",
+    "statusReceived": "Received",
+    "statusTransferred": "Transferred",
+    "statusResponded": "Responded",
+    "statusRejected": "Rejected",
+    "statusFirstAppeal": "First Appeal",
+    "statusSecondAppeal": "Second Appeal",
+    "statusDisposed": "Disposed",
+    "sectionAll": "All sections",
+    "section6": "§6 — Information",
+    "section11": "§11 — Third-party",
+    "status": "Status",
+    "filterByStatus": "Filter by status",
+    "section": "Section",
+    "filterBySection": "Filter by section",
+    "search": "Search",
+    "searchAriaLabel": "Search reference, applicant or subject",
+    "searchPlaceholder": "Reference, applicant, subject…"
+  },
+  "crmRtiList": {
+    "showing": "Showing {from}–{to} of {total}",
+    "pagesAriaLabel": "RTI register pages",
+    "previous": "← Previous",
+    "next": "Next →",
+    "pageOf": "Page {page} of {pages}"
+  },
+  "crmRtiNew": {
+    "modeOnline": "Online / RTI portal",
+    "modePost": "By post",
+    "modeEmail": "Email",
+    "modeInPerson": "In person",
+    "modeByHand": "By hand",
+    "contactInvalid": "Enter a valid 10-digit Indian mobile number or an email address.",
+    "feeInvalid": "Enter a valid fee amount (up to 2 decimal places).",
+    "dateOfReceipt": "Date of Receipt",
+    "dateOfReceiptHint": "Leave blank to use today. The 30-day response deadline is counted from this date.",
+    "modeOfReceipt": "Mode of Receipt",
+    "selectMode": "Select mode…",
+    "dpdpNotice": "Personal data collected here is used only to process this request under the Right to Information Act 2005, and is retained and disclosed in line with the applicable record-retention schedule and the DPDP Act 2023. Access to applicant contact details is logged.",
+    "contactPlaceholder": "10-digit mobile or email"
+  },
+  "crmServiceRequestDetail": {
+    "resolvedOn": "Resolved {when}",
+    "waitingOn": "Waiting on",
+    "statusNote": "Status note",
+    "piiMasked": "Contact details are masked under the DPDP Act 2023. Ask a CRM administrator if you need to reach this citizen."
+  },
+  "crmServiceRequestNew": {
+    "contactRequired": "Enter a phone number or an email so the citizen can be contacted about this request.",
+    "dpdpNote": "Contact details are collected only to process and update this request (Digital Personal Data Protection Act, 2023). Provide at least one of phone or email so the citizen can be reached.",
+    "phone": "Phone",
+    "email": "Email",
+    "phoneOrEmailRequired": "(phone or email required)"
+  },
+  "crmServiceRequestsFilterBar": {
+    "searchAria": "Search service requests",
+    "searchPlaceholder": "Search reference, citizen, subject…",
+    "search": "Search",
+    "status": "Status",
+    "priority": "Priority",
+    "serviceType": "Service type",
+    "filterStatusAria": "Filter by status",
+    "filterPriorityAria": "Filter by priority",
+    "filterServiceTypeAria": "Filter by service type",
+    "all": "All",
+    "statusOption": {
+      "open": "open",
+      "in_progress": "in progress",
+      "pending": "pending",
+      "resolved": "resolved",
+      "closed": "closed",
+      "cancelled": "cancelled"
+    },
+    "priorityOption": {
+      "low": "low",
+      "normal": "normal",
+      "high": "high",
+      "urgent": "urgent"
+    }
+  },
+  "crmServiceRequestsTable": {
+    "exportTitle": "Export citizen service requests?",
+    "exportDescription": "This file includes citizen names (personal data under the DPDP Act 2023). Export only for a specific, lawful official purpose.",
+    "exportConfirm": "Export",
+    "emptyTitle": "No service requests found",
+    "emptyMessage": "No requests match the current filters. Clear a filter or log a new request.",
+    "noRequests": "No requests",
+    "showing": "Showing {first}–{last} of {total} • Page {page} of {pageCount}",
+    "prev": "← Prev",
+    "next": "Next →"
+  },
+  "crmStageAgeingDashboard": {
+    "limitInvalid": "A stage limit needs a pipeline, one of that pipeline's stages, and a whole number of days greater than zero.",
+    "colPipeline": "Pipeline",
+    "pipelineForLimit": "Pipeline for limit {n}",
+    "selectPipeline": "Select a pipeline…",
+    "selectStage": "Select a stage…",
+    "choosePipelineFirst": "Choose a pipeline first",
+    "orphanOption": "{stage} — not in pipeline",
+    "orphanAlert": "This stage is not in the selected pipeline. Pick a current stage or delete the limit."
+  },
+  "crmTaskEscalationEditor": {
+    "unknownUser": "Unknown user (no longer exists)",
+    "unknownRole": "Unknown role \"{role}\"",
+    "noManager": "No manager set",
+    "managerRoleAria": "Manager role for rule {n}",
+    "managerUserAria": "Manager user for rule {n}",
+    "noRole": "No role",
+    "noSpecificUser": "No specific user",
+    "escalates": "Escalates to <strong>{name}</strong>",
+    "escalatesMissing": "Escalates to <strong>{name}</strong> — fix this before it can escalate.",
+    "escalatesWithCount": "Escalates to <strong>{name}</strong> · {count, plural, one {{formatted} task currently overdue} other {{formatted} tasks currently overdue}}"
+  },
+  "crmVoiceOfCitizen": {
+    "windowRange": "Window: {from} to {to}",
+    "earliest": "earliest",
+    "today": "today",
+    "windowAll": "Window: all time",
+    "subtitle": "What citizens and stakeholders are saying — every logged interaction is scored for sentiment and grouped by theme • {window} • नागरिक प्रतिक्रिया",
+    "feedbackForm": "Feedback form",
+    "invalidPeriod": "That reporting period isn’t valid (the start date must be on or before the end date). Showing all activity instead.",
+    "partialWindowBody": "More interactions have been scored than this summary can scan in one pass, so the figures below cover the most recent activity only. Use the period control above to narrow the window and read an exact figure."
   }
 }

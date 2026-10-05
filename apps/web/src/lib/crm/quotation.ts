@@ -75,6 +75,9 @@ export interface Product {
   activeFrom: string;
   activeTo: string;
   enabled: boolean;
+  /** Audit: who last changed this product and when, when the API returns them. */
+  updatedBy?: string;
+  updatedAt?: string;
 }
 
 export function normaliseProduct(raw: unknown): Product | null {
@@ -96,6 +99,8 @@ export function normaliseProduct(raw: unknown): Product | null {
     activeFrom: str(r.activeFrom),
     activeTo: str(r.activeTo),
     enabled: bool(r.enabled, true),
+    updatedBy: str(r.updatedBy) || undefined,
+    updatedAt: str(r.updatedAt) || undefined,
   };
 }
 
@@ -157,6 +162,14 @@ export interface PriceBook {
   channel: string;
   entries: PriceBookEntry[];
   enabled: boolean;
+  /**
+   * Change-tracking surfaced for pricing integrity (GAP-CRM-PRICE-BOOKS-01):
+   * version bumps on every save; updatedBy/updatedAt record who last changed a
+   * price and when. Present whenever the API returns them.
+   */
+  version?: number;
+  updatedBy?: string;
+  updatedAt?: string;
 }
 
 export function normalisePriceBookEntry(raw: unknown): PriceBookEntry | null {
@@ -189,6 +202,9 @@ export function normalisePriceBook(raw: unknown): PriceBook | null {
       .map(normalisePriceBookEntry)
       .filter((e): e is PriceBookEntry => e !== null),
     enabled: bool(r.enabled, true),
+    ...(r.version !== undefined ? { version: num(r.version) } : {}),
+    ...(str(r.updatedBy) ? { updatedBy: str(r.updatedBy) } : {}),
+    ...(str(r.updatedAt) ? { updatedAt: str(r.updatedAt) } : {}),
   };
 }
 
@@ -278,6 +294,8 @@ export interface Quotation {
   version: number;
   status: QuoteStatus;
   lines: QuotationLine[];
+  /** When this quotation (version) was created, for list display. */
+  createdAt?: string;
   /** Whether an unapproved discount/deviation is blocking send (QP-004). */
   approvalRequired?: boolean;
   approvalStatus?: string;
@@ -323,6 +341,7 @@ export function normaliseQuotation(raw: unknown): Quotation | null {
     lines: toArray(r, "lines", "lineItems")
       .map(normaliseLine)
       .filter((l): l is QuotationLine => l !== null),
+    createdAt: str(r.createdAt) || undefined,
     approvalRequired: bool(r.approvalRequired),
     approvalStatus: str(r.approvalStatus) || undefined,
   };
@@ -524,13 +543,20 @@ export interface ApprovalRequest {
   amountBps?: number;
   reason: string;
   status: string;
+  /**
+   * The user id (ctx.actorId) that raised the request. Used for UI-side
+   * maker-checker: an approver must not be offered Approve on their own
+   * request. The server (quotation-approval-routes.ts decide) is the
+   * authority on both role and — once added — maker!=checker.
+   */
+  requestedBy?: string;
 }
 
 export function normaliseApproval(raw: unknown): ApprovalRequest | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
   const quotationId = str(r.quotationId);
-  const type = str(r.type);
+  const type = str(r.type ?? r.approvalType);
   if (!(APPROVAL_TYPES as readonly string[]).includes(type)) return null;
   return {
     id: typeof r.id === "string" ? r.id : undefined,
@@ -539,6 +565,7 @@ export function normaliseApproval(raw: unknown): ApprovalRequest | null {
     amountBps: r.amountBps !== undefined ? num(r.amountBps) : undefined,
     reason: str(r.reason),
     status: str(r.status) || "pending",
+    requestedBy: str(r.requestedBy ?? r.requestedById ?? r.createdBy) || undefined,
   };
 }
 

@@ -22,6 +22,7 @@ import {
   type DedupContactSnapshot,
   type DedupSource,
 } from "@/lib/crm/dedupCandidates";
+import { maskEmail, maskPhone } from "@/app/_components/ds";
 
 // ─── Confidence badge ─────────────────────────────────────────────────────────
 
@@ -69,6 +70,14 @@ function fmt(key: keyof DedupContactSnapshot, v: string | null | undefined): str
       return v;
     }
   }
+  // DPDP data minimisation (GAP-CRM-DEDUP-CANDIDATES-01): a duplicate reviewer
+  // only needs enough of the contact PII to recognise a match, not the full
+  // email/phone of both people side by side. Mask these by default; name and
+  // company stay clear so the pair is still recognisable. A role-gated,
+  // server-audited reveal is a backend-dependent follow-up (the dedup-candidates
+  // endpoint and an audit sink do not exist yet — see dedupCandidates.ts).
+  if (key === "email") return maskEmail(v);
+  if (key === "phone") return maskPhone(v);
   return v;
 }
 

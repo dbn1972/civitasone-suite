@@ -148,6 +148,55 @@ describe("OP-003 stage-gate enforcement", () => {
   });
 });
 
+describe("GAP-CRM-OPPORTUNITIES-01 terminal-stage guard on PATCH /stage", () => {
+  it("rejects moving an OPEN deal into Won via plain stage change (422 USE_CLOSE_ENDPOINT) and leaves it open", async () => {
+    const app = await buildApp();
+    const create = await app.inject({
+      method: "POST", url: "/v1/crm/deals", headers: headers(),
+      payload: { name: "Try To Win By Drag", pipelineId: PIPE_ID, stage: "Negotiation", stageId: STAGE_NEG, valueMinor: 300000, product: "CloudSuite", nextStep: "Final" },
+    });
+    expect(create.statusCode).toBe(202);
+    const dealId = create.json().id;
+    await drainQueue();
+
+    const move = await app.inject({
+      method: "PATCH", url: `/v1/crm/deals/${dealId}/stage`, headers: headers(),
+      payload: { stage: "Won", stageId: STAGE_WON, version: 1 },
+    });
+    expect(move.statusCode).toBe(422);
+    expect(move.json().code).toBe("USE_CLOSE_ENDPOINT");
+
+    await drainQueue();
+    const rows = await scoped((tx) => tx<Array<{ stage: string; status: string }>>`
+      SELECT stage, status FROM crm.deals WHERE id = ${dealId} AND tenant_id = ${TENANT}`);
+    await app.close();
+    expect(rows[0]!.stage).toBe("Negotiation");
+    expect(rows[0]!.status).toBe("active");
+  });
+
+  it("still allows closing that same deal as won through the governed /close flow (202)", async () => {
+    const app = await buildApp();
+    const create = await app.inject({
+      method: "POST", url: "/v1/crm/deals", headers: headers(),
+      payload: { name: "Win By Close", pipelineId: PIPE_ID, stage: "Negotiation", stageId: STAGE_NEG, valueMinor: 300000, product: "CloudSuite", nextStep: "Final" },
+    });
+    const dealId = create.json().id;
+    await drainQueue();
+
+    const close = await app.inject({
+      method: "POST", url: `/v1/crm/deals/${dealId}/close`, headers: headers(),
+      payload: { outcome: "won", reason: "" },
+    });
+    expect(close.statusCode).toBe(202);
+    await drainQueue();
+    const rows = await scoped((tx) => tx<Array<{ stage: string; status: string }>>`
+      SELECT stage, status FROM crm.deals WHERE id = ${dealId} AND tenant_id = ${TENANT}`);
+    await app.close();
+    expect(rows[0]!.stage).toBe("Won");
+    expect(rows[0]!.status).toBe("won");
+  });
+});
+
 describe("OP-005 stage-limits config + ageing dashboard", () => {
   const AGED = "eeeeeeee-2222-4000-8000-000000000001";
   it("configures a limit, flags an over-limit deal, then clears it on delete", async () => {
@@ -295,6 +344,84 @@ describe("OP-006 extended closure", () => {
     expect(rows[0]!.stage).toBe("Lost");
     expect(rows[0]!.closeOutcome).toBe("lost");
     expect(rows[0]!.closeCompetitor).toEqual(["RivalCorp"]);
+  });
+});
+
+describe("GAP-CRM-PIPELINES-01 referential guards on pipeline delete / stage removal", () => {
+  const RP_ID = "bbbbbbbb-2222-4000-8000-0000000000f1";
+  const RP_ALPHA = "dddddddd-2222-4000-8000-0000000000f1";
+  const RP_BETA = "dddddddd-2222-4000-8000-0000000000f2";
+  const RP_WON = "dddddddd-2222-4000-8000-0000000000f3";
+
+  beforeAll(async () => {
+    // A dedicated pipeline with three stages and five OPEN deals parked on Alpha.
+    await scoped((tx) => tx`
+      INSERT INTO crm.pipelines (id, tenant_id, name, stages, status, created_by, updated_by)
+      VALUES (${RP_ID}, ${TENANT}, 'Referential', ${JSON.stringify([
+        { id: RP_ALPHA, name: "Alpha", probability: 10, ordinal: 0 },
+        { id: RP_BETA, name: "Beta", probability: 50, ordinal: 1 },
+        { id: RP_WON, name: "Won", probability: 100, ordinal: 2 },
+      ])}::jsonb, 'active', ${ACTOR}, ${ACTOR})
+      ON CONFLICT (id) DO NOTHING`.then(() => 0));
+    for (let i = 0; i < 5; i++) {
+      await scoped((tx) => tx`
+        INSERT INTO crm.deals (id, tenant_id, pipeline_id, stage_id, name, stage, value_minor, currency, status, stage_entered_at, created_by, updated_by, version)
+        VALUES (${`fafafafa-2222-4000-8000-00000000000${i + 1}`}, ${TENANT}, ${RP_ID}, ${RP_ALPHA}, ${`Ref Deal ${i}`}, 'Alpha', 100000, 'INR', 'active', now(), ${ACTOR}, ${ACTOR}, 1)
+        ON CONFLICT (id) DO NOTHING`.then(() => 0));
+    }
+  });
+
+  it("DELETE a pipeline with open deals is refused (409 PIPELINE_IN_USE) and the pipeline survives", async () => {
+    const app = await buildApp();
+    const del = await app.inject({ method: "DELETE", url: `/v1/crm/pipelines/${RP_ID}`, headers: headers() });
+    expect(del.statusCode).toBe(409);
+    expect(del.json().code).toBe("PIPELINE_IN_USE");
+    // Message carries the count (5) so the UI can show it.
+    expect(del.json().message).toMatch(/5/);
+
+    // The pipeline is still there (never soft-deleted).
+    const get = await app.inject({ method: "GET", url: `/v1/crm/pipelines/${RP_ID}`, headers: headers(["crm_user"]) });
+    await app.close();
+    expect(get.statusCode).toBe(200);
+  });
+
+  it("PATCH removing a populated stage is refused (409 STAGE_IN_USE)", async () => {
+    const app = await buildApp();
+    // Drop "Alpha" (which holds the 5 deals), keep Beta + Won + a new one so the 3–10
+    // stage rule still passes.
+    const patch = await app.inject({
+      method: "PATCH", url: `/v1/crm/pipelines/${RP_ID}`, headers: headers(),
+      payload: {
+        version: 1,
+        stages: [
+          { id: RP_BETA, name: "Beta", probability: 50, ordinal: 0 },
+          { id: RP_WON, name: "Won", probability: 100, ordinal: 1 },
+          { id: "dddddddd-2222-4000-8000-0000000000f4", name: "Gamma", probability: 70, ordinal: 2 },
+        ],
+      },
+    });
+    await app.close();
+    expect(patch.statusCode).toBe(409);
+    expect(patch.json().code).toBe("STAGE_IN_USE");
+    expect(patch.json().message).toMatch(/Alpha/);
+  });
+
+  it("PATCH that keeps all populated stages (adds one) is accepted (202)", async () => {
+    const app = await buildApp();
+    const patch = await app.inject({
+      method: "PATCH", url: `/v1/crm/pipelines/${RP_ID}`, headers: headers(),
+      payload: {
+        version: 1,
+        stages: [
+          { id: RP_ALPHA, name: "Alpha", probability: 10, ordinal: 0 },
+          { id: RP_BETA, name: "Beta", probability: 50, ordinal: 1 },
+          { id: RP_WON, name: "Won", probability: 100, ordinal: 2 },
+          { id: "dddddddd-2222-4000-8000-0000000000f5", name: "Delta", probability: 80, ordinal: 3 },
+        ],
+      },
+    });
+    await app.close();
+    expect(patch.statusCode).toBe(202);
   });
 });
 

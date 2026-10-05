@@ -86,4 +86,57 @@ describe("Deal detail page (getDealById regression)", () => {
 
     expect(screen.getByText("Deal not found")).toBeInTheDocument();
   });
+
+  // GAP-CRM-DEALS-DETAIL-01: a LOST deal must show the open path complete, 'Closed
+  // Lost' as the current step, and NEVER a 'Closed Won' entry — the old index-based
+  // list rendered both terminals and showed Won as "done" for a lost deal.
+  it("a lost deal shows Closed Lost as current with no Closed Won entry", async () => {
+    rawPayload.mockReturnValue({ ...RAW_DEAL, stage: "Lost", status: "lost", probability: 0 });
+
+    const ui = await DealDetailPage({ params: { id: RAW_DEAL.id } });
+    render(ui);
+
+    // No 'Closed Won' step must exist at all.
+    expect(screen.queryByText("Closed Won")).not.toBeInTheDocument();
+
+    const current = document.querySelector('li[aria-current="step"]');
+    expect(current).not.toBeNull();
+    expect(current).toHaveTextContent("Closed Lost");
+
+    // The open-path stages precede it and are marked done.
+    const steps = Array.from(document.querySelectorAll("ul.tl li"));
+    const labels = steps.map((li) => li.querySelector(".t")?.textContent ?? "");
+    expect(labels.some((l) => l.includes("Prospecting"))).toBe(true);
+    expect(labels.some((l) => l.includes("Proposal"))).toBe(true);
+    expect(labels.some((l) => l.includes("Negotiation"))).toBe(true);
+    const openSteps = steps.slice(0, 3);
+    for (const li of openSteps) expect(li).toHaveClass("done");
+  });
+
+  // Symmetrical: a WON deal shows Closed Won current and no Closed Lost entry.
+  it("a won deal shows Closed Won as current with no Closed Lost entry", async () => {
+    rawPayload.mockReturnValue({ ...RAW_DEAL, stage: "Won", status: "won", probability: 100 });
+
+    const ui = await DealDetailPage({ params: { id: RAW_DEAL.id } });
+    render(ui);
+
+    expect(screen.queryByText("Closed Lost")).not.toBeInTheDocument();
+    const current = document.querySelector('li[aria-current="step"]');
+    expect(current).toHaveTextContent("Closed Won");
+  });
+
+  // An open deal is unaffected: current step is the open stage, terminal is a neutral
+  // 'Closed' todo with neither Won nor Lost shown.
+  it("an open deal keeps its open stage current and shows a neutral Closed step", async () => {
+    rawPayload.mockReturnValue({ ...RAW_DEAL, stage: "Negotiation", status: "active" });
+
+    const ui = await DealDetailPage({ params: { id: RAW_DEAL.id } });
+    render(ui);
+
+    expect(screen.queryByText("Closed Won")).not.toBeInTheDocument();
+    expect(screen.queryByText("Closed Lost")).not.toBeInTheDocument();
+    expect(screen.getByText("Closed")).toBeInTheDocument();
+    const current = document.querySelector('li[aria-current="step"]');
+    expect(current).toHaveTextContent("Negotiation");
+  });
 });

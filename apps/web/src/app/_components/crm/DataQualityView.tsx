@@ -6,6 +6,7 @@
  * on a failed load we render "—" + DataSourceBadge, never a fabricated zero.
  */
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { StatGrid, StatCard, Card, Segmented, Tabs, EmptyState, ProgressBar } from "../ds";
 import {
@@ -41,6 +42,7 @@ function statValue(source: DqSource, value: number): string {
 }
 
 export function DataQualityView() {
+  const t = useTranslations("crmDataQualityView");
   const [entity, setEntity] = useState<DqEntity>("contacts");
   const [filter, setFilter] = useState<DqFilter>("missing");
   const [report, setReport] = useState<DataQualityReport | null>(null);
@@ -132,14 +134,19 @@ export function DataQualityView() {
             <thead>
               <tr>
                 <th>Record</th>
-                <th style={{ textAlign: "right" }}>Quality score</th>
+                <th style={{ textAlign: "end" }}>Quality score</th>
                 <th>Issues</th>
               </tr>
             </thead>
             <tbody>
               {records.map((r) => (
                 <tr key={r.id}>
-                  <td><a href={`${DETAIL_BASE[entity]}${r.id}`}>{r.id}</a></td>
+                  <td>
+                    <a href={`${DETAIL_BASE[entity]}${r.id}`} title={r.id}>
+                      {r.name ?? t("unnamedRecord")}
+                    </a>
+                    <div style={{ fontSize: 11, color: "var(--muted)" }}>{r.id}</div>
+                  </td>
                   <td className="num">{Math.round(r.score * 100)}%</td>
                   <td style={{ fontSize: 13 }}>{r.issues.length > 0 ? r.issues.join(", ") : "—"}</td>
                 </tr>

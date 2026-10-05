@@ -6,8 +6,11 @@
  * badge and never fabricate an empty rule set as fact.
  */
 import { useEffect, useId, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { EmptyState, Button } from "../ds";
+import { EmptyState, Button, ErrorState, ConfirmDialog } from "../ds";
+import { toHumanError } from "@/lib/messages";
+import { useFormError } from "@/lib/useFormError";
 import {
   getDedupRules,
   saveDedupRules,
@@ -51,11 +54,15 @@ function ruleNumbersValid(rule: DedupRule): boolean {
 }
 
 export function DedupRulesEditor() {
+  const t = useTranslations("crmDedupRulesEditor");
   const [rules, setRules] = useState<DedupRule[]>([]);
   const [source, setSource] = useState<DqSource | "loading">("loading");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const formError = useFormError("matching rules");
+  // Guards the destructive "save an empty rule set" path (GAP-CRM-DEDUP-RULES-01).
+  const [confirmEmpty, setConfirmEmpty] = useState(false);
   const headingId = useId();
 
   // Stable per-row React key, independent of array position -- see
@@ -104,22 +111,44 @@ export function DedupRulesEditor() {
     setRuleRowIds((ids) => ids.filter((_, i) => i !== idx));
   }
 
-  async function save() {
-    setMessage("");
-    setError("");
-    if (!rules.every(ruleNumbersValid)) {
-      setError("Weight and threshold must be whole numbers from 0 to 100. Fix the highlighted rules before saving.");
-      return;
-    }
+  async function doSave() {
     setBusy(true);
     try {
       await saveDedupRules(rules);
       setMessage("Matching rules saved.");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save the matching rules.");
+      setError(formError.fromException("save", e).message);
     } finally {
       setBusy(false);
     }
+  }
+
+  async function save() {
+    setMessage("");
+    setError("");
+    // Never PUT off a failed load: the current rule set is unknown, so saving
+    // would overwrite the tenant's live config with whatever is on screen
+    // (an empty array on an error load) — a silent wipe (GAP-CRM-DEDUP-RULES-01).
+    if (source !== "api") {
+      setError(t("notLoaded"));
+      return;
+    }
+    if (!rules.every(ruleNumbersValid)) {
+      setError(t("invalidNumbers"));
+      return;
+    }
+    // Saving an empty list clears every matching rule — require an explicit
+    // confirmation before wiping the tenant's deduplication config.
+    if (rules.length === 0) {
+      setConfirmEmpty(true);
+      return;
+    }
+    await doSave();
+  }
+
+  async function confirmEmptySave() {
+    setConfirmEmpty(false);
+    await doSave();
   }
 
   if (source === "loading") {
@@ -130,11 +159,27 @@ export function DedupRulesEditor() {
     );
   }
 
+  // A failed load must NOT fall through to the "No matching rules yet" empty
+  // state with an enabled Save button: saving from there PUTs an empty rule set
+  // and wipes the tenant's dedup config. Show a retry instead. RefreshErrorState
+  // only calls router.refresh(), which will not re-run this client fetch, so we
+  // use ErrorState with an explicit onRetry={load} (GAP-CRM-DEDUP-RULES-01).
+  if (source === "error") {
+    return (
+      <div className="card">
+        <div className="card-h">
+          <h3 id={headingId}>{t("heading")}</h3>
+          <DataSourceBadge source="error" />
+        </div>
+        <ErrorState error={toHumanError("load", { area: "matching rules" })} onRetry={() => void load()} />
+      </div>
+    );
+  }
+
   return (
     <div className="card">
       <div className="card-h">
         <h3 id={headingId}>Matching rules</h3>
-        {source === "error" ? <DataSourceBadge source="error" /> : null}
       </div>
       {message ? (
         <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", padding: "0 12px" }}>{message}</p>
@@ -155,8 +200,8 @@ export function DedupRulesEditor() {
             <tr>
               <th>Field</th>
               <th>Match type</th>
-              <th style={{ textAlign: "right" }}>Weight</th>
-              <th style={{ textAlign: "right" }}>Threshold</th>
+              <th style={{ textAlign: "end" }}>Weight</th>
+              <th style={{ textAlign: "end" }}>Threshold</th>
               <th>Enabled</th>
               <th><span className="sr-only">Actions</span></th>
             </tr>
@@ -194,7 +239,7 @@ export function DedupRulesEditor() {
                     value={Number.isFinite(rule.weight) ? rule.weight : ""}
                     aria-invalid={Number.isFinite(rule.weight) ? undefined : true}
                     onChange={(e) => update(idx, { weight: sanitizeNumber(e.target.value) })}
-                    style={{ width: 80, padding: 6, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)", textAlign: "right" }}
+                    style={{ width: 80, padding: 6, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)", textAlign: "end" }}
                   />
                 </td>
                 <td className="num">
@@ -205,7 +250,7 @@ export function DedupRulesEditor() {
                     value={Number.isFinite(rule.threshold) ? rule.threshold : ""}
                     aria-invalid={Number.isFinite(rule.threshold) ? undefined : true}
                     onChange={(e) => update(idx, { threshold: sanitizeNumber(e.target.value) })}
-                    style={{ width: 80, padding: 6, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)", textAlign: "right" }}
+                    style={{ width: 80, padding: 6, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)", textAlign: "end" }}
                   />
                 </td>
                 <td>
@@ -236,6 +281,17 @@ export function DedupRulesEditor() {
           {busy ? "Saving…" : "Save rules"}
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={confirmEmpty}
+        danger
+        title={t("confirmEmptyTitle")}
+        description={t("confirmEmptyDescription")}
+        confirmLabel={t("confirmEmptyConfirm")}
+        busy={busy}
+        onCancel={() => setConfirmEmpty(false)}
+        onConfirm={() => void confirmEmptySave()}
+      />
     </div>
   );
 }

@@ -1,22 +1,54 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
 import { getCrmGrievances } from "../../../_data/loaders";
 import { GrievancesTable } from "./GrievancesTable";
 
-type SP = { status?: string; priority?: string; search?: string };
+type SP = { status?: string; priority?: string; search?: string; page?: string };
+
+// Matches the loader default so the server pager and the API page size agree.
+const PAGE_SIZE = 50;
 
 export default async function GrievancesPage({ searchParams }: { searchParams?: SP }) {
   // The status/priority/search params used to be declared and then dropped on the
   // floor — the loader was called with no arguments, so a filtered URL returned
   // the unfiltered register. Filtering happens server-side because the API
   // paginates: narrowing client-side would only narrow the current page.
+  //
+  // GAP-CRM-GRIEVANCES-01: the API paginates at 50 rows/page but the page used
+  // to request only page 1 and never render a pager, so any register beyond 50
+  // grievances had unreachable records — overdue grievances could be silently
+  // hidden. The page is now server-driven: `page` is read from the URL, passed
+  // to the loader, and a Prev/Next pager under the table walks `data.total`.
+  const t = await getTranslations("crmGrievancesList");
+  const page = Math.max(1, Number(searchParams?.page) || 1);
   const { data, source } = await getCrmGrievances({
     ...(searchParams?.status ? { status: searchParams.status } : {}),
     ...(searchParams?.priority ? { priority: searchParams.priority } : {}),
     ...(searchParams?.search ? { search: searchParams.search } : {}),
+    page,
+    limit: PAGE_SIZE,
   });
 
   const rows = data.rows;
+  const total = data.total;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  // Clamp the displayed page to what the register actually has, so a URL with
+  // ?page=99 on a 2-page register still reports an honest window.
+  const currentPage = Math.min(page, pageCount);
+  const firstRow = total === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const lastRow = total === 0 ? 0 : firstRow + rows.length - 1;
+
+  // Preserve the active filters when moving between pages; only `page` changes.
+  const pageHref = (p: number): string => {
+    const qs = new URLSearchParams();
+    if (searchParams?.status) qs.set("status", searchParams.status);
+    if (searchParams?.priority) qs.set("priority", searchParams.priority);
+    if (searchParams?.search) qs.set("search", searchParams.search);
+    if (p > 1) qs.set("page", String(p));
+    const s = qs.toString();
+    return s ? `/crm/grievances?${s}` : "/crm/grievances";
+  };
 
   // Counts are derived from the page the API returned, so they describe the
   // current view, not the register. `total` is the only figure that comes from
@@ -56,7 +88,55 @@ export default async function GrievancesPage({ searchParams }: { searchParams?: 
         <StatCard icon="📋" iconBg="color-mix(in srgb, var(--ink2) 10%, transparent)" label="Total Grievances" value={stat(data.total)} />
       </StatGrid>
 
-      <GrievancesTable grievances={rows} source={source === "error" ? "error" : "api"} />
+      {/* GAP-CRM-GRIEVANCES-01: honest whole-register window. `total` is the
+          server figure; `firstRow`-`lastRow` describe the rows on this page. */}
+      {source !== "error" && total > 0 && (
+        <p style={{ fontSize: 13, color: "var(--ink2)", margin: "4px 0 8px" }}>
+          {t("showing", {
+            from: firstRow.toLocaleString("en-IN"),
+            to: lastRow.toLocaleString("en-IN"),
+            total: total.toLocaleString("en-IN"),
+          })}
+        </p>
+      )}
+
+      <GrievancesTable grievances={rows} source={source === "error" ? "error" : "api"} page={currentPage} pageSize={PAGE_SIZE} />
+
+      {/* Server-driven pager: the DataTable's own 15-row client pager only ever
+          saw the current API page (<=50 rows), so pages 51+ were unreachable.
+          These are plain links that re-run the server fetch for the next page,
+          preserving the active filters. */}
+      {source !== "error" && pageCount > 1 && (
+        <nav
+          aria-label={t("pagesAriaLabel")}
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, margin: "16px 0" }}
+        >
+          {currentPage > 1 ? (
+            <Link href={pageHref(currentPage - 1)} className="btn" rel="prev">
+              {t("previous")}
+            </Link>
+          ) : (
+            <span className="btn" aria-disabled="true" style={{ opacity: 0.5, pointerEvents: "none" }}>
+              {t("previous")}
+            </span>
+          )}
+          <span aria-live="polite" style={{ fontSize: 13, color: "var(--ink2)" }}>
+            {t("pageOf", {
+              page: currentPage.toLocaleString("en-IN"),
+              pages: pageCount.toLocaleString("en-IN"),
+            })}
+          </span>
+          {currentPage < pageCount ? (
+            <Link href={pageHref(currentPage + 1)} className="btn" rel="next">
+              {t("next")}
+            </Link>
+          ) : (
+            <span className="btn" aria-disabled="true" style={{ opacity: 0.5, pointerEvents: "none" }}>
+              {t("next")}
+            </span>
+          )}
+        </nav>
+      )}
     </>
   );
 }

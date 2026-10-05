@@ -1,6 +1,7 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { PageHeader, EmptyState, DataTable } from "../../../../_components/ds";
+import { PageHeader, EmptyState, DataTable, maskPhone, maskEmail } from "../../../../_components/ds";
 import { getContactById } from "../../../../_data/loaders";
+import { getSessionRoles, hasAnyRole, CRM_PII_READ_ROLES, CRM_VERIFY_ROLES } from "@/lib/auth/roleGuard";
 import { formatIndianDate } from "@/lib/formatters";
 import { ContactDetailActions } from "./ContactDetailActions";
 import { QualifyPanel } from "../../../../_components/crm/QualifyPanel";
@@ -29,6 +30,15 @@ export default async function Page({ params }: { params: { id: string } }) {
     );
   }
 
+  // GAP-CRM-CONTACTS-DETAIL-02: DPDP — mask phone/email unless the role may
+  // read PII. Computed server-side from the session.
+  const canViewPii = hasAnyRole(getSessionRoles(), CRM_PII_READ_ROLES);
+  // Document verify/reject is an approval control restricted to CRM admins
+  // (GAP-CRM-ACCOUNTS-DETAIL-02); the server stays the authority.
+  const canVerify = hasAnyRole(getSessionRoles(), CRM_VERIFY_ROLES);
+  const phoneDisplay = contact.phone ? (canViewPii ? contact.phone : maskPhone(contact.phone)) : null;
+  const emailDisplay = contact.email ? (canViewPii ? contact.email : maskEmail(contact.email)) : null;
+
   const classificationTags: Array<{ label: string; value: string }> = [
     ...(contact.temperature ? [{ label: "Temperature", value: contact.temperature }] : []),
     ...(contact.priority ? [{ label: "Priority", value: contact.priority }] : []),
@@ -55,15 +65,16 @@ export default async function Page({ params }: { params: { id: string } }) {
               <div className="fld"><div className="l">Name</div><div className="v">{contact.name}</div></div>
               {contact.designation && <div className="fld"><div className="l">Designation</div><div className="v">{contact.designation}</div></div>}
               {contact.organization && <div className="fld"><div className="l">Organisation</div><div className="v">{contact.organization}</div></div>}
-              {contact.phone && <div className="fld"><div className="l">Phone</div><div className="v">{contact.phone}</div></div>}
-              {contact.email && <div className="fld"><div className="l">Email</div><div className="v">{contact.email}</div></div>}
+              {phoneDisplay && <div className="fld"><div className="l">Phone</div><div className="v">{phoneDisplay}</div></div>}
+              {emailDisplay && <div className="fld"><div className="l">Email</div><div className="v">{emailDisplay}</div></div>}
               {contact.city && <div className="fld"><div className="l">City</div><div className="v">{contact.city}</div></div>}
               {contact.leadStatus && <div className="fld"><div className="l">Lead Status</div><div className="v">{contact.leadStatus}</div></div>}
               {contact.expectedValueDisplay && <div className="fld"><div className="l">Expected Value</div><div className="v">{contact.expectedValueDisplay}</div></div>}
               {contact.lastActivityDate && <div className="fld"><div className="l">Last Activity</div><div className="v">{formatIndianDate(contact.lastActivityDate)}</div></div>}
-              {contact.marketingConsent !== undefined && (
-                <div className="fld"><div className="l">Marketing Consent</div><div className="v">{contact.marketingConsent ? "Yes" : "No"}</div></div>
-              )}
+              {/* GAP-CRM-CONTACTS-DETAIL-02: the bare Yes/No marketing-consent
+                  row was removed — DPDP consent (with its captured date, and
+                  purpose/source once the backend sends them) is shown in the
+                  Customer360 consent block below, so this duplicate is dropped. */}
             </div>
           </div>
 
@@ -86,7 +97,7 @@ export default async function Page({ params }: { params: { id: string } }) {
           <AddressesEditor ownerType="contact" ownerId={contact.id} />
           <ContactRolesEditor contactId={contact.id} />
           <DocumentAlertsView subjectType="contact" subjectId={contact.id} />
-          <DocumentsPanel subjectType="contact" subjectId={contact.id} canVerify />
+          <DocumentsPanel subjectType="contact" subjectId={contact.id} canVerify={canVerify} />
 
           {contact.deals.length > 0 && (
             <div className="card">

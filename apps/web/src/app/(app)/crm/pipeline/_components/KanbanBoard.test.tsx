@@ -1,7 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { KanbanBoard } from "./KanbanBoard";
 import type { PipelineDealCard, PipelineView } from "../../../../_data/loaders";
+
+function render(ui: ReactElement) {
+  return rtlRender(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -103,6 +114,18 @@ describe("KanbanBoard", () => {
     expect(screen.getByText("Create Deal")).toBeInTheDocument();
   });
 
+  // GAP-CRM-PIPELINE-01: on a failed load with nothing cached, the board must NOT read
+  // as "No deals in pipeline / Create Deal" (which fabricates empty as fact) — it shows
+  // an error state with Retry instead.
+  it("shows an error state, not the empty 'No deals' state, when source='error' and no deals", () => {
+    render(<KanbanBoard pipeline={PIPELINE} deals={[]} source="error" />);
+
+    expect(screen.queryByText("No deals in pipeline")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Create Deal" })).not.toBeInTheDocument();
+    expect(screen.getByText(/couldn't be loaded/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
+  });
+
   it("uses default stages when pipeline is null", () => {
     render(<KanbanBoard pipeline={null} deals={DEALS} source="api" />);
 
@@ -140,6 +163,10 @@ describe("KanbanBoard", () => {
     await act(async () => {
       fireEvent.keyDown(card, { key: "ArrowRight" });
     });
+    // GAP-CRM-PIPELINE-02: the move is confirmed first — click Move to commit.
+    await act(async () => {
+      fireEvent.click(await screen.findByRole("button", { name: /^move$/i }));
+    });
 
     await waitFor(() => {
       expect(screen.getByRole("alert")).toBeInTheDocument();
@@ -160,6 +187,11 @@ describe("KanbanBoard", () => {
     const card = screen.getByRole("button", { name: /Enterprise License/i });
     await act(async () => {
       fireEvent.keyDown(card, { key: "ArrowRight" });
+    });
+    // No PATCH yet — the dialog is open and awaiting confirmation.
+    expect(global.fetch).not.toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.click(await screen.findByRole("button", { name: /^move$/i }));
     });
 
     await waitFor(() => {
@@ -190,6 +222,9 @@ describe("KanbanBoard", () => {
     await act(async () => {
       fireEvent.keyDown(card, { key: "ArrowRight" });
     });
+    await act(async () => {
+      fireEvent.click(await screen.findByRole("button", { name: /^move$/i }));
+    });
 
     await waitFor(() => {
       expect(screen.getByRole("alert")).toBeInTheDocument();
@@ -207,11 +242,85 @@ describe("KanbanBoard", () => {
     await act(async () => {
       fireEvent.keyDown(card, { key: "ArrowRight" });
     });
+    await act(async () => {
+      fireEvent.click(await screen.findByRole("button", { name: /^move$/i }));
+    });
 
     await waitFor(() => {
       expect(screen.getByRole("alert")).toBeInTheDocument();
       expect(screen.getByRole("alert").textContent).toContain("Network error");
     });
+  });
+
+  // GAP-CRM-PIPELINE-02: a move must open a confirm dialog and issue NO PATCH until the
+  // user confirms; cancelling leaves the card where it was.
+  it("opens a confirm dialog on move and issues no PATCH until confirmed", async () => {
+    const fetchSpy = vi.fn();
+    global.fetch = fetchSpy;
+
+    render(<KanbanBoard pipeline={PIPELINE} deals={DEALS} source="api" />);
+    const card = screen.getByRole("button", { name: /Enterprise License/i });
+    await act(async () => {
+      fireEvent.keyDown(card, { key: "ArrowRight" });
+    });
+
+    // Dialog is open, nothing sent.
+    expect(await screen.findByRole("button", { name: /^move$/i })).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    // Cancel leaves the card in place and still issues no PATCH.
+    fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+    expect(fetchSpy).not.toHaveBeenCalled();
+    // The card is still under the Lead column (unmoved).
+    const leadRegion = screen.getByRole("region", { name: /Lead stage/i });
+    expect(leadRegion.textContent).toContain("Enterprise License");
+  });
+
+  // A deal that already has its own probability (45) must keep it when moved to a stage
+  // with a different default (30) UNLESS the user ticks the "use stage default" box — so
+  // the PATCH omits `probability` by default.
+  it("does not overwrite a deal's probability with the stage default unless the user opts in", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+    global.fetch = fetchSpy;
+
+    const dealWithProb: PipelineDealCard[] = [
+      { ...DEALS[0], probability: 45 },
+    ];
+    render(<KanbanBoard pipeline={PIPELINE} deals={dealWithProb} source="api" />);
+    const card = screen.getByRole("button", { name: /Enterprise License/i });
+    await act(async () => {
+      fireEvent.keyDown(card, { key: "ArrowRight" }); // Lead(10) -> Proposal(30)
+    });
+    await act(async () => {
+      fireEvent.click(await screen.findByRole("button", { name: /^move$/i }));
+    });
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.stage).toBe("Proposal");
+    // probability is NOT sent — the deal keeps its own 45.
+    expect(body.probability).toBeUndefined();
+  });
+
+  it("sends the stage default probability when the user opts in", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+    global.fetch = fetchSpy;
+
+    const dealWithProb: PipelineDealCard[] = [{ ...DEALS[0], probability: 45 }];
+    render(<KanbanBoard pipeline={PIPELINE} deals={dealWithProb} source="api" />);
+    const card = screen.getByRole("button", { name: /Enterprise License/i });
+    await act(async () => {
+      fireEvent.keyDown(card, { key: "ArrowRight" }); // -> Proposal(30)
+    });
+    // Tick the "replace likelihood" checkbox, then confirm.
+    fireEvent.click(await screen.findByRole("checkbox"));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /^move$/i }));
+    });
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.probability).toBe(30);
   });
 
   it("stage columns display deal count and value", () => {

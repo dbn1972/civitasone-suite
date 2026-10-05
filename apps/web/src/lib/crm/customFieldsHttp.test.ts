@@ -110,6 +110,7 @@ describe("customFields HTTP client", () => {
     fetchMock.mockResolvedValueOnce(res({ accepted: true }, { status: 202 }));
     await cf.createCustomField({
       entityType: "deals", fieldName: "  Priority  ", fieldType: "select", required: true, options: ["Hi", ""], ordinal: 3,
+      sensitive: false, visibleToRoles: [],
     });
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/proxy/v1/crm/custom-fields");

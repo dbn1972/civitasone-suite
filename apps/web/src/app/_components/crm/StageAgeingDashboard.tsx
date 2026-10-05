@@ -7,16 +7,19 @@
  * saved-info badge, never a fabricated "0 breaches" as fact.
  */
 import { useEffect, useId, useState } from "react";
+import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState, Button } from "../ds";
 import {
   getStageAgeing,
   getStageLimits,
+  getPipelines,
   createStageLimit,
   updateStageLimit,
   deleteStageLimit,
   type StageAgeingRow,
   type StageLimit,
+  type Pipeline,
   type OpSource,
 } from "@/lib/crm/opportunity";
 
@@ -31,15 +34,32 @@ function toRow(l: StageLimit): LimitRow {
 }
 
 export function StageAgeingDashboard() {
+  const t = useTranslations("crmStageAgeingDashboard");
   const [rows, setRows] = useState<StageAgeingRow[]>([]);
   const [ageingSource, setAgeingSource] = useState<OpSource | "loading">("loading");
   const [limits, setLimits] = useState<LimitRow[]>([]);
   const [limitSource, setLimitSource] = useState<OpSource | "loading">("loading");
+  const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
   const headingId = useId();
+
+  /** The stages of the pipeline a row is scoped to (empty when none chosen/loaded). */
+  function stagesFor(pipelineId: string | undefined): Pipeline["stages"] {
+    const p = pipelines.find((pp) => pp.id === pipelineId);
+    return p?.stages ?? [];
+  }
+  /** A saved limit whose stage key is not in its pipeline's stage list is an orphan. */
+  function isOrphan(row: LimitRow): boolean {
+    if (!row.stage.trim()) return false;
+    const stages = stagesFor(row.pipelineId);
+    // Only flag as orphan once we actually know the pipeline's stages — a limit with no
+    // pipeline scope at all (legacy rows) can't be validated against a stage list.
+    if (!row.pipelineId || stages.length === 0) return false;
+    return !stages.some((s) => s.key === row.stage);
+  }
 
   async function loadAgeing(isLive: () => boolean = () => true) {
     setAgeingSource("loading");
@@ -55,11 +75,17 @@ export function StageAgeingDashboard() {
     setLimits(data.map(toRow));
     setLimitSource(source);
   }
+  async function loadPipelines(isLive: () => boolean = () => true) {
+    const { data } = await getPipelines();
+    if (!isLive()) return;
+    setPipelines(data);
+  }
 
   useEffect(() => {
     let live = true;
     void loadAgeing(() => live);
     void loadLimits(() => live);
+    void loadPipelines(() => live);
     return () => {
       live = false;
     };
@@ -69,18 +95,27 @@ export function StageAgeingDashboard() {
     setLimits((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   }
   function addLimit() {
-    setLimits((prev) => [...prev, toRow({ stage: "", maxDays: 14, enabled: true })]);
+    // Default the new row to the first pipeline so the stage <select> has something to
+    // offer immediately (the stage must be one of a pipeline's configured stages).
+    const firstPipeline = pipelines[0]?.id;
+    setLimits((prev) => [...prev, toRow({ stage: "", maxDays: 14, enabled: true, ...(firstPipeline ? { pipelineId: firstPipeline } : {}) })]);
   }
 
   function rowValid(r: LimitRow): boolean {
-    return r.stage.trim().length > 0 && Number.isInteger(r.maxDays) && r.maxDays > 0;
+    if (!(Number.isInteger(r.maxDays) && r.maxDays > 0)) return false;
+    if (!r.stage.trim()) return false;
+    // A stage is only valid when it belongs to the row's chosen pipeline — a free-typed
+    // key (the old behaviour) that matches no stage silently disabled the alert.
+    const stages = stagesFor(r.pipelineId);
+    if (!r.pipelineId || stages.length === 0) return false;
+    return stages.some((s) => s.key === r.stage);
   }
 
   async function saveLimit(row: LimitRow) {
     setMessage("");
     setError("");
     if (!rowValid(row)) {
-      setError("A stage limit needs a stage and a whole number of days greater than zero.");
+      setError(t("limitInvalid"));
       return;
     }
     const payload: StageLimit = {
@@ -199,6 +234,7 @@ export function StageAgeingDashboard() {
           <table className="tbl">
             <thead>
               <tr>
+                <th>{t("colPipeline")}</th>
                 <th>Stage</th>
                 <th style={{ width: 140 }}>Limit (days)</th>
                 <th>
@@ -210,20 +246,61 @@ export function StageAgeingDashboard() {
               {limits.map((row, i) => {
                 const n = i + 1;
                 const busy = busyKey === row.key;
+                const stages = stagesFor(row.pipelineId);
+                const orphan = isOrphan(row);
                 return (
                   <tr key={row.key}>
+                    <td>
+                      <label className="sr-only" htmlFor={`${headingId}-pipeline-${row.key}`}>
+                        {t("pipelineForLimit", { n })}
+                      </label>
+                      <select
+                        id={`${headingId}-pipeline-${row.key}`}
+                        value={row.pipelineId ?? ""}
+                        aria-invalid={row.pipelineId ? undefined : true}
+                        onChange={(e) => update(row.key, { pipelineId: e.target.value || undefined, stage: "" })}
+                        style={inputStyle}
+                      >
+                        <option value="">{t("selectPipeline")}</option>
+                        {pipelines.map((p) => (
+                          <option key={p.id ?? p.name} value={p.id ?? ""}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
                     <td>
                       <label className="sr-only" htmlFor={`${headingId}-stage-${row.key}`}>
                         Stage for limit {n}
                       </label>
-                      <input
+                      <select
                         id={`${headingId}-stage-${row.key}`}
                         value={row.stage}
-                        aria-invalid={row.stage.trim() ? undefined : true}
+                        aria-invalid={row.stage.trim() && !orphan && stages.some((s) => s.key === row.stage) ? undefined : true}
+                        disabled={!row.pipelineId || stages.length === 0}
                         onChange={(e) => update(row.key, { stage: e.target.value })}
                         style={inputStyle}
-                        placeholder="stage key"
-                      />
+                      >
+                        <option value="">{row.pipelineId ? t("selectStage") : t("choosePipelineFirst")}</option>
+                        {/* A saved limit whose stage no longer exists in the pipeline is
+                            kept visible as a disabled, flagged option so it can still be
+                            seen and deleted — it is never silently dropped. */}
+                        {orphan ? (
+                          <option value={row.stage} disabled>
+                            {t("orphanOption", { stage: row.stage })}
+                          </option>
+                        ) : null}
+                        {stages.map((s) => (
+                          <option key={s.key} value={s.key}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </select>
+                      {orphan ? (
+                        <p role="alert" style={{ fontSize: 11, color: "#b42318", margin: "4px 0 0" }}>
+                          {t("orphanAlert")}
+                        </p>
+                      ) : null}
                     </td>
                     <td>
                       <label className="sr-only" htmlFor={`${headingId}-days-${row.key}`}>
@@ -237,7 +314,7 @@ export function StageAgeingDashboard() {
                         value={Number.isInteger(row.maxDays) ? row.maxDays : ""}
                         aria-invalid={Number.isInteger(row.maxDays) && row.maxDays > 0 ? undefined : true}
                         onChange={(e) => update(row.key, { maxDays: Number(e.target.value) })}
-                        style={{ ...inputStyle, textAlign: "right" }}
+                        style={{ ...inputStyle, textAlign: "end" }}
                       />
                     </td>
                     <td>

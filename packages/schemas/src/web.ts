@@ -395,6 +395,7 @@ export const crmCampaignRoiSummarySchema = z.object({
   data: z.array(
     crmCampaignRoiFiguresSchema.extend({
       campaignId: z.string(),
+      name: z.string().optional(),
       currency: z.string(),
       periods: z.number().int(),
     }),
@@ -404,6 +405,7 @@ export const crmCampaignRoiSummarySchema = z.object({
 export const crmCampaignRoiSchema = z.object({
   data: crmCampaignRoiFiguresSchema.extend({
     campaignId: z.string(),
+    name: z.string().optional(),
     currency: z.string(),
     periods: z.array(
       crmCampaignRoiFiguresSchema.extend({
@@ -1328,7 +1330,7 @@ export const ContactDetailSchema = z.object({
 
 export const CRMActivityEntrySchema = z.object({
   id: z.string(),
-  type: z.enum(["call", "meeting", "email", "task", "note"]),
+  type: z.enum(["call", "meeting", "email", "task", "note", "appointment", "reminder", "complaint"]),
   subject: z.string(),
   relatedTo: z.string().optional(),
   relatedType: z.enum(["contact", "deal", "other"]).optional(),

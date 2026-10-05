@@ -2,6 +2,7 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, StatusPill, EmptyState } from "../../../../_components/ds";
 import { getDealById } from "../../../../_data/loaders";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { getTranslations } from "next-intl/server";
 import { DealDetailActions } from "./DealDetailActions";
 
 export default async function Page({ params }: { params: { id: string } }) {
@@ -17,13 +18,37 @@ export default async function Page({ params }: { params: { id: string } }) {
     );
   }
 
-  // Canonical stage vocabulary — matches DealSummary["stage"] (see
-  // apps/web/src/app/_data/apiMappers.ts normalizeDealStage), NOT the
-  // Capitalized "Lead"/"Proposal"/"Won"/"Lost" strings the backend stores;
-  // deal.stage here is already normalized by getDealById before it reaches
-  // this page.
-  const STAGES = ["prospecting", "proposal", "negotiation", "closed_won", "closed_lost"] as const;
-  const currentIdx = STAGES.indexOf(deal.stage as typeof STAGES[number]);
+  // The workflow is driven by deal.status (won | lost | open/active), NOT by a fixed
+  // index into a vocabulary that lists BOTH terminal stages. The previous version used
+  // a static [...,'closed_won','closed_lost'] list and derived currentIdx from the
+  // normalized stage: a lost deal (currentIdx 4) rendered 'Closed Won' (i=3) as "done"
+  // and 'Closed Lost' as current — i.e. it looked like the deal had passed THROUGH a win
+  // on the way to a loss, which is dangerously misleading in an approvals context.
+  //
+  // Instead, build the open path then exactly ONE terminal step reflecting the real
+  // outcome: 'Closed Won' only when won, 'Closed Lost' only when lost, otherwise a
+  // neutral 'Closed' todo. A non-colour text cue ("Lost"/"Won") is added to the terminal
+  // step so the state is conveyed without relying on colour alone (WCAG 1.4.1).
+  const t = await getTranslations("crmDealDetail");
+  const OPEN_PATH = ["prospecting", "proposal", "negotiation"] as const;
+  const isWon = deal.status === "won";
+  const isLost = deal.status === "lost";
+  const terminal: { key: string; label: string; cue?: string; cueTone?: "won" | "lost" } = isWon
+    ? { key: "closed_won", label: t("steps.closedWon"), cue: t("cues.won"), cueTone: "won" }
+    : isLost
+      ? { key: "closed_lost", label: t("steps.closedLost"), cue: t("cues.lost"), cueTone: "lost" }
+      : { key: "closed", label: t("steps.closed") };
+  const steps: Array<{ key: string; label: string; cue?: string; cueTone?: "won" | "lost" }> = [
+    ...OPEN_PATH.map((s) => ({ key: s, label: t(`steps.${s}`) })),
+    terminal,
+  ];
+
+  // When the deal is closed (won/lost), every open-path step is complete and the
+  // terminal step is current. When still open, locate the current open stage by the
+  // normalized deal.stage; the terminal step is a future "todo".
+  const closed = isWon || isLost;
+  const openIdx = OPEN_PATH.indexOf(deal.stage as typeof OPEN_PATH[number]);
+  const currentIdx = closed ? steps.length - 1 : openIdx >= 0 ? openIdx : 0;
 
   return (
     <>
@@ -61,9 +86,17 @@ export default async function Page({ params }: { params: { id: string } }) {
             <div className="card-h"><h3>Workflow</h3></div>
             <div className="pad">
               <ul className="tl">
-                {STAGES.map((stage, i) => (
-                  <li key={stage} className={i < currentIdx ? "done" : i === currentIdx ? "cur" : "todo"} aria-current={i === currentIdx ? "step" : undefined}>
-                    <div className="t">{stage.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}</div>
+                {steps.map((step, i) => (
+                  <li key={step.key} className={i < currentIdx ? "done" : i === currentIdx ? "cur" : "todo"} aria-current={i === currentIdx ? "step" : undefined}>
+                    <div className="t">
+                      {step.label}
+                      {step.cue ? <span className="sr-only"> — {step.cue}</span> : null}
+                      {step.cue ? (
+                        <span aria-hidden="true" style={{ marginInlineStart: 6, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4, color: step.cueTone === "lost" ? "#b42318" : "#047857" }}>
+                          {step.cue}
+                        </span>
+                      ) : null}
+                    </div>
                   </li>
                 ))}
               </ul>

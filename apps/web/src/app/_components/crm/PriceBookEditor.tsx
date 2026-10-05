@@ -5,12 +5,21 @@
  * book applies for a given set of criteria ("Applicable book: …"). Prices are
  * entered in rupees and stored as paise (no float). A failed load shows the
  * saved-info badge; a failed resolve says so honestly rather than implying none.
+ *
+ * GAP-CRM-PRICE-BOOKS-01: each book shows its version and "Last changed by X on
+ * <date> (IST)" (from the API's version/updatedBy/updatedAt), and editing a
+ * LIVE (enabled) book requires an explicit reason first — a price change feeds
+ * every quotation built afterwards, while already-captured quotations keep
+ * their saved price. A per-book audit-event history drawer is deferred: the
+ * crm-service price-books module exposes no audit-event read endpoint yet
+ * (decision recorded in the fixer report).
  */
 import { useEffect, useId, useState } from "react";
+import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState, Button } from "../ds";
 import { rupeesToMinorString } from "@/lib/money";
-import { formatMoney } from "@/lib/formatters";
+import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import {
   getPriceBooks,
   createPriceBook,
@@ -41,6 +50,7 @@ function blankBook(): PriceBook {
 }
 
 export function PriceBookEditor() {
+  const t = useTranslations("crmPriceBookEditor");
   const [books, setBooks] = useState<PriceBook[]>([]);
   const [source, setSource] = useState<QpSource | "loading">("loading");
   const [products, setProducts] = useState<Product[]>([]);
@@ -50,6 +60,10 @@ export function PriceBookEditor() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [confirmBook, setConfirmBook] = useState<PriceBook | null>(null);
+  // GAP-CRM-PRICE-BOOKS-01: editing a LIVE (enabled) book changes the prices
+  // every quotation built afterwards will use, so opening one for edit goes
+  // through an explicit acknowledgement first.
+  const [confirmEditBook, setConfirmEditBook] = useState<PriceBook | null>(null);
 
   // Resolve panel state.
   const [rSegment, setRSegment] = useState("");
@@ -96,6 +110,16 @@ export function PriceBookEditor() {
     );
     setMessage("");
     setError("");
+  }
+
+  /**
+   * Edit entry point: a live (enabled, saved) book must be acknowledged first
+   * because its prices feed every subsequent quotation; a draft/disabled book
+   * opens straight away.
+   */
+  function requestEdit(b: PriceBook) {
+    if (b.id && b.enabled) setConfirmEditBook(b);
+    else edit(b);
   }
 
   function draftValid(d: PriceBook): boolean {
@@ -201,12 +225,22 @@ export function PriceBookEditor() {
               <li key={b.id ?? b.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid var(--line)" }}>
                 <span style={{ fontSize: 14 }}>
                   <strong>{b.name}</strong>{" "}
+                  {b.version !== undefined ? <span style={{ fontSize: 12, color: "var(--muted)" }}>v{b.version}</span> : null}{" "}
                   <span style={{ color: "var(--muted)" }}>
                     · {[b.segment, b.currency, b.geography, b.channel].filter(Boolean).join(" / ") || "any"} · {b.entries.length} price{b.entries.length === 1 ? "" : "s"}
                   </span>
+                  {b.updatedBy || b.updatedAt ? (
+                    <span style={{ display: "block", fontSize: 12, color: "var(--muted)" }} aria-label={t("lastChangedAria", { name: b.name })}>
+                      {b.updatedBy && b.updatedAt
+                        ? t("lastChangedByOn", { by: b.updatedBy, date: formatIndianDate(b.updatedAt) })
+                        : b.updatedBy
+                          ? t("lastChangedBy", { by: b.updatedBy })
+                          : t("lastChangedOn", { date: formatIndianDate(b.updatedAt ?? "") })}
+                    </span>
+                  ) : null}
                 </span>
                 <span style={{ display: "flex", gap: 6 }}>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => edit(b)}>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => requestEdit(b)}>
                     Edit
                   </Button>
                   <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmBook(b)} aria-label={`Delete price book ${b.name}`}>
@@ -277,7 +311,7 @@ export function PriceBookEditor() {
                       inputMode="decimal"
                       value={e.priceRupees}
                       onChange={(ev) => setEntries((prev) => prev.map((r, i) => (i === idx ? { ...r, priceRupees: ev.target.value } : r)))}
-                      style={{ ...inputStyle, textAlign: "right" }}
+                      style={{ ...inputStyle, textAlign: "end" }}
                       placeholder="0.00"
                     />
                     <Button type="button" variant="ghost" size="sm" onClick={() => setEntries((prev) => prev.filter((_, i) => i !== idx))} aria-label={`Remove entry ${idx + 1}`}>
@@ -358,6 +392,22 @@ export function PriceBookEditor() {
         busy={busy}
         onCancel={() => setConfirmBook(null)}
         onConfirm={() => confirmBook && void doDelete(confirmBook)}
+      />
+
+      <ConfirmDialog
+        open={confirmEditBook !== null}
+        requireReason
+        reasonLabel={t("editReasonLabel")}
+        title={confirmEditBook ? t("editTitle", { name: confirmEditBook.name }) : ""}
+        description={t("editDescription")}
+        confirmLabel={t("editConfirm")}
+        busy={busy}
+        onCancel={() => setConfirmEditBook(null)}
+        onConfirm={() => {
+          const b = confirmEditBook;
+          setConfirmEditBook(null);
+          if (b) edit(b);
+        }}
       />
     </div>
   );

@@ -11643,5 +11643,507 @@
       "clearanceUnavailable": "क्लीयरेंस जाँच अस्थायी रूप से उपलब्ध नहीं है, इसलिए अभी डाउनलोड की पुष्टि नहीं हो सकती। थोड़ी देर में पुनः प्रयास करें।",
       "variantUnavailable": "दस्तावेज़ का यह रूप उपलब्ध नहीं है।"
     }
+  },
+  "crmContactEdit": {
+    "piiHiddenHint": "आपकी भूमिका के लिए छिपा है। वर्तमान मान रखने के लिए खाली छोड़ें, या बदलने के लिए नया मान लिखें।"
+  },
+  "crmAccountDetail": {
+    "notFoundTitle": "खाता नहीं मिला",
+    "notFoundMessage": "यह खाता मौजूद नहीं है या अब सक्रिय नहीं है।",
+    "unavailableTitle": "खाते का विवरण उपलब्ध नहीं है",
+    "unavailableMessage": "यह खाता मौजूद है, परंतु अभी यहाँ लोड नहीं किया जा सका। कृपया इसे खाता सूची से खोलें।"
+  },
+  "crmAccountHealth": {
+    "title": "खाता स्वास्थ्य",
+    "subtitle": "जोखिम या गंभीर स्कोर वाले खाते, तात्कालिकता के क्रम में।",
+    "allAccounts": "सभी खाते",
+    "loadErrorWhat": "खाता स्वास्थ्य लोड नहीं हो सका।",
+    "loadErrorNext": "पुनः प्रयास करें, या खातों की सीधे समीक्षा के लिए “सभी खाते” खोलें।"
+  },
+  "crmAccountHealthDetail": {
+    "titleWithId": "खाता स्वास्थ्य · {id}"
+  },
+  "crmActivityTypes": {
+    "call": "कॉल",
+    "meeting": "बैठक",
+    "email": "ईमेल",
+    "task": "कार्य",
+    "note": "टिप्पणी",
+    "appointment": "नियुक्ति",
+    "reminder": "अनुस्मारक",
+    "complaint": "शिकायत"
+  },
+  "crmAssignmentRulesEditor": {
+    "criteriaNotObject": "मानदंड एक JSON ऑब्जेक्ट होना चाहिए, जैसे {example}।",
+    "criteriaInvalidFallback": "इस रणनीति के लिए मानदंड अमान्य हैं।",
+    "unnamed": "(अनाम)",
+    "ruleCriteriaError": "नियम “{name}” — {error}",
+    "ruleNeedsNameOrder": "नियम “{name}” के लिए नाम और पूर्ण संख्या में क्रम आवश्यक है।"
+  },
+  "crmCampaignDetail": {
+    "performanceTitle": "अभियान का प्रदर्शन",
+    "subtitleNamed": "अभियान {id} · {currency}"
+  },
+  "crmCampaignRoiTable": {
+    "unnamedCampaign": "अनाम अभियान",
+    "colCampaign": "अभियान",
+    "filterPlaceholder": "अभियान के नाम से फ़िल्टर करें"
+  },
+  "crmCitizenFeedback": {
+    "subtitle": "नागरिक प्रतिक्रिया प्रपत्र का पूर्वावलोकन। जमा करने की सुविधा अभी जुड़ी नहीं है, इसलिए यहाँ दर्ज की गई कोई भी जानकारी एकत्र या संग्रहीत नहीं की जाती।",
+    "noticeAria": "डेटा संरक्षण सूचना",
+    "notice": "यह प्रपत्र चालू होने पर प्रतिक्रिया <strong>डिजिटल व्यक्तिगत डेटा संरक्षण अधिनियम, 2023 (DPDP अधिनियम)</strong> के अंतर्गत केवल सार्वजनिक सेवा वितरण में सुधार के लिए एकत्र और संसाधित की जाएगी, और उस समय आपसे सहमति माँगी जाएगी। चूँकि जमा करने की सुविधा अभी जुड़ी नहीं है, इसलिए कोई सहमति नहीं ली जाती और यहाँ आप जो भी लिखते हैं वह एकत्र या संग्रहीत नहीं होता।"
+  },
+  "crmContactToolbar": {
+    "exportFiltered": "फ़िल्टर किए गए निर्यात करें",
+    "exportAll": "सभी संपर्क निर्यात करें",
+    "confirmTitleFiltered": "फ़िल्टर किए गए संपर्क निर्यात करें?",
+    "confirmTitleAll": "सभी संपर्क निर्यात करें?",
+    "confirmDescription": "इससे संपर्कों का व्यक्तिगत डेटा (नाम, फ़ोन, ईमेल) डाउनलोड होगा। यह निर्यात आपके खाते और नीचे दिए गए उद्देश्य के विरुद्ध लॉग किया जाता है।",
+    "confirmLabel": "CSV निर्यात करें",
+    "reasonLabel": "इस निर्यात का उद्देश्य"
+  },
+  "crmContactsImport": {
+    "noValidRows": "आयात करने के लिए कोई मान्य पंक्ति नहीं है।",
+    "subtitle": "थोक अपलोड — CSV कॉलम: name, email, phone, company, leadStatus, marketingConsent। अमान्य ईमेल, फ़ोन या लीड स्थिति वाली पंक्तियाँ अस्वीकृत कर दी जाती हैं; कॉलम रिक्त होने पर विपणन सहमति डिफ़ॉल्ट रूप से \"नहीं\" मानी जाती है।",
+    "csvData": "CSV डेटा",
+    "downloadTemplate": "टेम्पलेट डाउनलोड करें",
+    "readySummary": "{valid, plural, one {# मान्य पंक्ति} other {# मान्य पंक्तियाँ}} तैयार{rejected, plural, =0 {} one { · # पंक्ति अस्वीकृत} other { · # पंक्तियाँ अस्वीकृत}}।",
+    "duplicatesFound": "{count, plural, one {# संभावित डुप्लिकेट} other {# संभावित डुप्लिकेट}} रजिस्ट्री में पहले से मौजूद {count, plural, one {है} other {हैं}}।",
+    "matchedLine": "{name} — {fields} पर मेल खाता है",
+    "importAnyway": "फिर भी आयात करें (मैंने संभावित डुप्लिकेट की समीक्षा कर ली है)।",
+    "importing": "आयात हो रहा है…",
+    "checking": "डुप्लिकेट की जाँच हो रही है…",
+    "importButton": "{count, plural, one {# संपर्क} other {# संपर्क}} आयात करें",
+    "rejectedHeading": "अस्वीकृत पंक्तियाँ ({count})",
+    "colLine": "पंक्ति",
+    "colReason": "कारण",
+    "colMarketingConsent": "विपणन सहमति",
+    "yes": "हाँ",
+    "no": "नहीं",
+    "confirmTitle": "{count, plural, one {# संपर्क} other {# संपर्क}} आयात करें?",
+    "confirmDescription": "इस कार्यालय की रजिस्ट्री में {count, plural, one {# संपर्क} other {# संपर्क}} बनाए जाएँगे। यह कार्रवाई लॉग की जाती है।",
+    "confirmLabel": "संपर्क आयात करें"
+  },
+  "crmCustomFieldsManager": {
+    "sensitiveLabel": "संवेदनशील (रिकॉर्ड में मास्क करें)",
+    "sensitiveWarning": "⚠ यह एक सांविधिक पहचानकर्ता (आधार, PAN, पासपोर्ट, बैंक खाता) जैसा प्रतीत होता है। DPDP के अंतर्गत इसका मान मास्क और प्रतिबंधित होना चाहिए — “संवेदनशील” पहले से चुना गया है। नीचे चुनें कि कौन-सी भूमिकाएँ इसे स्पष्ट रूप में देख सकती हैं।",
+    "visibleToRolesLegend": "इन भूमिकाओं को दिखाई देगा (अन्य को मास्क किया हुआ मान दिखेगा)",
+    "visibleToRolesGroupLabel": "वे भूमिकाएँ जो स्पष्ट मान देख सकती हैं",
+    "visibleToRole": "{role} को दिखाई दे"
+  },
+  "crmDataQualityView": {
+    "unnamedRecord": "अनाम अभिलेख"
+  },
+  "crmDealDetail": {
+    "steps": {
+      "prospecting": "संभावना की खोज",
+      "proposal": "प्रस्ताव",
+      "negotiation": "वार्ता",
+      "closedWon": "सफलतापूर्वक बंद",
+      "closedLost": "असफल रूप से बंद",
+      "closed": "बंद"
+    },
+    "cues": {
+      "won": "सफल",
+      "lost": "असफल"
+    }
+  },
+  "crmDedupRulesEditor": {
+    "invalidNumbers": "भार और सीमा-मान 0 से 100 तक की पूर्ण संख्याएँ होनी चाहिए। सहेजने से पहले चिह्नित नियमों को ठीक करें।",
+    "notLoaded": "नियम लोड नहीं हो सके, इसलिए उन्हें अभी सहेजा नहीं जा सकता। पहले लोड को पुनः प्रयास करें।",
+    "heading": "मिलान नियम",
+    "confirmEmptyTitle": "बिना किसी मिलान नियम के सहेजें?",
+    "confirmEmptyDescription": "इससे कार्यालय के सभी डुप्लिकेट-निर्धारण नियम हट जाएँगे। नए नियम जोड़े जाने तक डुप्लिकेट की पहचान बंद रहेगी। इसे पूर्ववत नहीं किया जा सकता।",
+    "confirmEmptyConfirm": "सभी नियम हटाएँ"
+  },
+  "crmEditContactForm": {
+    "leadStatus": "लीड स्थिति",
+    "changeStatus": "स्थिति बदलें"
+  },
+  "crmFollowUpModal": {
+    "defaultSubject": "खाता स्वास्थ्य अनुवर्ती कार्रवाई — {account}"
+  },
+  "crmGrievanceActions": {
+    "conflict": "इस शिकायत में किसी अन्य व्यक्ति ने परिवर्तन किया है। नवीनतम संस्करण लोड कर दिया गया है — उसकी समीक्षा करें और पुनः प्रयास करें।"
+  },
+  "crmGrievancesList": {
+    "showing": "{total} में से {from}–{to} दिखाए जा रहे हैं",
+    "pagesAriaLabel": "शिकायत रजिस्टर के पृष्ठ",
+    "previous": "← पिछला",
+    "next": "अगला →",
+    "pageOf": "पृष्ठ {page} / {pages}"
+  },
+  "crmKanbanBoard": {
+    "loadErrorTitle": "पाइपलाइन लोड नहीं की जा सकी",
+    "loadErrorMessage": "यह प्रायः अस्थायी होता है। पुनः प्रयास के लिए पृष्ठ रीफ़्रेश करें — हम सौदे न होने जैसा खाली बोर्ड नहीं दिखाएँगे।",
+    "retry": "पुनः प्रयास करें",
+    "moveTitle": "“{name}” को {stage} में स्थानांतरित करें?",
+    "moveDescription": "इससे इस सहभागिता का चरण बदलकर <strong>{stage}</strong> हो जाएगा।",
+    "replaceProbability": "इस सौदे की संभावना ({current}%) को चरण की डिफ़ॉल्ट संभावना ({stageDefault}%) से बदलें",
+    "moveConfirm": "स्थानांतरित करें",
+    "moveCancelled": "स्थानांतरण रद्द किया गया।"
+  },
+  "crmLeadAssignmentControl": {
+    "chooseAssignOwner": "इस लीड को सौंपने के लिए स्वामी चुनें।",
+    "chooseTransferOwner": "इस लीड को स्थानांतरित करने के लिए स्वामी चुनें।",
+    "assignedTo": "लीड {name} को सौंपी गई।",
+    "transferredTo": "स्वामित्व {name} को स्थानांतरित किया गया।",
+    "assignTitleOwner": "लीड {name} को सौंपें?",
+    "assignTitleRules": "इस लीड को नियमों के अनुसार सौंपें?",
+    "transferTitle": "स्वामित्व {name} को स्थानांतरित करें?",
+    "owner": "स्वामी",
+    "assignOwnerAria": "जिसे यह लीड सौंपी जानी है वह स्वामी",
+    "transferToOwner": "स्वामी को स्थानांतरित करें",
+    "transferOwnerAria": "जिसे यह लीड स्थानांतरित की जानी है वह स्वामी"
+  },
+  "crmLeadFormEditor": {
+    "checkFields": "चिह्नित फ़ील्ड जाँचें।",
+    "editTitle": "“{name}” संपादित करें",
+    "registerTitle": "लीड-कैप्चर फ़ॉर्म पंजीकृत करें",
+    "editHint": "इस सार्वजनिक फ़ॉर्म की नीति में संशोधन करें। सार्वजनिक कुंजी अपरिवर्तित रहती है।",
+    "registerHint": "पंजीकरण से एक सार्वजनिक कुंजी बनती है, जिस पर लैंडिंग पेज POST करते हैं। विपणन डेटा-संग्रह को विधिसम्मत रखने के लिए सहमति अनिवार्य करें (DPDP)।",
+    "name": "नाम",
+    "namePlaceholder": "हमसे संपर्क करें — मुखपृष्ठ",
+    "origins": "अनुमत ओरिजिन (प्रति पंक्ति एक; रिक्त = कोई भी)",
+    "defaultSource": "डिफ़ॉल्ट लीड स्रोत",
+    "maxPerMinute": "प्रति मिनट अधिकतम प्रस्तुतियाँ",
+    "requireConsentAria": "सहमति अनिवार्य करें",
+    "requireConsentLabel": "प्रत्येक प्रस्तुति पर स्पष्ट सहमति अनिवार्य करें (अनुशंसित — विपणन डेटा-संग्रह को विधिसम्मत रखता है)",
+    "cancel": "रद्द करें",
+    "saving": "सहेजा जा रहा है…",
+    "saveForm": "फ़ॉर्म सहेजें",
+    "registerForm": "फ़ॉर्म पंजीकृत करें"
+  },
+  "crmLeadFormsTable": {
+    "saved": "फ़ॉर्म सहेजा गया।",
+    "paused": "फ़ॉर्म रोका गया।",
+    "resumed": "फ़ॉर्म फिर से शुरू किया गया।",
+    "consentFixed": "अब सहमति आवश्यक है — फ़ॉर्म विधिसम्मत है।",
+    "registerForm": "फ़ॉर्म पंजीकृत करें",
+    "registered": "फ़ॉर्म पंजीकृत हो गया। इसका सार्वजनिक सबमिट URL <code>{path}</code> है — इसे अपने लैंडिंग पेज पर एम्बेड करें।",
+    "colForm": "फ़ॉर्म",
+    "colStatus": "स्थिति",
+    "colSubmitUrl": "सार्वजनिक सबमिट URL",
+    "colOrigins": "अनुमत ओरिजिन",
+    "colSource": "डिफ़ॉल्ट स्रोत",
+    "colRate": "दर सीमा",
+    "colActions": "कार्य",
+    "edit": "संपादित करें",
+    "pause": "रोकें",
+    "enable": "सक्षम करें",
+    "fixConsent": "सहमति सुधारें",
+    "emptyTitle": "कोई वेबसाइट फ़ॉर्म पंजीकृत नहीं है",
+    "emptyMessage": "लैंडिंग पेज जिस सार्वजनिक कुंजी पर POST कर सकें, उसे बनाने के लिए लीड-कैप्चर फ़ॉर्म पंजीकृत करें।",
+    "confirmTitle": "“{name}” पर सहमति अनिवार्य करें?",
+    "confirmDescription": "यह फ़ॉर्म अभी स्पष्ट सहमति के बिना प्रस्तुतियाँ स्वीकार करता है, जो DPDP के अंतर्गत अवैध डेटा-संग्रह का जोखिम है। सहमति अनिवार्य करने से यह विधिसम्मत हो जाता है; सहमति के बिना की गई प्रस्तुतियाँ अस्वीकार कर दी जाएँगी।",
+    "confirmLabel": "सहमति अनिवार्य करें"
+  },
+  "crmLeadScoreRulesEditor": {
+    "heading": "स्कोरिंग नियम"
+  },
+  "crmLinkedAccountsPanel": {
+    "ownershipNotice": "ईमेल पता दर्ज करने से केवल उसे जोड़ने का आपका अनुरोध दर्ज होता है — इससे यह प्रमाणित <strong>नहीं</strong> होता कि वह मेलबॉक्स या कैलेंडर आपका है। जब तक सेवा-प्रदाता अपनी सहमति (साइन-इन / OAuth) प्रक्रिया से स्वामित्व सत्यापित नहीं कर लेता, तब तक CRM में कुछ भी सिंक नहीं होगा; इससे किसी अन्य व्यक्ति का इनबॉक्स भूलवश जुड़ने से बचता है (डिजिटल व्यक्तिगत डेटा संरक्षण अधिनियम, 2023)।"
+  },
+  "crmOnboardingList": {
+    "colCustomerDeal": "ग्राहक / सौदा",
+    "unnamedCase": "अनाम प्रकरण",
+    "ref": "संदर्भ {id}"
+  },
+  "crmOpportunityForm": {
+    "saved": "अवसर “{name}” सहेजा गया।",
+    "created": "अवसर “{name}” बनाया गया।",
+    "accountLabel": "खाता (वैकल्पिक)",
+    "accountAria": "खाता",
+    "accountPlaceholder": "खाते खोजें…",
+    "accountHint": "इस अवसर को किसी खाते से जोड़ें ताकि यह खाता-स्तरीय दृश्यों में दिखाई दे।",
+    "saving": "सहेजा जा रहा है…",
+    "createdStatus": "बनाया गया",
+    "saveOpportunity": "अवसर सहेजें",
+    "createOpportunity": "अवसर बनाएँ",
+    "createAnother": "एक और बनाएँ"
+  },
+  "crmOpportunityViews": {
+    "close": "बंद करें…"
+  },
+  "crmOverdueTaskAlerts": {
+    "ownerUnavailable": "सौंपा गया (नाम उपलब्ध नहीं)",
+    "emptyTitle": "कुछ भी अतिदेय नहीं",
+    "emptyMessage": "कोई भी खुला कार्य अपनी नियत समय-सीमा से आगे नहीं है।",
+    "colTask": "कार्य",
+    "taskFallback": "कार्य",
+    "colDue": "देय समय",
+    "colOverdueBy": "अतिदेय अवधि",
+    "colOwner": "स्वामी"
+  },
+  "crmOwnerPicker": {
+    "onLeave": "अवकाश पर",
+    "searchPlaceholder": "नाम से खोजें…"
+  },
+  "crmPeriodFilter": {
+    "ariaLabel": "रिपोर्टिंग अवधि",
+    "period": "अवधि",
+    "preset": {
+      "days7": "7 दिन",
+      "days30": "30 दिन",
+      "days90": "90 दिन",
+      "all": "सभी",
+      "custom": "अनुकूलित"
+    }
+  },
+  "crmPipelineEditor": {
+    "removeStageHint": "जिस चरण में अब भी खुले सौदे हैं, उसे हटाने का प्रयास सहेजते समय तब तक अस्वीकार किया जाएगा जब तक वे सौदे अन्यत्र स्थानांतरित नहीं कर दिए जाते।",
+    "deleteDescription": "अवसर अब इस पाइपलाइन का उपयोग नहीं कर सकेंगे। यदि इसमें अब भी कोई खुला सौदा है, तो हटाने का अनुरोध अस्वीकार कर दिया जाएगा और आपको उनकी संख्या बताई जाएगी — पहले उन सौदों को स्थानांतरित या बंद करें। इसे पूर्ववत नहीं किया जा सकता।"
+  },
+  "crmPriceBookEditor": {
+    "lastChangedAria": "{name} का अंतिम बदलाव",
+    "lastChangedByOn": "अंतिम बदलाव {by} द्वारा {date} (IST) को",
+    "lastChangedBy": "अंतिम बदलाव {by} द्वारा",
+    "lastChangedOn": "अंतिम बदलाव {date} (IST) को",
+    "editReasonLabel": "आप इस सक्रिय मूल्य-पुस्तिका को क्यों बदल रहे हैं?",
+    "editTitle": "सक्रिय मूल्य-पुस्तिका “{name}” संपादित करें?",
+    "editDescription": "यह मूल्य-पुस्तिका सक्रिय है। यहाँ मूल्य बदलने से इसके बाद बनने वाले प्रत्येक कोटेशन का मूल्य बदल जाएगा — पहले से दर्ज कोटेशन अपना सहेजा हुआ मूल्य बनाए रखेंगे। इस बदलाव के साथ आपके नाम से एक नया संस्करण दर्ज किया जाएगा।",
+    "editConfirm": "मूल्य संपादित करें"
+  },
+  "crmProductCatalogueEditor": {
+    "colLastChanged": "अंतिम बदलाव",
+    "lastChangedAria": "उत्पाद {n} का अंतिम बदलाव",
+    "unknownUser": "अज्ञात",
+    "deleteWarning": "यह उत्पाद मौजूदा कोटेशनों और मूल्य-पुस्तिकाओं में संदर्भित हो सकता है। इसे हटाने पर वे दस्तावेज़ ऐसे उत्पाद की ओर इंगित कर सकते हैं जो अब मौजूद नहीं है, और इसे पूर्ववत नहीं किया जा सकता।",
+    "deletePrefer": "इसके बजाय उत्पाद को <em>बंद</em> करना बेहतर है (सक्षम का चयन हटाएँ) — इससे वह मौजूदा दस्तावेज़ों में बना रहता है और नए कोटेशन में उपयोग नहीं हो पाता।",
+    "deleteAnyway": "फिर भी हटाएँ"
+  },
+  "crmQualificationFrameworksEditor": {
+    "colQuestion": "प्रश्न",
+    "colWeight": "भार",
+    "colShare": "हिस्सा",
+    "colActions": "कार्रवाइयाँ",
+    "questionTextLabel": "प्रश्न {n} का पाठ",
+    "questionWeightLabel": "प्रश्न {n} का भार",
+    "questionShareAria": "प्रश्न {n} का हिस्सा",
+    "removeQuestionAria": "प्रश्न {n} हटाएँ",
+    "remove": "हटाएँ",
+    "totalWeight": "कुल भार",
+    "weightsRelative": "भार सापेक्ष होते हैं; कुल {total}",
+    "totalWeightValueAria": "कुल भार का मान",
+    "zeroTotalWarning": "कुल भार 0 है — कोई भी प्रश्न इस निर्णय को प्रभावित नहीं कर सकता कि लीड योग्य है या नहीं। कम से कम एक प्रश्न को भार दें।"
+  },
+  "crmQuotationApprovalPanel": {
+    "rejected": "अनुमोदन अस्वीकृत किया गया।",
+    "rejectedNotice": "एक अनुरोध अस्वीकृत हुआ है। भेजने से पहले कोटेशन में संशोधन करें और नया अनुमोदन अनुरोध उठाएँ।",
+    "statusRejected": "अस्वीकृत",
+    "statusPending": "लंबित",
+    "approve": "अनुमोदित करें",
+    "reject": "अस्वीकार करें",
+    "awaitingOther": "किसी अन्य अनुमोदक की प्रतीक्षा (यह अनुरोध आपने उठाया है)",
+    "awaitingApprover": "अनुमोदक की प्रतीक्षा",
+    "rejectReasonLabel": "अस्वीकृति का कारण",
+    "rejectTitle": "इस अनुमोदन अनुरोध को अस्वीकार करें?",
+    "rejectDescription": "छूट / विचलन का अनुरोध अस्वीकृत चिह्नित किया जाएगा। आवश्यकता होने पर अनुरोधकर्ता नया अनुरोध उठा सकता है। यह ऑडिट ट्रेल में दर्ज किया जाता है।",
+    "rejectConfirm": "अनुरोध अस्वीकार करें"
+  },
+  "crmQuotationBuilder": {
+    "colQuoteRef": "कोटेशन संदर्भ",
+    "colAccount": "खाता",
+    "colOpportunity": "अवसर",
+    "colCreated": "निर्मित",
+    "opportunityLabel": "अवसर (डील) आईडी",
+    "opportunityAria": "अवसर आईडी",
+    "opportunityPlaceholder": "कोटेशन को अनाथ न रखने के लिए किसी डील से जोड़ें",
+    "accountLabel": "खाता आईडी (वैकल्पिक)",
+    "accountAria": "खाता आईडी",
+    "accountPlaceholder": "ग्राहक खाता",
+    "linkHint": "अवसर जोड़ने से यह कोटेशन ग्राहक से जुड़ जाता है, ताकि दो “standard v1” कोटेशन में अंतर किया जा सके।",
+    "refLine": "संदर्भ <strong>{ref}</strong>।",
+    "accountLine": "खाता {id}।",
+    "opportunityLine": "अवसर {id}।"
+  },
+  "crmReasonCodesEditor": {
+    "heading": "कारण कोड"
+  },
+  "crmRtiActions": {
+    "noPermission": "आपको RTI अनुरोधों पर कार्रवाई करने की अनुमति नहीं है।",
+    "disposedOn": "यह RTI अनुरोध निपटाया जा चुका है ({date} को)। यह एक बंद, केवल-पठन अभिलेख है।",
+    "disposed": "यह RTI अनुरोध निपटाया जा चुका है। यह एक बंद, केवल-पठन अभिलेख है।",
+    "faaOrderRecorded": "प्रथम अपीलीय प्राधिकारी का आदेश {date} को दर्ज किया गया। आवेदक धारा 19(3) के अंतर्गत सूचना आयोग में द्वितीय अपील दायर कर सकता है, अथवा अनुरोध का निपटान किया जा सकता है।",
+    "faaPending": "प्रथम अपील का निर्णय RTI अधिनियम की धारा 19(1) के अंतर्गत प्रथम अपीलीय प्राधिकारी (FAA) द्वारा किया जाता है।",
+    "secondAppealInfo": "द्वितीय अपील धारा 19(3) के अंतर्गत सूचना आयोग (CIC/SIC) के समक्ष की जाती है। आयोग का निर्णय होने के बाद अनुरोध का निपटान करें।",
+    "needsAdmin": "FAA का निर्णय दर्ज करने या अनुरोध का निपटान करने के लिए CRM प्रशासक आवश्यक है।",
+    "decisionDue": "प्रथम अपील का निर्णय देय: {date}",
+    "recordFaaDecision": "FAA निर्णय दर्ज करें",
+    "recordFaaConfirmTitle": "प्रथम अपीलीय प्राधिकारी का निर्णय दर्ज करें?",
+    "recordFaaConfirmBody": "यह आदेश सांविधिक अभिलेख का भाग बन जाता है और केवल एक बार दर्ज किया जा सकता है।",
+    "outcomeLabel": "परिणाम",
+    "outcomeAllowed": "अपील स्वीकार",
+    "outcomePartlyAllowed": "अपील आंशिक रूप से स्वीकार",
+    "outcomeDismissed": "अपील खारिज",
+    "appellateOrderLabel": "अपीलीय आदेश का पाठ",
+    "recordSecondAppeal": "द्वितीय अपील दर्ज करें",
+    "secondAppealConfirmTitle": "सूचना आयोग में द्वितीय अपील दर्ज करें?",
+    "secondAppealConfirmBody": "इसका उपयोग तब करें जब आवेदक ने धारा 19(3) के अंतर्गत द्वितीय अपील दायर की हो — FAA के आदेश के विरुद्ध, अथवा समय पर आदेश न होने के कारण। आयोग का वाद / डायरी संख्या दर्ज करें।",
+    "commissionRefLabel": "आयोग संदर्भ",
+    "dispose": "निपटाएं",
+    "disposeConfirmTitle": "क्या इस RTI अनुरोध का निपटान करें?",
+    "disposeConfirmBody": "अनुरोध बंद हो जाएगा। निपटाया गया RTI एक केवल-पठन सांविधिक अभिलेख है और यहां से दोबारा नहीं खोला जा सकता। बंद करने का कारण बताएं (जैसे आदेशानुसार सूचना उपलब्ध कराई गई, अपील वापस ली गई)।",
+    "disposeReasonLabel": "निपटान का कारण",
+    "noFurtherAction": "इस स्थिति के लिए यहां कोई और कार्रवाई उपलब्ध नहीं है।",
+    "forward": "अग्रेषित करें",
+    "forwardConfirmTitle": "क्या इस RTI अनुरोध को अग्रेषित करें?",
+    "forwardConfirmBody": "RTI अधिनियम की धारा 6(3) के अंतर्गत अनुरोध को किसी अन्य विभाग को स्थानांतरित करता है। सांविधिक उत्तर-अवधि दोबारा शुरू नहीं होती।",
+    "forwardReasonLabel": "विभाग / कार्यालय",
+    "respond": "उत्तर दें",
+    "respondConfirmTitle": "क्या इस RTI अनुरोध का उत्तर दर्ज करें?",
+    "respondConfirmBody": "आवेदक को CPIO का उत्तर दर्ज करता है। सुनिश्चित करें कि यह 30-दिन की सांविधिक समय-सीमा के भीतर जमा किया जाए। भेजने से पहले नीचे दिए गए पाठ की समीक्षा करें — यह सांविधिक अभिलेख का भाग बन जाता है।",
+    "respondReasonLabel": "आवेदक को उत्तर",
+    "firstAppeal": "प्रथम अपील",
+    "firstAppealConfirmTitle": "क्या प्रथम अपील दायर करें?",
+    "firstAppealConfirmBody": "RTI अधिनियम की धारा 19 के अंतर्गत इस अनुरोध को प्रथम अपील के रूप में आगे बढ़ाता है। इसे केवल आवेदक की ओर से ही करें।"
+  },
+  "crmRtiDetail": {
+    "modeOnline": "ऑनलाइन / RTI पोर्टल",
+    "modePost": "डाक द्वारा",
+    "modeEmail": "ईमेल",
+    "modeInPerson": "व्यक्तिगत रूप से",
+    "modeByHand": "हाथों-हाथ",
+    "feeNotPaid": "भुगतान नहीं किया गया",
+    "feePaid": "भुगतान किया गया",
+    "feePaidAmount": "भुगतान किया गया — {amount}",
+    "outcomeAllowed": "अपील स्वीकार",
+    "outcomePartlyAllowed": "अपील आंशिक रूप से स्वीकार",
+    "outcomeDismissed": "अपील खारिज",
+    "modeOfReceipt": "प्राप्ति का माध्यम",
+    "appealDisposalTitle": "अपील एवं निपटान",
+    "faaDecision": "FAA निर्णय",
+    "appellateOrder": "अपीलीय आदेश",
+    "secondAppeal": "द्वितीय अपील",
+    "secondAppealRecorded": "{ref} — {date} को दर्ज",
+    "disposed": "निपटाया गया",
+    "disposalReason": "निपटान का कारण",
+    "applicantDataNoticeLogged": "RTI आवेदक का व्यक्तिगत डेटा। पहुंच दर्ज की जाती है।",
+    "applicantDataNoticeMasked": "RTI आवेदक का व्यक्तिगत डेटा। छिपाया गया — आपको पूरा संपर्क विवरण देखने की अनुमति नहीं है।"
+  },
+  "crmRtiFilters": {
+    "statusAll": "सभी स्थितियां",
+    "statusReceived": "प्राप्त",
+    "statusTransferred": "स्थानांतरित",
+    "statusResponded": "उत्तर दिया गया",
+    "statusRejected": "अस्वीकृत",
+    "statusFirstAppeal": "प्रथम अपील",
+    "statusSecondAppeal": "द्वितीय अपील",
+    "statusDisposed": "निपटाया गया",
+    "sectionAll": "सभी धाराएं",
+    "section6": "§6 — सूचना",
+    "section11": "§11 — तृतीय पक्ष",
+    "status": "स्थिति",
+    "filterByStatus": "स्थिति के अनुसार फ़िल्टर करें",
+    "section": "धारा",
+    "filterBySection": "धारा के अनुसार फ़िल्टर करें",
+    "search": "खोजें",
+    "searchAriaLabel": "संदर्भ, आवेदक या विषय खोजें",
+    "searchPlaceholder": "संदर्भ, आवेदक, विषय…"
+  },
+  "crmRtiList": {
+    "showing": "{total} में से {from}–{to} दिखाए जा रहे हैं",
+    "pagesAriaLabel": "RTI रजिस्टर के पृष्ठ",
+    "previous": "← पिछला",
+    "next": "अगला →",
+    "pageOf": "पृष्ठ {page} / {pages}"
+  },
+  "crmRtiNew": {
+    "modeOnline": "ऑनलाइन / RTI पोर्टल",
+    "modePost": "डाक द्वारा",
+    "modeEmail": "ईमेल",
+    "modeInPerson": "व्यक्तिगत रूप से",
+    "modeByHand": "हाथों-हाथ",
+    "contactInvalid": "कृपया 10 अंकों का वैध भारतीय मोबाइल नंबर या ईमेल पता दर्ज करें।",
+    "feeInvalid": "कृपया वैध शुल्क राशि दर्ज करें (दशमलव के अधिकतम 2 स्थान)।",
+    "dateOfReceipt": "प्राप्ति की तिथि",
+    "dateOfReceiptHint": "आज की तिथि के लिए खाली छोड़ें। 30-दिन की उत्तर-अवधि इसी तिथि से गिनी जाती है।",
+    "modeOfReceipt": "प्राप्ति का माध्यम",
+    "selectMode": "माध्यम चुनें…",
+    "dpdpNotice": "यहां एकत्र किया गया व्यक्तिगत डेटा केवल सूचना का अधिकार अधिनियम, 2005 के अंतर्गत इस अनुरोध की प्रक्रिया के लिए उपयोग किया जाता है, तथा लागू अभिलेख-अवधारण अनुसूची और DPDP अधिनियम, 2023 के अनुसार रखा और प्रकट किया जाता है। आवेदक के संपर्क विवरण तक पहुंच दर्ज की जाती है।",
+    "contactPlaceholder": "10 अंकों का मोबाइल या ईमेल"
+  },
+  "crmServiceRequestDetail": {
+    "resolvedOn": "समाधान तिथि: {when}",
+    "waitingOn": "प्रतीक्षारत",
+    "statusNote": "स्थिति टिप्पणी",
+    "piiMasked": "डीपीडीपी अधिनियम 2023 के अंतर्गत संपर्क विवरण छिपाए गए हैं। इस नागरिक से संपर्क करना आवश्यक हो तो CRM प्रशासक से अनुरोध करें।"
+  },
+  "crmServiceRequestNew": {
+    "contactRequired": "नागरिक से इस अनुरोध के संबंध में संपर्क करने के लिए फ़ोन नंबर या ईमेल दर्ज करें।",
+    "dpdpNote": "संपर्क विवरण केवल इस अनुरोध को संसाधित करने और अद्यतन करने के लिए एकत्र किए जाते हैं (डिजिटल व्यक्तिगत डेटा संरक्षण अधिनियम, 2023)। नागरिक से संपर्क हो सके, इसके लिए फ़ोन या ईमेल में से कम से कम एक दें।",
+    "phone": "फ़ोन",
+    "email": "ईमेल",
+    "phoneOrEmailRequired": "(फ़ोन या ईमेल आवश्यक)"
+  },
+  "crmServiceRequestsFilterBar": {
+    "searchAria": "सेवा अनुरोध खोजें",
+    "searchPlaceholder": "संदर्भ, नागरिक, विषय खोजें…",
+    "search": "खोजें",
+    "status": "स्थिति",
+    "priority": "प्राथमिकता",
+    "serviceType": "सेवा का प्रकार",
+    "filterStatusAria": "स्थिति के अनुसार छानें",
+    "filterPriorityAria": "प्राथमिकता के अनुसार छानें",
+    "filterServiceTypeAria": "सेवा प्रकार के अनुसार छानें",
+    "all": "सभी",
+    "statusOption": {
+      "open": "खुला",
+      "in_progress": "प्रगति में",
+      "pending": "लंबित",
+      "resolved": "समाधानित",
+      "closed": "बंद",
+      "cancelled": "रद्द"
+    },
+    "priorityOption": {
+      "low": "निम्न",
+      "normal": "सामान्य",
+      "high": "उच्च",
+      "urgent": "अत्यावश्यक"
+    }
+  },
+  "crmServiceRequestsTable": {
+    "exportTitle": "नागरिक सेवा अनुरोध निर्यात करें?",
+    "exportDescription": "इस फ़ाइल में नागरिकों के नाम (डीपीडीपी अधिनियम 2023 के अंतर्गत व्यक्तिगत डेटा) शामिल हैं। केवल किसी विशिष्ट, वैध आधिकारिक प्रयोजन के लिए निर्यात करें।",
+    "exportConfirm": "निर्यात",
+    "emptyTitle": "कोई सेवा अनुरोध नहीं मिला",
+    "emptyMessage": "वर्तमान फ़िल्टर से कोई अनुरोध मेल नहीं खाता। कोई फ़िल्टर हटाएँ या नया अनुरोध दर्ज करें।",
+    "noRequests": "कोई अनुरोध नहीं",
+    "showing": "{total} में से {first}–{last} दिखाए जा रहे हैं • पृष्ठ {page} / {pageCount}",
+    "prev": "← पिछला",
+    "next": "अगला →"
+  },
+  "crmStageAgeingDashboard": {
+    "limitInvalid": "स्टेज सीमा के लिए एक पाइपलाइन, उस पाइपलाइन का कोई एक चरण और शून्य से अधिक पूर्ण संख्या में दिन आवश्यक हैं।",
+    "colPipeline": "पाइपलाइन",
+    "pipelineForLimit": "सीमा {n} के लिए पाइपलाइन",
+    "selectPipeline": "पाइपलाइन चुनें…",
+    "selectStage": "चरण चुनें…",
+    "choosePipelineFirst": "पहले पाइपलाइन चुनें",
+    "orphanOption": "{stage} — पाइपलाइन में नहीं है",
+    "orphanAlert": "यह चरण चयनित पाइपलाइन में नहीं है। कोई वर्तमान चरण चुनें या सीमा हटा दें।"
+  },
+  "crmTaskEscalationEditor": {
+    "unknownUser": "अज्ञात उपयोगकर्ता (अब मौजूद नहीं)",
+    "unknownRole": "अज्ञात भूमिका \"{role}\"",
+    "noManager": "कोई प्रबंधक निर्धारित नहीं",
+    "managerRoleAria": "नियम {n} के लिए प्रबंधक की भूमिका",
+    "managerUserAria": "नियम {n} के लिए प्रबंधक उपयोगकर्ता",
+    "noRole": "कोई भूमिका नहीं",
+    "noSpecificUser": "कोई विशिष्ट उपयोगकर्ता नहीं",
+    "escalates": "<strong>{name}</strong> को आगे भेजा जाएगा",
+    "escalatesMissing": "<strong>{name}</strong> को आगे भेजा जाएगा — आगे भेजे जाने से पहले इसे ठीक करें।",
+    "escalatesWithCount": "<strong>{name}</strong> को आगे भेजा जाएगा · {count, plural, one {{formatted} कार्य वर्तमान में अतिदेय} other {{formatted} कार्य वर्तमान में अतिदेय}}"
+  },
+  "crmVoiceOfCitizen": {
+    "windowRange": "अवधि: {from} से {to} तक",
+    "earliest": "आरंभ से",
+    "today": "आज",
+    "windowAll": "अवधि: सभी समय",
+    "subtitle": "नागरिक और हितधारक क्या कह रहे हैं — प्रत्येक दर्ज अंतःक्रिया का भावना-स्कोर निकाला जाता है और विषय के अनुसार समूहित किया जाता है • {window} • नागरिक प्रतिक्रिया",
+    "feedbackForm": "प्रतिक्रिया प्रपत्र",
+    "invalidPeriod": "यह रिपोर्टिंग अवधि मान्य नहीं है (आरंभ तिथि समाप्ति तिथि के बराबर या उससे पहले होनी चाहिए)। इसके बजाय सभी गतिविधि दिखाई जा रही है।",
+    "partialWindowBody": "इस सारांश द्वारा एक बार में जाँची जा सकने वाली संख्या से अधिक अंतःक्रियाओं का स्कोर निकाला गया है, इसलिए नीचे के आँकड़े केवल हाल की गतिविधि को दर्शाते हैं। सटीक आँकड़ा देखने के लिए ऊपर दिए अवधि नियंत्रण से समय-सीमा संकुचित करें।"
   }
 }

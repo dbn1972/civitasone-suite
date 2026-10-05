@@ -3,12 +3,17 @@
  * LeadScoreRulesEditor — LQ-002 admin. View and edit the weighted scoring rules
  * that drive automatic lead scoring. GET on mount, PUT on save. Numbers are
  * NaN-guarded and params are validated as JSON; an invalid row blocks the save
- * (never PUT a NaN weight or malformed params). On a failed load we show the
- * saved-info badge and never fabricate an empty rule set as fact.
+ * (never PUT a NaN weight or malformed params). On a failed load we show a
+ * recoverable ErrorState (never the editor) so an errored load can never be
+ * saved back as an empty rule set — saving {rules:[]} from a failed load would
+ * switch off automatic scoring for every lead. We never fabricate an empty rule
+ * set as fact.
  */
 import { useEffect, useId, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { EmptyState, Button } from "../ds";
+import { EmptyState, Button, ErrorState } from "../ds";
+import { toHumanError } from "@/lib/messages";
 import {
   getScoreRules,
   saveScoreRules,
@@ -64,6 +69,7 @@ function rowValid(row: RuleRow): boolean {
 }
 
 export function LeadScoreRulesEditor() {
+  const t = useTranslations("crmLeadScoreRulesEditor");
   const [rows, setRows] = useState<RuleRow[]>([]);
   const [source, setSource] = useState<LqSource | "loading">("loading");
   const [busy, setBusy] = useState(false);
@@ -140,11 +146,25 @@ export function LeadScoreRulesEditor() {
     );
   }
 
+  // A failed load must never fall through to the editor: saving from an
+  // errored view would PUT {rules:[]} and switch off automatic scoring for
+  // every lead. Show a recoverable error with no Save/Add instead.
+  if (source === "error") {
+    return (
+      <div className="card">
+        <div className="card-h">
+          <h3 id={headingId}>{t("heading")}</h3>
+          <DataSourceBadge source="error" />
+        </div>
+        <ErrorState error={toHumanError("load", { area: "scoring rules" })} onRetry={() => void load()} />
+      </div>
+    );
+  }
+
   return (
     <div className="card">
       <div className="card-h">
         <h3 id={headingId}>Scoring rules</h3>
-        {source === "error" ? <DataSourceBadge source="error" /> : null}
       </div>
       {message ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", padding: "0 12px" }}>{message}</p> : null}
       {error ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", padding: "0 12px" }}>{error}</p> : null}
@@ -161,7 +181,7 @@ export function LeadScoreRulesEditor() {
             <tr>
               <th>Attribute</th>
               <th>Score function</th>
-              <th style={{ textAlign: "right" }}>Weight</th>
+              <th style={{ textAlign: "end" }}>Weight</th>
               <th>Params (JSON)</th>
               <th>Enabled</th>
               <th><span className="sr-only">Actions</span></th>
@@ -202,7 +222,7 @@ export function LeadScoreRulesEditor() {
                       value={Number.isFinite(row.weight) ? row.weight : ""}
                       aria-invalid={Number.isFinite(row.weight) ? undefined : true}
                       onChange={(e) => update(idx, { weight: sanitizeNumber(e.target.value) })}
-                      style={{ width: 80, padding: 6, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)", textAlign: "right" }}
+                      style={{ width: 80, padding: 6, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)", textAlign: "end" }}
                     />
                   </td>
                   <td>

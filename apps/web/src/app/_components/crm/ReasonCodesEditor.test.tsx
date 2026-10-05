@@ -1,3 +1,5 @@
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { ReasonCodesEditor } from "./ReasonCodesEditor";
@@ -16,16 +18,32 @@ beforeEach(() => {
 });
 
 describe("ReasonCodesEditor (LQ-004 admin)", () => {
-  it("shows the saved-info badge on a failed load", async () => {
+  it("shows a recoverable error (no Save/Add, no PUT) on a failed load", async () => {
     vi.mocked(lq.getReasonCodes).mockResolvedValue({ data: [], source: "error" });
-    render(<ReasonCodesEditor />);
-    await waitFor(() => expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument());
-    expect(screen.getByText(/no reason codes yet/i)).toBeInTheDocument();
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><ReasonCodesEditor /></NextIntlClientProvider>);
+    await waitFor(() => expect(screen.getByText(/couldn.t load reason codes/i)).toBeInTheDocument());
+    // The editor and its empty-state must never render on an errored load:
+    // saving from there would PUT {codes:[]} and erase the taxonomy.
+    expect(screen.queryByText(/no reason codes yet/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /save reason codes/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /add reason code/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
+  });
+
+  it("recovers to the editor when retry succeeds", async () => {
+    vi.mocked(lq.getReasonCodes)
+      .mockResolvedValueOnce({ data: [], source: "error" })
+      .mockResolvedValueOnce({ data: [code], source: "api" });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><ReasonCodesEditor /></NextIntlClientProvider>);
+    await waitFor(() => expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /try again/i }));
+    await waitFor(() => expect(screen.getByDisplayValue("No budget")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /save reason codes/i })).toBeInTheDocument();
   });
 
   it("blocks save when a row has no code", async () => {
     vi.mocked(lq.getReasonCodes).mockResolvedValue({ data: [], source: "api" });
-    render(<ReasonCodesEditor />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><ReasonCodesEditor /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByText(/no reason codes yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add reason code/i }));
     fireEvent.click(screen.getByRole("button", { name: /save reason codes/i }));
@@ -36,7 +54,7 @@ describe("ReasonCodesEditor (LQ-004 admin)", () => {
   it("loads, edits and saves reason codes", async () => {
     vi.mocked(lq.getReasonCodes).mockResolvedValue({ data: [code], source: "api" });
     vi.mocked(lq.saveReasonCodes).mockResolvedValue(undefined);
-    render(<ReasonCodesEditor />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><ReasonCodesEditor /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByDisplayValue("No budget")).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText(/label for reason 1/i), { target: { value: "No funds" } });
     fireEvent.click(screen.getByRole("button", { name: /save reason codes/i }));
@@ -52,7 +70,7 @@ describe("ReasonCodesEditor (LQ-004 admin)", () => {
   // focus) alone.
   it("keeps a reason code's own value and focus attached to it after an earlier one is removed", async () => {
     vi.mocked(lq.getReasonCodes).mockResolvedValue({ data: [], source: "api" });
-    render(<ReasonCodesEditor />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><ReasonCodesEditor /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByText(/no reason codes yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add reason code/i }));
     fireEvent.click(screen.getByRole("button", { name: /add reason code/i }));
