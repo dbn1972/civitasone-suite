@@ -8,6 +8,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { commandId } from "../../shared/idempotency.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
+import { ALLOWED_CURRENCIES } from "../deals/quotation-domain.js";
 import * as repo from "./repo.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
@@ -15,6 +16,8 @@ const ADMIN_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
 
 const idParam = z.object({ id: z.string().uuid() });
 const minor = z.string().regex(/^\d{1,25}$/, "must be a non-negative integer string of minor units");
+// F4-03: a price book carries a currency from the small allow-list (default INR).
+const currencyCode = z.enum(ALLOWED_CURRENCIES);
 
 const itemBody = z.object({
   productId: z.string().uuid(),
@@ -35,7 +38,7 @@ const entriesField = z.array(itemBody).max(1000).optional();
 const createBody = z.object({
   name: z.string().min(1).max(200),
   segment: z.string().min(1).max(120).nullable().optional(),
-  currency: z.string().length(3).default("INR"),
+  currency: currencyCode.default("INR"),
   geography: z.string().min(1).max(120).nullable().optional(),
   channel: z.string().min(1).max(120).nullable().optional(),
   priority: z.number().int().min(0).max(100000).default(0),
@@ -45,7 +48,7 @@ const createBody = z.object({
 const updateBody = z.object({
   name: z.string().min(1).max(200).optional(),
   segment: z.string().min(1).max(120).nullable().optional(),
-  currency: z.string().length(3).optional(),
+  currency: currencyCode.optional(),
   geography: z.string().min(1).max(120).nullable().optional(),
   channel: z.string().min(1).max(120).nullable().optional(),
   priority: z.number().int().min(0).max(100000).optional(),
@@ -55,7 +58,7 @@ const updateBody = z.object({
 
 const resolveQuery = z.object({
   segment: z.string().min(1).max(120).optional(),
-  currency: z.string().length(3).optional(),
+  currency: currencyCode.optional(),
   geography: z.string().min(1).max(120).optional(),
   channel: z.string().min(1).max(120).optional(),
 });

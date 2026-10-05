@@ -1,9 +1,9 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { useFormError } from "@/lib/useFormError";
-import { useTranslations } from "next-intl";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { Button, ConfirmDialog } from "@/app/_components/ds";
 
@@ -24,23 +24,9 @@ type Props = {
   initialSegment?: "all" | "mine" | "recent";
 };
 
-/** Flatten a value to a CSV cell, quoting when it contains a comma/quote/newline. */
-function csvCell(value: unknown): string {
-  const s = value === null || value === undefined ? "" : String(value);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
-/** Build a CSV document from an array of record rows (header from the first row's keys). */
-function toCsv(rows: Array<Record<string, unknown>>): string {
-  if (rows.length === 0) return "";
-  const headers = Object.keys(rows[0]);
-  const lines = [headers.join(",")];
-  for (const row of rows) lines.push(headers.map((h) => csvCell(row[h])).join(","));
-  return lines.join("\n");
-}
-
 export function ContactToolbar({ canExport = false, exportQuery = {}, initialSearch = "", initialSegment = "all" }: Props) {
   const t = useTranslations("crmContactToolbar");
+  const tExport = useTranslations("crmExport");
   const router = useRouter();
   const searchParams = useSearchParams();
   // GAP-CRM-CONTACTS-04: seed from the URL so after a search the box isn't blank
@@ -81,14 +67,16 @@ export function ContactToolbar({ canExport = false, exportQuery = {}, initialSea
     try {
       // Forward the active filters AND the mandatory purpose so the backend
       // audit event records why this PII egress happened (CLAUDE.md rule 8).
+      // F2-01: the server now returns CSV directly (text/csv), applies the
+      // filters, masks PII by role and audits the export — so the client just
+      // streams the response to a file instead of re-serialising JSON.
       const params = new URLSearchParams(exportQuery);
       if (purpose) params.set("purpose", purpose);
       const qs = params.toString();
       const res = await browserFetch(`v1/crm/contacts/export${qs ? `?${qs}` : ""}`);
       if (!res.ok) throw new Error(await errorMessageFromResponse(res));
-      const body = (await res.json()) as { data: Array<Record<string, unknown>> };
-      const csv = toCsv(body.data);
-      const blob = new Blob([csv], { type: "text/csv" });
+      const csv = await res.text();
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -96,7 +84,7 @@ export function ContactToolbar({ canExport = false, exportQuery = {}, initialSea
       a.click();
       URL.revokeObjectURL(url);
       setExportOpen(false);
-      setMessage(`Exported ${body.data.length} contacts.`);
+      setMessage(tExport("contactsDone"));
     } catch (e) {
       setError(formError.fromException("save", e).message);
     } finally {
@@ -155,7 +143,7 @@ export function ContactToolbar({ canExport = false, exportQuery = {}, initialSea
         confirmLabel={t("confirmLabel")}
         requireReason
         reasonLabel={t("reasonLabel")}
-        minReasonLength={5}
+        minReasonLength={10}
         busy={busy}
         errorMessage={error || undefined}
         onConfirm={(reason) => void exportContacts(reason)}

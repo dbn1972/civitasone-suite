@@ -109,6 +109,30 @@ describe("GET/PUT /v1/crm/lead-reason-codes", () => {
   it("400 for an invalid code body", async () => {
     expect((await call("PUT", "/v1/crm/lead-reason-codes", { payload: { codes: [{ code: "BAD CODE", label: "x", appliesToStatus: "nurture", active: true }] } })).statusCode).toBe(400);
   });
+
+  // F3-03: an empty catalogue PUT is a loud 422 EMPTY_CONFIG_REJECTED unless the
+  // caller explicitly confirms clearing all with ?confirmEmpty=true.
+  it("422 EMPTY_CONFIG_REJECTED for an empty code list without confirmEmpty", async () => {
+    const res = await call("PUT", "/v1/crm/lead-reason-codes", { payload: { codes: [] } });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("EMPTY_CONFIG_REJECTED");
+  });
+
+  it("refuses confirmEmpty=false (z.coerce.boolean would read it as true)", async () => {
+    const res = await call("PUT", "/v1/crm/lead-reason-codes?confirmEmpty=false", { payload: { codes: [] } });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("EMPTY_CONFIG_REJECTED");
+  });
+
+  it("refuses a non-true/false confirmEmpty value (0)", async () => {
+    const res = await call("PUT", "/v1/crm/lead-reason-codes?confirmEmpty=0", { payload: { codes: [] } });
+    expect(res.statusCode).toBeGreaterThanOrEqual(400);
+  });
+
+  it("accepts an empty code list with ?confirmEmpty=true", async () => {
+    const res = await call("PUT", "/v1/crm/lead-reason-codes?confirmEmpty=true", { payload: { codes: [] } });
+    expect(res.statusCode).toBe(200);
+  });
 });
 
 // ── GAP-CRM-LEAD-REASON-CODES-04: list-level optimistic concurrency ──────────

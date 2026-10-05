@@ -224,7 +224,11 @@ export class DedupRulesConflictError extends Error {
 }
 
 export async function saveDedupRules(rules: DedupRule[], version?: string): Promise<string | undefined> {
-  const res = await browserFetch("v1/crm/dedup-rules", {
+  // F3-03: the server rejects an empty config PUT with 422 unless confirmEmpty=true.
+  // Reaching here with an empty list is the editor's explicit "clear all" confirmation,
+  // so pass the flag through (it is a no-op for a non-empty list).
+  const path = rules.length === 0 ? "v1/crm/dedup-rules?confirmEmpty=true" : "v1/crm/dedup-rules";
+  const res = await browserFetch(path, {
     method: "PUT",
     // GAP-CRM-DEDUP-RULES-02: send the version as If-Match so the backend can
     // reject a stale write (409) instead of silently overwriting a concurrent

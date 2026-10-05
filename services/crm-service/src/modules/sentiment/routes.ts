@@ -2,6 +2,7 @@
  * Voice-of-Customer routes (P2-6).
  * GET /v1/crm/sentiment/summary — aggregate: polarity mix, average score, top themes
  * GET /v1/crm/sentiment         — the underlying scored interactions
+ * GET /v1/crm/sentiment/export  — audited CSV export of the scored interactions (F2-06)
  *
  * There is no write route on purpose: a reading exists because an interaction was
  * logged, and the sentiment consumer is the only thing that produces one. Scoring
@@ -18,6 +19,9 @@ import { hasAnyRole } from "@civitasone/auth";
 import type { RequestContext } from "@civitasone/types";
 import { listQuery, windowOf, listEnvelope } from "../../shared/list-query.js";
 import { POLARITIES } from "./domain.js";
+import { rowsToCsv, exportFilename, type CsvColumn } from "../../shared/csv-export.js";
+import { auditBulkExport } from "../../shared/export-audit.js";
+import type { InteractionSentimentView } from "./schema.js";
 import * as queries from "./queries.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
@@ -35,6 +39,23 @@ const filterQuery = z.object({
 });
 
 const listSentimentQuery = listQuery.merge(filterQuery);
+
+const exportSentimentQuery = filterQuery.extend({
+  purpose: z.string().trim().min(10).max(500),
+});
+
+/** Hard ceiling on a single export. */
+const EXPORT_CAP = 5000;
+
+const EXPORT_COLUMNS: CsvColumn<InteractionSentimentView>[] = [
+  { header: "Analysed At", value: (r) => r.analysedAt },
+  { header: "Activity Type", value: (r) => r.activityType },
+  { header: "Polarity", value: (r) => r.polarity },
+  { header: "Score", value: (r) => r.score },
+  { header: "Themes", value: (r) => (r.themes ?? []).join("; ") },
+  { header: "Excerpt", value: (r) => r.excerpt },
+  { header: "Model", value: (r) => r.model },
+];
 
 /**
  * An inverted range silently returns nothing, which reads as "no complaints" —
@@ -79,5 +100,41 @@ export async function sentimentRoutes(app: FastifyInstance): Promise<void> {
       { ...q, excludeSensitive: !canSeeSensitive(ctx) },
     );
     return reply.send(listEnvelope(rows, w, total));
+  });
+  // F2-06: audited CSV export of the scored interactions, with the same vigilance
+  // filter as the list. CSV is returned directly (not a client Blob) and the bulk
+  // egress is recorded with the caller's stated purpose.
+  app.get("/v1/crm/sentiment/export", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CRM_ROLES);
+    const q = exportSentimentQuery.parse(req.query ?? {});
+    assertOrderedRange(q.from, q.to);
+
+    const canSeeVigilance = canSeeSensitive(ctx);
+    const { rows } = await queries.listSentiments(
+      ctx.tenantId,
+      EXPORT_CAP,
+      0,
+      { from: q.from, to: q.to, polarity: q.polarity, activityType: q.activityType, excludeSensitive: !canSeeVigilance },
+    );
+    const csv = rowsToCsv(EXPORT_COLUMNS, rows);
+
+    await auditBulkExport(ctx, {
+      resourceType: "interaction_sentiment",
+      action: "sentiment_bulk_export",
+      rowCount: rows.length,
+      purpose: q.purpose,
+      filters: {
+        ...(q.from ? { from: q.from } : {}),
+        ...(q.to ? { to: q.to } : {}),
+        ...(q.polarity ? { polarity: q.polarity } : {}),
+        ...(q.activityType ? { activityType: q.activityType } : {}),
+      },
+      masked: !canSeeVigilance,
+    });
+
+    reply.header("content-type", "text/csv; charset=utf-8");
+    reply.header("content-disposition", `attachment; filename="${exportFilename("voice-of-customer")}"`);
+    return reply.send(csv);
   });
 }

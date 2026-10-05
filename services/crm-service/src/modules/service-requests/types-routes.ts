@@ -21,6 +21,7 @@ const CFG: CodeMasterConfig = {
   table: "crm.service_types",
   resource: "service_type",
   noun: "service type",
+  hasSla: true,
   commands: {
     create: COMMANDS.createServiceType,
     update: COMMANDS.updateServiceType,

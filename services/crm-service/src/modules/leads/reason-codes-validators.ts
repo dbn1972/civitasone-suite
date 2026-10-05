@@ -11,7 +11,10 @@ export const reasonCodeSchema = z.object({
 });
 
 export const putReasonCodesBody = z.object({
-  codes: z.array(reasonCodeSchema).min(1).max(50),
+  // F3-03 empty-config guard: an empty list is allowed through validation so the
+  // ROUTE can answer with 422 EMPTY_CONFIG_REJECTED (unless ?confirmEmpty=true),
+  // rather than a generic 400. A non-empty list is still capped at 50.
+  codes: z.array(reasonCodeSchema).max(50),
   // GAP-CRM-LEAD-REASON-CODES-04: optional list-level optimistic-concurrency
   // token. Also accepted via the If-Match header; the header takes precedence.
   version: z.string().min(1).optional(),

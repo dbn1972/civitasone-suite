@@ -77,6 +77,18 @@ export function templateLabel(slug: string): string {
 
 /* ============================================================ QP-001 types == */
 
+/**
+ * F4-03: the small allow-list of currencies a product / price book / quotation may carry
+ * (mirrors crm-service ALLOWED_CURRENCIES). Display uses formatMoneyIn so a non-INR amount
+ * renders under the right symbol.
+ */
+export const ALLOWED_CURRENCIES = ["INR", "USD", "EUR", "GBP", "AED"] as const;
+export type AllowedCurrency = (typeof ALLOWED_CURRENCIES)[number];
+
+export function isAllowedCurrency(code: string): code is AllowedCurrency {
+  return (ALLOWED_CURRENCIES as readonly string[]).includes(code.toUpperCase());
+}
+
 export interface Product {
   id?: string;
   category: string;
@@ -85,6 +97,8 @@ export interface Product {
   unit: string;
   /** Tax rate in basis points (1 bp = 0.01%). */
   taxRateBps: number;
+  /** F4-02: optional HSN (goods) / SAC (services) classification code (4-8 digits). */
+  hsnSac?: string;
   /** Unit price in minor units (paise) as a string. */
   priceMinor: string;
   currency: string;
@@ -110,6 +124,7 @@ export function normaliseProduct(raw: unknown): Product | null {
     name,
     unit: str(r.unit),
     taxRateBps: num(r.taxRateBps),
+    ...(str(r.hsnSac) ? { hsnSac: str(r.hsnSac) } : {}),
     priceMinor: minorStr(r.priceMinor ?? r.price),
     currency: str(r.currency) || "INR",
     activeFrom: str(r.activeFrom),
@@ -310,6 +325,21 @@ export interface Quotation {
   version: number;
   status: QuoteStatus;
   lines: QuotationLine[];
+  /** F4-03: the quotation's single currency (default INR). */
+  currency?: string;
+  /** F4-02: Indian GST state codes for the CGST/SGST vs IGST decision. */
+  placeOfSupply?: string;
+  supplierState?: string;
+  /**
+   * F4-01: server-computed money (bigint paise strings). Present once the server
+   * has applied the quotation — the UI reads these for display rather than
+   * re-summing a saved quotation.
+   */
+  netMinor?: string;
+  taxMinor?: string;
+  grandTotalMinor?: string;
+  /** F4-02: quotation-level GST summary (paise strings), from the document endpoint. */
+  gstSummary?: { cgstMinor: string; sgstMinor: string; igstMinor: string };
   /** When this quotation (version) was created, for list display. */
   createdAt?: string;
   /** Whether an unapproved discount/deviation is blocking send (QP-004). */
@@ -357,6 +387,22 @@ export function normaliseQuotation(raw: unknown): Quotation | null {
     lines: toArray(r, "lines", "lineItems")
       .map(normaliseLine)
       .filter((l): l is QuotationLine => l !== null),
+    ...(str(r.currency) ? { currency: str(r.currency) } : {}),
+    ...(str(r.placeOfSupply) ? { placeOfSupply: str(r.placeOfSupply) } : {}),
+    ...(str(r.supplierState) ? { supplierState: str(r.supplierState) } : {}),
+    // F4-01: carry the server-computed money through when present (bigint paise strings).
+    ...(r.netMinor !== undefined ? { netMinor: minorStr(r.netMinor) } : {}),
+    ...(r.taxMinor !== undefined ? { taxMinor: minorStr(r.taxMinor) } : {}),
+    ...(r.grandTotalMinor !== undefined ? { grandTotalMinor: minorStr(r.grandTotalMinor) } : {}),
+    ...(r.gstSummary && typeof r.gstSummary === "object"
+      ? {
+          gstSummary: {
+            cgstMinor: minorStr((r.gstSummary as Record<string, unknown>).cgstMinor),
+            sgstMinor: minorStr((r.gstSummary as Record<string, unknown>).sgstMinor),
+            igstMinor: minorStr((r.gstSummary as Record<string, unknown>).igstMinor),
+          },
+        }
+      : {}),
     createdAt: str(r.createdAt) || undefined,
     approvalRequired: bool(r.approvalRequired),
     approvalStatus: str(r.approvalStatus) || undefined,
@@ -391,6 +437,47 @@ export function quotationTotalMinor(lines: QuotationLine[]): string {
   let total = 0n;
   for (const l of lines) total += BigInt(lineNetMinor(l)) + BigInt(lineTaxMinor(l));
   return total.toString();
+}
+
+/** Sum of per-line tax (paise string) — the quotation's total tax. */
+export function quotationTaxMinor(lines: QuotationLine[]): string {
+  let total = 0n;
+  for (const l of lines) total += BigInt(lineTaxMinor(l));
+  return total.toString();
+}
+
+/**
+ * F4-02: split a total tax (paise) into CGST/SGST/IGST for the builder footer, mirroring
+ * the server (quotation-domain gstSplit): intra-state (place == supplier) → CGST = SGST =
+ * tax/2, odd paisa to SGST; inter-state (or either state unknown) → IGST = tax. BigInt
+ * only; no float touches a money value.
+ */
+export function gstSplit(
+  taxMinor: string,
+  placeOfSupply: string | null | undefined,
+  supplierState: string | null | undefined,
+): { cgstMinor: string; sgstMinor: string; igstMinor: string } {
+  const tax = BigInt(minorStr(taxMinor));
+  if (tax <= 0n) return { cgstMinor: "0", sgstMinor: "0", igstMinor: "0" };
+  const pos = (placeOfSupply ?? "").trim().toUpperCase();
+  const sup = (supplierState ?? "").trim().toUpperCase();
+  const intra = pos !== "" && sup !== "" && pos === sup;
+  if (intra) {
+    const cgst = tax / 2n;
+    const sgst = tax - cgst;
+    return { cgstMinor: cgst.toString(), sgstMinor: sgst.toString(), igstMinor: "0" };
+  }
+  return { cgstMinor: "0", sgstMinor: "0", igstMinor: tax.toString() };
+}
+
+/**
+ * F4-01: the grand total to DISPLAY for a saved quotation — prefer the server's
+ * grand_total_minor when present, falling back to a client re-sum only for a
+ * never-persisted draft that carries no server figure yet.
+ */
+export function displayGrandTotalMinor(q: Quotation): string {
+  if (q.grandTotalMinor !== undefined && q.grandTotalMinor !== "") return q.grandTotalMinor;
+  return quotationTotalMinor(q.lines);
 }
 
 export async function getQuotations(): Promise<LoaderResult<Quotation[]>> {
@@ -467,6 +554,9 @@ export async function createQuotation(q: Quotation): Promise<void> {
     templateRef: q.template,
     lineItems: toApiLineItems(q.lines),
     totalMinor: quotationTotalMinor(q.lines),
+    ...(q.currency ? { currency: q.currency } : {}),
+    ...(q.placeOfSupply ? { placeOfSupply: q.placeOfSupply } : {}),
+    ...(q.supplierState ? { supplierState: q.supplierState } : {}),
   };
   const res = await browserFetch("v1/crm/quotations", { method: "POST", body: JSON.stringify(body) });
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
@@ -484,6 +574,8 @@ export async function updateQuotation(id: string, q: Quotation): Promise<{ id: s
   const body = {
     lineItems: toApiLineItems(q.lines),
     totalMinor: quotationTotalMinor(q.lines),
+    ...(q.placeOfSupply ? { placeOfSupply: q.placeOfSupply } : {}),
+    ...(q.supplierState ? { supplierState: q.supplierState } : {}),
   };
   const res = await browserFetch(`v1/crm/quotations/${id}/new-version`, {
     method: "POST",

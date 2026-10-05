@@ -8,7 +8,7 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { resolveContext, requireRole } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as dedupRepo from "./dedup-repo.js";
 import { rankDuplicates } from "./dedup-domain.js";
 
@@ -24,14 +24,24 @@ const ruleSchema = z.object({
 });
 
 const putRulesBody = z.object({
-  rules: z.array(ruleSchema).min(1).max(20),
+  // F3-03 empty-config guard: an empty list reaches the ROUTE (422
+  // EMPTY_CONFIG_REJECTED unless ?confirmEmpty=true) rather than a generic 400.
+  rules: z.array(ruleSchema).max(20),
   // GAP-CRM-DEDUP-RULES-02: optional list-level optimistic-concurrency token.
   // Also accepted via the If-Match header; the header takes precedence.
   version: z.string().min(1).optional(),
 });
 
-const duplicateCheckBody = z.object({
-  id: z.string().uuid().optional(),
+/** F3-03: `?confirmEmpty=true` must be explicit to accept an empty config PUT.
+ * (z.coerce.boolean() would read the string "false" as true, so use an enum.) */
+const confirmEmptyQuery = z.object({
+  confirmEmpty: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
+});
+
+const duplicateCheckBody = z.object({  id: z.string().uuid().optional(),
   name: z.string().max(200).optional(),
   email: z.string().max(320).optional(),
   phone: z.string().max(32).optional(),
@@ -56,6 +66,13 @@ export async function dedupRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = putRulesBody.parse(req.body);
+    const { confirmEmpty } = confirmEmptyQuery.parse(req.query ?? {});
+    // F3-03: refuse an accidental empty dedup-rules PUT unless the caller explicitly
+    // confirmed clearing all (the web's DedupRulesEditor already has a "clear all"
+    // confirmation that sets confirmEmpty=true). Fails loud over a silent no-op.
+    if (body.rules.length === 0 && !confirmEmpty) {
+      throw new HttpError(422, "EMPTY_CONFIG_REJECTED", "an empty dedup-rules list requires confirmEmpty=true");
+    }
     // If-Match header takes precedence over a body version; strip optional
     // weak-ETag quoting so `"3"` and `3` compare equal.
     const headerMatch = req.headers["if-match"];

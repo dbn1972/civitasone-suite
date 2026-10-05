@@ -24,6 +24,9 @@ describe("mapCrmAccounts", () => {
         website: "https://example.gov.in",
         parentId: null,
         contactCount: 4,
+        // F5-01/F5-02: owner + last-contact context (null when absent).
+        ownerId: null,
+        lastContactAt: null,
       },
     ]);
   });
@@ -32,7 +35,7 @@ describe("mapCrmAccounts", () => {
     const mapped = mapCrmAccounts([{ id: "a", name: "Branch" }]);
 
     expect(mapped).toEqual([
-      { id: "a", name: "Branch", industry: null, website: null, parentId: null, contactCount: 0 },
+      { id: "a", name: "Branch", industry: null, website: null, parentId: null, contactCount: 0, ownerId: null, lastContactAt: null },
     ]);
   });
 
@@ -40,6 +43,14 @@ describe("mapCrmAccounts", () => {
     const mapped = mapCrmAccounts([{ id: "a", name: "Branch", contactCount: "12" }]);
 
     expect(mapped?.[0]?.contactCount).toBe(12);
+  });
+
+  it("F5-01/F5-02: carries ownerId and lastContactAt when present", () => {
+    const mapped = mapCrmAccounts([
+      { id: "a", name: "Branch", ownerId: "99999999-9999-4999-8999-999999999999", lastContactAt: "2026-09-15T08:30:00.000Z" },
+    ]);
+    expect(mapped?.[0]?.ownerId).toBe("99999999-9999-4999-8999-999999999999");
+    expect(mapped?.[0]?.lastContactAt).toBe("2026-09-15T08:30:00.000Z");
   });
 
   it("skips rows without an id or name", () => {

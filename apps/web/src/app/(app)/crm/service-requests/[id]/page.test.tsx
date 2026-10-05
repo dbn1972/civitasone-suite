@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen } from "@/test-utils/intl-render";
 
 const fetchJsonMock = vi.fn();
 vi.mock("../../../../_data/apiClient", () => ({
@@ -77,19 +77,20 @@ describe("ServiceRequestDetailPage — DETAIL-01 (status note vs resolution)", (
   });
 });
 
-describe("ServiceRequestDetailPage — DETAIL-02 (PII masking, DPDP)", () => {
-  it("masks phone and email for a non-privileged crm_user", async () => {
+describe("ServiceRequestDetailPage — DETAIL-02 / F1-04 + F1-06 (server-side PII masking, DPDP)", () => {
+  it("renders the server-masked phone and email for a non-privileged crm_user", async () => {
     mockRoles.mockReturnValue(["crm_user"]);
-    mockDetail({ status: "open" });
+    // The server masks for a non-PII role; the page renders the returned value.
+    mockDetail({ status: "open", citizenPhone: "******3210", citizenEmail: "a***@example.gov.in" });
     render(await Page({ params: { id: "sr-1" } }));
     expect(screen.queryByText("9876543210")).not.toBeInTheDocument();
     expect(screen.queryByText("asha.rao@example.gov.in")).not.toBeInTheDocument();
     // masked forms present
-    expect(screen.getByText(/98••••••10/)).toBeInTheDocument();
+    expect(screen.getByText("******3210")).toBeInTheDocument();
     expect(screen.getByText(/masked under the DPDP Act/i)).toBeInTheDocument();
   });
 
-  it("reveals phone and email in clear for a privileged crm_admin", async () => {
+  it("renders phone and email in clear for a privileged crm_admin (server sends the clear value)", async () => {
     mockRoles.mockReturnValue(["crm_admin"]);
     mockDetail({ status: "open" });
     render(await Page({ params: { id: "sr-1" } }));

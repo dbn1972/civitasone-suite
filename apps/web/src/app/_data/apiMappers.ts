@@ -596,6 +596,9 @@ export function mapCrmAccounts(payload: unknown): CRMAccountSummary[] | null {
       website: toText(row.website),
       parentId: toText(row.parentId),
       contactCount: parseMinor(row.contactCount) ?? 0,
+      // F5-01/F5-02: optional owner + last-contact context (null when unset).
+      ownerId: toText(row.ownerId),
+      lastContactAt: toText(row.lastContactAt),
     });
   }
   return mapped;

@@ -115,7 +115,6 @@ export function RtiTable({
   rows: seedRows,
   source = "api",
   page = 1,
-  canRevealPii = false,
   hasFilters = false,
 }: {
   rows: CrmRtiRow[];
@@ -123,10 +122,12 @@ export function RtiTable({
   /** 1-based server page — part of the cache key so pages don't overwrite each other. */
   page?: number;
   /**
-   * GAP-CRM-RTI-04: whether the viewer may see applicant names in the clear
-   * (CRM_PII_READ_ROLES, resolved server-side on the page). When false, the
-   * list shows a reduced form; the detail page remains the place for the full
-   * name. The server stays the authority on what data it returns.
+   * GAP-CRM-RTI-04 / F1-02 + F1-06: whether the viewer may see applicant names
+   * in the clear. The SERVER now masks `applicantName` in the list for roles
+   * outside the CRM PII-read set and sends the clear value only to those roles,
+   * so the table renders whatever the server returned and no longer masks
+   * client-side. Kept as an optional prop for backward compatibility with
+   * callers that still pass it; it no longer affects rendering.
    */
   canRevealPii?: boolean;
   /**
@@ -202,7 +203,7 @@ export function RtiTable({
             label: t("colApplicant"),
             render: (r) => (
               <span style={{ fontSize: 13, color: "var(--ink)" }}>
-                {canRevealPii ? r.applicantName : maskApplicantName(r.applicantName)}
+                {r.applicantName}
               </span>
             ),
           },

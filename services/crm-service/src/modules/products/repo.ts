@@ -13,6 +13,7 @@ export interface ProductView {
   name: string;
   unit: string;
   taxRateBps: number;
+  hsnSac: string | null;
   priceMinor: string;
   currency: string;
   activeFrom: string | null;
@@ -24,6 +25,7 @@ export interface ProductView {
 const COLS = sql`
   id, category, code, name, unit,
   tax_rate_bps AS "taxRateBps",
+  hsn_sac AS "hsnSac",
   price_minor::text AS "priceMinor",
   currency,
   active_from AS "activeFrom",
@@ -81,4 +83,25 @@ export async function isSelectable(tenantId: string, id: string): Promise<boolea
       AND (active_to IS NULL OR active_to >= CURRENT_DATE)
   `)) as unknown as Array<{ ok: number }>;
   return rows.length > 0;
+}
+
+/**
+ * F4-03: the currency each of the given products carries, keyed by product id. Used to
+ * enforce that a quotation stays single-currency — a line sourced from a product in a
+ * different currency to the quotation header is rejected (422) at the route boundary.
+ */
+export async function currenciesByIds(
+  tenantId: string,
+  ids: readonly string[],
+): Promise<Map<string, string>> {
+  const unique = Array.from(new Set(ids.filter((id) => id)));
+  if (unique.length === 0) return new Map();
+  const rows = await scopedRead(async (tx) => tx.execute(sql`
+    SELECT id, currency FROM crm.products
+    WHERE tenant_id = ${tenantId}
+      AND id = ANY(${sql`ARRAY[${sql.join(unique.map((id) => sql`${id}::uuid`), sql`, `)}]`})
+  `)) as unknown as Array<{ id: string; currency: string }>;
+  const map = new Map<string, string>();
+  for (const r of rows) map.set(r.id, (r.currency ?? "").toUpperCase());
+  return map;
 }

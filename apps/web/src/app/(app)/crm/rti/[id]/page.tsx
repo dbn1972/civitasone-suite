@@ -1,10 +1,12 @@
+import { getTranslations } from "next-intl/server";
 import { fetchJson } from "../../../../_data/apiClient";
 import { PageHeader, StatusPill, Card, LoadErrorState, EmptyState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { RtiActions } from "./RtiActions";
 import { formatMoney } from "@/lib/formatters";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
-import { getTranslations } from "next-intl/server";
+import { sectionLabel } from "@/lib/crm/rti";
+import { CaseStatusTimeline, type CaseHistoryEntry } from "../../../../_components/crm/CaseStatusTimeline";
 
 type Translate = (key: string, values?: Record<string, string | number>) => string;
 
@@ -97,25 +99,11 @@ const FAA_OUTCOME_KEY: Record<string, string> = {
 };
 
 /**
- * GAP-CRM-RTI-DETAIL-03: partially mask the applicant's contact (DPDP). A
- * phone shows only its last 4 digits; an email shows the first char and its
- * domain. Shown in clear only to a user with a CRM role (who legitimately
- * needs it to reply) — never to an unprivileged viewer. An audited
- * reveal-with-reason for the masked case is a backend-dependent follow-up
- * (GAP-CRM-RTI-04): there is no read-access-log endpoint to call yet, and a
- * reveal with no real audit behind it is worse than none.
+ * GAP-CRM-RTI-DETAIL-03 / F1-02: the applicant's name and contact are masked
+ * SERVER-SIDE for roles outside the CRM PII-read set (crm-service
+ * modules/rti/rti-route.ts + shared/pii-reveal.ts). The page renders whatever
+ * the server returned — no client-side masking.
  */
-function maskContact(value: string): string {
-  const v = value.trim();
-  if (v.includes("@")) {
-    const [local, domain] = v.split("@");
-    const head = local ? local[0] : "";
-    return `${head}•••@${domain ?? ""}`;
-  }
-  const digits = v.replace(/\D/g, "");
-  if (digits.length >= 4) return `•••• ${digits.slice(-4)}`;
-  return "••••";
-}
 
 export default async function RtiDetailPage({
   params,
@@ -140,6 +128,22 @@ export default async function RtiDetailPage({
   );
   const r = result.data;
   const source = result.source;
+
+  // F6-01: status timeline — separate GET, so the detail contract is unchanged.
+  const { data: history } = await fetchJson<unknown, CaseHistoryEntry[]>(
+    `/api/v1/crm/rti/${params.id}/history`,
+    [],
+    {
+      revalidateSeconds: 0,
+      telemetryKey: "crm.rti.history",
+      mapResponse: (p) => {
+        if (p && typeof p === "object" && Array.isArray((p as { data?: unknown }).data)) {
+          return (p as { data: CaseHistoryEntry[] }).data;
+        }
+        return [];
+      },
+    },
+  );
 
   // GAP-CRM-GRIEVANCES-DETAIL-07 (also RTI): an outage must not be titled as a
   // missing record. Only a real 404 (or a successful empty body) is "not
@@ -321,20 +325,19 @@ export default async function RtiDetailPage({
               <dd style={{ fontWeight: 600 }}>{r.applicantName}</dd>
               <dt style={{ color: "var(--ink2)" }}>{t("contact")}</dt>
               <dd style={{ wordBreak: "break-all" }}>
-                {r.applicantContact
-                  ? canAct
-                    ? r.applicantContact
-                    : maskContact(r.applicantContact)
-                  : "—"}
+                {r.applicantContact ?? "—"}
               </dd>
             </dl>
-            {/* GAP-CRM-RTI-DETAIL-03: DPDP notice. Contact is shown in clear
-                only to CRM staff who need it to reply; others see a masked
-                value. */}
+            {/* GAP-CRM-RTI-DETAIL-03 / F1-02+F1-06: DPDP notice. The SERVER
+                masks the applicant's name (partially) and contact for roles
+                outside the CRM PII-read set and sends the clear value only to
+                those roles, so the page renders what the server returned. */}
             <p style={{ margin: "0 16px 12px", fontSize: 11, color: "var(--ink2)", lineHeight: 1.5 }}>
               {canAct ? t("applicantDataNoticeLogged") : t("applicantDataNoticeMasked")}
             </p>
           </Card>
+          {/* F6-01: status transition timeline. */}
+          <CaseStatusTimeline entries={history} />
         </div>
       </div>
     </>

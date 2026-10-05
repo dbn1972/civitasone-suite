@@ -6,6 +6,7 @@ import { getSessionRoles, CRM_VIGILANCE_ROLES } from "@/lib/auth/roleGuard";
 import { toHumanError } from "@/lib/messages";
 import { PeriodFilter } from "./PeriodFilter";
 import { ThemeTable } from "./ThemeTable";
+import { ServerExportButton } from "../../../_components/crm/ServerExportButton";
 import {
   MOOD_ICON,
   MOOD_ICON_BG,
@@ -82,6 +83,15 @@ export default async function VoiceOfCitizenPage({
         actions={
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <PeriodFilter from={range.from} to={range.to} />
+            <ServerExportButton
+              endpointPath="v1/crm/sentiment/export"
+              filenameBase="voice-of-customer"
+              filters={{
+                from: range.from ? `${range.from}T00:00:00.000Z` : undefined,
+                to: range.to ? `${range.to}T23:59:59.999Z` : undefined,
+              }}
+              kind="voc"
+            />
             <a className="btn" href="/crm/voice-of-customer/feedback">
               {t("feedbackForm")}
             </a>
@@ -217,7 +227,7 @@ export default async function VoiceOfCitizenPage({
                 {t("hiddenSensitiveThemes", { count: hiddenSensitiveCount })}
               </p>
             ) : null}
-            <ThemeTable themes={visibleThemes} canExport={canSeeSensitive} />
+            <ThemeTable themes={visibleThemes} />
           </>
         )}
       </Card>

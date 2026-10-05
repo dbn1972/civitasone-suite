@@ -34,13 +34,14 @@ import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState, Button } from "../ds";
 import { rupeesToMinorString, percentToBps } from "@/lib/money";
-import { formatMoney, formatBps, formatIndianDate } from "@/lib/formatters";
+import { formatMoneyIn, formatBps, formatIndianDate } from "@/lib/formatters";
 import {
   getProducts,
   createProduct,
   updateProduct,
   deleteProduct,
   isProductSelectable,
+  ALLOWED_CURRENCIES,
   type Product,
   type QpSource,
 } from "@/lib/crm/quotation";
@@ -63,8 +64,8 @@ interface Row extends Omit<Product, "priceMinor" | "taxRateBps"> {
 }
 let SEQ = 0;
 
-function snapshotOf(r: { category: string; code: string; name: string; unit: string; priceRupees: string; taxPercent: string; currency: string; activeFrom: string; activeTo: string; enabled: boolean }): string {
-  return JSON.stringify([r.category, r.code, r.name, r.unit, r.priceRupees, r.taxPercent, r.currency, r.activeFrom, r.activeTo, r.enabled]);
+function snapshotOf(r: { category: string; code: string; name: string; unit: string; priceRupees: string; taxPercent: string; currency: string; hsnSac?: string; activeFrom: string; activeTo: string; enabled: boolean }): string {
+  return JSON.stringify([r.category, r.code, r.name, r.unit, r.priceRupees, r.taxPercent, r.currency, r.hsnSac ?? "", r.activeFrom, r.activeTo, r.enabled]);
 }
 
 function toRow(p: Product): Row {
@@ -87,6 +88,7 @@ function blank(): Product {
 
 export function ProductCatalogueEditor() {
   const t = useTranslations("crmProductCatalogueEditor");
+  const tCat = useTranslations("crmCatalogue");
   const [rows, setRows] = useState<Row[]>([]);
   const [source, setSource] = useState<QpSource | "loading">("loading");
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -164,8 +166,15 @@ export function ProductCatalogueEditor() {
       !duplicateCode(row) &&
       priceMinorOf(row) !== null &&
       taxBpsOf(row) !== null &&
+      hsnValid(row) &&
       datesValid(row)
     );
+  }
+
+  /** F4-02: HSN/SAC is optional, but when present must be 4-8 digits (server-enforced). */
+  function hsnValid(row: Row): boolean {
+    const h = (row.hsnSac ?? "").trim();
+    return h === "" || /^\d{4,8}$/.test(h);
   }
 
   function buildPayload(row: Row, priceMinor: string, taxRateBps: number): Product {
@@ -176,6 +185,7 @@ export function ProductCatalogueEditor() {
       name: row.name.trim(),
       unit: row.unit.trim(),
       taxRateBps,
+      ...(row.hsnSac && row.hsnSac.trim() ? { hsnSac: row.hsnSac.trim() } : {}),
       priceMinor,
       currency: row.currency.trim() || "INR",
       activeFrom: row.activeFrom,
@@ -208,6 +218,8 @@ export function ProductCatalogueEditor() {
         setError(t("activeToBeforeFrom", { name: row.name || row.code || t("newLabel") }));
       } else if (duplicateCode(row)) {
         setError(t("codeUsed", { code: row.code.trim() }));
+      } else if (!hsnValid(row)) {
+        setError(tCat("hsnInvalidRow", { name: row.name || row.code || tCat("newProduct") }));
       } else {
         setError(t("needsFields", { name: row.name || row.code || t("newLabel"), max: MAX_TAX_PERCENT }));
       }
@@ -299,6 +311,7 @@ export function ProductCatalogueEditor() {
                 <th style={{ width: 120 }}>Price (₹)</th>
                 <th style={{ width: 70 }}>{t("currency")}</th>
                 <th style={{ width: 140 }}>{t("colTax")}</th>
+                <th style={{ width: 110 }}>{tCat("hsnHeader")}</th>
                 <th>Active from</th>
                 <th>Active to</th>
                 <th>Enabled</th>
@@ -343,15 +356,21 @@ export function ProductCatalogueEditor() {
                     <td data-label={t("colPrice")}>
                       <label className="sr-only" htmlFor={`${headingId}-price-${row.key}`}>Price for product {n}</label>
                       <input id={`${headingId}-price-${row.key}`} inputMode="decimal" value={row.priceRupees} aria-invalid={priceOk ? undefined : true} onChange={(e) => update(row.key, { priceRupees: e.target.value })} style={{ ...inputStyle, textAlign: "end" }} placeholder="0.00" />
-                      {row.priceRupees.trim() && priceOk ? <span style={{ fontSize: 11, color: "var(--muted)" }}>{formatMoney(priceMinorOf(row)!)}</span> : null}
+                      {row.priceRupees.trim() && priceOk ? <span style={{ fontSize: 11, color: "var(--muted)" }}>{formatMoneyIn(priceMinorOf(row)!, row.currency || "INR")}</span> : null}
                     </td>
                     <td data-label={t("currency")}>
-                      {/* GAP-CRM-PRODUCTS-06 (DECISION): currency is shown per row but
-                          constrained to INR. formatMoney always renders ₹ and no
-                          multi-currency money formatter exists yet (same decision as
-                          GAP-CRM-PRICE-BOOKS-04), so a selectable currency would
-                          display rupee amounts under a foreign code. Recorded in report. */}
-                      <span style={{ fontSize: 13 }} aria-label={t("currencyForProduct", { n })}>{row.currency?.trim() || "INR"}</span>
+                      {/* F4-03: currency is chosen from the small allow-list
+                          (INR/USD/EUR/GBP/AED). Display uses formatMoneyIn so a non-INR
+                          price renders under the correct symbol. */}
+                      <label className="sr-only" htmlFor={`${headingId}-cur-${row.key}`}>{tCat("currencyAria", { n })}</label>
+                      <select
+                        id={`${headingId}-cur-${row.key}`}
+                        value={ALLOWED_CURRENCIES.includes((row.currency || "INR") as (typeof ALLOWED_CURRENCIES)[number]) ? (row.currency || "INR") : "INR"}
+                        onChange={(e) => update(row.key, { currency: e.target.value })}
+                        style={inputStyle}
+                      >
+                        {ALLOWED_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
                     </td>
                     <td data-label="Tax">
                       <label className="sr-only" htmlFor={`${headingId}-tax-${row.key}`}>Tax percent for product {n}</label>
@@ -382,6 +401,20 @@ export function ProductCatalogueEditor() {
                       ) : null}
                       {row.taxPercent.trim() && taxOk ? <span style={{ fontSize: 11, color: "var(--muted)" }}>{formatBps(taxBpsOf(row)!)}</span> : null}
                       {row.taxPercent.trim() && !taxOk ? <span style={{ fontSize: 11, color: "#b42318" }}>{t("rateRange", { max: MAX_TAX_PERCENT })}</span> : null}
+                    </td>
+                    <td data-label={tCat("hsnHeader")}>
+                      {/* F4-02: optional HSN (goods) / SAC (services) code, 4-8 digits. */}
+                      <label className="sr-only" htmlFor={`${headingId}-hsn-${row.key}`}>{tCat("hsnAria", { n })}</label>
+                      <input
+                        id={`${headingId}-hsn-${row.key}`}
+                        inputMode="numeric"
+                        value={row.hsnSac ?? ""}
+                        aria-invalid={hsnValid(row) ? undefined : true}
+                        onChange={(e) => update(row.key, { hsnSac: e.target.value })}
+                        style={inputStyle}
+                        placeholder={tCat("hsnPlaceholder")}
+                      />
+                      {!hsnValid(row) ? <span style={{ fontSize: 11, color: "#b42318" }}>{tCat("hsnInvalid")}</span> : null}
                     </td>
                     <td data-label={t("colActiveFrom")}>
                       <label className="sr-only" htmlFor={`${headingId}-from-${row.key}`}>Active from for product {n}</label>

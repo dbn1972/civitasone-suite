@@ -21,6 +21,15 @@ vi.mock("@/lib/api/browserClient", async () => {
   return { ...actual, browserFetch: (...args: unknown[]) => browserFetchMock(...args) };
 });
 
+// F5-01: the OwnerPicker searches the CRM agent directory; stub it so the form
+// renders without hitting the network.
+vi.mock("@/lib/crm/assignment", () => ({
+  getAgents: vi.fn(async () => ({
+    data: [{ agentId: "agent-7", name: "Asha Rao", activeLeads: 0, maxLeads: 10, available: true, onLeave: false }],
+    source: "api",
+  })),
+}));
+
 import { NewAccountForm } from "./NewAccountForm";
 import type { CRMAccountSummary } from "@civitasone/types";
 
@@ -125,5 +134,20 @@ describe("NewAccountForm", () => {
     render(<NewAccountForm accounts={accounts} />);
     openAndFill("Parent Dept");
     expect(screen.getByText(/already exists/i)).toBeInTheDocument();
+  });
+
+  // F5-01: the form exposes an Owner picker, and a create with no owner chosen
+  // sends ownerId undefined (never a fabricated/raw UUID).
+  it("renders an Owner field and omits ownerId when none is chosen", async () => {
+    browserFetchMock.mockResolvedValue(makeRes(true, 202, { id: "a1" }));
+    render(<NewAccountForm accounts={accounts} />);
+    openAndFill("New Dept");
+    expect(screen.getByLabelText("Account owner")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Create account" }));
+
+    await waitFor(() => expect(browserFetchMock).toHaveBeenCalled());
+    const post = browserFetchMock.mock.calls.find((c) => c[0] === "v1/crm/accounts");
+    const body = JSON.parse((post![1] as { body: string }).body) as { ownerId?: string };
+    expect(body.ownerId).toBeUndefined();
   });
 });

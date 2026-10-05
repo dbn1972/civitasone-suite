@@ -12,7 +12,9 @@ export const scoreRuleSchema = z.object({
 });
 
 export const putScoreRulesBody = z.object({
-  rules: z.array(scoreRuleSchema).min(1).max(20),
+  // F3-03 empty-config guard: an empty list reaches the ROUTE (which answers 422
+  // EMPTY_CONFIG_REJECTED unless ?confirmEmpty=true) instead of a generic 400.
+  rules: z.array(scoreRuleSchema).max(20),
   // GAP-CRM-LEAD-SCORING-05: optional list-level optimistic-concurrency token.
   // Also accepted via the If-Match header; the header takes precedence.
   version: z.string().min(1).optional(),

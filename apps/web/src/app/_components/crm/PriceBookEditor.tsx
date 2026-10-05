@@ -19,7 +19,7 @@ import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState, Button } from "../ds";
 import { rupeesToMinorString } from "@/lib/money";
-import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { formatMoneyIn, formatIndianDate } from "@/lib/formatters";
 import {
   getPriceBooks,
   createPriceBook,
@@ -28,6 +28,7 @@ import {
   resolvePriceBook,
   getProducts,
   isProductSelectable,
+  ALLOWED_CURRENCIES,
   type PriceBook,
   type PriceBookEntry,
   type Product,
@@ -37,13 +38,12 @@ import {
 const inputStyle = { padding: 6, minHeight: 36, borderRadius: 8, border: "1px solid var(--line)", width: "100%" } as const;
 
 /**
- * GAP-CRM-PRICE-BOOKS-04: the backend accepts any 3-letter currency, but every
- * price is entered in rupees and formatMoney always renders ₹, so a non-INR book
- * would display rupee amounts under a foreign code. Until multi-currency money
- * formatting exists, the currency is constrained to a supported set (INR only)
- * via a disabled-ish select rather than free text. Decision recorded in the report.
+ * F4-03: a price book carries a currency from the small allow-list
+ * (INR/USD/EUR/GBP/AED). Entries are entered in the major unit and stored as minor
+ * units (paise/cents); display uses formatMoneyIn so a non-INR book renders under the
+ * right symbol rather than always ₹.
  */
-const SUPPORTED_CURRENCIES = ["INR"] as const;
+const SUPPORTED_CURRENCIES = ALLOWED_CURRENCIES;
 
 /** Unique, sorted, non-empty values of a book field across the loaded books. */
 function usedValues(books: PriceBook[], pick: (b: PriceBook) => string): string[] {
@@ -460,7 +460,7 @@ export function PriceBookEditor() {
               Applicable book: <strong>{resolved.name}</strong>{" "}
               <span style={{ color: "var(--muted)" }}>
                 ({resolved.entries.length} price{resolved.entries.length === 1 ? "" : "s"}
-                {resolved.entries.length > 0 ? `, e.g. ${formatMoney(resolved.entries[0].priceMinor)}` : ""})
+                {resolved.entries.length > 0 ? `, e.g. ${formatMoneyIn(resolved.entries[0].priceMinor, resolved.currency)}` : ""})
               </span>
             </span>
           ) : (

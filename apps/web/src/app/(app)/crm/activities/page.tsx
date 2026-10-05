@@ -2,12 +2,16 @@ import { getTranslations } from "next-intl/server";
 import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
 import { getCRMActivities } from "../../../_data/loaders";
 import { todayIST, istDatePart } from "@/lib/formatters";
+import { getSessionRoles, CRM_ADMIN_ROLES, hasAnyRole } from "@/lib/auth/roleGuard";
 import { ActivitiesTable } from "./ActivitiesTable";
 import { LogActivityButton } from "./LogActivityButton";
 
 export default async function Page({ searchParams }: { searchParams?: { segment?: string } }) {
   const t = await getTranslations("crm.activities");
   const { data: activities, source } = await getCRMActivities();
+  // F2-04: the activities export is a tenant-wide bulk egress, so it is offered
+  // only to CRM admins (the server endpoint enforces the same gate + audits it).
+  const canExport = hasAnyRole(getSessionRoles(), CRM_ADMIN_ROLES);
 
   // Never fabricate a 0 count when the list load failed — show "—" instead
   // (matches the pattern already used on dashboard/accounts/contacts).
@@ -44,7 +48,7 @@ export default async function Page({ searchParams }: { searchParams?: { segment?
           the generic "All" view. GAP-CRM-ACTIVITIES-02: pass `source` so the
           table shows a retry on an outage instead of the empty-register copy;
           GAP-CRM-ACTIVITIES-03: pass the IST `today` so client/server agree. */}
-      <ActivitiesTable activities={activities} initialSegment={searchParams?.segment} source={source} today={today} heading={t("tableHeading")} emptyTitle={t("emptyTitle")} />
+      <ActivitiesTable activities={activities} initialSegment={searchParams?.segment} source={source} today={today} heading={t("tableHeading")} emptyTitle={t("emptyTitle")} canExport={canExport} />
     </>
   );
 }

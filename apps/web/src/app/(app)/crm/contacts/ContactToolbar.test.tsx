@@ -19,7 +19,7 @@ vi.mock("@/lib/api/browserClient", async () => {
 import { ContactToolbar } from "./ContactToolbar";
 
 function makeRes(ok: boolean, status: number, body: unknown): Response {
-  return { ok, status, json: async () => body } as unknown as Response;
+  return { ok, status, json: async () => body, text: async () => String(body) } as unknown as Response;
 }
 
 function renderToolbar(props: Parameters<typeof ContactToolbar>[0]) {
@@ -49,7 +49,7 @@ describe("ContactToolbar export (GAP-CRM-CONTACTS-01)", () => {
 
   it("requires a purpose before exporting and forwards it + active filters, as CSV", async () => {
     browserFetchMock.mockResolvedValue(
-      makeRes(true, 200, { data: [{ name: "Asha Rao", phone: "9876543210", email: "asha@example.com" }] }),
+      makeRes(true, 200, "Name,Email,Phone\r\n\"Asha Rao\",\"a***@example.com\",\"******3210\""),
     );
     renderToolbar({ canExport: true, exportQuery: { search: "rao", status: "qualified" } });
 
@@ -71,7 +71,11 @@ describe("ContactToolbar export (GAP-CRM-CONTACTS-01)", () => {
     expect(url).toContain("search=rao");
     expect(url).toContain("status=qualified");
     expect(url).toContain("purpose=Quarterly+outreach+review");
-    await waitFor(() => expect(screen.getByText("Exported 1 contacts.")).toBeInTheDocument());
+    // The server returns CSV directly; the client streams it, and the success
+    // copy now states the export was recorded (server-audited).
+    await waitFor(() =>
+      expect(screen.getByText(/recorded in the audit trail/i)).toBeInTheDocument(),
+    );
   });
 
   it("labels the control 'Export all contacts' when no filter is active", () => {

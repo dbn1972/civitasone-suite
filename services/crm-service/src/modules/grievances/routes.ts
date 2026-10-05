@@ -1,9 +1,10 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import { listQuery, windowOf, listEnvelope } from "../../shared/list-query.js";
+import { maskList, maskRecord } from "../../shared/pii-reveal.js";
 import {
   STATUS,
   PRIORITY,
@@ -17,6 +18,46 @@ import {
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
 const ADMIN_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
+
+/**
+ * F3-02 optimistic concurrency: read the optional `If-Match` precondition from the
+ * request. The web (GrievanceActions.tsx) sends the version it rendered as `If-Match`
+ * on every lifecycle PATCH; the server is the authority. Weak-validator (`W/`) and
+ * surrounding quotes are stripped so `7`, `"7"` and `W/"7"` all resolve to 7. Returns
+ * `undefined` when no header is sent (back-compat: the write proceeds unconditionally).
+ */
+function ifMatchVersion(req: FastifyRequest): number | undefined {
+  const raw = req.headers["if-match"];
+  if (typeof raw !== "string") return undefined;
+  const cleaned = raw.replace(/^W\//, "").replace(/^"|"$/g, "").trim();
+  if (cleaned === "") return undefined;
+  const n = Number(cleaned);
+  if (!Number.isInteger(n) || n < 0) {
+    throw new HttpError(400, "INVALID_IF_MATCH", "If-Match must be an integer version");
+  }
+  return n;
+}
+
+/**
+ * F3-02: when a version-guarded lifecycle UPDATE affects no rows AND an `If-Match`
+ * precondition was supplied, disambiguate "row gone/terminal" (404) from "someone else
+ * advanced it since you loaded" (412 PRECONDITION_FAILED). Only called on the 0-row path,
+ * so it never adds a query to the happy path.
+ */
+async function raiseConflictOrNotFound(
+  tenantId: string,
+  id: string,
+  ifMatch: number,
+  notFoundMessage: string,
+): Promise<never> {
+  const rows = (await scopedRead((tx) => tx.execute(sql`
+    SELECT version FROM crm.grievances WHERE id = ${id} AND tenant_id = ${tenantId}
+  `))) as unknown as Array<{ version: number }>;
+  if (rows.length > 0 && rows[0]!.version !== ifMatch) {
+    throw new HttpError(412, "PRECONDITION_FAILED", "grievance was modified by someone else");
+  }
+  throw new HttpError(404, "NOT_FOUND", notFoundMessage);
+}
 
 const listParams = listQuery.extend({
   status: z.enum(STATUS).optional(),
@@ -104,7 +145,7 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
         ${statusF} ${priorityF} ${categoryF} ${assignedF} ${searchF}
     `))) as unknown as Array<{ total: number }>;
 
-    return reply.send(listEnvelope(rows, w, ct?.total ?? 0));
+    return reply.send(listEnvelope(maskList("grievance", rows, ctx.roles), w, ct?.total ?? 0));
   });
 
   // GET /v1/crm/grievances/stats — KPIs (must register before /:id to avoid routing conflict)
@@ -154,7 +195,7 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     `))) as unknown as Array<Record<string, unknown>>;
 
     if (rows.length === 0) throw new HttpError(404, "NOT_FOUND", "grievance not found");
-    return reply.send({ data: rows[0] });
+    return reply.send({ data: maskRecord("grievance", rows[0]!, ctx.roles) });
   });
 
   // PATCH /v1/crm/grievances/:id/assign
@@ -163,17 +204,22 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CRM_ROLES);
     const { id } = idParam.parse(req.params);
     const body = assignBody.parse(req.body);
+    const ifMatch = ifMatchVersion(req);
+    const versionF = ifMatch !== undefined ? sql`AND version = ${ifMatch}` : sql``;
 
     const rows = (await scopedRead((tx) => tx.execute(sql`
       UPDATE crm.grievances
       SET assigned_to = ${body.assignedTo}::uuid,
           status = CASE WHEN status = 'REGISTERED' THEN 'FORWARDED' ELSE status END,
           updated_by = ${ctx.actorId}, updated_at = now(), version = version + 1
-      WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
+      WHERE id = ${id} AND tenant_id = ${ctx.tenantId} ${versionF}
       RETURNING id, status, assigned_to AS "assignedTo", version
     `))) as unknown as Array<Record<string, unknown>>;
 
-    if (rows.length === 0) throw new HttpError(404, "NOT_FOUND", "grievance not found");
+    if (rows.length === 0) {
+      if (ifMatch !== undefined) await raiseConflictOrNotFound(ctx.tenantId, id, ifMatch, "grievance not found");
+      throw new HttpError(404, "NOT_FOUND", "grievance not found");
+    }
     return reply.send({ data: rows[0] });
   });
 
@@ -183,6 +229,8 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CRM_ROLES);
     const { id } = idParam.parse(req.params);
     const body = forwardBody.parse(req.body);
+    const ifMatch = ifMatchVersion(req);
+    const versionF = ifMatch !== undefined ? sql`AND version = ${ifMatch}` : sql``;
 
     const rows = (await scopedRead((tx) => tx.execute(sql`
       UPDATE crm.grievances
@@ -191,14 +239,16 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
           forwarded_at = now(),
           updated_by = ${ctx.actorId}, updated_at = now(), version = version + 1
       WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
-        AND status != 'DISPOSED'
+        AND status != 'DISPOSED' ${versionF}
       RETURNING id, status,
                 forwarded_to AS "forwardedTo", forwarded_at AS "forwardedAt",
                 version
     `))) as unknown as Array<Record<string, unknown>>;
 
-    if (rows.length === 0)
+    if (rows.length === 0) {
+      if (ifMatch !== undefined) await raiseConflictOrNotFound(ctx.tenantId, id, ifMatch, "grievance not found or already disposed");
       throw new HttpError(404, "NOT_FOUND", "grievance not found or already disposed");
+    }
     return reply.send({ data: rows[0] });
   });
 
@@ -208,6 +258,8 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CRM_ROLES);
     const { id } = idParam.parse(req.params);
     const body = resolveBody.parse(req.body);
+    const ifMatch = ifMatchVersion(req);
+    const versionF = ifMatch !== undefined ? sql`AND version = ${ifMatch}` : sql``;
 
     const rows = (await scopedRead((tx) => tx.execute(sql`
       UPDATE crm.grievances
@@ -215,12 +267,14 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
           resolved_at = now(),
           updated_by = ${ctx.actorId}, updated_at = now(), version = version + 1
       WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
-        AND status != 'DISPOSED'
+        AND status != 'DISPOSED' ${versionF}
       RETURNING id, status, resolved_at AS "resolvedAt", version
     `))) as unknown as Array<Record<string, unknown>>;
 
-    if (rows.length === 0)
+    if (rows.length === 0) {
+      if (ifMatch !== undefined) await raiseConflictOrNotFound(ctx.tenantId, id, ifMatch, "grievance not found or already disposed");
       throw new HttpError(404, "NOT_FOUND", "grievance not found or already disposed");
+    }
     return reply.send({ data: rows[0] });
   });
 
@@ -229,18 +283,22 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
+    const ifMatch = ifMatchVersion(req);
+    const versionF = ifMatch !== undefined ? sql`AND version = ${ifMatch}` : sql``;
 
     const rows = (await scopedRead((tx) => tx.execute(sql`
       UPDATE crm.grievances
       SET status = 'DISPOSED', closed_at = now(),
           updated_by = ${ctx.actorId}, updated_at = now(), version = version + 1
       WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
-        AND status != 'DISPOSED'
+        AND status != 'DISPOSED' ${versionF}
       RETURNING id, status, closed_at AS "closedAt", version
     `))) as unknown as Array<Record<string, unknown>>;
 
-    if (rows.length === 0)
+    if (rows.length === 0) {
+      if (ifMatch !== undefined) await raiseConflictOrNotFound(ctx.tenantId, id, ifMatch, "grievance not found or already disposed");
       throw new HttpError(404, "NOT_FOUND", "grievance not found or already disposed");
+    }
     return reply.send({ data: rows[0] });
   });
 
@@ -249,18 +307,22 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const { id } = idParam.parse(req.params);
+    const ifMatch = ifMatchVersion(req);
+    const versionF = ifMatch !== undefined ? sql`AND version = ${ifMatch}` : sql``;
 
     const rows = (await scopedRead((tx) => tx.execute(sql`
       UPDATE crm.grievances
       SET status = 'APPEAL', priority = 'urgent', escalated_at = now(),
           updated_by = ${ctx.actorId}, updated_at = now(), version = version + 1
       WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
-        AND status != 'DISPOSED'
+        AND status != 'DISPOSED' ${versionF}
       RETURNING id, status, priority, escalated_at AS "escalatedAt", version
     `))) as unknown as Array<Record<string, unknown>>;
 
-    if (rows.length === 0)
+    if (rows.length === 0) {
+      if (ifMatch !== undefined) await raiseConflictOrNotFound(ctx.tenantId, id, ifMatch, "grievance not found or already disposed");
       throw new HttpError(404, "NOT_FOUND", "grievance not found or already disposed");
+    }
     return reply.send({ data: rows[0] });
   });
 
@@ -270,6 +332,8 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CRM_ROLES);
     const { id } = idParam.parse(req.params);
     const body = appealBody.parse(req.body ?? {});
+    const ifMatch = ifMatchVersion(req);
+    const versionF = ifMatch !== undefined ? sql`AND version = ${ifMatch}` : sql``;
 
     const rows = (await scopedRead((tx) => tx.execute(sql`
       UPDATE crm.grievances
@@ -278,14 +342,16 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
           escalated_at = now(),
           updated_by = ${ctx.actorId}, updated_at = now(), version = version + 1
       WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
-        AND status != 'DISPOSED'
+        AND status != 'DISPOSED' ${versionF}
       RETURNING id, status, priority,
                 appeal_reason AS "appealReason",
                 escalated_at AS "escalatedAt", version
     `))) as unknown as Array<Record<string, unknown>>;
 
-    if (rows.length === 0)
+    if (rows.length === 0) {
+      if (ifMatch !== undefined) await raiseConflictOrNotFound(ctx.tenantId, id, ifMatch, "grievance not found or already disposed");
       throw new HttpError(404, "NOT_FOUND", "grievance not found or already disposed");
+    }
     return reply.send({ data: rows[0] });
   });
 }

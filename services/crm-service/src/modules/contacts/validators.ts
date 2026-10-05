@@ -157,9 +157,20 @@ const createAccountObject = z.object({
   // DQ-001/003 business identifiers on the account.
   gstin: z.string().max(15).optional(),
   pan: z.string().max(10).optional(),
+  // F5-01: optional account owner (an identity user id). Nullable/omitted =
+  // unassigned. The UI picks it by name via the agent directory.
+  ownerId: z.string().uuid().optional(),
 });
 export const createAccountBody = createAccountObject.superRefine(formatRefiner(ACCOUNT_FORMAT_SPECS));
 export type CreateAccountBody = z.infer<typeof createAccountBody>;
+
+// F5-01: PATCH /v1/crm/accounts/:id body. Currently only the owner is mutable
+// here (name/industry/website edits and parent moves have their own paths). A
+// null ownerId clears the owner; an absent ownerId is a no-op for that field.
+export const updateAccountBody = z.object({
+  ownerId: z.string().uuid().nullable().optional(),
+});
+export type UpdateAccountBody = z.infer<typeof updateAccountBody>;
 
 // DELETE /v1/crm/contacts/:id body. Optional (and defaults applied against `{}`
 // at the route) so existing callers that send no body keep working. When the
@@ -212,6 +223,10 @@ export const accountViewSchema = z.object({
   website: z.string().nullable(),
   parentId: z.string().uuid().nullable(),
   contactCount: z.number().int().nonnegative(),
+  // F5-01/F5-02: optional so older clients/tests that assert the pre-F5 shape
+  // keep passing; the server always sends them now (null when unset).
+  ownerId: z.string().uuid().nullable().optional(),
+  lastContactAt: z.string().nullable().optional(),
 });
 
 // GAP-CRM-ACCOUNTS-02: `meta.total` carries the tenant-wide active-account count

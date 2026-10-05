@@ -240,13 +240,22 @@ describe("OnboardingDetail (P1-9)", () => {
     expect(onb.getOnboardingCase).toHaveBeenCalledTimes(2);
   });
 
-  // GAP-CRM-ONBOARDING-DETAIL-05: the KYC reference is masked by default.
-  it("masks the KYC reference (all but last 4)", async () => {
-    const withRef = { ...caseAt("verification", "verified"), kycReference: "1234567890" };
+  // GAP-CRM-ONBOARDING-DETAIL-05 / F1-03 + F1-06: the KYC reference is masked
+  // SERVER-SIDE (last 4) for everyone except the KYC approver roles. The page
+  // renders whatever the server returned — no client masking.
+  it("renders the server-masked KYC reference (all but last 4) for a non-approver", async () => {
+    const withRef = { ...caseAt("verification", "verified"), kycReference: "••••7890" };
     vi.mocked(onb.getOnboardingCase).mockResolvedValue({ data: withRef, source: "api" });
     render(<OnboardingDetail id="c1" />);
-    await waitFor(() => expect(screen.getByText(/•••• 7890/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("••••7890")).toBeInTheDocument());
     expect(screen.queryByText("1234567890")).not.toBeInTheDocument();
+  });
+
+  it("renders the clear KYC reference for a KYC approver (server sends the clear value)", async () => {
+    const withRef = { ...caseAt("verification", "verified"), kycReference: "KYC-REF-1234567890" };
+    vi.mocked(onb.getOnboardingCase).mockResolvedValue({ data: withRef, source: "api" });
+    render(<OnboardingDetail id="c1" canApproveKyc />);
+    await waitFor(() => expect(screen.getByText("KYC-REF-1234567890")).toBeInTheDocument());
   });
 
   // GAP-CRM-ONBOARDING-DETAIL-07: the raw version number is no longer shown in

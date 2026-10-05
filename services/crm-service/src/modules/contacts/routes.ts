@@ -1,11 +1,11 @@
 import type { FastifyInstance } from "fastify";
-import { z, ZodError } from "zod";
+import { ZodError } from "zod";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import {
   createContactBody, updateContactBody, mergeContactsBody, bulkImportBody,
-  listContactsQuery, createAccountBody, idParam, contactsListSchema, accountsListSchema,
+  listContactsQuery, createAccountBody, updateAccountBody, idParam, contactsListSchema, accountsListSchema,
   classificationBody,
   internalBulkImportBody,
   deleteContactBody,
@@ -16,6 +16,7 @@ import {
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as repo from "./repo.js";
 import * as leadFieldRules from "../leads/field-rules-repo.js";
 import { validateRequiredFields } from "../leads/field-rules-domain.js";
 
@@ -71,19 +72,10 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     }, isAdmin(ctx.roles)));
   });
 
-  app.get("/v1/crm/contacts/export", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, CRM_ROLES);
-    const admin = isAdmin(ctx.roles);
-    const q = z.object({
-      limit: z.coerce.number().int().min(1).max(500).default(500),
-      offset: z.coerce.number().int().min(0).default(0),
-    }).parse(req.query);
-    const rows = await queries.exportContacts(ctx.tenantId, admin, q.limit, q.offset);
-    // Dedicated audit for a bulk PII export (DPDP accountability).
-    await commands.auditBulkExport(ctx, rows.length, admin);
-    return reply.send({ data: rows, exportedAt: new Date().toISOString(), meta: { limit: q.limit, offset: q.offset, returned: rows.length } });
-  });
+  // F2-01: the bulk contacts export (now CSV + purpose + filters + audit) moved
+  // to contacts/export-routes.ts (contactExportRoutes). Keeping one route group
+  // per concern per the house rules; the path /v1/crm/contacts/export is owned
+  // there so it is not duplicated here.
 
   app.post("/v1/crm/contacts/bulk/import", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -230,6 +222,21 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CRM_ROLES);
     const body = createAccountBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createAccount(ctx, body));
+  });
+
+  // F5-01: change an account's owner (and any future mutable account field).
+  app.patch("/v1/crm/accounts/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    // Reassigning an account owner is a manager/admin action, not any crm_user's.
+    requireRole(ctx, ADMIN_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = updateAccountBody.parse(req.body);
+    // The new owner must be a real member of this tenant's agent directory -
+    // never an arbitrary UUID (null clears the owner and needs no check).
+    if (body.ownerId && !(await repo.agentInDirectory(ctx.tenantId, body.ownerId))) {
+      throw new HttpError(422, "OWNER_NOT_IN_TENANT", "the new owner is not an active user in this tenant");
+    }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updateAccount(ctx, id, body));
   });
 
   app.setErrorHandler((err, req, reply) => {

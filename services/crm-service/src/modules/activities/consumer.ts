@@ -41,6 +41,11 @@ export function registerActivityConsumers(queue: Queue): void {
         createdBy: msg.actorId,
       });
       if (p.contactId) await contactRepo.touchLastActivity(tx, p.contactId, p.tenantId);
+      // F5-02: stamp the owning account's last_contact_at so the accounts list
+      // and health watchlist can show a "Last contact" column without a
+      // cross-module JOIN into crm.activities (same denormalisation as the
+      // contact touch above). Reuses the already-validated p.accountId.
+      if (p.accountId) await contactRepo.touchAccountLastContact(tx, p.accountId, p.tenantId);
       await emit(tx, msg, EVENTS.activityCreated, { activityId: p.id, contactId: p.contactId }, "create", p.id);
       // Voice of Customer (P2-6): hand the text to the sentiment module for scoring.
       await enqueueSentimentAnalysis(tx, msg, p);
@@ -58,6 +63,10 @@ export function registerActivityConsumers(queue: Queue): void {
     if (msg.payload.contactId) {
       await cache.invalidate(cache.makeKey(msg.tenantId, "contact", msg.payload.contactId));
       await cache.invalidateResource(msg.tenantId, "contact");
+    }
+    // F5-02: a touched account's last_contact_at moved — drop the cached list.
+    if (msg.payload.accountId) {
+      await cache.invalidateResource(msg.tenantId, "account");
     }
   });
 

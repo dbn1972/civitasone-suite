@@ -466,7 +466,9 @@ export async function getScoreRules(): Promise<LoaderResult<LeadScoreRule[]> & {
 }
 
 export async function saveScoreRules(rules: LeadScoreRule[], version?: string): Promise<string | undefined> {
-  const res = await browserFetch("v1/crm/lead-score-rules", {
+  // F3-03: the server rejects an empty config PUT with 422 unless confirmEmpty=true.
+  const path = rules.length === 0 ? "v1/crm/lead-score-rules?confirmEmpty=true" : "v1/crm/lead-score-rules";
+  const res = await browserFetch(path, {
     method: "PUT",
     // GAP-CRM-LEAD-SCORING-05: send the version as If-Match so the backend
     // rejects a stale write (409) instead of silently overwriting a concurrent
@@ -629,7 +631,9 @@ export async function getReasonCodes(): Promise<LoaderResult<LeadReasonCode[]> &
 }
 
 export async function saveReasonCodes(codes: LeadReasonCode[], version?: string): Promise<string | undefined> {
-  const res = await browserFetch("v1/crm/lead-reason-codes", {
+  // F3-03: the server rejects an empty config PUT with 422 unless confirmEmpty=true.
+  const path = codes.length === 0 ? "v1/crm/lead-reason-codes?confirmEmpty=true" : "v1/crm/lead-reason-codes";
+  const res = await browserFetch(path, {
     method: "PUT",
     // GAP-CRM-LEAD-REASON-CODES-04: send the version as If-Match so the backend
     // rejects a stale write (409) instead of silently overwriting a concurrent

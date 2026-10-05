@@ -22,7 +22,7 @@ export function registerOrderConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.convertQuotationToOrder, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; quotationId: string; quotationVersion: number;
-      dealId: string | null; orderRef: string; totalMinor: string; currency: string;
+      dealId: string | null; orderRef: string; totalMinor: string; grandTotalMinor?: string; currency: string;
     };
     try {
       await db.transaction(async (tx) => {
@@ -42,16 +42,16 @@ export function registerOrderConsumers(queue: Queue): void {
         }
         const rows = (await tx.execute(sql`
           INSERT INTO crm.orders
-            (id, tenant_id, quotation_id, quotation_version, deal_id, order_ref, total_minor, currency, created_by, updated_by)
+            (id, tenant_id, quotation_id, quotation_version, deal_id, order_ref, total_minor, grand_total_minor, currency, created_by, updated_by)
           VALUES (${p.id}, ${p.tenantId}, ${p.quotationId}, ${p.quotationVersion}, ${p.dealId},
-                  ${p.orderRef}, ${p.totalMinor}::bigint, ${p.currency}, ${msg.actorId}, ${msg.actorId})
+                  ${p.orderRef}, ${p.totalMinor}::bigint, ${p.grandTotalMinor ?? p.totalMinor}::bigint, ${p.currency}, ${msg.actorId}, ${msg.actorId})
           ON CONFLICT (tenant_id, quotation_id) DO NOTHING
           RETURNING id
         `)) as unknown as Array<{ id: string }>;
         if (rows.length === 0) return; // already converted — idempotent no-op
         await emitWithAudit(tx, ctxOf(msg), {
           eventType: EVENTS.orderCreated, action: "convert_to_order", resourceType: RESOURCE, resourceId: p.id,
-          payload: { orderId: p.id, quotationId: p.quotationId, orderRef: p.orderRef, totalMinor: p.totalMinor, currency: p.currency },
+          payload: { orderId: p.id, quotationId: p.quotationId, orderRef: p.orderRef, totalMinor: p.totalMinor, grandTotalMinor: p.grandTotalMinor ?? p.totalMinor, currency: p.currency },
         });
       });
     } catch (err) {

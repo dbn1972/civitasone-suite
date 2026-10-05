@@ -4,6 +4,10 @@ import { sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import { listQuery, windowOf, listEnvelope } from "../../shared/list-query.js";
+import { maskList, maskRecord } from "../../shared/pii-reveal.js";
+import { recordStatusHistory, listStatusHistory } from "../../shared/case-status-history.js";
+import { enqueue } from "../../shared/outbox.js";
+import { COMMANDS } from "../../topics.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
 const ADMIN_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
@@ -69,23 +73,79 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
     const body = createBody.parse(req.body);
     const refNo = srRef();
 
-    const rows = (await scopedRead((tx) => tx.execute(sql`
-      INSERT INTO crm.service_requests (
-        tenant_id, contact_id, citizen_name, citizen_phone, citizen_email,
-        service_type, subject, description, priority, status,
-        due_at, intake_channel, reference_no, created_by, updated_by
-      ) VALUES (
-        ${ctx.tenantId}, ${body.contactId ?? null}, ${body.citizenName},
-        ${body.citizenPhone ?? null}, ${body.citizenEmail ?? null},
-        ${body.serviceType}, ${body.subject}, ${body.description ?? null},
-        ${body.priority}, 'open',
-        ${body.dueAt ?? null}, ${body.intakeChannel ?? null}, ${refNo}, ${ctx.actorId}, ${ctx.actorId}
-      )
-      RETURNING id, reference_no AS "referenceNo",
-                citizen_name AS "citizenName", service_type AS "serviceType",
-                subject, priority, status, intake_channel AS "intakeChannel", created_at AS "createdAt"
-    `))) as unknown as Array<Record<string, unknown>>;
-    return reply.code(201).send({ data: rows[0] });
+    const row = await scopedRead(async (tx) => {
+      // F6-03: when the caller gives no explicit dueAt, derive it from the
+      // picked service type's SLA. due_at = created_at + sla_hours. Match on the
+      // active service_types master by code OR label (the form sends the label),
+      // taking the lowest sla_hours if both somehow match. NULL when the type has
+      // no SLA / is not in the master -> due_at stays NULL (today's behaviour).
+      let slaDueExpr = sql`${body.dueAt ?? null}`;
+      if (body.dueAt === undefined) {
+        const slaRows = (await tx.execute(sql`
+          SELECT sla_hours AS "slaHours"
+          FROM crm.service_types
+          WHERE tenant_id = ${ctx.tenantId}
+            AND active = true
+            AND sla_hours IS NOT NULL
+            AND (code = ${body.serviceType} OR label = ${body.serviceType})
+          ORDER BY sla_hours ASC
+          LIMIT 1
+        `)) as unknown as Array<{ slaHours: number }>;
+        const slaHours = slaRows[0]?.slaHours;
+        if (slaHours !== undefined && slaHours !== null) {
+          slaDueExpr = sql`now() + make_interval(hours => ${slaHours})`;
+        }
+      }
+
+      const inserted = (await tx.execute(sql`
+        INSERT INTO crm.service_requests (
+          tenant_id, contact_id, citizen_name, citizen_phone, citizen_email,
+          service_type, subject, description, priority, status,
+          due_at, intake_channel, reference_no, created_by, updated_by
+        ) VALUES (
+          ${ctx.tenantId}, ${body.contactId ?? null}, ${body.citizenName},
+          ${body.citizenPhone ?? null}, ${body.citizenEmail ?? null},
+          ${body.serviceType}, ${body.subject}, ${body.description ?? null},
+          ${body.priority}, 'open',
+          ${slaDueExpr}, ${body.intakeChannel ?? null}, ${refNo}, ${ctx.actorId}, ${ctx.actorId}
+        )
+        RETURNING id, reference_no AS "referenceNo",
+                  citizen_name AS "citizenName", service_type AS "serviceType",
+                  subject, priority, status, intake_channel AS "intakeChannel",
+                  due_at AS "dueAt", created_at AS "createdAt"
+      `)) as unknown as Array<Record<string, unknown>>;
+
+      // F6-01: seed the timeline with the opening transition (null -> open),
+      // in the same tx as the insert.
+      await recordStatusHistory(tx, {
+        tenantId: ctx.tenantId,
+        resourceType: "service_request",
+        resourceId: String(inserted[0]?.id),
+        fromStatus: null,
+        toStatus: "open",
+        note: null,
+        actorId: ctx.actorId,
+      });
+      return inserted[0];
+    });
+    return reply.code(201).send({ data: row });
+  });
+
+  // GET /v1/crm/service-requests/:id/history — F6-01 status timeline
+  app.get("/v1/crm/service-requests/:id/history", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CRM_ROLES);
+    const { id } = idParam.parse(req.params);
+
+    // 404 when the request does not exist for this tenant (not an empty list).
+    const [exists] = (await scopedRead((tx) => tx.execute(sql`
+      SELECT 1 AS ok FROM crm.service_requests
+      WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
+    `))) as unknown as Array<{ ok: number }>;
+    if (!exists) throw new HttpError(404, "NOT_FOUND", "service request not found");
+
+    const data = await listStatusHistory(ctx.tenantId, "service_request", id);
+    return reply.send({ data, meta: { total: data.length } });
   });
 
   // GET /v1/crm/service-requests
@@ -143,7 +203,7 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
     for (const s of STATUS) statusCounts[s] = 0;
     for (const row of statusRows) statusCounts[row.status] = row.count;
 
-    const envelope = listEnvelope(rows, w, ct?.total ?? 0);
+    const envelope = listEnvelope(maskList("service_request", rows, ctx.roles), w, ct?.total ?? 0);
     return reply.send({ ...envelope, meta: { ...envelope.meta, statusCounts } });
   });
 
@@ -169,7 +229,7 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
     `))) as unknown as Array<Record<string, unknown>>;
 
     if (rows.length === 0) throw new HttpError(404, "NOT_FOUND", "service request not found");
-    return reply.send({ data: rows[0] });
+    return reply.send({ data: maskRecord("service_request", rows[0]!, ctx.roles) });
   });
 
   // PATCH /v1/crm/service-requests/:id/status — update status / close
@@ -186,21 +246,65 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
     const versionF =
       body.version !== undefined ? sql`AND version = ${body.version}` : sql``;
 
-    const rows = (await scopedRead((tx) => tx.execute(sql`
-      UPDATE crm.service_requests
-      SET status = ${body.status},
-          resolution = COALESCE(${body.resolution ?? null}, resolution),
-          status_note = COALESCE(${body.statusNote ?? null}, status_note),
-          assigned_to = COALESCE(${body.assignedTo ?? null}::uuid, assigned_to),
-          resolved_at = CASE WHEN ${body.status} = 'resolved' AND resolved_at IS NULL THEN now() ELSE resolved_at END,
-          closed_at   = CASE WHEN ${body.status} IN ('closed', 'cancelled') AND closed_at IS NULL THEN now() ELSE closed_at END,
-          updated_by = ${ctx.actorId}, updated_at = now(), version = version + 1
-      WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
-        AND status NOT IN ('closed', 'cancelled')
-        ${versionF}
-      RETURNING id, status, assigned_to AS "assignedTo", resolved_at AS "resolvedAt",
-                closed_at AS "closedAt", resolution, status_note AS "statusNote", version
-    `))) as unknown as Array<Record<string, unknown>>;
+    // F6-01: capture the pre-transition status (via a CTE over the row as it was
+    // before the UPDATE) and write the history row in the SAME tx as the write,
+    // so a transition and its timeline entry commit or roll back together.
+    const rows = (await scopedRead(async (tx) => {
+      const updated = (await tx.execute(sql`
+        WITH prev AS (
+          SELECT status FROM crm.service_requests
+          WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
+        )
+        UPDATE crm.service_requests
+        SET status = ${body.status},
+            resolution = COALESCE(${body.resolution ?? null}, resolution),
+            status_note = COALESCE(${body.statusNote ?? null}, status_note),
+            assigned_to = COALESCE(${body.assignedTo ?? null}::uuid, assigned_to),
+            resolved_at = CASE WHEN ${body.status} = 'resolved' AND resolved_at IS NULL THEN now() ELSE resolved_at END,
+            closed_at   = CASE WHEN ${body.status} IN ('closed', 'cancelled') AND closed_at IS NULL THEN now() ELSE closed_at END,
+            updated_by = ${ctx.actorId}, updated_at = now(), version = version + 1
+        WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
+          AND status NOT IN ('closed', 'cancelled')
+          ${versionF}
+        RETURNING id, status, (SELECT status FROM prev) AS "fromStatus",
+                  assigned_to AS "assignedTo", resolved_at AS "resolvedAt",
+                  closed_at AS "closedAt", resolution, status_note AS "statusNote", version
+      `)) as unknown as Array<Record<string, unknown>>;
+
+      if (updated.length > 0) {
+        await recordStatusHistory(tx, {
+          tenantId: ctx.tenantId,
+          resourceType: "service_request",
+          resourceId: id,
+          fromStatus: (updated[0]?.["fromStatus"] as string | null) ?? null,
+          toStatus: body.status,
+          note: body.resolution ?? body.statusNote ?? null,
+          actorId: ctx.actorId,
+        });
+
+        // F6-02: on resolve/close, enqueue a transactional citizen notification
+        // through the queue (never an inline HTTP call in the request). The
+        // command carries NO PII — the consumer reads the SR row for the citizen
+        // phone/email at send time, so the contact value never enters the queue
+        // envelope or any consumer log. The consumer no-ops when there is no
+        // phone/email on the request.
+        if (body.status === "resolved" || body.status === "closed") {
+          await enqueue(tx as Parameters<typeof enqueue>[0], {
+            topic: COMMANDS.notifyServiceRequestResolution,
+            eventType: COMMANDS.notifyServiceRequestResolution,
+            tenantId: ctx.tenantId,
+            actorId: ctx.actorId,
+            correlationId: ctx.correlationId,
+            payload: {
+              serviceRequestId: id,
+              tenantId: ctx.tenantId,
+              status: body.status,
+            },
+          });
+        }
+      }
+      return updated;
+    })) as unknown as Array<Record<string, unknown>>;
 
     if (rows.length === 0) {
       // Disambiguate: a row that still exists in a non-terminal state means the
@@ -227,6 +331,10 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
       }
       throw new HttpError(404, "NOT_FOUND", "service request not found or already closed");
     }
-    return reply.send({ data: rows[0] });
+    // `fromStatus` is an internal join used to write the timeline — not part of
+    // the SR view contract. Strip it before returning.
+    const data: Record<string, unknown> = { ...(rows[0] as Record<string, unknown>) };
+    delete data["fromStatus"];
+    return reply.send({ data });
   });
 }

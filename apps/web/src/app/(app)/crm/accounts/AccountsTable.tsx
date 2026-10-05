@@ -1,12 +1,14 @@
 "use client";
 
 import type { CRMAccountSummary } from "@civitasone/types";
+import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { DataTable, EmptyState } from "../../../_components/ds";
 import { RefreshErrorState } from "../../../_components/ds/RefreshErrorState";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { toHumanError } from "@/lib/messages";
-import { useTranslations } from "next-intl";
 import { useSeededResource } from "@/lib/sync/resource";
+import { getAgents } from "@/lib/crm/assignment";
 
 type AccountRow = {
   id: string;
@@ -16,6 +18,8 @@ type AccountRow = {
   parentId: string | null;
   parentName: string | null;
   contacts: number;
+  ownerId: string | null;
+  ownerName: string;
 };
 
 export function AccountsTable({
@@ -26,6 +30,7 @@ export function AccountsTable({
   source?: "api" | "error";
 }) {
   const t = useTranslations("crmAccountsTable");
+  const tOwner = useTranslations("crmOwner");
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<CRMAccountSummary[]>(
     "crm.accounts",
     accounts,
@@ -35,6 +40,31 @@ export function AccountsTable({
 
   const nameById = new Map(rows.map((a) => [a.id, a.name]));
 
+  // F5-01: resolve each account owner's id to a display NAME via the CRM agent
+  // directory (never show a raw UUID in the Owner column). The directory is
+  // small and shared with the assignment screens; a failed load leaves the
+  // map empty and the column falls back to "Unassigned"/"—" rather than a UUID.
+  const [ownerNames, setOwnerNames] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    let cancelled = false;
+    const ownerIds = Array.from(
+      new Set(rows.map((a) => a.ownerId).filter((v): v is string => typeof v === "string" && v.length > 0)),
+    );
+    if (ownerIds.length === 0) {
+      setOwnerNames(new Map());
+      return;
+    }
+    void getAgents().then(({ data }) => {
+      if (cancelled) return;
+      const map = new Map<string, string>();
+      for (const a of data) map.set(a.agentId, a.name);
+      setOwnerNames(map);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [rows]);
+
   const tableRows: AccountRow[] = rows.map((a) => ({
     id: a.id,
     name: a.name,
@@ -43,6 +73,12 @@ export function AccountsTable({
     parentId: a.parentId ?? null,
     parentName: a.parentId ? nameById.get(a.parentId) ?? null : null,
     contacts: a.contactCount,
+    ownerId: a.ownerId ?? null,
+    // Resolve the owner id to a name; a known id that the directory could not
+    // (yet) resolve shows a short id fragment, never the full UUID.
+    ownerName: a.ownerId
+      ? ownerNames.get(a.ownerId) ?? tOwner("unknownUser")
+      : tOwner("unassigned"),
   }));
 
   const resolvedProvenance = provenance ?? "live";
@@ -104,6 +140,13 @@ export function AccountsTable({
                   </a>
                 );
               },
+            },
+            {
+              key: "ownerId",
+              label: tOwner("columnOwner"),
+              // F5-01: show the resolved owner name (or "Unassigned"), never a
+              // raw UUID.
+              render: (row) => row.ownerName,
             },
             { key: "contacts", label: "Contacts", align: "right" },
           ]}

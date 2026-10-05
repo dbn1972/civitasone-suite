@@ -81,6 +81,42 @@ describe("ServiceTypesEditor (GAP-CRM-SERVICE-REQUESTS-NEW-02)", () => {
       ),
     );
   });
+
+  // F6-03: SLA hours field.
+  it("renders the SLA input with a configured type's slaHours and sends it on save", async () => {
+    vi.mocked(st.getServiceTypes)
+      .mockResolvedValueOnce({ data: [row({ slaHours: 48 })], source: "api" })
+      .mockResolvedValueOnce({ data: [row({ slaHours: 24 })], source: "api" });
+    vi.mocked(st.updateServiceType).mockResolvedValue();
+    render(<ServiceTypesEditor />);
+    const slaInput = (await screen.findByLabelText(/SLA target in hours/i)) as HTMLInputElement;
+    expect(slaInput.value).toBe("48");
+    fireEvent.change(slaInput, { target: { value: "24" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Save$/i }));
+    await waitFor(() =>
+      expect(vi.mocked(st.updateServiceType)).toHaveBeenCalledWith(
+        "s1",
+        expect.objectContaining({ slaHours: 24 }),
+      ),
+    );
+  });
+
+  it("treats a blank SLA input as null (no SLA)", async () => {
+    vi.mocked(st.getServiceTypes)
+      .mockResolvedValueOnce({ data: [row({ slaHours: 48 })], source: "api" })
+      .mockResolvedValueOnce({ data: [row({ slaHours: null })], source: "api" });
+    vi.mocked(st.updateServiceType).mockResolvedValue();
+    render(<ServiceTypesEditor />);
+    const slaInput = (await screen.findByLabelText(/SLA target in hours/i)) as HTMLInputElement;
+    fireEvent.change(slaInput, { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Save$/i }));
+    await waitFor(() =>
+      expect(vi.mocked(st.updateServiceType)).toHaveBeenCalledWith(
+        "s1",
+        expect.objectContaining({ slaHours: null }),
+      ),
+    );
+  });
 });
 
 describe("ServiceTypesEditor stale read after 202 (rows must not vanish, revert or reappear)", () => {

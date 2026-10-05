@@ -21,16 +21,16 @@ export function registerProductConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.createProduct, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; category?: string; code: string; name: string; unit: string;
-      taxRateBps: number; priceMinor: string; currency: string; activeFrom?: string | null; activeTo?: string | null; enabled: boolean;
+      taxRateBps: number; hsnSac?: string | null; priceMinor: string; currency: string; activeFrom?: string | null; activeTo?: string | null; enabled: boolean;
     };
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         await tx.execute(sql`
           INSERT INTO crm.products
-            (id, tenant_id, category, code, name, unit, tax_rate_bps, price_minor, currency, active_from, active_to, enabled, created_by, updated_by)
+            (id, tenant_id, category, code, name, unit, tax_rate_bps, hsn_sac, price_minor, currency, active_from, active_to, enabled, created_by, updated_by)
           VALUES (${p.id}, ${p.tenantId}, ${p.category ?? null}, ${p.code}, ${p.name}, ${p.unit},
-                  ${p.taxRateBps}, ${p.priceMinor}::bigint, ${p.currency}, ${p.activeFrom ?? null}::date,
+                  ${p.taxRateBps}, ${p.hsnSac ?? null}, ${p.priceMinor}::bigint, ${p.currency}, ${p.activeFrom ?? null}::date,
                   ${p.activeTo ?? null}::date, ${p.enabled}, ${msg.actorId}, ${msg.actorId})
           ON CONFLICT (tenant_id, code) DO NOTHING
         `);
@@ -52,6 +52,7 @@ export function registerProductConsumers(queue: Queue): void {
         if (p.name !== undefined) sets.push(sql`name = ${p.name as string}`);
         if (p.unit !== undefined) sets.push(sql`unit = ${p.unit as string}`);
         if (p.taxRateBps !== undefined) sets.push(sql`tax_rate_bps = ${p.taxRateBps as number}`);
+        if (p.hsnSac !== undefined) sets.push(sql`hsn_sac = ${p.hsnSac as string | null}`);
         if (p.priceMinor !== undefined) sets.push(sql`price_minor = ${p.priceMinor as string}::bigint`);
         if (p.currency !== undefined) sets.push(sql`currency = ${p.currency as string}`);
         if (p.activeFrom !== undefined) sets.push(sql`active_from = ${p.activeFrom as string | null}::date`);

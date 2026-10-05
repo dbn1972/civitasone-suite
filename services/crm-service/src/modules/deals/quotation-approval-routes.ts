@@ -112,6 +112,21 @@ export async function quotationApprovalRoutes(app: FastifyInstance): Promise<voi
     if (!approval) throw new HttpError(404, "NOT_FOUND", "approval not found");
     if (approval.status !== "pending") throw new HttpError(422, "ALREADY_DECIDED", `approval is already ${approval.status}`);
 
+    // F3-01 maker ≠ checker: a quotation approval must be signed off by someone other
+    // than the person who raised it OR who created the quotation. Conservative default:
+    // the self-approval ban applies to the `approve` decision only — a requester may still
+    // reject (withdraw) their own request, which cannot grant an unapproved discount.
+    if (body.decision === "approve") {
+      const quotationCreator = await repo.quotationCreatedBy(ctx.tenantId, approval.quotationId);
+      if (ctx.actorId === approval.requestedBy || ctx.actorId === quotationCreator) {
+        throw new HttpError(
+          403,
+          "SELF_APPROVAL_FORBIDDEN",
+          "an approval cannot be granted by the person who requested it or created the quotation",
+        );
+      }
+    }
+
     const msgId = commandId(ctx, `${COMMANDS.decideQuotationApproval}:${id}`);
     await queue.publish(COMMANDS.decideQuotationApproval, {
       messageId: msgId, type: COMMANDS.decideQuotationApproval, tenantId: ctx.tenantId, actorId: ctx.actorId,

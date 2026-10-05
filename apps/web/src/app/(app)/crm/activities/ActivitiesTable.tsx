@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import type { CRMActivityEntry } from "@civitasone/types";
 import { DataTable, Segmented, EmptyState } from "../../../_components/ds";
 import { RefreshErrorState } from "../../../_components/ds/RefreshErrorState";
+import { ServerExportButton } from "../../../_components/crm/ServerExportButton";
 import { formatIndianDate, istDatePart, todayIST } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { activityTypeLabel } from "./activityTypes";
@@ -50,6 +51,7 @@ export function ActivitiesTable({
   emptyTitle = "No activities yet",
   emptyMessage = "Schedule your first call, meeting, site visit, or correspondence.",
   filterPlaceholder = "Filter activities…",
+  canExport = false,
 }: {
   activities: CRMActivityEntry[];
   initialSegment?: string;
@@ -66,6 +68,8 @@ export function ActivitiesTable({
   emptyTitle?: string;
   emptyMessage?: string;
   filterPlaceholder?: string;
+  /** F2-04: whether to offer the server-audited CSV export (CRM admins only). */
+  canExport?: boolean;
 }) {
   const [segment, setSegment] = useState<string>(resolveSegment(initialSegment));
   const tType = useTranslations("crmActivityTypes");
@@ -107,7 +111,17 @@ export function ActivitiesTable({
     <div className="card">
       <div className="card-h">
         <h3>{heading}</h3>
-        <Segmented options={[...SEGMENTS]} value={segment} onChange={setSegment} />
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {canExport && (
+            <ServerExportButton
+              endpointPath="v1/crm/activities/export"
+              filenameBase="activities"
+              filters={activeSegment === "Overdue" ? { status: "open" } : {}}
+              kind="activities"
+            />
+          )}
+          <Segmented options={[...SEGMENTS]} value={segment} onChange={setSegment} />
+        </div>
       </div>
       {activities.length === 0 ? (
         <EmptyState icon="◈" title={emptyTitle} message={emptyMessage} />

@@ -15,6 +15,13 @@ function render(ui: ReactElement) {
 vi.mock("@/lib/sync/resource", () => ({ useSeededResource: vi.fn() }));
 // RefreshErrorState's retry uses router.refresh(); a bare mock is enough.
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+// F5-01: the Owner column resolves owner ids to names via the agent directory.
+vi.mock("@/lib/crm/assignment", () => ({
+  getAgents: vi.fn(async () => ({
+    data: [{ agentId: "agent-7", name: "Asha Rao", activeLeads: 0, maxLeads: 10, available: true, onLeave: false }],
+    source: "api",
+  })),
+}));
 
 import { useSeededResource } from "@/lib/sync/resource";
 import { AccountsTable } from "./AccountsTable";
@@ -63,6 +70,27 @@ describe("AccountsTable outage vs empty (GAP-CRM-ACCOUNTS-01)", () => {
     render(<AccountsTable accounts={[account]} source="api" />);
     expect(screen.getByText("NDMA")).toBeInTheDocument();
     expect(screen.queryByText("No accounts yet")).not.toBeInTheDocument();
+  });
+});
+
+describe("AccountsTable owner column (F5-01)", () => {
+  beforeEach(() => mockedHook.mockReset());
+
+  it("shows 'Unassigned' when an account has no owner, never a raw UUID", () => {
+    const unowned = { ...account, ownerId: null } as unknown as CRMAccountSummary;
+    seed([unowned], "live");
+    render(<AccountsTable accounts={[unowned]} source="api" />);
+    expect(screen.getByText("Unassigned")).toBeInTheDocument();
+  });
+
+  it("resolves the owner id to a name from the agent directory", async () => {
+    const owned = { ...account, ownerId: "agent-7" } as unknown as CRMAccountSummary;
+    seed([owned], "live");
+    render(<AccountsTable accounts={[owned]} source="api" />);
+    // Name resolves asynchronously via getAgents.
+    expect(await screen.findByText("Asha Rao")).toBeInTheDocument();
+    // The raw owner id must never be rendered.
+    expect(screen.queryByText("agent-7")).not.toBeInTheDocument();
   });
 });
 

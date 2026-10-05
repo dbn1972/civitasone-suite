@@ -1,15 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen } from "@/test-utils/intl-render";
 
 vi.mock("../../../_data/loaders", () => ({
   getCrmSentimentSummary: vi.fn(),
   getCrmCitizenRatings: vi.fn(),
 }));
 vi.mock("./ThemeTable", () => ({
-  ThemeTable: ({ themes, canExport }: { themes: Array<{ theme: string }>; canExport?: boolean }) => (
+  ThemeTable: ({ themes }: { themes: Array<{ theme: string }> }) => (
     <div
       data-testid="theme-table"
-      data-can-export={String(canExport)}
       data-themes={themes.map((t) => t.theme).join(",")}
     >
       Nothing scored yet
@@ -213,23 +212,23 @@ describe("VoiceOfCitizenPage — GoI redesign", () => {
     source: "api" as const,
   };
 
-  it("hides staff_conduct and corruption rows and disables export for a plain crm_user", async () => {
+  it("hides staff_conduct and corruption rows and shows the vigilance note for a plain crm_user", async () => {
     mockRoles.mockReturnValue(["crm_user"]);
     mockedSummary.mockResolvedValue(sensitiveSummary);
     render(withIntl(await VoiceOfCitizenPage({})));
     const table = screen.getByTestId("theme-table");
     expect(table.dataset.themes).toBe("delay");
-    expect(table.dataset.canExport).toBe("false");
+    // The server now enforces the vigilance filter + audits the export; the UI
+    // theme-filter is defence-in-depth and still hides the sensitive rows here.
     expect(screen.getByText(/vigilance-sensitive theme/i)).toBeInTheDocument();
   });
 
-  it("shows sensitive rows and allows export for a vigilance-admin role", async () => {
+  it("shows sensitive rows for a vigilance-admin role", async () => {
     mockRoles.mockReturnValue(["crm_admin"]);
     mockedSummary.mockResolvedValue(sensitiveSummary);
     render(withIntl(await VoiceOfCitizenPage({})));
     const table = screen.getByTestId("theme-table");
     expect(table.dataset.themes).toBe("delay,staff_conduct,corruption");
-    expect(table.dataset.canExport).toBe("true");
     expect(screen.queryByText(/vigilance-sensitive theme/i)).not.toBeInTheDocument();
   });
 

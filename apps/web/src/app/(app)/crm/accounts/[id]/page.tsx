@@ -1,12 +1,13 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, EmptyState, DataTable, RefreshErrorState } from "../../../../_components/ds";
 import { getCrmAccount, getCrmAccounts, getCrmAccountAncestors, getCrmAccountChildren } from "../../../../_data/loaders";
 import { getSessionRoles, hasAnyRole, CRM_VERIFY_ROLES } from "@/lib/auth/roleGuard";
 import { toHumanError } from "@/lib/messages";
-import { getTranslations } from "next-intl/server";
 import { hierarchyState } from "./hierarchyState";
 import { safeExternalUrl } from "@/lib/url";
 import { collectDescendantIds } from "../hierarchy";
 import { AccountParentForm } from "./AccountParentForm";
+import { AccountOwnerForm } from "./AccountOwnerForm";
 import { Customer360Panel } from "../../../../_components/crm/Customer360Panel";
 import { AccountRelationshipsEditor } from "../../../../_components/crm/AccountRelationshipsEditor";
 import { ActivityFeed } from "../../../../_components/crm/ActivityFeed";
@@ -17,6 +18,7 @@ import { DocumentAlertsView } from "../../../../_components/crm/DocumentAlertsVi
 
 export default async function Page({ params }: { params: { id: string } }) {
   const t = await getTranslations("crmAccountDetail");
+  const tOwner = await getTranslations("crmOwner");
   // The account is resolved by id (getCrmAccount queries the list at the server's
   // max page size, so accounts beyond the default 50-row page resolve) rather
   // than accounts.find() over the default page, which rendered a valid deep link
@@ -135,6 +137,17 @@ export default async function Page({ params }: { params: { id: string } }) {
               <div className="fld"><div className="l">Reports to</div><div className="v">{parentName ?? "Top level"}</div></div>
               <div className="fld"><div className="l">Linked Contacts</div><div className="v">{account.contactCount}</div></div>
             </div>
+          </div>
+
+          <div className="card">
+            <div className="card-h"><h3>{tOwner("cardTitle")}</h3></div>
+            {/* F5-01: change the owning agent. The picker resolves the current
+                owner id to a name itself; the server audits the change. */}
+            <AccountOwnerForm
+              accountId={account.id}
+              currentOwnerId={account.ownerId ?? null}
+              currentOwnerName={null}
+            />
           </div>
 
           <div className="card">

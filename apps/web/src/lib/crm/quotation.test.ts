@@ -8,6 +8,11 @@ import {
   lineNetMinor,
   lineTaxMinor,
   quotationTotalMinor,
+  quotationTaxMinor,
+  gstSplit,
+  displayGrandTotalMinor,
+  isAllowedCurrency,
+  ALLOWED_CURRENCIES,
   normaliseApprovals,
   normaliseVersions,
   ApprovalRequiredError,
@@ -79,5 +84,66 @@ describe("quotation normalisers & money math (QP-001..005)", () => {
 
   it("ApprovalRequiredError is an Error subtype", () => {
     expect(new ApprovalRequiredError("x")).toBeInstanceOf(Error);
+  });
+});
+
+describe("F4 money follow-ups (web)", () => {
+  it("F4-02: normalises a product's hsnSac when present, omits it otherwise", () => {
+    expect(normaliseProduct({ id: "p", name: "X", code: "X", hsnSac: "998314" })!.hsnSac).toBe("998314");
+    expect(normaliseProduct({ id: "p", name: "X", code: "X" })!.hsnSac).toBeUndefined();
+  });
+
+  it("F4-03: currency allow-list accepts only INR/USD/EUR/GBP/AED", () => {
+    for (const c of ALLOWED_CURRENCIES) expect(isAllowedCurrency(c)).toBe(true);
+    expect(isAllowedCurrency("usd")).toBe(true);
+    expect(isAllowedCurrency("JPY")).toBe(false);
+  });
+
+  it("F4-01: normalises server net/tax/grand-total + GST summary + place/supplier", () => {
+    const q = normaliseQuotation({
+      id: "q1",
+      status: "sent",
+      lineItems: [{ productId: "p", quantity: 1, unitPriceMinor: 100000, taxRateBps: 1800 }],
+      netMinor: "100000",
+      taxMinor: "18000",
+      grandTotalMinor: "118000",
+      currency: "USD",
+      placeOfSupply: "27",
+      supplierState: "07",
+      gstSummary: { cgstMinor: "0", sgstMinor: "0", igstMinor: "18000" },
+    })!;
+    expect(q.netMinor).toBe("100000");
+    expect(q.taxMinor).toBe("18000");
+    expect(q.grandTotalMinor).toBe("118000");
+    expect(q.currency).toBe("USD");
+    expect(q.placeOfSupply).toBe("27");
+    expect(q.supplierState).toBe("07");
+    expect(q.gstSummary).toEqual({ cgstMinor: "0", sgstMinor: "0", igstMinor: "18000" });
+  });
+
+  it("F4-01: displayGrandTotalMinor prefers the server figure over a client re-sum", () => {
+    const lines: QuotationLine[] = [{ productId: "p", quantity: 1, unitPriceMinor: "100000", taxRateBps: 1800 }];
+    // Server says grand total is 999999; the UI shows that, not the re-summed 118000.
+    expect(displayGrandTotalMinor({ template: "", version: 1, status: "sent", lines, grandTotalMinor: "999999" })).toBe("999999");
+    // No server figure (unsaved draft): fall back to the client sum.
+    expect(displayGrandTotalMinor({ template: "", version: 1, status: "draft", lines })).toBe("118000");
+  });
+
+  it("F4-01: quotationTaxMinor sums per-line tax with BigInt", () => {
+    const lines: QuotationLine[] = [
+      { productId: "a", quantity: 10, unitPriceMinor: "500000", taxRateBps: 1800 },
+      { productId: "b", quantity: 1, unitPriceMinor: "150000", taxRateBps: 1800 },
+    ];
+    expect(quotationTaxMinor(lines)).toBe("927000");
+  });
+
+  it("F4-02: gstSplit — intra-state halves (odd paisa to SGST), inter-state is IGST", () => {
+    expect(gstSplit("18000", "27", "27")).toEqual({ cgstMinor: "9000", sgstMinor: "9000", igstMinor: "0" });
+    const odd = gstSplit("18001", "27", "27");
+    expect(odd.cgstMinor).toBe("9000");
+    expect(odd.sgstMinor).toBe("9001");
+    expect(gstSplit("18000", "27", "07")).toEqual({ cgstMinor: "0", sgstMinor: "0", igstMinor: "18000" });
+    expect(gstSplit("18000", "", "")).toEqual({ cgstMinor: "0", sgstMinor: "0", igstMinor: "18000" });
+    expect(gstSplit("0", "27", "27")).toEqual({ cgstMinor: "0", sgstMinor: "0", igstMinor: "0" });
   });
 });

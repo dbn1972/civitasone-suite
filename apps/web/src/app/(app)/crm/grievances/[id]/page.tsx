@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { fetchJson } from "../../../../_data/apiClient";
-import { PageHeader, StatusPill, Card, Masked, LoadErrorState, EmptyState } from "../../../../_components/ds";
+import { PageHeader, StatusPill, Card, LoadErrorState, EmptyState } from "../../../../_components/ds";
 import { getSessionRoles, hasAnyRole, CRM_GRIEVANCE_CLOSE_ROLES, CRM_PII_READ_ROLES } from "@/lib/auth/roleGuard";
 import { GrievanceActions } from "./GrievanceActions";
 
@@ -336,24 +336,18 @@ export default async function GrievanceDetailPage({
               <dd style={{ fontWeight: 600 }}>{g.citizenName}</dd>
               <dt style={{ color: "var(--ink2)" }}>{t("phone")}</dt>
               <dd>
-                {g.citizenPhone
-                  ? canRevealPii
-                    ? g.citizenPhone
-                    : <Masked value={g.citizenPhone} kind="phone" ariaLabel={t("maskedPhone")} />
-                  : "—"}
+                {g.citizenPhone ?? "—"}
               </dd>
               <dt style={{ color: "var(--ink2)" }}>{t("email")}</dt>
               <dd style={{ wordBreak: "break-all" }}>
-                {g.citizenEmail
-                  ? canRevealPii
-                    ? g.citizenEmail
-                    : <Masked value={g.citizenEmail} kind="email" ariaLabel={t("maskedEmail")} />
-                  : "—"}
+                {g.citizenEmail ?? "—"}
               </dd>
             </dl>
-            {/* GAP-CRM-GRIEVANCES-DETAIL-05: DPDP — citizen contact is personal
-                data. It is shown in clear only to a CRM PII-read role; everyone
-                else sees a masked value. */}
+            {/* GAP-CRM-GRIEVANCES-DETAIL-05 / F1-01+F1-06: DPDP — citizen
+                contact is personal data. The SERVER masks it for roles outside
+                the CRM PII-read set and sends the clear value only to those
+                roles, so the page simply renders what the server returned
+                (no client-side masking). */}
             {(g.citizenPhone || g.citizenEmail) && !canRevealPii && (
               <p style={{ margin: "0 16px 12px", fontSize: 11, color: "var(--ink2)", lineHeight: 1.5 }}>
                 {t("maskedNotice")}

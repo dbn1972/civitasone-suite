@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { Masked, maskAccount, maskPhone, maskEmail } from "./Masked";
+
+function withIntl(ui: React.ReactElement) {
+  return <NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>;
+}
 
 describe("Masked", () => {
   it("masks PAN as before", () => {
@@ -44,5 +50,34 @@ describe("Masked phone/email (CRM PII)", () => {
   it("masks implausible values in full", () => {
     expect(maskPhone("12")).toBe("XXXX");
     expect(maskEmail("notanemail")).not.toContain("notanemail");
+  });
+});
+
+// F1-05: Masked gains an optional onReveal config that, for a reveal-allowed
+// viewer, renders the interactive audited reveal control (MaskedReveal).
+describe("Masked onReveal (F1-05 audited reveal)", () => {
+  const reveal = {
+    canReveal: true,
+    resourceType: "grievance" as const,
+    resourceId: "8cf7f7eb-1de6-4a31-b48c-1f598ecf33c0",
+    field: "citizenPhone",
+    label: "citizen phone",
+  };
+
+  it("renders a Reveal control when onReveal.canReveal is true", () => {
+    render(withIntl(<Masked kind="phone" value="******3210" onReveal={reveal} />));
+    expect(screen.getByText("******3210")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reveal" })).toBeInTheDocument();
+  });
+
+  it("renders NO reveal control when canReveal is false (static masked render)", () => {
+    render(withIntl(<Masked kind="phone" value="******3210" onReveal={{ ...reveal, canReveal: false }} />));
+    expect(screen.getByText("******3210")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
+  });
+
+  it("stays a static render with no reveal control when onReveal is omitted", () => {
+    render(<Masked kind="phone" value="9876543210" />);
+    expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
   });
 });

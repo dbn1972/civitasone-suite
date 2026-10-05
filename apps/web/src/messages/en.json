@@ -1875,6 +1875,10 @@
       "columnBand": "Band",
       "columnScore": "Health Score",
       "columnLastScored": "Last Scored",
+      "columnOwner": "Owner",
+      "columnLastContact": "Last Contact",
+      "unassigned": "Unassigned",
+      "unknownUser": "Unknown user",
       "filterPlaceholder": "Filter by account…",
       "emptyTitle": "No accounts at risk",
       "emptyMessage": "Accounts appear here once they are scored at risk or critical.",
@@ -11401,6 +11405,18 @@
     "unavailable": "The value could not be shown. Try again.",
     "failed": "Could not reach the server. Check your connection and try again."
   },
+  "piiReveal": {
+    "reveal": "Reveal",
+    "hide": "Hide",
+    "maskedAria": "{label} (masked)",
+    "title": "Reveal {label}?",
+    "description": "Showing the {label} is recorded in the audit trail with your name and the reason below. It is hidden again after 30 seconds.",
+    "confirm": "Reveal",
+    "reasonLabel": "Reason for revealing (at least 10 characters)",
+    "forbidden": "You do not have permission to reveal this value.",
+    "unavailable": "The value could not be shown. Try again.",
+    "failed": "Could not reach the server. Check your connection and try again."
+  },
   "financeWorkflowErrors": {
     "makerChecker": "The person who made this change cannot also approve it. Ask a different authorised officer to do it.",
     "vendorNotPending": "This vendor is no longer awaiting approval. Refresh the page.",
@@ -14202,5 +14218,79 @@
   "crmOwnershipDirectoryEditor": {
     "namePlaceholder": "{singular} name",
     "addSingular": "+ Add {singular}"
+  },
+  "crmExport": {
+    "button": "⬇ Export CSV",
+    "purposeLabel": "Purpose (required, recorded in the audit trail)",
+    "purposePlaceholder": "e.g. Monthly register review for the district office",
+    "export": "Export",
+    "exporting": "Exporting…",
+    "cancel": "Cancel",
+    "purposeRequired": "Please state a purpose of at least 10 characters.",
+    "done": "Exported {filename}. This download was recorded in the audit trail.",
+    "failed": "The export could not be completed.",
+    "contactsDone": "Export complete. This download was recorded in the audit trail.",
+    "activitiesTitle": "Export activities?",
+    "activitiesDescription": "This downloads the tenant's logged interactions. State a purpose — it is recorded in the audit trail.",
+    "grievancesTitle": "Export the grievance register?",
+    "grievancesDescription": "This file includes citizen contact details (personal data under the DPDP Act 2023), masked unless you hold a PII-read role. State a purpose — it is recorded in the audit trail.",
+    "leadFormsTitle": "Export the lead-form registry?",
+    "leadFormsDescription": "This CSV lists each form's policy (origins, consent, rate limit). The public form KEY is deliberately omitted by the server. State a purpose — it is recorded in the audit trail.",
+    "serviceRequestsTitle": "Export citizen service requests?",
+    "serviceRequestsDescription": "This file includes citizen contact details (personal data under the DPDP Act 2023), masked unless you hold a PII-read role. State a purpose — it is recorded in the audit trail.",
+    "vocTitle": "Export Voice-of-Citizen readings?",
+    "vocDescription": "This downloads the scored interactions for the current window. Vigilance-sensitive themes (staff conduct, integrity) are included only for authorised roles — the server enforces this. State a purpose; it is recorded in the audit trail."
+  },
+  "crmOwner": {
+    "label": "Owner",
+    "cardTitle": "Account Owner",
+    "change": "Change owner",
+    "saving": "Saving…",
+    "submitted": "Owner change submitted. It takes effect shortly.",
+    "failed": "Could not change the account owner.",
+    "ariaLabel": "Account owner",
+    "placeholder": "Search owner by name…",
+    "unknownUser": "Unknown user",
+    "unassigned": "Unassigned",
+    "columnOwner": "Owner"
+  },
+  "crmTimeline": {
+    "title": "Status timeline",
+    "empty": "No status changes recorded yet.",
+    "opened": "Opened"
+  },
+  "crmCatalogue": {
+    "hsnHeader": "HSN/SAC",
+    "hsnAria": "HSN or SAC classification for product {n}",
+    "hsnPlaceholder": "e.g. 998314",
+    "hsnInvalid": "HSN/SAC must be 4–8 digits.",
+    "hsnInvalidRow": "Product “{name}”: HSN/SAC must be 4–8 digits (or left blank).",
+    "newProduct": "(new)",
+    "currencyAria": "Currency for product {n}"
+  },
+  "crmServiceTypes": {
+    "slaLabel": "SLA (hours)",
+    "slaAria": "SLA target in hours",
+    "slaPlaceholder": "none",
+    "slaDerived": "Target derived from the {hours}h SLA for this service type. Edit to override.",
+    "slaInfo": "This service type has a {hours}h SLA."
+  },
+  "crmQuotation": {
+    "placeOfSupplyAria": "Place of supply state code",
+    "supplierStateAria": "Supplier state code",
+    "stateCodePlaceholder": "e.g. 27",
+    "cgst": "CGST",
+    "sgst": "SGST",
+    "igst": "IGST",
+    "placeOfSupplyLabel": "Place of supply (state code)",
+    "supplierStateLabel": "Supplier state (state code)",
+    "intraNote": "Intra-state: tax splits into CGST + SGST.",
+    "interNote": "Inter-state (or blank): tax is charged as IGST."
+  },
+  "crmCaseNotes": {
+    "rtiPiiLogged": "Personal data of the RTI applicant. Access is logged.",
+    "rtiPiiMasked": "Personal data of the RTI applicant. Masked — you do not have permission to view the full applicant details.",
+    "srResolveDescription": "Record how the request was fulfilled. If the citizen left a phone or email, they are notified automatically.",
+    "srCloseDescription": "Closing is final — the request can no longer be actioned. If the citizen left a phone or email, they are notified automatically."
   }
 }

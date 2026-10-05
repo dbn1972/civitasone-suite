@@ -99,13 +99,14 @@ describe("LeadFormsTable (GAP-CRM-LEAD-FORMS-01)", () => {
     expect(screen.getByText("Paused")).toBeInTheDocument();
   });
 
-  // GAP-CRM-LEAD-FORMS-02: the CSV export is gated behind an explicit
-  // sensitive-data confirmation (the public submit URL is in the file).
-  it("asks for confirmation before exporting the registry CSV", async () => {
+  // F2-05: the CSV export is now SERVER-AUDITED — the button opens the purpose
+  // dialog (purpose recorded in the audit trail) and the server omits the form key.
+  it("asks for a purpose before exporting the registry CSV", async () => {
     render(<LeadFormsTable rows={[form()]} />);
-    fireEvent.click(screen.getByRole("button", { name: /CSV/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Export CSV/i }));
     expect(await screen.findByText(/Export the lead-form registry\?/i)).toBeInTheDocument();
-    expect(screen.getByText(/lets anyone post leads into this tenant/i)).toBeInTheDocument();
+    expect(screen.getByText(/public form KEY is deliberately omitted/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Purpose/i)).toBeInTheDocument();
   });
 });
 

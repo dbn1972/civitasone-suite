@@ -45,6 +45,7 @@ function blank(): ServiceType {
 
 export function ServiceTypesEditor({ retryDelaysMs = DEFAULT_RETRY_DELAYS_MS }: { retryDelaysMs?: readonly number[] } = {}) {
   const t = useTranslations("crmServiceTypesEditor");
+  const tSla = useTranslations("crmServiceTypes");
   const [rows, setRows] = useState<Row[]>([]);
   const [source, setSource] = useState<MasterSource | "loading">("loading");
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -226,6 +227,25 @@ export function ServiceTypesEditor({ retryDelaysMs = DEFAULT_RETRY_DELAYS_MS }: 
                         onChange={(e) => update(row.key, { sortOrder: Number(e.target.value) || 0 })}
                         style={{ ...inputStyle, width: 80, minHeight: 32 }}
                         aria-label={t("sortOrder")}
+                      />
+                    </label>
+                    {/* F6-03: optional SLA target in hours. Blank = no SLA; a new
+                        request against this type then has no auto-derived due date. */}
+                    <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13 }}>
+                      {tSla("slaLabel")}
+                      <input
+                        type="number"
+                        min={1}
+                        max={87600}
+                        value={row.slaHours ?? ""}
+                        onChange={(e) =>
+                          update(row.key, {
+                            slaHours: e.target.value === "" ? null : Number(e.target.value) || null,
+                          })
+                        }
+                        style={{ ...inputStyle, width: 90, minHeight: 32 }}
+                        aria-label={tSla("slaAria")}
+                        placeholder={tSla("slaPlaceholder")}
                       />
                     </label>
                   </div>

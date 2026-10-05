@@ -74,8 +74,6 @@ export function ThemeTable({ themes, canExport = true }: { themes: RankedTheme[]
       ]}
       rows={rows}
       sortable
-      exportable={canExport}
-      exportFilename="crm-voice-of-citizen-themes"
       emptyIcon="▣"
       emptyTitle="Nothing scored yet"
       emptyMessage="Themes appear once interactions have been logged against contacts and engagements. Every note, call and complaint is scored automatically."
