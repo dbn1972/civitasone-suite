@@ -11,6 +11,8 @@ import { fetchJson } from "@/app/_data/apiClient";
 import { EmployeePayGroupCard } from "./EmployeePayGroupCard";
 import { getEmployeePayGroup } from "../../payroll/pay-groups/payGroupData";
 import { INDIAN_STATES_UTS } from "@/lib/india/states";
+import { getEmployeeScannedDocuments } from "./scannedDocumentsData";
+import { ScannedDocumentsSection } from "./ScannedDocumentsSection";
 import { getTranslations } from "next-intl/server";
 
 // GAP-HR-EMPLOYEES-DETAIL-04: GAP-HR-SF-17 (#1658) added batch name
@@ -197,6 +199,8 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
   const roles = getSessionRoles();
   const canAdminister = roles.some((r) => EMPLOYEE_ADMIN_ROLES.includes(r));
   const costCenterName = canAdminister && employee.costCenterId ? await getCostCenterName(employee.costCenterId) : null;
+  // GAP-ADMIN-BULK-SCAN-02: scanned records on the personnel file (hrms-service gates the read to these same HR roles).
+  const scannedDocs = canAdminister ? await getEmployeeScannedDocuments(params.id) : null;
 
   // Pay group (payroll-service, PAYROLL_READER_ROLES): only fetched for roles
   // that may read it, so everyone else never meets a 403 card.
@@ -461,6 +465,8 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
       )}
 
       {payGroupResult && <EmployeePayGroupCard result={payGroupResult} />}
+
+      {scannedDocs && <ScannedDocumentsSection result={scannedDocs} backHref="/hr/employees" />}
 
       {/* Lifecycle Timeline */}
       <Card title={t("lifecycleTitle")}>

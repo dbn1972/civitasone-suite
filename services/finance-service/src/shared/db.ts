@@ -22,6 +22,7 @@ import { formulationSchema } from "../modules/budget/formulation-schema.js";
 import { distributionSchema } from "../modules/budget/distribution-schema.js";
 import { supplementarySchema } from "../modules/budget/supplementary-schema.js";
 import { schema as resolutionIntakeModule } from "../modules/resolution-intake/schema.js";
+import { schema as scanLinkModule } from "../modules/scan-link/schema.js";
 import { schema as reconModule } from "../modules/recon/schema.js";
 import { officeSchema } from "../modules/budget/office-schema.js";
 import { schema as approvalsModule } from "../modules/approvals/schema.js";
@@ -48,6 +49,7 @@ const SCHEMA = {
   ...supplementarySchema,
   ...resolutionIntakeModule,
   ...reconModule,
+  ...scanLinkModule,
   ...outboxSchema,
 };
 

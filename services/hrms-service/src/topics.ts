@@ -53,6 +53,8 @@ export const COMMANDS = {
   lifecycleIssuePpo:        "hrms.lifecycle.separation.issue_ppo",
   nominationComplete:       "hrms.nomination.complete",
   // GAP-HR-OUTSOURCED-01: vendor-supplied workforce contract register.
+  // GAP-ADMIN-BULK-SCAN-02: DPDP audit-on-read of scanned documents (published by the route, audited by scan-link-consumer.ts).
+  scanLinkDocumentsViewed:  "hrms.scan-link.documents_viewed",
   outsourcedCreate:         "hrms.outsourced.create",
   outsourcedUpdate:         "hrms.outsourced.update",
   loanCreate:               "hrms.loan.create",

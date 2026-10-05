@@ -3,7 +3,7 @@
  *
  * bank_api / pfms: finance and payroll own payments, so finance_admin and
  * payroll_admin join the tenant/platform admins. esign / dsc: tenant admins
- * and the platform roles only. Enforced in the route AND the consumer (the
+ * and the platform roles only (ocr too: the scan-OCR provider chain is a tenant-admin decision). Enforced in the route AND the consumer (the
  * route stamps the caller's roles into the command it publishes).
  */
 import { TENANT_ADMIN_ROLES } from "../../shared/context.js";

@@ -13,6 +13,7 @@
  *
  * Requirements validated: 6.3, 6.4, 6.7
  */
+import type { TesseractProvider } from "@civitasone/ocr";
 import { pino } from "pino";
 
 const log = pino({ name: "document-scan-ocr-adapter" });
@@ -169,19 +170,28 @@ function mapRawCloudResponse(raw: unknown): OcrExtraction {
 // Local Tesseract Fallback
 // ---------------------------------------------------------------------------
 
-async function callTesseract(imageBuffer: Buffer): Promise<OcrExtraction> {
-  // Tesseract local processing — uses child_process or native bindings.
-  // In production this would invoke tesseract CLI or a Node.js binding.
-  // For now, we simulate the extraction interface.
-  try {
-    const { createWorker } = await import("tesseract.js");
-    const worker = await createWorker("eng+hin");
-    const { data } = await worker.recognize(imageBuffer);
-    await worker.terminate();
+/**
+ * Local OCR now runs on the shared @civitasone/ocr tesseract provider (WASM worker pool, lazy
+ * traineddata, OCR_TESSDATA_PATH-configurable). Behaviour is unchanged: languages eng+hin, any failure
+ * degrades to an empty extraction.
+ */
+let localProvider: Promise<TesseractProvider> | null = null;
 
+function getLocalProvider(): Promise<TesseractProvider> {
+  localProvider ??= import("@civitasone/ocr").then((m) => new m.TesseractProvider({ maxWorkers: 1, idleTimeoutMs: 30_000 }));
+  return localProvider;
+}
+
+async function callTesseract(imageBuffer: Buffer): Promise<OcrExtraction> {
+  try {
+    const provider = await getLocalProvider();
+    const { toPageImage } = await import("@civitasone/ocr");
+    const page = await toPageImage(imageBuffer);
+    const [result] = await provider.recognize([page], { langs: ["eng", "hin"] });
     // Parse Tesseract raw text output into structured fields
-    return parseTesseractOutput(data.text);
+    return parseTesseractOutput(result?.text ?? "");
   } catch (err) {
+    localProvider = null; // allow a clean re-init next call (e.g. package failed to load)
     log.warn({ err, event: "tesseract_unavailable" },
       "Tesseract.js not available — returning empty extraction");
     return emptyExtraction();

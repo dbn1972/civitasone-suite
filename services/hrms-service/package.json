@@ -29,6 +29,7 @@
     "@civitasone/render": "workspace:*",
     "@civitasone/schemas": "workspace:*",
     "@civitasone/search": "workspace:*",
+    "@civitasone/scan-link": "workspace:*",
     "@civitasone/scanner": "workspace:*",
     "@civitasone/storage": "workspace:*",
     "@civitasone/types": "workspace:*",

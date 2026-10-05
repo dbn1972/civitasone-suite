@@ -12,7 +12,6 @@ vi.mock("next/navigation", () => ({
 
 import TenantProvisionPage from "./tenant-provision/page";
 import { InvoicesTable } from "./invoices/InvoicesTable";
-import BulkScanPage from "./bulk-scan/page";
 
 // GAP-ADMIN-TENANT-PROVISION-01/-02
 describe("tenant-provision", () => {
@@ -58,20 +57,4 @@ describe("InvoicesTable", () => {
   });
 });
 
-// GAP-ADMIN-BULK-SCAN-03/-04, GAP-ADMIN-DISCOVERY-03/-04
-describe.each([
-  ["bulk-scan", BulkScanPage, "Bulk accessibility scans are coming soon."],
-] as const)("%s placeholder", (dir, Page, subtitle) => {
-  it("uses plain user-facing copy with no fake control and no engineering words", () => {
-    const { container } = render(Page());
-    expect(screen.getByText(subtitle)).toBeInTheDocument();
-    expect(screen.getByText("Not available yet")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /queue|scan/i })).not.toBeInTheDocument();
-    expect(container.textContent ?? "").not.toMatch(/backend|implementation|placeholder/i);
-  });
-
-  it("has no inline hex colours in the source", () => {
-    const src = readFileSync(join(__dirname, dir, "page.tsx"), "utf8");
-    expect(src).not.toMatch(/#[0-9a-fA-F]{6}\b/);
-  });
-});
+// GAP-ADMIN-BULK-SCAN-02: the bulk-scan placeholder copy test was removed -- the page is now a real, wired feature (see bulk-scan/_components tests).

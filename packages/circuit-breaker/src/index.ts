@@ -24,6 +24,12 @@ export interface CircuitBreakerOptions {
   failureThreshold: number;
   /** Milliseconds to wait in the open state before moving to half-open. */
   recoveryMs: number;
+  /**
+   * Optional filter: return false for errors that say nothing about the protected dependency's health (e.g. the
+   * CALLER aborted the call). Such errors are rethrown but neither count toward the threshold nor close/open
+   * the breaker (a half-open probe stays half-open). Default: every error counts.
+   */
+  countsAsFailure?: (err: unknown) => boolean;
 }
 
 export class CircuitBreakerOpenError extends Error {
@@ -77,7 +83,7 @@ export class CircuitBreaker {
       this._onSuccess();
       return result;
     } catch (err) {
-      this._onFailure();
+      if (this.opts.countsAsFailure?.(err) !== false) this._onFailure();
       throw err;
     }
   }

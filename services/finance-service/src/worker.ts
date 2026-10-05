@@ -47,6 +47,7 @@ import { registerResolutionIntakeConsumers } from "./modules/resolution-intake/c
 import { registerReconConsumers } from "./modules/recon/consumer.js";
 import { registerRevenueGlConsumers } from "./modules/revenue-gl/consumer.js";
 import { registerSimplifiedConsumers } from "./modules/simplified/consumer.js";
+import { registerScanLinkConsumers } from "./modules/scan-link/consumer.js";
 
 const log = pino({ name: "finance-worker" });
 
@@ -118,6 +119,7 @@ registerResolutionIntakeConsumers(queue);
 registerReconConsumers(queue);
 registerRevenueGlConsumers(queue);
 registerSimplifiedConsumers(queue);
+registerScanLinkConsumers(queue);
 
 await queue.start();
 const relay = startRelay(scannerDb as unknown as typeof db, queue);

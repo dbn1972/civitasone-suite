@@ -165,7 +165,7 @@ describe("platform catalogue", () => {
     for (const k of ["esign_nsdl_egov", "esign_emudhra", "esign_cdac", "dsc_usb_token_bridge", "dsc_remote_hsm", "bank_sbi", "bank_hdfc", "bank_icici", "bank_axis", "bank_pnb", "bank_generic", "pfms_epayment"]) {
       expect(keys).toContain(k);
     }
-    expect(new Set(data.map((p) => p.category))).toEqual(new Set(["esign", "dsc", "bank_api", "pfms"]));
+    expect(new Set(data.map((p) => p.category))).toEqual(new Set(["esign", "dsc", "bank_api", "pfms", "ocr"]));
     for (const p of data.filter((d) => !d.key.startsWith("zz_test_"))) {
       expect(p.endpoints).toEqual({ sandbox: null, production: null });
     }

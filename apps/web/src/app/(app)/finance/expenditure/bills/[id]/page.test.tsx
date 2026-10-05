@@ -9,6 +9,8 @@ vi.mock("@/lib/auth/roleGuard", () => ({ getSessionRoles: () => rolesMock() }));
 const loaderMock = vi.fn();
 vi.mock("../../../../../_data/loaders", () => ({ getFinanceBillById: () => loaderMock() }));
 vi.mock("./BillLineItemsTable", () => ({ BillLineItemsTable: () => null }));
+// Async server component with its own loader + tests (scannedDocuments.test.ts / ScannedDocumentsSection.test.tsx).
+vi.mock("../../../_components/scanned/ScannedDocumentsSection", () => ({ ScannedDocumentsSection: () => null }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }), usePathname: () => "/", useSearchParams: () => new URLSearchParams() }));
 
 import BillDetailPage from "./page";

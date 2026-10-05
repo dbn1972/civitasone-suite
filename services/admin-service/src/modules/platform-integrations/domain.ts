@@ -6,7 +6,7 @@
  * environment, tenant availability and the production-switch guards.
  */
 import { z } from "zod";
-import type { IntegrationEnvironment, ProviderRow } from "./schema.js";
+import type { IntegrationEnvironment, ProviderRow, TenantIntegrationRow } from "./schema.js";
 
 /** Error carrying an HTTP status + stable machine code for the route layer. */
 export class IntegrationError extends Error {
@@ -265,4 +265,42 @@ export function maskedSecrets(fields: ConfigField[], sealed: Record<string, stri
     const set = typeof sealed[f.key] === "string" && sealed[f.key] !== "";
     return { key: f.key, label: f.label, set, masked: set ? SECRET_MASK : null };
   });
+}
+
+// ── OCR availability (read by document-service bulk-scan) ────────────────────
+
+export type OcrAvailability = { id: string; label: string; available: boolean; sandbox: boolean };
+
+/** Catalogue key `ocr_<engine>` -> the engine id the OCR package uses (`tesseract`, `google_docai`, ...). */
+export function ocrEngineId(key: string): string | null {
+  return key.startsWith("ocr_") && key.length > 4 ? key.slice(4) : null;
+}
+
+/**
+ * Which OCR engines may this tenant's scan pipeline use, and in which mode?
+ *   - tesseract is on-device and ALWAYS available (no record, no credentials, never sandbox);
+ *   - a cloud engine is available when the platform offers it to the tenant, the tenant has an ENABLED record whose
+ *     required fields (incl. sealed secrets) are complete for the record's environment, and - for production - the
+ *     platform has promoted it past beta. `sandbox` says the record runs against the sandbox mock.
+ * Secrets are never part of the result (only their presence is consulted).
+ */
+export function ocrAvailability(
+  providerRows: readonly ProviderRow[], records: readonly TenantIntegrationRow[], tenantId: string, edition: string | null,
+): OcrAvailability[] {
+  const out: OcrAvailability[] = [];
+  let sawTesseract = false;
+  for (const p of providerRows) {
+    if (p.category !== "ocr") continue;
+    const id = ocrEngineId(p.key);
+    if (!id) continue;
+    if (id === "tesseract") { sawTesseract = true; out.push({ id, label: p.name, available: true, sandbox: false }); continue; }
+    if (!isAvailableToTenant(p, tenantId, edition)) continue;
+    const rec = records.find((r) => r.providerKey === p.key);
+    const complete = !!rec && rec.enabled
+      && missingRequired(parseFields(p.configSchema), rec.environment, rec.config, Object.keys(rec.secrets)).length === 0
+      && (rec.environment === "sandbox" || p.status === "available");
+    out.push({ id, label: p.name, available: complete, sandbox: rec ? rec.environment === "sandbox" : false });
+  }
+  if (!sawTesseract) out.unshift({ id: "tesseract", label: "Tesseract (on-device)", available: true, sandbox: false });
+  return out;
 }

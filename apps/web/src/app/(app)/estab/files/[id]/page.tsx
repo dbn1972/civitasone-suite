@@ -4,6 +4,7 @@ import { formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { FileDetailActions } from "./FileDetailActions";
 import { FileAttachments } from "./FileAttachments";
+import { ScannedDocumentsSection } from "./ScannedDocumentsSection";
 import { OfficerName } from "./OfficerName";
 import { MovementTimeline } from "./MovementTimeline";
 import type { EstabFileDetail } from "@civitasone/types";
@@ -129,6 +130,8 @@ export default async function EstabFileDetailPage({ params }: { params: { id: st
           />
 
           <FileAttachments fileId={file.id} attachments={file.attachments ?? []} />
+
+          <ScannedDocumentsSection fileId={file.id} backHref="/estab/list" />
 
           <div className="card">
             <div className="card-h"><h3>Note sheet</h3></div>

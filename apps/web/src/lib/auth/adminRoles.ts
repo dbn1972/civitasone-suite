@@ -73,3 +73,6 @@ export const BILLING_INVOICE_OPERATOR_ROLES: readonly string[] = [...PLATFORM_AD
 export function rolesAllow(sessionRoles: readonly string[], allowed: readonly string[]): boolean {
   return sessionRoles.some((r) => allowed.includes(r));
 }
+
+/** document-service bulk-scan routes (BULK_SCAN_ROLES in modules/bulk-scan/http.ts): Admin > Bulk scan (GAP-ADMIN-BULK-SCAN-02). */
+export const BULK_SCAN_ADMIN_ROLES: readonly string[] = ["document_admin", "super_admin"];

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { PageHeader, Card, StatCard, StatGrid, StatusPill, LoadErrorState, EmptyState } from "@/app/_components/ds";
 import { getFinanceActorNames, getFinancePaymentById, getFinancePaymentContext } from "@/app/_data/loaders";
 import { actorLabel } from "@/lib/finance/workflowTypes";
+import { ScannedDocumentsSection } from "../../_components/scanned/ScannedDocumentsSection";
 import { RaiseEOfficeNote } from "@/app/_components/RaiseEOfficeNote";
 import { formatIndianDateTime, formatMoney } from "@/lib/formatters";
 import { canRaiseForApproval, formatPaymentRef, hasPaymentHistory, paymentStatusVariant } from "../paymentUi";
@@ -138,6 +139,8 @@ export default async function PaymentDetailPage({ params }: { params: { id: stri
           </ol>
         )}
       </Card>
+
+      <ScannedDocumentsSection kind="payments" id={params.id} backHref="/finance/payments" />
 
       {/* GAP-FINANCE-PAYMENTS-DETAIL-03: a released / failed / already-submitted payment cannot be
           raised for approval (the API 409s it), so the action is only offered for open payments. */}

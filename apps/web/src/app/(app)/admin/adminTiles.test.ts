@@ -52,7 +52,9 @@ describe("admin hub tiles", () => {
     expect(tenant).not.toContain("/admin/operators");
     expect(tenant).not.toContain("/admin/gateway-config");
     const platform = visibleAdminTiles(["platform_admin"], t).map((x) => x.href);
-    expect(platform).toEqual(expect.arrayContaining(["/admin/tenants", "/admin/gateway-config", "/admin/gateway-routes", "/admin/audit-log", "/admin/bulk-scan"]));
+    expect(platform).toEqual(expect.arrayContaining(["/admin/tenants", "/admin/gateway-config", "/admin/gateway-routes", "/admin/audit-log"]));
+    expect(platform).not.toContain("/admin/bulk-scan");
+    expect(visibleAdminTiles(["document_admin"], t).map((x) => x.href)).toContain("/admin/bulk-scan");
     expect(visibleAdminTiles(["api_admin"], t).map((x) => x.href)).toEqual(["/admin/gateway-routes"]);
     expect(visibleAdminTiles([], t)).toEqual([]);
   });

@@ -5,6 +5,7 @@ import { formatIndianDate, formatMoney, formatEntityRef } from "@/lib/formatters
 import { canWrite, BILL_APPROVE_ROLES } from "@/lib/finance/writeRoles";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { BillPassPayActions } from "../../../_components/FinanceActions";
+import { ScannedDocumentsSection } from "../../../_components/scanned/ScannedDocumentsSection";
 import { BillLineItemsTable } from "./BillLineItemsTable";
 
 export default async function BillDetailPage({ params }: { params: { id: string } }) {
@@ -74,6 +75,8 @@ export default async function BillDetailPage({ params }: { params: { id: string 
           />
         </Card>
       )}
+
+      <ScannedDocumentsSection kind="bills" id={params.id} backHref="/finance/expenditure/bills" />
     </>
   );
 }
