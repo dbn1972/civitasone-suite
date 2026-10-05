@@ -4,7 +4,9 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import type { CRMActivityEntry } from "@civitasone/types";
 import { DataTable, Segmented, EmptyState } from "../../../_components/ds";
-import { formatIndianDate } from "@/lib/formatters";
+import { RefreshErrorState } from "../../../_components/ds/RefreshErrorState";
+import { formatIndianDate, istDatePart, todayIST } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 import { activityTypeLabel } from "./activityTypes";
 
 type ActivityRow = {
@@ -34,17 +36,39 @@ function resolveSegment(raw?: string): Segment {
 export function ActivitiesTable({
   activities,
   initialSegment,
+  source = "api",
+  today,
 }: {
   activities: CRMActivityEntry[];
   initialSegment?: string;
+  source?: "api" | "error";
+  /**
+   * Today's IST calendar date ("YYYY-MM-DD"), computed once on the server so
+   * the Today segment matches the page's "Due Today" stat and never uses the
+   * UTC date (GAP-CRM-ACTIVITIES-03). Falls back to an IST compute if omitted.
+   */
+  today?: string;
 }) {
   const [segment, setSegment] = useState<string>(resolveSegment(initialSegment));
   const tType = useTranslations("crmActivityTypes");
-  const today = new Date().toISOString().slice(0, 10);
+  const tTable = useTranslations("crmActivitiesTable");
+  const todayDate = today ?? todayIST();
+
+  // GAP-CRM-ACTIVITIES-02: an outage leaves `activities` empty, which must not
+  // read as "No interactions yet". Show a retry and hide the segment control.
+  // ux-001-ok: empty-vs-error guard — this branch only fires when source === "error".
+  if (source === "error" && activities.length === 0) {
+    return (
+      <div className="card">
+        <div className="card-h"><h3>{tTable("heading")}</h3></div>
+        <RefreshErrorState error={toHumanError("load", { area: tTable("loadArea") })} backHref="/crm" />
+      </div>
+    );
+  }
 
   const tableRows: ActivityRow[] = activities
     .filter((a) => {
-      if (segment === "Today") return a.dueDate === today;
+      if (segment === "Today") return istDatePart(a.dueDate) === todayDate;
       if (segment === "Overdue") return a.status === "overdue";
       return true;
     })

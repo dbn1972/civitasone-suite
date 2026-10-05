@@ -51,3 +51,28 @@ export function countSubsidiaries(accounts: CRMAccountSummary[]): number {
   const present = new Set(accounts.map((a) => a.id));
   return accounts.filter((a) => a.parentId && present.has(a.parentId)).length;
 }
+
+/**
+ * All descendant ids of `rootId` within the supplied list (children, their
+ * children, …), excluding `rootId` itself. Used by the re-parent form to stop
+ * an account being moved under one of its own descendants — which would create
+ * a cycle (GAP-CRM-ACCOUNTS-DETAIL-03). Cycle-safe: each id is visited once.
+ */
+export function collectDescendantIds(accounts: CRMAccountSummary[], rootId: string): Set<string> {
+  const childrenByParent = new Map<string, string[]>();
+  for (const a of accounts) {
+    if (!a.parentId) continue;
+    const list = childrenByParent.get(a.parentId);
+    if (list) list.push(a.id);
+    else childrenByParent.set(a.parentId, [a.id]);
+  }
+  const descendants = new Set<string>();
+  const stack = [...(childrenByParent.get(rootId) ?? [])];
+  while (stack.length > 0) {
+    const id = stack.pop() as string;
+    if (descendants.has(id)) continue;
+    descendants.add(id);
+    for (const child of childrenByParent.get(id) ?? []) stack.push(child);
+  }
+  return descendants;
+}

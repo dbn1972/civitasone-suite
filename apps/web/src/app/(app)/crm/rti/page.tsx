@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
 import { getCrmRti } from "../../../_data/loaders";
+import { getSessionRoles, hasAnyRole, CRM_PII_READ_ROLES } from "@/lib/auth/roleGuard";
 import { RtiTable } from "./RtiTable";
 import { RtiFilters } from "./RtiFilters";
 import { rtiSlaBucket } from "./rtiStatus";
@@ -27,6 +28,12 @@ export default async function RtiPage({
   // current page and leave the Total tile wrong.
   const t = await getTranslations("crmRtiList");
   const page = Math.max(1, Number(searchParams?.page) || 1);
+  // GAP-CRM-RTI-04: only PII-read roles see applicant names in the clear in the
+  // list; everyone else sees a reduced form. The server stays the authority.
+  const canRevealPii = hasAnyRole(getSessionRoles(), CRM_PII_READ_ROLES);
+  // GAP-CRM-RTI-05: whether any filter is active, so the empty state can say
+  // "none recorded yet" rather than "none match the filters".
+  const hasFilters = Boolean(searchParams?.status || searchParams?.section || searchParams?.search);
   const { data, source } = await getCrmRti({
     ...(searchParams?.status   ? { status: searchParams.status }   : {}),
     ...(searchParams?.section  ? { section: searchParams.section } : {}),
@@ -68,12 +75,12 @@ export default async function RtiPage({
   return (
     <>
       <PageHeader
-        title="RTI Requests"
-        subtitle="Right to Information Act 2005 — 30-day statutory response register."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/crm"
         actions={
           <Link href="/crm/rti/new" className="btn primary">
-            + New RTI Request
+            {t("newRequest")}
           </Link>
         }
       />
@@ -85,25 +92,25 @@ export default async function RtiPage({
         <StatCard
           icon="📋"
           iconBg="color-mix(in srgb, var(--ink2) 10%, transparent)"
-          label="Open (this page)"
+          label={t("statOpen")}
           value={stat(open)}
         />
         <StatCard
           icon="🔴"
           iconBg="color-mix(in srgb, var(--bad) 12%, transparent)"
-          label="Overdue (this page)"
+          label={t("statOverdue")}
           value={stat(overdue)}
         />
         <StatCard
           icon="⚠️"
           iconBg="color-mix(in srgb, var(--warn) 15%, transparent)"
-          label="Critical — &lt;7 days (this page)"
+          label={t("statCritical")}
           value={stat(critical)}
         />
         <StatCard
           icon="📁"
           iconBg="color-mix(in srgb, var(--good) 12%, transparent)"
-          label="Total RTI Requests"
+          label={t("statTotal")}
           value={stat(data.total)}
         />
       </StatGrid>
@@ -126,7 +133,7 @@ export default async function RtiPage({
         </p>
       )}
 
-      <RtiTable rows={rows} source={source === "error" ? "error" : "api"} page={currentPage} />
+      <RtiTable rows={rows} source={source === "error" ? "error" : "api"} page={currentPage} canRevealPii={canRevealPii} hasFilters={hasFilters} />
 
       {/* GAP-CRM-RTI-02: server-driven pager. The DataTable's own client pager
           only ever saw the current API page (<=50 rows), so pages 51+ were

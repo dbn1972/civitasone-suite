@@ -71,6 +71,19 @@ describe("opportunity normalisers (OP-001..006)", () => {
     expect(rows2[0].exceededBy).toBe(0);
   });
 
+  // GAP-CRM-OPPORTUNITY-AGEING-03: owner is mapped when present (tolerating aliases),
+  // and omitted when absent.
+  it("maps ownerName/ownerId when the ageing payload carries them", () => {
+    const [row] = normaliseAgeing([
+      { id: "d1", name: "x", stage: "qual", daysInStage: 20, maxDays: 14, ownerName: "Asha Rao", ownerId: "u-1" },
+    ]);
+    expect(row.ownerName).toBe("Asha Rao");
+    expect(row.ownerId).toBe("u-1");
+    const [bare] = normaliseAgeing([{ id: "d2", name: "y", stage: "q", daysInStage: 5, maxDays: 14 }]);
+    expect(bare.ownerName).toBeUndefined();
+    expect(bare.ownerId).toBeUndefined();
+  });
+
   it("normalises stage limits from the API's maxDays/enabled shape", () => {
     const [row] = normaliseStageLimits({ limits: [{ stage: "qual", maxDays: 14, enabled: false }] });
     expect(row.maxDays).toBe(14);

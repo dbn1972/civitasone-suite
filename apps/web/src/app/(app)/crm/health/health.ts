@@ -72,6 +72,12 @@ export function summariseWatchlist(entries: AccountHealthEntry[]): WatchlistSumm
 
 export interface NamedAccountHealthEntry extends AccountHealthEntry {
   accountName: string;
+  /**
+   * GAP-CRM-HEALTH-03: true when no crm-service account matched this id, so the
+   * name is a synthesised id-suffix label rather than a real account name. Lets
+   * the page avoid surfacing an unidentifiable row as "Call First".
+   */
+  unresolved: boolean;
 }
 
 /**
@@ -80,18 +86,24 @@ export interface NamedAccountHealthEntry extends AccountHealthEntry {
  * The health endpoint returns account ids only — names live in crm-service, and
  * a cross-service join is not available to us. The web layer therefore reads
  * both lists and joins them here. An id with no matching account still renders,
- * labelled as unknown, because dropping it would silently hide an at-risk
+ * labelled with a short id fragment (GAP-CRM-HEALTH-03: identifiable, not a
+ * bare "Unknown account"), because dropping it would silently hide an at-risk
  * account from the very screen meant to surface it.
  */
 export function withAccountNames(
   entries: AccountHealthEntry[],
   accounts: CRMAccountSummary[],
+  unresolvedLabel: (shortId: string) => string = (shortId) => `Account ${shortId}`,
 ): NamedAccountHealthEntry[] {
   const nameById = new Map(accounts.map((a) => [a.id, a.name]));
-  return entries.map((entry) => ({
-    ...entry,
-    accountName: nameById.get(entry.accountId) ?? "Unknown account",
-  }));
+  return entries.map((entry) => {
+    const name = nameById.get(entry.accountId);
+    return {
+      ...entry,
+      accountName: name ?? unresolvedLabel(entry.accountId.slice(0, 8)),
+      unresolved: name === undefined,
+    };
+  });
 }
 
 /**

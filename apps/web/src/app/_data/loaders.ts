@@ -20,7 +20,7 @@ import type {
   CRMDealSummary,
   CRMDashboard,
   CRMCampaignRoi,
-  CRMCampaignRoiSummaryRow,
+  CRMCampaignRoiSummary,
   CRMLeadCaptureForm,
   CRMControlTower,
   NotificationExperiment,
@@ -1536,6 +1536,12 @@ export interface CrmContactsQuery {
   region?: string;
   status?: string;
   source?: string;
+  /**
+   * GAP-CRM-ACCOUNTS-DETAIL-06: exact owning-account filter. The account detail
+   * page's "View contacts" links by this id (not a free-text name search) so a
+   * renamed account keeps its contacts and similarly-named orgs don't mix.
+   */
+  accountId?: string;
 }
 
 export async function getCrmContacts(opts?: CrmContactsQuery): Promise<LoaderResult<CRMContactSummary[]>> {
@@ -1552,6 +1558,7 @@ export async function getCrmContacts(opts?: CrmContactsQuery): Promise<LoaderRes
   if (opts?.region) qs.set("region", opts.region);
   if (opts?.status) qs.set("status", opts.status);
   if (opts?.source) qs.set("source", opts.source);
+  if (opts?.accountId) qs.set("accountId", opts.accountId);
   const path = qs.toString() ? `/api/v1/crm/contacts?${qs}` : "/api/v1/crm/contacts";
   return fetchJson(path, [] as CRMContactSummary[], {
     revalidateSeconds: 30,
@@ -1561,13 +1568,62 @@ export async function getCrmContacts(opts?: CrmContactsQuery): Promise<LoaderRes
   });
 }
 
-export async function getCrmAccounts(): Promise<LoaderResult<CRMAccountSummary[]>> {
-  return fetchJson("/api/v1/crm/accounts", [] as CRMAccountSummary[], {
+/**
+ * GAP-CRM-ACCOUNTS-02: the accounts list endpoint is page-capped (crm-service
+ * listContactsQuery: default 50, max 200) and returns no total, so stats
+ * derived from the returned page can silently undercount. Request the server's
+ * maximum page and report whether the page was filled (truncated) so the UI
+ * can say "showing the first N" instead of presenting a page count as the
+ * whole-master total. A real total needs a backend aggregate (tracked as a
+ * backend follow-up); until then this fails safe by never claiming a count it
+ * cannot stand behind.
+ */
+export const CRM_ACCOUNTS_PAGE_LIMIT = 200;
+
+export type CrmAccountsResult = LoaderResult<CRMAccountSummary[]> & {
+  /**
+   * True when the returned page was full, i.e. more accounts may exist beyond
+   * it. Optional only so pre-existing test mocks that stub `{data, source}`
+   * keep type-checking; the real loader always sets it.
+   */
+  truncated?: boolean;
+  /** The page size requested (so the UI can word the hint). */
+  pageLimit?: number;
+  /**
+   * GAP-CRM-ACCOUNTS-02: tenant-wide active-account total from the server's
+   * `meta.total`, so the page shows "Showing N of M" instead of guessing. Null
+   * when the backend did not return it (older contract) or the load failed.
+   */
+  total?: number | null;
+};
+
+export async function getCrmAccounts(): Promise<CrmAccountsResult> {
+  // The server now returns `meta.total` alongside the capped page. mapResponse
+  // receives the full validated payload, so capture the total here before the
+  // mapper reduces it to the row array.
+  let total: number | null = null;
+  const result = await fetchJson(`/api/v1/crm/accounts?limit=${CRM_ACCOUNTS_PAGE_LIMIT}`, [] as CRMAccountSummary[], {
     revalidateSeconds: 30,
     telemetryKey: "crm.accounts",
     responseSchema: crmAccountsListSchema,
-    mapResponse: mapCrmAccounts,
+    mapResponse: (payload) => {
+      if (payload && typeof payload === "object" && "meta" in payload) {
+        const meta = (payload as { meta?: { total?: number } }).meta;
+        if (meta && typeof meta.total === "number") total = meta.total;
+      }
+      return mapCrmAccounts(payload);
+    },
   });
+  return {
+    ...result,
+    pageLimit: CRM_ACCOUNTS_PAGE_LIMIT,
+    total: result.source === "api" ? total : null,
+    // Prefer the authoritative server total when present; else fall back to the
+    // "page is full" heuristic the HIGH/wave-1 pass used.
+    truncated:
+      result.source === "api" &&
+      (total !== null ? total > result.data.length : result.data.length >= CRM_ACCOUNTS_PAGE_LIMIT),
+  };
 }
 
 /**
@@ -1712,7 +1768,7 @@ export async function getCrmGrievances(
 
 export async function getCrmServiceRequests(
   params: { status?: string; priority?: string; serviceType?: string; search?: string; limit?: number; page?: number } = {},
-): Promise<LoaderResult<{ rows: CrmServiceRequestRow[]; total: number }>> {
+): Promise<LoaderResult<{ rows: CrmServiceRequestRow[]; total: number; statusCounts: Record<string, number> }>> {
   const qs = new URLSearchParams();
   if (params.status) qs.set("status", params.status);
   if (params.priority) qs.set("priority", params.priority);
@@ -1720,14 +1776,14 @@ export async function getCrmServiceRequests(
   if (params.search) qs.set("search", params.search);
   qs.set("limit", String(params.limit ?? 50));
   qs.set("page", String(params.page ?? 1));
-  return fetchJson<unknown, { rows: CrmServiceRequestRow[]; total: number }>(
+  return fetchJson<unknown, { rows: CrmServiceRequestRow[]; total: number; statusCounts: Record<string, number> }>(
     `/api/v1/crm/service-requests?${qs.toString()}`,
-    { rows: [], total: 0 },
+    { rows: [], total: 0, statusCounts: {} },
     {
       revalidateSeconds: 30,
       telemetryKey: "crm.service-requests",
-      mapResponse: (p) =>
-        mapEnvelopeWithTotal<CrmServiceRequestRow>(p, (r) => ({
+      mapResponse: (p) => {
+        const base = mapEnvelopeWithTotal<CrmServiceRequestRow>(p, (r) => ({
           id: toText(r.id) ?? "",
           referenceNo: toText(r.referenceNo),
           citizenName: toText(r.citizenName),
@@ -1738,7 +1794,21 @@ export async function getCrmServiceRequests(
           assignedTo: toText(r.assignedTo),
           dueAt: toText(r.dueAt),
           createdAt: toText(r.createdAt),
-        })),
+        }));
+        if (!base) return null;
+        // GAP-CRM-SERVICE-REQUESTS-05: per-status totals from the server, used
+        // to drive summary tiles that sum to the register total (never a single
+        // page's counts). Absent/legacy responses yield an empty map.
+        const meta = isRecord(p) && isRecord(p.meta) ? p.meta : undefined;
+        const rawCounts = meta && isRecord(meta.statusCounts) ? meta.statusCounts : undefined;
+        const statusCounts: Record<string, number> = {};
+        if (rawCounts) {
+          for (const [k, v] of Object.entries(rawCounts)) {
+            if (typeof v === "number") statusCounts[k] = v;
+          }
+        }
+        return { ...base, statusCounts };
+      },
     },
   );
 }
@@ -3248,7 +3318,10 @@ function mapDeals(payload: unknown): DealSummary[] | null {
       contactId: toText(row.contactId) ?? undefined,
       contactName: toText(row.contactName) ?? undefined,
       stage: stage as DealSummary["stage"],
-      amount: typeof row.amount === "number" ? row.amount : 0,
+      // GAP-CRM-DEALS-04: DealSummary.amount is now a minor-unit string. (This
+      // mapDeals is currently unused — getDeals uses mapDealSummaries — but keep
+      // it type-correct: emit an exact digit string, "0" when absent/invalid.)
+      amount: typeof row.amount === "number" && Number.isSafeInteger(row.amount) && row.amount >= 0 ? String(row.amount) : "0",
       owner: toText(row.owner) ?? "—",
       closeDate: toText(row.closeDate) ?? undefined,
       probability: typeof row.probability === "number" ? row.probability : 0,
@@ -3389,12 +3462,39 @@ function mapPipelineDeals(payload: unknown): PipelineDealCard[] | null {
   return mapped.length > 0 ? mapped : null;
 }
 
-export async function getPipelineDeals(): Promise<LoaderResult<PipelineDealCard[]>> {
-  return fetchJson<unknown, PipelineDealCard[]>("/api/v1/crm/deals?limit=200", [], {
+/**
+ * GAP-CRM-PIPELINE-05: the Kanban board fetches at most this many engagements.
+ * Exported so the page can detect a likely truncation (exactly this many rows
+ * came back) and warn the clerk that the board — and the figures derived from
+ * it — may be incomplete, rather than silently dropping the 201st engagement.
+ */
+export const PIPELINE_DEAL_LIMIT = 200;
+
+export type PipelineDealsResult = LoaderResult<PipelineDealCard[]> & {
+  /**
+   * GAP-CRM-PIPELINE-05: tenant-wide (or pipeline-scoped) live-deal total from the
+   * server's `pagination.total`, so the board shows "N of M". Null when the load
+   * failed or the backend did not return it.
+   */
+  total?: number | null;
+};
+
+export async function getPipelineDeals(pipelineId?: string): Promise<PipelineDealsResult> {
+  let total: number | null = null;
+  const qs = new URLSearchParams({ limit: String(PIPELINE_DEAL_LIMIT) });
+  if (pipelineId) qs.set("pipelineId", pipelineId);
+  const result = await fetchJson<unknown, PipelineDealCard[]>(`/api/v1/crm/deals?${qs.toString()}`, [], {
     revalidateSeconds: 30,
     telemetryKey: "crm.pipeline.deals",
-    mapResponse: mapPipelineDeals,
+    mapResponse: (payload) => {
+      if (payload && typeof payload === "object" && "pagination" in payload) {
+        const pg = (payload as { pagination?: { total?: number } }).pagination;
+        if (pg && typeof pg.total === "number") total = pg.total;
+      }
+      return mapPipelineDeals(payload);
+    },
   });
+  return { ...result, total: result.source === "api" ? total : null };
 }
 
 const CHAT_LIST_OPTIONS = {
@@ -3525,19 +3625,25 @@ const CRM_FORECAST_OPTIONS = {
 };
 
 /**
- * Weighted revenue forecast for active deals, optionally scoped to one pipeline.
- * The total is recomputed server-side from that pipeline's stage probabilities,
- * so the filter is a query parameter rather than a client-side narrowing.
+ * Weighted revenue forecast for active deals, optionally scoped to one pipeline
+ * and/or a close-date window (GAP-CRM-FORECAST-03 — tie the total to a quarter /
+ * financial year). The total is recomputed server-side, so these are query
+ * parameters rather than a client-side narrowing.
  */
-export async function getCrmForecast(pipelineId?: string): Promise<LoaderResult<CRMForecast>> {
-  if (pipelineId) {
-    return fetchJson(
-      `/api/v1/crm/forecast?pipelineId=${encodeURIComponent(pipelineId)}`,
-      CRM_FORECAST_EMPTY,
-      CRM_FORECAST_OPTIONS,
-    );
-  }
-  return fetchJson("/api/v1/crm/forecast", CRM_FORECAST_EMPTY, CRM_FORECAST_OPTIONS);
+export async function getCrmForecast(
+  pipelineId?: string,
+  window?: { closeDateFrom?: string; closeDateTo?: string },
+): Promise<LoaderResult<CRMForecast>> {
+  const params = new URLSearchParams();
+  if (pipelineId) params.set("pipelineId", pipelineId);
+  if (window?.closeDateFrom) params.set("closeDateFrom", window.closeDateFrom);
+  if (window?.closeDateTo) params.set("closeDateTo", window.closeDateTo);
+  const qs = params.toString();
+  return fetchJson(
+    qs ? `/api/v1/crm/forecast?${qs}` : "/api/v1/crm/forecast",
+    CRM_FORECAST_EMPTY,
+    CRM_FORECAST_OPTIONS,
+  );
 }
 
 const CRM_VOC_EMPTY: CRMVocSummary = {
@@ -3579,6 +3685,34 @@ export async function getCrmSentimentSummary(
   });
 }
 
+export interface CRMCitizenRatings {
+  /** Mean 1-5, or null when there are no ratings (tile shows '—'). */
+  average: number | null;
+  count: number;
+}
+
+/**
+ * GAP-CRM-VOICE-OF-CUSTOMER-FEEDBACK-05: citizen rating aggregate (average +
+ * count) for the VoC dashboard's "Citizen ratings" tile, kept SEPARATE from the
+ * model-scored sentiment summary. Falls back to a null/0 aggregate on failure so
+ * the tile shows '—' rather than a fabricated score.
+ */
+export async function getCrmCitizenRatings(): Promise<LoaderResult<CRMCitizenRatings>> {
+  const empty: CRMCitizenRatings = { average: null, count: 0 };
+  return fetchJson("/api/v1/crm/citizen-feedback/summary", empty, {
+    revalidateSeconds: 60,
+    telemetryKey: "crm.citizen_ratings",
+    mapResponse: (payload): CRMCitizenRatings | null => {
+      if (!payload || typeof payload !== "object") return null;
+      const data = (payload as { data?: { average?: unknown; count?: unknown } }).data;
+      if (!data || typeof data !== "object") return null;
+      const count = typeof data.count === "number" ? data.count : 0;
+      const average = typeof data.average === "number" ? data.average : null;
+      return { average, count };
+    },
+  });
+}
+
 
 /**
  * Campaign ROI across every campaign with recorded performance (P1-6).
@@ -3616,13 +3750,25 @@ export async function getCrmLeadCaptureForms(): Promise<LoaderResult<CRMLeadCapt
   });
 }
 
-export async function getCrmCampaignRoiSummary(): Promise<LoaderResult<CRMCampaignRoiSummaryRow[]>> {
-  return fetchJson("/api/v1/crm/campaigns/roi-summary?limit=200", [] as CRMCampaignRoiSummaryRow[], {
-    revalidateSeconds: 60,
-    telemetryKey: "crm.campaign.roi_summary",
-    responseSchema: crmCampaignRoiSummarySchema,
-    mapResponse: (payload) => payload.data,
-  });
+export const CAMPAIGN_ROI_SUMMARY_LIMIT = 200;
+
+export async function getCrmCampaignRoiSummary(): Promise<LoaderResult<CRMCampaignRoiSummary>> {
+  return fetchJson(
+    `/api/v1/crm/campaigns/roi-summary?limit=${CAMPAIGN_ROI_SUMMARY_LIMIT}`,
+    { rows: [], total: 0 } as CRMCampaignRoiSummary,
+    {
+      revalidateSeconds: 60,
+      telemetryKey: "crm.campaign.roi_summary",
+      responseSchema: crmCampaignRoiSummarySchema,
+      // GAP-CRM-CAMPAIGNS-03: carry the service's full distinct-campaign count
+      // (meta.total) through so the page can flag partial (first-page) totals.
+      // Fall back to the row count when an older service omits meta.total.
+      mapResponse: (payload) => ({
+        rows: payload.data,
+        total: payload.meta?.total ?? payload.data.length,
+      }),
+    },
+  );
 }
 
 /**
@@ -3680,9 +3826,13 @@ export function mapCRMActivityEntries(payload: unknown): CRMActivityEntry[] | nu
     const type = validTypes.has(rawType) ? rawType : "note";
     const subject = toText(row.subject) ?? toText(row.text);
     const owner = toText(row.owner) ?? toText(row.actorName) ?? toText(row.actor) ?? "—";
-    const status = toText(row.status) ?? "open";
+    const rawStatus = toText(row.status) ?? "open";
+    // GAP-CRM-ACTIVITIES-04: keep the row rather than discarding it. An
+    // unrecognised status (e.g. in_progress/done from a newer backend) falls
+    // back to "open" so a legitimate record is never silently lost from the
+    // list and counts; previously such rows were `continue`d past entirely.
+    const status = validStatuses.has(rawStatus) ? rawStatus : "open";
     if (!id || !subject) continue;
-    if (!validStatuses.has(status)) continue;
     mapped.push({
       id,
       type: type as CRMActivityEntry["type"],
@@ -3695,7 +3845,12 @@ export function mapCRMActivityEntries(payload: unknown): CRMActivityEntry[] | nu
       status: status as CRMActivityEntry["status"],
     });
   }
-  return mapped.length > 0 ? mapped : null;
+  // GAP-CRM-ACTIVITIES-04: an empty-but-valid list is NOT an error. Return the
+  // (possibly empty) array whenever the payload was a valid array; getArrayPayload
+  // already returned null for a non-array, which is the only real failure here.
+  // Previously `mapped.length > 0 ? mapped : null` made fetchJson report a
+  // legitimately-empty activity register as source:'error' with "—" stats.
+  return mapped;
 }
 
 export async function getCRMActivities(): Promise<LoaderResult<CRMActivityEntry[]>> {

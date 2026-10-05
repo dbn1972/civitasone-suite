@@ -11,6 +11,7 @@ import { useEffect, useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState, Button } from "../ds";
+import { HelpTip } from "../ds/HelpTip";
 import {
   getPipelines,
   createPipeline,
@@ -43,6 +44,8 @@ export function PipelineEditor() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<Pipeline | null>(null);
+  // GAP-CRM-PIPELINES-02: an aria-live message announcing stage reorders.
+  const [stageAnnouncement, setStageAnnouncement] = useState("");
   const headingId = useId();
 
   async function load(isLive: () => boolean = () => true) {
@@ -99,6 +102,28 @@ export function PipelineEditor() {
     setDraft((d) => (d ? { ...d, stages: d.stages.filter((_, i) => i !== idx) } : d));
   }
 
+  // GAP-CRM-PIPELINES-02: stage order IS the process flow, but the editor could
+  // only append/remove, never reorder. moveStage swaps a stage with its
+  // neighbour so the order can be corrected without deleting and recreating.
+  // The server must key stage identity on `key` (not array index) for this to
+  // be safe on a pipeline with live deals — the save payload preserves each
+  // stage's key, so a reorder changes only ordinal, not identity. (That server
+  // behaviour is asserted by the save contract, not verifiable here.)
+  function moveStage(idx: number, dir: "up" | "down") {
+    setDraft((d) => {
+      if (!d) return d;
+      const target = dir === "up" ? idx - 1 : idx + 1;
+      if (target < 0 || target >= d.stages.length) return d;
+      const stages = [...d.stages];
+      const [moved] = stages.splice(idx, 1);
+      stages.splice(target, 0, moved);
+      return { ...d, stages };
+    });
+    setStageAnnouncement(
+      t("stageMovedAnnouncement", { n: idx + 1, dir, position: dir === "up" ? idx : idx + 2 }),
+    );
+  }
+
   function draftValid(d: Pipeline): boolean {
     return d.name.trim().length > 0 && d.stages.length > 0 && d.stages.every((s) => s.name.trim().length > 0);
   }
@@ -153,6 +178,27 @@ export function PipelineEditor() {
       setBusy(false);
     }
   }
+
+  // GAP-CRM-PIPELINES-04: distinct, non-empty scope values already used across
+  // saved pipelines and the current draft — the datalist suggestions.
+  const scopeOptions = (() => {
+    const products = new Set<string>();
+    const regions = new Set<string>();
+    const businessUnits = new Set<string>();
+    const sources = [...pipelines, ...(draft ? [draft] : [])];
+    for (const p of sources) {
+      for (const s of p.stages) {
+        if (s.product?.trim()) products.add(s.product.trim());
+        if (s.region?.trim()) regions.add(s.region.trim());
+        if (s.businessUnit?.trim()) businessUnits.add(s.businessUnit.trim());
+      }
+    }
+    return {
+      products: [...products].sort(),
+      regions: [...regions].sort(),
+      businessUnits: [...businessUnits].sort(),
+    };
+  })();
 
   if (source === "loading") {
     return (
@@ -246,6 +292,8 @@ export function PipelineEditor() {
             </div>
 
             <div style={{ display: "grid", gap: 12 }}>
+              {/* GAP-CRM-PIPELINES-02: announce reorders to assistive tech. */}
+              <div className="sr-only" role="status" aria-live="polite">{stageAnnouncement}</div>
               {draft.stages.map((stage, idx) => (
                 <div key={stage.key} style={{ border: "1px solid var(--line)", borderRadius: 8, padding: 10 }}>
                   <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
@@ -268,7 +316,35 @@ export function PipelineEditor() {
                         aria-label={`Gate stage ${idx + 1}`}
                       />
                       Gate
+                      {/* GAP-CRM-PIPELINES-04: "Gate" is specialist jargon whose
+                          meaning previously lived only in a type comment. */}
+                      <HelpTip term={t("gate")}>
+                        {t("gateHelp")}
+                      </HelpTip>
                     </label>
+                    {/* GAP-CRM-PIPELINES-02: reorder a stage within the flow. */}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => moveStage(idx, "up")}
+                      disabled={idx === 0}
+                      aria-label={t("moveStageUp", { n: idx + 1 })}
+                      title={t("moveStageUpTitle")}
+                    >
+                      ↑
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => moveStage(idx, "down")}
+                      disabled={idx === draft.stages.length - 1}
+                      aria-label={t("moveStageDown", { n: idx + 1 })}
+                      title={t("moveStageDownTitle")}
+                    >
+                      ↓
+                    </Button>
                     <Button
                       type="button"
                       variant="ghost"
@@ -299,32 +375,61 @@ export function PipelineEditor() {
                     </div>
                   </fieldset>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginTop: 8 }}>
-                    <input
-                      value={stage.product ?? ""}
-                      onChange={(e) => patchStage(idx, { product: e.target.value })}
-                      style={inputStyle}
-                      placeholder="Product scope"
-                      aria-label={`Product scope for stage ${idx + 1}`}
-                    />
-                    <input
-                      value={stage.region ?? ""}
-                      onChange={(e) => patchStage(idx, { region: e.target.value })}
-                      style={inputStyle}
-                      placeholder="Region scope"
-                      aria-label={`Region scope for stage ${idx + 1}`}
-                    />
-                    <input
-                      value={stage.businessUnit ?? ""}
-                      onChange={(e) => patchStage(idx, { businessUnit: e.target.value })}
-                      style={inputStyle}
-                      placeholder="Business unit"
-                      aria-label={`Business unit for stage ${idx + 1}`}
-                    />
-                  </div>
+                  {/* GAP-CRM-PIPELINES-04: explain what the scope fields do, and
+                      offer existing values as a datalist so the clerk reuses an
+                      established value instead of inventing a mismatching one.
+                      These stay free text until master data exists (the server's
+                      scope-matching format is not confirmable here). */}
+                  <fieldset style={{ border: "none", padding: 0, margin: 0, marginTop: 8 }}>
+                    <legend style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4, display: "inline-flex", alignItems: "center" }}>
+                      {t("scopeLegend")}
+                      <HelpTip term={t("scope")}>
+                        {t("scopeHelp")}
+                      </HelpTip>
+                    </legend>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+                      <input
+                        value={stage.product ?? ""}
+                        onChange={(e) => patchStage(idx, { product: e.target.value })}
+                        style={inputStyle}
+                        placeholder={t("productScope")}
+                        aria-label={t("productScopeAria", { n: idx + 1 })}
+                        list={`${headingId}-products`}
+                      />
+                      <input
+                        value={stage.region ?? ""}
+                        onChange={(e) => patchStage(idx, { region: e.target.value })}
+                        style={inputStyle}
+                        placeholder={t("regionScope")}
+                        aria-label={t("regionScopeAria", { n: idx + 1 })}
+                        list={`${headingId}-regions`}
+                      />
+                      <input
+                        value={stage.businessUnit ?? ""}
+                        onChange={(e) => patchStage(idx, { businessUnit: e.target.value })}
+                        style={inputStyle}
+                        placeholder={t("businessUnit")}
+                        aria-label={t("businessUnitAria", { n: idx + 1 })}
+                        list={`${headingId}-business-units`}
+                      />
+                    </div>
+                  </fieldset>
                 </div>
               ))}
             </div>
+
+            {/* GAP-CRM-PIPELINES-04: datalists of scope values already in use
+                across saved pipelines + the current draft, so entries are reused
+                consistently rather than retyped (and mis-typed). */}
+            <datalist id={`${headingId}-products`}>
+              {scopeOptions.products.map((v) => <option key={v} value={v} />)}
+            </datalist>
+            <datalist id={`${headingId}-regions`}>
+              {scopeOptions.regions.map((v) => <option key={v} value={v} />)}
+            </datalist>
+            <datalist id={`${headingId}-business-units`}>
+              {scopeOptions.businessUnits.map((v) => <option key={v} value={v} />)}
+            </datalist>
 
             <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
               <Button type="button" variant="ghost" size="sm" onClick={addStage}>

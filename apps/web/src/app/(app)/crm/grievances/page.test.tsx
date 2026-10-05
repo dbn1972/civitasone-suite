@@ -8,9 +8,19 @@ vi.mock("@/app/_data/loaders", () => ({
   getCrmGrievances: (...args: unknown[]) => getCrmGrievancesMock(...args),
 }));
 
+const rolesMock = vi.fn(() => [] as string[]);
+vi.mock("@/lib/auth/roleGuard", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/auth/roleGuard")>("@/lib/auth/roleGuard");
+  return { ...actual, getSessionRoles: () => rolesMock() };
+});
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+}));
+
 import GrievancesPage from "./page";
 
-function row(id: string, status: string) {
+function row(id: string, status: string, dueAt?: string) {
   return {
     id,
     referenceNo: `GRV/2026/${id}`,
@@ -19,6 +29,8 @@ function row(id: string, status: string) {
     subject: `Grievance ${id}`,
     priority: "normal",
     status,
+    assignedTo: null,
+    dueAt: dueAt ?? null,
     createdAt: "2026-08-01T00:00:00.000Z",
   };
 }
@@ -35,6 +47,8 @@ const ROWS = [
 describe("GrievancesPage stat cards", () => {
   beforeEach(() => {
     getCrmGrievancesMock.mockReset();
+    rolesMock.mockReset();
+    rolesMock.mockReturnValue(["crm_admin"]);
   });
 
   // Regression test for the HIGH bug: the Open/Escalated/Resolved stat
@@ -97,5 +111,63 @@ describe("GrievancesPage stat cards", () => {
     );
     // On the last page there is no further "next" page link.
     expect(screen.queryByRole("link", { name: /Next/ })).not.toBeInTheDocument();
+  });
+
+  // GAP-CRM-GRIEVANCES-02 — the page now renders server-side filter controls
+  // (status/priority selects + a whole-register search box).
+  it("renders the server-side filter controls", async () => {
+    getCrmGrievancesMock.mockResolvedValue({ data: { rows: ROWS, total: ROWS.length }, source: "api" });
+    const ui = await GrievancesPage({ searchParams: {} });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+
+    expect(screen.getByLabelText("Filter by status")).toBeInTheDocument();
+    expect(screen.getByLabelText("Filter by priority")).toBeInTheDocument();
+    expect(screen.getByLabelText(/Search reference, citizen or subject/i)).toBeInTheDocument();
+  });
+
+  // GAP-CRM-GRIEVANCES-03 — on an outage the page shows a retry error state,
+  // NOT the "No grievances yet" first-use empty copy.
+  it("renders a retry error state (not the empty register copy) on a load error", async () => {
+    getCrmGrievancesMock.mockResolvedValue({ data: { rows: [], total: 0 }, source: "error", status: 500 });
+    const ui = await GrievancesPage({ searchParams: {} });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+
+    expect(screen.queryByText(/No grievances yet/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/couldn't load/i)).toBeInTheDocument();
+    // Tiles show the honest "—" dash, not a false 0.
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+  });
+
+  // GAP-CRM-GRIEVANCES-04 — an Overdue tile counts non-disposed rows past due.
+  it("counts overdue (non-disposed, past-due) grievances on this page", async () => {
+    const past = "2020-01-01T00:00:00.000Z";
+    const rows = [
+      row("1", "REGISTERED", past), // overdue
+      row("2", "DISPOSED", past),   // past due but disposed → not overdue
+      row("3", "FORWARDED", "2999-01-01T00:00:00.000Z"), // future → not overdue
+    ];
+    getCrmGrievancesMock.mockResolvedValue({ data: { rows, total: 3 }, source: "api" });
+    const ui = await GrievancesPage({ searchParams: {} });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+
+    expect(screen.getByText(/Overdue \(this page\)/).nextElementSibling).toHaveTextContent("1");
+  });
+
+  // GAP-CRM-GRIEVANCES-05 — the CSV export (which carries citizen names) is only
+  // offered to roles with export rights.
+  it("hides the CSV export button for a role without export rights", async () => {
+    rolesMock.mockReturnValue(["crm_user"]);
+    getCrmGrievancesMock.mockResolvedValue({ data: { rows: ROWS, total: ROWS.length }, source: "api" });
+    const ui = await GrievancesPage({ searchParams: {} });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+    expect(screen.queryByRole("button", { name: /CSV/i })).not.toBeInTheDocument();
+  });
+
+  it("shows the CSV export button for a role with export rights", async () => {
+    rolesMock.mockReturnValue(["crm_admin"]);
+    getCrmGrievancesMock.mockResolvedValue({ data: { rows: ROWS, total: ROWS.length }, source: "api" });
+    const ui = await GrievancesPage({ searchParams: {} });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+    expect(screen.getByRole("button", { name: /CSV/i })).toBeInTheDocument();
   });
 });

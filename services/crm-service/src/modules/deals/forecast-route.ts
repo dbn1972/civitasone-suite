@@ -17,6 +17,11 @@ const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
 
 const forecastQuerySchema = z.object({
   pipelineId: z.string().uuid().optional(),
+  // GAP-CRM-FORECAST-03: optionally scope the forecast to a close-date window so a
+  // weighted total can be tied to a quarter / financial year. ISO calendar dates
+  // (YYYY-MM-DD); the UI resolves the FY quarter to this range.
+  closeDateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  closeDateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 export async function forecastRoutes(app: FastifyInstance): Promise<void> {
@@ -37,6 +42,15 @@ export async function forecastRoutes(app: FastifyInstance): Promise<void> {
     ];
     if (query.pipelineId) {
       conditions.push(eq(deals.pipelineId, query.pipelineId));
+    }
+    // GAP-CRM-FORECAST-03: constrain to the requested close-date window when given.
+    // A deal with no expected_close_date is excluded from a dated forecast — it
+    // cannot be attributed to the period.
+    if (query.closeDateFrom) {
+      conditions.push(sql`${deals.expectedCloseDate} >= ${query.closeDateFrom}`);
+    }
+    if (query.closeDateTo) {
+      conditions.push(sql`${deals.expectedCloseDate} <= ${query.closeDateTo}`);
     }
 
     const activeDeals = await scopedRead((tx) => tx.select({

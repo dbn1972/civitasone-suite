@@ -111,17 +111,21 @@ describe("OpportunityForm (OP-003)", () => {
     expect(screen.getByRole("button", { name: /create opportunity/i })).not.toBeDisabled();
   });
 
-  // GAP-CRM-OPPORTUNITIES-NEW-02: a chosen/prefilled account must ride along in the POST.
-  it("includes a prefilled accountId in the create payload", async () => {
+  // GAP-CRM-OPPORTUNITIES-NEW-03: a stage's mandatory fields are shown BEFORE
+  // submit — an inline hint and starred labels — not only after a rejected save.
+  it("shows the stage's required fields inline (hint + starred labels) before submit", async () => {
     vi.mocked(op.getPipelines).mockResolvedValue({ data: [pipeline], source: "api" });
     vi.mocked(op.createOpportunity).mockResolvedValue("deal-xyz");
     render(<NextIntlClientProvider locale="en" messages={enMessages}><OpportunityForm initialAccountId="acc-9" initialAccountLabel="Ward 12 Office" /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByLabelText(/opportunity name/i)).toBeInTheDocument());
-    fireEvent.change(screen.getByLabelText(/opportunity name/i), { target: { value: "Linked" } });
-    fireEvent.change(screen.getByLabelText(/deal value in rupees/i), { target: { value: "100" } });
-    fireEvent.click(screen.getByRole("button", { name: /create opportunity/i }));
-    await waitFor(() => expect(op.createOpportunity).toHaveBeenCalledTimes(1));
-    const payload = vi.mocked(op.createOpportunity).mock.calls[0][0];
-    expect(payload.accountId).toBe("acc-9");
+    // Choosing the "propose" stage (needs value + product) surfaces the hint.
+    fireEvent.change(screen.getByLabelText(/^stage$/i), { target: { value: "propose" } });
+    const note = screen.getByRole("note");
+    expect(note.textContent).toMatch(/required for this stage:.*deal value.*product/i);
+    // The create API has not been touched — this is purely a client hint.
+    expect(op.createOpportunity).not.toHaveBeenCalled();
+    // The Value and Product labels are starred proactively.
+    expect(screen.getByText(/Value \(₹\) \*/)).toBeInTheDocument();
+    expect(screen.getByText(/Product \*/)).toBeInTheDocument();
   });
 });

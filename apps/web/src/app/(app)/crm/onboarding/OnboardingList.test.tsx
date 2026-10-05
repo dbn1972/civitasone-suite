@@ -14,14 +14,18 @@ function withIntl(ui: React.ReactElement) {
   );
 }
 
+const pushMock = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: pushMock, refresh: vi.fn() }),
+}));
+
 vi.mock("@/lib/crm/onboarding", async (orig) => {
   const actual = await orig<typeof import("@/lib/crm/onboarding")>();
   return { ...actual, getOnboardingCases: vi.fn(), getOnboardingLookups: vi.fn() };
 });
 
-const cases: onb.OnboardingCase[] = [
-  {
-    id: "11111111-1111-1111-1111-111111111111",
+function caseOf(partial: Partial<onb.OnboardingCase> & { id: string }): onb.OnboardingCase {
+  return {
     dealId: "d1",
     accountId: "a1",
     stage: "verification",
@@ -35,12 +39,16 @@ const cases: onb.OnboardingCase[] = [
     version: 1,
     accountName: null,
     dealName: null,
-  },
-];
+    ...partial,
+  };
+}
+
+const cases: onb.OnboardingCase[] = [caseOf({ id: "11111111-1111-1111-1111-111111111111" })];
 
 const noLookups: onb.OnboardingLookups = { dealNames: {}, accountNames: {} };
 
 beforeEach(() => {
+  pushMock.mockReset();
   vi.mocked(onb.getOnboardingCases).mockReset();
   vi.mocked(onb.getOnboardingLookups).mockReset();
   vi.mocked(onb.getOnboardingLookups).mockResolvedValue(noLookups);
@@ -50,16 +58,18 @@ describe("OnboardingList (P1-9)", () => {
   it("renders cases with stage + KYC labels", async () => {
     vi.mocked(onb.getOnboardingCases).mockResolvedValue({ data: cases, source: "api" });
     render(withIntl(<OnboardingList />));
-    await waitFor(() => expect(screen.getByText(/Verification/)).toBeInTheDocument());
-    expect(screen.getByText(/Submitted/)).toBeInTheDocument();
-    // links to the detail page
-    expect(screen.getByRole("link")).toHaveAttribute("href", `/crm/onboarding/${cases[0].id}`);
+    await waitFor(() => expect(screen.getByRole("link", { name: /Unnamed case/ })).toBeInTheDocument());
+    // Stage + KYC labels appear in the row (filter options also carry some of
+    // these words, so assert at least one occurrence rather than uniqueness).
+    expect(screen.getAllByText(/Verification/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Submitted/).length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: /Unnamed case/ })).toHaveAttribute(
+      "href",
+      `/crm/onboarding/${cases[0].id}`,
+    );
   });
 
-  // GAP-CRM-ONBOARDING-01 — a row must be identified by its customer/deal name,
-  // not an 8-char UUID fragment. The old primary identifier was `shortId(c.id)`
-  // ("11111111…"); this asserts the deal name is now the link text and the
-  // raw UUID fragment is no longer the row's primary identifier.
+  // GAP-CRM-ONBOARDING-01 — a row is identified by its customer/deal name.
   it("identifies a row by its resolved deal name, not a UUID fragment", async () => {
     vi.mocked(onb.getOnboardingCases).mockResolvedValue({ data: cases, source: "api" });
     vi.mocked(onb.getOnboardingLookups).mockResolvedValue({
@@ -72,20 +82,79 @@ describe("OnboardingList (P1-9)", () => {
       "href",
       `/crm/onboarding/${cases[0].id}`,
     );
-    // Account shows the name, not the id fragment.
     expect(screen.getByText("Acme Corp")).toBeInTheDocument();
-    // The 8-char UUID fragment is never the primary identifier (link text).
     expect(screen.queryByRole("link", { name: /^11111111…$/ })).not.toBeInTheDocument();
   });
 
-  it("passes the stage filter to the loader", async () => {
+  // GAP-CRM-ONBOARDING-02: fetch a full page (<=200) and pass the stage filter.
+  it("passes the stage filter and a full page size to the loader", async () => {
     vi.mocked(onb.getOnboardingCases).mockResolvedValue({ data: cases, source: "api" });
     render(withIntl(<OnboardingList />));
-    await waitFor(() => expect(onb.getOnboardingCases).toHaveBeenCalledWith({}));
-    fireEvent.change(screen.getByLabelText(/stage/i), { target: { value: "provisioning" } });
+    await waitFor(() => expect(onb.getOnboardingCases).toHaveBeenCalledWith({ limit: 200 }));
+    fireEvent.change(screen.getByLabelText("Stage"), { target: { value: "provisioning" } });
     await waitFor(() =>
-      expect(onb.getOnboardingCases).toHaveBeenLastCalledWith({ stage: "provisioning" }),
+      expect(onb.getOnboardingCases).toHaveBeenLastCalledWith({ stage: "provisioning", limit: 200 }),
     );
+  });
+
+  // GAP-CRM-ONBOARDING-02: 150 cases paginate at 25/page.
+  it("paginates a long case list at 25 per page", async () => {
+    const many = Array.from({ length: 150 }, (_, i) =>
+      caseOf({
+        id: `${String(i).padStart(8, "0")}-0000-0000-0000-000000000000`,
+        dealName: `Deal ${String(i).padStart(3, "0")}`,
+      }),
+    );
+    vi.mocked(onb.getOnboardingCases).mockResolvedValue({ data: many, source: "api" });
+    render(withIntl(<OnboardingList />));
+    await waitFor(() => expect(screen.getByText(/Page 1 of 6/)).toBeInTheDocument());
+    // 25 data rows on the first page.
+    const links = screen.getAllByRole("link").filter((a) => a.getAttribute("href")?.startsWith("/crm/onboarding/"));
+    expect(links.length).toBe(25);
+  });
+
+  // GAP-CRM-ONBOARDING-02: clicking a sortable header reorders rows.
+  it("sorts by Updated when the header is activated", async () => {
+    const rows = [
+      caseOf({ id: "a0000000-0000-0000-0000-000000000000", dealName: "Alpha", updatedAt: "2026-08-01T00:00:00Z" }),
+      caseOf({ id: "b0000000-0000-0000-0000-000000000000", dealName: "Bravo", updatedAt: "2026-09-01T00:00:00Z" }),
+    ];
+    vi.mocked(onb.getOnboardingCases).mockResolvedValue({ data: rows, source: "api" });
+    render(withIntl(<OnboardingList />));
+    const header = await screen.findByText("Updated");
+    fireEvent.click(header);
+    await waitFor(() => expect(header.closest("th")).toHaveAttribute("aria-sort", "ascending"));
+    fireEvent.click(header);
+    expect(header.closest("th")).toHaveAttribute("aria-sort", "descending");
+  });
+
+  // GAP-CRM-ONBOARDING-03: KYC filter narrows the rows client-side.
+  it("filters rows by KYC status", async () => {
+    const rows = [
+      caseOf({ id: "a0000000-0000-0000-0000-000000000000", dealName: "Alpha", kycStatus: "submitted" }),
+      caseOf({ id: "b0000000-0000-0000-0000-000000000000", dealName: "Bravo", kycStatus: "verified" }),
+    ];
+    vi.mocked(onb.getOnboardingCases).mockResolvedValue({ data: rows, source: "api" });
+    render(withIntl(<OnboardingList />));
+    await waitFor(() => expect(screen.getByRole("link", { name: "Alpha" })).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("KYC status"), { target: { value: "submitted" } });
+    await waitFor(() => expect(screen.queryByRole("link", { name: "Bravo" })).not.toBeInTheDocument());
+    expect(screen.getByRole("link", { name: "Alpha" })).toBeInTheDocument();
+    // The loader is NOT re-called for a KYC change (client-side filter only).
+    expect(onb.getOnboardingCases).toHaveBeenCalledTimes(1);
+  });
+
+  // GAP-CRM-ONBOARDING-03: a case stale in its stage beyond the SLA shows an
+  // Overdue pill; a fresh one does not.
+  it("flags a case older than the stage SLA as Overdue", async () => {
+    const stale = caseOf({
+      id: "a0000000-0000-0000-0000-000000000000",
+      dealName: "Stale case",
+      updatedAt: "2000-01-01T00:00:00Z",
+    });
+    vi.mocked(onb.getOnboardingCases).mockResolvedValue({ data: [stale], source: "api" });
+    render(withIntl(<OnboardingList />));
+    await waitFor(() => expect(screen.getByText(/overdue/i)).toBeInTheDocument());
   });
 
   it("shows an empty state on an ok-but-empty result (never fabricated as error)", async () => {

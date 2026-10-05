@@ -3,10 +3,24 @@ import { render, screen } from "@testing-library/react";
 
 vi.mock("../../../_data/loaders", () => ({
   getCrmSentimentSummary: vi.fn(),
+  getCrmCitizenRatings: vi.fn(),
 }));
 vi.mock("./ThemeTable", () => ({
-  ThemeTable: () => <div data-testid="theme-table">Nothing scored yet</div>,
+  ThemeTable: ({ themes, canExport }: { themes: Array<{ theme: string }>; canExport?: boolean }) => (
+    <div
+      data-testid="theme-table"
+      data-can-export={String(canExport)}
+      data-themes={themes.map((t) => t.theme).join(",")}
+    >
+      Nothing scored yet
+    </div>
+  ),
 }));
+const mockRoles = vi.fn<() => string[]>();
+vi.mock("@/lib/auth/roleGuard", async (orig) => {
+  const actual = await orig<typeof import("@/lib/auth/roleGuard")>();
+  return { ...actual, getSessionRoles: () => mockRoles() };
+});
 vi.mock("../../../_components/DataSourceBadge", () => ({
   DataSourceBadge: ({ source }: { source: string }) =>
     source === "error" ? <div>Couldn't load — showing nothing</div> : null,
@@ -19,7 +33,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import VoiceOfCitizenPage from "./page";
-import { getCrmSentimentSummary } from "../../../_data/loaders";
+import { getCrmSentimentSummary, getCrmCitizenRatings } from "../../../_data/loaders";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 
@@ -32,6 +46,7 @@ function withIntl(ui: React.ReactElement) {
 }
 
 const mockedSummary = vi.mocked(getCrmSentimentSummary);
+const mockedRatings = vi.mocked(getCrmCitizenRatings);
 
 const mockSummaryData = {
   data: {
@@ -48,6 +63,10 @@ const mockSummaryData = {
 beforeEach(() => {
   mockedSummary.mockReset();
   mockedSummary.mockResolvedValue(mockSummaryData);
+  mockedRatings.mockReset();
+  mockedRatings.mockResolvedValue({ data: { average: 4.25, count: 12 }, source: "api" });
+  mockRoles.mockReset();
+  mockRoles.mockReturnValue(["crm_admin"]);
 });
 
 describe("VoiceOfCitizenPage — GoI redesign", () => {
@@ -82,6 +101,50 @@ describe("VoiceOfCitizenPage — GoI redesign", () => {
   it("renders ThemeTable component", async () => {
     render(withIntl(await VoiceOfCitizenPage({})));
     expect(screen.getByTestId("theme-table")).toBeInTheDocument();
+  });
+
+  // GAP-CRM-VOICE-OF-CUSTOMER-FEEDBACK-05: a "Citizen ratings" tile (average +
+  // count), SEPARATE from the model-scored sentiment tiles.
+  it("renders a Citizen ratings tile with the average and count, separate from sentiment", async () => {
+    render(withIntl(await VoiceOfCitizenPage({})));
+    expect(screen.getByText("Citizen ratings")).toBeInTheDocument();
+    expect(screen.getByText("Average rating (1 to 5)")).toBeInTheDocument();
+    expect(screen.getByText("4.25")).toBeInTheDocument();
+    expect(screen.getByText("Ratings received")).toBeInTheDocument();
+    expect(screen.getByText("12")).toBeInTheDocument();
+  });
+
+  it("shows '—' for the ratings tile when there are no ratings", async () => {
+    mockedRatings.mockResolvedValue({ data: { average: null, count: 0 }, source: "api" });
+    render(withIntl(await VoiceOfCitizenPage({})));
+    // The average shows em-dash; count shows 0.
+    expect(screen.getByText("Average rating (1 to 5)")).toBeInTheDocument();
+    expect(screen.getByText("Ratings received")).toBeInTheDocument();
+  });
+
+  it("shows '—' for the ratings tile when the ratings load fails", async () => {
+    mockedRatings.mockResolvedValue({ data: { average: null, count: 0 }, source: "error" });
+    render(withIntl(await VoiceOfCitizenPage({})));
+    expect(screen.getByText("Citizen ratings")).toBeInTheDocument();
+  });
+
+  // GAP-CRM-VOICE-OF-CUSTOMER-04: the average score is a SIGNED -100..+100
+  // scale, so the tile shows a signed value and the real range, never "n / 100".
+  it("shows the average score on a signed scale, not out of 100", async () => {
+    render(withIntl(await VoiceOfCitizenPage({})));
+    expect(screen.getByText("+72")).toBeInTheDocument();
+    expect(screen.queryByText("72 / 100")).not.toBeInTheDocument();
+    expect(screen.getByText(/Average Score \(-100 to \+100\)/)).toBeInTheDocument();
+  });
+
+  it("renders a negative average with a minus sign rather than a 0-100 floor", async () => {
+    mockedSummary.mockResolvedValue({
+      ...mockSummaryData,
+      data: { ...mockSummaryData.data, averageScore: -22 },
+      source: "api" as const,
+    });
+    render(withIntl(await VoiceOfCitizenPage({})));
+    expect(screen.getByText("−22")).toBeInTheDocument();
   });
 
   it("shows DataSourceBadge when source is error", async () => {
@@ -129,5 +192,53 @@ describe("VoiceOfCitizenPage — GoI redesign", () => {
     });
     render(withIntl(await VoiceOfCitizenPage({})));
     expect(screen.getByTestId("theme-table")).toBeInTheDocument();
+  });
+
+  // GAP-CRM-VOICE-OF-CUSTOMER-05: vigilance-sensitive themes are hidden from —
+  // and non-exportable by — a plain crm_user, and visible/exportable to a
+  // vigilance-admin role.
+  const sensitiveSummary = {
+    data: {
+      total: 100,
+      negativeShare: 40,
+      averageScore: -5,
+      byPolarity: { positive: 30, neutral: 30, negative: 40 },
+      themes: [
+        { theme: "delay", count: 40, negativeCount: 30 },
+        { theme: "staff_conduct", count: 20, negativeCount: 18 },
+        { theme: "corruption", count: 10, negativeCount: 9 },
+      ],
+      truncated: false,
+    },
+    source: "api" as const,
+  };
+
+  it("hides staff_conduct and corruption rows and disables export for a plain crm_user", async () => {
+    mockRoles.mockReturnValue(["crm_user"]);
+    mockedSummary.mockResolvedValue(sensitiveSummary);
+    render(withIntl(await VoiceOfCitizenPage({})));
+    const table = screen.getByTestId("theme-table");
+    expect(table.dataset.themes).toBe("delay");
+    expect(table.dataset.canExport).toBe("false");
+    expect(screen.getByText(/vigilance-sensitive theme/i)).toBeInTheDocument();
+  });
+
+  it("shows sensitive rows and allows export for a vigilance-admin role", async () => {
+    mockRoles.mockReturnValue(["crm_admin"]);
+    mockedSummary.mockResolvedValue(sensitiveSummary);
+    render(withIntl(await VoiceOfCitizenPage({})));
+    const table = screen.getByTestId("theme-table");
+    expect(table.dataset.themes).toBe("delay,staff_conduct,corruption");
+    expect(table.dataset.canExport).toBe("true");
+    expect(screen.queryByText(/vigilance-sensitive theme/i)).not.toBeInTheDocument();
+  });
+
+  it("does not name a hidden sensitive theme as the Primary Concern for a crm_user", async () => {
+    mockRoles.mockReturnValue(["crm_user"]);
+    // corruption is the most-negative but must not surface as the headline concern.
+    mockedSummary.mockResolvedValue(sensitiveSummary);
+    render(withIntl(await VoiceOfCitizenPage({})));
+    // "Integrity concerns" is the label for corruption — must not appear as the concern value.
+    expect(screen.queryByText("Integrity concerns")).not.toBeInTheDocument();
   });
 });

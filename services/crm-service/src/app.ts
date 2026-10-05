@@ -48,6 +48,7 @@ import { section8Routes } from "./modules/dashboard/section8-routes.js";
 import { controlTowerRoutes } from "./modules/dashboard/control-tower-routes.js";
 import { onboardingRoutes } from "./modules/onboarding/routes.js";
 import { sentimentRoutes } from "./modules/sentiment/routes.js";
+import { citizenFeedbackRoutes } from "./modules/sentiment/feedback-routes.js";
 import { assignmentRoutes } from "./modules/assignment/routes.js";
 import { communicationRoutes } from "./modules/communications/routes.js";
 import { sendRoutes } from "./modules/communications/send-routes.js";
@@ -76,7 +77,9 @@ import { subscriptionRoutes } from "./modules/subscriptions/routes.js";
 import { volumeVsActualRoutes } from "./modules/dashboard/volume-vs-actual-routes.js";
 import { sponsorRoutes } from "./modules/accounts/sponsors-routes.js";
 import { grievanceRoutes } from "./modules/grievances/routes.js";
+import { grievanceCategoryRoutes } from "./modules/grievances/categories-routes.js";
 import { serviceRequestRoutes } from "./modules/service-requests/routes.js";
+import { serviceTypeRoutes } from "./modules/service-requests/types-routes.js";
 import { rtiRoutes } from "./modules/rti/rti-route.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -167,6 +170,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(onboardingRoutes);
   // P2-6: Voice-of-Customer reporting over scored interactions.
   await app.register(sentimentRoutes);
+  // GAP-CRM-VOICE-OF-CUSTOMER-FEEDBACK-05: citizen self-reported ratings + comment.
+  await app.register(citizenFeedbackRoutes);
   await app.register(assignmentRoutes);
   // ── ACM: Activity/Follow-up + Account/Contact management ──
   await app.register(communicationRoutes);
@@ -205,7 +210,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(sponsorRoutes);
   // ── Citizen Relationship Management — grievances + service requests ──
   await app.register(grievanceRoutes);
+  // GAP-CRM-GRIEVANCES-NEW-03: admin-editable grievance-category master.
+  await app.register(grievanceCategoryRoutes);
   await app.register(serviceRequestRoutes);
+  // GAP-CRM-SERVICE-REQUESTS-NEW-02: admin-editable service-type master.
+  await app.register(serviceTypeRoutes);
   // RTI Act 2005 — 30-day statutory response register
   await app.register(rtiRoutes);
 

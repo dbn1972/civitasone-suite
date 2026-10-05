@@ -1,8 +1,8 @@
 import { getTranslations } from "next-intl/server";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { Card, EmptyState, PageHeader, StatCard, StatGrid, StatusPill } from "../../../../_components/ds";
+import { Card, EmptyState, PageHeader, StatCard, StatGrid, StatusPill, HelpTip, LoadErrorState } from "../../../../_components/ds";
 import { getAccountHealthBreakdown, getCrmAccounts } from "../../../../_data/loaders";
-import { BAND_LABEL, signalLabel } from "../health";
+import { SIGNAL_LABEL, signalLabel } from "../health";
 import { FollowUpModal } from "./FollowUpModal";
 
 interface PageProps {
@@ -35,13 +35,30 @@ function shortId(id: string): string {
 }
 
 export default async function AccountHealthDetailPage({ params }: PageProps) {
-  const [{ data: breakdown, source }, { data: accounts }] = await Promise.all([
+  const [breakdownResult, { data: accounts }] = await Promise.all([
     getAccountHealthBreakdown(params.accountId),
     getCrmAccounts(),
   ]);
+  const { data: breakdown, source } = breakdownResult;
 
   const t = await getTranslations("crmAccountHealthDetail");
   const accountName = accounts.find((a) => a.id === params.accountId)?.name ?? null;
+
+  // GAP-CRM-HEALTH-ACCOUNTID-02: a fetch failure is not a scoring gap. Only a
+  // real 404 (or a successful null body) means "not scored yet"; a network/5xx/
+  // 403 gets the status-aware retry/permission state, and the follow-up action
+  // is hidden (there is no account state to act on).
+  if (!breakdown && source === "error" && breakdownResult.status !== 404) {
+    return (
+      <>
+        <PageHeader
+          title={accountName ?? t("titleWithId", { id: shortId(params.accountId) })}
+          back="/crm/health"
+        />
+        <LoadErrorState result={breakdownResult} area="account health" backHref="/crm/health" />
+      </>
+    );
+  }
 
   if (!breakdown) {
     return (
@@ -55,9 +72,9 @@ export default async function AccountHealthDetailPage({ params }: PageProps) {
         <Card>
           <EmptyState
             icon="📊"
-            title="No health score yet"
-            message="This account has not been scored. A score appears once the health signals for it have been collected and a recompute has run."
-            action={<a className="btn" href="/crm/health">Back to watchlist</a>}
+            title={t("noScoreTitle")}
+            message={t("noScoreMessage")}
+            action={<a className="btn" href="/crm/health">{t("backToWatchlist")}</a>}
           />
         </Card>
       </>
@@ -68,33 +85,33 @@ export default async function AccountHealthDetailPage({ params }: PageProps) {
     <>
       <PageHeader
         title={accountName ?? t("titleWithId", { id: shortId(breakdown.accountId) })}
-        subtitle={`Scored ${formatDateTime(breakdown.computedAt)}`}
+        subtitle={t("scored", { when: formatDateTime(breakdown.computedAt) })}
         back="/crm/health"
         actions={
           <>
             <FollowUpModal accountId={breakdown.accountId} accountName={accountName} />
-            <a className="btn" href={`/crm/accounts/${breakdown.accountId}`}>View Account</a>
+            <a className="btn" href={`/crm/accounts/${breakdown.accountId}`}>{t("viewAccount")}</a>
           </>
         }
       />
       <StatGrid>
-        <StatCard icon="❤️" iconBg="#fee2e2" label="Health Score" value={`${breakdown.score}/100`} />
-        <StatCard icon="🏷️" iconBg="#e0f2fe" label="Band" value={BAND_LABEL[breakdown.band]} />
+        <StatCard icon="❤️" iconBg="#fee2e2" label={t("healthScore")} value={`${breakdown.score}/100`} />
+        <StatCard icon="🏷️" iconBg="#e0f2fe" label={t("band")} value={t(`band_${breakdown.band}`)} />
         <StatCard
           icon="🧮"
           iconBg="#fef3c7"
-          label="Signals Used"
+          label={t("signalsUsed")}
           value={breakdown.contributingFactors.length.toLocaleString("en-IN")}
         />
-        <StatCard icon="🔁" iconBg="#dcfce7" label="Version" value={String(breakdown.version)} />
+        <StatCard icon="🔁" iconBg="#dcfce7" label={t("version")} value={String(breakdown.version)} />
       </StatGrid>
 
-      <Card title="Contributing Signals">
+      <Card title={t("contributingSignals")}>
         {breakdown.contributingFactors.length === 0 ? ( // ux-001-ok: `breakdown` is only reachable past the earlier `if (!breakdown) return` guard above (source==="error" implies a null breakdown per the loader contract) -- this is a genuinely signal-free stored score, never a masked fetch failure
           <EmptyState
             icon="🧮"
-            title="No signals recorded"
-            message="The stored score has no signal breakdown, so only the composite score is available for this account."
+            title={t("noSignalsTitle")}
+            message={t("noSignalsMessage")}
           />
         ) : (
           // Deliberately a plain table, not DataTable: this is a fixed,
@@ -103,28 +120,43 @@ export default async function AccountHealthDetailPage({ params }: PageProps) {
           // the rows would obscure the weighting narrative.
           <table className="tbl">
             <caption className="sr-only">
-              Signals contributing to this account&apos;s health score
+              {t("signalsCaption")}
             </caption>
             <thead>
               <tr>
-                <th scope="col">Signal</th>
-                <th scope="col" style={{ textAlign: "end" }}>Value</th>
-                <th scope="col" style={{ textAlign: "end" }}>Weight</th>
-                <th scope="col" style={{ textAlign: "end" }}>Contribution</th>
-                <th scope="col">Data Quality</th>
+                <th scope="col">{t("colSignal")}</th>
+                <th scope="col" style={{ textAlign: "end" }}>{t("colValue")}</th>
+                <th scope="col" style={{ textAlign: "end" }}>{t("colWeight")}</th>
+                <th scope="col" style={{ textAlign: "end" }}>{t("colContribution")}</th>
+                <th scope="col">
+                  {/* GAP-CRM-HEALTH-ACCOUNTID-05: "Clamped" is specialist jargon.
+                      A HelpTip explains, in plain words, that it means the raw
+                      signal was outside its allowed range and capped for scoring. */}
+                  <span style={{ display: "inline-flex", alignItems: "center" }}>
+                    {t("colDataQuality")}
+                    <HelpTip term={t("clamped")}>
+                      {t("clampedHelp")}
+                    </HelpTip>
+                  </span>
+                </th>
               </tr>
             </thead>
             <tbody>
               {breakdown.contributingFactors.map((factor) => (
                 <tr key={factor.signal}>
-                  <td>{signalLabel(factor.signal)}</td>
+                  <td>{factor.signal in SIGNAL_LABEL ? t(`signal_${factor.signal}`) : signalLabel(factor.signal)}</td>
                   <td style={{ textAlign: "end" }}>{factor.value}</td>
                   <td style={{ textAlign: "end" }}>{Math.round(factor.weight * 100)}%</td>
-                  <td style={{ textAlign: "end" }}>{factor.contribution}</td>
+                  {/* GAP-CRM-HEALTH-ACCOUNTID-05: contribution is points toward the
+                      composite 0-100 score; label the unit so a bare number is not
+                      ambiguous. A positive value is prefixed with "+". */}
+                  <td style={{ textAlign: "end" }}>
+                    {t("contributionPts", { value: factor.contribution > 0 ? `+${factor.contribution}` : String(factor.contribution) })}
+                  </td>
                   <td>
                     {factor.clamped
-                      ? <StatusPill status="Clamped" />
-                      : <StatusPill status="Reported" />}
+                      ? <StatusPill status="Clamped" label={t("clamped")} />
+                      : <StatusPill status="Reported" label={t("reported")} />}
                   </td>
                 </tr>
               ))}
@@ -134,11 +166,9 @@ export default async function AccountHealthDetailPage({ params }: PageProps) {
       </Card>
 
       {breakdown.storedScore !== breakdown.score && (
-        <Card title="Score Recomputed From Signals">
+        <Card title={t("recomputedTitle")}>
           <p style={{ padding: "12px 16px", margin: 0, color: "#475569", fontSize: 13 }}>
-            The stored score for this account is {breakdown.storedScore}, while recomputing from the
-            signals above gives {breakdown.score}. The recomputed value is shown so the score, band
-            and signals always agree. A recompute will bring the stored value back in line.
+            {t("recomputedBody", { stored: breakdown.storedScore, score: breakdown.score })}
           </p>
         </Card>
       )}

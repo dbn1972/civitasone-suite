@@ -8,12 +8,14 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { EmptyState, Button, ErrorState, ConfirmDialog } from "../ds";
+import { EmptyState, Button, ErrorState, ConfirmDialog, HelpTip } from "../ds";
 import { toHumanError } from "@/lib/messages";
 import { useFormError } from "@/lib/useFormError";
+import { formatIndianDateTime } from "@/lib/formatters";
 import {
   getDedupRules,
   saveDedupRules,
+  DedupRulesConflictError,
   type DedupRule,
   type DedupField,
   type DedupMatchType,
@@ -53,6 +55,26 @@ function ruleNumbersValid(rule: DedupRule): boolean {
   );
 }
 
+/**
+ * GAP-CRM-DEDUP-RULES-03: the backend upserts by (tenant, field), so two rules
+ * on the same field silently collapse to one on save (and two different
+ * match-types on one field are contradictory). Return the first field that is
+ * configured more than once, or null when every field is unique.
+ */
+function firstDuplicateField(rules: DedupRule[]): DedupField | null {
+  const seen = new Set<DedupField>();
+  for (const r of rules) {
+    if (seen.has(r.field)) return r.field;
+    seen.add(r.field);
+  }
+  return null;
+}
+
+/** A stable snapshot for dirty-state comparison (GAP-CRM-DEDUP-RULES-02). */
+function snapshot(rules: DedupRule[]): string {
+  return JSON.stringify(rules);
+}
+
 export function DedupRulesEditor() {
   const t = useTranslations("crmDedupRulesEditor");
   const [rules, setRules] = useState<DedupRule[]>([]);
@@ -63,7 +85,16 @@ export function DedupRulesEditor() {
   const formError = useFormError("matching rules");
   // Guards the destructive "save an empty rule set" path (GAP-CRM-DEDUP-RULES-01).
   const [confirmEmpty, setConfirmEmpty] = useState(false);
+  // GAP-CRM-DEDUP-RULES-02: optimistic-concurrency token from load, and the
+  // loaded snapshot used to tell whether there are unsaved edits.
+  const [version, setVersion] = useState<string | undefined>(undefined);
+  const [loadedSnapshot, setLoadedSnapshot] = useState<string>("[]");
+  // GAP-CRM-DEDUP-RULES-02: "Last changed by/at" from the GET metadata.
+  const [lastChangedBy, setLastChangedBy] = useState<string | undefined>(undefined);
+  const [lastChangedAt, setLastChangedAt] = useState<string | undefined>(undefined);
   const headingId = useId();
+
+  const dirty = source === "api" && snapshot(rules) !== loadedSnapshot;
 
   // Stable per-row React key, independent of array position -- see
   // ElectFlexBenefitForm.tsx (apps/web/src/app/(app)/hr/payroll/flex-benefits)
@@ -80,12 +111,18 @@ export function DedupRulesEditor() {
 
   async function load(isLive: () => boolean = () => true) {
     setSource("loading");
-    const { data, source: s } = await getDedupRules();
+    const { data, source: s, version: v, updatedBy, updatedAt } = await getDedupRules();
     // Skip if the editor unmounted while this request was in flight.
     if (!isLive()) return;
     setRules(data);
     setRuleRowIds(data.map(() => nextRuleRowId.current++));
     setSource(s);
+    setVersion(v);
+    setLastChangedBy(updatedBy);
+    setLastChangedAt(updatedAt);
+    setLoadedSnapshot(snapshot(data));
+    setMessage("");
+    setError("");
   }
 
   useEffect(() => {
@@ -94,6 +131,20 @@ export function DedupRulesEditor() {
     return () => { live = false; };
   }, []);
 
+  // GAP-CRM-DEDUP-RULES-02: warn before a full page unload (close/reload/
+  // external nav) while there are unsaved edits, so a tenant-wide config
+  // change is not lost silently. In-app navigation shows the inline "unsaved
+  // changes" banner below (Next's App Router has no stable navigation-block API).
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
+
   function update(idx: number, patch: Partial<DedupRule>) {
     setRules((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
   }
@@ -101,7 +152,17 @@ export function DedupRulesEditor() {
   function addRule() {
     setRules((prev) => [
       ...prev,
-      { field: "email", matchType: "exact", weight: 1, threshold: 90, enabled: true },
+      // GAP-CRM-DEDUP-RULES-03: default weight 50 (a meaningful contribution),
+      // not 1 — a weight-1 rule has almost no effect until the admin notices
+      // and edits it. Default to the first field not already configured so a
+      // new rule doesn't immediately collide with an existing one.
+      {
+        field: FIELD_OPTIONS.find((f) => !prev.some((r) => r.field === f)) ?? "email",
+        matchType: "exact",
+        weight: 50,
+        threshold: 90,
+        enabled: true,
+      },
     ]);
     setRuleRowIds((ids) => [...ids, nextRuleRowId.current++]);
   }
@@ -114,10 +175,19 @@ export function DedupRulesEditor() {
   async function doSave() {
     setBusy(true);
     try {
-      await saveDedupRules(rules);
+      const newVersion = await saveDedupRules(rules, version);
+      // Keep the stored token current so a follow-up save isn't a false conflict.
+      if (newVersion) setVersion(newVersion);
       setMessage("Matching rules saved.");
+      setLoadedSnapshot(snapshot(rules));
     } catch (e) {
-      setError(formError.fromException("save", e).message);
+      if (e instanceof DedupRulesConflictError) {
+        // GAP-CRM-DEDUP-RULES-02: a concurrent admin changed the rules; retrying
+        // the stale write would clobber theirs, so prompt a reload instead.
+        setError(t("conflictChanged"));
+      } else {
+        setError(formError.fromException("save", e).message);
+      }
     } finally {
       setBusy(false);
     }
@@ -135,6 +205,13 @@ export function DedupRulesEditor() {
     }
     if (!rules.every(ruleNumbersValid)) {
       setError(t("invalidNumbers"));
+      return;
+    }
+    // GAP-CRM-DEDUP-RULES-03: two rules on the same field collapse to one on
+    // the backend's (tenant, field) upsert, so block it with an inline error.
+    const dup = firstDuplicateField(rules);
+    if (dup) {
+      setError(t("duplicateField", { field: dup }));
       return;
     }
     // Saving an empty list clears every matching rule — require an explicit
@@ -181,11 +258,23 @@ export function DedupRulesEditor() {
       <div className="card-h">
         <h3 id={headingId}>Matching rules</h3>
       </div>
+      {lastChangedAt ? (
+        <p style={{ fontSize: 12, color: "var(--muted)", padding: "0 12px" }}>
+          {lastChangedBy
+            ? t("lastChangedAtBy", { at: formatIndianDateTime(lastChangedAt), by: lastChangedBy })
+            : t("lastChangedAt", { at: formatIndianDateTime(lastChangedAt) })}
+        </p>
+      ) : null}
       {message ? (
         <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", padding: "0 12px" }}>{message}</p>
       ) : null}
       {error ? (
         <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", padding: "0 12px" }}>{error}</p>
+      ) : null}
+      {dirty ? (
+        <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#92400e", padding: "0 12px" }}>
+          {t("unsavedChanges")}
+        </p>
       ) : null}
 
       {rules.length === 0 ? (
@@ -200,8 +289,18 @@ export function DedupRulesEditor() {
             <tr>
               <th>Field</th>
               <th>Match type</th>
-              <th style={{ textAlign: "end" }}>Weight</th>
-              <th style={{ textAlign: "end" }}>Threshold</th>
+              <th style={{ textAlign: "end" }}>
+                {t("weight")}{" "}
+                <HelpTip term={t("weight")}>
+                  {t("weightHelp")}
+                </HelpTip>
+              </th>
+              <th style={{ textAlign: "end" }}>
+                {t("threshold")}{" "}
+                <HelpTip term={t("threshold")}>
+                  {t("thresholdHelp")}
+                </HelpTip>
+              </th>
               <th>Enabled</th>
               <th><span className="sr-only">Actions</span></th>
             </tr>
@@ -275,11 +374,19 @@ export function DedupRulesEditor() {
         </table>
       )}
 
-      <div style={{ display: "flex", gap: 8, padding: 12 }}>
+      <div style={{ display: "flex", gap: 8, padding: 12, alignItems: "center" }}>
         <Button type="button" variant="ghost" onClick={addRule}>+ Add rule</Button>
         <Button type="button" onClick={() => void save()} disabled={busy}>
           {busy ? "Saving…" : "Save rules"}
         </Button>
+        {rules.length > 0 ? (
+          <span style={{ marginInlineStart: "auto", fontSize: 13, color: "var(--muted)" }}>
+            {t.rich("totalEnabledWeight", {
+              total: rules.filter((r) => r.enabled).reduce((sum, r) => sum + (Number.isFinite(r.weight) ? r.weight : 0), 0),
+              strong: (chunks) => <strong>{chunks}</strong>,
+            })}
+          </span>
+        ) : null}
       </div>
 
       <ConfirmDialog

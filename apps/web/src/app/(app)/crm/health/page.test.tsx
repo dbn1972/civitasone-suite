@@ -65,4 +65,46 @@ describe("AccountHealthPage FAILMASK guard (GAP-CRM-HEALTH-01)", () => {
     expect(screen.getByText("Critical")).toBeInTheDocument();
     expect(screen.getByText("No accounts at risk")).toBeInTheDocument();
   });
+
+  // GAP-CRM-HEALTH-02 — the average tile is labelled as an at-risk average, and
+  // a full 100-row list shows a truncation notice.
+  it("labels the average as at-risk and shows a truncation notice at the 100-row cap", async () => {
+    const rows = Array.from({ length: 100 }, (_, i) => ({
+      accountId: `11111111-1111-1111-1111-${String(i).padStart(12, "0")}`,
+      score: 20,
+      band: "at_risk" as const,
+      computedAt: "2026-08-01T00:00:00Z",
+    }));
+    getWatchlistMock.mockResolvedValue({ data: rows, source: "api" });
+    getAccountsMock.mockResolvedValue({ data: [], source: "api" });
+
+    const ui = await AccountHealthPage();
+    render(ui);
+
+    expect(screen.getByText(/Average score \(at-risk accounts\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Showing the first 100 at-risk accounts/i)).toBeInTheDocument();
+  });
+
+  // GAP-CRM-HEALTH-03 — "Call First" prefers the worst account that has a
+  // resolved name, never a bare id-suffix label, when a named one exists.
+  it("picks a resolved account name for Call First over an unresolved worst", async () => {
+    getWatchlistMock.mockResolvedValue({
+      data: [
+        // Worst score but no matching account → unresolved.
+        { accountId: "99999999-9999-9999-9999-999999999999", score: 5, band: "critical", computedAt: "2026-08-01T00:00:00Z" },
+        // Slightly higher but named.
+        { accountId: "22222222-2222-2222-2222-222222222222", score: 12, band: "critical", computedAt: "2026-08-01T00:00:00Z" },
+      ],
+      source: "api",
+    });
+    getAccountsMock.mockResolvedValue({
+      data: [{ id: "22222222-2222-2222-2222-222222222222", name: "Bharat Steel", industry: null, website: null, parentId: null, contactCount: 0 }],
+      source: "api",
+    });
+
+    const ui = await AccountHealthPage();
+    render(ui);
+
+    expect(screen.getByText("Call First").nextElementSibling).toHaveTextContent("Bharat Steel");
+  });
 });

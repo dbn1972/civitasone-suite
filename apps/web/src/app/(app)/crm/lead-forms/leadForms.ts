@@ -15,6 +15,24 @@ export function publicSubmitPath(formKey: string): string {
 export type FormHealth = "live" | "paused" | "unlawful";
 
 /**
+ * GAP-CRM-LEAD-FORMS-03: human labels for the health enum. The raw value
+ * "unlawful" must never be printed verbatim as a pill label — it is both an
+ * internal enum and a legal conclusion the UI should not assert. The condition
+ * is "enabled without requiring consent", surfaced as "Consent gaps" on the
+ * tile; the per-row pill says "Consent not required" (what is actually true of
+ * the form's configuration). The enum stays internal.
+ */
+export const HEALTH_LABEL: Record<FormHealth, string> = {
+  live: "Live",
+  paused: "Paused",
+  unlawful: "Consent not required",
+};
+
+/** The DPDP explanation shown when any form is in the consent-gap state. */
+export const CONSENT_GAP_NOTE =
+  "Enabled without requiring consent. The DPDP Act 2023 requires consent for marketing-intake forms — require consent or pause these forms.";
+
+/**
  * A form that is enabled but does not require consent is an unlawful-capture
  * risk under DPDP for marketing intake — surface it louder than a deliberate pause.
  */
@@ -34,8 +52,14 @@ export function rankForms(forms: CRMLeadCaptureForm[]): CRMLeadCaptureForm[] {
   });
 }
 
-export function originSummary(origins: string[]): string {
-  if (origins.length === 0) return "Any origin";
+export function originSummary(
+  origins: string[],
+  labels: { any: string; more: (count: number) => string } = {
+    any: "Any origin",
+    more: (count) => `+${count} more`,
+  },
+): string {
+  if (origins.length === 0) return labels.any;
   if (origins.length === 1) return origins[0]!;
-  return `${origins[0]} +${origins.length - 1} more`;
+  return `${origins[0]} ${labels.more(origins.length - 1)}`;
 }

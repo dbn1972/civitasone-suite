@@ -13,15 +13,22 @@ export async function getDeal(id: string, tenantId: string): Promise<DealView | 
 export async function listDeals(
   tenantId: string,
   limit: number,
-  offset: number
-): Promise<{ data: DealView[]; pagination: { hasMore: boolean; pageSize: number; cursor?: string } }> {
-  return cache.listOrLoad(tenantId, RESOURCE, `list:${limit}:${offset}`, async () => {
-    const rows = await repo.listByTenant(tenantId, limit, offset);
+  offset: number,
+  pipelineId?: string,
+): Promise<{ data: DealView[]; pagination: { hasMore: boolean; pageSize: number; total: number; cursor?: string } }> {
+  return cache.listOrLoad(tenantId, RESOURCE, `list:${limit}:${offset}:${pipelineId ?? "*"}`, async () => {
+    const [rows, total] = await Promise.all([
+      repo.listByTenant(tenantId, limit, offset, pipelineId),
+      // GAP-CRM-PIPELINE-05: the tenant-wide (or pipeline-scoped) live-deal total,
+      // so the board shows "N of M" instead of guessing truncation from a full page.
+      repo.countByTenant(tenantId, pipelineId),
+    ]);
     return {
       data: rows,
       pagination: {
-        hasMore: rows.length === limit,
+        hasMore: offset + rows.length < total,
         pageSize: limit,
+        total,
         ...(rows.length ? { cursor: String(offset + rows.length) } : {}),
       },
     };

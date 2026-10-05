@@ -216,6 +216,19 @@ export function OpportunityForm({ opportunity, onSaved, initialAccountId, initia
 
   const isMissing = (field: OppFieldKey) => missing.includes(field);
 
+  // GAP-CRM-OPPORTUNITIES-NEW-03: the mandatory fields for the chosen stage are
+  // known client-side (selectedPipeline stage.mandatoryFields), so surface them
+  // BEFORE submit — an inline hint plus a star on each required label — instead
+  // of only after the server rejects the save. The server stays the authority.
+  const selectedStage = useMemo(
+    () => selectedPipeline?.stages.find((s) => s.key === stage) ?? null,
+    [selectedPipeline, stage],
+  );
+  const requiredFields = selectedStage?.mandatoryFields ?? [];
+  const isRequired = (field: OppFieldKey) => requiredFields.includes(field);
+  // Star a label when the stage requires it OR the server flagged it missing.
+  const star = (field: OppFieldKey) => (isRequired(field) || isMissing(field) ? " *" : "");
+
   return (
     <div className="card">
       <div className="card-h">
@@ -280,6 +293,12 @@ export function OpportunityForm({ opportunity, onSaved, initialAccountId, initia
           </label>
         </div>
 
+        {requiredFields.length > 0 ? (
+          <p role="note" style={{ fontSize: 12, color: "var(--muted)", margin: 0, padding: "0 2px" }}>
+            {t("requiredForStage", { fields: requiredFields.map((f) => OPP_FIELD_LABELS[f]).join(", ") })}
+          </p>
+        ) : null}
+
         <div style={{ fontSize: 13, display: "grid", gap: 4 }}>
           <span aria-hidden="true">{t("accountLabel")}</span>
           <EntityPicker
@@ -298,7 +317,7 @@ export function OpportunityForm({ opportunity, onSaved, initialAccountId, initia
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
           <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
-            Value (₹){isMissing("value") ? " *" : ""}
+            Value (₹){star("value")}
             <input
               aria-label="Deal value in rupees"
               inputMode="decimal"
@@ -313,7 +332,7 @@ export function OpportunityForm({ opportunity, onSaved, initialAccountId, initia
             ) : null}
           </label>
           <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
-            Probability (%){isMissing("probability") ? " *" : ""}
+            Probability (%){star("probability")}
             <input
               aria-label="Probability percent"
               type="number"
@@ -326,7 +345,7 @@ export function OpportunityForm({ opportunity, onSaved, initialAccountId, initia
             />
           </label>
           <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
-            Quantity{isMissing("quantity") ? " *" : ""}
+            Quantity{star("quantity")}
             <input
               aria-label="Quantity"
               type="number"
@@ -340,22 +359,22 @@ export function OpportunityForm({ opportunity, onSaved, initialAccountId, initia
         </div>
 
         <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
-          Product{isMissing("product") ? " *" : ""}
+          Product{star("product")}
           <input aria-label="Product" value={product} aria-invalid={isMissing("product") ? true : undefined} onChange={(e) => setProduct(e.target.value)} style={inputStyle} />
         </label>
 
         <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
-          Competitors (comma separated){isMissing("competitors") ? " *" : ""}
+          Competitors (comma separated){star("competitors")}
           <input aria-label="Competitors" value={competitors} aria-invalid={isMissing("competitors") ? true : undefined} onChange={(e) => setCompetitors(e.target.value)} style={inputStyle} placeholder="Acme, Globex" />
         </label>
 
         <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
-          Next step{isMissing("nextStep") ? " *" : ""}
+          Next step{star("nextStep")}
           <input aria-label="Next step" value={nextStep} aria-invalid={isMissing("nextStep") ? true : undefined} onChange={(e) => setNextStep(e.target.value)} style={inputStyle} />
         </label>
 
         <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
-          Expected close date{isMissing("expectedCloseDate") ? " *" : ""}
+          Expected close date{star("expectedCloseDate")}
           <input aria-label="Expected close date" type="date" value={expectedCloseDate} aria-invalid={isMissing("expectedCloseDate") ? true : undefined} onChange={(e) => setExpectedCloseDate(e.target.value)} style={inputStyle} />
         </label>
 

@@ -1,14 +1,9 @@
-import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { PageHeader } from "../../../_components/ds";
 import { getDeals } from "../../../_data/loaders";
-import { formatMoney } from "@/lib/formatters";
 import { DealsTable } from "./DealsTable";
 
 export default async function Page() {
   const { data: deals, source } = await getDeals();
-
-  const openDeals = deals.filter((d) => d.status === "open").length;
-  const pipelineValue = deals.filter((d) => d.status === "open").reduce((s, d) => s + d.amount, 0);
-  const wonValue = deals.filter((d) => d.status === "won").reduce((s, d) => s + d.amount, 0);
 
   return (
     <>
@@ -20,16 +15,12 @@ export default async function Page() {
           <a className="btn primary" href="/crm/deals/new">+ New Engagement</a>
         }
       />
-      {/* UX-012: the data-source badge now lives inside DealsTable, driven by
-          the same useSeededResource call that produces its rows — not a
-          second, independent read of `source` here that could disagree with
-          the table's own cache state (UX-002's pattern). */}
-      <StatGrid>
-        <StatCard icon="▣" iconBg="#eef2ff" label="Total Engagements" value={deals.length.toLocaleString("en-IN")} />
-        <StatCard icon="◉" iconBg="#ecfdf3" label="Active Engagements" value={openDeals.toLocaleString("en-IN")} />
-        <StatCard icon="◈" iconBg="#f3e8ff" label="Active Procurement Value" value={formatMoney(pipelineValue)} />
-        <StatCard icon="△" iconBg="#ecfdf3" label="Concluded Value" value={formatMoney(wonValue)} />
-      </StatGrid>
+      {/* GAP-CRM-DEALS-03/04: the stat cards, the data-source badge and the
+          table all live inside DealsTable, driven by one useSeededResource
+          call. The page no longer computes figures from a second, independent
+          read of the server rows (which could print 0 / ₹0.00 on a failed load
+          while the cached table showed real data), and money is summed as
+          bigint paise there, not as a JS number here. */}
       <DealsTable deals={deals} source={source} />
     </>
   );

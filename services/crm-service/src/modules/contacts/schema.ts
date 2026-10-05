@@ -87,10 +87,45 @@ export const contacts = crmSchema.table("contacts", {
   version: integer("version").notNull().default(1),
 });
 
+/**
+ * GAP-CRM-CONTACTS-IMPORT-04: per-batch bulk-import outcome, written by the
+ * bulk-import consumer inside the same transaction as the row writes and read
+ * back by GET /v1/crm/contacts/import/:batchId. `rejectedRows` holds only the
+ * row index + a coarse machine reason — never any contact PII (see migration
+ * 0104 and the consumer).
+ */
+export const contactImportBatches = crmSchema.table("contact_import_batches", {
+  batchId: uuid("batch_id").primaryKey(),
+  tenantId: uuid("tenant_id").notNull(),
+  status: varchar("status", { length: 16 }).notNull().default("completed"),
+  total: integer("total").notNull().default(0),
+  accepted: integer("accepted").notNull().default(0),
+  rejected: integer("rejected").notNull().default(0),
+  errored: integer("errored").notNull().default(0),
+  rejectedRows: jsonb("rejected_rows").$type<Array<{ index: number; reason: string }>>().notNull().default([]),
+  createdBy: uuid("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type ContactRow = typeof contacts.$inferSelect;
 export type ContactInsert = typeof contacts.$inferInsert;
 export type AccountRow = typeof accounts.$inferSelect;
 export type AccountInsert = typeof accounts.$inferInsert;
+export type ContactImportBatchRow = typeof contactImportBatches.$inferSelect;
+export type ContactImportBatchInsert = typeof contactImportBatches.$inferInsert;
+
+/** Public view of an import batch result (GAP-CRM-CONTACTS-IMPORT-04). */
+export type ContactImportBatchView = {
+  batchId: string;
+  status: string;
+  total: number;
+  accepted: number;
+  rejected: number;
+  errored: number;
+  rejectedRows: Array<{ index: number; reason: string }>;
+  createdAt: string;
+};
 
 export type ContactView = {
   id: string;
@@ -127,6 +162,10 @@ export type ContactDetailView = {
   id: string;
   name: string;
   organization?: string;
+  /** GAP-CRM-CONTACTS-NEW-02: the linked account id (when the contact is tied
+   *  to an account) so the edit form can seed an account EntityPicker and keep
+   *  the link on save, rather than treating the organisation as free text. */
+  accountId?: string;
   email?: string;
   phone?: string;
   designation?: string;
@@ -153,4 +192,4 @@ export type ContactDetailView = {
   }>;
 };
 
-export const schema = { contacts, accounts };
+export const schema = { contacts, accounts, contactImportBatches };

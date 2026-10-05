@@ -49,9 +49,33 @@ interface PendingMove {
   deal: Opportunity;
   toStage: string;
   toStageName: string;
+  /** Stage uuid when the pipeline provides one. */
+  toStageId?: string;
 }
 
-export function OpportunityViews() {
+/**
+ * GAP-CRM-OPPORTUNITIES-04: a failed view used to render an EmptyState whose
+ * title was the bare character "—" with no way to recover. A failure is not an
+ * empty board, so show a titled error with a working Retry that re-runs the
+ * same fetch (reload()) — "—" is for missing values, never a heading.
+ */
+function ViewError({ icon, onRetry }: { icon: string; onRetry: () => void }) {
+  const t = useTranslations("crmOpportunityViews");
+  return (
+    <EmptyState
+      icon={icon}
+      title={t("loadErrorTitle")}
+      message={t("loadErrorMessage")}
+      action={
+        <Button type="button" onClick={onRetry}>
+          {t("retry")}
+        </Button>
+      }
+    />
+  );
+}
+
+export function OpportunityViews({ canClose = true }: { canClose?: boolean } = {}) {
   const t = useTranslations("crmOpportunityViews");
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [pipelineSource, setPipelineSource] = useState<OpSource | "loading">("loading");
@@ -101,17 +125,26 @@ export function OpportunityViews() {
       setList(data);
       setListSource(source);
     } else if (view === "Calendar") {
-      const { data, source } = await getCalendar(pipelineId);
-      if (!isLive()) return;
-      setCalendar(data);
-      setCalendarSource(source);
+      // GAP-CRM-OPPORTUNITIES-05: the calendar is a re-slice of the board's deals
+      // (grouped by close date instead of stage). If the board was already loaded
+      // for this pipeline, derive the calendar from it rather than issuing a second
+      // fetch of the same kanban endpoint; only fetch when we have nothing cached.
+      if (kanban.length > 0 && kanbanSource === "api") {
+        if (!isLive()) return;
+        setCalendarSource("api");
+      } else {
+        const { data, source } = await getCalendar(pipelineId);
+        if (!isLive()) return;
+        setCalendar(data);
+        setCalendarSource(source);
+      }
     } else {
       const { data, source } = await getFunnel(pipelineId);
       if (!isLive()) return;
       setFunnel(data);
       setFunnelSource(source);
     }
-  }, [pipelineId, view]);
+  }, [pipelineId, view, kanban, kanbanSource]);
 
   useEffect(() => {
     let live = true;
@@ -120,6 +153,28 @@ export function OpportunityViews() {
   }, [reload]);
 
   const selectedPipeline = useMemo(() => pipelines.find((p) => p.id === pipelineId) ?? null, [pipelines, pipelineId]);
+
+  // GAP-CRM-OPPORTUNITIES-05: the calendar is derived from the board's deals when the
+  // board has been loaded (no second fetch), otherwise from the dedicated calendar
+  // fetch. A deal without an expected close date cannot be placed on a calendar, so we
+  // drop it from the entries but surface how many were omitted — the empty copy no
+  // longer claims that *no* deal has a close date when only some are undated.
+  const { calendarEntries, undatedCount } = useMemo(() => {
+    const kanbanDeals = kanban.flatMap((col) => col.deals);
+    if (kanbanDeals.length > 0) {
+      const dated: CalendarEntry[] = [];
+      let undated = 0;
+      for (const d of kanbanDeals) {
+        if (d.id && d.expectedCloseDate) {
+          dated.push({ id: d.id, name: d.name, expectedCloseDate: d.expectedCloseDate, valueMinor: d.valueMinor, stage: d.stage });
+        } else {
+          undated += 1;
+        }
+      }
+      return { calendarEntries: dated, undatedCount: undated };
+    }
+    return { calendarEntries: calendar, undatedCount: 0 };
+  }, [kanban, calendar]);
 
   async function confirmMove() {
     if (!pendingMove?.deal.id) return;
@@ -135,7 +190,9 @@ export function OpportunityViews() {
     setMoveBusy(true);
     setMoveError("");
     try {
-      await changeOpportunityStage(pendingMove.deal.id, pendingMove.toStage, version);
+      // GAP-CRM-OPPORTUNITIES-02: send the stage NAME (+ id) — the same
+      // contract the pipeline Kanban uses; the server matches stages by name.
+      await changeOpportunityStage(pendingMove.deal.id, pendingMove.toStageName, version, pendingMove.toStageId);
       setMessage(`“${pendingMove.deal.name}” moved to ${pendingMove.toStageName}.`);
       setPendingMove(null);
       await reload();
@@ -215,7 +272,7 @@ export function OpportunityViews() {
       {/* ---------------------------------------------------------- Board -- */}
       {view === "Board" ? (
         activeSource === "error" ? (
-          <EmptyState icon="🗂️" title="—" message="The board could not be loaded just now." />
+          <ViewError icon="🗂️" onRetry={() => void reload()} />
         ) : kanban.length === 0 ? (
           <EmptyState icon="🗂️" title="No stages to show" message="This pipeline has no opportunities yet." />
         ) : (
@@ -241,7 +298,7 @@ export function OpportunityViews() {
                               const to = selectedPipeline.stages.find((s) => s.key === e.target.value);
                               if (to && to.key !== col.stage) {
                                 setMoveError("");
-                                setPendingMove({ deal: d, toStage: to.key, toStageName: to.name });
+                                setPendingMove({ deal: d, toStage: to.key, toStageName: to.name, ...(to.id ? { toStageId: to.id } : {}) });
                               }
                             }}
                             style={{ padding: 4, borderRadius: 6, border: "1px solid var(--line)" }}
@@ -261,7 +318,7 @@ export function OpportunityViews() {
                                 </option>
                               ))}
                           </select>
-                          {!d.outcome && d.status !== "closed" ? (
+                          {canClose && !d.outcome && d.status !== "closed" ? (
                             <Button type="button" variant="ghost" size="sm" onClick={() => setCloseTarget(d)} style={{ marginTop: 4 }}>
                               {t("close")}
                             </Button>
@@ -281,7 +338,7 @@ export function OpportunityViews() {
       {/* ----------------------------------------------------------- List -- */}
       {view === "List" ? (
         activeSource === "error" ? (
-          <EmptyState icon="📋" title="—" message="The list could not be loaded just now." />
+          <ViewError icon="📋" onRetry={() => void reload()} />
         ) : list.length === 0 ? (
           <EmptyState icon="📋" title="No opportunities" message="Nothing on this pipeline yet." />
         ) : (
@@ -309,11 +366,11 @@ export function OpportunityViews() {
                   <td>
                     {d.status === "closed" || d.outcome ? (
                       <span style={{ fontSize: 12, color: "var(--muted)" }}>Closed{d.outcome ? ` · ${d.outcome}` : ""}</span>
-                    ) : (
+                    ) : canClose ? (
                       <Button type="button" variant="ghost" size="sm" onClick={() => setCloseTarget(d)}>
                         Close
                       </Button>
-                    )}
+                    ) : null}
                   </td>
                 </tr>
               ))}
@@ -325,12 +382,25 @@ export function OpportunityViews() {
       {/* ------------------------------------------------------- Calendar -- */}
       {view === "Calendar" ? (
         activeSource === "error" ? (
-          <EmptyState icon="📅" title="—" message="The calendar could not be loaded just now." />
-        ) : calendar.length === 0 ? (
-          <EmptyState icon="📅" title="No close dates" message="No opportunities have an expected close date." />
+          <ViewError icon="📅" onRetry={() => void reload()} />
+        ) : calendarEntries.length === 0 ? (
+          <EmptyState
+            icon="📅"
+            title={t("noCloseDatesTitle")}
+            message={
+              undatedCount > 0
+                ? t("undatedEmptyMessage", { count: undatedCount })
+                : t("noExpectedCloseDate")
+            }
+          />
         ) : (
           <div style={{ padding: 12, display: "grid", gap: 6 }}>
-            {calendar
+            {undatedCount > 0 ? (
+              <p role="note" style={{ fontSize: 12, color: "var(--muted)", margin: "0 0 4px" }}>
+                {t("undatedNote", { count: undatedCount })}
+              </p>
+            ) : null}
+            {calendarEntries
               .slice()
               .sort((a, b) => a.expectedCloseDate.localeCompare(b.expectedCloseDate))
               .map((c) => (
@@ -347,7 +417,7 @@ export function OpportunityViews() {
       {/* --------------------------------------------------------- Funnel -- */}
       {view === "Funnel" ? (
         activeSource === "error" ? (
-          <EmptyState icon="📊" title="—" message="The funnel could not be loaded just now." />
+          <ViewError icon="📊" onRetry={() => void reload()} />
         ) : funnel.length === 0 ? (
           <EmptyState icon="📊" title="No funnel data" message="No opportunities to chart." />
         ) : (

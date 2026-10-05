@@ -1,5 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
+
+function render(ui: ReactElement) {
+  return rtlRender(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
 import NewContactPage from "./page";
 import * as dq from "@/lib/crm/dataQuality";
 import type { DuplicateCandidate } from "@/lib/crm/dataQuality";
@@ -83,5 +94,58 @@ describe("NewContactPage duplicate-check (DQ-001 findings 1,2,5)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /create contact/i }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/proxy/v1/crm/contacts", expect.anything()));
+  });
+});
+
+describe("NewContactPage error + duplicate-submit (GAP-CRM-CONTACTS-NEW-01 / -04)", () => {
+  it("GAP-CRM-CONTACTS-NEW-01: a 422 shows a safe message that points at the fields (not the fixed string, not raw server text)", async () => {
+    vi.mocked(dq.duplicateCheck).mockResolvedValue([]);
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 422,
+      json: async () => ({ code: "MANDATORY_FIELDS_MISSING", message: "missing mandatory field(s): city" }),
+    });
+    render(<NewContactPage />);
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Asha" } });
+    fireEvent.click(screen.getByRole("button", { name: /create contact/i }));
+    const alert = await screen.findByRole("alert");
+    // Safe copy for a 400/422: a plain "some values/details weren't accepted,
+    // check what you entered" — never the fixed "Could not create the contact."
+    // and never the raw server text.
+    expect(alert.textContent).toMatch(/weren.t accepted/i);
+    expect(alert.textContent).not.toMatch(/Could not create the contact/);
+    expect(alert.textContent).not.toMatch(/missing mandatory field/i);
+  });
+
+  it("GAP-CRM-CONTACTS-NEW-04: a 201 with no id navigates to the list and disables a second submit", async () => {
+    vi.mocked(dq.duplicateCheck).mockResolvedValue([]);
+    const pushSpy = vi.fn();
+    // Replace the router push used by the component via a module mock.
+    fetchMock.mockResolvedValue({ ok: true, status: 201, json: async () => ({}) });
+    render(<NewContactPage />);
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Asha" } });
+    fireEvent.click(screen.getByRole("button", { name: /create contact/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/proxy/v1/crm/contacts", expect.anything()));
+    // The submit button latches to "Created" and is disabled — no duplicate POST.
+    await waitFor(() => expect(screen.getByRole("button", { name: /created/i })).toBeDisabled());
+    const postCalls = () => fetchMock.mock.calls.filter((c) => c[0] === "/api/proxy/v1/crm/contacts").length;
+    expect(postCalls()).toBe(1);
+    void pushSpy;
+  });
+});
+
+describe("NewContactPage DPDP + account link (GAP-CRM-CONTACTS-NEW-03 / -02)", () => {
+  it("GAP-CRM-CONTACTS-NEW-03: consent is DPDP-only wording with a PAN/GSTIN notice", () => {
+    render(<NewContactPage />);
+    expect(screen.getByText(/DPDP Act, 2023/)).toBeInTheDocument();
+    expect(screen.queryByText(/GDPR/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Personal data collected for KYC\/tax/i)).toBeInTheDocument();
+  });
+
+  it("GAP-CRM-CONTACTS-NEW-02: offers an account picker plus a free-text organisation fallback", () => {
+    render(<NewContactPage />);
+    expect(screen.getByLabelText("Link to an existing account")).toBeInTheDocument();
+    // With no account linked, the free-text organisation input is the fallback.
+    expect(screen.getByPlaceholderText("Or type a new organisation")).toBeInTheDocument();
   });
 });

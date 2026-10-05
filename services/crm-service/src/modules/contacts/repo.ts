@@ -1,6 +1,6 @@
 import { eq, and, or, ilike, desc, sql, type SQL } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
-import { contacts, accounts, type ContactRow, type ContactInsert, type ContactView, type ContactDetailView, type AccountInsert } from "./schema.js";
+import { contacts, accounts, contactImportBatches, type ContactRow, type ContactInsert, type ContactView, type ContactDetailView, type AccountInsert, type ContactImportBatchInsert, type ContactImportBatchView } from "./schema.js";
 import { deals } from "../deals/schema.js";
 import { activities } from "../activities/schema.js";
 import { blindIndex } from "../../shared/pii-crypto.js";
@@ -60,6 +60,7 @@ export async function findDetail(id: string, tenantId: string): Promise<ContactD
     id: contact.id,
     name: contact.name,
     ...(contact.company ? { organization: contact.company } : {}),
+    ...(contact.accountId ? { accountId: contact.accountId } : {}),
     ...(contact.email ? { email: contact.email } : {}),
     ...(contact.phone ? { phone: contact.phone } : {}),
     ...(contact.designation ? { designation: contact.designation } : {}),
@@ -98,6 +99,11 @@ export type ListFilters = {
   search?: string;
   leadStatus?: string;
   ownerId?: string;
+  // GAP-CRM-ACCOUNTS-DETAIL-06: exact filter by owning account so "View
+  // contacts" from an account links to that account's contacts rather than a
+  // fuzzy free-text name search (which mixes similarly-named orgs and loses
+  // contacts when an account is renamed).
+  accountId?: string;
   temperature?: string;
   priority?: string;
   segmentName?: string;
@@ -137,6 +143,7 @@ export async function listByTenant(
   if (filters.expectedValueMin) conditions.push(sql`${contacts.expectedValueMinor} >= ${filters.expectedValueMin}::bigint`);
   if (filters.expectedValueMax) conditions.push(sql`${contacts.expectedValueMinor} <= ${filters.expectedValueMax}::bigint`);
   if (filters.ownerId) conditions.push(eq(contacts.ownerId, filters.ownerId));
+  if (filters.accountId) conditions.push(eq(contacts.accountId, filters.accountId));
   if (filters.segment === "mine" && filters.actorId) conditions.push(eq(contacts.ownerId, filters.actorId));
   if (filters.segment === "recent") {
     conditions.push(sql`${contacts.lastActivityAt} > now() - interval '30 days' OR ${contacts.createdAt} > now() - interval '7 days'`);
@@ -380,6 +387,19 @@ export async function listAccounts(tenantId: string, limit = 500, offset = 0): P
   return rows.map((r) => ({ ...r, contactCount: Number(r.contactCount ?? 0) }));
 }
 
+/**
+ * GAP-CRM-ACCOUNTS-02: the total number of active accounts for this tenant, so
+ * the list page can show "Showing N of M" instead of guessing from a capped page.
+ * Counts the SAME population as listAccounts (status='active', tenant-scoped),
+ * without the contact leftJoin so it is a single cheap aggregate.
+ */
+export async function countAccounts(tenantId: string): Promise<number> {
+  const rows = await scopedRead((tx) => tx.select({ total: sql<string>`count(*)` })
+    .from(accounts)
+    .where(and(eq(accounts.tenantId, tenantId), eq(accounts.status, "active"))));
+  return Number(rows[0]?.total ?? 0);
+}
+
 /** Tenant-scoped existence check for an account (cross-tenant FK guard). */
 export async function accountExists(tenantId: string, accountId: string): Promise<boolean> {
   const rows = await scopedRead((tx) => tx.select({ one: sql`1` }).from(accounts)
@@ -411,3 +431,62 @@ export async function contactExistsTx(tx: Writer, tenantId: string, contactId: s
 }
 
 export { toView };
+
+/**
+ * GAP-CRM-CONTACTS-IMPORT-04: persist a bulk-import batch's outcome. Called by
+ * the bulk-import consumer INSIDE the same transaction as the row writes, so a
+ * reader can never observe a half-applied batch (no TOCTOU). onConflict keeps it
+ * idempotent under redelivery — markProcessed already guards the common case,
+ * but a safety net costs nothing here.
+ *
+ * `rejectedRows` carries only { index, reason } (row number + a coarse machine
+ * reason). No name/email/phone is stored — the uploader already holds the row,
+ * and leaking PII into a result row (or an audit reader) is exactly what the
+ * item forbids.
+ */
+export async function recordImportBatchTx(tx: Writer, row: ContactImportBatchInsert): Promise<void> {
+  await (tx as typeof db)
+    .insert(contactImportBatches)
+    .values(row)
+    .onConflictDoNothing({ target: contactImportBatches.batchId });
+}
+
+/** GAP-CRM-CONTACTS-IMPORT-04: read a batch's outcome for the status endpoint. */
+export async function getImportBatch(batchId: string, tenantId: string): Promise<ContactImportBatchView | null> {
+  const rows = await scopedRead((tx) => tx.select().from(contactImportBatches)
+    .where(and(eq(contactImportBatches.batchId, batchId), eq(contactImportBatches.tenantId, tenantId)))
+    .limit(1));
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    batchId: r.batchId,
+    status: r.status,
+    total: r.total,
+    accepted: r.accepted,
+    rejected: r.rejected,
+    errored: r.errored,
+    rejectedRows: (r.rejectedRows as Array<{ index: number; reason: string }>) ?? [],
+    createdAt: r.createdAt.toISOString(),
+  };
+}
+
+/**
+ * GAP-CRM-SERVICE-REQUESTS-NEW-04 / GAP-CRM-DEALS-NEW-04: lightweight contact
+ * lookup for the SR/deal EntityPickers. Returns id + display name only (email
+ * and phone are AES-GCM ciphertext at rest and cannot be ILIKE-matched; they
+ * are masked per-role at the query layer anyway), searching over name + company
+ * exactly like the main list, capped small. Active contacts only.
+ */
+export async function lookup(tenantId: string, q: string, limit: number): Promise<ContactView[]> {
+  const conditions: SQL[] = [eq(contacts.tenantId, tenantId), sql`${contacts.status} = 'active'`];
+  const trimmed = q.trim();
+  if (trimmed) {
+    const like = `%${trimmed}%`;
+    conditions.push(or(ilike(contacts.name, like), ilike(contacts.company, like))!);
+  }
+  const rows = await scopedRead((tx) => tx.select().from(contacts)
+    .where(and(...conditions))
+    .orderBy(desc(contacts.updatedAt))
+    .limit(limit));
+  return rows.map(toView);
+}

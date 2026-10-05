@@ -3,14 +3,18 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { DuplicateCheckPanel } from "../../../../_components/crm/DuplicateCheckPanel";
+import { useTranslations } from "next-intl";
 import { useToast } from "@/app/_components/ds/Toast";
-import { Button, PageHeader } from "@/app/_components/ds";
+import { Button, PageHeader, EntityPicker, type EntityOption } from "@/app/_components/ds";
+import { browserFetch } from "@/lib/api/browserClient";
 import {
   duplicateCheck,
   parseFieldError,
   type DuplicateCandidate,
   type ValidatedField,
 } from "@/lib/crm/dataQuality";
+import { LEAD_STATUS_LABELS } from "@/lib/crm/leadQualification";
+import { humanErrorFromFailure } from "@/lib/messages";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
@@ -21,7 +25,45 @@ type FieldErrors = Partial<Record<ValidatedField, string>>;
 /** A row of GET /v1/crm/lead-field-rules — only what this form needs (LM-001). */
 type LeadFieldRule = { fieldName?: string; required?: boolean; enabled?: boolean };
 
+/**
+ * GAP-CRM-CONTACTS-NEW-02: account search for the EntityPicker so a new contact
+ * can be LINKED to an existing account (contact.accountId) — the backend accepts
+ * `accountId` on create (crm-service contacts/validators.ts createContactBody),
+ * and the Accounts screens' Linked-Contacts count / "View contacts" rely on that
+ * link rather than a fragile name match. Mirrors OpportunityForm's adapters.
+ */
+async function searchAccounts(query: string, signal: AbortSignal): Promise<EntityOption[]> {
+  try {
+    const res = await browserFetch("v1/crm/accounts", { signal });
+    if (!res.ok) return [];
+    const body = (await res.json()) as { data?: Array<{ id?: string; name?: string }> };
+    const q = query.trim().toLowerCase();
+    return (body.data ?? [])
+      .filter((a): a is { id: string; name: string } => Boolean(a.id && a.name))
+      .filter((a) => (q ? a.name.toLowerCase().includes(q) : true))
+      .slice(0, 20)
+      .map((a) => ({ id: a.id, label: a.name }));
+  } catch {
+    return [];
+  }
+}
+
+async function resolveAccounts(ids: string[]): Promise<EntityOption[]> {
+  try {
+    const res = await browserFetch("v1/crm/accounts", {});
+    if (!res.ok) return [];
+    const body = (await res.json()) as { data?: Array<{ id?: string; name?: string }> };
+    const want = new Set(ids);
+    return (body.data ?? [])
+      .filter((a): a is { id: string; name: string } => Boolean(a.id && a.name && want.has(a.id)))
+      .map((a) => ({ id: a.id, label: a.name }));
+  } catch {
+    return [];
+  }
+}
+
 export default function NewContactPage() {
+  const t = useTranslations("crmContactNewPage");
   const router = useRouter();
   const { toast } = useToast();
   const [form, setForm] = useState({
@@ -30,6 +72,12 @@ export default function NewContactPage() {
     leadStatus: "new", leadSource: "", marketingConsent: false,
   });
   const [busy, setBusy] = useState(false);
+  const [created, setCreated] = useState(false);
+  // GAP-CRM-CONTACTS-NEW-02: the linked account id + label. When set, the
+  // create payload carries accountId and uses the account name as `company`;
+  // when empty the free-text Organisation input below is the fallback.
+  const [accountId, setAccountId] = useState<string | null>(null);
+  const [accountLabel, setAccountLabel] = useState<string>("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -144,7 +192,10 @@ export default function NewContactPage() {
           name: form.name,
           email: form.email || undefined,
           phone: form.phone || undefined,
-          company: form.company || undefined,
+          // GAP-CRM-CONTACTS-NEW-02: a linked account sets accountId and supplies
+          // the company name from the account; otherwise fall back to free text.
+          company: (accountId ? accountLabel : form.company) || undefined,
+          accountId: accountId || undefined,
           designation: form.designation || undefined,
           city: form.city || undefined,
           gstin: form.gstin || undefined,
@@ -157,22 +208,35 @@ export default function NewContactPage() {
       });
       // Read the body exactly ONCE. A DQ-003 format error is surfaced against its
       // field; anything else (including the LM-001 422 "missing mandatory field(s)"
-      // message) falls through to the page-level error banner.
+      // message) is turned into a clerk-safe, STATUS/CODE-aware banner — never the
+      // raw server text (UX-020 / RouteError policy) — via humanErrorFromFailure.
       const body = (await res.json().catch(() => null)) as { id?: string; code?: string; message?: string } | null;
       if (!res.ok) {
         const fe = parseFieldError({ code: body?.code, message: body?.message });
         if (fe) {
           setFieldErrors({ [fe.field]: fe.message });
         } else {
-          setError("Could not create the contact.");
+          // GAP-CRM-CONTACTS-NEW-01: previously a fixed "Could not create the
+          // contact." for every non-field failure, so a 422 "missing mandatory
+          // field(s)" told the user nothing. Derive the safe message from the
+          // HTTP status + any domain code (a 400/422 says "check the highlighted
+          // fields"; a 5xx/network says "try again"), without leaking body.message.
+          const human = humanErrorFromFailure({ status: res.status, code: body?.code, kind: "save", area: t("contactArea") });
+          setError(`${human.what} ${human.next}`);
         }
         return;
       }
+      // GAP-CRM-CONTACTS-NEW-04: a success WITHOUT an id used to leave the filled
+      // form with the submit button enabled, so a second click created a
+      // duplicate. Lock the form and go to the list when there is no id to open.
+      setCreated(true);
       setMessage("Contact created.");
       toast.success("Contact created successfully.");
       if (body?.id) setTimeout(() => router.push(`/crm/contacts/${body.id}`), 500);
+      else setTimeout(() => router.push("/crm/contacts"), 500);
     } catch {
-      setError("Could not create the contact.");
+      const human = humanErrorFromFailure({ kind: "offline" });
+      setError(`${human.what} ${human.next}`);
     } finally {
       setBusy(false);
     }
@@ -232,7 +296,32 @@ export default function NewContactPage() {
             </div>
             <div>
               <label htmlFor="new-company" style={labelStyle}>{labelFor("company", "Organisation")}</label>
-              <input id="new-company" {...requiredProps("company")} value={form.company} onChange={(e) => setDedupField({ company: e.target.value })} onBlur={() => void runDuplicateCheck()} placeholder="Acme Corp" style={inputStyle} />
+              {/* GAP-CRM-CONTACTS-NEW-02: link to an existing account so the
+                  Accounts screens' Linked-Contacts count / "View contacts" are
+                  driven by accountId, not a fragile name match. */}
+              <EntityPicker
+                aria-label={t("linkAccountAria")}
+                value={accountId}
+                onChange={(v) => {
+                  const id = typeof v === "string" ? v : null;
+                  setAccountId(id);
+                  if (!id) setAccountLabel("");
+                }}
+                search={searchAccounts}
+                resolve={async (ids) => {
+                  const opts = await resolveAccounts(ids);
+                  if (opts[0]) setAccountLabel(opts[0].label);
+                  return opts;
+                }}
+                placeholder={t("searchAccounts")}
+              />
+              {accountId ? (
+                <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>
+                  {t.rich("linkedTo", { name: accountLabel, strong: (chunks) => <strong>{chunks}</strong> })}
+                </p>
+              ) : (
+                <input id="new-company" {...requiredProps("company")} value={form.company} onChange={(e) => setDedupField({ company: e.target.value })} onBlur={() => void runDuplicateCheck()} placeholder={t("typeNewOrg")} style={{ ...inputStyle, marginTop: 6 }} />
+              )}
             </div>
             <div>
               <label htmlFor="new-gstin" style={labelStyle}>GSTIN</label>
@@ -244,8 +333,12 @@ export default function NewContactPage() {
                 placeholder="29ABCDE1234F1Z5"
                 style={inputStyle}
                 aria-invalid={fieldErrors.gstin ? true : undefined}
-                aria-describedby={describedBy("gstin")}
+                aria-describedby={[describedBy("gstin"), "new-gstin-note"].filter(Boolean).join(" ") || undefined}
               />
+              {/* GAP-CRM-CONTACTS-NEW-03: why we collect this + that access is role-scoped. */}
+              <p id="new-gstin-note" style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>
+                {t("gstinNote")}
+              </p>
               {fieldErrors.gstin ? <p id={gstinErrId} role="alert" style={errStyle}>{fieldErrors.gstin}</p> : null}
             </div>
             <div>
@@ -257,8 +350,12 @@ export default function NewContactPage() {
                 placeholder="ABCDE1234F"
                 style={inputStyle}
                 aria-invalid={fieldErrors.pan ? true : undefined}
-                aria-describedby={describedBy("pan")}
+                aria-describedby={[describedBy("pan"), "new-pan-note"].filter(Boolean).join(" ") || undefined}
               />
+              {/* GAP-CRM-CONTACTS-NEW-03: PAN of an individual is personal data under DPDP. */}
+              <p id="new-pan-note" style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>
+                {t("panNote")}
+              </p>
               {fieldErrors.pan ? <p id={panErrId} role="alert" style={errStyle}>{fieldErrors.pan}</p> : null}
             </div>
             <div>
@@ -286,11 +383,15 @@ export default function NewContactPage() {
             <div>
               <label htmlFor="new-leadStatus" style={labelStyle}>Lead status</label>
               <select id="new-leadStatus" value={form.leadStatus} onChange={(e) => setForm({ ...form, leadStatus: e.target.value })} style={inputStyle}>
-                <option value="new">New</option>
-                <option value="contacted">Contacted</option>
-                <option value="qualified">Engaged Stakeholder</option>
-                <option value="unqualified">Inactive Stakeholder</option>
-                <option value="customer">Customer</option>
+                {/* GAP-CRM-CONTACTS-06: one canonical label per status (shared
+                    LEAD_STATUS_LABELS) so the form, the list and the edit form
+                    all name a status identically — no more "Engaged/Inactive
+                    Stakeholder" wording that disagreed with the list. */}
+                <option value="new">{LEAD_STATUS_LABELS.new}</option>
+                <option value="contacted">{LEAD_STATUS_LABELS.contacted}</option>
+                <option value="qualified">{LEAD_STATUS_LABELS.qualified}</option>
+                <option value="unqualified">{LEAD_STATUS_LABELS.unqualified}</option>
+                <option value="customer">{LEAD_STATUS_LABELS.customer}</option>
               </select>
             </div>
             <div>
@@ -313,10 +414,13 @@ export default function NewContactPage() {
 
           <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: 13 }}>
             <input type="checkbox" checked={form.marketingConsent} onChange={(e) => setForm({ ...form, marketingConsent: e.target.checked })} />
-            Marketing consent (GDPR/DPDP)
+            {/* GAP-CRM-CONTACTS-NEW-03: DPDP is the governing law here, not GDPR.
+                Decision (M03): drop the GDPR reference; final legal wording is
+                flagged for DPO sign-off (see report). */}
+            {t("marketingConsent")}
           </label>
-          <Button type="submit" disabled={busy || checking} loading={busy} style={{ marginTop: 16, minHeight: 44 }}>
-            {busy ? "Creating…" : checking ? "Checking…" : ackDuplicates ? "Create anyway" : "Create contact"}
+          <Button type="submit" disabled={busy || checking || created} loading={busy} style={{ marginTop: 16, minHeight: 44 }}>
+            {busy ? "Creating…" : checking ? "Checking…" : created ? t("created") : ackDuplicates ? "Create anyway" : "Create contact"}
           </Button>
         </form>
       </div>

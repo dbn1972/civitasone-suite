@@ -25,6 +25,9 @@ const ruleSchema = z.object({
 
 const putRulesBody = z.object({
   rules: z.array(ruleSchema).min(1).max(20),
+  // GAP-CRM-DEDUP-RULES-02: optional list-level optimistic-concurrency token.
+  // Also accepted via the If-Match header; the header takes precedence.
+  version: z.string().min(1).optional(),
 });
 
 const duplicateCheckBody = z.object({
@@ -42,16 +45,31 @@ export async function dedupRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/crm/dedup-rules", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
-    const rules = await dedupRepo.getRules(ctx.tenantId, ctx.actorId);
-    return reply.send({ data: rules });
+    const { rules, meta } = await dedupRepo.getRulesList(ctx.tenantId, ctx.actorId);
+    // GAP-CRM-DEDUP-RULES-02: surface the list version as an ETag (for If-Match)
+    // and in the body meta, plus who/when last changed it for the editor.
+    void reply.header("ETag", meta.version);
+    return reply.send({ data: rules, version: meta.version, meta });
   });
 
   app.put("/v1/crm/dedup-rules", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = putRulesBody.parse(req.body);
-    const rules = await dedupRepo.upsertRules(ctx.tenantId, body.rules, ctx.actorId, ctx.correlationId);
-    return reply.send({ data: rules });
+    // If-Match header takes precedence over a body version; strip optional
+    // weak-ETag quoting so `"3"` and `3` compare equal.
+    const headerMatch = req.headers["if-match"];
+    const ifMatch = typeof headerMatch === "string" ? headerMatch.replace(/^W\//, "").replace(/^"|"$/g, "") : undefined;
+    const expectedVersion = ifMatch ?? body.version;
+    const { rules, meta } = await dedupRepo.upsertRules(
+      ctx.tenantId,
+      body.rules,
+      ctx.actorId,
+      ctx.correlationId,
+      expectedVersion,
+    );
+    void reply.header("ETag", meta.version);
+    return reply.send({ data: rules, version: meta.version, meta });
   });
 
   /**

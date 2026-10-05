@@ -3,6 +3,10 @@ import { render, screen } from "@testing-library/react";
 
 vi.mock("../../../../_data/loaders", () => ({ getContactById: vi.fn() }));
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+}));
+
 const mockRoles = vi.fn<() => string[]>();
 vi.mock("@/lib/auth/roleGuard", async (orig) => {
   const actual = await orig<typeof import("@/lib/auth/roleGuard")>();
@@ -14,7 +18,11 @@ vi.mock("../../../../_components/crm/DocumentsPanel", () => ({
     <div data-testid="docs" data-can-verify={String(Boolean(props.canVerify))} />
   ),
 }));
-vi.mock("./ContactDetailActions", () => ({ ContactDetailActions: () => <div /> }));
+vi.mock("./ContactDetailActions", () => ({
+  ContactDetailActions: (props: { canDelete?: boolean }) => (
+    <div data-testid="actions" data-can-delete={String(Boolean(props.canDelete))} />
+  ),
+}));
 vi.mock("../../../../_components/crm/QualifyPanel", () => ({ QualifyPanel: () => <div /> }));
 vi.mock("../../../../_components/crm/ScoreHistoryView", () => ({ ScoreHistoryView: () => <div /> }));
 vi.mock("../../../../_components/crm/LeadTransitionControl", () => ({ LeadTransitionControl: () => <div /> }));
@@ -79,5 +87,48 @@ describe("Contact detail PII masking (GAP-CRM-CONTACTS-DETAIL-02)", () => {
     mContact.mockResolvedValue({ data: pii, source: "api" });
     render(await Page({ params: { id: "c-1" } }));
     expect(screen.queryByText("Marketing Consent")).not.toBeInTheDocument();
+  });
+});
+
+describe("Contact detail delete gating (GAP-CRM-CONTACTS-DETAIL-03)", () => {
+  it("canDelete=false for a plain crm_user", async () => {
+    mockRoles.mockReturnValue(["crm_user"]);
+    render(await Page({ params: { id: "c-1" } }));
+    expect(screen.getByTestId("actions").dataset.canDelete).toBe("false");
+  });
+
+  it("canDelete=true for crm_admin", async () => {
+    mockRoles.mockReturnValue(["crm_admin"]);
+    render(await Page({ params: { id: "c-1" } }));
+    expect(screen.getByTestId("actions").dataset.canDelete).toBe("true");
+  });
+});
+
+describe("Contact detail duplicate cards removed (GAP-CRM-CONTACTS-DETAIL-04)", () => {
+  it("does not render a page-level 'Related Deals' or 'Activity Timeline' card", async () => {
+    mockRoles.mockReturnValue(["crm_admin"]);
+    mContact.mockResolvedValue({
+      data: { ...(contact as object), deals: [{ id: "d1", dealName: "Deal A", stage: "won", amount: 100 }], activityTimeline: [{ id: "a1", type: "call", subject: "Rang", status: "completed" }] } as never,
+      source: "api",
+    });
+    render(await Page({ params: { id: "c-1" } }));
+    expect(screen.queryByRole("heading", { name: "Related Deals" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Activity Timeline" })).not.toBeInTheDocument();
+  });
+});
+
+describe("Contact detail failure vs not-found (GAP-CRM-CONTACTS-DETAIL-05)", () => {
+  it("a 500 shows a retry/error state, not 'does not exist'", async () => {
+    mockRoles.mockReturnValue(["crm_user"]);
+    mContact.mockResolvedValue({ data: null, source: "error", status: 500 } as never);
+    render(await Page({ params: { id: "c-1" } }));
+    expect(screen.queryByText(/does not exist or has been removed/)).not.toBeInTheDocument();
+  });
+
+  it("a 404 shows the not-found copy", async () => {
+    mockRoles.mockReturnValue(["crm_user"]);
+    mContact.mockResolvedValue({ data: null, source: "error", status: 404 } as never);
+    render(await Page({ params: { id: "c-1" } }));
+    expect(screen.getByText(/does not exist or has been removed/)).toBeInTheDocument();
   });
 });

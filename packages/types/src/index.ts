@@ -335,6 +335,17 @@ export interface CRMCampaignRoi extends CRMCampaignRoiFigures {
 }
 
 /**
+ * The campaign ROI summary response: the page-limited rows plus the service's
+ * full distinct-campaign count (GAP-CRM-CAMPAIGNS-03). `total` lets the UI warn
+ * that the portfolio figures it folds are only the first page for a large tenant.
+ */
+export interface CRMCampaignRoiSummary {
+  rows: CRMCampaignRoiSummaryRow[];
+  /** Total distinct campaigns server-side; may exceed `rows.length`. */
+  total: number;
+}
+
+/**
  * One entry in a golden profile's append-only provenance trail (P1-14).
  * `attributes` is optional: a trail written before attribute-level provenance
  * existed names no keys, and the Customer 360 view reads those as unattributed
@@ -1252,7 +1263,15 @@ export type DealSummary = {
   contactId?: string;
   contactName?: string;
   stage: "prospecting" | "qualification" | "proposal" | "negotiation" | "closed_won" | "closed_lost";
-  amount: number;
+  /**
+   * Deal value in MINOR units (paise) as an exact digit string — never a JS
+   * number. GAP-CRM-DEALS-04: a number invites float arithmetic and loses
+   * precision above 2^53 paise, contrary to CLAUDE.md's "money is bigint minor
+   * units" rule. Callers sum with BigInt and render via formatMoney (which
+   * accepts a string). "0" means a genuine zero; the mapper never fabricates a
+   * value for missing data.
+   */
+  amount: string;
   owner: string;
   closeDate?: string;
   probability: number;
@@ -1265,6 +1284,9 @@ export type ContactDetail = {
   id: string;
   name: string;
   organization?: string;
+  /** GAP-CRM-CONTACTS-NEW-02: linked account id (if any) so the edit form can
+   *  seed an account picker and preserve the link on save. */
+  accountId?: string | null;
   email?: string;
   phone?: string;
   designation?: string;

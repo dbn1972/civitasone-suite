@@ -11,7 +11,7 @@
 import { useEffect, useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { ConfirmDialog, EmptyState, Button } from "../ds";
+import { ConfirmDialog, EmptyState, Button, StatusPill } from "../ds";
 import { rupeesToMinorString, percentToBps } from "@/lib/money";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { QuotationApprovalPanel } from "./QuotationApprovalPanel";
@@ -31,6 +31,7 @@ import {
   lineTaxMinor,
   quotationTotalMinor,
   isProductSelectable,
+  templateLabel,
   ApprovalRequiredError,
   type Quotation,
   type QuotationLine,
@@ -126,6 +127,7 @@ export function QuotationBuilder({ canApprove = false, currentUserId = null }: Q
   const [versionSource, setVersionSource] = useState<QpSource | "idle">("idle");
   const [confirmConvert, setConfirmConvert] = useState(false);
   const [rejecting, setRejecting] = useState(false);
+  const [accepting, setAccepting] = useState(false);
 
   // Price-book resolve (seeds unit prices).
   const [resolvedBook, setResolvedBook] = useState<PriceBook | null>(null);
@@ -222,6 +224,10 @@ export function QuotationBuilder({ canApprove = false, currentUserId = null }: Q
     .map(toLine)
     .filter((l): l is QuotationLine => l !== null);
   const grandTotal = quotationTotalMinor(draftLines);
+  // GAP-CRM-QUOTATIONS-06: show subtotal (net) and total tax, not just the grand
+  // total. BigInt throughout — no float touches a money value.
+  const subtotalMinor = draftLines.reduce((sum, l) => sum + BigInt(lineNetMinor(l)), 0n).toString();
+  const totalTaxMinor = draftLines.reduce((sum, l) => sum + BigInt(lineTaxMinor(l)), 0n).toString();
 
   function linesValid(): boolean {
     if (lines.length === 0) return false;
@@ -259,10 +265,25 @@ export function QuotationBuilder({ canApprove = false, currentUserId = null }: Q
     };
     setBusy(true);
     try {
-      if (selected?.id) await updateQuotation(selected.id, payload);
-      else await createQuotation(payload);
-      setMessage("Quotation saved.");
-      await load();
+      if (selected?.id) {
+        const { id: newId } = await updateQuotation(selected.id, payload);
+        // Re-open the freshly-created version so a second save supersedes the
+        // new version, not the stale one (GAP-CRM-QUOTATIONS-03).
+        const { data } = await getQuotations();
+        setQuotations(data);
+        const reopened = newId ? data.find((q) => q.id === newId) : undefined;
+        if (reopened) {
+          openQuote(reopened);
+          setMessage(t("savedAsVersion", { version: reopened.version }));
+        } else {
+          setMessage(t("savedAsNewVersion"));
+          await load();
+        }
+      } else {
+        await createQuotation(payload);
+        setMessage(t("quotationCreated"));
+        await load();
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save the quotation.");
     } finally {
@@ -353,14 +374,14 @@ export function QuotationBuilder({ canApprove = false, currentUserId = null }: Q
               {quotations.map((q) => (
                 <tr key={q.id}>
                   <td>{q.quoteRef || "—"}</td>
-                  <td>{q.template || "standard"}</td>
+                  <td>{templateLabel(q.template)}</td>
                   <td className="num">v{q.version}</td>
                   <td>{q.accountId || "—"}</td>
                   <td>{q.opportunityId || "—"}</td>
                   <td>{q.createdAt ? formatIndianDate(q.createdAt) : "—"}</td>
                   <td className="num">{q.lines.length}</td>
                   <td className="num">{formatMoney(quotationTotalMinor(q.lines))}</td>
-                  <td>{q.status}</td>
+                  <td><StatusPill status={q.status} /></td>
                   <td>
                     <Button type="button" variant="ghost" size="sm" onClick={() => openQuote(q)}>
                       Open
@@ -381,7 +402,15 @@ export function QuotationBuilder({ canApprove = false, currentUserId = null }: Q
       {editing ? (
         <div className="card">
           <div className="card-h">
-            <h3>{selected?.id ? `Quotation v${selected.version} (${selected.status})` : "New quotation"}</h3>
+            <h3 style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              {selected?.id ? (
+                <>
+                  {t("quotationVersion", { version: selected.version })} <StatusPill status={selected.status} />
+                </>
+              ) : (
+                t("newQuotation")
+              )}
+            </h3>
           </div>
           {message ? (
             <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", padding: "0 12px" }}>
@@ -397,13 +426,16 @@ export function QuotationBuilder({ canApprove = false, currentUserId = null }: Q
           <div style={{ display: "flex", gap: 12, padding: 12, flexWrap: "wrap", alignItems: "end" }}>
             <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
               Template
-              <select aria-label="Template" value={template} onChange={(e) => setTemplate(e.target.value)} style={inputStyle}>
+              <select aria-label={t("template")} value={template} onChange={(e) => setTemplate(e.target.value)} style={inputStyle} disabled={!!selected?.id}>
                 {TEMPLATES.map((t) => (
                   <option key={t} value={t}>
-                    {t}
+                    {templateLabel(t)}
                   </option>
                 ))}
               </select>
+              {selected?.id ? (
+                <span style={{ fontSize: 11, color: "var(--muted)" }}>{t("templateFixed")}</span>
+              ) : null}
             </label>
             <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
               Seed prices for segment
@@ -523,10 +555,20 @@ export function QuotationBuilder({ canApprove = false, currentUserId = null }: Q
               {lines.length > 0 ? (
                 <tfoot>
                   <tr>
+                    <td colSpan={6} style={{ textAlign: "end" }}>{t("subtotal")}</td>
+                    <td className="num" aria-label={t("subtotal")}>{formatMoney(subtotalMinor)}</td>
+                    <td />
+                  </tr>
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: "end" }}>{t("totalTax")}</td>
+                    <td className="num" aria-label={t("totalTax")}>{formatMoney(totalTaxMinor)}</td>
+                    <td />
+                  </tr>
+                  <tr>
                     <td colSpan={6} style={{ textAlign: "end", fontWeight: 600 }}>
                       Grand total
                     </td>
-                    <td className="num" style={{ fontWeight: 700 }}>
+                    <td className="num" style={{ fontWeight: 700 }} aria-label={t("grandTotal")}>
                       {formatMoney(grandTotal)}
                     </td>
                     <td />
@@ -542,26 +584,39 @@ export function QuotationBuilder({ canApprove = false, currentUserId = null }: Q
             </Button>
             <span style={{ flex: 1 }} />
             <Button type="button" onClick={() => void save()} disabled={busy}>
-              {busy ? "Saving…" : selected?.id ? "Save quotation" : "Create quotation"}
+              {busy ? t("saving") : selected?.id ? t("saveAsNewVersion") : t("createQuotation")}
             </Button>
           </div>
 
           {selected?.id ? (
             <div style={{ display: "flex", gap: 8, padding: "0 12px 12px", flexWrap: "wrap" }}>
-              <Button type="button" size="sm" onClick={() => void doSend()} disabled={busy || blocking} title={blocking ? "An approval is outstanding" : undefined}>
-                Send / Finalize
-              </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={() => void runAction(() => acceptQuotation(selected.id!), "Quotation accepted.")} disabled={busy}>
-                Accept
-              </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={() => setRejecting(true)} disabled={busy}>
-                Reject
-              </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={() => void runAction(() => newQuotationVersion(selected.id!), "New version created.")} disabled={busy}>
-                New version
-              </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmConvert(true)} disabled={busy}>
-                Convert to order
+              {/* GAP-CRM-QUOTATIONS-04: actions follow the server state machine
+                  (quotation-domain.ts): Send only from draft; Accept/Reject only
+                  from sent; Convert only from accepted. Others are hidden so a
+                  rejected/accepted quote no longer offers Send/Accept. */}
+              {selected.status === "draft" ? (
+                <Button type="button" size="sm" onClick={() => void doSend()} disabled={busy || blocking} title={blocking ? t("approvalOutstanding") : undefined}>
+                  {t("sendFinalize")}
+                </Button>
+              ) : null}
+              {selected.status === "sent" ? (
+                <>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setAccepting(true)} disabled={busy}>
+                    {t("accept")}
+                  </Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setRejecting(true)} disabled={busy}>
+                    {t("reject")}
+                  </Button>
+                </>
+              ) : null}
+              {selected.status === "accepted" ? (
+                <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmConvert(true)} disabled={busy}>
+                  {t("convertToOrder")}
+                </Button>
+              ) : null}
+              {/* Revising is always available (the backend mints a new version). */}
+              <Button type="button" variant="ghost" size="sm" onClick={() => void runAction(async () => { await newQuotationVersion(selected.id!); }, t("newVersionCreated"))} disabled={busy} title={t("cloneTitle")}>
+                {t("newVersionClone")}
               </Button>
             </div>
           ) : null}
@@ -583,9 +638,9 @@ export function QuotationBuilder({ canApprove = false, currentUserId = null }: Q
               ) : (
                 <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
                   {versions.map((v) => (
-                    <li key={v.version} style={{ fontSize: 13, display: "flex", gap: 8 }}>
+                    <li key={v.version} style={{ fontSize: 13, display: "flex", gap: 8, alignItems: "center" }}>
                       <strong>v{v.version}</strong>
-                      <span>{v.status}</span>
+                      <StatusPill status={v.status} />
                       <span>{formatMoney(v.totalMinor)}</span>
                       {v.createdAt ? <span style={{ color: "var(--muted)" }}>{formatIndianDate(v.createdAt)}</span> : null}
                     </li>
@@ -606,6 +661,25 @@ export function QuotationBuilder({ canApprove = false, currentUserId = null }: Q
           currentUserId={currentUserId}
         />
       ) : null}
+
+      <ConfirmDialog
+        open={accepting}
+        // GAP-CRM-QUOTATIONS-04: recording a customer acceptance is a commercial
+        // decision, so it is confirmed. An optional PO/email reference can be
+        // noted; the backend accept endpoint takes no body, so the note is for
+        // the confirming user's own check only (recorded in the fixer report).
+        optionalReason
+        reasonLabel={t("acceptanceReferenceLabel")}
+        title={t("recordAcceptanceTitle")}
+        description={t("recordAcceptanceDescription")}
+        confirmLabel={t("recordAcceptance")}
+        busy={busy}
+        onCancel={() => setAccepting(false)}
+        onConfirm={() => {
+          setAccepting(false);
+          if (selected?.id) void runAction(() => acceptQuotation(selected.id!), t("quotationAccepted"));
+        }}
+      />
 
       <ConfirmDialog
         open={confirmConvert}

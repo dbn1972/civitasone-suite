@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { formatMoneyCompact, formatMoney, formatIndianDate, formatIndianDateTime, todayIST, addDaysIST, minorToRupeesOrNull, formatClockTime12h, percentOfMinor, humanizeStatus, formatEntityRef, utilisationPercent, isOverUtilised } from "./formatters";
+import { formatMoneyCompact, formatMoney, formatIndianDate, formatIndianDateTime, todayIST, istDatePart, addDaysIST, minorToRupeesOrNull, formatClockTime12h, percentOfMinor, humanizeStatus, formatEntityRef, utilisationPercent, isOverUtilised } from "./formatters";
 
 // ---------------------------------------------------------------------------
 // formatClockTime12h -- GAP-HR-ATTENDANCE-CONFIG-02
@@ -471,5 +471,36 @@ describe("utilisationPercent / isOverUtilised (exact over-utilisation)", () => {
     expect(isOverUtilised("999", "1000")).toBe(false);
     expect(isOverUtilised("5", "0")).toBe(false);
     expect(isOverUtilised("9007199254740994", "9007199254740993")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// istDatePart + todayIST at the IST day boundary -- GAP-CRM-ACTIVITIES-03
+// ---------------------------------------------------------------------------
+describe("istDatePart (GAP-CRM-ACTIVITIES-03)", () => {
+  it("returns a bare calendar date unchanged", () => {
+    expect(istDatePart("2026-03-11")).toBe("2026-03-11");
+  });
+
+  it("resolves a UTC instant to its IST calendar day", () => {
+    // 2026-03-10T19:00:00Z == 2026-03-11 00:30 IST.
+    expect(istDatePart("2026-03-10T19:00:00.000Z")).toBe("2026-03-11");
+  });
+
+  it("returns null for empty/invalid input", () => {
+    expect(istDatePart(null)).toBeNull();
+    expect(istDatePart(undefined)).toBeNull();
+    expect(istDatePart("not a date")).toBeNull();
+  });
+});
+
+describe("todayIST at the IST day boundary (GAP-CRM-ACTIVITIES-03)", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("returns the IST day, not the UTC day, just after IST midnight", () => {
+    vi.useFakeTimers();
+    // 00:30 IST on 11 Mar 2026 is still 10 Mar in UTC.
+    vi.setSystemTime(new Date("2026-03-10T19:00:00.000Z"));
+    expect(todayIST()).toBe("2026-03-11");
   });
 });

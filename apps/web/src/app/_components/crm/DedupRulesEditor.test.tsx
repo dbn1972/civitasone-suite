@@ -1,9 +1,20 @@
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { DedupRulesEditor } from "./DedupRulesEditor";
 import * as dq from "@/lib/crm/dataQuality";
+
+import type { ReactElement } from "react";
+
+function render(ui: ReactElement) {
+  return rtlRender(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
+
 
 vi.mock("@/lib/crm/dataQuality", async (orig) => {
   const actual = await orig<typeof import("@/lib/crm/dataQuality")>();
@@ -53,7 +64,7 @@ describe("DedupRulesEditor (GAP-CRM-DEDUP-RULES-01)", () => {
     expect(dq.saveDedupRules).not.toHaveBeenCalled();
     const dialog = await screen.findByRole("alertdialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /clear all rules/i }));
-    await waitFor(() => expect(dq.saveDedupRules).toHaveBeenCalledWith([]));
+    await waitFor(() => expect(dq.saveDedupRules).toHaveBeenCalledWith([], undefined));
   });
 
   it("saves a non-empty rule set directly without a confirm dialog", async () => {
@@ -62,8 +73,97 @@ describe("DedupRulesEditor (GAP-CRM-DEDUP-RULES-01)", () => {
     render(<NextIntlClientProvider locale="en" messages={enMessages}><DedupRulesEditor /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByDisplayValue("50")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
-    await waitFor(() => expect(dq.saveDedupRules).toHaveBeenCalledWith([rule]));
+    await waitFor(() => expect(dq.saveDedupRules).toHaveBeenCalledWith([rule], undefined));
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
+
+  it("GAP-CRM-DEDUP-RULES-02: sends the version as If-Match and shows a reload message on 409", async () => {
+    vi.mocked(dq.getDedupRules).mockResolvedValue({ data: [rule], source: "api", version: "v7" });
+    vi.mocked(dq.saveDedupRules).mockRejectedValue(new dq.DedupRulesConflictError());
+    render(<DedupRulesEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("50")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    // the stored version is sent through
+    await waitFor(() => expect(dq.saveDedupRules).toHaveBeenCalledWith([rule], "v7"));
+    // a specific "changed by someone else, reload" message is shown
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/changed by someone else/i));
+  });
+
+  it("GAP-CRM-DEDUP-RULES-02: shows an unsaved-changes warning after an edit", async () => {
+    vi.mocked(dq.getDedupRules).mockResolvedValue({ data: [rule], source: "api" });
+    render(<DedupRulesEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("50")).toBeInTheDocument());
+
+    expect(screen.queryByText(/unsaved changes/i)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByDisplayValue("50"), { target: { value: "60" } });
+    expect(screen.getByText(/unsaved changes/i)).toBeInTheDocument();
+  });
+
+  // GAP-CRM-DEDUP-RULES-02 (wave2): "Last changed by/at" + version advances on save.
+  it("GAP-CRM-DEDUP-RULES-02: shows Last changed by/at and keeps the version current after save", async () => {
+    vi.mocked(dq.getDedupRules).mockResolvedValue({
+      data: [rule],
+      source: "api",
+      version: "3",
+      updatedBy: "admin-9",
+      updatedAt: "2026-10-03T08:00:00.000Z",
+    });
+    vi.mocked(dq.saveDedupRules).mockResolvedValue("4");
+    render(<DedupRulesEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("50")).toBeInTheDocument());
+    expect(screen.getByText(/last changed/i)).toBeInTheDocument();
+    expect(screen.getByText(/admin-9/)).toBeInTheDocument();
+
+    // First save sends the loaded version "3".
+    fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    await waitFor(() => expect(dq.saveDedupRules).toHaveBeenCalledWith([rule], "3"));
+    await screen.findByText(/matching rules saved/i);
+    // Edit again + save: the version advanced to "4", so the second save sends "4".
+    fireEvent.change(screen.getByDisplayValue("90"), { target: { value: "80" } });
+    fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    await waitFor(() => expect(vi.mocked(dq.saveDedupRules).mock.calls.at(-1)?.[1]).toBe("4"));
+  });
+
+  it("GAP-CRM-DEDUP-RULES-03: blocks saving when two rules share a field", async () => {
+    const dupRules: dq.DedupRule[] = [
+      { field: "email", matchType: "exact", weight: 50, threshold: 90, enabled: true },
+      { field: "email", matchType: "fuzzy", weight: 40, threshold: 80, enabled: true },
+    ];
+    vi.mocked(dq.getDedupRules).mockResolvedValue({ data: dupRules, source: "api" });
+    render(<DedupRulesEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("50")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    expect(dq.saveDedupRules).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent(/more than one rule/i);
+  });
+
+  it("GAP-CRM-DEDUP-RULES-03: a newly added rule defaults to a meaningful weight (not 1)", async () => {
+    vi.mocked(dq.getDedupRules).mockResolvedValue({ data: [rule], source: "api" });
+    render(<DedupRulesEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("50")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /add rule/i }));
+    // two weight inputs now show 50 (existing + new default), none shows 1
+    expect(screen.getAllByDisplayValue("50").length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByDisplayValue("1")).not.toBeInTheDocument();
+  });
+
+  it("GAP-CRM-DEDUP-RULES-04: explains weight/threshold and totals enabled weights", async () => {
+    const rules: dq.DedupRule[] = [
+      { field: "email", matchType: "exact", weight: 50, threshold: 90, enabled: true },
+      { field: "phone", matchType: "exact", weight: 30, threshold: 85, enabled: true },
+      { field: "name", matchType: "fuzzy", weight: 20, threshold: 70, enabled: false },
+    ];
+    vi.mocked(dq.getDedupRules).mockResolvedValue({ data: rules, source: "api" });
+    render(<DedupRulesEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("50")).toBeInTheDocument());
+
+    // help tooltips present on the headers
+    expect(screen.getAllByRole("button", { name: /help|explain|weight|threshold/i }).length).toBeGreaterThanOrEqual(2);
+    // total of ENABLED weights only (50 + 30 = 80, the disabled 20 excluded)
+    expect(screen.getByText("80")).toBeInTheDocument();
   });
 });
 

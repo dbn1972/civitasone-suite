@@ -67,7 +67,7 @@ export function OwnerPicker({ value, onChange, disabled, id, placeholder, ...res
       }}
       search={search}
       resolve={resolve}
-      {...(value ? { initialOptions: [{ id: value.id, label: value.name }] } : {})}
+      {...(value && value.name !== value.id ? { initialOptions: [{ id: value.id, label: value.name }] } : {})}
       {...(disabled !== undefined ? { disabled } : {})}
       {...(id !== undefined ? { id } : {})}
       placeholder={placeholder ?? t("searchPlaceholder")}

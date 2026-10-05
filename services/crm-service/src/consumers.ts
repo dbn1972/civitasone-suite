@@ -32,6 +32,9 @@ import { registerTeamConsumers } from "./modules/teams/consumer.js";
 import { registerResidualF3Consumers } from "./modules/residual-f3/consumer.js";
 import { registerOnboardingConsumers } from "./modules/onboarding/consumer.js";
 import { registerSentimentConsumers } from "./modules/sentiment/consumer.js";
+import { registerServiceTypeConsumers } from "./modules/service-requests/types-routes.js";
+import { registerGrievanceCategoryConsumers } from "./modules/grievances/categories-routes.js";
+import { registerCitizenFeedbackConsumers } from "./modules/sentiment/feedback-consumer.js";
 import { registerAssignmentConsumers } from "./modules/assignment/consumer.js";
 import { registerCommunicationConsumers } from "./modules/communications/consumer.js";
 import { registerSendConsumers } from "./modules/communications/send-consumer.js";
@@ -77,6 +80,9 @@ export function registerAllConsumers(queue: Queue): void {
   registerResidualF3Consumers(queue);
   registerOnboardingConsumers(queue);
   registerSentimentConsumers(queue);
+  registerCitizenFeedbackConsumers(queue);
+  registerServiceTypeConsumers(queue);
+  registerGrievanceCategoryConsumers(queue);
   registerAssignmentConsumers(queue);
   // ── ACM: Activity/Follow-up + Account/Contact management ──
   registerCommunicationConsumers(queue);

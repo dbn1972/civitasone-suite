@@ -12,9 +12,18 @@ import { toHumanError } from "@/lib/messages";
  * building block that hook is built on -- never the backend's own
  * message/error text or the raw HTTP status. See
  * docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-003/UX-016.
+ *
+ * GAP-CRM-GRIEVANCES-DETAIL-03: the message is now chosen from the HTTP status
+ * so a permission refusal (403) and a business-rule conflict (409, e.g.
+ * "already disposed") no longer read as the same transient "couldn't save"
+ * error. The status is read ONLY to pick a catalogued kind — it is never echoed
+ * to the clerk (UX-020), and the backend's own text is never shown. A 412
+ * version-conflict stays its own dedicated path (grievanceConflictError) and is
+ * handled before this function is reached.
  */
-function grievanceActionError(): string {
-  const human = toHumanError("save", { area: "grievance" });
+function grievanceActionError(status?: number): string {
+  const kind = status === 403 ? "forbidden" : status === 409 ? "conflict" : "save";
+  const human = toHumanError(kind, { area: "grievance" });
   return `${human.what} ${human.next}`;
 }
 
@@ -37,7 +46,7 @@ function grievanceActionError(): string {
  * The legacy /escalate alias remains on the backend for backward compatibility.
  * The UI uses /first-appeal to match CPGRAMS portal terminology.
  */
-export function GrievanceActions({ id, status, version }: { id: string; status: string; version?: number }) {
+export function GrievanceActions({ id, status, version, canClose = false }: { id: string; status: string; version?: number; canClose?: boolean }) {
   const t = useTranslations("crmGrievanceActions");
   const router = useRouter();
 
@@ -66,7 +75,12 @@ export function GrievanceActions({ id, status, version }: { id: string; status: 
       throw new Error(t("conflict"));
     }
     if (!res.ok) {
-      throw new Error(grievanceActionError());
+      // GAP-CRM-GRIEVANCES-DETAIL-03: a 409 means the grievance moved under us
+      // (e.g. already disposed), so refresh the page to show its real state;
+      // a 403/5xx leaves the page as-is. The status only picks the catalogued
+      // message — it is never shown to the clerk.
+      if (res.status === 409) router.refresh();
+      throw new Error(grievanceActionError(res.status));
     }
     router.refresh();
   }
@@ -74,7 +88,7 @@ export function GrievanceActions({ id, status, version }: { id: string; status: 
   if (terminal) {
     return (
       <span style={{ fontSize: 13, color: "var(--ink2)" }}>
-        This grievance is disposed — no further action available.
+        {t("disposedNote")}
       </span>
     );
   }
@@ -83,43 +97,50 @@ export function GrievanceActions({ id, status, version }: { id: string; status: 
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
       {/* Forward to department — CPGRAMS portal: forward to competent authority */}
       <ActionButton
-        label="Forward"
-        confirmTitle="Forward this grievance?"
-        confirmDescription="Enter the department or office to which this grievance is being forwarded."
+        label={t("forward")}
+        confirmTitle={t("forwardTitle")}
+        confirmDescription={t("forwardDescription")}
         requireReason
-        reasonLabel="Department / Office"
+        reasonLabel={t("forwardReasonLabel")}
         onConfirm={(dept) => patch("forward", { forwardedTo: dept })}
       />
 
       {/* First Appeal — citizen-initiated; bumps priority to urgent */}
       <ActionButton
-        label="First Appeal"
-        confirmTitle="File a first appeal?"
-        confirmDescription="Record the citizen reason for appeal. The grievance is escalated to urgent priority."
+        label={t("firstAppeal")}
+        confirmTitle={t("firstAppealTitle")}
+        confirmDescription={t("firstAppealDescription")}
         requireReason
-        reasonLabel="Reason for appeal"
+        reasonLabel={t("firstAppealReasonLabel")}
         onConfirm={(reason) => patch("first-appeal", { ...(reason ? { appealReason: reason } : {}) })}
       />
 
       {!disposed && (
         <ActionButton
-          label="Resolve"
+          label={t("resolve")}
           className="primary"
-          confirmTitle="Resolve this grievance?"
-          confirmDescription="Record how the grievance was resolved. Status moves to DISPOSED in the CPGRAMS portal."
+          confirmTitle={t("resolveTitle")}
+          confirmDescription={t("resolveDescription")}
           requireReason
-          reasonLabel="Resolution"
+          reasonLabel={t("resolveReasonLabel")}
           onConfirm={(reason) => patch("resolve", { resolution: reason })}
         />
       )}
 
-      <ActionButton
-        label="Close"
-        danger
-        confirmTitle="Close this grievance?"
-        confirmDescription="Administrative closure — grievance is marked DISPOSED. Requires administrator rights."
-        onConfirm={() => patch("close")}
-      />
+      {/* GAP-CRM-GRIEVANCES-DETAIL-02: Close is an administrator-only action
+          (crm-service 403s a plain crm_user). Only offer it when the server
+          page computed canClose from the session roles — a non-admin used to
+          see Close, confirm the dialog, then get the generic "couldn't save"
+          message. The server remains the real gate. */}
+      {canClose && (
+        <ActionButton
+          label={t("close")}
+          danger
+          confirmTitle={t("closeTitle")}
+          confirmDescription={t("closeDescription")}
+          onConfirm={() => patch("close")}
+        />
+      )}
     </div>
   );
 }

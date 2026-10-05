@@ -27,18 +27,38 @@ import {
 
 interface Row extends TaskEscalationRule {
   key: string;
+  /** Display unit for the threshold input (GAP-CRM-TASK-ESCALATION-05). */
+  unit: Unit;
 }
 let SEQ = 0;
 function toRow(r: TaskEscalationRule): Row {
-  return { ...r, key: r.id ?? `new-${SEQ++}` };
+  return { ...r, key: r.id ?? `new-${SEQ++}`, unit: naturalUnit(r.thresholdMinutes) };
 }
 
-function sanitizeInt(raw: string): number {
-  const n = Number(raw);
-  return Number.isInteger(n) && n > 0 ? n : Number.NaN;
-}
 function rowValid(r: Row): boolean {
   return Number.isInteger(r.thresholdMinutes) && r.thresholdMinutes > 0 && (r.managerRole.trim().length > 0 || r.managerId.trim().length > 0);
+}
+
+/** Threshold units offered in the editor (GAP-CRM-TASK-ESCALATION-05). */
+const UNITS = ["minutes", "hours", "days"] as const;
+type Unit = (typeof UNITS)[number];
+const UNIT_KEYS = { minutes: "unitMinutes", hours: "unitHours", days: "unitDays" } as const;
+const UNIT_FACTOR: Record<Unit, number> = { minutes: 1, hours: 60, days: 1440 };
+/** 1 year in minutes — an upper bound so a typo can't set an absurd threshold. */
+const MAX_THRESHOLD_MINUTES = 525600;
+
+/** Pick the most natural unit for a stored minute count (exact day > exact hour > minutes). */
+function naturalUnit(minutes: number): Unit {
+  if (Number.isInteger(minutes) && minutes > 0 && minutes % 1440 === 0) return "days";
+  if (Number.isInteger(minutes) && minutes > 0 && minutes % 60 === 0) return "hours";
+  return "minutes";
+}
+/** Human echo of a minute count, e.g. "= 1 day", "= 2 hours". */
+function echoThreshold(minutes: number, t: ReturnType<typeof useTranslations>): string {
+  if (!Number.isInteger(minutes) || minutes <= 0) return "";
+  if (minutes % 1440 === 0) return t("echoDays", { count: minutes / 1440 });
+  if (minutes % 60 === 0) return t("echoHours", { count: minutes / 60 });
+  return t("echoMinutes", { count: minutes });
 }
 
 const inputStyle = { padding: 6, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)", width: "100%" } as const;
@@ -114,6 +134,22 @@ export function TaskEscalationEditor() {
       setError("Each rule needs a positive threshold in minutes and a manager role or user.");
       return;
     }
+    if (row.thresholdMinutes > MAX_THRESHOLD_MINUTES) {
+      setError(t("thresholdTooLarge", { max: MAX_THRESHOLD_MINUTES }));
+      return;
+    }
+    // GAP-CRM-TASK-ESCALATION-05: block two enabled rules that share the same
+    // threshold AND manager — their behaviour would be ambiguous/duplicated.
+    const mgr = (r: Row) => `${r.managerRole.trim()}|${r.managerId.trim()}`;
+    const clash =
+      row.enabled &&
+      rows.some(
+        (r) => r.key !== row.key && r.enabled && r.thresholdMinutes === row.thresholdMinutes && mgr(r) === mgr(row),
+      );
+    if (clash) {
+      setError(t("duplicateThreshold"));
+      return;
+    }
     const rule: TaskEscalationRule = {
       ...(row.id ? { id: row.id } : {}),
       thresholdMinutes: row.thresholdMinutes,
@@ -170,24 +206,54 @@ export function TaskEscalationEditor() {
         {rows.length === 0 ? (
           <EmptyState icon="⏰" title="No task-escalation rules yet" message="Add a rule so overdue tasks reach a manager." />
         ) : (
-          rows.map((row, i) => {
+          // GAP-CRM-TASK-ESCALATION-05: show rules in ascending threshold order
+          // so the escalation ladder reads top-to-bottom. Each rule fires
+          // independently (backend does not cascade), stated in the help text.
+          rows
+            .slice()
+            .sort((a, b) => (a.thresholdMinutes || 0) - (b.thresholdMinutes || 0))
+            .map((row, i) => {
             const summary = managerSummary(row);
             return (
             <fieldset key={row.key} style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 12, display: "grid", gap: 10, margin: 0 }}>
               <legend style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)", padding: "0 6px" }}>Rule {i + 1}</legend>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
                 <div>
-                  <label htmlFor={`${row.key}-th`} style={labelStyle}>Overdue by (minutes)</label>
-                  <input
-                    id={`${row.key}-th`}
-                    aria-label={`Threshold minutes for rule ${i + 1}`}
-                    type="number"
-                    min={1}
-                    value={Number.isNaN(row.thresholdMinutes) ? "" : row.thresholdMinutes}
-                    onChange={(e) => update(row.key, { thresholdMinutes: sanitizeInt(e.target.value) })}
-                    aria-invalid={rowValid(row) ? undefined : true}
-                    style={inputStyle}
-                  />
+                  {/* GAP-CRM-TASK-ESCALATION-05: enter the threshold in a chosen
+                      unit (minutes/hours/days); it converts to thresholdMinutes
+                      and echoes the stored value so there is no hidden unit. */}
+                  <label htmlFor={`${row.key}-th`} style={labelStyle}>{t("overdueBy")}</label>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <input
+                      id={`${row.key}-th`}
+                      aria-label={t("thresholdValueAria", { n: i + 1 })}
+                      type="number"
+                      min={1}
+                      value={
+                        Number.isNaN(row.thresholdMinutes) || !Number.isFinite(row.thresholdMinutes)
+                          ? ""
+                          : row.thresholdMinutes / UNIT_FACTOR[row.unit]
+                      }
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        const mins = Number.isFinite(v) && v > 0 ? Math.round(v * UNIT_FACTOR[row.unit]) : Number.NaN;
+                        update(row.key, { thresholdMinutes: mins });
+                      }}
+                      aria-invalid={rowValid(row) ? undefined : true}
+                      style={{ ...inputStyle, flex: 1 }}
+                    />
+                    <select
+                      aria-label={t("thresholdUnitAria", { n: i + 1 })}
+                      value={row.unit}
+                      onChange={(e) => update(row.key, { unit: e.target.value as Unit })}
+                      style={{ ...inputStyle, width: 110 }}
+                    >
+                      {UNITS.map((u) => <option key={u} value={u}>{t(UNIT_KEYS[u])}</option>)}
+                    </select>
+                  </div>
+                  {echoThreshold(row.thresholdMinutes, t) ? (
+                    <p style={{ fontSize: 11, color: "var(--muted)", margin: "4px 0 0" }}>{echoThreshold(row.thresholdMinutes, t)}</p>
+                  ) : null}
                 </div>
                 <div>
                   {/* GAP-CRM-TASK-ESCALATION-01: a SELECT fed by the tenant's
@@ -269,6 +335,11 @@ export function TaskEscalationEditor() {
         <div>
           <Button type="button" onClick={addRule} style={{ minHeight: 44 }}>+ Add task-escalation rule</Button>
         </div>
+        {rows.length > 0 ? (
+          <p style={{ fontSize: 12, color: "var(--muted)", margin: 0 }}>
+            {t("rulesListedHelp")}
+          </p>
+        ) : null}
         {message ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", margin: 0 }}>{message}</p> : null}
         {error ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", margin: 0 }}>{error}</p> : null}
       </div>

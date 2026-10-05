@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { requireAnyRole } from "@/lib/auth/roleGuard";
+import { requireAnyRole, CRM_ADMIN_ROLES } from "@/lib/auth/roleGuard";
 
 /**
  * Agent Workload is a platform-wide routing control: it sets each agent's lead
@@ -10,9 +10,7 @@ import { requireAnyRole } from "@/lib/auth/roleGuard";
  * the URL got a fully-wired capacity editor (GAP-CRM-AGENT-WORKLOAD-01). The
  * server remains the authority; this is defence-in-depth + UX.
  */
-const ALLOWED_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
-
 export default function AgentWorkloadLayout({ children }: { children: ReactNode }) {
-  requireAnyRole(ALLOWED_ROLES, "/crm");
+  requireAnyRole(CRM_ADMIN_ROLES, "/crm");
   return <>{children}</>;
 }

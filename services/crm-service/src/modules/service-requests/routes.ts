@@ -10,6 +10,7 @@ const ADMIN_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
 
 const PRIORITY = ["low", "normal", "high", "urgent"] as const;
 const STATUS = ["open", "in_progress", "pending", "resolved", "closed", "cancelled"] as const;
+const INTAKE_CHANNEL = ["walk_in", "phone", "portal", "email", "letter"] as const;
 
 const createBody = z.object({
   contactId: z.string().uuid().optional(),
@@ -21,6 +22,9 @@ const createBody = z.object({
   description: z.string().max(5000).optional(),
   priority: z.enum(PRIORITY).default("normal"),
   dueAt: z.string().datetime().optional(),
+  // GAP-CRM-SERVICE-REQUESTS-NEW-03: capture how the request was received so it
+  // can be reported on by channel. Optional; constrained to a known set.
+  intakeChannel: z.enum(INTAKE_CHANNEL).optional(),
 });
 
 const listParams = listQuery.extend({
@@ -42,6 +46,11 @@ const updateStatusBody = z.object({
   resolution: z.string().max(5000).optional(),
   statusNote: z.string().max(5000).optional(),
   assignedTo: z.string().uuid().optional(),
+  // GAP-CRM-SERVICE-REQUESTS-DETAIL-03: optimistic concurrency. When the client
+  // sends the `version` it read, a stale write (someone else already advanced
+  // the request) is rejected with 409 instead of silently overwriting. Optional
+  // for backward compatibility with callers that have not adopted it yet.
+  version: z.number().int().nonnegative().optional(),
 });
 
 const idParam = z.object({ id: z.string().uuid() });
@@ -64,17 +73,17 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
       INSERT INTO crm.service_requests (
         tenant_id, contact_id, citizen_name, citizen_phone, citizen_email,
         service_type, subject, description, priority, status,
-        due_at, reference_no, created_by, updated_by
+        due_at, intake_channel, reference_no, created_by, updated_by
       ) VALUES (
         ${ctx.tenantId}, ${body.contactId ?? null}, ${body.citizenName},
         ${body.citizenPhone ?? null}, ${body.citizenEmail ?? null},
         ${body.serviceType}, ${body.subject}, ${body.description ?? null},
         ${body.priority}, 'open',
-        ${body.dueAt ?? null}, ${refNo}, ${ctx.actorId}, ${ctx.actorId}
+        ${body.dueAt ?? null}, ${body.intakeChannel ?? null}, ${refNo}, ${ctx.actorId}, ${ctx.actorId}
       )
       RETURNING id, reference_no AS "referenceNo",
                 citizen_name AS "citizenName", service_type AS "serviceType",
-                subject, priority, status, created_at AS "createdAt"
+                subject, priority, status, intake_channel AS "intakeChannel", created_at AS "createdAt"
     `))) as unknown as Array<Record<string, unknown>>;
     return reply.code(201).send({ data: rows[0] });
   });
@@ -118,7 +127,24 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
         ${statusF} ${priorityF} ${typeF} ${assignedF} ${searchF}
     `))) as unknown as Array<{ total: number }>;
 
-    return reply.send(listEnvelope(rows, w, ct?.total ?? 0));
+    // GAP-CRM-SERVICE-REQUESTS-05: per-status totals for the whole filtered
+    // register (honouring every filter EXCEPT status, so the summary tiles stay
+    // meaningful while a status filter is applied and always sum to the register
+    // total). Computed server-side so the tiles never reflect only one page.
+    const statusRows = (await scopedRead((tx) => tx.execute(sql`
+      SELECT r.status AS status, COUNT(*)::int AS count
+      FROM crm.service_requests r
+      WHERE r.tenant_id = ${ctx.tenantId}
+        ${priorityF} ${typeF} ${assignedF} ${searchF}
+      GROUP BY r.status
+    `))) as unknown as Array<{ status: string; count: number }>;
+
+    const statusCounts: Record<string, number> = {};
+    for (const s of STATUS) statusCounts[s] = 0;
+    for (const row of statusRows) statusCounts[row.status] = row.count;
+
+    const envelope = listEnvelope(rows, w, ct?.total ?? 0);
+    return reply.send({ ...envelope, meta: { ...envelope.meta, statusCounts } });
   });
 
   // GET /v1/crm/service-requests/:id
@@ -133,6 +159,7 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
              r.service_type AS "serviceType", r.subject, r.description,
              r.priority, r.status, r.assigned_to AS "assignedTo",
              r.contact_id AS "contactId", r.resolution, r.status_note AS "statusNote",
+             r.intake_channel AS "intakeChannel",
              r.due_at AS "dueAt", r.resolved_at AS "resolvedAt",
              r.closed_at AS "closedAt",
              r.created_at AS "createdAt", r.updated_at AS "updatedAt",
@@ -156,6 +183,9 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
       requireRole(ctx, ADMIN_ROLES);
     }
 
+    const versionF =
+      body.version !== undefined ? sql`AND version = ${body.version}` : sql``;
+
     const rows = (await scopedRead((tx) => tx.execute(sql`
       UPDATE crm.service_requests
       SET status = ${body.status},
@@ -167,12 +197,36 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
           updated_by = ${ctx.actorId}, updated_at = now(), version = version + 1
       WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
         AND status NOT IN ('closed', 'cancelled')
+        ${versionF}
       RETURNING id, status, assigned_to AS "assignedTo", resolved_at AS "resolvedAt",
                 closed_at AS "closedAt", resolution, status_note AS "statusNote", version
     `))) as unknown as Array<Record<string, unknown>>;
 
-    if (rows.length === 0)
+    if (rows.length === 0) {
+      // Disambiguate: a row that still exists in a non-terminal state means the
+      // caller's `version` was stale (someone else changed it first) — a 409 so
+      // the UI can prompt a reload rather than silently losing the write
+      // (GAP-CRM-SERVICE-REQUESTS-DETAIL-03). A genuinely missing/already-closed
+      // request stays a 404.
+      const [current] = (await scopedRead((tx) => tx.execute(sql`
+        SELECT version, status FROM crm.service_requests
+        WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
+      `))) as unknown as Array<{ version: number; status: string }>;
+      if (
+        body.version !== undefined &&
+        current &&
+        current.version !== body.version &&
+        current.status !== "closed" &&
+        current.status !== "cancelled"
+      ) {
+        throw new HttpError(
+          409,
+          "VERSION_CONFLICT",
+          "service request was changed by someone else; reload and try again",
+        );
+      }
       throw new HttpError(404, "NOT_FOUND", "service request not found or already closed");
+    }
     return reply.send({ data: rows[0] });
   });
 }

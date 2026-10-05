@@ -98,6 +98,8 @@ export const CLOSE_OUTCOME_LABELS: Record<CloseOutcome, string> = {
 export interface PipelineStage {
   key: string;
   name: string;
+  /** Pipeline stage uuid from crm-service (sent as `stageId` on a move). */
+  id?: string;
   /** Fields that must be present before an opportunity can enter this stage. */
   mandatoryFields: OppFieldKey[];
   /** A gate stage requires an explicit review before the deal may pass. */
@@ -123,9 +125,11 @@ export function normaliseStage(raw: unknown): PipelineStage | null {
   const fields = strArray(r.mandatoryFields).filter((f): f is OppFieldKey =>
     (OPP_FIELD_KEYS as readonly string[]).includes(f),
   );
+  const id = str(r.id);
   return {
     key,
     name: name || key,
+    ...(id ? { id } : {}),
     mandatoryFields: fields,
     gate: bool(r.gate),
     product: str(r.product) || undefined,
@@ -338,21 +342,56 @@ export async function updateOpportunity(id: string, opp: Opportunity): Promise<v
   if (!res.ok) await throwStageError(res);
 }
 
-/** OP-003 stage move — 422 MANDATORY_STAGE_FIELDS_MISSING surfaces the fields. */
-export async function changeOpportunityStage(id: string, stage: string, version: number): Promise<void> {
+/**
+ * OP-003 stage move — 422 MANDATORY_STAGE_FIELDS_MISSING surfaces the fields.
+ * `stage` is the stage NAME: crm-service resolves the target by name (findStage),
+ * so sending the web-derived key ("proposal") 422s as INVALID_STAGE whenever the
+ * key differs from the configured name (GAP-CRM-OPPORTUNITIES-02).
+ */
+export async function changeOpportunityStage(
+  id: string,
+  stage: string,
+  version: number,
+  stageId?: string,
+): Promise<void> {
+  const res = await requestStageChange(id, { stage, version, ...(stageId ? { stageId } : {}) });
+  if (!res.ok) await throwStageError(res);
+}
+
+/** The one stage-move request body both boards send (GAP-CRM-OPPORTUNITIES-02). */
+export interface StageChangeRequest {
+  /** Stage name as configured on the pipeline (the backend's `stage`). */
+  stage: string;
+  /** Pipeline stage uuid, when the deal belongs to a real pipeline. */
+  stageId?: string;
+  /** Sent only when the user accepted the stage's default probability. */
+  probability?: number;
+  /** Optimistic-lock version the caller rendered. */
+  version: number;
+}
+
+/**
+ * GAP-CRM-OPPORTUNITIES-02: the single client entry point for a stage move.
+ * The opportunity list views (select + confirm) and the pipeline Kanban
+ * (drag/keyboard + confirm) both go through here, so they send the same
+ * route, verb and payload shape and leave identical audit entries.
+ * Returns the raw Response so callers can render 409/422 their own way.
+ */
+export function requestStageChange(id: string, req: StageChangeRequest): Promise<Response> {
   // Moving a deal through the pipeline has its own route —
   // `PATCH /v1/crm/deals/:id/stage` — which is what enforces the OP-003
-  // mandatory-field gate and stamps stage_entered_at for stage ageing. This was
-  // sending PUT to the generic `/v1/crm/deals/:id` instead: wrong verb and wrong
-  // path, so every stage move 404'd and the 422 field gate never ran.
-  //
-  // `version` is mandatory in the request schema: the stage move is an
-  // optimistic-locked write, so the caller must send the version it rendered.
-  const res = await browserFetch(`v1/crm/deals/${id}/stage`, {
+  // mandatory-field gate and stamps stage_entered_at for stage ageing.
+  // `version` is mandatory: the stage move is an optimistic-locked write.
+  const body: StageChangeRequest = {
+    stage: req.stage,
+    ...(req.stageId !== undefined ? { stageId: req.stageId } : {}),
+    ...(req.probability !== undefined ? { probability: req.probability } : {}),
+    version: req.version,
+  };
+  return browserFetch(`v1/crm/deals/${id}/stage`, {
     method: "PATCH",
-    body: JSON.stringify({ stage, version }),
+    body: JSON.stringify(body),
   });
-  if (!res.ok) await throwStageError(res);
 }
 
 /* ============================================================ OP-006 close == */
@@ -520,6 +559,9 @@ export interface StageAgeingRow {
   limitDays: number;
   /** How far past the configured limit (days), never negative. */
   exceededBy: number;
+  /** GAP-CRM-OPPORTUNITY-AGEING-03: who to chase. Present only when the endpoint returns it. */
+  ownerName?: string;
+  ownerId?: string;
 }
 
 export function normaliseAgeing(raw: unknown): StageAgeingRow[] {
@@ -546,6 +588,11 @@ export function normaliseAgeing(raw: unknown): StageAgeingRow[] {
         daysInStage,
         limitDays,
         exceededBy: Math.max(0, exceededBy),
+        // GAP-CRM-OPPORTUNITY-AGEING-03: surface the owner when the endpoint
+        // returns one (ownerName / ownerId, tolerating owner / assigneeName
+        // aliases) so a manager can see who to chase; omitted otherwise.
+        ...(str(r.ownerName ?? r.owner ?? r.assigneeName) ? { ownerName: str(r.ownerName ?? r.owner ?? r.assigneeName) } : {}),
+        ...(str(r.ownerId ?? r.assigneeId) ? { ownerId: str(r.ownerId ?? r.assigneeId) } : {}),
       };
     })
     .filter((r): r is StageAgeingRow => r !== null);

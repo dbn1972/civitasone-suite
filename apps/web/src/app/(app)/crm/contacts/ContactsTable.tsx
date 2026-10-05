@@ -1,8 +1,11 @@
 "use client";
 
 import { DataTable, EmptyState } from "../../../_components/ds";
+import { RefreshErrorState } from "../../../_components/ds/RefreshErrorState";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { useTranslations } from "next-intl";
 import { formatIndianDate } from "@/lib/formatters";
+import { LEAD_STATUS_LABELS } from "@/lib/crm/leadQualification";
 import { useSeededResource } from "@/lib/sync/resource";
 
 type Contact = {
@@ -35,7 +38,8 @@ type ContactRow = {
   tags: string;
 };
 
-export function ContactsTable({ contacts, source = "api" }: { contacts: Contact[]; source?: "api" | "error" }) {
+export function ContactsTable({ contacts, source = "api", filtered = false }: { contacts: Contact[]; source?: "api" | "error"; filtered?: boolean }) {
+  const t = useTranslations("crmContactsTable");
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<Contact[]>(
     "crm.contacts",
     contacts,
@@ -68,15 +72,52 @@ export function ContactsTable({ contacts, source = "api" }: { contacts: Contact[
           call as `rows`, so it can never contradict this table. */}
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       {tableRows.length === 0 ? (
-        <EmptyState icon="▣" title="No contacts yet" message="Add your first contact to get started." />
+        // GAP-CRM-CONTACTS-05: distinguish three empty-ish states instead of
+        // always claiming the master is empty.
+        source === "error" ? (
+          // A failed load is not "no contacts" — offer a real retry, not an
+          // Add-your-first-contact nudge that would mislead the user.
+          <RefreshErrorState
+            error={{
+              what: t("loadErrorWhat"),
+              next: t("loadErrorNext"),
+              actions: ["retry", "help"],
+            }}
+            backHref="/crm/contacts"
+          />
+        ) : filtered ? (
+          // The server filtered by search/filters and matched nothing — tell
+          // the user that, with a way back to the unfiltered list.
+          <EmptyState
+            icon="🔍"
+            title={t("noMatchTitle")}
+            message={t("noMatchMessage")}
+            action={<a className="btn ghost" href="/crm/contacts" style={{ minHeight: 44, display: "inline-flex", alignItems: "center" }}>{t("clearFilters")}</a>}
+          />
+        ) : (
+          // Genuinely empty master — nudge the first create.
+          <EmptyState
+            icon="▣"
+            title={t("emptyTitle")}
+            message={t("emptyMessage")}
+            action={<a className="btn primary" href="/crm/contacts/new" style={{ minHeight: 44, display: "inline-flex", alignItems: "center" }}>{t("newContact")}</a>}
+          />
+        )
       ) : (
         <DataTable<ContactRow>
           columns={[
             { key: "name", label: "Name" },
             { key: "account", label: "Organisation" },
             { key: "phone", label: "Phone" },
-            { key: "leadStatus", label: "Lead Status" },
-            { key: "temperature", label: "Priority Level" },
+            // GAP-CRM-CONTACTS-06: render the lead status as a toned pill with
+            // the SHARED canonical label so the list, New and Edit forms all
+            // name a status identically (no more raw "qualified").
+            { key: "leadStatus", label: "Lead Status", cellType: "status", statusLabels: LEAD_STATUS_LABELS },
+            // GAP-CRM-CONTACTS-03: this column renders c.temperature
+            // (hot/warm/cold), so it must be headed "Temperature" — not
+            // "Priority Level", which read as a duplicate of the "Priority"
+            // (high/medium/low) column beside it.
+            { key: "temperature", label: t("colTemperature") },
             { key: "priority", label: "Priority" },
             { key: "segment", label: "Segment" },
             { key: "expectedValue", label: "Expected Value", align: "right" },

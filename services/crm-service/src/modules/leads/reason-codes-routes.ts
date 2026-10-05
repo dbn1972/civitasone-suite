@@ -16,20 +16,26 @@ export async function leadReasonCodeRoutes(app: FastifyInstance): Promise<void> 
     const ctx = resolveContext(req);
     // Readable by any CRM user: the transition form needs the codes to offer them.
     requireRole(ctx, CRM_ROLES);
-    const codes = await repo.getCodes(ctx.tenantId, ctx.actorId);
-    return reply.send({ data: codes, meta: { total: codes.length } });
+    const { codes, meta } = await repo.getCodesList(ctx.tenantId, ctx.actorId);
+    void reply.header("ETag", meta.version);
+    return reply.send({ data: codes, version: meta.version, meta: { ...meta, total: codes.length } });
   });
 
   app.put("/v1/crm/lead-reason-codes", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = putReasonCodesBody.parse(req.body);
-    const codes = await repo.upsertCodes(
+    const headerMatch = req.headers["if-match"];
+    const ifMatch = typeof headerMatch === "string" ? headerMatch.replace(/^W\//, "").replace(/^"|"$/g, "") : undefined;
+    const expectedVersion = ifMatch ?? body.version;
+    const { codes, meta } = await repo.upsertCodes(
       ctx.tenantId,
       body.codes.map((c) => ({ code: c.code, label: c.label, appliesToStatus: c.appliesToStatus, active: c.active })),
       ctx.actorId,
       ctx.correlationId,
+      expectedVersion,
     );
-    return reply.send({ data: codes });
+    void reply.header("ETag", meta.version);
+    return reply.send({ data: codes, version: meta.version, meta });
   });
 }

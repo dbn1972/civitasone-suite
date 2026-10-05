@@ -18,10 +18,25 @@ function fmtDateTime(iso: string): string {
   return d.toLocaleString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-/** Keep path prefixes as plain string literals so crm-link-integrity can resolve them. */
-function subjectHref(subjectType: string, subjectId: string): string {
-  if (subjectType === "account") return `/crm/accounts/${subjectId}`;
-  return `/crm/contacts/${subjectId}`;
+/**
+ * Keep path prefixes as plain string literals so crm-link-integrity can resolve
+ * them. Returns null when no detail route exists for the subject type (e.g.
+ * 'lead' has no /crm/leads/[id] page) so the caller renders plain text instead
+ * of a wrong link (GAP-CRM-TASK-ESCALATION-04).
+ */
+export function subjectHref(subjectType: string, subjectId: string): string | null {
+  if (!subjectId) return null;
+  switch (subjectType) {
+    case "account":
+      return `/crm/accounts/${subjectId}`;
+    case "contact":
+      return `/crm/contacts/${subjectId}`;
+    case "deal":
+      return `/crm/deals/${subjectId}`;
+    // 'lead' and any unknown type have no detail route — render plain text.
+    default:
+      return null;
+  }
 }
 
 /**
@@ -89,12 +104,10 @@ export function OverdueTaskAlerts() {
               {
                 key: "subject",
                 label: t("colTask"),
-                render: (task) =>
-                  task.subjectType && task.subjectId ? (
-                    <a href={subjectHref(task.subjectType, task.subjectId)}>{task.subject || t("taskFallback")}</a>
-                  ) : (
-                    task.subject || t("taskFallback")
-                  ),
+                render: (task) => {
+                  const href = task.subjectType && task.subjectId ? subjectHref(task.subjectType, task.subjectId) : null;
+                  return href ? <a href={href}>{task.subject || t("taskFallback")}</a> : (task.subject || t("taskFallback"));
+                },
               },
               { key: "dueAt", label: t("colDue"), render: (task) => fmtDateTime(task.dueAt) },
               {

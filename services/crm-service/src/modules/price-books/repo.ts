@@ -65,7 +65,7 @@ export async function resolve(tenantId: string, c: ResolveCriteria): Promise<Pri
   const rows = await scopedRead(async (tx) => tx.execute(sql`
     SELECT ${COLS} FROM crm.price_books
     WHERE tenant_id = ${tenantId} AND enabled = true ${segF} ${geoF} ${chF} ${curF}
-    ORDER BY priority DESC, name ASC
+    ORDER BY priority DESC, name ASC, id ASC
     LIMIT 1
   `)) as unknown as PriceBookView[];
   return rows[0] ?? null;

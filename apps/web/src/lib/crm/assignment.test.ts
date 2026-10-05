@@ -68,6 +68,26 @@ describe("assignment normalisers", () => {
     expect(normaliseResources([{ name: "Q1" }, { description: "x" }])).toHaveLength(1);
   });
 
+  it("normaliseResources preserves unmodelled extra fields (GAP-CRM-ASSIGNMENT-DIRECTORY-03)", () => {
+    const r = normaliseResources([{ id: "t1", name: "North", description: "", enabled: true, region: "North", code: "N1" }]);
+    expect(r[0].extra).toEqual({ region: "North", code: "N1" });
+  });
+
+  it("normaliseResources does not leak server-managed keys into extra", () => {
+    const r = normaliseResources([{ id: "t1", name: "North", tenant_id: "t", created_at: "x", version: 2, region: "North" }]);
+    expect(r[0].extra).toEqual({ region: "North" });
+  });
+
+  it("normaliseAgents keeps a MISSING maxLeads as NaN, not 0 (GAP-CRM-AGENT-WORKLOAD-03)", () => {
+    const a = normaliseAgents([{ agentId: "a1", name: "Asha" }]);
+    expect(Number.isNaN(a[0].maxLeads)).toBe(true);
+  });
+
+  it("normaliseAgents keeps an explicit maxLeads of 0", () => {
+    const a = normaliseAgents([{ agentId: "a1", name: "Asha", maxLeads: 0 }]);
+    expect(a[0].maxLeads).toBe(0);
+  });
+
   it("normaliseAgents reads id/agentId + activeLeads aliases", () => {
     const a = normaliseAgents([
       { agentId: "a1", name: "Asha", currentLeads: 5, maxLeads: 10 },

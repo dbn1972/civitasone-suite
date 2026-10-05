@@ -6,12 +6,12 @@ import { useFormError } from "@/lib/useFormError";
 import { ActionButton, Button } from "../../../../_components/ds";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 
-type Props = { contactId: string; name: string };
+type Props = { contactId: string; name: string; canDelete?: boolean };
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
 
-export function ContactDetailActions({ contactId, name }: Props) {
+export function ContactDetailActions({ contactId, name, canDelete = false }: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -72,21 +72,28 @@ export function ContactDetailActions({ contactId, name }: Props) {
       <a className="btn ghost" href={`/crm/contacts/${contactId}/edit`} style={{ minHeight: 44, display: "inline-flex", alignItems: "center" }}>
         Edit
       </a>
-      <ActionButton
-        label="Delete"
-        className="btn danger"
-        danger
-        requireReason
-        reasonLabel="Reason for deletion"
-        confirmTitle={`Delete ${name}?`}
-        confirmDescription="This removes the contact from the CRM. The action is recorded in the audit trail and cannot be undone here."
-        confirmLabel="Delete contact"
-        onConfirm={deleteContact}
-        onSuccess={() => {
-          setMessage("Contact deleted.");
-          setTimeout(() => router.push("/crm/contacts"), 500);
-        }}
-      />
+      {/* GAP-CRM-CONTACTS-DETAIL-03: Delete is an admin-only control
+          (crm-service DELETE /v1/crm/contacts/:id requires ADMIN_ROLES =
+          crm_admin|super_admin). A normal crm_user used to see a Delete button
+          whose 403 only surfaced AFTER they typed a deletion reason. Hide it
+          unless the session may delete; the server remains the authority. */}
+      {canDelete ? (
+        <ActionButton
+          label="Delete"
+          className="btn danger"
+          danger
+          requireReason
+          reasonLabel="Reason for deletion"
+          confirmTitle={`Delete ${name}?`}
+          confirmDescription="This removes the contact from the CRM. The action is recorded in the audit trail and cannot be undone here."
+          confirmLabel="Delete contact"
+          onConfirm={deleteContact}
+          onSuccess={() => {
+            setMessage("Contact deleted.");
+            setTimeout(() => router.push("/crm/contacts"), 500);
+          }}
+        />
+      ) : null}
       {showActivity ? (
         <div className="card" style={{ marginTop: 16 }}>
           <form onSubmit={logActivity} className="pad" style={{ maxWidth: 520 }}>

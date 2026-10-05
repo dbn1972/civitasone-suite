@@ -1,12 +1,29 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
+
+function render(ui: ReactElement) {
+  return rtlRender(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
 
 import { OnboardingDetail } from "./OnboardingDetail";
 import * as onb from "@/lib/crm/onboarding";
 
 vi.mock("@/lib/crm/onboarding", async (orig) => {
   const actual = await orig<typeof import("@/lib/crm/onboarding")>();
-  return { ...actual, getOnboardingCase: vi.fn(), advanceStage: vi.fn(), recordKyc: vi.fn() };
+  return {
+    ...actual,
+    getOnboardingCase: vi.fn(),
+    getOnboardingLookups: vi.fn(),
+    advanceStage: vi.fn(),
+    recordKyc: vi.fn(),
+  };
 });
 
 function caseAt(stage: onb.OnboardingStage, kycStatus: onb.KycStatus): onb.OnboardingCase {
@@ -30,6 +47,8 @@ function caseAt(stage: onb.OnboardingStage, kycStatus: onb.KycStatus): onb.Onboa
 
 beforeEach(() => {
   vi.mocked(onb.getOnboardingCase).mockReset();
+  vi.mocked(onb.getOnboardingLookups).mockReset();
+  vi.mocked(onb.getOnboardingLookups).mockResolvedValue({ dealNames: {}, accountNames: {} });
   vi.mocked(onb.advanceStage).mockReset();
   vi.mocked(onb.recordKyc).mockReset();
 });
@@ -125,13 +144,15 @@ describe("OnboardingDetail (P1-9)", () => {
       .mockResolvedValueOnce({ data: caseAt("verification", "submitted"), source: "api" })
       .mockResolvedValue({ data: caseAt("verification", "verified"), source: "api" });
     vi.mocked(onb.recordKyc).mockResolvedValue({ accepted: false });
-    render(<OnboardingDetail id="c1" />);
+    render(<OnboardingDetail id="c1" canApproveKyc />);
     fireEvent.change(await screen.findByLabelText(/new kyc outcome/i), { target: { value: "verified" } });
+    // GAP-CRM-ONBOARDING-DETAIL-02: a verified outcome now requires a reference.
+    fireEvent.change(screen.getByLabelText(/kyc reference/i), { target: { value: "KYC-123" } });
     fireEvent.click(screen.getByRole("button", { name: /record kyc outcome/i }));
     const dialog = await screen.findByRole("alertdialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /record outcome/i }));
     await waitFor(() =>
-      expect(onb.recordKyc).toHaveBeenCalledWith("c1", { status: "verified", version: 2 }),
+      expect(onb.recordKyc).toHaveBeenCalledWith("c1", { status: "verified", reference: "KYC-123", version: 2 }),
     );
     await waitFor(() => expect(onb.getOnboardingCase).toHaveBeenCalledTimes(2));
   });
@@ -141,5 +162,90 @@ describe("OnboardingDetail (P1-9)", () => {
     render(<OnboardingDetail id="c1" />);
     await waitFor(() => expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument());
     expect(screen.getByText(/couldn't be loaded/i)).toBeInTheDocument();
+  });
+
+  // GAP-CRM-ONBOARDING-DETAIL-01: the case is named by its customer/deal, and
+  // Account/Deal render as links with names, not raw UUIDs.
+  it("names the customer and links Account/Deal instead of showing raw UUIDs", async () => {
+    vi.mocked(onb.getOnboardingCase).mockResolvedValue({
+      data: caseAt("verification", "submitted"),
+      source: "api",
+    });
+    vi.mocked(onb.getOnboardingLookups).mockResolvedValue({
+      dealNames: { d1: "Acme renewal" },
+      accountNames: { a1: "Acme Corp" },
+    });
+    render(<OnboardingDetail id="c1" />);
+    await waitFor(() => expect(screen.getByText(/Onboarding — Acme renewal/)).toBeInTheDocument());
+    const accountLink = screen.getByRole("link", { name: "Acme Corp" });
+    expect(accountLink).toHaveAttribute("href", "/crm/accounts/a1");
+    const dealLink = screen.getByRole("link", { name: "Acme renewal" });
+    expect(dealLink).toHaveAttribute("href", "/crm/deals/d1");
+    // The raw ids are not the heading / not shown as the Account/Deal value.
+    expect(screen.queryByText(/^Case /)).not.toBeInTheDocument();
+  });
+
+  // GAP-CRM-ONBOARDING-DETAIL-03: verified/rejected are approver-only. A
+  // non-approver sees only "Submitted"; an approver sees all three.
+  it("hides verified/rejected KYC outcomes from a non-approver", async () => {
+    vi.mocked(onb.getOnboardingCase).mockResolvedValue({
+      data: caseAt("initiated", "pending"),
+      source: "api",
+    });
+    render(<OnboardingDetail id="c1" canApproveKyc={false} />);
+    const select = await screen.findByLabelText(/new kyc outcome/i);
+    const options = within(select).getAllByRole("option").map((o) => o.textContent);
+    // pending → submitted is the only non-approver move; verified/rejected are
+    // only reachable from "submitted" and are approver-only, so even there a
+    // non-approver would see an empty option set.
+    expect(options).toContain("Submitted");
+    expect(options).not.toContain("Verified");
+    expect(options).not.toContain("Rejected");
+  });
+
+  it("offers verified and rejected to an approver", async () => {
+    vi.mocked(onb.getOnboardingCase).mockResolvedValue({
+      data: caseAt("documents_submitted", "submitted"),
+      source: "api",
+    });
+    render(<OnboardingDetail id="c1" canApproveKyc />);
+    const select = await screen.findByLabelText(/new kyc outcome/i);
+    const options = within(select).getAllByRole("option").map((o) => o.textContent);
+    expect(options).toContain("Verified");
+    expect(options).toContain("Rejected");
+  });
+
+  // GAP-CRM-ONBOARDING-DETAIL-02: a verified outcome requires a reference.
+  it("blocks a verified outcome with no reference and does not call recordKyc", async () => {
+    vi.mocked(onb.getOnboardingCase).mockResolvedValue({
+      data: caseAt("documents_submitted", "submitted"),
+      source: "api",
+    });
+    render(<OnboardingDetail id="c1" canApproveKyc />);
+    fireEvent.change(await screen.findByLabelText(/new kyc outcome/i), { target: { value: "verified" } });
+    fireEvent.click(screen.getByRole("button", { name: /record kyc outcome/i }));
+    expect(await screen.findByText(/reference is required/i)).toBeInTheDocument();
+    expect(onb.recordKyc).not.toHaveBeenCalled();
+  });
+
+  // GAP-CRM-ONBOARDING-DETAIL-04: a failed load offers a working Retry.
+  it("offers Retry on a failed load and re-fetches when clicked", async () => {
+    vi.mocked(onb.getOnboardingCase)
+      .mockResolvedValueOnce({ data: null, source: "error" })
+      .mockResolvedValue({ data: caseAt("verification", "submitted"), source: "api" });
+    render(<OnboardingDetail id="c1" />);
+    const retry = await screen.findByRole("button", { name: /try again/i });
+    fireEvent.click(retry);
+    await waitFor(() => expect(screen.getByText(/Onboarding — Unnamed case/)).toBeInTheDocument());
+    expect(onb.getOnboardingCase).toHaveBeenCalledTimes(2);
+  });
+
+  // GAP-CRM-ONBOARDING-DETAIL-05: the KYC reference is masked by default.
+  it("masks the KYC reference (all but last 4)", async () => {
+    const withRef = { ...caseAt("verification", "verified"), kycReference: "1234567890" };
+    vi.mocked(onb.getOnboardingCase).mockResolvedValue({ data: withRef, source: "api" });
+    render(<OnboardingDetail id="c1" />);
+    await waitFor(() => expect(screen.getByText(/•••• 7890/)).toBeInTheDocument());
+    expect(screen.queryByText("1234567890")).not.toBeInTheDocument();
   });
 });

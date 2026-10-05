@@ -1,7 +1,7 @@
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { Card, DataTable, EmptyState, PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { Card, DataTable, EmptyState, PageHeader, RefreshErrorState, StatCard, StatGrid } from "../../../_components/ds";
 import { getCrmControlTower } from "../../../_data/loaders";
-import { formatMoney } from "@/lib/formatters";
+import { getTranslations } from "next-intl/server";
+import { toHumanError } from "@/lib/messages";
 import { ExceptionTable } from "./ExceptionTable";
 import { hotExceptions, rankRegions, totalExceptionCount } from "./tower";
 
@@ -10,14 +10,30 @@ export const dynamic = "force-dynamic";
 type RegionRow = { id: string; region: string; deals: number; pipelineMinor: string };
 
 export default async function ControlTowerPage() {
+  const t = await getTranslations("crmControlTowerPage");
   const { data, source } = await getCrmControlTower();
+
+  // GAP-CRM-CONTROL-TOWER-03: a feed failure must offer a real retry and keep
+  // the page's identity, not collapse to a dead "unavailable" EmptyState with
+  // no action. Only a genuine (successful) null uses the EmptyState below.
+  if (source === "error") {
+    return (
+      <>
+        <PageHeader title={t("title")} back="/crm" backLabel={t("backLabel")} />
+        <RefreshErrorState error={toHumanError("load", { area: t("loadArea") })} backHref="/crm" />
+      </>
+    );
+  }
 
   if (!data) {
     return (
       <>
-        <PageHeader title="Control Tower" back="/crm" backLabel="CRM" />
-        {source === "error" && <DataSourceBadge source={source} />}
-        <EmptyState icon="🛰️" title="Control tower unavailable" message="The executive GIS and exception feed could not be loaded." />
+        <PageHeader title={t("title")} back="/crm" backLabel={t("backLabel")} />
+        <EmptyState
+          icon="🛰️"
+          title={t("unavailableTitle")}
+          message={t("unavailableMessage")}
+        />
       </>
     );
   }
@@ -44,17 +60,16 @@ export default async function ControlTowerPage() {
     <>
       <PageHeader
         title="Executive Control Tower"
-        subtitle="Regional pipeline heat, exception counts, and drill-downs into the operational dashboards."
+        subtitle={t("subtitle")}
         back="/crm"
         backLabel="CRM"
       />
-      {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
         <StatCard icon="🗺️" iconBg="#e0f2fe" label="Regions" value={regions.length.toLocaleString("en-IN")} />
         <StatCard icon="🚨" iconBg="#fee2e2" label="Exception volume" value={totalExceptionCount(exceptions).toLocaleString("en-IN")} />
       </StatGrid>
 
-      <Card title="GIS — pipeline by region">
+      <Card title={t("pipelineByRegion")}>
         <DataTable<RegionRow>
           columns={[
             { key: "region", label: "Region" },
@@ -67,7 +82,7 @@ export default async function ControlTowerPage() {
           exportFilename="control-tower-regions"
           emptyIcon="🗺️"
           emptyTitle="No regional pipeline"
-          emptyMessage="Open deals with a contact region appear on the heat map."
+          emptyMessage={t("regionEmptyMessage")}
         />
       </Card>
 

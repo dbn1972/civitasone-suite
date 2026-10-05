@@ -79,3 +79,21 @@ describe("Contacts list page stat gating (LQ-003)", () => {
     expect(screen.queryByText("High Priority Leads")).not.toBeInTheDocument();
   });
 });
+
+describe("Contacts account filter (GAP-CRM-ACCOUNTS-DETAIL-06)", () => {
+  beforeEach(() => mocked.mockReset());
+
+  it("forwards accountId to getCrmContacts and shows a clearable filter chip", async () => {
+    mocked.mockResolvedValue({ data: [], source: "api" });
+    render(await Page({ searchParams: { accountId: "acc-1", accountName: "NDMA" } }));
+    expect(mocked).toHaveBeenCalledWith(expect.objectContaining({ accountId: "acc-1" }));
+    expect(screen.getByText(/Filtered to one account: NDMA/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Clear account filter" })).toHaveAttribute("href", "/crm/contacts");
+  });
+
+  it("shows no account chip without an accountId", async () => {
+    mocked.mockResolvedValue({ data: [], source: "api" });
+    render(await Page({ searchParams: {} }));
+    expect(screen.queryByText(/Filtered to one account/)).not.toBeInTheDocument();
+  });
+});

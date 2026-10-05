@@ -1,9 +1,18 @@
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
 import { StageAgeingDashboard } from "./StageAgeingDashboard";
 import * as op from "@/lib/crm/opportunity";
+import type { ReactElement } from "react";
+
+function render(ui: ReactElement) {
+  return rtlRender(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
 
 vi.mock("@/lib/crm/opportunity", async (orig) => {
   const actual = await orig<typeof import("@/lib/crm/opportunity")>();
@@ -46,7 +55,7 @@ describe("StageAgeingDashboard (OP-005)", () => {
       ],
       source: "api",
     });
-    render(<NextIntlClientProvider locale="en" messages={enMessages}><StageAgeingDashboard /></NextIntlClientProvider>);
+    render(<StageAgeingDashboard />);
     await waitFor(() => expect(screen.getByText("Slow deal")).toBeInTheDocument());
     const rows = screen.getAllByRole("row").filter((r) => /deal/i.test(r.textContent ?? ""));
     // worst (over by 40) should sort above (over by 16)
@@ -55,13 +64,13 @@ describe("StageAgeingDashboard (OP-005)", () => {
 
   it("gates the ageing table on a failed fetch", async () => {
     vi.mocked(op.getStageAgeing).mockResolvedValue({ data: [], source: "error" });
-    render(<NextIntlClientProvider locale="en" messages={enMessages}><StageAgeingDashboard /></NextIntlClientProvider>);
+    render(<StageAgeingDashboard />);
     await waitFor(() => expect(screen.getAllByText(/couldn.t load/i).length).toBeGreaterThan(0));
   });
 
   it("creates a stage limit from the pipeline's stage list", async () => {
     vi.mocked(op.createStageLimit).mockResolvedValue(undefined);
-    render(<NextIntlClientProvider locale="en" messages={enMessages}><StageAgeingDashboard /></NextIntlClientProvider>);
+    render(<StageAgeingDashboard />);
     await waitFor(() => expect(screen.getByText(/no stage limits yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add stage limit/i }));
     // The new row defaults to the first pipeline; pick one of ITS stages by key.
@@ -72,7 +81,7 @@ describe("StageAgeingDashboard (OP-005)", () => {
   });
 
   it("blocks a zero-day limit", async () => {
-    render(<NextIntlClientProvider locale="en" messages={enMessages}><StageAgeingDashboard /></NextIntlClientProvider>);
+    render(<StageAgeingDashboard />);
     await waitFor(() => expect(screen.getByText(/no stage limits yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add stage limit/i }));
     fireEvent.change(screen.getByLabelText(/stage for limit 1/i), { target: { value: "qual" } });
@@ -86,7 +95,7 @@ describe("StageAgeingDashboard (OP-005)", () => {
   // configured stages — there is no free-text input to typo into a dead key, and the
   // stage <select> only offers that pipeline's stages.
   it("offers only the selected pipeline's stages, never a free-text key", async () => {
-    render(<NextIntlClientProvider locale="en" messages={enMessages}><StageAgeingDashboard /></NextIntlClientProvider>);
+    render(<StageAgeingDashboard />);
     await waitFor(() => expect(screen.getByText(/no stage limits yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add stage limit/i }));
     const stageSelect = screen.getByLabelText(/stage for limit 1/i);
@@ -108,7 +117,7 @@ describe("StageAgeingDashboard (OP-005)", () => {
       data: [{ id: "l1", pipelineId: "p1", stage: "proposel", maxDays: 14, enabled: true }],
       source: "api",
     });
-    render(<NextIntlClientProvider locale="en" messages={enMessages}><StageAgeingDashboard /></NextIntlClientProvider>);
+    render(<StageAgeingDashboard />);
     await waitFor(() => expect(screen.getByText(/not in the selected pipeline/i)).toBeInTheDocument());
     // The orphan key is still shown (as a disabled option) so it can be seen/removed.
     expect(screen.getByText(/proposel — not in pipeline/i)).toBeInTheDocument();
@@ -116,5 +125,66 @@ describe("StageAgeingDashboard (OP-005)", () => {
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
     expect(await screen.findByText(/one of that pipeline's stages/i)).toBeInTheDocument();
     expect(op.updateStageLimit).not.toHaveBeenCalled();
+  });
+
+  // GAP-CRM-OPPORTUNITY-AGEING-02: a limit can be paused. Unticking Enabled and
+  // saving sends enabled:false in the PUT body (no silent re-enable).
+  it("sends enabled:false when the Enabled toggle is unticked and saved", async () => {
+    vi.mocked(op.updateStageLimit).mockResolvedValue(undefined);
+    vi.mocked(op.getStageLimits).mockResolvedValue({
+      data: [{ id: "l1", pipelineId: "p1", stage: "qual", maxDays: 14, enabled: true }],
+      source: "api",
+    });
+    render(<StageAgeingDashboard />);
+    await waitFor(() => expect(screen.getByLabelText(/enabled for limit 1/i)).toBeInTheDocument());
+    const toggle = screen.getByLabelText(/enabled for limit 1/i) as HTMLInputElement;
+    expect(toggle.checked).toBe(true);
+    fireEvent.click(toggle);
+    expect(screen.getByText(/paused/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    await waitFor(() =>
+      expect(op.updateStageLimit).toHaveBeenCalledWith("l1", expect.objectContaining({ enabled: false })),
+    );
+  });
+
+  // GAP-CRM-OPPORTUNITY-AGEING-03: a breach links to its record and shows the owner.
+  it("links the breach name to the deal record and shows an Owner column", async () => {
+    vi.mocked(op.getStageAgeing).mockResolvedValue({
+      data: [{ id: "d1", name: "Slow deal", stage: "qual", stageName: "Qualify", daysInStage: 30, limitDays: 14, exceededBy: 16, ownerName: "Asha Rao" }],
+      source: "api",
+    });
+    render(<StageAgeingDashboard />);
+    await waitFor(() => expect(screen.getByText("Slow deal")).toBeInTheDocument());
+    const link = screen.getByRole("link", { name: "Slow deal" });
+    expect(link).toHaveAttribute("href", "/crm/deals/d1");
+    expect(screen.getByText("Asha Rao")).toBeInTheDocument();
+  });
+
+  // GAP-CRM-OPPORTUNITY-AGEING-04: the error state has a Retry that re-fetches and
+  // never claims "saved information".
+  it("shows a Retry on a failed ageing load that re-fetches", async () => {
+    vi.mocked(op.getStageAgeing)
+      .mockResolvedValueOnce({ data: [], source: "error" })
+      .mockResolvedValue({ data: [{ id: "d1", name: "Recovered deal", stage: "qual", stageName: "Qualify", daysInStage: 30, limitDays: 14, exceededBy: 16 }], source: "api" });
+    render(<StageAgeingDashboard />);
+    const retry = await screen.findByRole("button", { name: /retry/i });
+    expect(screen.queryByText(/showing saved information/i)).not.toBeInTheDocument();
+    fireEvent.click(retry);
+    await waitFor(() => expect(screen.getByText("Recovered deal")).toBeInTheDocument());
+  });
+
+  // GAP-CRM-OPPORTUNITY-AGEING-05: a non-admin (canConfig=false) sees the ageing
+  // list but no limits config (Save/Delete).
+  it("hides the limits config card for a non-admin (canConfig=false)", async () => {
+    vi.mocked(op.getStageAgeing).mockResolvedValue({
+      data: [{ id: "d1", name: "Slow deal", stage: "qual", stageName: "Qualify", daysInStage: 30, limitDays: 14, exceededBy: 16 }],
+      source: "api",
+    });
+    render(<StageAgeingDashboard canConfig={false} />);
+    await waitFor(() => expect(screen.getByText("Slow deal")).toBeInTheDocument());
+    expect(screen.queryByText(/stage day limits/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /add stage limit/i })).not.toBeInTheDocument();
+    // The limits endpoint is not even called for a non-admin.
+    expect(op.getStageLimits).not.toHaveBeenCalled();
   });
 });

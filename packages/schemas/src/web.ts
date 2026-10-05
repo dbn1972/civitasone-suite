@@ -400,6 +400,16 @@ export const crmCampaignRoiSummarySchema = z.object({
       periods: z.number().int(),
     }),
   ),
+  // GAP-CRM-CAMPAIGNS-03: the service reports the full distinct-campaign count
+  // in meta.total alongside the (page-limited) data rows, so the UI can tell
+  // when the portfolio totals it folds are only a partial (first-page) view.
+  meta: z
+    .object({
+      total: z.number().int().optional(),
+      page: z.number().int().optional(),
+      pageSize: z.number().int().optional(),
+    })
+    .optional(),
 });
 
 export const crmCampaignRoiSchema = z.object({
@@ -517,7 +527,12 @@ export const notificationExperimentListSchema = z.object({
 
 
 export const crmContactsListSchema = paginatedSchema(crmContactApiSchema);
-export const crmAccountsListSchema = z.object({ data: z.array(crmAccountApiSchema) });
+export const crmAccountsListSchema = z.object({
+  data: z.array(crmAccountApiSchema),
+  // GAP-CRM-ACCOUNTS-02: tenant-wide active-account total, so the list page can
+  // show "Showing N of M". Optional for backward compatibility.
+  meta: z.object({ total: z.number().int().nonnegative() }).optional(),
+});
 export const crmAccountHierarchyListSchema = z.object({ data: z.array(crmAccountHierarchyNodeSchema) });
 export const crmDealsListSchema = paginatedSchema(crmDealApiSchema);
 export const crmActivitiesListSchema = paginatedSchema(crmActivityApiSchema);
@@ -1297,6 +1312,9 @@ export const ContactDetailSchema = z.object({
   id: z.string(),
   name: z.string(),
   organization: z.string().optional(),
+  // GAP-CRM-CONTACTS-NEW-02: the linked account id so the edit form can seed an
+  // account EntityPicker and preserve the account link on save.
+  accountId: z.string().uuid().nullish(),
   email: z.string().optional(),
   phone: z.string().optional(),
   designation: z.string().optional(),

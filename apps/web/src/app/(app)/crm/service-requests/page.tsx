@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
 import { getCrmServiceRequests } from "../../../_data/loaders";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
@@ -33,6 +34,7 @@ const SERVICE_TYPES = [
 ];
 
 export default async function ServiceRequestsPage({ searchParams }: { searchParams?: SP }) {
+  const t = await getTranslations("crmServiceRequestsPage");
   const pageParam = Number.parseInt(searchParams?.page ?? "1", 10);
   const page = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1;
 
@@ -52,11 +54,14 @@ export default async function ServiceRequestsPage({ searchParams }: { searchPara
   const roles = getSessionRoles();
   const canExport = EXPORT_ROLES.some((role) => roles.includes(role));
 
-  // Stats cover the whole register where the API gives a total; per-page counts
-  // are explicitly labelled as "this page" so they never masquerade as totals.
-  const open = rows.filter((r) => r.status === "open" || r.status === "in_progress").length;
-  const pending = rows.filter((r) => r.status === "pending").length;
-  const closed = rows.filter((r) => r.status === "closed" || r.status === "resolved").length;
+  // GAP-CRM-SERVICE-REQUESTS-05: summary tiles use SERVER-SIDE per-status counts
+  // for the whole filtered register, so the parts sum to Total regardless of the
+  // 15-row page. Cancelled is counted in its own tile so no status is dropped.
+  const sc = data.statusCounts ?? {};
+  const open = (sc.open ?? 0) + (sc.in_progress ?? 0);
+  const pending = sc.pending ?? 0;
+  const closed = (sc.closed ?? 0) + (sc.resolved ?? 0);
+  const cancelled = sc.cancelled ?? 0;
   const stat = (n: number) => (source === "error" ? "—" : n.toLocaleString("en-IN"));
 
   // Vary the offline cache key by the full query (filters + page) so one page's
@@ -83,9 +88,10 @@ export default async function ServiceRequestsPage({ searchParams }: { searchPara
       />
 
       <StatGrid>
-        <StatCard icon="📥" iconBg="color-mix(in srgb, var(--ink2) 10%, transparent)" label="Open / In Progress (this page)" value={stat(open)} />
-        <StatCard icon="⏳" iconBg="color-mix(in srgb, var(--warn) 15%, transparent)" label="Pending (this page)" value={stat(pending)} />
-        <StatCard icon="✅" iconBg="color-mix(in srgb, var(--good) 12%, transparent)" label="Closed / Resolved (this page)" value={stat(closed)} />
+        <StatCard icon="📥" iconBg="color-mix(in srgb, var(--ink2) 10%, transparent)" label={t("openInProgress")} value={stat(open)} />
+        <StatCard icon="⏳" iconBg="color-mix(in srgb, var(--warn) 15%, transparent)" label={t("pending")} value={stat(pending)} />
+        <StatCard icon="✅" iconBg="color-mix(in srgb, var(--good) 12%, transparent)" label={t("closedResolved")} value={stat(closed)} />
+        <StatCard icon="🚫" iconBg="color-mix(in srgb, var(--bad) 10%, transparent)" label={t("cancelled")} value={stat(cancelled)} />
         <StatCard icon="📋" iconBg="color-mix(in srgb, var(--ink2) 10%, transparent)" label="Total Requests" value={stat(total)} />
       </StatGrid>
 

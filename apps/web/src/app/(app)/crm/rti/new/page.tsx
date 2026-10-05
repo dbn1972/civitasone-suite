@@ -7,10 +7,11 @@ import { Button, PageHeader } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
 import { todayIST } from "@/lib/formatters";
+import { RTI_PUBLIC_AUTHORITIES, normaliseAuthority } from "../rtiAuthorities";
 
 const RTI_SECTIONS = [
-  { value: "s.6",  label: "§6 — Information Request" },
-  { value: "s.11", label: "§11 — Third-party Information" },
+  { value: "s.6",  labelKey: "section6" },
+  { value: "s.11", labelKey: "section11" },
 ] as const;
 
 // GAP-CRM-RTI-NEW-02: mode-of-receipt vocabulary mirrors crm-service's
@@ -23,16 +24,10 @@ const RTI_MODES = [
   { value: "by_hand",   labelKey: "modeByHand" },
 ] as const;
 
-const SAMPLE_DEPARTMENTS = [
-  "Ministry of Finance",
-  "Department of Revenue",
-  "Ministry of Home Affairs",
-  "Ministry of Health & Family Welfare",
-  "Ministry of Education",
-  "Department of Posts",
-  "UIDAI",
-  "Other",
-];
+// GAP-CRM-RTI-NEW-04: the department suggestions come from the shared RTI
+// public-authority list (rtiAuthorities), the SAME list the Forward action
+// uses, so the two screens can never drift. The typed value is normalised
+// (trim + collapse whitespace) before submit so spelling variants fold to one.
 
 // GAP-CRM-RTI-NEW-03: a contact must be either an Indian 10-digit mobile
 // (optionally +91 / 0 prefixed) or an email. Validated client-side so a
@@ -55,6 +50,10 @@ export default function NewRtiPage() {
   const formError = useFormError("RTI request");
   const [contactMsg, setContactMsg] = useState<string | null>(null);
   const [feeMsg, setFeeMsg] = useState<string | null>(null);
+  // GAP-CRM-RTI-NEW-05: Fee Paid? and Fee Amount are coupled. "No" clears and
+  // disables the amount; "Yes" requires an amount (0 allowed for exempt/BPL).
+  const [feePaid, setFeePaid] = useState(false);
+  const [feeAmount, setFeeAmount] = useState("");
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -72,12 +71,19 @@ export default function NewRtiPage() {
       return;
     }
 
+    // GAP-CRM-RTI-NEW-05: a fee amount is only meaningful when the fee is paid.
+    // When not paid, no amount is sent; when paid, an amount is required (0 is
+    // allowed for an exempt/BPL applicant).
     // GAP-CRM-RTI-NEW-01: send the fee as paise (bigint minor units), not a
     // rupees JSON float. rupeesToMinorString rejects >2 decimals rather than
     // silently rounding a statutory fee.
-    const feeAmountRaw = String(fd.get("feeAmount") ?? "").trim();
+    const feeAmountRaw = feePaid ? feeAmount.trim() : "";
     let feeAmountMinor: string | undefined;
-    if (feeAmountRaw) {
+    if (feePaid) {
+      if (!feeAmountRaw) {
+        setFeeMsg(t("feeRequired"));
+        return;
+      }
       const minor = rupeesToMinorString(feeAmountRaw, { allowZero: true });
       if (minor === null) {
         setFeeMsg(t("feeInvalid"));
@@ -91,12 +97,13 @@ export default function NewRtiPage() {
 
     const body = {
       section:          fd.get("section"),
-      departmentRef:    fd.get("departmentRef"),
+      // GAP-CRM-RTI-NEW-04: normalise the authority so spelling variants fold.
+      departmentRef:    normaliseAuthority(String(fd.get("departmentRef") ?? "")),
       applicantName:    fd.get("applicantName"),
       applicantContact: contactRaw.trim() || undefined,
       subject:          fd.get("subject"),
       description:      fd.get("description"),
-      feePaid:          fd.get("feePaid") === "true",
+      feePaid,
       ...(feeAmountMinor !== undefined ? { feeAmountMinor } : {}),
       ...(receivedDate ? { receivedDate } : {}),
       ...(mode ? { mode } : {}),
@@ -152,10 +159,10 @@ export default function NewRtiPage() {
   return (
     <>
       <PageHeader
-        title="New RTI Request"
-        subtitle="Log a Right to Information Act 2005 request."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/crm/rti"
-        backLabel="RTI Requests"
+        backLabel={t("backLabel")}
       />
 
       <div
@@ -191,19 +198,19 @@ export default function NewRtiPage() {
           {/* ── RTI Metadata ── */}
           <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
             <legend style={{ fontWeight: 600, marginBottom: 12, color: "var(--ink)" }}>
-              RTI Details
+              {t("rtiDetails")}
             </legend>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div
                 style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}
               >
                 <label style={labelStyle}>
-                  <span>Section{req}</span>
+                  <span>{t("section")}{req}</span>
                   <select name="section" required style={fieldStyle}>
-                    <option value="">Select section…</option>
+                    <option value="">{t("selectSection")}</option>
                     {RTI_SECTIONS.map((s) => (
                       <option key={s.value} value={s.value}>
-                        {s.label}
+                        {t(s.labelKey)}
                       </option>
                     ))}
                   </select>
@@ -213,17 +220,17 @@ export default function NewRtiPage() {
                 </label>
 
                 <label style={labelStyle}>
-                  <span>Department / Public Authority{req}</span>
+                  <span>{t("department")}{req}</span>
                   <input
                     list="dept-suggestions"
                     name="departmentRef"
                     required
                     maxLength={200}
-                    placeholder="e.g. Ministry of Finance"
+                    placeholder={t("departmentPlaceholder")}
                     style={fieldStyle}
                   />
                   <datalist id="dept-suggestions">
-                    {SAMPLE_DEPARTMENTS.map((d) => (
+                    {RTI_PUBLIC_AUTHORITIES.map((d) => (
                       <option key={d} value={d} />
                     ))}
                   </datalist>
@@ -269,12 +276,12 @@ export default function NewRtiPage() {
               </div>
 
               <label style={labelStyle}>
-                <span>Subject{req}</span>
+                <span>{t("subject")}{req}</span>
                 <input
                   name="subject"
                   required
                   maxLength={500}
-                  placeholder="Brief one-line subject of the RTI request"
+                  placeholder={t("subjectPlaceholder")}
                   style={fieldStyle}
                 />
                 {formError.fieldError("subject") && (
@@ -283,13 +290,13 @@ export default function NewRtiPage() {
               </label>
 
               <label style={labelStyle}>
-                <span>Description / Particulars Sought{req}</span>
+                <span>{t("description")}{req}</span>
                 <textarea
                   name="description"
                   required
                   rows={5}
                   maxLength={10000}
-                  placeholder="Describe the information sought under the RTI Act…"
+                  placeholder={t("descriptionPlaceholder")}
                   style={{ ...fieldStyle, resize: "vertical" }}
                 />
                 {formError.fieldError("description") && (
@@ -302,7 +309,7 @@ export default function NewRtiPage() {
           {/* ── Applicant Details ── */}
           <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
             <legend style={{ fontWeight: 600, marginBottom: 12, color: "var(--ink)" }}>
-              Applicant Details
+              {t("applicantDetails")}
             </legend>
             {/* GAP-CRM-RTI-NEW-03: DPDP purpose / lawful-basis notice. This is
                 an officer-side register entry on behalf of an applicant, so
@@ -324,12 +331,12 @@ export default function NewRtiPage() {
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <label style={labelStyle}>
-                <span>Full Name{req}</span>
+                <span>{t("fullName")}{req}</span>
                 <input
                   name="applicantName"
                   required
                   maxLength={200}
-                  placeholder="Applicant's full name"
+                  placeholder={t("fullNamePlaceholder")}
                   style={fieldStyle}
                 />
                 {formError.fieldError("applicantName") && (
@@ -338,7 +345,7 @@ export default function NewRtiPage() {
               </label>
 
               <label style={labelStyle}>
-                <span>Contact (Phone / Email)</span>
+                <span>{t("contact")}</span>
                 <input
                   name="applicantContact"
                   maxLength={200}
@@ -357,28 +364,52 @@ export default function NewRtiPage() {
           {/* ── Fee ── */}
           <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
             <legend style={{ fontWeight: 600, marginBottom: 12, color: "var(--ink)" }}>
-              Application Fee
+              {t("applicationFee")}
             </legend>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <label style={labelStyle}>
-                <span>Fee Paid?</span>
-                <select name="feePaid" defaultValue="false" style={fieldStyle}>
-                  <option value="false">No</option>
-                  <option value="true">Yes</option>
+                <span>{t("feePaid")}</span>
+                <select
+                  name="feePaid"
+                  value={feePaid ? "true" : "false"}
+                  onChange={(e) => {
+                    const paid = e.target.value === "true";
+                    setFeePaid(paid);
+                    // Clear a stale amount when switching to "No".
+                    if (!paid) {
+                      setFeeAmount("");
+                      setFeeMsg(null);
+                    }
+                  }}
+                  style={fieldStyle}
+                >
+                  <option value="false">{t("no")}</option>
+                  <option value="true">{t("yes")}</option>
                 </select>
               </label>
 
               <label style={labelStyle}>
-                <span>Fee Amount (INR)</span>
+                <span>{t("feeAmount")}{feePaid ? req : null}</span>
                 <input
                   name="feeAmount"
                   type="text"
                   inputMode="decimal"
-                  placeholder="e.g. 10.00"
+                  placeholder={t("feeAmountPlaceholder")}
+                  value={feeAmount}
+                  disabled={!feePaid}
+                  aria-disabled={!feePaid}
                   aria-invalid={feeMsg ? true : undefined}
-                  onChange={() => feeMsg && setFeeMsg(null)}
-                  style={fieldStyle}
+                  onChange={(e) => {
+                    setFeeAmount(e.target.value);
+                    if (feeMsg) setFeeMsg(null);
+                  }}
+                  style={{ ...fieldStyle, ...(feePaid ? {} : { opacity: 0.6, cursor: "not-allowed" }) }}
                 />
+                {!feePaid ? (
+                  <span style={{ fontSize: 12, color: "var(--ink2)" }}>
+                    {t("markFeePaid")}
+                  </span>
+                ) : null}
                 {feeMsg && (
                   <span style={{ fontSize: 12, color: "var(--bad)" }}>{feeMsg}</span>
                 )}
@@ -395,10 +426,10 @@ export default function NewRtiPage() {
             }}
           >
             <a href="/crm/rti" className="btn">
-              Cancel
+              {t("cancel")}
             </a>
             <Button type="submit" disabled={saving} loading={saving}>
-              {saving ? "Filing…" : "File RTI Request"}
+              {saving ? t("filing") : t("fileRequest")}
             </Button>
           </div>
         </form>

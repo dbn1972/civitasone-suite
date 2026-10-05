@@ -119,3 +119,107 @@ describe("ImportContactsPage", () => {
     await waitFor(() => expect(screen.getByText("Import 1 contact?")).toBeInTheDocument());
   });
 });
+
+describe("ImportContactsPage feedback & caps (GAP-CRM-CONTACTS-IMPORT-04 / -05)", () => {
+  beforeEach(() => {
+    pushMock.mockReset();
+    browserFetchMock.mockReset();
+  });
+
+  function body(csv: string) {
+    fireEvent.change(screen.getByLabelText("CSV data"), { target: { value: csv } });
+  }
+
+  it("GAP-CRM-CONTACTS-IMPORT-04: shows an import summary (accepted/rejected) instead of auto-redirecting", async () => {
+    browserFetchMock.mockResolvedValue(makeRes(true, 202, { id: "batch-1" }));
+    renderPage();
+    // One valid row + one rejected (bad email) so the summary shows both counts.
+    body(`${HEADER}\nAsha Rao,,,,new,\nBad,abc,,,new,`);
+    fireEvent.click(screen.getByRole("button", { name: /Import 1 contact/ }));
+    await waitFor(() => expect(screen.getByText("Import 1 contact?")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Import contacts" }));
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Import summary" })).toBeInTheDocument());
+    const summaryCard = screen.getByRole("heading", { name: "Import summary" }).closest(".card") as HTMLElement;
+    expect(summaryCard.textContent).toMatch(/1\s*contact queued/);
+    expect(summaryCard.textContent).toMatch(/1\s*row were rejected before import/);
+    expect(screen.getByRole("link", { name: "View contacts" })).toBeInTheDocument();
+    // No auto-redirect.
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it("GAP-CRM-CONTACTS-IMPORT-05: chunks a >500-row import into multiple POSTs", async () => {
+    browserFetchMock.mockResolvedValue(makeRes(true, 202, { id: "batch" }));
+    renderPage();
+    const rows = Array.from({ length: 1200 }, (_, i) => `Person ${i},,,,new,`).join("\n");
+    body(`${HEADER}\n${rows}`);
+    fireEvent.click(screen.getByRole("button", { name: /Import 1,200 contacts/ }));
+    await waitFor(() => expect(screen.getByText("Import 1,200 contacts?")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Import contacts" }));
+    // 1200 rows / 500 per batch = 3 POSTs to the bulk endpoint.
+    await waitFor(() => {
+      const posts = browserFetchMock.mock.calls.filter((c) => c[0] === "v1/crm/contacts/bulk/import");
+      expect(posts).toHaveLength(3);
+    });
+    // The single-string status banner carries the batch count.
+    await waitFor(() => expect(screen.getByText(/1,200 contacts queued in 3 batches/)).toBeInTheDocument());
+  });
+
+  it("GAP-CRM-CONTACTS-IMPORT-05: labels the preview 'first 50 of N'", () => {
+    renderPage();
+    const rows = Array.from({ length: 120 }, (_, i) => `Person ${i},,,,new,`).join("\n");
+    body(`${HEADER}\n${rows}`);
+    expect(screen.getByRole("heading", { name: /showing first 50 of 120/ })).toBeInTheDocument();
+  });
+
+  it("GAP-CRM-CONTACTS-IMPORT-05: refuses an import above the row cap", () => {
+    renderPage();
+    const rows = Array.from({ length: 5001 }, (_, i) => `Person ${i},,,,new,`).join("\n");
+    body(`${HEADER}\n${rows}`);
+    expect(screen.getByRole("button", { name: /Import 5,001 contacts/ })).toBeDisabled();
+    expect(screen.getByText(/Too many rows \(5001\)/)).toBeInTheDocument();
+    expect(browserFetchMock).not.toHaveBeenCalled();
+  });
+
+  // GAP-CRM-CONTACTS-IMPORT-04 (backend): the page polls the job-status endpoint
+  // and shows the TRUE server-side outcome (created vs skipped) + a server
+  // "Download rejected rows (CSV)" built from the server result.
+  it("GAP-CRM-CONTACTS-IMPORT-04: polls the batch status endpoint and shows the server result", async () => {
+    browserFetchMock.mockImplementation((path: string) => {
+      if (path === "v1/crm/contacts/bulk/import") {
+        return Promise.resolve(makeRes(true, 202, { id: "batch-xyz" }));
+      }
+      if (path === "v1/crm/contacts/import/batch-xyz") {
+        return Promise.resolve(
+          makeRes(true, 200, {
+            batchId: "batch-xyz",
+            status: "completed",
+            total: 2,
+            accepted: 1,
+            rejected: 1,
+            errored: 0,
+            rejectedRows: [{ index: 1, reason: "duplicate_email" }],
+          }),
+        );
+      }
+      return Promise.resolve(makeRes(true, 200, {}));
+    });
+    renderPage();
+    body(`${HEADER}\nAsha Rao,asha@example.com,,,new,\nAsha Dup,asha@example.com,,,new,`);
+    fireEvent.click(screen.getByRole("button", { name: /Import 2 contacts/ }));
+    await waitFor(() => expect(screen.getByText("Import 2 contacts?")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Import contacts" }));
+
+    // The server-polled outcome shows created + skipped counts.
+    await waitFor(() =>
+      expect(browserFetchMock).toHaveBeenCalledWith("v1/crm/contacts/import/batch-xyz"),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByText((_c, el) => el?.textContent === "Server result: 1 created, 1 skipped (duplicates or errors)."),
+      ).toBeInTheDocument(),
+    );
+    // A server-rejected CSV download is offered.
+    expect(screen.getByRole("button", { name: /Download rejected rows \(CSV\)/ })).toBeInTheDocument();
+  });
+});

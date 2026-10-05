@@ -1,7 +1,8 @@
 import { getTranslations } from "next-intl/server";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { Card, PageHeader, RefreshErrorState, StatCard, StatGrid } from "../../../_components/ds";
-import { getCrmSentimentSummary } from "../../../_data/loaders";
+import { getCrmSentimentSummary, getCrmCitizenRatings } from "../../../_data/loaders";
+import { getSessionRoles, CRM_VIGILANCE_ROLES } from "@/lib/auth/roleGuard";
 import { toHumanError } from "@/lib/messages";
 import { PeriodFilter } from "./PeriodFilter";
 import { ThemeTable } from "./ThemeTable";
@@ -9,6 +10,9 @@ import {
   MOOD_ICON,
   MOOD_ICON_BG,
   MOOD_LABEL,
+  SCORE_MAX,
+  SCORE_MIN,
+  formatAverageScore,
   moodOf,
   rankThemes,
   shareOf,
@@ -40,6 +44,9 @@ export default async function VoiceOfCitizenPage({
   const t = await getTranslations("crmVoiceOfCitizen");
   const { range, invalid } = parseRange(searchParams);
   const { data: summary, source } = await getCrmSentimentSummary(range);
+  // GAP-CRM-VOICE-OF-CUSTOMER-FEEDBACK-05: citizen self-reported ratings, kept
+  // SEPARATE from the model-scored sentiment aggregate above.
+  const { data: ratings, source: ratingsSource } = await getCrmCitizenRatings();
 
   // The loader falls back to an all-zero summary on a failed fetch (there's no
   // sensible non-zero default for an aggregate), so every figure below must be
@@ -49,6 +56,18 @@ export default async function VoiceOfCitizenPage({
   const mood = moodOf(summary);
   const themes = rankThemes(summary);
   const concern = topConcern(summary);
+
+  // GAP-CRM-VOICE-OF-CUSTOMER-05: vigilance-sensitive themes (staff conduct,
+  // integrity/corruption) are hidden from — and non-exportable by — anyone
+  // without a vigilance-admin role. The server should enforce the same filter;
+  // this UI gate is defence-in-depth (flagged for HUMAN REVIEW).
+  const SENSITIVE_THEMES = new Set(["staff_conduct", "corruption"]);
+  const roles = getSessionRoles();
+  const canSeeSensitive = CRM_VIGILANCE_ROLES.some((r) => roles.includes(r));
+  const visibleThemes = canSeeSensitive ? themes : themes.filter((t) => !SENSITIVE_THEMES.has(t.theme));
+  const hiddenSensitiveCount = themes.length - visibleThemes.length;
+  // The headline "Primary Concern" must not name a theme the viewer may not see.
+  const visibleConcern = concern && (canSeeSensitive || !SENSITIVE_THEMES.has(concern.theme)) ? concern : null;
   const windowLabel =
     range.from || range.to
       ? t("windowRange", { from: range.from ?? t("earliest"), to: range.to ?? t("today") })
@@ -72,8 +91,23 @@ export default async function VoiceOfCitizenPage({
           </div>
         }
       />
-      <div role="note" aria-label="Data protection notice" className="flex items-start gap-2.5 mt-2 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
-        <span aria-hidden="true" className="text-base leading-snug">🛡</span>
+      <div
+        role="note"
+        aria-label={t("dataProtectionNotice")}
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 10,
+          marginTop: 8,
+          padding: "12px 16px",
+          background: "var(--infobg)",
+          border: "1px solid var(--infobd)",
+          borderRadius: "var(--r)",
+          fontSize: 14,
+          color: "var(--info)",
+        }}
+      >
+        <span aria-hidden="true" style={{ fontSize: 16, lineHeight: 1.3 }}>🛡</span>
         <span>Citizen feedback is anonymised in aggregate reporting. Individual feedback access is subject to DPDP Act 2023 provisions.</span>
       </div>
       {invalid && (
@@ -107,7 +141,7 @@ export default async function VoiceOfCitizenPage({
           icon="◈"
           iconBg="#fef3c7"
           label="Primary Concern"
-          value={isError ? "—" : concern ? themeLabel(concern.theme) : "None"}
+          value={isError ? "—" : visibleConcern ? themeLabel(visibleConcern.theme) : "None"}
         />
       </StatGrid>
 
@@ -142,10 +176,31 @@ export default async function VoiceOfCitizenPage({
           <StatCard
             icon="▣"
             iconBg="#e0e7ff"
-            label="Average Score"
-            value={isError || summary.total === 0 ? "—" : `${summary.averageScore} / 100`}
+            label={t("averageScore", { min: SCORE_MIN, max: SCORE_MAX })}
+            value={isError || summary.total === 0 ? "—" : formatAverageScore(summary.averageScore)}
           />
         </StatGrid>
+      </Card>
+
+      <Card title={t("citizenRatings")}>
+        <StatGrid>
+          <StatCard
+            icon="★"
+            iconBg="#fef3c7"
+            label={t("averageRating")}
+            value={ratingsSource === "error" || ratings.count === 0 ? "—" : ratings.average!.toFixed(2)}
+          />
+          <StatCard
+            icon="▣"
+            iconBg="#e0f2fe"
+            label={t("ratingsReceived")}
+            value={ratingsSource === "error" ? "—" : ratings.count.toLocaleString("en-IN")}
+          />
+        </StatGrid>
+        <p style={{ fontSize: 13, color: "var(--muted)", margin: "8px 0 0" }}>
+          {t("citizenRatingsNote")}{" "}
+          <a href="/crm/voice-of-customer/feedback">{t("openFeedbackForm")}</a>.
+        </p>
       </Card>
 
       <Card title="Key Feedback Themes">
@@ -156,7 +211,14 @@ export default async function VoiceOfCitizenPage({
             source={{ area: "citizen feedback themes" }}
           />
         ) : (
-          <ThemeTable themes={themes} />
+          <>
+            {hiddenSensitiveCount > 0 ? (
+              <p role="note" style={{ fontSize: 13, color: "var(--ink2)", margin: "0 0 10px" }}>
+                {t("hiddenSensitiveThemes", { count: hiddenSensitiveCount })}
+              </p>
+            ) : null}
+            <ThemeTable themes={visibleThemes} canExport={canSeeSensitive} />
+          </>
         )}
       </Card>
     </>

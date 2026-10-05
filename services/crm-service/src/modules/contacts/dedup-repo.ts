@@ -3,6 +3,7 @@
  */
 import { eq, and, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+import { HttpError } from "../../shared/context.js";
 import { enqueue } from "../../shared/outbox.js";
 import { dedupRules, type DedupRuleRow } from "./dedup-schema.js";
 import { contacts } from "./schema.js";
@@ -56,6 +57,67 @@ export async function getRules(tenantId: string, actorId: string): Promise<Dedup
   return seeded.map(toRule);
 }
 
+/**
+ * GAP-CRM-DEDUP-RULES-02 — list-level optimistic-concurrency metadata.
+ *
+ * `version` is a tenant-list token derived from `SUM(version)` across the
+ * tenant's rule rows. Every upsert bumps at least one row's `version` by 1 (an
+ * insert starts at 1, an update does `version + 1`), so the list sum strictly
+ * increases on ANY change to the list — whether a different row or the same
+ * row — which is exactly what a wholesale-PUT editor needs to detect a
+ * concurrent admin edit. No schema change is required.
+ */
+export interface RulesListMeta {
+  version: string;
+  updatedBy: string | null;
+  updatedAt: string | null;
+}
+
+export interface RulesList {
+  rules: DedupRule[];
+  meta: RulesListMeta;
+}
+
+type VersionRow = { version: string | number | null; updatedBy: string | null; updatedAt: Date | string | null };
+
+/** Compute the list version + last-change metadata from a locked/unlocked tx. */
+async function readListMeta(
+  tx: { execute: (q: ReturnType<typeof sql>) => Promise<unknown> },
+  tenantId: string,
+  lock: boolean,
+): Promise<RulesListMeta> {
+  // The aggregate itself cannot carry FOR UPDATE; when locking is requested we
+  // first lock the tenant's rows, then aggregate within the same transaction so
+  // the version we compare against cannot change under us (no TOCTOU).
+  if (lock) {
+    await tx.execute(sql`SELECT id FROM crm.dedup_rules WHERE tenant_id = ${tenantId} FOR UPDATE`);
+  }
+  const rows = (await tx.execute(sql`
+    SELECT COALESCE(SUM(version), 0)::text AS version,
+           (SELECT updated_by FROM crm.dedup_rules WHERE tenant_id = ${tenantId} ORDER BY updated_at DESC LIMIT 1) AS "updatedBy",
+           (SELECT updated_at FROM crm.dedup_rules WHERE tenant_id = ${tenantId} ORDER BY updated_at DESC LIMIT 1) AS "updatedAt"
+    FROM crm.dedup_rules
+    WHERE tenant_id = ${tenantId}
+  `)) as unknown as VersionRow[];
+  const r = rows[0];
+  const updatedAt = r?.updatedAt ?? null;
+  return {
+    version: String(r?.version ?? "0"),
+    updatedBy: r?.updatedBy ?? null,
+    updatedAt: updatedAt instanceof Date ? updatedAt.toISOString() : updatedAt,
+  };
+}
+
+/**
+ * Read the tenant's rules together with the list-level concurrency token
+ * (GAP-CRM-DEDUP-RULES-02). Seeds defaults on first read via getRules.
+ */
+export async function getRulesList(tenantId: string, actorId: string): Promise<RulesList> {
+  const rules = await getRules(tenantId, actorId);
+  const meta = await scopedRead((tx) => readListMeta(tx, tenantId, false));
+  return { rules, meta };
+}
+
 export interface RuleUpsert {
   field: DedupField;
   matchType: "exact" | "fuzzy";
@@ -67,14 +129,33 @@ export interface RuleUpsert {
 /**
  * Replace/insert the given rules for a tenant (upsert by tenant+field). Rules
  * not present in the payload are left untouched, so a partial PUT is additive.
+ *
+ * GAP-CRM-DEDUP-RULES-02 optimistic concurrency: when `expectedVersion` is
+ * supplied, the tenant's rows are locked (`FOR UPDATE`) and the current list
+ * version re-read INSIDE the write transaction before any mutation. A mismatch
+ * throws 409 VERSION_CONFLICT and the transaction rolls back untouched, so a
+ * stale wholesale PUT can never overwrite a concurrent admin's change. The lock
+ * serializes two same-version writers: the first commits (bumping the version),
+ * the second then observes the new version and 409s.
  */
 export async function upsertRules(
   tenantId: string,
   rules: RuleUpsert[],
   actorId: string,
   correlationId: string,
-): Promise<DedupRule[]> {
+  expectedVersion?: string,
+): Promise<RulesList> {
   await db.transaction(async (tx) => {
+    if (expectedVersion !== undefined) {
+      const current = await readListMeta(tx as unknown as { execute: (q: ReturnType<typeof sql>) => Promise<unknown> }, tenantId, true);
+      if (current.version !== expectedVersion) {
+        throw new HttpError(
+          409,
+          "VERSION_CONFLICT",
+          "These matching rules were changed by another admin. Reload to see the latest, then re-apply your changes.",
+        );
+      }
+    }
     for (const r of rules) {
       await tx
         .insert(dedupRules)
@@ -119,7 +200,7 @@ export async function upsertRules(
       },
     });
   });
-  return getRules(tenantId, actorId);
+  return getRulesList(tenantId, actorId);
 }
 
 /**

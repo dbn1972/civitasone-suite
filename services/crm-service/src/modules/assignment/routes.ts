@@ -16,9 +16,11 @@
  *   GET/POST/PUT/DELETE /v1/crm/escalation-rules[/:id]
  */
 import type { FastifyInstance } from "fastify";
+import { sql } from "drizzle-orm";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
-import { resolveContext, requireRole } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { scopedRead } from "../../shared/db.js";
 import { COMMANDS } from "../../topics.js";
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
@@ -26,6 +28,37 @@ import * as repo from "./repo.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
 const ADMIN_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
+
+/**
+ * GAP-CRM-ASSIGNMENT-DIRECTORY-04: deleting a queue / territory / partner /
+ * branch that an assignment rule still points at would leave a dangling
+ * reference (the rule's `criteria` JSONB carries the target id under a
+ * rule-specific key, e.g. queueId/territoryId/partnerId/branchId), so a lead it
+ * would have routed to is silently never assigned. The DELETE is CQRS (fire and
+ * forget), so guard SYNCHRONOUSLY in the route before enqueueing: if any
+ * assignment rule references this id, refuse with 409 IN_USE and the count,
+ * instead of a 202 that quietly orphans rules. UUIDs are globally unique, so a
+ * text search of the criteria JSON is a safe, key-agnostic reference test.
+ */
+async function assertNotReferencedByRules(
+  tenantId: string,
+  targetId: string,
+): Promise<void> {
+  const rows = (await scopedRead((tx) => tx.execute(sql`
+    SELECT count(*)::int AS count
+    FROM crm.assignment_rules
+    WHERE tenant_id = ${tenantId}
+      AND criteria::text LIKE ${"%" + targetId + "%"}
+  `))) as unknown as Array<{ count: number }>;
+  const count = rows[0]?.count ?? 0;
+  if (count > 0) {
+    throw new HttpError(
+      409,
+      "IN_USE",
+      `cannot delete: still referenced by ${count} assignment rule${count === 1 ? "" : "s"}. Reassign or remove those rules first.`,
+    );
+  }
+}
 
 export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
   // ── Assignment rules ───────────────────────────────────────────────────────
@@ -101,6 +134,7 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
   app.delete("/v1/crm/assignment-queues/:id", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
     const { id } = v.idParam.parse(req.params);
+    await assertNotReferencedByRules(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.deleteTarget(ctx, COMMANDS.deleteAssignmentQueue, id));
   });
 
@@ -122,6 +156,7 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
   app.delete("/v1/crm/territories/:id", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
     const { id } = v.idParam.parse(req.params);
+    await assertNotReferencedByRules(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.deleteTarget(ctx, COMMANDS.deleteTerritory, id));
   });
 
@@ -143,6 +178,7 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
   app.delete("/v1/crm/partners/:id", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
     const { id } = v.idParam.parse(req.params);
+    await assertNotReferencedByRules(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.deleteTarget(ctx, COMMANDS.deletePartner, id));
   });
 
@@ -164,6 +200,7 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
   app.delete("/v1/crm/branches/:id", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
     const { id } = v.idParam.parse(req.params);
+    await assertNotReferencedByRules(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.deleteTarget(ctx, COMMANDS.deleteBranch, id));
   });
 

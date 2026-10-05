@@ -286,6 +286,30 @@ describe("DM-002 document types + verify", () => {
     expect(del.statusCode).toBe(204);
   });
 
+  // GAP-CRM-DOCUMENT-TYPES-01: the `code` identifies the type and documents are
+  // keyed to it, so changing it on a saved type could orphan them. The PUT body
+  // has no `code` field at all, so a code sent on update is ignored — the type
+  // keeps its original code and attached documents are never orphaned.
+  it("ignores a code change on PUT (code is immutable once saved)", async () => {
+    const create = await inject("POST", "/v1/crm/document-types", {
+      headers: adminHeaders(),
+      payload: { code: "immutable_code", name: "Immutable", appliesTo: ["contact"] },
+    });
+    expect(create.statusCode).toBe(201);
+    const typeId = create.json().data.id as string;
+
+    const upd = await inject("PUT", `/v1/crm/document-types/${typeId}`, {
+      headers: adminHeaders(),
+      payload: { name: "Renamed", code: "attempted_new_code" },
+    });
+    expect(upd.statusCode).toBe(200);
+    // The name changed; the code did NOT.
+    expect(upd.json().data.name).toBe("Renamed");
+    expect(upd.json().data.code).toBe("immutable_code");
+
+    await inject("DELETE", `/v1/crm/document-types/${typeId}`, { headers: adminHeaders() });
+  });
+
   // Regression coverage: applies_to used to be a scalar column + z.enum() validator, so
   // ANY array the frontend's checkbox UI sent (even a single checked box) failed
   // validation unconditionally. Now a real array, allowing >1 subject type per document

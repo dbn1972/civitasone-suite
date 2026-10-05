@@ -5,7 +5,7 @@
  * affected records with drill-down. Every stat is gated on source==="error":
  * on a failed load we render "—" + DataSourceBadge, never a fabricated zero.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { StatGrid, StatCard, Card, Segmented, Tabs, EmptyState, ProgressBar } from "../ds";
@@ -47,24 +47,52 @@ export function DataQualityView() {
   const [filter, setFilter] = useState<DqFilter>("missing");
   const [report, setReport] = useState<DataQualityReport | null>(null);
   const [source, setSource] = useState<DqSource | "loading">("loading");
+  // GAP-CRM-DATA-QUALITY-03: the counts and completeness distribution are a
+  // per-entity summary and do not change when the filter tab changes (only the
+  // records list does). We cache the per-entity summary and show "records
+  // reloading" ONLY in the records card on a filter switch, so clicking
+  // "Invalid format" never blanks the stat cards or distribution to "…".
+  const summaryEntity = useRef<DqEntity | null>(null);
+  // True only while the records list is reloading for a filter change on an
+  // entity whose summary we already have — keeps stats/distribution mounted.
+  const [recordsReloading, setRecordsReloading] = useState(false);
 
   useEffect(() => {
     let alive = true;
-    setSource("loading");
+    const haveSummary = summaryEntity.current === entity && report !== null;
+    if (haveSummary) {
+      setRecordsReloading(true);
+    } else {
+      setSource("loading");
+    }
     void getDataQuality(entity, filter).then(({ data, source: s }) => {
       if (!alive) return;
-      setReport(data);
-      setSource(s);
+      setReport((prev) =>
+        // On a filter-only reload keep the known-good counts/distribution and
+        // only swap the records, so a transient records error can't wipe stats.
+        haveSummary && prev && s === "api" ? { ...prev, records: data.records } : data,
+      );
+      if (!haveSummary) {
+        setSource(s);
+        if (s === "api") summaryEntity.current = entity;
+      } else if (s === "error") {
+        // keep the cached summary; surface the error only in the records card
+      }
+      setRecordsReloading(false);
     });
     return () => {
       alive = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entity, filter]);
 
   const counts = report?.counts ?? { missing: 0, invalid: 0, stale: 0 };
   const distribution = report?.distribution ?? [];
   const records = report?.records ?? [];
-  const maxBucket = distribution.reduce((m, b) => Math.max(m, b.count), 0) || 1;
+  // GAP-CRM-DATA-QUALITY-02: bars are a share of the master (all records), not
+  // of the largest bucket, so a dominant bucket no longer flattens the rest to
+  // invisibility and each bar reads as a true percentage.
+  const distributionTotal = distribution.reduce((sum, b) => sum + b.count, 0);
   const isError = source === "error";
   const isLoading = source === "loading";
 
@@ -97,13 +125,21 @@ export function DataQualityView() {
           ) : distribution.length === 0 ? (
             <EmptyState icon="📊" title="No distribution data" message="Nothing to summarise for this selection yet." />
           ) : (
-            distribution.map((b) => (
-              <div key={b.label} style={{ display: "grid", gridTemplateColumns: "160px 1fr 60px", alignItems: "center", gap: 10 }}>
-                <span style={{ fontSize: 13 }}>{b.label}</span>
-                <ProgressBar value={(b.count / maxBucket) * 100} />
-                <span className="num" style={{ fontSize: 13 }}>{b.count.toLocaleString("en-IN")}</span>
-              </div>
-            ))
+            distribution.map((b) => {
+              const pct = distributionTotal > 0 ? (b.count / distributionTotal) * 100 : 0;
+              const pctLabel = `${pct.toFixed(1)}%`;
+              return (
+                <div key={b.label} style={{ display: "grid", gridTemplateColumns: "160px 1fr 110px", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 13 }}>{b.label}</span>
+                  <span role="img" aria-label={t("distributionBarAria", { label: b.label, pct: pctLabel })} style={{ display: "block" }}>
+                    <ProgressBar value={pct} />
+                  </span>
+                  <span className="num" style={{ fontSize: 13 }}>
+                    {b.count.toLocaleString("en-IN")} ({pctLabel})
+                  </span>
+                </div>
+              );
+            })
           )}
         </div>
       </Card>
@@ -121,7 +157,7 @@ export function DataQualityView() {
 
       <div className="card" style={{ marginTop: 12 }}>
         <div className="card-h"><h3>{FILTER_LABEL[filter]} — {ENTITY_LABEL[entity]}</h3></div>
-        {isLoading ? (
+        {isLoading || recordsReloading ? (
           <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)", padding: 12 }}>Loading records…</p>
         ) : isError ? (
           <p role="alert" style={{ fontSize: 13, color: "var(--muted)", padding: 12 }}>

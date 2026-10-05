@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { ActionButton } from "../../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { formatIndianDate } from "@/lib/formatters";
+import { RTI_PUBLIC_AUTHORITIES, RTI_AUTHORITY_OTHER, normaliseAuthority } from "../rtiAuthorities";
 
 /**
  * Plain-language failure message for a failed RTI lifecycle action. `patch`
@@ -60,6 +61,7 @@ export function RtiActions({
   firstAppealDueAt,
   firstAppealDecidedAt,
   disposedAt,
+  receivedAt,
 }: {
   id: string;
   status: string;
@@ -84,10 +86,28 @@ export function RtiActions({
   firstAppealDecidedAt?: string | null;
   /** When the request was disposed. */
   disposedAt?: string | null;
+  /**
+   * GAP-CRM-RTI-DETAIL-04: when the request was received — used to warn if the
+   * s.6(3) 5-day transfer window has passed when forwarding.
+   */
+  receivedAt?: string | null;
 }) {
   const t = useTranslations("crmRtiActions");
   const router = useRouter();
   const [outcome, setOutcome] = useState<FaaOutcome>("allowed");
+  // GAP-CRM-RTI-DETAIL-04: Forward target is chosen from the shared authority
+  // list (not free text); "Other" reveals a normalised free-text field.
+  const [forwardChoice, setForwardChoice] = useState<string>("");
+  const [forwardOther, setForwardOther] = useState<string>("");
+
+  const forwardDept = forwardChoice === RTI_AUTHORITY_OTHER ? normaliseAuthority(forwardOther) : forwardChoice;
+
+  // s.6(3): a request must be transferred within 5 days of receipt.
+  const transferWindowDays = 5;
+  const daysSinceReceipt = receivedAt
+    ? Math.floor((Date.now() - new Date(receivedAt).getTime()) / 86_400_000)
+    : null;
+  const transferWindowPassed = daysSinceReceipt !== null && daysSinceReceipt > transferWindowDays;
 
   const canProgress = status === "RECEIVED" || status === "TRANSFERRED";
   const canAppeal = status === "RESPONDED" || status === "REJECTED";
@@ -216,14 +236,60 @@ export function RtiActions({
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
       {canProgress && (
         <>
-          {/* Forward to another department — s.6(3) transfer */}
+          {/* Forward to another department — s.6(3) transfer.
+              GAP-CRM-RTI-DETAIL-04: the target is chosen from the shared RTI
+              public-authority list (not free text), with an explicit "Other"
+              for an authority not listed; the value is normalised. A warning is
+              shown when the s.6(3) 5-day transfer window has already passed. */}
           <ActionButton
             label={t("forward")}
             confirmTitle={t("forwardConfirmTitle")}
-            confirmDescription={t("forwardConfirmBody")}
-            requireReason
-            reasonLabel={t("forwardReasonLabel")}
-            onConfirm={(dept) => patch("forward", { departmentRef: dept })}
+            confirmDescription={
+              <>
+                <p style={{ margin: "0 0 8px" }}>
+                  {t("forwardConfirmBody")}
+                </p>
+                {transferWindowPassed && (
+                  <p role="alert" style={{ margin: "0 0 8px", fontSize: 13, color: "var(--warn)", fontWeight: 600 }}>
+                    {t("transferWindowPassed", { window: transferWindowDays, days: daysSinceReceipt })}
+                  </p>
+                )}
+                <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
+                  {t("transferTo")}
+                  <select
+                    aria-label={t("transferToAriaLabel")}
+                    value={forwardChoice}
+                    onChange={(e) => setForwardChoice(e.target.value)}
+                    style={{ padding: 6, minHeight: 36 }}
+                  >
+                    <option value="">{t("selectAuthority")}</option>
+                    {RTI_PUBLIC_AUTHORITIES.map((a) => (
+                      <option key={a} value={a}>{a}</option>
+                    ))}
+                    <option value={RTI_AUTHORITY_OTHER}>{t("otherAuthority")}</option>
+                  </select>
+                </label>
+                {forwardChoice === RTI_AUTHORITY_OTHER && (
+                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, marginTop: 8 }}>
+                    {t("authorityName")}
+                    <input
+                      aria-label={t("otherAuthorityAriaLabel")}
+                      value={forwardOther}
+                      maxLength={200}
+                      onChange={(e) => setForwardOther(e.target.value)}
+                      placeholder={t("authorityNamePlaceholder")}
+                      style={{ padding: 6, minHeight: 36 }}
+                    />
+                  </label>
+                )}
+              </>
+            }
+            onConfirm={() => {
+              if (!forwardDept) {
+                throw new Error(t("selectAuthorityError"));
+              }
+              return patch("forward", { departmentRef: forwardDept });
+            }}
           />
 
           {/* Respond within the 30-day statutory deadline. GAP-CRM-RTI-DETAIL-02:

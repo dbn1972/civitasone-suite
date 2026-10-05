@@ -116,7 +116,7 @@ export function FollowUpModal({ accountId, accountName, onClose }: Props) {
   return (
     <>
       <Button onClick={openModal}>
-        Create Follow-up
+        {t("createFollowUp")}
       </Button>
 
       {open && (
@@ -128,7 +128,7 @@ export function FollowUpModal({ accountId, accountName, onClose }: Props) {
           <div
             role="dialog"
             aria-modal="true"
-            aria-label="Create follow-up service request"
+            aria-label={t("dialogAriaLabel")}
             style={DIALOG}
           >
             <div
@@ -141,7 +141,7 @@ export function FollowUpModal({ accountId, accountName, onClose }: Props) {
             >
               <div>
                 <h2 style={{ margin: 0, fontSize: 18, color: "var(--ink)" }}>
-                  Create Follow-up
+                  {t("createFollowUp")}
                 </h2>
                 <p
                   style={{
@@ -150,7 +150,7 @@ export function FollowUpModal({ accountId, accountName, onClose }: Props) {
                     color: "var(--mut)",
                   }}
                 >
-                  {"Account: "}
+                  {t("accountLabel")}
                   {accountName ? (
                     <strong style={{ color: "var(--ink)" }}>{accountName}</strong>
                   ) : (
@@ -169,7 +169,7 @@ export function FollowUpModal({ accountId, accountName, onClose }: Props) {
               </div>
               <button
                 type="button"
-                aria-label="Close dialog"
+                aria-label={t("closeDialog")}
                 onClick={() => setOpen(false)}
                 style={{
                   background: "none",
@@ -209,7 +209,7 @@ export function FollowUpModal({ accountId, accountName, onClose }: Props) {
             >
               <label style={LABEL}>
                 <span>
-                  Contact Name{" "}
+                  {t("contactName")}{" "}
                   <span aria-hidden="true" style={{ color: "var(--bad)" }}>
                     *
                   </span>
@@ -218,7 +218,7 @@ export function FollowUpModal({ accountId, accountName, onClose }: Props) {
                   name="citizenName"
                   required
                   maxLength={200}
-                  placeholder="Citizen or account representative name"
+                  placeholder={t("contactNamePlaceholder")}
                   style={FIELD}
                 />
                 {formError.fieldError("citizenName") && (
@@ -227,37 +227,35 @@ export function FollowUpModal({ accountId, accountName, onClose }: Props) {
               </label>
 
               <label style={LABEL}>
-                <span>Phone</span>
+                <span>{t("phone")}</span>
                 <input
                   name="citizenPhone"
                   type="tel"
                   maxLength={32}
-                  placeholder="e.g. 9876543210"
+                  placeholder={t("phonePlaceholder")}
                   style={FIELD}
                 />
               </label>
 
               <label style={LABEL}>
                 <span>
-                  Service Type{" "}
+                  {t("serviceType")}{" "}
                   <span aria-hidden="true" style={{ color: "var(--bad)" }}>
                     *
                   </span>
                 </span>
                 <select name="serviceType" required style={FIELD}>
-                  <option value="">Select service type...</option>
+                  <option value="">{t("selectServiceType")}</option>
+                  {/* GAP-CRM-HEALTH-ACCOUNTID-03: only account-relevant follow-up
+                      types belong here. "New Water Connection" / "New Electricity
+                      Connection" are citizen service-request types, not account
+                      health actions, and mis-typed the resulting record. */}
                   <option value="Account Health Follow-up">
-                    Account Health Follow-up
+                    {t("typeAccountHealthFollowUp")}
                   </option>
-                  <option value="Renewal Support">Renewal Support</option>
-                  <option value="Escalation">Escalation</option>
-                  <option value="New Water Connection">
-                    New Water Connection
-                  </option>
-                  <option value="New Electricity Connection">
-                    New Electricity Connection
-                  </option>
-                  <option value="Other">Other</option>
+                  <option value="Renewal Support">{t("typeRenewalSupport")}</option>
+                  <option value="Escalation">{t("typeEscalation")}</option>
+                  <option value="Other">{t("typeOther")}</option>
                 </select>
                 {formError.fieldError("serviceType") && (
                   <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("serviceType")}</span>
@@ -266,7 +264,7 @@ export function FollowUpModal({ accountId, accountName, onClose }: Props) {
 
               <label style={LABEL}>
                 <span>
-                  Subject{" "}
+                  {t("subject")}{" "}
                   <span aria-hidden="true" style={{ color: "var(--bad)" }}>
                     *
                   </span>
@@ -275,7 +273,7 @@ export function FollowUpModal({ accountId, accountName, onClose }: Props) {
                   name="subject"
                   required
                   maxLength={500}
-                  defaultValue={t("defaultSubject", { account: accountName ?? accountId })}
+                  defaultValue={t("defaultSubject", { account: accountName ?? t("thisAccount") })}
                   style={FIELD}
                 />
                 {formError.fieldError("subject") && (
@@ -284,12 +282,12 @@ export function FollowUpModal({ accountId, accountName, onClose }: Props) {
               </label>
 
               <label style={LABEL}>
-                <span>Description</span>
+                <span>{t("description")}</span>
                 <textarea
                   name="description"
                   rows={3}
                   maxLength={5000}
-                  placeholder="Additional context for the follow-up..."
+                  placeholder={t("descriptionPlaceholder")}
                   style={{ ...FIELD, resize: "vertical" }}
                 />
                 {formError.fieldError("description") && (
@@ -298,12 +296,12 @@ export function FollowUpModal({ accountId, accountName, onClose }: Props) {
               </label>
 
               <label style={LABEL}>
-                <span>Priority</span>
+                <span>{t("priority")}</span>
                 <select name="priority" defaultValue="normal" style={FIELD}>
-                  <option value="low">Low</option>
-                  <option value="normal">Normal</option>
-                  <option value="high">High</option>
-                  <option value="urgent">Urgent</option>
+                  <option value="low">{t("priorityLow")}</option>
+                  <option value="normal">{t("priorityNormal")}</option>
+                  <option value="high">{t("priorityHigh")}</option>
+                  <option value="urgent">{t("priorityUrgent")}</option>
                 </select>
               </label>
 
@@ -321,14 +319,14 @@ export function FollowUpModal({ accountId, accountName, onClose }: Props) {
                   onClick={() => setOpen(false)}
                   disabled={saving}
                 >
-                  Cancel
+                  {t("cancel")}
                 </Button>
                 <Button
                   type="submit"
                   disabled={saving}
                   loading={saving}
                 >
-                  {saving ? "Creating..." : "Create Service Request"}
+                  {saving ? t("creating") : t("createServiceRequest")}
                 </Button>
               </div>
             </form>

@@ -1,11 +1,13 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader } from "../../../_components/ds";
 
-export default function RtiLoading() {
+export default async function RtiLoading() {
+  const t = await getTranslations("crmRtiList");
   return (
     <>
       <PageHeader
-        title="RTI Requests"
-        subtitle="Right to Information Act 2005 — 30-day response register."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/crm"
       />
       <div

@@ -10,19 +10,24 @@ vi.mock("@/lib/crm/leadQualification", async (orig) => {
   return { ...actual, getScoreRules: vi.fn(), saveScoreRules: vi.fn() };
 });
 
-const rule: lq.LeadScoreRule = { attribute: "industry", weight: 5, scoreFnType: "linear", params: { max: 100 }, enabled: true };
+const rule: lq.LeadScoreRule = { attribute: "leadSource", weight: 5, scoreFnType: "map", params: { default: 20 }, enabled: true };
 
 beforeEach(() => {
   vi.mocked(lq.getScoreRules).mockReset();
   vi.mocked(lq.saveScoreRules).mockReset();
 });
 
+/** Walk through the GAP-04 confirm dialog that now gates every Save. */
+async function confirmSave() {
+  fireEvent.click(await screen.findByRole("button", { name: /save and re-score/i }));
+}
+
 describe("LeadScoreRulesEditor (LQ-002 admin)", () => {
   it("loads and shows existing rules", async () => {
     vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [rule], source: "api" });
     render(<NextIntlClientProvider locale="en" messages={enMessages}><LeadScoreRulesEditor /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
-    expect(screen.getByLabelText(/attribute for rule 1/i)).toHaveValue("industry");
+    expect(screen.getByLabelText(/attribute for rule 1/i)).toHaveValue("leadSource");
     expect(screen.queryByText(/couldn.t load/i)).not.toBeInTheDocument();
   });
 
@@ -30,8 +35,6 @@ describe("LeadScoreRulesEditor (LQ-002 admin)", () => {
     vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [], source: "error" });
     render(<NextIntlClientProvider locale="en" messages={enMessages}><LeadScoreRulesEditor /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByText(/couldn.t load scoring rules/i)).toBeInTheDocument());
-    // The editor and its empty-state must never render on an errored load:
-    // saving from there would PUT {rules:[]} and disable scoring for all leads.
     expect(screen.queryByText(/no scoring rules yet/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /save rules/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /add rule/i })).not.toBeInTheDocument();
@@ -49,18 +52,30 @@ describe("LeadScoreRulesEditor (LQ-002 admin)", () => {
     expect(screen.getByRole("button", { name: /save rules/i })).toBeInTheDocument();
   });
 
-  it("adds a rule and saves it, serialising params to JSON", async () => {
+  // GAP-CRM-LEAD-SCORING-02: the score-function select now offers the real
+  // backend kinds, not linear/step/boolean.
+  it("offers the real crm-service score-function kinds (not linear/step/boolean)", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [rule], source: "api" });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><LeadScoreRulesEditor /></NextIntlClientProvider>);
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    const options = Array.from(screen.getByLabelText(/score function for rule 1/i).querySelectorAll("option")).map((o) => (o as HTMLOptionElement).value);
+    expect(options).toEqual(["presence", "map", "recency", "numeric_threshold"]);
+    expect(options).not.toContain("linear");
+  });
+
+  it("adds a rule and saves it, serialising params to JSON (through the confirm)", async () => {
     vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [], source: "api" });
     vi.mocked(lq.saveScoreRules).mockResolvedValue(undefined);
     render(<NextIntlClientProvider locale="en" messages={enMessages}><LeadScoreRulesEditor /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByText(/no scoring rules yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add rule/i }));
-    fireEvent.change(screen.getByLabelText(/attribute for rule 1/i), { target: { value: "budget" } });
-    fireEvent.change(screen.getByLabelText(/params json for rule 1/i), { target: { value: '{"max":50}' } });
+    fireEvent.change(screen.getByLabelText(/attribute for rule 1/i), { target: { value: "company" } });
+    fireEvent.change(screen.getByLabelText(/params json for rule 1/i), { target: { value: '{"present":80,"absent":10}' } });
     fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    await confirmSave();
     await waitFor(() => expect(lq.saveScoreRules).toHaveBeenCalled());
     const saved = vi.mocked(lq.saveScoreRules).mock.calls[0][0];
-    expect(saved[0]).toMatchObject({ attribute: "budget", params: { max: 50 } });
+    expect(saved[0]).toMatchObject({ attribute: "company", scoreFnType: "presence", params: { present: 80, absent: 10 } });
   });
 
   it("blocks save when a weight is non-finite (NaN guard)", async () => {
@@ -69,6 +84,7 @@ describe("LeadScoreRulesEditor (LQ-002 admin)", () => {
     await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
     expect(await screen.findByText(/needs an attribute, a whole-number weight/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /save and re-score/i })).not.toBeInTheDocument();
     expect(lq.saveScoreRules).not.toHaveBeenCalled();
   });
 
@@ -80,8 +96,55 @@ describe("LeadScoreRulesEditor (LQ-002 admin)", () => {
     fireEvent.change(params, { target: { value: "{not json" } });
     expect(params).toHaveAttribute("aria-invalid", "true");
     fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
-    expect(await screen.findByText(/valid json params/i)).toBeInTheDocument();
+    expect(await screen.findByText(/valid params for its score function/i)).toBeInTheDocument();
     expect(lq.saveScoreRules).not.toHaveBeenCalled();
+  });
+
+  // GAP-CRM-LEAD-SCORING-02: a params blob that is valid JSON but the wrong
+  // shape for the chosen function is now blocked with a per-row message.
+  it("blocks save when params do not match the score function's shape", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [{ ...rule, scoreFnType: "map", params: {} }], source: "api" });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><LeadScoreRulesEditor /></NextIntlClientProvider>);
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    const params = screen.getByLabelText(/params json for rule 1/i);
+    // "values" must be an object of value → score.
+    fireEvent.change(params, { target: { value: '{"values":[1,2,3]}' } });
+    expect(await screen.findByText(/“values” must be an object/i)).toBeInTheDocument();
+    expect(params).toHaveAttribute("aria-invalid", "true");
+    fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    expect(lq.saveScoreRules).not.toHaveBeenCalled();
+  });
+
+  // GAP-CRM-LEAD-SCORING-03: an unrecognised attribute warns (but is still
+  // allowed — backend attribute is free text).
+  it("warns on an attribute that is not a known lead field", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [{ ...rule, attribute: "madeUpField" }], source: "api" });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><LeadScoreRulesEditor /></NextIntlClientProvider>);
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    expect(screen.getByText(/not a known lead field/i)).toBeInTheDocument();
+  });
+
+  // GAP-CRM-LEAD-SCORING-04: a running total and per-rule share are shown, and
+  // Save is gated by a confirm that says it re-scores every lead.
+  it("shows the running weight total and share, and confirms before re-scoring", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({
+      data: [
+        { ...rule, attribute: "leadSource", weight: 30 },
+        { ...rule, attribute: "company", weight: 10, scoreFnType: "presence", params: {} },
+      ],
+      source: "api",
+    });
+    vi.mocked(lq.saveScoreRules).mockResolvedValue(undefined);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><LeadScoreRulesEditor /></NextIntlClientProvider>);
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    expect(screen.getByLabelText(/total enabled weight/i)).toHaveTextContent("40");
+    expect(screen.getByLabelText(/share for rule 1/i)).toHaveTextContent("75%");
+    // Save opens the confirm; the API is not called until confirmed.
+    fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    expect(await screen.findByText(/re-scores every lead/i)).toBeInTheDocument();
+    expect(lq.saveScoreRules).not.toHaveBeenCalled();
+    await confirmSave();
+    await waitFor(() => expect(lq.saveScoreRules).toHaveBeenCalled());
   });
 
   it("surfaces a save error from the server", async () => {
@@ -90,14 +153,10 @@ describe("LeadScoreRulesEditor (LQ-002 admin)", () => {
     render(<NextIntlClientProvider locale="en" messages={enMessages}><LeadScoreRulesEditor /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    await confirmSave();
     expect(await screen.findByText(/BAD: nope/)).toBeInTheDocument();
   });
 
-  // Row identity: rules were keyed by array position, so removing an
-  // earlier rule shifted later ones up into a different key -- React
-  // patched the focused rule's DOM node in place with a different rule's
-  // data instead of removing the right node and leaving the rest (and
-  // focus) alone.
   it("keeps a rule's own value and focus attached to it after an earlier rule is removed", async () => {
     vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [], source: "api" });
     render(<NextIntlClientProvider locale="en" messages={enMessages}><LeadScoreRulesEditor /></NextIntlClientProvider>);
@@ -111,11 +170,38 @@ describe("LeadScoreRulesEditor (LQ-002 admin)", () => {
     thirdAttribute.focus();
     expect(document.activeElement).toBe(thirdAttribute);
 
-    // Remove the first rule -- rules 2-3 shift up to become rules 1-2.
     fireEvent.click(screen.getAllByRole("button", { name: /remove rule/i })[0]!);
 
     const survivingThirdAttribute = screen.getAllByLabelText(/attribute for rule/i)[1]!;
     expect(survivingThirdAttribute).toHaveValue("budget");
     expect(document.activeElement).toBe(survivingThirdAttribute);
+  });
+
+  // GAP-CRM-LEAD-SCORING-05 (wave2): optimistic concurrency wiring.
+  it("sends the loaded version to saveScoreRules and shows Last changed by/at", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({
+      data: [rule],
+      source: "api",
+      meta: { version: "9", updatedBy: "admin-xyz", updatedAt: "2026-10-02T09:00:00.000Z" },
+    });
+    vi.mocked(lq.saveScoreRules).mockResolvedValue("10");
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><LeadScoreRulesEditor /></NextIntlClientProvider>);
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    expect(screen.getByText(/last changed/i)).toBeInTheDocument();
+    expect(screen.getByText(/admin-xyz/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    await confirmSave();
+    await waitFor(() => expect(lq.saveScoreRules).toHaveBeenCalled());
+    expect(vi.mocked(lq.saveScoreRules).mock.calls[0][1]).toBe("9");
+  });
+
+  it("shows a reload message on a 409 ConfigConflictError", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [rule], source: "api", meta: { version: "9" } });
+    vi.mocked(lq.saveScoreRules).mockRejectedValue(new lq.ConfigConflictError());
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><LeadScoreRulesEditor /></NextIntlClientProvider>);
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    await confirmSave();
+    expect(await screen.findByText(/changed by another admin/i)).toBeInTheDocument();
   });
 });

@@ -4,12 +4,14 @@
  * ownership directories (queues, territories, partners, branches) that feed the
  * assignment engine. Each row is created (POST), updated (PUT) or deleted
  * (DELETE) individually per the contract; deletion is governed via a
- * ConfirmDialog. On a failed load we show the saved-info badge per tab and never
- * fabricate an empty directory as fact.
+ * ConfirmDialog. On a failed load we show a retry (not a false empty directory
+ * with an enabled "+ Add", which could duplicate routing entries).
  */
+import { useTranslations } from "next-intl";
 import { useEffect, useId, useState } from "react";
-import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState, Tabs, Button } from "../ds";
+import { ErrorState } from "../ds/ErrorState";
+import { toHumanError } from "@/lib/messages";
 import {
   getResources,
   createResource,
@@ -17,6 +19,7 @@ import {
   deleteResource,
   OWNERSHIP_RESOURCES,
   OWNERSHIP_RESOURCE_LABELS,
+  OWNERSHIP_RESOURCE_SINGULAR,
   type OwnershipResource,
   type NamedResource,
   type AsSource,
@@ -36,6 +39,7 @@ const labelToResource = (label: string): OwnershipResource =>
   OWNERSHIP_RESOURCES.find((r) => OWNERSHIP_RESOURCE_LABELS[r] === label) ?? OWNERSHIP_RESOURCES[0];
 
 function ResourceTable({ resource }: { resource: OwnershipResource }) {
+  const t = useTranslations("crmOwnershipDirectoryEditor");
   const [rows, setRows] = useState<Row[]>([]);
   const [source, setSource] = useState<AsSource | "loading">("loading");
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -76,6 +80,9 @@ function ResourceTable({ resource }: { resource: OwnershipResource }) {
     }
     const body: NamedResource = {
       ...(row.id ? { id: row.id } : {}),
+      // GAP-CRM-ASSIGNMENT-DIRECTORY-03: re-send the unmodelled, type-specific
+      // fields verbatim so an edit never drops them (lossless round-trip).
+      ...(row.extra ? row.extra : {}),
       name: row.name.trim(),
       description: row.description.trim(),
       enabled: row.enabled,
@@ -114,6 +121,7 @@ function ResourceTable({ resource }: { resource: OwnershipResource }) {
   }
 
   const label = OWNERSHIP_RESOURCE_LABELS[resource];
+  const singular = OWNERSHIP_RESOURCE_SINGULAR[resource];
   const confirmRow = rows.find((r) => r.key === confirmKey) ?? null;
 
   if (source === "loading") {
@@ -124,11 +132,26 @@ function ResourceTable({ resource }: { resource: OwnershipResource }) {
     );
   }
 
+  // GAP-CRM-ASSIGNMENT-DIRECTORY-02: on a failed load the rows are [], which
+  // must NOT read as "No queues yet" with an enabled "+ Add" button (an admin
+  // could re-create entries that already exist and duplicate routing data).
+  // Show a retry and offer no create/edit controls until the load succeeds.
+  if (source === "error") {
+    return (
+      <div>
+        <div className="card-h"><h3 id={headingId}>{label}</h3></div>
+        <ErrorState
+          error={toHumanError("load", { area: label.toLowerCase() })}
+          onRetry={() => void load()}
+        />
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="card-h">
         <h3 id={headingId}>{label}</h3>
-        {source === "error" ? <DataSourceBadge source="error" /> : null}
       </div>
       {message ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", padding: "0 12px" }}>{message}</p> : null}
       {error ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", padding: "0 12px" }}>{error}</p> : null}
@@ -158,7 +181,7 @@ function ResourceTable({ resource }: { resource: OwnershipResource }) {
                       value={row.name}
                       aria-invalid={row.name.trim() ? undefined : true}
                       onChange={(e) => update(row.key, { name: e.target.value })}
-                      placeholder={`${label.replace(/s$/, "")} name`}
+                      placeholder={t("namePlaceholder", { singular })}
                       style={inputStyle}
                     />
                   </td>
@@ -190,7 +213,7 @@ function ResourceTable({ resource }: { resource: OwnershipResource }) {
       )}
 
       <div style={{ display: "flex", gap: 8, padding: 12 }}>
-        <Button type="button" variant="ghost" onClick={addRow}>+ Add {label.replace(/s$/, "").toLowerCase()}</Button>
+        <Button type="button" variant="ghost" onClick={addRow}>{t("addSingular", { singular: singular.toLowerCase() })}</Button>
       </div>
 
       <ConfirmDialog

@@ -1,5 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
+
+import type { ReactElement } from "react";
+
+function render(ui: ReactElement) {
+  return rtlRender(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
+
 
 const pushMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -16,6 +27,15 @@ function withIntl(ui: React.ReactElement) {
       {ui}
     </NextIntlClientProvider>
   );
+}
+
+// The form loads the service-type master (GAP-CRM-SERVICE-REQUESTS-NEW-02) and
+// may load a contact lookup on mount, so there can be GET calls before the
+// submit. This helper picks the service-request POST call specifically.
+function postCall(fetchSpy: { mock: { calls: unknown[][] } }) {
+  return fetchSpy.mock.calls.find(
+    (call) => (call[1] as RequestInit | undefined)?.method === "POST",
+  ) as [RequestInfo | URL, RequestInit] | undefined;
 }
 
 describe("NewServiceRequestPage", () => {
@@ -38,8 +58,9 @@ describe("NewServiceRequestPage", () => {
 
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/crm/service-requests/new-sr-1"));
 
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchSpy.mock.calls[0];
+    const call = postCall(fetchSpy);
+    expect(call).toBeDefined();
+    const [url, init] = call!;
     expect(url).toBe("/api/proxy/v1/crm/service-requests");
     expect((init as RequestInit).method).toBe("POST");
     const body = JSON.parse((init as RequestInit).body as string);
@@ -63,13 +84,56 @@ describe("NewServiceRequestPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Submit Request" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/phone number or an email/i);
-    expect(fetchSpy).not.toHaveBeenCalled();
+    // The mount-time master GET may fire, but no service-request POST must be made.
+    expect(postCall(fetchSpy)).toBeUndefined();
     expect(pushMock).not.toHaveBeenCalled();
   });
 
   it("renders the DPDP purpose notice for contact details", () => {
     render(withIntl(<NewServiceRequestPage />));
     expect(screen.getByText(/Digital Personal\s+Data Protection Act, 2023/i)).toBeInTheDocument();
+  });
+
+  // GAP-CRM-SERVICE-REQUESTS-NEW-03: the form captures intake channel and an
+  // optional target resolution date, and sends them to the API.
+  it("sends intake channel and target resolution date when provided", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: "sr-c" } }), { status: 201 }),
+    );
+
+    render(<NewServiceRequestPage />);
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Meera Devi" } });
+    fireEvent.change(screen.getByLabelText(/service type/i), { target: { value: "Birth Certificate" } });
+    fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: "Need birth certificate" } });
+    fireEvent.change(screen.getByLabelText(/^Phone/), { target: { value: "9876543210" } });
+    fireEvent.change(screen.getByLabelText(/received via/i), { target: { value: "walk_in" } });
+    fireEvent.change(screen.getByLabelText(/target resolution date/i), { target: { value: "2026-10-20" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit Request" }));
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalled());
+    const [, init] = postCall(fetchSpy)!;
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.intakeChannel).toBe("walk_in");
+    expect(body.dueAt).toBe("2026-10-20T00:00:00.000Z");
+  });
+
+  it("omits intake channel and target date when left blank", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: "sr-d" } }), { status: 201 }),
+    );
+
+    render(<NewServiceRequestPage />);
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Meera Devi" } });
+    fireEvent.change(screen.getByLabelText(/service type/i), { target: { value: "Birth Certificate" } });
+    fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: "Need birth certificate" } });
+    fireEvent.change(screen.getByLabelText(/^Phone/), { target: { value: "9876543210" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit Request" }));
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalled());
+    const [, init] = postCall(fetchSpy)!;
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.intakeChannel).toBeUndefined();
+    expect(body.dueAt).toBeUndefined();
   });
 
   // UX-016: this used to surface the backend's raw `message` field (or a
@@ -90,5 +154,75 @@ describe("NewServiceRequestPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/Some details weren't accepted\. Check what you entered and try again\./);
     expect(screen.queryByText("Service type required")).not.toBeInTheDocument();
     expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  // GAP-CRM-SERVICE-REQUESTS-NEW-02: the select is fed by the per-tenant
+  // service-type master. A configured active type appears as an option.
+  it("offers the tenant's configured service types from the master", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/v1/crm/service-types")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ data: [{ id: "t1", code: "ration_card", label: "Ration Card", active: true, sortOrder: 0 }] }), { status: 200 }),
+        );
+      }
+      return Promise.resolve(new Response(JSON.stringify({ data: { id: "x" } }), { status: 201 }));
+    });
+
+    render(<NewServiceRequestPage />);
+    await waitFor(() => expect(screen.getByRole("option", { name: "Ration Card" })).toBeInTheDocument());
+    // The master was non-empty, so the fallback notice is NOT shown.
+    expect(screen.queryByText(/standard service-type list/i)).not.toBeInTheDocument();
+  });
+
+  // GAP-CRM-SERVICE-REQUESTS-NEW-02: a failed master load falls back to the
+  // standard list with an inline notice — never an empty select, no crash.
+  it("falls back to the standard service-type list with a notice when the master fails to load", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/v1/crm/service-types")) {
+        return Promise.resolve(new Response("{}", { status: 500 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ data: { id: "x" } }), { status: 201 }));
+    });
+
+    render(<NewServiceRequestPage />);
+    expect(await screen.findByText(/standard service-type list/i)).toBeInTheDocument();
+    // Standard options are still present, so the select is never empty.
+    expect(screen.getByRole("option", { name: "Birth Certificate" })).toBeInTheDocument();
+  });
+
+  // GAP-CRM-SERVICE-REQUESTS-NEW-04: an async contact-search picker links an
+  // existing contact; the chosen contactId is sent on the request.
+  it("offers an async contact search picker and sends the chosen contactId", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/v1/crm/contacts/lookup")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ data: [{ id: "ct-9", name: "Meera Devi", phone: "98xxxx3210" }] }), { status: 200 }),
+        );
+      }
+      if (url.includes("/v1/crm/service-types")) {
+        return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ data: { id: "sr-link" } }), { status: 201 }));
+    });
+
+    render(<NewServiceRequestPage />);
+    const picker = screen.getByRole("combobox", { name: /link existing contact/i });
+    fireEvent.change(picker, { target: { value: "Meera" } });
+    const option = await screen.findByText("Meera Devi");
+    fireEvent.mouseDown(option);
+
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Meera Devi" } });
+    fireEvent.change(screen.getByLabelText(/service type/i), { target: { value: "Birth Certificate" } });
+    fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: "Need birth certificate" } });
+    fireEvent.change(screen.getByLabelText(/^Phone/), { target: { value: "9876543210" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit Request" }));
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/crm/service-requests/sr-link"));
+    const call = fetchSpy.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "POST");
+    const body = JSON.parse((call![1] as RequestInit).body as string);
+    expect(body.contactId).toBe("ct-9");
   });
 });

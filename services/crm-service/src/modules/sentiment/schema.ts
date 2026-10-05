@@ -68,3 +68,37 @@ export interface InteractionSentimentView {
 }
 
 export const schema = { interactionSentiments };
+
+/**
+ * GAP-CRM-VOICE-OF-CUSTOMER-FEEDBACK-05 — a citizen's self-reported service
+ * rating (1-5) + optional comment, optionally "regarding" a service request.
+ *
+ * Distinct from {@link interactionSentiments}: that is model-scored from logged
+ * interactions; this is the citizen's own voice, surfaced as a SEPARATE
+ * "Citizen ratings" tile. `serviceRequestId` is an opaque reference, not a FK.
+ * `comment` is free text — shown unmasked only to CRM admins (CRM_PII_READ_ROLES).
+ */
+export const citizenFeedback = crmSchema.table("citizen_feedback", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull(),
+  serviceRequestId: uuid("service_request_id"),
+  rating: integer("rating").notNull(),
+  comment: text("comment"),
+  submissionType: varchar("submission_type", { length: 16 })
+    .notNull()
+    .default("anonymous"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  createdBy: uuid("created_by").notNull(),
+  updatedBy: uuid("updated_by").notNull(),
+  version: integer("version").notNull().default(1),
+});
+
+export type CitizenFeedbackRow = typeof citizenFeedback.$inferSelect;
+export type CitizenFeedbackInsert = typeof citizenFeedback.$inferInsert;
+
+export const feedbackSchema = { citizenFeedback };

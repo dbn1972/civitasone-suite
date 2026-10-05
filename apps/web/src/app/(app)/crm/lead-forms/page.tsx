@@ -1,5 +1,6 @@
+import { getTranslations } from "next-intl/server";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { Card, PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { Card, PageHeader, StatCard, StatGrid, RefreshErrorState } from "../../../_components/ds";
 import { getCrmLeadCaptureForms } from "../../../_data/loaders";
 import { LeadFormsTable } from "./LeadFormsTable";
 import { formHealth, rankForms } from "./leadForms";
@@ -7,6 +8,7 @@ import { formHealth, rankForms } from "./leadForms";
 export const dynamic = "force-dynamic";
 
 export default async function LeadFormsPage() {
+  const t = await getTranslations("crmLeadFormsPage");
   const { data: forms, source } = await getCrmLeadCaptureForms();
   const ranked = rankForms(forms);
   const live = forms.filter((f) => formHealth(f) === "live").length;
@@ -19,20 +21,60 @@ export default async function LeadFormsPage() {
   return (
     <>
       <PageHeader
-        title="Website Lead Forms"
-        subtitle="Public form keys that turn website submissions into CRM leads with UTM attribution and consent checks."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/crm"
-        backLabel="CRM"
+        backLabel={t("backLabel")}
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
-        <StatCard icon="🌐" iconBg="#e0f2fe" label="Forms" value={stat(forms.length)} />
-        <StatCard icon="✅" iconBg="#dcfce7" label="Live" value={stat(live)} />
-        <StatCard icon="⛔" iconBg="#fee2e2" label="Consent gaps" value={stat(unlawful)} />
+        <StatCard icon="🌐" iconBg="#e0f2fe" label={t("statForms")} value={stat(forms.length)} />
+        <StatCard icon="✅" iconBg="#dcfce7" label={t("statLive")} value={stat(live)} />
+        <StatCard icon="⛔" iconBg="#fee2e2" label={t("statConsentGaps")} value={stat(unlawful)} />
       </StatGrid>
-      <Card title="Registered forms">
-        <LeadFormsTable rows={ranked} />
-      </Card>
+
+      {/* GAP-CRM-LEAD-FORMS-03: explain the "Consent gaps" condition in DPDP
+          terms when there is at least one such form, so the tile and pill are
+          not the only (unexplained) signal. */}
+      {source !== "error" && unlawful > 0 && (
+        <p
+          role="note"
+          style={{
+            margin: "4px 0 12px",
+            padding: "10px 14px",
+            fontSize: 13,
+            lineHeight: 1.5,
+            color: "var(--ink2)",
+            background: "color-mix(in srgb, var(--bad) 8%, transparent)",
+            border: "1px solid color-mix(in srgb, var(--bad) 30%, transparent)",
+            borderRadius: "var(--r)",
+          }}
+        >
+          {t("consentGapNote")}
+        </p>
+      )}
+
+      {/* GAP-CRM-LEAD-FORMS-04: on an outage, show a retry state in place of the
+          table (the tiles already show "—") instead of the table's own
+          "No website forms registered" empty copy, which would read as an
+          empty registry rather than a failed load. */}
+      {source === "error" ? (
+        <Card title={t("registeredForms")}>
+          <RefreshErrorState
+            error={{
+              what: t("loadErrorWhat"),
+              next: t("loadErrorNext"),
+              actions: ["retry", "back", "help"],
+            }}
+            backHref="/crm"
+            source={{ area: "lead-form registry" }}
+          />
+        </Card>
+      ) : (
+        <Card title={t("registeredForms")}>
+          <LeadFormsTable rows={ranked} />
+        </Card>
+      )}
     </>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { useFormError } from "@/lib/useFormError";
 import { useTranslations } from "next-intl";
@@ -18,6 +18,10 @@ type Props = {
   canExport?: boolean;
   /** The current list filters to apply to the export. */
   exportQuery?: ExportQuery;
+  /** GAP-CRM-CONTACTS-04: seed the search box from the URL so it isn't blank after a search. */
+  initialSearch?: string;
+  /** GAP-CRM-CONTACTS-04: seed the segment view-mode from the URL. */
+  initialSegment?: "all" | "mine" | "recent";
 };
 
 /** Flatten a value to a CSV cell, quoting when it contains a comma/quote/newline. */
@@ -35,11 +39,14 @@ function toCsv(rows: Array<Record<string, unknown>>): string {
   return lines.join("\n");
 }
 
-export function ContactToolbar({ canExport = false, exportQuery = {} }: Props) {
+export function ContactToolbar({ canExport = false, exportQuery = {}, initialSearch = "", initialSegment = "all" }: Props) {
   const t = useTranslations("crmContactToolbar");
   const router = useRouter();
-  const [search, setSearch] = useState("");
-  const [segment, setSegment] = useState<"all" | "mine" | "recent">("all");
+  const searchParams = useSearchParams();
+  // GAP-CRM-CONTACTS-04: seed from the URL so after a search the box isn't blank
+  // and a reload keeps the control populated.
+  const [search, setSearch] = useState(initialSearch);
+  const [segment, setSegment] = useState<"all" | "mine" | "recent">(initialSegment);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const formError = useFormError("contact export");
@@ -47,10 +54,24 @@ export function ContactToolbar({ canExport = false, exportQuery = {} }: Props) {
   const [busy, setBusy] = useState(false);
 
   function applyFilters() {
-    const params = new URLSearchParams();
+    // GAP-CRM-CONTACTS-04: start from the CURRENT URL so the classification
+    // filters (temperature/priority/segmentName/…) set by LeadFilters are
+    // preserved; only this control's own keys (search, segment) are updated.
+    const params = new URLSearchParams(searchParams?.toString() ?? "");
     if (search.trim()) params.set("search", search.trim());
+    else params.delete("search");
     if (segment !== "all") params.set("segment", segment);
-    router.push(`/crm/contacts?${params.toString()}`);
+    else params.delete("segment");
+    const qs = params.toString();
+    router.push(qs ? `/crm/contacts?${qs}` : "/crm/contacts");
+  }
+
+  function clearAll() {
+    // GAP-CRM-CONTACTS-04: a single control to drop every filter (search,
+    // segment and the classification params) and return to the full list.
+    setSearch("");
+    setSegment("all");
+    router.push("/crm/contacts");
   }
 
   async function exportContacts(purpose?: string) {
@@ -104,6 +125,10 @@ export function ContactToolbar({ canExport = false, exportQuery = {} }: Props) {
           <option value="recent">Recent</option>
         </select>
         <Button variant="ghost" onClick={applyFilters} style={{ minHeight: 44 }}>Search</Button>
+        {/* GAP-CRM-CONTACTS-04: one-click reset of search + segment + classification filters. */}
+        {(search.trim() || segment !== "all" || Object.keys(exportQuery).length > 0) ? (
+          <Button variant="ghost" onClick={clearAll} style={{ minHeight: 44 }}>{t("clearFilters")}</Button>
+        ) : null}
         <a className="btn primary" href="/crm/contacts/new" style={{ minHeight: 44, display: "inline-flex", alignItems: "center" }}>+ New Contact</a>
         {/* GAP-CRM-CONTACTS-01: bulk PII egress — only for permitted roles, and
             always behind a confirm dialog that captures a mandatory purpose. */}

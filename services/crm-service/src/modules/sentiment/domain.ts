@@ -350,6 +350,9 @@ function containsWord(text: string, term: string): boolean {
   ).test(text);
 }
 
+/** Themes only vigilance-cleared roles may see (staff conduct / integrity). Enforced server-side. */
+export const SENSITIVE_THEMES = ["staff_conduct", "corruption"] as const;
+
 /** Themes present in the text, sorted for a stable stored value. */
 export function detectThemes(text: string): string[] {
   const lowered = text.toLowerCase();

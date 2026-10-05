@@ -1,5 +1,6 @@
 import { eq, and, gte, lte, desc, sql, type SQL } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+import { SENSITIVE_THEMES } from "./domain.js";
 import {
   interactionSentiments,
   type InteractionSentimentRow,
@@ -30,6 +31,8 @@ export interface ListFilters {
   to?: Date | undefined;
   polarity?: string | undefined;
   activityType?: string | undefined;
+  /** Drop every reading tagged with a vigilance-sensitive theme (non-vigilance viewers). */
+  excludeSensitive?: boolean | undefined;
 }
 
 function conditions(tenantId: string, f: ListFilters): SQL[] {
@@ -39,6 +42,10 @@ function conditions(tenantId: string, f: ListFilters): SQL[] {
   if (f.polarity) where.push(eq(interactionSentiments.polarity, f.polarity));
   if (f.activityType)
     where.push(eq(interactionSentiments.activityType, f.activityType));
+  if (f.excludeSensitive)
+    where.push(
+      sql`NOT (${interactionSentiments.themes} ?| ARRAY[${sql.join(SENSITIVE_THEMES.map((t) => sql`${t}`), sql`, `)}]::text[])`,
+    );
   return where;
 }
 

@@ -1,9 +1,20 @@
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
 import { PipelineEditor } from "./PipelineEditor";
 import * as op from "@/lib/crm/opportunity";
+
+import type { ReactElement } from "react";
+
+function render(ui: ReactElement) {
+  return rtlRender(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
+
 
 vi.mock("@/lib/crm/opportunity", async (orig) => {
   const actual = await orig<typeof import("@/lib/crm/opportunity")>();
@@ -99,5 +110,63 @@ describe("PipelineEditor (OP-002)", () => {
     await waitFor(() => expect(screen.getByText("Enterprise")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /delete pipeline enterprise/i }));
     expect(await screen.findByText(/the delete will be refused/i)).toBeInTheDocument();
+  });
+
+  // GAP-CRM-PIPELINES-02: stages can be reordered, and the save payload reflects
+  // the new order (the server keys on stage key, not index).
+  it("reorders stages and persists the new order on save", async () => {
+    const twoStage: op.Pipeline = {
+      id: "p2",
+      name: "Flow",
+      enabled: true,
+      stages: [
+        { key: "s1", name: "First", mandatoryFields: [], gate: false },
+        { key: "s2", name: "Second", mandatoryFields: [], gate: false },
+      ],
+    };
+    vi.mocked(op.getPipelines).mockResolvedValue({ data: [twoStage], source: "api" });
+    vi.mocked(op.updatePipeline).mockResolvedValue(undefined);
+    render(<PipelineEditor />);
+    await waitFor(() => expect(screen.getByText("Flow")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
+
+    // Move stage 1 ("First") down -> order becomes Second, First.
+    fireEvent.click(screen.getByRole("button", { name: /move stage 1 down/i }));
+    fireEvent.click(screen.getByRole("button", { name: /save pipeline/i }));
+
+    await waitFor(() => expect(op.updatePipeline).toHaveBeenCalled());
+    const payload = vi.mocked(op.updatePipeline).mock.calls[0][1];
+    expect(payload.stages.map((s) => s.name)).toEqual(["Second", "First"]);
+    // Keys travel with the stage (identity preserved, only order changed).
+    expect(payload.stages.map((s) => s.key)).toEqual(["s2", "s1"]);
+  });
+
+  it("disables Move up on the first stage and Move down on the last", async () => {
+    const twoStage: op.Pipeline = {
+      id: "p2",
+      name: "Flow",
+      enabled: true,
+      stages: [
+        { key: "s1", name: "First", mandatoryFields: [], gate: false },
+        { key: "s2", name: "Second", mandatoryFields: [], gate: false },
+      ],
+    };
+    vi.mocked(op.getPipelines).mockResolvedValue({ data: [twoStage], source: "api" });
+    render(<PipelineEditor />);
+    await waitFor(() => expect(screen.getByText("Flow")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
+    expect(screen.getByRole("button", { name: /move stage 1 up/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /move stage 2 down/i })).toBeDisabled();
+  });
+
+  // GAP-CRM-PIPELINES-04: the Gate control has a visible explanation (HelpTip).
+  it("explains what Gate means via a help tip", async () => {
+    vi.mocked(op.getPipelines).mockResolvedValue({ data: [pipeline], source: "api" });
+    render(<PipelineEditor />);
+    await waitFor(() => expect(screen.getByText("Enterprise")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
+    const help = screen.getByRole("button", { name: /what is gate/i });
+    fireEvent.click(help);
+    expect(await screen.findByText(/requires an explicit review/i)).toBeInTheDocument();
   });
 });

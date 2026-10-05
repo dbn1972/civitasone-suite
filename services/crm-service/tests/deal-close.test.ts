@@ -17,11 +17,11 @@ const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000040";
 const ACTOR = "cccccccc-3333-4000-8000-000000000040";
 
-function token(roles = ["crm_user"], tenantId = TENANT) {
+function token(roles = ["crm_admin"], tenantId = TENANT) {
   return signToken({ sub: ACTOR, tid: tenantId, roles, sid: "sess-close" }, SECRET);
 }
 
-function headers(roles = ["crm_user"]) {
+function headers(roles = ["crm_admin"]) {
   return {
     authorization: `Bearer ${token(roles)}`,
     "x-tenant-id": TENANT,
@@ -115,6 +115,20 @@ beforeAll(async () => {
 });
 
 describe("POST /v1/crm/deals/:id/close", () => {
+  describe("authorization — admin-only (matches web CRM_OPPORTUNITY_CLOSE_ROLES)", () => {
+    it("crm_user cannot close a deal → 403", async () => {
+      const app = await buildApp();
+      const res = await app.inject({
+        method: "POST",
+        url: `/v1/crm/deals/${OPEN_DEAL_ID}/close`,
+        headers: headers(["crm_user"]),
+        payload: { outcome: "cancelled", reason: "Withdrawn by the department" },
+      });
+      await app.close();
+      expect(res.statusCode).toBe(403);
+    });
+  });
+
   describe("happy path — won", () => {
     it("closes deal as won → 202", async () => {
       const app = await buildApp();

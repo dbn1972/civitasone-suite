@@ -67,9 +67,17 @@ describe("withAccountNames", () => {
   });
 
   it("keeps a row whose account is missing rather than hiding an at-risk account", () => {
-    const named = withAccountNames([entry({ accountId: "ghost" })], []);
+    const named = withAccountNames([entry({ accountId: "ghost-1234-5678" })], []);
     expect(named).toHaveLength(1);
-    expect(named[0].accountName).toBe("Unknown account");
+    // GAP-CRM-HEALTH-03: identifiable id-suffix label, not a bare "Unknown
+    // account"; flagged unresolved so the page can keep it out of "Call First".
+    expect(named[0].accountName).toBe("Account ghost-12");
+    expect(named[0].unresolved).toBe(true);
+  });
+
+  it("marks a resolved account as not unresolved", () => {
+    const named = withAccountNames([entry({ accountId: "acc-1" })], [account("acc-1", "Bharat Steel")]);
+    expect(named[0].unresolved).toBe(false);
   });
 });
 

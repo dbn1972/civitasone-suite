@@ -43,4 +43,28 @@ describe("CRM Dashboard page (GoI redesign)", () => {
     expect(note).toBeInTheDocument();
     expect(note).toHaveTextContent(/stakeholder/i);
   });
+
+  it("GAP-CRM-DASHBOARD-01: shows '—' for every stat when the load fails", async () => {
+    mocked.mockResolvedValue({ data: mockDash, source: "error", status: 500 });
+    render(await Page());
+    // 4 stat cards all read "—" instead of fabricated 0 / ₹0.00
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(4);
+    expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
+    expect(screen.queryByText("42")).not.toBeInTheDocument();
+  });
+
+  it("GAP-CRM-DASHBOARD-01: shows real numbers on success", async () => {
+    mocked.mockResolvedValue({ data: mockDash, source: "api" });
+    render(await Page());
+    expect(screen.getByText("42")).toBeInTheDocument();
+    expect(screen.getByText("8")).toBeInTheDocument();
+  });
+
+  it("GAP-CRM-DASHBOARD-02: the purpose note no longer calls itself 'not a commercial sales pipeline'", async () => {
+    mocked.mockResolvedValue({ data: mockDash, source: "api" });
+    render(await Page());
+    const note = screen.getByRole("note");
+    expect(note).not.toHaveTextContent("not a commercial sales pipeline");
+    expect(note).toHaveTextContent(/Engagement Pipeline/);
+  });
 });

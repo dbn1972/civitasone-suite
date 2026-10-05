@@ -59,6 +59,22 @@ export const APPROVAL_TYPE_LABELS: Record<ApprovalType, string> = {
 export const QUOTE_STATUSES = ["draft", "sent", "accepted", "rejected", "converted"] as const;
 export type QuoteStatus = (typeof QUOTE_STATUSES)[number];
 
+/**
+ * Human labels for the quotation template slugs (GAP-CRM-QUOTATIONS-06): the UI
+ * used to show the raw slug ("government-tender"). Unknown slugs fall back to a
+ * title-cased form so a new backend template never renders blank.
+ */
+export const TEMPLATE_LABELS: Record<string, string> = {
+  standard: "Standard",
+  "government-tender": "Government tender",
+  "annual-contract": "Annual contract",
+};
+
+export function templateLabel(slug: string): string {
+  if (!slug) return "Standard";
+  return TEMPLATE_LABELS[slug] ?? slug.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 /* ============================================================ QP-001 types == */
 
 export interface Product {
@@ -464,7 +480,7 @@ export async function createQuotation(q: Quotation): Promise<void> {
  * the revised line items. This helper used to PUT /v1/crm/quotations/:id, a path
  * that does not exist, so saving an edit always 404'd.
  */
-export async function updateQuotation(id: string, q: Quotation): Promise<void> {
+export async function updateQuotation(id: string, q: Quotation): Promise<{ id: string | null }> {
   const body = {
     lineItems: toApiLineItems(q.lines),
     totalMinor: quotationTotalMinor(q.lines),
@@ -474,6 +490,15 @@ export async function updateQuotation(id: string, q: Quotation): Promise<void> {
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  // The 202 envelope carries the new version's id ({ id, status, correlationId }),
+  // so the builder can re-open the freshly-created version rather than keep
+  // pointing at the now-superseded row (GAP-CRM-QUOTATIONS-03).
+  try {
+    const data = (await res.json()) as Record<string, unknown>;
+    return { id: typeof data.id === "string" ? data.id : null };
+  } catch {
+    return { id: null };
+  }
 }
 
 /**

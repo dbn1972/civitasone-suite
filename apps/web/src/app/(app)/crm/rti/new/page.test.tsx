@@ -1,7 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
+
+import type { ReactElement } from "react";
+
+function render(ui: ReactElement) {
+  return rtlRender(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
+
 
 const pushMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -100,6 +111,8 @@ describe("NewRtiPage", () => {
     );
     render(<NextIntlClientProvider locale="en" messages={enMessages}><NewRtiPage /></NextIntlClientProvider>);
     fillRequired();
+    // GAP-CRM-RTI-NEW-05: enable the amount by marking the fee as paid first.
+    fireEvent.change(screen.getByLabelText(/fee paid\?/i), { target: { value: "true" } });
     fireEvent.change(screen.getByLabelText(/fee amount/i), { target: { value: "10.10" } });
     fireEvent.click(screen.getByRole("button", { name: "File RTI Request" }));
 
@@ -115,10 +128,39 @@ describe("NewRtiPage", () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     render(<NextIntlClientProvider locale="en" messages={enMessages}><NewRtiPage /></NextIntlClientProvider>);
     fillRequired();
+    fireEvent.change(screen.getByLabelText(/fee paid\?/i), { target: { value: "true" } });
     fireEvent.change(screen.getByLabelText(/fee amount/i), { target: { value: "1.005" } });
     fireEvent.click(screen.getByRole("button", { name: "File RTI Request" }));
 
     expect(await screen.findByText(/up to 2 decimal places/i)).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  // GAP-CRM-RTI-NEW-05: Fee Amount is disabled while Fee Paid is "No" and no
+  // amount is sent even if one was typed before switching.
+  it("disables Fee Amount when Fee Paid is No and sends feePaid:false with no amount", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: "r4" } }), { status: 201 }),
+    );
+    render(<NewRtiPage />);
+    fillRequired();
+    expect(screen.getByLabelText(/fee amount/i)).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "File RTI Request" }));
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/crm/rti/r4"));
+    const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.feePaid).toBe(false);
+    expect(body.feeAmountMinor).toBeUndefined();
+  });
+
+  // GAP-CRM-RTI-NEW-05: Fee Paid "Yes" with no amount blocks submit.
+  it("blocks Fee Paid Yes with an empty amount", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    render(<NewRtiPage />);
+    fillRequired();
+    fireEvent.change(screen.getByLabelText(/fee paid\?/i), { target: { value: "true" } });
+    fireEvent.click(screen.getByRole("button", { name: "File RTI Request" }));
+    expect(await screen.findByText(/Enter the fee amount paid/i)).toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(pushMock).not.toHaveBeenCalled();
   });
@@ -154,5 +196,25 @@ describe("NewRtiPage", () => {
     render(<NextIntlClientProvider locale="en" messages={enMessages}><NewRtiPage /></NextIntlClientProvider>);
     expect(screen.getByText(/used only to process this request under the/i)).toBeInTheDocument();
     expect(screen.getByText(/DPDP Act 2023/)).toBeInTheDocument();
+  });
+
+  // GAP-CRM-RTI-NEW-04: the typed authority is normalised (trim + collapse
+  // inner whitespace) so spelling variants fold to one canonical string.
+  it("normalises the department / authority before submit", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: "r5" } }), { status: 201 }),
+    );
+    render(<NewRtiPage />);
+    fireEvent.change(screen.getByLabelText(/^section/i), { target: { value: "s.6" } });
+    fireEvent.change(screen.getByLabelText(/department \/ public authority/i), {
+      target: { value: "  Ministry   of  Finance " },
+    });
+    fireEvent.change(screen.getByLabelText(/^subject/i), { target: { value: "Subject" } });
+    fireEvent.change(screen.getByLabelText(/description \/ particulars sought/i), { target: { value: "Details" } });
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Anil Sharma" } });
+    fireEvent.click(screen.getByRole("button", { name: "File RTI Request" }));
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/crm/rti/r5"));
+    const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.departmentRef).toBe("Ministry of Finance");
   });
 });

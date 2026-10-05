@@ -28,6 +28,7 @@ import {
   verifyBody,
   scanResultBody,
   idParam,
+  registerQuery,
 } from "./validators.js";
 import {
   buildStorageKey,
@@ -141,6 +142,91 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
       ORDER BY lineage_id, version DESC
     `))) as unknown as Array<Record<string, unknown>>;
     return reply.send({ data: rows, meta: { total: rows.length } });
+  });
+
+  // ── GAP-CRM-DOCUMENTS-02: cross-record register (paged, tenant-scoped) ──
+  //
+  // Unlike the per-subject list above, this spans every record so a clerk can
+  // triage expiring / infected / missing-mandatory documents in one place. It
+  // returns the subject TYPE + ID only (never a cross-module join to resolve the
+  // record's name — the web layer resolves names the same way other screens do).
+  //
+  // `missingMandatory` is a different shape of answer: it reports (subjectType,
+  // subjectId, docTypeCode) tuples that LACK a current mandatory document, so its
+  // rows carry no document id. To avoid a cross-module join (we cannot enumerate
+  // every lead/contact/account from here), the universe of subjects scanned is
+  // those that already own at least one document — an honest, documented scope.
+  app.get("/v1/crm/documents/register", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CRM_ROLES);
+    const q = registerQuery.parse(req.query ?? {});
+    const limit = q.limit;
+    const offset = (q.page - 1) * limit;
+    const subjectFilter = q.subjectType ? sql`AND subject_type = ${q.subjectType}` : sql``;
+
+    if (q.missingMandatory) {
+      // Subjects (that own ≥1 document) missing a current doc of a mandatory type
+      // that applies to their subject_type. appliesTo=[] (wildcard) applies to all.
+      const base = sql`
+        WITH subjects AS (
+          SELECT DISTINCT subject_type, subject_id FROM crm.documents
+          WHERE tenant_id = ${ctx.tenantId} AND deleted_at IS NULL ${subjectFilter}
+        ),
+        required AS (
+          SELECT s.subject_type, s.subject_id, dt.code AS doc_type_code, dt.name AS doc_type_name
+          FROM subjects s
+          JOIN crm.document_types dt
+            ON dt.tenant_id = ${ctx.tenantId} AND dt.enabled = true AND dt.mandatory = true
+           AND (cardinality(dt.applies_to) = 0 OR s.subject_type = ANY (dt.applies_to))
+        ),
+        missing AS (
+          SELECT r.subject_type, r.subject_id, r.doc_type_code, r.doc_type_name
+          FROM required r
+          WHERE NOT EXISTS (
+            SELECT 1 FROM crm.documents d
+            WHERE d.tenant_id = ${ctx.tenantId} AND d.subject_type = r.subject_type
+              AND d.subject_id = r.subject_id AND d.doc_type = r.doc_type_code
+              AND d.is_current = true AND d.deleted_at IS NULL
+          )
+        )`;
+      const totalRows = (await scopedRead((tx) => tx.execute(sql`
+        ${base} SELECT count(*)::int AS total FROM missing
+      `))) as unknown as Array<{ total: number }>;
+      const rows = (await scopedRead((tx) => tx.execute(sql`
+        ${base}
+        SELECT subject_type AS "subjectType", subject_id AS "subjectId",
+               doc_type_code AS "docTypeCode", doc_type_name AS "docTypeName"
+        FROM missing
+        ORDER BY subject_type, subject_id, doc_type_code
+        LIMIT ${limit} OFFSET ${offset}
+      `))) as unknown as Array<Record<string, unknown>>;
+      const data = rows.map((r) => ({ ...r, kind: "missing_mandatory" as const }));
+      return reply.send({ data, meta: { total: totalRows[0]?.total ?? 0, page: q.page, pageSize: limit } });
+    }
+
+    // Document-row register (optionally scan-status and/or expiry filtered).
+    const scanFilter = q.scanStatus ? sql`AND scan_status = ${q.scanStatus}` : sql``;
+    const expiryFilter =
+      q.expiringWithinDays !== undefined
+        ? sql`AND expiry_date IS NOT NULL AND expiry_date <= (CURRENT_DATE + ${q.expiringWithinDays} * INTERVAL '1 day')`
+        : sql``;
+    const where = sql`
+      WHERE tenant_id = ${ctx.tenantId} AND deleted_at IS NULL AND is_current = true
+        ${subjectFilter} ${scanFilter} ${expiryFilter}`;
+    const totalRows = (await scopedRead((tx) => tx.execute(sql`
+      SELECT count(*)::int AS total FROM crm.documents ${where}
+    `))) as unknown as Array<{ total: number }>;
+    const rows = (await scopedRead((tx) => tx.execute(sql`
+      SELECT id, subject_type AS "subjectType", subject_id AS "subjectId",
+             doc_type AS "docType", title, filename, scan_status AS "scanStatus",
+             verification_status AS "verificationStatus", expiry_date AS "expiryDate",
+             version, created_at AS "createdAt"
+      FROM crm.documents ${where}
+      ORDER BY (expiry_date IS NULL), expiry_date ASC, created_at DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `))) as unknown as Array<Record<string, unknown>>;
+    const data = rows.map((r) => ({ ...r, kind: "document" as const }));
+    return reply.send({ data, meta: { total: totalRows[0]?.total ?? 0, page: q.page, pageSize: limit } });
   });
 
   // ── download: presigned GET, scan-gated SECURE-BY-DEFAULT (only 'clean' passes) ──

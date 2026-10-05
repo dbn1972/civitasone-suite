@@ -20,6 +20,11 @@ const STATUS_MAP: Record<string, PillVariant> = {
   inactive: "mut",
   closed: "mut",
   confirmed: "good",
+  // GAP-CRM-SERVICE-REQUESTS-04: a resolved service request/ticket is a
+  // successful terminal state; without this key it fell through to the neutral
+  // "info" blue, visually identical to an unknown value. Added additively (no
+  // existing caller passes "resolved" expecting the info fallback).
+  resolved: "good",
   // GAP-HR-SERVICE-BOOK-01: service book entries are "attested" (competent-
   // authority sign-off, immutable) or "recorded" (not yet attested); neither
   // key existed here before, so both fell back to the generic "info" tone.
@@ -101,6 +106,18 @@ const STATUS_MAP: Record<string, PillVariant> = {
   filed: "warn",
   assigned: "warn",
   responded: "good",
+  // GAP-CRM-RTI-03: RTI register lifecycle (crm-service RTI_STATUS:
+  // RECEIVED/TRANSFERRED/RESPONDED/REJECTED/FIRST_APPEAL/SECOND_APPEAL/
+  // DISPOSED). Only "responded"/"rejected"/"disposed" were mapped, so the live
+  // states (received/transferred) and the appeal states fell back to the
+  // neutral "info" pill, giving the register's colour no meaning. An appeal is
+  // an escalated, attention-needing state (warn); received/transferred are the
+  // neutral in-progress starting states (info is correct, keyed explicitly so
+  // it is a decision, not a fallthrough).
+  received: "info",
+  transferred: "info",
+  "first appeal": "warn",
+  "second appeal": "warn",
 
   // Medical claims / payroll settlement -- settled/credited/disbursed share the
   // "money actually moved, favourably" tone as the existing paid/cleared keys
@@ -238,6 +255,19 @@ const STATUS_MAP: Record<string, PillVariant> = {
   sunset: "mut",
   // Device trust (admin/devices): hrms.trusted_devices.trust_status.
   trusted: "good",
+
+  // CRM lead/contact lifecycle (crm-service lead status enum; see
+  // lib/crm/leadQualification.ts LEAD_STATUSES). GAP-CRM-CONTACTS-06: the
+  // contacts list printed the raw enum word with no tone, so "qualified",
+  // "disqualified" etc. all fell through to the neutral "info" pill and the
+  // list named a status differently from the New/Edit forms. Tones mirror
+  // LEAD_STATUS_TONES in leadQualification.ts. ("new"/"customer" below;
+  // "contacted" is a mid-funnel waiting state = warn.)
+  contacted: "warn",
+  qualified: "good",
+  unqualified: "mut",
+  disqualified: "bad",
+  customer: "good",
 };
 // Deliberately NOT added: a generic "flagged" key. tenant-admin/security/SecurityTable.tsx
 // has its own inline outcome->variant mapping that fails closed to "bad" for any

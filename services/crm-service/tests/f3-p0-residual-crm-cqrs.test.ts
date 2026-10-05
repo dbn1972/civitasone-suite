@@ -14,6 +14,8 @@ const TARGETS = [
   "accounts/hierarchy-routes.ts",
   "activities/capture-routes.ts",
   "dashboard/campaign-roi-routes.ts",
+  "service-requests/types-routes.ts",
+  "grievances/categories-routes.ts",
 ];
 
 describe("F3 P0 residual CRM CQRS", () => {

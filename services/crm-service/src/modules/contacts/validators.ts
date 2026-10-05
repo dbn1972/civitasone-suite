@@ -79,6 +79,9 @@ export const listContactsQuery = z.object({
   search: z.string().max(100).optional(),
   leadStatus: z.string().optional(),
   ownerId: z.string().uuid().optional(),
+  // GAP-CRM-ACCOUNTS-DETAIL-06: exact owning-account filter (used by the account
+  // detail page's "View contacts" link so a renamed account keeps its contacts).
+  accountId: z.string().uuid().optional(),
   // "segment" is the pre-existing saved-view mode (all/mine/recent). The LQ-003
   // classification "segment" column is filtered via "segmentName" to avoid
   // overloading this param.
@@ -130,6 +133,38 @@ export type DeleteContactBody = z.infer<typeof deleteContactBody>;
 
 export const idParam = z.object({ id: z.string().uuid() });
 
+// GAP-CRM-CONTACTS-IMPORT-04: :batchId path param for the import status route.
+export const importBatchParam = z.object({ batchId: z.string().uuid() });
+
+// GAP-CRM-SERVICE-REQUESTS-NEW-04 / GAP-CRM-DEALS-NEW-04: contact lookup query.
+export const contactLookupQuery = z.object({
+  q: z.string().max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(25).default(10),
+});
+
+// Import batch result — counts + per-row { index, reason }, NO PII.
+export const importBatchSchema = z.object({
+  batchId: z.string().uuid(),
+  status: z.enum(["processing", "completed", "failed"]),
+  total: z.number().int().nonnegative(),
+  accepted: z.number().int().nonnegative(),
+  rejected: z.number().int().nonnegative(),
+  errored: z.number().int().nonnegative(),
+  rejectedRows: z.array(z.object({ index: z.number().int().nonnegative(), reason: z.string() })),
+  createdAt: z.string(),
+});
+
+// Contact lookup row — id + display name + MASKED phone/email only.
+export const contactLookupSchema = z.object({
+  data: z.array(z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    company: z.string().nullable(),
+    email: z.string().nullable(),
+    phone: z.string().nullable(),
+  })),
+});
+
 export const accountViewSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
@@ -139,7 +174,13 @@ export const accountViewSchema = z.object({
   contactCount: z.number().int().nonnegative(),
 });
 
-export const accountsListSchema = z.object({ data: z.array(accountViewSchema) });
+// GAP-CRM-ACCOUNTS-02: `meta.total` carries the tenant-wide active-account count
+// so the UI can show "Showing N of M" and caveat page-derived stats. Optional so
+// older callers/tests that assert only `data` keep passing.
+export const accountsListSchema = z.object({
+  data: z.array(accountViewSchema),
+  meta: z.object({ total: z.number().int().nonnegative() }).optional(),
+});
 
 export const contactViewSchema = z.object({
   id: z.string().uuid(),

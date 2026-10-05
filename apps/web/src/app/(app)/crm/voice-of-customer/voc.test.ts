@@ -9,6 +9,9 @@ import { describe, it, expect } from "vitest";
 import type { CRMVocSummary } from "@civitasone/types";
 import {
   MOOD_LABEL,
+  SCORE_MAX,
+  SCORE_MIN,
+  formatAverageScore,
   moodOf,
   rankThemes,
   shareOf,
@@ -152,5 +155,36 @@ describe("themeLabel", () => {
 
   it("falls back to a readable form for a theme it does not know", () => {
     expect(themeLabel("some_new_theme")).toBe("some new theme");
+  });
+});
+
+// GAP-CRM-VOICE-OF-CUSTOMER-04: the score is a SIGNED -100..+100 scale, so the
+// display must show the sign and the real range, never "n / 100".
+describe("formatAverageScore / signed scale", () => {
+  it("exposes the signed scale bounds the server scorer clamps to", () => {
+    expect(SCORE_MIN).toBe(-100);
+    expect(SCORE_MAX).toBe(100);
+  });
+
+  it("renders a negative mean with an explicit minus sign (not '-22 / 100')", () => {
+    expect(formatAverageScore(-22)).toBe("−22");
+  });
+
+  it("renders a positive mean with an explicit plus sign", () => {
+    expect(formatAverageScore(72)).toBe("+72");
+  });
+
+  it("renders a zero mean without a sign", () => {
+    expect(formatAverageScore(0)).toBe("0");
+  });
+});
+
+// GAP-CRM-VOICE-OF-CUSTOMER-06: one polarity word across the screen — the
+// overall mood tile uses the same "Neutral" word as the Sentiment Mix card
+// rather than the synonym "Mixed".
+describe("MOOD_LABEL polarity wording", () => {
+  it("labels the neutral band 'Neutral', matching the mix card", () => {
+    expect(MOOD_LABEL.neutral).toBe("Neutral");
+    expect(Object.values(MOOD_LABEL)).not.toContain("Mixed");
   });
 });

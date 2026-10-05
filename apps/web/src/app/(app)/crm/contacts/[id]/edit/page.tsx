@@ -1,12 +1,26 @@
 import { getTranslations } from "next-intl/server";
 import { getContactById } from "../../../../../_data/loaders";
 import { PageHeader, EmptyState, maskEmail, maskPhone } from "../../../../../_components/ds";
+import { LoadErrorState } from "../../../../../_components/ds/LoadErrorState";
 import { getSessionRoles, hasAnyRole, CRM_PII_READ_ROLES } from "@/lib/auth/roleGuard";
 import EditContactForm from "./EditContactForm";
 
 export default async function Page({ params }: { params: { id: string } }) {
-  const { data: contact } = await getContactById(params.id);
+  const { data: contact, source, status, errorMessage } = await getContactById(params.id);
   if (!contact) {
+    // GAP-CRM-CONTACTS-DETAIL-EDIT-04: an API outage used to render the same
+    // bare "Contact not found" as a real 404, so a transient failure looked
+    // like a deleted record. Only a genuine 404 is "not found"; anything else
+    // is a transient failure (Retry) or a 403 (access-restricted copy).
+    if (source === "error" && status !== 404) {
+      const tErr = await getTranslations("crmContactEdit");
+      return (
+        <>
+          <PageHeader title={tErr("editTitle")} back="/crm/contacts" />
+          <LoadErrorState result={{ status, errorMessage }} area={tErr("loadArea")} backHref="/crm/contacts" backLabel={tErr("backLabel")} />
+        </>
+      );
+    }
     return (
       <>
         <PageHeader title="Edit Contact" back="/crm/contacts" />
@@ -36,6 +50,7 @@ export default async function Page({ params }: { params: { id: string } }) {
         name: contact.name,
         ...(canViewPii ? { email: contact.email, phone: contact.phone } : {}),
         organization: contact.organization,
+        ...(contact.accountId ? { accountId: contact.accountId } : {}),
         designation: contact.designation,
         city: contact.city,
         ...(contact.leadStatus ? { leadStatus: contact.leadStatus } : {}),

@@ -16,15 +16,19 @@ export async function leadScoreRuleRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/crm/lead-score-rules", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
-    const rules = await repo.getRuleViews(ctx.tenantId, ctx.actorId);
-    return reply.send({ data: rules, meta: { total: rules.length } });
+    const { rules, meta } = await repo.getRuleViewsList(ctx.tenantId, ctx.actorId);
+    void reply.header("ETag", meta.version);
+    return reply.send({ data: rules, version: meta.version, meta: { ...meta, total: rules.length } });
   });
 
   app.put("/v1/crm/lead-score-rules", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = putScoreRulesBody.parse(req.body);
-    const rules = await repo.upsertRules(
+    const headerMatch = req.headers["if-match"];
+    const ifMatch = typeof headerMatch === "string" ? headerMatch.replace(/^W\//, "").replace(/^"|"$/g, "") : undefined;
+    const expectedVersion = ifMatch ?? body.version;
+    const { rules, meta } = await repo.upsertRules(
       ctx.tenantId,
       body.rules.map((r) => ({
         attribute: r.attribute,
@@ -35,8 +39,10 @@ export async function leadScoreRuleRoutes(app: FastifyInstance): Promise<void> {
       })),
       ctx.actorId,
       ctx.correlationId,
+      expectedVersion,
     );
-    return reply.send({ data: rules });
+    void reply.header("ETag", meta.version);
+    return reply.send({ data: rules, version: meta.version, meta });
   });
 
   app.get("/v1/crm/leads/:id/score-history", async (req, reply) => {

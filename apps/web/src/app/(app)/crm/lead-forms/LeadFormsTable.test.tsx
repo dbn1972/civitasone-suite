@@ -1,7 +1,12 @@
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { NextIntlClientProvider as __Intl } from "next-intl";
+import __enMessages from "@/messages/en.json";
+function render(ui: React.ReactElement) {
+  return rtlRender(<__Intl locale="en" messages={__enMessages}>{ui}</__Intl>);
+}
 import { LeadFormsTable } from "./LeadFormsTable";
 import type { CRMLeadCaptureForm } from "@civitasone/types";
 import * as client from "@/lib/crm/leadForms";
@@ -78,5 +83,28 @@ describe("LeadFormsTable (GAP-CRM-LEAD-FORMS-01)", () => {
   it("does not offer Fix consent on a lawful form", () => {
     render(<NextIntlClientProvider locale="en" messages={enMessages}><LeadFormsTable rows={[form({ requireConsent: true })]} /></NextIntlClientProvider>);
     expect(screen.queryByRole("button", { name: /fix consent/i })).not.toBeInTheDocument();
+  });
+
+  // GAP-CRM-LEAD-FORMS-03: the consent-gap status shows the human label
+  // "Consent not required", never the raw "unlawful" enum.
+  it("labels a consent-gap form 'Consent not required', never 'unlawful'", () => {
+    render(<LeadFormsTable rows={[form({ enabled: true, requireConsent: false })]} />);
+    expect(screen.getByText("Consent not required")).toBeInTheDocument();
+    expect(screen.queryByText("unlawful")).not.toBeInTheDocument();
+  });
+
+  it("labels an enabled, consenting form 'Live' and a disabled one 'Paused'", () => {
+    render(<LeadFormsTable rows={[form({ enabled: true, requireConsent: true, name: "A" }), form({ id: "f2", enabled: false, name: "B" })]} />);
+    expect(screen.getByText("Live")).toBeInTheDocument();
+    expect(screen.getByText("Paused")).toBeInTheDocument();
+  });
+
+  // GAP-CRM-LEAD-FORMS-02: the CSV export is gated behind an explicit
+  // sensitive-data confirmation (the public submit URL is in the file).
+  it("asks for confirmation before exporting the registry CSV", async () => {
+    render(<LeadFormsTable rows={[form()]} />);
+    fireEvent.click(screen.getByRole("button", { name: /CSV/i }));
+    expect(await screen.findByText(/Export the lead-form registry\?/i)).toBeInTheDocument();
+    expect(screen.getByText(/lets anyone post leads into this tenant/i)).toBeInTheDocument();
   });
 });

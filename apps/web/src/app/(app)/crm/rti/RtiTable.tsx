@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { DataTable, StatusPill } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
@@ -22,6 +23,7 @@ import { isRtiClosed, rtiDaysLeft } from "./rtiStatus";
  * `Math.ceil(ms)` diff that shifted by the time of day the page rendered.
  */
 function SlaBadge({ status, dueAt }: { status: string; dueAt: string | null }) {
+  const t = useTranslations("crmRtiTable");
   if (isRtiClosed(status)) {
     return (
       <span
@@ -36,7 +38,7 @@ function SlaBadge({ status, dueAt }: { status: string; dueAt: string | null }) {
           whiteSpace: "nowrap",
         }}
       >
-        Closed
+        {t("closed")}
       </span>
     );
   }
@@ -51,8 +53,8 @@ function SlaBadge({ status, dueAt }: { status: string; dueAt: string | null }) {
         ? "var(--warn)"
         : "var(--good)";
   const label = overdue
-    ? `${Math.abs(daysLeft)}d overdue`
-    : `${daysLeft}d left`;
+    ? t("daysOverdue", { days: Math.abs(daysLeft) })
+    : t("daysLeft", { days: daysLeft });
   return (
     <span
       style={{
@@ -72,23 +74,35 @@ function SlaBadge({ status, dueAt }: { status: string; dueAt: string | null }) {
 }
 
 // ---------------------------------------------------------------------------
-// Status chip colours
+// Section label
 // ---------------------------------------------------------------------------
 
-const STATUS_TONE: Record<string, string> = {
-  RECEIVED: "var(--ink2)",
-  TRANSFERRED: "var(--link)",
-  RESPONDED: "var(--good)",
-  REJECTED: "var(--bad)",
-  FIRST_APPEAL: "var(--warn)",
-  SECOND_APPEAL: "var(--warn)",
-  DISPOSED: "var(--ink2)",
-};
-
-function sectionLabel(s: string) {
-  if (s === "s.6") return "§6 Information";
-  if (s === "s.11") return "§11 Third-party";
+function sectionLabel(s: string, t: (key: string) => string) {
+  if (s === "s.6") return t("section6");
+  if (s === "s.11") return t("section11");
   return s;
+}
+
+/**
+ * GAP-CRM-RTI-04: an RTI applicant's name is personal data under DPDP. In the
+ * register list it is shown in a reduced form to a viewer without PII-read
+ * permission — the first name plus a masked surname ("Anil S••••") — enough to
+ * recognise a row without exposing the full identity to everyone with CRM
+ * access. The full name remains available on the detail page. Server-side
+ * search still matches the full name (this only changes what is displayed).
+ */
+export function maskApplicantName(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return "—";
+  const parts = trimmed.split(/\s+/);
+  const first = parts[0];
+  if (parts.length === 1) {
+    // Single token: show the first character, mask the rest.
+    return first.length <= 1 ? first : `${first[0]}${"•".repeat(Math.min(first.length - 1, 6))}`;
+  }
+  const rest = parts.slice(1).join(" ");
+  const surnameInitial = rest[0] ?? "";
+  return `${first} ${surnameInitial}${"•".repeat(Math.min(Math.max(rest.length - 1, 1), 6))}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -99,12 +113,27 @@ export function RtiTable({
   rows: seedRows,
   source = "api",
   page = 1,
+  canRevealPii = false,
+  hasFilters = false,
 }: {
   rows: CrmRtiRow[];
   source?: "api" | "error";
   /** 1-based server page — part of the cache key so pages don't overwrite each other. */
   page?: number;
+  /**
+   * GAP-CRM-RTI-04: whether the viewer may see applicant names in the clear
+   * (CRM_PII_READ_ROLES, resolved server-side on the page). When false, the
+   * list shows a reduced form; the detail page remains the place for the full
+   * name. The server stays the authority on what data it returns.
+   */
+  canRevealPii?: boolean;
+  /**
+   * GAP-CRM-RTI-05: whether any status/section/search filter is active, so the
+   * empty state can say "none recorded yet" vs. "none match the filters".
+   */
+  hasFilters?: boolean;
 }) {
+  const t = useTranslations("crmRtiTable");
   const {
     data: rows,
     provenance,
@@ -132,7 +161,7 @@ export function RtiTable({
         columns={[
           {
             key: "referenceNo",
-            label: "Reference No.",
+            label: t("colReferenceNo"),
             render: (r) => (
               <Link
                 href={`/crm/rti/${r.id}`}
@@ -144,7 +173,7 @@ export function RtiTable({
           },
           {
             key: "section",
-            label: "Section",
+            label: t("colSection"),
             render: (r) => (
               <span
                 style={{
@@ -155,27 +184,29 @@ export function RtiTable({
                   color: "var(--ink2)",
                 }}
               >
-                {sectionLabel(r.section)}
+                {sectionLabel(r.section, t)}
               </span>
             ),
           },
           {
             key: "departmentRef",
-            label: "Department",
+            label: t("colDepartment"),
             render: (r) => (
               <span style={{ fontSize: 13, color: "var(--ink)" }}>{r.departmentRef}</span>
             ),
           },
           {
             key: "applicantName",
-            label: "Applicant",
+            label: t("colApplicant"),
             render: (r) => (
-              <span style={{ fontSize: 13, color: "var(--ink)" }}>{r.applicantName}</span>
+              <span style={{ fontSize: 13, color: "var(--ink)" }}>
+                {canRevealPii ? r.applicantName : maskApplicantName(r.applicantName)}
+              </span>
             ),
           },
           {
             key: "dueAt",
-            label: "Due Date / SLA",
+            label: t("colDueSla"),
             render: (r) => (
               <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                 {r.dueAt && (
@@ -189,17 +220,20 @@ export function RtiTable({
           },
           {
             key: "status",
-            label: "Status",
+            label: t("colStatus"),
             render: (r) => (
-              <StatusPill
-                label={r.status}
-                status={r.status}
-              />
+              // GAP-CRM-RTI-03: no label override — StatusPill humanises the
+              // raw enum ("FIRST_APPEAL" -> "First appeal") and maps the tone.
+              <StatusPill status={r.status} />
             ),
           },
         ]}
         rows={rows}
-        emptyMessage="No RTI requests match the current filters."
+        emptyMessage={
+          hasFilters
+            ? t("emptyFiltered")
+            : t("emptyNone")
+        }
       />
     </>
   );

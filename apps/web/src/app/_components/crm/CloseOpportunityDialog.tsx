@@ -26,6 +26,12 @@ import {
 } from "@/lib/crm/opportunity";
 
 const REASON_MIN_NON_WON = 10;
+// GAP-CRM-OPPORTUNITIES-03: a won close is irreversible and feeds revenue
+// reporting, so it must carry a substantive reason too — a 1-character "reason"
+// is meaningless. The floor is now 10 for every outcome (the backend close-route
+// REASON_MIN mirrors this; HUMAN REVIEW: confirm the server enforces >= 10 for
+// "won" as well, otherwise the UI floor is advisory only).
+const REASON_MIN_WON = 10;
 
 interface CloseOpportunityDialogProps {
   opportunityId: string;
@@ -64,7 +70,7 @@ export function CloseOpportunityDialog({
 
   if (!open) return null;
 
-  const reasonMin = outcome === "won" ? 1 : REASON_MIN_NON_WON;
+  const reasonMin = outcome === "won" ? REASON_MIN_WON : REASON_MIN_NON_WON;
   const reasonLen = reason.trim().length;
   const reasonTooShort = reasonLen > 0 && reasonLen < reasonMin;
   const competitorRequired = outcome === "lost";

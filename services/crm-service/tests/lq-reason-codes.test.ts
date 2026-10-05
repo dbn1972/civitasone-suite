@@ -111,6 +111,64 @@ describe("GET/PUT /v1/crm/lead-reason-codes", () => {
   });
 });
 
+// ── GAP-CRM-LEAD-REASON-CODES-04: list-level optimistic concurrency ──────────
+describe("optimistic concurrency (GAP-CRM-LEAD-REASON-CODES-04)", () => {
+  it("GET returns a list-level version + last-changed metadata", async () => {
+    const t = randomUUID();
+    const res = await call("GET", "/v1/crm/lead-reason-codes", { headers: headers(["crm_admin"], t) });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { version: string; meta: { updatedBy: string | null; updatedAt: string | null } };
+    expect(typeof body.version).toBe("string");
+    expect(body.version.length).toBeGreaterThan(0);
+    expect(res.headers.etag).toBe(body.version);
+    expect(body.meta.updatedBy).toBeTruthy();
+    expect(body.meta.updatedAt).toBeTruthy();
+    await scoped(t, (tx) => tx`DELETE FROM crm.lead_reason_codes WHERE tenant_id = ${t}`);
+  });
+
+  it("two writers with the same version: the second gets 409 and there is no overwrite", async () => {
+    const t = randomUUID();
+    // Seed + load an initial version both writers share.
+    const loaded = await call("GET", "/v1/crm/lead-reason-codes", { headers: headers(["crm_admin"], t) });
+    const staleVersion = (loaded.json() as { version: string }).version;
+
+    // Writer 1 toggles a known default code off, with the current version → wins.
+    const w1 = await call("PUT", "/v1/crm/lead-reason-codes", {
+      headers: headers(["crm_admin"], t),
+      payload: { codes: [{ code: "duplicate", label: "Duplicate record", appliesToStatus: "disqualified", active: false }], version: staleVersion },
+    });
+    expect(w1.statusCode).toBe(200);
+    expect((w1.json() as { version: string }).version).not.toBe(staleVersion);
+
+    // Writer 2 submits a different value for the SAME code with the now-stale version → 409.
+    const w2 = await call("PUT", "/v1/crm/lead-reason-codes", {
+      headers: headers(["crm_admin"], t),
+      payload: { codes: [{ code: "duplicate", label: "Duplicate record", appliesToStatus: "disqualified", active: true }], version: staleVersion },
+    });
+    expect(w2.statusCode).toBe(409);
+    expect((w2.json() as { code: string }).code).toBe("VERSION_CONFLICT");
+
+    // Writer 1's change (active=false) survived; writer 2 did NOT overwrite it back to active=true.
+    const rows = (await scoped(t, (tx) => tx`
+      SELECT active FROM crm.lead_reason_codes WHERE tenant_id = ${t} AND code = 'duplicate' AND applies_to_status = 'disqualified'
+    `)) as unknown as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.active).toBe(false);
+    await scoped(t, (tx) => tx`DELETE FROM crm.lead_reason_codes WHERE tenant_id = ${t}`);
+  });
+
+  it("a PUT with no version still succeeds (back-compat)", async () => {
+    const t = randomUUID();
+    await call("GET", "/v1/crm/lead-reason-codes", { headers: headers(["crm_admin"], t) });
+    const res = await call("PUT", "/v1/crm/lead-reason-codes", {
+      headers: headers(["crm_admin"], t),
+      payload: { codes: [{ code: "custom_reason", label: "Custom", appliesToStatus: "nurture", active: true }] },
+    });
+    expect(res.statusCode).toBe(200);
+    await scoped(t, (tx) => tx`DELETE FROM crm.lead_reason_codes WHERE tenant_id = ${t}`);
+  });
+});
+
 describe("re-open transition (LQ-004)", () => {
   it("re-opens a disqualified lead to qualified with a valid reason code (round-trip)", async () => {
     const id = randomUUID();

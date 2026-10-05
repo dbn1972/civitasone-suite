@@ -2,9 +2,10 @@
 
 import type { CRMAccountSummary } from "@civitasone/types";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { useFormError } from "@/lib/useFormError";
-import { Button } from "@/app/_components/ds";
+import { Button, ConfirmDialog } from "@/app/_components/ds";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
@@ -14,6 +15,8 @@ type Props = {
   accountName: string;
   currentParentId: string | null;
   options: CRMAccountSummary[];
+  /** Number of sub-accounts that move with this account (GAP-CRM-ACCOUNTS-DETAIL-03). */
+  subtreeSize?: number;
 };
 
 /**
@@ -27,17 +30,27 @@ type Props = {
  * `body.message || "..."`, echoing the backend's raw text for any code other
  * than CYCLE_DETECTED).
  */
-export function AccountParentForm({ accountId, accountName, currentParentId, options }: Props) {
+export function AccountParentForm({ accountId, accountName, currentParentId, options, subtreeSize = 0 }: Props) {
   const router = useRouter();
+  const t = useTranslations("crmAccountParentForm");
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [parentId, setParentId] = useState(currentParentId ?? "");
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const formError = useFormError("parent account");
 
-  async function submit(e: React.FormEvent) {
+  // GAP-CRM-ACCOUNTS-DETAIL-03: re-parenting moves the whole subtree, so a
+  // submit opens a confirmation first rather than firing the PATCH directly.
+  function requestConfirm(e: React.FormEvent) {
     e.preventDefault();
+    setError("");
+    setMessage("");
+    setConfirmOpen(true);
+  }
+
+  async function performMove() {
     setBusy(true);
     setMessage("");
     setError("");
@@ -59,17 +72,23 @@ export function AccountParentForm({ accountId, accountName, currentParentId, opt
           const resolved = await formError.fromResponse(res, "save");
           setError(resolved.message);
         }
+        setConfirmOpen(false);
         return;
       }
       setMessage("Hierarchy updated. The change appears once processing completes.");
+      setConfirmOpen(false);
       setOpen(false);
       router.refresh();
     } catch (caught) {
       setError(formError.fromException("save", caught).message);
+      setConfirmOpen(false);
     } finally {
       setBusy(false);
     }
   }
+
+  const targetName = parentId ? options.find((a) => a.id === parentId)?.name ?? t("anotherAccount") : t("topLevel");
+  const subtreeClause = subtreeSize > 0 ? t("subtreeClause", { count: subtreeSize }) : "";
 
   return (
     <>
@@ -78,7 +97,7 @@ export function AccountParentForm({ accountId, accountName, currentParentId, opt
       </Button>
       {open ? (
         <div className="card" style={{ marginTop: 16 }}>
-          <form onSubmit={submit} className="pad" style={{ maxWidth: 520 }}>
+          <form onSubmit={requestConfirm} className="pad" style={{ maxWidth: 520 }}>
             <h4 style={{ marginTop: 0 }}>Move {accountName}</h4>
             <label htmlFor="parent-select" style={labelStyle}>Reports to</label>
             <select id="parent-select" value={parentId} onChange={(e) => setParentId(e.target.value)} style={inputStyle}>
@@ -96,6 +115,24 @@ export function AccountParentForm({ accountId, accountName, currentParentId, opt
           </form>
         </div>
       ) : null}
+      <ConfirmDialog
+        open={confirmOpen}
+        title={t("confirmTitle")}
+        description={
+          <p style={{ margin: 0 }}>
+            {t.rich("confirmDescription", {
+              name: accountName,
+              subtree: subtreeClause,
+              target: targetName,
+              strong: (chunks) => <strong>{chunks}</strong>,
+            })}
+          </p>
+        }
+        confirmLabel={t("confirmLabel")}
+        busy={busy}
+        onConfirm={() => void performMove()}
+        onCancel={() => setConfirmOpen(false)}
+      />
       {message ? (
         <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", marginTop: 8 }}>{message}</p>
       ) : null}

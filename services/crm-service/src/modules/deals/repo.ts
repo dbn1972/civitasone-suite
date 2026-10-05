@@ -108,15 +108,40 @@ export async function findById(id: string, tenantId: string): Promise<DealView |
 }
 
 /** Same `tenantTransaction`/FORCE RLS rationale as `findById` above. */
-export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<DealView[]> {
+export async function listByTenant(
+  tenantId: string,
+  limit: number,
+  offset: number,
+  pipelineId?: string,
+): Promise<DealView[]> {
   const rows = await tenantTransaction(db, tenantId, (tx) => (tx as typeof db).select({ deal: deals, contactName: contacts.name })
     .from(deals)
     .leftJoin(contacts, eq(deals.contactId, contacts.id))
-    .where(and(eq(deals.tenantId, tenantId), sql`${deals.status} NOT IN ('deleted','cancelled')`))
+    .where(and(
+      eq(deals.tenantId, tenantId),
+      sql`${deals.status} NOT IN ('deleted','cancelled')`,
+      ...(pipelineId ? [eq(deals.pipelineId, pipelineId)] : []),
+    ))
     .orderBy(desc(deals.updatedAt))
     .limit(limit)
     .offset(offset));
   return rows.map((r) => toView(r.deal, r.contactName));
+}
+
+/**
+ * GAP-CRM-PIPELINE-05: tenant-wide count of live deals (optionally scoped to one
+ * pipeline), matching the SAME population listByTenant pages over, so the board
+ * can show "N of M" rather than inferring truncation from a full page.
+ */
+export async function countByTenant(tenantId: string, pipelineId?: string): Promise<number> {
+  const rows = await tenantTransaction(db, tenantId, (tx) => (tx as typeof db).select({ total: sql<string>`count(*)` })
+    .from(deals)
+    .where(and(
+      eq(deals.tenantId, tenantId),
+      sql`${deals.status} NOT IN ('deleted','cancelled')`,
+      ...(pipelineId ? [eq(deals.pipelineId, pipelineId)] : []),
+    )));
+  return Number(rows[0]?.total ?? 0);
 }
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;

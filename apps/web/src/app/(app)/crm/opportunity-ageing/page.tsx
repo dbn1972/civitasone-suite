@@ -1,17 +1,23 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader } from "../../../_components/ds";
 import { StageAgeingDashboard } from "../../../_components/crm/StageAgeingDashboard";
+import { getSessionRoles, hasAnyRole, CRM_CONFIG_ADMIN_ROLES } from "@/lib/auth/roleGuard";
 
 /** OP-005 — opportunities exceeding their stage day-limit + limits config. */
-export default function Page() {
+export default async function Page() {
+  const t = await getTranslations("crmOpportunityAgeingPage");
+  // GAP-CRM-OPPORTUNITY-AGEING-05: the ageing list is useful to every manager, but
+  // editing the per-stage limits (which drive the alert tenant-wide) is admin-only.
+  const canConfig = hasAnyRole(getSessionRoles(), CRM_CONFIG_ADMIN_ROLES);
   return (
     <>
       <PageHeader
-        title="Stage Ageing"
-        subtitle="Opportunities that have stalled past their configured stage limit, plus the per-stage day limits that drive the alert."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/crm"
-        backLabel="CRM"
+        backLabel={t("backLabel")}
       />
-      <StageAgeingDashboard />
+      <StageAgeingDashboard canConfig={canConfig} />
     </>
   );
 }

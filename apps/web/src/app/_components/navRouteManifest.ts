@@ -41,6 +41,7 @@ export const LINKABLE_INTERMEDIATE_PATHS: ReadonlySet<string> = new Set([
   "/crm/deals",
   "/crm/grievances",
   "/crm/opportunities",
+  "/crm/overdue-tasks",
   "/crm/rti",
   "/crm/service-requests",
   "/crm/voice-of-customer",

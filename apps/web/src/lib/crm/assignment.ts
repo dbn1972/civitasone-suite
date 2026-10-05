@@ -25,6 +25,10 @@ function str(v: unknown): string {
 function bool(v: unknown, dflt = false): boolean {
   return typeof v === "boolean" ? v : dflt;
 }
+/** True when `obj` has own property `key` with a non-null/undefined value. */
+function hasOwn(obj: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(obj, key) && obj[key] !== null && obj[key] !== undefined;
+}
 
 /** Tolerate bare-array vs { items | data | rules | <named> } wrappers. */
 function toArray(raw: unknown, ...keys: string[]): unknown[] {
@@ -72,6 +76,12 @@ export interface AssignmentRule {
   ordinal: number;
   enabled: boolean;
   fallbackOwnerId: string;
+  /**
+   * Who last changed the rule and when (AS-001). Optional — only present when
+   * the backend returns it; never fabricated client-side (GAP-CRM-ASSIGNMENT-RULES-05).
+   */
+  updatedBy?: string;
+  updatedAt?: string;
 }
 
 export function normaliseRule(raw: unknown): AssignmentRule | null {
@@ -91,6 +101,8 @@ export function normaliseRule(raw: unknown): AssignmentRule | null {
     ordinal: num(r.ordinal),
     enabled: bool(r.enabled, true),
     fallbackOwnerId: str(r.fallbackOwnerId),
+    ...(typeof r.updatedBy === "string" && r.updatedBy ? { updatedBy: r.updatedBy } : {}),
+    ...(typeof r.updatedAt === "string" && r.updatedAt ? { updatedAt: r.updatedAt } : {}),
   };
 }
 
@@ -213,12 +225,49 @@ export const OWNERSHIP_RESOURCE_LABELS: Record<OwnershipResource, string> = {
   branches: "Branches",
 };
 
-/** A named ownership record; extra backend fields are carried through opaquely. */
+/**
+ * Correct singular forms for button/placeholder copy. GAP-CRM-ASSIGNMENT-
+ * DIRECTORY-01: the UI previously derived the singular with
+ * `label.replace(/s$/, "")`, which produced "Territorie" and "Branche". Use an
+ * explicit map instead so every tab reads correctly.
+ */
+export const OWNERSHIP_RESOURCE_SINGULAR: Record<OwnershipResource, string> = {
+  "assignment-queues": "Queue",
+  territories: "Territory",
+  partners: "Partner",
+  branches: "Branch",
+};
+
+/**
+ * Server-managed / already-modelled keys that must NOT be echoed back in an
+ * update body as opaque extras: `id`/`name`/`description`/`enabled` are handled
+ * explicitly, and the audit/version/tenant columns are owned by the service.
+ */
+const RESERVED_RESOURCE_KEYS = new Set([
+  "id", "name", "description", "enabled",
+  "tenantId", "tenant_id", "createdAt", "created_at", "updatedAt", "updated_at",
+  "createdBy", "created_by", "updatedBy", "updated_by", "version",
+]);
+
+/**
+ * A named ownership record.
+ *
+ * GAP-CRM-ASSIGNMENT-DIRECTORY-03: besides the four modelled fields, each
+ * resource has type-specific columns (queues: teamId; territories: code,
+ * region, ownerId; partners: partnerType, ownerId; branches: code,
+ * territoryId). The backend PUT already COALESCEs omitted fields, so these are
+ * NOT wiped today — but the editor only read name/description/enabled, so the
+ * old "carried through opaquely" comment was wrong. `extra` now captures those
+ * unmodelled fields on read and re-sends them on update, so the round-trip is
+ * genuinely lossless even if the backend ever switches to replace-all.
+ */
 export interface NamedResource {
   id?: string;
   name: string;
   description: string;
   enabled: boolean;
+  /** Unmodelled, type-specific backend fields, preserved verbatim across an edit. */
+  extra?: Record<string, unknown>;
 }
 
 export function normaliseResources(raw: unknown): NamedResource[] {
@@ -228,11 +277,18 @@ export function normaliseResources(raw: unknown): NamedResource[] {
     const r = item as Record<string, unknown>;
     const name = str(r.name);
     if (!name) continue;
+    const extra: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(r)) {
+      if (RESERVED_RESOURCE_KEYS.has(k)) continue;
+      if (val === null || val === undefined) continue;
+      extra[k] = val;
+    }
     out.push({
       ...(typeof r.id === "string" ? { id: r.id } : {}),
       name,
       description: str(r.description),
       enabled: bool(r.enabled, true),
+      ...(Object.keys(extra).length > 0 ? { extra } : {}),
     });
   }
   return out;
@@ -307,7 +363,13 @@ export function normaliseAgents(raw: unknown): AgentWorkload[] {
       agentId,
       name: str(r.name) || agentId,
       activeLeads: num(r.activeLeads ?? r.currentLoad ?? r.currentLeads ?? r.openLeads),
-      maxLeads: num(r.maxLeads),
+      // GAP-CRM-AGENT-WORKLOAD-03: a MISSING maxLeads must stay NaN, not become
+      // 0. The assignment engine treats maxLeads=0 as "receives no new leads"
+      // (isEligible: currentLoad >= maxLeads is always true at 0), so coercing an
+      // absent value to 0 and PATCHing it back would silently stop routing to
+      // that agent. NaN makes the input render empty and blocks Save until the
+      // admin enters a real value.
+      maxLeads: hasOwn(r, "maxLeads") ? num(r.maxLeads) : Number.NaN,
       available: bool(r.available, true),
       onLeave: bool(r.onLeave, false),
     });
@@ -329,6 +391,13 @@ export interface CapacityPatch {
   maxLeads: number;
   available: boolean;
   onLeave: boolean;
+  /**
+   * GAP-CRM-AGENT-WORKLOAD-04: an optional change reason for risky capacity
+   * changes (going unavailable, on leave, or lowering max leads). Forwarded to
+   * the backend, which records it on the agent_capacity_update audit event.
+   * Optional so older callers / API versions stay compatible.
+   */
+  reason?: string;
 }
 
 export async function updateAgentCapacity(agentId: string, patch: CapacityPatch): Promise<void> {

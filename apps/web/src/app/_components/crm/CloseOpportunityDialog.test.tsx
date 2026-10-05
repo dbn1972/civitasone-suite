@@ -39,12 +39,24 @@ describe("CloseOpportunityDialog (OP-006)", () => {
     vi.mocked(op.closeOpportunity).mockResolvedValue(undefined);
     const onClosed = vi.fn();
     open({ onClosed });
-    fireEvent.change(screen.getByLabelText(/^reason$/i), { target: { value: "signed" } });
+    fireEvent.change(screen.getByLabelText(/^reason$/i), { target: { value: "contract signed" } });
     fireEvent.click(screen.getByRole("button", { name: /close opportunity/i }));
     await waitFor(() =>
-      expect(op.closeOpportunity).toHaveBeenCalledWith("d1", { outcome: "won", reason: "signed", competitor: undefined }),
+      expect(op.closeOpportunity).toHaveBeenCalledWith("d1", { outcome: "won", reason: "contract signed", competitor: undefined }),
     );
     expect(onClosed).toHaveBeenCalled();
+  });
+
+  // GAP-CRM-OPPORTUNITIES-03: a won close is irreversible and feeds revenue
+  // reporting, so a 1-character "reason" is no longer accepted — the floor is 10
+  // characters for every outcome.
+  it("blocks a won close with a too-short (1 char) reason", async () => {
+    const callsBefore = vi.mocked(op.closeOpportunity).mock.calls.length;
+    open();
+    fireEvent.change(screen.getByLabelText(/^reason$/i), { target: { value: "x" } });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /close opportunity/i })); });
+    expect((await screen.findAllByText(/at least 10 characters/i)).length).toBeGreaterThan(0);
+    expect(vi.mocked(op.closeOpportunity).mock.calls.length).toBe(callsBefore);
   });
 
   it("closes lost with reason + competitor", async () => {
@@ -62,7 +74,7 @@ describe("CloseOpportunityDialog (OP-006)", () => {
   it("surfaces a 422 mandatory-fields rejection inline", async () => {
     vi.mocked(op.closeOpportunity).mockRejectedValue(new op.MandatoryFieldsError("missing", ["nextStep"]));
     open();
-    fireEvent.change(screen.getByLabelText(/^reason$/i), { target: { value: "done" } });
+    fireEvent.change(screen.getByLabelText(/^reason$/i), { target: { value: "all done here" } });
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /close opportunity/i }));
     });

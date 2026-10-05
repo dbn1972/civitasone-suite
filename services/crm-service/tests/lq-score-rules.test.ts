@@ -110,6 +110,63 @@ describe("GET/PUT /v1/crm/lead-score-rules", () => {
   });
 });
 
+// ── GAP-CRM-LEAD-SCORING-05: list-level optimistic concurrency ───────────────
+describe("optimistic concurrency (GAP-CRM-LEAD-SCORING-05)", () => {
+  it("GET returns a list-level version + last-changed metadata", async () => {
+    const t = randomUUID();
+    const res = await call("GET", "/v1/crm/lead-score-rules", { headers: headers(["crm_admin"], t) });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { version: string; meta: { updatedBy: string | null; updatedAt: string | null } };
+    expect(typeof body.version).toBe("string");
+    expect(body.version.length).toBeGreaterThan(0);
+    expect(res.headers.etag).toBe(body.version);
+    expect(body.meta.updatedBy).toBeTruthy();
+    expect(body.meta.updatedAt).toBeTruthy();
+    await scoped(t, (tx) => tx`DELETE FROM crm.lead_score_rules WHERE tenant_id = ${t}`);
+  });
+
+  it("two writers with the same version: the second gets 409 and there is no overwrite", async () => {
+    const t = randomUUID();
+    const loaded = await call("GET", "/v1/crm/lead-score-rules", { headers: headers(["crm_admin"], t) });
+    const staleVersion = (loaded.json() as { version: string }).version;
+
+    // Writer 1 sets email weight to 41 with the current version → wins.
+    const w1 = await call("PUT", "/v1/crm/lead-score-rules", {
+      headers: headers(["crm_admin"], t),
+      payload: { rules: [{ attribute: "email", weight: 41, scoreFnType: "presence", params: {}, enabled: true }], version: staleVersion },
+    });
+    expect(w1.statusCode).toBe(200);
+    expect((w1.json() as { version: string }).version).not.toBe(staleVersion);
+
+    // Writer 2 sets email weight to 99 with the now-stale version → 409.
+    const w2 = await call("PUT", "/v1/crm/lead-score-rules", {
+      headers: headers(["crm_admin"], t),
+      payload: { rules: [{ attribute: "email", weight: 99, scoreFnType: "presence", params: {}, enabled: true }], version: staleVersion },
+    });
+    expect(w2.statusCode).toBe(409);
+    expect((w2.json() as { code: string }).code).toBe("VERSION_CONFLICT");
+
+    // Writer 1's 41 survived; writer 2's 99 was NOT applied.
+    const rows = (await scoped(t, (tx) => tx`
+      SELECT weight FROM crm.lead_score_rules WHERE tenant_id = ${t} AND attribute = 'email'
+    `)) as unknown as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(1);
+    expect(Number(rows[0]!.weight)).toBe(41);
+    await scoped(t, (tx) => tx`DELETE FROM crm.lead_score_rules WHERE tenant_id = ${t}`);
+  });
+
+  it("a PUT with no version still succeeds (back-compat)", async () => {
+    const t = randomUUID();
+    await call("GET", "/v1/crm/lead-score-rules", { headers: headers(["crm_admin"], t) });
+    const res = await call("PUT", "/v1/crm/lead-score-rules", {
+      headers: headers(["crm_admin"], t),
+      payload: { rules: [{ attribute: "company", weight: 22, scoreFnType: "presence", params: {}, enabled: true }] },
+    });
+    expect(res.statusCode).toBe(200);
+    await scoped(t, (tx) => tx`DELETE FROM crm.lead_score_rules WHERE tenant_id = ${t}`);
+  });
+});
+
 describe("GET /v1/crm/leads/:id/score-history", () => {
   it("records a history row when the score route scores a lead", async () => {
     const leadId = await createLead("Score Route Lead", { email: "sr@example.com", company: "Acme", leadSource: "referral" });

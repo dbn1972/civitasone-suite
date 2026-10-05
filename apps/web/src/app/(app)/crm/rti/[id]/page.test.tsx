@@ -1,7 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render as rtlRender, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
+
+import type { ReactElement } from "react";
+
+function render(ui: ReactElement) {
+  return rtlRender(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
+
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -77,6 +88,29 @@ describe("RtiDetailPage", () => {
     expect(screen.getByText("By post")).toBeInTheDocument();
   });
 
+  // GAP-CRM-RTI-DETAIL-05: a larger fee renders with Indian (lakh) grouping.
+  it("formats a large fee with lakh grouping from paise", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: { ...RTI, feeAmountMinor: "15000000", feeAmount: 150000 },
+      source: "api",
+    });
+    const ui = await RtiDetailPage({ params: { id: RTI.id } });
+    render(ui);
+    expect(screen.getByText(/Paid — ₹1,50,000\.00/)).toBeInTheDocument();
+  });
+
+  // GAP-CRM-RTI-DETAIL-05: fee paid but no amount shows "Paid", never "₹NaN".
+  it("shows 'Paid' when fee is paid but the amount is missing", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: { ...RTI, feePaid: true, feeAmount: undefined, feeAmountMinor: null },
+      source: "api",
+    });
+    const ui = await RtiDetailPage({ params: { id: RTI.id } });
+    render(ui);
+    expect(screen.getByText("Paid")).toBeInTheDocument();
+    expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
+  });
+
   // GAP-CRM-RTI-DETAIL-03: a CRM user who needs it to reply sees the contact
   // in clear; an unprivileged viewer sees it masked and no action buttons.
   it("shows the contact in clear to a CRM user", async () => {
@@ -105,17 +139,46 @@ describe("RtiDetailPage", () => {
     const ui = await RtiDetailPage({ params: { id: "does-not-exist" } });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
-    expect(screen.getByText("RTI Request Not Found")).toBeInTheDocument();
+    expect(screen.getAllByText("RTI request not found").length).toBeGreaterThan(0);
+  });
+
+  // GAP-CRM-RTI-DETAIL-06: a 404 is "not found", distinct from an outage.
+  it("treats a 404 as not-found", async () => {
+    fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 404 });
+    const ui = await RtiDetailPage({ params: { id: RTI.id } });
+    render(ui);
+    expect(screen.getAllByText("RTI request not found").length).toBeGreaterThan(0);
+  });
+
+  // GAP-CRM-RTI-DETAIL-06: a 500 is a retryable outage, NOT "not found".
+  it("shows a retry error state (not 'not found') on a 500", async () => {
+    fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 500 });
+    const ui = await RtiDetailPage({ params: { id: RTI.id } });
+    render(ui);
+    expect(screen.queryByText("RTI request not found")).not.toBeInTheDocument();
+    // RefreshErrorState offers a Try again action.
+    expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
+  });
+
+  // GAP-CRM-RTI-DETAIL-06: a 403 is "access restricted" (PermissionDenied),
+  // never titled as a missing record and never offering a pointless retry.
+  it("shows access-restricted (not 'not found') on a 403", async () => {
+    fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 403 });
+    const ui = await RtiDetailPage({ params: { id: RTI.id } });
+    render(ui);
+    expect(screen.queryByText("RTI request not found")).not.toBeInTheDocument();
+    expect(screen.getByText(/access restricted/i)).toBeInTheDocument();
   });
 
   it("does not claim a cached view when the fetch actually failed", async () => {
-    fetchJsonMock.mockResolvedValue({ data: null, source: "error" });
+    fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 500 });
 
     const ui = await RtiDetailPage({ params: { id: RTI.id } });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
-    expect(screen.getByText("RTI Request Not Found")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toBeInTheDocument();
+    // Not a fabricated "not found" — an honest, retryable error state.
+    expect(screen.queryByText("RTI request not found")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
   });
 
   // GAP-CRM-RTI-DETAIL-01: appeal chain wiring.
