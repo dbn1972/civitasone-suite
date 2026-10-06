@@ -3,7 +3,7 @@
  * Gateway rewrites "/api/v1/documents" → document-service "/v1/documents".
  */
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import type { FileSummary, FolderSummary, DakSummary, DocumentStats } from "./types";
+import type { FileSummary, FolderSummary, DakSummary, DakDetail, DocumentStats } from "./types";
 
 function asArray(x: unknown): Record<string, unknown>[] {
   return Array.isArray(x) ? (x as Record<string, unknown>[]) : [];
@@ -82,15 +82,37 @@ export function getDocumentInbox(): Promise<LoaderResult<DakSummary[]>> {
   });
 }
 
+export function getDak(id: string): Promise<LoaderResult<DakDetail | null>> {
+  return fetchJson<unknown, DakDetail | null>(`/api/v1/documents/daks/${encodeURIComponent(id)}`, null, {
+    revalidateSeconds: 15,
+    telemetryKey: "documents.dak",
+    mapResponse: (p) => {
+      const r = asObj(p);
+      if (!r || typeof r.id !== "string") return null;
+      return { ...toDak(r), body: strOrNull(r.body) };
+    },
+  });
+}
+
 export function getDocumentStats(): Promise<LoaderResult<DocumentStats>> {
-  const empty: DocumentStats = { inboxCount: 0, pendingCount: 0, urgentCount: 0 };
+  const empty: DocumentStats = {
+    inboxCount: 0, pendingCount: 0, urgentCount: 0,
+    inboxUrgentCount: 0, inboxPendingCount: 0, inboxForwardedCount: 0,
+  };
   return fetchJson<unknown, DocumentStats>("/api/v1/documents/inbox/summary", empty, {
     revalidateSeconds: 30,
     telemetryKey: "documents.stats",
     mapResponse: (p) => {
       const r = asObj(p);
       if (!r) return empty;
-      return { inboxCount: num(r.inboxCount), pendingCount: num(r.pendingCount), urgentCount: num(r.urgentCount) };
+      return {
+        inboxCount: num(r.inboxCount),
+        pendingCount: num(r.pendingCount),
+        urgentCount: num(r.urgentCount),
+        inboxUrgentCount: num(r.inboxUrgentCount),
+        inboxPendingCount: num(r.inboxPendingCount),
+        inboxForwardedCount: num(r.inboxForwardedCount),
+      };
     },
   });
 }

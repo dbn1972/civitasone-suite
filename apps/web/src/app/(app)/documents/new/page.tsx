@@ -1,98 +1,29 @@
-"use client";
-import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { PageHeader } from "../../../_components/ds";
-import { useFormError } from "@/lib/useFormError";
+import { getDocumentFolders } from "../_data/loaders";
+import { UploadDocumentForm, type FolderOption } from "./UploadDocumentForm";
 
-export default function UploadDocumentPage() {
-  const router = useRouter();
-  const [name, setName] = useState("");
-  const [tags, setTags] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const formError = useFormError("document");
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/v1/documents/files", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          name,
-          tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
-        }),
-      });
-      if (!res.ok) {
-        setError((await formError.fromResponse(res, "save")).message);
-        return;
-      }
-      router.push("/documents/library");
-      router.refresh();
-    } catch (caught) {
-      setError(formError.fromException("save", caught).message);
-    } finally {
-      setSubmitting(false);
-    }
-  }
+export default async function UploadDocumentPage({
+  searchParams,
+}: {
+  searchParams: { folderId?: string };
+}) {
+  const { data: folders } = await getDocumentFolders();
+  const options: FolderOption[] = folders.map((f) => ({ id: f.id, name: f.name, path: f.path }));
+  const defaultFolderId =
+    searchParams.folderId && folders.some((f) => f.id === searchParams.folderId)
+      ? searchParams.folderId
+      : null;
 
   return (
     <div className="wrap">
       <PageHeader
         title="Upload Document"
-        subtitle="Register a new file in the document library."
+        subtitle="Attach a file and register it in the document library."
       />
 
       <div className="card" style={{ maxWidth: 560, marginTop: 18 }}>
         <div className="card-h"><h3>File Details</h3></div>
-        <form onSubmit={handleSubmit} style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
-
-          {error && (
-            <div style={{ padding: "10px 14px", borderRadius: "var(--r)", background: "color-mix(in srgb, var(--bad) 12%, transparent)", color: "var(--bad)", fontSize: 14 }}>
-              {error}
-            </div>
-          )}
-
-          <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 14, color: "var(--ink2)" }}>
-            <span>File Name <span style={{ color: "var(--bad)" }}>*</span></span>
-            <input
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Budget Report Q3.pdf"
-              style={{
-                padding: "8px 12px", borderRadius: "var(--r)", border: "1px solid var(--line)",
-                background: "var(--bg)", color: "var(--ink)", fontSize: 14,
-              }}
-            />
-          </label>
-
-          <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 14, color: "var(--ink2)" }}>
-            <span>Tags (comma-separated)</span>
-            <input
-              value={tags}
-              onChange={(e) => setTags(e.target.value)}
-              placeholder="e.g. finance, 2025, approved"
-              style={{
-                padding: "8px 12px", borderRadius: "var(--r)", border: "1px solid var(--line)",
-                background: "var(--bg)", color: "var(--ink)", fontSize: 14,
-              }}
-            />
-          </label>
-
-          <p style={{ fontSize: 13, color: "var(--ink2)", margin: 0 }}>
-            File content upload (S3/storage) is wired to the backend — attach a file from the library view once the record is created.
-          </p>
-
-          <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-            <button type="submit" className="btn primary" disabled={submitting}>
-              {submitting ? "Saving…" : "Create Record"}
-            </button>
-            <button type="button" className="btn" onClick={() => router.back()}>Cancel</button>
-          </div>
-        </form>
+        <UploadDocumentForm folders={options} defaultFolderId={defaultFolderId} />
       </div>
     </div>
   );
