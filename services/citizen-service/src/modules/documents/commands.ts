@@ -53,6 +53,7 @@ export async function digilockerFetchIntake(ctx: RequestContext, body: Digilocke
     serviceId: body.serviceId ?? null,
     docType: body.docType,
     docUri: body.docUri,
+    consent: body.consent ?? false,
     digilockerRef: result.digilockerRef,
     providerStatus: result.providerStatus,
     configured: result.configured,

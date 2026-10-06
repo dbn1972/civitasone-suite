@@ -43,6 +43,12 @@ export interface FeeSchedule {
   id: string;
   name: string;
   serviceId: string;
+  /**
+   * GAP-CITIZEN-PAYMENTS-01: base fee in MINOR units (paise), as a numeric
+   * string. The citizen-service `fee.schedules.base_amount` column is a
+   * `bigint` of paise (CLAUDE.md: money is bigint paise end-to-end), so this
+   * must be rendered with `formatMoney()` — never printed raw.
+   */
   baseAmount: string;
   currency: string;
   exemptionCount: number;

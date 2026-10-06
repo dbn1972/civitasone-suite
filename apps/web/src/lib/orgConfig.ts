@@ -125,3 +125,21 @@ export const ORG_TYPE_LABELS: Record<OrgType, string> = {
   municipal: "Municipal / Local Body",
   educational: "University / Educational Institution",
 };
+
+/**
+ * GAP-CITIZEN-GRIEVANCES-NEW-06: the Data Protection Officer (DPO) contact
+ * address shown in DPDP notices. Resolved from a tenant/deploy setting
+ * (NEXT_PUBLIC_DPO_EMAIL) rather than hard-coded per screen, with a neutral,
+ * clearly-placeholder fallback so a misconfigured tenant never silently
+ * advertises another tenant's address. Pass an explicit value (e.g. from
+ * tenant settings) to override.
+ */
+export const DEFAULT_DPO_EMAIL = "dpo@example.gov.in";
+
+export function getDpoEmail(configured?: string | null): string {
+  const fromArg = configured?.trim();
+  if (fromArg) return fromArg;
+  const fromEnv = (typeof process !== "undefined" ? process.env?.NEXT_PUBLIC_DPO_EMAIL : undefined)?.trim();
+  if (fromEnv) return fromEnv;
+  return DEFAULT_DPO_EMAIL;
+}

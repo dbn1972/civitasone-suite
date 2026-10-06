@@ -7,6 +7,8 @@ import { Button } from "@/app/_components/ds";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
+// GAP-CITIZEN-RTI-03 remains OPEN: no CPIO directory endpoint exists yet, so the
+// applicant still supplies the CPIO UUID. Replace with a picker once one ships.
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function RegisterRTIButton() {
@@ -22,7 +24,7 @@ export function RegisterRTIButton() {
     e.preventDefault();
     setError("");
     if (!UUID_RE.test(form.cpioRef.trim())) {
-      setError("CPIO reference must be a valid identifier (UUID).");
+      setError(t("cpioInvalid"));
       return;
     }
     setBusy(true);
@@ -34,12 +36,12 @@ export function RegisterRTIButton() {
         body: JSON.stringify({ subject: form.subject, description: form.description, cpioRef: form.cpioRef.trim() }),
       });
       if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
-      setMessage("RTI application submitted. It will appear once processed.");
+      setMessage(t("registerSuccess"));
       setOpen(false);
       setForm({ subject: "", description: "", cpioRef: "" });
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not register the RTI application.");
+      setError(e instanceof Error ? e.message : t("registerErrorFallback"));
     } finally {
       setBusy(false);
     }

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { EmptyState } from "@/app/_components/ds";
 
@@ -7,6 +8,11 @@ export default async function CitizenNotFound() {
     <EmptyState
       title={t("notFoundTitle")}
       message={t("notFoundMessage")}
+      action={
+        <Link href="/citizen" className="btn">
+          {t("notFoundBack")}
+        </Link>
+      }
     />
   );
 }

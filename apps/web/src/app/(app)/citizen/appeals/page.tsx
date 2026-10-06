@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { PageHeader, RefreshErrorState } from "../../../_components/ds";
 import { getAppeals } from "../../../_data/citizenPartials";
 import { AppealPanel } from "./AppealPanel";
+import { AppealsTable } from "./AppealsTable";
 import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 
@@ -35,29 +36,8 @@ export default async function AppealsPage() {
         ) : appeals.length === 0 ? (
           <div className="pad" style={{ color: "var(--muted)" }}>{t("empty")}</div>
         ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ textAlign: "left", fontSize: 12, color: "var(--muted)" }}>
-                  <th scope="col" style={{ padding: 8 }}>{t("colType")}</th>
-                  <th scope="col" style={{ padding: 8 }}>{t("colGrounds")}</th>
-                  <th scope="col" style={{ padding: 8 }}>{t("colDeadline")}</th>
-                  <th scope="col" style={{ padding: 8 }}>{t("colStatus")}</th>
-                  <th scope="col" style={{ padding: 8 }}>{t("colOutcome")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {appeals.map((a) => (
-                  <tr key={a.id} style={{ borderTop: "1px solid var(--line)" }}>
-                    <td style={{ padding: 8 }}>{a.appealType}</td>
-                    <td style={{ padding: 8, maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.grounds}</td>
-                    <td style={{ padding: 8 }}>{a.filingDeadline || "—"}</td>
-                    <td style={{ padding: 8 }}>{a.status}</td>
-                    <td style={{ padding: 8 }}>{a.outcome || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="pad">
+            <AppealsTable appeals={appeals} />
           </div>
         )}
       </div>

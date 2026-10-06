@@ -1,7 +1,9 @@
 import { getTranslations } from "next-intl/server";
 import { PageHeader, RefreshErrorState } from "../../../_components/ds";
 import { getEligibilityRuleSets } from "../../../_data/citizenGaps";
-import { EligibilityCheck } from "./EligibilityCheck";
+import { getCatalogueServices } from "../../../_data/citizenPartials";
+import { humanizeStatus } from "@/lib/formatters";
+import { EligibilityCheck, type EligibilityServiceOption } from "./EligibilityCheck";
 import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 
@@ -14,6 +16,11 @@ export default async function EligibilityPage() {
   const errored = resource.status === "error";
   const published = errored ? null : ruleSets.filter((r) => r.status === "published").length;
 
+  // GAP-CITIZEN-ELIGIBILITY-01: resolve services so the checker offers a
+  // by-name picker instead of a hand-typed Service UUID.
+  const { data: services } = await getCatalogueServices();
+  const serviceOptions: EligibilityServiceOption[] = services.map((s) => ({ id: s.id, name: s.name }));
+
   return (
     <>
       <PageHeader
@@ -21,7 +28,7 @@ export default async function EligibilityPage() {
         subtitle={t("pageSubtitle")}
       />
 
-      <EligibilityCheck />
+      <EligibilityCheck services={serviceOptions} />
 
       <div className="card" style={{ marginTop: 16 }}>
         <div className="pad" style={{ borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between" }}>
@@ -51,7 +58,7 @@ export default async function EligibilityPage() {
                     <td style={{ padding: 8 }}>{r.name}</td>
                     <td style={{ padding: 8 }}>v{r.version}</td>
                     <td style={{ padding: 8 }}>{r.ruleCount}</td>
-                    <td style={{ padding: 8 }}>{r.status}</td>
+                    <td style={{ padding: 8 }}>{humanizeStatus(r.status)}</td>
                   </tr>
                 ))}
               </tbody>

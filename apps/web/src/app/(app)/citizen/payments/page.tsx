@@ -4,6 +4,7 @@ import { getFeeSchedules } from "../../../_data/citizenGaps";
 import { PaymentPanel } from "./PaymentPanel";
 import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
+import { formatMoney } from "@/lib/formatters";
 
 /** SVC-085 — Service fee & payment handling. */
 export default async function PaymentsPage() {
@@ -20,10 +21,13 @@ export default async function PaymentsPage() {
         subtitle={t("pageSubtitle")}
       />
 
-      <PaymentPanel schedules={schedules.map((s) => ({ id: s.id, name: s.name }))} />
+      <PaymentPanel
+        schedules={schedules.map((s) => ({ id: s.id, name: s.name, baseAmount: s.baseAmount, currency: s.currency }))}
+        loadFailed={errored}
+      />
 
       <div className="card" style={{ marginTop: 16 }}>
-        <div className="pad" style={{ borderBottom: "1px solid var(--line)" }}><strong>{t("listTitle")}</strong></div>
+        <div className="pad" style={{ borderBottom: "1px solid var(--line)" }}><strong>{errored ? t("listTitle") : t("listTitleCount", { count: schedules.length })}</strong></div>
         {errored ? (
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "fee schedules" })} />
@@ -37,7 +41,6 @@ export default async function PaymentsPage() {
                 <tr style={{ textAlign: "left", fontSize: 12, color: "var(--muted)" }}>
                   <th scope="col" style={{ padding: 8 }}>{t("colName")}</th>
                   <th scope="col" style={{ padding: 8 }}>{t("colBaseAmount")}</th>
-                  <th scope="col" style={{ padding: 8 }}>{t("colCurrency")}</th>
                   <th scope="col" style={{ padding: 8 }}>{t("colExemptions")}</th>
                 </tr>
               </thead>
@@ -45,8 +48,15 @@ export default async function PaymentsPage() {
                 {schedules.map((s) => (
                   <tr key={s.id} style={{ borderTop: "1px solid var(--line)" }}>
                     <td style={{ padding: 8 }}>{s.name}</td>
-                    <td style={{ padding: 8 }}>{s.baseAmount}</td>
-                    <td style={{ padding: 8 }}>{s.currency}</td>
+                    <td style={{ padding: 8 }}>
+                      {/* GAP-CITIZEN-PAYMENTS-01: baseAmount is paise (bigint)
+                          — render as ₹ with en-IN grouping, never raw. The
+                          currency code is only shown when it is not INR, so
+                          the common case has no redundant "INR" column. */}
+                      {s.currency && s.currency !== "INR"
+                        ? `${s.currency} ${s.baseAmount}`
+                        : formatMoney(s.baseAmount)}
+                    </td>
                     <td style={{ padding: 8 }}>{s.exemptionCount}</td>
                   </tr>
                 ))}

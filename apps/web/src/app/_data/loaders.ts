@@ -4097,7 +4097,10 @@ export async function getCitizenRequests(): Promise<LoaderResult<CitizenRequestS
 
 export async function getRTIApplications(): Promise<LoaderResult<RTISummary[]>> {
   return fetchJson<unknown, RTISummary[]>("/api/v1/citizen/rti", [], {
-    revalidateSeconds: 120,
+    // GAP-CITIZEN-RTI-02: do not serve a stale list after a §6(3) transfer.
+    // The RTI register is a statutory, mutation-heavy view; a router.refresh()
+    // after a transfer must re-read fresh data, so the fetch is not cached.
+    revalidateSeconds: 0,
     telemetryKey: "citizen.rti",
     responseSchema: RTISummaryListSchema,
     mapResponse: (p) => getArrayPayload(p) as RTISummary[] | null,
@@ -4188,14 +4191,9 @@ export async function getCitizenNotices(): Promise<LoaderResult<CitizenNotice[]>
   });
 }
 
-export type CitizenSurvey = {
-  id: string;
-  surveyName: string;
-  responses: number;
-  completion: string;
-  period: string;
-  status: string;
-};
+import type { CitizenSurvey } from "@/lib/citizenSurveys";
+export type { CitizenSurvey, SurveySummary } from "@/lib/citizenSurveys";
+export { normalizeSurveyStatus, parseCompletionPct, summarizeSurveys } from "@/lib/citizenSurveys";
 
 export async function getCitizenSurveys(): Promise<LoaderResult<CitizenSurvey[]>> {
   return fetchJson<unknown, CitizenSurvey[]>("/api/v1/citizen/surveys", [], {

@@ -69,11 +69,12 @@ async function audit(
   action: string,
   resourceType: string,
   resourceId: string,
+  newValue?: Record<string, unknown>,
 ) {
   await enqueue(tx, {
     topic: AUDIT, eventType: AUDIT,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "citizen", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "citizen", action, resourceType, resourceId, outcome: "success", ...(newValue ? { newValue } : {}) },
   });
 }
 
@@ -158,6 +159,7 @@ export function registerFeePaymentConsumers(rawQueue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; applicationId: string; scheduleId?: string; serviceId?: string;
       citizenId?: string; subject: Record<string, unknown>; reference?: string;
+      method?: string; instrumentRef?: string; payerName?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -172,7 +174,7 @@ export function registerFeePaymentConsumers(rawQueue: Queue): void {
         id: p.id, tenantId: p.tenantId, applicationId: p.applicationId, scheduleId: sched.id,
         citizenId: p.citizenId ?? null, amount: fee.amount, currency: sched.currency,
         exemptionApplied: fee.exemptionApplied, method: "offline", status: "offline_recorded",
-        gatewayRef: p.reference ?? null, receiptNo, receiptIssuedAt: now,
+        gatewayRef: p.reference ?? p.instrumentRef ?? null, receiptNo, receiptIssuedAt: now,
         reconciliationStatus: "reconciled", createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       let hoaCode: string | null = null;
@@ -217,7 +219,11 @@ export function registerFeePaymentConsumers(rawQueue: Queue): void {
         },
         eventType: "citizen.payment.received",
       });
-      await audit(tx, msg, "payment_offline_record", "payment", p.id);
+      await audit(tx, msg, "payment_offline_record", "payment", p.id, {
+        method: p.method ?? "cash",
+        ...(p.instrumentRef ? { instrumentRef: p.instrumentRef } : {}),
+        ...(p.payerName ? { payerName: p.payerName } : {}),
+      });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "payment", p.id));
   });

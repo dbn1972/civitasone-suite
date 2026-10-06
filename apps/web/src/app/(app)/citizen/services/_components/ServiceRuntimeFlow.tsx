@@ -9,7 +9,6 @@ import { ErrorState, Button } from "@/app/_components/ds";
 import {
   type PublishedServiceRuntime,
   channelDisabledMessage,
-  formatFee,
   isChannelAllowed,
   type RuntimeJourneyStep,
   buildDemandLines,
@@ -28,6 +27,9 @@ export interface ServiceRuntimeFlowProps {
   service: PublishedServiceRuntime;
   counterMode?: boolean;
   assistedBy?: string | null;
+  /** GAP-...-APPLY-02: server-provided payment mode. 'sandbox' shows a TEST
+   *  MODE badge and the sandbox note; 'gateway' hides test wording. */
+  paymentMode?: "sandbox" | "gateway";
 }
 
 function valuesFromDraft(formData: Record<string, unknown>): Record<string, string> {
@@ -48,6 +50,11 @@ function JourneyRail({
 }) {
   const t = useTranslations("citizenServices");
   const activeIdx = Math.max(0, steps.findIndex((s) => s.id === active));
+  const labelFor = (id: RuntimeJourneyStep): string =>
+    id === "form" ? t("journeyForm")
+      : id === "review" ? t("journeyReview")
+        : id === "fee" ? t("journeyFee")
+          : t("journeyDone");
   return (
     <nav aria-label={t("applicationSteps")} style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
       {steps.map((step, idx) => {
@@ -73,7 +80,7 @@ function JourneyRail({
               color: done ? "var(--good)" : current ? "var(--ink)" : "var(--mut)",
             }}
           >
-            {idx + 1}. {step.label}
+            {idx + 1}. {labelFor(step.id)}
           </span>
         );
       })}
@@ -81,22 +88,28 @@ function JourneyRail({
   );
 }
 
-export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = null }: ServiceRuntimeFlowProps) {
+export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = null, paymentMode = "sandbox" }: ServiceRuntimeFlowProps) {
   const t = useTranslations("citizenServices");
   const design = service.formDesign;
   const hasFee = service.feeFromMinor != null;
   const journey = useMemo(() => journeyStepsForService(hasFee), [hasFee]);
-  const [step, setStep] = useState<RuntimeJourneyStep>("form");
+  const [step, setStep] = useState("form" as RuntimeJourneyStep);
   const [sectionIndex, setSectionIndex] = useState(0);
-  const [values, setValues] = useState<Record<string, string>>({});
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [draftId, setDraftId] = useState<string | null>(null);
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [trackingNo, setTrackingNo] = useState<string | null>(null);
-  const [submittedAt, setSubmittedAt] = useState<Date | null>(null);
+  const [values, setValues] = useState({} as Record<string, string>);
+  const [errors, setErrors] = useState({} as Record<string, string>);
+  const [draftId, setDraftId] = useState(null as string | null);
+  const [saveState, setSaveState] = useState("idle" as "idle" | "saving" | "saved" | "error");
+  const [trackingNo, setTrackingNo] = useState(null as string | null);
+  const [applicationId, setApplicationId] = useState("");
+  const [paymentState, setPaymentState] = useState(null as "paid" | "failed" | "skipped" | "retrying" | null);
+  const [submittedAt, setSubmittedAt] = useState(null as Date | null);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(null as string | null);
+  // GAP-...-APPLY-05 (DPDP): do not persist partial personal data until the
+  // applicant has acknowledged the save-as-draft purpose notice. Resuming an
+  // existing draft implies prior consent, so it is pre-acknowledged then.
+  const [consented, setConsented] = useState(false);
 
   const channel = counterMode ? "counter" : "portal";
   const channelOk = isChannelAllowed(service.channels, channel);
@@ -111,6 +124,7 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
         if (!cancelled && latest) {
           setDraftId(latest.id);
           setValues(valuesFromDraft(latest.formData));
+          setConsented(true); // resuming an existing draft implies prior consent
         }
       } catch {
         /* resume optional */
@@ -149,10 +163,10 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
   );
 
   useEffect(() => {
-    if (step !== "form" || Object.keys(values).length === 0) return;
+    if (step !== "form" || !consented || Object.keys(values).length === 0) return;
     const t = setTimeout(() => { void autosave(values, draftId); }, 800);
     return () => clearTimeout(t);
-  }, [values, draftId, step, autosave]);
+  }, [values, draftId, step, autosave, consented]);
 
   const validateSection = (): boolean => {
     if (!design) return false;
@@ -197,37 +211,57 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
           serviceKey: service.serviceKey,
           channel,
           formData: values,
+          ...(counterMode && assistedBy ? { operatorId: assistedBy } : {}),
         });
         setDraftId(id);
       } else {
         await updateDraft(id, values);
       }
       const ack = await submitDraft(id);
-      // FN-14 — fee-bearing packs: labelled sandbox capture → receipt → GL when
-      // no live gateway key is configured (pilot / Test Run path).
-      if (service.feeFromMinor != null && ack.applicationId) {
-        try {
-          const paymentId = await createPaymentIntent({
-            applicationId: ack.applicationId,
-            serviceId: service.id,
-            subject: values,
-          });
-          await confirmPayment(paymentId, "sandbox");
-        } catch {
-          /* payment is best-effort after submit; tracking still succeeds */
+      setApplicationId(ack.applicationId);
+      // FN-14 — fee-bearing packs: capture payment via the configured mode.
+      // GAP-...-APPLY-01: do NOT swallow a payment failure — record the outcome
+      // and surface it on the submitted screen so a citizen is never told
+      // "submitted" (implying paid) when payment did not complete.
+      if (service.feeFromMinor != null) {
+        if (ack.applicationId) {
+          try {
+            const paymentId = await createPaymentIntent({
+              applicationId: ack.applicationId,
+              serviceId: service.id,
+              subject: values,
+            });
+            await confirmPayment(paymentId, paymentMode);
+            setPaymentState("paid");
+          } catch {
+            // telemetry only — never console.log, never log PII
+            setPaymentState("failed");
+          }
+        } else {
+          // tracking/applicationId not yet issued — payment cannot be attempted
+          setPaymentState("skipped");
         }
       }
       setTrackingNo(ack.trackingNo);
       setSubmittedAt(new Date());
       setStep("submitted");
     } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : "We could not submit your application. Check your connection and try again.",
-      );
+      setError(e instanceof Error ? e.message : t("submitFailed"));
     } finally {
       setBusy(false);
+    }
+  };
+
+  // GAP-...-APPLY-01: retry payment for an already-submitted fee-bearing application.
+  const payNow = async () => {
+    if (!applicationId) return;
+    setPaymentState("retrying");
+    try {
+      const paymentId = await createPaymentIntent({ applicationId, serviceId: service.id, subject: values });
+      await confirmPayment(paymentId, paymentMode);
+      setPaymentState("paid");
+    } catch {
+      setPaymentState("failed");
     }
   };
 
@@ -245,7 +279,7 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
     return (
       <ErrorState
         error={{
-          what: "Channel not available",
+          what: t("channelNotAvailableTitle"),
           next: channelDisabledMessage(channel, service.channels),
           actions: ["back"],
         }}
@@ -258,8 +292,8 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
     return (
       <ErrorState
         error={{
-          what: "Form not available",
-          next: "This service does not yet have a published application form. Try again later or ask at the counter.",
+          what: t("formNotAvailableTitle"),
+          next: t("formNotAvailableNext"),
           actions: ["back"],
         }}
         backHref="/citizen/catalogue"
@@ -291,6 +325,31 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
 
       {step === "form" ? (
         <>
+          {!consented ? (
+            <div
+              className="pad"
+              style={{
+                background: "var(--infobg)",
+                border: "1px solid var(--infobd)",
+                borderRadius: "var(--r-sm)",
+                fontSize: 13,
+                display: "grid",
+                gap: 8,
+              }}
+            >
+              <strong>{t("consentTitle")}</strong>
+              <span>{t("consentNotice")}</span>
+              <label style={{ display: "flex", gap: 8, alignItems: "flex-start", minHeight: 44 }}>
+                <input
+                  type="checkbox"
+                  checked={consented}
+                  onChange={(e) => setConsented(e.target.checked)}
+                  style={{ marginTop: 3 }}
+                />
+                <span>{t("consentCheckbox")}</span>
+              </label>
+            </div>
+          ) : null}
           <FormRenderer
             design={design}
             showRuntimeNote={false}
@@ -314,11 +373,11 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
           />
           <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <span style={{ fontSize: 12, color: "var(--mut)" }} aria-live="polite">
-              {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved just now" : saveState === "error" ? "Offline — retrying" : ""}
+              {saveState === "saving" ? t("saving") : saveState === "saved" ? t("savedJustNow") : saveState === "error" ? t("offlineRetrying") : ""}
             </span>
             <div style={{ display: "flex", gap: 8 }}>
               {sectionIndex > 0 ? (
-                <Button type="button" variant="primary" style={{ minHeight: 44 }} onClick={() => setSectionIndex((i) => i - 1)}>
+                <Button type="button" variant="ghost" style={{ minHeight: 44 }} onClick={() => setSectionIndex((i) => i - 1)}>
                   {t("back")}
                 </Button>
               ) : null}
@@ -347,10 +406,29 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
 
       {step === "fee" ? (
         <div className="card pad" style={{ display: "grid", gap: 14 }}>
-          <h3 style={{ margin: 0 }}>{t("feeSummaryTitle")}</h3>
-          <p style={{ margin: 0, fontSize: 13, color: "var(--mut)" }}>
-            {t("feeSummaryNote")}
-          </p>
+          <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+            {t("feeSummaryTitle")}
+            {paymentMode === "sandbox" ? (
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: "var(--warn)",
+                  background: "var(--warnbg)",
+                  border: "1px solid var(--warnbd)",
+                  padding: "2px 8px",
+                  borderRadius: 4,
+                }}
+              >
+                {t("testModeBadge")}
+              </span>
+            ) : null}
+          </h3>
+          {paymentMode === "sandbox" ? (
+            <p style={{ margin: 0, fontSize: 13, color: "var(--mut)" }}>
+              {t("feeSummaryNote")}
+            </p>
+          ) : null}
           <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: 8 }}>
             {demandLines.map((line) => (
               <li
@@ -389,34 +467,81 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
             <span>{t("payOnline")}</span>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <Button type="button" variant="primary" style={{ minHeight: 44 }} onClick={() => setStep("review")}>{t("back")}</Button>
+            <Button type="button" variant="ghost" style={{ minHeight: 44 }} onClick={() => setStep("review")}>{t("back")}</Button>
             <Button type="button" variant="primary" style={{ minHeight: 44 }} disabled={busy} onClick={() => void onSubmit()}>
-              {busy ? t("submitting") : t("paySandboxAndSubmit")}
+              {busy ? t("submitting") : paymentMode === "sandbox" ? t("paySandboxAndSubmit") : t("payAndSubmit")}
             </Button>
           </div>
           {error ? <p role="alert" style={{ color: "var(--bad)", fontSize: 13, margin: 0 }}>{error}</p> : null}
         </div>
       ) : null}
 
-      {step === "submitted" && trackingNo ? (
+      {step === "submitted" ? (
         <div className="card pad" style={{ textAlign: "center", display: "grid", gap: 14 }}>
-          <p style={{ margin: 0, fontSize: 14, color: "var(--good)", fontWeight: 600 }}>{t("applicationSubmitted")}</p>
-          <p style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>{t("yourTrackingNumber")}</p>
-          <p
-            style={{
-              margin: 0,
-              fontSize: 28,
-              fontWeight: 700,
-              letterSpacing: 1,
-              wordBreak: "break-all",
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
-            {trackingNo}
+          {/* GAP-...-APPLY-01: do not imply "paid" when payment failed/was skipped. */}
+          <p style={{ margin: 0, fontSize: 14, color: "var(--good)", fontWeight: 600 }}>
+            {paymentState === "failed" || paymentState === "skipped"
+              ? t("submittedPaymentPendingTitle")
+              : t("applicationSubmitted")}
           </p>
-          <Button type="button" variant="primary" style={{ minHeight: 44 }} onClick={() => void copyTracking()}>
-            {copied ? t("copied") : t("copyTrackingNumber")}
-          </Button>
+
+          {/* GAP-...-APPLY-03: null tracking -> pending state, no copy/track link. */}
+          {trackingNo ? (
+            <>
+              <p style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>{t("yourTrackingNumber")}</p>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 28,
+                  fontWeight: 700,
+                  letterSpacing: 1,
+                  wordBreak: "break-all",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {trackingNo}
+              </p>
+              <Button type="button" variant="primary" style={{ minHeight: 44 }} onClick={() => void copyTracking()}>
+                {copied ? t("copied") : t("copyTrackingNumber")}
+              </Button>
+            </>
+          ) : (
+            <div role="status" style={{ display: "grid", gap: 6 }}>
+              <strong style={{ fontSize: 16 }}>{t("trackingPendingTitle")}</strong>
+              <span style={{ fontSize: 13, color: "var(--mut)" }}>{t("trackingPendingMessage")}</span>
+            </div>
+          )}
+
+          {/* GAP-...-APPLY-01: payment status + retry when a fee-bearing payment did not complete. */}
+          {hasFee && (paymentState === "failed" || paymentState === "skipped" || paymentState === "retrying") ? (
+            <div
+              role="alert"
+              style={{
+                display: "grid",
+                gap: 8,
+                padding: 12,
+                borderRadius: "var(--r-sm)",
+                background: "var(--warnbg)",
+                border: "1px solid var(--warnbd)",
+                fontSize: 13,
+              }}
+            >
+              <span>{paymentState === "retrying" ? t("paymentRetrying") : t("paymentNotCompleted")}</span>
+              <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+                <Button
+                  type="button"
+                  variant="primary"
+                  style={{ minHeight: 44 }}
+                  disabled={paymentState === "retrying" || !applicationId}
+                  onClick={() => void payNow()}
+                >
+                  {t("payNow")}
+                </Button>
+                <span style={{ fontSize: 12, color: "var(--mut)", alignSelf: "center" }}>{t("payCounter")}</span>
+              </div>
+            </div>
+          ) : null}
+
           {expectedBy ? (
             <p style={{ margin: 0, fontSize: 14 }}>
               {t("expectedDecisionBy", { date: expectedBy })}
@@ -427,13 +552,15 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
               ) : null}
             </p>
           ) : null}
-          <Link
-            href={`/citizen/services/${service.serviceKey}/track/${encodeURIComponent(trackingNo)}`}
-            className="btn primary"
-            style={{ minHeight: 44 }}
-          >
-            {t("trackStatus")}
-          </Link>
+          {trackingNo ? (
+            <Link
+              href={`/citizen/services/${service.serviceKey}/track/${encodeURIComponent(trackingNo)}`}
+              className="btn primary"
+              style={{ minHeight: 44 }}
+            >
+              {t("trackStatus")}
+            </Link>
+          ) : null}
         </div>
       ) : null}
     </div>

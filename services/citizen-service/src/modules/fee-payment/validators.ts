@@ -48,7 +48,14 @@ export const recordOfflineBody = z.object({
   citizenId:     z.string().uuid().optional(),
   subject:       z.record(z.unknown()).default({}),
   reference:     safeText({ max: 128 }).optional(),
-}).refine((b) => b.serviceId || b.scheduleId, { message: "serviceId or scheduleId required" });
+  // Offline instrument details captured by PaymentPanel (cash / cheque / DD).
+  method:        z.enum(["cash", "cheque", "dd"]).optional(),
+  instrumentRef: safeText({ max: 128 }).optional(),
+  payerName:     safeText({ max: 200 }).optional(),
+}).refine((b) => b.serviceId || b.scheduleId, { message: "serviceId or scheduleId required" })
+  .refine((b) => !(b.method === "cheque" || b.method === "dd") || Boolean(b.instrumentRef), {
+    message: "instrumentRef required for cheque/dd", path: ["instrumentRef"],
+  });
 export type RecordOfflineBody = z.infer<typeof recordOfflineBody>;
 
 /** FN-14 — confirm a pending online intent (live gateway or labelled sandbox). */

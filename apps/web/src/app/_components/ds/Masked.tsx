@@ -90,6 +90,32 @@ export function maskEmail(value: string): string {
 }
 
 /**
+ * GAP-CITIZEN-GRIEVANCES-03: mask a person's name for DPDP-sensitive staff
+ * lists. Keeps the first character of each whitespace-separated part and the
+ * last character of the final part, masking the rest, so a masked name stays
+ * recognisable-at-a-glance without exposing the full identity to every
+ * signed-in user. A single short token is masked in full. Exported as a plain
+ * string function so a DataTable cell (which cannot take a component across
+ * the client boundary) can pre-format it.
+ *
+ *   maskName("Ramesh Kumar") -> "R••••• K•••r"
+ *   maskName("Sita")         -> "S••a"
+ *   maskName("A")            -> "•"
+ */
+export function maskName(value: string): string {
+  const v = value.trim();
+  if (!v) return "";
+  const parts = v.split(/\s+/);
+  const maskPart = (p: string, keepLast: boolean): string => {
+    if (p.length <= 1) return "•";
+    if (p.length === 2) return `${p[0]}•`;
+    const last = keepLast ? p[p.length - 1] : "•";
+    return `${p[0]}${"•".repeat(p.length - 2)}${last}`;
+  };
+  return parts.map((p, i) => maskPart(p, i === parts.length - 1)).join(" ");
+}
+
+/**
  * GAP-PAYROLL-DISBURSEMENT-01: bank account numbers show only the last 4
  * digits ("••••1234"). Values of 4 characters or fewer are masked in full --
  * there is nothing safe to show.

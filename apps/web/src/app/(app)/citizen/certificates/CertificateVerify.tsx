@@ -4,6 +4,7 @@ import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/app/_components/ds";
+import { humanizeStatus } from "@/lib/formatters";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
@@ -38,7 +39,7 @@ export function CertificateVerify() {
       if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       setResult((await res.json()) as VerifyResult);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Verification failed.");
+      setError(e instanceof Error ? e.message : t("verifyFailed"));
     } finally {
       setBusy(false);
     }
@@ -61,15 +62,26 @@ export function CertificateVerify() {
       {result ? (
         <div className="pad" style={{ borderTop: "1px solid var(--line)" }}>
           <div style={{ display: "inline-block", padding: "4px 12px", borderRadius: 999, background: color, fontWeight: 600 }}>
-            {result.found ? `Certificate is ${result.validity}` : "Certificate not found"}
+            {result.found ? t("resultValidityState", { validity: result.validity ?? "" }) : t("resultNotFound")}
           </div>
           {result.found ? (
             <dl style={{ fontSize: 13, marginTop: 12 }}>
               <div><strong>{t("resultNumber")}</strong> {result.certNo}</div>
-              <div><strong>{t("resultType")}</strong> {result.certType}</div>
-              <div><strong>{t("resultStatus")}</strong> {result.status}</div>
+              {/* GAP-CITIZEN-CERTIFICATES-04/06: humanized, not raw codes. */}
+              <div><strong>{t("resultType")}</strong> {result.certType ? humanizeStatus(result.certType) : "—"}</div>
+              <div><strong>{t("resultStatus")}</strong> {result.status ? humanizeStatus(result.status) : "—"}</div>
               <div><strong>{t("resultValidTo")}</strong> {result.validTo || "—"}</div>
-              <div style={{ wordBreak: "break-all" }}><strong>{t("resultPayloadHash")}</strong> {result.payloadHash}</div>
+              {/* GAP-CITIZEN-CERTIFICATES-04: payloadHash is a digest a citizen
+                  does not need; hidden behind an opt-in disclosure, not shown
+                  by default. */}
+              {result.payloadHash ? (
+                <details style={{ marginTop: 8 }}>
+                  <summary style={{ cursor: "pointer", color: "var(--muted)" }}>{t("resultTechnicalDetails")}</summary>
+                  <div style={{ wordBreak: "break-all", marginTop: 6 }}>
+                    <strong>{t("resultPayloadHash")}</strong> {result.payloadHash}
+                  </div>
+                </details>
+              ) : null}
             </dl>
           ) : null}
         </div>

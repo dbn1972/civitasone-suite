@@ -18,6 +18,10 @@ export const saveDraftBody = z.object({
   serviceKey:    safeText({ max: 64 }).optional(),
   channel:       z.enum(INTAKE_CHANNELS).default("portal"),
   operatorId:    z.string().uuid().optional(),   // operator-on-behalf-of (assisted/counter)
+  // GAP-CITIZEN-INTAKE-04: applicant's consent to assisted/counter data entry
+  // (DPDP). Optional at the boundary for backward compatibility; the web
+  // requires it before enabling Save on assisted/counter channels.
+  assistedConsent: z.boolean().optional(),
   applicantType: applicantTypeField,
   formData:      z.record(z.unknown()).default({}),
   documentTypes: z.array(safeText({ max: 64 })).max(50).default([]),

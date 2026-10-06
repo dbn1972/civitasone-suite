@@ -16,11 +16,12 @@ async function audit(
   msg: { tenantId: string; actorId: string; correlationId: string },
   action: string,
   resourceId: string,
+  extra?: Record<string, unknown>,
 ): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT, eventType: AUDIT,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "citizen", action, resourceType: "discovery", resourceId, outcome: "success" },
+    payload: { service: "citizen", action, resourceType: "discovery", resourceId, outcome: "success", ...(extra ?? {}) },
   });
 }
 
@@ -28,7 +29,10 @@ export function registerDiscoveryConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
 
   queue.subscribe(COMMANDS.discoveryConsentGrant, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; citizenId: string; scope: string };
+    const p = msg.payload as {
+      id: string; tenantId: string; citizenId: string; scope: string;
+      purpose?: string; channel?: string; noticeVersion?: string;
+    };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const existing = await repo.findActiveConsentTx(tx, p.tenantId, p.citizenId, p.scope);
@@ -37,7 +41,11 @@ export function registerDiscoveryConsumers(rawQueue: Queue): void {
         id: p.id, tenantId: p.tenantId, citizenId: p.citizenId, scope: p.scope,
         granted: true, createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      await audit(tx, msg, "consent_grant", p.id);
+      // GAP-CITIZEN-DISCOVERY-01: the DPDP consent evidence (how/why/notice
+      // version) is recorded in the audit event alongside actor + timestamp.
+      await audit(tx, msg, "consent_grant", p.id, {
+        purpose: p.purpose ?? null, channel: p.channel ?? null, noticeVersion: p.noticeVersion ?? null,
+      });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "discovery-consent", p.citizenId));
   });

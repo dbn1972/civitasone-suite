@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { StatusPill, Button } from "@/app/_components/ds";
 import type { PublishedServiceRuntime } from "../_data/runtimeApi";
-import { channelDisabledMessage, formatFee, isChannelAllowed, listDraftsForService } from "../_data/runtimeApi";
+import { channelDisabledMessage, feeDisplay, firstDraftIdForService, isChannelAllowed } from "../_data/runtimeApi";
 
 interface Props {
   service: PublishedServiceRuntime;
@@ -28,8 +28,8 @@ export function ServicePageClient({ service, counterMode = false }: Props) {
   useEffect(() => {
     if (!channelOk) return;
     let live = true;
-    void listDraftsForService(service.id).then((drafts) => {
-      if (live && drafts[0]) setDraftBanner(drafts[0].id);
+    void firstDraftIdForService(service.id).then((id) => {
+      if (live && id) setDraftBanner(id);
     });
     return () => { live = false; };
   }, [service.id, channelOk]);
@@ -74,14 +74,18 @@ export function ServicePageClient({ service, counterMode = false }: Props) {
         <div>
           <dt style={{ fontSize: 12, color: "var(--mut)", margin: 0 }}>{t("fee")}</dt>
           <dd style={{ margin: "4px 0 0", fontSize: 18, fontWeight: 700 }}>
-            {formatFee(service.feeFromMinor, service.feeCurrency)}
+            {(() => {
+              const fee = feeDisplay(service.feeFromMinor, service.feeCurrency);
+              if (fee.kind === "onApproval" || fee.amount == null) return t("feeOnApproval");
+              return t("feeFrom", { amount: fee.amount });
+            })()}
           </dd>
         </div>
         <div>
           <dt style={{ fontSize: 12, color: "var(--mut)", margin: 0 }}>{t("timeToDecide")}</dt>
           <dd style={{ margin: "4px 0 0", fontSize: 18, fontWeight: 700 }}>
             {service.slaDays
-              ? `${service.slaDays} working day${service.slaDays === 1 ? "" : "s"}`
+              ? t("workingDays", { days: service.slaDays })
               : t("asPerOfficeSchedule")}
           </dd>
         </div>
@@ -113,7 +117,7 @@ export function ServicePageClient({ service, counterMode = false }: Props) {
                 }}
               >
                 <span aria-hidden style={{ color: "var(--primary)", fontWeight: 700, marginTop: 1 }}>
-                  ☐
+                  •
                 </span>
                 <span style={{ flex: 1 }}>
                   {d.label}
@@ -156,10 +160,7 @@ export function ServicePageClient({ service, counterMode = false }: Props) {
             fontSize: 14,
           }}
         >
-          Continue where you left off —{" "}
-          <Link href={applyHref} style={{ fontWeight: 600, color: "var(--warn)" }}>
-            {t("resumeDraft")}
-          </Link>
+          {t("continueWhereLeftOff")}
         </div>
       ) : null}
 

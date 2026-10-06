@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
-import { Masked, maskAccount, maskPhone, maskEmail } from "./Masked";
+import { Masked, maskAccount, maskPhone, maskEmail, maskName } from "./Masked";
 
 function withIntl(ui: React.ReactElement) {
   return <NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>;
@@ -79,5 +79,19 @@ describe("Masked onReveal (F1-05 audited reveal)", () => {
   it("stays a static render with no reveal control when onReveal is omitted", () => {
     render(<Masked kind="phone" value="9876543210" />);
     expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
+  });
+});
+
+describe("maskName (GAP-CITIZEN-GRIEVANCES-03)", () => {
+  it("masks each part keeping first chars and the last char of the final part", () => {
+    expect(maskName("Ramesh Kumar")).toBe("R••••• K•••r");
+  });
+  it("masks a single short token", () => {
+    expect(maskName("Sita")).toBe("S••a");
+    expect(maskName("A")).toBe("•");
+    expect(maskName("Jo")).toBe("J•");
+  });
+  it("returns empty string for empty input", () => {
+    expect(maskName("   ")).toBe("");
   });
 });

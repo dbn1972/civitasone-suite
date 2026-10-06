@@ -11,6 +11,22 @@ export const registerGrievanceBody = z.object({
   category:    safeText({ max: 64 }),
   subject:     safeText({ max: 200 }),
   description: safeText({ max: 5000, multiline: true }),
+  // GAP-CITIZEN-GRIEVANCES-NEW-02: complainant name (free text, capped).
+  complainantName: safeText({ max: 200 }).optional(),
+  // GAP-CITIZEN-GRIEVANCES-NEW-02/04: optional complainant contact channels.
+  complainantContact: z
+    .array(z.object({ kind: z.enum(["mobile", "email"]), value: safeText({ max: 320 }) }))
+    .max(5)
+    .optional(),
+  // GAP-CITIZEN-GRIEVANCES-NEW-01: structured DPDP consent record. The server
+  // stamps the authoritative time; the client cannot be trusted for it.
+  dpdpConsent: z
+    .object({
+      given: z.boolean(),
+      noticeVersion: safeText({ max: 32 }),
+      purpose: safeText({ max: 64 }),
+    })
+    .optional(),
 });
 export type RegisterGrievanceBody = z.infer<typeof registerGrievanceBody>;
 

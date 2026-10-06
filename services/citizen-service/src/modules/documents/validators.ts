@@ -17,6 +17,11 @@ export const digilockerFetchBody = z.object({
   serviceId:     z.string().uuid().optional(),
   docType:       safeText({ max: 64 }),
   docUri:        safeText({ max: 512 }),
+  // GAP-CITIZEN-DOCUMENTS-02: operator-captured DPDP consent attestation that
+  // the applicant authorised fetching this document from DigiLocker. Optional
+  // at the schema boundary for backward compatibility; the web requires it
+  // before enabling the fetch control. Persisting it is a HUMAN REVIEW follow-up.
+  consent:       z.boolean().optional(),
 });
 export type DigilockerFetchBody = z.infer<typeof digilockerFetchBody>;
 

@@ -6,7 +6,7 @@ import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import {
   assertWithinFilingWindow, canIssueOrder,
-  DEFAULT_FILING_WINDOW_DAYS,
+  deriveFilingWindowDays,
 } from "./domain.js";
 import type { FileAppealBody, AssignBody, ScheduleHearingBody, RecordHearingBody, PrepareOrderBody } from "./validators.js";
 
@@ -36,7 +36,12 @@ export async function fileAppeal(
   body: FileAppealBody,
 ): Promise<Accepted & { filingDeadline: string }> {
   const id = randomUUID();
-  const windowDays = body.windowDays ?? DEFAULT_FILING_WINDOW_DAYS;
+  // GAP-CITIZEN-APPEALS-01: the filing window is STATUTORY and must be derived
+  // server-side — never taken from the browser. windowDays is no longer part
+  // of FileAppealBody (stripped by the validator), so the statutory default is
+  // applied here. A per-service override, when wired, is passed as the second
+  // arg to deriveFilingWindowDays — still never from the request body.
+  const windowDays = deriveFilingWindowDays();
   let filingDeadline: string;
   try {
     ({ filingDeadline } = assertWithinFilingWindow(new Date(body.decisionDate), windowDays));

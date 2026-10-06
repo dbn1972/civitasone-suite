@@ -1,20 +1,22 @@
 "use client";
 
 import { UserFacingError } from "@/lib/userFacingError";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
+import { humanizeStatus } from "@/lib/formatters";
 import { Button } from "@/app/_components/ds";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
 
+export interface DocumentServiceOption { id: string; name: string; serviceKey: string }
 interface ChecklistItem { docType: string; label?: string; mandatory: boolean; provided: boolean; verified: boolean }
 interface Checklist { source: string; items: ChecklistItem[]; complete: boolean }
 interface Uploaded { id: string; verificationStatus: string; providerStatus?: string; configured?: boolean }
 
 /** SVC-084 — upload / DigiLocker fetch + required-document checklist. */
-export function DocumentPanel() {
+export function DocumentPanel({ services }: { services: DocumentServiceOption[] }) {
   const t = useTranslations("citizenDocuments");
   const [serviceId, setServiceId] = useState("");
   const [applicationId, setApplicationId] = useState("");
@@ -23,7 +25,26 @@ export function DocumentPanel() {
   const [error, setError] = useState("");
   const [uploaded, setUploaded] = useState<Uploaded | null>(null);
   const [checklist, setChecklist] = useState<Checklist | null>(null);
+  // GAP-CITIZEN-DOCUMENTS-02: probe whether DigiLocker is configured so the
+  // fetch control is disabled (with an explanation) when the provider is absent,
+  // rather than offering a button that always returns provider_unconfigured.
+  const [digilockerConfigured, setDigilockerConfigured] = useState<boolean | null>(null);
+  // DPDP consent attestation required before an operator fetches a document.
+  const [consent, setConsent] = useState(false);
   const formError = useFormError("document");
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/proxy/v1/citizen/documents/digilocker-status");
+        if (!res.ok) { if (active) setDigilockerConfigured(false); return; }
+        const body = (await res.json()) as { configured?: boolean };
+        if (active) setDigilockerConfigured(Boolean(body.configured));
+      } catch { if (active) setDigilockerConfigured(false); }
+    })();
+    return () => { active = false; };
+  }, []);
 
   async function post<T>(path: string, body: unknown): Promise<T> {
     const res = await fetch(`/api/proxy${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -35,8 +56,8 @@ export function DocumentPanel() {
     setBusy(true); setError(""); setUploaded(null);
     try {
       const body = source === "upload"
-        ? { applicationId, serviceId, docType }
-        : { applicationId, serviceId, docType, docUri: `digilocker://${docType}` };
+        ? { applicationId: applicationId || undefined, serviceId, docType }
+        : { applicationId: applicationId || undefined, serviceId, docType, docUri: `digilocker://${docType}`, consent: true };
       setUploaded(await post<Uploaded>(`/v1/citizen/documents/${source === "upload" ? "upload" : "digilocker-fetch"}`, body));
     } catch (caught) { setError(formError.fromException("save", caught).message); } finally { setBusy(false); }
   }
@@ -52,28 +73,74 @@ export function DocumentPanel() {
     } catch (caught) { setError(formError.fromException("load", caught).message); } finally { setBusy(false); }
   }
 
+  const docTypeOptions = checklist?.items ?? [];
+
   return (
     <div style={{ display: "grid", gap: 16 }}>
       <div className="card">
         <div className="pad" style={{ maxWidth: 640 }}>
           <h4 style={{ marginTop: 0 }}>{t("submitFormTitle")}</h4>
-          <label htmlFor="d-svc" style={labelStyle}>{t("serviceIdLabel")}</label>
-          <input id="d-svc" value={serviceId} onChange={(e) => setServiceId(e.target.value)} style={inputStyle} />
+
+          {/* GAP-CITIZEN-DOCUMENTS-03: choose a service by name; its id travels in the request. */}
+          <label htmlFor="d-svc" style={labelStyle}>{t("serviceLabel")}</label>
+          <select id="d-svc" value={serviceId} onChange={(e) => setServiceId(e.target.value)} style={inputStyle}>
+            <option value="">{t("servicePlaceholder")}</option>
+            {services.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+          {services.length === 0 ? <p style={{ fontSize: 12, color: "var(--muted)" }}>{t("serviceLoadError")}</p> : null}
+
           <label htmlFor="d-app" style={labelStyle}>{t("applicationIdLabel")}</label>
           <input id="d-app" value={applicationId} onChange={(e) => setApplicationId(e.target.value)} style={inputStyle} />
+
+          {/* GAP-CITIZEN-DOCUMENTS-04: docType is chosen from the checklist, not free text. */}
           <label htmlFor="d-type" style={labelStyle}>{t("docTypeLabel")}</label>
-          <input id="d-type" value={docType} onChange={(e) => setDocType(e.target.value)} style={inputStyle} placeholder={t("docTypePlaceholder")} />
+          {docTypeOptions.length > 0 ? (
+            <select id="d-type" value={docType} onChange={(e) => setDocType(e.target.value)} style={inputStyle}>
+              <option value="">{t("docTypeSelectPlaceholder")}</option>
+              {docTypeOptions.map((i) => (
+                <option key={i.docType} value={i.docType}>{i.label ?? humanizeStatus(i.docType)}</option>
+              ))}
+            </select>
+          ) : (
+            <p id="d-type" style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>{t("docTypeHint")}</p>
+          )}
+
+          {/* GAP-CITIZEN-DOCUMENTS-02: DPDP consent attestation before a DigiLocker fetch. */}
+          <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13, margin: "4px 0 12px" }}>
+            <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} style={{ marginTop: 3, minWidth: 18, minHeight: 18 }} />
+            <span>{t("consentLabel")}</span>
+          </label>
+
           <div style={{ display: "flex", gap: 8 }}>
             <Button type="button" variant="primary" style={{ minHeight: 44 }} disabled={busy || !docType || !serviceId} onClick={() => upload("upload")}>{t("upload")}</Button>
-            <Button type="button" variant="primary" style={{ minHeight: 44 }} disabled={busy || !docType || !serviceId} onClick={() => upload("digilocker")}>{t("fetchDigilocker")}</Button>
+            <Button
+              type="button"
+              variant="primary"
+              style={{ minHeight: 44 }}
+              disabled={busy || !docType || !serviceId || !consent || digilockerConfigured === false}
+              onClick={() => upload("digilocker")}
+            >
+              {t("fetchDigilocker")}
+            </Button>
           </div>
+          {digilockerConfigured === false ? (
+            <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>{t("digilockerUnavailable")}</p>
+          ) : null}
+
           {uploaded ? (
             <div className="pad" style={{ marginTop: 12, background: "var(--surface, #f8fafc)", borderRadius: 8, fontSize: 13 }}>
-              Submitted — verification {uploaded.verificationStatus}
-              {uploaded.providerStatus ? ` (DigiLocker: ${uploaded.providerStatus}${uploaded.configured === false ? " — provider not configured" : ""})` : ""}.
+              <div>{t("resultSubmitted", { status: humanizeStatus(uploaded.verificationStatus) })}</div>
+              {uploaded.providerStatus ? (
+                <div>{t("resultDigilocker", { status: humanizeStatus(uploaded.providerStatus) })}</div>
+              ) : null}
+              {uploaded.configured === false ? (
+                <div style={{ color: "var(--bad, #b42318)" }}>{t("resultProviderUnconfigured")}</div>
+              ) : null}
             </div>
           ) : null}
-          {error ? <p role="alert" style={{ color: "#b42318", fontSize: 13 }}>{error}</p> : null}
+          {error ? <p role="alert" style={{ color: "var(--bad, #b42318)", fontSize: 13 }}>{error}</p> : null}
         </div>
       </div>
 
@@ -84,15 +151,15 @@ export function DocumentPanel() {
           {checklist ? (
             <div style={{ marginTop: 12 }}>
               <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>
-                Source: {checklist.source} · {checklist.complete ? "complete" : "incomplete"}
+                {t("checklistSource", { source: humanizeStatus(checklist.source) })} · {checklist.complete ? t("checklistComplete") : t("checklistIncomplete")}
               </div>
               <ul style={{ fontSize: 13, listStyle: "none", padding: 0 }}>
                 {checklist.items.map((i) => (
                   <li key={i.docType} style={{ padding: "4px 0" }}>
-                    <span style={{ color: i.verified ? "#067647" : i.provided ? "#b54708" : "#b42318" }}>
-                      {i.verified ? "✔ verified" : i.provided ? "• provided (pending)" : "✗ missing"}
+                    <span style={{ color: i.verified ? "var(--good, #067647)" : i.provided ? "var(--warn, #b54708)" : "var(--bad, #b42318)" }}>
+                      {i.verified ? `✔ ${t("statusVerified")}` : i.provided ? `• ${t("statusProvided")}` : `✗ ${t("statusMissing")}`}
                     </span>{" "}
-                    {i.label ?? i.docType}{i.mandatory ? " (required)" : ""}
+                    {i.label ?? humanizeStatus(i.docType)}{i.mandatory ? ` (${t("required")})` : ""}
                   </li>
                 ))}
               </ul>

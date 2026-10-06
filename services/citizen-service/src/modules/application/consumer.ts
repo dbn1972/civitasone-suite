@@ -170,6 +170,7 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       serviceKey?: string | null; channel: string; assistedBy: string | null;
       applicantType?: string | null;
       formData: Record<string, unknown>; documentTypes: string[];
+      assistedConsent?: boolean;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -180,7 +181,8 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
         formData: p.formData, documentTypes: p.documentTypes, status: "draft",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      await audit(tx, msg, "draft_save", "application_intake", p.id);
+      await audit(tx, msg, "draft_save", "application_intake", p.id,
+        p.assistedBy ? { assistedConsent: p.assistedConsent === true, assistedBy: p.assistedBy, channel: p.channel } : undefined);
     });
   });
 
@@ -244,10 +246,13 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
   });
 }
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
+async function audit(
+  tx: any, msg: any, action: string, resourceType: string, resourceId: string,
+  newValue?: Record<string, unknown>,
+): Promise<void> {
   await enqueue(tx, {
     topic: "audit.event.record", eventType: "audit.event.record",
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "citizen", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "citizen", action, resourceType, resourceId, outcome: "success", ...(newValue ? { newValue } : {}) },
   });
 }

@@ -51,6 +51,7 @@ export async function saveDraft(
     applicantType: string;
     formData: Record<string, unknown>;
     documentTypes: string[];
+    assistedConsent?: boolean | undefined;
   },
 ): Promise<Accepted> {
   const id = randomUUID();

@@ -5,6 +5,7 @@ import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, resolveCitizenId, isOfficer, assertOwnership, HttpError } from "../../shared/context.js";
 import { idParam, fileRtiBody, respondRtiBody, appealRtiBody, transferRtiBody } from "./validators.js";
+import { isAppealAllowed } from "./domain.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -38,6 +39,12 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     const owner = await queries.getRti(ctx.tenantId, id);
     if (!owner) throw new HttpError(404, "NOT_FOUND", "rti request not found");
     assertOwnership(ctx, owner.citizenId);
+    // GAP-CITIZEN-RTI-DETAIL-01: §19(1) — an appeal is maintainable only when a
+    // response exists or the §7 30-day clock has lapsed (deemed refusal). Reject
+    // a premature appeal (fail closed) instead of silently accepting it.
+    if (!isAppealAllowed({ hasResponse: owner.responses.length > 0, deadline: owner.deadline })) {
+      throw new HttpError(409, "APPEAL_NOT_ALLOWED", "appeal not allowed before a response or the 30-day statutory deadline");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.appealRti(ctx, id, { ...body, ownerCitizenId: owner.citizenId }));
   });
 
