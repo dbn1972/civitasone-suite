@@ -1,5 +1,6 @@
-import { ModuleListPage } from "../../../_components/ModuleListPage";
+import { PageHeader } from "../../../_components/ds";
 import { getJourneyAnalytics } from "../_data";
+import { AnalyticsView } from "../_components/AnalyticsView";
 import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -11,12 +12,8 @@ export default async function Page() {
       <nav aria-label="Breadcrumb" className="back">
         <ArrowLeft aria-hidden="true" size={14} /> <a href="/journeys">Customer Journeys</a>
       </nav>
-      <ModuleListPage
-        title="Journeys — Analytics"
-        description="Execution outcomes for drop-off and conversion analysis."
-        rows={data}
-        source={source}
-      />
+      <PageHeader title="Journeys — Analytics" subtitle="Execution outcomes: completion and drop-off counts." />
+      <AnalyticsView analytics={data} source={source} />
     </div>
   );
 }

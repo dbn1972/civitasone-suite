@@ -1,0 +1,10 @@
+import { SkeletonTable } from "../../../_components/ds";
+
+// GAP-JOURNEYS-HOME-04: table skeleton for the triggers list.
+export default function Loading() {
+  return (
+    <div className="page-main">
+      <SkeletonTable rows={6} />
+    </div>
+  );
+}
