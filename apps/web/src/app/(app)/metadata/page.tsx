@@ -1,14 +1,20 @@
-import { PageHeader, Card, EmptyState } from "@/app/_components/ds";
+import { PageHeader, Card } from "@/app/_components/ds";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
+// GAP-METADATA-HOME-03: each card's title now equals the target page's H1
+// (Entities, Fields, Validation rules, Records, Forms) so the hub and the
+// pages agree. GAP-METADATA-HOME-02: descriptions are business copy with no
+// "/api/v1/..." path. GAP-METADATA-HOME-04: the href drives a whole-tile Link
+// (below) rather than a tiny underlined text link, so the entire card is the
+// click/focus target.
 const LINKS = [
-  { href: "/metadata/entities", title: "Entities", desc: "Custom entity definitions (/api/v1/metadata/entities)" },
-  { href: "/metadata/fields", title: "Fields", desc: "Field definitions on entities" },
-  { href: "/metadata/rules", title: "Validation rules", desc: "Entity validation rules" },
-  { href: "/metadata/records", title: "Records", desc: "Custom master-data records" },
-  { href: "/metadata/forms", title: "Forms", desc: "Form versions and publish lifecycle" },
+  { href: "/metadata/entities", title: "Entities", desc: "Custom entity definitions for your organisation." },
+  { href: "/metadata/fields", title: "Fields", desc: "Field definitions on each entity." },
+  { href: "/metadata/rules", title: "Validation rules", desc: "Validation rules enforced on each entity." },
+  { href: "/metadata/records", title: "Records", desc: "Custom master-data records held against an entity." },
+  { href: "/metadata/forms", title: "Forms", desc: "Form layouts and their publish lifecycle." },
 ];
 
 export default function MetadataHubPage() {
@@ -16,14 +22,20 @@ export default function MetadataHubPage() {
     <div className="page-main wrap" aria-label="Metadata hub">
       <PageHeader
         title="Metadata"
-        subtitle="Configure custom entities, fields, rules, records and forms via /api/v1/metadata/*."
+        subtitle="Configure custom entities, fields, rules, records and forms."
       />
       <div className="grid gap-4 md:grid-cols-2">
         {LINKS.map((l) => (
-          <Card key={l.href} title={l.title} padding>
-            <p className="text-sm text-muted mb-3">{l.desc}</p>
-            <Link className="text-sm underline" href={l.href}>{l.title} →</Link>
-          </Card>
+          <Link
+            key={l.href}
+            href={l.href}
+            className="mtile"
+            style={{ textDecoration: "none", color: "inherit", display: "block" }}
+          >
+            <Card title={l.title} padding>
+              <p className="text-sm text-muted">{l.desc}</p>
+            </Card>
+          </Link>
         ))}
       </div>
     </div>

@@ -1,33 +1,21 @@
-import { PageHeader, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
-import { getMetadataEntities } from "../_data";
-import { toResourceState } from "@/app/_data/useResource";
-import { toHumanError } from "@/lib/messages";
+import { getFieldsForEntity } from "../_data";
+import { EntityScopedListPage } from "../_components/EntityScopedListPage";
 
 export const dynamic = "force-dynamic";
 
-export default async function MetadataFieldsPage() {
-  const result = await getMetadataEntities();
-  const { data } = result;
-  const resource = toResourceState(result);
-  const errored = resource.status === "error";
-  return (
-    <div className="page-main wrap" aria-label="Metadata fields">
-      <PageHeader
-        title="Fields"
-        subtitle="Wired to /api/v1/metadata/entities (select entity to drill into fields)."
-        back="/metadata"
-      />
-      <Card title="Fields">
-        {errored ? (
-          <div className="pad">
-            <RefreshErrorState error={toHumanError("load", { area: "fields" })} backHref="/metadata" />
-          </div>
-        ) : data.length === 0 ? (
-          <EmptyState icon="📦" title="No data" message="Entities from the metadata API appear here as the entry point for fields." />
-        ) : (
-          <pre className="text-xs overflow-auto p-3">{JSON.stringify(data.slice(0, 50), null, 2)}</pre>
-        )}
-      </Card>
-    </div>
-  );
+type SP = { entity?: string };
+
+export default async function MetadataFieldsPage({ searchParams }: { searchParams?: SP }) {
+  // GAP-METADATA-FIELDS-02/-03: this page used to call getMetadataEntities()
+  // and label entity rows as "Fields"; the metadata-service only lists fields
+  // entity-scoped (GET /v1/metadata/entities/:entityId/fields), so the real
+  // contract is the entity drill-down the subtitle always promised.
+  return EntityScopedListPage({
+      title: "Fields",
+      resourceLabel: "fields",
+      resourceSingular: "field",
+      detailHeader: "Type",
+      ...(searchParams?.entity ? { selectedEntityId: searchParams.entity } : {}),
+      loadRows: getFieldsForEntity,
+    });
 }
