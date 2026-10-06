@@ -94,6 +94,17 @@ const nextConfig = {
       // keeps any external bookmark to the old URL working by sending it to the
       // canonical plans list.
       { source: '/billing/list', destination: '/billing/plans', permanent: true },
+      // GAP-ESTABLISHMENT-HOME-03 / GAP-ESTABLISHMENT-FILES-02: /establishment and
+      // /establishment/files were permanent aliases implemented as page-level
+      // runtime redirect() calls (307 temporary), which also made the segment
+      // flash establishment/loading.tsx before resolving. Moved to config
+      // redirects (permanent: true -> 308) that run before any page or loading
+      // boundary, so bookmarks/search engines learn the canonical URL and there
+      // is no skeleton flash. The redirect() page.tsx and loading.tsx files were
+      // deleted; establishment/layout.tsx + not-found.tsx stay for unknown
+      // children such as /establishment/foo (GAP-ESTABLISHMENT-HOME-02).
+      { source: '/establishment', destination: '/estab', permanent: true },
+      { source: '/establishment/files', destination: '/estab/list', permanent: true },
       { source: '/stock/:path*', destination: '/inventory/:path*', permanent: true },
     ];
   },
