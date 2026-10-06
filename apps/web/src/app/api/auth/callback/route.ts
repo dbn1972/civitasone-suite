@@ -17,6 +17,7 @@ function clearAuthCookies(jar: ReturnType<typeof cookies>) {
   jar.delete(COOKIE.OAUTH_STATE);
   jar.delete(COOKIE.ACCESS);
   jar.delete(COOKIE.REFRESH);
+  jar.delete(COOKIE.POST_LOGIN_NEXT);
 }
 
 export async function GET(req: Request) {
@@ -61,7 +62,12 @@ export async function GET(req: Request) {
       // rejection -- the fail-open contract above still applies.
     });
 
-    return NextResponse.redirect(new URL("/dashboard", APP_URL));
+    // GAP-AUTH-LOGIN-02: land the user on the deep-link they originally
+    // requested, if the login route stored a validated same-origin path.
+    const next = jar.get(COOKIE.POST_LOGIN_NEXT)?.value;
+    jar.delete(COOKIE.POST_LOGIN_NEXT);
+    const dest = next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
+    return NextResponse.redirect(new URL(dest, APP_URL));
   } catch (err) {
     // Server-side only (Route Handler); apps/web has no shared logger package,
     // and an auth failure here must stay observable in server logs.

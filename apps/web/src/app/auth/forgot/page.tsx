@@ -5,7 +5,7 @@ export const metadata = { title: "Forgot password · CivitasOne" };
 
 export default function Page() {
   return (
-    <PageShell title="Forgot Password" description="Enter your email and we will send reset instructions.">
+    <PageShell title="Recover account access" description="Reset your credentials through your organisation's single sign-on, or contact IT.">
       <ForgotForm />
     </PageShell>
   );
