@@ -2,6 +2,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
 vi.mock("@/lib/sync/resource", () => ({ useSeededResource: vi.fn() }));
+// RefreshErrorState uses next/navigation's useRouter for its retry action
+// (router.refresh); stub it so the error branch renders in a plain RTL render.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
 
 import { useSeededResource } from "@/lib/sync/resource";
 import { ModuleListTable } from "./ModuleListTable";
@@ -73,7 +78,13 @@ describe("ModuleListTable", () => {
     expect(screen.queryByText(/showing nothing/i)).not.toBeInTheDocument();
   });
 
-  it("shows an honest, unambiguous empty state when the fetch failed and no cache exists", () => {
+  // GAP-IDENTITY-{API-KEYS,BREAKGLASS,SESSIONS,USERS,WEBAUTHN}-05: a failed
+  // fetch with no cache now renders a real error state WITH a working Retry,
+  // not the amber "Couldn't load — showing nothing" badge stacked on the
+  // "No records" EmptyState (which made a hard failure and a genuine empty
+  // result look alike and offered no way to recover). This asserts the NEW
+  // behaviour and fails on the old code.
+  it("shows a retryable error state (no 'No records', no 'showing nothing') when the fetch failed and no cache exists", () => {
     mockedHook.mockReturnValue({
       data: [],
       fromCache: false,
@@ -81,16 +92,14 @@ describe("ModuleListTable", () => {
       cachedAt: null,
       provenance: "error-no-data",
     } as never);
-    render(<ModuleListTable cacheKey="test" rows={[]} source="error" />);
+    render(<ModuleListTable cacheKey="test" rows={[]} source="error" errorArea="sessions" />);
 
-    // Two independent role="status" live regions now legitimately coexist here:
-    // the page-level DataSourceBadge (data-provenance banner) and EmptyState's
-    // own live region (a11y HIGH-3 — a screen reader must hear "no results"
-    // too, not just see it). Assert each by its specific text rather than
-    // assuming there is exactly one status node.
-    expect(screen.getByText(/Couldn't load — showing nothing/i)).toBeInTheDocument();
+    // A real retry affordance exists now.
+    expect(screen.getByRole("button", { name: /try again|retry/i })).toBeInTheDocument();
+    // The old ambiguous copy is gone.
+    expect(screen.queryByText(/Couldn't load — showing nothing/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("No records")).not.toBeInTheDocument();
     expect(screen.queryByText(/Showing saved data/i)).not.toBeInTheDocument();
-    expect(screen.getByText("No records")).toBeInTheDocument();
   });
   // GAP-ADMIN-GATEWAY-ROUTES-02
   it("slug ids are shown in full (two ids sharing an 8-char prefix stay distinguishable); UUIDs are still shortened with the full id in the title", () => {

@@ -1,22 +1,17 @@
-import { ModuleListPage } from "../../../_components/ModuleListPage";
-import { getIdentitySessions } from "../_data";
-import { ArrowLeft } from "lucide-react";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export default async function Page() {
-  const { data, source } = await getIdentitySessions();
-  return (
-    <div className="page-main" aria-labelledby="page-heading">
-      <nav aria-label="Breadcrumb" className="back">
-        <ArrowLeft aria-hidden="true" size={14} /> <a href="/identity">Identity</a>
-      </nav>
-      <ModuleListPage
-        title="Identity — Sessions"
-        description="Sessions from identity-service."
-        rows={data}
-        source={source}
-      />
-    </div>
-  );
+/**
+ * GAP-IDENTITY-SESSIONS-02 / SESSIONS-03: the old /identity/sessions rendered a
+ * read-only generic ModuleListPage — no revoke control, and rows that could not
+ * be attributed to a person (a bare id in the Name column, raw ISO dates, no
+ * user / IP / device / last-seen). The canonical /tenant-admin/sessions page
+ * reads the SAME /api/identity/sessions endpoint via the typed getActiveSessions
+ * loader and already provides all of that plus an audited, confirm-gated Revoke
+ * (SessionsTable). Rather than maintain a second, weaker, unattributable copy we
+ * redirect to the canonical page. Both surfaces are role-gated identically
+ * (identity/layout.tsx IDENTITY_ADMIN_ROLES == tenant-admin/layout.tsx ALLOWED),
+ * and the redirect preserves existing /identity/sessions bookmarks.
+ */
+export default function Page() {
+  redirect("/tenant-admin/sessions");
 }

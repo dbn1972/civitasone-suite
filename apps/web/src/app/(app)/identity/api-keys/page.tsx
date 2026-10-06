@@ -1,22 +1,15 @@
-import { ModuleListPage } from "../../../_components/ModuleListPage";
-import { getIdentityApiKeys } from "../_data";
-import { ArrowLeft } from "lucide-react";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export default async function Page() {
-  const { data, source } = await getIdentityApiKeys();
-  return (
-    <div className="page-main" aria-labelledby="page-heading">
-      <nav aria-label="Breadcrumb" className="back">
-        <ArrowLeft aria-hidden="true" size={14} /> <a href="/identity">Identity</a>
-      </nav>
-      <ModuleListPage
-        title="Identity — API keys"
-        description="API keys from identity-service."
-        rows={data}
-        source={source}
-      />
-    </div>
-  );
+/**
+ * GAP-IDENTITY-API-KEYS-02 (+ API-KEYS-01/04/05/06): the old /identity/api-keys
+ * rendered a read-only generic ModuleListPage — no create / rotate / revoke, no
+ * scopes / owner / expiry / last-used columns, raw ISO dates, and a failmask that
+ * made an error look like an empty list. The canonical /tenant-admin/api-keys
+ * page already has APIKeysTable (Name / Scope / Last used / Expires / Status) and
+ * APIKeyActions (create with scopes, rotate, revoke via ConfirmDialog), with the
+ * backend emitting audit events on every mutation. We redirect to it rather than
+ * keep a second, weaker, unguarded list. Preserves /identity/api-keys bookmarks.
+ */
+export default function Page() {
+  redirect("/tenant-admin/api-keys");
 }
