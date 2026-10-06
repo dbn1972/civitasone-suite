@@ -345,7 +345,6 @@ import {
   LegalCaseDetailSchema,
   HearingSummaryListSchema,
   CourtOrderSummaryListSchema,
-  LegalOpinionSummaryListSchema,
   SessionSummaryListSchema,
   SessionDetailSchema,
   BreakglassSummaryListSchema,
@@ -390,6 +389,7 @@ import {
   mapHelpdeskTicketList,
   mapHelpdeskTicketDetail,
   mapLegalCaseSummaries,
+  mapLegalOpinionSummaries,
   mapMaintenanceSummaries,
   mapProcurementIndentSummaries,
   mapProcurementIndentDetail,
@@ -4951,6 +4951,8 @@ const LEGAL_DASHBOARD_EMPTY: LegalDashboard = {
   hearingsThisWeek: 0,
   ordersPending: 0,
   opinionsDue: 0,
+  disposedCases: 0,
+  totalCases: 0,
 };
 
 export async function getLegalDashboard(): Promise<LoaderResult<LegalDashboard>> {
@@ -5001,8 +5003,12 @@ export async function getLegalOpinions(): Promise<LoaderResult<LegalOpinionSumma
   return fetchJson<unknown, LegalOpinionSummary[]>("/api/v1/legal/opinions", [], {
     revalidateSeconds: 120,
     telemetryKey: "legal.opinions",
-    responseSchema: LegalOpinionSummaryListSchema,
-    mapResponse: (p) => getArrayPayload(p) as LegalOpinionSummary[] | null,
+    // GAP-LEGAL-OPINIONS-04: the real legal-service returns `{ items: [...] }`
+    // of opinions.legal_opinions rows (soughtBy/counselName, status
+    // sought|drafted|issued|pending_approval) — not a bare array in the web
+    // vocabulary. The bare LegalOpinionSummaryListSchema rejected every real
+    // response, so the list silently fell back to empty. Map explicitly.
+    mapResponse: mapLegalOpinionSummaries,
   });
 }
 

@@ -12,6 +12,7 @@ export function CreateCaseForm() {
   const [title, setTitle] = useState("");
   const [court, setCourt] = useState("");
   const [petitioner, setPetitioner] = useState("");
+  const [respondent, setRespondent] = useState("");
   const [subject, setSubject] = useState("");
   const [counselRef, setCounselRef] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "error">("idle");
@@ -34,6 +35,12 @@ export function CreateCaseForm() {
       subject: subject.trim() || undefined,
       petitioner: petitioner.trim() || undefined,
       counselRef: counselRef.trim() || undefined,
+      // GAP-LEGAL-CASES-NEW-02: respondent is captured via the backend's
+      // `parties` array (createCaseBody.parties), the only place the create
+      // schema accepts a respondent name.
+      parties: respondent.trim()
+        ? [{ name: respondent.trim(), role: "respondent" as const }]
+        : undefined,
     };
     try {
       const res = await fetch("/api/proxy/v1/legal/cases", {
@@ -46,6 +53,10 @@ export function CreateCaseForm() {
         setMessage((await formError.fromResponse(res, "save")).message);
         return;
       }
+      // GAP-LEGAL-CASES-NEW-03: the create endpoint is accepted-async and
+      // returns { id, status:"accepted" } without a readable case row yet, so
+      // we return to the list (where the new case appears) rather than a
+      // detail route that would 404 until the consumer has written the row.
       router.push("/legal/list");
       router.refresh();
     } catch (caught) {
@@ -57,27 +68,31 @@ export function CreateCaseForm() {
   return (
     <form onSubmit={(e) => void handleSubmit(e)} className="card pad" style={{ maxWidth: 820 }} noValidate>
       <div className="fields">
-        <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+        <div className="field">
           <label className="label" htmlFor="caseNo">Case number *</label>
           <input id="caseNo" className="inp" value={caseNo} onChange={(e) => setCaseNo(e.target.value)} required style={{ minHeight: 44 }} placeholder="e.g. WP/1234/2024" />
         </div>
-        <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+        <div className="field">
           <label className="label" htmlFor="court">Court / Forum *</label>
           <input id="court" className="inp" value={court} onChange={(e) => setCourt(e.target.value)} required style={{ minHeight: 44 }} placeholder="e.g. High Court" />
         </div>
-        <div className="field" style={{ gridColumn: "1 / -1", background: "#fff", padding: "13px 16px" }}>
+        <div className="field" style={{ gridColumn: "1 / -1" }}>
           <label className="label" htmlFor="title">Case title *</label>
           <input id="title" className="inp" value={title} onChange={(e) => setTitle(e.target.value)} required style={{ minHeight: 44 }} placeholder="e.g. State vs. ABC Pvt Ltd" />
         </div>
-        <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+        <div className="field">
           <label className="label" htmlFor="petitioner">Petitioner</label>
           <input id="petitioner" className="inp" value={petitioner} onChange={(e) => setPetitioner(e.target.value)} style={{ minHeight: 44 }} />
         </div>
-        <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+        <div className="field">
+          <label className="label" htmlFor="respondent">Respondent</label>
+          <input id="respondent" className="inp" value={respondent} onChange={(e) => setRespondent(e.target.value)} style={{ minHeight: 44 }} />
+        </div>
+        <div className="field">
           <label className="label" htmlFor="counselRef">Counsel reference</label>
           <input id="counselRef" className="inp" value={counselRef} onChange={(e) => setCounselRef(e.target.value)} style={{ minHeight: 44 }} />
         </div>
-        <div className="field" style={{ gridColumn: "1 / -1", background: "#fff", padding: "13px 16px" }}>
+        <div className="field" style={{ gridColumn: "1 / -1" }}>
           <label className="label" htmlFor="subject">Subject</label>
           <textarea id="subject" className="inp" rows={3} value={subject} onChange={(e) => setSubject(e.target.value)} />
         </div>

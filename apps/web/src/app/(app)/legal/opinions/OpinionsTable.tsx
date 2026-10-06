@@ -61,10 +61,19 @@ export function OpinionsTable({ items, source = "api" }: { items: Opinion[]; sou
           { key: "opinionNo", label: "Opinion", render: (r) => <span className="mono">{r.opinionNo}</span> },
           { key: "subject", label: "Subject" },
           { key: "requestedBy", label: "Sought by" },
-          { key: "advisorName", label: "Author", render: (r) => <>{r.advisorName ?? "Law Dept"}</> },
+          {
+            key: "advisorName",
+            label: "Author",
+            // GAP-LEGAL-OPINIONS-05: an opinion with no assigned counsel must
+            // read as unassigned, not be silently attributed to "Law Dept".
+            render: (r) =>
+              r.advisorName ? <>{r.advisorName}</> : <span className="pill mut">Unassigned</span>,
+          },
           { key: "status", label: "Status", render: (r) => opinionStatusPill(r.status) },
         ]}
         rows={visible}
+        rowLinkKey="id"
+        rowLinkPrefix="/legal/opinions/"
         sortable
         filterable
         filterPlaceholder="Filter opinions…"

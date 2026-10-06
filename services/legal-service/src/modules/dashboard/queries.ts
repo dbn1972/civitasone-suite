@@ -39,10 +39,27 @@ export async function getDashboard(tenantId: string) {
       eq(legalOrders.tenantId, tenantId),
     ));
 
+  // GAP-LEGAL-DASHBOARD-01: expose real disposed/total counts so the web
+  // "disposal rate" KPI is computed from data, not fabricated.
+  const [disposed] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(legalCases)
+    .where(and(
+      eq(legalCases.tenantId, tenantId),
+      inArray(legalCases.status, ["disposed", "settled"]),
+    ));
+
+  const [total] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(legalCases)
+    .where(eq(legalCases.tenantId, tenantId));
+
   return {
     activeCases: active?.count ?? 0,
     hearingsThisWeek: hearingsThisWeek?.count ?? 0,
     ordersPending: ordersPending?.count ?? 0,
     opinionsDue: 0,
+    disposedCases: disposed?.count ?? 0,
+    totalCases: total?.count ?? 0,
   };
 }

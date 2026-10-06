@@ -385,6 +385,34 @@ export const HELP_MODULES: HelpModule[] = [
     ],
     terms: ["GST", "GSTIN", "IRN", "e-invoice", "GSTN"],
   },
+  {
+    slug: "legal",
+    icon: "⚖️",
+    title: "Legal",
+    summary: "Keep track of court cases, hearings, court orders, and legal opinions in one place.",
+    href: "/legal",
+    moduleKey: "legal",
+    major: false,
+    tasks: [
+      {
+        title: "Register a new court case",
+        steps: [
+          "Open Legal, then New Case.",
+          "Fill in the case number, title, and court.",
+          "Save it — the case now appears in the Cases List.",
+        ],
+      },
+      {
+        title: "Record a court order",
+        steps: [
+          "Open Legal, then Court Orders.",
+          "Choose Record Order and pick the case it belongs to.",
+          "Enter the order details and the compliance date, then save.",
+        ],
+      },
+    ],
+    terms: ["Hearing", "Court order"],
+  },
 ];
 
 /** Find a single module guide by its slug. */

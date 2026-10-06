@@ -20,6 +20,11 @@ export const recordOrderBody = z.object({
   deptRef:   z.string().max(128).optional(),
   summary:   z.string().min(1).max(2000),
   orderDate: z.string(),
+  // GAP-LEGAL-COURT-ORDERS-NEW-01: let the registrar record whether the order
+  // requires compliance and by when, so the dashboard's Compliance-Due and
+  // Contempt-Risk counts reflect real court directions.
+  complianceRequired: z.boolean().optional(),
+  complianceDeadline: z.string().optional(),
 });
 export type RecordOrderBody = z.infer<typeof recordOrderBody>;
 

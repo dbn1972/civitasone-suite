@@ -2105,6 +2105,8 @@ export type LegalDashboard = {
   hearingsThisWeek: number;
   ordersPending: number;
   opinionsDue: number;
+  disposedCases: number;
+  totalCases: number;
 };
 
 export type LegalCaseSummary = {
@@ -2164,6 +2166,7 @@ export type CourtOrderSummary = {
   court: string;
   orderDate: string;
   orderNo?: string;
+  orderType?: string;
   summary: string;
   complianceRequired: boolean;
   complianceDeadline?: string;

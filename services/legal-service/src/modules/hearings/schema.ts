@@ -1,4 +1,4 @@
-import { pgSchema, uuid, text, integer, varchar, timestamp, date } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, text, integer, varchar, timestamp, date, boolean } from "drizzle-orm/pg-core";
 
 export const hearingsSchema = pgSchema("hearings");
 
@@ -31,6 +31,8 @@ export const legalOrders = hearingsSchema.table("legal_orders", {
   deptRef:   text("dept_ref"),
   summary:   text("summary").notNull(),
   orderDate: date("order_date").notNull(),
+  complianceRequired: boolean("compliance_required").notNull().default(false),
+  complianceDeadline: date("compliance_deadline"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),

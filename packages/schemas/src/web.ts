@@ -2100,6 +2100,8 @@ export const LegalDashboardSchema = z.object({
   hearingsThisWeek: z.number().default(0),
   ordersPending: z.number().default(0),
   opinionsDue: z.number().default(0),
+  disposedCases: z.number().default(0),
+  totalCases: z.number().default(0),
 });
 
 export const LegalCaseSummarySchema = z.object({
@@ -2161,6 +2163,7 @@ export const CourtOrderSummarySchema = z.object({
   court: z.string(),
   orderDate: z.string(),
   orderNo: z.string().optional(),
+  orderType: z.string().optional(),
   summary: z.string(),
   complianceRequired: z.boolean().default(false),
   complianceDeadline: z.string().optional(),

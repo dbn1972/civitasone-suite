@@ -19,13 +19,18 @@ const AUDIT_TOPIC = "audit.event.record";
 export function registerOpinionConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.opinionSeek, async (msg) => {
     const p = msg.payload as {
-      id: string; tenantId: string; opinionNo: string; subject: string;
+      id: string; tenantId: string; opinionNo?: string; subject: string;
       question: string; caseId?: string; soughtBy?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // GAP-LEGAL-OPINIONS-NEW-02: when the client omits opinionNo the server
+      // allocates the next number in the OPN/<year>/NNNN series atomically
+      // inside this transaction. The UNIQUE (tenant_id, opinion_no) constraint
+      // guards against races — a colliding concurrent insert redelivers.
+      const opinionNo = p.opinionNo ?? await repo.nextOpinionNo(tx, p.tenantId, new Date().getFullYear());
       await repo.insertOpinion(tx, {
-        id: p.id, tenantId: p.tenantId, opinionNo: p.opinionNo, subject: p.subject,
+        id: p.id, tenantId: p.tenantId, opinionNo, subject: p.subject,
         question: p.question, caseId: p.caseId ?? null, soughtBy: p.soughtBy ?? null,
         status: "sought", createdBy: msg.actorId, updatedBy: msg.actorId,
       });

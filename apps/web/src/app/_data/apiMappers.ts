@@ -11,6 +11,7 @@ import type {
   SrnDetail,
   CycleCountDetail,
   LegalCaseSummary,
+  LegalOpinionSummary,
   MaintenanceSummary,
   PODetail,
   PurchaseOrderListItem,
@@ -726,6 +727,12 @@ export function mapLegalCaseSummaries(payload: unknown): LegalCaseSummary[] | nu
       department: toText(row.department) ?? undefined,
       petitioner: toText(row.petitioner) ?? undefined,
       respondent: toText(row.respondent) ?? undefined,
+      // GAP-LEGAL-LIST-04: cases.legal_cases.counsel_ref is a free-text counsel
+      // reference (NOT a join from a counsel master, so there is no counsel id
+      // to deep-link). Surface it so the "Counsel" column shows the stored
+      // value instead of always rendering "—"; also accept advocateName if a
+      // future DTO provides it.
+      advocateName: toText(row.counselRef) ?? toText(row.counsel_ref) ?? toText(row.advocateName) ?? undefined,
       nextHearingDate: toText(row.nextDate) ?? toText(row.nextHearingDate) ?? undefined,
       status,
     });
@@ -1174,6 +1181,62 @@ export function mapTenantUsers(payload: unknown): TenantUserSummary[] | null {
               : "Active";
     if (!name) continue;
     mapped.push({ name, role, status });
+  }
+  return mapped;
+}
+
+/**
+ * GAP-LEGAL-OPINIONS-04 / OPINIONS-05 / OPINIONS-DETAIL-04: map the real
+ * legal-service opinions payload (`GET /v1/legal/opinions` → `{ items: [...] }`
+ * of `opinions.legal_opinions` rows) onto the web `LegalOpinionSummary` shape.
+ *
+ * The service and the web type historically disagreed on BOTH the envelope and
+ * the field names, so the old loader (bare `LegalOpinionSummaryListSchema` over
+ * the raw `{items}` body) rejected every real response and the list silently
+ * fell back to empty/error. Concretely the service returns:
+ *   - an `{ items: [...] }` envelope (not a bare array)
+ *   - `soughtBy` (not `requestedBy`), `counselName` (not `advisorName`)
+ *   - `soughtAt`/`issuedAt` timestamps (not `requestDate`/`issuedDate`)
+ *   - status `sought | drafted | issued | pending_approval`
+ *     (not `pending | draft | issued | revised`)
+ *
+ * We normalise to the web vocabulary so the list, filters and detail page all
+ * read the same resolved values. `sought` → `pending` (awaiting an opinion),
+ * `drafted` → `draft`, `pending_approval` → `pending` (still open), `issued`
+ * stays. Unknown counsel is left undefined so the table can render an explicit
+ * "Unassigned" rather than a fabricated author.
+ */
+export function mapLegalOpinionSummaries(payload: unknown): LegalOpinionSummary[] | null {
+  const rows = getArrayPayload(payload);
+  if (!rows) return null;
+  const mapped: LegalOpinionSummary[] = [];
+  for (const row of rows) {
+    if (!isRecord(row)) continue;
+    const id = toText(row.id);
+    const opinionNo = toText(row.opinionNo) ?? toText(row.opinion_no) ?? id;
+    const subject = toText(row.subject);
+    if (!id || !opinionNo || !subject) continue;
+    const rawStatus = (toText(row.status) ?? "pending").toLowerCase();
+    const status: LegalOpinionSummary["status"] =
+      rawStatus === "issued" ? "issued"
+        : rawStatus === "drafted" || rawStatus === "draft" ? "draft"
+          : rawStatus === "revised" ? "revised"
+            : "pending"; // sought | pending_approval | pending | unknown → still open
+    const requestedBy = toText(row.soughtBy) ?? toText(row.sought_by) ?? toText(row.requestedBy) ?? "—";
+    const advisorName = toText(row.counselName) ?? toText(row.counsel_name) ?? toText(row.advisorName) ?? undefined;
+    const requestDate =
+      toText(row.soughtAt) ?? toText(row.sought_at) ?? toText(row.requestDate) ?? toText(row.createdAt)?.slice(0, 10) ?? "—";
+    const issuedDate = toText(row.issuedAt) ?? toText(row.issued_at) ?? toText(row.issuedDate) ?? undefined;
+    mapped.push({
+      id,
+      opinionNo,
+      subject,
+      requestedBy,
+      requestDate,
+      ...(advisorName ? { advisorName } : {}),
+      status,
+      ...(issuedDate ? { issuedDate } : {}),
+    });
   }
   return mapped;
 }
