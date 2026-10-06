@@ -78,4 +78,31 @@ describe("mapModuleRows", () => {
     expect(mapModuleRows("not json")).toBeNull();
     expect(mapModuleRows({ unrelated: true })).toBeNull();
   });
+
+  // GAP-TELEPHONY-LIST-01 regression proof: a telephony /v1/telephony/calls
+  // row (CallSummary shape) carries NONE of the label fields this generic
+  // mapper requires (name/title/subject/label/code/contractNo/fileNo), so
+  // every row is dropped and the legacy /telephony/list page always rendered
+  // "No records" even with a full call log. This asserts that broken outcome
+  // so it stays documented; /telephony/list now redirects to /telephony/calls
+  // (LIST-05) instead of rendering this empty generic list.
+  it("drops telephony call rows (no label field) — proving the legacy list was always empty", () => {
+    const CALL_ROW = {
+      id: "19c91840-1e19-406a-a51e-ecdc92f8edf6",
+      direction: "inbound",
+      callerNumber: "******7210",
+      status: "completed",
+      disposition: "resolved",
+      queueId: "22222222-0000-0000-0000-000000000001",
+      agentId: "33333333-0000-0000-0000-000000000001",
+      hasRecording: true,
+      waitSeconds: 12,
+      talkSeconds: 184,
+      slaAnswered: true,
+      abandoned: false,
+      startedAt: "2026-09-29T10:00:00.000Z",
+      endedAt: "2026-09-29T10:03:04.000Z",
+    };
+    expect(mapModuleRows({ data: [CALL_ROW] })).toEqual([]);
+  });
 });

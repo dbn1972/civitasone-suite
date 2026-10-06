@@ -122,6 +122,9 @@ export type ListFilters = {
   queueId?: string;
   agentId?: string;
   callerNumber?: string;
+  /** GAP-TELEPHONY-CALLS-05: inclusive lower / exclusive upper createdAt bound. */
+  from?: string;
+  to?: string;
 };
 
 /** List always returns MASKED numbers — PII never leaks into collection reads. */
@@ -136,6 +139,8 @@ export async function listByTenant(
   if (filters.direction) conditions.push(eq(calls.direction, filters.direction));
   if (filters.queueId) conditions.push(eq(calls.queueId, filters.queueId));
   if (filters.agentId) conditions.push(eq(calls.agentId, filters.agentId));
+  if (filters.from) conditions.push(sql`${calls.createdAt} >= ${filters.from}`);
+  if (filters.to) conditions.push(sql`${calls.createdAt} < ${filters.to}`);
   // Exact caller lookup via blind index — the ciphertext column is never matched.
   if (filters.callerNumber) conditions.push(eq(calls.callerNumberIdx, blindIndex(filters.callerNumber)));
 

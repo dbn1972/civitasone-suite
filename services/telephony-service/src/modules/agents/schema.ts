@@ -36,6 +36,13 @@ export type AgentView = {
   userId: string;
   displayName: string;
   queueId: string | null;
+  /**
+   * GAP-TELEPHONY-AGENTS-04: the queue's human name, resolved via a left join
+   * on the agent-queue board so the UI shows "Ward 7 Complaints" instead of a
+   * truncated queueId UUID. Null when the agent is unassigned or the queue row
+   * is missing.
+   */
+  queueName: string | null;
   status: AgentStatus;
   extension: string | null;
   version: number;

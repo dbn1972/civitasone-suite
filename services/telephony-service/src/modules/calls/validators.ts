@@ -87,6 +87,11 @@ export const listCallsQuery = z.object({
   agentId: z.string().uuid().optional(),
   // Exact caller-number lookup — matched via the blind index, never decrypted.
   callerNumber: phone.optional(),
+  // GAP-TELEPHONY-CALLS-05: inclusive-from / exclusive-to call-creation window
+  // so the Call Log KPIs describe a real range (Today / 7d / 30d) rather than
+  // "whatever the default page returned".
+  from: z.string().datetime({ offset: true }).optional(),
+  to: z.string().datetime({ offset: true }).optional(),
 });
 export type ListCallsQuery = z.infer<typeof listCallsQuery>;
 

@@ -432,6 +432,31 @@ export function formatEntityRef(ref: string | null | undefined): string {
 }
 
 /**
+ * GAP-TELEPHONY-CALLS-06: format a whole-second count as a clock duration
+ * ("m:ss", or "h:mm:ss" past an hour) for the Call Log's Wait/Talk columns,
+ * replacing the raw "184s" rendering. A distinct name from the existing
+ * instant-span `formatDuration(startedAt, endedAt)` above (which takes ISO
+ * timestamps) so the two don't collide. null/undefined/negative/non-finite is
+ * MISSING data (e.g. an abandoned call never talked) and renders "—", never a
+ * fabricated 0:00.
+ *
+ *   formatSecondsDuration(184)   -> "3:04"
+ *   formatSecondsDuration(0)     -> "0:00"
+ *   formatSecondsDuration(3670)  -> "1:01:10"
+ *   formatSecondsDuration(null)  -> "—"
+ */
+export function formatSecondsDuration(seconds: number | null | undefined): string {
+  if (seconds === null || seconds === undefined || !Number.isFinite(seconds) || seconds < 0) return "—";
+  const total = Math.floor(seconds);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const ss = String(s).padStart(2, "0");
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${ss}`;
+  return `${m}:${ss}`;
+}
+
+/**
  * Humanize a raw lowercase/snake_case status or enum value for display, e.g.
  * for a StatusPill/StatCard that was not given an explicit hand-written
  * label. "pending" -> "Pending", "pending_approval" -> "Pending Approval",

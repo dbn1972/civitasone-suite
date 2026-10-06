@@ -68,6 +68,13 @@ const TILE_ICONS: Record<string, string> = {
   Subscriptions: "🔁",
   Invoices: "🧾",
   "GSTN Console": "🏛️",
+  // GAP-TELEPHONY-HOME-04: the telephony hub tiles ("Call Log", "Agent Queue",
+  // "Dispositions") had no TILE_ICONS entry and no matching href substring, so
+  // all fell through to the generic 📁 folder glyph. Keyed by their hub labels
+  // (ModuleHub links in telephony/page.tsx).
+  "Call Log": "📞",
+  "Agent Queue": "🎧",
+  Dispositions: "🗂",
 };
 
 const TILE_BG = ["#eef2ff", "#ecfdf3", "#fffaeb", "#fce7ee", "#e7edfd", "#f1f5f9"];
