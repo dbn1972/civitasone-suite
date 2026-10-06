@@ -3,7 +3,8 @@ import { PageHeader, StatGrid, StatCard, EmptyState, RefreshErrorState } from ".
 import { getPlugins } from "../../../_data/loaders";
 import { toHumanError } from "@/lib/messages";
 import { PluginsTable } from "../PluginsTable";
-import { ArrowLeft } from "lucide-react";
+import { lifecycleOf } from "../PluginActions";
+import { getSessionRoles, hasAnyRole, PLUGIN_MANAGE_ROLES } from "@/lib/auth/roleGuard";
 
 type PluginRow = {
 	id?: string;
@@ -11,33 +12,35 @@ type PluginRow = {
 	status: string;
 } & Record<string, unknown>;
 
-function isEnabled(status: string) {
-	return status.toLowerCase() === "enabled";
-}
-
 export default async function Page() {
 	const { data, source } = await getPlugins();
 	const plugins = data as PluginRow[];
+	const canManage = hasAnyRole(getSessionRoles(), PLUGIN_MANAGE_ROLES);
 
 	const errored = source === "error";
 	const total = errored ? null : plugins.length;
-	const enabled = errored ? null : plugins.filter((p) => isEnabled(p.status)).length;
-	const disabled = errored || total === null || enabled === null ? null : total - enabled;
+	// GAP-PLUGINS-INSTALLED-04: count by real lifecycle, not "everything that
+	// isn't enabled". "Other" captures pending/error/unknown so a problem row is
+	// not silently bucketed as Disabled.
+	const enabled = errored ? null : plugins.filter((p) => lifecycleOf(p.status) === "enabled").length;
+	const disabled = errored ? null : plugins.filter((p) => lifecycleOf(p.status) === "disabled").length;
+	const other =
+		errored || total === null || enabled === null || disabled === null ? null : total - enabled - disabled;
 
 	return (
 		<div className="wrap">
-			<nav aria-label="Breadcrumb" className="back">
-				<ArrowLeft aria-hidden="true" size={14} /> <a href="/plugins">Plugins</a>
-			</nav>
 			<PageHeader
 				title="Plugins — Installed"
 				subtitle="Enable or disable tenant features through controlled plugin toggles."
+				back="/plugins"
+				backLabel="Plugins"
 			/>
 
 			<StatGrid>
 				<StatCard icon="🧩" iconBg="#eff8ff" label="Total Plugins" value={total === null ? "—" : total} />
 				<StatCard icon="✅" iconBg="#e6f7f0" label="Enabled" value={enabled === null ? "—" : enabled} />
 				<StatCard icon="⏸️" iconBg="#f4f5f7" label="Disabled" value={disabled === null ? "—" : disabled} />
+				<StatCard icon="⚠️" iconBg="#fff6e6" label="Other" value={other === null ? "—" : other} />
 			</StatGrid>
 
 			{source === "error" && (
@@ -59,7 +62,7 @@ export default async function Page() {
 						message="Tenant plugins will appear here once they are provisioned for your organisation."
 					/>
 				) : (
-					<PluginsTable rows={plugins} />
+					<PluginsTable rows={plugins} canManage={canManage} />
 				)}
 			</div>
 		</div>

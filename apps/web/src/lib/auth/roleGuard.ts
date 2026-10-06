@@ -393,3 +393,29 @@ export const NOTIFICATION_SEND_ROLES = ["notification_admin", "super_admin", "pl
 /** Mirrors notification-service NOTIFY_READ_ROLES: send roles + audit_officer. */
 export const NOTIFICATION_READ_ROLES = [...NOTIFICATION_SEND_ROLES, "audit_officer"];
 export const NOTIFICATION_TEMPLATE_ADMIN_ROLES = ["platform_admin", "super_admin", "tenant_admin"];
+
+/**
+ * GAP-PLUGINS-HOME-01 / GAP-PLUGINS-INSTALLED-02 / GAP-PLUGINS-REGISTRY-01:
+ * plugin module role gating. The plugin-service enforces roles server-side on
+ * every route (verified in the services/plugin-service route modules):
+ *  - items list: ["plugin_user","plugin_admin","super_admin"]
+ *  - registry list + install/enable/disable/configure/uninstall and hooks:
+ *    ["plugin_admin","super_admin"]
+ *  - marketplace list + install/review: ["super_admin","platform_admin"]
+ *
+ * The web layer had NO gate at all, so every signed-in user saw the tiles and
+ * the Installed page's Install/Enable/Disable controls (learning they lacked
+ * access only from a failed call). These constants mirror the server sets so
+ * the web layout can add a matching requireAnyRole gate and the Installed page
+ * can hide the mutating controls from a non-admin; the server remains the real
+ * authority (UI hiding alone is not the boundary).
+ *
+ * PLUGIN_MODULE_ROLES is the UNION of everyone who can read ANY plugin
+ * sub-route, used by the segment layout so it never locks out a user a
+ * sub-route would admit. PLUGIN_MANAGE_ROLES is the narrower set that may
+ * install/enable/disable a tenant plugin.
+ */
+export const PLUGIN_MANAGE_ROLES = ["plugin_admin", "super_admin", "platform_admin"];
+export const PLUGIN_MODULE_ROLES = Array.from(
+  new Set([...PLUGIN_MANAGE_ROLES, "plugin_user"]),
+);
