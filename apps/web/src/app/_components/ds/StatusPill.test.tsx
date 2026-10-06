@@ -444,3 +444,12 @@ describe("GAP-PROJECTS-WBS-05: project WBS status keys", () => {
     expect(pillTone("in_progress")).toBe("warn");
   });
 });
+
+// GAP-WORKFLOW-DEFINITIONS-03: a workflow definition version that is
+// "deployed" is live and must read green, not the neutral "info" fallback.
+describe("workflow definition status 'deployed'", () => {
+  it("maps 'deployed' to the green 'good' tone (same as 'active')", () => {
+    expect(pillTone("deployed")).toBe("good");
+    expect(pillTone("active")).toBe("good");
+  });
+});

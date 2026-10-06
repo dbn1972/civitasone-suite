@@ -50,7 +50,10 @@ export function HistoryTimeline({ transitions }: { transitions: WorkflowTransiti
             )}
           </div>
           <div className="d">
-            {fmtTime(t.createdAt)} · actor <span className="mono">{t.actorId.slice(0, 8)}…</span>
+            {fmtTime(t.createdAt)} · actor{" "}
+            <span className="mono" title={`User ID: ${t.actorId}`} aria-label={`User ID ${t.actorId}`}>
+              {t.actorId ? `${t.actorId.slice(0, 8)}…` : "unknown"}
+            </span>
           </div>
         </li>
       ))}

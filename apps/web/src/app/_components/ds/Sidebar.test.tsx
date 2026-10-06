@@ -167,4 +167,20 @@ describe("Sidebar", () => {
       expect(screen.queryByRole("link", { name: /Administration/ })).not.toBeInTheDocument();
     });
   });
+
+  // GAP-WORKFLOW-LIST-05 / GAP-WORKFLOW-MY-TASKS-07: Workflow sidebar entry.
+  describe("Workflow entry", () => {
+    it("shows a Workflow link to /workflow when the module is enabled", () => {
+      render(<Sidebar enabledModules={["workflow"]} />);
+      expect(screen.getByRole("link", { name: /Workflow/ })).toHaveAttribute("href", "/workflow");
+    });
+    it("is hidden when the workflow module is not enabled", () => {
+      render(<Sidebar enabledModules={["finance"]} />);
+      expect(screen.queryByRole("link", { name: /Workflow/ })).not.toBeInTheDocument();
+    });
+    it("is shown (backward compatible) when enabledModules is null", () => {
+      render(<Sidebar enabledModules={null} />);
+      expect(screen.getByRole("link", { name: /Workflow/ })).toBeInTheDocument();
+    });
+  });
 });

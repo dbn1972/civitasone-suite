@@ -6,6 +6,10 @@ vi.mock("./_data/workflowData", () => ({
   getAnalyticsSummary: (...args: unknown[]) => getAnalyticsSummaryMock(...args),
   formatDuration: (s: number | null) => (s === null ? "—" : `${s}s`),
   titleCase: (s: string) => s[0].toUpperCase() + s.slice(1),
+  inProgressCount: (byStatus: Record<string, number>) =>
+    (byStatus["active"] ?? 0) + (byStatus["pending"] ?? 0) + (byStatus["running"] ?? 0),
+  formatBreachRate: (rate: number, tracked: number) =>
+    tracked <= 0 ? "—" : `${(rate * 100).toFixed(1)}%`,
 }));
 
 import WorkflowHubPage from "./page";
@@ -29,6 +33,26 @@ describe("WorkflowHubPage", () => {
     render(await WorkflowHubPage());
     expect(screen.getByText("Total instances")).toBeInTheDocument();
     expect(screen.getByText("8")).toBeInTheDocument();
+  });
+
+  // GAP-WORKFLOW-HOME-03: "In progress" counts active + pending + running — the
+  // same population the Instances list labels "In progress".
+  it("counts active + pending + running for 'In progress'", async () => {
+    const a = { ...MOCK_ANALYTICS, instancesByStatus: { active: 2, pending: 3, running: 1, completed: 9 } };
+    getAnalyticsSummaryMock.mockResolvedValue({ data: a, source: "api" });
+    render(await WorkflowHubPage());
+    const label = screen.getByText("In progress");
+    const card = label.closest(".stat");
+    expect(card?.textContent).toContain("6");
+  });
+
+  // GAP-WORKFLOW-HOME-04: a tenant with no SLA-tracked tasks must not print a
+  // false clean "0.0%" breach rate.
+  it("shows an em dash for breach rate when no SLA-tracked tasks exist", async () => {
+    const a = { ...MOCK_ANALYTICS, slaBreachRate: 0, slaTrackedTasks: 0 };
+    getAnalyticsSummaryMock.mockResolvedValue({ data: a, source: "api" });
+    render(await WorkflowHubPage());
+    expect(screen.queryByText("0.0%")).not.toBeInTheDocument();
   });
 
   it("shows the honest 'no instances yet' empty state only for a genuinely empty successful fetch", async () => {

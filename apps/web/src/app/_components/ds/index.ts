@@ -1,5 +1,5 @@
 export { Sidebar } from "./Sidebar";
-export { ToastProvider, useToast } from "./Toast";
+export { ToastProvider, useToast, useToastOptional } from "./Toast";
 export { TopBar } from "./TopBar";
 export { AppShell } from "./AppShell";
 export { PageHeader } from "./PageHeader";
