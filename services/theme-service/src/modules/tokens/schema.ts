@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
 
 export const themeSchema = pgSchema("theme");
 
@@ -64,8 +64,7 @@ export const brandConfig = themeSchema.table("brand_config", {
   version:         integer("version").notNull().default(1),
 });
 
-export const brandPresets = themeSchema.table("brand_presets", {
-  id:              uuid("id").primaryKey().defaultRandom(),
+export const brandPresets = themeSchema.table("brand_presets", {  id:              uuid("id").primaryKey().defaultRandom(),
   code:            text("code").notNull().unique(),
   name:            text("name").notNull(),
   description:     text("description"),
@@ -84,4 +83,30 @@ export type BrandConfigRow = typeof brandConfig.$inferSelect;
 export type BrandConfigInsert = typeof brandConfig.$inferInsert;
 export type BrandPresetRow = typeof brandPresets.$inferSelect;
 
-export const schema = { tokens, brandConfig, brandPresets };
+/**
+ * GAP-THEMES-HOME-01 / GAP-THEMES-TOKENS-02: a published theme revision. A
+ * publish snapshots the tenant's current tokens into `tokens` jsonb and marks
+ * the revision published; the version is monotonic per tenant so the UI can
+ * show "v{n} published" and an optimistic-concurrency check can reject a
+ * stale publish. Mirrors migration 0002_theme_revisions.sql.
+ */
+export const revisions = themeSchema.table("revisions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull(),
+  name: varchar("name", { length: 160 }).notNull(),
+  status: varchar("status", { length: 24 }).notNull().default("draft"),
+  tokens: jsonb("tokens").notNull().default({}),
+  reason: text("reason"),
+  publishedAt: timestamp("published_at", { withTimezone: true }),
+  rolledBackAt: timestamp("rolled_back_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy: uuid("created_by").notNull(),
+  updatedBy: uuid("updated_by").notNull(),
+  version: integer("version").notNull().default(1),
+});
+
+export type RevisionRow = typeof revisions.$inferSelect;
+export type RevisionInsert = typeof revisions.$inferInsert;
+
+export const schema = { tokens, brandConfig, brandPresets, revisions };

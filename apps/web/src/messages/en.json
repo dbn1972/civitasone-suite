@@ -1,4 +1,24 @@
 {
+  "themes": {
+    "title": "Themes",
+    "description": "Design tokens, templates and branding for tenant editions. Publishing tokens changes what every tenant screen shows; the branding lists are read-only.",
+    "editBrandLabel": "Edit tenant brand",
+    "editBrandNote": "Change the logo and colours tenants see",
+    "tokensLabel": "Tokens",
+    "tokensNote": "Review tokens and publish a theme revision to all tenant screens",
+    "templatesLabel": "Templates",
+    "templatesNote": "Ready-made looks you can start from (read-only)",
+    "brandingLabel": "Branding",
+    "brandingNote": "View branding packs (read-only)",
+    "brandLabel": "Brand preset",
+    "brandNote": "View the active brand (read-only)",
+    "brandPageTitle": "Themes — Brand",
+    "brandPageSubtitle": "The active brand and available presets for your organisation.",
+    "brandingPageTitle": "Themes — Branding",
+    "brandingPageSubtitle": "Branding packs for your organisation.",
+    "templatesPageTitle": "Themes — Templates",
+    "templatesPageSubtitle": "Ready-made looks you can start from."
+  },
   "action": {
     "save": "Save",
     "cancel": "Cancel",
