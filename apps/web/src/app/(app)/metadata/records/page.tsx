@@ -1,33 +1,19 @@
-import { PageHeader, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
-import { getMetadataEntities } from "../_data";
-import { toResourceState } from "@/app/_data/useResource";
-import { toHumanError } from "@/lib/messages";
+import { getRecordsForEntity } from "../_data";
+import { EntityScopedListPage } from "../_components/EntityScopedListPage";
 
 export const dynamic = "force-dynamic";
 
-export default async function MetadataRecordsPage() {
-  const result = await getMetadataEntities();
-  const { data } = result;
-  const resource = toResourceState(result);
-  const errored = resource.status === "error";
-  return (
-    <div className="page-main wrap" aria-label="Metadata records">
-      <PageHeader
-        title="Records"
-        subtitle="Wired to /api/v1/metadata/entities (select entity to drill into records)."
-        back="/metadata"
-      />
-      <Card title="Records">
-        {errored ? (
-          <div className="pad">
-            <RefreshErrorState error={toHumanError("load", { area: "records" })} backHref="/metadata" />
-          </div>
-        ) : data.length === 0 ? (
-          <EmptyState icon="📦" title="No data" message="Entities from the metadata API appear here as the entry point for records." />
-        ) : (
-          <pre className="text-xs overflow-auto p-3">{JSON.stringify(data.slice(0, 50), null, 2)}</pre>
-        )}
-      </Card>
-    </div>
-  );
+type SP = { entity?: string };
+
+export default async function MetadataRecordsPage({ searchParams }: { searchParams?: SP }) {
+  // GAP-METADATA-RECORDS-02/-03: was calling getMetadataEntities() and
+  // labelling entity rows "Records"; records are only listed entity-scoped
+  // (GET /v1/metadata/entities/:entityId/records).
+  return EntityScopedListPage({
+    title: "Records",
+    resourceLabel: "records",
+    resourceSingular: "record",
+    ...(searchParams?.entity ? { selectedEntityId: searchParams.entity } : {}),
+    loadRows: getRecordsForEntity,
+  });
 }

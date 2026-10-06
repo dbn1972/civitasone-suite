@@ -670,3 +670,19 @@ export const PROCUREMENT_WRITE_ROLES = [
  * (create gate) / GAP-WORKS-MASTERS-04 (edit/deactivate gate).
  */
 export const WORKS_MASTERS_ADMIN_ROLES = ["works_admin", "super_admin"];
+
+/**
+ * GAP-METADATA-HOME-01: roles permitted to reach the /metadata segment
+ * (tenant-wide, schema-changing configuration: entities, fields, validation
+ * rules, records and forms). MUST mirror metadata-service's own `ADMIN` set in
+ * services/metadata-service/src/shared/roles.ts
+ * (`["super_admin","platform_admin","metadata_admin"]`), which every
+ * /v1/metadata/* route already enforces via requireRole (verified). The web
+ * segment had NO layout and NO gate, so any signed-in user could open the hub
+ * and its pages and only discovered they lacked access from failed fetches.
+ * This constant lets the segment layout add a matching requireAnyRole gate
+ * (defence-in-depth + honest UX); the metadata-service remains the real
+ * authority. "metadata_user" (the broader records role, DATA set) is
+ * deliberately excluded from the schema-admin segment gate.
+ */
+export const METADATA_ADMIN_ROLES = ["super_admin", "platform_admin", "metadata_admin"];
