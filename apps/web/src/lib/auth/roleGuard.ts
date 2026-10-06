@@ -117,6 +117,24 @@ export const PAYROLL_READER_ROLES = [...PAYROLL_ADMIN_ROLES, "hr_admin", "financ
 export const PAYROLL_REPORT_ROLES = [...PAYROLL_ADMIN_ROLES, "hr_admin"];
 
 /**
+ * GAP-RECOMMENDATIONS-HEALTH-02: roles permitted to read the recommendation
+ * surfaces (NBA/predictive, cross-sell matrix, at-risk health, feedback).
+ * Mirrors recommendation-service's REC_ROLES (the READ_ROLES/REC_ROLES array
+ * repeated in every module's routes.ts). The service is the authority and
+ * returns 403 to any other role regardless of what the page renders; gating
+ * the layout on this constant shows PermissionDenied instead of four failed
+ * fetches. At-risk rows carry only accountId/score/band/computedAt (no contact
+ * PII — see health/scoring-routes.ts), so this role gate plus the service RBAC
+ * is the control; there is no unmasked phone/email to leak.
+ */
+export const RECOMMENDATION_READER_ROLES = [
+  "recommendation_admin",
+  "crm_user",
+  "sales_user",
+  "super_admin",
+];
+
+/**
  * Roles permitted to approve/reject a cycle count. Mirrors inventory-service's
  * APPROVE_ROLES in modules/cycle-count/routes.ts (GAP-INVENTORY-CYCLE-COUNTS-DETAIL-02);
  * the server remains the authority (it also enforces maker != checker).

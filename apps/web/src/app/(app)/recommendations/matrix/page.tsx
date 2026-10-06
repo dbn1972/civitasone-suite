@@ -1,6 +1,8 @@
-import { ModuleListPage } from "../../../_components/ModuleListPage";
+import { PageHeader } from "../../../_components/ds";
+import { RefreshErrorState } from "../../../_components/ds/RefreshErrorState";
+import { toHumanError } from "@/lib/messages";
 import { getRecMatrix } from "../_data";
-import { ArrowLeft } from "lucide-react";
+import { MatrixTable } from "./MatrixTable";
 
 export const dynamic = "force-dynamic";
 
@@ -8,15 +10,21 @@ export default async function Page() {
   const { data, source } = await getRecMatrix();
   return (
     <div className="page-main" aria-labelledby="page-heading">
-      <nav aria-label="Breadcrumb" className="back">
-        <ArrowLeft aria-hidden="true" size={14} /> <a href="/recommendations">Recommendations</a>
-      </nav>
-      <ModuleListPage
+      <PageHeader
         title="Recommendations — Cross-Sell Matrix"
-        description="Product affinity rules and cross-sell configuration."
-        rows={data}
-        source={source}
+        subtitle="Product affinity rules (read-only)."
+        back="/recommendations"
+        backLabel="Recommendations"
       />
+      {source === "error" ? (
+        <RefreshErrorState
+          error={toHumanError("load", { area: "cross-sell rules" })}
+          source={{ area: "cross-sell rules" }}
+          backHref="/recommendations"
+        />
+      ) : (
+        <MatrixTable rows={data} />
+      )}
     </div>
   );
 }
