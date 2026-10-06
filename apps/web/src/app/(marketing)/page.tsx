@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SMALL_OFFICE_LICENSING_LABEL } from "./_data/pricing";
 
 /* ─────────────────────────────────────────────────────────────────────────────
  * CivitasOne Landing Page — Hero, Features, Modules, Comparison, CTA
@@ -29,7 +30,7 @@ const modules = [
 
 const comparison = [
   { feature: "Offline", c1: "✅ Full CRUD", sap: "❌ Read-only", oracle: "❌" },
-  { feature: "Licensing/year", c1: "₹0", sap: "₹50L–5Cr", oracle: "₹30L–3Cr" },
+  { feature: "Licensing/year", c1: "₹0 (Small Office); from ₹1.8L (PSU)", sap: "₹50L–5Cr", oracle: "₹30L–3Cr" },
   { feature: "Training needed", c1: "0 hours", sap: "40+ hours", oracle: "40+ hours" },
   { feature: "Languages", c1: "5", sap: "1 (without pack)", oracle: "1" },
   { feature: "Mobile-first", c1: "✅", sap: "❌", oracle: "❌" },
@@ -57,7 +58,8 @@ export default function LandingPage() {
                 The ERP that works without internet.
               </h1>
               <p className="mt-6 text-lg text-gray-600 sm:text-xl">
-                Built for Indian Government, PSU, and Small Offices. Offline-first. Zero training. ₹0 licensing.
+                Built for Indian Government, PSU, and Small Offices. Offline-first. Zero training.{" "}
+                {SMALL_OFFICE_LICENSING_LABEL}.
               </p>
               <div className="mt-8 flex flex-wrap gap-4">
                 <Link
