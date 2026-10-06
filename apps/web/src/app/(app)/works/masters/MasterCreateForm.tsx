@@ -3,8 +3,10 @@
 import { UserFacingError } from "@/lib/userFacingError";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useToast, Button } from "@/app/_components/ds";
+import { useToast, Button, EntityPicker, type EntityOption } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { humanizeMaster, PARENT_FIELD } from "./masterTypes";
+import type { MasterItem, ParentOption } from "./MastersTable";
 
 // ─── Field spec types ─────────────────────────────────────────────────────────
 
@@ -29,7 +31,16 @@ type CheckboxField = {
   label: string;
 };
 
-type FieldSpec = TextField | MoneyField | CheckboxField;
+// GAP-WORKS-MASTERS-03: a parent reference is a picker over fetched options,
+// not a raw UUID the clerk pastes.
+type SelectField = {
+  type: "select";
+  key: string;
+  label: string;
+  required?: boolean;
+};
+
+type FieldSpec = TextField | MoneyField | CheckboxField | SelectField;
 
 // ─── Field map ────────────────────────────────────────────────────────────────
 
@@ -51,7 +62,7 @@ const FIELD_MAP: Record<string, FieldSpec[]> = {
   "work-sub-types": [
     { type: "text",     key: "name",       label: "Name",        required: true },
     { type: "text",     key: "code",       label: "Code",        required: true },
-    { type: "text",     key: "workTypeId", label: "Work Type ID", required: true, placeholder: "Paste Work Type UUID" },
+    { type: "select",   key: "workTypeId", label: "Work Type",   required: true },
     { type: "checkbox", key: "active",     label: "Active" },
   ],
   "proposer-types": [
@@ -71,7 +82,7 @@ const FIELD_MAP: Record<string, FieldSpec[]> = {
   ],
   "repair-types": [
     { type: "text",     key: "name",      label: "Name",       required: true },
-    { type: "text",     key: "programId", label: "Program ID", required: true, placeholder: "Paste Program UUID" },
+    { type: "select",   key: "programId", label: "Program",    required: true },
     { type: "checkbox", key: "active",    label: "Active" },
   ],
   "schemes": [
@@ -81,7 +92,7 @@ const FIELD_MAP: Record<string, FieldSpec[]> = {
   ],
   "scopes": [
     { type: "text",     key: "name",       label: "Name",        required: true },
-    { type: "text",     key: "workTypeId", label: "Work Type ID", required: true, placeholder: "Paste Work Type UUID" },
+    { type: "select",   key: "workTypeId", label: "Work Type",   required: true },
     { type: "text",     key: "unit",       label: "Unit",         required: true, placeholder: "e.g. m, sqm, nos" },
     { type: "checkbox", key: "active",     label: "Active" },
   ],
@@ -106,9 +117,9 @@ const FIELD_MAP: Record<string, FieldSpec[]> = {
     { type: "checkbox", key: "active", label: "Active" },
   ],
   "issue-description-types": [
-    { type: "text",     key: "name",  label: "Name", required: true },
-    { type: "text",     key: "code",  label: "Code" },
-    { type: "checkbox", key: "active", label: "Active" },
+    { type: "text",     key: "name",        label: "Name",       required: true },
+    { type: "select",   key: "issueTypeId", label: "Issue Type", required: true },
+    { type: "checkbox", key: "active",       label: "Active" },
   ],
   "assets": [
     { type: "text",     key: "code",     label: "Code",       required: true },
@@ -121,9 +132,9 @@ const FIELD_MAP: Record<string, FieldSpec[]> = {
     { type: "checkbox", key: "active",   label: "Active" },
   ],
   "work-description-types": [
-    { type: "text",     key: "name",  label: "Name", required: true },
-    { type: "text",     key: "code",  label: "Code" },
-    { type: "checkbox", key: "active", label: "Active" },
+    { type: "text",     key: "keyword",    label: "Keyword",    required: true },
+    { type: "select",   key: "workTypeId", label: "Work Type",  required: true },
+    { type: "checkbox", key: "active",       label: "Active" },
   ],
   "sr-items": [
     { type: "text",     key: "zone",        label: "Zone",        required: true },
@@ -149,29 +160,6 @@ function getFields(masterType: string): FieldSpec[] {
   return FIELD_MAP[masterType] ?? DEFAULT_FIELDS;
 }
 
-function humanizeMaster(prefix: string): string {
-  const map: Record<string, string> = {
-    "authorities":             "Authorities",
-    "work-types":              "Work Types",
-    "work-sub-types":          "Work Sub-Types",
-    "proposer-types":          "Proposer Types",
-    "programs":                "Programs",
-    "publication-levels":      "Publication Levels",
-    "repair-types":            "Repair Types",
-    "schemes":                 "Schemes",
-    "scopes":                  "Scopes",
-    "tender-types":            "Tender Types",
-    "user-departments":        "User Departments",
-    "contractor-classes":      "Contractor Classes",
-    "issue-types":             "Issue Types",
-    "issue-description-types": "Issue Description Types",
-    "assets":                  "Assets",
-    "work-description-types":  "Work Description Types",
-    "sr-items":                "SR Items",
-  };
-  return map[prefix] ?? prefix;
-}
-
 // ─── Shared styles ────────────────────────────────────────────────────────────
 
 const inputStyle: React.CSSProperties = {
@@ -192,35 +180,87 @@ const labelStyle: React.CSSProperties = {
   fontWeight: 600,
 };
 
+// On create, the write is a 202 CQRS command: the read model may lag. Poll
+// router.refresh() a few times until the row shows up (GAP-WORKS-MASTERS-05)
+// instead of a single fixed 600ms refresh that leaves a slow write invisible.
+const REFRESH_DELAYS_MS = [600, 1500, 3000];
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function MasterCreateForm({
   masterType,
   onCreated,
+  parentOptions = [],
+  editItem,
+  onDone,
+  canWrite = true,
 }: {
   masterType: string;
   onCreated?: () => void;
+  /** Options for the parent picker (GAP-WORKS-MASTERS-03). */
+  parentOptions?: ParentOption[];
+  /** When set, the form edits this row (GAP-WORKS-MASTERS-04) rather than creating. */
+  editItem?: MasterItem;
+  /** Called when an edit is saved or cancelled. */
+  onDone?: () => void;
+  /**
+   * GAP-WORKS-HOME-05: when false, a read-only role sees no create control at
+   * all (renders nothing). Defaults true so existing callers are unchanged.
+   * The server remains the authority (POST/PATCH 403 non-admins).
+   */
+  canWrite?: boolean;
 }) {
   const router = useRouter();
   const { toast } = useToast();
 
-  const [open, setOpen]   = useState(false);
-  const [form, setForm]   = useState<Record<string, string | boolean>>({});
-  const [busy, setBusy]   = useState(false);
+  const isEdit = Boolean(editItem);
+  const parent = PARENT_FIELD[masterType as keyof typeof PARENT_FIELD];
+
+  const [open, setOpen] = useState(isEdit);
+  const [form, setForm] = useState<Record<string, string | boolean>>(() =>
+    editItem ? seedForm(getFields(masterType), editItem) : {},
+  );
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const formError = useFormError("master data");
 
-  const fields    = getFields(masterType);
+  const allFields = getFields(masterType);
+  // In edit mode only name/code/active are editable server-side
+  // (patchMasterSchema) — parent links and money fields are immutable to
+  // avoid rewriting history on referenced masters.
+  const fields = isEdit
+    ? allFields.filter((f) => ["name", "code", "active"].includes(f.key))
+    : allFields;
   const typeLabel = humanizeMaster(masterType);
+
+  const parentOpts: EntityOption[] = parentOptions.map((o) => ({ id: o.id, label: o.label }));
+
+  function searchParents(query: string): Promise<EntityOption[]> {
+    const q = query.trim().toLowerCase();
+    const matches = q === "" ? parentOpts : parentOpts.filter((o) => o.label.toLowerCase().includes(q));
+    return Promise.resolve(matches.slice(0, 50));
+  }
+  function resolveParents(ids: string[]): Promise<EntityOption[]> {
+    return Promise.resolve(parentOpts.filter((o) => ids.includes(o.id)));
+  }
 
   function handleClose() {
     setOpen(false);
     setForm({});
     setError("");
+    onDone?.();
   }
 
   function setValue(key: string, value: string | boolean) {
     setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  function pollRefresh(index = 0) {
+    if (index >= REFRESH_DELAYS_MS.length) return;
+    setTimeout(() => {
+      router.refresh();
+      pollRefresh(index + 1);
+    }, REFRESH_DELAYS_MS[index]);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -234,7 +274,6 @@ export function MasterCreateForm({
 
       for (const field of fields) {
         if (field.type === "checkbox") {
-          // Default to true if user never touched the checkbox
           body[field.key] = form[field.key] !== undefined ? form[field.key] : true;
         } else if (field.type === "money") {
           const val = String(form[field.key] ?? "").trim();
@@ -246,7 +285,7 @@ export function MasterCreateForm({
             throw new Error(`${field.label} is required`);
           }
         } else {
-          // text
+          // text | select
           const val = String(form[field.key] ?? "").trim();
           if (val !== "") {
             body[field.key] = val;
@@ -256,20 +295,30 @@ export function MasterCreateForm({
         }
       }
 
-      const res = await fetch(`/api/proxy/v1/works/masters/${masterType}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      let res: Response;
+      if (isEdit && editItem) {
+        body.version = Number(editItem.version ?? 1);
+        res = await fetch(`/api/proxy/v1/works/masters/${masterType}/${editItem.id}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      } else {
+        res = await fetch(`/api/proxy/v1/works/masters/${masterType}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      }
 
       if (res.status !== 202) {
         throw UserFacingError.from(await formError.fromResponse(res, "save"));
       }
 
-      toast.success("Created. Changes will reflect shortly.");
+      toast.success(isEdit ? "Saved. Changes will reflect shortly." : "Created. Changes will reflect shortly.");
       handleClose();
       onCreated?.();
-      setTimeout(() => router.refresh(), 600);
+      pollRefresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
@@ -277,8 +326,10 @@ export function MasterCreateForm({
     }
   }
 
-  // ── Collapsed: just the "+ Add" button ──────────────────────────────────────
+  // ── Collapsed (create only): just the "+ Add" button ─────────────────────────
   if (!open) {
+    // GAP-WORKS-HOME-05: a read-only role gets no create control at all.
+    if (!canWrite) return null;
     return (
       <Button
         variant="primary"
@@ -302,7 +353,7 @@ export function MasterCreateForm({
       }}
     >
       <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 600 }}>
-        Add {typeLabel}
+        {isEdit ? `Edit ${typeLabel}` : `Add ${typeLabel}`}
       </h3>
 
       {error && (
@@ -354,6 +405,30 @@ export function MasterCreateForm({
               );
             }
 
+            if (field.type === "select") {
+              const selected = String(form[field.key] ?? "");
+              return (
+                <div key={field.key}>
+                  <label style={labelStyle} id={`mcf-${masterType}-${field.key}-label`}>
+                    {field.label}
+                    {field.required && (
+                      <span style={{ color: "#e53e3e", marginInlineStart: 2 }}>*</span>
+                    )}
+                  </label>
+                  <EntityPicker
+                    aria-label={`${field.label}${parent ? ` (${humanizeMaster(parent.optionsType)})` : ""}`}
+                    value={selected === "" ? null : selected}
+                    onChange={(v) => setValue(field.key, Array.isArray(v) ? (v[0] ?? "") : (v ?? ""))}
+                    search={searchParents}
+                    resolve={resolveParents}
+                    initialOptions={parentOpts}
+                    placeholder={`Search ${field.label.toLowerCase()}…`}
+                    minQueryLength={0}
+                  />
+                </div>
+              );
+            }
+
             // text | money
             const isMoney = field.type === "money";
             return (
@@ -390,7 +465,7 @@ export function MasterCreateForm({
             disabled={busy}
             style={{ minHeight: 38 }}
           >
-            {busy ? "Saving…" : "Create"}
+            {busy ? "Saving…" : isEdit ? "Save" : "Create"}
           </Button>
           <Button
             variant="ghost"
@@ -404,4 +479,20 @@ export function MasterCreateForm({
       </form>
     </div>
   );
+}
+
+function seedForm(fields: FieldSpec[], item: MasterItem): Record<string, string | boolean> {
+  const seeded: Record<string, string | boolean> = {};
+  for (const f of fields) {
+    const raw = item[f.key];
+    if (f.type === "checkbox") {
+      seeded[f.key] = raw == null ? true : Boolean(raw);
+    } else if (f.type === "money") {
+      // stored as minor units (paise); show as rupees in the form
+      seeded[f.key] = raw != null ? String(Number(raw) / 100) : "";
+    } else {
+      seeded[f.key] = raw != null ? String(raw) : "";
+    }
+  }
+  return seeded;
 }

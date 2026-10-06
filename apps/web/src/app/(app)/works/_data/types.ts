@@ -133,6 +133,22 @@ export interface WorkIssue {
 /** work_closures.closureType — also the FE tab key on the closure list page. */
 export type ClosureType = "closed" | "dropped" | "completion";
 
+/**
+ * GAP-WORKS-CLOSURE-03: the canonical closure-type tab keys plus an "other"
+ * catch-all. The backend close route (execution/validators.ts closeWorkSchema)
+ * only ever emits closed | dropped | completion today, but a legacy/unknown
+ * value must still be countable and visible rather than silently dropped from
+ * every tab (it previously defaulted to "closed", mislabelling it).
+ */
+export const CLOSURE_TYPES = ["closed", "dropped", "completion"] as const;
+export type NormalizedClosureType = ClosureType | "other";
+
+/** Fold any raw closureType to a known tab key; unknown -> "other". */
+export function normalizeClosureType(raw: unknown): NormalizedClosureType {
+  const v = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  return (CLOSURE_TYPES as readonly string[]).includes(v) ? (v as ClosureType) : "other";
+}
+
 export interface WorkClosure {
   id: string;
   workId: string;

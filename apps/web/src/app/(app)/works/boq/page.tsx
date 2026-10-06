@@ -1,25 +1,27 @@
 import Link from "next/link";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { formatMoney } from "@/lib/formatters";
-import { getBoqItems } from "../_data/loaders";
+import { getBoqItems, getBoqIndexSummary } from "../_data/loaders";
 import { BoqTable } from "./BoqTable";
 
 export default async function BoqPage() {
-  const { data: items, source } = await getBoqItems();
+  const [{ data: items, source }, { data: summary }] = await Promise.all([
+    getBoqItems(),
+    getBoqIndexSummary(),
+  ]);
 
-  const total = items.length;
-  // amount is amountMinor (paise) serialised as a string — sum with BigInt and
-  // render via formatMoney so the total is paise-exact and matches the ₹ format
-  // used everywhere else (never float-divide paise or drop trailing zeros).
-  const totalAmountMinor = items.reduce((sum, item) => {
-    try {
-      return sum + BigInt(String(item.amount ?? "0"));
-    } catch {
-      return sum;
-    }
-  }, 0n);
-  const totalAmount = formatMoney(totalAmountMinor);
+  // GAP-WORKS-BOQ-02: the stat cards show the FULL-set figures from the list
+  // response meta (count + paise-exact sum), not just the page the table
+  // fetched — a partial money total on a finance card is misleading. When the
+  // set is larger than the page we fetched, show a "showing first N" hint so a
+  // reader knows the table itself is truncated even though the totals are not.
+  const total = summary.total;
+  const totalAmount = formatMoney(summary.totalAmountMinor);
+  const truncated = summary.total > summary.fetched && summary.fetched > 0;
   const scopes = new Set(items.map((i) => String(i.scope ?? ""))).size;
+  // GAP-WORKS-BOQ-04: count lines actually linked to a Schedule-of-Rates item
+  // (srItemId present), not just any row that happens to carry an item code.
+  const srLinked = items.filter((i) => typeof i.srItemId === "string" && i.srItemId.length > 0).length;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -46,14 +48,20 @@ export default async function BoqPage() {
       <StatGrid>
         <StatCard icon="📐" iconBg="#eff6ff" label="Total Items" value={total} />
         <StatCard icon="💰" iconBg="#ecfdf3" label="Total Amount" value={totalAmount} />
-        <StatCard icon="📊" iconBg="#fffaeb" label="Scopes" value={scopes} />
+        <StatCard icon="📊" iconBg="#fffaeb" label="Scopes (shown)" value={scopes} />
         <StatCard
           icon="📋"
           iconBg="#f0fdf4"
-          label="SR Items"
-          value={items.filter((i) => i.itemCode && i.itemCode !== "—").length}
+          label="SR Items (shown)"
+          hint="Lines linked to a Schedule of Rates item, among the rows shown below."
+          value={srLinked}
         />
       </StatGrid>
+      {truncated ? (
+        <p style={{ fontSize: 13, color: "var(--muted)", margin: "0 0 12px" }} role="note">
+          Showing the first {summary.fetched} of {summary.total} BoQ items. Totals above cover all {summary.total}.
+        </p>
+      ) : null}
       <Card title="BoQ Items">
         <BoqTable items={items} source={source === "error" ? "error" : "api"} />
       </Card>

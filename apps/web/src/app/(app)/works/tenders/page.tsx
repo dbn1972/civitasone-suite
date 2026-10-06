@@ -1,21 +1,24 @@
 import Link from "next/link";
-import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
-import { getTenders } from "../_data/loaders";
+import { PageHeader, Card } from "@/app/_components/ds";
+import { getTenders, getTenderTypeNameMap, getAuthorityNameMap, resolveTenderNames } from "../_data/loaders";
 import { TendersTable } from "./TendersTable";
 
 export default async function TendersPage() {
-  const { data: tenders, source } = await getTenders();
-
-  const total = tenders.length;
-  const open = tenders.filter((t) => t.status === "open").length;
-  const closed = tenders.filter((t) => t.status === "closed").length;
+  // GAP-WORKS-TENDERS-02/NEW-03: resolve type/authority ids to real master
+  // names web-side (no cross-module service join). GAP-WORKS-TENDERS-03: the
+  // stat cards now live inside TendersTable and are computed from the SAME
+  // useSeededResource rows, so they can never disagree with the table (an
+  // offline/cached table no longer shows rows while the cards read 0).
+  const [tendersResult, typeMapResult, authorityMapResult] = await Promise.all([
+    getTenders(),
+    getTenderTypeNameMap(),
+    getAuthorityNameMap(),
+  ]);
+  const { data: tenders, source } = tendersResult;
+  const resolved = resolveTenderNames(tenders, typeMapResult.data, authorityMapResult.data);
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
-      {/* UX-012: the data-source badge now lives inside TendersTable, driven
-          by the same useSeededResource call that produces its rows — not a
-          second, independent read of `source` here that could disagree with
-          the table's own cache state (UX-002's pattern). */}
       <PageHeader
         title="Tender Pipeline"
         subtitle="Pre-tender, quotation, and award management."
@@ -26,13 +29,8 @@ export default async function TendersPage() {
           </div>
         }
       />
-      <StatGrid>
-        <StatCard icon="📢" iconBg="#eff6ff" label="Total Tenders" value={total} />
-        <StatCard icon="📝" iconBg="#fffaeb" label="Open" value={open} />
-        <StatCard icon="🏆" iconBg="#f0fdf4" label="Closed" value={closed} />
-      </StatGrid>
       <Card title="Tenders">
-        <TendersTable tenders={tenders} source={source === "error" ? "error" : "api"} />
+        <TendersTable tenders={resolved} source={source === "error" ? "error" : "api"} />
       </Card>
     </div>
   );

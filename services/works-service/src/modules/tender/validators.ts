@@ -6,7 +6,12 @@ export const createPreTenderSchema = z.object({
   referenceNumber: z.string().max(128).optional(),
   tenderType: z.string().max(64).optional(),
   tenderCategory: z.string().max(64).optional(),
-  bidValidity: z.number().int().optional(),
+  bidValidity: z.number().int().positive().max(365).optional(),
+  // GAP-WORKS-TENDERS-NEW-02: the opening date the register/status depend on.
+  // The pre_tenders table already carries this column; accept it as an ISO
+  // datetime so a created pre-tender records a real opening date instead of
+  // leaving it null (which rendered a meaningless derived status).
+  openingDate: z.string().datetime({ offset: true }).optional(),
   fees: zMoneyMinorString.optional(),
 });
 

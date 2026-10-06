@@ -4,6 +4,8 @@ import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
 import { Button } from "@/app/_components/ds";
+import { CONTRACTOR_WRITE_ROLES } from "@/lib/works/roles";
+import { validateContractorIds, type IndianIdFieldErrors } from "@/lib/validation/indianIds";
 
 interface ContractorData {
   id: string;
@@ -21,7 +23,7 @@ interface ContractorEditToggleProps {
   roles: string[];
 }
 
-const WRITE_ROLES = ["works_admin", "works_operator", "super_admin", "dao", "do"];
+const WRITE_ROLES: readonly string[] = CONTRACTOR_WRITE_ROLES;
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -82,6 +84,7 @@ function ContractorEditForm({
 
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [idErrors, setIdErrors] = useState<IndianIdFieldErrors>({});
   const formError = useFormError("contractor");
 
   async function handleSubmit(e: React.FormEvent) {
@@ -114,6 +117,21 @@ function ContractorEditForm({
       setMsg({ text: "No changes detected.", ok: false });
       return;
     }
+
+    // GAP-WORKS-CONTRACTORS-NEW-01: validate the tax-identifier FORMAT of only
+    // the fields the user actually CHANGED (same rules as the register form +
+    // works-service). Empty values are allowed (they CLEAR the field
+    // server-side); only a non-empty, malformed value is rejected. Validating
+    // only changed fields avoids blocking an unrelated edit (e.g. phone)
+    // because of a pre-existing PAN/GSTIN pairing the user never touched.
+    const nextIdErrors = validateContractorIds({
+      pan: "pan" in patch ? pan : undefined,
+      gst: "gst" in patch ? gst : undefined,
+      phone: "phone" in patch ? phone : undefined,
+      email: "email" in patch ? email : undefined,
+    });
+    setIdErrors(nextIdErrors);
+    if (Object.keys(nextIdErrors).length > 0) return;
 
     setBusy(true);
     try {
@@ -226,8 +244,8 @@ function ContractorEditForm({
               placeholder="AAAPZ1234C"
               style={inputStyle}
             />
-            {formError.fieldError("pan") && (
-              <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("pan")}</span>
+            {(idErrors.pan ?? formError.fieldError("pan")) && (
+              <span style={{ fontSize: 12, color: "var(--bad)" }}>{idErrors.pan ?? formError.fieldError("pan")}</span>
             )}
           </div>
           <div style={fieldWrap}>
@@ -242,8 +260,8 @@ function ContractorEditForm({
               onChange={(e) => setGst(e.target.value.toUpperCase())}
               style={inputStyle}
             />
-            {formError.fieldError("gst") && (
-              <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("gst")}</span>
+            {(idErrors.gst ?? formError.fieldError("gst")) && (
+              <span style={{ fontSize: 12, color: "var(--bad)" }}>{idErrors.gst ?? formError.fieldError("gst")}</span>
             )}
           </div>
           <div style={fieldWrap}>
@@ -258,8 +276,8 @@ function ContractorEditForm({
               onChange={(e) => setEmail(e.target.value)}
               style={inputStyle}
             />
-            {formError.fieldError("email") && (
-              <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("email")}</span>
+            {(idErrors.email ?? formError.fieldError("email")) && (
+              <span style={{ fontSize: 12, color: "var(--bad)" }}>{idErrors.email ?? formError.fieldError("email")}</span>
             )}
           </div>
           <div style={fieldWrap}>
@@ -274,8 +292,8 @@ function ContractorEditForm({
               onChange={(e) => setPhone(e.target.value)}
               style={inputStyle}
             />
-            {formError.fieldError("phone") && (
-              <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("phone")}</span>
+            {(idErrors.phone ?? formError.fieldError("phone")) && (
+              <span style={{ fontSize: 12, color: "var(--bad)" }}>{idErrors.phone ?? formError.fieldError("phone")}</span>
             )}
           </div>
 

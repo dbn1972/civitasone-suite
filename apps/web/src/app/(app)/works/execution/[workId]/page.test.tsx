@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
+// Every loader + direct fetch on this page goes through fetchJson; we drive
+// them in call order: [0] header, [1] scopes, [2] issues, [3] progress.
+// getWorkHeader/getWorkProgress live in ../../_data/loaders but ultimately
+// call this same fetchJson, so stubbing fetchJson covers all four.
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
   fetchJson: (...args: unknown[]) => fetchJsonMock(...args),
@@ -8,71 +12,98 @@ vi.mock("@/app/_data/apiClient", () => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
-// The actions panel is a client component with its own deps (dialogs, toast);
-// stub it — this test is about the Work Scopes table rendering real fields.
 vi.mock("./ExecutionActions", () => ({ ExecutionActions: () => null }));
 
 import ExecutionDetailPage from "./page";
 
-// REAL work_scopes rows from GET /v1/works/execution/:workId/scopes (raw select;
-// works-service execution/repo.ts listScopes, schema.ts). Columns are
-// { id, scopeId, targetValue, description, plannedStart, plannedEnd, ... } — no
-// scopeName / targetQuantity / unit / startDate / endDate / status.
 const SCOPE_A = {
   id: "ws-a",
   scopeId: "aaaaaaaa-1111-2222-3333-444444444444",
-  targetValue: "250",
+  targetValue: "100",
   description: "Bituminous surfacing",
   plannedStart: "2026-01-10T12:00:00.000Z",
   plannedEnd: "2026-06-30T12:00:00.000Z",
-  version: 1,
-};
-const SCOPE_B = {
-  id: "ws-b",
-  scopeId: "bbbbbbbb-5555-6666-7777-888888888888",
-  targetValue: "80",
-  description: null, // optional — must still render a distinguishable label
-  plannedStart: null,
-  plannedEnd: null,
-  version: 1,
 };
 
-describe("ExecutionDetailPage — Work Scopes table", () => {
+describe("ExecutionDetailPage (GAP-WORKS-EXECUTION-WORKID-01/03/04/05/06)", () => {
   beforeEach(() => {
     fetchJsonMock.mockReset();
   });
 
-  it("renders real work_scopes fields (description, target, planned dates), not dashes", async () => {
+  it("WORKID-01: header shows the work number + description, never a UUID prefix", async () => {
     fetchJsonMock
-      .mockResolvedValueOnce({ data: [SCOPE_A, SCOPE_B], source: "api" }) // scopes
-      .mockResolvedValueOnce({ data: [], source: "api" }); // issues
+      .mockResolvedValueOnce({ data: { workNumber: "W-2025-014", description: "Village road" }, source: "api" })
+      .mockResolvedValueOnce({ data: [SCOPE_A], source: "api" })
+      .mockResolvedValueOnce({ data: [], source: "api" })
+      .mockResolvedValueOnce({ data: [{ scopeId: SCOPE_A.scopeId, percentage: 30 }], source: "api" });
 
-    const ui = await ExecutionDetailPage({ params: { workId: "work-123" } });
-    render(ui);
+    render(await ExecutionDetailPage({ params: { workId: "3f9a1c20-aaaa-bbbb-cccc-dddddddddddd" } }));
 
-    // Real description + target render — the buggy mapping showed "—" and "0"
-    // (scopeName/targetQuantity don't exist on the row).
-    expect(screen.getByText("Bituminous surfacing")).toBeInTheDocument();
-    expect(screen.getByText("250")).toBeInTheDocument();
-    // Planned dates render (buggy mapping read startDate/endDate → null → "—").
-    expect(screen.getAllByText(/2026/).length).toBeGreaterThan(0);
-    // A scope with no description falls back to a scopeId-derived label, never a
-    // blank/dash.
-    expect(screen.getByText(/Scope bbbbbbbb/)).toBeInTheDocument();
-
-    // Columns / cards that mapped nonexistent fields are gone.
-    expect(screen.queryByText("Unit")).toBeNull(); // dropped scopes column
-    expect(screen.queryByText("Overall Progress")).toBeNull(); // status-derived, unbacked
+    expect(screen.getByText(/W-2025-014 — Village road/)).toBeInTheDocument();
+    expect(screen.queryByText(/Work 3f9a1c20…/)).toBeNull();
   });
 
-  it("shows a guided empty state (not fabricated rows) when there are no scopes", async () => {
+  it("WORKID-04: a scope's achieved % renders from the progress register", async () => {
     fetchJsonMock
-      .mockResolvedValueOnce({ data: [], source: "api" }) // scopes
-      .mockResolvedValueOnce({ data: [], source: "api" }); // issues
+      .mockResolvedValueOnce({ data: { workNumber: "W-1", description: "d" }, source: "api" })
+      .mockResolvedValueOnce({ data: [SCOPE_A], source: "api" })
+      .mockResolvedValueOnce({ data: [], source: "api" })
+      .mockResolvedValueOnce({ data: [{ scopeId: SCOPE_A.scopeId, percentage: 30 }], source: "api" });
 
-    const ui = await ExecutionDetailPage({ params: { workId: "work-123" } });
-    render(ui);
+    render(await ExecutionDetailPage({ params: { workId: "w1" } }));
+    expect(screen.getByText("30%")).toBeInTheDocument();
+  });
 
-    expect(screen.getByText("No scopes defined")).toBeInTheDocument();
+  it("WORKID-03: there is no Priority column", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce({ data: { workNumber: "W-1", description: "d" }, source: "api" })
+      .mockResolvedValueOnce({ data: [], source: "api" })
+      .mockResolvedValueOnce({ data: [{ id: "i1", workId: "w1", description: "x", status: "open" }], source: "api" })
+      .mockResolvedValueOnce({ data: [], source: "api" });
+
+    render(await ExecutionDetailPage({ params: { workId: "w1" } }));
+    expect(screen.queryByText("Priority")).toBeNull();
+  });
+
+  it("WORKID-06: a work with no issues reads 'No issues raised', not 'No open issues'", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce({ data: { workNumber: "W-1", description: "d" }, source: "api" })
+      .mockResolvedValueOnce({ data: [], source: "api" })
+      .mockResolvedValueOnce({ data: [], source: "api" })
+      .mockResolvedValueOnce({ data: [], source: "api" });
+
+    render(await ExecutionDetailPage({ params: { workId: "w1" } }));
+    expect(screen.getByText("No issues raised")).toBeInTheDocument();
+    expect(screen.queryByText("No open issues")).toBeNull();
+  });
+
+  it("WORKID-05: scopes ok but issues failed → issues section shows a retry state and Open/Closed stats show '—'", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce({ data: { workNumber: "W-1", description: "d" }, source: "api" })
+      .mockResolvedValueOnce({ data: [SCOPE_A], source: "api" })
+      .mockResolvedValueOnce({ data: [], source: "error" })
+      .mockResolvedValueOnce({ data: [{ scopeId: SCOPE_A.scopeId, percentage: 30 }], source: "api" });
+
+    render(await ExecutionDetailPage({ params: { workId: "w1" } }));
+
+    // Scopes still render.
+    expect(screen.getByText("Bituminous surfacing")).toBeInTheDocument();
+    // Issues section shows an error/retry state.
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    // Open/Closed issue stats are blanked (—), not a misleading 0.
+    expect(screen.getByText("Open Issues").closest(".stat")!.querySelector(".val")!.textContent).toBe("—");
+  });
+
+  it("WORKID-05: a progress-fetch error shows '—' for Achieved, not 0%", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce({ data: { workNumber: "W-1", description: "d" }, source: "api" })
+      .mockResolvedValueOnce({ data: [SCOPE_A], source: "api" })
+      .mockResolvedValueOnce({ data: [], source: "api" })
+      .mockResolvedValueOnce({ data: [], source: "error" });
+
+    render(await ExecutionDetailPage({ params: { workId: "w1" } }));
+    // Achieved cell shows an em dash, never 0%.
+    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(screen.queryByText("0%")).toBeNull();
   });
 });

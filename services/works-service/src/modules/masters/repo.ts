@@ -1,4 +1,4 @@
-import { eq, and, getTableName } from "drizzle-orm";
+import { eq, and, getTableName, ilike, or, desc } from "drizzle-orm";
 import { cache } from "../../shared/infra.js";
 import { scopedRead, type Db } from "../../shared/db.js";
 import * as s from "./schema.js";
@@ -37,5 +37,41 @@ export async function getMaster(table: TableType, tenantId: string, id: string) 
         .where(and(eq(table.id, id), eq(table.tenantId, tenantId)));
       return rows[0] ?? null;
     });
+  });
+}
+
+/**
+ * GAP-WORKS-BOQ-NEW-01: typeahead search over the Schedule of Rates master
+ * (works.sr_items) for the BoQ "Add item" SR picker. Matches the trimmed query
+ * against item code or description (case-insensitive), active items only,
+ * returning the canonical code/unit/rate so the FE can prefill them and send a
+ * real srItemId instead of letting a clerk free-type a code/unit/rate that
+ * drifts from the approved SR. Empty query returns the first `limit` active
+ * items so the picker is useful before the user types.
+ */
+export async function searchSrItems(tenantId: string, query: string, limit = 20) {
+  const q = query.trim();
+  const safeLimit = Math.min(Math.max(limit, 1), 50);
+  return scopedRead(async (tx) => {
+    const conditions = [eq(s.srItems.tenantId, tenantId), eq(s.srItems.active, true)];
+    if (q.length > 0) {
+      const like = `%${q}%`;
+      const match = or(ilike(s.srItems.itemCode, like), ilike(s.srItems.description, like));
+      if (match) conditions.push(match);
+    }
+    return tx
+      .select({
+        id: s.srItems.id,
+        itemCode: s.srItems.itemCode,
+        description: s.srItems.description,
+        unit: s.srItems.unit,
+        rate: s.srItems.rate,
+        zone: s.srItems.zone,
+        srYear: s.srItems.srYear,
+      })
+      .from(s.srItems)
+      .where(and(...conditions))
+      .orderBy(desc(s.srItems.srYear), s.srItems.itemCode)
+      .limit(safeLimit);
   });
 }

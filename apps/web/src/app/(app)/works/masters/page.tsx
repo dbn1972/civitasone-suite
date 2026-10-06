@@ -1,111 +1,20 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { PageHeader, Card, DataTable } from "@/app/_components/ds";
+import { PageHeader } from "@/app/_components/ds";
 import { fetchJson } from "@/app/_data/apiClient";
-import { MasterCreateForm } from "./MasterCreateForm";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { WORKS_MASTERS_ADMIN_ROLES } from "@/lib/auth/roleGuard";
+import { MastersTable, type MasterItem, type ParentOption } from "./MastersTable";
+import {
+  MASTER_TYPES,
+  isMasterType,
+  humanizeMaster,
+  PARENT_FIELD,
+  type MasterType,
+} from "./masterTypes";
 
-// ─── Master type catalogue ────────────────────────────────────────────────────
-
-const MASTER_TYPES = [
-  "authorities",
-  "work-types",
-  "work-sub-types",
-  "proposer-types",
-  "programs",
-  "publication-levels",
-  "repair-types",
-  "schemes",
-  "scopes",
-  "tender-types",
-  "user-departments",
-  "contractor-classes",
-  "issue-types",
-  "issue-description-types",
-  "assets",
-  "work-description-types",
-  "sr-items",
-] as const;
-
-type MasterType = (typeof MASTER_TYPES)[number];
-
-function isMasterType(v: string): v is MasterType {
-  return (MASTER_TYPES as readonly string[]).includes(v);
-}
-
-function humanizeMaster(prefix: string): string {
-  const map: Record<string, string> = {
-    "authorities": "Authorities",
-    "work-types": "Work Types",
-    "work-sub-types": "Work Sub-Types",
-    "proposer-types": "Proposer Types",
-    "programs": "Programs",
-    "publication-levels": "Publication Levels",
-    "repair-types": "Repair Types",
-    "schemes": "Schemes",
-    "scopes": "Scopes",
-    "tender-types": "Tender Types",
-    "user-departments": "User Departments",
-    "contractor-classes": "Contractor Classes",
-    "issue-types": "Issue Types",
-    "issue-description-types": "Issue Description Types",
-    "assets": "Assets",
-    "work-description-types": "Work Description Types",
-    "sr-items": "SR Items",
-  };
-  return map[prefix] ?? prefix;
-}
-
-// ─── Display row type (server-mapped, serialisable for DataTable) ─────────────
-
-type DisplayRow = {
-  shortId: string;
-  name: string;
-  code: string;
-  active: string;
-};
-
-const columns: { key: keyof DisplayRow; label: string }[] = [
-  { key: "shortId", label: "ID" },
-  { key: "name",    label: "Name" },
-  { key: "code",    label: "Code" },
-  { key: "active",  label: "Active" },
-];
-
-// ─── Nav styles ───────────────────────────────────────────────────────────────
-
-const navItemBase: React.CSSProperties = {
-  display: "block",
-  padding: "9px 14px",
-  fontSize: 13,
-  textDecoration: "none",
-  borderBottom: "1px solid var(--line)",
-  transition: "background 0.1s",
-};
-
-const navItemActive: React.CSSProperties = {
-  ...navItemBase,
-  fontWeight: 600,
-  background: "var(--primary)",
-  color: "var(--primary-fg, #fff)",
-};
-
-const navItemDefault: React.CSSProperties = {
-  ...navItemBase,
-  color: "var(--text)",
-};
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
-export default async function MastersPage({
-  searchParams,
-}: {
-  searchParams?: { type?: string };
-}) {
-  const rawType = searchParams?.type ?? "authorities";
-  if (!isMasterType(rawType)) notFound();
-  const type: MasterType = rawType;
-
-  const { data: items } = await fetchJson<unknown, Record<string, unknown>[]>(
+async function fetchMaster(type: MasterType) {
+  return fetchJson<unknown, Record<string, unknown>[]>(
     `/api/v1/works/masters/${type}?pageSize=100`,
     [],
     {
@@ -119,15 +28,39 @@ export default async function MastersPage({
       },
     },
   );
+}
 
-  const rows: DisplayRow[] = items.map((item) => ({
-    shortId: String(item.id ?? "").slice(0, 8),
-    name:    String(item.name ?? "—"),
-    code:    item.code != null ? String(item.code) : "—",
-    active:  item.active != null ? (item.active ? "Yes" : "No") : "—",
-  }));
+export default async function MastersPage({
+  searchParams,
+}: {
+  searchParams?: { type?: string };
+}) {
+  const rawType = searchParams?.type ?? "authorities";
+  if (!isMasterType(rawType)) notFound();
+  const type: MasterType = rawType;
 
-  const typeLabel = humanizeMaster(type);
+  const { data: items, source } = await fetchMaster(type);
+  const failed = source === "error";
+
+  // GAP-WORKS-MASTERS-02: create/edit/deactivate controls are admin-only (the
+  // works-service POST/PATCH already 403 everyone else). getSessionRoles reads
+  // the session JWT server-side; the server remains the real authority.
+  const canManage = WORKS_MASTERS_ADMIN_ROLES.some((r) => getSessionRoles().includes(r));
+
+  // GAP-WORKS-MASTERS-03: for a type that references a parent master, fetch the
+  // parent list so the create/edit form offers a name picker (not a raw UUID
+  // box) and the table can show the parent NAME instead of an id prefix.
+  const parent = PARENT_FIELD[type];
+  let parentOptions: ParentOption[] = [];
+  if (parent && !failed) {
+    const { data: parentItems } = await fetchMaster(parent.optionsType);
+    parentOptions = parentItems
+      .filter((p) => typeof p.id === "string")
+      .map((p) => ({
+        id: String(p.id),
+        label: String(p.name ?? p.keyword ?? p.code ?? p.id),
+      }));
+  }
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -138,31 +71,16 @@ export default async function MastersPage({
         backLabel="Works & Billing"
       />
 
-      <div
-        style={{
-          display: "flex",
-          gap: 24,
-          alignItems: "flex-start",
-          marginTop: 20,
-        }}
-      >
+      <div className="masters-layout">
         {/* ── Left nav ─────────────────────────────── */}
-        <nav
-          aria-label="Master types"
-          style={{
-            width: 220,
-            flexShrink: 0,
-            border: "1px solid var(--line)",
-            borderRadius: 10,
-            overflow: "hidden",
-          }}
-        >
+        <nav aria-label="Master types" className="masters-nav">
           {MASTER_TYPES.map((mt) => (
             <Link
               key={mt}
               href={`/works/masters?type=${mt}`}
-              style={mt === type ? navItemActive : navItemDefault}
+              className={mt === type ? "masters-nav-item active" : "masters-nav-item"}
               aria-current={mt === type ? "page" : undefined}
+              style={navItemStyle(mt === type)}
             >
               {humanizeMaster(mt)}
             </Link>
@@ -170,28 +88,31 @@ export default async function MastersPage({
         </nav>
 
         {/* ── Right content ─────────────────────────── */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {/* Create form (renders a button that expands inline) */}
-          <MasterCreateForm masterType={type} />
-
-          <div style={{ marginTop: 16 }}>
-            <Card title={`${typeLabel} (${rows.length})`}>
-              <DataTable<DisplayRow>
-                columns={columns}
-                rows={rows}
-                sortable
-                filterable
-                filterPlaceholder={`Filter ${typeLabel.toLowerCase()}…`}
-                pageSize={25}
-                emptyIcon="📂"
-                emptyTitle={`No ${typeLabel.toLowerCase()} yet`}
-                emptyMessage="Use the form above to add the first entry."
-                caption={`${typeLabel} master registry list`}
-              />
-            </Card>
-          </div>
+        <div className="masters-content">
+          <MastersTable
+            masterType={type}
+            items={items as MasterItem[]}
+            failed={failed}
+            canManage={canManage}
+            parentOptions={parentOptions}
+          />
         </div>
       </div>
     </div>
   );
+}
+
+// Per-link visual styling kept inline (the responsive column behaviour is in
+// civitas-ds.css .masters-layout/.masters-nav — GAP-WORKS-MASTERS-06).
+function navItemStyle(active: boolean): React.CSSProperties {
+  return {
+    display: "block",
+    padding: "9px 14px",
+    fontSize: 13,
+    textDecoration: "none",
+    borderBottom: "1px solid var(--line)",
+    fontWeight: active ? 600 : undefined,
+    background: active ? "var(--primary)" : undefined,
+    color: active ? "var(--primary-fg, #fff)" : "var(--text)",
+  };
 }

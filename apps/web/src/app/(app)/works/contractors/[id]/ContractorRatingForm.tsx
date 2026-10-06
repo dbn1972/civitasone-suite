@@ -11,13 +11,26 @@ interface ContractorRatingFormProps {
   currentRating: number;
   ratingCount: number;
   canRate: boolean;
+  /** ISO timestamp of the most recent rating, for the self-cooldown hint. */
+  lastRatedAt?: string | null;
+  /** actorId (JWT sub) of the most recent rating's author. */
+  lastRatedBy?: string | null;
+  /** The current viewer's actorId, to detect "I rated this recently". */
+  viewerId?: string | null;
 }
+
+const MIN_REASON = 10;
+/** Days within which the SAME user re-rating is warned about (UI hint only; backend is authoritative). */
+const COOLDOWN_DAYS = 30;
 
 export function ContractorRatingForm({
   contractorId,
   currentRating,
   ratingCount,
   canRate,
+  lastRatedAt,
+  lastRatedBy,
+  viewerId,
 }: ContractorRatingFormProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -38,7 +51,18 @@ export function ContractorRatingForm({
 
   const displayRating = hoverRating || selectedRating;
 
-  async function handleConfirm() {
+  // GAP-WORKS-CONTRACTORS-DETAIL-04: warn (don't hard-block — the backend is
+  // the authority) when THIS user already rated within the cooldown window.
+  const recentlyRatedBySelf = (() => {
+    if (!lastRatedAt || !lastRatedBy || !viewerId || lastRatedBy !== viewerId) return false;
+    const last = new Date(lastRatedAt).getTime();
+    if (Number.isNaN(last)) return false;
+    const days = (Date.now() - last) / (1000 * 60 * 60 * 24);
+    return days < COOLDOWN_DAYS;
+  })();
+
+  async function handleConfirm(reason?: string) {
+    const comment = (reason ?? "").trim();
     setBusy(true);
     setErrorMessage(undefined);
     formError.clear();
@@ -48,17 +72,19 @@ export function ContractorRatingForm({
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ rating: selectedRating }),
+          body: JSON.stringify({ rating: selectedRating, comment }),
         }
       );
       if (!res.ok) {
+        // Keep the dialog open so the user sees the message (e.g. a 409
+        // cooldown rejection) in context and can act on it.
         setErrorMessage((await formError.fromResponse(res, "save")).message);
         return;
       }
       setDialogOpen(false);
       toast.success("Rating submitted.");
-      setTimeout(() => router.refresh(), 600);
       setSelectedRating(0);
+      setTimeout(() => router.refresh(), 600);
     } catch (caught) {
       setErrorMessage(formError.fromException("save", caught).message);
     } finally {
@@ -83,6 +109,16 @@ export function ContractorRatingForm({
           ? `${currentRating.toFixed(1)} / 5 (${ratingCount} reviews)`
           : "Not yet rated"}
       </p>
+
+      {recentlyRatedBySelf && (
+        <p
+          role="status"
+          style={{ margin: 0, fontSize: 13, color: "#92400e", background: "#fef3c7", padding: "8px 12px", borderRadius: 8 }}
+        >
+          You rated this contractor within the last {COOLDOWN_DAYS} days. A new rating
+          will be recorded in addition to the previous one.
+        </p>
+      )}
 
       <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
         {[1, 2, 3, 4, 5].map((star) => (
@@ -117,11 +153,17 @@ export function ContractorRatingForm({
       <ConfirmDialog
         open={dialogOpen}
         title="Rate Contractor"
-        description={`Rate this contractor ${selectedRating}/5 stars?`}
+        description={`Rate this contractor ${selectedRating}/5 stars? A rating affects tender eligibility, so record the basis for it.`}
         confirmLabel="Submit"
+        requireReason
+        reasonLabel="Reason / basis for rating"
+        minReasonLength={MIN_REASON}
+        maxReasonLength={1000}
         busy={busy}
         errorMessage={errorMessage}
-        onConfirm={handleConfirm}
+        onConfirm={(reason) => {
+          void handleConfirm(reason);
+        }}
         onCancel={() => {
           setDialogOpen(false);
           setErrorMessage(undefined);

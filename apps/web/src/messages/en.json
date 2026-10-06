@@ -14528,5 +14528,36 @@
     "goToDashboard": "Go to dashboard",
     "backOnline": "Back online — reconnecting…",
     "statusOffline": "You are currently offline."
+  },
+  "works": {
+    "hub": {
+      "title": "Works & Billing",
+      "subtitle": "Engineering works lifecycle — proposals to bills.",
+      "loadError": "Couldn't load dashboard figures",
+      "stats": {
+        "total": "Total Works",
+        "active": "Active",
+        "completed": "Completed",
+        "draft": "Draft",
+        "pending": "Pending"
+      },
+      "quickActions": {
+        "title": "Quick Actions",
+        "newProposal": "New Proposal",
+        "createTender": "Create Tender",
+        "registerContractor": "Register Contractor",
+        "accountCompile": "Account Compile"
+      },
+      "tiles": {
+        "proposals": { "label": "Work Proposals", "desc": "Register and track proposals" },
+        "tenders": { "label": "Tender Pipeline", "desc": "Publish and manage tenders" },
+        "contractors": { "label": "Contractors", "desc": "Registered firms & ratings" },
+        "execution": { "label": "Execution", "desc": "Progress, issues, photos" },
+        "billing": { "label": "Bills & MB", "desc": "MBs, bills and disbursement" },
+        "procurement": { "label": "Procurement", "desc": "Purchase orders" },
+        "masters": { "label": "Masters Registry", "desc": "Lookup values & categories" },
+        "reports": { "label": "Reports", "desc": "Analytics and work register" }
+      }
+    }
   }
 }

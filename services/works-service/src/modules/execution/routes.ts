@@ -7,26 +7,47 @@ import * as commands from "./commands.js";
 import {
   listScopes, listIssues, listExecutionProgress, listAllIssues, listClosures,
   getWorkScope, listScopeProgress, hasPhysicalCompletion,
+  countExecutionProgress, countAllIssues,
 } from "./repo.js";
-import { getAward } from "../tender/repo.js";
-import { listSplits } from "../proposal/repo.js";
+import { getAward, finalizedAgreementByWorkIds } from "../tender/repo.js";
+import { listSplits, getWorkHeaders } from "../proposal/repo.js";
 import {
   canRecordPhysicalCompletion, canApplyProgressDelta, validateProgressNotExceedTarget,
   closureEligibility, parentSplitConsistency,
 } from "./domain.js";
 import { paginationSchema } from "../masters/validators.js";
+import { z } from "zod";
+
+// Progress register query: pagination plus an optional single-work filter
+// (GAP-WORKS-EXECUTION-WORKID-04).
+const progressQuerySchema = paginationSchema.extend({
+  workId: z.string().uuid().optional(),
+});
 
 const WRITE_ROLES = ["works_admin", "works_operator", "super_admin", "dao", "do", "sdo", "section_officer"];
 const READ_ROLES = ["works_admin", "works_operator", "works_viewer", "super_admin", "dao", "do", "sdo", "section_officer", "estimator"];
 
 export async function executionRoutes(app: FastifyInstance): Promise<void> {
   // Tenant-wide execution progress register (paginated) — the FE execution list page.
+  // Optional ?workId= scopes it to a single work (GAP-WORKS-EXECUTION-WORKID-04);
+  // rows are enriched with the human-readable work number + description resolved
+  // from the proposal module in application code (GAP-WORKS-EXECUTION-01), never
+  // a cross-module SQL join (CLAUDE.md rule 4).
   app.get("/v1/works/execution/progress", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
-    const query = paginationSchema.parse(req.query);
-    const data = await listExecutionProgress(ctx.tenantId, query.page, query.pageSize);
-    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total: data.length } });
+    const query = progressQuerySchema.parse(req.query);
+    const [rows, total] = await Promise.all([
+      listExecutionProgress(ctx.tenantId, query.page, query.pageSize, query.workId),
+      countExecutionProgress(ctx.tenantId, query.workId),
+    ]);
+    const headers = await getWorkHeaders(ctx.tenantId, rows.map((r) => r.workId));
+    const data = rows.map((r) => ({
+      ...r,
+      workNumber: headers.get(r.workId)?.workNumber ?? null,
+      workDescription: headers.get(r.workId)?.description ?? null,
+    }));
+    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total } });
   });
 
   // Tenant-wide issues register (paginated) — the FE execution issues list.
@@ -34,8 +55,17 @@ export async function executionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
     const query = paginationSchema.parse(req.query);
-    const data = await listAllIssues(ctx.tenantId, query.page, query.pageSize);
-    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total: data.length } });
+    const [rows, total] = await Promise.all([
+      listAllIssues(ctx.tenantId, query.page, query.pageSize),
+      countAllIssues(ctx.tenantId),
+    ]);
+    const headers = await getWorkHeaders(ctx.tenantId, rows.map((r) => r.workId));
+    const data = rows.map((r) => ({
+      ...r,
+      workNumber: headers.get(r.workId)?.workNumber ?? null,
+      workDescription: headers.get(r.workId)?.description ?? null,
+    }));
+    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total } });
   });
 
   // Tenant-wide closure register (paginated) — the FE closure list page.
@@ -44,7 +74,16 @@ export async function executionRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READ_ROLES);
     const query = paginationSchema.parse(req.query);
     const data = await listClosures(ctx.tenantId, query.page, query.pageSize);
-    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total: data.length } });
+    // GAP-WORKS-CLOSURE-02: enrich each row with its agreement number when the
+    // work has exactly one finalized award (unambiguous). Composed here (not in
+    // the execution repo) because `awards` belongs to the tender module —
+    // keeps the execution repo querying only its own + proposal schema.
+    const agreements = await finalizedAgreementByWorkIds(
+      ctx.tenantId,
+      data.map((r) => r.workId),
+    );
+    const enriched = data.map((r) => ({ ...r, agreementNumber: agreements.get(r.workId) ?? null }));
+    return reply.send({ data: enriched, meta: { page: query.page, pageSize: query.pageSize, total: enriched.length } });
   });
 
   // List scopes
@@ -132,8 +171,8 @@ export async function executionRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/works/execution/issues/:id/close", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
-    const body = v.closeIssueSchema.parse({ id: (req.params as { id: string }).id });
-    return sendAccepted(reply, acceptedResponseSchema, await commands.closeIssueCommand(ctx, body.id));
+    const body = v.closeIssueSchema.parse({ id: (req.params as { id: string }).id, ...(req.body as object ?? {}) });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.closeIssueCommand(ctx, body.id, body.resolution));
   });
 
   // Close work

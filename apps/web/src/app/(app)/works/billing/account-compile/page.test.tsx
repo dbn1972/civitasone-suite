@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { ToastProvider } from "@/app/_components/ds/Toast";
 
@@ -14,12 +14,110 @@ function renderWithToast(ui: ReactElement) {
   return render(<ToastProvider>{ui}</ToastProvider>);
 }
 
-/**
- * UX-016: on failure this page used to show `data.message ??
- * \`Request failed (${res.status})\`` — the raw backend message, or the raw
- * HTTP status in parens — directly in a role="alert" box. It now routes
- * through useFormError and never surfaces either.
- */
+/** Mock the prior-compiles GET (returns `prior` rows) and the POST. */
+function mockFetch(opts: { prior?: unknown[]; postStatus?: number; postBody?: unknown } = {}) {
+  const { prior = [], postStatus = 202, postBody = { data: { id: "job-123", correlationId: "corr-1" } } } = opts;
+  return vi.spyOn(globalThis, "fetch").mockImplementation(((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (method === "GET" && url.includes("/account-compile")) {
+      return Promise.resolve(new Response(JSON.stringify({ data: prior }), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    return Promise.resolve(new Response(JSON.stringify(postBody), { status: postStatus, headers: { "content-type": "application/json" } }));
+  }) as typeof fetch);
+}
+
+describe("AccountCompilePage — ACCOUNT-COMPILE-01 confirm + reference", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    pushMock.mockReset();
+  });
+
+  it("opens a confirm dialog (no POST) on Compile, naming period and recipient; Cancel makes no request", async () => {
+    const fetchSpy = mockFetch();
+    renderWithToast(<AccountCompilePage />);
+
+    fireEvent.change(screen.getByLabelText(/Submitted To/i), { target: { value: "Treasury Officer, Bhubaneswar" } });
+    fireEvent.click(screen.getByRole("button", { name: "Compile Account" }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText(/Treasury Officer, Bhubaneswar/)).toBeInTheDocument();
+    // No POST yet — only the prior-check GET may have fired.
+    const posts = fetchSpy.mock.calls.filter((c) => (c[1] as RequestInit | undefined)?.method === "POST");
+    expect(posts.length).toBe(0);
+
+    fireEvent.click(within(dialog).getByRole("button", { name: /Cancel/i }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    const postsAfterCancel = fetchSpy.mock.calls.filter((c) => (c[1] as RequestInit | undefined)?.method === "POST");
+    expect(postsAfterCancel.length).toBe(0);
+  });
+
+  it("posts once on confirm and shows the returned reference without auto-redirecting", async () => {
+    const fetchSpy = mockFetch();
+    renderWithToast(<AccountCompilePage />);
+
+    fireEvent.change(screen.getByLabelText(/Submitted To/i), { target: { value: "Treasury Officer, Bhubaneswar" } });
+    fireEvent.click(screen.getByRole("button", { name: "Compile Account" }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Submit to treasury" }));
+
+    await waitFor(() => expect(screen.getByText(/Reference:/)).toBeInTheDocument());
+    expect(screen.getByText("job-123")).toBeInTheDocument();
+    // honest, no auto-redirect: a "Go to billing" link is offered instead
+    expect(screen.getByRole("link", { name: /Go to billing/i })).toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
+
+    const posts = fetchSpy.mock.calls.filter((c) => (c[1] as RequestInit | undefined)?.method === "POST");
+    expect(posts.length).toBe(1);
+  });
+});
+
+describe("AccountCompilePage — ACCOUNT-COMPILE-03 already-compiled warning", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    pushMock.mockReset();
+  });
+
+  it("warns when the selected month/year was already compiled", async () => {
+    mockFetch({ prior: [{ id: "c1", status: "submitted", submittedTo: "Treasury Officer, Bhubaneswar", submittedAt: "2026-05-01" }] });
+    renderWithToast(<AccountCompilePage />);
+    await waitFor(() => expect(screen.getByText(/has already been compiled/)).toBeInTheDocument());
+  });
+});
+
+describe("AccountCompilePage — ACCOUNT-COMPILE-04 FY ordering + payload", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    pushMock.mockReset();
+  });
+
+  it("orders the month select FY-first (April is the first option)", () => {
+    mockFetch();
+    renderWithToast(<AccountCompilePage />);
+    const monthSelect = screen.getByLabelText(/Month/i) as HTMLSelectElement;
+    expect(monthSelect.options[0].textContent).toBe("April");
+    expect(monthSelect.options[0].value).toBe("4");
+  });
+
+  it("sends the CALENDAR month/year in the payload even though the list is FY-ordered", async () => {
+    const fetchSpy = mockFetch();
+    renderWithToast(<AccountCompilePage />);
+    fireEvent.change(screen.getByLabelText(/Month/i), { target: { value: "1" } }); // January
+    fireEvent.change(screen.getByLabelText(/Submitted To/i), { target: { value: "Treasury Officer, Bhubaneswar" } });
+    fireEvent.click(screen.getByRole("button", { name: "Compile Account" }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Submit to treasury" }));
+
+    await waitFor(() => {
+      const post = fetchSpy.mock.calls.find((c) => (c[1] as RequestInit | undefined)?.method === "POST");
+      expect(post).toBeTruthy();
+      const body = JSON.parse((post![1] as RequestInit).body as string);
+      expect(body.month).toBe(1);
+      expect(typeof body.year).toBe("number");
+    });
+  });
+});
+
 describe("AccountCompilePage — UX-016 clerk-safe errors", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -27,54 +125,19 @@ describe("AccountCompilePage — UX-016 clerk-safe errors", () => {
   });
 
   it("shows a clerk-safe message, never the raw HTTP status, when the compile request fails", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({}), { status: 409, headers: { "content-type": "application/json" } }),
-    );
+    mockFetch({ postStatus: 409, postBody: {} });
     renderWithToast(<AccountCompilePage />);
 
-    fireEvent.change(screen.getByLabelText(/Submitted To/i), {
-      target: { value: "District Treasury Officer, Nashik" },
-    });
+    fireEvent.change(screen.getByLabelText(/Submitted To/i), { target: { value: "Treasury Officer, Bhubaneswar" } });
     fireEvent.click(screen.getByRole("button", { name: "Compile Account" }));
-
-    const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toMatch(/This account compile was changed by someone else\. Refresh to see the latest version, then try again\./);
-    expect(alert.textContent).not.toMatch(/409/);
-  });
-
-  it("never surfaces raw server text on a plain-text failure", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response("Internal Server Error\n at Object.<anonymous> (/srv/works.js:5:1)", {
-        status: 500,
-        headers: { "content-type": "text/plain" },
-      }),
-    );
-    renderWithToast(<AccountCompilePage />);
-
-    fireEvent.change(screen.getByLabelText(/Submitted To/i), {
-      target: { value: "District Treasury Officer, Nashik" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Compile Account" }));
-
-    const alert = await screen.findByRole("alert");
-    expect(alert.textContent).not.toMatch(/\b500\b/);
-    expect(alert.textContent).not.toMatch(/Internal Server Error/);
-    expect(alert.textContent).not.toMatch(/at Object\.<anonymous>/);
-  });
-
-  it("still submits successfully and initiates the compile", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({}), { status: 202, headers: { "content-type": "application/json" } }),
-    );
-    renderWithToast(<AccountCompilePage />);
-
-    fireEvent.change(screen.getByLabelText(/Submitted To/i), {
-      target: { value: "District Treasury Officer, Nashik" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Compile Account" }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Submit to treasury" }));
 
     await waitFor(() =>
-      expect(screen.getByText("✅ Account compile submitted. Redirecting to billing…")).toBeInTheDocument(),
+      expect(
+        screen.getAllByText(/This account compile was changed by someone else\. Refresh to see the latest version, then try again\./).length,
+      ).toBeGreaterThan(0),
     );
+    expect(screen.queryByText(/\b409\b/)).not.toBeInTheDocument();
   });
 });

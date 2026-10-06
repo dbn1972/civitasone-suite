@@ -23,6 +23,8 @@ export function registerTenderConsumers(q: Queue): void {
         tenderType: (p.tenderType as string) ?? null,
         tenderCategory: (p.tenderCategory as string) ?? null,
         bidValidity: (p.bidValidity as number) ?? null,
+        // GAP-WORKS-TENDERS-NEW-02: persist the opening date when supplied.
+        openingDate: p.openingDate ? new Date(p.openingDate as string) : null,
         fees: p.fees ? BigInt(p.fees as string | number) : null,
         status: "draft",
         createdBy: msg.actorId,

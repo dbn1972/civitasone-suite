@@ -1,7 +1,9 @@
 import Link from "next/link";
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, LoadErrorState } from "@/app/_components/ds";
+import { maskPan, maskPhone } from "@/app/_components/ds/Masked";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { canWriteContractors } from "@/lib/works/roles";
 
 type RawContractor = {
   id: string;
@@ -20,20 +22,19 @@ export type ContractorRow = {
   registrationNo: string;
   pan: string;
   phone: string;
-  rating: string;
+  /** Raw rating for numeric sort; null when unrated (sorts consistently). */
+  ratingValue: number | null;
+  reviews: number;
   activeStatus: string;
 };
 
+/** Loader result + the server-reported total (meta.limit/offset), for the "first N of M" hint. */
+type ContractorListResult = LoaderResult<ContractorRow[]> & { total: number | null };
+
+const PAGE_SIZE = 100;
+
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
-}
-
-function formatRating(
-  perf: number | null | undefined,
-  count: number | undefined,
-): string {
-  if (perf == null) return "Not rated";
-  return `${perf}/5 (${count ?? 0} reviews)`;
 }
 
 function mapContractors(payload: unknown): ContractorRow[] | null {
@@ -47,43 +48,86 @@ function mapContractors(payload: unknown): ContractorRow[] | null {
     if (!isRecord(raw)) return [];
     const row = raw as RawContractor;
     if (typeof row.id !== "string") return [];
+    const rawPan = row.pan ? String(row.pan) : "";
+    const rawPhone = row.phone ? String(row.phone) : "";
+    const perf = typeof row.performanceRating === "number" ? row.performanceRating : null;
     return [
       {
         id: row.id,
         name: String(row.name ?? "—"),
         registrationNo: String(row.registrationNo ?? "—"),
-        pan: String(row.pan ?? "—"),
-        phone: String(row.phone ?? "—"),
-        rating: formatRating(row.performanceRating, row.ratingCount),
-        activeStatus: row.active !== false ? "Active" : "Inactive",
+        // GAP-WORKS-CONTRACTORS-02 (PII/DPDP): never ship a full PAN/phone to
+        // the register. Mask server-side-of-the-client here; the detail page
+        // offers an audited reveal for authorised roles. Filtering still works
+        // on the masked form (last-4 of PAN / last-3 of phone).
+        pan: rawPan ? maskPan(rawPan) : "—",
+        phone: rawPhone ? maskPhone(rawPhone) : "—",
+        ratingValue: perf,
+        reviews: typeof row.ratingCount === "number" ? row.ratingCount : 0,
+        activeStatus: row.active !== false ? "active" : "inactive",
       },
     ];
   });
 }
 
-async function getContractors(): Promise<LoaderResult<ContractorRow[]>> {
-  return fetchJson<unknown, ContractorRow[]>("/api/v1/works/contractors", [], {
-    telemetryKey: "works.contractors",
-    mapResponse: mapContractors,
-  });
+async function getContractors(): Promise<ContractorListResult> {
+  const result = await fetchJson<unknown, ContractorRow[]>(
+    `/api/v1/works/contractors?pageSize=${PAGE_SIZE}`,
+    [],
+    {
+      telemetryKey: "works.contractors",
+      mapResponse: mapContractors,
+    },
+  );
+  return { ...result, total: null };
 }
 
-const columns: { key: keyof ContractorRow; label: string }[] = [
+const columns: {
+  key: keyof ContractorRow;
+  label: string;
+  cellType?: "status";
+}[] = [
   { key: "name",           label: "Name" },
   { key: "registrationNo", label: "Reg. No." },
   { key: "pan",            label: "PAN" },
   { key: "phone",          label: "Phone" },
-  { key: "rating",         label: "Performance Rating" },
-  { key: "activeStatus",   label: "Status" },
+  { key: "ratingValue",    label: "Rating (/5)" },
+  { key: "reviews",        label: "Reviews" },
+  { key: "activeStatus",   label: "Status", cellType: "status" },
 ];
 
 export default async function ContractorsPage() {
-  const { data: contractors, source } = await getContractors();
+  const roles = getSessionRoles();
+  const canWrite = canWriteContractors(roles);
+
+  const { data: contractors, source, status, errorMessage } = await getContractors();
+
+  // GAP-WORKS-CONTRACTORS-03 (FAILMASK): a failed fetch must not look like an
+  // empty, healthy register (zeroed stat cards + "No contractors registered").
+  if (source === "error") {
+    return (
+      <div className="page-main wrap" aria-labelledby="page-heading">
+        <PageHeader
+          title="Contractors"
+          subtitle="Registered contractors available for tender quotations."
+          back="/works"
+          backLabel="Works & Billing"
+        />
+        <LoadErrorState
+          result={{ status, errorMessage }}
+          area="contractors"
+          backHref="/works"
+          backLabel="Works & Billing"
+        />
+      </div>
+    );
+  }
 
   const total      = contractors.length;
-  const activeCount  = contractors.filter((c) => c.activeStatus === "Active").length;
-  const ratedCount   = contractors.filter((c) => c.rating !== "Not rated").length;
+  const activeCount  = contractors.filter((c) => c.activeStatus === "active").length;
+  const ratedCount   = contractors.filter((c) => c.ratingValue != null).length;
   const unratedCount = total - ratedCount;
+  const atPageLimit  = total >= PAGE_SIZE;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -93,8 +137,7 @@ export default async function ContractorsPage() {
         back="/works"
         backLabel="Works & Billing"
         actions={
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {source === "error" && <DataSourceBadge source="error" />}
+          canWrite ? (
             <Link
               href="/works/contractors/new"
               className="btn primary"
@@ -102,7 +145,7 @@ export default async function ContractorsPage() {
             >
               + Register contractor
             </Link>
-          </div>
+          ) : undefined
         }
       />
 
@@ -113,10 +156,18 @@ export default async function ContractorsPage() {
         <StatCard icon="🔲" iconBg="var(--panel, #f1f5f9)"   label="Unrated"  value={unratedCount} />
       </StatGrid>
 
-      <Card title={`Contractors (${total})`}>
+      <Card title={`Contractors (${total}${atPageLimit ? "+" : ""})`}>
+        {atPageLimit && (
+          <p style={{ fontSize: 12, color: "var(--muted)", margin: "0 0 8px" }}>
+            Showing the first {PAGE_SIZE} contractors. Refine the filter to find more.
+          </p>
+        )}
         <DataTable<ContractorRow>
           columns={columns}
           rows={contractors}
+          rowLinkKey="id"
+          rowLinkPrefix="/works/contractors/"
+          identifyingColumnKey="name"
           sortable
           filterable
           filterPlaceholder="Filter by name, registration…"

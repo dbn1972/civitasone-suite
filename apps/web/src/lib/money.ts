@@ -201,3 +201,29 @@ export function minorToDecimalString(minor: bigint | number | string | null | un
   const abs = negative ? -value : value;
   return `${negative ? "-" : ""}${abs / 100n}.${(abs % 100n).toString().padStart(2, "0")}`;
 }
+
+/**
+ * GAP-WORKS-BILLING-WORKID-05: sum a list of PAISE (minor-unit) values with
+ * BigInt — never Number() float accumulation (the billing detail page
+ * previously did `sum + Number(String(b.grossAmountMinor))`, which loses
+ * precision above 2^53 paise and violates the bigint-minor rule). Accepts the
+ * stringified-bigint paise the works loaders carry (plus number/bigint); any
+ * null/empty/unparsable entry contributes 0n (the same defensive skip
+ * boq/page.tsx uses). Returns a bigint suitable to hand straight to
+ * formatMoney().
+ *
+ *   sumMinor(["9007199254740993", "1"]) === 9007199254740994n
+ *   sumMinor(["100000", "", "50000"])   === 150000n
+ */
+export function sumMinor(values: readonly (string | number | bigint | null | undefined)[]): bigint {
+  let total = 0n;
+  for (const v of values) {
+    if (v === null || v === undefined || v === "") continue;
+    try {
+      total += BigInt(typeof v === "string" ? v.trim() : v);
+    } catch {
+      // skip unparsable entries rather than crash a stat card
+    }
+  }
+  return total;
+}

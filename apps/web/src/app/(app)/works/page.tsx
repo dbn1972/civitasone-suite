@@ -1,8 +1,12 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { StatIcon } from "@/app/_components/ds/StatIcon";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { WORKS_ADMIN_ROLES, WORKS_READ_ROLES, worksRolesAllow } from "@/lib/auth/workRoles";
+import { draftProposals, sumPendingProposals } from "./_data/status";
 
 type DashboardData = {
   totalWorks: number;
@@ -28,50 +32,71 @@ async function getWorksDashboard(): Promise<LoaderResult<DashboardData>> {
   );
 }
 
-const MODULES: Array<{ href: string; label: string; icon: string; desc: string }> = [
-  { href: "/works/proposals",   label: "Work Proposals",   icon: "📋", desc: "Register and track proposals" },
-  { href: "/works/tenders",     label: "Tender Pipeline",  icon: "📢", desc: "Publish and manage tenders" },
-  { href: "/works/contractors", label: "Contractors",      icon: "🏢", desc: "Registered firms & ratings" },
-  { href: "/works/execution",   label: "Execution",        icon: "🏗️", desc: "Progress, issues, photos" },
-  { href: "/works/billing",     label: "Bills & MB",       icon: "💰", desc: "MBs, bills and disbursement" },
-  { href: "/procurement",       label: "Procurement",      icon: "📦", desc: "Purchase orders" },
-  { href: "/works/masters",     label: "Masters Registry", icon: "📚", desc: "Lookup values & categories" },
-  { href: "/works/reports",     label: "Reports",          icon: "📊", desc: "Analytics and work register" },
+/**
+ * Hub tiles. `icon` is an emoji glyph resolved to a lucide vector by StatIcon
+ * (headless-safe — see StatIcon.tsx); `labelKey`/`descKey` resolve under
+ * works.hub.tiles.*. `roles`, when set, gates the tile to a session role set
+ * (GAP-WORKS-HOME-05) — the server still enforces access, this only avoids
+ * offering a tile the destination page/API would reject.
+ */
+const MODULES: Array<{
+  href: string;
+  key: string;
+  icon: string;
+  roles?: readonly string[];
+}> = [
+  { href: "/works/proposals", key: "proposals", icon: "📋" },
+  { href: "/works/tenders", key: "tenders", icon: "📢" },
+  { href: "/works/contractors", key: "contractors", icon: "🏢" },
+  { href: "/works/execution", key: "execution", icon: "🏗" },
+  { href: "/works/billing", key: "billing", icon: "💰" },
+  { href: "/procurement", key: "procurement", icon: "📦" },
+  { href: "/works/masters", key: "masters", icon: "📚", roles: WORKS_READ_ROLES },
+  { href: "/works/reports", key: "reports", icon: "📊", roles: WORKS_READ_ROLES },
 ];
 
-const WORKS_ADMIN_ROLES = ["works_admin", "dao", "do", "super_admin", "div_officer"];
-
 export default async function WorksHub() {
+  const t = await getTranslations("works.hub");
   const { data: dash, source } = await getWorksDashboard();
   const roles = getSessionRoles();
-  const canAdmin = roles.some((r) => WORKS_ADMIN_ROLES.includes(r));
+  const canAdmin = worksRolesAllow(roles, WORKS_ADMIN_ROLES);
 
-  const draftCount   = dash.byStatus["draft"]     ?? 0;
-  const pendingCount = dash.byStatus["submitted"]  ?? dash.byStatus["pending"] ?? 0;
+  // GAP-WORKS-HOME-01 (FAILMASK): on a failed fetch, show "—" (StatCard renders
+  // null as an em dash) instead of a fabricated 0 that is indistinguishable
+  // from a genuine empty dashboard.
+  const failed = source === "error";
+  const draftCount = failed ? null : draftProposals(dash.byStatus);
+  // GAP-WORKS-HOME-02: pending = past-draft, derived from the real status
+  // vocabulary (dao_finalized + ts_eligible), not the never-present
+  // "submitted"/"pending" keys the hub used to read.
+  const pendingCount = failed ? null : sumPendingProposals(dash.byStatus);
+
+  // GAP-WORKS-HOME-05: tiles with a `roles` gate are shown only to those roles.
+  const visibleModules = MODULES.filter((m) => !m.roles || worksRolesAllow(roles, m.roles));
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Works & Billing"
-        subtitle="Engineering works lifecycle — proposals to bills."
-        actions={source === "error" ? <DataSourceBadge source="error" /> : null}
+        title={t("title")}
+        subtitle={t("subtitle")}
+        actions={failed ? <DataSourceBadge source="error" message={t("loadError")} /> : null}
       />
 
       <StatGrid>
-        <StatCard icon="🏗️" iconBg="var(--infobg, #eff6ff)"  label="Total Works"  value={dash.totalWorks} />
-        <StatCard icon="▶️"  iconBg="var(--goodbg, #ecfdf3)"  label="Active"       value={dash.activeWorks} />
-        <StatCard icon="✅"  iconBg="var(--panel, #f1f5f9)"   label="Completed"    value={dash.closedWorks} />
-        <StatCard icon="📝"  iconBg="var(--warnbg, #fef3c7)"  label="Draft"        value={draftCount} />
-        <StatCard icon="⏳"  iconBg="#fdf2f8"                 label="Pending"      value={pendingCount} />
+        <StatCard icon="🏗" tone="info" label={t("stats.total")} value={failed ? null : dash.totalWorks} />
+        <StatCard icon="▶️" tone="good" label={t("stats.active")} value={failed ? null : dash.activeWorks} />
+        <StatCard icon="✅" tone="neutral" label={t("stats.completed")} value={failed ? null : dash.closedWorks} />
+        <StatCard icon="📝" tone="warn" label={t("stats.draft")} value={draftCount} />
+        <StatCard icon="⏳" tone="bad" label={t("stats.pending")} value={pendingCount} />
       </StatGrid>
 
       {canAdmin && (
-        <Card title="Quick Actions" padding>
+        <Card title={t("quickActions.title")} padding>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            <Link href="/works/proposals/new"          className="btn ghost" style={{ fontSize: 13 }}>📋 New Proposal</Link>
-            <Link href="/works/tenders/new"            className="btn ghost" style={{ fontSize: 13 }}>📢 Create Tender</Link>
-            <Link href="/works/contractors/new"        className="btn ghost" style={{ fontSize: 13 }}>🏢 Register Contractor</Link>
-            <Link href="/works/billing/account-compile" className="btn ghost" style={{ fontSize: 13 }}>💼 Account Compile</Link>
+            <Link href="/works/proposals/new" className="btn ghost" style={{ fontSize: 13 }}>{t("quickActions.newProposal")}</Link>
+            <Link href="/works/tenders/new" className="btn ghost" style={{ fontSize: 13 }}>{t("quickActions.createTender")}</Link>
+            <Link href="/works/contractors/new" className="btn ghost" style={{ fontSize: 13 }}>{t("quickActions.registerContractor")}</Link>
+            <Link href="/works/billing/account-compile" className="btn ghost" style={{ fontSize: 13 }}>{t("quickActions.accountCompile")}</Link>
           </div>
         </Card>
       )}
@@ -84,7 +109,7 @@ export default async function WorksHub() {
           marginTop: 8,
         }}
       >
-        {MODULES.map(({ href, icon, label, desc }) => (
+        {visibleModules.map(({ href, icon, key }) => (
           <Link
             key={href}
             href={href}
@@ -100,9 +125,11 @@ export default async function WorksHub() {
               color: "inherit",
             }}
           >
-            <span style={{ fontSize: 28, lineHeight: 1 }}>{icon}</span>
-            <span style={{ fontWeight: 600, fontSize: 14, color: "var(--ink)" }}>{label}</span>
-            <span style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.4 }}>{desc}</span>
+            <span style={{ fontSize: 28, lineHeight: 1 }} aria-hidden>
+              <StatIcon icon={icon} size={28} />
+            </span>
+            <span style={{ fontWeight: 600, fontSize: 14, color: "var(--ink)" }}>{t(`tiles.${key}.label`)}</span>
+            <span style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.4 }}>{t(`tiles.${key}.desc`)}</span>
           </Link>
         ))}
       </div>

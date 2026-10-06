@@ -21,6 +21,26 @@ const WORK = "11111111-1111-1111-1111-111111111111";
 const AWARD = "22222222-2222-2222-2222-222222222222";
 const MB = "33333333-3333-3333-3333-333333333333";
 
+/** Mock awards/mbs GETs + the bill-create POST. Returns the spy so tests can
+ * inspect the POST specifically. */
+function mockFetch(postStatus = 202) {
+  return vi.spyOn(globalThis, "fetch").mockImplementation(((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (method === "GET" && url.endsWith(`/${WORK}/awards`)) {
+      return Promise.resolve(new Response(JSON.stringify({ data: [{ id: AWARD, agreementNumber: "AGR/42", contractorName: "Acme", status: "do_finalized" }] }), { status: 200 }));
+    }
+    if (method === "GET" && url.endsWith(`/${WORK}/mbs`)) {
+      return Promise.resolve(new Response(JSON.stringify({ data: [{ id: MB, mbNumber: "MB/01", status: "do_finalized" }] }), { status: 200 }));
+    }
+    return Promise.resolve(new Response(JSON.stringify({ data: { id: "bill-1", status: "draft" } }), { status: postStatus }));
+  }) as typeof fetch);
+}
+
+function postCall(spy: ReturnType<typeof mockFetch>) {
+  return spy.mock.calls.find((c) => (c[1] as RequestInit | undefined)?.method === "POST");
+}
+
 describe("Generate Bill form", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -28,30 +48,29 @@ describe("Generate Bill form", () => {
     searchParamsMock = new URLSearchParams(`workId=${WORK}&awardId=${AWARD}&mbId=${MB}`);
   });
 
-  it("prefills work/award/mb from the query params passed by the billing detail page", () => {
+  it("prefills work/award/mb from the query params passed by the billing detail page", async () => {
+    mockFetch();
     render(<NewBillPage />);
-    expect(screen.getByLabelText(/Work ID/i)).toHaveValue(WORK);
-    expect(screen.getByLabelText(/Award ID/i)).toHaveValue(AWARD);
-    expect(screen.getByLabelText(/Measurement Book ID/i)).toHaveValue(MB);
+    expect(await screen.findByLabelText(/Work ID/i)).toHaveValue(WORK);
+    // award/mb become selects once the per-work lists load; the seeded value stays selected
+    await waitFor(() => expect(screen.getByLabelText(/^Award/i)).toHaveValue(AWARD));
+    await waitFor(() => expect(screen.getByLabelText(/Measurement Book/i)).toHaveValue(MB));
   });
 
   it("posts to the real create-bill endpoint with rupee amounts converted to paise (minor units)", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ data: { id: "bill-1", status: "draft" } }), { status: 202 }),
-    );
-
+    const fetchSpy = mockFetch();
     render(<NewBillPage />);
+    await screen.findByLabelText(/Work ID/i);
     fireEvent.change(screen.getByLabelText(/Bill Number/i), { target: { value: "RA/2024-25/001" } });
     fireEvent.change(screen.getByLabelText(/Gross Amount/i), { target: { value: "1000" } });
     fireEvent.change(screen.getByLabelText(/Deductions/i), { target: { value: "100" } });
 
-    // Net-payable preview is gross - deductions, shown paise-exact.
     expect(screen.getByText("₹900.00")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Generate Bill" }));
 
-    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
-    const [url, init] = fetchSpy.mock.calls[0];
+    await waitFor(() => expect(postCall(fetchSpy)).toBeTruthy());
+    const [url, init] = postCall(fetchSpy)!;
     expect(url).toBe("/api/proxy/v1/works/billing/bills");
     const body = JSON.parse((init as RequestInit).body as string);
     expect(body).toMatchObject({
@@ -65,23 +84,45 @@ describe("Generate Bill form", () => {
     });
   });
 
-  it("blocks submission when deductions exceed the gross amount", () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
+  it("converts fractional rupees exactly with no float error (GAP-WORKS-BILLING-BILLS-NEW-02)", async () => {
+    const fetchSpy = mockFetch();
     render(<NewBillPage />);
+    await screen.findByLabelText(/Work ID/i);
+    fireEvent.change(screen.getByLabelText(/Bill Number/i), { target: { value: "RA/2" } });
+    fireEvent.change(screen.getByLabelText(/Gross Amount/i), { target: { value: "2.50" } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate Bill" }));
+    await waitFor(() => expect(postCall(fetchSpy)).toBeTruthy());
+    const body = JSON.parse((postCall(fetchSpy)![1] as RequestInit).body as string);
+    expect(body.grossAmountMinor).toBe("250");
+  });
+
+  it("rejects a non-positive gross amount rather than posting (BILLS-NEW-02 guard)", async () => {
+    const fetchSpy = mockFetch();
+    render(<NewBillPage />);
+    await screen.findByLabelText(/Work ID/i);
+    fireEvent.change(screen.getByLabelText(/Bill Number/i), { target: { value: "RA/3" } });
+    fireEvent.change(screen.getByLabelText(/Gross Amount/i), { target: { value: "0" } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate Bill" }));
+    expect(screen.getByRole("alert")).toHaveTextContent(/valid gross amount/i);
+    expect(postCall(fetchSpy)).toBeUndefined();
+  });
+
+  it("blocks submission when deductions exceed the gross amount", async () => {
+    const fetchSpy = mockFetch();
+    render(<NewBillPage />);
+    await screen.findByLabelText(/Work ID/i);
     fireEvent.change(screen.getByLabelText(/Bill Number/i), { target: { value: "RA/1" } });
     fireEvent.change(screen.getByLabelText(/Gross Amount/i), { target: { value: "100" } });
     fireEvent.change(screen.getByLabelText(/Deductions/i), { target: { value: "150" } });
     fireEvent.click(screen.getByRole("button", { name: "Generate Bill" }));
     expect(screen.getByRole("alert")).toHaveTextContent(/Deductions cannot exceed/i);
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(postCall(fetchSpy)).toBeUndefined();
   });
 
   it("shows a clerk-safe message, never the raw HTTP status, when the create fails (UX-016)", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response("", { status: 503 }),
-    );
-
+    const fetchSpy = mockFetch(503);
     render(<NewBillPage />);
+    await screen.findByLabelText(/Work ID/i);
     fireEvent.change(screen.getByLabelText(/Bill Number/i), { target: { value: "RA/2024-25/002" } });
     fireEvent.change(screen.getByLabelText(/Gross Amount/i), { target: { value: "1000" } });
     fireEvent.click(screen.getByRole("button", { name: "Generate Bill" }));
@@ -89,5 +130,6 @@ describe("Generate Bill form", () => {
     const alert = await screen.findByRole("alert");
     await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
     expect(alert.textContent).not.toMatch(/\b503\b/);
+    expect(fetchSpy).toHaveBeenCalled();
   });
 });

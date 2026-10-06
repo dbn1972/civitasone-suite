@@ -50,7 +50,7 @@ export function registerExecutionConsumers(q: Queue): void {
       const ok = await markProcessed(tx, msg.messageId);
       if (!ok) return;
 
-      const { id } = msg.payload as { id: string };
+      const { id, resolution } = msg.payload as { id: string; resolution?: string };
       const rows = await tx.select().from(workIssues)
         .where(and(eq(workIssues.tenantId, msg.tenantId), eq(workIssues.id, id)))
         .limit(1);
@@ -58,7 +58,7 @@ export function registerExecutionConsumers(q: Queue): void {
       if (!issue || issue.status === "closed") return;
 
       await tx.update(workIssues)
-        .set({ status: "closed", closedDate: new Date() })
+        .set({ status: "closed", closedDate: new Date(), ...(resolution ? { resolution } : {}) })
         .where(and(eq(workIssues.tenantId, msg.tenantId), eq(workIssues.id, id)));
 
       await enqueue(tx, {
@@ -303,6 +303,16 @@ export function registerExecutionConsumers(q: Queue): void {
         payload: { workId, closureType },
       });
 
+      // GAP-WORKS-EXECUTION-WORKID-07: a work closure is a mutation, so it
+      // MUST emit an audit row regardless of closureType (CLAUDE.md rule 8).
+      // This was previously only emitted inside the completion-only branch
+      // below, so "closed"/"dropped" closures left no audit trail.
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "works-service", action: "close", resourceType: "work", resourceId: p.id, outcome: "success", detail: closureType },
+      });
+
       // Completion closure → hand the newly-built public asset to asset-service.
       if (closureType === "completion") {
         const propRows = await tx.select().from(workProposals)
@@ -329,7 +339,6 @@ export function registerExecutionConsumers(q: Queue): void {
             closureType,
           },
         });
-        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "process", resourceType: "execution", resourceId: p.id, outcome: "success" } });
       }
     });
   });

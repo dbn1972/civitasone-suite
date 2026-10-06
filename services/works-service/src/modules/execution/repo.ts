@@ -1,4 +1,4 @@
-import { eq, and, desc, gte, lte, inArray } from "drizzle-orm";
+import { eq, and, desc, gte, lte, inArray, sql } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { workScopes, scopeProgress, workIssues, workClosures, physicalCompletions } from "./schema.js";
 import { workProposals } from "../proposal/schema.js";
@@ -48,9 +48,22 @@ export async function hasPhysicalCompletion(tenantId: string, workId: string): P
  * Tenant-wide execution progress register — every recorded scope-progress
  * entry joined back to its parent work-scope (for workId/scopeId/target),
  * newest reporting period first. Backs the FE execution list page.
+ *
+ * `workId` optionally scopes the register to a single work (GAP-WORKS-
+ * EXECUTION-WORKID-04): the detail page needs that work's progress without
+ * client-side filtering of a 100-row cap. The join is within the execution
+ * module's own schema (scope_progress ⋈ work_scopes) — no cross-module join.
  */
-export async function listExecutionProgress(tenantId: string, page: number, pageSize: number) {
+export async function listExecutionProgress(
+  tenantId: string,
+  page: number,
+  pageSize: number,
+  workId?: string,
+) {
   return scopedRead(async (tx) => {
+    const where = workId
+      ? and(eq(scopeProgress.tenantId, tenantId), eq(workScopes.workId, workId))
+      : eq(scopeProgress.tenantId, tenantId);
     return tx
       .select({
         id: scopeProgress.id,
@@ -68,10 +81,26 @@ export async function listExecutionProgress(tenantId: string, page: number, page
       })
       .from(scopeProgress)
       .innerJoin(workScopes, eq(workScopes.id, scopeProgress.workScopeId))
-      .where(eq(scopeProgress.tenantId, tenantId))
+      .where(where)
       .orderBy(desc(scopeProgress.year), desc(scopeProgress.month))
       .limit(pageSize)
       .offset((page - 1) * pageSize);
+  });
+}
+
+/** True count of progress rows for a tenant (optionally one work) — feeds the
+ * paginated register's meta.total so the FE can show "first N of M". */
+export async function countExecutionProgress(tenantId: string, workId?: string): Promise<number> {
+  return scopedRead(async (tx) => {
+    const where = workId
+      ? and(eq(scopeProgress.tenantId, tenantId), eq(workScopes.workId, workId))
+      : eq(scopeProgress.tenantId, tenantId);
+    const rows = await tx
+      .select({ count: sql<number>`cast(count(*) as int)` })
+      .from(scopeProgress)
+      .innerJoin(workScopes, eq(workScopes.id, scopeProgress.workScopeId))
+      .where(where);
+    return rows[0]?.count ?? 0;
   });
 }
 
@@ -83,6 +112,17 @@ export async function listAllIssues(tenantId: string, page: number, pageSize: nu
       .orderBy(desc(workIssues.raisedDate))
       .limit(pageSize)
       .offset((page - 1) * pageSize);
+  });
+}
+
+/** True count of issues for a tenant — feeds the issues register's meta.total. */
+export async function countAllIssues(tenantId: string): Promise<number> {
+  return scopedRead(async (tx) => {
+    const rows = await tx
+      .select({ count: sql<number>`cast(count(*) as int)` })
+      .from(workIssues)
+      .where(eq(workIssues.tenantId, tenantId));
+    return rows[0]?.count ?? 0;
   });
 }
 

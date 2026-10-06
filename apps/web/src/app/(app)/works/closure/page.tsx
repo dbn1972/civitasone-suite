@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getClosures } from "../_data/loaders";
 import { ClosureTable } from "./ClosureTable";
@@ -20,6 +21,15 @@ export default async function ClosurePage() {
         title="Closure"
         subtitle="Closed, dropped, and completion list works."
         back="/works"
+        actions={
+          <Link
+            href="/works/closure/new"
+            className="btn primary"
+            style={{ minHeight: 36, fontSize: 13, padding: "6px 14px" }}
+          >
+            + New closure
+          </Link>
+        }
       />
       <StatGrid>
         <StatCard icon="🔒" iconBg="#eff6ff" label="Total" value={total} />

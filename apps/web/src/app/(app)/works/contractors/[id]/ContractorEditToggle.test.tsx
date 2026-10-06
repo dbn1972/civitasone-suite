@@ -82,22 +82,30 @@ describe("ContractorEditToggle — clearing a field actually sends the clear", (
     expect(screen.queryByText("Contractor updated.")).not.toBeInTheDocument();
   });
 
+  it("blocks a malformed PAN client-side (NEW-01) before any request", async () => {
+    openEditForm();
+    fireEvent.change(screen.getByLabelText(/^PAN$/), { target: { value: "SHORT" } });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    expect(await screen.findByText(/valid 10-character PAN/i)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("renders an inline field-level message from a fieldErrors response next to the offending field", async () => {
     fetchMock.mockResolvedValue(
       new Response(
         JSON.stringify({
           code: "VALIDATION_FAILED",
           message: "validation_failed",
-          fieldErrors: [{ field: "pan", message: "PAN must be exactly 10 characters." }],
+          fieldErrors: [{ field: "name", message: "Name is already in use." }],
         }),
         { status: 400, headers: { "content-type": "application/json" } },
       ),
     );
     openEditForm();
-    fireEvent.change(screen.getByLabelText(/^PAN$/), { target: { value: "SHORT" } });
+    fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: "Dup Name" } });
     fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
 
-    expect(await screen.findByText("PAN must be exactly 10 characters.")).toBeInTheDocument();
+    expect(await screen.findByText("Name is already in use.")).toBeInTheDocument();
   });
 
   it("never surfaces a raw HTTP status code or raw server text on a plain-text failure", async () => {

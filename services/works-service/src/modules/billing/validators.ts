@@ -48,3 +48,12 @@ export const compileAccountSchema = z.object({
   year: z.number().int().min(2000).max(2100),
   submittedTo: z.string().max(256).optional(),
 });
+
+/**
+ * GAP-WORKS-BILLING-ACCOUNT-COMPILE-03: query validator for the
+ * "already compiled?" check. Query params arrive as strings, so coerce.
+ */
+export const listAccountCompileSchema = z.object({
+  month: z.coerce.number().int().min(1).max(12),
+  year: z.coerce.number().int().min(2000).max(2100),
+});

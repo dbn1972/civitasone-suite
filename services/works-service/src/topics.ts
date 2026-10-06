@@ -3,6 +3,7 @@
 export const COMMANDS = {
   // Masters
   masterCreate:                "works.master.create",
+  masterUpdate:                "works.master.update",
 
   // Proposal
   proposalCreate:              "works.proposal.create",
@@ -57,6 +58,7 @@ export const COMMANDS = {
 export const EVENTS = {
   // Masters
   masterCreated:                "works.master.created",
+  masterUpdated:                "works.master.updated",
 
   // Proposal
   proposalCreated:             "works.proposal.created",

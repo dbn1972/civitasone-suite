@@ -25,6 +25,41 @@ export const PROPOSAL_WRITE_ROLES = [
 ] as const;
 
 /**
+ * GAP-WORKS-EXECUTION-ISSUES-04 / GAP-WORKS-EXECUTION-WORKID-02: roles the
+ * works-service execution module admits on its mutation routes (close issue,
+ * record progress, add scope, physical-complete). Mirrors execution/routes.ts
+ * WRITE_ROLES EXACTLY — the service stays authoritative (403); this list only
+ * decides whether the UI offers the control at all. Keep in sync with that
+ * constant.
+ */
+export const ISSUE_CLOSE_ROLES = [
+  "works_admin",
+  "works_operator",
+  "super_admin",
+  "dao",
+  "do",
+  "sdo",
+  "section_officer",
+] as const;
+
+/**
+ * GAP-WORKS-EXECUTION-WORKID-02: roles allowed to certify physical completion
+ * or close a work. The two backend routes differ slightly — close is
+ * dao/do/works_admin/super_admin; physical-complete additionally admits sdo
+ * (execution/routes.ts). This UI gate is the UNION so the two cards show for
+ * anyone who can perform EITHER; each action's own 403 stays authoritative.
+ */
+export const WORK_CLOSURE_ROLES = ["dao", "do", "sdo", "works_admin", "super_admin"] as const;
+
+export function canCloseIssue(roles: readonly string[]): boolean {
+  return roles.some((r) => (ISSUE_CLOSE_ROLES as readonly string[]).includes(r));
+}
+
+export function canManageWorkClosure(roles: readonly string[]): boolean {
+  return roles.some((r) => (WORK_CLOSURE_ROLES as readonly string[]).includes(r));
+}
+
+/**
  * UX gate for the finance module's nav entry + `/finance/*` layout (Medium
  * finding: finance screens rendered for every role — the server-side
  * boundary already 403s a non-finance role on every endpoint, this list
@@ -348,3 +383,180 @@ export function canWriteFleet(roles: readonly string[]): boolean {
 export const PAYROLL_STATUTORY_WRITE_ROLES = ["payroll_admin", "payroll_officer", "super_admin"] as const;
 export const PAYROLL_CONFIG_ADMIN_ROLES = ["payroll_admin", "super_admin"] as const;
 export const PAYROLL_ARREAR_DECIDER_ROLES = ["payroll_admin", "payroll_officer", "super_admin"] as const;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Works module (approvals / billing / account-compile / hub) role & status
+// constants. Derived from services/works-service route guards; the server
+// remains the authority, these only decide what the UI offers.
+// (Merged alongside the HR/finance/asset/payroll constants above — a prior
+// edit had replaced the whole file with only this works block, dropping the
+// others; restored here so every importer resolves.)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Roles the works-service accepts for creating an AA or TS (WRITE_ROLES). */
+export const AA_CREATE_ROLES = ["works_admin", "works_operator", "super_admin", "dao", "do", "sdo"];
+export const TS_CREATE_ROLES = AA_CREATE_ROLES;
+
+/**
+ * Roles the works-service accepts for finalizing an AA or TS. The finalize
+ * routes gate on the same WRITE_ROLES as create (routes.ts), so the two sets
+ * are identical today; kept as its own named constant so a future narrower
+ * finalize gate (e.g. DAO/DO only) is a one-line change here.
+ */
+export const APPROVAL_FINALIZE_ROLES = ["works_admin", "works_operator", "super_admin", "dao", "do", "sdo"];
+
+/** Roles that may read the AA/TS registers (READ_ROLES). */
+export const APPROVALS_READ_ROLES = [
+  "works_admin",
+  "works_operator",
+  "works_viewer",
+  "super_admin",
+  "dao",
+  "do",
+  "sdo",
+  "section_officer",
+  "estimator",
+];
+
+/**
+ * Statuses the works-service will actually accept a finalize request for.
+ * domain.ts canFinalize() allows ONLY "draft" — a "submitted" record returns
+ * 422 FINALIZATION_BLOCKED. The UI must therefore treat only "draft" as
+ * finalizable (the previous {draft, submitted} set offered a guaranteed-422
+ * button on submitted records).
+ */
+export const FINALIZABLE_STATUSES = new Set<string>(["draft"]);
+
+/**
+ * Statuses counted as "pending" in the register stat cards. An approval is
+ * pending exactly while it is still finalizable (i.e. "draft"); once
+ * finalized it is no longer pending. Kept in lock-step with
+ * FINALIZABLE_STATUSES so the Pending count and the Finalize button can never
+ * disagree about what is outstanding (GAP-WORKS-APPROVALS-02).
+ */
+export const PENDING_STATUSES = FINALIZABLE_STATUSES;
+
+/** Terminal statuses the server reports once a finalize has been applied. */
+export const FINALIZED_STATUSES = new Set<string>(["finalized", "approved", "published"]);
+
+/**
+ * GAP-WORKS-BILLING-WORKID-03: roles the works-service billing routes accept
+ * for a bill/MB finalize (POST .../finalize). Mirrors billing/routes.ts
+ *   WRITE_ROLES = ["works_admin","works_operator","super_admin","dao","do",
+ *                  "sdo","section_officer","estimator"]
+ * exactly, so the UI only offers the irreversible Advance control to a caller
+ * the server will actually accept. The server remains the authority (every
+ * finalize route calls requireRole and the consumer re-checks the transition);
+ * this gate is defence-in-depth + UX, hiding a control that would otherwise
+ * 403.
+ *
+ * DECISION (conservative, recorded for HUMAN REVIEW): the works-service does
+ * NOT today enforce a per-authority step map (SO must do the SO step, DAO the
+ * DAO step, …) — every step is gated on the same WRITE_ROLES set and ordered
+ * only by the sequence check. So the UI does NOT claim per-step authority
+ * enforcement it cannot back; it gates the whole control on this set and names
+ * the expected authority in the dialog as guidance only. A true per-authority
+ * maker-checker split is flagged as a backend follow-up rather than faked
+ * client-side.
+ */
+export const BILLING_FINALIZE_ROLES = [
+  "works_admin",
+  "works_operator",
+  "super_admin",
+  "dao",
+  "do",
+  "sdo",
+  "section_officer",
+  "estimator",
+];
+
+/** Roles that may read the billing registers (billing/routes.ts READ_ROLES). */
+export const BILLING_READ_ROLES = [...BILLING_FINALIZE_ROLES, "works_viewer"];
+
+/**
+ * The authority conventionally responsible for each finalize step, keyed by
+ * the TARGET status. Shown in the confirm dialog as guidance ("Steps the bill
+ * to DAO finalized — DAO authority") so the operator knows which officer the
+ * step represents. NOT a client-side enforcement map (see the DECISION on
+ * BILLING_FINALIZE_ROLES above). Account-compile is DAO/DO (billing/routes.ts).
+ */
+export const BILL_STEP_AUTHORITY: Record<string, string> = {
+  so_finalized: "Section Officer (SO)",
+  sdo_finalized: "Sub-Divisional Officer (SDO)",
+  auditor_finalized: "Auditor",
+  dao_finalized: "Divisional Accounts Officer (DAO)",
+  do_finalized: "Divisional Officer (DO)",
+};
+
+export const MB_STEP_AUTHORITY: Record<string, string> = {
+  so_finalized: "Section Officer (SO)",
+  sdo_finalized: "Sub-Divisional Officer (SDO)",
+  estimator_finalized: "Estimator",
+  do_finalized: "Divisional Officer (DO)",
+};
+
+/**
+ * GAP-WORKS-BILLING-ACCOUNT-COMPILE-02: roles the works-service accepts for
+ * POST /v1/works/billing/account-compile. Mirrors billing/routes.ts exactly
+ * (["dao","do","works_admin","super_admin"]). Used by the account-compile
+ * layout's requireAnyRole gate so a user without the role is redirected rather
+ * than shown a live form that 403s on submit.
+ */
+export const ACCOUNT_COMPILE_ROLES = ["dao", "do", "works_admin", "super_admin"];
+
+// ─── Works hub (GAP-WORKS-HOME-05) ───────────────────────────────────────────
+// Role allow-lists for the /works hub tiles, Quick Actions and masters create.
+// Each mirrors a works-service server-side gate so the hub never offers a
+// control the API will reject; the server stays the authority.
+
+/**
+ * Who may create/finalize works proposals, tenders, account-compile etc. — the
+ * hub's Quick Actions card gates on this. (Previously declared inline in
+ * works/page.tsx as WORKS_ADMIN_ROLES.)
+ */
+export const WORKS_ADMIN_ROLES: readonly string[] = [
+  "works_admin",
+  "dao",
+  "do",
+  "super_admin",
+  "div_officer",
+];
+
+/**
+ * Who may READ the works module (dashboard, registers, masters list, reports).
+ * Mirrors works-service reporting/routes.ts and masters/routes.ts READ_ROLES —
+ * notably includes works_operator and works_viewer, which WORKS_ADMIN_ROLES
+ * omits. The Masters and Reports tiles gate on this so an operator/viewer who
+ * legitimately needs them is not hidden out.
+ */
+export const WORKS_READ_ROLES: readonly string[] = [
+  "works_admin",
+  "works_operator",
+  "works_viewer",
+  "super_admin",
+  "dao",
+  "do",
+  "sdo",
+  "section_officer",
+  "estimator",
+];
+
+/**
+ * Who may create works master data. Mirrors works-service
+ * modules/masters/routes.ts ADMIN_ROLES exactly (the POST
+ * /v1/works/masters/:prefix gate) — deliberately NARROWER than
+ * WORKS_READ_ROLES: a works_operator/works_viewer may list masters but the
+ * create endpoint 403s them, so the UI must not offer the Add control.
+ */
+export const WORKS_MASTERS_WRITE_ROLES: readonly string[] = [
+  "works_admin",
+  "super_admin",
+];
+
+/** True when any of `sessionRoles` is in `allowed`. Pure; for UI gating. */
+export function worksRolesAllow(
+  sessionRoles: readonly string[],
+  allowed: readonly string[],
+): boolean {
+  return sessionRoles.some((r) => allowed.includes(r));
+}

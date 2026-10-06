@@ -26,6 +26,9 @@ vi.mock("../src/shared/infra.js", () => ({
 
 const mockInserted: unknown[] = [];
 const mockInsertedValues: unknown[] = [];
+const mockUpdated: unknown[] = [];
+const mockUpdatedSets: unknown[] = [];
+const mockUpdatedWhereCalled: boolean[] = [];
 let mockMarkResult = true;
 const mockTx: any = {
   insert: (t: unknown) => {
@@ -34,6 +37,20 @@ const mockTx: any = {
       values: (v: unknown) => {
         mockInsertedValues.push(v);
         return Promise.resolve();
+      },
+    };
+  },
+  update: (t: unknown) => {
+    mockUpdated.push(t);
+    return {
+      set: (vals: unknown) => {
+        mockUpdatedSets.push(vals);
+        return {
+          where: (_w: unknown) => {
+            mockUpdatedWhereCalled.push(true);
+            return Promise.resolve();
+          },
+        };
       },
     };
   },
@@ -68,6 +85,9 @@ beforeEach(() => {
   mockInvalidateResource.mockClear();
   mockInserted.length = 0;
   mockInsertedValues.length = 0;
+  mockUpdated.length = 0;
+  mockUpdatedSets.length = 0;
+  mockUpdatedWhereCalled.length = 0;
   mockEnqueued.length = 0;
   mockMarkResult = true;
 });
@@ -211,5 +231,85 @@ describe("Masters CQRS — consumer persistence", () => {
 
     expect(handlers[COMMANDS.proposalCreate]).toBeUndefined();
     expect(handlers[COMMANDS.masterCreate]).toBeDefined();
+  });
+});
+
+describe("Masters CQRS — publishMasterUpdate (GAP-WORKS-MASTERS-04)", () => {
+  it("publishes to COMMANDS.masterUpdate with the id, masterType and patch", async () => {
+    const { publishMasterUpdate } = await import("../src/modules/masters/commands.js");
+    const { COMMANDS } = await import("../src/topics.js");
+
+    await publishMasterUpdate(baseCtx, "authorities", "auth-1", { name: "Renamed", active: false });
+
+    expect(mockPublish).toHaveBeenCalledTimes(1);
+    const [topic, msg] = mockPublish.mock.calls[0];
+    expect(topic).toBe(COMMANDS.masterUpdate);
+    expect(msg.payload.id).toBe("auth-1");
+    expect(msg.payload.masterType).toBe("authorities");
+    expect(msg.payload.patch).toEqual({ name: "Renamed", active: false });
+  });
+});
+
+describe("Masters CQRS — masterUpdate consumer (GAP-WORKS-MASTERS-04)", () => {
+  it("deactivation updates the correct table, bumps version, emits updated + audit", async () => {
+    const { registerMasterConsumers } = await import("../src/modules/masters/consumer.js");
+    const { COMMANDS, EVENTS } = await import("../src/topics.js");
+    const { authorities } = await import("../src/modules/masters/schema.js");
+
+    const handlers: Record<string, (msg: unknown) => Promise<void>> = {};
+    const q = { subscribe: (t: string, fn: (msg: unknown) => Promise<void>) => { handlers[t] = fn; } } as any;
+    registerMasterConsumers(q);
+
+    await handlers[COMMANDS.masterUpdate]({
+      messageId: "u-1", tenantId: baseCtx.tenantId, actorId: baseCtx.actorId,
+      correlationId: "c-1", schemaVersion: "1.0",
+      payload: { id: "auth-1", masterType: "authorities", patch: { active: false } },
+    });
+
+    expect(mockUpdated).toHaveLength(1);
+    expect(mockUpdated[0]).toBe(authorities);
+    const setVals = mockUpdatedSets[0] as Record<string, unknown>;
+    expect(setVals.active).toBe(false);
+    expect(setVals.version).toBeDefined(); // version bump (sql`version + 1`)
+    expect(mockUpdatedWhereCalled).toHaveLength(1);
+    expect(mockEnqueued.some((e) => e.topic === EVENTS.masterUpdated)).toBe(true);
+    expect(mockEnqueued.some((e) => e.topic === "audit.event.record")).toBe(true);
+    expect(mockInvalidateResource).toHaveBeenCalledWith(baseCtx.tenantId, "master:authorities");
+  });
+
+  it("rejects an unknown masterType (no update, no event)", async () => {
+    const { registerMasterConsumers } = await import("../src/modules/masters/consumer.js");
+    const { COMMANDS } = await import("../src/topics.js");
+
+    const handlers: Record<string, (msg: unknown) => Promise<void>> = {};
+    const q = { subscribe: (t: string, fn: (msg: unknown) => Promise<void>) => { handlers[t] = fn; } } as any;
+    registerMasterConsumers(q);
+
+    await handlers[COMMANDS.masterUpdate]({
+      messageId: "u-2", tenantId: baseCtx.tenantId, actorId: baseCtx.actorId,
+      correlationId: "c-1", schemaVersion: "1.0",
+      payload: { id: "x-1", masterType: "not-a-real-master", patch: { active: false } },
+    });
+
+    expect(mockUpdated).toHaveLength(0);
+    expect(mockEnqueued).toHaveLength(0);
+  });
+
+  it("is idempotent on redelivery (markProcessed=false → no update)", async () => {
+    mockMarkResult = false;
+    const { registerMasterConsumers } = await import("../src/modules/masters/consumer.js");
+    const { COMMANDS } = await import("../src/topics.js");
+
+    const handlers: Record<string, (msg: unknown) => Promise<void>> = {};
+    const q = { subscribe: (t: string, fn: (msg: unknown) => Promise<void>) => { handlers[t] = fn; } } as any;
+    registerMasterConsumers(q);
+
+    await handlers[COMMANDS.masterUpdate]({
+      messageId: "u-dup", tenantId: baseCtx.tenantId, actorId: baseCtx.actorId,
+      correlationId: "c-1", schemaVersion: "1.0",
+      payload: { id: "auth-1", masterType: "authorities", patch: { active: false } },
+    });
+
+    expect(mockUpdated).toHaveLength(0);
   });
 });

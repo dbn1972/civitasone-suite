@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { PageHeader, Card, DataTable } from "@/app/_components/ds";
+import { PageHeader, Card, DataTable, LoadErrorState, RefreshErrorState } from "@/app/_components/ds";
+import { Masked, maskPan } from "@/app/_components/ds/Masked";
+import { RevealableValue } from "@/app/_components/ds/RevealableValue";
 import { StatusTimeline } from "@/app/_components/ds/designer/StatusTimeline";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { fetchJson } from "@/app/_data/apiClient";
 import { formatIndianDate } from "@/lib/formatters";
-import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { getSessionRoles, getSessionUserId } from "@/lib/auth/roleGuard";
+import { CONTRACTOR_RATE_ROLES, canRevealContractorPii } from "@/lib/works/roles";
 import { ContractorRatingForm } from "./ContractorRatingForm";
 import { ContractorEditToggle } from "./ContractorEditToggle";
 
@@ -30,6 +32,8 @@ type RatingHistoryRow = {
   rating: number;
   ratedAt: string;
   ratedBy?: string;
+  ratedByName?: string;
+  note?: string;
 };
 
 type RatingDisplayRow = {
@@ -37,6 +41,7 @@ type RatingDisplayRow = {
   rating: string;
   ratedAt: string;
   ratedBy: string;
+  note: string;
 };
 
 const EMPTY: ContractorDetail = {
@@ -55,14 +60,6 @@ const EMPTY: ContractorDetail = {
   updatedAt: "",
 };
 
-const CONTRACTOR_RATE_ROLES = [
-  "works_admin",
-  "works_operator",
-  "super_admin",
-  "dao",
-  "do",
-];
-
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
@@ -74,23 +71,32 @@ function mapRatingHistory(payload: unknown): RatingHistoryRow[] | null {
     ? (payload as { data: unknown[] }).data
     : null;
   if (!rows) return null;
-  return rows.flatMap((r) => {
+  return rows.flatMap((r, index) => {
     if (!isRecord(r)) return [];
+    const rr = r as Record<string, unknown>;
     return [
       {
-        id: String((r as { id?: unknown }).id ?? Math.random()),
-        rating: Number((r as { rating?: unknown }).rating ?? 0),
-        ratedAt: String((r as { ratedAt?: unknown }).ratedAt ?? ""),
-        ratedBy: (r as { ratedBy?: unknown }).ratedBy
-          ? String((r as { ratedBy?: unknown }).ratedBy)
-          : undefined,
+        // GAP-WORKS-CONTRACTORS-DETAIL-03: never Math.random() a key (it churns
+        // on every render and breaks list reconciliation); fall back to the row
+        // index when the API omits an id.
+        id: typeof rr.id === "string" ? rr.id : `rating-${index}`,
+        rating: Number(rr.rating ?? 0),
+        ratedAt: String(rr.ratedAt ?? ""),
+        ratedBy: rr.ratedBy ? String(rr.ratedBy) : undefined,
+        ratedByName: rr.ratedByName ? String(rr.ratedByName) : undefined,
+        note: rr.note ? String(rr.note) : undefined,
       },
     ];
   });
 }
 
+/**
+ * GAP-WORKS-CONTRACTORS-DETAIL-05: floor to whole filled stars so the glyph
+ * row never shows MORE stars than the printed decimal (4.5 -> 4 filled, never
+ * 5). The precise value is printed numerically beside it.
+ */
 function starDisplay(rating: number): string {
-  const filled = Math.min(5, Math.max(0, Math.round(rating)));
+  const filled = Math.min(5, Math.max(0, Math.floor(rating)));
   return "★".repeat(filled) + "☆".repeat(5 - filled);
 }
 
@@ -101,53 +107,64 @@ export default async function ContractorDetailPage({
 }) {
   const roles = getSessionRoles();
   const canRate = roles.some((r) => CONTRACTOR_RATE_ROLES.includes(r));
+  const canRevealPii = canRevealContractorPii(roles);
+  const viewerId = getSessionUserId();
 
-  const [{ data: contractor, source }, { data: ratingHistory }] =
-    await Promise.all([
-      fetchJson<unknown, ContractorDetail>(
-        `/api/v1/works/contractors/${params.id}`,
-        EMPTY,
-        {
-          telemetryKey: "works.contractors.detail",
-          mapResponse: (p) => {
-            if (!p || typeof p !== "object")
-              return null as unknown as ContractorDetail;
-            return (
-              (p as { data?: ContractorDetail }).data ??
-              (null as unknown as ContractorDetail)
-            );
-          },
-        }
-      ),
-      fetchJson<unknown, RatingHistoryRow[]>(
-        `/api/v1/works/contractors/${params.id}/rating-history`,
-        [],
-        {
-          telemetryKey: "works.contractor.rating-history",
-          mapResponse: mapRatingHistory,
-        }
-      ),
-    ]);
+  const [contractorResult, ratingResult] = await Promise.all([
+    fetchJson<unknown, ContractorDetail>(
+      `/api/v1/works/contractors/${params.id}`,
+      EMPTY,
+      {
+        telemetryKey: "works.contractors.detail",
+        mapResponse: (p) => {
+          if (!isRecord(p)) return null as unknown as ContractorDetail;
+          return (
+            ((p as { data?: ContractorDetail }).data ??
+              (null as unknown as ContractorDetail))
+          );
+        },
+      }
+    ),
+    fetchJson<unknown, RatingHistoryRow[]>(
+      `/api/v1/works/contractors/${params.id}/rating-history`,
+      [],
+      {
+        telemetryKey: "works.contractor.rating-history",
+        mapResponse: mapRatingHistory,
+      }
+    ),
+  ]);
 
-  const hasApiError = source === "error";
-  if (source === "error" || !contractor.id) return notFound();
+  const { data: contractor, source, status, errorMessage } = contractorResult;
+  const { data: ratingHistory, source: ratingSource } = ratingResult;
 
+  // GAP-WORKS-CONTRACTORS-DETAIL-01 (FAILMASK): a real missing id (API 404)
+  // is a genuine not-found; every OTHER failure (403/5xx/network/invalid
+  // payload) must render an honest, retryable error state — NOT a 404 that
+  // tells the user the contractor "does not exist".
+  if (source === "error") {
+    if (status === 404) return notFound();
+    return (
+      <div className="page-main wrap" aria-labelledby="page-heading">
+        <PageHeader title="Contractor" back="/works/contractors" backLabel="Contractors" />
+        <LoadErrorState
+          result={{ status, errorMessage }}
+          area="contractor"
+          backHref="/works/contractors"
+          backLabel="Contractors"
+        />
+      </div>
+    );
+  }
+  if (!contractor.id) return notFound();
+
+  // KPI grid: identifiers (PAN/GST/Phone/Email) are shown ONCE in Contact
+  // Details below (GAP-WORKS-CONTRACTORS-DETAIL-02), not duplicated here.
   const kpiItems: Array<{ label: string; value: string }> = [
-    { label: "PAN", value: String(contractor.pan ?? "—") },
-    { label: "GST", value: String(contractor.gst ?? "—") },
-    { label: "Phone", value: String(contractor.phone ?? "—") },
-    { label: "Email", value: String(contractor.email ?? "—") },
     { label: "Status", value: contractor.active ? "Active" : "Inactive" },
+    { label: "Reg. No.", value: String(contractor.registrationNo ?? "—") },
     { label: "Registered Since", value: formatIndianDate(contractor.createdAt) },
-  ];
-
-  const contactFields: Array<{ term: string; value: string }> = [
-    { term: "Address", value: String(contractor.address ?? "—") },
-    { term: "Email", value: String(contractor.email ?? "—") },
-    { term: "Phone", value: String(contractor.phone ?? "—") },
-    { term: "PAN", value: String(contractor.pan ?? "—") },
-    { term: "GST", value: String(contractor.gst ?? "—") },
-    { term: "Active", value: contractor.active ? "Yes" : "No" },
+    { label: "Reviews", value: String(contractor.ratingCount) },
   ];
 
   const contractorTimelineSteps = [
@@ -165,11 +182,14 @@ export default async function ContractorDetailPage({
     },
   ];
 
-  const ratingDisplayRows: RatingDisplayRow[] = ratingHistory.map((r) => ({
-    id: r.id,
+  const ratingDisplayRows: RatingDisplayRow[] = ratingHistory.map((r, i) => ({
+    id: r.id || `rating-${i}`,
     ratedAt: r.ratedAt ? new Date(r.ratedAt).toLocaleDateString("en-IN") : "—",
     rating: `${r.rating} / 5`,
-    ratedBy: r.ratedBy?.slice(0, 8) ?? "—",
+    // GAP-WORKS-CONTRACTORS-DETAIL-03: show a resolved rater NAME when the
+    // backend supplies one; never an opaque 8-char UUID slice.
+    ratedBy: r.ratedByName && r.ratedByName.trim() ? r.ratedByName : "—",
+    note: r.note && r.note.trim() ? r.note : "—",
   }));
 
   return (
@@ -179,7 +199,6 @@ export default async function ContractorDetailPage({
         subtitle={`Reg. No. ${String(contractor.registrationNo ?? "—")}`}
         back="/works/contractors"
         backLabel="Contractors"
-        actions={hasApiError ? <DataSourceBadge source="error" /> : undefined}
       />
 
       {/* Rating banner */}
@@ -251,7 +270,8 @@ export default async function ContractorDetailPage({
         ))}
       </div>
 
-      {/* Contact Details card */}
+      {/* Contact Details card — PII masked by default (DPDP); PAN has an
+          audited reveal for authorised roles. */}
       <Card title="Contact Details">
         <dl
           style={{
@@ -262,41 +282,83 @@ export default async function ContractorDetailPage({
             margin: 0,
           }}
         >
-          {contactFields.map(({ term, value }) => (
-            <div key={term}>
-              <dt
-                style={{
-                  fontSize: 11,
-                  color: "var(--muted)",
-                  fontWeight: 600,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.04em",
-                  marginBottom: 2,
-                }}
-              >
-                {term}
-              </dt>
-              <dd style={{ margin: 0, fontWeight: 500 }}>{value}</dd>
-            </div>
-          ))}
+          <div>
+            <dt style={dtStyle}>Address</dt>
+            <dd style={{ margin: 0, fontWeight: 500 }}>{String(contractor.address ?? "—")}</dd>
+          </div>
+          <div>
+            <dt style={dtStyle}>Email</dt>
+            <dd style={{ margin: 0, fontWeight: 500 }}>
+              <Masked value={contractor.email} kind="email" fallback="—" ariaLabel="Contractor email (masked)" />
+            </dd>
+          </div>
+          <div>
+            <dt style={dtStyle}>Phone</dt>
+            <dd style={{ margin: 0, fontWeight: 500 }}>
+              <Masked value={contractor.phone} kind="phone" fallback="—" ariaLabel="Contractor phone (masked)" />
+            </dd>
+          </div>
+          <div>
+            <dt style={dtStyle}>PAN</dt>
+            <dd style={{ margin: 0, fontWeight: 500 }}>
+              {contractor.pan ? (
+                <RevealableValue
+                  maskedText={maskPan(contractor.pan)}
+                  revealPath={`v1/works/contractors/${params.id}/reveal-pan`}
+                  pick={(json) => (json as { data?: { value?: string | null } })?.data?.value}
+                  canReveal={canRevealPii}
+                  label="PAN"
+                  fallback="—"
+                />
+              ) : (
+                "—"
+              )}
+            </dd>
+          </div>
+          <div>
+            <dt style={dtStyle}>GST</dt>
+            <dd style={{ margin: 0, fontWeight: 500 }}>{String(contractor.gst ?? "—")}</dd>
+          </div>
+          <div>
+            <dt style={dtStyle}>Active</dt>
+            <dd style={{ margin: 0, fontWeight: 500 }}>{contractor.active ? "Yes" : "No"}</dd>
+          </div>
         </dl>
       </Card>
 
-      {/* Rate Contractor card */}
-      <Card title="Rate Contractor">
-        <div style={{ padding: "16px" }}>
-          <ContractorRatingForm
-            contractorId={params.id}
-            currentRating={contractor.performanceRating ?? 0}
-            ratingCount={contractor.ratingCount}
-            canRate={canRate}
-          />
-        </div>
-      </Card>
+      {/* Rate Contractor card — only rendered for roles that can rate
+          (GAP-WORKS-CONTRACTORS-DETAIL-05). */}
+      {canRate && (
+        <Card title="Rate Contractor">
+          <div style={{ padding: "16px" }}>
+            <ContractorRatingForm
+              contractorId={params.id}
+              currentRating={contractor.performanceRating ?? 0}
+              ratingCount={contractor.ratingCount}
+              canRate={canRate}
+              lastRatedAt={ratingHistory[0]?.ratedAt ?? null}
+              lastRatedBy={ratingHistory[0]?.ratedBy ?? null}
+              viewerId={viewerId}
+            />
+          </div>
+        </Card>
+      )}
 
       {/* Rating History card */}
       <Card title={`Rating History (${ratingHistory.length})`}>
-        {ratingHistory.length === 0 ? (
+        {ratingSource === "error" ? (
+          // GAP-WORKS-CONTRACTORS-DETAIL-01: a failed history fetch must not
+          // masquerade as "No ratings recorded yet."
+          <div style={{ padding: "12px 0" }}>
+            <RefreshErrorState
+              error={{
+                what: "Couldn't load the rating history.",
+                next: "This is usually temporary — try again.",
+                actions: ["retry"],
+              }}
+            />
+          </div>
+        ) : ratingHistory.length === 0 ? (
           <p style={{ fontSize: 13, color: "var(--muted)", padding: "12px 0" }}>
             No ratings recorded yet.
           </p>
@@ -306,6 +368,7 @@ export default async function ContractorDetailPage({
               { key: "ratedAt", label: "Date" },
               { key: "rating", label: "Rating (1–5)" },
               { key: "ratedBy", label: "Rated By" },
+              { key: "note", label: "Comment" },
             ]}
             rows={ratingDisplayRows}
             pageSize={10}
@@ -340,19 +403,44 @@ export default async function ContractorDetailPage({
           ← All contractors
         </Link>
         <ContractorEditToggle
-          contractor={{
-            id: contractor.id,
-            name: contractor.name,
-            registrationNo: contractor.registrationNo ?? null,
-            pan: contractor.pan ?? null,
-            gst: contractor.gst ?? null,
-            email: contractor.email ?? null,
-            phone: contractor.phone ?? null,
-            address: contractor.address ?? null,
-          }}
+          contractor={
+            canRevealPii
+              ? {
+                  id: contractor.id,
+                  name: contractor.name,
+                  registrationNo: contractor.registrationNo ?? null,
+                  pan: contractor.pan ?? null,
+                  gst: contractor.gst ?? null,
+                  email: contractor.email ?? null,
+                  phone: contractor.phone ?? null,
+                  address: contractor.address ?? null,
+                }
+              : {
+                  // GAP-WORKS-CONTRACTORS-DETAIL-02 step 4: a non-editor's RSC
+                  // payload must not carry the clear PAN/phone/email. The edit
+                  // toggle renders null for them anyway (canEdit=false).
+                  id: contractor.id,
+                  name: contractor.name,
+                  registrationNo: contractor.registrationNo ?? null,
+                  pan: null,
+                  gst: null,
+                  email: null,
+                  phone: null,
+                  address: null,
+                }
+          }
           roles={roles}
         />
       </div>
     </div>
   );
 }
+
+const dtStyle: React.CSSProperties = {
+  fontSize: 11,
+  color: "var(--muted)",
+  fontWeight: 600,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+  marginBottom: 2,
+};

@@ -15,6 +15,17 @@ vi.mock("@/app/_components/ds/Toast", () => ({
   }),
 }));
 
+// Work picker adapter — resolve the preset id to a label so the picker shows it.
+vi.mock("@/lib/entityAdapters/workProposal", () => ({
+  searchWorkProposals: vi.fn(async () => [{ id: "11111111-1111-1111-1111-111111111111", label: "WRK-1", sublabel: "Road" }]),
+  resolveWorkProposals: vi.fn(async () => [{ id: "11111111-1111-1111-1111-111111111111", label: "WRK-1", sublabel: "Road" }]),
+}));
+
+// SR search adapter.
+vi.mock("../../_data/client", () => ({
+  searchSrItems: vi.fn(async () => [{ id: "sr-1", itemCode: "PCC-1-4-8", description: "PCC 1:4:8", unit: "cum", rate: "45000" }]),
+}));
+
 import NewBoqItemPage from "./page";
 
 const WORK = "11111111-1111-1111-1111-111111111111";
@@ -26,26 +37,42 @@ describe("Add BoQ Item form", () => {
     searchParamsMock = new URLSearchParams();
   });
 
-  it("prefills the Work ID from the ?workId passed by the BoQ detail page", () => {
-    searchParamsMock = new URLSearchParams(`workId=${WORK}`);
-    render(<NewBoqItemPage />);
-    expect(screen.getByLabelText(/Work ID/i)).toHaveValue(WORK);
-  });
-
-  it("converts the rupee rate to integer paise before posting", async () => {
-    searchParamsMock = new URLSearchParams(`workId=${WORK}`);
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ data: { id: "boq-1" } }), { status: 202 }),
-    );
-
-    render(<NewBoqItemPage />);
+  function fillRequired() {
     fireEvent.change(screen.getByLabelText(/Item description/i), { target: { value: "PCC 1:4:8" } });
     fireEvent.change(screen.getByLabelText(/^Unit/i), { target: { value: "cum" } });
-    fireEvent.change(screen.getByLabelText(/Rate per unit/i), { target: { value: "12.50" } });
     fireEvent.change(screen.getByLabelText(/Quantity/i), { target: { value: "3" } });
+  }
 
+  it("GAP-WORKS-BOQ-NEW-02: formats the live estimate as grouped rupees (₹…), not a bare float", async () => {
+    searchParamsMock = new URLSearchParams(`workId=${WORK}`);
+    render(<NewBoqItemPage />);
+    fireEvent.change(screen.getByLabelText(/Rate per unit/i), { target: { value: "125" } });
+    fireEvent.change(screen.getByLabelText(/Quantity/i), { target: { value: "1000" } });
+    // ₹125 × 1000 = ₹1,25,000.00 (Indian grouping), never "125000.00"
+    await waitFor(() => expect(screen.getByText(/Estimated: ₹1,25,000\.00/)).toBeInTheDocument());
+  });
+
+  it("GAP-WORKS-BOQ-NEW-01/02: rejects a sub-paise rate like 1.005 before posting", async () => {
+    searchParamsMock = new URLSearchParams(`workId=${WORK}`);
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    render(<NewBoqItemPage />);
+    fillRequired();
+    fireEvent.change(screen.getByLabelText(/Rate per unit/i), { target: { value: "1.005" } });
     fireEvent.click(screen.getByRole("button", { name: "Add BoQ Item" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/valid rate/i);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
 
+  it("GAP-WORKS-BOQ-NEW-01: converts rupee rate to paise and posts it (bigint money rule)", async () => {
+    searchParamsMock = new URLSearchParams(`workId=${WORK}`);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "boq-1" }), { status: 202 }),
+    );
+    render(<NewBoqItemPage />);
+    fillRequired();
+    fireEvent.change(screen.getByLabelText(/Rate per unit/i), { target: { value: "12.50" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add BoQ Item" }));
     await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
     const [url, init] = fetchSpy.mock.calls[0];
     expect(url).toBe("/api/proxy/v1/works/boq");
@@ -54,17 +81,25 @@ describe("Add BoQ Item form", () => {
     expect(body.workId).toBe(WORK);
   });
 
+  it("GAP-WORKS-BOQ-NEW-04: maps a 409 duplicate to a clear field message, not the raw status", async () => {
+    searchParamsMock = new URLSearchParams(`workId=${WORK}`);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 409 }));
+    render(<NewBoqItemPage />);
+    fillRequired();
+    fireEvent.change(screen.getByLabelText(/Rate per unit/i), { target: { value: "12.50" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add BoQ Item" }));
+    const alert = await screen.findByRole("alert");
+    await waitFor(() => expect(alert).toHaveTextContent(/already exists for this work/i));
+    expect(alert.textContent).not.toMatch(/\b409\b/);
+  });
+
   it("shows a clerk-safe message, never the raw HTTP status, when the create fails (UX-016)", async () => {
     searchParamsMock = new URLSearchParams(`workId=${WORK}`);
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 500 }));
-
     render(<NewBoqItemPage />);
-    fireEvent.change(screen.getByLabelText(/Item description/i), { target: { value: "PCC 1:4:8" } });
-    fireEvent.change(screen.getByLabelText(/^Unit/i), { target: { value: "cum" } });
+    fillRequired();
     fireEvent.change(screen.getByLabelText(/Rate per unit/i), { target: { value: "12.50" } });
-    fireEvent.change(screen.getByLabelText(/Quantity/i), { target: { value: "3" } });
     fireEvent.click(screen.getByRole("button", { name: "Add BoQ Item" }));
-
     const alert = await screen.findByRole("alert");
     await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
     expect(alert.textContent).not.toMatch(/\b500\b/);

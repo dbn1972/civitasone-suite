@@ -111,4 +111,24 @@ describe("ApprovalFinalizeButton", () => {
     expect(message.textContent).not.toMatch(/Internal Server Error/);
     expect(message.textContent).not.toMatch(/at Object\.<anonymous>/);
   });
+
+  // GAP-WORKS-APPROVALS-02/04: the works-service canFinalize rule accepts ONLY
+  // "draft". A "submitted" record must not offer a Finalize button that is
+  // guaranteed to 422.
+  it("does not offer Finalize for a 'submitted' record (backend accepts draft only)", () => {
+    renderWithToast(<ApprovalFinalizeButton id={AA_ID} type="aa" status="submitted" />);
+    expect(screen.queryByRole("button", { name: "Finalize AA" })).not.toBeInTheDocument();
+  });
+
+  // GAP-WORKS-APPROVALS-AA/TS-DETAIL-04: a user without a finalize role sees a
+  // disabled control with an explanation and can never fire the request.
+  it("renders a disabled Finalize with an explanation when the user lacks the role, and never POSTs", () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    renderWithToast(<ApprovalFinalizeButton id={AA_ID} type="aa" status="draft" canFinalize={false} />);
+    const btn = screen.getByRole("button", { name: "Finalize AA" }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    expect(btn.getAttribute("title")).toMatch(/works approver role/i);
+    fireEvent.click(btn);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
 });

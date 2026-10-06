@@ -557,3 +557,33 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 .ta-field-ok {
   color: var(--good);
 }
+
+/* GAP-WORKS-MASTERS-06: masters registry two-column layout. Was inline styles
+   (width:220 flex column) with no media query, so on a phone the nav ate ~60%
+   of the row and squeezed the table. These classes make the nav stack above
+   the content below 768px. */
+.masters-layout {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  margin-top: 20px;
+}
+.masters-nav {
+  width: 220px;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.masters-content {
+  flex: 1;
+  min-width: 0;
+}
+@media (max-width: 768px) {
+  .masters-layout {
+    flex-direction: column;
+  }
+  .masters-nav {
+    width: 100%;
+  }
+}

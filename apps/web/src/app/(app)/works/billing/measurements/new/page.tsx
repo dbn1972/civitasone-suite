@@ -1,9 +1,9 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
-import { PageHeader, Button } from "@/app/_components/ds";
+import { PageHeader, Button, SkeletonCard } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 const inputStyle = {
@@ -42,6 +42,47 @@ const okBanner = {
   fontSize: 13,
 } as const;
 
+/** A quantity/dimension value: a positive decimal with at most 3 places
+ * (matching the measurements.quantity numeric(18,4) column's usable
+ * precision). Empty string allowed for optional dimensions. */
+const QTY_RE = /^\d+(\.\d{1,3})?$/;
+
+type Option = { id: string; label: string; sublabel?: string };
+
+/**
+ * GAP-WORKS-BILLING-MEASUREMENTS-NEW-01: compute No. × L × B × D from the
+ * non-empty dimension fields using integer-scaled arithmetic (×1000 per
+ * factor) so the suggestion is decimal-exact, then present it rounded to 3
+ * places. Returns null when no dimension is given (nothing to suggest).
+ */
+function computeFromDimensions(d: {
+  numberVal: string;
+  lengthVal: string;
+  breadthVal: string;
+  depthVal: string;
+}): string | null {
+  const factors = [d.numberVal, d.lengthVal, d.breadthVal, d.depthVal]
+    .map((v) => v.trim())
+    .filter((v) => v !== "");
+  if (factors.length === 0) return null; // ux-001-ok: purely client-side arithmetic on the clerk typed dimensions, no loader involved
+  // Scale each factor to an integer of thousandths; reject bad input.
+  let scaledProduct = 1n;
+  let scale = 0;
+  for (const f of factors) {
+    if (!QTY_RE.test(f)) return null;
+    const [whole, frac = ""] = f.split(".");
+    const thousandths = BigInt(whole) * 1000n + BigInt(frac.padEnd(3, "0"));
+    scaledProduct *= thousandths;
+    scale += 3;
+  }
+  // scaledProduct is the product in units of 10^-scale; render to 3 dp.
+  const divisorExtra = BigInt(10) ** BigInt(scale - 3);
+  const milli = scaledProduct / divisorExtra; // now in thousandths
+  const whole = milli / 1000n;
+  const frac = (milli % 1000n).toString().padStart(3, "0");
+  return `${whole}.${frac}`;
+}
+
 type MeasurementForm = {
   mbId: string;
   boqItemId: string;
@@ -58,6 +99,8 @@ function RecordMeasurementForm() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
 
+  const workId = (searchParams.get("workId") ?? "").trim();
+
   const [form, setForm] = useState<MeasurementForm>({
     mbId: searchParams.get("mbId") ?? "",
     boqItemId: searchParams.get("boqItemId") ?? "",
@@ -73,10 +116,46 @@ function RecordMeasurementForm() {
   const [message, setMessage] = useState("");
   const formError = useFormError("measurement");
 
+  // GAP-WORKS-BILLING-MEASUREMENTS-NEW-02: when the work is known, offer the
+  // work's MBs as a select (and show the selected MB number) instead of a
+  // pasted UUID.
+  const [mbs, setMbs] = useState<Option[] | null>(null);
+  useEffect(() => {
+    if (!workId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/proxy/v1/works/billing/${workId}/mbs`);
+        if (cancelled || !res.ok) return;
+        const body = (await res.json()) as { data?: unknown };
+        const rows = Array.isArray(body.data) ? body.data : [];
+        setMbs(
+          rows.map((r) => {
+            const row = r as Record<string, unknown>;
+            return { id: String(row.id ?? ""), label: String(row.mbNumber ?? row.id ?? "") };
+          }),
+        );
+      } catch {
+        /* leave null → text input */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [workId]);
+
   function set(field: keyof MeasurementForm) {
-    return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
   }
+
+  const computed = computeFromDimensions(form);
+  // A mismatch is when a computed value exists and the typed quantity differs
+  // from it (beyond a 0.001 tolerance). Then a remark is required before save.
+  const qtyNum = Number(form.quantity);
+  const computedNum = computed !== null ? Number(computed) : null;
+  const mismatch =
+    computedNum !== null && QTY_RE.test(form.quantity.trim()) && Math.abs(qtyNum - computedNum) > 0.001;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -84,9 +163,37 @@ function RecordMeasurementForm() {
     setError("");
     setMessage("");
 
-    const qty = parseFloat(form.quantity);
-    if (!qty || qty <= 0) {
-      setError("Quantity must be a positive number.");
+    // GAP-WORKS-BILLING-MEASUREMENTS-NEW-03/04: validate the quantity and
+    // dimensions as positive decimals (≤3 dp) before building the payload —
+    // reject NaN/Infinity/negatives rather than letting parseFloat coerce
+    // them. Quantity is a physical measure (not money), sent as a JSON number
+    // per the works-service recordMeasurementSchema (z.number().positive()).
+    const q = form.quantity.trim();
+    if (!QTY_RE.test(q) || Number(q) <= 0) {
+      setError("Quantity must be a positive number with up to 3 decimal places.");
+      setBusy(false);
+      return;
+    }
+    for (const [field, val] of [
+      ["No.", form.numberVal],
+      ["Length", form.lengthVal],
+      ["Breadth", form.breadthVal],
+      ["Depth", form.depthVal],
+    ] as const) {
+      const t = val.trim();
+      if (t !== "" && !QTY_RE.test(t)) {
+        setError(`${field} must be a non-negative number with up to 3 decimal places.`);
+        setBusy(false);
+        return;
+      }
+    }
+    // GAP-WORKS-BILLING-MEASUREMENTS-NEW-01: a quantity that disagrees with the
+    // computed L×B×D×No. must be justified with a remark before it becomes the
+    // authoritative billed value.
+    if (mismatch && !form.remarks.trim()) {
+      setError(
+        `Quantity (${q}) differs from the computed value (${computed}). Add a remark explaining the difference, or use the computed value.`,
+      );
       setBusy(false);
       return;
     }
@@ -94,12 +201,12 @@ function RecordMeasurementForm() {
     const body: Record<string, unknown> = {
       mbId: form.mbId.trim(),
       boqItemId: form.boqItemId.trim(),
-      quantity: qty,
+      quantity: Number(q),
     };
-    if (form.numberVal)  body.numberVal  = parseFloat(form.numberVal);
-    if (form.lengthVal)  body.lengthVal  = parseFloat(form.lengthVal);
-    if (form.breadthVal) body.breadthVal = parseFloat(form.breadthVal);
-    if (form.depthVal)   body.depthVal   = parseFloat(form.depthVal);
+    if (form.numberVal.trim()) body.numberVal = Number(form.numberVal.trim());
+    if (form.lengthVal.trim()) body.lengthVal = Number(form.lengthVal.trim());
+    if (form.breadthVal.trim()) body.breadthVal = Number(form.breadthVal.trim());
+    if (form.depthVal.trim()) body.depthVal = Number(form.depthVal.trim());
     if (form.remarks.trim()) body.remarks = form.remarks.trim();
 
     formError.clear();
@@ -115,10 +222,8 @@ function RecordMeasurementForm() {
       }
       setMessage("Measurement recorded.");
       toast.success("Measurement recorded.");
-      const workId = searchParams.get("workId");
       setTimeout(() => {
-        if (workId) router.push("/works/billing/" + workId);
-        else router.push("/works/billing");
+        router.push(workId ? "/works/billing/" + workId : "/works/billing");
       }, 600);
     } catch (caught) {
       setError(formError.fromException("save", caught).message);
@@ -127,14 +232,14 @@ function RecordMeasurementForm() {
     }
   }
 
-  const backWorkId = searchParams.get("workId");
+  const backHref = workId ? "/works/billing/" + workId : "/works/billing";
 
   return (
     <>
       <PageHeader
         title="Record Measurement"
         subtitle="Enter measured quantities against a Measurement Book item."
-        back={backWorkId ? "/works/billing/" + backWorkId : "/works/billing"}
+        back={backHref}
         backLabel="Billing"
       />
 
@@ -166,16 +271,25 @@ function RecordMeasurementForm() {
             }}
           >
             <div>
-              <label style={labelStyle} htmlFor="mbId">Measurement Book ID (UUID) *</label>
-              <input
-                id="mbId"
-                style={inputStyle}
-                type="text"
-                value={form.mbId}
-                onChange={set("mbId")}
-                placeholder="UUID of the MB"
-                required
-              />
+              <label style={labelStyle} htmlFor="mbId">Measurement Book *</label>
+              {mbs && mbs.length > 0 ? (
+                <select id="mbId" style={inputStyle} value={form.mbId} onChange={set("mbId")} required>
+                  <option value="">Select a measurement book…</option>
+                  {mbs.map((m) => (
+                    <option key={m.id} value={m.id}>{m.label}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  id="mbId"
+                  style={inputStyle}
+                  type="text"
+                  value={form.mbId}
+                  onChange={set("mbId")}
+                  placeholder="UUID of the MB"
+                  required
+                />
+              )}
             </div>
             <div>
               <label style={labelStyle} htmlFor="boqItemId">BoQ Item ID (UUID) *</label>
@@ -205,6 +319,27 @@ function RecordMeasurementForm() {
               placeholder="Measured quantity (e.g. 12.5)"
               required
             />
+            {computed !== null && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
+                <span style={{ fontSize: 12, color: "var(--muted)" }}>
+                  Computed from dimensions: <strong>{computed}</strong>
+                </span>
+                <button
+                  type="button"
+                  className="btn ghost"
+                  style={{ minHeight: 28, fontSize: 12, padding: "2px 10px" }}
+                  onClick={() => setForm((prev) => ({ ...prev, quantity: computed }))}
+                >
+                  Use computed
+                </button>
+              </div>
+            )}
+            {mismatch && (
+              <p role="status" style={{ fontSize: 12, color: "#92400e", marginTop: 6 }}>
+                ⚠️ Entered quantity differs from the computed value — add a remark explaining why,
+                or use the computed value.
+              </p>
+            )}
           </div>
 
           {/* Dimensions */}
@@ -248,31 +383,30 @@ function RecordMeasurementForm() {
               ))}
             </div>
             <p style={{ margin: "10px 0 0", fontSize: 11, color: "var(--muted)" }}>
-              L × B × D × No. product is for reference — the backend uses <code>quantity</code> as the authoritative value.
+              Enter dimensions to get a computed suggestion for Quantity. Quantity remains the
+              authoritative value the backend bills against — the computed figure is a cross-check.
             </p>
           </fieldset>
 
           {/* Remarks */}
           <div>
-            <label style={labelStyle} htmlFor="remarks">Remarks</label>
+            <label style={labelStyle} htmlFor="remarks">
+              Remarks{mismatch ? " *" : ""}
+            </label>
             <textarea
               id="remarks"
               style={{ ...inputStyle, minHeight: 80, resize: "vertical" }}
               value={form.remarks}
               onChange={set("remarks")}
               maxLength={2048}
-              placeholder="Optional site observation or note"
+              placeholder={mismatch ? "Required: explain why the quantity differs from the computed value" : "Optional site observation or note"}
             />
           </div>
 
           <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 4 }}>
             <Button
               variant="ghost"
-              onClick={() => {
-                const workId = searchParams.get("workId");
-                if (workId) router.push("/works/billing/" + workId);
-                else router.push("/works/billing");
-              }}
+              onClick={() => router.push(backHref)}
               disabled={busy}
             >
               Cancel
@@ -292,8 +426,9 @@ function RecordMeasurementForm() {
 }
 
 export default function RecordMeasurementPage() {
+  // GAP-WORKS-BILLING-MEASUREMENTS-NEW-04: visible Suspense fallback.
   return (
-    <Suspense>
+    <Suspense fallback={<SkeletonCard />}>
       <RecordMeasurementForm />
     </Suspense>
   );

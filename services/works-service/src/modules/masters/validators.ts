@@ -14,6 +14,29 @@ export const updateMasterSchema = z.object({
   version: z.number().int().min(1),
 });
 
+/**
+ * GAP-WORKS-MASTERS-04: body schema for PATCH /v1/works/masters/:type/:id.
+ * Conservatively limited to the fields that are safe to edit after creation
+ * across every master type — name, code and the active flag — plus a REQUIRED
+ * `version` for optimistic concurrency (reject a stale write). Parent links
+ * (workTypeId/programId/issueTypeId) and money fields (rate/cost) are
+ * deliberately NOT editable here: changing a master's parent or rate after
+ * live records reference it would silently rewrite history, so those are
+ * out of scope for an in-place edit (create a new master instead). At least
+ * one editable field must be present alongside version.
+ */
+export const patchMasterSchema = z
+  .object({
+    name: z.string().min(1).max(256).optional(),
+    code: z.string().min(1).max(64).optional(),
+    active: z.boolean().optional(),
+    version: z.number().int().min(1),
+  })
+  .refine(
+    (b) => b.name !== undefined || b.code !== undefined || b.active !== undefined,
+    { message: "at least one of name, code or active must be provided" },
+  );
+
 export const createAuthoritySchema = z.object({
   name: z.string().min(1).max(256),
   code: z.string().min(1).max(64),
@@ -83,4 +106,10 @@ export const createRepairTypeSchema = z.object({
 export const paginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(20),
+});
+
+/** GAP-WORKS-BOQ-NEW-01: query for the SR-items typeahead (BoQ Add-item picker). */
+export const srItemSearchSchema = z.object({
+  q: z.string().max(256).optional().default(""),
+  limit: z.coerce.number().int().min(1).max(50).optional().default(20),
 });
