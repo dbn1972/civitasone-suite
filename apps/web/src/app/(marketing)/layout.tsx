@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { MobileNav } from "./MobileNav";
 
 export const metadata: Metadata = {
   title: "CivitasOne — The ERP that works without internet",
@@ -26,9 +27,18 @@ function NavBar() {
           <Link href="/docs" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">
             Docs
           </Link>
+          <Link href="/contact" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">
+            Contact
+          </Link>
         </div>
 
         <div className="flex items-center gap-3">
+          <Link
+            href="/contact"
+            className="hidden rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors md:inline-block"
+          >
+            Contact sales
+          </Link>
           <Link
             href="/sandbox"
             className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
@@ -41,6 +51,7 @@ function NavBar() {
           >
             Sign In
           </Link>
+          <MobileNav />
         </div>
       </nav>
     </header>
