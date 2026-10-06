@@ -1,11 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-
-export const metadata: Metadata = {
-  title: "API Reference — CivitasOne",
-  description:
-    "OpenAPI 3.1 specification for the CivitasOne Suite REST API. Bearer token auth, CQRS async writes, 33 services.",
-};
+import { CopyCodeBlock } from "../_content/CopyCodeBlock";
 
 const services = [
   { name: "Finance", description: "Budget, bills, payments, GL, sanctions", endpoints: 45 },
@@ -20,6 +15,33 @@ const services = [
   { name: "Audit", description: "Events, compliance, observations", endpoints: 14 },
 ];
 
+// Totals are DERIVED from the services array above so the displayed numbers
+// can never drift from the list (GAP-DOCS-API-01). The grid below is a
+// curated selection, not the full platform surface.
+const selectedServiceCount = services.length;
+const selectedEndpointCount = services.reduce((sum, s) => sum + s.endpoints, 0);
+
+// Hosted (SaaS) base URL. Self-hosted tenants run their own host, so this is
+// overridable via NEXT_PUBLIC_API_DOCS_BASE (GAP-DOCS-API-03).
+const apiBaseUrl =
+  process.env.NEXT_PUBLIC_API_DOCS_BASE ?? "https://api.civitasone.app";
+
+export const metadata: Metadata = {
+  title: "API Reference — CivitasOne",
+  description:
+    "OpenAPI 3.1 specification for the CivitasOne Suite REST API. Bearer token auth, CQRS async writes.",
+};
+
+const AUTH_SNIPPET = `Authorization: Bearer <access_token>
+
+# Obtain token:
+POST /realms/civitasone/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&client_id=<id>&client_secret=<secret>`;
+
+const GENERATE_SNIPPET = `node scripts/docs/generate-openapi.mjs > docs/api/openapi-generated.yaml`;
+
 export default function ApiDocsPage() {
   return (
     <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
@@ -29,9 +51,11 @@ export default function ApiDocsPage() {
           API Reference
         </h1>
         <p className="mt-4 text-lg text-gray-500">
-          CivitasOne exposes a unified REST API across 33 microservices with 1,185+
-          endpoints. All write operations use CQRS (return 202 Accepted) and all
-          requests require Bearer token authentication via Keycloak OIDC.
+          CivitasOne exposes a unified REST API across its microservices. All write
+          operations use CQRS (return 202 Accepted) and all requests require Bearer
+          token authentication via an OIDC-compliant identity provider. The selection
+          below covers {selectedServiceCount} services and{" "}
+          {selectedEndpointCount.toLocaleString("en-IN")} endpoints.
         </p>
       </div>
 
@@ -45,31 +69,40 @@ export default function ApiDocsPage() {
           <span aria-hidden="true">📄</span> Download OpenAPI Spec (YAML)
         </a>
         <a
-          href="https://api.civitasone.app"
+          href={apiBaseUrl}
           className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
           target="_blank"
           rel="noopener noreferrer"
         >
-          <span aria-hidden="true">🔗</span> Production Base URL
+          <span aria-hidden="true">🔗</span> Hosted (SaaS) Base URL
         </a>
       </div>
+      <p className="mt-2 text-xs text-gray-500">
+        Self-hosted and on-premise tenants use their own base URL — substitute your
+        environment&apos;s host for the hosted URL shown above.
+      </p>
 
       {/* Auth section */}
       <div className="mt-12 rounded-xl border border-gray-200 bg-gray-50 p-6">
         <h2 className="text-lg font-semibold text-gray-900">Authentication</h2>
         <p className="mt-2 text-sm text-gray-600">
-          All endpoints require a Bearer token obtained from Keycloak. Include the token
-          in the <code className="rounded bg-gray-200 px-1.5 py-0.5 text-xs font-mono">Authorization</code> header:
+          All endpoints require a Bearer token obtained from your OIDC-compliant
+          identity provider. Include the token in the{" "}
+          <code className="rounded bg-gray-200 px-1.5 py-0.5 text-xs font-mono">Authorization</code> header:
         </p>
-        <pre className="mt-3 overflow-x-auto rounded-lg bg-gray-900 p-4 text-sm text-green-400 font-mono">
-{`Authorization: Bearer <access_token>
-
-# Obtain token:
-POST /realms/civitasone/protocol/openid-connect/token
-Content-Type: application/x-www-form-urlencoded
-
-grant_type=client_credentials&client_id=<id>&client_secret=<secret>`}
-        </pre>
+        <CopyCodeBlock code={AUTH_SNIPPET} />
+        <p className="mt-2 text-sm text-gray-600">
+          <strong className="font-semibold text-gray-900">Keep secrets server-side.</strong>{" "}
+          The <code className="rounded bg-gray-200 px-1.5 py-0.5 text-xs font-mono">client_secret</code>{" "}
+          must never be shipped to a browser or mobile client — use the
+          client_credentials flow only from a trusted backend. Request the minimum
+          scopes your integration needs, and issue, rotate and revoke credentials from{" "}
+          <Link href="/developer-portal" className="font-medium text-gray-900 underline">
+            the Developer Portal API Keys
+          </Link>
+          . A browser or SPA integration should use the Authorization Code flow with
+          PKCE instead of client_credentials.
+        </p>
       </div>
 
       {/* CQRS note */}
@@ -77,15 +110,16 @@ grant_type=client_credentials&client_id=<id>&client_secret=<secret>`}
         <h2 className="text-lg font-semibold text-gray-900">Write Pattern (CQRS)</h2>
         <p className="mt-2 text-sm text-gray-600">
           All mutations (POST, PUT, PATCH, DELETE) return <code className="rounded bg-blue-100 px-1.5 py-0.5 text-xs font-mono">202 Accepted</code> with
-          a correlation ID. The command is processed asynchronously via SQS.
-          Subscribe to webhooks or poll for status updates.
+          a correlation ID. The command is processed asynchronously via the platform
+          message queue. Subscribe to webhooks or poll for status updates.
         </p>
       </div>
 
       {/* Services grid */}
-      <h2 className="mt-12 text-2xl font-bold text-gray-900">Services</h2>
+      <h2 className="mt-12 text-2xl font-bold text-gray-900">Services (selected)</h2>
       <p className="mt-2 text-gray-500">
-        Each service owns its own database and exposes a focused API surface.
+        A selection of {selectedServiceCount} services. Each service owns its own
+        database and exposes a focused API surface.
       </p>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -105,12 +139,11 @@ grant_type=client_credentials&client_id=<id>&client_secret=<secret>`}
       <div className="mt-12 border-t border-gray-100 pt-8">
         <h2 className="text-lg font-semibold text-gray-900">OpenAPI Specification</h2>
         <p className="mt-2 text-sm text-gray-600">
-          The curated spec covers the top 35 most-used endpoints with full request/response
-          schemas. For the complete auto-generated spec covering all 1,185 endpoints, run:
+          The downloadable spec above covers a curated set of the most-used endpoints
+          with full request/response schemas. To regenerate the complete
+          auto-generated spec from the live services, run:
         </p>
-        <pre className="mt-3 overflow-x-auto rounded-lg bg-gray-900 p-4 text-sm text-green-400 font-mono">
-{`node scripts/docs/generate-openapi.mjs > docs/api/openapi-generated.yaml`}
-        </pre>
+        <CopyCodeBlock code={GENERATE_SNIPPET} />
       </div>
 
       {/* Back link */}
