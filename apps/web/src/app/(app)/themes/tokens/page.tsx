@@ -1,40 +1,78 @@
-import { PageShell } from "../../../_components/PageShell";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PageHeader } from "@/app/_components/ds/PageHeader";
+import { RefreshErrorState } from "@/app/_components/ds/RefreshErrorState";
 import { Card, StatGrid, StatCard } from "@/app/_components/ds";
 import { getThemeTokens } from "../../../_data/loaders";
 import { ThemeActions } from "../ThemeActions";
 import { ThemeTokenTable } from "../ThemeTokenTable";
-import { ArrowLeft } from "lucide-react";
+import { ThemeContrastPanel } from "../ThemeContrastPanel";
+import { isCssColour } from "@/lib/colour";
 
-const HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+export const dynamic = "force-dynamic";
 
 export default async function Page() {
-	const { data: themeTokens, source } = await getThemeTokens();
+  const { data: themeTokens, source } = await getThemeTokens();
 
-	const total = themeTokens.length;
-	const colourTokens = themeTokens.filter((t) => HEX.test(String(t.value ?? "").trim())).length;
-	const scalarTokens = total - colourTokens;
+  // GAP-THEMES-TOKENS-01: a failed read must not look like a healthy, empty
+  // tenant that merely needs a publish. Show a real error state with Retry and
+  // suppress the stats/palette/publish entirely so the page never nudges the
+  // user to publish a tenant-wide theme on top of data it could not read.
+  if (source === "error") {
+    return (
+      <div className="page-main" aria-labelledby="page-heading">
+        <PageHeader
+          title="Themes — Tokens"
+          subtitle="Tenant branding and token preview workspace."
+          back="/themes"
+          backLabel="Themes"
+        />
+        <Card title="Token palette">
+          <div className="pad">
+            <RefreshErrorState
+              error={{
+                what: "We could not load the theme tokens.",
+                next: "Try again before publishing a new revision.",
+                actions: ["retry", "back"],
+              }}
+              source={{ area: "theme tokens" }}
+              backHref="/themes"
+            />
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
-	return (
-		<PageShell title="Themes — Tokens" description="Tenant branding and token preview workspace.">
-			<nav aria-label="Breadcrumb" className="back">
-				<ArrowLeft aria-hidden="true" size={14} /> <a href="/themes">Themes</a>
-			</nav>
-			{source === "error" ? <DataSourceBadge source={source} /> : null}
+  const total = themeTokens.length;
+  const colourTokens = themeTokens.filter((t) => isCssColour(String(t.value ?? ""))).length;
+  const scalarTokens = total - colourTokens;
 
-			<StatGrid>
-				<StatCard icon="🎨" label="Theme tokens" value={total} />
-				<StatCard icon="🌈" iconBg="#fef3c7" label="Colour tokens" value={colourTokens} />
-				<StatCard icon="⚙️" iconBg="#e0e7ff" label="Scalar tokens" value={scalarTokens} />
-			</StatGrid>
+  return (
+    <div className="page-main" aria-labelledby="page-heading">
+      <PageHeader
+        title="Themes — Tokens"
+        subtitle="Tenant branding and token preview workspace."
+        back="/themes"
+        backLabel="Themes"
+      />
 
-			<ThemeActions />
+      <StatGrid>
+        <StatCard icon="🎨" label="Theme tokens" value={total} />
+        <StatCard icon="🌈" tone="warn" label="Colour tokens" value={colourTokens} />
+        <StatCard icon="⚙️" tone="info" label="Scalar tokens" value={scalarTokens} />
+      </StatGrid>
 
-			<Card title="Token palette">
-				<div className="pad">
-					<ThemeTokenTable tokens={themeTokens} />
-				</div>
-			</Card>
-		</PageShell>
-	);
+      {/* GAP-THEMES-TOKENS-03: show a WCAG contrast check for the key colour
+          pairs before the user can publish, so an inaccessible palette is
+          visible at a glance rather than discovered after it ships. */}
+      <ThemeContrastPanel tokens={themeTokens} />
+
+      <ThemeActions />
+
+      <Card title="Token palette">
+        <div className="pad">
+          <ThemeTokenTable tokens={themeTokens} />
+        </div>
+      </Card>
+    </div>
+  );
 }

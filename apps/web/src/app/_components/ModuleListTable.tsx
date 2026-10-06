@@ -1,6 +1,7 @@
 "use client";
 
 import { Card, EmptyState } from "./ds";
+import { StatusPill } from "./ds/StatusPill";
 import { DataSourceBadge } from "./DataSourceBadge";
 import { RefreshErrorState } from "./ds/RefreshErrorState";
 import type { ModuleRowSummary } from "@civitasone/types";
@@ -88,7 +89,7 @@ export function ModuleListTable({
                 <td><span className="mono" title={row.id}>{UUID_RE.test(row.id) ? row.id.slice(0, 8) : row.id}</span></td>
                 <td>{row.label}</td>
                 <td>{row.sublabel ?? "—"}</td>
-                <td>{row.status ?? "—"}</td>
+                <td>{row.status ? <StatusPill status={row.status} /> : "—"}</td>
                 <td>{row.meta ?? "—"}</td>
               </tr>
             ))}

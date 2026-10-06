@@ -4,6 +4,7 @@
  */
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import type { ModuleRowSummary } from "@civitasone/types";
+import { formatIndianDate } from "@/lib/formatters";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -25,7 +26,7 @@ function extractRows(payload: unknown): unknown[] {
   return [payload];
 }
 
-function mapRows(payload: unknown): ModuleRowSummary[] {
+export function mapRows(payload: unknown): ModuleRowSummary[] {
   const mapped: ModuleRowSummary[] = [];
   for (const [index, row] of extractRows(payload).entries()) {
     if (!isRecord(row)) continue;
@@ -50,19 +51,20 @@ function mapRows(payload: unknown): ModuleRowSummary[] {
       id;
     const sublabel =
       toText(row.description) ??
-      toText(row.status) ??
-      toText(row.state) ??
       toText(row.category) ??
       toText(row.tier) ??
       toText(row.programName) ??
       toText(row.agentId) ??
       toText(row.profileId);
     const status = toText(row.status) ?? toText(row.state) ?? toText(row.lifecycle);
+    // GAP-THEMES-BRAND-02 / GAP-THEMES-BRANDING-01: date-like meta (updatedAt/
+    // createdAt) is formatted to the tenant-locale IST date (CLAUDE.md
+    // timestamps rule) instead of a raw ISO string; code/currency keep priority.
+    const dateMeta = toText(row.updatedAt) ?? toText(row.createdAt);
     const meta =
       toText(row.code) ??
       toText(row.currency) ??
-      toText(row.updatedAt) ??
-      toText(row.createdAt) ??
+      (dateMeta ? formatIndianDate(dateMeta) : undefined) ??
       (typeof row.points === "number" ? `${row.points} pts` : undefined) ??
       (typeof row.balance === "number" ? `bal ${row.balance}` : undefined);
     mapped.push({
@@ -85,7 +87,6 @@ function moduleLoader(path: string, key: string) {
     });
 }
 
-export const getThemeTokenRows = moduleLoader("/api/v1/themes/tokens", "themes.tokens");
 export const getThemeTemplates = moduleLoader("/api/v1/themes/templates", "themes.templates");
 export const getThemeBranding = moduleLoader("/api/v1/themes/branding", "themes.branding");
 export const getThemeBrand = moduleLoader("/api/v1/themes/brand", "themes.brand");

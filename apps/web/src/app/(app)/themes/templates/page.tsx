@@ -1,21 +1,23 @@
+import { getTranslations } from "next-intl/server";
 import { ModuleListPage } from "../../../_components/ModuleListPage";
 import { getThemeTemplates } from "../_data";
-import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
+  const t = await getTranslations("themes");
   const { data, source } = await getThemeTemplates();
   return (
     <div className="page-main" aria-labelledby="page-heading">
-      <nav aria-label="Breadcrumb" className="back">
-        <ArrowLeft aria-hidden="true" size={14} /> <a href="/themes">Themes</a>
-      </nav>
       <ModuleListPage
-        title="Themes — Templates"
-        description="Theme templates from theme-service."
+        title={t("templatesPageTitle")}
+        description={t("templatesPageSubtitle")}
+        cacheKey="module.themes-templates"
         rows={data}
         source={source}
+        back="/themes"
+        backLabel="Themes"
+        errorArea="theme templates"
       />
     </div>
   );

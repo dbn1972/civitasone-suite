@@ -393,3 +393,31 @@ export const NOTIFICATION_SEND_ROLES = ["notification_admin", "super_admin", "pl
 /** Mirrors notification-service NOTIFY_READ_ROLES: send roles + audit_officer. */
 export const NOTIFICATION_READ_ROLES = [...NOTIFICATION_SEND_ROLES, "audit_officer"];
 export const NOTIFICATION_TEMPLATE_ADMIN_ROLES = ["platform_admin", "super_admin", "tenant_admin"];
+
+/**
+ * GAP-THEMES-HOME-01 / GAP-THEMES-TOKENS-02 / GAP-THEMES-BRAND-05 /
+ * GAP-THEMES-BRANDING-05 / GAP-THEMES-TEMPLATES-04: theme-module role gating.
+ *
+ * The theme-service enforces roles server-side on every route (verified in
+ * services/theme-service/src/modules/*):
+ *  - token read/list/create: ["theme_user","theme_admin","super_admin"]
+ *    (modules/tokens/routes.ts ROLES)
+ *  - templates + branding (read AND write) and brand write/apply-preset +
+ *    POST /v1/themes/publish: ["theme_admin","super_admin"]
+ *    (modules/templates/routes.ts, modules/branding/routes.ts,
+ *     modules/tokens/brand-routes.ts ADMIN_ROLES, publish-routes.ts PUBLISH_ROLES)
+ *
+ * The web /themes tree had NO layout gate at all, so every signed-in user
+ * reached the hub and the publish control (and only learned they lacked
+ * access from a failed call). These constants mirror the server sets so the
+ * themes layout can add a matching requireAnyRole gate (defence-in-depth +
+ * honest UX); the server remains the authoritative gate.
+ *
+ * THEME_MODULE_ROLES is the UNION (anyone who can use ANY themes route) used
+ * by the themes hub layout so it never locks out a theme_user that the token
+ * read routes admit. THEME_ADMIN_ROLES is the narrower set that may publish /
+ * edit templates / branding / brand — the hub hides those tiles and controls
+ * from anyone outside it.
+ */
+export const THEME_ADMIN_ROLES = ["theme_admin", "super_admin"];
+export const THEME_MODULE_ROLES = ["theme_user", ...THEME_ADMIN_ROLES];
