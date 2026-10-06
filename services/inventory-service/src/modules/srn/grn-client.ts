@@ -24,6 +24,9 @@ export class ProcurementUnavailableError extends Error {
 export interface RemoteGrn {
   id: string;
   status: string;
+  /** GAP-PROCUREMENT-GRN-DETAIL-SRN-05 — the GRN creator (receiver), so the SRN
+   *  signer can be checked to be a different person (separation of duties). */
+  createdBy?: string;
 }
 
 /**
@@ -49,8 +52,9 @@ export async function fetchGrn(tenantId: string, grnId: string): Promise<RemoteG
   }
   if (res.status === 404) return null;
   if (!res.ok) throw new ProcurementUnavailableError(`procurement-service grn lookup failed: ${res.status}`);
-  const body = await res.json() as { id: string; status: string };
-  return { id: body.id, status: body.status };
+  const body = await res.json() as { id: string; status: string; createdBy?: unknown };
+  const createdBy = typeof body.createdBy === "string" && body.createdBy.length > 0 ? body.createdBy : undefined;
+  return createdBy ? { id: body.id, status: body.status, createdBy } : { id: body.id, status: body.status };
 }
 
 export interface GrnReference {

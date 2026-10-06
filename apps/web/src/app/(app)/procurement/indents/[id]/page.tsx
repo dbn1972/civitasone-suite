@@ -1,7 +1,8 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, Card, StatusPill, EmptyState, ErrorState, DataTable } from "../../../../_components/ds";
 import { getProcurementIndentById } from "../../../../_data/loaders";
-import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { formatMoney, formatIndianDate, formatIndianDateTime } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -12,6 +13,21 @@ const STATUS_LABELS: Record<string, string> = {
   rejected: "Rejected",
   converted_to_po: "Converted to PO",
   closed: "Closed",
+};
+
+// GAP-PROCUREMENT-INDENTS-DETAIL-01: the detail page used to be a dead end —
+// no contextual next step for a status that implies one. These link to
+// surfaces that already exist and enforce their own roles (approvals queue;
+// PO creation; tender creation). We intentionally do NOT pass an indent id
+// query param: orders/new and tenders/new do not yet consume one (verified
+// against their page.tsx), so a prefill link would silently do nothing —
+// linking to the plain creation route is honest and still removes the dead
+// end. Statuses with no actionable next step (draft/converted_to_po/closed)
+// get none.
+const NEXT_STEP: Record<string, { href: string; label: string }> = {
+  pending_approval: { href: "/procurement/approvals", label: "View in approvals" },
+  tender_required: { href: "/procurement/tenders/new", label: "Create tender" },
+  approved: { href: "/procurement/orders/new", label: "Create purchase order" },
 };
 
 type LineItemRow = Record<string, unknown> & {
@@ -72,6 +88,11 @@ export default async function IndentDetailPage({ params }: { params: { id: strin
         back="/procurement/indents"
         actions={
           <>
+            {NEXT_STEP[indent.status] ? (
+              <Link href={NEXT_STEP[indent.status].href} className="btn primary">
+                {NEXT_STEP[indent.status].label}
+              </Link>
+            ) : null}
             <StatusPill status={indent.status} label={STATUS_LABELS[indent.status] ?? indent.status} />
             {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
           </>
@@ -104,10 +125,15 @@ export default async function IndentDetailPage({ params }: { params: { id: strin
             <span className="label">Required By</span>
             <span>{indent.requiredByDate ? formatIndianDate(indent.requiredByDate) : "—"}</span>
           </div>
-          <div className="field">
-            <span className="label">Status</span>
-            <StatusPill status={indent.status} label={STATUS_LABELS[indent.status] ?? indent.status} />
+          {/* GAP-PROCUREMENT-INDENTS-DETAIL-02: an approver needs to see WHY
+              the purchase is requested; the create form collects this
+              (required, min 3) but the detail page never showed it. */}
+          <div className="field" style={{ gridColumn: "1 / -1" }}>
+            <span className="label">Purpose / justification</span>
+            <span>{indent.purpose && indent.purpose.trim() ? indent.purpose : "—"}</span>
           </div>
+          {/* GAP-PROCUREMENT-INDENTS-DETAIL-04: the status is already shown by
+              the PageHeader pill above; a second pill here was a duplicate. */}
         </div>
       </Card>
 
@@ -124,18 +150,29 @@ export default async function IndentDetailPage({ params }: { params: { id: strin
       {indent.approvalTrail.length > 0 && (
         <Card title="Approval trail" padding>
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            {indent.approvalTrail.map((step, i) => (
-              <div key={i} style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
-                <div style={{ marginTop: "6px", width: "8px", height: "8px", borderRadius: "50%", background: "#818cf8", flexShrink: 0 }} />
-                <div>
-                  <div style={{ fontSize: "0.875rem", fontWeight: 500, color: "#1e293b" }}>
-                    {step.actor} — <span style={{ fontWeight: 400, color: "#64748b" }}>{step.action}</span>
+            {indent.approvalTrail.map((step, i) => {
+              // GAP-PROCUREMENT-INDENTS-DETAIL-03: a rejection's reason must
+              // stand out from an ordinary remark, with an explicit label.
+              const isRejection = /reject/i.test(step.action);
+              return (
+                <div key={i} style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
+                  <div style={{ marginTop: "6px", width: "8px", height: "8px", borderRadius: "50%", background: isRejection ? "var(--bad)" : "var(--info)", flexShrink: 0 }} />
+                  <div>
+                    <div style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--ink)" }}>
+                      {step.actor} — <span style={{ fontWeight: 400, color: "var(--mut)" }}>{step.action}</span>
+                    </div>
+                    {/* GAP-PROCUREMENT-INDENTS-DETAIL-03: ISO -> Indian
+                        date+time (Asia/Kolkata) instead of a raw ISO string. */}
+                    <div style={{ fontSize: "0.75rem", color: "var(--mut)" }}>{formatIndianDateTime(step.timestamp)}</div>
+                    {step.remarks && (
+                      <div style={{ fontSize: "0.75rem", color: isRejection ? "var(--bad)" : "var(--mut)", fontWeight: isRejection ? 600 : 400, marginTop: "2px" }}>
+                        {isRejection ? `Reason: ${step.remarks}` : step.remarks}
+                      </div>
+                    )}
                   </div>
-                  <div style={{ fontSize: "0.75rem", color: "var(--mut)" }}>{step.timestamp}</div>
-                  {step.remarks && <div style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "2px" }}>{step.remarks}</div>}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </Card>
       )}

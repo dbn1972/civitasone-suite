@@ -728,9 +728,19 @@ function mapApprovals(payload: unknown): ApprovalSummary[] | null {
     const owner = toText(row.owner) ?? toText(row.approver);
     const dueDisplay = toText(row.dueDisplay) ?? toText(row.due) ?? "—";
     if (!id || !referenceId || !owner) continue;
-    mapped.push({ id, referenceId, owner, dueDisplay });
+    const dueAt = toText(row.dueAt) ?? toText(row.dueDate);
+    mapped.push({ id, referenceId, owner, dueDisplay, ...(dueAt ? { dueAt } : {}) });
   }
-  return mapped.length > 0 ? mapped : null;
+  // GAP-PROCUREMENT-APPROVALS-02: return the mapped array as-is, even when
+  // empty. A tenant with zero pending approvals is a normal, successful 200
+  // ({data: []}), not a parse failure. fetchJson treats a `null` mapResponse
+  // as source:"error" (invalid_payload), so the old `mapped.length > 0 ?
+  // mapped : null` rendered the load ErrorState for a genuinely empty queue
+  // instead of the "No pending approvals" EmptyState. Only return null when
+  // the payload could not be read as a row list at all (getArrayPayload
+  // returned null above). Same regression class as mapEmployees /
+  // mapContractsListRows.
+  return mapped;
 }
 
 function mapAccounts(payload: unknown): AccountSummary[] | null {
@@ -3223,9 +3233,15 @@ export async function getProcurementPOById(id: string): Promise<LoaderResult<POD
 export type BidEvaluation = {
   id: string;
   tender: string;
+  /** GAP-PROCUREMENT-BID-EVALUATION-05: opaque tender id for linking the ref. */
+  tenderId?: string;
   bidder: string;
   technicalScore: number;
-  financialScore: number;
+  /**
+   * GAP-PROCUREMENT-BID-EVALUATION-06: null while the financial envelope is
+   * sealed (financialOpened=false). The UI renders this as a withheld "—".
+   */
+  financialScore: number | null;
   totalScore: number;
   rank: number;
   status: string;
@@ -3241,11 +3257,21 @@ export async function getProcurementBidEvaluations(): Promise<LoaderResult<BidEv
 
 export type ReverseAuction = {
   id: string;
+  // GAP-PROCUREMENT-REVERSE-AUCTION-02: stable human identifier + indent ref.
+  auctionNo: string;
+  indentRef: string;
   item: string;
   startPrice: number;
   currentLowest: number;
+  // GAP-PROCUREMENT-REVERSE-AUCTION-03: authoritative paise (string) for exact
+  // formatMoney display and BigInt savings maths.
+  startPriceMinor: string;
+  currentLowestMinor: string;
+  savingsMinor: string;
   bidders: number;
   timeRemaining: string;
+  // GAP-PROCUREMENT-REVERSE-AUCTION-01: real end instant for the client countdown.
+  endsAt: string;
   status: string;
 };
 
@@ -3255,6 +3281,18 @@ export async function getProcurementReverseAuctions(): Promise<LoaderResult<Reve
     telemetryKey: "procurement.reverse_auctions",
     mapResponse: (p) => getArrayPayload(p) as ReverseAuction[] | null,
   });
+}
+
+/**
+ * GAP-PROCUREMENT-REVERSE-AUCTION-02: a single auction for the read-only detail
+ * page. Reuses the clean list endpoint (which already returns string minor
+ * units + endsAt) and finds the row by id, rather than depending on the raw
+ * auction row's bigint serialization.
+ */
+export async function getProcurementReverseAuctionById(id: string): Promise<LoaderResult<ReverseAuction | null>> {
+  const result = await getProcurementReverseAuctions();
+  const match = (result.data ?? []).find((a) => a.id === id) ?? null;
+  return { ...result, data: match };
 }
 
 export type GemItem = {
@@ -3321,10 +3359,14 @@ export async function getProcurementEmpanelment(): Promise<LoaderResult<Empanelm
 
 export type PreBidConference = {
   id: string;
+  // GAP-PROCUREMENT-PRE-BID-01: opaque tender id for linking the tender cell.
+  tenderId: string;
   tender: string;
   date: string;
   queriesRaised: number;
   responses: number;
+  // GAP-PROCUREMENT-PRE-BID-03: unanswered queries, computed server-side.
+  openQueries: number;
   attendees: number;
   status: string;
 };
@@ -6841,16 +6883,19 @@ export async function getRequestBreachReport(): Promise<LoaderResult<RequestBrea
 // ---- Procurement: Vendor Scorecard ----------------------------------------
 export type VendorScorecard = {
   vendorId: string;
-  overallRating: number;
+  // GAP-...-SCORECARD-05: display figures can be genuinely unknown (no GRNs
+  // yet, a dimension not scored). Model that as null so the UI shows "—"
+  // instead of a fabricated red 0. overallRating/band stay required.
+  overallRating: number | null;
   ratingBand: string;
-  totalOrders: number;
-  onTimeDeliveries: number;
-  lateDeliveries: number;
-  qualityRejections: number;
-  slaBreaches: number;
-  deliveryScore: number;
-  qualityScore: number;
-  slaScore: number;
+  totalOrders: number | null;
+  onTimeDeliveries: number | null;
+  lateDeliveries: number | null;
+  qualityRejections: number | null;
+  slaBreaches: number | null;
+  deliveryScore: number | null;
+  qualityScore: number | null;
+  slaScore: number | null;
   lastUpdated: string | null;
 };
 
@@ -6869,6 +6914,11 @@ export async function getProcurementVendorScorecard(vendorId: string): Promise<L
 // ---- Procurement: Annual Plans --------------------------------------------
 export type AnnualPlanSummary = {
   id: string;
+  // GAP-PROCUREMENT-PLANNING-02: the list endpoint (planning/queries.listPlans
+  // -> serializePlan spreads the full PlanRow) already returns planNo, the
+  // human "APP/2026/001"-style number; surface it so the list can show it
+  // instead of a UUID fragment.
+  planNo?: string;
   planYear: number;
   title: string;
   department: string;

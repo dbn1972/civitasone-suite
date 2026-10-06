@@ -91,6 +91,20 @@ export function registerSrnConsumers(q: Queue): void {
   q.subscribe(COMMANDS.srnSign, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; receivedAt?: string; remarks?: string };
 
+    // Cross-service lookup OUTSIDE the DB transaction: a short read to find the
+    // SRN's GRN, then the HTTP fetchGrn. A failure to reach procurement
+    // (ProcurementUnavailableError) is retryable — the bus redelivers — rather
+    // than silently allowing a self-sign. A missing SRN skips the fetch; the
+    // transaction below raises SRN_NOT_FOUND authoritatively.
+    const pre = await db.transaction((tx) => tx.select({ grnId: storeReceiptNotes.grnId }).from(storeReceiptNotes)
+      .where(and(eq(storeReceiptNotes.tenantId, msg.tenantId), eq(storeReceiptNotes.id, p.id)))
+      .limit(1));
+    const preRead: { grnId: string | undefined; grn: Awaited<ReturnType<typeof fetchGrn>> | undefined } = {
+      grnId: pre[0]?.grnId,
+      grn: undefined,
+    };
+    if (preRead.grnId) preRead.grn = await fetchGrn(msg.tenantId, preRead.grnId);
+
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
@@ -106,6 +120,22 @@ export function registerSrnConsumers(q: Queue): void {
       } catch (err) {
         if (err instanceof DomainError) throw new NonRetryableError(err.message);
         throw err;
+      }
+
+      // GAP-PROCUREMENT-GRN-DETAIL-SRN-05 — separation of duties: the officer who
+      // signs the SRN (certifies physical acceptance into store, the GFR Rule
+      // 149 payment gate) must not be the same officer who created/received the
+      // GRN. The GRN's creator was resolved cross-service from procurement
+      // BEFORE this transaction opened (see the pre-read below) so no HTTP call
+      // holds a DB transaction/row locks. The GRN id is re-checked against the
+      // locked SRN row here, so a stale pre-read can never be trusted.
+      if (preRead.grnId !== srn.grnId) {
+        throw new Error(`SRN ${p.id} changed GRN between pre-read and sign; redeliver`);
+      }
+      if (preRead.grn?.createdBy && msg.actorId && preRead.grn.createdBy === msg.actorId) {
+        throw new NonRetryableError(
+          "SOD_VIOLATION: the GRN receiver cannot also sign the Store Receipt Note — a different store officer must sign it",
+        );
       }
 
       const [updated] = await tx.update(storeReceiptNotes)

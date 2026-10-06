@@ -19,7 +19,11 @@ const grnItemSchema = z.object({
 // the "inspector" was never more than whatever identity the receiver
 // self-declared — not a real second, independently authenticated actor.
 export const createGrnBody = z.object({
-  grnNo:        z.string().min(1).max(64),
+  // GAP-PROCUREMENT-GRN-NEW-01 — grnNo is issued server-side from a gapless
+  // per-tenant per-year sequence (allocateDocNo in grn/consumer.ts); any value
+  // the client sends is ignored. Kept optional only for backward compatibility
+  // with older callers that still include it.
+  grnNo:        z.string().max(64).optional(),
   poRef:        z.string().min(1),
   vendorId:     z.string().uuid(),
   receivedDate: z.string().optional(),

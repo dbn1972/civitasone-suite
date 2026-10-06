@@ -23,9 +23,9 @@ describe("LineItemsEditor — delete button label (Req 3.6)", () => {
 // onChange.
 function StatefulEditor() {
   const [items, setItems] = useState<LineItem[]>([
-    { itemCode: "A1", description: "First", quantity: 1, unitPrice: 10 },
-    { itemCode: "B2", description: "Second", quantity: 1, unitPrice: 20 },
-    { itemCode: "C3", description: "Third", quantity: 1, unitPrice: 30 },
+    { itemCode: "A1", description: "First", quantity: 1, unitPrice: 10, unit: "nos" },
+    { itemCode: "B2", description: "Second", quantity: 1, unitPrice: 20, unit: "nos" },
+    { itemCode: "C3", description: "Third", quantity: 1, unitPrice: 30, unit: "nos" },
   ]);
   return <LineItemsEditor items={items} onChange={setItems} />;
 }

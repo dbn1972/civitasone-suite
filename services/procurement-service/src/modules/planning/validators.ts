@@ -57,3 +57,16 @@ export const linkTenderBody = z.object({
 export type LinkTenderBody = z.infer<typeof linkTenderBody>;
 
 export const idParam = z.object({ id: z.string().uuid() });
+
+/**
+ * GAP-PROCUREMENT-PLANNING-01: plans list query — pagination plus an optional
+ * department / financial-year (FY start) filter. `limit`/`offset` mirror the
+ * platform's common listQuerySchema defaults so existing callers are unchanged.
+ */
+export const listPlansQuery = z.object({
+  limit:      z.coerce.number().int().min(1).max(200).default(50),
+  offset:     z.coerce.number().int().min(0).default(0),
+  department: z.string().min(1).max(128).optional(),
+  year:       z.coerce.number().int().min(2000).max(2100).optional(),
+});
+export type ListPlansQuery = z.infer<typeof listPlansQuery>;

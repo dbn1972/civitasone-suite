@@ -4,18 +4,11 @@ import { PageHeader, Card, StatusPill, EmptyState, ErrorState, DataTable } from 
 import { getProcurementGRNById, getSrnByGrn } from "../../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+import { getSessionUserId } from "@/lib/auth/roleGuard";
 import { AmendGrnForm } from "./AmendGrnForm";
 import { InspectGrnForm } from "./InspectGrnForm";
+import { grnStatusLabel } from "../statusLabels";
 
-const STATUS_LABELS: Record<string, string> = {
-  draft: "Draft",
-  under_inspection: "Under Inspection",
-  received: "Received",
-  quality_check: "Quality Check",
-  accepted: "Accepted",
-  partially_rejected: "Partially Rejected",
-  rejected: "Rejected",
-};
 
 // Req 1.2 — GRN partial-delivery amendment. Only editable while `draft` or
 // `under_inspection`; the server rejects a PATCH after that with 409
@@ -50,10 +43,13 @@ const ITEM_COLUMNS: { key: keyof ItemRow; label: string; align?: "left" | "right
 ];
 
 export default async function GRNDetailPage({ params }: { params: { id: string } }) {
-  const [{ data: grn, source }, { data: srn }] = await Promise.all([
+  const [{ data: grn, source }, { data: srn, source: srnSource, status: srnStatus }] = await Promise.all([
     getProcurementGRNById(params.id),
     getSrnByGrn(params.id),
   ]);
+  // GAP-PROCUREMENT-GRN-DETAIL-03 — the viewer's own user id, for an up-front
+  // separation-of-duties hint (the server stays authoritative).
+  const viewerId = getSessionUserId();
 
   if (!grn) {
     // L3 fix: see indents/[id]/page.tsx — don't tell the officer a GRN is
@@ -79,6 +75,21 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
     unit: item.unit,
   }));
 
+  // GAP-PROCUREMENT-GRN-DETAIL-02 — the match is only "known" once computed
+  // (post-inspection). An uninspected GRN must read as a neutral pending state,
+  // never a red mismatch.
+  const matchKnown = grn.threeWayMatch !== undefined;
+
+  // GAP-PROCUREMENT-GRN-DETAIL-05 — distinguish a failed SRN lookup from a
+  // genuine "no SRN yet". fetchJson returns source 'error' with a status on any
+  // non-2xx/network failure; a real 404 (or source 'api' with null) means no SRN
+  // exists. Only offer "Create SRN" when we actually know none exists.
+  const srnUnknown = !srn && srnSource === "error" && srnStatus !== 404;
+
+  // GAP-PROCUREMENT-GRN-DETAIL-03 — the viewer created this GRN, so SoD bars them
+  // from inspecting it; disable the actions up front (server still enforces).
+  const isCreator = Boolean(viewerId && grn.createdBy && viewerId === grn.createdBy);
+
   return (
     <>
       <PageHeader
@@ -87,11 +98,15 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
         back="/procurement/grn"
         actions={
           <>
-            <StatusPill
-              status={grn.threeWayMatch ? "accepted" : "rejected"}
-              label={grn.threeWayMatch ? "Three-way match" : "Three-way mismatch"}
-            />
-            <StatusPill status={grn.status} label={STATUS_LABELS[grn.status] ?? grn.status} />
+            {matchKnown ? (
+              <StatusPill
+                status={grn.threeWayMatch ? "accepted" : "rejected"}
+                label={grn.threeWayMatch ? "Three-way match" : "Three-way mismatch"}
+              />
+            ) : (
+              <StatusPill status="pending" label="Match pending inspection" />
+            )}
+            <StatusPill status={grn.status} label={grnStatusLabel(grn.status)} />
             {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
           </>
         }
@@ -117,9 +132,15 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
           </div>
           <div className="field">
             <span className="label">Three-way match</span>
-            <span style={{ color: grn.threeWayMatch ? "#16a34a" : "#b91c1c", fontWeight: 600 }}>
-              {grn.threeWayMatch ? "Matched (PO · receipt · inspection)" : "Not matched"}
-            </span>
+            {matchKnown ? (
+              <span style={{ color: grn.threeWayMatch ? "#16a34a" : "#b91c1c", fontWeight: 600 }}>
+                {grn.threeWayMatch ? "Matched (PO · receipt · inspection)" : "Not matched"}
+              </span>
+            ) : (
+              // GAP-PROCUREMENT-GRN-DETAIL-02 — neutral, not red: the match has not
+              // been computed because the GRN has not been inspected yet.
+              <span style={{ color: "var(--muted, #6b7280)", fontWeight: 600 }}>Pending inspection</span>
+            )}
           </div>
           <div className="field">
             <span className="label">Store Receipt Note (SRN)</span>
@@ -128,6 +149,15 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
                 <>
                   <StatusPill status={srn.status} label={srn.status === "signed" ? "Signed" : "Draft"} />
                   <Link href={`/procurement/grn/${grn.id}/srn`}>View SRN</Link>
+                </>
+              ) : srnUnknown ? (
+                // GAP-PROCUREMENT-GRN-DETAIL-05 — the SRN lookup failed; do NOT
+                // offer "Create SRN" (a GRN may already have a signed SRN we just
+                // couldn't read — creating a second one would be a duplicate on a
+                // payment gate).
+                <>
+                  <StatusPill status="pending" label="Unavailable" />
+                  <span style={{ fontSize: "0.8125rem", color: "var(--muted, #6b7280)" }}>Couldn&apos;t check SRN — refresh</span>
                 </>
               ) : (
                 <>
@@ -172,14 +202,14 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
         // that separation (403 SOD_VIOLATION otherwise), this is just the UI
         // entry point.
         <Card title="Inspection required" padding>
-          <InspectGrnForm grnId={grn.id} />
+          <InspectGrnForm grnId={grn.id} grnNo={grn.grnNo} isCreator={isCreator} />
         </Card>
       ) : null}
 
       {grn.items.length > 0 && canAmendGrn(grn.status) ? (
         <Card title="Amend received items" padding>
           <p style={{ marginBottom: 12, fontSize: "0.875rem", color: "var(--muted, #6b7280)" }}>
-            This GRN is still {STATUS_LABELS[grn.status] ?? grn.status} — update received and accepted
+            This GRN is still {grnStatusLabel(grn.status)} — update received and accepted
             quantities to record a partial delivery. GRN number, vendor, and PO reference cannot be changed.
           </p>
           <AmendGrnForm grnId={grn.id} items={grn.items} />

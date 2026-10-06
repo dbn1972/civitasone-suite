@@ -42,10 +42,17 @@ export function registerTenderConsumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; title: string; scope?: string; eligibility?: string;
       type: string; estimatedMinor: number; emdAmountMinor: number; bidClosingDate: string;
-      sanctionRef?: string;
+      sanctionRef?: string; openingDate?: string; indentRef?: string;
+      justificationCategory?: string; justification?: string; approvingAuthority?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // GAP-PROCUREMENT-TENDERS-NEW-04: an opening date, if supplied, must not be
+      // before the bid closing date. Reject non-retryably rather than storing a
+      // nonsensical schedule.
+      if (p.openingDate && p.bidClosingDate && p.openingDate < p.bidClosingDate) {
+        throw new NonRetryableError(`[INVALID_OPENING_DATE] opening date ${p.openingDate} is before closing date ${p.bidClosingDate}`);
+      }
       const tenderNo = await allocateDocNo(tx, p.tenantId, "tender");
       await repo.insertTender(tx, {
         id: p.id, tenantId: p.tenantId, tenderNo, title: p.title,
@@ -53,6 +60,11 @@ export function registerTenderConsumers(queue: Queue): void {
         type: p.type, estimatedMinor: BigInt(p.estimatedMinor),
         emdAmountMinor: BigInt(p.emdAmountMinor), currency: "INR",
         bidClosingDate: p.bidClosingDate, status: "draft",
+        openingDate: p.openingDate ?? null,
+        indentRef: p.indentRef ?? null,
+        justificationCategory: p.justificationCategory ?? null,
+        justification: p.justification ?? null,
+        approvingAuthority: p.approvingAuthority ?? null,
         sanctionRef: p.sanctionRef ?? null,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });

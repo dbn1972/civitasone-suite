@@ -6,7 +6,7 @@ export default function NewTenderPage() {
     <>
       <PageHeader
         title="New Tender"
-        subtitle="Float an open, limited, single-source, or GeM tender. It enters the procurement workflow."
+        subtitle="Create an open, limited, single-source, or GeM tender as a draft. Attach the NIT and publish it afterwards."
         back="/procurement/tenders"
       />
       <CreateTenderForm />

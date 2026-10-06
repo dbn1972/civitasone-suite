@@ -1,6 +1,7 @@
-import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
-import { PageHeader, Card, EmptyState } from "../../../../../_components/ds";
+import { PageHeader, Card, EmptyState, RefreshErrorState } from "../../../../../_components/ds";
 import { getProcurementVendorScorecard, getProcurementVendorById } from "../../../../../_data/loaders";
+import { toHumanError } from "@/lib/messages";
+import { formatIndianDate } from "@/lib/formatters";
 
 const BAND_COLOR: Record<string, string> = {
   excellent: "var(--good)",
@@ -10,7 +11,20 @@ const BAND_COLOR: Record<string, string> = {
   unrated:   "var(--ink2)",
 };
 
-function ScoreBar({ label, score, max = 100 }: { label: string; score: number; max?: number }) {
+function ScoreBar({ label, score, max = 100 }: { label: string; score: number | null; max?: number }) {
+  // GAP-...-SCORECARD-05: an unscored dimension is "not measured yet", not a
+  // red zero. Show "—" and a neutral grey bar rather than coercing null to 0.
+  if (score === null || score === undefined) {
+    return (
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+          <span style={{ fontSize: 13, color: "var(--ink2)" }}>{label}</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink2)" }}>—</span>
+        </div>
+        <div style={{ height: 8, borderRadius: 4, background: "var(--line)" }} aria-hidden="true" />
+      </div>
+    );
+  }
   const pct = Math.min(100, Math.round((score / max) * 100));
   const color = pct >= 80 ? "var(--good)" : pct >= 50 ? "var(--warn)" : "var(--bad)";
   return (
@@ -79,6 +93,21 @@ export default async function VendorScorecardPage({ params }: { params: { id: st
   const vendorName = vendor?.name ?? "Vendor";
 
   if (!scorecard) {
+    // GAP-...-SCORECARD-01: an outage must not read as "this vendor has no
+    // history". Only show the empty state on a real empty (source 'api');
+    // on a fetch error show a retryable error state instead.
+    if (source === "error") {
+      return (
+        <>
+          <PageHeader title="Vendor Scorecard" subtitle={vendorName} back={"/procurement/vendors/" + params.id} />
+          <RefreshErrorState
+            error={toHumanError("load", { area: "vendor scorecard" })}
+            backHref={"/procurement/vendors/" + params.id}
+            source={{ area: "vendor scorecard" }}
+          />
+        </>
+      );
+    }
     return (
       <>
         <PageHeader title="Vendor Scorecard" subtitle={vendorName} back={"/procurement/vendors/" + params.id} />
@@ -87,11 +116,17 @@ export default async function VendorScorecardPage({ params }: { params: { id: st
     );
   }
 
-  const subscores = [
-    { label: "Delivery",       value: scorecard.deliveryScore ?? 0 },
-    { label: "Quality",        value: scorecard.qualityScore ?? 0 },
-    { label: "SLA",            value: scorecard.slaScore ?? 0 },
+  const subscores: { label: string; value: number | null }[] = [
+    { label: "Delivery", value: scorecard.deliveryScore ?? null },
+    { label: "Quality",  value: scorecard.qualityScore ?? null },
+    { label: "SLA",      value: scorecard.slaScore ?? null },
   ];
+  // Radar only plots dimensions that are actually scored (05).
+  const radarScores = subscores
+    .filter((s): s is { label: string; value: number } => s.value !== null)
+    .map((s) => ({ label: s.label, value: s.value }));
+
+  const asOf = scorecard.lastUpdated ? formatIndianDate(scorecard.lastUpdated) : "—";
 
   const bandColor = BAND_COLOR[scorecard.ratingBand] ?? "var(--ink2)";
 
@@ -99,40 +134,50 @@ export default async function VendorScorecardPage({ params }: { params: { id: st
     <>
       <PageHeader
         title="Vendor Scorecard"
-        subtitle={vendorName}
+        subtitle={`${vendorName} · As of ${asOf}`}
         back={"/procurement/vendors/" + params.id}
         actions={
-          <>
-            <span style={{ background: bandColor, color: "#fff", borderRadius: 4, padding: "2px 10px", fontSize: 12, fontWeight: 600, textTransform: "capitalize" }}>
-              {scorecard.ratingBand}
-            </span>
-            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
-          </>
+          <span style={{ background: bandColor, color: "#fff", borderRadius: 4, padding: "2px 10px", fontSize: 12, fontWeight: 600, textTransform: "capitalize" }}>
+            {scorecard.ratingBand}
+          </span>
         }
       />
 
+      {/* GAP-...-SCORECARD-03: the band legend explains the thresholds so the
+          /100 score is interpretable, and states plainly that this performance
+          score (out of 100) is distinct from the buyer rating (out of 5) shown
+          on the list/profile — two honest, separately-sourced measures rather
+          than one re-scaled into the other. */}
+      <p className="muted" style={{ fontSize: 12, marginBottom: 16 }}>
+        Performance score is out of 100 (bands: Excellent ≥ 90, Good 75–89,
+        Average 50–74, Poor &lt; 50). This is separate from the buyer rating
+        (out of 5) shown on the vendor list and profile.
+      </p>
+
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: 12, marginBottom: 24 }}>
         {[
-          { label: "Overall score", value: String(scorecard.overallRating ?? 0) + "/100", accent: true },
-          { label: "Total orders",  value: String(scorecard.totalOrders) },
-          { label: "On-time deliveries",    value: String(scorecard.onTimeDeliveries ?? 0) },
-          { label: "Late deliveries",       value: String(scorecard.lateDeliveries ?? 0) },
-          { label: "Quality rejections",    value: String(scorecard.qualityRejections ?? 0) },
-          { label: "SLA breaches",          value: String(scorecard.slaBreaches ?? 0) },
+          { label: "Overall score", value: scorecard.overallRating !== null && scorecard.overallRating !== undefined ? `${scorecard.overallRating}/100` : "—", accent: true },
+          { label: "Total orders",  value: scorecard.totalOrders ?? "—" },
+          { label: "On-time deliveries",    value: scorecard.onTimeDeliveries ?? "—" },
+          { label: "Late deliveries",       value: scorecard.lateDeliveries ?? "—" },
+          { label: "Quality rejections",    value: scorecard.qualityRejections ?? "—" },
+          { label: "SLA breaches",          value: scorecard.slaBreaches ?? "—" },
         ].map(({ label, value, accent }) => (
           <div key={label} className="card pad" style={{ textAlign: "center" }}>
-            <div style={{ fontSize: accent ? 28 : 22, fontWeight: 700, color: accent ? bandColor : "var(--ink)" }}>{value}</div>
+            <div style={{ fontSize: accent ? 28 : 22, fontWeight: 700, color: accent ? bandColor : "var(--ink)" }}>{String(value)}</div>
             <div style={{ fontSize: 11, color: "var(--ink2)", marginTop: 4 }}>{label}</div>
           </div>
         ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      {/* GAP-...-SCORECARD-02: responsive — stack on phones, two columns on
+          desktop (was a fixed "1fr 1fr" with no breakpoint). */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,280px),1fr))", gap: 16 }}>
         <Card title="Score breakdown" padding>
           {subscores.map((s) => <ScoreBar key={s.label} label={s.label} score={s.value} />)}
         </Card>
         <Card title="Performance radar" padding>
-          <RadarChart scores={subscores} />
+          <RadarChart scores={radarScores} />
           <table className="sr-only" aria-label="Performance radar data table">
             <thead>
               <tr>
@@ -144,7 +189,7 @@ export default async function VendorScorecardPage({ params }: { params: { id: st
               {subscores.map((s) => (
                 <tr key={s.label}>
                   <td>{s.label}</td>
-                  <td>{s.value}</td>
+                  <td>{s.value === null ? "—" : s.value}</td>
                 </tr>
               ))}
             </tbody>

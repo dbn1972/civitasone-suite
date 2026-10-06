@@ -1,32 +1,22 @@
-import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
+import { PageHeader } from "../../../_components/ds";
 import { getProcurementGem } from "../../../_data/loaders";
 import { GemTable } from "./GemTable";
 
 export default async function GemPage() {
   const { data: items, source } = await getProcurementGem();
 
-  const delivered = items.filter((i) => i.gemStatus === "Delivered").length;
-  const inTransit = items.filter((i) => i.gemStatus === "In Transit" || i.gemStatus === "Shipped").length;
-  const totalValuePaise = items.reduce((sum, i) => sum + i.amount, 0);
-  const totalValueDisplay = totalValuePaise > 0 ? `₹${(totalValuePaise / 100).toLocaleString("en-IN")}` : "₹0";
-
   return (
     <>
-      {/* UX-012: the data-source badge now lives inside GemTable, driven by
-          the same useSeededResource call that produces its rows — not a
-          second, independent read of `source` here that could disagree with
-          the table's own cache state (UX-002's pattern). */}
+      {/* GAP-PROCUREMENT-GEM-03: retitled "GeM Orders" — there is no live
+          two-way GeM sync on this surface yet, so "Integration" overclaimed.
+          GAP-PROCUREMENT-GEM-01/02/04/05: stats, the error/empty state, spend
+          and status buckets all live in the client component, derived from the
+          SAME useSeededResource read, so a failed fetch never reads as "no GeM
+          orders" and the cards reconcile to the order count. */}
       <PageHeader
-        title="GeM Integration"
+        title="GeM Orders"
         subtitle="Government e-Marketplace orders and delivery tracking."
       />
-
-      <StatGrid>
-        <StatCard icon="🛒" iconBg="#eef2ff" label="Total Orders" value={items.length} />
-        <StatCard icon="📦" iconBg="#ecfdf3" label="Delivered" value={delivered} />
-        <StatCard icon="🚚" iconBg="#fffaeb" label="In Transit" value={inTransit} />
-        <StatCard icon="💰" iconBg="#fce7ee" label="Total Value" value={totalValueDisplay} />
-      </StatGrid>
 
       <GemTable items={items} source={source} />
     </>

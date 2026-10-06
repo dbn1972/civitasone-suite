@@ -86,7 +86,7 @@ export async function awardRfq(ctx: RequestContext, rfqId: string, body: AwardRf
   await queue.publish(COMMANDS.rfqAward, {
     messageId: randomUUID(), type: COMMANDS.rfqAward,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id: rfqId, tenantId: ctx.tenantId, responseId: body.responseId },
+    payload: { id: rfqId, tenantId: ctx.tenantId, responseId: body.responseId, justification: body.justification ?? null },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "rfq", rfqId));
   return { id: rfqId, status: "accepted", correlationId: ctx.correlationId };

@@ -14,6 +14,13 @@ export const procurementTenders = tenderSchema.table("procurement_tenders", {
   currency:        char("currency", { length: 3 }).notNull().default("INR"),
   nitRef:          text("nit_ref"),
   emdAmountMinor:  bigint("emd_amount_minor", { mode: "bigint" }).notNull().default(0n),
+  // GAP-PROCUREMENT-TENDERS-NEW-01: opaque link to the authorising indent
+  // ("procurement_indent:<uuid>"), keeping the indent -> tender -> PO chain.
+  indentRef:       text("indent_ref"),
+  // GAP-PROCUREMENT-TENDERS-NEW-02: GFR Rule 166 single-source justification.
+  justificationCategory: varchar("justification_category", { length: 32 }),
+  justification:   text("justification"),
+  approvingAuthority:    text("approving_authority"),
   publishDate:     date("publish_date"),
   bidClosingDate:  date("bid_closing_date").notNull().defaultNow(),
   openingDate:     date("opening_date"),

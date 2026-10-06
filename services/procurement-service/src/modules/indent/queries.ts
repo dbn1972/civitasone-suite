@@ -60,10 +60,15 @@ export async function listTenderRequiredIndents(tenantId: string, limit = 50): P
   return repo.findTenderRequiredIndents(tenantId, limit);
 }
 
-export async function listIndents(tenantId: string, limit = 50, offset = 0): Promise<IndentSummaryRow[]> {
+export async function listIndents(tenantId: string, limit = 50, offset = 0, department?: string, status?: string): Promise<IndentSummaryRow[]> {
+  // GAP-PROCUREMENT-INDENTS-05: when `department` is set the caller lacks a
+  // procurement-wide/oversight role, so the list is fenced to their own
+  // department (least-privilege). Wide readers pass no department and see all.
   const result = await cache.getOrLoad<IndentRow[]>(
-    cache.makeKey(tenantId, "indents", `list:${limit}:${offset}`),
-    () => repo.findIndentsByTenant(tenantId, limit, offset),
+    cache.makeKey(tenantId, "indents", `list:${limit}:${offset}:${department ?? "*"}:${status ?? "*"}`),
+    () => (department
+      ? repo.findIndentsByTenantAndDepartment(tenantId, department, limit, offset, status)
+      : repo.findIndentsByTenant(tenantId, limit, offset, status)),
   );
   return withRequestedBy(tenantId, result ?? []);
 }

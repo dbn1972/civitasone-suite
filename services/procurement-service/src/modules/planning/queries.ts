@@ -20,7 +20,16 @@ export async function getPlan(id: string, tenantId: string): Promise<Record<stri
   return { ...serializePlan(plan), lines: lines.map(serializeLine) };
 }
 
-export async function listPlans(tenantId: string, limit = 50, offset = 0): Promise<Record<string, unknown>[]> {
-  const rows = await repo.listPlansByTenant(tenantId, limit, offset);
-  return rows.map(serializePlan);
+export async function listPlans(
+  tenantId: string,
+  limit = 50,
+  offset = 0,
+  filter?: { department?: string | undefined; year?: number | undefined },
+): Promise<Record<string, unknown>[]> {
+  const rows = await repo.listPlansByTenant(tenantId, limit, offset, filter);
+  // GAP-PROCUREMENT-PLANNING-02/04: the list page shows the human planNo and an
+  // "Items" count; planNo is already on PlanRow (serialized below) and the line
+  // count is resolved in one grouped query (no N+1).
+  const counts = await repo.countLinesByPlanIds(tenantId, rows.map((r) => r.id));
+  return rows.map((r) => ({ ...serializePlan(r), itemCount: counts.get(r.id) ?? 0 }));
 }

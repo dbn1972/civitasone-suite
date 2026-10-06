@@ -20,10 +20,35 @@ export async function findIndentItemsByIndentId(indentId: string): Promise<(type
   return db.transaction((tx) => tx.select().from(procurementIndentItems).where(eq(procurementIndentItems.indentId, indentId)));
 }
 
-export async function findIndentsByTenant(tenantId: string, limit = 100, offset = 0): Promise<IndentRow[]> {
+export async function findIndentsByTenant(tenantId: string, limit = 100, offset = 0, status?: string): Promise<IndentRow[]> {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.
-  return db.transaction((tx) => tx.select().from(procurementIndents).where(eq(procurementIndents.tenantId, tenantId)).limit(limit).offset(offset));
+  // `status` is a SQL predicate (not a post-filter) so limit/offset page over
+  // the matching rows only.
+  const where = status
+    ? and(eq(procurementIndents.tenantId, tenantId), eq(procurementIndents.status, status))
+    : eq(procurementIndents.tenantId, tenantId);
+  return db.transaction((tx) => tx.select().from(procurementIndents).where(where).limit(limit).offset(offset));
+}
+
+/**
+ * GAP-PROCUREMENT-INDENTS-05: department-scoped list for a caller who does NOT
+ * hold a procurement-wide / oversight role. Least-privilege: a departmental
+ * clerk sees only their own department's indents, never the whole tenant's
+ * purchase demand (DPDP / least-privilege). Tenant-scoped as well, so RLS and
+ * the app-layer predicate agree.
+ */
+export async function findIndentsByTenantAndDepartment(
+  tenantId: string,
+  department: string,
+  limit = 100,
+  offset = 0,
+  status?: string,
+): Promise<IndentRow[]> {
+  const base = and(eq(procurementIndents.tenantId, tenantId), eq(procurementIndents.department, department));
+  return db.transaction((tx) => tx.select().from(procurementIndents)
+    .where(status ? and(base, eq(procurementIndents.status, status)) : base)
+    .limit(limit).offset(offset));
 }
 
 export async function findIndentByIdTx(tx: Writer, id: string): Promise<IndentRow | null> {

@@ -613,3 +613,48 @@ export const LOYALTY_READ_ROLES = ["loyalty_user", "loyalty_admin", "super_admin
  * control.
  */
 export const LOYALTY_ADMIN_ROLES = ["loyalty_admin", "super_admin"];
+
+/**
+ * Roles permitted to read procurement data generally (the module hub, lists
+ * and detail views). Mirrors procurement-service's READER_ROLES across its
+ * route modules (e.g. modules/po/routes.ts, modules/tender/routes.ts):
+ * PROC_ROLES (procurement_officer, procurement_admin, super_admin) plus
+ * audit_officer and finance_officer. A role outside this set is 403'd by the
+ * service regardless of what the UI renders; gating the hub tiles on it shows
+ * only reachable navigation (GAP-PROCUREMENT-HOME-01). The server stays the
+ * authority — this is defence-in-depth + UX.
+ */
+export const PROCUREMENT_READER_ROLES = [
+  "procurement_officer",
+  "procurement_admin",
+  "super_admin",
+  "audit_officer",
+  "finance_officer",
+];
+
+/**
+ * Roles permitted to act on procurement approvals / sign-offs and to open the
+ * approval-sensitive tiles (Approvals, Bid Evaluation, EMD & BG, Empanelment).
+ * Mirrors procurement-service's APPROVE_ROLES (modules/planning/routes.ts:
+ * procurement_admin, super_admin). A plain procurement_officer can raise work
+ * but the service 403s them on the approve endpoints, so the hub must not
+ * offer those approval tiles to a non-approver (GAP-PROCUREMENT-HOME-01). The
+ * server remains the authority.
+ */
+export const PROCUREMENT_APPROVER_ROLES = ["procurement_admin", "super_admin"];
+
+/**
+ * Roles permitted to create/dispatch purchase orders (and raise PO
+ * amendments). Mirrors procurement-service's PROC_ROLES in modules/po/routes.ts
+ * and WRITE_ROLES in modules/po/amendment-routes.ts (procurement_officer,
+ * procurement_admin, super_admin). A role outside this set — notably a
+ * read-only audit_officer/finance_officer, who CAN read POs — is 403'd by the
+ * service on POST /pos and /dispatch, so the UI must not offer "+ New PO" or a
+ * Dispatch control to them (GAP-PROCUREMENT-ORDERS-03). The server remains the
+ * authority; this is defence-in-depth + UX.
+ */
+export const PROCUREMENT_WRITE_ROLES = [
+  "procurement_officer",
+  "procurement_admin",
+  "super_admin",
+];

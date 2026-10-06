@@ -33,8 +33,11 @@ export async function listTenders(tenantId: string, limit: number, offset: numbe
     publishDate: row.publishDate ? String(row.publishDate) : undefined,
     bidClosingDate: String(row.bidClosingDate),
     openingDate: row.openingDate ? String(row.openingDate) : undefined,
-    status: mapTenderStatus(row.status) === "technical_evaluation" || mapTenderStatus(row.status) === "financial_evaluation"
-      ? "evaluation" : mapTenderStatus(row.status),
+    // GAP-PROCUREMENT-TENDERS-02: surface the real evaluation phase
+    // (technical_evaluation / financial_evaluation) instead of collapsing both
+    // to "evaluation", so the register can count and label them separately.
+    // mapTenderStatus still guards against any unknown DB value.
+    status: mapTenderStatus(row.status),
     bidsReceived: row.bidsReceived,
   }));
 }
@@ -43,20 +46,51 @@ export async function getTenderDetail(id: string, tenantId: string) {
   const row = await repo.findTenderById(id);
   if (!row || row.tenantId !== tenantId) return null;
   const bids = await repo.findBidsByTender(id);
-  const mapped = mapTenderStatus(row.status);
+  // GAP-PROCUREMENT-TENDERS-DETAIL-05: load this tender's documents so the
+  // detail page can show a document count and a NIT-present/missing cue, and
+  // so Publish can be gated when no NIT has been attached. Read-only; failures
+  // degrade to "no documents" rather than failing the whole detail view.
+  const docs = await docsRepo.listDocsByTender(id, tenantId).catch(() => []);
+  const hasNit = docs.some((d) => d.docType === "nit" && d.isCurrent);
   return {
     id: row.id,
     tenderNo: row.tenderNo,
     title: row.title,
     type: mapTenderType(row.type),
     estimatedValue: Number(row.estimatedMinor) / 100,
+    // GAP-PROCUREMENT-TENDERS-DETAIL-05: EMD captured on create but never
+    // surfaced before. Minor units (paise) as a number, matching estimatedValue
+    // staying in major units — here we send the raw paise so the UI formats it
+    // with formatMoney (which expects paise). Guard against the >2^53 case is
+    // unnecessary for an EMD figure (always well under that).
+    emdAmountMinor: Number(row.emdAmountMinor),
     publishDate: row.publishDate ? String(row.publishDate) : undefined,
     bidClosingDate: String(row.bidClosingDate),
     openingDate: row.openingDate ? String(row.openingDate) : undefined,
-    status: mapped === "technical_evaluation" || mapped === "financial_evaluation" ? "evaluation" : mapped,
+    // GAP-PROCUREMENT-TENDERS-DETAIL-02: surface the real evaluation phase
+    // (technical_evaluation / financial_evaluation) rather than collapsing both
+    // to "evaluation", so the lifecycle UI can gate Open-financial / Award on
+    // the actual phase instead of guessing from whether a bidAmount is visible.
+    // mapTenderStatus still guards any unknown DB value.
+    status: mapTenderStatus(row.status),
     bidsReceived: row.bidsReceived,
     scope: row.scope ?? undefined,
     eligibilityCriteria: row.eligibility ?? undefined,
+    // GAP-PROCUREMENT-TENDERS-DETAIL-03: identities for the UI-side maker-checker
+    // gate (Award hidden/disabled for the creator and the technical evaluator).
+    // The award consumer re-checks SoD in-txn — the server stays authoritative.
+    createdBy: row.createdBy,
+    techEvaluatedBy: row.techEvaluatedBy ?? null,
+    // GAP-PROCUREMENT-TENDERS-DETAIL-05: NIT presence + document count so the
+    // UI can gate Publish and show a "Documents (N)" / NIT-missing cue.
+    hasNit,
+    documentCount: docs.length,
+    // GAP-PROCUREMENT-TENDERS-NEW-01/02: indent link + single-source
+    // justification surfaced for the detail page.
+    indentRef: row.indentRef ?? undefined,
+    justificationCategory: row.justificationCategory ?? undefined,
+    justification: row.justification ?? undefined,
+    approvingAuthority: row.approvingAuthority ?? undefined,
     bids: bids.map((b) => ({
       // Needed by the web UI to submit per-bid technical evaluation results
       // (POST .../technical-evaluation takes { results: [{ bidId, ... }] }) —
@@ -68,6 +102,9 @@ export async function getTenderDetail(id: string, tenantId: string) {
       bidAmount: b.financialOpened ? Number(b.bidAmount) / 100 : undefined,
       technicalScore: b.technicalScore ?? undefined,
       financialScore: b.financialScore ?? undefined,
+      // GAP-PROCUREMENT-TENDERS-DETAIL-02: explicit per-bid envelope state so the
+      // lifecycle UI gates Award on real data, not a guess from bidAmount.
+      financialOpened: b.financialOpened,
       status: b.status,
     })),
   };
@@ -76,45 +113,72 @@ export async function getTenderDetail(id: string, tenantId: string) {
 export type BidEvaluationSummary = {
   id: string;
   tender: string;
+  // GAP-PROCUREMENT-BID-EVALUATION-05: opaque tender id so the web can link the
+  // tender ref to /procurement/tenders/[id] (the ref string alone is not a
+  // route key).
+  tenderId: string;
   bidder: string;
   technicalScore: number;
-  financialScore: number;
+  // GAP-PROCUREMENT-BID-EVALUATION-06 (sealed-bid discipline): the financial
+  // score is withheld (null) until the financial envelope has been opened
+  // (financialOpened=true). GFR sealed-bid integrity — nobody sees financial
+  // standing while technical evaluation is still in progress.
+  financialScore: number | null;
   totalScore: number;
   rank: number;
   status: string;
+  financialOpened: boolean;
 };
 
 /**
  * Cross-tender bid-evaluation register (gap/routes.ts real-data lift).
  * totalScore is a simple average of technical/financial scores when both are
- * present — there is no weighted-formula config yet, so we don't fabricate one.
+ * present AND the financial envelope is open — there is no weighted-formula
+ * config yet, so we don't fabricate one. While the financial envelope is
+ * sealed (financialOpened=false), financialScore is withheld (null) and
+ * totalScore reflects the technical score only (GAP-PROCUREMENT-BID-EVALUATION-06).
  */
 export async function listBidEvaluations(tenantId: string, limit: number, offset: number): Promise<BidEvaluationSummary[]> {
   const rows = await repo.listBidEvaluationsByTenant(tenantId, limit, offset);
   return rows.map((r) => {
     const tech = r.technicalScore ?? 0;
-    const fin = r.financialScore ?? 0;
-    const bothPresent = r.technicalScore != null && r.financialScore != null;
-    const totalScore = bothPresent ? Math.round((tech + fin) / 2) : (r.technicalScore ?? r.financialScore ?? 0);
+    const opened = r.financialOpened === true;
+    // Sealed-bid guard: never surface the financial score before the envelope
+    // is opened.
+    const fin = opened ? (r.financialScore ?? 0) : null;
+    const bothPresent = opened && r.technicalScore != null && r.financialScore != null;
+    const totalScore = bothPresent
+      ? Math.round((tech + (r.financialScore ?? 0)) / 2)
+      : tech;
     return {
       id: r.bidId,
       tender: r.tenderNo,
+      tenderId: r.tenderId,
       bidder: r.vendorName,
       technicalScore: tech,
       financialScore: fin,
       totalScore,
       rank: r.rank ?? 0,
       status: r.status,
+      financialOpened: opened,
     };
   });
 }
 
 export type PreBidConferenceSummary = {
   id: string;
+  // GAP-PROCUREMENT-PRE-BID-01: the opaque tender id so the web can link the
+  // tender cell to /procurement/tenders/[id]. (It equals `id` today because a
+  // "conference" is one tender's query thread, but surfaced explicitly so the
+  // web does not rely on that coincidence.)
+  tenderId: string;
   tender: string;
   date: string;
   queriesRaised: number;
   responses: number;
+  // GAP-PROCUREMENT-PRE-BID-03: open (unanswered) queries — the actionable
+  // number — computed server-side so the tile and table agree.
+  openQueries: number;
   attendees: number;
   status: string;
 };
@@ -128,15 +192,21 @@ export type PreBidConferenceSummary = {
  */
 export async function listPreBidConferenceAggregates(tenantId: string, limit: number, offset: number): Promise<PreBidConferenceSummary[]> {
   const rows = await docsRepo.listPrebidAggregatesByTenant(tenantId, limit, offset);
-  return rows.map((r) => ({
-    id: r.tenderId,
-    tender: r.tenderNo,
-    date: new Date(r.firstQueryAt).toISOString().slice(0, 10),
-    queriesRaised: Number(r.queriesRaised),
-    responses: Number(r.responses),
-    attendees: 0,
-    status: Number(r.publishedCount) >= Number(r.queriesRaised) && Number(r.queriesRaised) > 0 ? "published" : "pending",
-  }));
+  return rows.map((r) => {
+    const queriesRaised = Number(r.queriesRaised);
+    const responses = Number(r.responses);
+    return {
+      id: r.tenderId,
+      tenderId: r.tenderId,
+      tender: r.tenderNo,
+      date: new Date(r.firstQueryAt).toISOString().slice(0, 10),
+      queriesRaised,
+      responses,
+      openQueries: Math.max(0, queriesRaised - responses),
+      attendees: 0,
+      status: Number(r.publishedCount) >= queriesRaised && queriesRaised > 0 ? "published" : "pending",
+    };
+  });
 }
 
 /**

@@ -22,7 +22,16 @@ export async function getGrn(id: string, tenantId: string): Promise<Record<strin
     vendorId: row.vendorId,
     receivedDate: String(row.receivedDate),
     receivedBy: row.createdBy,
-    threeWayMatch: row.threeWayMatch,
+    // GAP-PROCUREMENT-GRN-DETAIL-03 — expose the creator id so the web detail
+    // page can pre-empt a self-inspection (SoD) block up front. The server
+    // remains authoritative (acceptGrn/rejectGrn re-check SoD under the lock).
+    createdBy: row.createdBy,
+    // GAP-PROCUREMENT-GRN-DETAIL-02 — the three-way match is only meaningful once
+    // the GRN has actually been inspected. Report it as undefined (not the
+    // schema-default `false`) while no inspection row exists, so an uninspected
+    // GRN reads as a neutral "pending" state on the detail page instead of a red
+    // mismatch. Once inspected, the real boolean is returned.
+    threeWayMatch: inspection ? row.threeWayMatch : undefined,
     notes: row.notes ?? undefined,
     itemCount: items.length,
     totalValue: 0,
@@ -66,18 +75,28 @@ export async function listGrns(tenantId: string, limit: number, offset: number) 
   const vendorNameById = new Map(vendors.map((v) => [v.id, v.name]));
   const countById = await repo.countItemsByGrnIds(grnRows.map((row) => row.id));
 
-  return grnRows.map((row) => ({
-    id: row.id,
-    grnNo: row.grnNo,
-    poRef: row.poRef,
-    vendor: vendorNameById.get(row.vendorId) ?? row.vendorId.slice(0, 8),
-    receivedDate: String(row.receivedDate),
-    receivedBy: row.createdBy,
-    itemCount: countById.get(row.id) ?? 0,
-    totalValue: 0,
-    status: mapGrnStatus(row.status),
-    threeWayMatch: row.threeWayMatch,
-  }));
+  return grnRows.map((row) => {
+    const status = mapGrnStatus(row.status);
+    // GAP-PROCUREMENT-GRN-04 — the three-way match is only known once the GRN
+    // has a quality decision (accepted/rejected/partially_rejected). While it is
+    // still draft/under_inspection/received/quality_check the match is pending,
+    // so report undefined rather than the schema-default `false` — otherwise the
+    // list would show a red "Mismatch" for every uninspected GRN, disagreeing
+    // with the detail page.
+    const decided = status === "accepted" || status === "rejected" || status === "partially_rejected";
+    return {
+      id: row.id,
+      grnNo: row.grnNo,
+      poRef: row.poRef,
+      vendor: vendorNameById.get(row.vendorId) ?? row.vendorId.slice(0, 8),
+      receivedDate: String(row.receivedDate),
+      receivedBy: row.createdBy,
+      itemCount: countById.get(row.id) ?? 0,
+      totalValue: 0,
+      status,
+      threeWayMatch: decided ? row.threeWayMatch : undefined,
+    };
+  });
 }
 
 function mapGrnStatus(status: string): "draft" | "under_inspection" | "received" | "quality_check" | "accepted" | "partially_rejected" | "rejected" {

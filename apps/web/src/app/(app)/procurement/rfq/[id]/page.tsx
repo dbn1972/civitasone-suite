@@ -1,8 +1,12 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, Card, StatusPill, EmptyState, ErrorState, DataTable } from "../../../../_components/ds";
 import { getRFQById } from "../../../../_data/loaders";
-import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, formatInternalRef } from "@/lib/formatters";
+import { opaqueRefHref, parseOpaqueRef } from "@/lib/refs";
 import { toHumanError } from "@/lib/messages";
+import { ComparativeStatement, computeL1 } from "./ComparativeStatement";
+import { RFQActions } from "./RFQActions";
 
 type LineItemRow = Record<string, unknown> & {
   itemName: string;
@@ -10,24 +14,10 @@ type LineItemRow = Record<string, unknown> & {
   unit: string;
 };
 
-type ResponseRow = Record<string, unknown> & {
-  vendorName: string;
-  totalAmount: string;
-  submittedAt: string;
-  status: string;
-};
-
 const LINE_ITEM_COLUMNS: { key: keyof LineItemRow; label: string; align?: "left" | "right" }[] = [
   { key: "itemName", label: "Item Name" },
   { key: "quantity", label: "Qty", align: "right" },
   { key: "unit", label: "Unit" },
-];
-
-const RESPONSE_COLUMNS: { key: keyof ResponseRow; label: string; align?: "left" | "right"; cellType?: "status" }[] = [
-  { key: "vendorName", label: "Vendor" },
-  { key: "totalAmount", label: "Bid Amount", align: "right" },
-  { key: "submittedAt", label: "Submitted" },
-  { key: "status", label: "Status", cellType: "status" },
 ];
 
 export default async function RFQDetailPage({ params }: { params: { id: string } }) {
@@ -54,12 +44,19 @@ export default async function RFQDetailPage({ params }: { params: { id: string }
     unit: item.unit,
   }));
 
-  const responseRows: ResponseRow[] = rfq.responses.map((resp) => ({
-    vendorName: resp.vendorName,
-    totalAmount: formatMoney(resp.totalAmount),
-    submittedAt: formatIndianDate(resp.submittedAt),
-    status: resp.status,
-  }));
+  // GAP-PROCUREMENT-RFQ-DETAIL-04: resolve the opaque indent ref to a link; never
+  // print the raw "procurement_indent:<uuid>". formatInternalRef guards a
+  // malformed "...:undefined" ref down to "—".
+  const indentHref = opaqueRefHref(rfq.indentRef);
+  const indentParsed = parseOpaqueRef(rfq.indentRef);
+
+  // GAP-PROCUREMENT-RFQ-DETAIL-01/-02: the award candidate is the L1 (lowest
+  // unsealed) response — computed server-side so the Award action and the
+  // comparative statement agree on the winner.
+  const l1 = computeL1(rfq.responses);
+  const awardCandidate = l1 && l1.totalAmountMinor !== undefined
+    ? { responseId: l1.responseId, vendorName: l1.vendorName }
+    : null;
 
   return (
     <>
@@ -83,7 +80,11 @@ export default async function RFQDetailPage({ params }: { params: { id: string }
           </div>
           <div className="field">
             <span className="label">Indent Ref</span>
-            <span className="mono">{rfq.indentRef ?? "—"}</span>
+            {indentHref && indentParsed ? (
+              <Link href={indentHref}>View indent</Link>
+            ) : (
+              <span>{formatInternalRef(rfq.indentRef)}</span>
+            )}
           </div>
           <div className="field">
             <span className="label">Closing Date</span>
@@ -100,10 +101,23 @@ export default async function RFQDetailPage({ params }: { params: { id: string }
           {rfq.description && (
             <div className="field" style={{ gridColumn: "1 / -1" }}>
               <span className="label">Description</span>
-              <span>{rfq.description}</span>
+              {/* GAP-PROCUREMENT-RFQ-DETAIL-05: preserve line breaks in a
+                  multi-line description instead of collapsing them. */}
+              <span style={{ whiteSpace: "pre-wrap" }}>{rfq.description}</span>
             </div>
           )}
         </div>
+      </Card>
+
+      {/* GAP-PROCUREMENT-RFQ-DETAIL-01: lifecycle actions (close / award). */}
+      <Card title="Actions" padding>
+        <RFQActions
+          rfqId={rfq.id}
+          status={rfq.status}
+          closingDate={rfq.closingDate}
+          responseCount={rfq.responses.length}
+          awardCandidate={awardCandidate}
+        />
       </Card>
 
       {rfq.lineItems.length > 0 && (
@@ -117,12 +131,10 @@ export default async function RFQDetailPage({ params }: { params: { id: string }
       )}
 
       {rfq.responses.length > 0 && (
-        <Card title="Vendor responses">
-          <DataTable<ResponseRow>
-            columns={RESPONSE_COLUMNS}
-            rows={responseRows}
-            pageSize={25}
-          />
+        // GAP-PROCUREMENT-RFQ-DETAIL-02/-03: comparative statement with L1 marker
+        // and sealed-amount discipline, replacing the flat total-only table.
+        <Card title="Vendor responses (comparative statement)">
+          <ComparativeStatement responses={rfq.responses} lineItems={rfq.lineItems} />
         </Card>
       )}
     </>

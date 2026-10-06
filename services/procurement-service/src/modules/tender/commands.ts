@@ -11,6 +11,23 @@ import type { CreateTenderBody, SubmitBidBody, TechEvaluateBody, AwardTenderBody
 export type Accepted = { id: string; status: string; correlationId: string };
 
 export async function createTender(ctx: RequestContext, body: CreateTenderBody): Promise<Accepted> {
+  // GAP-PROCUREMENT-TENDERS-NEW-06: reject a bid-closing date in the past
+  // synchronously (422) rather than minting a draft that can never accept a bid.
+  // bidClosingDate is a 'YYYY-MM-DD' calendar date; the last valid instant is
+  // end-of-day UTC on that date.
+  const closeMs = Date.parse(`${body.bidClosingDate}T23:59:59.999Z`);
+  if (!Number.isFinite(closeMs)) {
+    throw new HttpError(422, "INVALID_CLOSING_DATE", `bid closing date '${body.bidClosingDate}' is not a valid date`);
+  }
+  if (Date.now() > closeMs) {
+    throw new HttpError(422, "CLOSING_DATE_PAST", `bid closing date ${body.bidClosingDate} is in the past`);
+  }
+  // GAP-PROCUREMENT-TENDERS-NEW-04: an opening date, if given, must be on/after
+  // the closing date.
+  if (body.openingDate && body.openingDate < body.bidClosingDate) {
+    throw new HttpError(422, "INVALID_OPENING_DATE", `opening date ${body.openingDate} is before closing date ${body.bidClosingDate}`);
+  }
+
   // GFR mode-bands: reject a tender type that violates the value band for the
   // estimated value synchronously with 400 (e.g. single-rigour mode below the
   // band floor). Mirrors the SoD synchronous-reject pattern. Money is paise.

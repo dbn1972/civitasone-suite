@@ -129,6 +129,14 @@ export interface NavTile {
    * is rendered as-is -- use "—" for a count that failed to load, never 0.
    */
   badge?: { text: string; tone?: 'warn' | 'info' };
+  /**
+   * Optional role allow-list for this tile. When present, a hub should only
+   * render the tile for a session holding at least one of these roles (plus
+   * super_admin, which always sees everything). The server route remains the
+   * authority; this only decides whether the tile is offered as navigation
+   * (GAP-PROCUREMENT-HOME-01).
+   */
+  roles?: string[];
 }
 
 export interface MetricCard {
@@ -571,6 +579,13 @@ export interface ApprovalSummary {
   referenceId: string;
   owner: string;
   dueDisplay: string;
+  /**
+   * ISO-8601 due timestamp, when the source row carries one. Lets the UI
+   * compute "overdue"/"due today" by comparing dates rather than
+   * substring-matching the localised `dueDisplay` string
+   * (GAP-PROCUREMENT-APPROVALS-04). Optional: some approvals have no due date.
+   */
+  dueAt?: string;
 }
 
 export interface EmployeeSummary {
@@ -1089,6 +1104,11 @@ export type IndentSummary = {
 };
 
 export type IndentDetail = IndentSummary & {
+  // GAP-PROCUREMENT-INDENTS-DETAIL-02: the justification an approver needs to
+  // read; collected on the create form (required, min 3) and returned by
+  // procurement-service getIndent (indent/queries.ts). Optional so an older
+  // payload without it still maps.
+  purpose?: string;
   lineItems: Array<{
     itemCode: string;
     itemName: string;
@@ -1137,11 +1157,16 @@ export type RFQSummary = {
 
 export type RFQDetail = RFQSummary & {
   description?: string;
-  lineItems: Array<{ itemName: string; quantity: number; unit: string }>;
+  awardedResponseId?: string | null;
+  lineItems: Array<{ itemId?: string; itemName: string; quantity: number; unit: string }>;
   responses: Array<{
     vendorId: string;
     vendorName: string;
-    totalAmount: number;
+    responseId: string;
+    /** Integer minor units (paise) as a string; undefined while sealed. */
+    totalAmountMinor?: string;
+    sealed: boolean;
+    lineRates: Array<{ itemId?: string; itemName?: string; unitPriceMinor: string }>;
     submittedAt: string;
     status: string;
   }>;
@@ -1174,7 +1199,16 @@ export type GRNSummary = {
 export type GRNDetail = GRNSummary & {
   vendorId?: string;
   notes?: string;
-  threeWayMatch: boolean;
+  // GAP-PROCUREMENT-GRN-DETAIL-02: `undefined` means the three-way match has
+  // not been computed yet (GRN still awaiting inspection). It must stay
+  // distinct from `false` (computed, mismatch) so an uninspected GRN does not
+  // read as a red mismatch. Previously forced to `boolean` (defaulting to
+  // false) in the mapper.
+  threeWayMatch?: boolean;
+  // GAP-PROCUREMENT-GRN-DETAIL-03: user id (JWT sub) of whoever created/received
+  // this GRN, so the detail page can pre-empt a separation-of-duties block when
+  // the viewer is the creator (the server stays authoritative).
+  createdBy?: string;
   items: Array<{
     id?: string;
     poItemRef: string;
@@ -1197,6 +1231,10 @@ export type SrnDetail = {
   id: string;
   grnId: string;
   storeOfficerId: string;
+  // GAP-PROCUREMENT-GRN-DETAIL-SRN-02: display name / designation of the store
+  // officer when the SRN API supplies it, so the page can show a name instead
+  // of a raw UUID. The id stays authoritative; this is display-only.
+  storeOfficerName?: string;
   receivedAt: string | null;
   remarks?: string;
   status: "draft" | "signed";
@@ -1233,13 +1271,34 @@ export type TenderSummary = {
   publishDate?: string;
   bidClosingDate: string;
   openingDate?: string;
-  status: "draft" | "published" | "evaluation" | "awarded" | "cancelled";
+  // GAP-PROCUREMENT-TENDERS-02 / DETAIL-02: the two evaluation phases are now
+  // surfaced distinctly; the legacy collapsed "evaluation" is kept in the union
+  // for backward compatibility with older cached payloads. Mirrors
+  // TenderSummarySchema in packages/schemas/src/web.ts.
+  status: "draft" | "published" | "evaluation" | "technical_evaluation" | "financial_evaluation" | "awarded" | "cancelled";
   bidsReceived: number;
 };
 
 export type TenderDetail = TenderSummary & {
   scope?: string;
   eligibilityCriteria?: string;
+  // GAP-PROCUREMENT-TENDERS-DETAIL-05: EMD captured on create, now surfaced on
+  // the detail page. Minor units (paise). Optional for backward compatibility.
+  emdAmountMinor?: number;
+  // GAP-PROCUREMENT-TENDERS-DETAIL-03: identities for the UI-side maker-checker
+  // gate (Award hidden/disabled for the creator / technical evaluator). The
+  // server remains the authority (award consumer re-checks SoD in-txn).
+  createdBy?: string;
+  techEvaluatedBy?: string | null;
+  // GAP-PROCUREMENT-TENDERS-DETAIL-05: NIT presence + document count so Publish
+  // can be gated and a NIT-missing cue shown. Optional for backward compat.
+  hasNit?: boolean;
+  documentCount?: number;
+  // GAP-PROCUREMENT-TENDERS-NEW-01/02: indent link + single-source justification.
+  indentRef?: string;
+  justificationCategory?: string;
+  justification?: string;
+  approvingAuthority?: string;
   bids: Array<{
     // bidId: needed by the tender lifecycle UI to submit per-bid technical
     // evaluation results (POST /v1/procurement/tenders/:id/technical-evaluation
@@ -1257,6 +1316,11 @@ export type TenderDetail = TenderSummary & {
     bidAmount?: number;
     technicalScore?: number;
     financialScore?: number;
+    // GAP-PROCUREMENT-TENDERS-DETAIL-02: whether this bid's sealed financial
+    // envelope has been opened — the lifecycle UI gates Award on this, not a
+    // guess from whether bidAmount happens to be present. Optional for backward
+    // compatibility; mirrors TenderDetailSchema in packages/schemas/src/web.ts.
+    financialOpened?: boolean;
     status: string;
   }>;
 };

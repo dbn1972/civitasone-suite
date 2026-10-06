@@ -5322,7 +5322,29 @@
     "bids": "Bids",
     "purchase": "Purchase Order",
     "vendors": "Vendors",
-    "contracts": "Contracts"
+    "contracts": "Contracts",
+    "hub": {
+      "subtitle": "Requisitions, vendors, purchase orders, and tenders with approval controls.",
+      "allModules": "View all modules",
+      "tiles": {
+        "dashboard": { "title": "Dashboard", "description": "Snapshot of procurement activity" },
+        "planning": { "title": "Annual Plans", "description": "GFR annual procurement plan aggregation and approval" },
+        "indents": { "title": "Purchase Indents", "description": "Material requisitions from departments" },
+        "vendors": { "title": "Vendors", "description": "Empanelled vendor directory" },
+        "rfq": { "title": "RFQ", "description": "Request for quotation management" },
+        "orders": { "title": "Purchase Orders", "description": "Operational order book" },
+        "grn": { "title": "Goods Receipt", "description": "GRN tracking and quality checks" },
+        "contracts": { "title": "Contracts", "description": "Rate and service contracts" },
+        "tenders": { "title": "Tenders", "description": "Open and limited tenders" },
+        "approvals": { "title": "Approvals", "description": "Pending approvals and sign-offs" },
+        "bidEvaluation": { "title": "Bid Evaluation", "description": "Technical and financial scoring matrix" },
+        "reverseAuction": { "title": "Reverse Auction", "description": "Live and scheduled reverse auctions" },
+        "gem": { "title": "GeM", "description": "Government e-Marketplace integration" },
+        "emdBg": { "title": "EMD & BG", "description": "Earnest Money Deposit (EMD) and bank guarantee (BG) register" },
+        "empanelment": { "title": "Empanelment", "description": "Vendor empanelment management" },
+        "preBid": { "title": "Pre-Bid", "description": "Pre-bid conference log" }
+      }
+    }
   },
   "promotion": {
     "title": "Promotions",

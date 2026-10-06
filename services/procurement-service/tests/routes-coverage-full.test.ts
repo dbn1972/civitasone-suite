@@ -2,14 +2,21 @@
  * Comprehensive route coverage tests for procurement-service.
  * Hits ALL routes to push line coverage above 80%.
  */
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import { signToken } from "@civitasone/auth";
+import { runWithTenant } from "@civitasone/db";
+import { eq } from "drizzle-orm";
 import { buildApp } from "../src/app.js";
-import { sqlClient } from "../src/shared/db.js";
+import { db, sqlClient } from "../src/shared/db.js";
+import { procurementPos } from "../src/modules/po/schema.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-3333-4000-8000-000000000099";
 const FAKE_UUID = "00000000-0000-4000-8000-000000000001";
+// A real, seeded PO (distinct from FAKE_UUID, which other cases rely on being
+// absent) used by the GRN-NEW-04 "accepted (202)" create below.
+const COV_PO_ID = "00000000-0000-4000-8000-0000000000c0";
+const COV_VENDOR_ID = "00000000-0000-4000-8000-0000000000c1";
 
 function tok(roles: string[] = ["procurement_officer", "procurement_manager", "super_admin"]) {
   return signToken({ sub: "user-cov-001", tid: TENANT, roles, sid: "sess-cov-001" }, SECRET);
@@ -20,7 +27,26 @@ function citizenTok() {
 const auth = { authorization: `Bearer ${tok()}` };
 const citizenAuth = { authorization: `Bearer ${citizenTok()}` };
 
-afterAll(async () => { await sqlClient.end(); });
+afterAll(async () => {
+  await runWithTenant(TENANT, () => db.transaction((tx) =>
+    tx.delete(procurementPos).where(eq(procurementPos.id, COV_PO_ID))));
+  await sqlClient.end();
+});
+
+// GRN-NEW-04 — POST /v1/procurement/grns now validates that the referenced PO
+// exists and its vendor matches. Seed a PO (id = FAKE_UUID, vendor = FAKE_UUID)
+// so the "accepted (202)" GRN create below references a real, vendor-matching
+// PO instead of a dangling reference (which is now correctly a 404).
+beforeAll(async () => {
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.delete(procurementPos).where(eq(procurementPos.id, COV_PO_ID));
+    await tx.insert(procurementPos).values({
+      id: COV_PO_ID, tenantId: TENANT, poNo: "PO-COV-001", vendorId: COV_VENDOR_ID,
+      indentRef: "procurement_indent:cov", status: "approved", totalMinor: 50000n,
+      createdBy: COV_VENDOR_ID, updatedBy: COV_VENDOR_ID,
+    });
+  }));
+});
 
 // ─── GET routes: expect 200 ──────────────────────────────────────────────────
 describe("GET routes — 200 OK", () => {
@@ -136,7 +162,8 @@ describe("POST routes — accepted (202)", () => {
       method: "POST", url: "/v1/procurement/grns", headers: auth,
       payload: {
         // DOM-002 — grnCreate is receive-only now: no `inspection` field.
-        grnNo: "GRN-TEST-001", poRef: "PO-001", vendorId: FAKE_UUID,
+        // GRN-NEW-04 — poRef must resolve to a real PO whose vendor matches.
+        grnNo: "GRN-TEST-001", poRef: `procurement_po:${COV_PO_ID}`, vendorId: COV_VENDOR_ID,
         items: [{ poItemRef: "item-1", itemCode: "IT001", orderedQty: 5, receivedQty: 5, acceptedQty: 5 }],
       },
     });
@@ -163,7 +190,7 @@ describe("POST routes — accepted (202)", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/procurement/tenders", headers: auth,
       payload: {
-        title: "IT Equipment Tender", bidClosingDate: "2025-04-01",
+        title: "IT Equipment Tender", bidClosingDate: "2099-04-01",
         type: "open", estimatedMinor: 600000000,
       },
     });

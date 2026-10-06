@@ -18,6 +18,7 @@ export function registerRfqConsumers(queue: Queue): void {
       id: string; tenantId: string; title: string; description?: string; indentRef?: string;
       closingDate: string; vendorIds: string[];
       items?: Array<{ itemName: string; quantity: number; unit: string }>;
+      fewerVendorsJustification?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -41,7 +42,7 @@ export function registerRfqConsumers(queue: Queue): void {
       await enqueue(tx, {
         topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { service: "procurement", action: "create", resourceType: "rfq", resourceId: p.id, outcome: "success" },
+        payload: { service: "procurement", action: "create", resourceType: "rfq", resourceId: p.id, outcome: "success", vendorsInvited: p.vendorIds.length, fewerVendorsJustification: p.fewerVendorsJustification ?? undefined },
       });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "rfq", p.id));
@@ -152,7 +153,7 @@ export function registerRfqConsumers(queue: Queue): void {
    * transition, assert SoD, mark winner, mark the rest).
    */
   queue.subscribe(COMMANDS.rfqAward, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; responseId: string };
+    const p = msg.payload as { id: string; tenantId: string; responseId: string; justification?: string | null };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const rfq = await repo.findRfqByIdTx(tx, p.id, p.tenantId);
@@ -196,7 +197,7 @@ export function registerRfqConsumers(queue: Queue): void {
       await enqueue(tx, {
         topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { service: "procurement", action: "award", resourceType: "rfq", resourceId: p.id, outcome: "success" },
+        payload: { service: "procurement", action: "award", resourceType: "rfq", resourceId: p.id, outcome: "success", justification: p.justification ?? undefined },
       });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "rfq", p.id));

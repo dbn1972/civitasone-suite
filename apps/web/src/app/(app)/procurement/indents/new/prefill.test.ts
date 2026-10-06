@@ -4,7 +4,7 @@ import { parseIndentPrefill } from "./prefill";
 describe("GAP-INVENTORY-LOW-STOCK-03: indent prefill from the low-stock link", () => {
   it("builds the first line item from item code, description and quantity", () => {
     expect(parseIndentPrefill({ itemCode: "PEN-01", description: "Gel pen", quantity: "40" })).toEqual({
-      item: { itemCode: "PEN-01", description: "Gel pen", quantity: 40, unitPrice: 0 },
+      item: { itemCode: "PEN-01", description: "Gel pen", quantity: 40, unitPrice: 0, unit: "nos" },
       truncated: false,
     });
   });

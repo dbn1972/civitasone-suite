@@ -37,8 +37,14 @@ describe("useSeededResource — UX-002 dataProvenance is the single source of tr
     const { result } = renderHook(() =>
       useSeededResource("k.empty", [] as unknown[], "api", (d: unknown[]) => d.length === 0),
     );
-    await waitFor(() => expect(mockedReadCache).toHaveBeenCalled());
+    // GAP-PROCUREMENT-EMD-BG-04: a legitimately empty "api" result is now
+    // authoritative-live — the hook renders it and OVERWRITES the cache rather
+    // than reading a stale copy. (It no longer calls readCache at all for a
+    // successful server read.)
+    await waitFor(() => expect(mockedWriteCache).toHaveBeenCalledWith("k.empty", []));
     expect(result.current.provenance).toBe("live");
+    expect(result.current.data).toEqual([]);
+    expect(mockedReadCache).not.toHaveBeenCalled();
   });
 
   // This is the exact case the gap (UX-002) is about: the server call failed,
@@ -73,5 +79,24 @@ describe("useSeededResource — UX-002 dataProvenance is the single source of tr
     );
     await waitFor(() => expect(result.current.provenance).toBe("error-no-data"));
     expect(result.current.fromCache).toBe(false);
+  });
+
+  // GAP-PROCUREMENT-EMD-BG-04 / GAP-PROCUREMENT-GEM-05: a successful but EMPTY
+  // api result is authoritative — it must NOT be replaced by stale cached
+  // rows, and it must overwrite the cache so those rows can't resurface. On
+  // the old code (`serverUsable = serverSource==='api' && !isEmpty(initialData)`)
+  // an empty api response fell through to the cache and showed [{id:1}].
+  it("renders an authoritative empty api result as live, ignoring and overwriting cached rows", async () => {
+    mockedReadCache.mockResolvedValue({ value: [{ id: 1 }], cachedAt: "2026-09-01T00:00:00.000Z" });
+    const { result } = renderHook(() =>
+      useSeededResource("k.apiempty", [] as unknown[], "api", (d: unknown[]) => d.length === 0),
+    );
+    await waitFor(() => expect(result.current.provenance).toBe("live"));
+    expect(result.current.data).toEqual([]);
+    expect(result.current.fromCache).toBe(false);
+    // Cache is overwritten with the empty authoritative result.
+    expect(mockedWriteCache).toHaveBeenCalledWith("k.apiempty", []);
+    // The stale cached rows are never read into state.
+    expect(result.current.data).not.toEqual([{ id: 1 }]);
   });
 });
