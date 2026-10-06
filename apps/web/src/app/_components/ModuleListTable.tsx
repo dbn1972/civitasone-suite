@@ -2,6 +2,7 @@
 
 import { Card, EmptyState } from "./ds";
 import { DataSourceBadge } from "./DataSourceBadge";
+import { StatusPill } from "./ds/StatusPill";
 import { RefreshErrorState } from "./ds/RefreshErrorState";
 import type { ModuleRowSummary } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
@@ -88,7 +89,11 @@ export function ModuleListTable({
                 <td><span className="mono" title={row.id}>{UUID_RE.test(row.id) ? row.id.slice(0, 8) : row.id}</span></td>
                 <td>{row.label}</td>
                 <td>{row.sublabel ?? "—"}</td>
-                <td>{row.status ?? "—"}</td>
+                {/* GAP-RECOMMENDATIONS-FEEDBACK-03: a status rendered as plain
+                    text made "accepted" and "rejected" look identical. Render
+                    it as a StatusPill (shared tone map) so terminal states are
+                    colour-coded; a missing status still shows "—". */}
+                <td>{row.status ? <StatusPill status={row.status} /> : "—"}</td>
                 <td>{row.meta ?? "—"}</td>
               </tr>
             ))}

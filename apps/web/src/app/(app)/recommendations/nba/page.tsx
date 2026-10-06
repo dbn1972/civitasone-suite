@@ -1,6 +1,8 @@
-import { ModuleListPage } from "../../../_components/ModuleListPage";
+import { PageHeader } from "../../../_components/ds";
+import { RefreshErrorState } from "../../../_components/ds/RefreshErrorState";
+import { toHumanError } from "@/lib/messages";
 import { getRecNba } from "../_data";
-import { ArrowLeft } from "lucide-react";
+import { NbaTable } from "./NbaTable";
 
 export const dynamic = "force-dynamic";
 
@@ -8,15 +10,21 @@ export default async function Page() {
   const { data, source } = await getRecNba();
   return (
     <div className="page-main" aria-labelledby="page-heading">
-      <nav aria-label="Breadcrumb" className="back">
-        <ArrowLeft aria-hidden="true" size={14} /> <a href="/recommendations">Recommendations</a>
-      </nav>
-      <ModuleListPage
+      <PageHeader
         title="Recommendations — Next Best Action"
-        description="Predictive / NBA signals from recommendation-service."
-        rows={data}
-        source={source}
+        subtitle="Predictive model scores for your customers and records, highest score first."
+        back="/recommendations"
+        backLabel="Recommendations"
       />
+      {source === "error" ? (
+        <RefreshErrorState
+          error={toHumanError("load", { area: "predictive scores" })}
+          source={{ area: "predictive scores" }}
+          backHref="/recommendations"
+        />
+      ) : (
+        <NbaTable rows={data} />
+      )}
     </div>
   );
 }
