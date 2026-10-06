@@ -20,4 +20,7 @@ export const COOKIE = {
   OAUTH_STATE: "civitasone_oauth_state",
   DEVICE_ID: "civitasone_device_id",
   DEVICE_TRUST: "civitasone_device_trust",
+  // GAP-AUTH-LOGIN-02: short-lived cookie carrying the validated post-login
+  // destination path through the OIDC round-trip.
+  POST_LOGIN_NEXT: "civitasone_post_login_next",
 } as const;
