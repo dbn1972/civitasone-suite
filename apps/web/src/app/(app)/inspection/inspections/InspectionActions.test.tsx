@@ -20,7 +20,7 @@ describe("InspectionRowAction", () => {
     );
     render(<InspectionRowAction id="11111111-2222-4333-8444-555555555555" status="scheduled" />);
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
-    await waitFor(() => expect(screen.getByText(/accepted \(queued\)/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/status will update shortly/i)).toBeInTheDocument());
     expect(fetchSpy.mock.calls[0]![0]).toContain("/inspections/11111111-2222-4333-8444-555555555555/transition");
     expect((fetchSpy.mock.calls[0]![1] as RequestInit).method).toBe("POST");
     expect(JSON.parse(String((fetchSpy.mock.calls[0]![1] as RequestInit).body))).toEqual({
@@ -56,7 +56,7 @@ describe("InspectionRowAction", () => {
     expect(within(dialog).getByText(/cannot be undone/i)).toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Finalize inspection" }));
-    await waitFor(() => expect(screen.getByText(/accepted \(queued\)/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/status will update shortly/i)).toBeInTheDocument());
 
     expect(fetchSpy.mock.calls[0]![0]).toContain("/inspections/11111111-2222-4333-8444-555555555555/finalize");
     const init = fetchSpy.mock.calls[0]![1] as RequestInit;
@@ -72,5 +72,39 @@ describe("InspectionRowAction", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
     await waitFor(() => expect(screen.getByText(/Some details weren't accepted\. Check what you entered and try again\./)).toBeInTheDocument());
     expect(screen.queryByText(/invalid transition/i)).not.toBeInTheDocument();
+  });
+
+  // GAP-INSPECTION-INSPECTIONS-04: "Complete" is a sign-off that records the
+  // inspection's outcome. It must NOT fire a hard-coded "Completed from
+  // inspection hub" string on one click; it opens a confirm dialog, blocks
+  // confirmation until the officer types remarks, and sends those remarks as
+  // body.remarks. This fails against the pre-fix single-click button.
+  it("Complete requires typed remarks and sends them as body.remarks (no hard-coded string)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ status: "accepted" }), { status: 202 }),
+    );
+    render(<InspectionRowAction id="11111111-2222-4333-8444-555555555555" status="in_progress" />);
+
+    // A bare click must open the dialog, not fire the request.
+    fireEvent.click(screen.getByRole("button", { name: "Complete" }));
+    expect(fetchSpy).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole("alertdialog");
+
+    // Confirm is blocked until remarks are typed.
+    const confirmBtn = within(dialog).getByRole("button", { name: "Complete" });
+    expect(confirmBtn).toBeDisabled();
+
+    fireEvent.change(within(dialog).getByRole("textbox"), {
+      target: { value: "Fire exits clear; extinguishers serviced." },
+    });
+    expect(confirmBtn).not.toBeDisabled();
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => expect(screen.getByText(/status will update shortly/i)).toBeInTheDocument());
+    expect(fetchSpy.mock.calls[0]![0]).toContain("/inspections/11111111-2222-4333-8444-555555555555/transition");
+    expect(JSON.parse(String((fetchSpy.mock.calls[0]![1] as RequestInit).body))).toEqual({
+      targetState: "completed",
+      remarks: "Fire exits clear; extinguishers serviced.",
+    });
   });
 });
