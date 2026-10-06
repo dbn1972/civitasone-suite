@@ -58,12 +58,28 @@ export function ComplianceTable({ items, variant }: ComplianceTableProps) {
   return (
     <DataTable<ComplianceRow>
       columns={[
-        { key: "lawOrRule", label: "Law / Rule" },
+        {
+          key: "lawOrRule",
+          label: "Law / Rule",
+          // GAP-AUDIT-COMPLIANCE-05: show the section alongside the rule, as the
+          // DPDP variant already does.
+          render: (item) => (
+            <>{item.lawOrRule as string}{item.section ? ` §${item.section as string}` : ""}</>
+          ),
+        },
         { key: "requirement", label: "Requirement" },
         {
           key: "department",
           label: "Dept",
           render: (item) => (item.department as string | undefined) ?? "—",
+        },
+        {
+          // GAP-AUDIT-COMPLIANCE-05: regulatory/CERT-In items are often the ones
+          // with hard deadlines, yet the cert table had no Due column — an
+          // overdue direction showed no due date. Added before Status.
+          key: "dueDate",
+          label: "Due",
+          render: (item) => formatIndianDate(item.dueDate as string),
         },
         {
           key: "status",

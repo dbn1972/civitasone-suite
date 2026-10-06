@@ -2028,6 +2028,14 @@ export const AuditPlanItemSchema = z.object({
   auditUnit: z.string(),
   department: z.string(),
   type: z.enum(["routine", "special", "compliance", "performance"]),
+  // GAP-AUDIT-PLAN-01 / PLAN-03: the parent audit_plans row carries the
+  // planner-entered plan number, title and chosen risk level. These are
+  // projected via a join in audit-service queries.listPlanItems. Optional so
+  // the contract stays backward-compatible with any producer that does not
+  // yet join to the parent plan.
+  planNo: z.string().optional(),
+  title: z.string().optional(),
+  riskLevel: z.enum(["low", "medium", "high"]).optional(),
   plannedFrom: z.string(),
   plannedTo: z.string(),
   auditorTeam: z.string().optional(),
@@ -2057,18 +2065,25 @@ export const AuditExportJobSchema = z.object({
   format: z.enum(["pdf", "xlsx", "csv"]),
   status: z.enum(["queued", "processing", "completed", "failed"]),
   downloadUrl: z.string().optional(),
+  // GAP-AUDIT-EXPORTS-04: optional distinguishing metadata (additive).
+  periodFrom: z.string().optional(),
+  periodTo: z.string().optional(),
+  rowCount: z.number().nullable().optional(),
+  includesPii: z.boolean().optional(),
 });
 export const AuditExportJobListSchema = z.array(AuditExportJobSchema);
 
 export const CagParaSummarySchema = z.object({
   id: z.string(),
-  reportYear: z.string(),
-  paraNo: z.string(),
-  department: z.string(),
-  totalParas: z.number(),
-  settled: z.number(),
-  pending: z.number(),
-  status: z.enum(["under_review", "partially_settled", "nearly_settled", "settled"]),
+  // GAP-AUDIT-CAG-04: display fields are nullish — a para row need not carry a
+  // human report year / department name; GAP-AUDIT-CAG-01: totals optional.
+  reportYear: z.string().nullish(),
+  paraNo: z.string().optional(),
+  department: z.string().nullish(),
+  totalParas: z.number().optional(),
+  settled: z.number().optional(),
+  pending: z.number().optional(),
+  status: z.string(),
 });
 export const CagParaSummaryListSchema = z.array(CagParaSummarySchema);
 
@@ -2089,7 +2104,10 @@ export const InvestigationSummarySchema = z.object({
   assignedTo: z.string(),
   started: z.string(),
   findings: z.string(),
-  status: z.enum(["in_progress", "findings_submitted", "closed"]),
+  // GAP-AUDIT-INVESTIGATION-04: accept any status string at the boundary; the
+  // loader normalizes unmodelled values to "unknown" instead of letting a new
+  // backend status (e.g. on_hold) fail the entire payload into an error state.
+  status: z.string(),
 });
 export const InvestigationSummaryListSchema = z.array(InvestigationSummarySchema);
 

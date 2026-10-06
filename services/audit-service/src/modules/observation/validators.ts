@@ -10,6 +10,7 @@ export const createObservationBody = z.object({
   // P0-3: money in PAISE carried as a decimal string to avoid float/Number truncation
   // of amounts above 2^53. Validated as a non-negative integer string; BigInt()-parsed downstream.
   amountInvolvedMinor: z.string().regex(/^\d+$/, "must be a non-negative integer string").default("0"),
+  reason:              z.string().trim().max(500).optional(),
 });
 export type CreateObservationBody = z.infer<typeof createObservationBody>;
 
@@ -18,6 +19,7 @@ export const draftParaBody = z.object({
   deptRef:  z.string().min(1).max(128),
   body:     z.string().min(1).max(8000),
   sourceRef: z.string().max(256).optional(),
+  reason:   z.string().trim().max(500).optional(),
 });
 export type DraftParaBody = z.infer<typeof draftParaBody>;
 
@@ -26,6 +28,7 @@ export const complianceReplyBody = z.object({
   replyText:       z.string().min(1).max(4000),
   respondedByRef:  z.string().min(1).max(128),
   attachmentRef:   z.string().max(512).optional(),
+  reason:          z.string().trim().max(500).optional(),
 });
 export type ComplianceReplyBody = z.infer<typeof complianceReplyBody>;
 

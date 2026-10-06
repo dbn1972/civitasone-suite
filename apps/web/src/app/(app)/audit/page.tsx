@@ -1,46 +1,78 @@
 import Link from "next/link";
-import { DataSourceBadge } from "../../_components/DataSourceBadge";
-import { PageHeader, StatCard } from "../../_components/ds";
+import { PageHeader, StatCard, Card, EmptyState, RefreshErrorState } from "../../_components/ds";
 import { getAuditItems } from "../../_data/loaders";
+import { toResourceState } from "../../_data/useResource";
+import { toHumanError } from "@/lib/messages";
+import { AuditBreadcrumb } from "./_components/AuditBreadcrumb";
+import { AUDIT_SECTIONS } from "./_components/auditNav";
 import { AuditLogTable } from "./AuditLogTable";
 
-export default async function AuditPage() {
-  const { data: auditItems, source } = await getAuditItems();
+// Keep the Event Log sub-nav in sync with the shared section index
+// (GAP-AUDIT-DASHBOARD-02) — show the cross-module jumps the Event Log always
+// offered (CAG / Vigilance / Investigation) sourced from one list.
+const SUBNAV = AUDIT_SECTIONS.filter((s) =>
+  ["/audit/cag", "/audit/vigilance", "/audit/investigation"].includes(s.href),
+);
 
-  const total = auditItems.length;
-  const successes = auditItems.filter((i) => i.outcome === "success").length;
-  const failures = auditItems.filter((i) => i.outcome === "failure").length;
+export default async function AuditPage() {
+  const result = await getAuditItems();
+  const resource = toResourceState(result);
+  const errored = resource.status === "error";
+  const auditItems = result.data;
+
+  // GAP-AUDIT-HOME-04: on a real fetch failure the KPIs must read "we don't
+  // know" ("—"), not a fabricated all-zero dashboard that looks like a tenant
+  // with no activity. StatCard already renders null as "—".
+  const total = errored ? null : auditItems.length;
+  const successes = errored ? null : auditItems.filter((i) => i.outcome === "success").length;
+  const failures = errored ? null : auditItems.filter((i) => i.outcome === "failure").length;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
-      <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
-        <Link href="/audit/dashboard" className="lnk">Audit</Link>
-        <span aria-hidden="true" style={{ margin: "0 7px", color: "var(--line)" }}>/</span>
-        <span aria-current="page">Event Log</span>
-      </nav>
+      {/* GAP-AUDIT-HOME-05: Event Log is the module home — its breadcrumb must
+          not link "Audit" back to itself. */}
+      <AuditBreadcrumb current="Event Log" isHome />
       <nav aria-label="Audit sub-modules" style={{ display: "flex", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
-        <Link href="/audit/cag" className="btn ghost sm">CAG Audit</Link>
-        <Link href="/audit/vigilance" className="btn ghost sm">Vigilance</Link>
-        <Link href="/audit/investigation" className="btn ghost sm">Investigation</Link>
+        {SUBNAV.map((s) => (
+          <Link key={s.href} href={s.href} className="btn ghost sm">{s.label}</Link>
+        ))}
       </nav>
       <PageHeader
         title="Audit Events"
         subtitle="Tenant-scoped activity log with outcome and resource context."
         actions={<Link href="/audit/exports" className="btn ghost">Export</Link>}
       />
-      <div className="grid g-4" style={{ marginBottom: 18 }}>
+      {/* GAP-AUDIT-HOME-02: the old fourth "Policy Alerts" tile re-rendered the
+          failures count under a different label — a fabricated signal with no
+          backing data. Removed; the honest three KPIs the log can actually
+          compute remain in a 3-up grid. */}
+      <div className="grid g-3" style={{ marginBottom: 18 }}>
         <StatCard icon="📜" iconBg="#eef2ff" label="Total Events" value={total} />
         <StatCard icon="✅" iconBg="#e6f7f0" label="Success" value={successes} />
         <StatCard icon="🔐" iconBg="var(--warnbg)" label="Failures" value={failures} />
-        <StatCard icon="🚨" iconBg="#fef3f2" label="Policy Alerts" value={failures > 0 ? failures : 0} />
       </div>
-      {source === "error" && <DataSourceBadge source={source} />}
-      <div className="card">
-        <div className="card-h"><h3>Audit event log</h3></div>
-        <div className="pad">
-          <AuditLogTable rows={auditItems} />
+      {errored ? (
+        <Card title="Audit event log">
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "audit events" })} />
+          </div>
+        </Card>
+      ) : auditItems.length === 0 ? (
+        <Card title="Audit event log">
+          <EmptyState
+            icon="📜"
+            title="No audit events yet"
+            message="Tenant activity will appear here as users act across the suite."
+          />
+        </Card>
+      ) : (
+        <div className="card">
+          <div className="card-h"><h3>Audit event log</h3></div>
+          <div className="pad">
+            <AuditLogTable rows={auditItems} />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

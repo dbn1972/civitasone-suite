@@ -607,6 +607,11 @@ export interface AuditRowSummary {
   resourceType?: string;
   /** GAP-HR-AUDIT-LOG-05: audited entity id (event target / payload.resourceId). */
   resourceId?: string;
+  /** GAP-AUDIT-HOME-03: the audit event's own id, so the log can show an event
+   * reference an investigation can cite. Optional — not every caller of this
+   * shared row shape populates it, so adding it cannot break an existing
+   * consumer. */
+  id?: string;
 }
 
 export type HelpdeskTicketPriority = 'Low' | 'Medium' | 'High' | 'Critical';
@@ -2039,6 +2044,12 @@ export type AuditPlanItem = {
   auditUnit: string;
   department: string;
   type: "routine" | "special" | "compliance" | "performance";
+  // GAP-AUDIT-PLAN-01 / PLAN-03: projected from the parent audit_plans row
+  // (plan number, title, chosen risk level). Optional to stay backward
+  // compatible with producers that do not yet join to the parent plan.
+  planNo?: string;
+  title?: string;
+  riskLevel?: "low" | "medium" | "high";
   plannedFrom: string;
   plannedTo: string;
   auditorTeam?: string;
@@ -2066,16 +2077,28 @@ export type AuditExportJob = {
   format: "pdf" | "xlsx" | "csv";
   status: "queued" | "processing" | "completed" | "failed";
   downloadUrl?: string;
+  // GAP-AUDIT-EXPORTS-04: distinguishing metadata for same-day exports.
+  periodFrom?: string;
+  periodTo?: string;
+  rowCount?: number | null;
+  includesPii?: boolean;
 };
 
 export type CagParaSummary = {
   id: string;
-  reportYear: string;
+  // GAP-AUDIT-CAG-04: nullable — audit-service rows need not carry a human
+  // report year / department name (only opaque refs), and we no longer fall
+  // back to those refs for display.
+  reportYear: string | null;
   paraNo: string;
-  department: string;
-  totalParas: number;
-  settled: number;
-  pending: number;
+  department: string | null;
+  // GAP-AUDIT-CAG-01: optional — the paras API returns one row per paragraph
+  // with no per-report aggregate; these were fabricated and are no longer
+  // populated by the mapper. Kept optional (not removed) so any other
+  // consumer compiles unchanged.
+  totalParas?: number;
+  settled?: number;
+  pending?: number;
   status: "under_review" | "partially_settled" | "nearly_settled" | "settled";
 };
 
@@ -2095,7 +2118,10 @@ export type InvestigationSummary = {
   assignedTo: string;
   started: string;
   findings: string;
-  status: "in_progress" | "findings_submitted" | "closed";
+  // GAP-AUDIT-INVESTIGATION-04: "unknown" represents a backend status the web
+  // does not yet model (e.g. on_hold/reopened) — it must NOT be coerced to
+  // in_progress (which inflated "Active Investigations").
+  status: "in_progress" | "findings_submitted" | "closed" | "unknown";
 };
 
 // ── Legal types ───────────────────────────────────────────────────────────────

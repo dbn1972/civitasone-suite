@@ -48,7 +48,7 @@ export function registerExportConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.exportCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; from: string; to: string;
-      format: "json" | "csv"; includePii?: boolean; roles?: string[];
+      format: "json" | "csv"; includePii?: boolean; roles?: string[]; reason?: string;
     };
 
     // P1-5: enforce PII gating server-side again (defense in depth) — strip if not allowed.
@@ -70,7 +70,7 @@ export function registerExportConsumers(queue: Queue): void {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { exportId: p.id, from: p.from, to: p.to, format: p.format, includesPii: allowPii },
       });
-      await audit(tx, msg, "create", RESOURCE.export, p.id);
+      await audit(tx, msg, "create", RESOURCE.export, p.id, p.reason, { includesPii: allowPii });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE.export, p.id));
 
@@ -176,10 +176,11 @@ async function audit(
   tx: Parameters<typeof enqueue>[0],
   msg: { tenantId: string; actorId: string; correlationId: string },
   action: string, resourceType: string, resourceId: string,
+  reason?: string, extra: Record<string, unknown> = {},
 ): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "audit", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "audit", action, resourceType, resourceId, outcome: "success", ...(reason ? { reason } : {}), ...extra },
   });
 }

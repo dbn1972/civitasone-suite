@@ -8,19 +8,30 @@ vi.mock("@/app/_data/apiClient", () => ({
 
 import CagPage from "./page";
 
-const MOCK_PARAS = [{ id: "p1", department: "Finance", totalParas: 5, settled: 2, pending: 3 }];
+// GAP-AUDIT-CAG-01: rows carry a real per-paragraph status; the page derives
+// counts from them (no fabricated totalParas/settled/pending per row).
+const MOCK_PARAS = [
+  { id: "p1", reportYear: "2024-25", paraNo: "1", department: "Finance", status: "settled" },
+  { id: "p2", reportYear: "2024-25", paraNo: "2", department: "Finance", status: "partially_settled" },
+  { id: "p3", reportYear: "2024-25", paraNo: "3", department: "Works", status: "under_review" },
+];
 
 describe("CagPage", () => {
   beforeEach(() => fetchJsonMock.mockReset());
 
-  it("renders CAG paragraphs and real stat counts on success", async () => {
+  it("GAP-AUDIT-CAG-01: KPIs are 3 paragraphs / 1 settled / 2 pending from real statuses", async () => {
     fetchJsonMock.mockResolvedValue({ data: MOCK_PARAS, source: "api" });
     render(await CagPage());
-    expect(screen.getAllByText("Total Paras").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("5").length).toBeGreaterThan(0);
+    expect(screen.getByText("Paragraphs")).toBeInTheDocument();
+    // Total 3, settled 1, pending 2, departments 2 — all present as stat values.
+    expect(screen.getAllByText("3").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("1").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("2").length).toBeGreaterThan(0);
+    // No fabricated per-row count columns.
+    expect(screen.queryByText("Total Paras")).not.toBeInTheDocument();
   });
 
-  it("shows the honest empty state when there genuinely are no CAG paragraphs", async () => {
+  it("GAP-AUDIT-CAG-02: a valid empty list shows the honest empty state, not an error", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
     render(await CagPage());
     expect(screen.getByText("No CAG paragraphs found")).toBeInTheDocument();

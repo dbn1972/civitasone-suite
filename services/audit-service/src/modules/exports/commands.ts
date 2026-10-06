@@ -30,6 +30,11 @@ export async function requestExport(ctx: RequestContext, body: CreateExportBody)
     throw new HttpError(403, "PII_EXPORT_FORBIDDEN", `bulk PII export requires one of: ${PII_EXPORT_ROLES.join(", ")}`);
   }
 
+  // A PII export must carry a justification; the consumer persists it in the audit record.
+  if (body.includePii && !body.reason) {
+    throw new HttpError(400, "REASON_REQUIRED", "a reason is required for a PII export");
+  }
+
   const id = randomUUID();
   await queue.publish(COMMANDS.exportCreate, {
     messageId: id,
@@ -40,7 +45,7 @@ export async function requestExport(ctx: RequestContext, body: CreateExportBody)
     schemaVersion: "1.0",
     payload: {
       id, tenantId: ctx.tenantId, from: body.from, to: body.to, format: body.format,
-      includePii: body.includePii, roles: ctx.roles,
+      includePii: body.includePii, roles: ctx.roles, reason: body.reason,
     },
   });
   await cache.put(cache.makeKey(ctx.tenantId, RESOURCE.export, id), {

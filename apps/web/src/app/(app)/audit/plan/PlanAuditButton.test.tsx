@@ -51,4 +51,24 @@ describe("PlanAuditButton", () => {
     expect(screen.queryByText(/already exists for this fiscal year/)).not.toBeInTheDocument();
     expect(refreshMock).not.toHaveBeenCalled();
   });
+
+  // GAP-AUDIT-PLAN-04: the date inputs set max/min, but a typed/pasted value
+  // can still invert the range; submit() must block planned-to < planned-from
+  // with a clear message and never hit the network.
+  it("blocks submission when planned-to is before planned-from", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    render(<PlanAuditButton />);
+    fireEvent.click(screen.getByRole("button", { name: "+ Plan Audit" }));
+    fireEvent.change(screen.getByLabelText("Plan no."), { target: { value: "PLAN-FY26-09" } });
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Reversed range audit" } });
+    fireEvent.change(screen.getByLabelText("Audit area / unit"), { target: { value: "Works Wing" } });
+    fireEvent.change(screen.getByLabelText("Planned from"), { target: { value: "2026-10-31" } });
+    fireEvent.change(screen.getByLabelText("Planned to"), { target: { value: "2026-10-01" } });
+    fireEvent.click(screen.getByRole("button", { name: "Plan audit" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Planned-to must be on or after planned-from/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(refreshMock).not.toHaveBeenCalled();
+  });
 });

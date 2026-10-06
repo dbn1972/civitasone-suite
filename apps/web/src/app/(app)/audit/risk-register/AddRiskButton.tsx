@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
 import { Button } from "@/app/_components/ds";
+import { riskScore, band, BAND_LABEL, LIKELIHOOD_LABEL, IMPACT_LABEL, CATEGORY_LABEL } from "@/lib/audit/riskScoring";
 
 const LIKELIHOOD = ["rare", "unlikely", "possible", "likely", "almost_certain"] as const;
 const IMPACT = ["negligible", "minor", "moderate", "major", "catastrophic"] as const;
@@ -91,23 +92,26 @@ export function AddRiskButton() {
               )}
               <label className="lbl" htmlFor="rk-cat">Category</label>
               <select id="rk-cat" className="inp" value={category} onChange={(e) => setCategory(e.target.value as typeof category)}>
-                {CATEGORY.map((c) => <option key={c} value={c}>{c}</option>)}
+                {CATEGORY.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c] ?? c}</option>)}
               </select>
               <div style={{ display: "flex", gap: 12 }}>
                 <div style={{ flex: 1 }}>
                   <label className="lbl" htmlFor="rk-like">Likelihood</label>
                   <select id="rk-like" className="inp" value={likelihood} onChange={(e) => setLikelihood(e.target.value as typeof likelihood)}>
-                    {LIKELIHOOD.map((l) => <option key={l} value={l}>{l.replace("_", " ")}</option>)}
+                    {LIKELIHOOD.map((l) => <option key={l} value={l}>{LIKELIHOOD_LABEL[l]}</option>)}
                   </select>
                 </div>
                 <div style={{ flex: 1 }}>
                   <label className="lbl" htmlFor="rk-imp">Impact</label>
                   <select id="rk-imp" className="inp" value={impact} onChange={(e) => setImpact(e.target.value as typeof impact)}>
-                    {IMPACT.map((i) => <option key={i} value={i}>{i}</option>)}
+                    {IMPACT.map((i) => <option key={i} value={i}>{IMPACT_LABEL[i]}</option>)}
                   </select>
                 </div>
               </div>
-              <div style={{ fontSize: 12, color: "#667085", marginTop: 2 }}>Risk score is computed server-side from likelihood × impact.</div>
+              <div style={{ fontSize: 13, color: "#344054", marginTop: 2 }} aria-live="polite">
+                Risk score (likelihood × impact): <strong>{riskScore(likelihood, impact)}</strong> — {BAND_LABEL[band(riskScore(likelihood, impact))]}
+                <span style={{ color: "#667085" }}>. Recomputed and stored server-side.</span>
+              </div>
               <label className="lbl" htmlFor="rk-owner">Owner (optional)</label>
               <input id="rk-owner" className="inp" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="CFO Office" />
               {error && <div role="alert" style={{ color: "var(--bad)", fontSize: 13, marginTop: 4 }}>{error}</div>}

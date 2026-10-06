@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
-import { Button } from "@/app/_components/ds";
+import { rupeesToMinorString } from "@/lib/money";
+import { Button, ConfirmDialog } from "@/app/_components/ds";
 
 interface FormState {
   obsNo: string;
@@ -29,10 +30,26 @@ export function LogObservationButton() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY);
+  // GAP-AUDIT-OBSERVATIONS-05: confirm gate before the create mutation.
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const titleId = useId();
   const formError = useFormError("observation");
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
+
+  // Validate required fields + money BEFORE showing the confirm dialog.
+  const handleProceed = useCallback(() => {
+    setError(null);
+    if (!form.obsNo.trim() || !form.auditeeRef.trim() || !form.finding.trim()) {
+      setError("Observation number, auditee and finding are required.");
+      return;
+    }
+    if (form.amountRupees.trim() && rupeesToMinorString(form.amountRupees.trim(), { allowZero: true }) === null) {
+      setError("Money value must be a non-negative rupee amount with at most two decimal places.");
+      return;
+    }
+    setConfirmOpen(true);
+  }, [form]);
 
   const close = useCallback(() => {
     if (busy) return;
@@ -55,7 +72,7 @@ export function LogObservationButton() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [open, close]);
 
-  const submit = useCallback(async () => {
+  const submit = useCallback(async (reason?: string) => {
     setError(null);
     if (!form.obsNo.trim() || !form.auditeeRef.trim() || !form.finding.trim()) {
       setError("Observation number, auditee and finding are required.");
@@ -64,12 +81,14 @@ export function LogObservationButton() {
     const rupees = form.amountRupees.trim();
     let amountInvolvedMinor = "0";
     if (rupees) {
-      const n = Number(rupees);
-      if (!Number.isFinite(n) || n < 0) {
-        setError("Money value must be a non-negative number of rupees.");
+      // GAP-AUDIT-OBSERVATIONS-04: integer paise conversion, never Number()*100.
+      // Rejects >2dp and negatives; allowZero so an explicit "0" is accepted.
+      const minor = rupeesToMinorString(rupees, { allowZero: true });
+      if (minor === null) {
+        setError("Money value must be a non-negative rupee amount with at most two decimal places.");
         return;
       }
-      amountInvolvedMinor = String(Math.round(n * 100));
+      amountInvolvedMinor = minor;
     }
     setBusy(true);
     try {
@@ -83,6 +102,8 @@ export function LogObservationButton() {
           category: form.category,
           riskLevel: form.riskLevel,
           amountInvolvedMinor,
+          // GAP-AUDIT-OBSERVATIONS-05: optional reason captured at confirm time.
+          ...(reason && reason.trim() ? { reason: reason.trim() } : {}),
         }),
       });
       if (!res.ok) {
@@ -90,6 +111,7 @@ export function LogObservationButton() {
         setError(resolved.message);
         return;
       }
+      setConfirmOpen(false);
       setOpen(false);
       setForm(EMPTY);
       router.refresh();
@@ -161,12 +183,30 @@ export function LogObservationButton() {
 
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
                 <Button variant="ghost" onClick={close} disabled={busy}>Cancel</Button>
-                <Button onClick={() => void submit()} disabled={busy}>{busy ? "Logging…" : "Log observation"}</Button>
+                <Button onClick={handleProceed} disabled={busy}>{busy ? "Logging…" : "Log observation"}</Button>
               </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* GAP-AUDIT-OBSERVATIONS-05: confirm gate summarising the observation
+          before the create mutation. Reason is optional per policy. */}
+      <ConfirmDialog
+        open={confirmOpen}
+        title={`Log observation ${form.obsNo.trim() || "(new)"}?`}
+        description={
+          `Risk: ${form.riskLevel.toUpperCase()} · Category: ${form.category}` +
+          (form.amountRupees.trim() ? ` · Money value: ₹${form.amountRupees.trim()}` : "") +
+          ". This will be recorded in the audit trail."
+        }
+        confirmLabel="Confirm & log"
+        reasonLabel="Reason / context (optional)"
+        busy={busy}
+        errorMessage={error ?? undefined}
+        onConfirm={(reason) => void submit(reason)}
+        onCancel={() => { if (!busy) { setConfirmOpen(false); } }}
+      />
     </>
   );
 }

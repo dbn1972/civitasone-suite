@@ -2,7 +2,7 @@
 
 import { UserFacingError } from "@/lib/userFacingError";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, formatIndianDateTime } from "@/lib/formatters";
 import { ActionButton, Button } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
@@ -39,6 +39,8 @@ interface ExportStatus {
 }
 
 const TERMINAL = new Set(["completed", "failed"]);
+// GAP-AUDIT-EXPORTS-05: resume a running job's polling after a page reload.
+const RESUME_KEY = "audit.exports.currentJob";
 
 function isoStart(d: string): string {
   return new Date(`${d}T00:00:00.000Z`).toISOString();
@@ -54,7 +56,7 @@ function defaultRange(): { from: string; to: string } {
   return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
 }
 
-export function ExportConsole() {
+export function ExportConsole({ canExportPii = false }: { canExportPii?: boolean } = {}) {
   const initial = defaultRange();
   const [from, setFrom] = useState(initial.from);
   const [to, setTo] = useState(initial.to);
@@ -70,16 +72,65 @@ export function ExportConsole() {
   const formError = useFormError("export");
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // GAP-AUDIT-EXPORTS-05: hold the 120s safety-stop timer so it can be cleared.
+  // Previously it was a fire-and-forget setTimeout, so starting job B while
+  // job A's safety timer was still pending would stop B's polling early.
+  const safetyRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
       clearInterval(pollRef.current);
       pollRef.current = null;
     }
+    if (safetyRef.current) {
+      clearTimeout(safetyRef.current);
+      safetyRef.current = null;
+    }
     setPolling(false);
+    try {
+      window.sessionStorage.removeItem(RESUME_KEY);
+    } catch {
+      // sessionStorage unavailable (SSR / privacy mode) — nothing to clean up.
+    }
   }, []);
 
   useEffect(() => () => stopPolling(), [stopPolling]);
+
+  // GAP-AUDIT-EXPORTS-05: on mount, resume polling for a job that was running
+  // when the page was reloaded. Seed a minimal "queued" job so the Current job
+  // card reappears immediately; the first poll fills in the real status.
+  useEffect(() => {
+    let resumeId: string | null = null;
+    try {
+      resumeId = window.sessionStorage.getItem(RESUME_KEY);
+    } catch {
+      resumeId = null;
+    }
+    if (!resumeId) return;
+    setJob((j) =>
+      j ?? {
+        id: resumeId as string,
+        status: "queued",
+        format,
+        ready: false,
+        download: null,
+        rowCount: null,
+        includesPii: false,
+        retentionUntil: null,
+        expiresAt: null,
+        error: null,
+        contentSha256: null,
+        signature: null,
+        signatureAlg: null,
+        signingKeyId: null,
+        signedAt: null,
+      },
+    );
+    startPolling(resumeId);
+    // Mount-only: intentionally runs once. startPolling/format are stable-enough
+    // for a one-shot resume and re-running on their change would restart polling.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const flash = useCallback((kind: "ok" | "err" | "info", text: string) => {
     setToast({ kind, text });
@@ -112,32 +163,44 @@ export function ExportConsole() {
     (id: string) => {
       stopPolling();
       setPolling(true);
+      try {
+        window.sessionStorage.setItem(RESUME_KEY, id);
+      } catch {
+        // sessionStorage unavailable — resume-after-reload simply won't work.
+      }
       void pollOnce(id);
       pollRef.current = setInterval(() => void pollOnce(id), 2500);
-      // safety stop after 2 minutes
-      window.setTimeout(() => stopPolling(), 120_000);
+      // safety stop after 2 minutes — kept in a ref so a later job's polling
+      // is never stopped by an earlier job's stale timer.
+      safetyRef.current = setTimeout(() => stopPolling(), 120_000);
     },
     [pollOnce, stopPolling],
   );
 
-  const generate = useCallback(async () => {
+  const generate = useCallback(async (reason?: string) => {
     setVerify(null);
     if (new Date(from) > new Date(to)) {
       throw new UserFacingError("Start date must be on or before end date.");
     }
-    const res = await fetch("/api/proxy/audit/exports", {
+    // GAP-AUDIT-EXPORTS-01: create is a v1 resource like status/verify/download.
+    // The audit-service registers the create handler under BOTH /audit/exports
+    // (legacy) and /v1/audit/exports; use the v1 path so this resource lives in
+    // one consistent namespace. The 202 envelope is { id, status, correlationId,
+    // data?: { id } } (acceptedResponseSchema), so read data.id first.
+    const res = await fetch("/api/proxy/v1/audit/exports", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ from: isoStart(from), to: isoEnd(to), format, includePii }),
+      body: JSON.stringify({ from: isoStart(from), to: isoEnd(to), format, includePii, reason }),
     });
     if (!res.ok) {
       const resolved = await formError.fromResponse(res, "save");
       throw UserFacingError.from(resolved);
     }
-    const body = (await res.json()) as { id?: string };
-    if (!body.id) throw new UserFacingError("Backend did not return an export id.");
+    const body = (await res.json()) as { id?: string; data?: { id?: string } };
+    const jobId = body.data?.id ?? body.id;
+    if (!jobId) throw new UserFacingError("Backend did not return an export id.");
     setJob({
-      id: body.id,
+      id: jobId,
       status: "queued",
       format,
       ready: false,
@@ -154,7 +217,7 @@ export function ExportConsole() {
       signedAt: null,
     });
     flash("info", "Export queued — generating signed artifact…");
-    startPolling(body.id);
+    startPolling(jobId);
     // formError.fromResponse is stable (useCallback'd on a fixed `area`
     // string inside useFormError) even though the wrapping `formError`
     // object literal isn't, so omitting it here is safe.
@@ -217,12 +280,20 @@ export function ExportConsole() {
             })}
           </div>
 
-          <label className="lbl" style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14, cursor: "pointer" }}>
-            <input type="checkbox" checked={includePii} onChange={(e) => setIncludePii(e.target.checked)} />
+          <label className="lbl" style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14, cursor: canExportPii ? "pointer" : "not-allowed" }}
+            title={canExportPii ? undefined : "Including PII columns requires an audit-admin role."}>
+            <input
+              type="checkbox"
+              checked={includePii}
+              disabled={!canExportPii}
+              onChange={(e) => setIncludePii(e.target.checked)}
+            />
             Include PII columns (IP, user-agent, before/after values)
           </label>
-          <div style={{ fontSize: 12, color: "#667085", marginTop: 4 }}>
-            PII export requires an audit-admin role; honoured server-side.
+          <div style={{ fontSize: 12, color: "var(--mut)", marginTop: 4 }}>
+            {canExportPii
+              ? "PII export is recorded with your reason and enforced server-side."
+              : "PII export requires an audit-admin role; the option is disabled for your role."}
           </div>
 
           <ActionButton
@@ -237,6 +308,8 @@ export function ExportConsole() {
               </>
             }
             confirmLabel="Generate"
+            requireReason={includePii}
+            reasonLabel="Reason for exporting PII columns (required)"
             onConfirm={generate}
           />
 
@@ -251,7 +324,7 @@ export function ExportConsole() {
                 fontSize: 13,
                 background: toast.kind === "ok" ? "var(--goodbg)" : toast.kind === "err" ? "var(--badbg)" : "var(--infobg)",
                 color: toast.kind === "ok" ? "var(--good)" : toast.kind === "err" ? "var(--bad)" : "var(--info)",
-                border: `1px solid ${toast.kind === "ok" ? "#abefc6" : toast.kind === "err" ? "#fecdca" : "#b2ddff"}`,
+                border: `1px solid ${toast.kind === "ok" ? "var(--goodbd)" : toast.kind === "err" ? "var(--badbd)" : "var(--infobd)"}`,
               }}
             >
               {toast.text}
@@ -264,7 +337,7 @@ export function ExportConsole() {
         <div className="card-h"><h3>Current job</h3></div>
         <div className="pad">
           {!job ? (
-            <p style={{ color: "#667085", fontSize: 14, margin: 0 }}>
+            <p style={{ color: "var(--mut)", fontSize: 14, margin: 0 }}>
               No active export. Configure a window on the left and generate a signed artifact.
             </p>
           ) : (
@@ -281,7 +354,7 @@ export function ExportConsole() {
                 </div>
                 <div className="fld"><div className="l">Format</div><div className="v">{job.format.toUpperCase()}</div></div>
                 {job.rowCount != null && <div className="fld"><div className="l">Rows</div><div className="v">{job.rowCount.toLocaleString("en-IN")}</div></div>}
-                {job.signedAt && <div className="fld"><div className="l">Signed</div><div className="v">{formatIndianDate(job.signedAt)}</div></div>}
+                {job.signedAt && <div className="fld"><div className="l">Signed</div><div className="v">{formatIndianDateTime(job.signedAt)}</div></div>}
                 {job.signatureAlg && <div className="fld"><div className="l">Algorithm</div><div className="v"><span className="mono">{job.signatureAlg}</span></div></div>}
                 {job.contentSha256 && (
                   <div className="fld">
@@ -303,7 +376,7 @@ export function ExportConsole() {
                       <span aria-hidden="true">⬇</span> Download artifact
                     </a>
                   ) : (
-                    <span style={{ fontSize: 12, color: "#667085", alignSelf: "center" }}>
+                    <span style={{ fontSize: 12, color: "var(--mut)", alignSelf: "center" }}>
                       Download token withheld (not the requester, or PII role required).
                     </span>
                   )}
@@ -320,8 +393,8 @@ export function ExportConsole() {
                   style={{
                     borderRadius: 8,
                     padding: 12,
-                    border: `1px solid ${verify.verified ? "#abefc6" : "#fecdca"}`,
-                    background: verify.verified ? "#f6fef9" : "#fffbfa",
+                    border: `1px solid ${verify.verified ? "var(--goodbd)" : "var(--badbd)"}`,
+                    background: verify.verified ? "var(--goodbg)" : "var(--badbg)",
                   }}
                 >
                   <div style={{ fontWeight: 600, marginBottom: 6 }}>

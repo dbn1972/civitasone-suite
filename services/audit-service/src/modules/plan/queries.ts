@@ -27,6 +27,14 @@ export async function listPlanItems(tenantId: string, limit: number) {
     auditUnit: row.unitRef ?? row.deptRef,
     department: row.deptRef,
     type: "routine" as const,
+    // GAP-AUDIT-PLAN-01 / PLAN-03: surface the parent plan's number, title and
+    // planner-chosen risk level (projected via the LEFT JOIN in repo). Omit when
+    // the item has no parent plan row (join miss) rather than fabricating.
+    ...(row.planNo ? { planNo: row.planNo } : {}),
+    ...(row.title ? { title: row.title } : {}),
+    ...(row.riskLevel === "low" || row.riskLevel === "medium" || row.riskLevel === "high"
+      ? { riskLevel: row.riskLevel as "low" | "medium" | "high" }
+      : {}),
     plannedFrom: row.scheduledFrom.toString(),
     plannedTo: row.scheduledTo.toString(),
     status: (row.status === "completed" ? "completed" : row.status === "in_progress" ? "in_progress" : row.status === "deferred" ? "deferred" : "planned") as "planned" | "in_progress" | "completed" | "deferred",

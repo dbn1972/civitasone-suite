@@ -47,6 +47,11 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         "processing"
       ) as "queued" | "processing" | "completed" | "failed",
       downloadUrl: row.signedUrl ?? undefined,
+      // GAP-AUDIT-EXPORTS-04: distinguishing metadata for same-day exports.
+      periodFrom: new Date(row.periodFrom as unknown as string).toISOString(),
+      periodTo: new Date(row.periodTo as unknown as string).toISOString(),
+      rowCount: row.rowCount ?? null,
+      includesPii: row.includesPii,
     }));
     sendValidated(reply, AuditExportJobListSchema, jobs);
   });

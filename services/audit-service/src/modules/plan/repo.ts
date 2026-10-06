@@ -36,7 +36,27 @@ export async function insertPlanItem(tx: Writer, row: typeof auditPlanItems.$inf
 export async function listPlanItemsByTenant(tenantId: string, limit: number) {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.
-  return db.transaction((tx) => tx.select().from(auditPlanItems).where(eq(auditPlanItems.tenantId, tenantId)).limit(limit));
+  //
+  // GAP-AUDIT-PLAN-01 / PLAN-03: LEFT JOIN the parent audit_plans row so the
+  // plan number, title and planner-chosen risk level reach the web table.
+  // Previously only auditPlanItems was selected, so riskLevel/planNo/title
+  // never left the service and the UI derived "Risk" from the audit type.
+  return db.transaction((tx) => tx
+    .select({
+      id: auditPlanItems.id,
+      deptRef: auditPlanItems.deptRef,
+      unitRef: auditPlanItems.unitRef,
+      scheduledFrom: auditPlanItems.scheduledFrom,
+      scheduledTo: auditPlanItems.scheduledTo,
+      status: auditPlanItems.status,
+      planNo: auditPlans.planNo,
+      title: auditPlans.title,
+      riskLevel: auditPlans.riskLevel,
+    })
+    .from(auditPlanItems)
+    .leftJoin(auditPlans, and(eq(auditPlanItems.planId, auditPlans.id), eq(auditPlans.tenantId, tenantId)))
+    .where(eq(auditPlanItems.tenantId, tenantId))
+    .limit(limit));
 }
 
 /**

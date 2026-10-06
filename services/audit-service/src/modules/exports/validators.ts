@@ -13,5 +13,7 @@ export const createExportBody = z.object({
   format: z.enum(["json", "csv"]).default("json"),
   // P1-5: opt-in to PII columns; only honoured for PII_EXPORT_ROLES, rejected otherwise.
   includePii: z.boolean().default(false),
+  // Justification for the export; mandatory (and persisted in the audit record) when PII is requested.
+  reason: z.string().trim().max(500).optional(),
 });
 export type CreateExportBody = z.infer<typeof createExportBody>;
