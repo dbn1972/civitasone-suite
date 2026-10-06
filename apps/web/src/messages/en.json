@@ -14441,5 +14441,17 @@
       "adminDesc": "Tune visitor policy — retention, approvals, overstay and pass rules — or apply a vertical preset.",
       "open": "Open"
     }
+  },
+  "municipal": {
+    "service": {
+      "totalRecords": "Total records",
+      "inProgress": "In progress",
+      "inProgressThisPage": "In progress (this page)",
+      "viewResource": "View {resource}",
+      "openResourceList": "Open {resource} list →",
+      "officerWorkspace": "Officer workspace",
+      "workspaceBody": "Scrutiny queues, approvals and permits for {label} are available in the {resource} list.",
+      "loadError": "this service"
+    }
   }
 }

@@ -31,6 +31,25 @@ export type MunicipalServiceConfig = {
    * apply/track links when this is unset.
    */
   citizenServiceKey?: string;
+  /**
+   * GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-DETAIL-01: record keys whose values
+   * are DPDP-sensitive personal data (phone, email, identity numbers, …) and
+   * must be masked by default in the read-only detail panel. Key-name
+   * heuristics (mobile/phone/aadhaar/pan/email/address) mask automatically;
+   * this list is for fields the heuristics would miss.
+   */
+  piiFields?: readonly string[];
+  /**
+   * GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-DETAIL-01: record keys that must
+   * never be rendered at all (internal/document identifiers, raw tokens).
+   */
+  hiddenFields?: readonly string[];
+  /**
+   * GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-DETAIL-03: preferred leading order of
+   * detail fields (status, reference, owner, …); any key not listed falls
+   * after these, alphabetically by label.
+   */
+  fieldOrder?: readonly string[];
   /** Sec5 scope (shop is reference template, not part of the 16) */
   sec5: boolean;
 };

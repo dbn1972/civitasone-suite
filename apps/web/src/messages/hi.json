@@ -13938,5 +13938,17 @@
       "adminDesc": "आगंतुक नीति समायोजित करें — प्रतिधारण, अनुमोदन, ओवरस्टे और पास नियम — या एक वर्टिकल प्रीसेट लागू करें।",
       "open": "खोलें"
     }
+  },
+  "municipal": {
+    "service": {
+      "totalRecords": "कुल रिकॉर्ड",
+      "inProgress": "प्रगति पर",
+      "inProgressThisPage": "प्रगति पर (इस पृष्ठ पर)",
+      "viewResource": "{resource} देखें",
+      "openResourceList": "{resource} सूची खोलें →",
+      "officerWorkspace": "अधिकारी कार्यक्षेत्र",
+      "workspaceBody": "{label} के लिए जाँच कतारें, अनुमोदन और परमिट {resource} सूची में उपलब्ध हैं।",
+      "loadError": "यह सेवा"
+    }
   }
 }

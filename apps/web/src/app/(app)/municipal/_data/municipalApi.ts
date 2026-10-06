@@ -12,7 +12,7 @@ import {
 export async function fetchMunicipalList(
   config: MunicipalServiceConfig,
   query?: { status?: string; page?: number },
-): Promise<{ data: MunicipalListResult; source: "api" | "error" }> {
+): Promise<{ data: MunicipalListResult; source: "api" | "error"; status?: number; errorCode?: string }> {
   const params = new URLSearchParams();
   if (query?.status) params.set("status", query.status);
   if (query?.page) params.set("page", String(query.page));
@@ -25,13 +25,16 @@ export async function fetchMunicipalList(
     telemetryKey: `municipal.${config.serviceKey}.list`,
     mapResponse: (payload) => parseListPayload(payload, config),
   });
-  return { data: result.data, source: result.source };
+  // GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-03: surface the HTTP status/code so the
+  // page can tell a 403 (permission) apart from a 500 (transient) instead of
+  // treating every failure alike.
+  return { data: result.data, source: result.source, status: result.status, errorCode: result.errorCode };
 }
 
 export async function fetchMunicipalDetail(
   config: MunicipalServiceConfig,
   id: string,
-): Promise<{ data: MunicipalRecordRow | null; raw: Record<string, unknown> | null; source: "api" | "error" }> {
+): Promise<{ data: MunicipalRecordRow | null; raw: Record<string, unknown> | null; source: "api" | "error"; status?: number; errorCode?: string }> {
   const path = detailPathFor(config, id);
   const result = await fetchJson<unknown, Record<string, unknown> | null>(path, null, {
     revalidateSeconds: 10,
@@ -40,12 +43,16 @@ export async function fetchMunicipalDetail(
   });
 
   if (!result.data) {
-    return { data: null, raw: null, source: result.source };
+    // GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-DETAIL-05: pass through status so the
+    // page can call notFound() on a real 404 and show a retry on a 5xx.
+    return { data: null, raw: null, source: result.source, status: result.status, errorCode: result.errorCode };
   }
 
   return {
     data: toMunicipalRecordRow(result.data, config),
     raw: result.data,
     source: result.source,
+    status: result.status,
+    errorCode: result.errorCode,
   };
 }

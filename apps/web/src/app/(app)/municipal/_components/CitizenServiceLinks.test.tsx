@@ -26,9 +26,13 @@ describe("CitizenServiceLinks", () => {
     );
   });
 
-  it("renders nothing for a service with no citizen-service manifest", () => {
+  it("shows a counter-only note (no links) for a service with no citizen-service manifest (SERVICEKEY-04)", () => {
+    // GAP-MUNICIPAL-SERVICEKEY-04 deliberately changed this from rendering
+    // nothing to rendering an explanatory note, so officers understand how
+    // citizens apply for counter-only services.
     const config = getMunicipalService("building")!;
-    const { container } = render(<CitizenServiceLinks config={config} />);
-    expect(container).toBeEmptyDOMElement();
+    render(<CitizenServiceLinks config={config} />);
+    expect(screen.getByText(/recorded by officers at the counter/i)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Apply online/i })).not.toBeInTheDocument();
   });
 });
