@@ -112,6 +112,43 @@ export const INVENTORY_CYCLE_COUNT_APPROVE_ROLES = ["inventory_manager", "invent
 export const INVENTORY_WRITE_ROLES = ["inventory_user", "inventory_manager", "inventory_admin", "store_keeper", "super_admin"];
 
 /**
+ * Roles permitted to create/update projects, tasks, milestones and members.
+ * Mirrors project-service's PROJ_ROLES (modules/project/routes.ts) — the
+ * service stays the authority (every mutating route calls requireRole), this
+ * web gate is defence-in-depth so the New-project form is not offered to a
+ * user whose POST is guaranteed to 403 (GAP-PROJECTS-NEW-03).
+ */
+export const PROJECT_WRITE_ROLES = ["project_manager", "project_officer", "super_admin"];
+
+/**
+ * Roles permitted to READ the beneficiaries register. Mirrors READER_ROLES in
+ * project-service modules/project/mock-elimination-routes.ts, the module that
+ * serves GET /v1/projects/beneficiaries (NOT the project/routes.ts list, whose
+ * role set differs). The register carries beneficiary PII and social category
+ * (DPDP) (GAP-PROJECTS-BENEFICIARIES-01). The service is the authority (it 403s
+ * others); this gate stops a user who would be 403'd from loading PII.
+ */
+export const PROJECT_READER_ROLES = [
+  "project_officer",
+  "project_admin",
+  "finance_officer",
+  "tenant_admin",
+  "super_admin",
+  "audit_officer",
+];
+
+/**
+ * Roles permitted to DISBURSE a project fund release (a money-moving,
+ * irreversible action). Mirrors project-service's SCHEME_ROLES in
+ * modules/scheme/routes.ts, which the disburse route
+ * (PATCH /v1/projects/schemes/:id/fund-releases/:rId/disburse) ALREADY enforces
+ * via requireRole — so this web constant is defence-in-depth only (it hides a
+ * Disburse control a non-authorised user's PATCH would 403 on), NOT the
+ * security boundary. GAP-PROJECTS-FUND-RELEASES-01.
+ */
+export const PROJECT_FUND_DISBURSE_ROLES = ["project_manager", "finance_officer", "super_admin"];
+
+/**
  * Roles permitted to activate/deactivate a bin. Mirrors inventory-service's
  * BIN_ADMIN_ROLES in modules/items/routes.ts (GAP-INVENTORY-BINS-03); the
  * service stays the authority.

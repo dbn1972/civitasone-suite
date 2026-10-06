@@ -12,8 +12,13 @@ export default async function SchemesPage() {
   const errored = resource.status === "error";
 
   const active = errored ? null : schemes.filter((s) => s.status === "active").length;
-  const totalAllocation = errored ? null : schemes.reduce((sum, s) => sum + s.totalAllocation, 0);
-  const totalReleased = errored ? null : schemes.reduce((sum, s) => sum + s.releasedAmount, 0);
+  // GAP-PROJECTS-SCHEMES-03: an empty scheme list reduced over [] to 0, so the
+  // money tiles rendered a fabricated "₹0.00" instead of the honest "—" used
+  // on error (UX-006: no data is not a real zero). Treat "no schemes" the same
+  // as errored for the money/active tiles.
+  const noData = errored || resource.status === "empty";
+  const totalAllocation = noData ? null : schemes.reduce((sum, s) => sum + s.totalAllocation, 0);
+  const totalReleased = noData ? null : schemes.reduce((sum, s) => sum + s.releasedAmount, 0);
 
   const rows: SchemeRow[] = schemes.map((s) => ({ ...s }));
 
@@ -21,7 +26,9 @@ export default async function SchemesPage() {
     <>
       <PageHeader
         title="Schemes"
-        subtitle="Physical & financial progress, beneficiaries — scheme-wise."
+        subtitle="Scheme-wise allocation, releases and project counts."
+        back="/projects"
+        backLabel="Back to Projects"
       />
       <StatGrid>
         <StatCard icon="📋" iconBg="#eef0fe" label="Total" value={errored ? "—" : schemes.length} />
@@ -39,7 +46,7 @@ export default async function SchemesPage() {
       <Card title="Schemes">
         {errored ? (
           <div className="pad">
-            <RefreshErrorState error={toHumanError("load", { area: "schemes" })} />
+            <RefreshErrorState error={toHumanError("load", { area: "schemes" })} backHref="/projects" />
           </div>
         ) : rows.length === 0 ? (
           <EmptyState icon="🏛️" title="No schemes" message="No schemes have been configured yet." />

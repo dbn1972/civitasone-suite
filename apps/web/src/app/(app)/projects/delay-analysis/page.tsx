@@ -3,6 +3,7 @@ import { getProjectDelayAnalysis } from "@/app/_data/loaders";
 import { DelayAnalysisTable } from "./DelayAnalysisTable";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
+import { normalizeRag } from "@/lib/rag";
 
 export default async function DelayAnalysisPage() {
   const result = await getProjectDelayAnalysis();
@@ -10,10 +11,17 @@ export default async function DelayAnalysisPage() {
   const resource = toResourceState(result);
   const errored = resource.status === "error";
 
+  // GAP-PROJECTS-DELAY-ANALYSIS-01: normalise every RAG spelling the endpoint
+  // might use (green|amber|red OR active|review|overdue) onto the canonical
+  // three before bucketing, so a "review" row lands in At Risk rather than no
+  // tile at all. Any value normalizeRag() cannot place is counted as "Other"
+  // so the tiles always reconcile to Total (an unmapped row is visible, not
+  // silently dropped from a monitoring view).
   const total = errored ? null : rows.length;
-  const onTrack = errored ? null : rows.filter((r) => r.rag === "active").length;
-  const atRisk = errored ? null : rows.filter((r) => r.rag === "review").length;
-  const delayed = errored ? null : rows.filter((r) => r.rag === "overdue").length;
+  const onTrack = errored ? null : rows.filter((r) => normalizeRag(r.rag) === "green").length;
+  const atRisk = errored ? null : rows.filter((r) => normalizeRag(r.rag) === "amber").length;
+  const delayed = errored ? null : rows.filter((r) => normalizeRag(r.rag) === "red").length;
+  const other = errored ? null : rows.filter((r) => normalizeRag(r.rag) === null).length;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -23,6 +31,9 @@ export default async function DelayAnalysisPage() {
         <StatCard icon="🟢" iconBg="#ecfdf3" label="On Track" value={onTrack ?? "—"} />
         <StatCard icon="🟡" iconBg="#fffaeb" label="At Risk" value={atRisk ?? "—"} />
         <StatCard icon="🔴" iconBg="#fef3f2" label="Delayed" value={delayed ?? "—"} />
+        {other !== null && other > 0 && (
+          <StatCard icon="❔" iconBg="#f3f4f6" label="Other" value={other} />
+        )}
       </StatGrid>
       <Card title="Project Delay Register">
         {errored ? (

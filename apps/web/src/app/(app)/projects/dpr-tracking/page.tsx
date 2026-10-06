@@ -13,7 +13,13 @@ export default async function DprTrackingPage() {
   const total = errored ? null : rows.length;
   const approved = errored ? null : rows.filter((r) => r.status === "approved").length;
   const underReview = errored ? null : rows.filter((r) => r.status === "under review" || r.status === "submitted").length;
-  const returned = errored ? null : rows.filter((r) => r.status === "rejected").length;
+  // GAP-PROJECTS-DPR-TRACKING-01: the row pill renders status 'rejected' as
+  // 'Rejected' (StatusPill -> bad). The tile previously labelled the same
+  // count 'Returned', so tile and row disagreed on the word for one status.
+  // Use 'Rejected' consistently until a distinct 'returned' status exists in
+  // the API + StatusPill (that, plus the submit/review/approve/return actions,
+  // is the real DPR workflow — deferred to backend, see Status note).
+  const rejected = errored ? null : rows.filter((r) => r.status === "rejected").length;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -22,7 +28,7 @@ export default async function DprTrackingPage() {
         <StatCard icon="📄" iconBg="#eff6ff" label="Total DPRs" value={total ?? "—"} />
         <StatCard icon="✅" iconBg="#ecfdf3" label="Approved" value={approved ?? "—"} />
         <StatCard icon="🔍" iconBg="#fffaeb" label="Under Review" value={underReview ?? "—"} />
-        <StatCard icon="↩️" iconBg="#fef3f2" label="Returned" value={returned ?? "—"} />
+        <StatCard icon="↩️" iconBg="#fef3f2" label="Rejected" value={rejected ?? "—"} />
       </StatGrid>
       <Card title="DPR Register">
         {errored ? (

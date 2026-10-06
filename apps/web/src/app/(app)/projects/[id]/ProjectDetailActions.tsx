@@ -1,43 +1,65 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button, ConfirmDialog } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
-type Milestone = { id: string; title: string; status: string };
+type Milestone = { id: string; title: string; status: string; dueDate?: string };
 
-type Props = { projectId: string; milestones: Milestone[] };
+type Props = {
+  projectId: string;
+  milestones: Milestone[];
+  /**
+   * GAP-PROJECTS-DETAIL-02: whether the signed-in user may complete milestones.
+   * Mirrors project-service PROJ_ROLES; the server is the authority (it 403s
+   * others). Computed server-side in page.tsx and passed in. When false, no
+   * completion control is rendered.
+   */
+  canComplete: boolean;
+};
 
-export function ProjectDetailActions({ projectId, milestones }: Props) {
+export function ProjectDetailActions({ projectId, milestones, canComplete }: Props) {
   const router = useRouter();
-  const [target, setTarget] = useState<Milestone | null>(null);
+  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const [message, setMessage] = useState("");
   const formError = useFormError("milestone");
 
-  const pending = milestones.filter((m) => m.status === "pending");
+  // GAP-PROJECTS-DETAIL-02: only the NEXT pending milestone (earliest due date)
+  // may be completed — not any pending milestone out of sequence. GAP-DETAIL-03:
+  // this also collapses the previous unbounded vertical stack of one button per
+  // pending milestone into a single header action.
+  const next = useMemo<Milestone | null>(() => {
+    const pending = milestones.filter((m) => m.status === "pending");
+    if (pending.length === 0) return null;
+    return [...pending].sort((a, b) => {
+      const ta = a.dueDate ? Date.parse(a.dueDate) : Number.POSITIVE_INFINITY;
+      const tb = b.dueDate ? Date.parse(b.dueDate) : Number.POSITIVE_INFINITY;
+      return (Number.isNaN(ta) ? Number.POSITIVE_INFINITY : ta) - (Number.isNaN(tb) ? Number.POSITIVE_INFINITY : tb);
+    })[0]!;
+  }, [milestones]);
 
-  async function confirmComplete(reason?: string) {
-    if (!target) return;
+  async function confirmComplete() {
+    if (!next) return;
     setBusy(true);
     setError(undefined);
     try {
       const res = await fetch(
-        `/api/proxy/v1/projects/${projectId}/milestones/${target.id}/complete`,
+        `/api/proxy/v1/projects/${projectId}/milestones/${next.id}/complete`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reason }),
+          body: JSON.stringify({}),
         },
       );
       if (!res.ok) {
         setError((await formError.fromResponse(res, "save")).message);
         return;
       }
-      setMessage(`Milestone “${target.title}” marked complete.`);
-      setTarget(null);
+      setMessage(`Milestone “${next.title}” marked complete.`);
+      setOpen(false);
       router.refresh();
     } catch (caught) {
       setError(formError.fromException("save", caught).message);
@@ -48,11 +70,12 @@ export function ProjectDetailActions({ projectId, milestones }: Props) {
 
   function cancel() {
     if (busy) return;
-    setTarget(null);
+    setOpen(false);
     setError(undefined);
   }
 
-  if (pending.length === 0) {
+  // No control for viewers (canComplete=false) or when nothing is pending.
+  if (!canComplete || !next) {
     return message ? (
       <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", margin: 0 }}>
         {message}
@@ -62,19 +85,16 @@ export function ProjectDetailActions({ projectId, milestones }: Props) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {pending.map((m) => (
-        <Button
-          key={m.id}
-          variant="ghost"
-          onClick={() => {
-            setError(undefined);
-            setMessage("");
-            setTarget(m);
-          }}
-        >
-          Complete: {m.title}
-        </Button>
-      ))}
+      <Button
+        variant="ghost"
+        onClick={() => {
+          setError(undefined);
+          setMessage("");
+          setOpen(true);
+        }}
+      >
+        Complete next milestone: {next.title}
+      </Button>
       {message ? (
         <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", margin: 0 }}>
           {message}
@@ -82,27 +102,30 @@ export function ProjectDetailActions({ projectId, milestones }: Props) {
       ) : null}
 
       <ConfirmDialog
-        open={target !== null}
+        open={open}
         title="Mark milestone as complete?"
         danger
         description={
           <>
             <p style={{ margin: "0 0 8px" }}>
               You are about to mark{" "}
-              <strong>{target?.title ?? "this milestone"}</strong> as complete.
+              <strong>{next.title}</strong> as complete.
             </p>
+            {/* GAP-PROJECTS-DETAIL-02 (HUMAN REVIEW): the previous copy claimed this
+                "triggers a fund release ... cannot be undone". The milestone-complete
+                consumer only sets the milestone to completed and records an audit
+                event — it does NOT release funds. Copy corrected to match the actual
+                behaviour; if a fund release is intended it must be built server-side. */}
             <p style={{ margin: 0 }}>
-              This is a maker-checker action that <strong>triggers a fund release</strong> against
-              the project and cannot be undone. A reason is recorded on the audit trail.
+              This records the milestone as completed with today’s date and writes an
+              entry to the audit trail.
             </p>
           </>
         }
         confirmLabel="Confirm completion"
-        requireReason
-        reasonLabel="Reason for completion (recorded for audit)"
         busy={busy}
         errorMessage={error}
-        onConfirm={(reason) => void confirmComplete(reason)}
+        onConfirm={() => void confirmComplete()}
         onCancel={cancel}
       />
     </div>

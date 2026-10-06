@@ -35,8 +35,24 @@ type MilestoneRow = {
 export function ProjectGantt({ milestones, projectStart, projectEnd }: ProjectGanttProps) {
   if (milestones.length === 0) return null;
 
-  const tasks: GanttTask[] = milestones.map((m, i) => {
-    const start = i === 0 ? projectStart : milestones[i - 1].dueDate;
+  // GAP-PROJECTS-DETAIL-04: the bars derive each start from the PREVIOUS
+  // milestone's due date assuming list order, so an out-of-order API response
+  // drew bars out of sequence. Sort by dueDate first (stable, nulls/invalid
+  // last) so the derived start chain and the chart are always chronological.
+  // Progress is still a status-derived approximation (the API carries no
+  // per-milestone start/progress field today), so the chart is labelled
+  // "Approximate timeline".
+  const sorted = [...milestones].sort((a, b) => {
+    const ta = Date.parse(a.dueDate);
+    const tb = Date.parse(b.dueDate);
+    if (Number.isNaN(ta) && Number.isNaN(tb)) return 0;
+    if (Number.isNaN(ta)) return 1;
+    if (Number.isNaN(tb)) return -1;
+    return ta - tb;
+  });
+
+  const tasks: GanttTask[] = sorted.map((m, i) => {
+    const start = i === 0 ? projectStart : sorted[i - 1].dueDate;
     const progress = m.status === "completed" ? 100 : m.status === "in_progress" ? 50 : 0;
     return {
       id: `ms-${i}`,
@@ -48,19 +64,22 @@ export function ProjectGantt({ milestones, projectStart, projectEnd }: ProjectGa
   });
 
   const ariaLabel =
-    `Milestone timeline Gantt chart covering ${formatIndianDate(projectStart)}` +
+    `Milestone timeline Gantt chart (approximate) covering ${formatIndianDate(projectStart)}` +
     `${projectEnd ? ` to ${formatIndianDate(projectEnd)}` : ""}, ` +
-    `${milestones.length} milestone${milestones.length === 1 ? "" : "s"}. ` +
+    `${sorted.length} milestone${sorted.length === 1 ? "" : "s"}. ` +
     `An equivalent data table follows.`;
 
-  const tableRows: MilestoneRow[] = milestones.map((m, i) => {
-    const start = i === 0 ? projectStart : milestones[i - 1].dueDate;
+  const tableRows: MilestoneRow[] = sorted.map((m, i) => {
+    const start = i === 0 ? projectStart : sorted[i - 1].dueDate;
     const progress = m.status === "completed" ? 100 : m.status === "in_progress" ? 50 : 0;
     return { title: m.title, start, dueDate: m.dueDate, status: m.status, progress };
   });
 
   return (
     <div>
+      <p style={{ margin: "0 0 8px", fontSize: "0.8rem", color: "var(--ink2)" }}>
+        Approximate timeline — bar starts are derived from the previous milestone’s due date; progress is estimated from status.
+      </p>
       {/* Visual chart, exposed as an image with a descriptive label (WCAG 1.1.1). */}
       <div role="img" aria-label={ariaLabel}>
         <GanttChart tasks={tasks} startDate={projectStart} endDate={projectEnd ?? undefined} />

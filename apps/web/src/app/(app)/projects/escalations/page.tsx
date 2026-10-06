@@ -10,10 +10,17 @@ export default async function EscalationsPage() {
   const resource = toResourceState(result);
   const errored = resource.status === "error";
 
+  // GAP-PROJECTS-ESCALATIONS-01: Critical/High must describe OPEN escalations
+  // only — a cleared row that still carried a 'blocked'/'overdue' severity was
+  // previously counted as Critical/High. Filter by status !== 'cleared' first.
   const active = errored ? null : rows.filter((r) => r.status !== "cleared").length;
-  const critical = errored ? null : rows.filter((r) => r.severity === "blocked").length;
-  const high = errored ? null : rows.filter((r) => r.severity === "overdue").length;
-  const resolvedThisMonth = errored ? null : rows.filter((r) => r.status === "cleared").length;
+  const critical = errored ? null : rows.filter((r) => r.status !== "cleared" && r.severity === "blocked").length;
+  const high = errored ? null : rows.filter((r) => r.status !== "cleared" && r.severity === "overdue").length;
+  // GAP-PROJECTS-ESCALATIONS-01: the row shape carries no cleared/resolved
+  // DATE, so a "this month" filter cannot be computed honestly — count all
+  // cleared rows and label the tile "Resolved" (not "Resolved This Month").
+  // A month-scoped tile needs a clearedAt field from the backend (HUMAN REVIEW).
+  const resolved = errored ? null : rows.filter((r) => r.status === "cleared").length;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -22,7 +29,7 @@ export default async function EscalationsPage() {
         <StatCard icon="🚨" iconBg="#fef3f2" label="Active Escalations" value={active ?? "—"} />
         <StatCard icon="🔴" iconBg="#fef3f2" label="Critical" value={critical ?? "—"} />
         <StatCard icon="🟠" iconBg="#fffaeb" label="High" value={high ?? "—"} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Resolved This Month" value={resolvedThisMonth ?? "—"} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Resolved" value={resolved ?? "—"} />
       </StatGrid>
       <Card title="Escalation Queue">
         {errored ? (

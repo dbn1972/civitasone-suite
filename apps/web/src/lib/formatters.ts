@@ -679,6 +679,52 @@ export function formatMoneyIn(
 }
 
 /**
+ * GAP-PROJECTS-UTILIZATION-03: format a MINOR-unit (paise) amount as a
+ * ₹-crore string with 2 decimals, e.g. for a fund-utilization table whose
+ * columns are headed "(₹ Cr)". Computed in BigInt (never Number(bigint)/1e9)
+ * so values above 2^53 paise stay exact; rounds half-up to 2 decimals of a
+ * crore. null/empty/unparseable renders "—" (UX-006), never a fabricated
+ * ₹0.00 Cr.
+ *
+ *   formatCrore("34500000000")  -> "₹345.00 Cr"   (₹345 crore)
+ *   formatCrore("185000000000") -> "₹1,850.00 Cr"
+ *   formatCrore(null)           -> "—"
+ */
+export function formatCrore(minorUnits: bigint | number | string | null | undefined): string {
+  if (minorUnits === null || minorUnits === undefined || minorUnits === "") return "—";
+  let minor: bigint;
+  try {
+    if (typeof minorUnits === "bigint") minor = minorUnits;
+    else if (typeof minorUnits === "number") {
+      if (!Number.isFinite(minorUnits)) return "—";
+      minor = BigInt(Math.round(minorUnits));
+    } else {
+      const t = minorUnits.trim();
+      if (!/^[+-]?\d+$/.test(t)) return "—";
+      minor = BigInt(t);
+    }
+  } catch {
+    return "—";
+  }
+  const negative = minor < 0n;
+  const abs = negative ? -minor : minor;
+  const CRORE = 1_000_000_000n; // 1 crore rupees in paise
+  // hundredths of a crore, rounded half-up.
+  const hundredths = (abs * 100n + CRORE / 2n) / CRORE;
+  const whole = (hundredths / 100n).toString();
+  // Indian grouping on the integer-crore part.
+  let grouped: string;
+  if (whole.length <= 3) grouped = whole;
+  else {
+    const head = whole.slice(0, whole.length - 3);
+    const tail = whole.slice(whole.length - 3);
+    grouped = head.replace(/\B(?=(\d{2})+(?!\d))/g, ",") + "," + tail;
+  }
+  const frac = (hundredths % 100n).toString().padStart(2, "0");
+  return `${negative ? "-" : ""}₹${grouped}.${frac} Cr`;
+}
+
+/**
  * GAP-FINANCE-BUDGET-ALLOCATION-05: compact "Cr / L" shorthand for stat cards
  * and summary figures (>= 1 lakh rupees), computed in bigint -- never via
  * Number(bigint)/100. Below 1 lakh it falls back to the exact formatMoney()

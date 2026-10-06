@@ -78,4 +78,60 @@ describe("SchemesPage (COMP-017)", () => {
     expect(screen.queryByText(formatMoney(TOTAL_ALLOCATION_SUM))).not.toBeInTheDocument();
     expect(screen.queryByText(formatMoney(TOTAL_RELEASED_SUM))).not.toBeInTheDocument();
   });
+
+  // GAP-PROJECTS-SCHEMES-03: an empty list must show honest "—" money tiles,
+  // never a fabricated "₹0.00" (UX-006). Previously reduce([]) => 0 printed
+  // formatRupees(0) = "₹0.00".
+  it("renders '—' for the money tiles (not ₹0.00) when the scheme list is empty", async () => {
+    getSchemesMock.mockResolvedValue({ data: [], source: "api" });
+
+    const ui = await SchemesPage();
+    render(ui);
+
+    expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
+    // Total count is a real 0; the money tiles are "—".
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(2);
+  });
+
+  // GAP-PROJECTS-SCHEMES-04: the subtitle must only claim what the table
+  // shows (no "physical progress"/"beneficiaries" columns exist here).
+  it("uses an honest subtitle that does not promise physical progress or beneficiaries", async () => {
+    getSchemesMock.mockResolvedValue({ data: [SCHEME_A], source: "api" });
+
+    const ui = await SchemesPage();
+    render(ui);
+
+    expect(screen.getByText("Scheme-wise allocation, releases and project counts.")).toBeInTheDocument();
+    expect(screen.queryByText(/Physical & financial progress, beneficiaries/)).not.toBeInTheDocument();
+  });
+
+  // GAP-PROJECTS-SCHEMES-02: the schemes list must offer a back affordance.
+  it("renders a back link to /projects", async () => {
+    getSchemesMock.mockResolvedValue({ data: [SCHEME_A], source: "api" });
+
+    const ui = await SchemesPage();
+    render(ui);
+
+    const back = screen.getByRole("link", { name: /back to projects/i });
+    expect(back).toHaveAttribute("href", "/projects");
+  });
+
+  // GAP-PROJECTS-SCHEMES-01 / SCHEMES-DETAIL-01: the money-unit split between
+  // the list (whole-rupee numbers -> formatRupees) and the detail page
+  // (minor-unit strings -> formatMoney) is correct today but lived only in
+  // comments. This locks it in: for the SAME scheme figures, the list's
+  // per-row Allocation/Released rendering (formatRupees on the rupee number)
+  // must display the identical string the detail page produces (formatMoney
+  // on the equivalent paise string). A future wrong formatter switch on
+  // either side (the 100x error the gap warns about) fails this test.
+  it("list and detail render the identical allocation/released figure for the same scheme", async () => {
+    // SCHEME_A: 1,000,000 rupees allocation == "100000000" paise.
+    const listAllocation = formatRupees(SCHEME_A.totalAllocation); // "₹10,00,000.00"
+    const detailAllocation = formatMoney(String(SCHEME_A.totalAllocation * 100)); // same scheme, paise
+    expect(listAllocation).toBe(detailAllocation);
+
+    const listReleased = formatRupees(SCHEME_A.releasedAmount);
+    const detailReleased = formatMoney(String(SCHEME_A.releasedAmount * 100));
+    expect(listReleased).toBe(detailReleased);
+  });
 });

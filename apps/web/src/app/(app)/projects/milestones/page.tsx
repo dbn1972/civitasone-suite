@@ -20,7 +20,8 @@ export default async function MilestonesPage() {
     <>
       <PageHeader
         title="Milestones"
-        subtitle="Define milestones, track achievement, trigger payment release."
+        subtitle="Milestone status across all projects. Open a project to record completion."
+        back="/projects"
       />
       <StatGrid>
         <StatCard icon="📋" iconBg="#eef0fe" label="Total" value={errored ? "—" : milestones.length} />
@@ -31,7 +32,7 @@ export default async function MilestonesPage() {
       <Card title="Milestones">
         {errored ? (
           <div className="pad">
-            <RefreshErrorState error={toHumanError("load", { area: "milestones" })} />
+            <RefreshErrorState error={toHumanError("load", { area: "milestones" })} backHref="/projects" />
           </div>
         ) : rows.length === 0 ? (
           <EmptyState icon="📋" title="No milestones" message="No milestones have been defined across projects yet." />

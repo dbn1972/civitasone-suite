@@ -43,6 +43,32 @@ describe("ProjectsDashboardPage", () => {
     expect(screen.getByText("Schemes").parentElement).toHaveTextContent("1");
   });
 
+  it("formats total outlay in crore with 2 decimals, never a rounded-to-zero whole crore (DASHBOARD-02)", async () => {
+    // 4,00,00,000 paise = ₹0.40 Cr -- the old Math.round(/1e9) showed "₹0 Cr".
+    mockLoaders({ dash: { data: { ...MOCK_DASHBOARD, totalOutlay: 400_000_000 }, source: "api" } });
+    render(await ProjectsDashboardPage());
+    expect(screen.getByText("Total outlay").parentElement).toHaveTextContent("₹0.40 Cr");
+  });
+
+  it("shows the On Track percentage tile (DASHBOARD-04)", async () => {
+    mockLoaders({ dash: { data: { ...MOCK_DASHBOARD, onTrackPct: 80 }, source: "api" } });
+    render(await ProjectsDashboardPage());
+    expect(screen.getByText("On Track").parentElement).toHaveTextContent("80.0%");
+  });
+
+  it("surfaces a reconciliation note when the dashboard total differs from the row count (DASHBOARD-03)", async () => {
+    // totalProjects 12 vs 1 row -> note visible.
+    mockLoaders({});
+    render(await ProjectsDashboardPage());
+    expect(screen.getByText(/Dashboard counts all/)).toBeInTheDocument();
+  });
+
+  it("hides the reconciliation note when the counts agree (DASHBOARD-03)", async () => {
+    mockLoaders({ dash: { data: { ...MOCK_DASHBOARD, totalProjects: 1 }, source: "api" } });
+    render(await ProjectsDashboardPage());
+    expect(screen.queryByText(/Dashboard counts all/)).not.toBeInTheDocument();
+  });
+
   it("shows the honest empty state when a tenant genuinely has zero projects (source: api, [])", async () => {
     mockLoaders({ projects: { data: [], source: "api" } });
     render(await ProjectsDashboardPage());

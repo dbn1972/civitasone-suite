@@ -40,6 +40,7 @@ export type CreateFundReleaseBody = z.infer<typeof createFundReleaseBody>;
 
 export const disburseBody = z.object({
   pfmsRef: z.string().optional(),
+  reason:  z.string().trim().min(1).max(500).optional(),
 });
 export type DisburseBody = z.infer<typeof disburseBody>;
 

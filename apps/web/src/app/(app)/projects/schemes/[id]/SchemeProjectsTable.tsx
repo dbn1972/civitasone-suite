@@ -9,6 +9,7 @@ import { DataTable } from "@/app/_components/ds";
 // column, rather than either inventing per-row district values or shipping a
 // column that would always render "--".
 export type SchemeProjectRow = {
+  id: string;
   name: string;
   code: string;
   status: string;
@@ -37,6 +38,13 @@ export function SchemeProjectsTable({ rows }: { rows: SchemeProjectRow[] }) {
       sortable
       filterable
       filterPlaceholder="Filter projects…"
+      // GAP-PROJECTS-SCHEMES-DETAIL-04: linked project rows were not clickable,
+      // so a user could not drill from a scheme to one of its projects. The
+      // scheme detail DTO exposes each project's real id (getSchemeDetail in
+      // project-service), so link each row to its project; name the link after
+      // the project, not its internal code.
+      rowHref={(r) => `/projects/${r.id}`}
+      identifyingColumnKey="name"
     />
   );
 }

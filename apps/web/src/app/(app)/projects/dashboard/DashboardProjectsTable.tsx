@@ -1,6 +1,6 @@
 "use client";
 
-import { DataTable } from "@/app/_components/ds";
+import { DataTable, RagPill } from "@/app/_components/ds";
 import { formatMoney } from "@/lib/formatters";
 
 export type DashboardProjectRow = {
@@ -12,6 +12,10 @@ export type DashboardProjectRow = {
   totalBudget: number;
   completionPct: number;
   status: string;
+  // GAP-PROJECTS-DASHBOARD-01: the project's RAG health signal (green/amber/
+  // red), rendered as its own coloured column. null when the backend did not
+  // supply it, so it renders a neutral "—" pill rather than a wrong colour.
+  rag: string | null;
 } & Record<string, unknown>;
 
 const COLUMNS: {
@@ -37,7 +41,12 @@ const COLUMNS: {
     align: "right",
     render: (r) => `${r.completionPct.toFixed(1)}%`,
   },
-  { key: "status", label: "RAG Status", cellType: "status" },
+  { key: "status", label: "Status", cellType: "status" },
+  {
+    key: "rag",
+    label: "RAG",
+    render: (r) => <RagPill rag={r.rag} />,
+  },
 ];
 
 export function DashboardProjectsTable({ rows }: { rows: DashboardProjectRow[] }) {

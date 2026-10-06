@@ -47,6 +47,7 @@ export async function mockEliminationRoutes(app: FastifyInstance): Promise<void>
           .limit(200));
         return result.map((r, i) => ({
           escalationId: `ESC-${String(i + 1).padStart(3, "0")}`,
+          projectId: r.id,
           project: r.name,
           issue: r.status === "blocked" ? "Critical blocker reported" : r.status === "delayed" ? "Timeline exceeded" : "Under review",
           severity: r.status === "blocked" ? "blocked" : r.status === "delayed" ? "overdue" : "pending",
@@ -69,27 +70,24 @@ export async function mockEliminationRoutes(app: FastifyInstance): Promise<void>
     const rows = await cache.getOrLoad(
       cache.makeKey(tenantId, "project", "beneficiaries"),
       async () => {
-        // Beneficiaries are derived from projects with citizen-facing schemes
-        // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
-        // before this read — a bare db.select() runs with no RLS GUC set.
-        const result = await db.transaction((tx) => tx.select({
-          id: projectProjects.id,
-          name: projectProjects.name,
-          code: projectProjects.code,
-          schemeId: projectProjects.schemeId,
-        }).from(projectProjects)
-          .where(eq(projectProjects.tenantId, tenantId))
-          .orderBy(desc(projectProjects.createdAt))
-          .limit(200));
-        return result.map((r, i) => ({
-          id: `BEN-${String(i + 1).padStart(3, "0")}`,
-          name: `Beneficiary ${i + 1}`,
-          project: r.name,
-          district: "—",
-          category: "General",
-          verified: "pending",
-          disbursement: "₹0",
-        }));
+        // GAP-PROJECTS-BENEFICIARIES-03 / -01 (DECISION — flagged for HUMAN REVIEW):
+        // this handler previously FABRICATED beneficiary rows — synthetic names
+        // ("Beneficiary N"), a hard-coded social category ("General"), a fixed
+        // verification status ("pending") and a literal "₹0" disbursement string —
+        // all derived from project rows, with no real beneficiary table behind
+        // them. Per the engineering rules (never invent numbers; remove fabricated
+        // data or wire it to real data; where no backend exists show an honest
+        // "not available" state), the fabricated rows are removed. There is no
+        // beneficiary entity in project-service today, so this returns an empty
+        // list and the web register shows its honest "No beneficiaries registered"
+        // empty state instead of fake PII/social-category/disbursement figures.
+        // A real beneficiary data source (name, district, social category as
+        // encrypted PII, disbursement in bigint paise) must be built before this
+        // can show rows — see HUMAN REVIEW in the batch report.
+        return [] as Array<{
+          id: string; name: string; project: string; district: string;
+          category: string; verified: string; disbursement: string;
+        }>;
       },
     );
 
@@ -128,6 +126,7 @@ export async function mockEliminationRoutes(app: FastifyInstance): Promise<void>
               .limit(1);
             out.push({
               dprNo: r.dprNo,
+              projectId: r.projectId,
               projectTitle: proj[0]?.name ?? "Unknown Project",
               submittedBy: r.submittedBy ?? "—",
               submittedDate: r.dprDate?.toString() ?? "—",
@@ -170,6 +169,11 @@ export async function mockEliminationRoutes(app: FastifyInstance): Promise<void>
           name: r.name,
           status: r.status,
           parentId: r.parentTaskId ?? null,
+          // GAP-PROJECTS-WBS-03: the query already selects projectId but the
+          // mapper used to drop it, so a WBS node could not be traced back to
+          // its project (the portfolio endpoint spans every project's tasks).
+          // Surface it so the web tree can link a node to /projects/<projectId>.
+          projectId: r.projectId,
         }));
       },
     );
@@ -192,19 +196,43 @@ export async function mockEliminationRoutes(app: FastifyInstance): Promise<void>
           id: projectProjects.id,
           name: projectProjects.name,
           status: projectProjects.status,
+          rag: projectProjects.rag,
           startDate: projectProjects.startDate,
           endDate: projectProjects.endDate,
         }).from(projectProjects)
           .where(eq(projectProjects.tenantId, tenantId))
           .orderBy(desc(projectProjects.createdAt))
           .limit(200));
+        // GAP-PROJECTS-DELAY-ANALYSIS-02/03: emit projectId so the UI can link
+        // each row to /projects/<id>; surface the project's STORED rag signal
+        // (green/amber/red) rather than re-deriving a status-flavoured word;
+        // and compute delayDays honestly from endDate vs today (whole days
+        // past a planned end that has not completed) instead of the previous
+        // fabricated flat "90". There is no stored revised/forecast end date
+        // at the project level, so revisedDeadline mirrors endDate and cause
+        // is left blank ("—") rather than inventing "Under investigation".
+        const todayMs = Date.UTC(
+          new Date().getUTCFullYear(),
+          new Date().getUTCMonth(),
+          new Date().getUTCDate(),
+        );
+        const overdueDays = (end: string | null, status: string): number => {
+          if (!end) return 0;
+          if (status === "completed" || status === "cancelled") return 0;
+          const [y, m, d] = end.split("-").map(Number);
+          if (!y || !m || !d) return 0;
+          const endMs = Date.UTC(y, m - 1, d);
+          const diff = Math.floor((todayMs - endMs) / 86_400_000);
+          return diff > 0 ? diff : 0;
+        };
         return result.map((r) => ({
+          projectId: r.id,
           project: r.name,
           originalDeadline: r.endDate?.toString() ?? "—",
           revisedDeadline: r.endDate?.toString() ?? "—",
-          delayDays: r.status === "delayed" ? 90 : 0,
-          cause: r.status === "delayed" ? "Under investigation" : "—",
-          rag: r.status === "delayed" ? "overdue" : r.status === "on_hold" ? "review" : "active",
+          delayDays: overdueDays(r.endDate?.toString() ?? null, r.status),
+          cause: "—",
+          rag: r.rag ?? "green",
         }));
       },
     );

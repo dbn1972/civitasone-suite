@@ -426,3 +426,21 @@ describe("billing invoice + GSTN return status keys", () => {
     expect(pillTone("generated")).not.toBe("info");
   });
 });
+
+// GAP-PROJECTS-WBS-05: project-service WBS/task nodes use "planned" for a
+// not-yet-started item. It had no STATUS_MAP key, so it fell back to the
+// neutral "info" blue — a different colour from the sibling "pending" nodes
+// in the same tree despite being the same not-started state. "in_progress"
+// vs "in progress" is already handled by normalizeStatusKey (locked here too
+// so a regression is caught), so only "planned" needed a new key.
+describe("GAP-PROJECTS-WBS-05: project WBS status keys", () => {
+  it("maps 'planned' to a non-info variant (mut)", () => {
+    expect(pillTone("planned")).toBe("mut");
+    expect(pillTone("planned")).not.toBe("info");
+  });
+
+  it("buckets 'in_progress' and 'in progress' to the same tone", () => {
+    expect(pillTone("in_progress")).toBe(pillTone("in progress"));
+    expect(pillTone("in_progress")).toBe("warn");
+  });
+});

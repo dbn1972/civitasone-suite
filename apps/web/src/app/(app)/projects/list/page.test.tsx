@@ -71,4 +71,18 @@ describe("ProjectsListPage", () => {
     expect(screen.getByText("At Risk").parentElement).toHaveTextContent("0");
     expect(screen.getByText("Delayed").parentElement).toHaveTextContent("0");
   });
+
+  it("GAP-PROJECTS-LIST-01: shows '—' in the tiles (not real zeros) when the projects fetch fails", async () => {
+    fetchJsonMock.mockImplementation((path: unknown) => {
+      if (typeof path === "string" && path.includes("/project/projects")) {
+        return Promise.resolve({ data: [], source: "error" as const });
+      }
+      return Promise.resolve({ data: [], source: "api" as const });
+    });
+    render(await ProjectsListPage());
+    expect(screen.getByText("Active").parentElement).toHaveTextContent("—");
+    expect(screen.getByText("On Track").parentElement).toHaveTextContent("—");
+    // The scope note (which implies a healthy load) must not appear on error.
+    expect(screen.queryByText(/Tiles cover active/)).not.toBeInTheDocument();
+  });
 });

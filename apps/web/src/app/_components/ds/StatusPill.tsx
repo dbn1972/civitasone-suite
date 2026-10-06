@@ -186,6 +186,27 @@ const STATUS_MAP: Record<string, PillVariant> = {
 
   // Recruitment pipeline / job-opening lifecycle
   scheduled: "info",
+  // GAP-PROJECTS-WBS-05: project-service WBS/task nodes use "planned" for a
+  // not-yet-started work item (see projects/wbs/page.tsx's "Not Started" tile,
+  // which already buckets both "pending" and "planned"). Without a key it fell
+  // through to the neutral "info" blue -- visually identical to an unknown
+  // value and a different colour from the "pending" nodes in the same tree,
+  // despite being the same not-started state. Mapped to "mut" (neutral/quiet),
+  // matching other not-yet-actioned starting states (draft/inactive). The sibling
+  // "in_progress"/"in progress" claim in the audit is already handled by
+  // normalizeStatusKey() -> "in progress" (warn); verified, not re-added.
+  planned: "mut",
+  // GAP-PROJECTS-DETAIL-05: project-service emits a "delayed" state for both a
+  // project (project/queries.ts mapProjectStatus / the synthetic red+active ->
+  // "delayed") and a milestone (getProjectDetail maps milestone status to
+  // pending|completed|delayed). It had no key here, so a slipped project or
+  // milestone fell through to the neutral "info" blue -- visually identical to
+  // an unknown value, hiding the one state the delay-tracking screens exist to
+  // surface. "bad" matches overdue/breached. (in_progress / on_hold are NOT
+  // added: they already resolve via normalizeStatusKey -> "in progress" /
+  // "on hold", both already mapped to "warn"; the audit's claim they were
+  // unmapped is refuted by the current STATUS_MAP.)
+  delayed: "bad",
   // GAP-ASSETS-PROJECTS-06: AUC lifecycle -- WIP still accumulating is "warn", capitalized is "good".
   "under construction": "warn",
   capitalized: "good",
