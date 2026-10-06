@@ -240,6 +240,32 @@ export const DOMAIN_CODE_MESSAGES: Record<string, DomainMessage> = {
   // Maker-checker: the approver must be a different person from the maker.
   MAKER_CHECKER: MAKER_CHECKER_MESSAGE,
   MAKER_CHECKER_VIOLATION: MAKER_CHECKER_MESSAGE,
+  // GAP-CHANGE-DETAIL-05: admin-service change domain codes
+  // (services/admin-service/src/modules/change/domain.ts). Each is a specific,
+  // actionable governance reason that must read differently from a generic
+  // network/"conflict" failure so a CAB member knows what to do next.
+  FREEZE_CONFLICT: {
+    en: {
+      what: "This release window overlaps a change freeze.",
+      next: "Pick a window outside the freeze, or get the freeze lifted first.",
+    },
+    hi: {
+      what: "यह रिलीज़ विंडो एक चेंज फ़्रीज़ से टकराती है।",
+      next: "फ़्रीज़ के बाहर कोई विंडो चुनें, या पहले फ़्रीज़ हटवाएँ।",
+    },
+    actions: ["back", "help"],
+  },
+  ROLLBACK_REQUIRED: {
+    en: {
+      what: "A rollback plan is required before this change can be approved.",
+      next: "Add a rollback plan to the change, then approve it.",
+    },
+    hi: {
+      what: "इस बदलाव को मंज़ूर करने से पहले एक रोलबैक योजना ज़रूरी है।",
+      next: "बदलाव में रोलबैक योजना जोड़ें, फिर मंज़ूर करें।",
+    },
+    actions: ["back", "help"],
+  },
   // Verified in services/*: the loan creator may not also disburse it.
   SELF_DISBURSE_FORBIDDEN: {
     en: {
