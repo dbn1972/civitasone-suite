@@ -345,6 +345,28 @@ export function hasAnyRole(sessionRoles: string[], allowed: string[]): boolean {
 }
 
 /**
+ * GAP-DASHBOARD-HOME-2-02: true when any session role belongs to the role
+ * `family`. A role belongs to a family when it is EXACTLY the family name, or
+ * is prefixed by `family` followed by a delimiter (`_` or `:`). This replaces
+ * the old `r.includes(family)` substring test used for dashboard tile /
+ * command-center visibility, which leaked modules to unrelated roles — e.g.
+ * `"chr_manager".includes("hr")` was true, so a cadre-HR-manager-ish role
+ * matched the HR family. Pure; UI-gating convenience only (ModuleGate /
+ * requireAnyRole / per-route 403 remain the real authorization boundary).
+ *
+ * Examples:
+ *   hasRoleFamily(["hr_officer"], "hr")   === true
+ *   hasRoleFamily(["hr"], "hr")           === true
+ *   hasRoleFamily(["chr_manager"], "hr")  === false
+ *   hasRoleFamily(["finance:admin"], "finance") === true
+ */
+export function hasRoleFamily(sessionRoles: string[], family: string): boolean {
+  return sessionRoles.some(
+    (r) => r === family || r.startsWith(`${family}_`) || r.startsWith(`${family}:`),
+  );
+}
+
+/**
  * GAP-BILLING-HOME-01 / GAP-BILLING-GSTN-01: billing module role gating.
  *
  * The billing-service enforces roles server-side on every route (verified):

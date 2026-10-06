@@ -4,38 +4,30 @@ import { PageHeader, EmptyState, StatIcon } from "../../_components/ds";
 import { RoleCommandCenter } from "./RoleCommandCenter";
 import { FirstRunTour } from "./FirstRunTour";
 import { ActivationTracker } from "../../_components/ActivationTracker";
-import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { getSessionRoles, hasRoleFamily } from "@/lib/auth/roleGuard";
+import { MODULE_REGISTRY } from "@/app/_data/moduleRegistry";
 import { getTranslations } from "next-intl/server";
 
-const MODULES = [
-  { icon: "🏦", label: "Finance", href: "/finance", desc: "Budgets, bills, payments, GL", bg: "#eef2ff", roles: ["finance"] },
-  { icon: "👥", label: "HR & Payroll", href: "/hr", desc: "Employees, attendance, leave, payroll", bg: "#f0fdf4", roles: ["hr", "payroll"] },
-  { icon: "🛒", label: "Procurement", href: "/procurement", desc: "Indents, vendors, POs, GRN", bg: "#fff7ed", roles: ["procurement"] },
-  { icon: "📊", label: "Projects", href: "/projects", desc: "Projects, milestones, fund releases", bg: "#eff6ff", roles: ["project"] },
-  { icon: "🎁", label: "Grants", href: "/grants", desc: "Grants, grantees, releases, UCs", bg: "#fef3f2", roles: ["grant"] },
-  { icon: "🏢", label: "Establishment", href: "/estab", desc: "Files, meetings, vehicles, compliance", bg: "#f5f3ff", roles: ["estab"] },
-  { icon: "🏗️", label: "Assets", href: "/assets", desc: "Fixed assets, maintenance, depreciation", bg: "#fff7ed", roles: ["asset"] },
-  { icon: "📦", label: "Stock", href: "/stock", desc: "SKUs, stock ledger, low stock alerts", bg: "#ecfdf5", roles: ["stock", "inventory"] },
-  { icon: "🤝", label: "CRM", href: "/crm", desc: "Contacts, deals, pipeline", bg: "#fdf4ff", roles: ["crm", "sales"] },
-  { icon: "🎧", label: "Helpdesk", href: "/helpdesk", desc: "Tickets, SLA, escalations", bg: "#f0f9ff", roles: ["helpdesk"] },
-  { icon: "🪪", label: "Citizen Portal", href: "/citizen", desc: "Requests, RTI, feedback", bg: "#ecfdf5", roles: ["citizen"] },
-  { icon: "🔍", label: "Audit", href: "/audit", desc: "Observations, risk register, compliance", bg: "#fff1f2", roles: ["audit"] },
-  { icon: "⚖️", label: "Legal", href: "/legal", desc: "Cases, hearings, court orders", bg: "#faf5ff", roles: ["legal"] },
-  { icon: "📈", label: "Reports", href: "/reports", desc: "Analytics, KPIs, MIS", bg: "#eff6ff", roles: [] },
-  { icon: "📚", label: "Knowledge", href: "/knowledge", desc: "Documents, records, search", bg: "#fff7ed", roles: [] },
-  { icon: "🔔", label: "Notifications", href: "/notifications", desc: "Alerts, deliveries, preferences", bg: "#f0f9ff", roles: [] },
-  { icon: "🛡️", label: "Tenant Admin", href: "/tenant-admin", desc: "Users, roles, settings, billing", bg: "#f5f3ff", roles: ["admin", "tenant"] },
-];
-
-function visibleModules(roles: string[]) {
-  if (roles.includes("super_admin")) return MODULES;
-  return MODULES.filter((m) => m.roles.length === 0 || m.roles.some((prefix) => roles.some((r) => r.includes(prefix)))); // ux-001-ok: `m.roles` is a hardcoded property of the module-static MODULES array literal above, not fetched data -- no loader/source in this path
+export function visibleModules(roles: string[]) {
+  if (roles.some((r) => r === "super_admin")) return MODULE_REGISTRY;
+  // GAP-DASHBOARD-HOME-2-02: match on role FAMILY (exact or delimiter-prefixed),
+  // not substring, so e.g. "chr_manager" no longer matches the "hr" family.
+  // ux-001-ok: `m.roles` is a hardcoded property of the static MODULE_REGISTRY,
+  // not fetched data — no loader/source in this path.
+  return MODULE_REGISTRY.filter(
+    (m) => m.roles.length === 0 || m.roles.some((family) => hasRoleFamily(roles, family)),
+  );
 }
 
 export default async function DashboardPage() {
   const t = await getTranslations("home");
   const roles = getSessionRoles();
-  const modules = visibleModules(roles);
+  // GAP-DASHBOARD-HOME-2-04: roles === [] means the session cookie was missing
+  // or could not be decoded (getSessionRoles returns [] in both cases), NOT
+  // "signed in with no modules". Treat it as a session-read failure and point
+  // the user back to sign-in rather than showing an access-request message.
+  const sessionUnreadable = roles.length === 0;
+  const modules = sessionUnreadable ? [] : visibleModules(roles);
 
   return (
     <>
@@ -83,7 +75,18 @@ export default async function DashboardPage() {
         <div className="card-h" style={{ marginBottom: 12 }}>
           <h2 id="dash-modules-h" style={{ margin: 0, fontSize: 15 }}>{t("yourModules")}</h2>
         </div>
-        {modules.length === 0 ? ( // ux-001-ok: `modules` is a synchronous filter of the hardcoded MODULES list against `getSessionRoles()` (a local JWT-cookie decode, not a network fetch) -- zero matches means the signed-in user's roles genuinely grant no module, never a fetch failure
+        {sessionUnreadable ? ( // GAP-DASHBOARD-HOME-2-04: roles===[] is a session-read failure (missing/undecodable cookie), not "no modules"
+          <div className="card">
+            <div className="pad">
+              <EmptyState
+                icon="🔐"
+                title={t("sessionUnreadable")}
+                message={t("sessionUnreadableMsg")}
+                action={<Link href="/auth/login" className="btn primary">{t("signInAgain")}</Link>}
+              />
+            </div>
+          </div>
+        ) : modules.length === 0 ? ( // ux-001-ok: `modules` is a synchronous filter of the static MODULE_REGISTRY against decoded session roles (a local JWT-cookie decode, not a network fetch) -- with a readable session, zero matches means the user's roles genuinely grant no module, never a fetch failure
           <div className="card">
             <div className="pad">
               <EmptyState
