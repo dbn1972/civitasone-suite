@@ -20,7 +20,9 @@ import type {
   CaseParty,
   CaseStatus,
   CertifiedCopy,
+  CasesPage,
   ConfigEntry,
+  Court,
   CopyStatus,
   CourtCase,
   CourtCaseDetail,
@@ -196,6 +198,39 @@ export function getCases(status?: CaseStatus): Promise<LoaderResult<CourtCase[]>
   });
 }
 
+/**
+ * A paginated page of the registry with the TRUE total (GAP-COURT-CASES-01).
+ * `status` filters server-side; `limit`/`offset` drive Prev/Next. The service
+ * caps limit at 100, so values above that are clamped here too.
+ */
+export function getCasesPage(opts: {
+  status?: string;
+  q?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<LoaderResult<CasesPage>> {
+  const limit = Math.min(Math.max(Math.trunc(opts.limit ?? 25), 1), 100);
+  const offset = Math.max(Math.trunc(opts.offset ?? 0), 0);
+  const params = new URLSearchParams();
+  if (opts.status) params.set("status", opts.status);
+  if (opts.q) params.set("q", opts.q);
+  params.set("limit", String(limit));
+  params.set("offset", String(offset));
+  const empty: CasesPage = { cases: [], total: 0, limit, offset };
+  return fetchJson<unknown, CasesPage>(`/api/v1/court/cases?${params.toString()}`, empty, {
+    revalidateSeconds: 15,
+    telemetryKey: `court.cases.page.${opts.status ?? "all"}`,
+    mapResponse: (p) => {
+      const o = asObj(p) ?? {};
+      const cases = pickItems(p).map(mapCase);
+      // `total` is the server's true count; fall back to the page length only
+      // if an older service build omits it (never fabricate a smaller total).
+      const total = typeof o.total === "number" && Number.isFinite(o.total) ? o.total : cases.length;
+      return { cases, total, limit, offset };
+    },
+  });
+}
+
 /** One case with its parties (GET /cases/:id → { ...case, parties }). */
 export function getCase(caseId: string): Promise<LoaderResult<CourtCaseDetail | null>> {
   return fetchJson<unknown, CourtCaseDetail | null>(
@@ -232,6 +267,31 @@ export function getCaseHearings(caseId: string): Promise<LoaderResult<Hearing[]>
       mapResponse: (p) => pickItems(p).map(mapHearing),
     },
   );
+}
+
+/**
+ * Flat hearings day view (GAP-COURT-HEARINGS-03): tenant-scoped hearings in a
+ * scheduled-date range, newest first. Powers the "today's hearings" list when
+ * no case is selected. `from`/`to` are YYYY-MM-DD (inclusive).
+ */
+export function getHearings(opts: {
+  from?: string;
+  to?: string;
+  status?: string;
+  benchId?: string;
+  limit?: number;
+}): Promise<LoaderResult<Hearing[]>> {
+  const params = new URLSearchParams();
+  if (opts.from) params.set("from", opts.from);
+  if (opts.to) params.set("to", opts.to);
+  if (opts.status) params.set("status", opts.status);
+  if (opts.benchId) params.set("benchId", opts.benchId);
+  params.set("limit", String(Math.min(Math.max(Math.trunc(opts.limit ?? 100), 1), 200)));
+  return fetchJson<unknown, Hearing[]>(`/api/v1/court/hearings?${params.toString()}`, [], {
+    revalidateSeconds: 15,
+    telemetryKey: "court.hearings.flat",
+    mapResponse: (p) => pickItems(p).map(mapHearing),
+  });
 }
 
 /** A case's certified-copy applications (§30), newest first. */
@@ -300,4 +360,23 @@ export function getConfigNamespace(namespace: string): Promise<LoaderResult<Conf
       mapResponse: mapConfig,
     },
   );
+}
+
+/**
+ * Courts/forums in the registry (GAP-COURT-CAUSE-LIST-01) — so the cause-list
+ * console can pick a court by NAME, and a court with no registered case is
+ * still selectable, instead of inferring an 8-char UUID from the case list.
+ */
+export function getCourts(): Promise<LoaderResult<Court[]>> {
+  return fetchJson<unknown, Court[]>(`/api/v1/court/courts?limit=100`, [], {
+    revalidateSeconds: 30,
+    telemetryKey: "court.courts",
+    mapResponse: (p) =>
+      pickItems(p).map((o) => ({
+        id: str(o.id),
+        name: str(o.name),
+        courtType: strOrNull(o.courtType),
+        establishmentCode: strOrNull(o.establishmentCode),
+      })),
+  });
 }

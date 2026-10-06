@@ -74,6 +74,18 @@ export interface CourtCaseDetail extends CourtCase {
   parties: CaseParty[];
 }
 
+/**
+ * A page of the case registry (GAP-COURT-CASES-01): the rows for the current
+ * page plus the TRUE total for the filter, so the UI can show "Showing X–Y of
+ * N" and drive Prev/Next instead of treating a capped page length as the total.
+ */
+export interface CasesPage {
+  cases: CourtCase[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 /** Pendency roll-up (case-registry pendencySummary). */
 export interface PendencyRow {
   status: string;
@@ -184,6 +196,14 @@ export interface CauseListRef {
   id: string;
   courtId?: string;
   listDate?: string;
+}
+
+/** A court/forum in the registry (GAP-COURT-CAUSE-LIST-01). */
+export interface Court {
+  id: string;
+  name: string;
+  courtType: string | null;
+  establishmentCode: string | null;
 }
 
 // ─── Config engine (§47) ─────────────────────────────────────────────────────

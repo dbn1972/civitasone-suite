@@ -71,6 +71,10 @@ async function seedCase(tenant: string, cnr: string, title: string) {
 // FLAKY-SKIP: Requires COURT_E2E=1 plus a live court-service stack (real Postgres + HTTP); unset in standard CI so this e2e suite never executes there. (expires: 2026-12-13)
 describe.skipIf(!RUN)("public case-status lookup (e2e — configurable OTP/captcha/open)", () => {
   beforeAll(async () => {
+    // The captcha-mode case below sends the dev bypass token "test-captcha-ok";
+    // verifyCaptcha() in domain.ts fails closed unless COURT_CAPTCHA_DEV_TOKEN is
+    // EXPLICITLY set (no baked-in default), so this suite must set it to match.
+    process.env.COURT_CAPTCHA_DEV_TOKEN = "test-captcha-ok";
     subscribeConsumers();
     await queue.start();
     app = await buildApp();
@@ -88,6 +92,7 @@ describe.skipIf(!RUN)("public case-status lookup (e2e — configurable OTP/captc
 
   afterAll(async () => {
     await queue.stop();
+    delete process.env.COURT_CAPTCHA_DEV_TOKEN;
     for (const t of [T_OTP, T_CAP, T_OPEN]) {
       await sqlClient.begin(async (sql) => {
         await sql`select set_config('app.tenant_id', ${t}, true)`;

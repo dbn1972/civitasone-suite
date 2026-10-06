@@ -1,5 +1,7 @@
 /** court feature — small shared display helpers. */
 
+import { istDatePart, todayIST } from "@/lib/formatters";
+
 /** IST-friendly date-time, e.g. "12 Jul 2026, 14:32". Falls back to "—". */
 export function fmtDateTime(iso: string | null | undefined): string {
   if (!iso) return "—";
@@ -12,6 +14,9 @@ export function fmtDateTime(iso: string | null | undefined): string {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
+    // GAP-COURT-HEARINGS-04: pin to IST so a hearing instant renders the same
+    // calendar day/time for a UTC-clock server and an IST browser alike.
+    timeZone: "Asia/Kolkata",
   });
 }
 
@@ -20,7 +25,16 @@ export function fmtDate(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  // Bare "YYYY-MM-DD" calendar dates name a day and must NOT be shifted by a
+  // timezone (that could roll them to the previous day); only resolve a full
+  // instant to its IST day. Mirrors lib/formatters' isBareCalendarDate rule.
+  const isBareDate = /^\d{4}-\d{2}-\d{2}$/.test(iso);
+  return d.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    ...(isBareDate ? { timeZone: "UTC" } : { timeZone: "Asia/Kolkata" }),
+  });
 }
 
 /** Title-case a snake/kebab enum token, e.g. "part_heard" → "Part heard". */
@@ -98,7 +112,42 @@ export function hearingPillStatus(status: string): string {
   }
 }
 
+/**
+ * GAP-COURT-HEARINGS-05: a FIXED hearing-status label dictionary rather than a
+ * generic humanize(), so the vocabulary (scheduled/held/adjourned/cancelled) is
+ * a stable, translatable set rather than whatever humanize() derives from the
+ * raw token. Unknown values fall back to humanize() so nothing disappears.
+ */
+const HEARING_STATUS_LABELS: Record<string, string> = {
+  scheduled: "Scheduled",
+  held: "Held",
+  adjourned: "Adjourned",
+  cancelled: "Cancelled",
+};
+export function hearingStatusLabel(status: string | null | undefined): string {
+  if (!status) return "—";
+  return HEARING_STATUS_LABELS[status] ?? humanize(status);
+}
+
 /** Today as YYYY-MM-DD (local) — the default date for cause lists / orders. */
 export function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * GAP-COURT-CASES-02: is a case past its SLA target and still live? Compares
+ * IST calendar DATES (via the shared istDatePart/todayIST helpers) so the
+ * answer doesn't flip during the 00:00–05:30 IST window a raw UTC compare
+ * gets wrong. A disposed/appealed matter is never "overdue" (its clock has
+ * stopped); a missing target is not overdue (nothing to breach).
+ */
+export function isOverdue(
+  targetDisposalDate: string | null | undefined,
+  status: string | null | undefined,
+): boolean {
+  if (!targetDisposalDate) return false;
+  if (status === "disposed" || status === "appealed") return false;
+  const target = istDatePart(targetDisposalDate);
+  if (!target) return false;
+  return target < todayIST();
 }

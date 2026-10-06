@@ -6,6 +6,7 @@ import { idParam, registerCaseBody, listCasesQuery } from "./validators.js";
 import { presentParty, PII_PRIVILEGED_ROLES } from "../party/domain.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
+import * as domain from "./domain.js";
 
 /** Roles permitted to register/mutate cases. */
 const COURT_WRITE_ROLES = ["registrar", "court_admin", "super_admin"];
@@ -34,16 +35,17 @@ export async function caseRegistryRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, COURT_READ_ROLES);
     const q = listCasesQuery.parse(req.query);
-    const items = await repo.listCases(
-      { tenantId: ctx.tenantId, status: q.status, courtId: q.courtId },
-      q.limit,
-      q.offset,
-    );
+    const filters = { tenantId: ctx.tenantId, status: q.status, courtId: q.courtId, q: q.q };
+    const [items, total] = await Promise.all([
+      repo.listCases(filters, q.limit, q.offset),
+      repo.countCases(filters),
+    ]);
     return reply.send({
       items,
       limit: q.limit,
       offset: q.offset,
       count: items.length,
+      total,
       source: "db",
     });
   });
@@ -71,7 +73,7 @@ export async function caseRegistryRoutes(app: FastifyInstance): Promise<void> {
     const from = q.from && rx.test(q.from) ? q.from : "1970-01-01";
     const to = q.to && rx.test(q.to) ? q.to : new Date().toISOString().slice(0, 10);
     const a = await repo.caseAnalytics(ctx.tenantId, from, to);
-    const clearanceRatePct = a.instituted > 0 ? Math.round((a.disposed / a.instituted) * 1000) / 10 : null;
+    const clearanceRatePct = domain.clearanceRatePct(a.instituted, a.disposed);
     return reply.send({ period: { from, to }, ...a, clearanceRatePct, source: "db" });
   });
 

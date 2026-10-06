@@ -335,6 +335,23 @@ export async function addCauseListItem(
   });
 }
 
+/**
+ * Look up the EXISTING cause-list for a court on a date (GAP-COURT-CAUSE-LIST-02).
+ * Returns its id when one already exists (a court has exactly one list per day),
+ * else null — so the console can re-open rather than re-generate / duplicate.
+ */
+export async function fetchCauseListByCourtDate(
+  courtId: string,
+  listDate: string,
+): Promise<CauseListRef | null> {
+  const qs = `?courtId=${encodeURIComponent(courtId)}&listDate=${encodeURIComponent(listDate)}`;
+  const out = await get<{ causeList?: { id?: string } | null; exists?: boolean }>(
+    `v1/court/cause-lists${qs}`,
+  );
+  if (!out.exists || !out.causeList?.id) return null;
+  return { id: out.causeList.id, courtId, listDate };
+}
+
 // ─── Config engine (§47) ─────────────────────────────────────────────────────
 
 export async function setConfig(input: {

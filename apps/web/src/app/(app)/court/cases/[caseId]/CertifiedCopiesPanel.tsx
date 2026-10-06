@@ -18,6 +18,8 @@ import { Button, Card, EmptyState, StatusPill } from "@/app/_components/ds";
 import type { CertifiedCopy, CopyStatus } from "../../_data/types";
 import { COPY_TRANSITIONS } from "../../_data/types";
 import { fmtDateTime, humanize, copyPillStatus } from "../../_data/format";
+import { formatMoney } from "@/lib/formatters";
+import { rupeesToMinorString } from "@/lib/money";
 import { fetchCaseCertifiedCopies, requestCertifiedCopy, transitionCertifiedCopy } from "../../_data/client";
 
 const fieldStyle: React.CSSProperties = {
@@ -32,19 +34,6 @@ const mono: React.CSSProperties = {
   fontVariantNumeric: "tabular-nums",
 };
 const errStyle: React.CSSProperties = { color: "var(--bad, #c0392b)", fontSize: 12, margin: "4px 0 0" };
-
-/** Render a BigInt-paise string as rupees, e.g. "1500" → "₹15.00". */
-function fmtPaise(minor: string | null): string {
-  if (minor === null) return "—";
-  try {
-    const n = BigInt(minor);
-    const rupees = n / 100n;
-    const paise = (n % 100n).toString().padStart(2, "0");
-    return `₹${rupees}.${paise}`;
-  } catch {
-    return minor;
-  }
-}
 
 export function CertifiedCopiesPanel({
   caseId,
@@ -252,12 +241,39 @@ function CopyRow({
   const deliveryModeId = useId();
   const remarksId = useId();
 
+  // CASEID-02: the fee is paise on the wire; show a plain-rupees placeholder
+  // (no symbol, no grouping — a value the clerk could type back) and a live
+  // ₹-grouped preview of what they entered.
+  const feeRupeesPlaceholder = (() => {
+    try {
+      const n = BigInt(copy.feeMinor);
+      return `${n / 100n}.${(n % 100n).toString().padStart(2, "0")}`;
+    } catch {
+      return "0.00";
+    }
+  })();
+  const receiptPreview = (() => {
+    const minor = receiptMinor.trim() ? rupeesToMinorString(receiptMinor.trim()) : null;
+    return minor === null ? "" : formatMoney(minor);
+  })();
+
   async function apply(target: CopyStatus) {
     setError(null);
-    if (target === "fee_paid" && (!paymentRef.trim() || !receiptMinor.trim())) {
-      setError("Enter both the payment reference and the receipted amount to record fee_paid.");
-      paymentRefRef.current?.focus();
-      return;
+    let receiptMinorStr: string | null = null;
+    if (target === "fee_paid") {
+      if (!paymentRef.trim() || !receiptMinor.trim()) {
+        setError("Enter both the payment reference and the receipted amount to record fee_paid.");
+        paymentRefRef.current?.focus();
+        return;
+      }
+      // GAP-COURT-CASES-CASEID-02: the clerk types RUPEES; convert to paise
+      // (no float rounding). A non-numeric / sub-paise / zero amount is caught
+      // here with an inline error instead of being sent and rejected server-side.
+      receiptMinorStr = rupeesToMinorString(receiptMinor.trim());
+      if (receiptMinorStr === null) {
+        setError("Enter the receipted amount in rupees (e.g. 150 or 150.00).");
+        return;
+      }
     }
     if (target === "rejected" && !remarks.trim()) {
       setError("Enter a reason for rejecting this certified copy.");
@@ -269,7 +285,9 @@ function CopyRow({
       await transitionCertifiedCopy(copy.id, {
         target,
         expectedVersion: copy.version,
-        ...(target === "fee_paid" ? { paymentRef: paymentRef.trim(), receiptMinor: receiptMinor.trim() } : {}),
+        ...(target === "fee_paid" && receiptMinorStr !== null
+          ? { paymentRef: paymentRef.trim(), receiptMinor: receiptMinorStr }
+          : {}),
         ...(target === "issued" && deliveryMode.trim() ? { deliveryMode: deliveryMode.trim() } : {}),
         ...(remarks.trim() ? { remarks: remarks.trim() } : {}),
       });
@@ -295,12 +313,12 @@ function CopyRow({
             {copy.urgent && <span style={{ color: "var(--ink2)", fontWeight: 400 }}> · urgent</span>}
           </div>
           <div style={{ fontSize: 12.5, color: "var(--ink2)", marginTop: 2, ...mono }}>
-            {copy.copiesCount} {copy.copiesCount === 1 ? "copy" : "copies"} · fee {fmtPaise(copy.feeMinor)}
+            {copy.copiesCount} {copy.copiesCount === 1 ? "copy" : "copies"} · fee {formatMoney(copy.feeMinor)}
             {copy.feeSource ? ` (${copy.feeSource})` : ""}
           </div>
           <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 4, ...mono }}>
             v{copy.version}
-            {copy.paymentRef && ` · paid ref ${copy.paymentRef} (${fmtPaise(copy.receiptMinor)})`}
+            {copy.paymentRef && ` · paid ref ${copy.paymentRef} (${formatMoney(copy.receiptMinor)})`}
             {copy.issuedAt && ` · issued ${fmtDateTime(copy.issuedAt)}`}
             {copy.deliveryMode && ` · via ${copy.deliveryMode}`}
           </div>
@@ -343,15 +361,20 @@ function CopyRow({
               </div>
               <div style={{ display: "grid", gap: 4, flex: "1 1 160px" }}>
                 <label htmlFor={receiptMinorId} style={{ fontSize: 12.5, fontWeight: 600 }}>
-                  Receipted amount (paise) <span aria-hidden="true">*</span>
+                  Receipted amount (₹) <span aria-hidden="true">*</span>
                 </label>
                 <input
                   id={receiptMinorId}
-                  placeholder={copy.feeMinor}
+                  inputMode="decimal"
+                  placeholder={feeRupeesPlaceholder}
                   value={receiptMinor}
                   onChange={(e) => setReceiptMinor(e.target.value)}
                   style={{ ...fieldStyle, ...mono }}
                 />
+                <p style={{ fontSize: 11.5, color: "var(--ink2)", margin: 0 }}>
+                  Expected fee {formatMoney(copy.feeMinor)}
+                  {receiptPreview ? ` · you entered ${receiptPreview}` : ""}
+                </p>
               </div>
             </div>
           )}

@@ -11,7 +11,15 @@ export default async function CourtAdminConfigPage() {
   const results = await Promise.all(namespaces.map((ns) => getConfigNamespace(ns)));
 
   const entries = results.flatMap((r) => r.data);
-  const source = results.some((r) => r.source === "error") ? "error" : "api";
+  // GAP-COURT-ADMIN-04: per-namespace health, so one failed namespace shows a
+  // per-card "couldn't load" (and disables Add/Retire) instead of silently
+  // falling back to built-in defaults as if that namespace were simply empty.
+  const sources: Record<string, "api" | "error"> = {};
+  namespaces.forEach((ns, i) => {
+    sources[ns] = results[i].source;
+  });
+  // The global badge appears only when EVERY namespace failed.
+  const allError = results.every((r) => r.source === "error");
 
   return (
     <>
@@ -21,8 +29,8 @@ export default async function CourtAdminConfigPage() {
         back="/court"
         backLabel="Court"
       />
-      {source === "error" && <DataSourceBadge source={source} />}
-      <AdminConfig initialEntries={entries} initialSource={source} />
+      {allError && <DataSourceBadge source="error" />}
+      <AdminConfig initialEntries={entries} initialSources={sources} allError={allError} />
     </>
   );
 }

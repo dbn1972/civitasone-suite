@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Button, Card, EmptyState, StatusPill } from "@/app/_components/ds";
+import { Button, Card, ConfirmDialog, EmptyState, StatusPill } from "@/app/_components/ds";
 import type { ConfigEntry, PresetName } from "../_data/types";
 import { PRESET_NAMES } from "../_data/types";
+import { humanize } from "../_data/format";
 import {
   DEFAULT_DISPOSAL_DAYS,
   ENUM_NAMESPACES,
@@ -36,13 +37,18 @@ const ALL_NS = [...ENUM_NAMESPACES.map((n) => n.namespace), SLA_NS];
 
 export function AdminConfig({
   initialEntries,
-  initialSource,
+  initialSources,
+  allError = false,
 }: {
   initialEntries: ConfigEntry[];
-  initialSource: "api" | "error";
+  /** Per-namespace load health (GAP-COURT-ADMIN-04). */
+  initialSources: Record<string, "api" | "error">;
+  allError?: boolean;
 }) {
   const [entries, setEntries] = useState<ConfigEntry[]>(initialEntries);
+  const [sources, setSources] = useState<Record<string, "api" | "error">>(initialSources);
   const [presetBusy, setPresetBusy] = useState<PresetName | null>(null);
+  const [pendingPreset, setPendingPreset] = useState<PresetName | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,13 +62,29 @@ export function AdminConfig({
     return m;
   }, [entries]);
 
-  async function reload() {
+  /** Reload a single namespace, clearing/raising its per-card error. */
+  async function reloadNamespace(ns: string) {
     try {
-      const all = await Promise.all(ALL_NS.map((ns) => fetchConfigNamespace(ns)));
-      setEntries(all.flat());
+      const rows = await fetchConfigNamespace(ns);
+      setEntries((prev) => [...prev.filter((e) => e.namespace !== ns), ...rows]);
+      setSources((prev) => ({ ...prev, [ns]: "api" }));
     } catch {
-      /* keep current on reload failure */
+      setSources((prev) => ({ ...prev, [ns]: "error" }));
     }
+  }
+
+  async function reloadAll() {
+    const results = await Promise.all(
+      ALL_NS.map(async (ns) => {
+        try {
+          return { ns, rows: await fetchConfigNamespace(ns), ok: true as const };
+        } catch {
+          return { ns, rows: [] as ConfigEntry[], ok: false as const };
+        }
+      }),
+    );
+    setEntries(results.flatMap((r) => r.rows));
+    setSources(Object.fromEntries(results.map((r) => [r.ns, r.ok ? "api" : "error"])) as Record<string, "api" | "error">);
   }
 
   function ok(msg: string) {
@@ -74,14 +96,17 @@ export function AdminConfig({
     setToast(null);
   }
 
-  async function onApplyPreset(preset: PresetName) {
+  async function confirmApplyPreset() {
+    const preset = pendingPreset;
+    if (!preset) return;
     setPresetBusy(preset);
     setError(null);
     setToast(null);
     try {
       await applyPreset(preset);
       ok(`Applied the ${PRESET_LABELS[preset] ?? preset} preset.`);
-      await reload();
+      setPendingPreset(null);
+      await reloadAll();
     } catch (err) {
       bad(err, "Could not apply the preset.");
     } finally {
@@ -115,7 +140,7 @@ export function AdminConfig({
               key={p}
               variant="ghost"
               disabled={presetBusy !== null}
-              onClick={() => void onApplyPreset(p)}
+              onClick={() => setPendingPreset(p)}
             >
               {presetBusy === p ? "Applying…" : (PRESET_LABELS[p] ?? p)}
             </Button>
@@ -123,26 +148,57 @@ export function AdminConfig({
         </div>
       </Card>
 
-      {initialSource === "error" && entries.length === 0 && (
+      {/* GAP-COURT-ADMIN-01: a preset overwrites tenant-wide value lists; confirm first. */}
+      <ConfirmDialog
+        open={pendingPreset !== null}
+        danger
+        title="Apply vertical preset?"
+        confirmLabel="Apply preset"
+        description={
+          pendingPreset ? (
+            <>
+              <p>
+                Applying the <strong>{PRESET_LABELS[pendingPreset] ?? pendingPreset}</strong> preset
+                upserts this tenant&rsquo;s <strong>case types</strong>, <strong>court types</strong> and{" "}
+                <strong>order types</strong> for everyone. Existing values are kept; the preset&rsquo;s
+                values are added or re-activated.
+              </p>
+              <p style={{ marginTop: 8 }}>You can still add or retire individual values afterwards.</p>
+            </>
+          ) : null
+        }
+        busy={presetBusy !== null}
+        onConfirm={() => void confirmApplyPreset()}
+        onCancel={() => setPendingPreset(null)}
+      />
+
+      {allError && entries.length === 0 && (
         <Card padding>
           <EmptyState
             icon="⚙️"
-            title="Showing built-in defaults"
-            message="Live configuration couldn't be reached, so the module defaults below are shown. Saving will still write to the config engine once connectivity returns."
+            title="Configuration couldn’t be loaded"
+            message="Live configuration couldn’t be reached for any list. Retry each card below once connectivity returns — editing is disabled until a list loads so you can’t accidentally save over real config."
           />
         </Card>
       )}
 
-      <SlaEditor entry={slaEntry} onOk={ok} onError={bad} onReload={reload} />
+      <SlaEditor
+        entry={slaEntry}
+        errored={sources[SLA_NS] === "error"}
+        onOk={ok}
+        onError={bad}
+        onReload={() => reloadNamespace(SLA_NS)}
+      />
 
       {ENUM_NAMESPACES.map((ns) => (
         <EnumEditor
           key={ns.namespace}
           ns={ns}
           entries={byNamespace.get(ns.namespace) ?? []}
+          errored={sources[ns.namespace] === "error"}
           onOk={ok}
           onError={bad}
-          onReload={reload}
+          onReload={() => reloadNamespace(ns.namespace)}
         />
       ))}
     </>
@@ -153,11 +209,13 @@ export function AdminConfig({
 
 function SlaEditor({
   entry,
+  errored,
   onOk,
   onError,
   onReload,
 }: {
   entry: ConfigEntry | undefined;
+  errored: boolean;
   onOk: (msg: string) => void;
   onError: (err: unknown, fallback: string) => void;
   onReload: () => Promise<void>;
@@ -185,6 +243,14 @@ function SlaEditor({
     } finally {
       setBusy(false);
     }
+  }
+
+  if (errored) {
+    return (
+      <Card title="Disposal SLA" padding>
+        <NamespaceError onReload={onReload} />
+      </Card>
+    );
   }
 
   return (
@@ -235,42 +301,84 @@ function SlaEditor({
   );
 }
 
+// ─── Per-card error state (GAP-COURT-ADMIN-04) ───────────────────────────────
+
+function NamespaceError({ onReload }: { onReload: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div role="alert" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+      <span style={{ fontSize: 13.5, color: "var(--ink2)" }}>
+        Could not load this list. Its values are hidden rather than falling back to defaults, so you
+        can&rsquo;t accidentally save over real configuration. Adding and retiring are disabled until
+        it loads.
+      </span>
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          void onReload().finally(() => setBusy(false));
+        }}
+      >
+        {busy ? "Retrying…" : "Retry"}
+      </Button>
+    </div>
+  );
+}
+
 // ─── Enumeration namespace editor ────────────────────────────────────────────
 
 function EnumEditor({
   ns,
   entries,
+  errored,
   onOk,
   onError,
   onReload,
 }: {
   ns: EnumNamespace;
   entries: ConfigEntry[];
+  errored: boolean;
   onOk: (msg: string) => void;
   onError: (err: unknown, fallback: string) => void;
   onReload: () => Promise<void>;
 }) {
   const [key, setKey] = useState("");
   const [label, setLabel] = useState("");
+  const [keepDefaults, setKeepDefaults] = useState(false);
   const [busy, setBusy] = useState(false);
   const [rowBusy, setRowBusy] = useState<string | null>(null);
+  const [pendingRetire, setPendingRetire] = useState<ConfigEntry | null>(null);
 
   const active = entries.filter((e) => e.active);
   const configured = active.length > 0;
+  const isLastActive = active.length === 1;
 
   async function add() {
     const configKey = key.trim();
     if (!configKey) return;
     setBusy(true);
     try {
+      // GAP-COURT-ADMIN-05: when seeding the FIRST value into an unconfigured
+      // namespace that has module defaults, optionally also persist those
+      // defaults so they don't silently stop applying.
+      if (!configured && keepDefaults && ns.defaults.length > 0) {
+        for (const d of ns.defaults) {
+          if (d === configKey) continue;
+          await setConfig({ namespace: ns.namespace, configKey: d, value: { allowed: true }, label: humanize(d) });
+        }
+      }
       await setConfig({
         namespace: ns.namespace,
         configKey,
         value: { allowed: true },
-        ...(label.trim() ? { label: label.trim() } : {}),
+        // GAP-COURT-ADMIN-03: label is never blank — auto-fill from the key.
+        label: label.trim() || humanize(configKey),
       });
       setKey("");
       setLabel("");
+      setKeepDefaults(false);
       onOk(`Added “${configKey}” to ${ns.title}.`);
       await onReload();
     } catch (err) {
@@ -280,17 +388,36 @@ function EnumEditor({
     }
   }
 
-  async function retire(entry: ConfigEntry) {
+  async function confirmRetire() {
+    const entry = pendingRetire;
+    if (!entry) return;
     setRowBusy(entry.id);
     try {
       await deactivateConfig(entry.id, entry.version);
       onOk(`Retired “${entry.configKey}”.`);
+      setPendingRetire(null);
       await onReload();
     } catch (err) {
       onError(err, "Could not retire the value.");
     } finally {
       setRowBusy(null);
     }
+  }
+
+  // Preview of the effective list after adding this key to an unconfigured ns.
+  const effectivePreview = useMemo(() => {
+    const k = key.trim();
+    if (!k || configured) return [];
+    const base = keepDefaults ? [...ns.defaults] : [];
+    return Array.from(new Set([...base, k]));
+  }, [key, configured, keepDefaults, ns.defaults]);
+
+  if (errored) {
+    return (
+      <Card title={ns.title} padding>
+        <NamespaceError onReload={onReload} />
+      </Card>
+    );
   }
 
   return (
@@ -312,7 +439,7 @@ function EnumEditor({
                 fontSize: 12.5,
               }}
             >
-              <span style={{ fontWeight: 600 }}>{e.label ?? e.configKey}</span>
+              <span style={{ fontWeight: 600 }}>{e.label ?? humanize(e.configKey)}</span>
               <span style={{ ...mono, color: "var(--ink2)" }}>{e.configKey}</span>
               <Button
                 aria-label={`Retire ${e.configKey}`}
@@ -320,7 +447,7 @@ function EnumEditor({
                 variant="ghost"
                 size="sm"
                 disabled={rowBusy === e.id}
-                onClick={() => void retire(e)}
+                onClick={() => setPendingRetire(e)}
                 style={{ padding: "0 6px", lineHeight: 1.4 }}
               >
                 {rowBusy === e.id ? "…" : "✕"}
@@ -337,9 +464,37 @@ function EnumEditor({
           </div>
           {ns.defaults.length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {/* GAP-COURT-ADMIN-03: show humanized labels, not raw snake_case. */}
               {ns.defaults.map((d) => (
-                <StatusPill key={d} status="draft" label={d} />
+                <StatusPill key={d} status="draft" label={humanize(d)} />
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* GAP-COURT-ADMIN-05: warn that configuring the first value drops the defaults. */}
+      {!configured && ns.defaults.length > 0 && key.trim() !== "" && (
+        <div
+          role="status"
+          style={{ fontSize: 12.5, color: "var(--ink2)", marginBottom: 10, border: "1px solid var(--warn, #f59e0b)", borderRadius: 8, padding: 8 }}
+        >
+          <div>
+            Adding this makes <strong>only your configured values</strong> valid — the defaults{" "}
+            {ns.defaults.map((d) => humanize(d)).join(", ")} will stop applying.
+          </div>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 6 }}>
+            <input type="checkbox" checked={keepDefaults} onChange={(e) => setKeepDefaults(e.target.checked)} />
+            Also keep the defaults (adds them as configured values)
+          </label>
+          {effectivePreview.length > 0 && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>Effective list after change</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {effectivePreview.map((v) => (
+                  <StatusPill key={v} status="active" label={humanize(v)} />
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -369,6 +524,37 @@ function EnumEditor({
           {busy ? "Adding…" : "Add value"}
         </Button>
       </div>
+
+      {/* GAP-COURT-ADMIN-02: confirm retire; warn when retiring the last value. */}
+      <ConfirmDialog
+        open={pendingRetire !== null}
+        danger
+        title={`Retire “${pendingRetire?.configKey ?? ""}”?`}
+        confirmLabel="Retire value"
+        description={
+          <>
+            <p>
+              Retiring removes this value from the active {ns.title.toLowerCase()} list. It is
+              reversible — you can re-add the key later.
+            </p>
+            {isLastActive && ns.defaults.length > 0 && (
+              <p style={{ marginTop: 8 }}>
+                <strong>This is the last active value.</strong> Once retired, the namespace falls
+                back to the built-in module defaults ({ns.defaults.map((d) => humanize(d)).join(", ")}).
+              </p>
+            )}
+            {isLastActive && ns.defaults.length === 0 && (
+              <p style={{ marginTop: 8 }}>
+                <strong>This is the last active value</strong>, and this namespace has no built-in
+                defaults — the list will be empty until you add a value or seed a preset.
+              </p>
+            )}
+          </>
+        }
+        busy={rowBusy === pendingRetire?.id}
+        onConfirm={() => void confirmRetire()}
+        onCancel={() => setPendingRetire(null)}
+      />
     </Card>
   );
 }

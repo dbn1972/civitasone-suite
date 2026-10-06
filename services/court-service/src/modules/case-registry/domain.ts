@@ -118,3 +118,19 @@ export function addDays(isoDate: string, days: number): string {
   dt.setUTCDate(dt.getUTCDate() + days);
   return dt.toISOString().slice(0, 10);
 }
+
+/**
+ * NCMS-style clearance rate: disposed as a percentage of instituted matters in
+ * the window, to ONE decimal place. Returns `null` (not 0) when nothing was
+ * instituted — a judicial statistic over an empty base is "not applicable", and
+ * rendering it as "0%" would be a fabricated fact (GAP-COURT-HOME-04). Pure so
+ * the route math is unit-testable without a DB.
+ *
+ *   clearanceRatePct(10, 8) -> 80
+ *   clearanceRatePct(3, 1)  -> 33.3
+ *   clearanceRatePct(0, 0)  -> null
+ */
+export function clearanceRatePct(instituted: number, disposed: number): number | null {
+  if (!Number.isFinite(instituted) || instituted <= 0) return null;
+  return Math.round((disposed / instituted) * 1000) / 10;
+}
