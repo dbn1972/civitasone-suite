@@ -1,15 +1,15 @@
+import { TileHubSkeleton } from "@/app/_components/ds";
+
+// GAP-ESTABLISHMENT-HOME-02: previously hand-rolled Tailwind bg-slate-200
+// blocks with animate-pulse, which ignore the design-system theme and render
+// as bright gray in dark mode. TileHubSkeleton uses the ds CSS-variable shimmer
+// (--line/--line2/--panel) so it tracks light/dark theming, and mirrors the
+// /estab ModuleHub layout (header + tile grid) rather than a generic stat page.
 export default function EstabLoading() {
   return (
-    <div className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <div className="mx-auto max-w-7xl animate-pulse space-y-5">
-        <div className="h-4 w-40 rounded bg-slate-200" />
-        <div className="h-9 w-64 rounded bg-slate-200" />
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-24 rounded-xl bg-slate-200" />
-          ))}
-        </div>
-        <div className="h-72 rounded-xl bg-slate-200" />
+    <div className="p-6 md:p-8">
+      <div className="mx-auto max-w-7xl">
+        <TileHubSkeleton />
       </div>
     </div>
   );
