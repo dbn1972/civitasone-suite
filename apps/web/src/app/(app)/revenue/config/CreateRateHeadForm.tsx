@@ -8,7 +8,18 @@ import type { AcceptedResponse } from "./types";
 
 type InvalidField = "code" | "name" | "category" | null;
 
-export function CreateRateHeadForm() {
+/**
+ * GAP-REVENUE-CONFIG-02: normalise a free-text category so "Property",
+ * "property" and " property " cannot fork the taxonomy. The backend stores a
+ * free varchar (no fixed enum — see rates.rate_heads.category), so we keep the
+ * list open but canonicalise to trimmed lowercase before POST, and offer the
+ * existing distinct categories via a datalist so clerks reuse them.
+ */
+export function normalizeCategory(input: string): string {
+  return input.trim().toLowerCase().replace(/\s+/g, "_");
+}
+
+export function CreateRateHeadForm({ categories = [] }: { categories?: string[] }) {
   const router = useRouter();
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
@@ -69,7 +80,7 @@ export function CreateRateHeadForm() {
         body: JSON.stringify({
           code: code.trim(),
           name: name.trim(),
-          category: category.trim(),
+          category: normalizeCategory(category),
           unitOfMeasure: unitOfMeasure.trim() || undefined,
         }),
       });
@@ -148,12 +159,18 @@ export function CreateRateHeadForm() {
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 maxLength={48}
+                list={`${categoryId}-list`}
                 placeholder="e.g. property_tax, water, sewerage"
                 aria-required="true"
                 aria-invalid={invalidField === "category" || undefined}
                 aria-describedby={invalidField === "category" ? categoryErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
+              <datalist id={`${categoryId}-list`}>
+                {Array.from(new Set(categories.map((c) => c.trim()).filter(Boolean))).map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
               {invalidField === "category" && fieldErrorText && (
                 <p id={categoryErrId} role="alert" className="pill bad" style={{ width: "fit-content" }}>
                   {fieldErrorText}

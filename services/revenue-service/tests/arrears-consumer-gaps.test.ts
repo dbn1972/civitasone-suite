@@ -114,6 +114,18 @@ describe("Arrears Consumer — writeOffCreate/writeOffDecide gaps", () => {
     expect(mockEnqueue.mock.calls[0]![1].topic).toBe("revenue.write_off.applied");
   });
 
+  it("writeOffDecide approve: chains the write-off onto the written-off DEMAND's own running balance", async () => {
+    txSelectResults = [
+      [{ id: "wo-3", makerUserId: "maker-1", assesseeId: "ae-1", demandId: "dem-9", amountMinor: 30000n, reason: "Bad" }],
+      [{ balanceMinor: 100000n }], // latest balance of dem-9
+    ];
+    await handlers["revenue.write_off.decide"]!(msg({ actorId: "checker-1", payload: { writeOffId: "wo-3", approve: true } }));
+    const row = mockInsertValues.mock.calls[0]![0];
+    expect(row.demandId).toBe("dem-9");
+    expect(row.balanceMinor).toBe(70000n);
+    expect(row.entryType).toBe("write_off");
+  });
+
   it("writeOffDecide reject: no DCB, only audit", async () => {
     txSelectResults = [[{ id: "wo-2", makerUserId: "maker-1", assesseeId: "ae-1", amountMinor: 50000n, reason: "X" }]];
     await handlers["revenue.write_off.decide"]!(msg({ actorId: "checker-1", payload: { writeOffId: "wo-2", approve: false } }));

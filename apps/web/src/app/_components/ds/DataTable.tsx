@@ -297,6 +297,10 @@ function cellValue<T extends Record<string, unknown>>(col: Column<T>, row: T): R
   }
   if (col.cellType === "status") {
     const raw = String(row[col.key] ?? "");
+    // A missing/empty status is MISSING data, not a real state: render the
+    // same "—" the amount/date cells use for absent values rather than an
+    // empty, meaningless pill (GAP-REVENUE-BILLS-03).
+    if (raw.trim() === "") return "—";
     return <StatusPill status={raw} label={col.statusLabels?.[raw]} />;
   }
   if (col.cellType === "amount") {

@@ -55,15 +55,74 @@ describe("AssesseeDetailPage", () => {
     expect(screen.getAllByText("₹3,000.00").length).toBeGreaterThan(0);
   });
 
-  it("shows the data-source badge on error instead of a friendly empty state", async () => {
+  it("labels bank reconciliation distinctly from receipt status (DETAIL-04)", async () => {
+    const { fireEvent } = await import("@testing-library/react");
     fetchJsonMock.mockImplementation((path: string) => {
-      if (path.endsWith(`/assessees/${ID}`)) return Promise.resolve({ data: ASSESSEE, source: "error" });
-      return Promise.resolve({ data: [], source: "error" });
+      if (path.endsWith(`/assessees/${ID}`)) return Promise.resolve({ data: ASSESSEE, source: "api" });
+      if (path.includes("/dcb")) return Promise.resolve({ data: DCB, source: "api" });
+      if (path.includes("/receipts"))
+        return Promise.resolve({
+          data: [
+            {
+              id: "r1",
+              receiptNo: "RCT-1",
+              channel: "counter",
+              amountMinor: "1000",
+              status: "posted",
+              reconciled: false,
+              createdAt: "2026-07-01T00:00:00.000Z",
+            },
+          ],
+          source: "api",
+        });
+      return Promise.resolve({ data: [], source: "api" });
     });
-
     const ui = await AssesseeDetailPage({ params: { id: ID } });
     render(ui);
+    fireEvent.click(screen.getByRole("tab", { name: "Receipts" }));
+    expect(screen.getByText("Bank reconciled")).toBeInTheDocument();
+    expect(screen.getByText("Pending")).toBeInTheDocument();
+    expect(screen.queryByText("No")).not.toBeInTheDocument();
+  });
 
-    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
+  it("offers deep-link actions preselecting this assessee (DETAIL-01)", async () => {
+    mockAllSuccess();
+    const ui = await AssesseeDetailPage({ params: { id: ID } });
+    render(ui);
+    const receipt = screen.getByRole("link", { name: "Record receipt" });
+    expect(receipt).toHaveAttribute("href", `/revenue/receipts?assesseeId=${ID}`);
+    expect(screen.getByRole("link", { name: "Generate bill" })).toHaveAttribute(
+      "href",
+      `/revenue/bills?assesseeId=${ID}`,
+    );
+  });
+
+  it("shows a per-section retry state when only receipts fail, not a false 'No receipts' (DETAIL-03)", async () => {
+    const { fireEvent } = await import("@testing-library/react");
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.endsWith(`/assessees/${ID}`)) return Promise.resolve({ data: ASSESSEE, source: "api" });
+      if (path.includes("/dcb")) return Promise.resolve({ data: DCB, source: "api" });
+      if (path.includes("/receipts")) return Promise.resolve({ data: [], source: "error" });
+      return Promise.resolve({ data: [], source: "api" });
+    });
+    const ui = await AssesseeDetailPage({ params: { id: ID } });
+    render(ui);
+    fireEvent.click(screen.getByRole("tab", { name: "Receipts" }));
+    expect(screen.queryByText("No receipts recorded")).not.toBeInTheDocument();
+    expect(screen.getByText("We couldn't load receipts.")).toBeInTheDocument();
+    // Receipts stat shows "—", not 0.
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("shows an honest error title + retry when the assessee record itself fails (DETAIL-05)", async () => {
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.endsWith(`/assessees/${ID}`)) return Promise.resolve({ data: null, source: "error" });
+      return Promise.resolve({ data: [], source: "error" });
+    });
+    const ui = await AssesseeDetailPage({ params: { id: ID } });
+    render(ui);
+    expect(screen.getAllByText("Assessee unavailable").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("We couldn't load this assessee.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 });

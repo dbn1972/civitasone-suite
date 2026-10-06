@@ -15,7 +15,6 @@ export default function AppError({
       reset={reset}
       backHref="/dashboard"
       backLabel="Back to Dashboard"
-      area="page"
     />
   );
 }

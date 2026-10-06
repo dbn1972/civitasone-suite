@@ -22,6 +22,11 @@ export const createInstalmentBody = z.object({
 
 export const createWriteOffBody = z.object({
   assesseeId: z.string().uuid(),
+  // GAP-REVENUE-WRITE-OFFS-03: optional demand reference + its FY, so the
+  // write-off records which year's demand it reduced. Optional for backward
+  // compatibility; the UI supplies them when a demand is selected.
+  demandId: z.string().uuid().optional(),
+  financialYear: z.string().min(1).max(16).optional(),
   amountMinor: bigintStringCoerce,
   reason: z.string().min(1).max(500),
 });
@@ -31,9 +36,27 @@ export const writeOffDecideBody = z.object({
   reason: z.string().optional(),
 });
 
+// GAP-REVENUE-WRITE-OFFS-02: query for the write-off list / checker queue.
+export const listWriteOffsQuery = z.object({
+  status: z.enum(['pending', 'approved', 'rejected']).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
 export const createRecoveryReferralBody = z.object({
   assesseeId: z.string().uuid(),
   reason: z.string().min(1).max(500),
+});
+
+/**
+ * GAP-REVENUE-RECOVERY-02: query for the recovery register list — standard
+ * pagination plus an optional assesseeId filter (coerced; a missing/blank
+ * value lists all referrals for the tenant).
+ */
+export const recoveryReferralListQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+  assesseeId: z.string().uuid().optional(),
 });
 
 export const createWaiverBody = z.object({

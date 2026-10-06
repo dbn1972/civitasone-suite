@@ -1,7 +1,9 @@
-import { Button, PageHeader, Card, EmptyState } from "@/app/_components/ds";
+import { Button, PageHeader, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { toHumanError } from "@/lib/messages";
 import { AdjustmentCreateForm } from "./AdjustmentCreateForm";
+import { AdjustmentRegister } from "./AdjustmentRegister";
 
 export type AssesseeOption = {
   id: string;
@@ -14,8 +16,23 @@ export type DemandOption = {
   id: string;
   financialYear: string;
   netMinor: string;
+  // GAP-REVENUE-ADJUSTMENTS-03: keep the components the same endpoint already
+  // returns so the clerk can see what makes up the net demand being moved.
+  principalMinor: string;
+  rebateMinor: string;
+  penaltyMinor: string;
+  interestMinor: string;
   status: string;
 };
+
+export type AdjustmentRegisterRow = {
+  id: string;
+  createdAt: string;
+  fromDemandId: string;
+  toDemandId: string;
+  amountMinor: string;
+  reason: string;
+} & Record<string, unknown>;
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
@@ -60,6 +77,10 @@ function mapDemands(payload: unknown): DemandOption[] | null {
       id,
       financialYear: typeof raw.financialYear === "string" ? raw.financialYear : "—",
       netMinor: String(raw.netMinor ?? 0),
+      principalMinor: String(raw.principalMinor ?? 0),
+      rebateMinor: String(raw.rebateMinor ?? 0),
+      penaltyMinor: String(raw.penaltyMinor ?? 0),
+      interestMinor: String(raw.interestMinor ?? 0),
       status: typeof raw.status === "string" ? raw.status : "unknown",
     });
   }
@@ -81,6 +102,34 @@ async function getDemands(assesseeId: string): Promise<LoaderResult<DemandOption
   );
 }
 
+function mapAdjustments(payload: unknown): AdjustmentRegisterRow[] | null {
+  const rows = arrayFromPayload(payload);
+  if (!rows) return null;
+  const mapped: AdjustmentRegisterRow[] = [];
+  for (const raw of rows) {
+    if (!isRecord(raw)) continue;
+    const id = raw.id;
+    if (typeof id !== "string") continue;
+    mapped.push({
+      id,
+      createdAt: typeof raw.createdAt === "string" ? raw.createdAt : "",
+      fromDemandId: typeof raw.fromDemandId === "string" ? raw.fromDemandId : "",
+      toDemandId: typeof raw.toDemandId === "string" ? raw.toDemandId : "",
+      amountMinor: String(raw.amountMinor ?? 0),
+      reason: typeof raw.reason === "string" ? raw.reason : "",
+    });
+  }
+  return mapped;
+}
+
+async function getAdjustments(assesseeId: string): Promise<LoaderResult<AdjustmentRegisterRow[]>> {
+  return fetchJson<unknown, AdjustmentRegisterRow[]>(
+    `/api/v1/revenue/assessees/${encodeURIComponent(assesseeId)}/adjustments?limit=200`,
+    [],
+    { telemetryKey: "revenue.adjustments.register", mapResponse: mapAdjustments },
+  );
+}
+
 export default async function AdjustmentsPage({
   searchParams,
 }: {
@@ -96,6 +145,14 @@ export default async function AdjustmentsPage({
 
   const demands = demandsResult.data;
 
+  const adjustmentsResult = assesseeId
+    ? await getAdjustments(assesseeId)
+    : ({ data: [] as AdjustmentRegisterRow[], source: "api" as const });
+
+  // id -> FY label so the register shows "FY 2025-2026", not a raw demand UUID.
+  const demandFyById: Record<string, string> = {};
+  for (const d of demands) demandFyById[d.id] = `FY ${d.financialYear}`;
+
   const overallSource = assesseesSource === "error" || demandsResult.source === "error" ? "error" : "api";
 
   return (
@@ -107,8 +164,13 @@ export default async function AdjustmentsPage({
         actions={overallSource === "error" ? <DataSourceBadge source="error" /> : null}
       />
 
-      <Card title="Select assessee" padding>
-        <form method="GET" style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
+      {assesseesSource === "error" ? (
+        <Card title="Select assessee" padding>
+          <RefreshErrorState error={toHumanError("load", { area: "assessees" })} backHref="/revenue" />
+        </Card>
+      ) : (
+        <Card title="Select assessee" padding>
+          <form method="GET" style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor="adjustments-assessee-select" style={{ fontSize: 13, fontWeight: 600 }}>
               Assessee
@@ -138,6 +200,7 @@ export default async function AdjustmentsPage({
           </Button>
         </form>
       </Card>
+      )}
 
       {!assesseeId ? (
         <Card title="Adjustments">
@@ -149,18 +212,24 @@ export default async function AdjustmentsPage({
         </Card>
       ) : demandsResult.source === "error" ? (
         <Card title="Demands">
-          <DataSourceBadge source="error" />
+          <RefreshErrorState error={toHumanError("load", { area: "demands" })} backHref="/revenue" />
         </Card>
       ) : (
         <AdjustmentCreateForm assesseeId={assesseeId} demands={demands} />
       )}
 
       <Card title="Adjustment register" padding>
-        <p style={{ margin: 0, fontSize: 13.5, color: "var(--ink2)" }}>
-          revenue-service does not yet expose a list endpoint for adjustments (only{" "}
-          <code>POST /v1/revenue/adjustments</code> exists — see <strong>## BACKEND FOLLOW-UPS</strong> in this PR).
-          Adjustments apply immediately and have no maker-checker decide step.
-        </p>
+        {!assesseeId ? (
+          <EmptyState
+            icon="🔀"
+            title="No assessee selected"
+            message="Select an assessee above to see the balance transfers recorded between their demands."
+          />
+        ) : adjustmentsResult.source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "the adjustment register" })} backHref="/revenue" />
+        ) : (
+          <AdjustmentRegister adjustments={adjustmentsResult.data} demandFyById={demandFyById} />
+        )}
       </Card>
     </div>
   );

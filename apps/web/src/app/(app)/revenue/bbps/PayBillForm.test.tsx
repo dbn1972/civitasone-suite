@@ -15,24 +15,35 @@ describe("PayBillForm", () => {
 
   it("requires all fields before opening the confirm dialog", () => {
     render(<PayBillForm />);
-    fireEvent.click(screen.getByRole("button", { name: "Pay Bill" }));
+    fireEvent.click(screen.getByRole("button", { name: "Record BBPS payment" }));
     expect(screen.getByText(/Enter the assessee identifier/)).toBeInTheDocument();
     expect(screen.getByText(/Enter a valid payment amount/)).toBeInTheDocument();
     expect(screen.getByText(/Enter the BBPS transaction ID/)).toBeInTheDocument();
   });
 
-  it("pays the bill on confirm (happy path)", async () => {
+  it("shows human channel labels, not raw codes (BBPS-04)", () => {
+    render(<PayBillForm />);
+    const select = screen.getByLabelText(/Channel/) as HTMLSelectElement;
+    const labels = Array.from(select.options).map((o) => o.textContent);
+    expect(labels).toContain("Net banking");
+    expect(labels).toContain("UPI");
+    expect(labels).not.toContain("netbanking");
+  });
+
+  it("records the payment on confirm (happy path) with consistent wording (BBPS-05)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ data: { messageId: "msg-2" } }), { status: 202 }),
     );
 
     render(<PayBillForm />);
     fillForm();
-    fireEvent.click(screen.getByRole("button", { name: "Pay Bill" }));
+    fireEvent.click(screen.getByRole("button", { name: "Record BBPS payment" }));
 
-    await waitFor(() => expect(screen.getByText("Submit this BBPS payment?")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Record this BBPS payment?")).toBeInTheDocument());
     expect(screen.getByText(/₹150.50/)).toBeInTheDocument();
-    fireEvent.click(screen.getByText("Pay bill"));
+    // Honest copy: no "dispatches money movement".
+    expect(screen.queryByText(/dispatches money movement/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Record payment"));
 
     await waitFor(() => {
       expect(screen.getByText(/message ID msg-2/)).toBeInTheDocument();
@@ -46,10 +57,10 @@ describe("PayBillForm", () => {
 
     render(<PayBillForm />);
     fillForm();
-    fireEvent.click(screen.getByRole("button", { name: "Pay Bill" }));
+    fireEvent.click(screen.getByRole("button", { name: "Record BBPS payment" }));
 
-    await waitFor(() => expect(screen.getByText("Submit this BBPS payment?")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("Pay bill"));
+    await waitFor(() => expect(screen.getByText("Record this BBPS payment?")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Record payment"));
 
     await waitFor(() => {
       expect(screen.getByText(/Some details weren't accepted\. Check what you entered and try again\./)).toBeInTheDocument();

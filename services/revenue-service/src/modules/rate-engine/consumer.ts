@@ -1,9 +1,11 @@
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
+import { and, eq } from "drizzle-orm";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
 import { rateHeads, rateSlabs, penaltyRules, rebateRules } from "./schema.js";
+import { assertNoSlabOverlap } from "./domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -72,6 +74,33 @@ export function registerRateEngineConsumers(queue: Queue): void {
         effectiveTo?: string | null;
         unitOfMeasure?: string | null;
       };
+
+      // GAP-REVENUE-CONFIG-01: reject a slab that overlaps an existing active
+      // slab for the same rate head + type/band in the same effective window.
+      // Overlapping active slabs make rate lookup non-deterministic → wrong tax
+      // on every demand in the overlap. Server is the authority.
+      const existingSlabs = await tx
+        .select()
+        .from(rateSlabs)
+        .where(and(eq(rateSlabs.tenantId, msg.tenantId), eq(rateSlabs.rateHeadId, p.rateHeadId)));
+      assertNoSlabOverlap(
+        existingSlabs.map((s) => ({
+          slabType: s.slabType,
+          bandFrom: s.bandFrom ?? null,
+          bandTo: s.bandTo ?? null,
+          effectiveFrom: typeof s.effectiveFrom === "string" ? s.effectiveFrom : String(s.effectiveFrom),
+          effectiveTo: s.effectiveTo == null ? null : typeof s.effectiveTo === "string" ? s.effectiveTo : String(s.effectiveTo),
+          isActive: s.isActive,
+        })),
+        {
+          slabType: p.slabType,
+          bandFrom: p.bandFrom ?? null,
+          bandTo: p.bandTo ?? null,
+          effectiveFrom: p.effectiveFrom,
+          effectiveTo: p.effectiveTo ?? null,
+          isActive: true,
+        },
+      );
 
       await tx.insert(rateSlabs).values({
         tenantId: msg.tenantId,

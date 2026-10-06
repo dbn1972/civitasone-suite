@@ -59,6 +59,27 @@ export const FINANCE_ROLES = [
 ] as const;
 
 /**
+ * GAP-REVENUE-HOME-01 / GAP-REVENUE-ASSESSEES-DETAIL-02: roles that revenue-service
+ * grants on its own routes — derived (not assumed) from the service's route
+ * guards: collection/routes.ts REVENUE_ROLES ("revenue_admin", "revenue_officer",
+ * "finance_admin", "super_admin", "tenant_admin") and analytics/routes.ts
+ * READ_ROLES (adds "revenue_analyst"). This is the client-side counterpart to
+ * that server enforcement: a signed-in user with NONE of these roles gets
+ * "access restricted" on direct navigation to any /revenue/* URL, instead of
+ * reading assessee financial/PII data the backend would otherwise 403. Fails
+ * OPEN when roles are unknown (empty array), matching Sidebar/moduleVisibility.
+ */
+export const REVENUE_ROLES = [
+  "revenue_admin",
+  "revenue_officer",
+  "revenue_analyst",
+  "finance_admin",
+  "super_admin",
+  "tenant_admin",
+  "admin",
+] as const;
+
+/**
  * GAP-FINANCE-OPENING-BALANCES-04: roles finance-service lets POST
  * /v1/finance/opening-balances (masters/fy-routes.ts WRITER_ROLES). Other
  * FINANCE_ROLES members (finance_officer, audit_officer, ...) can read the

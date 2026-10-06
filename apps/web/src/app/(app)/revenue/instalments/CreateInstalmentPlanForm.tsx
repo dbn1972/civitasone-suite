@@ -4,6 +4,7 @@ import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
+import { formatMoney, formatIndianDate } from "@/lib/formatters";
 
 type AcceptedResponse = { id?: string; status?: string; correlationId?: string };
 
@@ -14,7 +15,18 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function CreateInstalmentPlanForm({ assesseeId }: { assesseeId: string }) {
+export function CreateInstalmentPlanForm({
+  assesseeId,
+  assesseeLabel,
+  outstandingMinor,
+  demandsFailed = false,
+}: {
+  assesseeId: string;
+  assesseeLabel?: string;
+  /** Outstanding arrears in paise (BigInt string). "0" means nothing to plan. */
+  outstandingMinor?: string;
+  demandsFailed?: boolean;
+}) {
   const router = useRouter();
   const [instalmentCount, setInstalmentCount] = useState("");
   const [startDate, setStartDate] = useState(todayIso());
@@ -37,9 +49,39 @@ export function CreateInstalmentPlanForm({ assesseeId }: { assesseeId: string })
   const countValid = Number.isInteger(parsedCount) && parsedCount >= MIN_INSTALMENTS && parsedCount <= MAX_INSTALMENTS;
   const dateValid = /^\d{4}-\d{2}-\d{2}$/.test(startDate);
 
+  // GAP-REVENUE-INSTALMENTS-01: never commit a schedule against an unseen
+  // amount. Block when arrears could not be loaded, or there is nothing owing.
+  let outstanding = 0n;
+  try {
+    outstanding = outstandingMinor ? BigInt(outstandingMinor) : 0n;
+  } catch {
+    outstanding = 0n;
+  }
+  const hasArrears = outstanding > 0n;
+  const blocked = demandsFailed || !hasArrears;
+
+  // Per-instalment preview (BigInt division; note the remainder).
+  let perInstalmentLabel = "—";
+  let remainderLabel: string | null = null;
+  if (countValid && hasArrears) {
+    const base = outstanding / BigInt(parsedCount);
+    const remainder = outstanding % BigInt(parsedCount);
+    perInstalmentLabel = formatMoney(base.toString());
+    if (remainder > 0n) remainderLabel = formatMoney(remainder.toString());
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
+    if (blocked) {
+      setTone("bad");
+      setMessage(
+        demandsFailed
+          ? "This assessee's arrears could not be loaded, so a plan cannot be created right now."
+          : "This assessee has no outstanding arrears to put on a plan.",
+      );
+      return;
+    }
     const errors: Record<string, string> = {};
     if (!countValid) {
       errors.count = `Enter a whole number of instalments between ${MIN_INSTALMENTS} and ${MAX_INSTALMENTS}.`;
@@ -50,7 +92,6 @@ export function CreateInstalmentPlanForm({ assesseeId }: { assesseeId: string })
     if (Object.keys(errors).length > 0) {
       setTone("bad");
       setMessage("Please correct the highlighted fields.");
-      // Focus the first invalid field in DOM order: instalment count -> start date.
       if (errors.count) {
         countRef.current?.focus();
       } else if (errors.start) {
@@ -156,9 +197,16 @@ export function CreateInstalmentPlanForm({ assesseeId }: { assesseeId: string })
           </div>
 
           <div>
-            <Button type="submit" style={{ minHeight: 44 }} disabled={busy} loading={busy}>
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy || blocked} loading={busy}>
               Create Instalment Plan
             </Button>
+            <p style={{ margin: "6px 0 0", fontSize: 12.5, color: "var(--ink2)" }}>
+              {demandsFailed
+                ? "Outstanding arrears could not be loaded — try again before creating a plan."
+                : hasArrears
+                  ? `Outstanding arrears: ${formatMoney(outstanding.toString())}`
+                  : "No outstanding arrears to put on a plan."}
+            </p>
           </div>
 
           {message && (
@@ -182,8 +230,17 @@ export function CreateInstalmentPlanForm({ assesseeId }: { assesseeId: string })
         errorMessage={dialogError}
         description={
           <>
-            Create an instalment plan of <strong>{instalmentCount || 0}</strong> instalments starting{" "}
-            <strong>{startDate}</strong> for this assessee.
+            Put <strong>{assesseeLabel ?? "this assessee"}</strong>&rsquo;s outstanding arrears of{" "}
+            <strong>{formatMoney(outstanding.toString())}</strong> on a plan of{" "}
+            <strong>{instalmentCount || 0}</strong> instalments (about{" "}
+            <strong>{perInstalmentLabel}</strong> each
+            {remainderLabel ? (
+              <>
+                {" "}
+                — with a <strong>{remainderLabel}</strong> remainder on the first instalment
+              </>
+            ) : null}
+            ), starting <strong>{formatIndianDate(startDate)}</strong>.
           </>
         }
         onConfirm={() => void createPlan()}

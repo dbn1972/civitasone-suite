@@ -95,7 +95,9 @@ describe("RateConfigConsole", () => {
   it("renders the rate heads list on the default tab", () => {
     render(<RateConfigConsole {...baseProps()} />);
     expect(screen.getByText("PT")).toBeInTheDocument();
-    expect(screen.getByText("Property Tax")).toBeInTheDocument();
+    // "Property Tax" now appears as both the name and the prettified category
+    // (GAP-REVENUE-CONFIG-02 prettifies the category column).
+    expect(screen.getAllByText("Property Tax").length).toBeGreaterThanOrEqual(1);
   });
 
   it("renders an empty state (not the error badge) when rate heads are genuinely empty", () => {

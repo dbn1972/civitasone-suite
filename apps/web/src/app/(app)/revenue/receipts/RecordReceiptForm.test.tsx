@@ -62,4 +62,25 @@ describe("RecordReceiptForm", () => {
     });
     expect(screen.queryByText(/API_ERROR: 500/)).not.toBeInTheDocument();
   });
+
+  it("hides instrument/bank for online and requires instrument for cheque (GAP-REVENUE-RECEIPTS-04)", async () => {
+    render(<RecordReceiptForm assesseeId="a1" demands={demands} />);
+
+    // Online (default): no instrument/bank fields rendered.
+    expect(screen.queryByLabelText(/Instrument No\./)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Bank Name/)).not.toBeInTheDocument();
+
+    // Switch to cheque: fields appear.
+    fireEvent.change(screen.getByLabelText(/^Channel/), { target: { value: "cheque" } });
+    expect(screen.getByLabelText(/Instrument No\./)).toBeInTheDocument();
+
+    // Fill the rest but leave instrument blank -> blocked with a field error.
+    fireEvent.change(screen.getByLabelText(/^Demand/), { target: { value: "d1" } });
+    fireEvent.change(screen.getByLabelText(/^Amount/), { target: { value: "100" } });
+    fireEvent.change(screen.getByLabelText(/^Reference/), { target: { value: "CHQ-1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record Receipt" }));
+
+    expect(screen.getByText(/Instrument number is required/)).toBeInTheDocument();
+    expect(screen.queryByText("Record this receipt?")).not.toBeInTheDocument();
+  });
 });

@@ -1,14 +1,22 @@
 "use client";
 
 /**
- * Trade Licenses page — list, create, renew and cancel municipal trade licenses.
+ * Trade Licenses page — issue and track municipal trade licenses.
  * Command writes are async (202); list is read from the revenue-service repo.
+ *
+ * NOTE (GAP-REVENUE-TRADE-LICENSES-03 decision): revenue-service DOES expose
+ * renew (POST /:id/renew) and cancel (POST /:id/cancel) commands, but wiring
+ * row actions for them is a maker-checker-sensitive follow-up tracked
+ * separately. For now the page issues and tracks licences only, and the copy
+ * no longer promises renew/cancel it does not yet surface.
  */
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { Button, PageHeader, StatGrid, StatCard, Card, ErrorState, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
-import { feeRupees } from "./feeRupees";
+import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { rupeesToMinorString } from "@/lib/money";
+import { toHumanError } from "@/lib/messages";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -36,12 +44,30 @@ function TradeLicensesTable({ licenses }: { licenses: TradeLicenseRow[] }) {
   if (licenses.length === 0) { // ux-001-ok: only rendered by the parent's `!loading && !fetchError` branch below -- a fetch failure never reaches this component
     return <p style={{ color: "var(--ink2)", fontSize: 14, margin: 0 }}>No trade licenses found.</p>;
   }
+  // GAP-REVENUE-TRADE-LICENSES-05: map each known status to a distinct pill tone
+  // so expired/cancelled/suspended no longer all look like a generic "bad".
+  const pillClass = (status: string): string => {
+    switch (status) {
+      case "active":
+        return "good";
+      case "pending":
+        return "warn";
+      case "expired":
+      case "suspended":
+        return "warn";
+      case "cancelled":
+      case "rejected":
+        return "bad";
+      default:
+        return "";
+    }
+  };
   return (
     <div style={{ overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
         <thead>
           <tr style={{ borderBottom: "2px solid var(--line)" }}>
-            {["License No.", "Business", "Proprietor", "Type", "Cat.", "Status", "Expiry", "Fee (₹)", "Paid (₹)"].map((h) => (
+            {["License No.", "Business", "Proprietor", "Type", "Cat.", "Status", "Expiry", "Renewals", "Fee", "Paid"].map((h) => (
               <th key={h} style={{ padding: "8px 10px", textAlign: "start", fontWeight: 600, color: "var(--ink2)", whiteSpace: "nowrap" }}>{h}</th>
             ))}
           </tr>
@@ -56,15 +82,16 @@ function TradeLicensesTable({ licenses }: { licenses: TradeLicenseRow[] }) {
               <td style={{ padding: "8px 10px" }}>{l.category}</td>
               <td style={{ padding: "8px 10px" }}>
                 <span
-                  className={`pill ${l.status === "active" ? "good" : l.status === "pending" ? "warn" : "bad"}`}
-                  style={{ fontSize: 11 }}
+                  className={`pill ${pillClass(l.status)}`}
+                  style={{ fontSize: 11, textTransform: "capitalize" }}
                 >
                   {l.status}
                 </span>
               </td>
-              <td style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>{l.expiryDate ?? "—"}</td>
-              <td style={{ padding: "8px 10px", textAlign: "end" }}>{feeRupees(l.feeMinor)}</td>
-              <td style={{ padding: "8px 10px", textAlign: "end" }}>{feeRupees(l.feePaidMinor)}</td>
+              <td style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>{formatIndianDate(l.expiryDate)}</td>
+              <td style={{ padding: "8px 10px", textAlign: "end" }} className="tabular-nums">{l.renewalCount}</td>
+              <td style={{ padding: "8px 10px", textAlign: "end" }} className="tabular-nums">{formatMoney(l.feeMinor)}</td>
+              <td style={{ padding: "8px 10px", textAlign: "end" }} className="tabular-nums">{formatMoney(l.feePaidMinor)}</td>
             </tr>
           ))}
         </tbody>
@@ -81,6 +108,7 @@ type FieldErrors = {
   proprietorName?: string;
   address?: string;
   businessType?: string;
+  fee?: string;
 };
 
 function TradeLicenseCreateForm({ onCreated }: { onCreated: () => void }) {
@@ -93,18 +121,26 @@ function TradeLicenseCreateForm({ onCreated }: { onCreated: () => void }) {
   const [wardNo, setWardNo] = useState("");
   const [businessType, setBusinessType] = useState("");
   const [category, setCategory] = useState("A");
-  const [feeMinor, setFeeMinor] = useState("0");
+  // GAP-REVENUE-TRADE-LICENSES-01: fee is entered in RUPEES (decimal), never
+  // paise, and converted with rupeesToMinorString like every other revenue
+  // money form. Default blank (not "0") so a clerk cannot silently issue a ₹0
+  // licence by leaving the field untouched.
+  const [feeRupees, setFeeRupees] = useState("");
 
   const [errors, setErrors] = useState<FieldErrors>({});
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const licenseNoId = useId();
   const businessNameId = useId();
   const proprietorNameId = useId();
   const addressId = useId();
   const businessTypeId = useId();
+
+  // Paise string the fee converts to, or null when blank/zero/invalid.
+  const feeMinor = rupeesToMinorString(feeRupees);
 
   function validate(): boolean {
     const next: FieldErrors = {};
@@ -113,16 +149,27 @@ function TradeLicenseCreateForm({ onCreated }: { onCreated: () => void }) {
     if (!proprietorName.trim()) next.proprietorName = "Proprietor name is required.";
     if (!address.trim()) next.address = "Address is required.";
     if (!businessType) next.businessType = "Select a business type.";
+    // GAP-REVENUE-TRADE-LICENSES-01 DECISION (safest default, flagged for
+    // product): block ₹0 and malformed fees. Fee determines revenue, so an
+    // accidental zero/empty is treated as an error rather than silently issuing
+    // a free licence. Exempt categories, if any, are a future explicit opt-in.
+    if (!feeMinor) next.fee = "Enter a fee greater than zero (e.g. 2500 or 2500.50).";
     setErrors(next);
     return Object.keys(next).length === 0; // ux-001-ok: client-side form-field validation result, not a loader empty-check
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
     setApiError(null);
     if (!validate()) return;
+    setConfirmOpen(true);
+  }
+
+  async function submitCreate() {
+    if (!feeMinor) return;
     setBusy(true);
+    setApiError(null);
     try {
       await browserJson("v1/revenue/trade-licenses", {
         method: "POST",
@@ -134,12 +181,13 @@ function TradeLicenseCreateForm({ onCreated }: { onCreated: () => void }) {
           wardNo: wardNo.trim() || undefined,
           businessType,
           category,
-          feeMinor: feeMinor.trim() || "0",
+          feeMinor,
         }),
       });
+      setConfirmOpen(false);
       setMessage(`Trade license "${licenseNo.trim()}" submitted for registration.`);
       setLicenseNo(""); setBusinessName(""); setProprietorName("");
-      setAddress(""); setWardNo(""); setBusinessType(""); setCategory("A"); setFeeMinor("0");
+      setAddress(""); setWardNo(""); setBusinessType(""); setCategory("A"); setFeeRupees("");
       setErrors({});
       onCreated();
       router.refresh();
@@ -217,9 +265,14 @@ function TradeLicenseCreateForm({ onCreated }: { onCreated: () => void }) {
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor="tl-fee" style={labelStyle}>Fee (paise)</label>
-              <input id="tl-fee" value={feeMinor} onChange={(e) => setFeeMinor(e.target.value.replace(/\D/g, ""))}
-                inputMode="numeric" style={inputStyle} />
+              <label htmlFor="tl-fee" style={labelStyle}>Fee (₹) {req}</label>
+              <input id="tl-fee" value={feeRupees} onChange={(e) => setFeeRupees(e.target.value)}
+                type="text" inputMode="decimal" placeholder="e.g. 2500.00"
+                aria-required="true" aria-invalid={!!errors.fee || undefined} style={inputStyle} />
+              {feeMinor && !errors.fee && (
+                <p style={{ fontSize: 12, color: "var(--ink2)", margin: 0 }}>= {formatMoney(feeMinor)}</p>
+              )}
+              {errors.fee && <p role="alert" style={errStyle}>{errors.fee}</p>}
             </div>
           </div>
 
@@ -233,6 +286,26 @@ function TradeLicenseCreateForm({ onCreated }: { onCreated: () => void }) {
           {apiError && <p role="alert" className="pill bad" style={{ width: "fit-content" }}>{apiError}</p>}
         </div>
       </Card>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Issue this trade license?"
+        confirmLabel="Issue license"
+        busy={busy}
+        errorMessage={apiError ?? undefined}
+        description={
+          feeMinor ? (
+            <>
+              Issue licence <strong className="mono">{licenseNo.trim()}</strong> to{" "}
+              <strong>{businessName.trim()}</strong> with a fee of <strong>{formatMoney(feeMinor)}</strong>.
+            </>
+          ) : (
+            "Issue this trade license?"
+          )
+        }
+        onConfirm={() => void submitCreate()}
+        onCancel={() => !busy && setConfirmOpen(false)}
+      />
     </form>
   );
 }
@@ -240,6 +313,7 @@ function TradeLicenseCreateForm({ onCreated }: { onCreated: () => void }) {
 // ── Page (Client Component — fetches on mount) ───────────────────────────────
 
 import { useEffect } from "react";
+import { browserFetch } from "@/lib/api/browserClient";
 
 export default function TradeLicensesPage() {
   const [licenses, setLicenses] = useState<TradeLicenseRow[]>([]);
@@ -249,7 +323,12 @@ export default function TradeLicensesPage() {
   async function loadLicenses(signal?: AbortSignal) {
     setLoading(true);
     try {
-      const res = await fetch("/api/v1/revenue/trade-licenses", { signal });
+      // GAP-REVENUE-TRADE-LICENSES-02: route the browser read through the BFF
+      // proxy (/api/proxy/v1/...) like the create form (browserJson) and every
+      // other client call, rather than hitting /api/v1 directly — only the proxy
+      // attaches the httpOnly session, so a direct /api/v1 fetch is unauthenticated
+      // and would 404/401 in the browser.
+      const res = await browserFetch("v1/revenue/trade-licenses", { signal });
       if (!res.ok) throw new Error("fetch failed");
       const json = await res.json() as { data?: TradeLicenseRow[] };
       const arr = Array.isArray(json) ? json : (json.data ?? []);
@@ -272,19 +351,23 @@ export default function TradeLicensesPage() {
   const pendingCount = licenses.filter((l) => l.status === "pending").length;
   const expiredCount = licenses.filter((l) => l.status === "expired").length;
 
+  // GAP-REVENUE-TRADE-LICENSES-06: on a fetch failure show '—' (missing), not a
+  // fabricated 0, in every KPI; only the loading state shows '…'.
+  const kpi = (value: number): string | number => (fetchError ? "—" : loading ? "…" : value);
+
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Trade Licenses"
-        subtitle="Issue, renew, and cancel municipal trade and business licenses."
+        subtitle="Issue and track municipal trade and business licenses."
         back="/revenue"
       />
 
       <StatGrid>
-        <StatCard icon="📜" iconBg="var(--panel)" label="Total Licenses" value={loading ? "…" : licenses.length} />
-        <StatCard icon="✅" iconBg="var(--panel)" label="Active" value={loading ? "…" : activeCount} />
-        <StatCard icon="⏳" iconBg="var(--panel)" label="Pending" value={loading ? "…" : pendingCount} />
-        <StatCard icon="⚠️" iconBg="var(--panel)" label="Expired" value={loading ? "…" : expiredCount} />
+        <StatCard icon="📜" iconBg="var(--panel)" label="Total Licenses" value={kpi(licenses.length)} />
+        <StatCard icon="✅" iconBg="var(--panel)" label="Active" value={kpi(activeCount)} />
+        <StatCard icon="⏳" iconBg="var(--panel)" label="Pending" value={kpi(pendingCount)} />
+        <StatCard icon="⚠️" iconBg="var(--panel)" label="Expired" value={kpi(expiredCount)} />
       </StatGrid>
 
       <TradeLicenseCreateForm onCreated={loadLicenses} />
@@ -293,9 +376,11 @@ export default function TradeLicensesPage() {
         {loading ? (
           <div className="skeleton" aria-label="Loading licenses…" />
         ) : fetchError ? (
-          <p role="alert" style={{ color: "var(--bad)", fontSize: 14, margin: 0 }}>
-            Failed to load trade licenses. Please try again.
-          </p>
+          <ErrorState
+            error={toHumanError("load", { area: "trade licenses" })}
+            onRetry={() => void loadLicenses()}
+            backHref="/revenue"
+          />
         ) : (
           <TradeLicensesTable licenses={licenses} />
         )}

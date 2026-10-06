@@ -69,7 +69,11 @@ export function AdjustmentCreateForm({ assesseeId, demands }: { assesseeId: stri
     } else if (fromDemand) {
       try {
         if (BigInt(minorAmount) > BigInt(fromDemand.netMinor)) {
-          errors.amount = `Amount cannot exceed the source demand's outstanding balance of ${formatMoney(fromDemand.netMinor)}.`;
+          // The UI only has the gross "net demand" figure; the server caps
+          // against the live DCB outstanding balance (demand − receipts), which
+          // can be lower. Name the figure we actually have, and let the server
+          // enforce the authoritative limit (GAP-REVENUE-ADJUSTMENTS-03).
+          errors.amount = `Amount cannot exceed the source demand's net demand of ${formatMoney(fromDemand.netMinor)}.`;
         }
       } catch {
         // fromDemand.netMinor failed to parse as a bigint — let the server validate.
@@ -100,8 +104,14 @@ export function AdjustmentCreateForm({ assesseeId, demands }: { assesseeId: stri
     if (!fromDemand || !toDemand || !minorAmount) return;
     setBusy(true);
     setDialogError(undefined);
+    // Capture the human-meaningful details before the form resets so the
+    // success message can name them (GAP-REVENUE-ADJUSTMENTS-02) instead of a
+    // raw adjustment UUID.
+    const movedAmount = formatMoney(minorAmount);
+    const fromFy = fromDemand.financialYear;
+    const toFy = toDemand.financialYear;
     try {
-      const res = await browserJson<AcceptedResponse>("v1/revenue/adjustments", {
+      await browserJson<AcceptedResponse>("v1/revenue/adjustments", {
         method: "POST",
         body: JSON.stringify({
           assesseeId,
@@ -113,7 +123,7 @@ export function AdjustmentCreateForm({ assesseeId, demands }: { assesseeId: stri
       });
       setConfirmOpen(false);
       setTone("good");
-      setMessage(res.id ? `Adjustment applied (id ${res.id}).` : "Adjustment applied.");
+      setMessage(`Moved ${movedAmount} from FY ${fromFy} to FY ${toFy}.`);
       setFromDemandId("");
       setToDemandId("");
       setAmount("");
@@ -160,6 +170,23 @@ export function AdjustmentCreateForm({ assesseeId, demands }: { assesseeId: stri
                 <p id={fromErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
                   {fieldErrors.from}
                 </p>
+              )}
+              {fromDemand && (
+                <dl
+                  aria-label="Source demand breakdown"
+                  style={{ margin: "4px 0 0", display: "grid", gridTemplateColumns: "auto 1fr", gap: "2px 10px", fontSize: 12.5, color: "var(--ink2)" }}
+                >
+                  <dt>Principal</dt>
+                  <dd style={{ margin: 0, textAlign: "end" }}>{formatMoney(fromDemand.principalMinor)}</dd>
+                  <dt>Rebate</dt>
+                  <dd style={{ margin: 0, textAlign: "end" }}>−{formatMoney(fromDemand.rebateMinor)}</dd>
+                  <dt>Penalty</dt>
+                  <dd style={{ margin: 0, textAlign: "end" }}>{formatMoney(fromDemand.penaltyMinor)}</dd>
+                  <dt>Interest</dt>
+                  <dd style={{ margin: 0, textAlign: "end" }}>{formatMoney(fromDemand.interestMinor)}</dd>
+                  <dt style={{ fontWeight: 600 }}>Net demand</dt>
+                  <dd style={{ margin: 0, textAlign: "end", fontWeight: 600 }}>{formatMoney(fromDemand.netMinor)}</dd>
+                </dl>
               )}
             </div>
 

@@ -27,6 +27,12 @@ describe("AssesseeCreateForm", () => {
     expect(screen.getByText("Select an assessee type.")).toBeInTheDocument();
   });
 
+  it("shows a DPDP purpose/consent note for contact PII (ASSESSEES-03)", () => {
+    render(<AssesseeCreateForm />);
+    expect(screen.getByText(/used only to send this assessee their bills/i)).toBeInTheDocument();
+    expect(screen.getByText(/DPDP Act, 2023/)).toBeInTheDocument();
+  });
+
   it("registers an assessee on confirm (happy path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ data: { status: "accepted" } }), { status: 202 }),

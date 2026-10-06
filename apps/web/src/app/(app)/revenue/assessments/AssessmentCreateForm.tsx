@@ -4,6 +4,7 @@ import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
+import { rupeesToMinorString } from "@/lib/money";
 
 const FY_PATTERN = /^\d{4}-\d{2}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -14,12 +15,6 @@ type FieldErrors = {
   financialYear?: string;
   baseValue?: string;
 };
-
-function rupeesToPaiseString(val: string): string {
-  const n = parseFloat(val);
-  if (!Number.isFinite(n) || n < 0) return "0";
-  return Math.round(n * 100).toString();
-}
 
 export function AssessmentCreateForm() {
   const router = useRouter();
@@ -54,8 +49,8 @@ export function AssessmentCreateForm() {
     if (!UUID_PATTERN.test(assesseeId.trim())) next.assesseeId = "Enter a valid assessee ID (UUID).";
     if (!UUID_PATTERN.test(rateHeadId.trim())) next.rateHeadId = "Enter a valid rate head ID (UUID).";
     if (!FY_PATTERN.test(financialYear.trim())) next.financialYear = "Financial year must be in YYYY-YY format, e.g. 2026-27.";
-    if (!baseValue.trim() || Number.isNaN(parseFloat(baseValue)) || parseFloat(baseValue) < 0) {
-      next.baseValue = "Enter a valid non-negative base value (₹).";
+    if (rupeesToMinorString(baseValue) === null) {
+      next.baseValue = "Enter an amount in rupees with up to 2 decimals, e.g. 850000 or 8500.50.";
     }
     setErrors(next);
     if (next.assesseeId) { assesseeRef.current?.focus(); return false; }
@@ -76,6 +71,13 @@ export function AssessmentCreateForm() {
   async function createAssessment() {
     setBusy(true);
     setDialogError(undefined);
+    const baseValueMinor = rupeesToMinorString(baseValue);
+    if (baseValueMinor === null) {
+      setBusy(false);
+      setConfirmOpen(false);
+      setErrors((e) => ({ ...e, baseValue: "Enter an amount in rupees with up to 2 decimals, e.g. 850000 or 8500.50." }));
+      return;
+    }
     try {
       await browserJson<{ status: string }>("v1/revenue/assessments", {
         method: "POST",
@@ -83,7 +85,7 @@ export function AssessmentCreateForm() {
           assesseeId: assesseeId.trim(),
           rateHeadId: rateHeadId.trim(),
           financialYear: financialYear.trim(),
-          baseValue: rupeesToPaiseString(baseValue),
+          baseValue: baseValueMinor,
         }),
       });
       setConfirmOpen(false);

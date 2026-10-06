@@ -4,6 +4,7 @@ import { useId, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
+import { rupeesToMinorString, percentToBps } from "@/lib/money";
 import type { AcceptedResponse, SlabType } from "./types";
 
 interface CreateRateSlabFormProps {
@@ -19,22 +20,19 @@ const SLAB_TYPES: { value: SlabType; label: string }[] = [
 
 type InvalidField = "bandFrom" | "rateValue" | "effectiveFrom" | null;
 
-/** Rupees (as typed by the clerk) -> paise integer string. Never double-divide. */
+/** Rupees (as typed by the clerk) -> paise integer string, string-based (no
+ * float math): rejects exponents, >2 decimals and negatives. Zero is allowed —
+ * a band floor or a nil rate line is legitimate. */
 function rupeesToPaiseString(input: string): string | null {
-  const trimmed = input.trim();
-  if (!trimmed) return null;
-  const n = Number(trimmed);
-  if (!Number.isFinite(n) || n < 0) return null;
-  return Math.round(n * 100).toString();
+  return rupeesToMinorString(input, { allowZero: true });
 }
 
-/** Percent (as typed by the clerk) -> basis-points integer string. */
+/** Percent (as typed by the clerk) -> basis-points integer string, string-based.
+ * Caps at 100% (a rate slab percent cannot exceed 100). */
 function percentToBpsString(input: string): string | null {
-  const trimmed = input.trim();
-  if (!trimmed) return null;
-  const n = Number(trimmed);
-  if (!Number.isFinite(n) || n < 0 || n > 100) return null;
-  return Math.round(n * 100).toString();
+  const bps = percentToBps(input);
+  if (bps === null || bps > 10000) return null;
+  return bps.toString();
 }
 
 export function CreateRateSlabForm({ rateHeadId, rateHeadLabel }: CreateRateSlabFormProps) {
@@ -82,6 +80,26 @@ export function CreateRateSlabForm({ rateHeadId, rateHeadLabel }: CreateRateSlab
       setFieldErrorText("Band From (₹) is required for band slabs and must be a non-negative amount.");
       bandFromRef.current?.focus();
       return;
+    }
+
+    // GAP-REVENUE-CONFIG-04: a present Band To must be strictly greater than
+    // Band From (BigInt comparison, no float). An unparsable Band To is also
+    // rejected rather than silently dropped.
+    if (slabType === "band" && bandTo.trim() !== "") {
+      const bandToPaise = rupeesToPaiseString(bandTo);
+      const bandFromPaise = rupeesToPaiseString(bandFrom);
+      if (bandToPaise === null) {
+        setInvalidField("bandFrom");
+        setFieldErrorText("Band To (₹) must be a non-negative amount, or left blank for an open-ended band.");
+        bandFromRef.current?.focus();
+        return;
+      }
+      if (bandFromPaise !== null && BigInt(bandToPaise) <= BigInt(bandFromPaise)) {
+        setInvalidField("bandFrom");
+        setFieldErrorText("Band To (₹) must be greater than Band From (₹).");
+        bandFromRef.current?.focus();
+        return;
+      }
     }
 
     const rateValuePaiseOrBps =

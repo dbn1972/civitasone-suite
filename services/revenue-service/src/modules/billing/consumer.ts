@@ -45,6 +45,17 @@ export function registerBillingConsumers(rawQueue: Queue): void {
         .select()
         .from(bills)
         .where(eq(bills.tenantId, msg.tenantId));
+
+      // GAP-REVENUE-BILLS-01: idempotency per assessment. A double-click /
+      // retry arrives as a fresh messageId (markProcessed won't catch it) but
+      // the same assessmentId. If a bill already exists for this assessment,
+      // this is a duplicate submission: no-op rather than issuing a second
+      // bill. The DB also enforces this via uq_bills_tenant_assessment
+      // (migration 0013).
+      if (existingBills.some((b) => (b as { assessmentId?: string }).assessmentId === assessmentId)) {
+        return; // bill already issued for this assessment
+      }
+
       const billSequence = existingBills.length + 1;
 
       const billDate = new Date().toISOString().split("T")[0]!;

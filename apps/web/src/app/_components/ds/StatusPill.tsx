@@ -265,6 +265,21 @@ const STATUS_MAP: Record<string, PillVariant> = {
   presented: "warn",
   issued: "info", // explicit: this is the neutral starting state, not an unmapped word
 
+  // GAP-REVENUE-BILLS-03: revenue demand/bill lifecycle words the Bills &
+  // Demands tables render as pills. A demand/bill is "raised" (newly created,
+  // awaiting payment -> warn), fully "paid" (good, above) or "cancelled" (bad,
+  // above). "partially paid" (-> warn) and "generated" are mapped by the
+  // billing/GST gap block below ("generated" is "good" there: an active IRN is
+  // a successful terminal state; one key cannot carry two meanings, so the
+  // earlier-merged billing mapping stands). Without these keys they fell
+  // through to the neutral "info" pill.
+  raised: "warn",
+  // GAP-REVENUE-RECOVERY-02: recovery referral lifecycle (arrears.recovery_
+  // referrals.status: referred | accepted | resolved). "resolved" already maps
+  // to good above; "referred" is the live, attention-needing coercive state
+  // (warn) ("accepted" already maps to good above as the apar sign-off word).
+  referred: "warn",
+
 
   // Platform admin lists (GAP-ADMIN-ENTITLEMENTS-06, GAP-ADMIN-GATEWAYS-04/05): only
   // unambiguous words. "revoked" entitlement; communication-gateway health. An

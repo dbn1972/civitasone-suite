@@ -18,6 +18,8 @@ const WRITE_OFF: WriteOffRecord = {
   reason: "Unrecoverable after legal proceedings",
   status: "pending",
   makerUserId: "maker-1",
+  demandId: null,
+  financialYear: null,
 };
 
 describe("WriteOffDecideForm", () => {
@@ -99,5 +101,51 @@ describe("WriteOffDecideForm", () => {
       expect(screen.getByText(/This information was changed by someone else\. Refresh to see the latest version, then try again\./)).toBeInTheDocument();
     });
     expect(screen.queryByText(/MAKER_CHECKER_VIOLATION|separation of duties/)).not.toBeInTheDocument();
+  });
+
+  it("disables Approve/Reject when the signed-in user is the maker, and never opens the dialog (DECIDE-01)", () => {
+    render(
+      <WriteOffDecideForm writeOffId={WRITE_OFF_ID} writeOff={WRITE_OFF} currentUserId="maker-1" />,
+    );
+    const approve = screen.getByRole("button", { name: `Approve write-off ${WRITE_OFF_ID.slice(0, 8)}` });
+    expect(approve).toBeDisabled();
+    expect(screen.getByRole("button", { name: `Reject write-off ${WRITE_OFF_ID.slice(0, 8)}` })).toBeDisabled();
+    expect(screen.getByText(/you raised this write-off/i)).toBeInTheDocument();
+    fireEvent.click(approve);
+    expect(screen.queryByText("Approve this write-off?")).not.toBeInTheDocument();
+  });
+
+  it("keeps Approve/Reject enabled for a different officer (DECIDE-01)", () => {
+    render(
+      <WriteOffDecideForm writeOffId={WRITE_OFF_ID} writeOff={WRITE_OFF} currentUserId="checker-9" />,
+    );
+    expect(screen.getByRole("button", { name: `Approve write-off ${WRITE_OFF_ID.slice(0, 8)}` })).toBeEnabled();
+  });
+
+  it("hides Approve/Reject for an already-decided write-off and shows its status (DECIDE-03)", () => {
+    render(
+      <WriteOffDecideForm
+        writeOffId={WRITE_OFF_ID}
+        writeOff={{ ...WRITE_OFF, status: "approved" }}
+        currentUserId="checker-9"
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /Approve write-off/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/Already decided/)).toBeInTheDocument();
+  });
+
+  it("uses the assessee name in the confirm dialog, not an 8-char id (DECIDE-02)", async () => {
+    render(
+      <WriteOffDecideForm
+        writeOffId={WRITE_OFF_ID}
+        writeOff={WRITE_OFF}
+        currentUserId="checker-9"
+        assesseeName="Ravi Kumar"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: `Approve write-off ${WRITE_OFF_ID.slice(0, 8)}` }));
+    await waitFor(() => expect(screen.getByText("Approve this write-off?")).toBeInTheDocument());
+    expect(screen.getByText("Ravi Kumar")).toBeInTheDocument();
+    expect(screen.queryByText(WRITE_OFF.assesseeId.slice(0, 8))).not.toBeInTheDocument();
   });
 });

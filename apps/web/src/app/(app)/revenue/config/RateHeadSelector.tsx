@@ -1,6 +1,6 @@
 "use client";
 
-import { useId } from "react";
+import { useId, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { RateHeadRow } from "./types";
 
@@ -17,6 +17,7 @@ interface RateHeadSelectorProps {
 export function RateHeadSelector({ rateHeads, selectedId }: RateHeadSelectorProps) {
   const router = useRouter();
   const id = useId();
+  const [, startTransition] = useTransition();
 
   if (rateHeads.length === 0) {
     return null;
@@ -32,7 +33,13 @@ export function RateHeadSelector({ rateHeads, selectedId }: RateHeadSelectorProp
         value={selectedId ?? ""}
         aria-required="true"
         onChange={(e) => {
-          router.push(`/revenue/config?rateHeadId=${encodeURIComponent(e.target.value)}`);
+          const next = e.target.value;
+          // GAP-REVENUE-CONFIG-05: router.replace (not push) + scroll:false, in
+          // a transition — switching the selected head must not spam the back
+          // history nor jump the scroll position back to the top.
+          startTransition(() => {
+            router.replace(`/revenue/config?rateHeadId=${encodeURIComponent(next)}`, { scroll: false });
+          });
         }}
         style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
       >

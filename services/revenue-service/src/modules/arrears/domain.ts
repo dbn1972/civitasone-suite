@@ -59,6 +59,62 @@ export function validateWriteOff(amount: bigint, outstanding: bigint): void {
   }
 }
 
+/** Waivable component(s) of a demand selected on a waiver request. */
+export type WaiverComponent = "penalty" | "interest" | "both";
+
+/**
+ * The server-authoritative cap for a waiver against a demand. A waiver forgives
+ * accrued penalty and/or interest (never principal), so the cap is the chosen
+ * component's outstanding amount on that demand: `penalty`, `interest`, or
+ * their sum for `both`. Mirrors the web WaiverForm `capFor` helper
+ * (GAP-REVENUE-WAIVERS-01) so the server enforces the same ceiling the UI shows.
+ */
+export function waiverCap(
+  component: WaiverComponent,
+  penaltyMinor: bigint,
+  interestMinor: bigint,
+): bigint {
+  if (component === "penalty") return penaltyMinor;
+  if (component === "interest") return interestMinor;
+  return penaltyMinor + interestMinor; // both
+}
+
+/**
+ * GAP-REVENUE-WAIVERS-01 (server-side cap): validate a waiver amount against the
+ * waivable cap of its demand. Previously the penalty/interest cap was enforced
+ * ONLY in the web form, so a crafted API request could waive more than the
+ * demand's accrued penalty/interest (even negative or over-cap amounts). The
+ * command consumer is the authority: the amount must be strictly positive and
+ * must not exceed `cap` (the penalty/interest component[s] being waived).
+ */
+export function validateWaiver(amount: bigint, cap: bigint): void {
+  if (amount <= 0n) {
+    throw new DomainError("INVALID_AMOUNT", "Waiver amount must be positive");
+  }
+  if (amount > cap) {
+    throw new DomainError(
+      "WAIVER_EXCEEDS_CAP",
+      `Waiver ${amount.toString()} exceeds waivable amount ${cap.toString()}`,
+    );
+  }
+}
+
+/**
+ * GAP-REVENUE-RECOVERY-01: a coercive recovery referral may only be raised
+ * against an assessee that actually has outstanding (overdue) arrears. Fail
+ * closed — never refer a citizen with nothing owing (wrongful coercive action
+ * / legal liability). `outstanding` is the assessee's current DCB balance in
+ * paise; it must be strictly positive.
+ */
+export function validateRecoveryReferral(outstanding: bigint): void {
+  if (outstanding <= 0n) {
+    throw new DomainError(
+      "NO_OVERDUE_ARREARS",
+      "Recovery referral requires outstanding arrears; this assessee has none",
+    );
+  }
+}
+
 /**
  * Add N months to a date string (YYYY-MM-DD).
  */

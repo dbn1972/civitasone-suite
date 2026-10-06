@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
+import { REVENUE_CHANNELS, channelLabel, channelNeedsInstrument } from "@/lib/revenue/channels";
 import type { DemandOption } from "./page";
 
 type AcceptedResponse = { id?: string; status?: string; correlationId?: string };
 
-const CHANNELS = ["online", "counter", "cheque", "dd", "pos"] as const;
+const CHANNELS = REVENUE_CHANNELS;
 
 /** Convert a rupees-and-paise decimal string (clerk input) into a minor-unit integer string. */
 function rupeesToMinorString(v: string): string | null {
@@ -56,6 +57,23 @@ export function RecordReceiptForm({ assesseeId, demands }: { assesseeId: string;
   const selectedDemand = eligibleDemands.find((d) => d.id === demandId);
   const minorAmount = rupeesToMinorString(amount);
   const noEligibleDemands = eligibleDemands.length === 0;
+  const needsInstrument = channelNeedsInstrument(channel);
+
+  function handleChannelChange(next: (typeof CHANNELS)[number]) {
+    setChannel(next);
+    // Instrument/bank are only meaningful for cheque/dd; clear them when the
+    // channel no longer carries an instrument so stale values aren't posted.
+    if (!channelNeedsInstrument(next)) {
+      setInstrumentNo("");
+      setBankName("");
+      setFieldErrors((prev) => {
+        if (!prev.instrument) return prev;
+        const next = { ...prev };
+        delete next.instrument;
+        return next;
+      });
+    }
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -64,6 +82,10 @@ export function RecordReceiptForm({ assesseeId, demands }: { assesseeId: string;
     if (!demandId) errors.demand = "Select a demand.";
     if (!minorAmount) errors.amount = "Enter a valid amount greater than zero.";
     if (!reference.trim()) errors.reference = "Reference / UTR is required.";
+    // Cheque / demand-draft receipts must carry the instrument number.
+    if (channelNeedsInstrument(channel) && !instrumentNo.trim()) {
+      errors.instrument = "Instrument number is required for cheque / demand-draft receipts.";
+    }
     setFieldErrors(errors);
 
     if (Object.keys(errors).length > 0) {
@@ -96,8 +118,9 @@ export function RecordReceiptForm({ assesseeId, demands }: { assesseeId: string;
           amountMinor: minorAmount,
           channel,
           reference: reference.trim(),
-          instrumentNo: instrumentNo.trim() || undefined,
-          bankName: bankName.trim() || undefined,
+          // Instrument/bank are only sent for cheque/dd — never for online/counter/pos.
+          instrumentNo: needsInstrument && instrumentNo.trim() ? instrumentNo.trim() : undefined,
+          bankName: needsInstrument && bankName.trim() ? bankName.trim() : undefined,
         }),
       });
       setConfirmOpen(false);
@@ -195,13 +218,13 @@ export function RecordReceiptForm({ assesseeId, demands }: { assesseeId: string;
               <select
                 id={channelId}
                 value={channel}
-                onChange={(e) => setChannel(e.target.value as (typeof CHANNELS)[number])}
+                onChange={(e) => handleChannelChange(e.target.value as (typeof CHANNELS)[number])}
                 aria-required="true"
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               >
                 {CHANNELS.map((c) => (
                   <option key={c} value={c}>
-                    {c}
+                    {channelLabel(c)}
                   </option>
                 ))}
               </select>
@@ -232,31 +255,46 @@ export function RecordReceiptForm({ assesseeId, demands }: { assesseeId: string;
               )}
             </div>
 
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={instrumentId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Instrument No. (optional)
-              </label>
-              <input
-                id={instrumentId}
-                value={instrumentNo}
-                onChange={(e) => setInstrumentNo(e.target.value)}
-                maxLength={64}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
-              />
-            </div>
+            {needsInstrument && (
+              <div style={{ display: "grid", gap: 6 }}>
+                <label htmlFor={instrumentId} style={{ fontSize: 13, fontWeight: 600 }}>
+                  Instrument No.{" "}
+                  <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>
+                    *
+                  </span>
+                </label>
+                <input
+                  id={instrumentId}
+                  value={instrumentNo}
+                  onChange={(e) => setInstrumentNo(e.target.value)}
+                  maxLength={64}
+                  aria-required="true"
+                  aria-invalid={!!fieldErrors.instrument || undefined}
+                  aria-describedby={fieldErrors.instrument ? `${instrumentId}-error` : undefined}
+                  style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                />
+                {fieldErrors.instrument && (
+                  <p id={`${instrumentId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+                    {fieldErrors.instrument}
+                  </p>
+                )}
+              </div>
+            )}
 
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={bankId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Bank Name (optional)
-              </label>
-              <input
-                id={bankId}
-                value={bankName}
-                onChange={(e) => setBankName(e.target.value)}
-                maxLength={128}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
-              />
-            </div>
+            {needsInstrument && (
+              <div style={{ display: "grid", gap: 6 }}>
+                <label htmlFor={bankId} style={{ fontSize: 13, fontWeight: 600 }}>
+                  Bank Name (optional)
+                </label>
+                <input
+                  id={bankId}
+                  value={bankName}
+                  onChange={(e) => setBankName(e.target.value)}
+                  maxLength={128}
+                  style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                />
+              </div>
+            )}
           </div>
 
           <div>
@@ -298,7 +336,7 @@ export function RecordReceiptForm({ assesseeId, demands }: { assesseeId: string;
         description={
           selectedDemand && minorAmount ? (
             <>
-              Record a receipt of <strong>{formatMoney(minorAmount)}</strong> via <strong>{channel}</strong> against
+              Record a receipt of <strong>{formatMoney(minorAmount)}</strong> via <strong>{channelLabel(channel)}</strong> against
               demand FY <strong>{selectedDemand.financialYear}</strong>.
             </>
           ) : (

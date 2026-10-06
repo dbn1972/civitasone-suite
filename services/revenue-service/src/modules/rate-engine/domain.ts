@@ -304,6 +304,65 @@ export function assertMakerChecker(makerUserId: string, checkerUserId: string): 
 }
 
 /**
+ * GAP-REVENUE-CONFIG-01: reject a new rate slab that overlaps an existing
+ * active slab for the same rate head + slab type. Two overlapping active slabs
+ * make lookupEffectiveSlab() non-deterministic (it returns matching[0]),
+ * silently picking one — so every demand computed in the overlap window could
+ * use the wrong rate. The server is the authority on this (the client hint in
+ * CreateRateSlabForm is advisory only).
+ *
+ * Overlap = the effective-date windows intersect AND (for band slabs) the
+ * [bandFrom, bandTo) ranges intersect. Flat/ad_valorem slabs have no band, so
+ * any effective-date overlap for the same (head, type) is a conflict.
+ */
+export interface SlabWindow {
+  slabType: string;
+  bandFrom: bigint | null;
+  bandTo: bigint | null;
+  effectiveFrom: string; // YYYY-MM-DD
+  effectiveTo: string | null;
+  isActive: boolean;
+}
+
+function datesOverlap(aFrom: string, aTo: string | null, bFrom: string, bTo: string | null): boolean {
+  const aStart = Date.parse(`${aFrom}T00:00:00Z`);
+  const aEnd = aTo ? Date.parse(`${aTo}T00:00:00Z`) : Infinity;
+  const bStart = Date.parse(`${bFrom}T00:00:00Z`);
+  const bEnd = bTo ? Date.parse(`${bTo}T00:00:00Z`) : Infinity;
+  // Half-open windows [start, end): they overlap when each starts before the
+  // other ends.
+  return aStart < bEnd && bStart < aEnd;
+}
+
+function bandsOverlap(aFrom: bigint | null, aTo: bigint | null, bFrom: bigint | null, bTo: bigint | null): boolean {
+  const aStart = aFrom ?? 0n;
+  const aEnd = aTo; // null = open-ended (+inf)
+  const bStart = bFrom ?? 0n;
+  const bEnd = bTo;
+  const aEndCmp = aEnd === null; // open
+  const bEndCmp = bEnd === null;
+  // [aStart, aEnd) overlaps [bStart, bEnd)
+  const aBeforeB = aEndCmp ? false : (aEnd as bigint) <= bStart;
+  const bBeforeA = bEndCmp ? false : (bEnd as bigint) <= aStart;
+  return !(aBeforeB || bBeforeA);
+}
+
+export function assertNoSlabOverlap(existing: SlabWindow[], candidate: SlabWindow): void {
+  for (const s of existing) {
+    if (!s.isActive) continue;
+    if (s.slabType !== candidate.slabType) continue;
+    if (!datesOverlap(s.effectiveFrom, s.effectiveTo, candidate.effectiveFrom, candidate.effectiveTo)) continue;
+    if (candidate.slabType === "band") {
+      if (!bandsOverlap(s.bandFrom, s.bandTo, candidate.bandFrom, candidate.bandTo)) continue;
+    }
+    throw new DomainError(
+      "SLAB_OVERLAP",
+      "A rate slab for this rate head already covers an overlapping band/effective period",
+    );
+  }
+}
+
+/**
  * Full compute: given rate head config, base value, dates, exemptions → tax breakdown.
  *
  * This is the core deterministic function that must produce byte-identical results

@@ -1,7 +1,9 @@
 import { Button, PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { RefreshErrorState } from "@/app/_components/ds/RefreshErrorState";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
+import { channelLabel, isCollectedStatus } from "@/lib/revenue/channels";
 import { RecordReceiptForm } from "./RecordReceiptForm";
 
 export type AssesseeOption = {
@@ -148,6 +150,9 @@ export default async function ReceiptsPage({
       : "api";
 
   const totalCollectedMinor = receipts.reduce((sum, r) => {
+    // GAP-REVENUE-RECEIPTS-02: only standing collections (captured/reconciled)
+    // count toward Total Collected; a reversed receipt must not inflate it.
+    if (!isCollectedStatus(r.status)) return sum;
     try {
       return sum + BigInt(r.amountMinor);
     } catch {
@@ -156,7 +161,11 @@ export default async function ReceiptsPage({
   }, 0n);
   const reconciledCount = receipts.filter((r) => r.status === "reconciled").length;
 
-  const receiptRows = receipts.map((r) => ({ ...r, createdAtDisplay: formatIndianDate(r.createdAt) }));
+  const receiptRows = receipts.map((r) => ({
+    ...r,
+    channelDisplay: channelLabel(r.channel),
+    createdAtDisplay: formatIndianDate(r.createdAt),
+  }));
 
   const receiptColumns: {
     key: keyof (typeof receiptRows)[number] & string;
@@ -165,7 +174,7 @@ export default async function ReceiptsPage({
     cellType?: "status" | "amount";
   }[] = [
     { key: "receiptNo", label: "Receipt No." },
-    { key: "channel", label: "Channel" },
+    { key: "channelDisplay", label: "Channel" },
     { key: "reference", label: "Reference" },
     { key: "amountMinor", label: "Amount", align: "right", cellType: "amount" },
     { key: "status", label: "Status", cellType: "status" },
@@ -224,16 +233,47 @@ export default async function ReceiptsPage({
       ) : (
         <>
           <StatGrid>
-            <StatCard icon="🧾" iconBg="#e6f0ff" label="Receipts" value={receipts.length} />
-            <StatCard icon="💰" iconBg="#e6f7f0" label="Total Collected" value={formatMoney(totalCollectedMinor)} />
-            <StatCard icon="🔗" iconBg="#fff2e6" label="Reconciled" value={reconciledCount} />
+            <StatCard
+              icon="🧾"
+              iconBg="#e6f0ff"
+              label="Receipts"
+              value={receiptsResult.source === "error" ? null : receipts.length}
+            />
+            <StatCard
+              icon="💰"
+              iconBg="#e6f7f0"
+              label="Total Collected"
+              value={receiptsResult.source === "error" ? null : formatMoney(totalCollectedMinor)}
+            />
+            <StatCard
+              icon="🔗"
+              iconBg="#fff2e6"
+              label="Reconciled"
+              value={receiptsResult.source === "error" ? null : reconciledCount}
+            />
           </StatGrid>
 
-          <RecordReceiptForm assesseeId={assesseeId} demands={demands} />
+          {demandsResult.source === "error" ? (
+            <Card title="Record Receipt" padding>
+              <p role="status" style={{ margin: 0, fontSize: 13, color: "var(--ink2)" }}>
+                We couldn&rsquo;t load this assessee&rsquo;s demands, so a receipt can&rsquo;t be recorded right now.
+                Retry below.
+              </p>
+            </Card>
+          ) : (
+            <RecordReceiptForm assesseeId={assesseeId} demands={demands} />
+          )}
 
           <Card title="Receipts">
-            {receiptsResult.source === "error" && receipts.length === 0 ? (
-              <DataSourceBadge source="error" />
+            {receiptsResult.source === "error" ? (
+              <RefreshErrorState
+                error={{
+                  what: "We couldn't load this assessee's receipts.",
+                  next: "Retry in a moment. If it keeps failing, the revenue service may be unavailable.",
+                  actions: ["retry", "back"],
+                }}
+                backHref="/revenue"
+              />
             ) : (
               <DataTable<(typeof receiptRows)[number]>
                 columns={receiptColumns}

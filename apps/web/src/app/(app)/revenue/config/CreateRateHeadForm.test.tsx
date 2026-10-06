@@ -57,4 +57,26 @@ describe("CreateRateHeadForm", () => {
     });
     expect(screen.queryByText(/API_ERROR: 500/)).not.toBeInTheDocument();
   });
+
+  it("normalizes the category to canonical lowercase before POST (GAP-REVENUE-CONFIG-02)", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(JSON.stringify({ id: "rh-2", status: "accepted" }), { status: 202 }));
+
+    render(<CreateRateHeadForm categories={["property_tax", "water"]} />);
+    fireEvent.change(screen.getByLabelText(/^Code/), { target: { value: "PT2" } });
+    fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: "Property Tax 2" } });
+    // Clerk types a differently-cased / spaced variant.
+    fireEvent.change(screen.getByLabelText(/^Category/), { target: { value: "  Property Tax " } });
+    fireEvent.click(screen.getByRole("button", { name: "Create Rate Head" }));
+
+    await waitFor(() => expect(screen.getByText("Create this rate head?")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Create rate head"));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as { category: string };
+    // "  Property Tax " must not fork from "property_tax".
+    expect(body.category).toBe("property_tax");
+  });
 });

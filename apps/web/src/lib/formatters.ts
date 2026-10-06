@@ -838,6 +838,28 @@ export function formatPeriod(period: string | null | undefined): string {
   return `${PERIOD_MONTHS[month - 1]} ${match[1]}`;
 }
 
+/**
+ * Format a revenue-analytics period key for display, aware of the series
+ * granularity (GAP-REVENUE-ANALYTICS-05). The analytics repo emits:
+ *   - month: "YYYY-MM"      -> "Jul 2026"
+ *   - fy:    "YYYY-YYYY"    -> "FY 2026-27" (Indian financial year, Apr–Mar)
+ * The raw key must stay the sort key; only the displayed label changes. An
+ * unrecognised value is passed through unchanged so nothing disappears.
+ */
+export function formatRevenuePeriod(
+  period: string | null | undefined,
+  granularity: "month" | "fy" | string,
+): string {
+  if (!period) return "—";
+  const trimmed = period.trim();
+  if (granularity === "fy") {
+    const fy = /^(\d{4})-(\d{4})$/.exec(trimmed);
+    if (fy) return `FY ${fy[1]}-${fy[2].slice(2)}`;
+    return trimmed;
+  }
+  return formatPeriod(trimmed);
+}
+
 const PAY_PERIOD_MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",

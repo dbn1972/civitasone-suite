@@ -71,7 +71,7 @@ describe("ReceiptsPage", () => {
     expect(screen.getByText("No receipts recorded")).toBeInTheDocument();
   });
 
-  it("shows the data-source badge when a loader falls back on error", async () => {
+  it("renders a retry state (not an all-zero KPI) when receipts fail to load (GAP-REVENUE-RECEIPTS-03)", async () => {
     fetchJsonMock
       .mockResolvedValueOnce(assesseesPage)
       .mockResolvedValueOnce({ data: [], source: "api" })
@@ -80,6 +80,49 @@ describe("ReceiptsPage", () => {
     const ui = await ReceiptsPage({ searchParams: { assesseeId: "a1" } });
     render(ui);
 
-    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: /try again|retry/i })).toBeInTheDocument();
+    // The misleading "₹0.00" Total Collected must not be shown.
+    expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
+  });
+
+  it("excludes reversed receipts from Total Collected and humanizes the channel (GAP-REVENUE-RECEIPTS-02/04)", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce(assesseesPage)
+      .mockResolvedValueOnce({ data: [], source: "api" })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            id: "r1",
+            receiptNo: "RCPT-0001",
+            demandId: "d1",
+            amountMinor: "10000",
+            channel: "dd",
+            reference: "DD-1",
+            status: "captured",
+            createdAt: "2026-04-01T10:00:00.000Z",
+          },
+          {
+            id: "r2",
+            receiptNo: "RCPT-0002",
+            demandId: "d1",
+            amountMinor: "5000",
+            channel: "online",
+            reference: "UTR-2",
+            status: "reversed",
+            createdAt: "2026-04-02T10:00:00.000Z",
+          },
+        ],
+        source: "api",
+      });
+
+    const ui = await ReceiptsPage({ searchParams: { assesseeId: "a1" } });
+    render(ui);
+
+    // Only the ₹100.00 captured receipt counts, not the ₹50.00 reversed one.
+    // ₹100.00 appears in both the amount cell and the Total Collected KPI.
+    expect(screen.getAllByText("₹100.00").length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText("₹150.00")).not.toBeInTheDocument();
+    // Channel code "dd" is rendered as its human label (in the row + the select option).
+    expect(screen.getAllByText("Demand draft").length).toBeGreaterThanOrEqual(1);
   });
 });

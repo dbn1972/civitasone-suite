@@ -2,19 +2,31 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, ConfirmDialog } from "@/app/_components/ds";
+import { Button, ConfirmDialog, StatusPill } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 import type { WriteOffRecord } from "./page";
 
 type AcceptedResponse = { id?: string; status?: string; correlationId?: string };
 
+// GAP-REVENUE-WRITE-OFFS-DETAIL-DECIDE-03: the status a write-off must be in to
+// still be decidable. Shared literal (revenue-service arrears schema defaults
+// status to "pending"; approved/rejected are terminal). Kept in one place so a
+// future refund/write-off alignment changes it once.
+const PENDING_STATUS = "pending";
+
 export function WriteOffDecideForm({
   writeOffId,
   writeOff,
+  currentUserId,
+  assesseeName,
 }: {
   writeOffId: string;
   writeOff: WriteOffRecord | null;
+  /** Signed-in user id (JWT sub), for the maker != checker UI hint. */
+  currentUserId?: string | null;
+  /** Resolved assessee name for the confirm dialog (falls back to short id). */
+  assesseeName?: string | null;
 }) {
   const router = useRouter();
   const [pendingApprove, setPendingApprove] = useState<boolean | null>(null);
@@ -23,11 +35,27 @@ export function WriteOffDecideForm({
   const [dialogError, setDialogError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"good" | "bad">("good");
+  // GAP-REVENUE-WRITE-OFFS-DETAIL-DECIDE-03: once a decision succeeds, hide the
+  // buttons immediately (router.refresh re-fetches, but this is instant).
+  const [decidedLocally, setDecidedLocally] = useState(false);
 
   const shortId = writeOffId.slice(0, 8);
-  // Fail closed: never let a checker approve/reject a write-off whose amount,
-  // assessee and reason we could not load and show them (CRITICAL-1).
-  const canDecide = writeOff !== null;
+
+  // GAP-REVENUE-WRITE-OFFS-DETAIL-DECIDE-01: the maker of an irreversible
+  // balance reduction must not be able to approve/reject their own write-off.
+  // The server remains the authority (same-user decisions are rejected
+  // server-side); this disables the control so the maker never even opens the
+  // dialog. Compared only when both ids are present.
+  const isMaker =
+    !!currentUserId && !!writeOff?.makerUserId && currentUserId === writeOff.makerUserId;
+
+  // GAP-REVENUE-WRITE-OFFS-DETAIL-DECIDE-03: an already-decided write-off keeps
+  // no live Approve/Reject.
+  const isPending = writeOff?.status === PENDING_STATUS;
+
+  // Fail closed: never decide a write-off we couldn't load (CRITICAL-1), one we
+  // raised ourselves (DECIDE-01), or one already decided (DECIDE-03).
+  const canDecide = writeOff !== null && isPending && !isMaker && !decidedLocally;
 
   function startDecide(approve: boolean) {
     if (!canDecide) return;
@@ -55,6 +83,7 @@ export function WriteOffDecideForm({
           " processed asynchronously; the server rejects it if you are the same officer who raised the write-off.",
       );
       setPendingApprove(null);
+      setDecidedLocally(true);
       router.refresh();
     } catch (err) {
       setTone("bad");
@@ -64,11 +93,36 @@ export function WriteOffDecideForm({
     }
   }
 
+  // Already-decided (or locally just-decided): show status, no live buttons.
+  if (writeOff !== null && (!isPending || decidedLocally)) {
+    return (
+      <div style={{ display: "grid", gap: 10 }}>
+        <p role="status" style={{ margin: 0, fontSize: 13 }}>
+          Already decided — no further action is available.{" "}
+          <StatusPill status={writeOff.status} label={writeOff.status} />
+        </p>
+        {message && (
+          <p role={tone === "bad" ? "alert" : "status"} className={`pill ${tone}`} style={{ width: "fit-content" }}>
+            {message}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  const assesseeLabel = assesseeName ?? (writeOff ? writeOff.assesseeId.slice(0, 8) : "");
+
   return (
     <div style={{ display: "grid", gap: 12 }}>
-      {!canDecide && (
+      {!canDecide && writeOff === null && (
         <p role="status" style={{ margin: 0, fontSize: 12.5, color: "var(--ink2)" }}>
           Approve/Reject are disabled until the write-off record loads successfully.
+        </p>
+      )}
+
+      {isMaker && (
+        <p role="status" style={{ margin: 0, fontSize: 12.5, color: "var(--ink2)" }}>
+          You raised this write-off, so a different officer must decide it.
         </p>
       )}
 
@@ -114,7 +168,7 @@ export function WriteOffDecideForm({
             <>
               {pendingApprove ? "Approving" : "Rejecting"} a write-off of{" "}
               <strong>{formatMoney(writeOff.amountMinor)}</strong> for assessee{" "}
-              <strong className="mono">{writeOff.assesseeId.slice(0, 8)}</strong> — reason on file:{" "}
+              <strong>{assesseeLabel}</strong> — reason on file:{" "}
               <em>&ldquo;{writeOff.reason || "—"}&rdquo;</em>. This permanently reduces the demand balance once
               approved — the deciding officer must be different from the officer who raised the write-off; the
               server rejects same-user maker-checker decisions.
