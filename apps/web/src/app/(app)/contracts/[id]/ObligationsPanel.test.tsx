@@ -14,21 +14,42 @@ describe("ObligationsPanel", () => {
     refreshMock.mockReset();
   });
 
-  it("POSTs create obligation and expects 202 Accepted", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ status: "accepted" }), { status: 202 }),
-    );
+  it("POSTs create obligation with an owner picked by name and expects 202 Accepted (GAP-CONTRACTS-DETAIL-03/06)", async () => {
+    // GAP-CONTRACTS-DETAIL-03: owner is chosen from the identity user
+    // directory, not pasted as a raw UUID. The picker fetches the users list;
+    // the create POST sends the selected user's id.
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/identity/users")) {
+        return new Response(
+          JSON.stringify({ data: [{ id: "11111111-1111-1111-1111-111111111111", name: "Asha Officer" }] }),
+          { status: 200 },
+        );
+      }
+      return new Response(JSON.stringify({ status: "accepted" }), { status: 202 });
+    });
     render(<ObligationsPanel contractId="c1" obligations={[]} />);
     fireEvent.change(screen.getByPlaceholderText("Submit progress report"), {
       target: { value: "Submit BG" },
     });
     const dateInput = document.querySelector('input[type="date"]') as HTMLInputElement;
     fireEvent.change(dateInput, { target: { value: "2026-09-01" } });
-    fireEvent.change(screen.getByPlaceholderText("uuid"), { target: { value: "user-1" } });
+
+    // Owner is now a searchable picker — select by name (EntityPicker commits
+    // on mousedown, see its test notes).
+    fireEvent.change(screen.getByLabelText("Owner"), { target: { value: "Asha" } });
+    const option = await screen.findByText(/Asha Officer/);
+    fireEvent.mouseDown(option);
+
     fireEvent.click(screen.getByRole("button", { name: "Add obligation" }));
-    await waitFor(() => expect(screen.getByText(/accepted \(queued\)/i)).toBeInTheDocument());
-    expect(String(fetchSpy.mock.calls[0]![0])).toContain("/obligations");
-    expect((fetchSpy.mock.calls[0]![1] as RequestInit).method).toBe("POST");
+    await waitFor(() => expect(screen.getByText(/received/i)).toBeInTheDocument());
+    expect(screen.queryByText(/accepted \(queued\)/i)).not.toBeInTheDocument();
+
+    const postCall = fetchSpy.mock.calls.find(([u]) => String(u).includes("/obligations"));
+    expect(postCall).toBeTruthy();
+    expect((postCall![1] as RequestInit).method).toBe("POST");
+    const body = JSON.parse(String((postCall![1] as RequestInit).body));
+    expect(body.ownerId).toBe("11111111-1111-1111-1111-111111111111");
     expect(refreshMock).toHaveBeenCalled();
   });
 
@@ -96,7 +117,8 @@ describe("ObligationsPanel", () => {
     expect(screen.getByRole("alertdialog")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Yes, mark complete" }));
-    await waitFor(() => expect(screen.getByText(/accepted \(queued\)/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/received/i)).toBeInTheDocument());
+    expect(screen.queryByText(/accepted \(queued\)/i)).not.toBeInTheDocument();
     const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
     expect(body).toMatchObject({ status: "completed", version: 2 });
   });

@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { mapContractsListRows, mapCitizenPortalMetrics } from "./loaders";
+import {
+  mapContractsListRows,
+  mapCitizenPortalMetrics,
+  computeContractExpirySummary,
+  mapVendorOptions,
+  type ContractListRow,
+} from "./loaders";
 
 // Real GET /v1/contract/contracts response shape, captured live from the
 // running contract-service dev stack (see fix/contract-frontend-field-mapping
@@ -26,6 +32,9 @@ const REAL_ENVELOPE = {
 
 describe("mapContractsListRows", () => {
   it("maps the real contract-service envelope shape (title as label, vendorId as sublabel, contractNo as meta)", () => {
+    // GAP-CONTRACTS-LIST-04 (deliberate contract change): the mapper now also
+    // passes through `expiry` and `valueMinor` additively so the register can
+    // render Expires/Value columns and the hub can bucket by expiry.
     expect(mapContractsListRows(REAL_ENVELOPE)).toEqual([
       {
         id: "19c91840-1e19-406a-a51e-ecdc92f8edf6",
@@ -33,6 +42,8 @@ describe("mapContractsListRows", () => {
         sublabel: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
         status: "draft",
         meta: "CON-VERIFY-0001",
+        expiry: "2027-08-27",
+        valueMinor: "123456789",
       },
     ]);
   });
@@ -69,7 +80,8 @@ describe("mapContractsListRows", () => {
   });
 
   it("falls back to contractNo as the label when title is absent", () => {
-    const { title: _title, ...rest } = REAL_ENVELOPE.data[0];
+    const rest = { ...REAL_ENVELOPE.data[0] };
+    delete (rest as Record<string, unknown>).title;
     expect(mapContractsListRows({ data: [rest] })).toEqual([
       expect.objectContaining({ label: "CON-VERIFY-0001" }),
     ]);
@@ -136,5 +148,88 @@ describe("mapCitizenPortalMetrics", () => {
     expect(mapCitizenPortalMetrics(null)).toBeNull();
     expect(mapCitizenPortalMetrics("not json")).toBeNull();
     expect(mapCitizenPortalMetrics({ unrelated: true })).toBeNull();
+  });
+});
+
+// GAP-CONTRACTS-LIST-04: expiry / valueMinor passthrough edge cases.
+describe("mapContractsListRows — expiry/value passthrough (LIST-04)", () => {
+  it("omits expiry/valueMinor when the backend row has neither", () => {
+    const bare = { ...REAL_ENVELOPE.data[0] };
+    delete (bare as Record<string, unknown>).expiry;
+    delete (bare as Record<string, unknown>).valueMinor;
+    const rows = mapContractsListRows({ data: [bare] }) as ContractListRow[];
+    expect(rows[0]).not.toHaveProperty("expiry");
+    expect(rows[0]).not.toHaveProperty("valueMinor");
+  });
+
+  it("accepts validTo/expiryDate as expiry aliases and value as a valueMinor alias", () => {
+    const rows = mapContractsListRows({
+      data: [{ id: "a", title: "T", validTo: "2027-01-01", value: "500" }],
+    }) as ContractListRow[];
+    expect(rows[0]?.expiry).toBe("2027-01-01");
+    expect(rows[0]?.valueMinor).toBe("500");
+  });
+});
+
+// GAP-CONTRACTS-HOME-04: cumulative expiry buckets + open-expired count.
+describe("computeContractExpirySummary (HOME-04)", () => {
+  const TODAY = "2026-01-01";
+  const row = (expiry: string | undefined, status = "active"): ContractListRow => ({
+    id: Math.random().toString(36),
+    label: "c",
+    ...(expiry ? { expiry } : {}),
+    status,
+  });
+
+  it("buckets are cumulative: in30 <= in60 <= in90", () => {
+    const s = computeContractExpirySummary(
+      [row("2026-01-20"), row("2026-02-15"), row("2026-03-25"), row("2026-06-01")],
+      TODAY,
+    );
+    expect(s.in30).toBe(1);
+    expect(s.in60).toBe(2);
+    expect(s.in90).toBe(3);
+    expect(s.expired).toBe(0);
+  });
+
+  it("counts a past-expiry open contract as expired but not a closed one", () => {
+    const s = computeContractExpirySummary(
+      [row("2025-12-01", "active"), row("2025-11-01", "terminated"), row("2025-10-01", "closed")],
+      TODAY,
+    );
+    expect(s.expired).toBe(1);
+  });
+
+  it("ignores rows without a parseable expiry", () => {
+    const s = computeContractExpirySummary([row(undefined), row("not-a-date")], TODAY);
+    expect(s).toEqual({ in30: 0, in60: 0, in90: 0, expired: 0 });
+  });
+});
+
+// GAP-CONTRACTS-LIST-01 / NEW-01: vendor id->name options for name resolution.
+describe("mapVendorOptions", () => {
+  it("keeps id and name (unlike mapVendorSummaries, which drops the id)", () => {
+    expect(
+      mapVendorOptions({
+        data: [
+          { id: "v1", name: "Acme Infra", category: "civil" },
+          { id: "v2", name: "ByteWorks", category: "it" },
+        ],
+      }),
+    ).toEqual([
+      { id: "v1", name: "Acme Infra" },
+      { id: "v2", name: "ByteWorks" },
+    ]);
+  });
+
+  it("skips rows missing an id or a name", () => {
+    expect(mapVendorOptions({ data: [{ id: "v1" }, { name: "no-id" }, { id: "v2", name: "Ok" }] })).toEqual([
+      { id: "v2", name: "Ok" },
+    ]);
+  });
+
+  it("returns [] for an empty tenant and null for an unrecognizable payload", () => {
+    expect(mapVendorOptions({ data: [] })).toEqual([]);
+    expect(mapVendorOptions(null)).toBeNull();
   });
 });

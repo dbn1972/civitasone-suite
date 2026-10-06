@@ -1487,6 +1487,41 @@ export async function getVendors(): Promise<LoaderResult<VendorSummary[]>> {
   });
 }
 
+// GAP-CONTRACTS-LIST-01 / GAP-CONTRACTS-NEW-01: contract-service stores only a
+// raw vendorId (uuid) on a contract — it has no joined vendor display name.
+// The procurement vendor master DOES carry both id and name, so resolve names
+// web-side (cross-service read over HTTP, never a cross-DB join). This loader
+// returns id→name pairs the register and the new-contract picker both consume;
+// mapVendorSummaries intentionally drops the id (display-only shape), so this
+// uses its own id-preserving mapper. A failure is non-fatal to the caller:
+// the list falls back to a short id / "Unknown vendor", never a crash.
+export interface VendorOption {
+  id: string;
+  name: string;
+}
+
+export function mapVendorOptions(payload: unknown): VendorOption[] | null {
+  const rows = getArrayPayload(payload);
+  if (!rows) return null;
+  const mapped: VendorOption[] = [];
+  for (const row of rows) {
+    if (!isRecord(row)) continue;
+    const id = toText(row.id);
+    const name = toText(row.name);
+    if (!id || !name) continue;
+    mapped.push({ id, name });
+  }
+  return mapped;
+}
+
+export async function getVendorOptions(): Promise<LoaderResult<VendorOption[]>> {
+  return fetchJson<unknown, VendorOption[]>("/api/v1/procurement/vendors?limit=500", [], {
+    revalidateSeconds: 30,
+    telemetryKey: "procurement.vendor_options",
+    mapResponse: mapVendorOptions,
+  });
+}
+
 export async function getPurchaseOrders(): Promise<LoaderResult<PurchaseOrderSummary[]>> {
   return fetchJson("/api/v1/procurement/pos", [] as PurchaseOrderSummary[], {
     revalidateSeconds: 30,
@@ -2054,10 +2089,20 @@ export async function getBillingPlanById(id: string): Promise<LoaderResult<Recor
 // an error/couldn't-load state instead of the correct "no contracts yet"
 // empty state. Only return null when the payload itself couldn't be
 // understood as a row list at all (getArrayPayload returns null).
+// GAP-CONTRACTS-LIST-04: a contract list row carries the generic
+// ModuleRowSummary fields plus the two contract-specific columns the register
+// needs — `expiry` (ISO date) and `valueMinor` (paise as a numeric string).
+// Both optional: a backend that omits them (or a tenant row that lacks them)
+// renders a dash, never a fabricated value.
+export type ContractListRow = ModuleRowSummary & {
+  expiry?: string;
+  valueMinor?: string;
+};
+
 export function mapContractsListRows(payload: unknown): ModuleRowSummary[] | null {
   const rows = getArrayPayload(payload);
   if (!rows) return null;
-  const mapped: ModuleRowSummary[] = [];
+  const mapped: ContractListRow[] = [];
   for (const row of rows) {
     if (!isRecord(row)) continue;
     const id = toText(row.id);
@@ -2066,23 +2111,82 @@ export function mapContractsListRows(payload: unknown): ModuleRowSummary[] | nul
     const sublabel = toText(row.vendorId);
     const status = toText(row.status);
     const meta = toText(row.contractNo);
+    // GAP-CONTRACTS-LIST-04: the detail resource exposes `expiry` (a date
+    // string) and `valueMinor` (paise, as a numeric string per the live API).
+    // Pass both through additively so the list can render an "Expires" column
+    // (with an "expiring soon" pill) and a right-aligned "Value" column, and
+    // so the hub summary (GAP-CONTRACTS-HOME-04) can bucket by expiry. When a
+    // field is absent the column simply renders a dash — never a fabricated 0.
+    const expiry = toText(row.expiry) ?? toText(row.validTo) ?? toText(row.expiryDate);
+    const valueMinor = toText(row.valueMinor) ?? toText(row.value);
     mapped.push({
       id,
       label,
       ...(sublabel ? { sublabel } : {}),
       ...(status ? { status } : {}),
       ...(meta ? { meta } : {}),
+      ...(expiry ? { expiry } : {}),
+      ...(valueMinor ? { valueMinor } : {}),
     });
   }
   return mapped;
 }
 
-export async function getContracts(): Promise<LoaderResult<ModuleRowSummary[]>> {
-  return fetchJson<unknown, ModuleRowSummary[]>("/api/v1/contract/contracts", [], {
+export async function getContracts(): Promise<LoaderResult<ContractListRow[]>> {
+  return fetchJson<unknown, ContractListRow[]>("/api/v1/contract/contracts", [], {
     revalidateSeconds: 30,
     telemetryKey: "contract.list",
-    mapResponse: mapContractsListRows,
+    mapResponse: mapContractsListRows as (payload: unknown) => ContractListRow[] | null,
   });
+}
+
+// GAP-CONTRACTS-HOME-04: a buckets summary for the Contracts hub, computed
+// from the same list the register renders — so the hub's "Expiring in 30
+// days: N" can never silently disagree with the list. Pure and exported so
+// it is unit-testable without mocking fetchJson. Buckets are cumulative
+// windows measured from `today` (an injectable ISO date for deterministic
+// tests): `in30 <= in60 <= in90`. `expired` counts rows whose expiry is
+// strictly before today AND whose status is not already a closed/terminated
+// state (an expired-but-closed contract is not an outstanding risk). Returns
+// null only when the payload is not a recognizable row list at all, so the
+// hub can show dashes (not zeros) on a genuine load failure.
+export interface ContractExpirySummary {
+  in30: number;
+  in60: number;
+  in90: number;
+  expired: number;
+}
+
+export function computeContractExpirySummary(
+  rows: ContractListRow[],
+  today: string = new Date().toISOString().slice(0, 10),
+): ContractExpirySummary {
+  const summary: ContractExpirySummary = { in30: 0, in60: 0, in90: 0, expired: 0 };
+  const todayMs = Date.parse(`${today}T00:00:00Z`);
+  for (const row of rows) {
+    if (!row.expiry) continue;
+    const expMs = Date.parse(`${row.expiry}T00:00:00Z`);
+    if (Number.isNaN(expMs)) continue;
+    const status = (row.status ?? "").toLowerCase();
+    const days = Math.floor((expMs - todayMs) / 86_400_000);
+    if (days < 0) {
+      const closed = status === "closed" || status === "terminated" || status === "cancelled";
+      if (!closed) summary.expired += 1;
+      continue;
+    }
+    if (days <= 30) summary.in30 += 1;
+    if (days <= 60) summary.in60 += 1;
+    if (days <= 90) summary.in90 += 1;
+  }
+  return summary;
+}
+
+export async function getContractExpirySummary(): Promise<LoaderResult<ContractExpirySummary | null>> {
+  const result = await getContracts();
+  if (result.source === "error") {
+    return { data: null, source: "error", ...(result.status != null ? { status: result.status } : {}) };
+  }
+  return { data: computeContractExpirySummary(result.data), source: "api" };
 }
 
 export async function getContractById(id: string): Promise<LoaderResult<Record<string, unknown> | null>> {
