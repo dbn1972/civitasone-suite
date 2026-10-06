@@ -16,7 +16,7 @@ export async function createDocument(ctx: RequestContext, body: CreateDocumentBo
     category: body.category ?? null,
     status: "draft",
     tags: [],
-    accessLevel: "internal",
+    accessLevel: body.accessLevel ?? "internal",
     fileType: null,
     fileSize: null,
     author: null,

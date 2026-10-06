@@ -14,6 +14,7 @@ import type {
   GuidedFlowSummary,
   GuidedFlowStep,
   DeflectionMetrics,
+  DocumentDetail,
 } from "./types";
 
 function asArray(x: unknown): Record<string, unknown>[] {
@@ -129,6 +130,33 @@ export function getKnowledgeGuidedFlows(): Promise<LoaderResult<GuidedFlowSummar
         : [],
       status: str(r.status, "published"),
     })),
+  });
+}
+
+// GAP-KNOWLEDGE-LIST-01: fetch a single document/article by id.
+export function getKnowledgeDocument(id: string): Promise<LoaderResult<DocumentDetail | null>> {
+  return fetchJson<unknown, DocumentDetail | null>(`/api/v1/knowledge/articles/${id}`, null, {
+    revalidateSeconds: 10,
+    telemetryKey: "knowledge.document.detail",
+    mapResponse: (payload) => {
+      const r = asObj(payload);
+      if (!r) return null;
+      return {
+        id: str(r.id),
+        tenantId: str(r.tenantId),
+        title: str(r.title),
+        category: strOrNull(r.category),
+        status: str(r.status, "draft"),
+        tags: Array.isArray(r.tags) ? (r.tags as unknown[]).map((t) => str(t)) : [],
+        accessLevel: str(r.accessLevel, "internal"),
+        fileType: strOrNull(r.fileType),
+        fileSize: typeof r.fileSize === "number" ? r.fileSize : null,
+        author: strOrNull(r.author),
+        createdAt: str(r.createdAt),
+        updatedAt: str(r.updatedAt),
+        version: num(r.version, 1),
+      };
+    },
   });
 }
 

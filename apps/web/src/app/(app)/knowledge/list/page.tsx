@@ -1,77 +1,13 @@
-import Link from "next/link";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { getKnowledgeDocs } from "../../../_data/loaders";
-import { EmptyState, PageHeader, StatCard, StatGrid, RefreshErrorState } from "../../../_components/ds";
-import { toHumanError } from "@/lib/messages";
-import { ImportButton } from "./ImportButton";
-import { KnowledgeDocsTable, type DocRow } from "./KnowledgeDocsTable";
+import { redirect } from "next/navigation";
 
-export default async function KnowledgeListPage() {
-  const { data: docs, source } = await getKnowledgeDocs();
-  const errored = source === "error";
-
-  const total = docs.length;
-  const approved = docs.filter((d) => d.status === "approved").length;
-  const pendingReview = docs.filter((d) => d.status === "under_review").length;
-  const categories = new Set(docs.map((d) => d.category)).size;
-
-  function statusLabel(s: string) {
-    if (s === "approved") return "Published";
-    if (s === "under_review") return "Under review";
-    if (s === "draft") return "Draft";
-    if (s === "archived") return "Archived";
-    return s;
-  }
-
-  function statusPillStatus(s: string) {
-    if (s === "approved") return "approved";
-    if (s === "under_review") return "pending";
-    if (s === "archived") return "archived";
-    return "mut";
-  }
-
-  const rows: DocRow[] = docs.map((doc) => ({
-    id: doc.id.slice(0, 8).toUpperCase(),
-    title: doc.title,
-    category: doc.category,
-    author: doc.author ?? "—",
-    version: doc.version ?? "—",
-    accessLevel: doc.accessLevel,
-    statusLabel: statusLabel(doc.status),
-    statusPill: statusPillStatus(doc.status),
-  }));
-
-  return (
-    <div className="wrap">
-      {source === "error" && <DataSourceBadge source={source} />}
-      <PageHeader
-        title="Knowledge — Documents"
-        subtitle="All documents in the knowledge base."
-        actions={
-          <>
-            <ImportButton />
-            <Link href="/knowledge/documents/new" className="btn primary" style={{ minHeight: 44 }}>+ New Document</Link>
-          </>
-        }
-      />
-
-      <StatGrid>
-        <StatCard icon="📂" iconBg="#fef9e7" label="Total Documents" value={errored ? "—" : total.toLocaleString("en-IN")} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Published" value={errored ? "—" : approved.toLocaleString("en-IN")} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label="Under Review" value={errored ? "—" : pendingReview.toLocaleString("en-IN")} />
-        <StatCard icon="🏷️" iconBg="#eff6ff" label="Categories" value={errored ? "—" : categories.toLocaleString("en-IN")} />
-      </StatGrid>
-
-      <div className="card" style={{ marginTop: "18px" }}>
-        <div className="card-h"><h3>Documents</h3></div>
-        {errored ? (
-          <RefreshErrorState error={toHumanError("load", { area: "knowledge documents" })} backHref="/knowledge" />
-        ) : docs.length === 0 ? (
-          <EmptyState icon="📂" title="No documents found" message="No documents found in the knowledge base." />
-        ) : (
-          <KnowledgeDocsTable rows={rows} />
-        )}
-      </div>
-    </div>
-  );
+/**
+ * GAP-KNOWLEDGE-LIST-03: /knowledge/list was a near-duplicate of /knowledge/repository
+ * (same loader, same table with fewer columns, different status labels). Repository is
+ * the canonical list. This page now redirects to it to prevent orphan bookmarks.
+ *
+ * Decision: repository is canonical; list is retired. The Access column and stats
+ * from list were folded into repository by the repository fixes (REPOSITORY-01/03).
+ */
+export default function KnowledgeListPage() {
+  redirect("/knowledge/repository");
 }

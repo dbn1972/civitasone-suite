@@ -2,18 +2,7 @@
 
 import { useState } from "react";
 import { DataTable, EmptyState, Segmented, StatusPill } from "../../../_components/ds";
-
-type RecordRow = {
-  id: string;
-  recordNo: string;
-  title: string;
-  type: string;
-  department: string;
-  retentionPeriod: string;
-  statusLabel: string;
-  statusPill: string;
-  rawStatus: string;
-};
+import type { RecordRow } from "./page";
 
 const SEG_OPTIONS = ["All", "Due"];
 
@@ -21,7 +10,7 @@ export function RecordsClient({ rows }: { rows: RecordRow[] }) {
   const [seg, setSeg] = useState("All");
 
   const filtered = seg === "Due"
-    ? rows.filter((r) => r.rawStatus === "disposed" || r.rawStatus === "transferred")
+    ? rows.filter((r) => r.dueKind !== "none")
     : rows;
 
   return (
@@ -43,6 +32,7 @@ export function RecordsClient({ rows }: { rows: RecordRow[] }) {
             { key: "type", label: "Type" },
             { key: "department", label: "Department" },
             { key: "retentionPeriod", label: "Retention Period" },
+            { key: "disposalDue", label: "Disposal due" },
             {
               key: "statusLabel",
               label: "Status",

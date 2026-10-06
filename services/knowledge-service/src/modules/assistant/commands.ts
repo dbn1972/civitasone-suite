@@ -7,6 +7,7 @@ import { cache } from "../../shared/infra.js";
 import { EVENTS } from "../../topics.js";
 import { normalizeSteps, type Citation } from "./domain.js";
 import { answerQuestion } from "./grounded.js";
+import { redactPii } from "../ai/pii-redact.js";
 import * as repo from "./repo.js";
 import type {
   CreateFaqBody,
@@ -123,9 +124,13 @@ export async function updateFlow(ctx: RequestContext, id: string, body: UpdateFl
 export async function ask(ctx: RequestContext, body: AskBody): Promise<AskResult> {
   const result = await answerQuestion(ctx.tenantId, body.question);
   const interactionId = randomUUID();
+  // GAP-KNOWLEDGE-ASSISTANT-06 (DPDP): redact PII (Aadhaar, PAN, phone, email)
+  // from the free-text question BEFORE persisting it to the interactions table,
+  // so personal identifiers are not retained indefinitely in logs.
+  const storedQuestion = redactPii(body.question).redactedText;
   await txScoped(ctx.tenantId, async (tx) => {
     await repo.insertInteraction(tx as unknown as repo.Writer, {
-      id: interactionId, tenantId: ctx.tenantId, question: body.question,
+      id: interactionId, tenantId: ctx.tenantId, question: storedQuestion,
       answer: result.answer || null, answered: result.answered, escalated: false,
       citations: result.citations, createdBy: ctx.actorId,
     });
@@ -148,13 +153,16 @@ export async function ask(ctx: RequestContext, body: AskBody): Promise<AskResult
 // ── Escalate-to-ticket handoff → helpdesk-service ───────────────────
 export async function escalate(ctx: RequestContext, body: EscalateBody): Promise<Accepted> {
   const ticketRef = randomUUID();
+  // GAP-KNOWLEDGE-ASSISTANT-06 (DPDP): redact PII before persisting / forwarding.
+  const safeQuestion = redactPii(body.question).redactedText;
+  const safeDetail = body.detail ? redactPii(body.detail).redactedText : undefined;
   await txScoped(ctx.tenantId, async (tx) => {
     const t = tx as unknown as DrizzleTx;
     if (body.interactionId) {
       await repo.markEscalated(tx as unknown as repo.Writer, body.interactionId, ticketRef);
     } else {
       await repo.insertInteraction(tx as unknown as repo.Writer, {
-        id: randomUUID(), tenantId: ctx.tenantId, question: body.question,
+        id: randomUUID(), tenantId: ctx.tenantId, question: safeQuestion,
         answer: null, answered: false, escalated: true, citations: [], ticketRef,
         createdBy: ctx.actorId,
       });
@@ -164,8 +172,8 @@ export async function escalate(ctx: RequestContext, body: EscalateBody): Promise
       topic: HELPDESK_CREATE_TICKET, eventType: HELPDESK_CREATE_TICKET,
       tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
       payload: {
-        subject: body.question.slice(0, 200),
-        description: body.detail ?? body.question,
+        subject: safeQuestion.slice(0, 200),
+        description: safeDetail ?? safeQuestion,
         priority: body.priority,
         source: "knowledge_assistant",
         externalRef: ticketRef,
