@@ -22,6 +22,39 @@ export const LABELS = {
 export type LabelKey = keyof typeof LABELS;
 
 /**
+ * GAP-PLATFORM-ADMIN-TENANT-CONFIG-06: human module-feature names for the
+ * tenant-config "Enabled features" badges. The raw keys are lowercase/snake
+ * (e.g. "pfms_integration", "hrms", "mfa"); the card previously printed them
+ * verbatim with underscores turned to spaces ("pfms integration"). An unknown
+ * key falls back to Title Case via humanizeStatus so a newly-added feature is
+ * never hidden, just un-prettified.
+ */
+export const FEATURE_LABELS: Record<string, string> = {
+  hrms: "HRMS",
+  payroll: "Payroll",
+  finance: "Finance",
+  procurement: "Procurement",
+  audit: "Audit",
+  pfms_integration: "PFMS integration",
+  digilocker: "DigiLocker",
+  mfa: "Multi-factor authentication",
+  sso: "Single sign-on",
+  gst: "GST",
+  esign: "eSign",
+};
+
+/** Resolve a feature key to its display label, falling back to Title Case. */
+export function featureLabel(key: string): string {
+  const mapped = FEATURE_LABELS[key.trim().toLowerCase()];
+  if (mapped) return mapped;
+  return key
+    .split(/[\s_]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+/**
  * Tokens that must not appear in any clerk-facing copy (help content, error
  * messages, status badges, screen subtitles). Enforced by a unit test.
  * Requirements 5.2, 14.4, 14.6.

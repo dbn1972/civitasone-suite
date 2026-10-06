@@ -1,22 +1,35 @@
 import { PageHeader, StatCard } from "@/app/_components/ds";
-import { getAdminUsers } from "@/app/_data/loaders";
+import { getAdminUsers, getAdminRolesList } from "@/app/_data/loaders";
+import { getSessionRoles, getSessionUserId, requireAnyRole, PLATFORM_ADMIN_ROLES } from "@/lib/auth/roleGuard";
 import { Breadcrumb } from "../Breadcrumb";
 import { UserManagementPage } from "./UserManagementPage";
+import { mapAdminUsers } from "./mapAdminUsers";
 
 export default async function PlatformUsersPage() {
-  const { data: raw, source } = await getAdminUsers();
+  requireAnyRole(PLATFORM_ADMIN_ROLES, "/dashboard");
+  const [{ data: raw, source }, { data: rolesCatalogue }] = await Promise.all([
+    getAdminUsers(),
+    getAdminRolesList(),
+  ]);
 
-  const users = raw.map((u) => ({
-    id: (u as Record<string, unknown>).id as string ?? String(Math.random()),
-    name: (u as Record<string, unknown>).name as string | null ?? null,
-    email: (u as Record<string, unknown>).email as string ?? "",
-    roles: (u as Record<string, unknown>).roles as string[] ?? [],
-    status: (u as Record<string, unknown>).status as string ?? "active",
-    lastLoginAt: (u as Record<string, unknown>).lastLoginAt as string | null ?? null,
-    mfaEnabled: (u as Record<string, unknown>).mfaEnabled as boolean ?? false,
-    department: (u as Record<string, unknown>).department as string | null ?? null,
-    tenantId: (u as Record<string, unknown>).tenantId as string | null ?? null,
-  }));
+  // GAP-PLATFORM-ADMIN-USERS-04: a row without a real string id used to be
+  // given `String(Math.random())`, which changed on every render (breaking
+  // React keys + checkbox selection) and would target a FAKE id if an admin
+  // clicked Suspend/Reset. mapAdminUsers drops such rows instead of inventing
+  // an id; the actions below only ever operate on a real identity-service id.
+  const users = mapAdminUsers(raw);
+
+  const sessionRoles = getSessionRoles();
+  const currentUserId = getSessionUserId();
+
+  // GAP-PLATFORM-ADMIN-USERS-05: the role filter is driven by the real role
+  // catalogue (same source as /platform-admin/roles), not a hard-coded list of
+  // 9 roles. Fall back to the role keys actually present on the loaded users
+  // when the catalogue is empty/unreachable, so the filter is never blank.
+  const catalogueRoleKeys = rolesCatalogue.map((r) => r.key).filter((k) => k.length > 0);
+  const roleOptions = catalogueRoleKeys.length > 0
+    ? catalogueRoleKeys
+    : Array.from(new Set(users.flatMap((u) => u.roles))).sort();
 
   const total = users.length;
   const active = users.filter((u) => u.status === "active").length;
@@ -37,15 +50,13 @@ export default async function PlatformUsersPage() {
         <StatCard icon="⛔" iconBg="#fef3f2" label="Suspended" value={suspended} />
         <StatCard icon="🔐" iconBg="#eff6ff" label="MFA enabled" value={mfaOn} />
       </div>
-      {/* UX-012: the data-source badge now lives inside UserManagementPage,
-          driven by the same useSeededResource call that produces its rows —
-          not a second, independent read of `source` here that could
-          disagree with the table's own cache state (UX-002's pattern). This
-          site previously had it worse than most: the table never surfaced
-          cache state at all, so a failed fetch with a usable cache showed
-          "Couldn't load — showing nothing" while real (cached) rows were
-          visible directly underneath it. */}
-      <UserManagementPage users={users} source={source} />
+      <UserManagementPage
+        users={users}
+        source={source}
+        roleOptions={roleOptions}
+        currentUserId={currentUserId}
+        currentUserRoles={sessionRoles}
+      />
     </div>
   );
 }

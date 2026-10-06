@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { eq, desc } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { hasAnyRole } from "@civitasone/auth";
 import { scopedRead } from "../../shared/db.js";
 import {
   callUpstream, relayError, identityBaseUrl, auditBaseUrl, tenantServiceBaseUrl,
@@ -19,9 +20,11 @@ import * as incidentRepo from "../security-incident/repo.js";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import * as auditLogExportCommands from "../audit-log-export/commands.js";
+import * as rolePermissionAuditCommands from "../role-permissions-audit/commands.js";
 import * as userExportCommands from "../user-export/commands.js";
 import * as securityExportCommands from "../security-export/commands.js";
 import * as mfaExportCommands from "../mfa-export/commands.js";
+import * as tenantsRepo from "../tenants/repo.js";
 // Mirrors the web ADMIN_USERS_LIST_LIMIT: the browser can only ever export the rows it loaded.
 const USER_EXPORT_MAX_ROWS = 200;
 
@@ -46,6 +49,47 @@ const auditLogExportBody = z.object({
 });
 const FEATURE_FLAG_ADMIN = ["platform_admin", "super_admin"];
 const CUSTOM_DOMAIN_ADMIN = ["platform_admin", "super_admin"];
+
+// ─── GAP-PLATFORM-ADMIN-ROLES-01: server-side separation-of-duties (SoD) ───
+// Maker-checker must be enforced authoritatively on the server, not merely as
+// a convenience toggle in the web UI. A single role must never be able to BOTH
+// raise/submit AND approve the same resource, or it defeats the four-eyes
+// control. A permission key is "<resource>.<action>"; the resource is every
+// segment except the trailing action (so finance.payments.submit conflicts
+// with finance.payments.approve on resource "finance.payments"). We detect
+// conflicts on the FULL desired set the PATCH would leave the role holding,
+// so an admin cannot smuggle a conflict in gradually either.
+const SOD_SUBMIT_ACTIONS = new Set(["submit", "raise", "create", "initiate"]);
+const SOD_APPROVE_ACTIONS = new Set(["approve", "authorize", "authorise", "sanction"]);
+
+type SodConflict = { resource: string; submitKey: string; approveKey: string };
+
+/**
+ * Returns the SoD conflicts present in a desired permission-key set: resources
+ * for which the set grants BOTH a submit-class and an approve-class action.
+ * Keys without a dotted action (no resource/action split) are ignored.
+ */
+export function findSodConflicts(permissionKeys: Iterable<string>): SodConflict[] {
+  const submittersByResource = new Map<string, string>();
+  const approversByResource = new Map<string, string>();
+  for (const key of permissionKeys) {
+    const lastDot = key.lastIndexOf(".");
+    if (lastDot <= 0 || lastDot === key.length - 1) continue;
+    const resource = key.slice(0, lastDot);
+    const action = key.slice(lastDot + 1).toLowerCase();
+    if (SOD_SUBMIT_ACTIONS.has(action) && !submittersByResource.has(resource)) {
+      submittersByResource.set(resource, key);
+    } else if (SOD_APPROVE_ACTIONS.has(action) && !approversByResource.has(resource)) {
+      approversByResource.set(resource, key);
+    }
+  }
+  const conflicts: SodConflict[] = [];
+  for (const [resource, submitKey] of submittersByResource) {
+    const approveKey = approversByResource.get(resource);
+    if (approveKey) conflicts.push({ resource, submitKey, approveKey });
+  }
+  return conflicts.sort((a, b) => a.resource.localeCompare(b.resource));
+}
 
 function toIso(v: unknown): string | null {
   if (v === null || v === undefined) return null;
@@ -345,6 +389,70 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await mfaExportCommands.recordMfaExport(ctx, parsed.data.rowCount, parsed.data.filtered === true));
   });
 
+  // ─── Tenant configuration — real, read from admin-service's own
+  // admin_tenants store (GAP-PLATFORM-ADMIN-TENANT-CONFIG-01/-02) ───
+  //
+  // The web tenant-config screen previously rendered a hard-coded DEFAULT_CONFIG
+  // (a fictional "Government of India — Pilot Tenant" with invented seats,
+  // storage and a 2027 licence) to EVERY signed-in user. This returns the
+  // CALLER's real office row instead, and — TENANT-CONFIG-02 — exposes the two
+  // infrastructure identifiers (DB schema, Keycloak realm) ONLY to a
+  // platform_admin/super_admin. A plain viewer / tenant_admin gets those two
+  // fields as null, so the clear value never leaves the service for them (the
+  // web layer also hides the Copy controls, but this is the real boundary).
+  //
+  // Fields the platform does not actually track per-tenant yet (licensed
+  // seats, active seats, storage quota/used, a licence expiry date) are
+  // returned as null rather than fabricated — the web card renders an honest
+  // "Not tracked" for a null instead of a made-up number.
+  app.get("/v1/admin/tenant-config", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const tenant = await tenantsRepo.findByTenantId(ctx.tenantId);
+    if (!tenant) throw new HttpError(404, "NOT_FOUND", "no configuration is on record for this office");
+
+    const isPlatformAdmin = hasAnyRole(ctx, ["platform_admin", "super_admin"]);
+    const settings = tenant.settings ?? {};
+    const settingVal = (k: string): string | null => {
+      const v = (settings as Record<string, unknown>)[k];
+      return typeof v === "string" && v.length > 0 ? v : null;
+    };
+
+    // Infra identifiers: a stored per-tenant value wins; else fall back to the
+    // platform defaults (DB schema by tenant-id convention, Keycloak realm from
+    // env). Only ever returned to a platform admin.
+    const dbSchema = isPlatformAdmin
+      ? settingVal("dbSchema") ?? `tenant_${tenant.tenantId.replace(/-/g, "").slice(0, 8)}`
+      : null;
+    const keycloakRealm = isPlatformAdmin
+      ? settingVal("keycloakRealm") ?? (process.env.KEYCLOAK_REALM || "civitasone")
+      : null;
+
+    return reply.send({
+      data: {
+        tenantId: tenant.tenantId,
+        tenantName: tenant.name,
+        domain: tenant.domain,
+        edition: tenant.edition,
+        status: tenant.status,
+        region: tenant.region,
+        residency: tenant.residency,
+        dbSchema,
+        keycloakRealm,
+        // Honestly null until a real licence/quota store exists.
+        licenseType: settingVal("licenseType"),
+        licensedUntil: settingVal("licensedUntil"),
+        licensedSeats: null,
+        activeSeats: null,
+        storageQuotaGb: null,
+        storageUsedGb: null,
+        features: Array.isArray((settings as Record<string, unknown>).features)
+          ? ((settings as Record<string, unknown>).features as unknown[]).filter((f): f is string => typeof f === "string")
+          : [],
+      },
+    });
+  });
+
   // ─── Effective roles for a user — real, forwarded to identity-service RBAC ───
   //
   // Deliberately NOT /v1/admin/users/:id/roles: the gateway has a pre-existing,
@@ -530,11 +638,28 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const parsedBody = z.object({ permissionKeys: z.array(z.string()) }).safeParse(req.body);
+    const parsedBody = z.object({ permissionKeys: z.array(z.string()), reason: z.string().trim().min(3).max(500).optional() }).safeParse(req.body);
     if (!parsedBody.success) {
-      throw new HttpError(400, "VALIDATION_FAILED", "body must be { permissionKeys: string[] } — the FULL desired permission-key set for this role");
+      throw new HttpError(400, "VALIDATION_FAILED", "body must be { permissionKeys: string[], reason?: string (3-500 chars) } — permissionKeys is the FULL desired permission-key set for this role");
     }
+    const changeReason = parsedBody.data.reason;
     const desired = new Set(parsedBody.data.permissionKeys);
+
+    // GAP-PLATFORM-ADMIN-ROLES-01: enforce separation-of-duties BEFORE any
+    // upstream call (not even a read), so a rejected request leaves the role
+    // completely unchanged. Evaluated on the FULL desired set by design: this
+    // keeps the fail-fast guarantee, at the cost that a legacy role already
+    // holding a conflicting pair must be fixed by removing one of the pair in
+    // the same request (the 422 names the pair).
+    const sodConflicts = findSodConflicts(desired);
+    if (sodConflicts.length > 0) {
+      const detail = sodConflicts.map((c) => `${c.submitKey} + ${c.approveKey}`).join("; ");
+      throw new HttpError(
+        422,
+        "SOD_CONFLICT",
+        `separation-of-duties violated: a role may not both submit and approve the same resource (${detail})`,
+      );
+    }
 
     const roleRes = await callUpstream<{ permissions?: string[] } & Record<string, unknown>>(req, ctx, "GET", identityBaseUrl(), `/identity/rbac/roles/${id}`);
     if (roleRes.status < 200 || roleRes.status >= 300) { const r = relayError(roleRes.status, roleRes.body); return reply.code(r.status).send(r.payload); }
@@ -594,6 +719,10 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
         continue;
       }
       applied.revoked.push(key);
+    }
+    // ROLES-03: the mandatory UI reason is audited, not dropped.
+    if (applied.granted.length > 0 || applied.revoked.length > 0) {
+      await rolePermissionAuditCommands.recordRolePermissionsChange(ctx, id, applied.granted, applied.revoked, changeReason);
     }
     const status = applied.failed.length > 0 ? "partial" : "accepted";
     return reply.code(applied.failed.length > 0 ? 207 : 202).send({ roleId: id, status, ...applied });

@@ -53,6 +53,8 @@ export const COMMANDS = {
   backupSchedule:     "admin.backup.schedule",
   // GAP-ADMIN-AUDIT-LOG-03: audit-on-export for the platform audit-log CSV.
   auditLogExportRecorded: "admin.audit_log.export_recorded",
+  // ROLES-03: operator-supplied reason for an RBAC permission change.
+  rolePermissionsChanged: "admin.role_permissions.changed",
   // GAP-ADMIN-USERS-06: audit-on-export for the admin user-directory CSV.
   userExportRecorded: "admin.user_directory.export_recorded",
   // GAP-TENANT-ADMIN-SECURITY-04: audit-on-export for the Security Center

@@ -4,7 +4,18 @@ import { useEffect, useMemo, useState } from "react";
 import { Button, ConfirmDialog } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { toHumanError } from "@/lib/messages";
+import { humanizeStatus } from "@/lib/formatters";
 import type { AdminRoleSummary, AdminPermissionSummary } from "@/app/_data/loaders";
+
+/**
+ * GAP-PLATFORM-ADMIN-ROLES-06: human label for a raw module/action key. Prefer
+ * the permission catalogue's own `name`/`description` when available; else
+ * humanise the key ("finance" -> "Finance") rather than showing a raw
+ * lowercase key. Keeps the raw key visible elsewhere (useful for admins).
+ */
+function keyLabel(raw: string): string {
+  return humanizeStatus(raw);
+}
 
 /* ─── SoD policy (GFR 2017) ──────────────────────────────────────────────
  * submit + approve on the same FINANCIAL module is forbidden, except for
@@ -47,12 +58,17 @@ async function fetchRolePermissions(roleId: string): Promise<{ ok: boolean; keys
   }
 }
 
-async function saveRolePermissions(roleId: string, permissionKeys: string[]): Promise<{ ok: boolean; message?: string }> {
+async function saveRolePermissions(roleId: string, permissionKeys: string[], reason?: string): Promise<{ ok: boolean; message?: string }> {
   try {
+    // GAP-PLATFORM-ADMIN-ROLES-03: include the change reason in the body for
+    // the audit trail. The backend ignores unknown fields if it does not yet
+    // consume `reason`, so this is forward-compatible.
+    const body: Record<string, unknown> = { permissionKeys };
+    if (reason) body.reason = reason;
     const res = await fetch(`/api/proxy/v1/admin/roles/${roleId}/permissions`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ permissionKeys }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) return { ok: false, message: rolePermissionsError("save") };
     return { ok: true };
@@ -62,17 +78,20 @@ async function saveRolePermissions(roleId: string, permissionKeys: string[]): Pr
 }
 
 /* ─── Grid cell ──────────────────────────────────────────────────────── */
-function ToggleCell({ granted, provisioned, sod, editable, onToggle }: {
+function ToggleCell({ granted, provisioned, sod, editable, label, sodDescId, onToggle }: {
   granted: boolean;
   provisioned: boolean;
   sod: boolean;
   editable: boolean;
+  label: string;
+  sodDescId?: string;
   onToggle: () => void;
 }) {
   if (!provisioned) {
     return (
       <span
         title="This permission has not been provisioned for this tenant yet"
+        aria-label={`${label}: not provisioned for this tenant`}
         style={{
           display: "inline-block", minWidth: 52, padding: "3px 6px", borderRadius: 20, fontSize: 11, fontWeight: 700,
           border: "1px dashed var(--line)", background: "transparent", color: "var(--mut)",
@@ -88,12 +107,24 @@ function ToggleCell({ granted, provisioned, sod, editable, onToggle }: {
   let border = granted ? "1px solid var(--goodbd, #abefc6)" : "1px solid var(--line)";
   if (sod) { bg = "var(--warnbg, #fffaeb)"; color = "var(--warn, #b54708)"; border = "1px solid var(--warnbd, #fec84b)"; }
 
+  // GAP-PLATFORM-ADMIN-ROLES-04: give each toggle a context-rich accessible
+  // name ("<module> <action>: granted/not granted"), and for an SoD cell use
+  // aria-disabled (NOT the `disabled` attribute) so it stays in the tab order
+  // and its explanation is reachable via aria-describedby, not a title-only
+  // tooltip. A read-only (system role) cell keeps native disabled.
+  const nativeDisabled = !editable && !sod;
+  const ariaLabel = sod
+    ? `${label}: blocked by segregation of duties`
+    : `${label}: ${granted ? "granted" : "not granted"}`;
   return (
     <button
       type="button"
       onClick={editable && !sod ? onToggle : undefined}
-      disabled={!editable || sod}
+      disabled={nativeDisabled}
+      aria-disabled={sod || undefined}
       aria-pressed={granted}
+      aria-label={ariaLabel}
+      aria-describedby={sod ? sodDescId : undefined}
       title={sod ? "SoD: submit + approve on same role (financial module) is forbidden" : editable ? `Click to ${granted ? "revoke" : "grant"}` : granted ? "Allowed" : "Denied"}
       style={{
         minWidth: 52, padding: "3px 6px", borderRadius: 20, fontSize: 11, fontWeight: 700,
@@ -210,28 +241,34 @@ export function RolePermissionsMatrix({
     return n + c;
   }, 0);
 
-  async function saveChanges() {
+  async function saveChanges(reason?: string) {
     setBusy(true);
     setSaveError("");
     const failures: string[] = [];
+    const saved: string[] = [];
     for (const roleId of dirtyRoleIds) {
       const draft = draftByRole[roleId] ?? new Set<string>();
-      const result = await saveRolePermissions(roleId, [...draft]);
+      const role = orderedRoles.find((r) => r.id === roleId);
+      const result = await saveRolePermissions(roleId, [...draft], reason);
       if (!result.ok) {
-        const role = orderedRoles.find((r) => r.id === roleId);
-        failures.push(`${role?.name ?? roleId}: ${result.message ?? rolePermissionsError("save")}`);
+        failures.push(role?.name ?? roleId);
         continue;
       }
+      saved.push(role?.name ?? roleId);
       setBaselineByRole((prev) => ({ ...prev, [roleId]: new Set(draft) }));
     }
     setBusy(false);
     if (failures.length > 0) {
-      // Real failures are surfaced, never silently swallowed into a fake
-      // success notice (the bug this page previously had).
-      setSaveError(`${failures.length} role${failures.length === 1 ? "" : "s"} failed to save: ${failures.join("; ")}`);
+      // GAP-PLATFORM-ADMIN-ROLES-03: on a partial failure report BOTH which
+      // roles saved and which failed (not only the failures) so the operator
+      // knows the real post-save state — some roles ARE already committed.
+      // The dirty set shrinks to only the failed roles, so a retry resends
+      // just those (baseline was updated per success above).
+      const savedPart = saved.length > 0 ? `${saved.length} saved (${saved.join(", ")}); ` : "";
+      setSaveError(`${savedPart}${failures.length} failed (${failures.join(", ")}). Only the failed role${failures.length === 1 ? "" : "s"} remain unsaved — press Save again to retry.`);
       return;
     }
-    setNotice(`${changedCount} permission change${changedCount === 1 ? "" : "s"} saved.`);
+    setNotice(`${changedCount} permission change${changedCount === 1 ? "" : "s"} saved across ${saved.length} role${saved.length === 1 ? "" : "s"}.`);
     setConfirmOpen(false);
   }
 
@@ -289,7 +326,10 @@ export function RolePermissionsMatrix({
       ) : modules.length === 0 || actions.length === 0 ? (
         <p style={{ padding: 24, color: "var(--mut)", fontSize: 13 }}>No permissions are defined for this tenant yet.</p>
       ) : (
-        <div style={{ overflowX: "auto" }}>
+        <div>
+          <span id="sod-explanation" className="sr-only">
+            Blocked by segregation of duties: submit and approve on the same financial module cannot both be granted to one role (GFR 2017).
+          </span>
           {visibleRoles.map((role) => {
             const loadError = loadErrorByRole[role.id];
             const draft = draftByRole[role.id] ?? new Set<string>();
@@ -309,17 +349,17 @@ export function RolePermissionsMatrix({
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 580 }}>
                       <thead>
                         <tr style={{ background: "var(--line2, #f8fafc)", borderBottom: "1px solid var(--line)" }}>
-                          <th style={{ padding: "8px 14px", textAlign: "start", fontSize: 11.5, fontWeight: 650, color: "var(--ink2)" }}>Module</th>
+                          <th style={{ padding: "8px 14px", textAlign: "start", fontSize: 11.5, fontWeight: 650, color: "var(--ink2)", position: "sticky", insetInlineStart: 0, background: "var(--line2, #f8fafc)", zIndex: 1 }}>Module</th>
                           {actions.map((a) => (
-                            <th key={a} style={{ padding: "8px 10px", textAlign: "center", fontSize: 11, fontWeight: 650, color: "var(--ink2)", textTransform: "uppercase", letterSpacing: 0.4 }}>{a}</th>
+                            <th key={a} style={{ padding: "8px 10px", textAlign: "center", fontSize: 11, fontWeight: 650, color: "var(--ink2)", letterSpacing: 0.4 }}>{keyLabel(a)}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
                         {modules.map((mod) => (
                           <tr key={mod} style={{ borderBottom: "1px solid var(--line)" }}>
-                            <td style={{ padding: "8px 14px" }}>
-                              <span className="mono" style={{ fontWeight: 600 }}>{mod}</span>
+                            <td style={{ padding: "8px 14px", position: "sticky", insetInlineStart: 0, background: "var(--card, #fff)", zIndex: 1, boxShadow: "1px 0 0 var(--line)" }}>
+                              <span style={{ fontWeight: 600 }}>{keyLabel(mod)}</span>
                             </td>
                             {actions.map((action) => {
                               const key = `${mod}.${action}`;
@@ -333,6 +373,8 @@ export function RolePermissionsMatrix({
                                     provisioned={!!perm}
                                     sod={sod}
                                     editable={!role.isSystem && !!perm}
+                                    label={`${keyLabel(mod)} ${keyLabel(action)}`}
+                                    sodDescId="sod-explanation"
                                     onToggle={() => toggle(role.id, key)}
                                   />
                                 </td>
@@ -355,9 +397,12 @@ export function RolePermissionsMatrix({
         title="Save permission changes?"
         description={`You are applying ${changedCount} permission change${changedCount === 1 ? "" : "s"} across ${dirtyRoleIds.length} role${dirtyRoleIds.length === 1 ? "" : "s"}. This takes effect immediately.`}
         confirmLabel="Save changes"
+        requireReason
+        reasonLabel="Reason for this RBAC change"
+        minReasonLength={5}
         busy={busy}
         errorMessage={saveError || undefined}
-        onConfirm={() => void saveChanges()}
+        onConfirm={(reason) => void saveChanges(reason)}
         onCancel={() => { if (!busy) setConfirmOpen(false); }}
       />
     </div>

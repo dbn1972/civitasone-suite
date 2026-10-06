@@ -1,34 +1,42 @@
+import { requireAnyRole, PLATFORM_ADMIN_ROLES } from "@/lib/auth/roleGuard";
 import { getOrgHierarchyLevels } from "@/app/_data/loaders";
 import { PageHeader, StatCard } from "@/app/_components/ds";
 import { Breadcrumb } from "../Breadcrumb";
 import { OrgConfigPage } from "./OrgConfigPage";
 
-// COMP-014: this page used to seed its entire table from a hardcoded
-// DEFAULT_LEVELS constant and PUT to /v1/admin/org-hierarchy, a path with no
-// PUT route at all (the failure was hidden behind an unconditional "Org
-// hierarchy saved." notice, and a reload always showed the same hardcoded
-// 5 levels regardless). /v1/admin/org-hierarchy-levels (admin-service's new
-// org-hierarchy-levels module) is a dedicated backend for this
-// hierarchy-LEVEL-taxonomy concept — deliberately distinct from
-// /v1/admin/org-hierarchy, the real org-unit-INSTANCE CRUD already consumed
-// by admin/org/OrgHierarchyManager.tsx. Every load and save now goes through
-// this real per-tenant store (tenant override, platform default fallback —
-// see admin-service's migration 0033).
+// COMP-014: every load/save goes through the real per-tenant org-hierarchy-
+// levels store (admin-service GET/PUT /v1/admin/org-hierarchy-levels, tenant
+// override with platform-default fallback). Full history: see commit log.
 export default async function OrgConfigRoute() {
+  requireAnyRole(PLATFORM_ADMIN_ROLES, "/dashboard");
   const { data: levels, source } = await getOrgHierarchyLevels();
+
+  // GAP-PLATFORM-ADMIN-ORG-CONFIG-05: subtitle and stat tiles are derived from
+  // the tenant's REAL configured levels, not hardcoded "GFR 2017" / "Top-down"
+  // / a fixed "Ministry → Department → …" chain. On a load error show "—".
+  const errored = source === "error";
+  const chain = levels.map((l) => l.label).join(" → ");
+  const subtitle = errored
+    ? "Configure your organisation's reporting hierarchy."
+    : chain
+      ? `Reporting hierarchy — ${chain}.`
+      : "No hierarchy levels are configured yet.";
+  const topLevel = errored ? null : levels[0]?.label ?? "—";
+  const lowestLevel = errored ? null : levels[levels.length - 1]?.label ?? "—";
+
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Platform Admin", href: "/platform-admin" }, { label: "Org Configuration" }]} />
       <PageHeader
         back="/platform-admin"
         title="Organisation Configuration"
-        subtitle="Configure the Indian government org hierarchy — Ministry → Department → Division → Section → Unit."
+        subtitle={subtitle}
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
-        <StatCard icon="🏛️" iconBg="#eff6ff" label="Hierarchy levels" value={levels.length} />
-        <StatCard icon="📂" iconBg="#ecfdf3" label="Structure" value="GFR 2017" />
-        <StatCard icon="🔗" iconBg="#f1f5f9" label="Reporting chain" value="Top-down" />
-        <StatCard icon="✏️" iconBg="#fffaeb" label="Editable" value="Name + Order" />
+        <StatCard icon="🏛️" iconBg="#eff6ff" label="Hierarchy levels" value={errored ? null : levels.length} />
+        <StatCard icon="⬆️" iconBg="#ecfdf3" label="Top level" value={topLevel} />
+        <StatCard icon="⬇️" iconBg="#f1f5f9" label="Lowest level" value={lowestLevel} />
+        <StatCard icon="✏️" iconBg="#fffaeb" label="Editable" value={errored ? null : "Name, order, description"} />
       </div>
       <OrgConfigPage initialLevels={levels} source={source} />
     </div>
