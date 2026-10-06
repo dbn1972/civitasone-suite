@@ -524,6 +524,24 @@ export interface ModuleRowSummary {
   sublabel?: string;
   status?: string;
   meta?: string;
+  /**
+   * GAP-CATALOGUE-CATEGORIES-01: 0-based depth of this row within a flattened
+   * hierarchy tree (0 = root). Optional and additive: every existing
+   * ModuleListPage consumer omits it and renders unchanged. ModuleListTable
+   * indents the Name cell by `depth` when present.
+   */
+  depth?: number;
+  /**
+   * GAP-CATALOGUE-CATEGORIES-01: label of this row's parent in a flattened
+   * tree, for an optional "Parent" hint. Optional/additive.
+   */
+  parentLabel?: string;
+  /**
+   * GAP-CATALOGUE-{BUNDLES,CATEGORIES,PRODUCTS,RATES}-0x: a human-facing code
+   * (e.g. "SVC-BPA-01") kept distinct from `id` so the ID column never
+   * truncates a non-UUID code. Optional/additive.
+   */
+  code?: string;
 }
 
 export interface PurchaseOrderSummary {

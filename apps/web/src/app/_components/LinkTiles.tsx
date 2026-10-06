@@ -68,6 +68,14 @@ const TILE_ICONS: Record<string, string> = {
   Subscriptions: "🔁",
   Invoices: "🧾",
   "GSTN Console": "🏛️",
+  // GAP-CATALOGUE-HOME-04: the Service Catalogue hub's four tiles (Products,
+  // Categories, Rates, Bundles) had no TILE_ICONS entry and no matching href
+  // substring, so all four fell through to the generic 📁 folder glyph with no
+  // visual differentiation. Keyed by their hub titles (catalogue/page.tsx).
+  Products: "📦",
+  Categories: "🗂",
+  Rates: "💵",
+  Bundles: "🎁",
 };
 
 const TILE_BG = ["#eef2ff", "#ecfdf3", "#fffaeb", "#fce7ee", "#e7edfd", "#f1f5f9"];

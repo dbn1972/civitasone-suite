@@ -86,7 +86,15 @@ export function ModuleListTable({
             {data.map((row) => (
               <tr key={row.id}>
                 <td><span className="mono" title={row.id}>{UUID_RE.test(row.id) ? row.id.slice(0, 8) : row.id}</span></td>
-                <td>{row.label}</td>
+                {/* GAP-CATALOGUE-CATEGORIES-01: a flattened hierarchy row carries
+                    an optional 0-based `depth`; indent the Name cell by it so a
+                    sub-category reads as nested under its parent. Rows without
+                    `depth` (every non-tree consumer) render flush as before. */}
+                <td style={row.depth ? { paddingLeft: `${row.depth * 16}px` } : undefined}>
+                  {row.depth ? <span aria-hidden="true" style={{ opacity: 0.5 }}>└ </span> : null}
+                  {row.label}
+                  {row.parentLabel ? <span className="muted" style={{ fontSize: "0.85em" }}> · in {row.parentLabel}</span> : null}
+                </td>
                 <td>{row.sublabel ?? "—"}</td>
                 <td>{row.status ?? "—"}</td>
                 <td>{row.meta ?? "—"}</td>

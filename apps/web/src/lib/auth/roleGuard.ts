@@ -75,6 +75,26 @@ export function requireAnyRole(allowed: string[], redirectTo = "/dashboard"): vo
 export const PAYROLL_ADMIN_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 
 /**
+ * GAP-CATALOGUE-HOME-02: roles permitted to READ the service catalogue
+ * (products, categories, rates, bundles). Mirrors catalogue-service's own
+ * CATALOGUE_ROLES on every GET route (products/routes.ts, rates/routes.ts,
+ * bundles/routes.ts): catalogue_user, catalogue_admin, super_admin. A role
+ * outside this list already gets a 403 from the API; gating the catalogue
+ * layout on this constant shows the dashboard redirect instead of a page of
+ * failed fetches, and declares the module's owner. super_admin is included so
+ * platform operators keep access.
+ */
+export const CATALOGUE_READER_ROLES = ["catalogue_user", "catalogue_admin", "super_admin"];
+
+/**
+ * GAP-CATALOGUE-HOME-02: roles permitted to CREATE/EDIT catalogue entries.
+ * Mirrors catalogue-service's ADMIN_ROLES on every POST/PATCH/DELETE route:
+ * catalogue_admin, super_admin. UI write controls (none exist on the current
+ * read-only screens) must gate on this AND the server already enforces it.
+ */
+export const CATALOGUE_ADMIN_ROLES = ["catalogue_admin", "super_admin"];
+
+/**
  * Roles permitted to read payroll run data (list/detail). Mirrors
  * payroll-service's READER_ROLES (routes.ts): PAYROLL_ADMIN_ROLES plus
  * hr_admin/finance_officer -- deliberately NOT "employee" or "manager",
