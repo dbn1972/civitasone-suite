@@ -34,7 +34,7 @@ describe("POST /v1/admin/data-export", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/admin/data-export",
       headers: authHeader(["tenant_admin"]),
-      payload: { type: "full", format: "json" },
+      payload: { type: "full", format: "json", purpose: "Annual statutory audit export" },
     });
     expect(res.statusCode).toBe(202);
     const body = res.json();
@@ -64,7 +64,7 @@ describe("POST /v1/admin/data-export", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/admin/data-export",
       headers: authHeader(["super_admin"]),
-      payload: { type: "full", format: "json" },
+      payload: { type: "full", format: "json", purpose: "Annual statutory audit export" },
     });
     expect(res.statusCode).toBe(202);
   });
@@ -96,6 +96,16 @@ describe("POST /v1/admin/data-export", () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it("returns 400 PURPOSE_REQUIRED for a full export without a purpose", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/admin/data-export",
+      headers: authHeader(["tenant_admin"]),
+      payload: { type: "full", format: "json" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error?.code ?? res.json().code).toBe("PURPOSE_REQUIRED");
+  });
+
   it("returns 400 with missing format", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/admin/data-export",
@@ -109,7 +119,7 @@ describe("POST /v1/admin/data-export", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/admin/data-export",
       headers: authHeader(["employee"]),
-      payload: { type: "full", format: "json" },
+      payload: { type: "full", format: "json", purpose: "Annual statutory audit export" },
     });
     expect(res.statusCode).toBe(403);
   });
@@ -117,7 +127,7 @@ describe("POST /v1/admin/data-export", () => {
   it("returns 401 without auth", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/admin/data-export",
-      payload: { type: "full", format: "json" },
+      payload: { type: "full", format: "json", purpose: "Annual statutory audit export" },
     });
     expect(res.statusCode).toBe(401);
   });

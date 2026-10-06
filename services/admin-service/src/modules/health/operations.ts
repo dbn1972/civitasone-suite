@@ -107,7 +107,18 @@ export function redactLogLine(line: string): string {
     .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "<email>")
     .replace(/\b(Bearer\s+)[A-Za-z0-9._~+/=-]+\b/gi, "$1<redacted>")
     .replace(/\b((?:api[_-]?key|token|secret|password|passwd|pwd)\s*[:=]\s*)[^\s,"'}]+/gi, "$1<redacted>")
-    .replace(/\b(postgres(?:ql)?:\/\/)[^\s]+/gi, "$1<redacted>");
+    .replace(/\b(postgres(?:ql)?:\/\/)[^\s]+/gi, "$1<redacted>")
+    // JWTs that appear without a "Bearer " prefix (three base64url segments).
+    .replace(/\beyJ[A-Za-z0-9._~+/=-]{10,}\b/g, "<redacted>")
+    // GAP-TENANT-ADMIN-OPERATIONS-04: Indian PAN (ABCDE1234F) is personal data.
+    .replace(/\b[A-Z]{5}[0-9]{4}[A-Z]\b/g, "<pan>")
+    // GAP-TENANT-ADMIN-OPERATIONS-04: Aadhaar — 12 digits, optionally grouped
+    // 4-4-4 by spaces or hyphens. Masked BEFORE generic phone handling so a
+    // 12-digit id is not partially matched as a phone number.
+    .replace(/\b[2-9][0-9]{3}[ -]?[0-9]{4}[ -]?[0-9]{4}\b/g, "<aadhaar>")
+    // GAP-TENANT-ADMIN-OPERATIONS-04: Indian mobile numbers (optionally +91 /
+    // 0 prefixed, 10 digits starting 6-9), personal data under DPDP.
+    .replace(/\b(?:\+91[ -]?|0)?[6-9][0-9]{9}\b/g, "<phone>");
 }
 
 export async function readPm2Processes(): Promise<{ available: boolean; processes: OperationProcess[] }> {

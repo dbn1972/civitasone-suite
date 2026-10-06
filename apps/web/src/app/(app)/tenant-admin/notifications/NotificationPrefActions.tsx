@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { Button, EmptyState } from "../../../_components/ds";
+import { Button, EmptyState, ConfirmDialog } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type Pref = {
@@ -23,17 +23,12 @@ const DEFAULTS: Channels = { email: true, inApp: true };
 
 /**
  * Interactive notification channel settings + "Save changes" / "Reset to
- * defaults" for the tenant notification-preferences page. Replaces the dead
- * header buttons and the read-only channel pills.
+ * defaults" for the tenant notification-preferences page.
  *
- * Only Email and In-app are interactive because those are the channels the
- * notification-service actually persists; SMS/Webhook are shown as static
- * "not configured" indicators (the backend does not store them yet). Changed
- * rows are persisted via PATCH /notifications/prefs/:id through the proxy.
- *
- * WCAG: each channel toggle is a real <button role="switch"> with an aria-label
- * and aria-checked; a polite aria-live region announces save status and an
- * assertive region announces errors.
+ * Only Email and In-app are interactive because those are the only channels the
+ * notification-service persists (see GET /notifications/preferences, which
+ * returns smsEnabled/webhookEnabled always false). SMS/Webhook are therefore
+ * shown as explicit read-only indicators, never as something the admin can set.
  */
 export function NotificationPrefActions({ prefs }: { prefs: Pref[] }) {
   const router = useRouter();
@@ -44,10 +39,24 @@ export function NotificationPrefActions({ prefs }: { prefs: Pref[] }) {
     return m;
   }, [prefs]);
 
+  // GAP-TENANT-ADMIN-NOTIFICATIONS-05: pending must stay in sync with the server
+  // props. If router.refresh()/revalidate adds a NEW pref id, `pending[newId]`
+  // would be undefined and crash isDirty()/render. Keying the state object by a
+  // hash of the current pref ids resets it whenever the set of rows changes, so
+  // every rendered row always has a channels entry.
+  const prefKey = useMemo(() => prefs.map((p) => p.id).sort().join("|"), [prefs]);
+  const [stateKey, setStateKey] = useState(prefKey);
   const [pending, setPending] = useState<Record<string, Channels>>(initial);
+  if (stateKey !== prefKey) {
+    // Pref set changed under us — adopt the fresh server values.
+    setStateKey(prefKey);
+    setPending(initial);
+  }
+
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
+  const [confirmReset, setConfirmReset] = useState(false);
   const formError = useFormError("preferences");
 
   const byModule = useMemo(() => {
@@ -57,18 +66,35 @@ export function NotificationPrefActions({ prefs }: { prefs: Pref[] }) {
     }, {});
   }, [prefs]);
 
-  function isDirty(id: string, next: Record<string, Channels>): boolean {
-    return next[id].email !== initial[id].email || next[id].inApp !== initial[id].inApp;
+  // GAP-TENANT-ADMIN-NOTIFICATIONS-05: fall back to the server `initial` value
+  // for any id missing from `pending`, so a freshly-added row never throws.
+  function chan(id: string): Channels {
+    return pending[id] ?? initial[id] ?? DEFAULTS;
+  }
+
+  function isDirty(id: string): boolean {
+    const base = initial[id];
+    if (!base) return false;
+    const c = chan(id);
+    return c.email !== base.email || c.inApp !== base.inApp;
   }
 
   function toggle(id: string, channel: keyof Channels) {
     setStatus("");
     setError("");
-    setPending((p) => ({ ...p, [id]: { ...p[id], [channel]: !p[id][channel] } }));
+    setPending((p) => {
+      const cur = p[id] ?? initial[id] ?? DEFAULTS;
+      return { ...p, [id]: { ...cur, [channel]: !cur[channel] } };
+    });
   }
 
-  async function persist(target: Record<string, Channels>, okVerb: string) {
-    const ids = prefs.map((p) => p.id).filter((id) => isDirty(id, target));
+  // GAP-TENANT-ADMIN-NOTIFICATIONS-02: persist each dirty row, but DO NOT return
+  // on the first failure. Track saved vs failed ids; always refresh after any
+  // success so the stale `initial` is reconciled with the server; report an
+  // honest "Saved X of Y; N failed" and leave only the failed rows dirty so a
+  // retry re-sends just those.
+  async function save() {
+    const ids = prefs.map((p) => p.id).filter((id) => isDirty(id));
     if (ids.length === 0) {
       setStatus("Nothing to save.");
       return;
@@ -77,39 +103,65 @@ export function NotificationPrefActions({ prefs }: { prefs: Pref[] }) {
     setStatus("");
     setError("");
     formError.clear();
-    try {
-      for (const id of ids) {
+
+    const saved: string[] = [];
+    const failed: string[] = [];
+    let lastErr = "";
+    for (const id of ids) {
+      try {
+        const c = chan(id);
         const res = await fetch(`/api/proxy/notification/prefs/${id}`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ email: target[id].email, inApp: target[id].inApp }),
+          body: JSON.stringify({ email: c.email, inApp: c.inApp }),
         });
-        if (!res.ok) {
-          setError((await formError.fromResponse(res, "save")).message);
-          return;
+        if (res.ok) {
+          saved.push(id);
+        } else {
+          failed.push(id);
+          lastErr = (await formError.fromResponse(res, "save")).message;
         }
+      } catch (caught) {
+        failed.push(id);
+        lastErr = formError.fromException("save", caught).message;
       }
-      setStatus(`${okVerb} ${ids.length} preference${ids.length === 1 ? "" : "s"}.`);
-      router.refresh();
-    } catch (caught) {
-      setError(formError.fromException("save", caught).message);
-    } finally {
-      setBusy(false);
     }
+
+    setBusy(false);
+    if (failed.length === 0) {
+      setStatus(`Saved ${saved.length} preference${saved.length === 1 ? "" : "s"}.`);
+    } else {
+      const labels = failed
+        .map((id) => prefs.find((p) => p.id === id)?.label ?? id)
+        .join(", ");
+      setStatus(saved.length > 0 ? `Saved ${saved.length} of ${ids.length}.` : "");
+      setError(`${failed.length} not saved: ${labels}. ${lastErr}`.trim());
+    }
+    // Reconcile with the server even on partial failure (so saved rows stop
+    // showing dirty); the refresh re-seeds `initial`/`pending` via prefKey.
+    if (saved.length > 0) router.refresh();
   }
 
-  function save() {
-    void persist(pending, "Saved");
+  // GAP-TENANT-ADMIN-NOTIFICATIONS-01: Reset no longer persists on one click. It
+  // opens a confirmation (with an optional reason for the record), and on
+  // confirm only STAGES the defaults — the admin then reviews and presses Save,
+  // which is the audited write. Decision: a per-row preference PATCH has no
+  // reason field and threading one through the outbox audit is out of scope for
+  // this gap, so Reset stages rather than persisting silently (the safest
+  // default: no accidental tenant-wide rewrite, change is explicit + reviewed).
+  function applyResetToStage() {
+    setStatus("");
+    setError("");
+    setPending((prev) => {
+      const next: Record<string, Channels> = { ...prev };
+      for (const p of prefs) next[p.id] = { ...DEFAULTS };
+      return next;
+    });
+    setConfirmReset(false);
+    setStatus("Defaults staged. Review the changes and press Save to apply.");
   }
 
-  function resetToDefaults() {
-    const next: Record<string, Channels> = {};
-    for (const p of prefs) next[p.id] = { ...DEFAULTS };
-    setPending(next);
-    void persist(next, "Reset");
-  }
-
-  const dirty = prefs.some((p) => isDirty(p.id, pending));
+  const dirty = prefs.some((p) => isDirty(p.id));
   const modules = Object.keys(byModule);
 
   return (
@@ -117,10 +169,10 @@ export function NotificationPrefActions({ prefs }: { prefs: Pref[] }) {
       <div className="card-h">
         <h3>Channel settings</h3>
         <div style={{ display: "flex", gap: 8 }}>
-          <Button variant="ghost" disabled={busy} aria-busy={busy} onClick={() => resetToDefaults()}>
+          <Button variant="ghost" disabled={busy} aria-busy={busy} onClick={() => setConfirmReset(true)}>
             Reset to defaults
           </Button>
-          <Button disabled={busy || !dirty} aria-busy={busy} onClick={() => save()}>
+          <Button disabled={busy || !dirty} aria-busy={busy} onClick={() => void save()}>
             {busy ? "Saving…" : "Save changes"}
           </Button>
         </div>
@@ -133,15 +185,19 @@ export function NotificationPrefActions({ prefs }: { prefs: Pref[] }) {
                 {mod.replace(/_/g, " ")}
               </div>
               {(byModule[mod] ?? []).map((pref) => {
-                const ch = pending[pref.id];
+                const ch = chan(pref.id);
                 return (
-                  <div key={pref.id} className="prefrow">
+                  <div key={pref.id} className="prefrow" data-dirty={isDirty(pref.id) ? "true" : undefined}>
                     <span style={{ fontSize: 13 }}>{pref.label}</span>
-                    <div style={{ display: "flex", gap: 6 }}>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                       <ChannelSwitch label={`Email for ${pref.label}`} on={ch.email} disabled={busy} onClick={() => toggle(pref.id, "email")} text="Email" />
                       <ChannelSwitch label={`In-app for ${pref.label}`} on={ch.inApp} disabled={busy} onClick={() => toggle(pref.id, "inApp")} text="In-app" />
-                      {pref.smsEnabled ? <span className="pill info">SMS</span> : null}
-                      {pref.webhookEnabled ? <span className="pill info">Webhook</span> : null}
+                      {/* GAP-TENANT-ADMIN-NOTIFICATIONS-03: SMS/Webhook are not
+                          configurable here (backend does not store them), so
+                          they are labelled read-only rather than looking like
+                          live toggles. */}
+                      {pref.smsEnabled ? <span className="pill mut" title="SMS delivery is read-only here">SMS (read-only)</span> : null}
+                      {pref.webhookEnabled ? <span className="pill mut" title="Webhook delivery is read-only here">Webhook (read-only)</span> : null}
                     </div>
                   </div>
                 );
@@ -154,6 +210,17 @@ export function NotificationPrefActions({ prefs }: { prefs: Pref[] }) {
         <div role="status" aria-live="polite" style={{ fontSize: 12, color: "#067647", marginTop: 8 }}>{status}</div>
         <div role="alert" aria-live="assertive" style={{ fontSize: 12, color: "var(--bad)", marginTop: 4 }}>{error}</div>
       </div>
+
+      <ConfirmDialog
+        open={confirmReset}
+        title="Reset notification channels to defaults?"
+        description={`This stages Email and In-app ON for all ${prefs.length} event${prefs.length === 1 ? "" : "s"}. Nothing is saved until you press Save changes.`}
+        confirmLabel="Stage defaults"
+        optionalReason
+        reasonLabel="Reason (optional, for your records)"
+        onConfirm={() => applyResetToStage()}
+        onCancel={() => setConfirmReset(false)}
+      />
     </div>
   );
 }

@@ -5,12 +5,12 @@ import { COMMANDS } from "../../topics.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
-export async function toggleModule(ctx: RequestContext, tenantId: string, module: string, enabled: boolean): Promise<Accepted> {
+export async function toggleModule(ctx: RequestContext, tenantId: string, module: string, enabled: boolean, reason?: string): Promise<Accepted> {
   const id = idempotentId(ctx);
   await queue.publish(COMMANDS.moduleToggle, {
     messageId: id, type: COMMANDS.moduleToggle, tenantId,
     actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { tenantId, moduleKey: module, enabled },
+    payload: { tenantId, moduleKey: module, enabled, reason: reason ?? null },
   });
   await cache.invalidate(cache.makeKey(tenantId, "config", tenantId));
   return { id, status: "accepted", correlationId: ctx.correlationId };

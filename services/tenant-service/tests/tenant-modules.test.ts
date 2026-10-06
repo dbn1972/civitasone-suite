@@ -238,6 +238,19 @@ describe("quota domain logic", () => {
     const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
     expect(diffDays).toBe(expectedDays);
   });
+
+  // GAP-TENANT-ADMIN-USAGE-06: pin the documented projection model used by
+  // GET /v1/tenant/usage. The acceptance case from the gap ledger: usage
+  // 80/100 growing 10/day -> projected exhaustion in 2 days. The server
+  // computes exhaustion = ceil((limit - used) / dailyGrowthRate) days from
+  // now; dailyGrowthRate is derived at the route as max(1, round(used/30)).
+  it("projectedOverageDate: 80/100 at 10/day exhausts in 2 days (documented model)", () => {
+    const result = projectedOverageDate({ ...baseQuota, used: 80, limit: 100 }, 10);
+    expect(result).not.toBeNull();
+    const diffDays = Math.round((result!.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    expect(diffDays).toBe(2); // ceil(20 / 10)
+  });
+
 });
 
 // ═══════════════════════════════════════════════════════════════════════

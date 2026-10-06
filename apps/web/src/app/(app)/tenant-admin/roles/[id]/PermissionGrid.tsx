@@ -66,7 +66,15 @@ export function PermissionGrid({
     if (!editable) return;
     const k = key(m, a);
     const current = stateOf(m, a);
-    const next: CellState = current === "inherit" ? "allow" : current === "allow" ? "deny" : "inherit";
+    const hasBaseline = (baseline[k] ?? "inherit") !== "inherit";
+    // GAP-TENANT-ADMIN-ROLES-DETAIL-01: there is no permission-REMOVAL endpoint,
+    // so a reset-to-inherit of a saved cell can never be persisted. Rather than
+    // advertise "Inherit" as a step and then silently skip it on save, a cell
+    // that already has a saved baseline cycles ONLY Allow <-> Deny. A cell with
+    // no baseline still offers Inherit -> Allow -> Deny (nothing to remove).
+    const next: CellState = hasBaseline
+      ? current === "allow" ? "deny" : "allow"
+      : current === "inherit" ? "allow" : current === "allow" ? "deny" : "inherit";
     setDraft((d) => {
       const copy = { ...d };
       if ((baseline[k] ?? "inherit") === next) delete copy[k];
@@ -77,39 +85,68 @@ export function PermissionGrid({
   }
 
   const changed = Object.entries(draft).filter(([k, v]) => v !== (baseline[k] ?? "inherit"));
+  // With DETAIL-01 in place no draft can target "inherit" for a baselined cell,
+  // so `savable` is simply every change; `unremovable` stays as a defensive
+  // guard (should always be empty now).
   const savable = changed.filter(([, v]) => v !== "inherit");
-  const unremovable = changed.filter(([, v]) => v === "inherit");
   const dirty = changed.length > 0;
 
   async function save(reason?: string) {
     setBusy(true);
     setError(undefined);
     formError.clear();
+    // GAP-TENANT-ADMIN-ROLES-DETAIL-02: apply changes one by one but track which
+    // succeeded. On a mid-way failure, drop the succeeded cells from the draft,
+    // refresh from the server, and report "N of M saved; K failed" instead of
+    // leaving the role half-updated with a stale baseline and a retry that
+    // re-POSTs already-applied cells.
+    const succeeded: string[] = [];
+    let failureMessage: string | null = null;
     try {
       for (const [k, v] of savable) {
         const [resource, action] = k.split(":");
         const res = await fetch(`/api/proxy/policy/roles/${roleId}/permissions`, {
           method: "POST",
-          headers: { "content-type": "application/json", ...(reason ? { "x-correlation-id": reason.slice(0, 64) } : {}) },
-          body: JSON.stringify({ resource, action, effect: v === "deny" ? "deny" : "allow" }),
+          headers: { "content-type": "application/json" },
+          // GAP-TENANT-ADMIN-ROLES-DETAIL-04: reason travels in the BODY (zod-
+          // capped at 500 server-side), NOT as a truncated x-correlation-id
+          // header. The proxy supplies a real correlation id for tracing.
+          body: JSON.stringify({ resource, action, effect: v === "deny" ? "deny" : "allow", ...(reason ? { reason } : {}) }),
         });
         if (!res.ok) {
           const resolved = await formError.fromResponse(res, "save");
-          throw new Error(`${resource}:${action} — ${resolved.message}`);
+          failureMessage = `${resource}:${action} — ${resolved.message}`;
+          break;
         }
+        succeeded.push(k);
       }
-      setConfirmOpen(false);
-      setDraft({});
-      setNotice(
-        `${savable.length} permission change${savable.length === 1 ? "" : "s"} saved.` +
-          (unremovable.length > 0 ? ` ${unremovable.length} reset-to-inherit change${unremovable.length === 1 ? "" : "s"} could not be applied — the policy service has no permission-removal endpoint.` : ""),
+    } catch (err) {
+      failureMessage = formError.fromException("save", err).message;
+    }
+
+    if (failureMessage) {
+      // Remove the cells that DID apply so a retry does not re-POST them.
+      setDraft((d) => {
+        const copy = { ...d };
+        for (const k of succeeded) delete copy[k];
+        return copy;
+      });
+      // Keep the dialog open so the N-of-M result stays visible; the server
+      // refresh updates the baseline for the cells that did apply.
+      setError(
+        `${succeeded.length} of ${savable.length} change${savable.length === 1 ? "" : "s"} saved; ` +
+          `${savable.length - succeeded.length} failed: ${failureMessage}`,
       );
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save permissions.");
-    } finally {
       setBusy(false);
+      return;
     }
+
+    setConfirmOpen(false);
+    setDraft({});
+    setNotice(`${savable.length} permission change${savable.length === 1 ? "" : "s"} saved.`);
+    router.refresh();
+    setBusy(false);
   }
 
   const rows: ModuleRow[] = modules.map((m) => ({ module: m }));
@@ -164,7 +201,7 @@ export function PermissionGrid({
       ) : null}
       {editable ? (
         <p style={{ fontSize: 12, color: "var(--civitas-color-text-muted)", margin: 0, padding: "8px 16px 0" }}>
-          Click a cell to cycle <b>Inherit → Allow → Deny</b>. Saving records each change in the audit log.
+          Click a cell to change it. A new cell cycles <b>Inherit → Allow → Deny</b>; a saved cell toggles <b>Allow ⇄ Deny</b> (resetting a saved permission to Inherit is not yet supported). Saving records each change in the audit log.
         </p>
       ) : null}
 
@@ -188,9 +225,6 @@ export function PermissionGrid({
         description={
           <>
             You are applying <b>{savable.length}</b> permission change{savable.length === 1 ? "" : "s"} to this role.
-            {unremovable.length > 0 ? (
-              <> {unremovable.length} reset-to-inherit change{unremovable.length === 1 ? "" : "s"} cannot be applied (no removal endpoint) and will be skipped.</>
-            ) : null}
             {" "}This takes effect immediately for everyone assigned to the role.
           </>
         }

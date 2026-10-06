@@ -55,6 +55,12 @@ export const COMMANDS = {
   auditLogExportRecorded: "admin.audit_log.export_recorded",
   // GAP-ADMIN-USERS-06: audit-on-export for the admin user-directory CSV.
   userExportRecorded: "admin.user_directory.export_recorded",
+  // GAP-TENANT-ADMIN-SECURITY-04: audit-on-export for the Security Center
+  // events CSV (actor emails + source IPs are personal data under DPDP).
+  securityEventsExportRecorded: "admin.security_events.export_recorded",
+  // GAP-TENANT-ADMIN-MFA-03: audit-on-export for the MFA-status CSV (staff
+  // names + emails are personal data under DPDP; bulk extraction is recorded).
+  mfaExportRecorded: "admin.mfa_status.export_recorded",
   backupTrigger:      "admin.backup.trigger",
   breakGlassOpen:     "admin.breakglass.open",
   breakGlassClose:    "admin.breakglass.close",

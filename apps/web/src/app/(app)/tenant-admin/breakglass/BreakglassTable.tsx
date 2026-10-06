@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { Segmented, DataTable } from "../../../_components/ds";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, formatDuration } from "@/lib/formatters";
 import { BreakglassActions } from "./BreakglassActions";
 
 type Event = {
@@ -43,7 +44,11 @@ export function BreakglassTable({ events }: { events: Event[] }) {
               <div className="who">
                 <div className="av" aria-hidden="true">{event.actor.slice(0, 2).toUpperCase()}</div>
                 <div>
-                  <div className="nm">{event.actor}</div>
+                  {/* GAP-TENANT-ADMIN-BREAKGLASS-04 / DETAIL-02: link to the
+                      real detail route (now backed by a live fetch). */}
+                  <div className="nm">
+                    <Link href={`/tenant-admin/breakglass/${event.id}`}>{event.actor}</Link>
+                  </div>
                   <div className="ml">{event.actorEmail}</div>
                 </div>
               </div>
@@ -51,7 +56,18 @@ export function BreakglassTable({ events }: { events: Event[] }) {
           },
           { key: "reason", label: "Reason", render: (event) => <span style={{ display: "inline-block", maxWidth: 200 }}>{event.reason}</span> },
           { key: "startedAt", label: "Requested", render: (event) => formatIndianDate(event.startedAt) },
-          { key: "endedAt", label: "Duration", render: (event) => (event.endedAt ? "Ended" : "Ongoing") },
+          {
+            key: "endedAt",
+            label: "Duration",
+            // GAP-TENANT-ADMIN-BREAKGLASS-03: show real elapsed time, label
+            // auto_expired correctly, and show a live "Ongoing" elapsed span.
+            render: (event) =>
+              event.status === "auto_expired"
+                ? `Auto-expired${event.endedAt ? ` after ${formatDuration(event.startedAt, event.endedAt)}` : ""}`
+                : event.status === "active"
+                  ? `Ongoing · ${formatDuration(event.startedAt)}`
+                  : formatDuration(event.startedAt, event.endedAt),
+          },
           {
             key: "status",
             label: "Status",

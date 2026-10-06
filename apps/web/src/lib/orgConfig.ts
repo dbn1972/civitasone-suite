@@ -94,6 +94,26 @@ export function getTerminology(orgType?: string | null): OrgTerminology {
   return TERMINOLOGY.govt_dept;
 }
 
+/**
+ * GAP-TENANT-ADMIN-ORG-TYPE-04: one-line explanation of what each terminology
+ * flag actually switches on, so the Govt terms / CPC Pay / CCS Leave tags are
+ * not unexplained jargon. Keyed by the OrgTerminology boolean field name.
+ */
+export const FLAG_HELP: Record<"govtTerms" | "cpcPayMatrix" | "ccsLeaveRules", { label: string; help: string }> = {
+  govtTerms: {
+    label: "Govt terms",
+    help: "Uses government vocabulary (Sanction, Utilisation Certificate, GRN) instead of generic business terms.",
+  },
+  cpcPayMatrix: {
+    label: "CPC Pay",
+    help: "Pay is structured on the 7th Central Pay Commission matrix (levels and cells) rather than a free CTC.",
+  },
+  ccsLeaveRules: {
+    label: "CCS Leave",
+    help: "Applies CCS (Leave) Rules — sandwich leave and prefix/suffix holiday counting.",
+  },
+};
+
 /** Display label for an org type. */
 export const ORG_TYPE_LABELS: Record<OrgType, string> = {
   govt_dept: "Government Department",

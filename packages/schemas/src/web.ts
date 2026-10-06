@@ -2187,6 +2187,29 @@ export const SessionSummarySchema = z.object({
 });
 export const SessionSummaryListSchema = z.array(SessionSummarySchema);
 
+// GAP-TENANT-ADMIN-SESSIONS-DETAIL-01: the raw single-session view returned by
+// identity-service GET /identity/sessions/:id (SessionView in that service's
+// sessions/domain.ts). Distinct from SessionSummary (the list projection):
+// this is the by-id shape, with ip/device/mfaMethod/startedAt rather than the
+// list's ipAddress/userAgent/mfaVerified. Optional fields are tolerant so the
+// page never crashes if a field is absent.
+export const SessionDetailSchema = z.object({
+  id: z.string(),
+  tenantId: z.string().optional(),
+  userId: z.string(),
+  userEmail: z.string(),
+  userName: z.string().nullable().optional(),
+  ip: z.string().nullable().optional(),
+  device: z.string().nullable().optional(),
+  userAgent: z.string().nullable().optional(),
+  mfaMethod: z.string().nullable().optional(),
+  trusted: z.boolean().optional(),
+  status: z.enum(["active", "expired", "revoked"]),
+  lastActiveAt: z.string(),
+  startedAt: z.string().optional(),
+  expiresAt: z.string().optional(),
+});
+
 export const BreakglassSummarySchema = z.object({
   id: z.string(),
   actor: z.string(),
@@ -2241,6 +2264,10 @@ export const UserDetailSchema = z.object({
   id: z.string(),
   email: z.string(),
   name: z.string().optional(),
+  // GAP-TENANT-ADMIN-USERS-DETAIL-04: surface the employee code the invite
+  // dialog collects, when the backend returns it. Nullable + optional so
+  // existing payloads without it still validate.
+  empCode: z.string().nullable().optional(),
   roles: z.array(z.string()).default([]),
   mfaEnabled: z.boolean().default(false),
   lastLoginAt: z.string().optional(),

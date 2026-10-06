@@ -15,7 +15,7 @@ type Role = {
 
 const FILTERS = ["All", "System", "Custom"] as const;
 
-export function RolesTable({ roles }: { roles: Role[] }) {
+export function RolesTable({ roles, canCreate = true }: { roles: Role[]; canCreate?: boolean }) {
   const router = useRouter();
   const [filter, setFilter] = useState<string>("All");
   const [createOpen, setCreateOpen] = useState(false);
@@ -34,7 +34,8 @@ export function RolesTable({ roles }: { roles: Role[] }) {
           <div role="group" aria-label="Filter roles by type">
             <Segmented options={[...FILTERS]} value={filter} onChange={setFilter} />
           </div>
-          <Button size="sm" onClick={() => setCreateOpen(true)}>+ New Role</Button>
+          {/* GAP-TENANT-ADMIN-ROLES-04: no New Role control for a view-only admin. */}
+          {canCreate && <Button size="sm" onClick={() => setCreateOpen(true)}>+ New Role</Button>}
         </div>
       </div>
       <DataTable<Role>
@@ -50,7 +51,7 @@ export function RolesTable({ roles }: { roles: Role[] }) {
             label: "Description",
             sortable: false,
             render: (role) => (
-              <span style={{ display: "inline-block", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }}>
+              <span title={role.description ?? undefined} style={{ display: "inline-block", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }}>
                 {role.description ?? "—"}
               </span>
             ),
@@ -110,8 +111,10 @@ function NewRoleDialog({ open, onClose, onCreated }: { open: boolean; onClose: (
       }
       confirmLabel="Create role"
       busy={busy}
+      requireReason
+      reasonLabel="Reason for creating this role"
       errorMessage={error}
-      onConfirm={async () => {
+      onConfirm={async (reason) => {
         setNameErr("");
         if (name.trim().length === 0) { setNameErr("Role name is required."); return; }
         setBusy(true);
@@ -121,7 +124,14 @@ function NewRoleDialog({ open, onClose, onCreated }: { open: boolean; onClose: (
           const res = await fetch("/api/proxy/policy/roles", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ name: name.trim(), ...(description.trim() ? { description: description.trim() } : {}) }),
+            body: JSON.stringify({
+              name: name.trim(),
+              ...(description.trim() ? { description: description.trim() } : {}),
+              // GAP-TENANT-ADMIN-ROLES-02 / -DETAIL-04: send the audit reason in
+              // the body (not as a correlation-id header), so the policy service
+              // can store it as the role.created audit reason.
+              ...(reason ? { reason } : {}),
+            }),
           });
           if (!res.ok) {
             setError((await formError.fromResponse(res, "save")).message);

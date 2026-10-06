@@ -8,6 +8,16 @@ const STATUS_MAP: Record<string, PillVariant> = {
   paid: "good",
   completed: "good",
   passed: "good",
+  // GAP-TENANT-ADMIN-COMPLIANCE-01: compliance check results pass|warn|fail.
+  // "passed"/"failed" already map; the short forms the compliance API uses did
+  // not, so they fell back to neutral "info". Token-based tones replace the
+  // inline hex (which failed WCAG contrast on white).
+  pass: "good",
+  warn: "warn",
+  fail: "bad",
+  // GAP-TENANT-ADMIN-DATA-EXPORT-05: a data-export that is ready to download is
+  // a success terminal state (pending/processing/expired already map).
+  ready: "good",
   cleared: "good",
   open: "good",
   signed: "good",
@@ -185,6 +195,12 @@ const STATUS_MAP: Record<string, PillVariant> = {
   relieved: "good",
   disputed: "bad",
   accepted: "good", // apar record accepted by the accepting authority -- final positive sign-off
+  // GAP-TENANT-ADMIN-BREAKGLASS-DETAIL-05: a break-glass approval-chain step
+  // decision of "acknowledged" (e.g. a CISO acknowledging, not approving) is
+  // an informational terminal note, not a success; without this key it fell
+  // through to the neutral "info" default anyway, but it is keyed explicitly
+  // so the detail page's StatusPill is a decision, not a fallthrough.
+  acknowledged: "info",
 
   // Training (queries.ts training/routes.ts; nominated/waitlisted/attended
   // are real hrms_nominations.status values -- see training/schema.ts and

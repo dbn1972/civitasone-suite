@@ -48,14 +48,23 @@ export function APIKeysTable({ keys }: { keys: KeyRow[] }) {
           {
             key: "status",
             label: "Status",
-            render: (key) =>
-              key.status === "active" ? <span className="pill good">Active</span>
-                : key.status === "revoked" ? <span className="pill bad">Revoked</span>
-                : <StatusPill status="inactive" label="Expired" />,
+            // GAP-TENANT-ADMIN-API-KEYS-05: all three statuses now render via
+            // the shared StatusPill (active -> good, expired -> bad, revoked ->
+            // bad), replacing the inconsistent mix of raw pill markup for
+            // active/revoked and a mislabelled StatusPill status="inactive" for
+            // expired. STATUS_MAP already carries active/expired/revoked.
+            render: (key) => <StatusPill status={key.status} />,
           },
         ]}
         rows={rows}
         sortable
+        emptyIcon="🗝️"
+        emptyTitle={filter === "All" ? "No API keys yet" : `No ${filter.toLowerCase()} keys`}
+        emptyMessage={
+          filter === "All"
+            ? "Create your first key using Key Operations on the right."
+            : "No keys match this filter."
+        }
       />
     </div>
   );

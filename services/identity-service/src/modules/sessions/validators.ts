@@ -16,3 +16,12 @@ export const createSessionBody = z.object({
 export type CreateSessionBody = z.infer<typeof createSessionBody>;
 
 export const sessionIdParam = z.object({ id: z.string().uuid() });
+
+/**
+ * GAP-TENANT-ADMIN-USERS-DETAIL-02: optional, audited reason on a single-session
+ * revoke. Additive — the self-service sign-out path sends no body.
+ */
+export const sessionRevokeBody = z.object({
+  reason: z.string().min(3).max(500).optional(),
+});
+export type SessionRevokeBody = z.infer<typeof sessionRevokeBody>;

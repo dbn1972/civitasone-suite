@@ -12,7 +12,7 @@ import {
   assertCorrectionApproverDistinct,
   assertCorrectionPending,
 } from "./domain.js";
-import { breakGlassBody, closeParam, breakGlassListQuery } from "./validators.js";
+import { breakGlassBody, closeParam, breakGlassListQuery, breakGlassIdParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 import { publishAdminCommand } from "../../shared/f3-publish.js";
@@ -131,6 +131,32 @@ export async function supportRoutes(app: FastifyInstance): Promise<void> {
       endedAt: row.closedAt?.toISOString(),
       status: (row.closedAt ? "ended" : row.expiresAt < new Date() ? "auto_expired" : "active") as "active" | "ended" | "auto_expired",
     })));
+  });
+
+  // GAP-TENANT-ADMIN-BREAKGLASS-DETAIL-01: single break-glass grant by id.
+  // Replaces a web page that rendered a hard-coded sample record for every id.
+  // Returns only the fields actually stored (no invented resources/approval
+  // chain). 404 when the id does not exist so the web page can show not-found.
+  app.get("/v1/admin/breakglass/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireSuperAdmin(ctx);
+    const { id } = breakGlassIdParam.parse(req.params);
+    const q = breakGlassListQuery.pick({ tenantId: true }).parse(req.query);
+    const row = await repo.findBreakGlassById(id, q.tenantId);
+    if (!row) throw new HttpError(404, "NOT_FOUND", "break-glass grant not found");
+    return reply.send({
+      id: row.id,
+      actor: row.actorId,
+      actorEmail: null,
+      reason: row.reason,
+      startedAt: new Date(row.openedAt as unknown as string).toISOString(),
+      endedAt: row.closedAt ? row.closedAt.toISOString() : null,
+      status: row.closedAt ? "ended" : row.expiresAt < new Date() ? "auto_expired" : "active",
+      closedBy: row.closedAt ? row.updatedBy : null,
+      closeReason: null,
+      resourcesAccessed: null,
+      approvalChain: null,
+    });
   });
 
   app.post("/v1/admin/support/break-glass", async (req, reply) => {

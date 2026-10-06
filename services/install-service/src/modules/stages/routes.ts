@@ -14,6 +14,36 @@ import { MUNICIPAL_ONBOARDING_PACK_KEYS } from "../orchestrator/domain-pack-cons
 
 const ROLES = ["install_user","install_admin","super_admin","tenant_admin"];
 
+// GAP-TENANT-ADMIN-INSTALL-05: steps and stages are NOT two different
+// resources at two granularities — `/v1/install/steps` is a 1:1 view over the
+// SAME stage rows that `/v1/install/stages` returns (one step per stage,
+// carrying the stage's own status). This helper is the single mapping used by
+// the steps route so the invariant "step[i].status is derived purely from
+// stage[i].status, 1:1" is pinned by a test and cannot silently drift into a
+// rollup that disagrees with the stages endpoint.
+export function stageToStep(stage: {
+  id: string;
+  stepNumber: number;
+  name: string;
+  description?: string | null;
+  status: string;
+}): { id: string; stepNo: number; title: string; description: string | undefined; status: "pending" | "in_progress" | "completed" | "skipped"; completedAt: undefined } {
+  return {
+    id: stage.id,
+    stepNo: stage.stepNumber,
+    title: stage.name,
+    description: stage.description ?? undefined,
+    status: (stage.status === "completed"
+      ? "completed"
+      : stage.status === "skipped"
+        ? "skipped"
+        : stage.status === "in_progress"
+          ? "in_progress"
+          : "pending") as "pending" | "in_progress" | "completed" | "skipped",
+    completedAt: undefined,
+  };
+}
+
 const activateDomainPackBody = z.object({
   domainPackKey: z.string().min(1).max(64).optional().default("municipal-in-v1"),
   packKeys: z.array(z.string().min(1).max(64)).max(50).optional(),
@@ -48,14 +78,7 @@ export async function stagesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ROLES);
     const q = listQuerySchema.parse(req.query);
     const result = await queries.listStages(ctx.tenantId, q.limit, q.offset);
-    sendValidated(reply, InstallStepSummaryListSchema, result.data.map((stage) => ({
-      id: stage.id,
-      stepNo: stage.stepNumber,
-      title: stage.name,
-      description: stage.description ?? undefined,
-      status: (stage.status === "completed" ? "completed" : stage.status === "skipped" ? "skipped" : stage.status === "in_progress" ? "in_progress" : "pending") as "pending" | "in_progress" | "completed" | "skipped",
-      completedAt: undefined,
-    })));
+    sendValidated(reply, InstallStepSummaryListSchema, result.data.map(stageToStep));
   });
 
   app.get("/v1/install/stages/:id", async (req, reply) => {

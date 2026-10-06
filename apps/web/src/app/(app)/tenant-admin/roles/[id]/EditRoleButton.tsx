@@ -43,8 +43,10 @@ export function EditRoleButton({ roleId, name, description }: { roleId: string; 
           }
           confirmLabel="Save"
           busy={busy}
+          requireReason
+          reasonLabel="Reason for change (audited)"
           errorMessage={error}
-          onConfirm={async () => {
+          onConfirm={async (reason) => {
             setNameErr("");
             if (nm.trim().length === 0) { setNameErr("Role name is required."); return; }
             setBusy(true);
@@ -54,7 +56,7 @@ export function EditRoleButton({ roleId, name, description }: { roleId: string; 
               const res = await fetch(`/api/proxy/policy/roles/${roleId}`, {
                 method: "PATCH",
                 headers: { "content-type": "application/json" },
-                body: JSON.stringify({ name: nm.trim(), description: desc.trim() }),
+                body: JSON.stringify({ name: nm.trim(), description: desc.trim(), ...(reason ? { reason } : {}) }),
               });
               if (!res.ok) {
                 setError((await formError.fromResponse(res, "save")).message);

@@ -4,6 +4,7 @@ import { getSiemAlerts } from "@/app/_data/loaders";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { SiemTable } from "./SiemTable";
+import { isOpenSiemStatus } from "./siemHelpers";
 
 export default async function SiemPage() {
   const result = await getSiemAlerts();
@@ -11,7 +12,9 @@ export default async function SiemPage() {
   const errored = toResourceState(result).status === "error";
   const criticalAlerts = alerts.filter((a) => a.severity === "critical").length;
   const highAlerts = alerts.filter((a) => a.severity === "high").length;
-  const activeAlerts = alerts.filter((a) => a.status === "active" || a.status === "investigating").length;
+  // GAP-TENANT-ADMIN-SIEM-03: "Active" = the open incident lifecycle states
+  // (detected/triaged/contained), shared with the table's status tones.
+  const activeAlerts = alerts.filter((a) => isOpenSiemStatus(a.status)).length;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -19,7 +22,7 @@ export default async function SiemPage() {
       <PageHeader
         back="/tenant-admin"
         title="SIEM & Threat Monitoring"
-        subtitle="Real-time threat intelligence, blocked IPs, suspicious activity, and security alert management."
+        subtitle="Security alerts detected for this tenant. Near real-time (refreshes about every 30 seconds)."
       />
       {/* UX-012: the data-source badge now lives inside SiemTable, driven by
           the same useSeededResource call that produces its rows — not a

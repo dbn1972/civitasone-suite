@@ -353,16 +353,21 @@ describe("ai-ml/plugin-registry.ts -- GUC fix", () => {
     // both pre-fix and post-fix code (confirmed against unmodified main).
     // Flagged in the PR description; not fixed here (out of scope for a
     // tenant-scoping fix).
+    // Configuring an AI plugin is a tenant-admin action: PATCH
+    // /v1/hrms/ai/plugins/:id now enforces requireRole(tenant_admin/
+    // platform_admin/super_admin), matching the web page's own gate
+    // (ai-plugins/page.tsx canConfigure) — GAP-TENANT-ADMIN-AI-PLUGINS-03.
+    // This GUC regression is role-agnostic, so authenticate as tenant_admin.
     const patch = await app.inject({
       method: "PATCH", url: "/v1/hrms/ai/plugins/nlu-chatbot",
-      headers: auth(TENANT_A, HR_A, ["hr_admin"]),
+      headers: auth(TENANT_A, HR_A, ["tenant_admin"]),
       payload: { enabled: true, mode: "active", confidenceThreshold: 65, notifyOnPrediction: true, autoAction: false, maxPredictionsPerDay: 500 },
     });
     expect(patch.statusCode).toBe(200);
 
     const list = await app.inject({
       method: "GET", url: "/v1/hrms/ai/plugins",
-      headers: auth(TENANT_A, HR_A, ["hr_admin"]),
+      headers: auth(TENANT_A, HR_A, ["tenant_admin"]),
     });
     expect(list.statusCode).toBe(200);
     const nlu = list.json().data.find((p: { id: string }) => p.id === "nlu-chatbot");
@@ -375,7 +380,7 @@ describe("ai-ml/plugin-registry.ts -- GUC fix", () => {
 
     const stats = await app.inject({
       method: "GET", url: "/v1/hrms/ai/plugins/nlu-chatbot/stats",
-      headers: auth(TENANT_A, HR_A, ["hr_admin"]),
+      headers: auth(TENANT_A, HR_A, ["tenant_admin"]),
     });
     expect(stats.statusCode).toBe(200);
     const body = stats.json().data;
@@ -384,14 +389,14 @@ describe("ai-ml/plugin-registry.ts -- GUC fix", () => {
 
     const feedback = await app.inject({
       method: "POST", url: "/v1/hrms/ai/plugins/nlu-chatbot/feedback",
-      headers: auth(TENANT_A, HR_A, ["hr_admin"]),
+      headers: auth(TENANT_A, HR_A, ["tenant_admin"]),
       payload: { predictionId: predId, outcome: "correct", notes: "confirmed by fixture" },
     });
     expect(feedback.statusCode).toBe(200);
 
     const summary = await app.inject({
       method: "GET", url: "/v1/hrms/ai/plugins/summary",
-      headers: auth(TENANT_A, HR_A, ["hr_admin"]),
+      headers: auth(TENANT_A, HR_A, ["tenant_admin"]),
     });
     expect(summary.statusCode).toBe(200);
     expect(summary.json().data.predictionsToday).toBeGreaterThanOrEqual(1);
@@ -401,14 +406,14 @@ describe("ai-ml/plugin-registry.ts -- GUC fix", () => {
   it("tenant B sees none of tenant A's plugin config or predictions (isolation preserved)", async () => {
     const list = await app.inject({
       method: "GET", url: "/v1/hrms/ai/plugins",
-      headers: auth(TENANT_B, HR_B, ["hr_admin"]),
+      headers: auth(TENANT_B, HR_B, ["tenant_admin"]),
     });
     const nlu = list.json().data.find((p: { id: string }) => p.id === "nlu-chatbot");
     expect(nlu.enabled).toBe(false); // tenant B never enabled it -- must not see tenant A's config
 
     const summary = await app.inject({
       method: "GET", url: "/v1/hrms/ai/plugins/summary",
-      headers: auth(TENANT_B, HR_B, ["hr_admin"]),
+      headers: auth(TENANT_B, HR_B, ["tenant_admin"]),
     });
     expect(summary.json().data.predictionsToday).toBe(0);
   });

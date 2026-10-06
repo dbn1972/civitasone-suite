@@ -1,9 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, within, fireEvent, waitFor } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { ToastProvider } from "@/app/_components/ds";
+
+// UsersTable now emits a success toast on invite (GAP-TENANT-ADMIN-USERS-03),
+// so it must render inside a ToastProvider.
+function renderWithToast(ui: ReactElement) {
+  return render(<ToastProvider>{ui}</ToastProvider>);
+}
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(mockSearch),
 }));
+
+// GAP-TENANT-ADMIN-HOME-03: controls the ?invite= param UsersTable reads to
+// auto-open the invite dialog when linked from the tenant-admin home CTA.
+let mockSearch = "";
 
 vi.mock("@/lib/sync/resource", () => ({
   // Matches the real hook's deriveProvenance() (src/lib/sync/resource.ts):
@@ -24,6 +37,7 @@ import { UsersTable } from "./UsersTable";
 describe("UsersTable (InviteUserDialog) — UX-016 clerk-safe errors", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    mockSearch = "";
   });
 
   it("shows a clerk-safe message, never the raw response body, when inviting a user fails", async () => {
@@ -31,7 +45,7 @@ describe("UsersTable (InviteUserDialog) — UX-016 clerk-safe errors", () => {
       new Response("identity-service: duplicate email constraint on tenant_users", { status: 409 }),
     );
 
-    render(<UsersTable users={[]} />);
+    renderWithToast(<UsersTable users={[]} />);
     fireEvent.click(screen.getByRole("button", { name: "+ Invite User" }));
 
     const dialog = await screen.findByRole("alertdialog");
@@ -48,6 +62,7 @@ describe("UsersTable (InviteUserDialog) — UX-016 clerk-safe errors", () => {
 describe("UsersTable — Bug B (fix/tenant-admin-and-establishment-nav): honest empty directory state", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    mockSearch = "";
   });
 
   const makeUser = (overrides: Partial<{
@@ -58,7 +73,7 @@ describe("UsersTable — Bug B (fix/tenant-admin-and-establishment-nav): honest 
   });
 
   it("explains WHY the directory is empty instead of DataTable's generic 'No records found', when there are genuinely zero users", async () => {
-    render(<UsersTable users={[]} />);
+    renderWithToast(<UsersTable users={[]} />);
 
     expect(screen.getByText(/No users in this directory yet/i)).toBeInTheDocument();
     expect(screen.getByText(/Keycloak/i)).toBeInTheDocument();
@@ -75,7 +90,7 @@ describe("UsersTable — Bug B (fix/tenant-admin-and-establishment-nav): honest 
   });
 
   it("keeps DataTable's normal empty-filter behaviour when real users exist but a status filter matches none", () => {
-    render(<UsersTable users={[makeUser({ status: "active" })]} />);
+    renderWithToast(<UsersTable users={[makeUser({ status: "active" })]} />);
 
     fireEvent.click(screen.getByRole("tab", { name: "Suspended" }));
 
@@ -88,14 +103,14 @@ describe("UsersTable — Bug B (fix/tenant-admin-and-establishment-nav): honest 
   });
 
   it("shows the real directory rows (e.g. the caller's own account) once the loader returns them, instead of an empty state", () => {
-    render(<UsersTable users={[makeUser({ name: "uxtester", email: "uxtester@gov.in" })]} />);
+    renderWithToast(<UsersTable users={[makeUser({ name: "uxtester", email: "uxtester@gov.in" })]} />);
 
     expect(screen.queryByText(/No users in this directory yet/i)).not.toBeInTheDocument();
     expect(screen.getByText("uxtester")).toBeInTheDocument();
   });
 
   it("does NOT claim 'accounts aren't synced from Keycloak' when the fetch genuinely failed (provenance error-no-data) -- caught live: a rejected auth token also yields rows.length===0, and the Keycloak-sync explanation would be false for a plain fetch/auth error", () => {
-    render(<UsersTable users={[]} source="error" />);
+    renderWithToast(<UsersTable users={[]} source="error" />);
 
     // The DataSourceBadge above the table is the one place this file reports
     // a failed fetch (UX-012) -- it must say so...
@@ -106,5 +121,74 @@ describe("UsersTable — Bug B (fix/tenant-admin-and-establishment-nav): honest 
     expect(screen.queryByText(/No users in this directory yet/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Keycloak/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "+ Invite your first user" })).not.toBeInTheDocument();
+  });
+});
+
+describe("UsersTable — GAP-TENANT-ADMIN-USERS-01 (Department column removed)", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it("has no Department column header (identity-service exposes no department field)", () => {
+    renderWithToast(<UsersTable users={[{ id: "u1", name: "Asha", email: "asha@gov.in", roles: ["tenant_admin"], mfaEnabled: true, status: "active" }]} />);
+    expect(screen.queryByRole("columnheader", { name: /Department/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("UsersTable — GAP-TENANT-ADMIN-USERS-04 (all roles + MFA header)", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it("renders the first role plus a '+N' badge for a multi-role user instead of only roles[0]", () => {
+    renderWithToast(<UsersTable users={[{ id: "u1", name: "Asha", email: "asha@gov.in", roles: ["tenant_admin", "auditor", "approver"], mfaEnabled: false, status: "active" }]} />);
+    expect(screen.getByText("tenant_admin")).toBeInTheDocument();
+    expect(screen.getByText("+2")).toBeInTheDocument();
+    // the "+2" badge exposes the remaining roles for a11y / hover.
+    expect(screen.getByText("+2")).toHaveAttribute("title", "tenant_admin, auditor, approver");
+  });
+
+  it("renames the 'SSO / MFA' header to 'MFA' (no SSO data exists)", () => {
+    renderWithToast(<UsersTable users={[{ id: "u1", name: "Asha", email: "asha@gov.in", roles: ["tenant_admin"], mfaEnabled: true, status: "active" }]} />);
+    expect(screen.getByRole("columnheader", { name: /^MFA$/i })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: /SSO/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("UsersTable — GAP-TENANT-ADMIN-HOME-03: ?invite=1 opens the invite dialog", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    mockSearch = "";
+  });
+
+  it("opens the invite dialog on mount when the URL carries invite=1 (home-page CTA deep-link)", async () => {
+    mockSearch = "invite=1";
+    renderWithToast(<UsersTable users={[]} />);
+    expect(await screen.findByRole("alertdialog", { name: /Invite a user/i })).toBeInTheDocument();
+  });
+
+  it("does NOT open the invite dialog without the invite param", () => {
+    mockSearch = "";
+    renderWithToast(<UsersTable users={[]} />);
+    expect(screen.queryByRole("alertdialog", { name: /Invite a user/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("UsersTable — GAP-TENANT-ADMIN-USERS-03 (invite success toast)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    mockSearch = "";
+  });
+
+  it("shows a success toast naming the invitee's email after a successful invite", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 202 }));
+
+    renderWithToast(<UsersTable users={[]} />);
+    fireEvent.click(screen.getByRole("button", { name: "+ Invite User" }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText(/Full name/i), { target: { value: "Asha Verma" } });
+    fireEvent.change(within(dialog).getByLabelText(/^Email/i), { target: { value: "asha@gov.in" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Send invite" }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/Invitation sent to asha@gov\.in\. It may take a moment to appear in the directory\./i)).toBeInTheDocument(),
+    );
   });
 });

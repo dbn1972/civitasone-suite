@@ -22,6 +22,16 @@ export const statusBody = z.object({
 });
 export type StatusBody = z.infer<typeof statusBody>;
 
+/**
+ * GAP-TENANT-ADMIN-USERS-DETAIL-01/02: optional, audited reason for
+ * security-sensitive admin actions (reset-password, revoke-all). Additive —
+ * older callers that POST with no body still validate (reason undefined).
+ */
+export const reasonBody = z.object({
+  reason: z.string().min(3).max(500).optional(),
+});
+export type ReasonBody = z.infer<typeof reasonBody>;
+
 export const userIdParam   = z.object({ id: z.string().uuid() });
 export const tenantIdQuery = z.object({
   tenantId: z.string().uuid(),

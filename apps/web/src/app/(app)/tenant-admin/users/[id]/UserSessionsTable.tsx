@@ -2,11 +2,13 @@
 
 import { DataTable } from "../../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
+import { deviceLabel } from "@/lib/sessionLabels";
 import { SessionRevokeCell } from "./SessionRevokeCell";
 
 export type UserSession = {
   id: string;
   ipAddress?: string;
+  userAgent?: string;
   createdAt: string;
   lastActiveAt: string;
   status: string;
@@ -25,6 +27,9 @@ export function UserSessionsTable({ sessions }: { sessions: UserSession[] }) {
   return (
     <DataTable<UserSession>
       columns={[
+        // GAP-TENANT-ADMIN-USERS-DETAIL-05: Device column, matching the tenant
+        // session list, via the shared deviceLabel helper.
+        { key: "userAgent", label: "Device", sortable: false, render: (s) => deviceLabel(s.userAgent) },
         { key: "ipAddress", label: "IP address", render: (s) => <span className="mono">{s.ipAddress ?? "—"}</span> },
         { key: "createdAt", label: "Created", render: (s) => formatWhen(s.createdAt) },
         { key: "lastActiveAt", label: "Last active", render: (s) => formatWhen(s.lastActiveAt) },

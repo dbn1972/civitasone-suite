@@ -414,7 +414,7 @@ describe("previously-missing-table modules — end-to-end persistence smoke test
     const create = await app.inject({
       method: "POST", url: "/v1/admin/data-export",
       headers: bearer(["tenant_admin"], T, ACTOR),
-      payload: { type: "full", format: "csv" },
+      payload: { type: "full", format: "csv", purpose: "Annual statutory audit export" },
     });
     expect(create.statusCode).toBe(202);
     const createdId = create.json().id as string;
@@ -699,7 +699,7 @@ describe("previously-missing-table modules — lifecycle (update/delete/kill/pau
     const create = await app.inject({
       method: "POST", url: "/v1/admin/data-export",
       headers: bearer(["tenant_admin"], T, ACTOR),
-      payload: { type: "full", format: "json" },
+      payload: { type: "full", format: "json", purpose: "Annual statutory audit export" },
     });
     const exportId = create.json().id as string;
     await waitFor(

@@ -12,6 +12,10 @@ export interface ExportRequestPayload {
   type: "full" | "module" | "entity";
   moduleFilter?: string;
   format: "csv" | "json" | "pdf";
+  // GAP-TENANT-ADMIN-DATA-EXPORT-02/03: a recorded purpose and (for entity
+  // exports) the target entity id. Both flow into the request + audit event.
+  purpose?: string;
+  entityId?: string;
 }
 
 const COMMAND_REQUEST = "admin.data_export.request";
@@ -33,6 +37,8 @@ export async function exportRequest(ctx: RequestContext, payload: ExportRequestP
       type: payload.type,
       moduleFilter: payload.moduleFilter ?? null,
       format: payload.format,
+      purpose: payload.purpose ?? null,
+      entityId: payload.entityId ?? null,
     },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };

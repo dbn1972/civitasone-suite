@@ -66,14 +66,14 @@ export function registerCustomDomainConsumers(queue: Queue): void {
     }
   });
 
-  queue.subscribe<{ domainId: string; tenantId: string }>(COMMANDS.customDomainDelete, async (msg) => {
+  queue.subscribe<{ domainId: string; tenantId: string; reason?: string | null }>(COMMANDS.customDomainDelete, async (msg) => {
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         const p = msg.payload;
         await (tx as any).delete(customDomains)
           .where(and(eq(customDomains.id, p.domainId), eq(customDomains.tenantId, p.tenantId)));
-        await emit(tx, msg, "admin.custom_domain.deleted", p, "delete", p.domainId);
+        await emit(tx, msg, "admin.custom_domain.deleted", p, "delete", p.domainId, { reason: p.reason ?? null });
       });
       await cache.invalidate(listKey(msg.payload.tenantId));
     } catch (err) {
@@ -89,6 +89,7 @@ async function emit(
   payload: Record<string, unknown>,
   action: string,
   resourceId: string,
+  auditExtra: Record<string, unknown> = {},
 ): Promise<void> {
   const t = tx as Parameters<typeof enqueue>[0];
   await enqueue(t, {
@@ -98,6 +99,6 @@ async function emit(
   await enqueue(t, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId,
     correlationId: msg.correlationId,
-    payload: { service: "admin", action, resourceType: RESOURCE, resourceId, outcome: "success" },
+    payload: { service: "admin", action, resourceType: RESOURCE, resourceId, outcome: "success", ...auditExtra },
   });
 }

@@ -514,3 +514,39 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 .statutory-card:focus-visible {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
+
+/* GAP-TENANT-ADMIN-API-KEYS-06: shared form-field primitives, replacing the
+   inline style objects (lbl/inp/fieldErr) and hard-coded hex colours in
+   tenant-admin/api-keys/APIKeyActions.tsx. Token-based so dark theme stays
+   readable; 44px min-height on the input for touch targets. */
+.ta-lbl {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--ink2);
+  margin-bottom: 6px;
+}
+.ta-input {
+  width: 100%;
+  padding: 9px;
+  margin-bottom: 12px;
+  min-height: 44px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  font-size: 13.5px;
+  font-family: inherit;
+  color: var(--ink);
+  background: var(--surface, #fff);
+}
+.ta-input:focus-visible {
+  outline: 2px solid var(--ring, #4f46e5);
+  outline-offset: 1px;
+}
+.ta-field-err {
+  color: var(--bad);
+  font-size: 12px;
+  margin: -8px 0 12px;
+}
+.ta-field-ok {
+  color: var(--good);
+}

@@ -58,6 +58,9 @@ const patchConfigSchema = z.object({
 
 const debugModeSchema = z.object({
   durationMinutes: z.number().int().positive().optional(),
+  // GAP-TENANT-ADMIN-PLATFORM-CONFIG-01: optional operator reason, recorded on
+  // the audit event (debug logging is platform-wide; a reason aids triage).
+  reason: z.string().trim().min(1).max(500).optional(),
 }).strict();
 
 const gatewayConfigSchema = z.object({
@@ -252,7 +255,7 @@ export async function platformConfigRoutes(app: FastifyInstance): Promise<void> 
       ctx,
       "platform_config.debug_mode",
       { debugModeUntil: controllable.debugModeUntil, logLevel: controllable.logLevel },
-      { debugModeUntil: until, logLevel: "debug" },
+      { debugModeUntil: until, logLevel: "debug", ...(body.reason ? { reason: body.reason } : {}) },
     );
     controllable.debugModeUntil = until;
     controllable.logLevel = "debug";

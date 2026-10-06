@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Segmented, DataTable } from "../../../_components/ds";
+import { Segmented, DataTable, StatusPill } from "../../../_components/ds";
+import { maskEmail } from "../../../_components/ds/Masked";
 import { formatIndianDate } from "@/lib/formatters";
 
 export type AuditEvent = {
@@ -16,13 +17,37 @@ export type AuditEvent = {
 
 const FILTERS = ["All", "Failures"] as const;
 
-/** Format an ISO timestamp as a GFR-compliant Indian date plus 24h time. */
+/**
+ * Format an ISO timestamp as a GFR-compliant Indian date plus 24h time, both
+ * resolved in Asia/Kolkata regardless of the browser timezone.
+ * GAP-TENANT-ADMIN-AUDIT-01: the time part used to use the browser's local
+ * timezone (no explicit timeZone), so an event stamped 00:30 IST could show a
+ * different day/time on a machine in another zone.
+ */
 function formatWhen(iso: string): string {
   const time = new Date(iso);
   const hhmm = isNaN(time.getTime())
     ? ""
-    : ` ${time.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false })}`;
+    : ` ${time.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" })}`;
   return `${formatIndianDate(iso)}${hhmm}`;
+}
+
+/**
+ * GAP-TENANT-ADMIN-AUDIT-03 (DPDP): mask a source IP by default, keeping only
+ * the first octet (IPv4) or first hextet (IPv6) for coarse recognisability.
+ * There is no audited reveal endpoint for the audit log today, so these are
+ * masked statically rather than behind a reveal control that would give a
+ * false sense of logged access (same philosophy as ds/Masked).
+ */
+function maskIp(ip: string): string {
+  const v = ip.trim();
+  if (v.includes(":")) {
+    const head = v.split(":")[0] ?? "";
+    return `${head}:••••`;
+  }
+  const parts = v.split(".");
+  if (parts.length === 4) return `${parts[0]}.•.•.•`;
+  return "•••";
 }
 
 export function AuditLogTable({ events }: { events: AuditEvent[] }) {
@@ -47,25 +72,38 @@ export function AuditLogTable({ events }: { events: AuditEvent[] }) {
           {
             key: "actor",
             label: "Actor",
-            render: (e) => (
-              <div className="who">
-                <div className="av" aria-hidden="true">{e.actor.slice(0, 2).toUpperCase()}</div>
-                <div>
-                  <div className="nm">{e.actor}</div>
-                  {e.ipAddress && <div className="ml"><span className="mono">{e.ipAddress}</span></div>}
+            render: (e) => {
+              // GAP-TENANT-ADMIN-AUDIT-03: actor identifiers are often emails
+              // (PII); mask them by default. Non-email identifiers (service
+              // ids, usernames) are shown as-is.
+              const isEmail = e.actor.includes("@");
+              const display = isEmail ? maskEmail(e.actor) : e.actor;
+              return (
+                <div className="who">
+                  <div className="av" aria-hidden="true">{e.actor.slice(0, 2).toUpperCase()}</div>
+                  <div>
+                    <div className="nm">
+                      <span className={isEmail ? "mono" : undefined} aria-label={isEmail ? "actor email (masked)" : undefined}>{display}</span>
+                    </div>
+                    {e.ipAddress && <div className="ml"><span className="mono" aria-label="source IP (masked)">{maskIp(e.ipAddress)}</span></div>}
+                  </div>
                 </div>
-              </div>
-            ),
+              );
+            },
           },
           { key: "action", label: "Action", render: (e) => <span className="mono">{e.action}</span> },
           { key: "resource", label: "Target", render: (e) => e.resource ?? "—" },
           {
             key: "outcome",
             label: "Result",
+            // GAP-TENANT-ADMIN-AUDIT-05: an outcome other than success/failure
+            // used to render as a raw, un-humanised "info" pill. Route the two
+            // known outcomes to their explicit tone and everything else
+            // through StatusPill (humanised label + STATUS_MAP tone).
             render: (e) =>
               e.outcome === "success" ? <span className="pill good">Success</span>
                 : e.outcome === "failure" ? <span className="pill bad">Failure</span>
-                : <span className="pill info">{e.outcome}</span>,
+                : <StatusPill status={e.outcome} />,
           },
         ]}
         rows={rows}
@@ -73,6 +111,9 @@ export function AuditLogTable({ events }: { events: AuditEvent[] }) {
         filterable
         filterPlaceholder="Search audit events…"
         pageSize={15}
+        emptyIcon="📋"
+        emptyTitle={filter === "Failures" ? "No failures recorded" : "No audit events yet"}
+        emptyMessage={filter === "Failures" ? "No failed actions in the loaded events." : "Audit events will appear here as actions are taken."}
       />
     </div>
   );
