@@ -2125,7 +2125,10 @@ export const getGrantInstallmentsLegacy = moduleLoader("/api/v1/grants/installme
 export const getEstabFilesLegacy = moduleLoader("/api/v1/estab/files", "estab.files");
 export const getKnowledgeDocuments = moduleLoader("/api/v1/knowledge/documents", "knowledge.documents");
 export const getWorkflowInstances = moduleLoader("/api/v1/workflow/instances", "workflow.instances");
-export const getAnalyticsDashboards = moduleLoader("/api/v1/analytics/dashboards", "analytics.dashboards");
+// GAP-ANALYTICS-LIST-01: the generic moduleLoader-based getAnalyticsDashboards
+// was only used by the duplicate /analytics/list route, which now redirects to
+// /analytics/dashboards (that page uses the richer typed loader in
+// analytics/_data.ts). Export removed to leave one canonical loader.
 
 // Finance loaders
 

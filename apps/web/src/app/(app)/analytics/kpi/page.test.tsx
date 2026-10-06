@@ -49,4 +49,21 @@ describe("KpiPage", () => {
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
     expect(screen.queryByText("0")).not.toBeInTheDocument();
   });
+
+  it("GAP-ANALYTICS-KPI-01: no longer shows the misleading On/Below/Improving heuristic stats", async () => {
+    mockKpis({ data: MOCK_ROWS, source: "api" });
+    render(await KpiPage());
+    // Only the honest "Total KPIs" count remains.
+    expect(screen.getByText("Total KPIs")).toBeInTheDocument();
+    expect(screen.queryByText("On Target")).not.toBeInTheDocument();
+    expect(screen.queryByText("Below Target")).not.toBeInTheDocument();
+    expect(screen.queryByText("Improving")).not.toBeInTheDocument();
+  });
+
+  it("GAP-ANALYTICS-KPI-02: empty state no longer offers a 'Create Metric' CTA the app cannot fulfil", async () => {
+    mockKpis({ data: [], source: "api" });
+    render(await KpiPage());
+    expect(screen.getByText("No KPIs defined")).toBeInTheDocument();
+    expect(screen.queryByText("Create Metric")).not.toBeInTheDocument();
+  });
 });

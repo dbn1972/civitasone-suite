@@ -59,6 +59,14 @@ const STATUS_MAP: Record<string, PillVariant> = {
   unconfigured: "mut",
   "low stock": "bad",
   archived: "mut",
+  // GAP-ANALYTICS-DASHBOARDS-04: dashboard visibility pills. "shared" is a
+  // normal, positive-ish state (others can see it); "private" is the neutral
+  // default (owner-only). Neither existed before, so both fell through to the
+  // generic blue "info" pill, giving the Visibility column's colour no
+  // meaning. Added additively; no existing caller passes these expecting the
+  // info fallback.
+  shared: "info",
+  private: "mut",
 
   // --- GAP SF-04 (additive): every key below was verified against a real call
   // site under apps/web/src/app/(app)/hr/** (incl. payroll/** and

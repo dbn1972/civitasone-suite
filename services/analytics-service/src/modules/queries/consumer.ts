@@ -18,10 +18,32 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, AUDIT_TOPIC, QUERY_RESOURCE, SCHEDULED_RESOURCE } from "../../topics.js";
 import { querySpecSchema } from "../registry/spec.js";
 import { runAggregateQuery } from "../registry/builder.js";
+import { RegistryError } from "../registry/registry.js";
+import { ZodError } from "zod";
 import * as repo from "./repo.js";
 import type { QueryRunView } from "./schema.js";
 
 type Tx = Parameters<typeof enqueue>[0];
+
+/**
+ * GAP-ANALYTICS-QUERIES-02: the failure reason is now surfaced to the user in
+ * the UI (QueryResultsView error column), so what we persist here must be a
+ * safe, user-facing message — never a raw Postgres/driver string that could
+ * leak SQL, column names or stack internals. Validation (ZodError) and
+ * whitelist (RegistryError) failures are deterministic and already
+ * user-safe, so they pass through (trimmed/capped to the column width).
+ * Anything else is mapped to a generic message; the real error still flows
+ * through logs/telemetry elsewhere, not into tenant-visible state.
+ */
+export function sanitizeRunError(e: unknown): string {
+  const cap = (s: string): string => (s.length > 500 ? s.slice(0, 497) + "…" : s);
+  if (e instanceof RegistryError) return cap(e.message);
+  if (e instanceof ZodError) {
+    const first = e.issues[0];
+    return cap(first ? `Invalid query: ${first.path.join(".") || "spec"} — ${first.message}` : "Invalid query specification.");
+  }
+  return "The query could not be completed. Please adjust it and try again, or contact support if this persists.";
+}
 
 async function audit(
   tx: Tx,
@@ -68,7 +90,7 @@ export function registerQueriesConsumers(queue: Queue): void {
       result = res as unknown as Record<string, unknown>;
       resultRows = res.rowCount;
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = sanitizeRunError(e);
     }
 
     await db.transaction(async (tx) => {

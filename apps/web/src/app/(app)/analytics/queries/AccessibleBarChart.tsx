@@ -3,13 +3,19 @@
 /**
  * Accessible bar chart (WCAG 2.2 AA).
  *
- * Approach: the whole figure is exposed as a single labelled image
- * (role="img" + aria-label carrying the full data summary), so assistive
- * tech announces every category and value. The visual bars are decorative
- * (aria-hidden) and a visible-on-focus text alternative (a description list)
- * mirrors the same data for AT that prefers structured reading. Colour is a
- * DS token and never the sole carrier of meaning — every bar is labelled with
- * its value.
+ * GAP-ANALYTICS-QUERIES-05: the figure used to be `role="img"` with a long
+ * `aria-label` AND an sr-only <dl> nested inside. Children of a `role="img"`
+ * node are presentational, so the structured <dl> was NEVER exposed to screen
+ * readers — only the single unbounded label string was. We now drop
+ * `role="img"`/`aria-label` from the figure so its real descendants (the
+ * visible caption and the sr-only description list) ARE exposed to AT, and the
+ * decorative bar graphics are the only `aria-hidden` part. The <dl> is the
+ * canonical text alternative; the caption is visible to everyone.
+ *
+ * GAP-ANALYTICS-QUERIES-04: values are formatted by the caller via
+ * `formatValue` (money → ₹ paise-safe), not a bare toLocaleString, and the
+ * sr-only and visible numbers now use the SAME formatter (no "123 paise" vs
+ * "123paise" spacing drift).
  */
 import { useMemo } from "react";
 
@@ -18,13 +24,18 @@ export type BarDatum = { label: string; value: number };
 export function AccessibleBarChart({
   title,
   data,
-  unit = "",
+  formatValue,
 }: {
   title: string;
   data: BarDatum[];
-  unit?: string;
+  /** Format a raw numeric value for display (e.g. paise → "₹123.45"). */
+  formatValue?: (value: number) => string;
 }) {
   const max = useMemo(() => Math.max(1, ...data.map((d) => d.value)), [data]);
+  const fmt = useMemo(
+    () => formatValue ?? ((v: number) => v.toLocaleString("en-IN")),
+    [formatValue],
+  );
 
   if (data.length === 0) {
     return (
@@ -34,13 +45,9 @@ export function AccessibleBarChart({
     );
   }
 
-  const summary = `${title}: ${data
-    .map((d) => `${d.label} ${d.value.toLocaleString("en-IN")}${unit}`)
-    .join(", ")}.`;
-
   return (
-    <figure role="img" aria-label={summary} style={{ margin: 0 }}>
-      <figcaption aria-hidden="true" style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>
+    <figure style={{ margin: 0 }}>
+      <figcaption style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>
         {title}
       </figcaption>
 
@@ -64,23 +71,20 @@ export function AccessibleBarChart({
               />
             </span>
             <span style={{ flex: "0 0 90px", fontSize: 13, color: "#0f172a" }}>
-              {d.value.toLocaleString("en-IN")}
-              {unit}
+              {fmt(d.value)}
             </span>
           </div>
         ))}
       </div>
 
       {/* Text alternative: the same data as a structured description list,
-          visually hidden but available to assistive tech. */}
+          visually hidden but exposed to assistive tech (NOT nested under a
+          role="img", so AT actually announces each dt/dd pair). */}
       <dl className="sr-only">
         {data.map((d) => (
           <div key={d.label}>
             <dt>{d.label}</dt>
-            <dd>
-              {d.value.toLocaleString("en-IN")}
-              {unit ? ` ${unit}` : ""}
-            </dd>
+            <dd>{fmt(d.value)}</dd>
           </div>
         ))}
       </dl>
