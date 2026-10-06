@@ -43,7 +43,7 @@ export default async function SetupPage() {
   const stepViews = steps.map((s) => ({ ...s, status: statuses[s.key] ?? "todo" }));
   const doneCount = countComplete(statuses, keys);
   const progress = progressPct(statuses, keys);
-  const ready = allRequiredComplete(statuses);
+  const ready = allRequiredComplete(statuses, steps);
   const resumeIndex = firstIncompleteIndex(steps, statuses);
   const progressUnknown = keys.some((k) => statuses[k] === "unknown");
 
