@@ -26,6 +26,9 @@ export const agentViewSchema = z.object({
   userId: z.string().uuid(),
   displayName: z.string(),
   queueId: z.string().uuid().nullable(),
+  // GAP-TELEPHONY-AGENTS-04: resolved queue name (left join), null when
+  // unassigned. The board shows this instead of a truncated queueId UUID.
+  queueName: z.string().nullable(),
   status: z.enum(AGENT_STATUSES),
   extension: z.string().nullable(),
   version: z.number().int(),

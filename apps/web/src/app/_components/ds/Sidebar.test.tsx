@@ -156,6 +156,18 @@ describe("Sidebar", () => {
       expect(screen.getByRole("link", { name: /^Finance$/ })).toBeInTheDocument();
     });
   });
+  // GAP-TELEPHONY-HOME-01
+  describe("Telephony entry", () => {
+    it("is shown when the telephony module is enabled and links to /telephony", () => {
+      render(<Sidebar enabledModules={["telephony"]} />);
+      expect(screen.getByRole("link", { name: /Telephony/ })).toHaveAttribute("href", "/telephony");
+    });
+    it("is hidden when the telephony module is not enabled", () => {
+      render(<Sidebar enabledModules={["finance"]} />);
+      expect(screen.queryByRole("link", { name: /Telephony/ })).not.toBeInTheDocument();
+    });
+  });
+
   // GAP-ADMIN-HOME-04
   describe("Administration entry", () => {
     it.each(["platform_admin", "super_admin", "tenant_admin"])("is shown to %s and links to /admin", (role) => {

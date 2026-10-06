@@ -9,6 +9,7 @@ import {
   Users, ShoppingCart, BarChart2, Gift, Building2, HardHat, Package,
   GraduationCap, BookOpen, CalendarDays, Target, ClipboardList, BadgeCheck,
   Handshake, Headphones, FolderOpen, Landmark, Puzzle, ShieldCheck, Scale, CalendarCheck, Search, Telescope, Castle,
+  PhoneCall,
   MapPin, Map, Satellite,
   ScanSearch, Gavel, GitBranch,
   Bot, Truck, Star, Archive, Dna, Compass, Sparkles,
@@ -104,6 +105,12 @@ const NAV: NavGroup[] = [
       { icon: CalendarCheck, label: "Meeting Mgmt", href: "/meeting", moduleKey: "meeting" },
       { icon: Gavel, label: "Court Mgmt", href: "/court", moduleKey: "court" },
       { icon: Search, label: "Inspection", href: "/inspection", moduleKey: "inspection" },
+      // GAP-TELEPHONY-HOME-01: the Telephony call-centre module had no sidebar
+      // entry (only navRouteManifest + GlobalSearch knew the route), so an
+      // agent could reach it only by typing the URL. moduleKey "telephony"
+      // matches the ModuleGate key in telephony/layout.tsx, so the item is
+      // hidden when the module is disabled.
+      { icon: PhoneCall, label: "Telephony", href: "/telephony", moduleKey: "telephony" },
     ],
   },
   {

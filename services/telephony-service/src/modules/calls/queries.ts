@@ -22,6 +22,8 @@ function filterKey(limit: number, offset: number, f: ListFilters): string {
     f.direction ?? "-",
     f.queueId ?? "-",
     f.agentId ?? "-",
+    f.from ?? "-",
+    f.to ?? "-",
     // The caller-number filter is keyed by its blind index, never the cleartext,
     // so the cache key cannot leak a phone number.
     f.callerNumber ? "byNumber" : "-",

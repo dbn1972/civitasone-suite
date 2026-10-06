@@ -52,6 +52,8 @@ export async function callRoutes(app: FastifyInstance): Promise<void> {
         ...(q.queueId ? { queueId: q.queueId } : {}),
         ...(q.agentId ? { agentId: q.agentId } : {}),
         ...(q.callerNumber ? { callerNumber: q.callerNumber } : {}),
+        ...(q.from ? { from: q.from } : {}),
+        ...(q.to ? { to: q.to } : {}),
       }),
     );
   });

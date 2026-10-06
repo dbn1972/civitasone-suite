@@ -55,6 +55,26 @@ export function featureLabel(key: string): string {
 }
 
 /**
+ * GAP-TELEPHONY-DISPOSITIONS-05: humanise a snake_case code (e.g. a telephony
+ * disposition "no_resolution" or a tenant-defined wrap-up code) into
+ * sentence-case display text — "No resolution", "Callback scheduled". Replaces
+ * the dispositions page's underscore-only transform that left codes lowercase.
+ * Only the first word is capitalised (sentence case) so a multi-word code reads
+ * naturally rather than Title-Casing every word. Empty input renders "—".
+ *
+ *   humaniseCode("no_answer")           -> "No answer"
+ *   humaniseCode("callback_scheduled")  -> "Callback scheduled"
+ *   humaniseCode("")                     -> "—"
+ */
+export function humaniseCode(code: string | null | undefined): string {
+  if (!code || !code.trim()) return "—";
+  const words = code.trim().toLowerCase().split(/[\s_]+/).filter(Boolean);
+  if (words.length === 0) return "—";
+  words[0] = words[0]!.charAt(0).toUpperCase() + words[0]!.slice(1);
+  return words.join(" ");
+}
+
+/**
  * Tokens that must not appear in any clerk-facing copy (help content, error
  * messages, status badges, screen subtitles). Enforced by a unit test.
  * Requirements 5.2, 14.4, 14.6.
