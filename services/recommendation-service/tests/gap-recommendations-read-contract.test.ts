@@ -12,7 +12,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
 
-const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr"; // gitleaks:allow
+const SECRET = process.env.JWT_SECRET as string; // supplied by vitest.config.ts
 const TENANT = "aaaaaaaa-0001-4000-8000-000000000001";
 const USER = "aaaaaaaa-1111-4000-8000-000000000001";
 

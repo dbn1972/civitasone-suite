@@ -185,9 +185,30 @@ function mapJourneyCount(payload: unknown): number {
   return extractTotal(payload, mapJourneys(payload).length);
 }
 
-function mapRunningCount(payload: unknown): number {
-  const rows = mapExecutions(payload);
-  return rows.filter((r) => RUNNING_STATUSES.has(r.status)).length;
+// Server-side total for a status-filtered executions query. The list route
+// defaults to limit=20, so counting rows client-side would understate the
+// figure once there are more executions than one page; meta.total is exact.
+function mapStatusTotal(payload: unknown): number {
+  return extractTotal(payload, mapExecutions(payload).length);
+}
+
+// journey-service filters by exact status; "running" spans these two states.
+const RUNNING_FILTER_STATUSES = ["enrolled", "in_progress"] as const;
+
+function fetchStatusTotal(status: string, telemetryKey: string): Promise<LoaderResult<number>> {
+  return fetchJson<unknown, number>(
+    `/api/v1/journeys/executions?status=${encodeURIComponent(status)}&limit=1`,
+    0,
+    { revalidateSeconds: 30, telemetryKey, mapResponse: mapStatusTotal },
+  );
+}
+
+async function fetchRunningTotal(keyPrefix: string): Promise<number | null> {
+  const parts = await Promise.all(
+    RUNNING_FILTER_STATUSES.map((st) => fetchStatusTotal(st, `${keyPrefix}.${st}`)),
+  );
+  if (parts.some((p) => p.source === "error")) return null;
+  return parts.reduce((sum, p) => sum + p.data, 0);
 }
 
 // ── Loaders ──────────────────────────────────────────────────────────────────
@@ -216,16 +237,30 @@ export function getJourneyTemplates(): Promise<LoaderResult<JourneyTriggerRow[]>
   });
 }
 
-export function getJourneyAnalytics(): Promise<LoaderResult<JourneyAnalytics>> {
-  return fetchJson<unknown, JourneyAnalytics>(
-    "/api/v1/journeys/executions",
-    { total: 0, running: 0, completed: 0, failed: 0, byStatus: [] },
-    {
-      revalidateSeconds: 30,
-      telemetryKey: "journeys.analytics",
-      mapResponse: mapAnalytics,
+export async function getJourneyAnalytics(): Promise<LoaderResult<JourneyAnalytics>> {
+  // The list (max page) feeds the per-status breakdown; the headline running /
+  // completed / failed figures use server-side totals so they are not capped
+  // by the page size.
+  const [list, running, completed, exited] = await Promise.all([
+    fetchJson<unknown, JourneyAnalytics>(
+      "/api/v1/journeys/executions?limit=200",
+      { total: 0, running: 0, completed: 0, failed: 0, byStatus: [] },
+      { revalidateSeconds: 30, telemetryKey: "journeys.analytics", mapResponse: mapAnalytics },
+    ),
+    fetchRunningTotal("journeys.analytics.running"),
+    fetchStatusTotal("completed", "journeys.analytics.completed"),
+    fetchStatusTotal("exited", "journeys.analytics.exited"),
+  ]);
+  if (list.source === "error") return list;
+  return {
+    ...list,
+    data: {
+      ...list.data,
+      running: running ?? list.data.running,
+      completed: completed.source === "error" ? list.data.completed : completed.data,
+      failed: exited.source === "error" ? list.data.failed : exited.data,
     },
-  );
+  };
 }
 
 export async function getJourneyCounts(): Promise<JourneyCounts> {
@@ -235,17 +270,13 @@ export async function getJourneyCounts(): Promise<JourneyCounts> {
       telemetryKey: "journeys.count.defined",
       mapResponse: mapJourneyCount,
     }),
-    fetchJson<unknown, number>("/api/v1/journeys/executions", 0, {
-      revalidateSeconds: 30,
-      telemetryKey: "journeys.count.running",
-      mapResponse: mapRunningCount,
-    }),
+    fetchRunningTotal("journeys.count.running"),
   ]);
   return {
     defined: defined.source === "error" ? null : defined.data,
-    running: running.source === "error" ? null : running.data,
+    running,
   };
 }
 
 // Internal mappers exported for unit tests only.
-export const __test = { mapJourneys, mapExecutions, mapTriggers, mapAnalytics, mapRunningCount };
+export const __test = { mapJourneys, mapExecutions, mapTriggers, mapAnalytics, mapStatusTotal };

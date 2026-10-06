@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { __test } from "./_data";
 
-const { mapJourneys, mapExecutions, mapTriggers, mapAnalytics, mapRunningCount } = __test;
+const { mapJourneys, mapExecutions, mapTriggers, mapAnalytics, mapStatusTotal } = __test;
 
 describe("journeys _data typed mappers", () => {
   // GAP-JOURNEYS-ACTIVE-01/02, BUILDER-02: typed mappers read the service's
@@ -73,9 +73,11 @@ describe("journeys _data typed mappers", () => {
     expect(a.byStatus[0]).toEqual({ status: "in_progress", count: 2 }); // sorted desc
   });
 
-  it("mapRunningCount counts only running-ish statuses", () => {
-    expect(
-      mapRunningCount({ data: [{ id: "1", status: "in_progress" }, { id: "2", status: "completed" }, { id: "3", status: "enrolled" }] }),
-    ).toBe(2);
+  it("mapStatusTotal uses the server-reported meta.total, not the page length", () => {
+    expect(mapStatusTotal({ data: [{ id: "1", status: "in_progress" }], meta: { total: 57 } })).toBe(57);
+  });
+
+  it("mapStatusTotal falls back to the row count without meta", () => {
+    expect(mapStatusTotal({ data: [{ id: "1", status: "enrolled" }, { id: "2", status: "enrolled" }] })).toBe(2);
   });
 });

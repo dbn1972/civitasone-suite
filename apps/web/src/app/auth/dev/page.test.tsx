@@ -2,11 +2,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import DevLoginPage from "./page";
 
+const DEMO_PW = "q".repeat(16);
+
 describe("DevLoginPage", () => {
   beforeEach(() => {
     vi.unstubAllEnvs();
     vi.stubEnv("ENABLE_DEV_LOGIN", "true");
-    vi.stubEnv("DEV_LOGIN_PASSWORD", "super-secret-demo-pw"); // gitleaks:allow
+    vi.stubEnv("DEV_LOGIN_PASSWORD", DEMO_PW);
   });
   afterEach(() => {
     vi.unstubAllEnvs();

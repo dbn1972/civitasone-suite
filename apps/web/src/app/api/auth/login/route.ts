@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { safeNextPath } from "@/lib/auth/safeNext";
 import { redirect } from "next/navigation";
 import { generatePkcePair, buildAuthorizeUrl } from "@civitasone/client-core";
 import { getOidcConfig, COOKIE } from "@/lib/auth/config";
@@ -8,11 +9,6 @@ const SECURE = process.env.NODE_ENV === "production";
 // GAP-AUTH-LOGIN-02: only a same-origin absolute path is a safe post-login
 // destination. Must start with a single "/" (not "//", which browsers treat
 // as a protocol-relative URL to another origin).
-function safeNextPath(next: string | undefined): string | null {
-  if (!next) return null;
-  if (next.startsWith("/") && !next.startsWith("//")) return next;
-  return null;
-}
 
 export async function GET(req: Request) {
   const oidc = getOidcConfig();

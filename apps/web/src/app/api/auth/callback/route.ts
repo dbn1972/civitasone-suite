@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { safeNextPath } from "@/lib/auth/safeNext";
 import { NextResponse } from "next/server";
 import { exchangeAuthorizationCode } from "@civitasone/client-core";
 import { decodeUnverifiedClaims } from "@civitasone/auth";
@@ -66,7 +67,7 @@ export async function GET(req: Request) {
     // requested, if the login route stored a validated same-origin path.
     const next = jar.get(COOKIE.POST_LOGIN_NEXT)?.value;
     jar.delete(COOKIE.POST_LOGIN_NEXT);
-    const dest = next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
+    const dest = safeNextPath(next) ?? "/dashboard";
     return NextResponse.redirect(new URL(dest, APP_URL));
   } catch (err) {
     // Server-side only (Route Handler); apps/web has no shared logger package,

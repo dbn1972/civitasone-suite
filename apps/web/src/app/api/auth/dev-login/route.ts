@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { safeNextPath } from "@/lib/auth/safeNext";
 import { createHmac } from "node:crypto";
 import { z } from "zod";
 import { isDevLoginEnabled, assertDevLoginConfig } from "@/lib/auth/env";
@@ -281,7 +282,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   clearFailures(key);
   const token = mint(u, tenantId, secret);
   const nextPath = parsed.data.next.trim();
-  const safePath = nextPath.startsWith("/") && !nextPath.startsWith("//") ? nextPath : "/dashboard";
+  const safePath = safeNextPath(nextPath) ?? "/dashboard";
   const res = NextResponse.redirect(new URL(safePath, base), { status: 303 });
   res.cookies.set("civitasone_at", token, {
     httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12,

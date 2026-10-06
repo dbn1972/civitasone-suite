@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { safeNextPath } from "@/lib/auth/safeNext";
 import { Suspense } from "react";
 import LoginClient from "./LoginClient";
 
@@ -11,9 +12,7 @@ import LoginClient from "./LoginClient";
 
 // GAP-AUTH-LOGIN-02: only a same-origin absolute path is a safe destination.
 function safeNext(next: string | undefined): string | null {
-  if (!next) return null;
-  if (next.startsWith("/") && !next.startsWith("//")) return next;
-  return null;
+  return safeNextPath(next);
 }
 
 // GAP-AUTH-LOGIN-04: a branded, announced loading state instead of an empty

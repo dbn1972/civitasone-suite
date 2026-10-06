@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // The route reads env at request time via assertDevLoginConfig(); set a valid
 // baseline before importing, then override per-test with vi.stubEnv.
-const GOOD_SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr"; // gitleaks:allow
-const GOOD_PASSWORD = "demo-pw-123"; // gitleaks:allow — fake dev-login demo password
+const GOOD_SECRET = "s".repeat(40);
+const GOOD_PASSWORD = "p".repeat(12);
 const ORIGIN = "https://civitasone.example.gov.in";
 
 function formRequest(
@@ -115,6 +115,15 @@ describe("POST /api/auth/dev-login", () => {
     const { POST } = await loadRoute();
     const res = await POST(
       formRequest({ username: "superadmin", password: GOOD_PASSWORD, next: "//evil.com" }),
+    );
+    expect(res.headers.get("location")).toContain("/dashboard");
+    expect(res.headers.get("location")).not.toContain("evil.com");
+  });
+
+  it("rejects a backslash open-redirect next (/\\evil.com) and falls back to /dashboard", async () => {
+    const { POST } = await loadRoute();
+    const res = await POST(
+      formRequest({ username: "superadmin", password: GOOD_PASSWORD, next: "/\\evil.com" }),
     );
     expect(res.headers.get("location")).toContain("/dashboard");
     expect(res.headers.get("location")).not.toContain("evil.com");

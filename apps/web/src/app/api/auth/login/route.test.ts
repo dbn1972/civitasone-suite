@@ -52,4 +52,11 @@ describe("GET /api/auth/login (GAP-AUTH-LOGIN-02)", () => {
     expect(jar.set).not.toHaveBeenCalledWith(COOKIE.POST_LOGIN_NEXT, expect.anything(), expect.anything());
     expect(jar.delete).toHaveBeenCalledWith(COOKIE.POST_LOGIN_NEXT);
   });
+
+  it("does not store a backslash open-redirect next (/\\evil.com)", async () => {
+    const { GET } = await import("./route");
+    await GET(new Request("https://app.example/api/auth/login?next=/%5Cevil.com"));
+    expect(jar.set).not.toHaveBeenCalledWith(COOKIE.POST_LOGIN_NEXT, expect.anything(), expect.anything());
+    expect(jar.delete).toHaveBeenCalledWith(COOKIE.POST_LOGIN_NEXT);
+  });
 });
