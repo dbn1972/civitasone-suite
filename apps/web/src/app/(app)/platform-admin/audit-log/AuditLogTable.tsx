@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { Button } from "@/app/_components/ds";
+import { formatIndianDateTime, istDatePart } from "@/lib/formatters";
 
 /* ─── Types ─────────────────────────────────────────────────────────── */
 export type PlatformAuditEvent = {
@@ -21,10 +22,31 @@ export type PlatformAuditEvent = {
 
 const ACTION_TYPES = ["All", "CREATE", "UPDATE", "DELETE", "LOGIN", "LOGOUT", "EXPORT", "ROLE_CHANGE", "SETTINGS_CHANGE", "PERMISSION_CHANGE"] as const;
 
-function formatWhen(iso: string): string {
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  return d.toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+/**
+ * GAP-PLATFORM-ADMIN-AUDIT-LOG-05: neutralise CSV formula injection. A cell
+ * whose value begins with = + - @ (or a leading tab/CR) is interpreted as a
+ * formula by Excel/Sheets; prefix it with a single quote so it is treated as
+ * text. Still quote-wrap and escape embedded quotes.
+ */
+function csvCell(value: unknown): string {
+  let s = String(value ?? "");
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  return `"${s.replace(/"/g, '""')}"`;
+}
+
+function exportCsv(events: PlatformAuditEvent[]) {
+  const headers = ["Timestamp", "Actor", "Role", "IP", "Action Type", "Action", "Target", "Outcome"];
+  const rows = events.map((e) => [
+    e.timestamp, e.actor, e.actorRole, e.ipAddress ?? "", e.actionType, e.action, e.targetEntity, e.outcome,
+  ]);
+  const csv = [headers, ...rows].map((r) => r.map(csvCell).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function Diff({ before, after }: { before?: Record<string, unknown>; after?: Record<string, unknown> }) {
@@ -56,25 +78,10 @@ function Diff({ before, after }: { before?: Record<string, unknown>; after?: Rec
   );
 }
 
-function exportCsv(events: PlatformAuditEvent[]) {
-  const headers = ["Timestamp", "Actor", "Role", "IP", "Action Type", "Action", "Target", "Outcome"];
-  const rows = events.map((e) => [
-    e.timestamp, e.actor, e.actorRole, e.ipAddress ?? "", e.actionType, e.action, e.targetEntity, e.outcome,
-  ]);
-  const csv = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
 const PAGE_SIZE = 20;
 
 /* ─── Component ─────────────────────────────────────────────────────── */
-export function AuditLogTable({ events }: { events: PlatformAuditEvent[] }) {
+export function AuditLogTable({ events, canExport = true }: { events: PlatformAuditEvent[]; canExport?: boolean }) {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [actorSearch, setActorSearch] = useState("");
@@ -85,8 +92,15 @@ export function AuditLogTable({ events }: { events: PlatformAuditEvent[] }) {
 
   const filtered = useMemo(() => {
     return events.filter((e) => {
-      if (dateFrom && e.timestamp < dateFrom) return false;
-      if (dateTo && e.timestamp > dateTo + "T23:59:59") return false;
+      // GAP-PLATFORM-ADMIN-AUDIT-LOG-05/03: compare on the event's IST
+      // calendar day, inclusive of both bounds, rather than a raw ISO string
+      // compare (which dropped the last second and used UTC not IST).
+      if (dateFrom || dateTo) {
+        const day = istDatePart(e.timestamp);
+        if (!day) return false;
+        if (dateFrom && day < dateFrom) return false;
+        if (dateTo && day > dateTo) return false;
+      }
       if (actorSearch && !e.actor.toLowerCase().includes(actorSearch.toLowerCase())) return false;
       if (actionType !== "All" && e.actionType !== actionType) return false;
       if (outcomeFilter !== "All" && e.outcome !== outcomeFilter.toLowerCase()) return false;
@@ -105,9 +119,11 @@ export function AuditLogTable({ events }: { events: PlatformAuditEvent[] }) {
     <div className="card">
       <div className="card-h">
         <h3 id="platform-audit-heading">Platform audit log</h3>
-        <Button variant="ghost" size="sm" onClick={() => exportCsv(filtered)}>
-          Export CSV ({filtered.length})
-        </Button>
+        {canExport && (
+          <Button variant="ghost" size="sm" onClick={() => exportCsv(filtered)}>
+            Export current filtered view ({filtered.length})
+          </Button>
+        )}
       </div>
 
       {/* Filters */}
@@ -153,28 +169,30 @@ export function AuditLogTable({ events }: { events: PlatformAuditEvent[] }) {
               {["Timestamp", "Actor", "Action type", "Action", "Target", "IP", "Result"].map((h) => (
                 <th key={h} style={{ padding: "10px 14px", textAlign: "start", fontSize: 11.5, fontWeight: 650, color: "var(--ink2)", whiteSpace: "nowrap" }}>{h}</th>
               ))}
-              <th style={{ padding: "10px 14px", width: 60 }}></th>
+              {/* GAP-PLATFORM-ADMIN-AUDIT-LOG-04/06: the expander column needs
+                  an accessible name even though its header is visually blank. */}
+              <th style={{ padding: "10px 14px", width: 60 }}>
+                <span className="sr-only">Show changes</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {pageRows.length === 0 ? (
               <tr>
                 <td colSpan={8} style={{ padding: "32px 16px", textAlign: "center", color: "var(--ink2)", fontSize: 13 }}>
-                  No events match the current filters.
+                  {events.length === 0 ? "No audit events recorded yet." : "No events match the current filters."}
                 </td>
               </tr>
             ) : pageRows.map((e) => {
               const expanded = expandedId === e.id;
               const hasDiff = !!(e.before ?? e.after);
               return (
-                <>
+                <Fragment key={e.id}>
                   <tr
-                    key={e.id}
                     style={{ borderBottom: "1px solid var(--line)", cursor: hasDiff ? "pointer" : "default" }}
                     onClick={() => hasDiff ? setExpandedId(expanded ? null : e.id) : undefined}
-                    aria-expanded={hasDiff ? expanded : undefined}
                   >
-                    <td style={{ padding: "10px 14px", whiteSpace: "nowrap", fontSize: 12.5, color: "var(--ink2)" }}>{formatWhen(e.timestamp)}</td>
+                    <td style={{ padding: "10px 14px", whiteSpace: "nowrap", fontSize: 12.5, color: "var(--ink2)" }}>{formatIndianDateTime(e.timestamp)}</td>
                     <td style={{ padding: "10px 14px" }}>
                       <div className="who">
                         <div className="av" aria-hidden="true" style={{ fontSize: 10, width: 28, height: 28, borderRadius: "50%", background: "var(--primary-light, #eff6ff)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--primary-d)", fontWeight: 700, flexShrink: 0 }}>
@@ -182,7 +200,7 @@ export function AuditLogTable({ events }: { events: PlatformAuditEvent[] }) {
                         </div>
                         <div>
                           <div style={{ fontWeight: 600, fontSize: 13 }}>{e.actor}</div>
-                          <div style={{ fontSize: 11, color: "var(--ink2)" }}>{e.actorRole}</div>
+                          <div style={{ fontSize: 11, color: "var(--ink2)" }}>{e.actorRole || "Unknown"}</div>
                         </div>
                       </div>
                     </td>
@@ -207,17 +225,28 @@ export function AuditLogTable({ events }: { events: PlatformAuditEvent[] }) {
                         : <span className="pill info">{e.outcome}</span>}
                     </td>
                     <td style={{ padding: "10px 14px", textAlign: "center" }}>
-                      {hasDiff && <span style={{ fontSize: 16, color: "var(--ink2)", transition: "transform 0.15s", display: "inline-block", transform: expanded ? "rotate(90deg)" : "none" }}>›</span>}
+                      {hasDiff && (
+                        <button
+                          type="button"
+                          aria-expanded={expanded}
+                          aria-controls={`diff-${e.id}`}
+                          aria-label={`Show changes for ${e.action}`}
+                          onClick={(ev) => { ev.stopPropagation(); setExpandedId(expanded ? null : e.id); }}
+                          style={{ background: "transparent", border: "none", cursor: "pointer", padding: 4, color: "var(--ink2)", fontSize: 16, lineHeight: 1, display: "inline-block", transition: "transform 0.15s", transform: expanded ? "rotate(90deg)" : "none" }}
+                        >
+                          ›
+                        </button>
+                      )}
                     </td>
                   </tr>
                   {expanded && hasDiff && (
-                    <tr key={`${e.id}-diff`} style={{ background: "var(--line2, #f8fafc)" }}>
+                    <tr id={`diff-${e.id}`} style={{ background: "var(--line2, #f8fafc)" }}>
                       <td colSpan={8} style={{ padding: "0 14px 12px 56px" }}>
                         <Diff before={e.before} after={e.after} />
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               );
             })}
           </tbody>

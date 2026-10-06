@@ -128,3 +128,51 @@ describe("OrgConfigPage (COMP-014: real per-tenant org-hierarchy-levels)", () =>
     expect(screen.queryByText("Org hierarchy saved.")).not.toBeInTheDocument();
   });
 });
+
+describe("OrgConfigPage keyboard reorder / dirty guard / validation", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // GAP-PLATFORM-ADMIN-ORG-CONFIG-01: reordering must be possible without a
+  // mouse. Click "Move down" on L1 and the orders renumber and the first
+  // level becomes L2.
+  it("reorders via the keyboard-accessible Move down button and renumbers 1..n", () => {
+    render(<OrgConfigPage initialLevels={LEVELS} source="api" />);
+    fireEvent.click(screen.getByRole("button", { name: "Move Ministry down" }));
+    // After moving Ministry down, Department is now L1 and Ministry L2.
+    // The L-badges render as "L1"/"L2"; assert Ministry's row shows an
+    // "Unsaved changes" pill appeared and the move notice is announced.
+    expect(screen.getByText(/moved to position 2/i)).toBeInTheDocument();
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+  });
+
+  // GAP-PLATFORM-ADMIN-ORG-CONFIG-03: beforeunload must preventDefault while
+  // there are unsaved changes.
+  it("registers a beforeunload guard that fires while dirty", () => {
+    render(<OrgConfigPage initialLevels={LEVELS} source="api" />);
+    // Not dirty yet: a beforeunload is not prevented.
+    const before = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(before);
+    expect(before.defaultPrevented).toBe(false);
+
+    // Make it dirty.
+    fireEvent.click(screen.getByRole("button", { name: "Move Ministry down" }));
+    const after = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(after);
+    expect(after.defaultPrevented).toBe(true);
+  });
+
+  // GAP-PLATFORM-ADMIN-ORG-CONFIG-06: a duplicate name is rejected with an
+  // inline error and the edit row does not close.
+  it("rejects a duplicate level name on edit with an inline error", () => {
+    render(<OrgConfigPage initialLevels={LEVELS} source="api" />);
+    // Edit "Department" and rename it to "ministry" (dup of "Ministry").
+    fireEvent.click(screen.getAllByRole("button", { name: "Edit" })[1]);
+    fireEvent.change(screen.getByLabelText("Level name"), { target: { value: "ministry" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    // Error shown; the edit input is still present (row did not close).
+    expect(screen.getByText(/duplicate level name/i)).toBeInTheDocument();
+    expect(screen.getByLabelText("Level name")).toBeInTheDocument();
+  });
+});

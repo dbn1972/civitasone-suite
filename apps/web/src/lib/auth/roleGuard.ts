@@ -239,6 +239,33 @@ export const CRM_KYC_APPROVER_ROLES = ["crm_admin", "super_admin", "tenant_admin
  */
 export const CRM_GRIEVANCE_CLOSE_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
 
+/**
+ * Roles permitted to reach the /platform-admin segment (system settings, org
+ * config, roles & permissions, audit log, user management). These pages
+ * administer tenant-wide RBAC, security configuration and audit data, so the
+ * segment layout gates on this set and the server (admin-service /
+ * identity-service / audit-service) remains the authority.
+ *
+ * DECISION (GAP-PLATFORM-ADMIN-ROLES-02 / -SYSTEM-SETTINGS-03 /
+ * -AUDIT-LOG-02 / -ORG-CONFIG-02 / -HOME-01, safest default pending product
+ * confirmation — flagged for HUMAN REVIEW): include tenant_admin alongside
+ * platform_admin/super_admin. A segment-wide gate limited to
+ * platform_admin/super_admin risks locking a tenant_admin out of the audit log
+ * and settings they legitimately use today; a plain user (employee, hr_staff,
+ * crm_user, …) is excluded either way, which is what the ROLEGATE gaps
+ * require. Narrow this to platform_admin/super_admin if product decides
+ * tenant_admin must not administer the platform.
+ */
+export const PLATFORM_ADMIN_ROLES = ["platform_admin", "super_admin", "tenant_admin"];
+
+/**
+ * Read-only audit reviewers. The /platform-admin segment layout admits them (so the
+ * audit log stays reachable, as it was before the segment gate), but every page other
+ * than /platform-admin/audit-log re-checks PLATFORM_ADMIN_ROLES itself. The audit-service
+ * remains the authority on who may read events.
+ */
+export const PLATFORM_AUDIT_VIEW_ROLES = ["auditor", "audit_admin", "audit_officer"];
+
 /** True when any of the session roles is in `allowed`. Pure; for UI gating. */
 export function hasAnyRole(sessionRoles: string[], allowed: string[]): boolean {
   return allowed.some((r) => sessionRoles.includes(r));

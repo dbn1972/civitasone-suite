@@ -1,9 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Button, ConfirmDialog } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useFormError } from "@/lib/useFormError";
+import { useUnsavedChangesGuard } from "@/lib/useUnsavedChangesGuard";
+import { tint, validateOrgLevels } from "@/lib/orgLevels";
 import type { OrgHierarchyLevel } from "@/app/_data/loaders";
 
 /* ─── Types ─────────────────────────────────────────────────────────── */
@@ -11,63 +13,63 @@ type OrgLevel = OrgHierarchyLevel;
 
 function badge(color: string, text: string) {
   return (
-    <span style={{ padding: "2px 10px", borderRadius: 20, fontSize: 11.5, fontWeight: 700, background: color + "18", color, border: `1px solid ${color}40` }}>
+    <span style={{ padding: "2px 10px", borderRadius: 20, fontSize: 11.5, fontWeight: 700, background: tint(color, 0.1), color, border: `1px solid ${tint(color, 0.25)}` }}>
       {text}
     </span>
   );
 }
 
 const inp: React.CSSProperties = { width: "100%", padding: "7px 10px", borderRadius: 7, border: "1px solid var(--line)", fontSize: 13, fontFamily: "inherit", color: "var(--ink)", boxSizing: "border-box" as const };
-const lbl: React.CSSProperties = { display: "block", fontSize: 11.5, fontWeight: 650, color: "var(--ink2)", marginBottom: 3 };
 
-/* ─── Drag-to-reorder list ──────────────────────────────────────────── */
-// COMP-014: this page used to seed its entire editable state from a
-// hardcoded DEFAULT_LEVELS constant (never loaded, never saved for real —
-// PUT /v1/admin/org-hierarchy had no PUT route, and the failure was hidden
-// behind an unconditional "Org hierarchy saved." notice). It now receives
-// the tenant's REAL configured levels from the server (page.tsx's loader,
-// GET /v1/admin/org-hierarchy-levels — a new, dedicated backend for this
-// hierarchy-LEVEL-taxonomy concept, deliberately distinct from
-// /v1/admin/org-hierarchy's real org-unit-INSTANCE CRUD), and saves through
-// the matching real PUT, checking the response instead of assuming success.
+/* ─── Editable org-level list ───────────────────────────────────────── */
+// COMP-014: levels are the tenant's REAL configured hierarchy-level taxonomy
+// from GET /v1/admin/org-hierarchy-levels (admin-service), saved via the
+// matching PUT with res.ok checked. See git history for the full rationale.
 export function OrgConfigPage({ initialLevels, source }: { initialLevels: OrgLevel[]; source: "api" | "error" }) {
   const [levels, setLevels] = useState<OrgLevel[]>(initialLevels);
   const [editId, setEditId] = useState<string | null>(null);
   const [draft, setDraft] = useState<OrgLevel | null>(null);
+  const [draftError, setDraftError] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [confirmSave, setConfirmSave] = useState(false);
   const formError = useFormError("org hierarchy");
 
-  // Drag state
+  // GAP-PLATFORM-ADMIN-ORG-CONFIG-03: dirty tracking + unsaved-changes guard.
+  const baseline = useRef<string>(JSON.stringify(initialLevels));
+  const dirty = useMemo(
+    () => JSON.stringify(levels) !== baseline.current,
+    [levels],
+  );
+  useUnsavedChangesGuard(dirty || editId !== null);
+
+  // Drag state (progressive enhancement; buttons are the accessible path).
   const dragIndex = useRef<number | null>(null);
   const dragOverIndex = useRef<number | null>(null);
   const [dragging, setDragging] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
 
-  function onDragStart(i: number) {
-    dragIndex.current = i;
-    setDragging(i);
+  // GAP-PLATFORM-ADMIN-ORG-CONFIG-01: single reorder primitive reused by both
+  // drag-and-drop and the keyboard-accessible Move up/down buttons.
+  function moveLevel(from: number, to: number) {
+    if (from === to || from < 0 || to < 0 || from >= levels.length || to >= levels.length) return;
+    setLevels((prev) => {
+      const copy = [...prev];
+      const [moved] = copy.splice(from, 1);
+      copy.splice(to, 0, moved);
+      const renumbered = copy.map((l, idx) => ({ ...l, order: idx + 1 }));
+      setNotice(`"${moved.label}" moved to position ${to + 1}.`);
+      return renumbered;
+    });
   }
 
-  function onDragEnter(i: number) {
-    dragOverIndex.current = i;
-    setDragOver(i);
-  }
-
+  function onDragStart(i: number) { dragIndex.current = i; setDragging(i); }
+  function onDragEnter(i: number) { dragOverIndex.current = i; setDragOver(i); }
   function onDragEnd() {
     const from = dragIndex.current;
     const to = dragOverIndex.current;
-    if (from !== null && to !== null && from !== to) {
-      setLevels((prev) => {
-        const copy = [...prev];
-        const [moved] = copy.splice(from, 1);
-        copy.splice(to, 0, moved);
-        return copy.map((l, idx) => ({ ...l, order: idx + 1 }));
-      });
-      setNotice("Hierarchy reordered. Click Save order to persist.");
-    }
+    if (from !== null && to !== null) moveLevel(from, to);
     dragIndex.current = null;
     dragOverIndex.current = null;
     setDragging(null);
@@ -78,6 +80,7 @@ export function OrgConfigPage({ initialLevels, source }: { initialLevels: OrgLev
     setEditId(level.id);
     setDraft({ ...level });
     setError("");
+    setDraftError("");
     setNotice("");
   }
 
@@ -85,28 +88,33 @@ export function OrgConfigPage({ initialLevels, source }: { initialLevels: OrgLev
     setEditId(null);
     setDraft(null);
     setError("");
+    setDraftError("");
   }
 
   function saveEdit() {
     if (!draft) return;
-    if (!draft.label.trim()) { setError("Level name is required."); return; }
-    setLevels((prev) => prev.map((l) => l.id === draft.id ? { ...draft } : l));
+    // GAP-PLATFORM-ADMIN-ORG-CONFIG-06: validate the draft against the whole
+    // set (length bounds + case-insensitive unique labels), not just a
+    // non-empty name.
+    const candidate = levels.map((l) => (l.id === draft.id ? draft : l));
+    const result = validateOrgLevels(candidate);
+    if (!result.ok) { setDraftError(result.message); return; }
+    setLevels(candidate);
     setEditId(null);
     setDraft(null);
-    setNotice(`"${draft.label}" updated. Click Save order to persist.`);
+    setNotice(`"${draft.label.trim()}" updated. Click Save order to persist.`);
   }
 
   async function persistOrder() {
+    // Re-validate before sending (defence in depth).
+    const result = validateOrgLevels(levels);
+    if (!result.ok) { setError(result.message); setConfirmSave(false); return; }
     setBusy(true);
     setError("");
     try {
       const res = await fetch("/api/proxy/v1/admin/org-hierarchy-levels", {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        // Full shape (id/order/label/description/examples/color) — the
-        // pre-fix request sent only {id, order, label}, so an edited
-        // description/examples/color was silently discarded even when the
-        // save itself "succeeded".
         body: JSON.stringify({
           levels: levels.map((l) => ({
             id: l.id, order: l.order, label: l.label,
@@ -115,13 +123,11 @@ export function OrgConfigPage({ initialLevels, source }: { initialLevels: OrgLev
         }),
       });
       if (!res.ok) {
-        // A resolved non-2xx response never rejects fetch()'s promise, so a
-        // bare `.catch()` (the pre-fix code) never sees it — this explicit
-        // res.ok check is the actual fix for the silent-failure bug.
         const resolved = await formError.fromResponse(res, "save");
         setError(resolved.message);
         return;
       }
+      baseline.current = JSON.stringify(levels);
       setNotice("Org hierarchy saved.");
     } catch (caught) {
       setError(formError.fromException("save", caught).message);
@@ -143,16 +149,19 @@ export function OrgConfigPage({ initialLevels, source }: { initialLevels: OrgLev
         <p role="alert" style={{ fontSize: 12.5, color: "var(--bad, #b42318)", marginBottom: 12 }}>{error}</p>
       ) : null}
 
-      {/* Hierarchy diagram */}
+      {/* Hierarchy table */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-h">
-          <h3 style={{ margin: 0 }}>Indian Government Org Structure</h3>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <h3 style={{ margin: 0 }}>Indian Government Org Structure</h3>
+            {dirty && <span className="pill warn" style={{ fontSize: 11 }}>Unsaved changes</span>}
+          </div>
           <Button size="sm" onClick={() => setConfirmSave(true)} disabled={busy || levels.length === 0}>
             {busy ? "Saving…" : "Save order"}
           </Button>
         </div>
         <p style={{ fontSize: 12.5, color: "var(--ink2)", margin: 0, padding: "0 16px 10px" }}>
-          Drag rows to reorder reporting levels. Click Edit to rename or update descriptions.
+          Use the Move up / Move down buttons (or drag rows) to reorder reporting levels. Click Edit to rename or update descriptions.
         </p>
 
         {levels.length === 0 ? (
@@ -164,7 +173,7 @@ export function OrgConfigPage({ initialLevels, source }: { initialLevels: OrgLev
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
             <thead>
               <tr style={{ background: "var(--line2, #f8fafc)", borderBottom: "1px solid var(--line)" }}>
-                <th style={{ padding: "10px 16px", textAlign: "start", fontWeight: 650, fontSize: 12, color: "var(--ink2)", width: 40 }} aria-label="Drag handle"></th>
+                <th style={{ padding: "10px 16px", textAlign: "start", fontWeight: 650, fontSize: 12, color: "var(--ink2)", width: 96 }}>Reorder</th>
                 <th style={{ padding: "10px 16px", textAlign: "start", fontWeight: 650, fontSize: 12, color: "var(--ink2)" }}>Level</th>
                 <th style={{ padding: "10px 16px", textAlign: "start", fontWeight: 650, fontSize: 12, color: "var(--ink2)" }}>Name</th>
                 <th style={{ padding: "10px 16px", textAlign: "start", fontWeight: 650, fontSize: 12, color: "var(--ink2)" }}>Description</th>
@@ -190,19 +199,42 @@ export function OrgConfigPage({ initialLevels, source }: { initialLevels: OrgLev
                       borderBottom: "1px solid var(--line)",
                       background: isDragging ? "var(--line2, #f8fafc)" : isDragOver ? "var(--primary-light, #eff6ff)" : "transparent",
                       opacity: isDragging ? 0.5 : 1,
-                      cursor: isEditing ? "default" : "grab",
                       transition: "background 0.1s",
                     }}
                   >
-                    <td style={{ padding: "10px 16px", color: "var(--ink2)", fontSize: 16, textAlign: "center" }} aria-hidden="true">
-                      ⠿
+                    <td style={{ padding: "10px 16px" }}>
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={i === 0 || isEditing}
+                          aria-label={`Move ${level.label} up`}
+                          onClick={() => moveLevel(i, i - 1)}
+                          style={{ fontSize: 12, padding: "2px 8px" }}
+                        >
+                          ↑
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={i === levels.length - 1 || isEditing}
+                          aria-label={`Move ${level.label} down`}
+                          onClick={() => moveLevel(i, i + 1)}
+                          style={{ fontSize: 12, padding: "2px 8px" }}
+                        >
+                          ↓
+                        </Button>
+                      </div>
                     </td>
                     <td style={{ padding: "10px 16px" }}>
                       {badge(level.color, `L${level.order}`)}
                     </td>
                     <td style={{ padding: "10px 16px" }}>
                       {isEditing ? (
-                        <input style={inp} value={draft?.label ?? ""} onChange={(e) => setDraft((d) => d ? { ...d, label: e.target.value } : d)} aria-label="Level name" />
+                        <>
+                          <input style={inp} value={draft?.label ?? ""} onChange={(e) => setDraft((d) => d ? { ...d, label: e.target.value } : d)} aria-label="Level name" aria-invalid={!!draftError} aria-describedby={draftError ? `org-draft-error-${level.id}` : undefined} />
+                          {draftError && <span id={`org-draft-error-${level.id}`} role="alert" style={{ display: "block", fontSize: 11.5, color: "var(--bad, #b42318)", marginTop: 4 }}>{draftError}</span>}
+                        </>
                       ) : (
                         <span style={{ fontWeight: 600 }}>{level.label}</span>
                       )}
@@ -240,18 +272,18 @@ export function OrgConfigPage({ initialLevels, source }: { initialLevels: OrgLev
         )}
       </div>
 
-      {/* Hierarchy flow diagram */}
+      {/* Reporting chain preview */}
       <div className="card">
         <div className="card-h"><h3 style={{ margin: 0 }}>Reporting chain preview</h3></div>
         <div style={{ padding: "20px 24px", display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
           {levels.map((level, i) => (
             <div key={level.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ padding: "10px 18px", borderRadius: 10, background: level.color + "18", border: `1.5px solid ${level.color}50`, textAlign: "center", minWidth: 100 }}>
+              <div style={{ padding: "10px 18px", borderRadius: 10, background: tint(level.color, 0.1), border: `1.5px solid ${tint(level.color, 0.3)}`, textAlign: "center", minWidth: 100 }}>
                 <div style={{ fontSize: 11, color: level.color, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>L{level.order}</div>
                 <div style={{ fontSize: 13.5, fontWeight: 700, color: level.color }}>{level.label}</div>
               </div>
               {i < levels.length - 1 && (
-                <span style={{ color: "var(--ink2)", fontSize: 20, lineHeight: 1 }}>→</span>
+                <span style={{ color: "var(--ink2)", fontSize: 20, lineHeight: 1 }} aria-hidden="true">→</span>
               )}
             </div>
           ))}

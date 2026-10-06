@@ -1,3 +1,4 @@
+import { requireAnyRole, PLATFORM_ADMIN_ROLES } from "@/lib/auth/roleGuard";
 import { PageHeader, StatCard } from "@/app/_components/ds";
 import { Breadcrumb } from "../Breadcrumb";
 import { getAdminRolesList, getAdminPermissionsList } from "@/app/_data/loaders";
@@ -15,6 +16,7 @@ import { RolePermissionsMatrix } from "./RolePermissionsMatrix";
 // module/action grid from the real permission keys instead of a fabricated
 // constant.
 export default async function PlatformAdminRolesPage() {
+  requireAnyRole(PLATFORM_ADMIN_ROLES, "/dashboard");
   const [{ data: roles, source: rolesSource }, { data: permissions, source: permsSource }] = await Promise.all([
     getAdminRolesList(),
     getAdminPermissionsList(),

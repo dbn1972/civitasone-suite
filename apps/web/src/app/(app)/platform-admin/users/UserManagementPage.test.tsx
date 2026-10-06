@@ -35,23 +35,29 @@ function mockFetch(status: number, body: unknown = {}) {
   }) as unknown as typeof fetch;
 }
 
-describe("UserManagementPage (COMP-012)", () => {
+/** USERS-03: suspend now requires a reason before Confirm enables. */
+function typeSuspendReason(text = "Policy violation under review") {
+  fireEvent.change(screen.getByLabelText("Reason for suspension"), { target: { value: text } });
+}
+
+describe("UserManagementPage (COMP-012 + USERS-02/03)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     refreshMock.mockReset();
   });
 
-  it("suspend calls the real identity-service route (PATCH .../status), not the nonexistent POST .../suspend", async () => {
+  it("suspend calls the real identity-service route (PATCH .../status) with a reason", async () => {
     mockFetch(202);
-    render(<UserManagementPage users={USERS} />);
+    render(<UserManagementPage users={USERS} currentUserId="someone-else" />);
     fireEvent.click(screen.getByRole("button", { name: "Suspend" }));
+    typeSuspendReason();
     fireEvent.click(screen.getByRole("button", { name: "Suspend user" }));
     await waitFor(() =>
       expect(global.fetch).toHaveBeenCalledWith(
         `/api/proxy/v1/admin/users/${USERS[0].id}/status`,
         expect.objectContaining({
           method: "PATCH",
-          body: JSON.stringify({ status: "suspended" }),
+          body: JSON.stringify({ status: "suspended", reason: "Policy violation under review" }),
         }),
       ),
     );
@@ -60,20 +66,22 @@ describe("UserManagementPage (COMP-012)", () => {
 
   it("surfaces a failed suspend instead of silently succeeding", async () => {
     mockFetch(404, { code: "NOT_FOUND", message: "route not found" });
-    render(<UserManagementPage users={USERS} />);
+    render(<UserManagementPage users={USERS} currentUserId="someone-else" />);
     fireEvent.click(screen.getByRole("button", { name: "Suspend" }));
+    typeSuspendReason();
     fireEvent.click(screen.getByRole("button", { name: "Suspend user" }));
     expect(await screen.findByText(/could not suspend user/i)).toBeInTheDocument();
     expect(refreshMock).not.toHaveBeenCalled();
   });
 
-  it("'Reset pwd' is a real action (not a dead link) that POSTs the reset-password route", async () => {
+  it("'Reset password' is a real action (not a dead link) that POSTs the reset-password route", async () => {
     mockFetch(202);
     render(<UserManagementPage users={USERS} />);
-    const resetButton = screen.getByRole("button", { name: "Reset pwd" });
+    const resetButton = screen.getByRole("button", { name: "Reset password" });
     expect(resetButton.tagName).toBe("BUTTON");
     fireEvent.click(resetButton);
-    fireEvent.click(screen.getByRole("button", { name: "Reset password" }));
+    // Dialog open -> row button + confirm button both read "Reset password"; the confirm is the last.
+    fireEvent.click(screen.getAllByRole("button", { name: "Reset password" }).slice(-1)[0]);
     await waitFor(() =>
       expect(global.fetch).toHaveBeenCalledWith(
         `/api/proxy/v1/admin/users/${USERS[0].id}/reset-password`,
@@ -85,8 +93,8 @@ describe("UserManagementPage (COMP-012)", () => {
   it("surfaces a failed password reset instead of silently succeeding", async () => {
     mockFetch(500, { code: "INTERNAL", message: "boom" });
     render(<UserManagementPage users={USERS} />);
-    fireEvent.click(screen.getByRole("button", { name: "Reset pwd" }));
     fireEvent.click(screen.getByRole("button", { name: "Reset password" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Reset password" }).slice(-1)[0]);
     expect(await screen.findByText(/could not start a password reset/i)).toBeInTheDocument();
   });
 });

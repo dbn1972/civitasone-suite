@@ -490,6 +490,87 @@ describe("cross-service routes → identity-service (token-forwarded)", () => {
     expect(revokeCall!.url).toContain("perm-hr-read");
   });
 
+  // GAP-PLATFORM-ADMIN-ROLES-01: server-side separation-of-duties. The web UI
+  // only disables a toggle as a convenience; the authoritative maker-checker
+  // rule must live on the server. A desired permission-key set that would let
+  // ONE role both submit/raise AND approve the SAME resource must be rejected
+  // 422 SOD_CONFLICT, and — crucially — the role must be left COMPLETELY
+  // unchanged (the check runs before any upstream grant/revoke, so not even
+  // the non-conflicting keys are applied). These assertions fail on the old
+  // code, which forwarded the whole set to identity-service unconditionally.
+  it("PATCH /v1/admin/roles/:id/permissions rejects a set that grants the same resource both submit and approve (SoD), 422 SOD_CONFLICT, and applies NOTHING", async () => {
+    const roleId = "66666666-6666-4666-8666-666666666666";
+    const calls: Array<{ method: string; url: string }> = [];
+    const fetchMock = vi.fn(async (url: string, init: { method: string; headers: Record<string, string> }) => {
+      expectForwardsCallerAuth(init);
+      calls.push({ method: init.method, url });
+      // If the handler ever reaches identity-service for a conflicting set it
+      // has already failed the SoD rule, so answer plausibly and let the
+      // "no upstream calls" assertion below catch the regression.
+      if (url.endsWith(`/identity/rbac/roles/${roleId}`)) return jsonResponse(200, { id: roleId, permissions: [] });
+      if (url.includes("/identity/rbac/permissions")) return jsonResponse(200, []);
+      return jsonResponse(202, { id: roleId, status: "accepted" });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/admin/roles/${roleId}/permissions`,
+      headers: authHeader(["platform_admin"]),
+      // finance.submit + finance.approve on the SAME resource "finance" — plus a
+      // harmless key that must ALSO not be applied because the request is rejected whole.
+      payload: { permissionKeys: ["finance.submit", "finance.approve", "audit.read"] },
+    });
+
+    expect(res.statusCode).toBe(422);
+    const body = res.json();
+    expect(body.code).toBe("SOD_CONFLICT");
+    expect(body.message).toContain("finance.submit");
+    expect(body.message).toContain("finance.approve");
+    // The role is unchanged: the handler must NOT have made ANY upstream call
+    // (no role read, no permission list, no grant, no revoke) — it fails fast.
+    expect(calls).toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("PATCH /v1/admin/roles/:id/permissions treats nested-resource submit/approve as a conflict but allows submit+approve across DIFFERENT resources", async () => {
+    // Different resources (finance.submit + hr.approve) is NOT a conflict and
+    // must pass through to the real diff/grant path.
+    const okRoleId = "6a6a6a6a-6a6a-4a6a-8a6a-6a6a6a6a6a6a";
+    const okFetch = vi.fn(async (url: string, init: { method: string; headers: Record<string, string> }) => {
+      expectForwardsCallerAuth(init);
+      if (url.endsWith(`/identity/rbac/roles/${okRoleId}`)) return jsonResponse(200, { id: okRoleId, permissions: [] });
+      if (url.includes("/identity/rbac/permissions")) {
+        return jsonResponse(200, [
+          { id: "perm-fin-submit", key: "finance.submit" },
+          { id: "perm-hr-approve", key: "hr.approve" },
+        ]);
+      }
+      if (init.method === "POST" && url.endsWith("/permissions")) return jsonResponse(202, { id: okRoleId, status: "accepted" });
+      return jsonResponse(202, { id: okRoleId, status: "accepted" });
+    });
+    vi.stubGlobal("fetch", okFetch);
+    const okRes = await app.inject({
+      method: "PATCH", url: `/v1/admin/roles/${okRoleId}/permissions`,
+      headers: authHeader(["platform_admin"]),
+      payload: { permissionKeys: ["finance.submit", "hr.approve"] },
+    });
+    expect(okRes.statusCode).toBe(202);
+    vi.unstubAllGlobals();
+
+    // Nested resource: finance.payments.submit + finance.payments.approve IS a conflict.
+    const badRoleId = "6b6b6b6b-6b6b-4b6b-8b6b-6b6b6b6b6b6b";
+    const badFetch = vi.fn(async () => jsonResponse(200, {}));
+    vi.stubGlobal("fetch", badFetch);
+    const badRes = await app.inject({
+      method: "PATCH", url: `/v1/admin/roles/${badRoleId}/permissions`,
+      headers: authHeader(["platform_admin"]),
+      payload: { permissionKeys: ["finance.payments.submit", "finance.payments.approve"] },
+    });
+    expect(badRes.statusCode).toBe(422);
+    expect(badRes.json().code).toBe("SOD_CONFLICT");
+    expect(badFetch).not.toHaveBeenCalled();
+  });
+
   it("GET /v1/admin/user-roles/:id forwards the caller's bearer token and relays the user's real effective roles (not /v1/admin/users/:id/roles — see route comment for why)", async () => {
     const userId = "77777777-7777-4777-8777-777777777777";
     const fetchMock = vi.fn(async (url: string, init: { headers: Record<string, string> }) => {

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { GL_JOURNAL_LIMIT } from "@/lib/financeLimits";
+import { normalizeHexColor } from "@/lib/orgLevels";
 import { pathSeg } from "@/lib/pathSegment";
 import { mapEstabScannedDocuments, estabScannedDocumentsPath, type EstabScannedDocument } from "@/lib/estab/scannedDocuments";
 import { mapScannedDocuments, scannedDocumentsPath, type ScannedDocument, type ScannedDocumentsKind } from "@/lib/finance/scannedDocuments";
@@ -5059,6 +5060,70 @@ export async function getTenantModules(): Promise<LoaderResult<TenantModule[]>> 
   });
 }
 
+/**
+ * GAP-PLATFORM-ADMIN-TENANT-CONFIG-01/-02: the CALLER's own office config,
+ * read from admin-service's real admin_tenants store. Replaces the web card's
+ * old hard-coded DEFAULT_CONFIG. Infrastructure identifiers (dbSchema,
+ * keycloakRealm) come back null for anyone below platform_admin — the service
+ * is the authority on that gate, not the UI. Licence/seat/storage figures the
+ * platform does not track yet are null, never fabricated.
+ */
+export type AdminTenantConfig = {
+  tenantId: string;
+  tenantName: string;
+  domain: string;
+  edition: string | null;
+  status: string | null;
+  region: string | null;
+  residency: string | null;
+  dbSchema: string | null;
+  keycloakRealm: string | null;
+  licenseType: string | null;
+  licensedUntil: string | null;
+  licensedSeats: number | null;
+  activeSeats: number | null;
+  storageQuotaGb: number | null;
+  storageUsedGb: number | null;
+  features: string[];
+};
+
+export async function getTenantConfig(): Promise<LoaderResult<AdminTenantConfig | null>> {
+  return fetchJson<unknown, AdminTenantConfig | null>("/api/v1/admin/tenant-config", null, {
+    revalidateSeconds: 60,
+    telemetryKey: "admin.tenant-config",
+    mapResponse: (payload) => {
+      const data = isRecord(payload) && isRecord((payload as Record<string, unknown>).data)
+        ? ((payload as Record<string, unknown>).data as Record<string, unknown>)
+        : null;
+      if (!data) return null;
+      const str = (k: string): string | null => (typeof data[k] === "string" && (data[k] as string).length > 0 ? (data[k] as string) : null);
+      const num = (k: string): number | null => (typeof data[k] === "number" && Number.isFinite(data[k]) ? (data[k] as number) : null);
+      const tenantId = str("tenantId");
+      const tenantName = str("tenantName");
+      const domain = str("domain");
+      if (!tenantId || !tenantName || !domain) return null;
+      return {
+        tenantId,
+        tenantName,
+        domain,
+        edition: str("edition"),
+        status: str("status"),
+        region: str("region"),
+        residency: str("residency"),
+        dbSchema: str("dbSchema"),
+        keycloakRealm: str("keycloakRealm"),
+        licenseType: str("licenseType"),
+        licensedUntil: str("licensedUntil"),
+        licensedSeats: num("licensedSeats"),
+        activeSeats: num("activeSeats"),
+        storageQuotaGb: num("storageQuotaGb"),
+        storageUsedGb: num("storageUsedGb"),
+        features: Array.isArray(data.features) ? (data.features as unknown[]).filter((f): f is string => typeof f === "string") : [],
+      };
+    },
+  });
+}
+
 // ─── SA Admin: Platform Management Loaders ───────────────────────────────────
 
 export async function getSATenants(): Promise<LoaderResult<Record<string, unknown>[]>> {
@@ -6309,7 +6374,7 @@ export async function getOrgHierarchyLevels(): Promise<LoaderResult<OrgHierarchy
         label: String(l.label ?? ""),
         description: String(l.description ?? ""),
         examples: String(l.examples ?? ""),
-        color: String(l.color ?? "#334155"),
+        color: normalizeHexColor(typeof l.color === "string" ? l.color : null),
       }));
     },
   });

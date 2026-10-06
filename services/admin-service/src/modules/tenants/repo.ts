@@ -33,6 +33,21 @@ export async function findById(id: string): Promise<TenantView | null> {
   return rows[0] ? toView(rows[0]) : null;
 }
 
+// GAP-PLATFORM-ADMIN-TENANT-CONFIG-01/-02: resolve a tenant by its OWN
+// tenant_id (not the admin_tenants surrogate `id`) — the shape every signed-in
+// user's JWT carries as `tid`. Backs the self-service tenant-config screen,
+// which shows the CALLER's own office only. Uses scopedPlatformRead for the
+// same reason as findById: the per-request RLS GUC is the caller's tenant, and
+// admin_tenants.tenant_id is matched explicitly here, so the platform-bypass
+// read + explicit WHERE returns exactly the one row (or none) and never leaks
+// another tenant's row.
+export async function findByTenantId(tenantId: string): Promise<TenantView | null> {
+  const rows = await scopedPlatformRead((tx) =>
+    tx.select().from(adminTenants).where(eq(adminTenants.tenantId, tenantId)).limit(1),
+  );
+  return rows[0] ? toView(rows[0]) : null;
+}
+
 // Platform-wide admin listing — see findById's comment on scope + scopedPlatformRead.
 export async function list(page: number, limit: number): Promise<{ items: TenantView[]; total: number }> {
   const offset = (page - 1) * limit;

@@ -284,6 +284,14 @@ const STATUS_MAP: Record<string, PillVariant> = {
   // Device trust (admin/devices): hrms.trusted_devices.trust_status.
   trusted: "good",
 
+  // GAP-PLATFORM-ADMIN-USERS-07: identity-service user account states shown on
+  // /platform-admin/users. "suspended" (bad) and "pending" (warn) already map
+  // above; "locked" is an attention state (failed-login/lockout) and
+  // "deactivated" is a neutral terminal state — neither had a key, so both fell
+  // through to the neutral "info" pill, giving the status column no meaning.
+  locked: "bad",
+  deactivated: "mut",
+
   // CRM lead/contact lifecycle (crm-service lead status enum; see
   // lib/crm/leadQualification.ts LEAD_STATUSES). GAP-CRM-CONTACTS-06: the
   // contacts list printed the raw enum word with no tone, so "qualified",
