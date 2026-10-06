@@ -4,11 +4,29 @@ export interface Chapter {
   icon: string;
   description: string;
   content: string;
+  /**
+   * Stable, externally-citable chapter number. Set explicitly so that
+   * reordering or inserting chapters never renumbers an already-published
+   * reference (GAP-DOCS-HOME-03). Prefer `chapterNumber(chapter)` over the
+   * array index when displaying a number.
+   */
+  number?: number;
+}
+
+/**
+ * The number to display for a chapter. Uses the explicit `number` field when
+ * present (stable across reordering); otherwise it is undefined and callers
+ * should render the chapter without a leading number rather than fall back to
+ * a volatile array index.
+ */
+export function chapterNumber(chapter: Pick<Chapter, "number">): number | undefined {
+  return chapter.number;
 }
 
 export const chapters: Chapter[] = [
   {
     slug: "getting-started",
+    number: 1,
     title: "Getting Started",
     icon: "🚀",
     description: "First login, setup wizard, language, help",
@@ -28,10 +46,10 @@ When you open CivitasOne for the first time in your browser, you'll land on a si
 
 1. Type your official email address in the **Email** field.
 2. Type the temporary password you received (check your email from your IT admin).
-3. Tap the blue **Sign in** button.
+3. Click the blue **Sign in** button.
 4. If your office uses two-step verification (MFA), you'll be asked for a code from your authenticator app. Enter it and tap **Verify**.
 5. On your very first login, the system asks you to set a new password. Pick something you'll remember — at least 8 characters with a mix of letters and numbers.
-6. Tap **Set password**. You're in!
+6. Click **Set password**. You're in!
 
 > If you forget your password later, tap **Forgot password?** on the sign-in page. A reset link goes to your email.
 
@@ -80,13 +98,14 @@ To switch: tap the **Language** dropdown in the top bar and choose your preferre
 ## How to Get Help
 
 1. **Tooltip help** — Hover over "?" icons for field explanations
-2. **Help Centre** — Tap "?" in the bottom-left for guides and walkthroughs
-3. **AI Assistant** — Tap "Ask" for plain-language answers
+2. **Help Centre** — Click "?" in the bottom-left for guides and walkthroughs
+3. **AI Assistant** — Click "Ask" for plain-language answers
 4. **Keyboard shortcuts** — Press "?" on desktop to see shortcuts (Ctrl+K = search, Ctrl+/ = AI, Ctrl+N = create new)
 `,
   },
   {
     slug: "finance",
+    number: 2,
     title: "Finance",
     icon: "💰",
     description: "Budgets, bills, payments, GL, reports",
@@ -115,17 +134,17 @@ When you open **Finance** from the sidebar, the first screen is your Finance Das
 
 ### Create a new budget allocation
 
-1. Tap **+ Create Budget** at the top right.
+1. Click **+ Create Budget** at the top right.
 2. Pick the **Financial Year** (e.g. 2025–26).
 3. Choose the **Head of Account** from the dropdown.
-4. Enter the **Budget Estimate (BE)** amount in rupees.
+4. Enter the **Budget Estimate (BE)** amount in rupees — type the whole-rupee figure using Indian digit grouping, for example **12,50,000** (twelve lakh fifty thousand rupees). Do not enter paise; the system tracks paise internally.
 5. Optionally add a **Revised Estimate (RE)**.
-6. Tap **Save**.
+6. Click **Save**.
 
 ### Re-appropriate funds
 
 1. Open the budget line you want to move money from.
-2. Tap **Re-appropriate**.
+2. Click **Re-appropriate**.
 3. Choose the destination Head of Account.
 4. Enter the amount and reason.
 5. Submit for approval.
@@ -136,13 +155,13 @@ When you open **Finance** from the sidebar, the first screen is your Finance Das
 
 ### Create a new bill
 
-1. Tap **+ Create Bill**.
+1. Click **+ Create Bill**.
 2. Choose the **Vendor** from your vendor list.
 3. Enter the **Bill Amount** and the vendor's invoice number.
 4. Pick the **Head of Account**.
 5. Link to a **Sanction** and optionally a **Purchase Order**.
 6. Attach the original bill document.
-7. Tap **Save** or **Submit**.
+7. Click **Save** or **Submit**.
 
 ### 3-way match
 
@@ -157,7 +176,7 @@ Before a bill is paid, the system checks three things agree:
 
 ### Initiate a payment
 
-1. Tap **+ Initiate Payment**.
+1. Click **+ Initiate Payment**.
 2. Confirm payee bank details.
 3. Choose mode: NEFT, RTGS, or Cheque.
 4. Review amount and deductions (TDS, GST TDS calculated automatically).
@@ -169,18 +188,19 @@ Before a bill is paid, the system checks three things agree:
 
 ### Post a journal entry
 
-1. Tap **+ Journal Entry**.
+1. Click **+ Journal Entry**.
 2. Enter Date and Narration.
 3. Add Debit line (account + amount).
 4. Add Credit line (account + amount).
 5. Debits must equal credits.
-6. Tap **Post**.
+6. Click **Post**.
 
 > Most entries are created automatically. Manual entries are for adjustments or corrections.
 `,
   },
   {
     slug: "hr-payroll",
+    number: 3,
     title: "HR & Payroll",
     icon: "👥",
     description: "Leave, attendance, payroll, recruitment, APAR",
@@ -199,7 +219,7 @@ Open **HR** from the sidebar. The first screen shows the **Employee Directory** 
 1. Type a name, employee ID, or designation in the **Search** bar.
 2. Results filter as you type.
 3. Use the **Department** dropdown to narrow to one team.
-4. Tap a person's row to open their full profile.
+4. Click a person's row to open their full profile.
 
 ### Employee profile tabs
 
@@ -215,19 +235,19 @@ Open **HR** from the sidebar. The first screen shows the **Employee Directory** 
 
 ### Apply for leave
 
-1. Tap **+ Apply Leave**.
+1. Click **+ Apply Leave**.
 2. Choose the **Leave Type** (Casual, Earned, Half Pay, etc.).
 3. Pick **From Date** and **To Date**.
 4. If half-day, tick the checkbox.
 5. Type a short **Reason**.
-6. Tap **Submit**.
+6. Click **Submit**.
 
 ### Approve or reject leave
 
 1. Open **HR → Leave → Pending Approvals**.
-2. Tap the request to view details.
+2. Click the request to view details.
 3. Check the person's leave balance.
-4. Tap **Approve** or **Reject** (with reason).
+4. Click **Approve** or **Reject** (with reason).
 
 ---
 
@@ -236,10 +256,10 @@ Open **HR** from the sidebar. The first screen shows the **Employee Directory** 
 ### GPS check-in (mobile)
 
 1. Open the CivitasOne mobile app.
-2. Tap **Check In** on the home screen.
+2. Click **Check In** on the home screen.
 3. Allow location access. Your GPS location is captured.
 4. Take a selfie when prompted.
-5. Tap **Submit**. At day's end, repeat with **Check Out**.
+5. Click **Submit**. At day's end, repeat with **Check Out**.
 
 ---
 
@@ -247,16 +267,17 @@ Open **HR** from the sidebar. The first screen shows the **Employee Directory** 
 
 ### Run monthly payroll
 
-1. Tap **+ New Payroll Run**.
+1. Click **+ New Payroll Run**.
 2. Pick the **Month and Year**.
 3. The system calculates salaries based on pay structure, attendance, and leave.
 4. Review the summary.
-5. Tap **Submit for Approval**.
+5. Click **Submit for Approval**.
 6. After approval, generate payslips and bank files.
 `,
   },
   {
     slug: "procurement",
+    number: 4,
     title: "Procurement",
     icon: "🛒",
     description: "Indents, POs, vendors, GRN, tenders",
@@ -270,24 +291,24 @@ Open **HR** from the sidebar. The first screen shows the **Employee Directory** 
 
 ### Create an indent
 
-1. Tap **+ Create Indent**.
+1. Click **+ Create Indent**.
 2. Enter a short **Description** of what you need.
 3. Add items: name, quantity, unit, estimated unit price.
 4. Pick the **Required By Date**.
 5. Choose the **Head of Account**.
-6. Tap **Submit for Approval**.
+6. Click **Submit for Approval**.
 
 ### Approve an indent
 
 1. Open **Procurement → Indents → Pending Approval**.
 2. Review items, quantities, estimated cost.
 3. Confirm budget availability.
-4. Tap **Approve** or **Reject**.
+4. Click **Approve** or **Reject**.
 
 ### Convert to Purchase Order
 
 1. Open an approved indent.
-2. Tap **Convert to PO**.
+2. Click **Convert to PO**.
 3. Select the Vendor and confirm prices.
 4. Complete and submit the PO.
 
@@ -297,10 +318,10 @@ Open **HR** from the sidebar. The first screen shows the **Employee Directory** 
 
 ### Empanel a new vendor
 
-1. Tap **+ Add Vendor**.
+1. Click **+ Add Vendor**.
 2. Fill in: Business Name, GSTIN, PAN, Address, Phone, Email, Bank Account, Category.
 3. Attach supporting documents.
-4. Tap **Submit for Empanelment**.
+4. Click **Submit for Empanelment**.
 
 ### Rate a vendor
 
@@ -312,7 +333,7 @@ Score on Delivery Timeliness, Quality, Communication (1–5 stars each).
 
 ### Create a PO
 
-1. Tap **+ Create PO**.
+1. Click **+ Create PO**.
 2. Select the **Vendor**.
 3. Add items with quantities and agreed prices.
 4. Set delivery date and terms.
@@ -326,14 +347,15 @@ Score on Delivery Timeliness, Quality, Communication (1–5 stars each).
 ### Record goods received
 
 1. Open the PO.
-2. Tap **Record GRN**.
+2. Click **Record GRN**.
 3. Enter quantity received per item.
 4. Note any damaged or short items.
-5. Tap **Save**. Stock updates automatically.
+5. Click **Save**. Stock updates automatically.
 `,
   },
   {
     slug: "projects-grants",
+    number: 5,
     title: "Projects & Grants",
     icon: "📋",
     description: "Tasks, milestones, Gantt, disbursement, UCs",
@@ -347,18 +369,18 @@ Score on Delivery Timeliness, Quality, Communication (1–5 stars each).
 
 ### Create a new project
 
-1. Tap **+ New Project**.
+1. Click **+ New Project**.
 2. Enter **Project Name** and **Description**.
 3. Set **Start Date** and **Expected End Date**.
 4. Enter the **Total Budget**.
 5. Choose the **Head of Account**.
 6. Assign a **Project Manager**.
-7. Tap **Create**.
+7. Click **Create**.
 
 ### Add milestones
 
 1. Open the project → **Milestones** tab.
-2. Tap **+ Add Milestone**.
+2. Click **+ Add Milestone**.
 3. Enter name, target date, budget allocated.
 
 ### Break work into phases and tasks
@@ -382,15 +404,15 @@ Dependencies between tasks show as arrows.
 
 ### Create a grant
 
-1. Tap **+ New Grant**.
+1. Click **+ New Grant**.
 2. Enter scheme name, grantee, sanctioned amount.
 3. Set disbursement schedule.
-4. Tap **Save**.
+4. Click **Save**.
 
 ### Disburse funds
 
 1. Open the grant.
-2. Tap **+ Disburse**.
+2. Click **+ Disburse**.
 3. Enter amount, instalment number, bank details.
 4. Submit for approval.
 
@@ -403,6 +425,7 @@ Dependencies between tasks show as arrows.
   },
   {
     slug: "establishment",
+    number: 6,
     title: "Establishment",
     icon: "🏛️",
     description: "eOffice files, meetings, vehicles, RTI",
@@ -416,27 +439,27 @@ Dependencies between tasks show as arrows.
 
 ### Create a new file
 
-1. Tap **+ Create File**.
+1. Click **+ Create File**.
 2. Enter the **Subject**.
 3. Choose the **File Category** (General, Confidential, Secret).
 4. Pick the **Department**.
-5. Tap **Create**. A unique file number is generated.
+5. Click **Create**. A unique file number is generated.
 
 ### Add a note to a file
 
 1. Open the file → **Note Sheet** tab.
-2. Tap **+ Add Note**.
+2. Click **+ Add Note**.
 3. Type your note with recommendation or decision.
 4. Attach documents if needed.
-5. Tap **Save Note**.
+5. Click **Save Note**.
 
 ### Forward a file
 
 1. Open the file.
-2. Tap **Forward**.
+2. Click **Forward**.
 3. Search for the person or desk.
 4. Add a forwarding remark.
-5. Tap **Send**.
+5. Click **Send**.
 
 ---
 
@@ -444,18 +467,18 @@ Dependencies between tasks show as arrows.
 
 ### Schedule a meeting
 
-1. Tap **+ New Meeting**.
+1. Click **+ New Meeting**.
 2. Enter Title, Date, Start/End Time, Venue.
 3. Choose Chairperson and add Attendees.
 4. Add the Agenda.
-5. Tap **Send Invites**.
+5. Click **Send Invites**.
 
 ### Record Minutes of Meeting
 
 1. After the meeting, open the record.
-2. Tap **+ Record Minutes**.
+2. Click **+ Record Minutes**.
 3. For each agenda item: Discussion, Decision, Action Items.
-4. Tap **Save & Circulate**.
+4. Click **Save & Circulate**.
 
 ---
 
@@ -464,13 +487,14 @@ Dependencies between tasks show as arrows.
 ### Book an office vehicle
 
 1. Open **Establishment → Vehicles**.
-2. Tap **+ Book Vehicle**.
+2. Click **+ Book Vehicle**.
 3. Enter purpose, date, time, destination.
-4. Tap **Submit**. The transport officer approves.
+4. Click **Submit**. The transport officer approves.
 `,
   },
   {
     slug: "citizen-helpdesk",
+    number: 7,
     title: "Citizen Services & Helpdesk",
     icon: "🎫",
     description: "RTI, grievances, service requests, SLA tracking",
@@ -486,29 +510,29 @@ Citizens see three main options on the public portal:
 
 ### RTI Request
 
-1. Tap **File RTI Request**.
+1. Click **File RTI Request**.
 2. Fill in Name, Address, Phone, Email.
 3. Type what information is being requested.
 4. Choose the Department.
 5. Pay the fee online or upload receipt.
-6. Tap **Submit**. Response expected within 30 days.
+6. Click **Submit**. Response expected within 30 days.
 
 ### Grievance
 
-1. Tap **Lodge Grievance**.
+1. Click **Lodge Grievance**.
 2. Fill in personal details.
 3. Describe the complaint.
 4. Choose the Category (water, roads, electricity, etc.).
 5. Attach photos or documents.
-6. Tap **Submit**.
+6. Click **Submit**.
 
 ### Service Request
 
-1. Tap **Apply for Service**.
+1. Click **Apply for Service**.
 2. Choose the Service Type (birth certificate, trade licence, NOC, etc.).
 3. Fill in the application form.
 4. Upload required documents and pay fee.
-5. Tap **Submit**.
+5. Click **Submit**.
 
 ---
 
@@ -539,6 +563,7 @@ Officers see all incoming requests in tabs: RTI, Grievances, Service Requests. E
   },
   {
     slug: "stock-assets",
+    number: 8,
     title: "Stock & Assets",
     icon: "📦",
     description: "Inventory, asset register, depreciation, audits",
@@ -554,23 +579,23 @@ Officers see all incoming requests in tabs: RTI, Grievances, Service Requests. E
 
 **Using barcode scanner (mobile):**
 1. Open CivitasOne app → **Stock Scanner**.
-2. Tap **Receive Goods**.
+2. Click **Receive Goods**.
 3. Scan the barcode on each item.
 4. Enter the Quantity received.
 5. Link to the GRN or PO.
-6. Tap **Confirm**. Stock updates instantly.
+6. Click **Confirm**. Stock updates instantly.
 
 **Manual entry (web):**
 1. Open **Stock → Receive**.
 2. Search for the item.
 3. Enter Quantity, link to PO/GRN.
 4. Enter Batch Number and Expiry Date if applicable.
-5. Tap **Save**.
+5. Click **Save**.
 
 ### Adjust stock quantity
 
 1. Open the item.
-2. Tap **Adjust Quantity**.
+2. Click **Adjust Quantity**.
 3. Choose reason: Physical Count, Damaged, Expired, Transfer, Other.
 4. Enter the corrected quantity.
 5. Add a remark.
@@ -582,11 +607,11 @@ Officers see all incoming requests in tabs: RTI, Grievances, Service Requests. E
 
 ### Register a new asset
 
-1. Tap **+ Register Asset**.
+1. Click **+ Register Asset**.
 2. Enter: Asset Name, Category, Purchase Date, Purchase Value, Vendor, Location, Custodian.
 3. System generates an **Asset Tag Number**.
 4. Enter serial number if applicable.
-5. Tap **Save**.
+5. Click **Save**.
 
 ### Track depreciation
 
@@ -603,6 +628,7 @@ Assets depreciate automatically based on category rules. View current book value
   },
   {
     slug: "small-business",
+    number: 9,
     title: "Small Business",
     icon: "🏪",
     description: "Invoices, expenses, payments, GST, customers",
@@ -633,12 +659,12 @@ Quick actions: + Invoice, + Expense, + Payment In, View Reports.
 
 ### Create an invoice
 
-1. Tap **+ Create Invoice**.
+1. Click **+ Create Invoice**.
 2. Pick the **Customer**.
 3. Add items: name, quantity, rate, GST rate (0–28%).
 4. System calculates line totals and GST automatically.
 5. Add notes and discount if needed.
-6. Tap **Save & Send**.
+6. Click **Save & Send**.
 
 ### GST handling
 
@@ -649,7 +675,7 @@ Quick actions: + Invoice, + Expense, + Payment In, View Reports.
 
 1. After saving, tap **Share → WhatsApp**.
 2. PDF is generated and WhatsApp opens with customer's number.
-3. Tap Send.
+3. Click Send.
 
 ---
 
@@ -657,11 +683,11 @@ Quick actions: + Invoice, + Expense, + Payment In, View Reports.
 
 ### Record an expense
 
-1. Tap **+ New Expense**.
+1. Click **+ New Expense**.
 2. Enter amount, category, description.
 3. Choose payment mode (Cash, UPI, Bank Transfer).
 4. Attach receipt photo.
-5. Tap **Save**.
+5. Click **Save**.
 
 ---
 
@@ -674,6 +700,7 @@ Quick actions: + Invoice, + Expense, + Payment In, View Reports.
   },
   {
     slug: "admin-settings",
+    number: 10,
     title: "Admin & Settings",
     icon: "⚙️",
     description: "Users, roles, modules, branding, feature flags",
@@ -690,7 +717,7 @@ Quick actions: + Invoice, + Expense, + Payment In, View Reports.
 1. Open **Admin → Settings → Modules**.
 2. Find the module you want to change.
 3. Flip the toggle to On or Off.
-4. Tap **Save Changes**.
+4. Click **Save Changes**.
 
 > Turning a module off doesn't delete data — it just hides it. Turn it back on anytime.
 
@@ -700,11 +727,11 @@ Quick actions: + Invoice, + Expense, + Payment In, View Reports.
 
 ### Invite a new user
 
-1. Tap **+ Invite User**.
+1. Click **+ Invite User**.
 2. Enter Name and Email.
 3. Choose a Role: Admin, Officer, Clerk, or View Only.
 4. Pick Department and Branch.
-5. Tap **Send Invite**.
+5. Click **Send Invite**.
 
 ### Roles explained
 
@@ -718,7 +745,7 @@ Quick actions: + Invoice, + Expense, + Payment In, View Reports.
 ### Deactivate a user
 
 1. Open user profile.
-2. Tap **Actions → Deactivate**.
+2. Click **Actions → Deactivate**.
 3. Confirm. They can no longer sign in but records remain.
 
 ---
@@ -738,11 +765,12 @@ Control which new features are visible to users without deploying new code:
 2. Upload your office logo.
 3. Choose primary colour.
 4. Set the display name.
-5. Tap **Save**. All users see the updated branding.
+5. Click **Save**. All users see the updated branding.
 `,
   },
   {
     slug: "mobile-app",
+    number: 11,
     title: "Mobile App",
     icon: "📱",
     description: "Install, offline mode, biometric, push notifications",
@@ -808,11 +836,289 @@ When internet is lost, an orange bar appears: "You're offline — changes will s
 `,
   },
   {
+    slug: "service-designer",
+    number: 12,
+    title: "Service Designer",
+    icon: "🧩",
+    description: "Design citizen services, forms, fees, and SLAs",
+    content: `# Chapter 12: Service Designer
+
+> Build and publish the online services citizens use — without writing code. Define the form, the fee, the approval steps, and the promised turnaround.
+
+---
+
+## What the Service Designer Does
+
+The Service Designer (**Service Designer** in the sidebar) lets an administrator create a new citizen-facing service — such as a trade licence or a water connection — by describing it in plain steps. Once published, the service appears on the citizen portal and in the Helpdesk Service Catalogue.
+
+---
+
+## Create a New Service
+
+1. Open **Service Designer** from the sidebar.
+2. Click **+ New Service**.
+3. Enter the **Service Name** (for example, "New Trade Licence").
+4. Choose the **Department** that owns the service.
+5. Write a short **Description** citizens will read before applying.
+6. Click **Save Draft**.
+
+---
+
+## Design the Application Form
+
+1. Open the service → **Form** tab.
+2. Add fields one at a time: label, type (text, number, date, dropdown, file upload), and whether it is required.
+3. Mark any field that collects personal information so it can be masked in listings.
+4. Reorder fields by dragging, then click **Save**.
+
+---
+
+## Set the Fee and SLA
+
+1. Open the service → **Fee & SLA** tab.
+2. Enter the **Service Fee** amount in rupees (for example, 2,500). The system stores and reconciles money precisely; you only ever enter whole rupees.
+3. Set the **SLA** — the number of working days within which the service must be completed.
+4. Click **Save**.
+
+> The SLA you set here drives the deadline shown to citizens and the escalation timers in Helpdesk.
+
+---
+
+## Approval Steps
+
+1. Open the service → **Workflow** tab.
+2. Add the approval stages in order (for example, Clerk → Officer → Head).
+3. For each stage, choose which role can act.
+4. Click **Save**.
+
+---
+
+## Publish
+
+1. Review the summary on the **Overview** tab.
+2. Click **Publish**. The service goes live on the citizen portal.
+3. To stop accepting new applications, click **Unpublish** — existing applications are preserved.
+`,
+  },
+  {
+    slug: "visitor",
+    number: 13,
+    title: "Visitor Management",
+    icon: "🛡️",
+    description: "Pre-register visitors, issue passes, check in and out",
+    content: `# Chapter 13: Visitor Management
+
+> Record who comes into your office, issue a pass, and keep an auditable log of entry and exit.
+
+---
+
+## Pre-register a Visitor
+
+1. Open **Visitor Mgmt** from the sidebar.
+2. Click **+ Pre-register**.
+3. Enter the visitor's **Name**, **Phone**, and **Purpose of Visit**.
+4. Choose the **Host** (the employee they are visiting).
+5. Pick the **Expected Date and Time**.
+6. Click **Save**. The visitor and host receive a pass reference.
+
+---
+
+## Check In a Visitor
+
+1. Open **Visitor Mgmt → Front Desk**.
+2. Search by name, phone, or pass reference.
+3. Confirm the visitor's identity against the ID shown.
+4. Click **Check In**. A time-stamped **Visitor Pass** is issued.
+
+> Walk-in visitors can be registered on the spot from the same screen using **+ Walk-in**.
+
+---
+
+## Check Out
+
+1. Open the active visit from **Front Desk → On Premises**.
+2. Click **Check Out**. The exit time is recorded.
+
+Every check-in and check-out is written to the audit log so you always have a complete record of who was on the premises and when.
+
+---
+
+## Today's Visitors
+
+The dashboard shows live counts:
+
+| Card | What it tells you |
+|------|------------------|
+| **Expected Today** | Pre-registered visits for today |
+| **On Premises** | Visitors currently checked in |
+| **Checked Out** | Visits completed today |
+
+Use the filters to narrow by host, department, or status.
+`,
+  },
+  {
+    slug: "meeting",
+    number: 14,
+    title: "Meeting Management",
+    icon: "📅",
+    description: "Schedule meetings, build agendas, record minutes and actions",
+    content: `# Chapter 14: Meeting Management
+
+> Plan meetings, circulate an agenda, record decisions, and track the action items that come out of them.
+
+---
+
+## Schedule a Meeting
+
+1. Open **Meeting Mgmt** from the sidebar.
+2. Click **+ New Meeting**.
+3. Enter the **Title**, **Date**, **Start Time**, **End Time**, and **Venue** (or a video link).
+4. Choose the **Chairperson** and add **Attendees**.
+5. Click **Send Invites**. Attendees receive a calendar invitation.
+
+---
+
+## Build the Agenda
+
+1. Open the meeting → **Agenda** tab.
+2. Click **+ Add Agenda Item** for each topic.
+3. For each item, add a title, a short note, and the person presenting.
+4. Reorder items by dragging, then click **Save & Circulate**.
+
+---
+
+## Record Minutes
+
+1. After the meeting, open the record → **Minutes** tab.
+2. For each agenda item, capture the **Discussion**, the **Decision**, and any **Action Items**.
+3. For each action item, set an **Owner** and a **Due Date**.
+4. Click **Save & Circulate**. Minutes are sent to all attendees.
+
+---
+
+## Track Action Items
+
+1. Open **Meeting Mgmt → Action Items**.
+2. See every open action across meetings, with owner, due date, and status.
+3. Owners mark an item **Done** when complete; overdue items are highlighted.
+`,
+  },
+  {
+    slug: "court",
+    number: 15,
+    title: "Court Management",
+    icon: "⚖️",
+    description: "Track court cases, hearings, orders, and deadlines",
+    content: `# Chapter 15: Court Management
+
+> Keep every legal matter your office is involved in — cases, hearing dates, orders, and the deadlines you must not miss — in one place.
+
+---
+
+## Register a Case
+
+1. Open **Court Mgmt** from the sidebar.
+2. Click **+ New Case**.
+3. Enter the **Case Title**, **Court**, and **Case Number**.
+4. Record the **Petitioner** and **Respondent**.
+5. Choose the **Case Type** and the responsible **Officer**.
+6. Click **Save**.
+
+---
+
+## Record Hearings
+
+1. Open the case → **Hearings** tab.
+2. Click **+ Add Hearing**.
+3. Enter the **Hearing Date**, the **Purpose**, and the **Bench/Judge** if known.
+4. After the hearing, record the **Outcome** and the **Next Date**.
+5. Click **Save**.
+
+> The next hearing date drives reminders so no appearance is missed.
+
+---
+
+## Orders and Documents
+
+1. Open the case → **Orders** tab.
+2. Click **+ Upload Order**, attach the order copy, and note its date and summary.
+3. Record any **Compliance Deadline** the order imposes.
+
+---
+
+## Deadlines and Status
+
+The dashboard shows:
+
+| Card | What it tells you |
+|------|------------------|
+| **Open Cases** | Matters still active |
+| **Upcoming Hearings** | Hearings in the next 30 days |
+| **Compliance Due** | Order deadlines approaching |
+
+Filter cases by court, officer, or status to find a matter quickly.
+`,
+  },
+  {
+    slug: "inspection",
+    number: 16,
+    title: "Inspection",
+    icon: "🔎",
+    description: "Plan inspections, use checklists, record findings and follow-ups",
+    content: `# Chapter 16: Inspection
+
+> Plan site and facility inspections, work through a standard checklist, and track the findings until they are closed.
+
+---
+
+## Schedule an Inspection
+
+1. Open **Inspection** from the sidebar.
+2. Click **+ New Inspection**.
+3. Choose the **Inspection Type** and the **Site or Facility**.
+4. Assign the **Inspector** and pick the **Scheduled Date**.
+5. Click **Save**.
+
+---
+
+## Carry Out the Inspection
+
+1. Open the inspection on the day (the mobile app works offline on site).
+2. Work through the **Checklist** item by item, marking each **Pass**, **Fail**, or **Not Applicable**.
+3. For any failure, add a **Finding** with a note and a photo.
+4. Click **Submit** when complete. Offline entries sync when you are back online.
+
+---
+
+## Record and Track Findings
+
+1. Open the inspection → **Findings** tab.
+2. For each finding, set a **Severity** and an **Owner** responsible for fixing it.
+3. Set a **Due Date** for the corrective action.
+4. When the issue is resolved, mark the finding **Closed** with evidence.
+
+---
+
+## Follow-up and Reports
+
+The dashboard shows:
+
+| Card | What it tells you |
+|------|------------------|
+| **Scheduled** | Inspections planned ahead |
+| **Open Findings** | Issues awaiting corrective action |
+| **Overdue** | Findings past their due date |
+
+Export an inspection report at any time for the record.
+`,
+  },
+  {
     slug: "glossary",
+    number: 17,
     title: "Glossary",
     icon: "📖",
     description: "Every specialist term explained in plain language",
-    content: `# Chapter 12: Glossary
+    content: `# Chapter 17: Glossary
 
 > Every specialist term in CivitasOne, explained in one plain sentence.
 
