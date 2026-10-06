@@ -43,15 +43,38 @@ export interface VisitorLocation {
   status: string | null;
 }
 
-/** One checked-in visitor on the live premises roster. */
+/**
+ * One checked-in visitor on the live premises roster.
+ *
+ * GAP-VISITOR-GUARD-01/03: sourced from the NORMAL role-gated
+ * `GET /v1/visitor/check-ins/active` endpoint (not the break-glass evacuation
+ * roster), which deliberately returns NO raw phone/email/identity document —
+ * so the client never receives that PII. `validUntil` drives the overstay
+ * flag (GAP-VISITOR-GUARD-04); `locationId` scopes the display
+ * (GAP-VISITOR-GUARD-05).
+ */
 export interface RosterEntry {
   passId: string;
   visitorName: string;
-  hostName: string;
+  hostEmployeeId: string;
+  locationId: string;
   checkInTime: string;
-  lastKnownGate: string;
-  contactNumber: string;
+  /** Pass validity end; a check-in past this is an overstay. */
+  validUntil: string | null;
+  /** Server-computed overstay flag (validUntil < now). */
+  overstay: boolean;
   evacuated: boolean;
+}
+
+/** Raw `data.visitors[]` shape from GET /v1/visitor/check-ins/active. */
+export interface ActiveVisitor {
+  passId: string;
+  locationId: string;
+  visitorName: string;
+  hostEmployeeId: string;
+  checkInTime: string | null;
+  validUntil: string | null;
+  overstay: boolean;
 }
 
 export interface ConfigEntry {

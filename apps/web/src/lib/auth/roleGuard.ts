@@ -509,3 +509,23 @@ export const THEME_MODULE_ROLES = ["theme_user", ...THEME_ADMIN_ROLES];
  * who may read the endpoint; this gate decides what the UI reveals/exports.
  */
 export const FIELD_VISIT_LOCATION_ROLES = ["field_admin", "super_admin"];
+
+/**
+ * GAP-VISITOR-ADMIN-02 / GAP-VISITOR-HOME-02: roles permitted to administer
+ * visitor policy (/visitor/admin). Mirrors visitor-service config-registry
+ * CONFIG_WRITE_ROLES exactly (modules/config-registry/routes.ts) — only
+ * tenant/super admins may write visitor config; the POST /v1/visitor/config
+ * and preset endpoints 403 everyone else. This web gate (admin/layout.tsx +
+ * hiding the Admin tile on the hub) is defence-in-depth + honest UX; the
+ * service remains the authority.
+ */
+export const VISITOR_ADMIN_ROLES = ["tenant_admin", "super_admin"];
+
+/**
+ * GAP-VISITOR-HOME-02: roles permitted to operate the guard console
+ * (/visitor/guard). Mirrors visitor-service check-in ACTIVE_ROLES / GATE_ROLES
+ * (modules/check-in/routes.ts) — the roster/verify/check-in endpoints admit
+ * these roles and 403 others. The guard console is also reachable by the
+ * gate-terminal service account. Defence-in-depth; the service is the gate.
+ */
+export const VISITOR_GUARD_ROLES = ["security_admin", "gate_terminal", "protocol_officer", "employee", "tenant_admin", "super_admin"];

@@ -26,12 +26,15 @@ const location: VisitorLocation = {
 const rosterEntry: RosterEntry = {
   passId: "pass-1",
   visitorName: "Asha Rao",
-  hostName: "Dev Kumar",
+  hostEmployeeId: "emp-9",
+  locationId: "loc-1",
   checkInTime: new Date().toISOString(),
-  lastKnownGate: "gate-1",
-  contactNumber: "+911234500000",
+  validUntil: new Date(Date.now() + 3_600_000).toISOString(),
+  overstay: false,
   evacuated: false,
 };
+
+const GATE_UUID = "11111111-1111-4111-8111-111111111111";
 
 describe("GuardConsole", () => {
   beforeEach(() => {
@@ -40,6 +43,7 @@ describe("GuardConsole", () => {
     recordCheckOutMock.mockReset();
     verifyPassMock.mockReset();
     fetchRosterMock.mockResolvedValue([]);
+    try { window.localStorage.clear(); } catch { /* ignore */ }
   });
 
   it("loads the roster for the selected location on mount", async () => {
@@ -67,12 +71,12 @@ describe("GuardConsole", () => {
       validUntil: new Date(Date.now() + 86_400_000).toISOString(),
     });
     render(<GuardConsole locations={[location]} expectedToday={[]} expectedTodaySource="api" />);
-    fireEvent.change(screen.getByLabelText(/Gate terminal ID/i), { target: { value: "gate-1" } });
+    fireEvent.change(screen.getByLabelText(/Gate terminal ID/i), { target: { value: GATE_UUID } });
     fireEvent.change(screen.getByLabelText(/Scanned pass token/i), { target: { value: "qr-token-abc" } });
     fireEvent.click(screen.getByRole("button", { name: "Verify pass" }));
 
     await waitFor(() =>
-      expect(verifyPassMock).toHaveBeenCalledWith({ gateId: "gate-1", qrToken: "qr-token-abc" }),
+      expect(verifyPassMock).toHaveBeenCalledWith({ gateId: GATE_UUID, qrToken: "qr-token-abc" }),
     );
     expect(await screen.findByText("Pass valid")).toBeInTheDocument();
     expect(screen.getByText("PASS-001")).toBeInTheDocument();
@@ -83,7 +87,7 @@ describe("GuardConsole", () => {
     recordCheckInMock.mockResolvedValue(undefined);
     render(<GuardConsole locations={[location]} expectedToday={[]} expectedTodaySource="api" />);
 
-    fireEvent.change(screen.getByLabelText(/Gate terminal ID/i), { target: { value: "gate-1" } });
+    fireEvent.change(screen.getByLabelText(/Gate terminal ID/i), { target: { value: GATE_UUID } });
     fireEvent.change(screen.getByLabelText(/Scanned pass token/i), { target: { value: "qr-token-abc" } });
     fireEvent.click(screen.getByRole("button", { name: "Verify pass" }));
     await screen.findByText("Pass valid");
@@ -91,7 +95,7 @@ describe("GuardConsole", () => {
     fetchRosterMock.mockResolvedValue([rosterEntry]);
     fireEvent.click(screen.getByRole("button", { name: /Admit & check in/i }));
 
-    await waitFor(() => expect(recordCheckInMock).toHaveBeenCalledWith("pass-1", "gate-1"));
+    await waitFor(() => expect(recordCheckInMock).toHaveBeenCalledWith("pass-1", GATE_UUID));
     expect(await screen.findByText("✓ Checked in.")).toBeInTheDocument();
     // loadRoster is called once on mount and again after check-in.
     expect(fetchRosterMock).toHaveBeenCalledTimes(2);
@@ -100,7 +104,7 @@ describe("GuardConsole", () => {
   it("surfaces a rejected pass without offering a check-in action", async () => {
     verifyPassMock.mockResolvedValue({ valid: false, code: "EXPIRED", message: "Pass has expired." });
     render(<GuardConsole locations={[location]} expectedToday={[]} expectedTodaySource="api" />);
-    fireEvent.change(screen.getByLabelText(/Gate terminal ID/i), { target: { value: "gate-1" } });
+    fireEvent.change(screen.getByLabelText(/Gate terminal ID/i), { target: { value: GATE_UUID } });
     fireEvent.change(screen.getByLabelText(/Scanned pass token/i), { target: { value: "qr-token-abc" } });
     fireEvent.click(screen.getByRole("button", { name: "Verify pass" }));
 
@@ -109,14 +113,97 @@ describe("GuardConsole", () => {
     expect(screen.queryByRole("button", { name: /Admit & check in/i })).not.toBeInTheDocument();
   });
 
-  it("checks out a roster entry", async () => {
+  // GAP-VISITOR-GUARD-02: Check out is disabled until a valid gate UUID is set,
+  // and never sends a blank gate; when it runs it passes the gate UUID.
+  it("checks out a roster entry only after a valid gate id is entered", async () => {
     fetchRosterMock.mockResolvedValue([rosterEntry]);
     recordCheckOutMock.mockResolvedValue(undefined);
     render(<GuardConsole locations={[location]} expectedToday={[]} expectedTodaySource="api" />);
     await screen.findByText("Asha Rao");
 
+    // Blank gate => Check out disabled, nothing sent.
+    expect(screen.getByRole("button", { name: "Check out" })).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(/Gate terminal ID/i), { target: { value: GATE_UUID } });
+    expect(screen.getByRole("button", { name: "Check out" })).toBeEnabled();
+
     fireEvent.click(screen.getByRole("button", { name: "Check out" }));
-    await waitFor(() => expect(recordCheckOutMock).toHaveBeenCalledWith("pass-1", ""));
+    // GAP-VISITOR-GUARD-06: a confirm dialog gates the mutation.
+    const dialog = await screen.findByRole("alertdialog", { name: "Check this visitor out?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Check out" }));
+    await waitFor(() => expect(recordCheckOutMock).toHaveBeenCalledWith("pass-1", GATE_UUID));
+  });
+
+  // GAP-VISITOR-GUARD-02: an invalid (non-UUID) gate shows an inline error and
+  // never calls verifyPass.
+  it("rejects a non-UUID gate id with an inline error and does not verify", async () => {
+    render(<GuardConsole locations={[location]} expectedToday={[]} expectedTodaySource="api" />);
+    await waitFor(() => expect(fetchRosterMock).toHaveBeenCalled());
+    fireEvent.change(screen.getByLabelText(/Gate terminal ID/i), { target: { value: "not-a-uuid" } });
+    fireEvent.change(screen.getByLabelText(/Scanned pass token/i), { target: { value: "qr-token-abc" } });
+    fireEvent.click(screen.getByRole("button", { name: "Verify pass" }));
+    expect(screen.getByText(/must be a valid UUID/i)).toBeInTheDocument();
+    expect(verifyPassMock).not.toHaveBeenCalled();
+  });
+
+  // GAP-VISITOR-GUARD-03 (DPDP): the visitor phone in Expected today is masked.
+  it("masks the visitor phone in the Expected today table", async () => {
+    const approved = {
+      ...rosterEntry,
+    };
+    void approved;
+    const req = {
+      id: "vr-1",
+      status: "approved" as const,
+      purpose: "Meeting",
+      scheduledAt: new Date().toISOString(),
+      visitorName: "Priya Singh",
+      visitorPhone: "9876543210",
+      visitorEmail: null,
+      hostEmployeeId: "emp-1",
+      locationId: "loc-1",
+      passType: "single",
+      visitorCategory: "standard",
+      permittedAreas: [],
+      rejectionReason: null,
+      trackingRef: null,
+      createdAt: null,
+    };
+    render(<GuardConsole locations={[location]} expectedToday={[req]} expectedTodaySource="api" />);
+    await waitFor(() => expect(fetchRosterMock).toHaveBeenCalled());
+    expect(screen.getByText("Priya Singh")).toBeInTheDocument();
+    // Full number must not appear; masked form (last 3 digits) does.
+    expect(screen.queryByText("9876543210")).not.toBeInTheDocument();
+    expect(screen.getByText("98XXXXX210")).toBeInTheDocument();
+  });
+
+  // GAP-VISITOR-GUARD-05: Expected today is scoped to the selected location.
+  it("lists only the selected location's expected visitors", async () => {
+    const mk = (id: string, locationId: string, name: string) => ({
+      id, status: "approved" as const, purpose: null, scheduledAt: new Date().toISOString(),
+      visitorName: name, visitorPhone: "+910000000000", visitorEmail: null, hostEmployeeId: "e",
+      locationId, passType: "single", visitorCategory: "standard", permittedAreas: [],
+      rejectionReason: null, trackingRef: null, createdAt: null,
+    });
+    const locs = [location, { id: "loc-2", name: "Annexe", address: null, status: "active" }];
+    render(
+      <GuardConsole
+        locations={locs}
+        expectedToday={[mk("a", "loc-1", "Here Visitor"), mk("b", "loc-2", "Other Site Visitor")]}
+        expectedTodaySource="api"
+      />,
+    );
+    await waitFor(() => expect(fetchRosterMock).toHaveBeenCalled());
+    expect(screen.getByText("Here Visitor")).toBeInTheDocument();
+    expect(screen.queryByText("Other Site Visitor")).not.toBeInTheDocument();
+  });
+
+  // GAP-VISITOR-GUARD-04: overstay flag comes from the server (validUntil<now),
+  // not a hard-coded 8h client threshold.
+  it("flags an overstay from the server-computed flag", async () => {
+    fetchRosterMock.mockResolvedValue([{ ...rosterEntry, overstay: true }]);
+    render(<GuardConsole locations={[location]} expectedToday={[]} expectedTodaySource="api" />);
+    expect(await screen.findByText("Overstay")).toBeInTheDocument();
   });
 
   describe("error vs. empty states (not conflated via a shared EmptyState)", () => {

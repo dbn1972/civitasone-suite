@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within, act } from "@testing-library/react";
 
 const approveVisitRequestMock = vi.fn();
 const rejectVisitRequestMock = vi.fn();
@@ -136,5 +136,84 @@ describe("HostPortal", () => {
       expect(within(alert).getByRole("button", { name: "Try again" })).toBeInTheDocument();
       expect(screen.queryByText("No visitors expected today")).not.toBeInTheDocument();
     });
+  });
+
+  // GAP-VISITOR-HOST-02 (DPDP): the visitor phone is masked, never printed raw.
+  it("masks the visitor phone in the approval card", () => {
+    render(<HostPortal pending={[{ ...pendingRequest, visitorPhone: "9876543210" }]} pendingSource="api" expectedToday={[]} expectedTodaySource="api" />);
+    expect(screen.queryByText("9876543210")).not.toBeInTheDocument();
+    expect(screen.getByText("98XXXXX210")).toBeInTheDocument();
+  });
+
+  // GAP-VISITOR-HOST-01: Approve/Reject are offered only on the signed-in
+  // host's own requests (defence-in-depth over the server's assertOwnsRequest).
+  it("hides Approve/Reject on a request raised for another host", () => {
+    const mine = { ...pendingRequest, id: "mine", hostEmployeeId: "me", visitorName: "My Visitor" };
+    const theirs = { ...pendingRequest, id: "theirs", hostEmployeeId: "other", visitorName: "Their Visitor" };
+    render(
+      <HostPortal
+        pending={[mine, theirs]}
+        pendingSource="api"
+        expectedToday={[]}
+        expectedTodaySource="api"
+        currentHostId="me"
+      />,
+    );
+    expect(screen.getByText("My Visitor")).toBeInTheDocument();
+    expect(screen.getByText("Their Visitor")).toBeInTheDocument();
+    // Exactly one Approve + one Reject button (for the owned request only).
+    expect(screen.getAllByRole("button", { name: "Approve" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Reject" })).toHaveLength(1);
+    expect(screen.getByText(/Raised for another host/)).toBeInTheDocument();
+  });
+
+  it("shows Approve/Reject on every row for an elevated approver", () => {
+    const a = { ...pendingRequest, id: "a", hostEmployeeId: "x" };
+    const b = { ...pendingRequest, id: "b", hostEmployeeId: "y" };
+    render(
+      <HostPortal
+        pending={[a, b]}
+        pendingSource="api"
+        expectedToday={[]}
+        expectedTodaySource="api"
+        currentHostId="me"
+        canApproveAny
+      />,
+    );
+    expect(screen.getAllByRole("button", { name: "Approve" })).toHaveLength(2);
+  });
+
+  // GAP-VISITOR-HOST-04 / HOST-05: premises name + restricted-zone list shown.
+  it("shows the premises name and the restricted-zone list", () => {
+    const r = { ...pendingRequest, locationId: "loc-1", permittedAreas: ["Server room", "Vault"] };
+    render(
+      <HostPortal
+        pending={[r]}
+        pendingSource="api"
+        expectedToday={[]}
+        expectedTodaySource="api"
+        locationNames={{ "loc-1": "HQ Tower" }}
+      />,
+    );
+    expect(screen.getByText(/Premises: HQ Tower/)).toBeInTheDocument();
+    expect(screen.getByText(/Server room, Vault/)).toBeInTheDocument();
+  });
+
+  // GAP-VISITOR-HOST-06: the success toast auto-dismisses.
+  it("auto-dismisses the success toast after the timeout", async () => {
+    vi.useFakeTimers();
+    try {
+      approveVisitRequestMock.mockResolvedValue(undefined);
+      render(<HostPortal pending={[pendingRequest]} pendingSource="api" expectedToday={[]} expectedTodaySource="api" />);
+      fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+      fireEvent.click(screen.getAllByRole("button", { name: "Approve" })[1]);
+      // Let the mocked async approve resolve.
+      await vi.waitFor(() => expect(approveVisitRequestMock).toHaveBeenCalled());
+      await vi.waitFor(() => expect(screen.getByText(/Approved Priya Singh\./)).toBeInTheDocument());
+      await act(async () => { vi.advanceTimersByTime(5100); });
+      await vi.waitFor(() => expect(screen.queryByText(/Approved Priya Singh\./)).not.toBeInTheDocument());
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

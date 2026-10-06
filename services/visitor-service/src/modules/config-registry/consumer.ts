@@ -38,6 +38,8 @@ interface SetConfigPayload {
   effectiveFrom?: string; // YYYY-MM-DD
   effectiveTo?: string; // YYYY-MM-DD
   expectedVersion?: number;
+  /** GAP-VISITOR-ADMIN-01/03: audit reason for the change. */
+  reason?: string;
 }
 
 interface DeactivateConfigPayload {
@@ -124,7 +126,7 @@ export function registerConfigRegistryConsumers(queue: Queue): void {
         correlationId: msg.correlationId,
         payload: { id: p.id, namespace: p.namespace, configKey: p.configKey },
       });
-      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "config_registry", resourceId: p.id, outcome: "success" } });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "config_registry", resourceId: p.id, outcome: "success", ...(p.reason ? { reason: p.reason } : {}) } });
 
       // Invalidate the (tenant, namespace) read cache on commit so subsequent
       // reads see the new/updated value (fires only if the tx commits).

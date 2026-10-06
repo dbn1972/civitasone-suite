@@ -1829,43 +1829,154 @@
         "configuration": "Configuration"
       },
       "tiles": {
-        "dashboard": { "title": "Dashboard", "description": "Overview metrics and activity" },
-        "contacts": { "title": "Contacts", "description": "Vendor, beneficiary, and stakeholder contacts" },
-        "accounts": { "title": "Accounts", "description": "Organisations and institutions" },
-        "deals": { "title": "Vendor / Stakeholder Engagements", "description": "Engagements and procurement opportunities" },
-        "activities": { "title": "Activities", "description": "Calls, meetings, and follow-ups" },
-        "pipelineBoard": { "title": "Pipeline Board", "description": "Visual kanban of deal stages" },
-        "pipelines": { "title": "Engagement Pipelines", "description": "Configure pipeline stages" },
-        "opportunities": { "title": "Opportunities", "description": "Track opportunity funnel" },
-        "ageing": { "title": "Stage Ageing", "description": "Stale opportunity alerts" },
-        "forecast": { "title": "Procurement Pipeline Forecast", "description": "Pipeline procurement projections" },
-        "quotations": { "title": "Quotations", "description": "Quotes and proposals" },
-        "onboarding": { "title": "Customer Onboarding", "description": "Post-deal onboarding workflows" },
-        "grievances": { "title": "Grievances", "description": "Citizen and vendor grievance tracking" },
-        "serviceRequests": { "title": "Service Requests", "description": "Support requests and resolutions" },
-        "campaigns": { "title": "Campaigns", "description": "Outreach campaign performance" },
-        "voiceOfCustomer": { "title": "Voice of Citizen", "description": "Feedback and sentiment" },
-        "health": { "title": "Account Health", "description": "Relationship health scores" },
-        "controlTower": { "title": "Control Tower", "description": "Real-time operations overview" },
-        "leadForms": { "title": "Website Lead Forms", "description": "Public form submissions" },
-        "products": { "title": "Product Catalogue", "description": "Services and offerings" },
-        "priceBooks": { "title": "Price Books", "description": "Rate cards and pricing tiers" },
-        "documents": { "title": "Documents", "description": "Shared documents and attachments" },
-        "documentTypes": { "title": "Document Types", "description": "Document classification" },
-        "serviceTypes": { "title": "Service Types", "description": "Service-request taxonomy" },
-        "grievanceCategories": { "title": "Grievance Categories", "description": "Grievance taxonomy" },
-        "customFields": { "title": "Custom Fields", "description": "Extend data model" },
-        "dedupRules": { "title": "Matching Rules", "description": "Deduplication logic" },
-        "leadScoring": { "title": "Lead Scoring", "description": "Automated lead prioritisation" },
-        "qualificationFrameworks": { "title": "Qualification Frameworks", "description": "Deal qualification criteria" },
-        "leadReasonCodes": { "title": "Lead Stage Reasons", "description": "Stage transition reasons" },
-        "assignmentRules": { "title": "Assignment Rules", "description": "Auto-assign logic" },
-        "assignmentDirectory": { "title": "Assignment Directory", "description": "Agent mapping" },
-        "agentWorkload": { "title": "Agent Workload", "description": "Capacity and utilisation" },
-        "escalationRules": { "title": "Escalation Rules", "description": "SLA breach escalation" },
-        "taskEscalation": { "title": "Task Escalation", "description": "Overdue task routing" },
-        "linkedAccounts": { "title": "Connected Accounts", "description": "External integrations" },
-        "dataQuality": { "title": "Data Quality", "description": "Data completeness scoring" }
+        "dashboard": {
+          "title": "Dashboard",
+          "description": "Overview metrics and activity"
+        },
+        "contacts": {
+          "title": "Contacts",
+          "description": "Vendor, beneficiary, and stakeholder contacts"
+        },
+        "accounts": {
+          "title": "Accounts",
+          "description": "Organisations and institutions"
+        },
+        "deals": {
+          "title": "Vendor / Stakeholder Engagements",
+          "description": "Engagements and procurement opportunities"
+        },
+        "activities": {
+          "title": "Activities",
+          "description": "Calls, meetings, and follow-ups"
+        },
+        "pipelineBoard": {
+          "title": "Pipeline Board",
+          "description": "Visual kanban of deal stages"
+        },
+        "pipelines": {
+          "title": "Engagement Pipelines",
+          "description": "Configure pipeline stages"
+        },
+        "opportunities": {
+          "title": "Opportunities",
+          "description": "Track opportunity funnel"
+        },
+        "ageing": {
+          "title": "Stage Ageing",
+          "description": "Stale opportunity alerts"
+        },
+        "forecast": {
+          "title": "Procurement Pipeline Forecast",
+          "description": "Pipeline procurement projections"
+        },
+        "quotations": {
+          "title": "Quotations",
+          "description": "Quotes and proposals"
+        },
+        "onboarding": {
+          "title": "Customer Onboarding",
+          "description": "Post-deal onboarding workflows"
+        },
+        "grievances": {
+          "title": "Grievances",
+          "description": "Citizen and vendor grievance tracking"
+        },
+        "serviceRequests": {
+          "title": "Service Requests",
+          "description": "Support requests and resolutions"
+        },
+        "campaigns": {
+          "title": "Campaigns",
+          "description": "Outreach campaign performance"
+        },
+        "voiceOfCustomer": {
+          "title": "Voice of Citizen",
+          "description": "Feedback and sentiment"
+        },
+        "health": {
+          "title": "Account Health",
+          "description": "Relationship health scores"
+        },
+        "controlTower": {
+          "title": "Control Tower",
+          "description": "Real-time operations overview"
+        },
+        "leadForms": {
+          "title": "Website Lead Forms",
+          "description": "Public form submissions"
+        },
+        "products": {
+          "title": "Product Catalogue",
+          "description": "Services and offerings"
+        },
+        "priceBooks": {
+          "title": "Price Books",
+          "description": "Rate cards and pricing tiers"
+        },
+        "documents": {
+          "title": "Documents",
+          "description": "Shared documents and attachments"
+        },
+        "documentTypes": {
+          "title": "Document Types",
+          "description": "Document classification"
+        },
+        "serviceTypes": {
+          "title": "Service Types",
+          "description": "Service-request taxonomy"
+        },
+        "grievanceCategories": {
+          "title": "Grievance Categories",
+          "description": "Grievance taxonomy"
+        },
+        "customFields": {
+          "title": "Custom Fields",
+          "description": "Extend data model"
+        },
+        "dedupRules": {
+          "title": "Matching Rules",
+          "description": "Deduplication logic"
+        },
+        "leadScoring": {
+          "title": "Lead Scoring",
+          "description": "Automated lead prioritisation"
+        },
+        "qualificationFrameworks": {
+          "title": "Qualification Frameworks",
+          "description": "Deal qualification criteria"
+        },
+        "leadReasonCodes": {
+          "title": "Lead Stage Reasons",
+          "description": "Stage transition reasons"
+        },
+        "assignmentRules": {
+          "title": "Assignment Rules",
+          "description": "Auto-assign logic"
+        },
+        "assignmentDirectory": {
+          "title": "Assignment Directory",
+          "description": "Agent mapping"
+        },
+        "agentWorkload": {
+          "title": "Agent Workload",
+          "description": "Capacity and utilisation"
+        },
+        "escalationRules": {
+          "title": "Escalation Rules",
+          "description": "SLA breach escalation"
+        },
+        "taskEscalation": {
+          "title": "Task Escalation",
+          "description": "Overdue task routing"
+        },
+        "linkedAccounts": {
+          "title": "Connected Accounts",
+          "description": "External integrations"
+        },
+        "dataQuality": {
+          "title": "Data Quality",
+          "description": "Data completeness scoring"
+        }
       }
     },
     "accounts": {
@@ -14312,5 +14423,23 @@
     "rtiPiiMasked": "Personal data of the RTI applicant. Masked — you do not have permission to view the full applicant details.",
     "srResolveDescription": "Record how the request was fulfilled. If the citizen left a phone or email, they are notified automatically.",
     "srCloseDescription": "Closing is final — the request can no longer be actioned. If the citizen left a phone or email, they are notified automatically."
+  },
+  "visitor": {
+    "home": {
+      "title": "Visitor Management",
+      "subtitle": "Gate operations, host approvals and premises policy — one place.",
+      "statAwaiting": "Awaiting Approval",
+      "statExpectedToday": "Expected Today",
+      "statUpcoming": "Approved — upcoming",
+      "countsError": "We could not load visitor counts.",
+      "countsErrorNext": "Some figures below show “—”. Try again.",
+      "guardTitle": "Guard Console",
+      "guardDesc": "Verify passes at the gate, see who is expected today, and manage the live inside-now roster with overstay flags.",
+      "hostTitle": "Host Portal",
+      "hostDesc": "Approve or reject visit requests raised for you, and review your expected visitors for the day.",
+      "adminTitle": "Admin Configuration",
+      "adminDesc": "Tune visitor policy — retention, approvals, overstay and pass rules — or apply a vertical preset.",
+      "open": "Open"
+    }
   }
 }

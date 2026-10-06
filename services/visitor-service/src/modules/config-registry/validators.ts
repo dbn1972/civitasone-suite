@@ -20,6 +20,10 @@ export const setConfigBody = z.object({
   effectiveFrom:   z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "effectiveFrom must be YYYY-MM-DD").optional(),
   effectiveTo:     z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "effectiveTo must be YYYY-MM-DD").optional(),
   expectedVersion: z.coerce.number().int().min(1).optional(),
+  // GAP-VISITOR-ADMIN-01/03: optional free-text audit reason for a policy
+  // change (why this value was set). Carried into the config.changed audit
+  // event so retention/approval/anti-passback changes are traceable.
+  reason:          z.string().trim().max(2000).optional(),
 });
 export type SetConfigBody = z.infer<typeof setConfigBody>;
 
