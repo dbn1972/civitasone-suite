@@ -2,6 +2,7 @@
 import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Avatar } from "./Avatar";
 import {
   LayoutDashboard, Rocket, HelpCircle,
@@ -21,6 +22,29 @@ import { FINANCE_ROLES } from "@/lib/auth/workRoles";
 import { ADMIN_TENANT_ROLES } from "@/lib/auth/adminRoles";
 
 const COLLAPSED_KEY = "civitas-sidebar-collapsed";
+
+/**
+ * GAP-DASHBOARD-HOME-2-05: the "Dashboard" nav label was a hard-coded English
+ * string while the page it links to (/dashboard) rendered the next-intl key
+ * home.title (previously "Command Center"), so nav and page title disagreed —
+ * and the nav never translated for Hindi. We now align both to the single
+ * `nav.dashboard` key (home.title also points at "Dashboard"/"डैशबोर्ड").
+ *
+ * Sidebar is a "use client" component rendered from many existing component
+ * tests WITHOUT a <NextIntlClientProvider> (see Sidebar.test.tsx). A raw
+ * useTranslations() throws when that provider is absent, which would break
+ * those other tests. This guard mirrors DataTable.useSafeTranslations: fall
+ * back to the plain English label (identical to the previous behaviour) when
+ * no provider is present, and use the real translation when one is.
+ */
+function useNavLabel(): (href: string, fallback: string) => string {
+  try {
+    const t = useTranslations("nav");
+    return (href, fallback) => (href === "/dashboard" ? t("dashboard") : fallback);
+  } catch {
+    return (_href, fallback) => fallback;
+  }
+}
 
 type NavItem = {
   icon: LucideIcon;
@@ -182,6 +206,8 @@ export function Sidebar({ enabledModules, userName, userRole, roles }: SidebarPr
   // in a frame after mount instead — an acceptable, deliberate trade-off.
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
+  const navLabel = useNavLabel();
+
   useEffect(() => {
     try {
       const stored = localStorage.getItem(COLLAPSED_KEY);
@@ -276,7 +302,7 @@ export function Sidebar({ enabledModules, userName, userRole, roles }: SidebarPr
                   <span className="i" aria-hidden="true">
                     <Icon size={16} strokeWidth={1.75} />
                   </span>
-                  {label}
+                  {navLabel(href, label)}
                 </Link>
               ))}
             </div>

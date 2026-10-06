@@ -3605,14 +3605,17 @@
     "emptyMessage": "National, state, and restricted holidays appear here. Holiday calendars are used for leave computation and payroll."
   },
   "home": {
-    "title": "Command Center",
+    "title": "Dashboard",
     "subtitle": "What is happening, what needs action, and what to do next — filtered to your role.",
     "myApprovals": "My approvals",
     "setupBannerTitle": "New here? Finish setting up your workspace",
     "setupBannerDesc": "A few quick steps to get your office ready — pick up where you left off.",
     "yourModules": "Your modules",
     "noModules": "No modules assigned yet",
-    "noModulesMsg": "Your account does not have any modules enabled. Contact your tenant administrator to request access."
+    "noModulesMsg": "Your account does not have any modules enabled. Contact your tenant administrator to request access.",
+    "sessionUnreadable": "Your session could not be read",
+    "sessionUnreadableMsg": "We could not read your sign-in session — it may have expired. Please sign in again.",
+    "signInAgain": "Sign in again"
   },
   "hr": {
     "title": "Human Resources",
