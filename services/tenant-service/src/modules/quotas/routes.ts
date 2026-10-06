@@ -24,6 +24,10 @@ const PLATFORM_ADMIN = ["platform_admin", "super_admin"];
 // caller is now recognised via ctx.actorType directly instead of the dead
 // "service_account" string.
 const INTERNAL_INCREMENT_ROLES = ["platform_admin"];
+// GAP-TENANT-HOME-01: the tenant usage dashboard is tenant governance data.
+// Reading it requires a tenant-admin/config role, not merely a signed-in
+// session — otherwise any employee could read the office's quota posture.
+const TENANT_GOVERNANCE_READ = ["platform_admin", "super_admin", "tenant_admin"];
 const RESOURCE = "quota";
 
 export async function quotaRoutes(app: FastifyInstance): Promise<void> {
@@ -91,6 +95,7 @@ export async function quotaRoutes(app: FastifyInstance): Promise<void> {
   // GET full usage dashboard for current tenant (all resources)
   app.get("/v1/tenant/usage", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, TENANT_GOVERNANCE_READ);
     const quotas = await repo.findAllByTenant(ctx.tenantId);
     const resources = quotas.map((q) => ({
       resource: q.resource,

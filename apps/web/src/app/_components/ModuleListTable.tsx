@@ -1,6 +1,8 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { Card, EmptyState } from "./ds";
+import { StatusPill } from "./ds/StatusPill";
 import { DataSourceBadge } from "./DataSourceBadge";
 import { RefreshErrorState } from "./ds/RefreshErrorState";
 import type { ModuleRowSummary } from "@civitasone/types";
@@ -10,6 +12,30 @@ import { toHumanError } from "@/lib/messages";
 // GAP-ADMIN-GATEWAY-ROUTES-02: only UUID-shaped ids are shortened; slug ids
 // ("hrms-leave-requests") used to collapse to a shared 8-char prefix.
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// GAP-TENANT-{CODE-LISTS-05, CONSENT-EXCHANGE-05, DATA-MIGRATION-05,
+// ORG-HIERARCHY-05, OVERVIEW-06, PLANS-05} (shared, in-place; NOT a wholesale
+// DataTable rewrite that would churn 80+ other call sites and their snapshots):
+// the plain <table> had no client search or sort and printed status as raw
+// snake_case text. Add a small, optional client filter + sortable Name/Status
+// headers and render status through the DS <StatusPill>. All existing
+// behaviour (ID column + UUID truncation, provenance badge, empty/error
+// states, row keys) is unchanged.
+type SortKey = "label" | "status";
+function compareRows(a: ModuleRowSummary, b: ModuleRowSummary, key: SortKey, dir: 1 | -1): number {
+  const av = (key === "label" ? a.label : a.status ?? "").toLowerCase();
+  const bv = (key === "label" ? b.label : b.status ?? "").toLowerCase();
+  if (av < bv) return -1 * dir;
+  if (av > bv) return 1 * dir;
+  return 0;
+}
+function rowMatches(row: ModuleRowSummary, q: string): boolean {
+  const hay = [row.label, row.sublabel, row.status, row.meta, row.id]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return hay.includes(q);
+}
 
 /** Offline-capable table body for ModuleListPage. Cache key is derived from the
  * page title so each module list keeps its own encrypted cached copy. */
@@ -72,29 +98,78 @@ export function ModuleListTable({
       {data.length === 0 ? (
         <EmptyState icon="📋" title="No records" message="Nothing to show yet for this module." />
       ) : (
+        <ModuleListTableBody data={data} />
+      )}
+    </Card>
+  );
+}
+
+/** Inner table body with client search, sortable Name/Status headers and StatusPill. */
+function ModuleListTableBody({ data }: { data: ModuleRowSummary[] }) {
+  const [query, setQuery] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<1 | -1>(1);
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 1 ? -1 : 1));
+    } else {
+      setSortKey(key);
+      setSortDir(1);
+    }
+  }
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    let result = q ? data.filter((r) => rowMatches(r, q)) : data;
+    if (sortKey) {
+      result = [...result].sort((a, b) => compareRows(a, b, sortKey, sortDir));
+    }
+    return result;
+  }, [data, query, sortKey, sortDir]);
+
+  const sortIndicator = (key: SortKey) =>
+    sortKey === key ? (sortDir === 1 ? " ▲" : " ▼") : "";
+
+  return (
+    <>
+      <div style={{ marginBottom: 8 }}>
+        <input
+          type="search"
+          aria-label="Filter records"
+          placeholder="Filter…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="input input-sm"
+          style={{ maxWidth: 260 }}
+        />
+      </div>
+      {visible.length === 0 ? (
+        <EmptyState icon="🔍" title="No matches" message="No records match the current filter." />
+      ) : (
         <div className="tbl-wrap"><table className="tbl">
           <thead>
             <tr>
               <th scope="col">ID</th>
-              <th scope="col">Name</th>
+              <th scope="col" style={{ cursor: "pointer" }} onClick={() => toggleSort("label")} aria-sort={sortKey === "label" ? (sortDir === 1 ? "ascending" : "descending") : "none"}>Name{sortIndicator("label")}</th>
               <th scope="col">Detail</th>
-              <th scope="col">Status</th>
+              <th scope="col" style={{ cursor: "pointer" }} onClick={() => toggleSort("status")} aria-sort={sortKey === "status" ? (sortDir === 1 ? "ascending" : "descending") : "none"}>Status{sortIndicator("status")}</th>
               <th scope="col">Meta</th>
             </tr>
           </thead>
           <tbody>
-            {data.map((row) => (
+            {visible.map((row) => (
               <tr key={row.id}>
                 <td><span className="mono" title={row.id}>{UUID_RE.test(row.id) ? row.id.slice(0, 8) : row.id}</span></td>
                 <td>{row.label}</td>
                 <td>{row.sublabel ?? "—"}</td>
-                <td>{row.status ?? "—"}</td>
+                <td>{row.status ? <StatusPill status={row.status} /> : "—"}</td>
                 <td>{row.meta ?? "—"}</td>
               </tr>
             ))}
           </tbody>
         </table></div>
       )}
-    </Card>
+    </>
   );
 }
