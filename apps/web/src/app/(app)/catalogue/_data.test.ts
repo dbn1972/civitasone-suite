@@ -108,9 +108,18 @@ describe("mapRateRows / isRateInForce — GAP-CATALOGUE-RATES-01 (MISSING-FIELDS
     expect(row.meta).toBe("manual");
   });
 
-  it("accepts the raw rateValue (bigint-as-string) field too", () => {
+  it("never reads a legacy rateValue as money (minor units only)", () => {
     const row = mapRateRows([{ id: "r-2", rateValue: "100", effectiveDate: "2026-01-01" }])![0]!;
-    expect(row.label).toBe("₹1.00");
+    expect(row.label).toBe("—");
+  });
+
+  it("orders cards newest effective-from first, undated last", () => {
+    const rows = mapRateRows([
+      { id: "old", rateValueMinor: "100", effectiveFrom: "2025-01-01" },
+      { id: "none", rateValueMinor: "100" },
+      { id: "new", rateValueMinor: "100", effectiveFrom: "2026-03-01" },
+    ])!;
+    expect(rows.map((r) => r.id)).toEqual(["new", "old", "none"]);
   });
 
   it("marks the card containing today as In force and others as not", () => {

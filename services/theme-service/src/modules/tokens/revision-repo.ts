@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { setTenantGuc } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
@@ -13,6 +13,12 @@ export type PublishedRevision = {
   status: string;
   publishedAt: string | null;
 };
+
+/** Postgres unique_violation on (tenant_id, version) for published revisions. */
+export function isVersionConflict(err: unknown): boolean {
+  const e = err as { code?: string; cause?: { code?: string } } | null;
+  return e?.code === "23505" || e?.cause?.code === "23505";
+}
 
 export class StaleRevisionError extends Error {
   constructor(public latestVersion: number) {
@@ -65,6 +71,11 @@ export async function publish(args: {
     // policy accepts the insert, derived from the JWT tenant (ctx.tenantId)
     // rather than relying on the x-tenant-id header being present.
     await setTenantGuc(tx as unknown as { execute: (q: unknown) => Promise<unknown> }, args.tenantId);
+    // Serialise publishes per tenant: the version is max(version)+1, so two concurrent
+    // publishes would otherwise both read N and insert N+1, and the expectedVersion check
+    // would not be atomic. The transaction-scoped advisory lock makes read-check-insert one
+    // critical section; the partial unique index (migration 0014) is the backstop.
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${"theme.publish:" + args.tenantId}, 0))`);
     const latestRows = await tx
       .select({ version: revisions.version })
       .from(revisions)

@@ -4,7 +4,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { readScoped } from "../../shared/db.js";
-import { createBindingBody, breakglassBody, bindingIdParam } from "./validators.js";
+import { createBindingBody, breakglassBody, bindingIdParam, revokeBindingBody, listBindingsQuery } from "./validators.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 
@@ -40,8 +40,12 @@ export async function bindingRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/policy/bindings", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);
-    const rows = await readScoped(ctx.tenantId, (tx) => repo.listBindings(tx, ctx.tenantId));
-    return reply.send({ data: rows });
+    const q = safeParse(listBindingsQuery, req.query);
+    const [rows, total] = await readScoped(ctx.tenantId, async (tx) => [
+      await repo.listBindings(tx, ctx.tenantId, q.limit, q.offset),
+      await repo.countBindings(tx, ctx.tenantId),
+    ] as const);
+    return reply.send({ data: rows, limit: q.limit, offset: q.offset, count: rows.length, total });
   });
 
   app.post("/v1/policy/bindings", async (req, reply) => {
@@ -63,7 +67,8 @@ export async function bindingRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);
     const { id } = safeParse(bindingIdParam, req.params);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.revokeBinding(ctx, id));
+    const { reason } = safeParse(revokeBindingBody, req.body ?? {});
+    return sendAccepted(reply, acceptedResponseSchema, await commands.revokeBinding(ctx, id, reason));
   });
 
   app.post("/v1/policy/breakglass", async (req, reply) => {

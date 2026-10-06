@@ -1,5 +1,6 @@
 "use client";
 
+import { actionErrorText } from "../../../_data/errorText";
 import { useState } from "react";
 import { Card, ConfirmDialog, EmptyState, StatusPill } from "@/app/_components/ds";
 import { fmtDateTime, humanize } from "../../../_data/format";
@@ -102,7 +103,7 @@ export function MinutesPanel({
       setToast("Minutes draft is being created.");
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create the minutes draft.");
+      setError(actionErrorText(err));
     } finally {
       setBusy(null);
     }
@@ -121,7 +122,7 @@ export function MinutesPanel({
       setToast("Draft saved.");
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save the draft.");
+      setError(actionErrorText(err));
     } finally {
       setBusy(null);
     }
@@ -148,7 +149,7 @@ export function MinutesPanel({
       setConfirm(null);
       await refresh(current);
     } catch (err) {
-      setConfirmErr(err instanceof Error ? err.message : "Could not submit for approval.");
+      setConfirmErr(actionErrorText(err));
     } finally {
       setBusy(null);
     }
@@ -172,7 +173,7 @@ export function MinutesPanel({
       setConfirm(null);
       await refresh(minutes);
     } catch (err) {
-      setConfirmErr(err instanceof Error ? err.message : "Action failed. Please try again.");
+      setConfirmErr(actionErrorText(err));
     } finally {
       setBusy(null);
     }

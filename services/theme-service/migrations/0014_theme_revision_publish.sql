@@ -27,3 +27,11 @@ DROP POLICY IF EXISTS tenant_isolation_policy ON theme.revisions;
 CREATE POLICY tenant_isolation_policy ON theme.revisions
   USING (tenant_id = current_tenant_id())
   WITH CHECK (tenant_id = current_tenant_id());
+
+-- 3. Backstop for the publish version race: at most one published revision per
+--    (tenant, version). Partial so unpublished drafts (default version 1) are unaffected.
+--    The publish transaction also takes a per-tenant advisory lock, so this only fires on a
+--    genuine bypass; the route maps the violation to 409 STALE_REVISION.
+--    Rollback: DROP INDEX IF EXISTS theme.uq_theme_revisions_tenant_published_version;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_theme_revisions_tenant_published_version
+  ON theme.revisions (tenant_id, version) WHERE status = 'published';

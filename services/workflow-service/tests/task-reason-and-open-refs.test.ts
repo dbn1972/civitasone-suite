@@ -151,7 +151,7 @@ describe("POST /v1/workflow/internal/open-task-refs (GAP-HR-LEAVE-APPROVALS-04)"
     const denied = await app.inject({ method: "POST", url: "/v1/workflow/internal/open-task-refs", headers: { authorization: `Bearer ${userTok}` }, payload });
     expect(denied.statusCode).toBe(403);
 
-    process.env.INTERNAL_SERVICE_SECRET = "internal_secret_for_tests_only_32c"; // gitleaks:allow
+    process.env.INTERNAL_SERVICE_SECRET = `internal-${randomUUID()}`;
     const ok = await app.inject({
       method: "POST", url: "/v1/workflow/internal/open-task-refs",
       headers: { "x-internal": "1", "x-service-secret": process.env.INTERNAL_SERVICE_SECRET, "x-tenant-id": tenant },

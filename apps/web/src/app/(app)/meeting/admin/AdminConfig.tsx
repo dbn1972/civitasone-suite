@@ -1,5 +1,6 @@
 "use client";
 
+import { actionErrorText } from "../_data/errorText";
 import { useMemo, useState } from "react";
 import { Card, ConfirmDialog, EmptyState, StatusPill } from "@/app/_components/ds";
 import type { ConfigEntry, PresetName } from "../_data/types";
@@ -91,7 +92,7 @@ export function AdminConfig({
       setToast(`Saved “${field.label}”.`);
       await reload();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save this setting.");
+      setError(actionErrorText(err));
     } finally {
       setBusyKey(null);
     }
@@ -108,7 +109,7 @@ export function AdminConfig({
       setPendingPreset(null);
       await reload();
     } catch (err) {
-      setPresetErr(err instanceof Error ? err.message : "Could not apply the preset.");
+      setPresetErr(actionErrorText(err));
     } finally {
       setPresetBusy(null);
     }

@@ -1,5 +1,6 @@
 "use client";
 
+import { actionErrorText } from "../../_data/errorText";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -254,7 +255,7 @@ export function MeetingConsole({
       setStatus(toState as Meeting["status"]);
       setToast(`Meeting moved to “${humanize(toState)}”.`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not change the meeting state.");
+      setError(actionErrorText(err));
     } finally {
       setBusy(null);
     }
@@ -274,7 +275,7 @@ export function MeetingConsole({
       setPendingTransition(null);
     } catch (err) {
       setTransitionErr(
-        err instanceof Error ? err.message : "Could not change the meeting state.",
+        actionErrorText(err),
       );
     } finally {
       setBusy(null);
@@ -288,7 +289,7 @@ export function MeetingConsole({
       await attendanceCheckIn(meeting.id, participantId);
       await refreshAttendance();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Check-in failed.");
+      setError(actionErrorText(err));
     } finally {
       setBusy(null);
     }
@@ -301,7 +302,7 @@ export function MeetingConsole({
       await attendanceCheckOut(meeting.id, participantId);
       await refreshAttendance();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Check-out failed.");
+      setError(actionErrorText(err));
     } finally {
       setBusy(null);
     }
@@ -728,7 +729,7 @@ function VotePanel({
       onVoted(position);
       await onChanged();
     } catch (err) {
-      setCastErr(err instanceof Error ? err.message : "Could not record the ballot.");
+      setCastErr(actionErrorText(err));
     } finally {
       setBusy(null);
     }
@@ -744,7 +745,7 @@ function VotePanel({
       setConcludeConfirm(false);
       await onChanged();
     } catch (err) {
-      setConcludeErr(err instanceof Error ? err.message : "Could not conclude the vote.");
+      setConcludeErr(actionErrorText(err));
     } finally {
       setBusy(null);
     }
@@ -921,7 +922,7 @@ function InitiateVoteForm({
       setOpen(false);
       await onCreated();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not open the vote.");
+      setError(actionErrorText(err));
     } finally {
       setBusy(null);
     }

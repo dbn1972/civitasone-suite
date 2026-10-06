@@ -9,9 +9,11 @@ import { formatIndianDate } from "@/lib/formatters";
 /**
  * Publishes a new tenant theme revision. Publishing is irreversible — it
  * promotes the revision to every tenant surface — so it is gated behind a
- * ConfirmDialog that requires a change reason (maker-checker). The theme-service
- * publish route additionally enforces an admin role and maker != checker, and
- * writes an audit event with the reason (the server remains the authority).
+ * ConfirmDialog that requires a change reason (audit evidence). The theme-service
+ * publish route enforces an admin role, serialises concurrent publishes per tenant
+ * (409 on a stale expectedVersion) and writes an audit event with the reason (the
+ * server remains the authority). It does NOT enforce maker != checker: the
+ * confirmation dialog here is the only second step.
  */
 export function ThemeActions({ disabled = false }: { disabled?: boolean }) {
   const router = useRouter();

@@ -131,7 +131,9 @@ export async function evaluateRoutes(app: FastifyInstance): Promise<void> {
         topic: AUDIT,
         eventType: AUDIT,
         tenantId: actor.tenantId,
-        actorId: ctx.actorId,
+        // Subject override: audit under the admin asking. Otherwise keep the evaluated actor
+        // (trusted internal callers pass an explicit actor distinct from the service principal).
+        actorId: isSubjectOverride ? ctx.actorId : actor.userId,
         correlationId: ctx.correlationId,
         payload: {
           permissionKey: body.permissionKey,

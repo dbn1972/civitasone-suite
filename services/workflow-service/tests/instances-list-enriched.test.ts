@@ -19,7 +19,7 @@ import { tasks } from "../src/modules/tasks/schema.js";
 import { definitions } from "../src/modules/definitions/schema.js";
 import { asTenant, cleanup } from "./helpers/engine-harness.js";
 
-const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr"; // gitleaks:allow
+const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
 function makeToken(tenantId: string, roles: string[] = ["workflow_admin"], sub = "user-001") {
   return signToken({ sub, tid: tenantId, roles, sid: "sess-list03" }, SECRET);

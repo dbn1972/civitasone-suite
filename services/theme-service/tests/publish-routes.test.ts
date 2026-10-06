@@ -18,7 +18,7 @@ import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import type { FastifyInstance } from "fastify";
 
-const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr"; // gitleaks:allow
+const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
 const TENANT = "aaaaaaaa-9999-4000-8000-000000000777";
 const ACTOR = "aaaaaaaa-9999-4000-8000-00000000aaaa";
@@ -123,5 +123,35 @@ describe("POST /v1/themes/publish — behaviour (DB-backed)", () => {
       payload: { name: "Stale publish", reason: "built on an old page", expectedVersion: 0 },
     });
     expect(stale.statusCode).toBe(409);
+  });
+
+  it("concurrent publishes get distinct, gap-free versions (no duplicate version race)", async () => {
+    const hdr = { authorization: `Bearer ${token(["theme_admin"])}`, "content-type": "application/json" };
+    const probe = await app.inject({ method: "POST", url: "/v1/themes/publish", headers: hdr, payload: { name: `Probe ${Date.now()}`, reason: "probe" } });
+    if (probe.statusCode !== 201) {
+      expect([201, 500]).toContain(probe.statusCode);
+      return; // DB GUC not configured in this environment
+    }
+    const base = probe.json().version as number;
+    const results = await Promise.all(
+      Array.from({ length: 6 }, (_, i) =>
+        app.inject({ method: "POST", url: "/v1/themes/publish", headers: hdr, payload: { name: `Race ${i}`, reason: "race" } }),
+      ),
+    );
+    expect(results.map((r) => r.statusCode)).toEqual(Array(6).fill(201));
+    const versions = results.map((r) => r.json().version as number).sort((a, b) => a - b);
+    expect(versions).toEqual([base + 1, base + 2, base + 3, base + 4, base + 5, base + 6]);
+  });
+
+  it("two publishes racing on the same expectedVersion: exactly one wins, the other gets 409", async () => {
+    const hdr = { authorization: `Bearer ${token(["theme_admin"])}`, "content-type": "application/json" };
+    const probe = await app.inject({ method: "POST", url: "/v1/themes/publish", headers: hdr, payload: { name: `Probe2 ${Date.now()}`, reason: "probe" } });
+    if (probe.statusCode !== 201) return;
+    const cur = probe.json().version as number;
+    const [a, b] = await Promise.all([
+      app.inject({ method: "POST", url: "/v1/themes/publish", headers: hdr, payload: { name: "A", reason: "r", expectedVersion: cur } }),
+      app.inject({ method: "POST", url: "/v1/themes/publish", headers: hdr, payload: { name: "B", reason: "r", expectedVersion: cur } }),
+    ]);
+    expect([a.statusCode, b.statusCode].sort()).toEqual([201, 409]);
   });
 });

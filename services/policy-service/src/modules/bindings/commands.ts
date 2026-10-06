@@ -11,15 +11,15 @@ export async function createBinding(ctx: RequestContext, body: CreateBindingBody
   await queue.publish(COMMANDS.createBinding, {
     messageId: id, type: COMMANDS.createBinding, tenantId: ctx.tenantId, actorId: ctx.actorId,
     correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, userId: body.userId, roleId: body.roleId },
+    payload: { id, tenantId: ctx.tenantId, userId: body.userId, roleId: body.roleId, ...(body.reason ? { reason: body.reason } : {}) },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function revokeBinding(ctx: RequestContext, id: string): Promise<Accepted> {
+export async function revokeBinding(ctx: RequestContext, id: string, reason?: string): Promise<Accepted> {
   await queue.publish(COMMANDS.revokeBinding, {
     type: COMMANDS.revokeBinding, tenantId: ctx.tenantId, actorId: ctx.actorId,
-    correlationId: ctx.correlationId, schemaVersion: "1.0", payload: { id },
+    correlationId: ctx.correlationId, schemaVersion: "1.0", payload: { id, ...(reason ? { reason } : {}) },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

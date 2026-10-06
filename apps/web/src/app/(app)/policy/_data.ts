@@ -98,7 +98,7 @@ function listOf<T>(payload: Envelope<T>): T[] {
 
 /** Role↔user bindings. Backend today exposes mutations; GET is attempted for F1 wiring. */
 export function getPolicyBindings(): Promise<LoaderResult<PolicyBindingRow[]>> {
-  return fetchJson<Envelope<PolicyBindingRow>, PolicyBindingRow[]>("/api/v1/policy/bindings", [], {
+  return fetchJson<Envelope<PolicyBindingRow>, PolicyBindingRow[]>("/api/v1/policy/bindings?limit=500", [], {
     revalidateSeconds: 30,
     telemetryKey: "policy.bindings",
     mapResponse: listOf,

@@ -1,4 +1,5 @@
-import { pgSchema, uuid, varchar, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { pgSchema, uuid, varchar, text, integer, timestamp, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const themeSchema = pgSchema("theme");
 
@@ -64,7 +65,8 @@ export const brandConfig = themeSchema.table("brand_config", {
   version:         integer("version").notNull().default(1),
 });
 
-export const brandPresets = themeSchema.table("brand_presets", {  id:              uuid("id").primaryKey().defaultRandom(),
+export const brandPresets = themeSchema.table("brand_presets", {
+  id:              uuid("id").primaryKey().defaultRandom(),
   code:            text("code").notNull().unique(),
   name:            text("name").notNull(),
   description:     text("description"),
@@ -104,7 +106,11 @@ export const revisions = themeSchema.table("revisions", {
   createdBy: uuid("created_by").notNull(),
   updatedBy: uuid("updated_by").notNull(),
   version: integer("version").notNull().default(1),
-});
+}, (t) => ({
+  // Mirrors migration 0014: one published revision per (tenant, version).
+  publishedVersionUq: uniqueIndex("uq_theme_revisions_tenant_published_version")
+    .on(t.tenantId, t.version).where(sql`${t.status} = 'published'`),
+}));
 
 export type RevisionRow = typeof revisions.$inferSelect;
 export type RevisionInsert = typeof revisions.$inferInsert;

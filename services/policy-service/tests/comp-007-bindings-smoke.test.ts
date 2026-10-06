@@ -56,6 +56,7 @@ import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { queue } from "../src/shared/infra.js";
 import { readScoped, sqlClient } from "../src/shared/db.js";
+import { outboxMessages } from "../src/shared/outbox.js";
 import { registerBindingConsumers } from "../src/modules/bindings/consumer.js";
 import { roleBindings, breakglass } from "../src/modules/bindings/schema.js";
 
@@ -91,6 +92,11 @@ const app = await buildApp();
 async function findBinding(id: string, tenantId: string) {
   const rows = await readScoped(tenantId, (tx: any) => tx.select().from(roleBindings).where(eq(roleBindings.id, id)));
   return rows[0] ?? null;
+}
+async function findAudit(resourceId: string, action: string, tenantId: string) {
+  const rows = await readScoped(tenantId, (tx: any) =>
+    tx.select().from(outboxMessages).where(eq(outboxMessages.topic, "audit.event.record")));
+  return rows.find((r: any) => r.payload?.resourceId === resourceId && r.payload?.action === action) ?? null;
 }
 async function findBreakglass(id: string, tenantId: string) {
   const rows = await readScoped(tenantId, (tx: any) => tx.select().from(breakglass).where(eq(breakglass.id, id)));
@@ -214,6 +220,78 @@ describe("COMP-007: bindings -- POST /policy/bindings", () => {
       return r && r.status === "revoked" ? r : null;
     });
     expect(revoked.version).toBe(2);
+  }, 25000);
+
+  it("GAP-POLICY-BINDINGS-01: grant and revoke reasons are carried into the audit payload", async () => {
+    const userId = randomUUID();
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/policy/bindings",
+      headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
+      payload: { userId, roleId: randomUUID(), reason: "onboarding to finance desk" },
+    });
+    expect(res.statusCode).toBe(202);
+    const { id } = res.json();
+    const created = await waitFor(() => findAudit(id, "create", TENANT_A));
+    const createdEvt = await waitFor(async () => {
+      const rows = await readScoped(TENANT_A, (tx: any) =>
+        tx.select().from(outboxMessages).where(eq(outboxMessages.topic, "policy.binding.created")));
+      return rows.find((r: any) => r.payload?.userId === userId) ?? null;
+    });
+    expect(createdEvt.payload.reason).toBe("onboarding to finance desk");
+    expect(created.payload.outcome).toBe("success");
+
+    const del = await app.inject({
+      method: "DELETE",
+      url: `/v1/policy/bindings/${id}`,
+      headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
+      payload: { reason: "left the desk" },
+    });
+    expect(del.statusCode).toBe(202);
+    await waitFor(() => findAudit(id, "revoke", TENANT_A));
+    const revokedEvt = await waitFor(async () => {
+      const rows = await readScoped(TENANT_A, (tx: any) =>
+        tx.select().from(outboxMessages).where(eq(outboxMessages.topic, "policy.binding.revoked")));
+      return rows.find((r: any) => r.payload?.bindingId === id) ?? null;
+    });
+    expect(revokedEvt.payload.reason).toBe("left the desk");
+  }, 25000);
+
+  it("GAP-POLICY-BINDINGS-01: DELETE without a body still revokes (reason optional)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/policy/bindings",
+      headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
+      payload: { userId: randomUUID(), roleId: randomUUID() },
+    });
+    const { id } = res.json();
+    await waitFor(() => findBinding(id, TENANT_A));
+    const del = await app.inject({
+      method: "DELETE",
+      url: `/v1/policy/bindings/${id}`,
+      headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
+    });
+    expect(del.statusCode).toBe(202);
+  }, 15000);
+
+  it("GET paginates with limit/offset/total in a stable order", async () => {
+    const mk = () => app.inject({ method: "POST", url: "/v1/policy/bindings",
+      headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
+      payload: { userId: randomUUID(), roleId: randomUUID() } });
+    const ids: string[] = [];
+    for (let i = 0; i < 3; i++) { const r = await mk(); ids.push(r.json().id); }
+    for (const id of ids) await waitFor(() => findBinding(id, TENANT_A));
+    const hdr = { authorization: `Bearer ${token(["tenant_admin"])}` };
+    const all = (await app.inject({ method: "GET", url: "/v1/policy/bindings?limit=500", headers: hdr })).json();
+    expect(all.total).toBeGreaterThanOrEqual(3);
+    expect(all.count).toBe(all.data.length);
+    const p1 = (await app.inject({ method: "GET", url: "/v1/policy/bindings?limit=2&offset=0", headers: hdr })).json();
+    const p2 = (await app.inject({ method: "GET", url: "/v1/policy/bindings?limit=2&offset=2", headers: hdr })).json();
+    expect(p1.data).toHaveLength(2);
+    expect(p1.total).toBe(all.total);
+    expect([...p1.data, ...p2.data].map((r: any) => r.id)).toEqual(all.data.slice(0, 2 + p2.data.length).map((r: any) => r.id));
+    const bad = await app.inject({ method: "GET", url: "/v1/policy/bindings?limit=0", headers: hdr });
+    expect(bad.statusCode).toBe(400);
   }, 25000);
 
   it("a binding created under tenant A is invisible when read back under tenant B's RLS scope", async () => {

@@ -14,6 +14,7 @@
  */
 import { browserFetch } from "@/lib/api/browserClient";
 import { toHumanError, type MessageKind } from "@/lib/messages";
+import { UserFacingError } from "@/lib/userFacingError";
 import type {
   ActiveVote,
   CommitteeSummary,
@@ -62,14 +63,14 @@ async function send<T>(
     ...(opts.headers ? { headers: opts.headers } : {}),
     ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
   });
-  if (!res.ok) throw new Error(readError("save"));
+  if (!res.ok) throw new UserFacingError(readError("save"));
   const text = await res.text();
   return (text ? JSON.parse(text) : {}) as T;
 }
 
 async function get<T>(path: string): Promise<T> {
   const res = await browserFetch(path);
-  if (!res.ok) throw new Error(readError("load"));
+  if (!res.ok) throw new UserFacingError(readError("load"));
   return (await res.json()) as T;
 }
 

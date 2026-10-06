@@ -1,5 +1,6 @@
 "use client";
 
+import { actionErrorText } from "../../_data/errorText";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, ConfirmDialog } from "@/app/_components/ds";
@@ -267,7 +268,7 @@ export function NewMeetingForm() {
       }
     } catch (err) {
       setCreated(false);
-      setSubmitError(err instanceof Error ? err.message : "Could not schedule the meeting.");
+      setSubmitError(actionErrorText(err));
     } finally {
       setBusy(false);
     }

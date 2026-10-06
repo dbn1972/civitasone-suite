@@ -17,6 +17,7 @@ import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ActionButton, useToastOptional } from "@/app/_components/ds";
 import { toHumanError } from "@/lib/messages";
+import { UserFacingError } from "@/lib/userFacingError";
 
 /**
  * Plain-language failure message for a failed workflow-task action. This is
@@ -48,7 +49,7 @@ async function postJson(url: string, body?: unknown): Promise<void> {
   } catch {
     /* non-JSON body — fall through to the generic message */
   }
-  throw new Error(messageForCode(code, res.status));
+  throw new UserFacingError(messageForCode(code, res.status));
 }
 
 /** Plain-language message for a known task-action failure code. */
@@ -188,7 +189,7 @@ export function TaskActions({ taskId, status, assigneeId = null, currentUserId =
               announce("ok", "Task claimed.");
               router.refresh();
             } catch (err) {
-              announce("err", err instanceof Error ? err.message : taskActionError());
+              announce("err", err instanceof UserFacingError ? err.message : taskActionError());
             } finally {
               setClaiming(false);
             }

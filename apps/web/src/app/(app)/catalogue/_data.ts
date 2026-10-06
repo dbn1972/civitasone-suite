@@ -104,7 +104,6 @@ function moduleLoader(path: string, key: string) {
 }
 
 export const getCatalogueProducts = moduleLoader("/api/v1/catalogue/products", "catalogue.products");
-export const getCatalogueRates = moduleLoader("/api/v1/catalogue/rates", "catalogue.rates");
 
 // ---------------------------------------------------------------------------
 // GAP-CATALOGUE-BUNDLES-01 (OTHER): the generic mapper showed a bundle only as
@@ -240,12 +239,14 @@ export function isRateInForce(
 export function mapRateRows(payload: unknown): ModuleRowSummary[] | null {
   const rows = extractRows(payload);
   if (rows === null) return null;
-  const mapped: ModuleRowSummary[] = [];
+  const mapped: Array<{ from: string; row: ModuleRowSummary }> = [];
   for (const [index, row] of rows.entries()) {
     if (!isRecord(row)) continue;
     const r = row as RateRowInput;
     const id = toText(r.id) ?? `rate-${index + 1}`;
-    const amountRaw = r.rateValueMinor ?? r.rateValue;
+    // Money: the API contract is minor units in `rateValueMinor` ONLY. Never fall back to a
+    // legacy `rateValue` field, which could be a major-unit figure mis-read as paise.
+    const amountRaw = r.rateValueMinor;
     const amount =
       typeof amountRaw === "bigint" || typeof amountRaw === "number" || typeof amountRaw === "string"
         ? formatMoney(amountRaw)
@@ -255,13 +256,26 @@ export function mapRateRows(payload: unknown): ModuleRowSummary[] | null {
     const inForce = isRateInForce(from ?? null, to ?? null);
     const period = `${formatIndianDate(from)} → ${to ? formatIndianDate(to) : "open"}`;
     mapped.push({
-      id,
-      label: amount,
-      sublabel: period,
-      status: inForce ? "In force" : "Scheduled/expired",
-      ...(toText(r.source) ? { meta: toText(r.source) } : {}),
+      from: from ?? "",
+      row: {
+        id,
+        label: amount,
+        sublabel: period,
+        status: inForce ? "In force" : "Scheduled/expired",
+        ...(toText(r.source) ? { meta: toText(r.source) } : {}),
+      },
     });
   }
-  // Newest effective-from first.
-  return mapped;
+  // Newest effective-from first (ISO dates compare lexically; undated cards last).
+  mapped.sort((a, b) => (a.from < b.from ? 1 : a.from > b.from ? -1 : 0));
+  return mapped.map((m) => m.row);
+}
+
+/** Rate cards for ONE product (the API requires productId). Empty/non-UUID id => no call. */
+export function getCatalogueRatesForProduct(productId: string): Promise<LoaderResult<ModuleRowSummary[]>> {
+  return fetchJson<unknown, ModuleRowSummary[]>(
+    `/api/v1/catalogue/rates?productId=${encodeURIComponent(productId)}&limit=200`,
+    [] as ModuleRowSummary[],
+    { telemetryKey: "catalogue.rates", mapResponse: mapRateRows },
+  );
 }

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { UserFacingError } from "@/lib/userFacingError";
 
 const pushMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -108,15 +109,26 @@ describe("NewMeetingForm", () => {
     });
   });
 
-  it("shows the server error and does not navigate when the create call fails", async () => {
-    createMeetingMock.mockRejectedValue(new Error("COMMITTEE_NOT_FOUND: committee not found"));
+  it("shows the plain-language error and does not navigate when the create call fails", async () => {
+    createMeetingMock.mockRejectedValue(new UserFacingError("We couldn't schedule the meeting. Try again in a few minutes."));
     render(<NewMeetingForm />);
     fillRequiredFields();
     fireEvent.click(screen.getByRole("button", { name: "Schedule meeting" }));
 
     // The banner renders "⚠ {message}" as sibling text nodes, so match on
     // the message as a substring rather than the element's exact full text.
-    expect(await screen.findByText(/COMMITTEE_NOT_FOUND: committee not found/)).toBeInTheDocument();
+    expect(await screen.findByText(/We couldn't schedule the meeting/)).toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it("never shows a raw server error string from an unclassified throw", async () => {
+    createMeetingMock.mockRejectedValue(new Error("COMMITTEE_NOT_FOUND: committee not found"));
+    render(<NewMeetingForm />);
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole("button", { name: "Schedule meeting" }));
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/COMMITTEE_NOT_FOUND/);
     expect(pushMock).not.toHaveBeenCalled();
   });
 

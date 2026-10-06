@@ -18,7 +18,7 @@ import { agentViewSchema } from "../src/modules/agents/validators.js";
 import { toView } from "../src/modules/agents/repo.js";
 import type { AgentRow } from "../src/modules/agents/schema.js";
 
-const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr"; // gitleaks:allow
+const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000099";
 
 function token(roles = ["telephony_user"]) {

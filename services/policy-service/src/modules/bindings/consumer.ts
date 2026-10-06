@@ -10,22 +10,22 @@ const AUDIT_TOPIC = "audit.event.record";
 export function registerBindingConsumers(q: Queue): void {
   // RLS (#146): every handler must run inside the message's tenant context.
   q = tenantScoped(q);
-  q.subscribe<{ id: string; tenantId: string; userId: string; roleId: string }>(COMMANDS.createBinding, async (msg) => {
+  q.subscribe<{ id: string; tenantId: string; userId: string; roleId: string; reason?: string }>(COMMANDS.createBinding, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload;
       await repo.insertBinding(tx, { id: p.id, tenantId: p.tenantId, userId: p.userId, roleId: p.roleId, status: "active", createdBy: msg.actorId, updatedBy: msg.actorId, version: 1 });
-      await emitAudit(tx, msg, EVENTS.bindingCreated, { userId: p.userId, roleId: p.roleId }, "create", p.id);
+      await emitAudit(tx, msg, EVENTS.bindingCreated, { userId: p.userId, roleId: p.roleId, ...(p.reason ? { reason: p.reason } : {}) }, "create", p.id);
     });
   });
 
-  q.subscribe<{ id: string }>(COMMANDS.revokeBinding, async (msg) => {
+  q.subscribe<{ id: string; reason?: string }>(COMMANDS.revokeBinding, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const cur = await repo.findBindingByIdTx(tx, msg.payload.id);
       if (!cur) return;
       await repo.revokeBinding(tx, msg.payload.id, msg.actorId, cur.version + 1);
-      await emitAudit(tx, msg, EVENTS.bindingRevoked, { bindingId: msg.payload.id }, "revoke", msg.payload.id);
+      await emitAudit(tx, msg, EVENTS.bindingRevoked, { bindingId: msg.payload.id, ...(msg.payload.reason ? { reason: msg.payload.reason } : {}) }, "revoke", msg.payload.id);
     });
   });
 
