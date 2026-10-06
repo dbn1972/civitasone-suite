@@ -1,4 +1,16 @@
 {
+  "offlinePage": {
+    "title": "You're offline",
+    "intro": "This page isn't available offline yet. Previously visited screens are saved on this device, and any changes you made are kept safely until you reconnect.",
+    "queuedNone": "No changes are waiting to sync.",
+    "queuedOne": "1 change is saved on this device and will sync automatically when you reconnect.",
+    "queuedMany": "{count} changes are saved on this device and will sync automatically when you reconnect.",
+    "queuedChecking": "Checking for changes waiting to sync…",
+    "tryAgain": "Try again",
+    "goToDashboard": "Go to dashboard",
+    "backOnline": "Back online — reconnecting…",
+    "statusOffline": "You are currently offline."
+  },
   "action": {
     "save": "Save",
     "cancel": "Cancel",
