@@ -11,18 +11,22 @@ export default async function BeneficiariesPage() {
   const errored = resource.status === "error";
 
   const total = errored ? null : rows.length;
-  const active = errored ? null : rows.filter((r) => r.verified === "active").length;
+  // GAP-PROJECTS-BENEFICIARIES-02: "Active" and "Verified" previously showed the
+  // SAME count (both verified==='active') and "Pending Verification" counted
+  // pending + rejected, so rejected applicants looked pending. Now: Verified =
+  // active, Pending = pending ONLY, Rejected = rejected — four distinct figures.
+  const verified = errored ? null : rows.filter((r) => r.verified === "active").length;
   const pending = errored ? null : rows.filter((r) => r.verified === "pending").length;
-  const notVerified = errored ? null : rows.filter((r) => r.verified === "rejected").length;
+  const rejected = errored ? null : rows.filter((r) => r.verified === "rejected").length;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Beneficiaries" subtitle="Track project beneficiaries, verification status and disbursements." back="/projects" />
       <StatGrid>
         <StatCard icon="👥" iconBg="#eff6ff" label="Total Beneficiaries" value={total ?? "—"} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={active ?? "—"} />
-        <StatCard icon="🔍" iconBg="#fffaeb" label="Verified" value={active ?? "—"} />
-        <StatCard icon="⏳" iconBg="#fef3f2" label="Pending Verification" value={pending === null || notVerified === null ? "—" : pending + notVerified} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Verified" value={verified ?? "—"} />
+        <StatCard icon="⏳" iconBg="#fffaeb" label="Pending Verification" value={pending ?? "—"} />
+        <StatCard icon="🚫" iconBg="#fef3f2" label="Rejected" value={rejected ?? "—"} />
       </StatGrid>
       <Card title="Beneficiary Register">
         {errored ? (

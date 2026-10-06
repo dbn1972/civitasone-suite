@@ -1,34 +1,53 @@
-import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "@/app/_components/ds";
 import { UtilizationTable, type UtilizationRow } from "./UtilizationTable";
+import { deriveUtilizationTotals } from "./utilizationTotals";
+import { formatCrore, formatPercent } from "@/lib/formatters";
 
-const rows: UtilizationRow[] = [
-  { project: "NH-44 Bypass Construction", allocated: "345.00", released: "210.00", utilized: "185.50", utilizationPct: "88%", status: "active" },
-  { project: "District Hospital Upgradation - Lucknow", allocated: "128.00", released: "96.00", utilized: "42.30", utilizationPct: "44%", status: "review" },
-  { project: "Smart City Phase-II Varanasi", allocated: "512.00", released: "384.00", utilized: "310.20", utilizationPct: "81%", status: "active" },
-  { project: "Integrated Water Supply - Dehradun", allocated: "89.00", released: "45.00", utilized: "12.80", utilizationPct: "28%", status: "overdue" },
-  { project: "Solar Power Plant - Jaipur", allocated: "215.00", released: "160.00", utilized: "148.90", utilizationPct: "93%", status: "active" },
-  { project: "Primary School Construction - Raipur", allocated: "42.00", released: "21.00", utilized: "8.40", utilizationPct: "40%", status: "review" },
-  { project: "Urban Metro Corridor - Patna", allocated: "1850.00", released: "925.00", utilized: "780.00", utilizationPct: "84%", status: "active" },
-  { project: "State Highway Widening - Bhopal", allocated: "178.00", released: "134.00", utilized: "98.60", utilizationPct: "74%", status: "active" },
-];
+// GAP-PROJECTS-UTILIZATION-01 (HIGH, fabricated data): this page used to
+// hard-code eight sample projects (Lucknow, Dehradun, Jaipur, Patna…) and four
+// hand-typed stat tiles with NO loader call at all, so a Government user read
+// fabricated fund positions as their department's own. The literals are
+// removed. project-service exposes no project-wide fund-utilization aggregate
+// endpoint today (only per-scheme UC statements under
+// services/project-service/src/modules/utilisation), so rather than invent an
+// endpoint-and-migration we cannot verify end to end tonight, the page shows an
+// honest "not available yet" state and never any sample numbers.
+//
+// GAP-PROJECTS-UTILIZATION-02: when rows DO arrive, every tile is DERIVED from
+// the rows in BigInt minor units (deriveUtilizationTotals), and "Utilization %"
+// is the weighted sum(utilised)/sum(allocated) its "of allocated" label claims
+// — not the unweighted mean of per-row percentages the old static tile showed.
+//
+// HUMAN REVIEW (money): wiring a real getProjectUtilization() loader + a
+// project-service aggregation endpoint (allocated/released/utilised per project
+// as minor-unit strings) is the follow-up to make this page live. It is left as
+// a reviewed decision because it needs the DB-backed service test suite (test
+// Postgres on :5672), which was unavailable during this run.
+const rows: UtilizationRow[] = [];
 
 export default function UtilizationPage() {
-  const totalAllocated = "₹3,359 Cr";
-  const totalUtilized = "₹1,586.70 Cr";
-  const avgUtilization = "66%";
-  const unspent = "₹1,772.30 Cr";
+  const totals = deriveUtilizationTotals(rows);
+  const hasData = rows.length > 0;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Fund Utilization" subtitle="Track allocation, releases and utilization across all projects." back="/projects" />
       <StatGrid>
-        <StatCard icon="💰" iconBg="#eff6ff" label="Total Allocated" value={totalAllocated} />
-        <StatCard icon="📊" iconBg="#ecfdf3" label="Utilized" value={totalUtilized} />
-        <StatCard icon="📈" iconBg="#fffaeb" label="Utilization %" value={avgUtilization} />
-        <StatCard icon="🏦" iconBg="#f1f5f9" label="Unspent Balance" value={unspent} />
+        <StatCard icon="💰" iconBg="#eff6ff" label="Total Allocated" value={hasData ? formatCrore(totals.allocatedMinor) : "—"} />
+        <StatCard icon="📊" iconBg="#ecfdf3" label="Utilized" value={hasData ? formatCrore(totals.utilisedMinor) : "—"} />
+        <StatCard icon="📈" iconBg="#fffaeb" label="Utilization % (of allocated)" value={hasData ? formatPercent(totals.utilisationPct) : "—"} />
+        <StatCard icon="🏦" iconBg="#f1f5f9" label="Unspent Balance" value={hasData ? formatCrore(totals.unspentMinor) : "—"} />
       </StatGrid>
       <Card title="Project-wise Utilization">
-        <UtilizationTable rows={rows} />
+        {hasData ? (
+          <UtilizationTable rows={rows} />
+        ) : (
+          <EmptyState
+            icon="📊"
+            title="Fund utilization not available yet"
+            message="Project-wise fund utilization is not available for this tenant yet. Once utilization is recorded against projects, allocation, releases and utilization will appear here."
+          />
+        )}
       </Card>
     </div>
   );

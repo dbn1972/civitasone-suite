@@ -136,7 +136,7 @@ export function registerSchemeConsumers(queue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.fundReleaseDisburse, async (msg) => {
-    const p = msg.payload as { rId: string; tenantId: string; schemeId: string; pfmsRef?: string };
+    const p = msg.payload as { rId: string; tenantId: string; schemeId: string; pfmsRef?: string; reason?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const release = await repo.findFundReleaseByIdTx(tx, p.rId, p.tenantId);
@@ -156,16 +156,16 @@ export function registerSchemeConsumers(queue: Queue): void {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { releaseId: p.rId, schemeId: p.schemeId },
       });
-      await audit(tx, msg, "disburse", "fund_release", p.rId);
+      await audit(tx, msg, "disburse", "fund_release", p.rId, p.reason);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "scheme", p.schemeId));
   });
 }
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
+async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string, reason?: string): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "project", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "project", action, resourceType, resourceId, outcome: "success", ...(reason ? { reason } : {}) },
   });
 }

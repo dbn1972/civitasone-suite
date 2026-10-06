@@ -2,12 +2,18 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { z } from "zod";
 import { Button } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type Props = { projectId: string };
 
 const ROLES = ["project_manager", "project_officer", "engineer", "finance_officer", "viewer"] as const;
+
+// GAP-PROJECTS-DETAIL-MEMBERS-01 (fix step 4): zod uuid guard at the boundary so
+// a non-UUID (e.g. a pasted name or truncated id) is caught here with a clear
+// message instead of round-tripping to a raw server validation error.
+const userIdSchema = z.string().uuid();
 
 export function AddMemberForm({ projectId }: Props) {
   const router = useRouter();
@@ -19,9 +25,9 @@ export function AddMemberForm({ projectId }: Props) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!userId.trim()) {
+    if (!userIdSchema.safeParse(userId.trim()).success) {
       setStatus("error");
-      setMessage("User ID is required.");
+      setMessage("Enter a valid User ID (UUID).");
       return;
     }
     setStatus("submitting");

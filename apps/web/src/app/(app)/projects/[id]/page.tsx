@@ -1,14 +1,43 @@
 import Link from "next/link";
 import { getProjectById } from "../../../_data/loaders";
 import { PageHeader, Card, StatusPill, EmptyState, RefreshErrorState } from "@/app/_components/ds";
-import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { formatMoney, formatIndianDate, percentOfMinor, formatPercent } from "@/lib/formatters";
+import { getSessionRoles, hasAnyRole, PROJECT_WRITE_ROLES } from "@/lib/auth/roleGuard";
 import { toHumanError } from "@/lib/messages";
 import { ProjectGantt } from "./ProjectGantt";
 import { ProjectDetailActions } from "./ProjectDetailActions";
 import { MilestonesDetailTable, FundReleasesDetailTable } from "./ProjectDetailTables";
 
 export default async function ProjectDetailPage({ params }: { params: { id: string } }) {
-  const { data: project, source } = await getProjectById(params.id);
+  const { data: project, source, status } = await getProjectById(params.id);
+
+  // GAP-PROJECTS-DETAIL-01: an outage/401/5xx returns {data:null, source:"error"}.
+  // The old order checked `!project` first, so EVERY failure rendered the
+  // "Project not found … may have been removed" view and RefreshErrorState was
+  // unreachable. Check the error source first: a real 404 is genuinely
+  // not-found; anything else is a transient failure the clerk can retry.
+  if (source === "error") {
+    if (status === 404) {
+      return (
+        <>
+          <PageHeader title="Project Not Found" back="/projects/list" />
+          <Card>
+            <EmptyState
+              icon="🔍"
+              title="Project not found"
+              message="No project exists for the given ID. It may have been removed."
+            />
+          </Card>
+        </>
+      );
+    }
+    return (
+      <>
+        <PageHeader back="/projects/list" title="Project Detail" />
+        <RefreshErrorState error={toHumanError("load", { area: "project" })} backHref="/projects/list" />
+      </>
+    );
+  }
 
   if (!project) {
     return (
@@ -25,17 +54,19 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
     );
   }
 
-  if (source === "error") {
-    return (
-      <>
-        <PageHeader back="/projects/list" title="Project Detail" />
-        <RefreshErrorState error={toHumanError("load", { area: "project" })} backHref="/projects/list" />
-      </>
-    );
-  }
-
   const milestoneRows = project.milestones.map((m) => ({ ...m }));
   const fundReleaseRows = project.fundReleases.map((r) => ({ ...r }));
+
+  // GAP-PROJECTS-DETAIL-02: compute completion authority server-side (mirrors
+  // project-service PROJ_ROLES). The service remains the real gate.
+  const canComplete = hasAnyRole(getSessionRoles(), PROJECT_WRITE_ROLES);
+
+  // GAP-PROJECTS-DETAIL-06: spend/utilisation %, BigInt-safe (budget &
+  // expenditure are paise). "—" when there is no positive budget.
+  const spentPct = percentOfMinor(
+    Math.round(project.expenditure),
+    Math.round(project.totalBudget),
+  );
 
   return (
     <>
@@ -43,7 +74,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
         back="/projects/list"
         title={project.name}
         subtitle={project.projectCode}
-        actions={<ProjectDetailActions projectId={project.id} milestones={project.milestones} />}
+        actions={<ProjectDetailActions projectId={project.id} milestones={project.milestones} canComplete={canComplete} />}
       />
       <Card title="Details" padding>
         <div className="fields">
@@ -54,6 +85,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
           <div className="fld"><div className="l">Status</div><div className="v"><StatusPill status={project.status} /></div></div>
           <div className="fld"><div className="l">Budget</div><div className="v">{formatMoney(project.totalBudget)}</div></div>
           <div className="fld"><div className="l">Expenditure</div><div className="v">{formatMoney(project.expenditure)}</div></div>
+          <div className="fld"><div className="l">Spent %</div><div className="v">{formatPercent(spentPct)}</div></div>
           <div className="fld"><div className="l">Completion %</div><div className="v">{project.completionPct.toFixed(1)}%</div></div>
         </div>
       </Card>

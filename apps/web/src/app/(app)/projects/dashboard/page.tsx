@@ -8,7 +8,7 @@ import {
   RefreshErrorState,
   Term,
 } from "@/app/_components/ds";
-import { formatMoney } from "@/lib/formatters";
+import { formatCrore, formatPercent } from "@/lib/formatters";
 import { DashboardProjectsTable, type DashboardProjectRow } from "./DashboardProjectsTable";
 import { toHumanError } from "@/lib/messages";
 
@@ -28,9 +28,6 @@ export default async function ProjectsDashboardPage() {
   const anyError =
     source === "error" || projResult.source === "error" || schemeResult.source === "error";
 
-  // totalOutlay is held in paise (minor units). 1 crore = 1e7 rupees = 1e9 paise.
-  const outlayInCrores = Math.round(data.totalOutlay / 1e9);
-
   const rows: DashboardProjectRow[] = projects.map((p) => ({
     id: p.id,
     projectCode: p.projectCode,
@@ -40,7 +37,15 @@ export default async function ProjectsDashboardPage() {
     totalBudget: p.totalBudget,
     completionPct: p.completionPct,
     status: p.status,
+    rag: p.rag ?? null,
   }));
+
+  // GAP-PROJECTS-DASHBOARD-03: the "Projects" tile reports the dashboard
+  // aggregate (data.totalProjects, counts every lifecycle status) while the
+  // table below lists the rows returned by /project/projects. When those two
+  // disagree we surface an honest footnote rather than letting a reviewer
+  // assume the tile and the table describe the same set.
+  const countsDiffer = !anyError && data.totalProjects !== rows.length;
 
   return (
     <>
@@ -48,6 +53,7 @@ export default async function ProjectsDashboardPage() {
         title={<><Term name="PMU" /> Dashboard</>}
         subtitle="Real-time project monitoring — schemes, funds and delays."
         help="projects"
+        back="/projects"
       />
       <StatGrid>
         <StatCard icon="🏛️" iconBg="#eef0fe" label="Schemes" value={anyError ? "—" : schemes.length} />
@@ -55,8 +61,14 @@ export default async function ProjectsDashboardPage() {
         <StatCard
           icon="💰"
           iconBg="#ecfdf3"
-          label="Outlay (FY)"
-          value={anyError ? "—" : `₹${outlayInCrores.toLocaleString("en-IN")} Cr`}
+          label="Total outlay"
+          value={anyError ? "—" : formatCrore(data.totalOutlay)}
+        />
+        <StatCard
+          icon="✅"
+          iconBg="#f0fdf4"
+          label="On Track"
+          value={anyError ? "—" : formatPercent(data.onTrackPct)}
         />
         <StatCard
           icon="🔴"
@@ -68,7 +80,7 @@ export default async function ProjectsDashboardPage() {
       <Card title="Projects">
         {anyError ? (
           <div className="pad">
-            <RefreshErrorState error={toHumanError("load", { area: "projects" })} />
+            <RefreshErrorState error={toHumanError("load", { area: "projects" })} backHref="/projects" />
           </div>
         ) : rows.length === 0 ? (
           <EmptyState
@@ -77,7 +89,15 @@ export default async function ProjectsDashboardPage() {
             message="Projects will appear here once schemes are sanctioned and projects created."
           />
         ) : (
-          <DashboardProjectsTable rows={rows} />
+          <>
+            {countsDiffer && (
+              <p role="note" style={{ fontSize: 12, color: "#6b7280", margin: "0 0 8px" }}>
+                Dashboard counts all {data.totalProjects.toLocaleString("en-IN")} projects across every
+                status; the table below lists {rows.length.toLocaleString("en-IN")}.
+              </p>
+            )}
+            <DashboardProjectsTable rows={rows} />
+          </>
         )}
       </Card>
     </>

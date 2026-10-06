@@ -1,7 +1,16 @@
-export default function Loading() {
+export default function DelayAnalysisLoading() {
   return (
-    <div className="page-main wrap">
-      <div className="skeleton" aria-label="Loading…" />
+    <div className="min-h-screen bg-slate-50 p-6 md:p-8">
+      <div className="mx-auto max-w-7xl animate-pulse space-y-5" aria-label="Loading…">
+        <div className="h-4 w-48 rounded bg-slate-200" />
+        <div className="h-9 w-56 rounded bg-slate-200" />
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-24 rounded-xl bg-slate-200" />
+          ))}
+        </div>
+        <div className="h-96 rounded-xl bg-slate-200" />
+      </div>
     </div>
   );
 }

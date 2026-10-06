@@ -28,6 +28,9 @@ export function MilestonesTable({ rows }: { rows: MilestoneRow[] }) {
     <DataTable<MilestoneRow>
       columns={COLUMNS}
       rows={rows}
+      rowLinkPrefix="/projects/"
+      rowLinkKey="projectId"
+      identifyingColumnKey="title"
       sortable
       filterable
       filterPlaceholder="Filter milestones…"

@@ -1,10 +1,16 @@
 "use client";
 
-import { DataTable } from "@/app/_components/ds";
+import { DataTable, RagPill } from "@/app/_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
 
 export type DelayRow = {
   project: string;
+  // GAP-PROJECTS-DELAY-ANALYSIS-02: opaque project id used to link a row to
+  // /projects/<id>. Optional because the backend may not yet return it; when
+  // absent, DataTable's resolveHref() leaves the row un-linked (no
+  // ".../undefined" link) rather than breaking — the link lights up
+  // automatically once the endpoint supplies projectId.
+  projectId?: string;
   originalDeadline: string;
   revisedDeadline: string;
   delayDays: number;
@@ -17,13 +23,17 @@ const COLUMNS: {
   label: string;
   cellType?: "status" | "amount";
   align?: "left" | "right" | "center";
+  render?: (row: DelayRow) => React.ReactNode;
 }[] = [
   { key: "project", label: "Project Name" },
   { key: "originalDeadline", label: "Original Deadline" },
   { key: "revisedDeadline", label: "Revised Deadline" },
   { key: "delayDays", label: "Delay (days)", align: "right" },
   { key: "cause", label: "Cause" },
-  { key: "rag", label: "RAG Status", cellType: "status" },
+  // GAP-PROJECTS-DELAY-ANALYSIS-01: render a real RAG pill (Green/Amber/Red
+  // with colour) via the shared RagPill, instead of StatusPill painting the
+  // raw active/review/overdue word with lifecycle colours.
+  { key: "rag", label: "RAG", render: (r) => <RagPill rag={r.rag} /> },
 ];
 
 export function DelayAnalysisTable({ rows, source = "api" }: { rows: DelayRow[]; source?: "api" | "error" }) {
@@ -45,6 +55,9 @@ export function DelayAnalysisTable({ rows, source = "api" }: { rows: DelayRow[];
       <DataTable<DelayRow>
         columns={COLUMNS}
         rows={data}
+        rowLinkPrefix="/projects/"
+        rowLinkKey="projectId"
+        identifyingColumnKey="project"
         sortable
         filterable
         filterPlaceholder="Filter projects…"

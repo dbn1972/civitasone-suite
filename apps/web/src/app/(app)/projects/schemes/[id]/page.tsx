@@ -1,9 +1,8 @@
-import Link from "next/link";
 import { PageHeader, StatGrid, StatCard, Card, StatusPill, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { SchemeProjectsTable, type SchemeProjectRow } from "./SchemeProjectsTable";
 import { getSchemeDetail } from "../../../../_data/loaders";
 import { toResourceState } from "@/app/_data/useResource";
-import { formatMoney } from "@/lib/formatters";
+import { formatMoney, formatIndianDate, formatPercent } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 
 // COMP-016: this page used to look up `SCHEMES[id] ?? DEFAULT_SCHEME` from an
@@ -30,7 +29,7 @@ export default async function SchemeDetailPage({ params }: { params: Promise<{ i
     return (
       <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="Scheme" back="/projects/schemes" backLabel="Back to Schemes" />
-        <RefreshErrorState error={toHumanError("load", { area: "scheme" })} />
+        <RefreshErrorState error={toHumanError("load", { area: "scheme" })} backHref="/projects/schemes" />
       </div>
     );
   }
@@ -50,6 +49,7 @@ export default async function SchemeDetailPage({ params }: { params: Promise<{ i
 
   const scheme = resource.data;
   const rows: SchemeProjectRow[] = scheme.projects.map((p) => ({
+    id: p.id,
     name: p.name,
     code: p.code,
     status: p.status,
@@ -58,15 +58,10 @@ export default async function SchemeDetailPage({ params }: { params: Promise<{ i
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
-      <nav aria-label="Breadcrumb" style={{ fontSize: 13, marginBottom: 4 }}>
-        <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", gap: 6 }}>
-          <li><Link href="/projects">Projects</Link></li>
-          <li aria-hidden="true">›</li>
-          <li><Link href="/projects/schemes">Schemes</Link></li>
-          <li aria-hidden="true">›</li>
-          <li aria-current="page" style={{ color: "var(--muted)" }}>{scheme.name}</li>
-        </ol>
-      </nav>
+      {/* GAP-PROJECTS-SCHEMES-DETAIL-03: a hand-built inline breadcrumb used to
+          render here in addition to the PageHeader back link below, giving two
+          wayfinding controls for the same step. Removed the inline breadcrumb;
+          PageHeader's back="/projects/schemes" is the single affordance. */}
       <PageHeader
         title={scheme.name}
         subtitle={`Scheme code: ${scheme.schemeCode}`}
@@ -78,7 +73,7 @@ export default async function SchemeDetailPage({ params }: { params: Promise<{ i
       <StatGrid>
         <StatCard icon="📋" iconBg="#eff6ff" label="Total Projects" value={scheme.projects.length} />
         <StatCard icon="💰" iconBg="#ecfdf3" label="Budget" value={formatMoney(scheme.totalOutlayMinor)} />
-        <StatCard icon="📈" iconBg="#fffaeb" label="Utilized %" value={`${scheme.utilisationPct}%`} />
+        <StatCard icon="📈" iconBg="#fffaeb" label="Utilized %" value={formatPercent(scheme.utilisationPct)} />
         {/* != null, not ??: a recorded-but-zero beneficiary count (0) is a
             real value, not an absent one, and must not fall back to "--". */}
         <StatCard
@@ -102,9 +97,9 @@ export default async function SchemeDetailPage({ params }: { params: Promise<{ i
           <dt style={{ fontWeight: 500, color: "var(--muted)" }}>Released</dt>
           <dd style={{ margin: 0 }}>{formatMoney(scheme.releasedMinor)}</dd>
           <dt style={{ fontWeight: 500, color: "var(--muted)" }}>Start Date</dt>
-          <dd style={{ margin: 0 }}>{scheme.startDate ?? "—"}</dd>
+          <dd style={{ margin: 0 }}>{formatIndianDate(scheme.startDate)}</dd>
           <dt style={{ fontWeight: 500, color: "var(--muted)" }}>End Date</dt>
-          <dd style={{ margin: 0 }}>{scheme.endDate ?? "—"}</dd>
+          <dd style={{ margin: 0 }}>{formatIndianDate(scheme.endDate)}</dd>
         </dl>
       </Card>
 

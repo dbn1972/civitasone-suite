@@ -50,7 +50,9 @@ describe("SchemeDetailPage", () => {
     expect(screen.getByText("COMP016-TEST")).toBeInTheDocument();
     expect(screen.getByText("Centre 75% : State 25%")).toBeInTheDocument();
     expect(screen.getByText("SANC/TEST/001")).toBeInTheDocument();
-    expect(screen.getByText("25%")).toBeInTheDocument();
+    // GAP-PROJECTS-SCHEMES-DETAIL-02: utilisationPct is now rendered via
+    // formatPercent (1 decimal), not raw interpolation.
+    expect(screen.getByText("25.0%")).toBeInTheDocument();
     expect(screen.getByText("Regression Linked Project")).toBeInTheDocument();
     expect(screen.getByText("PRJ-1")).toBeInTheDocument();
 
@@ -103,8 +105,10 @@ describe("SchemeDetailPage", () => {
     expect(screen.getByText("Shri Test Officer")).toBeInTheDocument();
     expect(screen.getByText("Test Department of Testing")).toBeInTheDocument();
     expect(screen.getByText("4,200")).toBeInTheDocument();
-    expect(screen.getByText("2024-04-01")).toBeInTheDocument();
-    expect(screen.getByText("2026-03-31")).toBeInTheDocument();
+    // GAP-PROJECTS-SCHEMES-DETAIL-02: dates render via formatIndianDate
+    // ("dd Mon yyyy"), not the raw ISO string.
+    expect(screen.getByText("01 Apr 2024")).toBeInTheDocument();
+    expect(screen.getByText("31 Mar 2026")).toBeInTheDocument();
     // SCHEME already sets sanctionRef, so with all 5 of these also set, no
     // field on the page should be falling back to "—" at all.
     expect(screen.queryByText("—")).not.toBeInTheDocument();
@@ -120,5 +124,33 @@ describe("SchemeDetailPage", () => {
     expect(screen.queryByText("PM Awas Yojana (Urban)")).not.toBeInTheDocument();
     expect(screen.queryByText("Shri R.K. Gautam, IAS")).not.toBeInTheDocument();
     expect(screen.queryByText(SCHEME.name)).not.toBeInTheDocument();
+  });
+
+  // GAP-PROJECTS-SCHEMES-DETAIL-03: the page used to render a hand-built inline
+  // breadcrumb AND a PageHeader back link — two wayfinding controls for the
+  // same step. Only one back affordance should remain, and no inline
+  // <nav aria-label="Breadcrumb">.
+  it("renders exactly one back affordance and no duplicate inline breadcrumb", async () => {
+    getSchemeDetailMock.mockResolvedValue({ data: SCHEME, source: "api" });
+
+    const ui = await SchemeDetailPage({ params: Promise.resolve({ id: "s1" }) });
+    const { container } = render(ui);
+
+    expect(container.querySelector('nav[aria-label="Breadcrumb"]')).toBeNull();
+    const backLinks = screen.getAllByRole("link", { name: /back to schemes/i });
+    expect(backLinks).toHaveLength(1);
+    expect(backLinks[0]).toHaveAttribute("href", "/projects/schemes");
+  });
+
+  // GAP-PROJECTS-SCHEMES-DETAIL-04: linked project rows must be clickable and
+  // navigate to /projects/<projectId>.
+  it("links each linked-project row to /projects/<id>", async () => {
+    getSchemeDetailMock.mockResolvedValue({ data: SCHEME, source: "api" });
+
+    const ui = await SchemeDetailPage({ params: Promise.resolve({ id: "s1" }) });
+    render(ui);
+
+    const projectLink = screen.getByRole("link", { name: /open regression linked project/i });
+    expect(projectLink).toHaveAttribute("href", "/projects/p1");
   });
 });

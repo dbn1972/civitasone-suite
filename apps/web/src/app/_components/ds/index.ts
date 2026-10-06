@@ -58,5 +58,6 @@ export type { PredictionHistoryProps, PredictionHistoryEntry } from "./Predictio
 export { SkeletonRow, SkeletonCard, SkeletonTable, SkeletonBar, TileHubSkeleton } from "./Skeleton";
 export { Masked, maskAccount, maskLast4, maskPhone, maskEmail } from "./Masked";
 export type { MaskedProps, MaskedKind } from "./Masked";
+export { RagPill } from "./RagPill";
 export { RevealableValue } from "./RevealableValue";
 export type { RevealableValueProps } from "./RevealableValue";

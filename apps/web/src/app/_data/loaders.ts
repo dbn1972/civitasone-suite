@@ -6426,6 +6426,7 @@ export async function getRoleFeatureGrants(): Promise<LoaderResult<RoleFeatureGr
 
 export type ProjectEscalationRow = {
   escalationId: string;
+  projectId?: string;
   project: string;
   issue: string;
   severity: string;
@@ -6462,6 +6463,9 @@ export async function getProjectBeneficiaries(): Promise<LoaderResult<ProjectBen
 
 export type ProjectDprRow = {
   dprNo: string;
+  // GAP-PROJECTS-DPR-TRACKING-03: opaque project id for linking the DPR to
+  // /projects/<id>. Optional until the endpoint returns it (now does).
+  projectId?: string;
   projectTitle: string;
   submittedBy: string;
   submittedDate: string;
@@ -6483,6 +6487,10 @@ export type ProjectWbsNode = {
   name: string;
   status: string;
   parentId: string | null;
+  // GAP-PROJECTS-WBS-03: the portfolio WBS endpoint spans every project's
+  // tasks; projectId lets a node be traced back to its project. Optional so
+  // older cached payloads (pre-fix) still satisfy the type.
+  projectId?: string;
 };
 
 export async function getProjectWbs(): Promise<LoaderResult<ProjectWbsNode[]>> {
@@ -6495,6 +6503,10 @@ export async function getProjectWbs(): Promise<LoaderResult<ProjectWbsNode[]>> {
 
 export type ProjectDelayRow = {
   project: string;
+  // GAP-PROJECTS-DELAY-ANALYSIS-02: opaque project id for linking to
+  // /projects/<id>. Optional until the delay-analysis endpoint returns it;
+  // the table leaves rows un-linked while it is absent.
+  projectId?: string;
   originalDeadline: string;
   revisedDeadline: string;
   delayDays: number;

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { StatusPill } from "@/app/_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { ProjectWbsNode } from "@/app/_data/loaders";
@@ -26,12 +27,17 @@ function buildTree(nodes: ProjectWbsNode[]): TreeNode[] {
 
 function WbsTreeNode({ node, depth }: { node: TreeNode; depth: number }) {
   const isLeaf = node.children.length === 0;
+  // GAP-PROJECTS-WBS-01: this used role="treeitem" + aria-selected + an
+  // always-true aria-expanded, announcing an interactive tree widget with
+  // selection and expand/collapse that did not exist (no toggle, no keyboard
+  // navigation, no roving tabindex) — a worse experience for screen-reader
+  // users than plain content. Replaced with native nested-list semantics:
+  // a real <ul>/<li> hierarchy conveys the parent/child structure and depth
+  // to assistive tech without claiming controls that are not there. Depth is
+  // also exposed via aria-level for flattened announcement.
   return (
-    <>
-      <li
-        role="treeitem"
-        aria-selected={false}
-        aria-expanded={node.children.length > 0 ? true : undefined}
+    <li aria-level={depth + 1}>
+      <div
         style={{
           display: "flex",
           alignItems: "center",
@@ -44,14 +50,22 @@ function WbsTreeNode({ node, depth }: { node: TreeNode; depth: number }) {
           {isLeaf ? "📄" : depth === 0 ? "📦" : "📂"}
         </span>
         <span style={{ flex: 1, fontWeight: depth === 0 ? 600 : depth === 1 ? 500 : 400, fontSize: 14 }}>
-          {node.name}
+          {node.projectId ? (
+            <Link href={`/projects/${node.projectId}`}>{node.name}</Link>
+          ) : (
+            node.name
+          )}
         </span>
         <StatusPill status={node.status} />
-      </li>
-      {node.children.map((child) => (
-        <WbsTreeNode key={child.id} node={child} depth={depth + 1} />
-      ))}
-    </>
+      </div>
+      {node.children.length > 0 && (
+        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+          {node.children.map((child) => (
+            <WbsTreeNode key={child.id} node={child} depth={depth + 1} />
+          ))}
+        </ul>
+      )}
+    </li>
   );
 }
 
@@ -73,7 +87,7 @@ export function WbsTree({ nodes, source = "api" }: { nodes: ProjectWbsNode[]; so
   return (
     <div style={{ padding: "0 0 8px" }}>
       {cacheNote && <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "8px 12px" }}>{cacheNote}</p>}
-      <ul role="tree" aria-label="Work breakdown structure" style={{ listStyle: "none", padding: 0, margin: 0 }}>
+      <ul aria-label="Work breakdown structure" style={{ listStyle: "none", padding: 0, margin: 0 }}>
         {tree.map((node) => (
           <WbsTreeNode key={node.id} node={node} depth={0} />
         ))}

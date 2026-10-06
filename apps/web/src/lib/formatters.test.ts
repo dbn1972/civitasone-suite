@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { formatMoneyCompact, formatMoney, formatIndianDate, formatIndianDateTime, todayIST, istDatePart, addDaysIST, minorToRupeesOrNull, formatClockTime12h, percentOfMinor, humanizeStatus, formatEntityRef, utilisationPercent, isOverUtilised } from "./formatters";
+import { formatMoneyCompact, formatMoney, formatCrore, formatIndianDate, formatIndianDateTime, todayIST, istDatePart, addDaysIST, minorToRupeesOrNull, formatClockTime12h, percentOfMinor, humanizeStatus, formatEntityRef, utilisationPercent, isOverUtilised } from "./formatters";
 
 // ---------------------------------------------------------------------------
 // formatClockTime12h -- GAP-HR-ATTENDANCE-CONFIG-02
@@ -98,6 +98,30 @@ describe("formatMoney", () => {
   it("formats large amount in crore range", () => {
     // 1000000000 paise = INR 1,00,00,000.00
     expect(formatMoney(1000000000n)).toBe("₹1,00,00,000.00");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatCrore -- GAP-PROJECTS-DASHBOARD-02: paise -> "₹X.XX Cr", BigInt-based.
+// ---------------------------------------------------------------------------
+describe("formatCrore", () => {
+  it("renders a sub-crore outlay with 2 decimals instead of rounding to ₹0 Cr", () => {
+    expect(formatCrore(400_000_000)).toBe("₹0.40 Cr"); // ₹0.4 Cr
+  });
+  it("renders a zero outlay as ₹0.00 Cr", () => {
+    expect(formatCrore(0)).toBe("₹0.00 Cr");
+  });
+  it("renders a multi-crore outlay with Indian grouping", () => {
+    expect(formatCrore(1_800_000_000)).toBe("₹1.80 Cr");
+  });
+  it("stays exact for paise values above 2^53", () => {
+    // 1e16 paise = 1e7 crore = 1,00,00,000 Cr; Number math would drift here.
+    expect(formatCrore("10000000000000000")).toBe("₹1,00,00,000.00 Cr");
+  });
+  it("returns — for missing / unparseable input", () => {
+    expect(formatCrore(null)).toBe("—");
+    expect(formatCrore(undefined)).toBe("—");
+    expect(formatCrore("garbage")).toBe("—");
   });
 });
 

@@ -1631,10 +1631,15 @@ describe("Mock Elimination Routes", () => {
   });
 
   describe("GET /v1/projects/beneficiaries", () => {
-    it("returns beneficiaries", async () => {
+    it("returns no FABRICATED beneficiaries even when projects exist (GAP-PROJECTS-BENEFICIARIES-03/01: honest empty, no fake PII/₹)", async () => {
+      // Seed a project row: the OLD handler mapped these into fabricated
+      // beneficiaries ("Beneficiary N", category "General", "₹0"). The honest
+      // handler must now return an empty list regardless.
+      mockState.queryResult = [{ id: PROJECT_ID, name: "Rural Road", code: "PRJ-1", schemeId: null }];
       const res = await app.inject({ method: "GET", url: "/v1/projects/beneficiaries", headers: { authorization: `Bearer ${ADMIN_TOKEN()}` } });
       expect(res.statusCode).toBe(200);
-      expect(res.json().data).toBeDefined();
+      expect(res.json().data).toEqual([]);
+      mockState.queryResult = [];
     });
   });
 
@@ -1650,12 +1655,70 @@ describe("Mock Elimination Routes", () => {
       const res = await app.inject({ method: "GET", url: "/v1/projects/wbs", headers: { authorization: `Bearer ${ADMIN_TOKEN()}` } });
       expect(res.statusCode).toBe(200);
     });
+
+    it("surfaces projectId on each node so a node can be traced to its project (GAP-PROJECTS-WBS-03)", async () => {
+      mockState.queryResult = [
+        { id: TASK_ID, name: "Foundation", status: "in_progress", parentTaskId: null, projectId: PROJECT_ID },
+      ];
+      const res = await app.inject({ method: "GET", url: "/v1/projects/wbs", headers: { authorization: `Bearer ${ADMIN_TOKEN()}` } });
+      expect(res.statusCode).toBe(200);
+      const node = res.json().data[0];
+      expect(node.projectId).toBe(PROJECT_ID);
+      expect(node).toMatchObject({ id: TASK_ID, name: "Foundation", status: "in_progress", parentId: null });
+      mockState.queryResult = [SEED_PROJECT];
+    });
   });
 
   describe("GET /v1/projects/delay-analysis", () => {
     it("returns delay analysis", async () => {
       const res = await app.inject({ method: "GET", url: "/v1/projects/delay-analysis", headers: { authorization: `Bearer ${ADMIN_TOKEN()}` } });
       expect(res.statusCode).toBe(200);
+    });
+
+    it("GAP-PROJECTS-DELAY-ANALYSIS-03: delayDays is computed honestly from endDate vs today (not a fabricated flat 90), cause is blank, and projectId is emitted", async () => {
+      // A project with a hard-past planned end that is NOT in a terminal state.
+      // OLD handler fabricated delayDays=90 + cause="Under investigation" and
+      // emitted no projectId; the honest handler must compute the real overdue
+      // whole-day count from endDate and leave cause blank ("—").
+      mockState.queryResult = [{
+        id: PROJECT_ID,
+        name: "Rural Road Overdue",
+        status: "in_progress",
+        rag: "red",
+        startDate: "2019-01-01",
+        endDate: "2020-01-01",
+      }];
+      const res = await app.inject({ method: "GET", url: "/v1/projects/delay-analysis", headers: { authorization: `Bearer ${ADMIN_TOKEN()}` } });
+      expect(res.statusCode).toBe(200);
+      const row = res.json().data[0];
+      expect(row.projectId).toBe(PROJECT_ID);
+      // endDate 2020-01-01 is years in the past → delayDays must be a large
+      // positive real count, and specifically NOT the old fabricated 90.
+      const expectedDays = Math.floor(
+        (Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate()) - Date.UTC(2020, 0, 1)) / 86_400_000,
+      );
+      expect(row.delayDays).toBe(expectedDays);
+      expect(row.delayDays).toBeGreaterThan(90);
+      expect(row.cause).toBe("—");
+      expect(row.rag).toBe("red");
+      mockState.queryResult = [];
+    });
+
+    it("GAP-PROJECTS-DELAY-ANALYSIS-03: a completed project reports zero delay (overdue clock stops at terminal states)", async () => {
+      mockState.queryResult = [{
+        id: PROJECT_ID,
+        name: "Finished Project",
+        status: "completed",
+        rag: "green",
+        startDate: "2019-01-01",
+        endDate: "2020-01-01",
+      }];
+      const res = await app.inject({ method: "GET", url: "/v1/projects/delay-analysis", headers: { authorization: `Bearer ${ADMIN_TOKEN()}` } });
+      expect(res.statusCode).toBe(200);
+      const row = res.json().data[0];
+      expect(row.delayDays).toBe(0);
+      expect(row.cause).toBe("—");
+      mockState.queryResult = [];
     });
   });
 });

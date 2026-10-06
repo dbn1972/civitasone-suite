@@ -13,6 +13,25 @@ describe("gateway registry", () => {
     expect(resolved?.route.upstreamPath).toBe("/v1/projects");
   });
 
+  it("GAP-PROJECTS-HOME-02: BOTH /api/v1/project and /api/v1/projects reach project-service's /v1/projects upstream (both canonical)", () => {
+    // Singular prefix used by typed loaders (dashboard/projects/milestones/...).
+    const singular = resolveRoute("/api/v1/project/projects/abc");
+    expect(singular?.route.name).toBe("project");
+    expect(singular?.route.upstream).toContain("3014");
+    expect(singular?.route.upstreamPath).toBe("/v1/projects");
+    expect(singular?.remainder).toBe("/projects/abc"); // -> upstream /v1/projects/projects/abc
+
+    // Plural prefix used by sub-resources + mutations (members/tasks/milestones complete).
+    const plural = resolveRoute("/api/v1/projects/abc/members");
+    expect(plural?.route.name).toBe("projects");
+    expect(plural?.route.upstream).toContain("3014");
+    expect(plural?.route.upstreamPath).toBe("/v1/projects");
+    expect(plural?.remainder).toBe("/abc/members"); // -> upstream /v1/projects/abc/members
+
+    // Same upstream service for both — neither prefix is a dead end.
+    expect(singular?.route.upstream).toBe(plural?.route.upstream);
+  });
+
   it("registers all core domain services", () => {
     const names = new Set(SERVICE_ROUTES.map((r) => r.name));
     for (const required of ["finance", "hrms", "procurement", "identity", "sync"]) {
