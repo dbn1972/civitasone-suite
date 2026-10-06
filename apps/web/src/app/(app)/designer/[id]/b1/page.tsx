@@ -113,13 +113,22 @@ export default function DesignerB1Page() {
         </HelpTip>
       }
     >
-      <CatalogueB1Form
-        definitionId={params.id}
-        initial={initial}
-        onSaveState={setSaveState}
-        onPatternChange={(pattern) => setMeta((m) => ({ ...m, pattern }))}
-      />
-      <div style={{ marginTop: 16 }}>
+      {/* GAP-DESIGNER-DETAIL-B1-05: in-page section nav for the long B1 page */}
+      <nav aria-label="Page sections" style={{ marginBottom: 12, display: "flex", gap: 12, flexWrap: "wrap", fontSize: 13 }}>
+        <a href="#identity" style={{ color: "var(--link)" }}>Identity</a>
+        <a href="#applicants" style={{ color: "var(--link)" }}>Applicants</a>
+        <a href="#appeal" style={{ color: "var(--link)" }}>Appeal &amp; RTI</a>
+        <a href="#languages" style={{ color: "var(--link)" }}>Languages</a>
+      </nav>
+      <div id="identity">
+        <CatalogueB1Form
+          definitionId={params.id}
+          initial={initial}
+          onSaveState={setSaveState}
+          onPatternChange={(pattern) => setMeta((m) => ({ ...m, pattern }))}
+        />
+      </div>
+      <div id="applicants" style={{ marginTop: 16 }}>
         <ApplicantTypesForm
           definitionId={params.id}
           initial={applicantInitial}
@@ -127,7 +136,7 @@ export default function DesignerB1Page() {
           onSaveState={setSaveState}
         />
       </div>
-      <div style={{ marginTop: 16 }}>
+      <div id="appeal" style={{ marginTop: 16 }}>
         <GovernanceLinkageBuilder
           appeal={phase3.config.appealLinkage ?? null}
           rti={phase3.config.rtiLinkage ?? null}

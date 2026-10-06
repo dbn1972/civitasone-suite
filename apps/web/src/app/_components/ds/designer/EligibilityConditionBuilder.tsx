@@ -25,7 +25,15 @@ function formFieldOptions(fields: FormFieldDefinition[]): EligibilityAttributeOp
     id: f.apiName,
     label: f.label || f.apiName,
     group: "form" as const,
-    valueType: f.type === "number" ? "number" : f.type === "boolean" ? "boolean" : "text",
+    // GAP-DESIGNER-DETAIL-B3-04: preserve date as its own type (was collapsed to text).
+    valueType:
+      f.type === "number"
+        ? "number"
+        : f.type === "boolean"
+          ? "boolean"
+          : f.type === "date"
+            ? "date"
+            : "text",
   }));
 }
 
@@ -132,6 +140,25 @@ export function EligibilityConditionBuilder({
                   </optgroup>
                 ) : null}
               </select>
+              {/* GAP-DESIGNER-DETAIL-B3-01: DPDP notice for sensitive socio-economic attrs */}
+              {attributes.find((a) => a.id === row.attribute)?.sensitivity === "sensitive" ? (
+                <p
+                  role="note"
+                  style={{
+                    margin: 0,
+                    padding: "6px 10px",
+                    fontSize: 12,
+                    color: "var(--warn, #a15c00)",
+                    background: "var(--warnbg, #fffbe6)",
+                    border: "1px solid var(--line)",
+                    borderRadius: "var(--r-sm)",
+                  }}
+                >
+                  Sensitive attribute (DPDP Act). Use only when required by law or statute;
+                  source of truth is the BPL register or income certificate. The eligibility
+                  decision trail is audited.
+                </p>
+              ) : null}
               <select
                 className="input"
                 value={row.op}
@@ -142,15 +169,45 @@ export function EligibilityConditionBuilder({
                   <option key={o.id} value={o.id}>{o.label}</option>
                 ))}
               </select>
-              {op.needsValue ? (
-                <input
-                  className="input"
-                  value={row.value ?? ""}
-                  onChange={(e) => updateRow(idx, { value: e.target.value })}
-                  placeholder="Expected value"
-                  aria-label="Comparison value"
-                />
-              ) : null}
+              {op.needsValue ? (() => {
+                const attrDef = attributes.find((a) => a.id === row.attribute);
+                const vt = attrDef?.valueType ?? "text";
+                if (vt === "boolean") {
+                  return (
+                    <select
+                      className="input"
+                      value={row.value ?? ""}
+                      onChange={(e) => updateRow(idx, { value: e.target.value })}
+                      aria-label="Comparison value"
+                    >
+                      <option value="">Select</option>
+                      <option value="true">Yes</option>
+                      <option value="false">No</option>
+                    </select>
+                  );
+                }
+                if (vt === "date") {
+                  return (
+                    <input
+                      className="input"
+                      type="date"
+                      value={row.value ?? ""}
+                      onChange={(e) => updateRow(idx, { value: e.target.value })}
+                      aria-label="Comparison value"
+                    />
+                  );
+                }
+                return (
+                  <input
+                    className="input"
+                    type={vt === "number" ? "number" : "text"}
+                    value={row.value ?? ""}
+                    onChange={(e) => updateRow(idx, { value: e.target.value })}
+                    placeholder={vt === "number" ? "0" : "Expected value"}
+                    aria-label="Comparison value"
+                  />
+                );
+              })() : null}
               <select
                 className="input"
                 value={row.effect}

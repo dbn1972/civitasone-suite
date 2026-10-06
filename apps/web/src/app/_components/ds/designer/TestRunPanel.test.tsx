@@ -63,4 +63,23 @@ describe("TestRunPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: /Run sandbox test/i }));
     expect(onRun).toHaveBeenCalled();
   });
+
+  // GAP-DESIGNER-DETAIL-TEST-05: empty or invalid createdAt prints em-dash, never "Invalid Date".
+  it("renders a dash for empty or invalid createdAt, not Invalid Date", () => {
+    render(
+      <TestRunPanel
+        definitionId="def-1"
+        steps={[]}
+        history={[
+          { id: "r1", status: "pass", durationMs: 120, createdAt: "" },
+          { id: "r2", status: "fail", durationMs: null, createdAt: "not-a-date" },
+          { id: "r3", status: "pass", durationMs: 80, createdAt: "2026-09-28T12:00:00Z" },
+        ]}
+        onRun={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText(/Invalid Date/)).not.toBeInTheDocument();
+    // The valid row should render a real locale string.
+    expect(screen.getByText(/2026/)).toBeInTheDocument();
+  });
 });

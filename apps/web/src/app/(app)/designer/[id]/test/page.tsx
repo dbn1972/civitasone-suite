@@ -96,6 +96,13 @@ export default function DesignerTestPage() {
         onRun={() => void runTest()}
         running={running}
       />
+      {/* GAP-DESIGNER-DETAIL-TEST-01: explicit sandbox-isolation note — confirmed
+          by reading citizen-service sandbox-test/commands.ts (pure synthetic
+          simulation, writes only to sandbox_test_runs, never the real GL). */}
+      <p style={{ marginTop: 12, fontSize: 12, color: "var(--mut)" }}>
+        This is a sandbox — no ledger impact. Payments and postings are simulated; no journal entry
+        or real payment is created.
+      </p>
     </WizardShell>
   );
 }

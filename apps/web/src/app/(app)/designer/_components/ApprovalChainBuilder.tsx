@@ -3,7 +3,8 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
-import { narrateWorkflow, type WorkflowDesignState, type WorkflowLane } from "../_data/workflowConstants";
+import { SkeletonBar } from "@/app/_components/ds/Skeleton";
+import { narrateWorkflow, validateChain, type WorkflowDesignState, type WorkflowLane } from "../_data/workflowConstants";
 import { fetchTenantPositions, persistWorkflowDesign } from "../_data/workflowBuilderApi";
 import {
   cloneLanes,
@@ -14,7 +15,16 @@ import {
 
 const DesignerCanvas = dynamic(
   () => import("@/app/(app)/workflow/designer/_components/DesignerCanvas").then((m) => m.DesignerCanvas),
-  { ssr: false, loading: () => <p style={{ color: "var(--mut)" }}>Loading visual editor…</p> },
+  {
+    ssr: false,
+    // GAP-DESIGNER-DETAIL-B4-05: reserve the embedded canvas's 420px height with
+    // a skeleton (role=status) so there is no layout shift when the chunk loads.
+    loading: () => (
+      <div role="status" aria-label="Loading visual editor">
+        <SkeletonBar w="100%" h={420} />
+      </div>
+    ),
+  },
 );
 
 interface Props {
@@ -34,7 +44,12 @@ export function ApprovalChainBuilder({
   const [advanced, setAdvanced] = useState(initial.mode === "custom");
   const [templateSnapshot, setTemplateSnapshot] = useState<WorkflowLane[]>(() => cloneLanes(initial.lanes));
   const [positions, setPositions] = useState<{ id: string; label: string }[]>([]);
+  // GAP-DESIGNER-DETAIL-B4-04: track whether the positions fetch failed so we
+  // can show an inline error with retry instead of silently showing empty lists.
+  const [positionsFetchFailed, setPositionsFetchFailed] = useState(false);
   const [revertOpen, setRevertOpen] = useState(false);
+  // GAP-DESIGNER-DETAIL-B4-03: confirm before entering advanced mode.
+  const [confirmAdvancedOpen, setConfirmAdvancedOpen] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef(design);
   latest.current = design;
@@ -42,12 +57,15 @@ export function ApprovalChainBuilder({
   useEffect(() => {
     let live = true;
     fetchTenantPositions()
-      .then((data) => { if (live) setPositions(data); })
-      .catch(() => { if (live) setPositions([]); });
+      .then((data) => { if (live) { setPositions(data); setPositionsFetchFailed(false); } })
+      .catch(() => { if (live) { setPositions([]); setPositionsFetchFailed(true); } });
     return () => { live = false; };
   }, []);
 
   const narration = useMemo(() => narrateWorkflow(design.lanes), [design.lanes]);
+  // GAP-DESIGNER-DETAIL-B4-01 / B4-02: surface chain warnings (empty designation,
+  // duplicate designation, missing escalation, zero SLA) in the UI.
+  const chainWarnings = useMemo(() => validateChain(design.lanes), [design.lanes]);
   const isCustom = design.mode === "custom";
   const guidedLocked = isCustom;
 
@@ -219,11 +237,39 @@ export function ApprovalChainBuilder({
             />
           </div>
           <p style={{ margin: "16px 0 0", fontSize: 13, color: "var(--ink2)", fontStyle: "italic" }}>{narration}</p>
+          {chainWarnings.length > 0 ? (
+            <ul role="status" style={{ margin: "8px 0 0", padding: "0 0 0 18px", fontSize: 13 }}>
+              {chainWarnings.map((w) => (
+                <li key={w.laneId + w.kind} style={{ color: "var(--warn, #a15c00)", marginBottom: 4 }}>
+                  {w.message}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {positionsFetchFailed ? (
+            <p role="alert" style={{ margin: "8px 0 0", fontSize: 13, color: "var(--bad)" }}>
+              Could not load positions.{" "}
+              <button
+                type="button"
+                style={{ fontSize: 13 }}
+                onClick={() => {
+                  fetchTenantPositions()
+                    .then((d) => { setPositions(d); setPositionsFetchFailed(false); })
+                    .catch(() => setPositionsFetchFailed(true));
+                }}
+              >
+                Retry
+              </button>
+            </p>
+          ) : null}
+          <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--mut)" }}>
+            The person who submits a service for publication cannot approve it (checked at review).
+          </p>
         </div>
       </Card>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <Button variant="ghost" onClick={openAdvanced}>
+        <Button variant="ghost" onClick={() => (isCustom ? openAdvanced() : setConfirmAdvancedOpen(true))}>
           {isCustom ? "Open visual editor" : "Open visual editor (Advanced)"}
         </Button>
         {isCustom ? (
@@ -238,6 +284,18 @@ export function ApprovalChainBuilder({
         rows={revertDiff}
         onCancel={() => setRevertOpen(false)}
         onConfirm={confirmRevertToTemplate}
+      />
+
+      {/* GAP-DESIGNER-DETAIL-B4-03: confirm before switching to the visual editor,
+          because the guided chain is locked until revert and reverting discards
+          any visual-editor changes. */}
+      <ConfirmDialog
+        open={confirmAdvancedOpen}
+        title="Open the visual editor?"
+        description="The guided chain will be locked. Reverting later discards visual-editor changes."
+        confirmLabel="Open visual editor"
+        onCancel={() => setConfirmAdvancedOpen(false)}
+        onConfirm={() => { setConfirmAdvancedOpen(false); openAdvanced(); }}
       />
     </div>
   );

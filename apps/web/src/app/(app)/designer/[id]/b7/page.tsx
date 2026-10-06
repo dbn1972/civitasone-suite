@@ -135,7 +135,7 @@ export default function DesignerB7Page() {
       onNext={() => router.push(`/designer/${params.id}/${next}`)}
       help={
         <HelpTip term="Output & Issuance">
-          Design the certificate or closure note, numbering format, signatory, and validity period.
+          Design what citizens receive (certificate, licence, closure note or receipt): template, numbering, signatory and validity.
         </HelpTip>
       }
     >
@@ -147,7 +147,28 @@ export default function DesignerB7Page() {
         onSaveState={setSaveState}
         onDesignPersisted={onDesignPersisted}
       />
+      {/* GAP-DESIGNER-DETAIL-B7-01 (decision — recorded): two editors store validity
+          in two places (outputs.validity vs phase3.renewalPolicy). Until the backend
+          unifies them, show the Renewal Policy builder as READ-ONLY derived from the
+          issuance design above, with an honest note. We keep it visible so the checker
+          on review sees both; removing it would lose the explicit renewable toggle. */}
       <div style={{ marginTop: 24 }}>
+        <p
+          role="note"
+          style={{
+            margin: "0 0 8px",
+            padding: "6px 10px",
+            fontSize: 12,
+            color: "var(--warn, #a15c00)",
+            background: "var(--warnbg, #fffbe6)",
+            border: "1px solid var(--line)",
+            borderRadius: "var(--r-sm)",
+          }}
+        >
+          Validity and renewal settings above (in the Output tab) are the source of truth.
+          The summary below reflects those values. Changes here are saved separately until the
+          backend unifies the two storage paths — please set validity above only.
+        </p>
         <RenewalPolicyBuilder
           value={phase3.config.renewalPolicy ?? null}
           onChange={(renewalPolicy) => void phase3.patch({ renewalPolicy })}

@@ -70,6 +70,9 @@ export const VALIDATION_PRESETS: { id: ValidationPresetId; label: string }[] = [
   { id: "pin", label: "PIN code" },
 ];
 
+// GAP-DESIGNER-DETAIL-B2-03: replaced OS-dependent emoji glyphs (📅, 📎, 📍, 🗺,
+// 👤, 📱) with neutral Unicode text symbols that render consistently across
+// platforms and match the design system better. All aria-hidden, so no a11y impact.
 export const FIELD_PALETTE_GROUPS: {
   label: string;
   items: { type: DesignerFieldType; label: string; icon: string }[];
@@ -79,7 +82,7 @@ export const FIELD_PALETTE_GROUPS: {
     items: [
       { type: "text", label: "Text", icon: "Aa" },
       { type: "number", label: "Number", icon: "#" },
-      { type: "date", label: "Date", icon: "📅" },
+      { type: "date", label: "Date", icon: "⊡" },
       { type: "boolean", label: "Yes / No", icon: "☑" },
     ],
   },
@@ -92,20 +95,20 @@ export const FIELD_PALETTE_GROUPS: {
   },
   {
     label: "Files",
-    items: [{ type: "file", label: "File upload", icon: "📎" }],
+    items: [{ type: "file", label: "File upload", icon: "⊕" }],
   },
   {
     label: "Location",
     items: [
-      { type: "address", label: "Address", icon: "📍" },
-      { type: "ward", label: "Ward / Zone", icon: "🗺" },
+      { type: "address", label: "Address", icon: "⌂" },
+      { type: "ward", label: "Ward / Zone", icon: "◫" },
     ],
   },
   {
     label: "Applicant profile",
     items: [
-      { type: "profile_name", label: "Applicant name", icon: "👤" },
-      { type: "profile_mobile", label: "Mobile", icon: "📱" },
+      { type: "profile_name", label: "Applicant name", icon: "⊜" },
+      { type: "profile_mobile", label: "Mobile", icon: "☏" },
       { type: "profile_email", label: "Email", icon: "✉" },
     ],
   },

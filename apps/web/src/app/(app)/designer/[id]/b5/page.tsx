@@ -15,6 +15,7 @@ import { loadFormDesign } from "../../_data/formBuilderApi";
 import { adjacentBlocks } from "../../_data/designerNavigation";
 import { emptyFeeDesign, loadFeeDesign } from "../../_data/feeBuilderApi";
 import { hoaBlockMessage, isHoaBlocking } from "../../_data/feeBuilderModel";
+import { normalizeBindingsFromApi } from "../../_data/engineBindingApi";
 import type { FeeDesignState } from "@/app/_components/ds/designer/feeTypes";
 
 // PERF-009: FeeBuilder is 706 LOC. This page only ever renders it after its
@@ -46,6 +47,10 @@ export default function DesignerB5Page() {
     serviceKey: "",
     serviceId: "",
   });
+  // GAP-DESIGNER-DETAIL-B5-01 / ENGINES-01: derive from engine bindings on the
+  // definition instead of hard-coding false. When true the Engine fee-model card
+  // becomes selectable and links to /designer/[id]/engines.
+  const [engineAvailable, setEngineAvailable] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,6 +67,9 @@ export default function DesignerB5Page() {
           serviceKey: def.serviceKey,
           serviceId: sid,
         });
+        // GAP-DESIGNER-DETAIL-B5-01: check if any engine bindings exist.
+        const bindings = normalizeBindingsFromApi((def as unknown as Record<string, unknown>).engineBindings);
+        setEngineAvailable(bindings.length > 0);
 
         try {
           const form = await loadFormDesign(def.serviceKey, def.name);
@@ -176,11 +184,18 @@ export default function DesignerB5Page() {
         serviceName={meta.name}
         initial={initialDesign}
         formFields={formFields}
-        engineAvailable={false}
+        engineAvailable={engineAvailable}
         onSaveState={setSaveState}
         onDesignPersisted={onDesignPersisted}
         onDesignChange={setLiveDesign}
       />
+      {/* GAP-DESIGNER-DETAIL-ENGINES-01: make the assessment-engine binding page
+          reachable from B5 instead of only via a typed URL. */}
+      <div style={{ marginTop: 12, fontSize: 13 }}>
+        <Link href={`/designer/${params.id}/engines`} className="btn ghost">
+          {engineAvailable ? "Manage assessment engine binding" : "Bind an assessment engine"}
+        </Link>
+      </div>
       <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         <Link href={`/designer/${params.id}/${prev}`} className="btn ghost">← Previous block</Link>
         {hoaBlocked ? (

@@ -46,7 +46,7 @@ export function RenewalPolicyBuilder({
       <h3 style={h3}>Validity &amp; renewal</h3>
 
       <label style={field}>
-        <span style={labelText}>How long the output stays valid</span>
+        <span style={labelText}>How long the issued document stays valid</span>
         <select
           value={v.validityMode}
           onChange={(e) => {
@@ -126,7 +126,7 @@ export function RenewalPolicyBuilder({
         </>
       ) : (
         <p style={{ ...hint, marginTop: 12 }}>
-          Nothing to renew — this output has no expiry date.
+          Nothing to renew — this document has no expiry date.
         </p>
       )}
 

@@ -42,7 +42,7 @@ export const NOTIFICATION_EVENTS: { id: NotificationEvent; label: string; hint: 
 ];
 
 export const NOTIFICATION_CHANNELS: { id: NotificationChannel; label: string; hint: string }[] = [
-  { id: "sms", label: "SMS", hint: "Short text; keep under 160 characters when possible." },
+  { id: "sms", label: "SMS", hint: "Short text; GSM-7 messages use 160-char segments, Unicode (Hindi/Odia) uses 70-char segments." },
   { id: "email", label: "Email", hint: "Subject + longer body." },
   { id: "whatsapp", label: "WhatsApp", hint: "Conversational bubble; template-friendly wording." },
   { id: "in_app", label: "In-app", hint: "Shown on the applicant tracking screen." },
@@ -254,22 +254,58 @@ export function emptyNotificationsDesign(pattern: string): NotificationsDesignSt
   return { matrix: seedMatrixForPattern(pattern) };
 }
 
+/**
+ * GSM-7 default alphabet (plus the common extension chars). A message using
+ * ONLY these characters is sent as GSM-7 (160 chars/segment, 153 when
+ * concatenated). Any character outside this set forces the whole message to
+ * UCS-2 (70 chars/segment, 67 when concatenated) — this is how Hindi (Devanagari)
+ * and Odia SMS are actually billed.
+ */
+const GSM7_CHARS = new Set(
+  (
+    "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?" +
+    "¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà" +
+    // GSM-7 extension characters (each costs 2 septets, but we treat as in-alphabet)
+    "^{}\\[~]|€"
+  ).split(""),
+);
+
+export function isGsm7(text: string): boolean {
+  for (const ch of text) {
+    if (!GSM7_CHARS.has(ch)) return false;
+  }
+  return true;
+}
+
+/**
+ * GAP-DESIGNER-DETAIL-B8-04: SMS segment count that respects encoding. A
+ * Devanagari/Odia body is UCS-2 and segments at 70 (67 when multi-part), not
+ * 160/153, so the previous character-length-only count under-reported segments
+ * (and thus cost) for every non-Latin template.
+ */
 export function smsSegmentCount(text: string): number {
-  const len = text.length;
+  const len = [...text].length;
   if (len === 0) return 0;
-  return len <= 160 ? 1 : Math.ceil(len / 153);
+  if (isGsm7(text)) {
+    return len <= 160 ? 1 : Math.ceil(len / 153);
+  }
+  return len <= 70 ? 1 : Math.ceil(len / 67);
 }
 
 export function smsCharCount(text: string): number {
-  return text.length;
+  return [...text].length;
 }
 
 export function smsStats(text: string): { chars: number; segments: number; warn: string | null } {
   const chars = smsCharCount(text);
   const segments = smsSegmentCount(text);
+  const unicode = !isGsm7(text);
+  const singleLimit = unicode ? 70 : 160;
   let warn: string | null = null;
-  if (chars > 160) {
-    warn = `Longer than one SMS segment (${chars} characters → ${segments} segments).`;
+  if (chars > singleLimit) {
+    warn = unicode
+      ? `Unicode (e.g. Hindi/Odia) SMS: longer than one segment (${chars} characters → ${segments} segments at 70/segment).`
+      : `Longer than one SMS segment (${chars} characters → ${segments} segments).`;
   }
   return { chars, segments, warn };
 }

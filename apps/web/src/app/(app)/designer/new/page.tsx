@@ -2,10 +2,26 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { z } from "zod";
 import { Button, PageHeader, Card, HelpTip } from "@/app/_components/ds";
 import { createServiceDefinition, slugifyServiceKey, waitForServiceDefinition } from "../_data/designerApi";
 import { SERVICE_PATTERN_OPTIONS } from "../_data/designerConstants";
+
+/** GAP-DESIGNER-NEW-04 — zod at the form boundary. */
+const newServiceSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(3, "Service name must be at least 3 characters")
+    .max(120, "Service name must be at most 120 characters"),
+  office: z
+    .string()
+    .trim()
+    .max(200, "Owning office must be at most 200 characters")
+    .optional()
+    .or(z.literal("")),
+});
 
 export default function PatternPickerPage() {
   const router = useRouter();
@@ -14,11 +30,34 @@ export default function PatternPickerPage() {
   const [office, setOffice] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [nameTouched, setNameTouched] = useState(false);
 
   const pattern = SERVICE_PATTERN_OPTIONS.find((p) => p.id === selected);
 
+  // GAP-DESIGNER-NEW-03 — show the key base before Create so users know it.
+  const keyPreview = useMemo(() => {
+    const trimmed = name.trim();
+    if (trimmed.length < 3) return null;
+    return trimmed
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 48);
+  }, [name]);
+
+  const validateName = (value: string) => {
+    const result = newServiceSchema.shape.name.safeParse(value);
+    const msg = result.success ? null : result.error.issues[0]?.message ?? null;
+    setNameError(msg);
+    return result.success;
+  };
+
   const handleCreate = async () => {
-    if (!selected || !name.trim() || busy) return;
+    if (!selected || busy) return;
+    const valid = validateName(name);
+    setNameTouched(true);
+    if (!valid) return;
     setBusy(true);
     setError(null);
     try {
@@ -46,6 +85,8 @@ export default function PatternPickerPage() {
       />
 
       <div
+        role="radiogroup"
+        aria-label="Service pattern"
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
@@ -59,6 +100,8 @@ export default function PatternPickerPage() {
             <button
               key={p.id}
               type="button"
+              role="radio"
+              aria-checked={active}
               onClick={() => setSelected(p.id)}
               className="card"
               style={{
@@ -77,6 +120,20 @@ export default function PatternPickerPage() {
               <p style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>
                 e.g. {p.examples.join(" · ")}
               </p>
+              {active ? (
+                <span
+                  aria-hidden
+                  style={{
+                    display: "inline-block",
+                    marginTop: 8,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: "var(--primary)",
+                  }}
+                >
+                  ✓ Selected
+                </span>
+              ) : null}
             </button>
           );
         })}
@@ -85,33 +142,57 @@ export default function PatternPickerPage() {
       {pattern ? (
         <Card title="Service details" padding>
           <div style={{ display: "grid", gap: 16, maxWidth: 480 }}>
-            <label style={{ display: "grid", gap: 6 }}>
-              <span>Service name</span>
+            <div style={{ display: "grid", gap: 6 }}>
+              <label htmlFor="new-svc-name">Service name</label>
               <input
+                id="new-svc-name"
                 className="input"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  if (nameTouched) validateName(e.target.value);
+                }}
+                onBlur={() => {
+                  setNameTouched(true);
+                  validateName(name);
+                }}
                 placeholder="e.g. Trade License Renewal"
+                aria-invalid={nameTouched && nameError ? true : undefined}
+                aria-describedby={nameTouched && nameError ? "new-svc-name-err" : undefined}
               />
-            </label>
+              {nameTouched && nameError ? (
+                <p id="new-svc-name-err" role="alert" style={{ margin: 0, color: "var(--bad)", fontSize: 13 }}>
+                  {nameError}
+                </p>
+              ) : null}
+            </div>
+            {keyPreview ? (
+              <p style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>
+                Service key: <code>{keyPreview}-…</code>
+              </p>
+            ) : null}
             <label style={{ display: "grid", gap: 6 }}>
               <span>Owning office</span>
               <input
                 className="input"
                 value={office}
                 onChange={(e) => setOffice(e.target.value)}
-                placeholder="Pre-filled from your office (optional)"
+                placeholder="Owning office (optional)"
               />
             </label>
             <div>
               <span style={{ fontSize: 13, color: "var(--ink2)" }}>Active blocks: </span>
               <span style={{ fontSize: 13 }}>{pattern.activeBlocks.join(" · ")}</span>
             </div>
+            <div>
+              <span style={{ fontSize: 13, color: "var(--ink2)" }}>Channels: </span>
+              <span style={{ fontSize: 13 }}>Portal (change later in B1)</span>
+            </div>
             {error ? (
               <p role="alert" style={{ margin: 0, color: "var(--bad)", fontSize: 13 }}>{error}</p>
             ) : null}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <Button disabled={!name.trim() || busy} onClick={() => { void handleCreate(); }}>
+              <Button disabled={busy} onClick={() => { void handleCreate(); }}>
                 {busy ? "Creating…" : "Create draft"}
               </Button>
               <Link href="/designer/library" className="btn ghost">or start from a pack</Link>

@@ -94,3 +94,54 @@ describe("artifact formatters", () => {
     expect(formatPaise(0)).not.toBe(formatPaise(null));
   });
 });
+
+import { blockErrorsFromSteps, STEP_TO_BLOCK } from "./sandboxTestModel";
+
+/**
+ * GAP-DESIGNER-DETAIL-TEST-03: failed steps mark their owning block on the rail.
+ */
+describe("blockErrorsFromSteps (GAP-DESIGNER-DETAIL-TEST-03)", () => {
+  it("maps a failed 'workflow' step to B4 with count 1", () => {
+    const errors = blockErrorsFromSteps([
+      { id: "form", label: "Form", status: "pass" },
+      { id: "workflow", label: "Approval chain lanes", status: "fail" },
+    ]);
+    expect(errors.b4).toBe(1);
+    expect(errors.b2).toBeUndefined();
+  });
+
+  it("groups demand and payment failures into b5", () => {
+    const errors = blockErrorsFromSteps([
+      { id: "demand", label: "Fee demand lines", status: "fail" },
+      { id: "payment", label: "Test payment", status: "fail" },
+    ]);
+    expect(errors.b5).toBe(2);
+  });
+
+  it("maps step ids to correct blocks", () => {
+    expect(STEP_TO_BLOCK.form).toBe("b2");
+    expect(STEP_TO_BLOCK.eligibility).toBe("b3");
+    expect(STEP_TO_BLOCK.certificate).toBe("b7");
+  });
+});
+
+import { isTestStale } from "./sandboxTestModel";
+
+/**
+ * GAP-DESIGNER-DETAIL-TEST-02: stale test detection — a passing test from
+ * before the last definition edit should not satisfy canSubmit.
+ */
+describe("isTestStale (GAP-DESIGNER-DETAIL-TEST-02)", () => {
+  it("returns true when def updated after test", () => {
+    expect(isTestStale("2026-10-01T10:00:00Z", "2026-10-01T11:00:00Z")).toBe(true);
+  });
+
+  it("returns false when test is after def update", () => {
+    expect(isTestStale("2026-10-01T12:00:00Z", "2026-10-01T11:00:00Z")).toBe(false);
+  });
+
+  it("returns false when dates are missing (does not block)", () => {
+    expect(isTestStale(null, "2026-10-01T11:00:00Z")).toBe(false);
+    expect(isTestStale("2026-10-01T10:00:00Z", null)).toBe(false);
+  });
+});

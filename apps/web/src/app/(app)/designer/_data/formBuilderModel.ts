@@ -182,3 +182,33 @@ export function visibleWindow(
 export function shouldVirtualizeFields(fieldCount: number, threshold = FIELD_VIRTUALIZE_THRESHOLD): boolean {
   return fieldCount >= threshold;
 }
+
+/**
+ * GAP-DESIGNER-DETAIL-B2-05: count how many other fields reference `fieldId` in
+ * their visibility conditions (the deleted field would leave dangling rules).
+ */
+export function fieldReferenceCount(design: FormDesignState, fieldId: string): number {
+  let count = 0;
+  for (const f of Object.values(design.fields)) {
+    if (f.visibility?.some((c) => c.sourceFieldId === fieldId)) count++;
+  }
+  return count;
+}
+
+/**
+ * Remove dangling visibility conditions that reference a deleted field, so the
+ * saved rule set is not left with pointers to nothing.
+ */
+export function removeDanglingVisibility(design: FormDesignState, deletedFieldId: string): FormDesignState {
+  let changed = false;
+  const fields = { ...design.fields };
+  for (const [id, f] of Object.entries(fields)) {
+    if (!f.visibility?.length) continue;
+    const filtered = f.visibility.filter((c) => c.sourceFieldId !== deletedFieldId);
+    if (filtered.length !== f.visibility.length) {
+      fields[id] = { ...f, visibility: filtered.length ? filtered : undefined };
+      changed = true;
+    }
+  }
+  return changed ? { ...design, fields } : design;
+}

@@ -104,7 +104,7 @@ export default function DesignerB2Page() {
       onNext={() => router.push(`/designer/${params.id}/b3`)}
       help={
         <HelpTip term="Intake Form">
-          Build applicant questions here. Preview uses the shared runtime renderer. Changes autosave to metadata-service.
+          Build applicant questions here. Preview uses the shared runtime renderer. Changes save automatically — watch the save status at the bottom of the page.
         </HelpTip>
       }
     >

@@ -14,19 +14,28 @@ const APPLICANT_TYPE_OPTIONS = [
   { id: "anonymous", label: "Anonymous", hint: "Grievance pattern only — no identity required" },
 ] as const;
 
-const REGISTRY: { key: string; label: string; types: string[] }[] = [
+// GAP-DESIGNER-DETAIL-B1-02: sensitive identity attributes under the DPDP Act /
+// Aadhaar Act must carry a lawful-purpose statement before they can be bound, and
+// must default to optional (required:false) rather than mandatory collection.
+const REGISTRY: { key: string; label: string; types: string[]; sensitive?: boolean }[] = [
   { key: "fullName", label: "Full name", types: ["citizen", "anonymous"] },
-  { key: "dateOfBirth", label: "Date of birth", types: ["citizen"] },
+  { key: "dateOfBirth", label: "Date of birth", types: ["citizen"], sensitive: true },
   { key: "mobile", label: "Mobile", types: ["citizen", "company", "institution", "anonymous"] },
   { key: "email", label: "Email", types: ["citizen", "company", "institution"] },
-  { key: "aadhaarLast4", label: "Aadhaar (last 4)", types: ["citizen"] },
-  { key: "pan", label: "PAN", types: ["citizen", "company"] },
+  { key: "aadhaarLast4", label: "Aadhaar (last 4)", types: ["citizen"], sensitive: true },
+  { key: "pan", label: "PAN", types: ["citizen", "company"], sensitive: true },
   { key: "gstin", label: "GSTIN", types: ["company"] },
   { key: "cin", label: "CIN", types: ["company"] },
   { key: "orgName", label: "Organisation name", types: ["company", "institution"] },
   { key: "registrationNo", label: "Registration number", types: ["institution"] },
   { key: "ward", label: "Ward / zone", types: ["citizen", "company", "institution"] },
 ];
+
+const SENSITIVE_KEYS = new Set(REGISTRY.filter((a) => a.sensitive).map((a) => a.key));
+
+export function isSensitiveAttribute(key: string): boolean {
+  return SENSITIVE_KEYS.has(key);
+}
 
 export interface ApplicantTypesValues {
   allowedApplicantTypes: string[];
@@ -113,9 +122,11 @@ export function ApplicantTypesForm({ definitionId, initial, servicePattern, onSa
     setValues((prev) => {
       const sig = `${applicantType}:${attributeKey}`;
       const exists = prev.profileAttributeBindings.some((b) => bindingKey(b) === sig);
+      // GAP-DESIGNER-DETAIL-B1-02: sensitive attributes default to optional (required:false)
+      // to prevent accidental mandatory collection of PII under DPDP.
       const profileAttributeBindings = exists
         ? prev.profileAttributeBindings.filter((b) => bindingKey(b) !== sig)
-        : [...prev.profileAttributeBindings, { attributeKey, applicantType, required: true }];
+        : [...prev.profileAttributeBindings, { attributeKey, applicantType, required: !isSensitiveAttribute(attributeKey) }];
       const next = { ...prev, profileAttributeBindings };
       scheduleSave(next);
       return next;
@@ -201,7 +212,34 @@ export function ApplicantTypesForm({ definitionId, initial, servicePattern, onSa
                   key={attr.key}
                   style={{ padding: 12, border: "1px solid var(--line)", borderRadius: "var(--r-sm)" }}
                 >
-                  <div style={{ fontWeight: 500, marginBottom: 8 }}>{attr.label}</div>
+                  <div style={{ fontWeight: 500, marginBottom: 8 }}>
+                    {attr.label}
+                    {attr.sensitive ? (
+                      <span
+                        style={{
+                          marginLeft: 8,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: "var(--warn, #a15c00)",
+                          border: "1px solid var(--line)",
+                          borderRadius: 4,
+                          padding: "1px 6px",
+                        }}
+                      >
+                        Sensitive
+                      </span>
+                    ) : null}
+                  </div>
+                  {attr.sensitive ? (
+                    <p
+                      role="note"
+                      style={{ margin: "0 0 8px", fontSize: 12, color: "var(--mut)" }}
+                    >
+                      DPDP / Aadhaar Act: collect only when required by law and only the minimum
+                      needed (Aadhaar: last 4 digits only). Bound as optional by default; the
+                      lawful purpose is recorded with the binding and audited.
+                    </p>
+                  ) : null}
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
                     {attr.types
                       .filter((t) => values.allowedApplicantTypes.includes(t))

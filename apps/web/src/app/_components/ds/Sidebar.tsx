@@ -95,7 +95,7 @@ const NAV: NavGroup[] = [
       { icon: Headphones, label: "Helpdesk", href: "/helpdesk", moduleKey: "helpdesk" },
       { icon: FolderOpen, label: "Service Catalogue", href: "/helpdesk/catalogue", moduleKey: "helpdesk" },
       { icon: Landmark, label: "Citizen Portal", href: "/citizen", moduleKey: "citizen" },
-      { icon: Puzzle, label: "Service Designer", href: "/designer", moduleKey: "citizen" },
+      { icon: Puzzle, label: "Service Designer", href: "/designer", moduleKey: "designer" },
       { icon: ShieldCheck, label: "Visitor Mgmt", href: "/visitor", moduleKey: "visitor" },
       { icon: CalendarCheck, label: "Meeting Mgmt", href: "/meeting", moduleKey: "meeting" },
       { icon: Gavel, label: "Court Mgmt", href: "/court", moduleKey: "court" },

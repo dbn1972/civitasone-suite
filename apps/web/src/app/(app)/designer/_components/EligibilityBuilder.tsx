@@ -140,6 +140,12 @@ export function EligibilityBuilder({
             <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--mut)" }}>
               Fill sample values to see whether each condition passes or fails. Failing rules are highlighted in the list above.
             </p>
+            {/* GAP-DESIGNER-DETAIL-B3-05 (decision: accepted behaviour): sample runs are
+                a local design aid, not persisted. State that honestly rather than implying
+                they are saved as evidence for the checker. */}
+            <p role="note" style={{ margin: "0 0 12px", fontSize: 12, color: "var(--mut)" }}>
+              These sample runs are local to this screen and are not recorded. No applicant data is stored.
+            </p>
 
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
               <Button
