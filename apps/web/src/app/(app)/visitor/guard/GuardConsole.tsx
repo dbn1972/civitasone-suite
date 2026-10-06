@@ -3,14 +3,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Card,
+  ConfirmDialog,
   EmptyState,
   ErrorState,
+  Masked,
   RefreshErrorState,
   StatCard,
   StatGrid,
   StatusPill,
 } from "@/app/_components/ds";
-import { fmtTime, hoursSince } from "../_data/format";
+import { fmtTime } from "../_data/format";
 import type { PassVerifyResult, RosterEntry, VisitRequest, VisitorLocation } from "../_data/types";
 import {
   fetchRoster,
@@ -24,8 +26,6 @@ type Props = {
   expectedToday: VisitRequest[];
   expectedTodaySource: "api" | "error";
 };
-
-const OVERSTAY_HOURS = 8;
 
 const fieldStyle: React.CSSProperties = {
   width: "100%",
@@ -51,9 +51,36 @@ const monoStyle: React.CSSProperties = {
   fontVariantNumeric: "tabular-nums",
 };
 
+/** GAP-VISITOR-GUARD-02: the gate terminal id must be a UUID. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function GuardConsole({ locations, expectedToday, expectedTodaySource }: Props) {
   const [locationId, setLocationId] = useState(locations[0]?.id ?? "");
+  // GAP-VISITOR-GUARD-02: the gate terminal id is a UUID. Persist it per
+  // browser so it survives reload, validate it on change, and never let a
+  // blank/invalid gate reach a check-in/out mutation.
   const [gateId, setGateId] = useState("");
+  // GAP-VISITOR-GUARD-02: a check-in/out failure must be shown, not swallowed.
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  // Restore the persisted gate id once on mount (localStorage is browser-only).
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("visitor.guard.gateId");
+      if (saved) setGateId(saved);
+    } catch { /* storage unavailable (private mode / SSR) — ignore */ }
+  }, []);
+
+  const gateTrimmed = gateId.trim();
+  const isValidGate = UUID_RE.test(gateTrimmed);
+
+  function onGateChange(next: string) {
+    setGateId(next);
+    try {
+      if (next.trim()) window.localStorage.setItem("visitor.guard.gateId", next.trim());
+      else window.localStorage.removeItem("visitor.guard.gateId");
+    } catch { /* ignore storage errors */ }
+  }
 
   // Verify panel
   const [qrToken, setQrToken] = useState("");
@@ -68,6 +95,8 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
   const [rosterState, setRosterState] = useState<"idle" | "loading" | "ok" | "error">("idle");
   const [rosterError, setRosterError] = useState<string | null>(null);
   const [busyPass, setBusyPass] = useState<string | null>(null);
+  // GAP-VISITOR-GUARD-06: confirm a check-out before mutating the roster.
+  const [confirmCheckOut, setConfirmCheckOut] = useState<RosterEntry | null>(null);
 
   const loadRoster = useCallback(async (isLive: () => boolean = () => true) => {
     if (!locationId) {
@@ -99,8 +128,16 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
   }, [loadRoster]);
 
   const overstays = useMemo(
-    () => roster.filter((r) => (hoursSince(r.checkInTime) ?? 0) >= OVERSTAY_HOURS).length,
+    () => roster.filter((r) => r.overstay).length,
     [roster],
+  );
+
+  // GAP-VISITOR-GUARD-05: scope "Expected today" to the selected location so a
+  // guard at one site does not see every site's approved visitors (a PII leak).
+  // Day boundary is already IST (page.tsx uses isToday from _data/format).
+  const expectedHere = useMemo(
+    () => expectedToday.filter((r) => !locationId || r.locationId === locationId),
+    [expectedToday, locationId],
   );
 
   async function onVerify(e: React.FormEvent) {
@@ -108,13 +145,17 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
     setVerifyError(null);
     setVerifyResult(null);
     setCheckedInPass(null);
-    if (!gateId.trim() || !qrToken.trim()) {
+    if (!gateTrimmed || !qrToken.trim()) {
       setVerifyError("Enter both the gate ID and the scanned pass token.");
+      return;
+    }
+    if (!isValidGate) {
+      setVerifyError("Gate terminal ID must be a valid UUID.");
       return;
     }
     setVerifying(true);
     try {
-      const result = await verifyPass({ gateId: gateId.trim(), qrToken: qrToken.trim() });
+      const result = await verifyPass({ gateId: gateTrimmed, qrToken: qrToken.trim() });
       setVerifyResult(result);
       if (result.valid) setVerifiedToday((n) => n + 1);
     } catch (err) {
@@ -126,10 +167,14 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
 
   async function onCheckIn() {
     if (!verifyResult?.valid || !verifyResult.passId) return;
+    if (!isValidGate) {
+      setVerifyError("Gate terminal ID must be a valid UUID.");
+      return;
+    }
     setBusyPass("checkin");
     setVerifyError(null);
     try {
-      await recordCheckIn(verifyResult.passId, gateId.trim());
+      await recordCheckIn(verifyResult.passId, gateTrimmed);
       setCheckedInPass(verifyResult.passId);
       await loadRoster();
     } catch (err) {
@@ -140,12 +185,17 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
   }
 
   async function onCheckOut(passId: string) {
+    if (!isValidGate) {
+      setActionError("Enter a valid gate terminal ID (UUID) before checking a visitor out.");
+      return;
+    }
     setBusyPass(passId);
+    setActionError(null);
     try {
-      await recordCheckOut(passId, gateId.trim() || "");
+      await recordCheckOut(passId, gateTrimmed);
       await loadRoster();
     } catch (err) {
-      setRosterError(err instanceof Error ? err.message : "Check-out failed.");
+      setActionError(err instanceof Error ? err.message : "Check-out failed.");
     } finally {
       setBusyPass(null);
     }
@@ -179,15 +229,21 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
               id="guard-gate"
               placeholder="Gate UUID for this terminal"
               value={gateId}
-              onChange={(e) => setGateId(e.target.value)}
-              style={{ ...fieldStyle, ...monoStyle }}
+              aria-invalid={gateTrimmed !== "" && !isValidGate ? true : undefined}
+              onChange={(e) => onGateChange(e.target.value)}
+              style={{ ...fieldStyle, ...monoStyle, borderColor: gateTrimmed !== "" && !isValidGate ? "var(--bad)" : "var(--line)" }}
             />
+            {gateTrimmed !== "" && !isValidGate && (
+              <p role="alert" style={{ fontSize: 11.5, color: "var(--bad)", marginTop: 4 }}>
+                Enter a valid gate UUID.
+              </p>
+            )}
           </div>
         </div>
       </Card>
 
       <StatGrid>
-        <StatCard icon="📅" iconBg="#ecfeff" label="Expected Today" value={expectedToday.length.toLocaleString("en-IN")} />
+        <StatCard icon="📅" iconBg="#ecfeff" label="Expected Today" value={expectedHere.length.toLocaleString("en-IN")} />
         <StatCard icon="🟢" iconBg="#ecfdf5" label="Inside Now" value={rosterState === "ok" ? roster.length.toLocaleString("en-IN") : "—"} />
         <StatCard icon="⏰" iconBg="#fef2f2" label="Overstays" value={rosterState === "ok" ? overstays.toLocaleString("en-IN") : "—"} />
         <StatCard icon="✔️" iconBg="#eef2ff" label="Verified (session)" value={verifiedToday.toLocaleString("en-IN")} />
@@ -255,7 +311,7 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
       </Card>
 
       {/* Expected today */}
-      <Card title={`Expected today (${expectedToday.length})`} padding>
+      <Card title={`Expected today (${expectedHere.length})`} padding>
         {expectedTodaySource === "error" ? (
           <RefreshErrorState
             error={{
@@ -264,10 +320,10 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
               actions: ["retry", "help"],
             }}
           />
-        ) : expectedToday.length === 0 ? (
+        ) : expectedHere.length === 0 ? (
           <EmptyState icon="📅" title="No approved visitors expected today" message="Approved visit requests scheduled for today will appear here." />
         ) : (
-          <div style={{ overflowX: "auto" }}>
+          <div className="tbl-wrap">
             <table className="tbl" style={{ width: "100%" }}>
               <thead>
                 <tr>
@@ -279,11 +335,16 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
                 </tr>
               </thead>
               <tbody>
-                {expectedToday.map((v) => (
+                {expectedHere.map((v) => (
                   <tr key={v.id}>
                     <td>
                       <div style={{ fontWeight: 600 }}>{v.visitorName}</div>
-                      <div style={{ ...monoStyle, fontSize: 12, color: "var(--ink2)" }}>{v.visitorPhone}</div>
+                      {/* GAP-VISITOR-GUARD-03 (DPDP): visitor phone is masked
+                          for every guard viewer; no reveal here (no audited
+                          visitor-service reveal endpoint — HUMAN REVIEW). */}
+                      <div style={{ fontSize: 12, color: "var(--ink2)" }}>
+                        <Masked kind="phone" value={v.visitorPhone} ariaLabel="Visitor phone (masked)" />
+                      </div>
                     </td>
                     <td style={{ maxWidth: 260 }}>{v.purpose ?? "—"}</td>
                     <td><StatusPill status={v.visitorCategory === "vip" ? "pending" : "info"} label={v.visitorCategory} /></td>
@@ -298,6 +359,9 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
       </Card>
 
       {/* Inside now */}
+      {actionError && (
+        <div className="alert" role="alert" style={{ borderColor: "#fca5a5", color: "var(--bad)" }}>⚠ {actionError}</div>
+      )}
       <Card
         title={`Inside now (${rosterState === "ok" ? roster.length : "—"})`}
         link={<button type="button" className="btn ghost sm" onClick={() => void loadRoster()}>Refresh</button>}
@@ -310,7 +374,7 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
               what: "Live roster unavailable.",
               next:
                 rosterError ??
-                "The premises roster endpoint is restricted (emergency IP allowlist). Ask an administrator to authorise this console's network, then retry.",
+                "We couldn't load who is currently inside. Check your connection and try again.",
               actions: ["retry", "help"],
             }}
             onRetry={() => void loadRoster()}
@@ -320,42 +384,52 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
           <EmptyState icon="🟢" title="No one is currently inside" message="Visitors checked in at the gate will appear here until they check out." />
         )}
         {rosterState === "ok" && roster.length > 0 && (
-          <div style={{ overflowX: "auto" }}>
+          <div className="tbl-wrap">
             <table className="tbl" style={{ width: "100%" }}>
               <thead>
                 <tr>
                   <th style={labelStyle}>Visitor</th>
-                  <th style={labelStyle}>Host</th>
                   <th style={labelStyle}>Checked in</th>
-                  <th style={labelStyle}>Gate</th>
+                  <th style={labelStyle}>Valid until</th>
                   <th style={labelStyle}>Status</th>
                   <th style={labelStyle} />
                 </tr>
               </thead>
               <tbody>
-                {roster.map((r) => {
-                  const hrs = hoursSince(r.checkInTime) ?? 0;
-                  const over = hrs >= OVERSTAY_HOURS;
-                  return (
-                    <tr key={r.passId}>
-                      <td style={{ fontWeight: 600 }}>{r.visitorName}</td>
-                      <td>{r.hostName || "—"}</td>
-                      <td style={monoStyle}>{fmtTime(r.checkInTime)}</td>
-                      <td>{r.lastKnownGate || "—"}</td>
-                      <td>{over ? <StatusPill status="overdue" label={`Overstay · ${Math.floor(hrs)}h`} /> : <StatusPill status="active" label="On premises" />}</td>
-                      <td style={{ textAlign: "right" }}>
-                        <button type="button" className="btn ghost sm" disabled={busyPass === r.passId} onClick={() => void onCheckOut(r.passId)}>
-                          {busyPass === r.passId ? "…" : "Check out"}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
+                {roster.map((r) => (
+                  <tr key={r.passId}>
+                    <td style={{ fontWeight: 600 }}>{r.visitorName}</td>
+                    <td style={monoStyle}>{fmtTime(r.checkInTime)}</td>
+                    <td style={monoStyle}>{fmtTime(r.validUntil)}</td>
+                    <td>{r.overstay ? <StatusPill status="overdue" label="Overstay" /> : <StatusPill status="active" label="On premises" />}</td>
+                    <td style={{ textAlign: "right" }}>
+                      <button type="button" className="btn ghost sm" disabled={busyPass === r.passId || !isValidGate} onClick={() => { setActionError(null); setConfirmCheckOut(r); }}>
+                        {busyPass === r.passId ? "…" : "Check out"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         )}
       </Card>
+
+      {/* GAP-VISITOR-GUARD-06: confirm before a check-out mutates the roster. */}
+      <ConfirmDialog
+        open={confirmCheckOut !== null}
+        title="Check this visitor out?"
+        description={confirmCheckOut ? `Record ${confirmCheckOut.visitorName}'s exit at this gate. This updates the live occupancy roster.` : ""}
+        confirmLabel="Check out"
+        busy={busyPass !== null}
+        onConfirm={() => {
+          const r = confirmCheckOut;
+          if (!r) return;
+          setConfirmCheckOut(null);
+          void onCheckOut(r.passId);
+        }}
+        onCancel={() => { if (busyPass === null) setConfirmCheckOut(null); }}
+      />
     </>
   );
 }

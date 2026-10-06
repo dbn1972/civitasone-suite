@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader } from "@/app/_components/ds";
 import { getConfigNamespace } from "../_data/loaders";
 import { APPROVAL_NS, POLICY_NS } from "../_data/policy";
@@ -13,7 +12,6 @@ export default async function AdminConfigPage() {
   ]);
 
   const entries = [...policy.data, ...approval.data];
-  const source = policy.source === "error" || approval.source === "error" ? "error" : "api";
 
   return (
     <>
@@ -23,8 +21,11 @@ export default async function AdminConfigPage() {
         back="/visitor"
         backLabel="Visitor"
       />
-      {source === "error" && <DataSourceBadge source={source} />}
-      <AdminConfig initialEntries={entries} initialSource={source} />
+      <AdminConfig
+        initialEntries={entries}
+        policySource={policy.source}
+        approvalSource={approval.source}
+      />
     </>
   );
 }

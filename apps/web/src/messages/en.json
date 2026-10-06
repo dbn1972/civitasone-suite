@@ -1,4 +1,22 @@
 {
+  "visitor": {
+    "home": {
+      "title": "Visitor Management",
+      "subtitle": "Gate operations, host approvals and premises policy — one place.",
+      "statAwaiting": "Awaiting Approval",
+      "statExpectedToday": "Expected Today",
+      "statUpcoming": "Approved — upcoming",
+      "countsError": "We could not load visitor counts.",
+      "countsErrorNext": "Some figures below show “—”. Try again.",
+      "guardTitle": "Guard Console",
+      "guardDesc": "Verify passes at the gate, see who is expected today, and manage the live inside-now roster with overstay flags.",
+      "hostTitle": "Host Portal",
+      "hostDesc": "Approve or reject visit requests raised for you, and review your expected visitors for the day.",
+      "adminTitle": "Admin Configuration",
+      "adminDesc": "Tune visitor policy — retention, approvals, overstay and pass rules — or apply a vertical preset.",
+      "open": "Open"
+    }
+  },
   "action": {
     "save": "Save",
     "cancel": "Cancel",
