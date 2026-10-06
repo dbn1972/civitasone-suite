@@ -822,6 +822,43 @@ export function formatPercent(pct: number | null | undefined, decimals = 1): str
   return `${pct.toFixed(decimals)}%`;
 }
 
+/**
+ * GAP-HELPDESK-CATALOGUE-DETAIL-04 / CATALOGUE-05: format a whole-minute SLA/OLA
+ * target as plain, requester-facing turnaround text rather than raw "4320 min"
+ * ITIL jargon. Picks the largest sensible unit and keeps at most two parts.
+ *
+ *   formatMinutesDuration(4320) -> "3 days"
+ *   formatDuration(90)   -> "1 h 30 min"
+ *   formatDuration(45)   -> "45 min"
+ *   formatDuration(0)    -> "0 min"
+ *   formatDuration(null) -> "—"
+ */
+export function formatMinutesDuration(minutes: number | string | null | undefined): string {
+  if (minutes === null || minutes === undefined || minutes === "") return "—";
+  const n = typeof minutes === "number" ? minutes : Number(minutes);
+  if (!Number.isFinite(n) || n < 0) return "—";
+  const total = Math.round(n);
+  if (total === 0) return "0 min";
+
+  const MIN_PER_HOUR = 60;
+  const MIN_PER_DAY = 60 * 24;
+
+  const days = Math.floor(total / MIN_PER_DAY);
+  const hours = Math.floor((total % MIN_PER_DAY) / MIN_PER_HOUR);
+  const mins = total % MIN_PER_HOUR;
+
+  if (days > 0) {
+    // Whole days read cleanest as "N days"; show trailing hours only when present.
+    if (hours === 0 && mins === 0) return `${days} day${days === 1 ? "" : "s"}`;
+    const dayPart = `${days} day${days === 1 ? "" : "s"}`;
+    return hours > 0 ? `${dayPart} ${hours} h` : `${dayPart} ${mins} min`;
+  }
+  if (hours > 0) {
+    return mins > 0 ? `${hours} h ${mins} min` : `${hours} h`;
+  }
+  return `${mins} min`;
+}
+
 const PERIOD_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /**
@@ -995,4 +1032,26 @@ export function countLast24h(
     if (!Number.isNaN(t) && t >= cutoff && t <= now) count += 1;
   }
   return count;
+}
+
+/**
+ * GAP-HELPDESK-REPORTS-02: format an average-resolution duration given in
+ * HOURS for display, consistently across the helpdesk reports page and the
+ * helpdesk home tile (which previously disagreed: "31.2 hrs" vs "1.3d", and
+ * "0.0 hrs" vs "—" for no data).
+ *
+ * UX-006: 0 / null / undefined / non-finite is MISSING data (no resolution
+ * has happened yet), not a real zero -- it renders "—", never "0.0h", which
+ * would read as "everything resolves instantly". Under 24h shows hours to one
+ * decimal ("5.0h"); 24h or more shows days to one decimal ("1.3d").
+ *
+ *   formatDurationHours(0)     -> "—"
+ *   formatDurationHours(5)     -> "5.0h"
+ *   formatDurationHours(31.2)  -> "1.3d"
+ *   formatDurationHours(null)  -> "—"
+ */
+export function formatDurationHours(hours: number | null | undefined): string {
+  if (hours === null || hours === undefined || !Number.isFinite(hours) || hours <= 0) return "—";
+  if (hours < 24) return `${hours.toFixed(1)}h`;
+  return `${(hours / 24).toFixed(1)}d`;
 }

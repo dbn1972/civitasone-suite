@@ -334,6 +334,27 @@ const STATUS_MAP: Record<string, PillVariant> = {
   locked: "bad",
   deactivated: "mut",
 
+  // --- GAP-HELPDESK additive: SLA and service-request statuses used by the
+  // helpdesk catalogue/my-requests/breach pages. Previously fell through to
+  // the neutral "info" pill, making the SLA column and status column colours
+  // meaningless. Keys are written in normalizeStatusKey()'s canonical
+  // space-separated lowercase form.
+  "within sla": "good",
+  "due soon": "warn",
+  "at risk": "warn",
+  // "pending approval" already mapped above (disciplinary section) as "warn"
+  "pending fulfilment": "warn",
+  "in fulfilment": "info",
+  fulfilled: "good",
+  // "cancelled" already exists above (bad)
+
+  // Priority words (catalogue list/detail, internal tickets) — Low/Medium/High
+  // were missing so the Priority column rendered neutral info pills for all of them.
+  low: "info",
+  medium: "warn",
+  high: "warn",
+  critical: "bad",
+
   // CRM lead/contact lifecycle (crm-service lead status enum; see
   // lib/crm/leadQualification.ts LEAD_STATUSES). GAP-CRM-CONTACTS-06: the
   // contacts list printed the raw enum word with no tone, so "qualified",

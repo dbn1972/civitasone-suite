@@ -1,66 +1,52 @@
-import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { PageHeader, StatusPill, EmptyState } from "../../../../_components/ds";
-import { fetchJson } from "../../../../_data/apiClient";
+import { PageHeader, StatusPill, RefreshErrorState } from "../../../../_components/ds";
+import { getInternalHelpdeskTicketById } from "../../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 import { SlaBadge } from "../../SlaBadge";
-
-type InternalTicket = {
-  id: string;
-  subject: string;
-  priority: string;
-  status: string;
-  dueDate?: string;
-  slaStatus?: string;
-  assignee?: string;
-};
+import { getSessionRoles, hasAnyRole, HELPDESK_ROLES } from "@/lib/auth/roleGuard";
+import { InternalTicketActions } from "./InternalTicketActions";
 
 export default async function Page({ params }: { params: { id: string } }) {
-  const { data: ticket, source } = await fetchJson<unknown, InternalTicket | null>(
-    `/api/v1/helpdesk/tickets/${params.id}`,
-    null,
-    {
-      revalidateSeconds: 30,
-      telemetryKey: "helpdesk.internal.detail",
-      mapResponse: (payload) => {
-        const raw =
-          payload && typeof payload === "object" && "data" in payload
-            ? (payload as { data: unknown }).data
-            : payload;
-        if (!raw || typeof raw !== "object") return null;
-        const t = raw as Record<string, unknown>;
-        if (typeof t.id !== "string") return null;
-        return {
-          id: t.id,
-          subject: typeof t.subject === "string" ? t.subject : "",
-          priority: typeof t.priority === "string" ? t.priority : "normal",
-          status: typeof t.status === "string" ? t.status : "open",
-          dueDate: typeof t.dueDate === "string" ? t.dueDate : undefined,
-          slaStatus: typeof t.slaStatus === "string" ? t.slaStatus : undefined,
-          assignee: typeof t.assignee === "string" ? t.assignee : undefined,
-        } satisfies InternalTicket;
-      },
-    },
-  );
+  const { data: ticket, source, status } = await getInternalHelpdeskTicketById(params.id);
 
+  // GAP-HELPDESK-INTERNAL-DETAIL-03: distinguish fetch failure from a real 404.
   if (!ticket) {
+    if (source === "error" && status !== 404) {
+      return (
+        <>
+          <PageHeader title="Internal Ticket" back="/helpdesk/internal" backLabel="Internal" />
+          <RefreshErrorState error={toHumanError("load", { area: "internal ticket" })} backHref="/helpdesk/internal" />
+        </>
+      );
+    }
     return (
       <>
         <PageHeader title="Internal Ticket" back="/helpdesk/internal" backLabel="Internal" />
-        {source === "error" && <DataSourceBadge source={source} />}
-        <EmptyState icon="🎫" title="Ticket not found" message="This internal ticket does not exist." />
+        <div className="card pad">
+          <p style={{ color: "var(--mut)" }}>This internal ticket does not exist or has been removed.</p>
+        </div>
       </>
     );
   }
+
+  // GAP-HELPDESK-INTERNAL-DETAIL-05: show a real ticket number or a clean subtitle
+  // instead of a truncated UUID
+  const displayRef = ticket.ticketNo ?? `INT-${ticket.id.slice(0, 8).toUpperCase()}`;
+  const subtitle = ticket.createdAt
+    ? `${displayRef} · Raised ${formatIndianDate(ticket.createdAt)}`
+    : displayRef;
+
+  // GAP-HELPDESK-INTERNAL-DETAIL-02: mutation controls only for helpdesk roles
+  const canAct = hasAnyRole(getSessionRoles(), HELPDESK_ROLES);
 
   return (
     <>
       <PageHeader
         title={ticket.subject}
-        subtitle={`Internal ticket ${ticket.id.slice(0, 8).toUpperCase()}`}
+        subtitle={subtitle}
         back="/helpdesk/internal"
         backLabel="Internal"
       />
-      {source === "error" && <DataSourceBadge source={source} />}
       <div className="card">
         <div className="pad fields">
           <div className="fld"><div className="l">Priority</div><div className="v"><StatusPill status={ticket.priority.toLowerCase()} label={ticket.priority} /></div></div>
@@ -68,8 +54,22 @@ export default async function Page({ params }: { params: { id: string } }) {
           <div className="fld"><div className="l">SLA</div><div className="v">{ticket.slaStatus ? <SlaBadge status={ticket.slaStatus} /> : "—"}</div></div>
           <div className="fld"><div className="l">Due</div><div className="v">{ticket.dueDate ? formatIndianDate(ticket.dueDate) : "—"}</div></div>
           <div className="fld"><div className="l">Assignee</div><div className="v">{ticket.assignee ?? "Unassigned"}</div></div>
+          {ticket.requester ? (
+            <div className="fld"><div className="l">Requester</div><div className="v">{ticket.requester}</div></div>
+          ) : null}
         </div>
       </div>
+
+      {/* GAP-HELPDESK-INTERNAL-DETAIL-01: render the description typed in the form */}
+      {ticket.description ? (
+        <div className="card pad" style={{ marginTop: 16, whiteSpace: "pre-wrap" }}>
+          <div className="card-h"><h3>Description</h3></div>
+          <p style={{ fontSize: "0.875rem", lineHeight: 1.6 }}>{ticket.description}</p>
+        </div>
+      ) : null}
+
+      {/* GAP-HELPDESK-INTERNAL-DETAIL-02: work the ticket (helpdesk roles only) */}
+      {canAct ? <InternalTicketActions ticketId={ticket.id} currentStatus={ticket.status} /> : null}
     </>
   );
 }

@@ -516,7 +516,9 @@ function mapSlaRules(payload: unknown): SLAQueueSummary[] | null {
   return mapped.length > 0 ? mapped : null;
 }
 
-function mapTickets(payload: unknown): HelpdeskTicketSummary[] | null {
+// Exported for unit tests. GAP-HELPDESK-INTERNAL-04: verifies unknown statuses
+// are kept rather than dropped.
+export function mapTickets(payload: unknown): HelpdeskTicketSummary[] | null {
   const rows = getArrayPayload(payload);
   if (!rows) return null;
 
@@ -525,11 +527,14 @@ function mapTickets(payload: unknown): HelpdeskTicketSummary[] | null {
     if (!isRecord(row)) continue;
     const id = toText(row.id) ?? toText(row.ticketNo);
     const subject = toText(row.subject) ?? toText(row.title);
-    const priority = row.priority;
-    const status = row.status;
     if (!id || !subject) continue;
-    if (priority !== "Low" && priority !== "Medium" && priority !== "High" && priority !== "Critical") continue;
-    if (status !== "Open" && status !== "In Progress" && status !== "Resolved" && status !== "Closed") continue;
+    // GAP-HELPDESK-INTERNAL-04: do NOT drop a row whose status/priority is
+    // outside the known enum (e.g. "Pending", "On Hold", "Closed"). Dropping
+    // them silently hid real tickets from the queue entirely. Keep the raw
+    // value so the table and tabs can surface it; the display layer humanises
+    // and colours unknown values conservatively.
+    const priority = (toText(row.priority) ?? "Medium") as HelpdeskTicketSummary["priority"];
+    const status = (toText(row.status) ?? "Open") as HelpdeskTicketSummary["status"];
     mapped.push({ id, subject, priority, status });
   }
   // A tenant with zero matching tickets is a legitimate empty state, not a
@@ -880,6 +885,60 @@ export async function getInternalHelpdeskTickets(): Promise<LoaderResult<Interna
     responseSchema: ticketsListSchema,
     mapResponse: mapTickets,
   });
+}
+
+/**
+ * GAP-HELPDESK-INTERNAL-DETAIL-01/04: a single internal ticket's detail. The id
+ * is encoded with encodeURIComponent so a crafted id segment cannot alter the
+ * request path (DETAIL-04). `description`/`createdAt`/`requester` are mapped
+ * when present so the detail page can show what was asked (DETAIL-01).
+ */
+export type InternalHelpdeskTicketDetail = {
+  id: string;
+  subject: string;
+  priority: string;
+  status: string;
+  description?: string;
+  dueDate?: string;
+  slaStatus?: string;
+  assignee?: string;
+  createdAt?: string;
+  requester?: string;
+  ticketNo?: string;
+};
+
+export async function getInternalHelpdeskTicketById(id: string): Promise<LoaderResult<InternalHelpdeskTicketDetail | null>> {
+  return fetchJson<unknown, InternalHelpdeskTicketDetail | null>(
+    `/api/v1/helpdesk/tickets/${encodeURIComponent(id)}`,
+    null,
+    {
+      revalidateSeconds: 30,
+      telemetryKey: "helpdesk.internal.detail",
+      mapResponse: (payload) => {
+        const raw =
+          payload && typeof payload === "object" && "data" in payload
+            ? (payload as { data: unknown }).data
+            : payload;
+        if (!raw || typeof raw !== "object") return null;
+        const t = raw as Record<string, unknown>;
+        if (typeof t.id !== "string") return null;
+        const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
+        return {
+          id: t.id,
+          subject: str(t.subject) ?? "",
+          priority: str(t.priority) ?? "normal",
+          status: str(t.status) ?? "open",
+          description: str(t.description),
+          dueDate: str(t.dueDate),
+          slaStatus: str(t.slaStatus),
+          assignee: str(t.assignee),
+          createdAt: str(t.createdAt),
+          requester: str(t.requester) ?? str(t.requestedBy),
+          ticketNo: str(t.ticketNo),
+        } satisfies InternalHelpdeskTicketDetail;
+      },
+    },
+  );
 }
 
 export async function getInstallerStages(): Promise<LoaderResult<InstallerStageSummary[]>> {
@@ -3975,12 +4034,20 @@ export async function getHelpdeskTicketList(): Promise<LoaderResult<TicketDetail
 }
 
 export async function getHelpdeskTicketById(id: string): Promise<LoaderResult<TicketDetail | null>> {
-  return fetchJson<unknown, TicketDetail | null>(`/api/v1/citizen/tickets/${id}`, null, {
+  return fetchJson<unknown, TicketDetail | null>(`/api/v1/citizen/tickets/${encodeURIComponent(id)}`, null, {
     revalidateSeconds: 30,
     telemetryKey: "helpdesk.ticket.detail",
     mapResponse: mapHelpdeskTicketDetail,
   });
 }
+
+/**
+ * GAP-HELPDESK-SLAS-02: extends `LoaderResult` with per-bucket error sources
+ * so the page can show which SLA bucket failed instead of blanking everything.
+ */
+export type SlaTicketsResult = LoaderResult<TicketDetail[]> & {
+  bucketSources: Record<"breached" | "due_soon" | "within_sla", LoaderSource>;
+};
 
 /**
  * Powers /helpdesk/slas (SLA Queue). That page computes its own
@@ -4001,7 +4068,7 @@ export async function getHelpdeskTicketById(id: string): Promise<LoaderResult<Ti
  * source:"error" on every call) — mapTicketDetails already unwraps the
  * envelope itself via getArrayPayload().
  */
-export async function getBreachedSLATickets(): Promise<LoaderResult<TicketDetail[]>> {
+export async function getBreachedSLATickets(): Promise<SlaTicketsResult> {
   const fetchBucket = (slaStatus: "breached" | "due_soon" | "within_sla") =>
     fetchJson<unknown, TicketDetail[]>(`/api/v1/citizen/tickets?slaStatus=${slaStatus}`, [], {
       revalidateSeconds: 30,
@@ -4020,8 +4087,20 @@ export async function getBreachedSLATickets(): Promise<LoaderResult<TicketDetail
     source: breached.source === "error" || dueSoon.source === "error" || withinSla.source === "error"
       ? "error"
       : "api",
+    // GAP-HELPDESK-SLAS-02: expose each bucket's own source so the page can
+    // keep rendering the buckets that loaded and surface an error only for the
+    // bucket that actually failed, instead of blanking the whole page when any
+    // one of the three fetches errors.
+    bucketSources: {
+      breached: breached.source,
+      due_soon: dueSoon.source,
+      within_sla: withinSla.source,
+    },
   };
 }
+
+/** GAP-HELPDESK-SLAS-05: name matches behaviour (returns all SLA buckets, not only breached). */
+export const getSlaTickets = getBreachedSLATickets;
 
 const TICKET_ANALYTICS_EMPTY: TicketAnalytics = {
   totalTickets: 0,
@@ -4033,8 +4112,12 @@ const TICKET_ANALYTICS_EMPTY: TicketAnalytics = {
   byChannel: [],
 };
 
-export async function getTicketAnalytics(): Promise<LoaderResult<TicketAnalytics>> {
-  return fetchJson<unknown, TicketAnalytics>("/api/v1/citizen/tickets/analytics", TICKET_ANALYTICS_EMPTY, {
+export async function getTicketAnalytics(period?: "mtd" | "qtd" | "fy"): Promise<LoaderResult<TicketAnalytics>> {
+  // GAP-HELPDESK-REPORTS-01: pass the selected reporting period to the backend
+  // so the request carries the range. (The citizen-service analytics endpoint
+  // accepts `period` as an optional query param; see helpdesk/routes.ts.)
+  const query = period ? `?period=${period}` : "";
+  return fetchJson<unknown, TicketAnalytics>(`/api/v1/citizen/tickets/analytics${query}`, TICKET_ANALYTICS_EMPTY, {
     revalidateSeconds: 300,
     telemetryKey: "helpdesk.analytics",
     responseSchema: TicketAnalyticsSchema,
@@ -6821,6 +6904,67 @@ export async function getMyServiceRequests(): Promise<LoaderResult<ServiceReques
     telemetryKey: "helpdesk.catalogue.my_requests",
     mapResponse: (p) => ((p as { data?: ServiceRequestSummary[] } | null)?.data ?? []),
   });
+}
+
+/**
+ * GAP-HELPDESK-CATALOGUE-MY-REQUESTS-02: a single service request's detail,
+ * including (when the backend provides them) a rejection reason and stage
+ * history. Additive, optional fields so the loader stays tolerant of a
+ * service that has not yet rolled this shape out.
+ */
+export type ServiceRequestStageEvent = {
+  stage: string;
+  enteredAt: string;
+  note?: string | null;
+};
+export type ServiceRequestDetail = ServiceRequestSummary & {
+  rejectionReason?: string | null;
+  stageHistory?: ServiceRequestStageEvent[];
+};
+
+export async function getServiceRequest(id: string): Promise<LoaderResult<ServiceRequestDetail | null>> {
+  return fetchJson<unknown, ServiceRequestDetail | null>(
+    `/api/v1/helpdesk/catalogue/requests/${encodeURIComponent(id)}`,
+    null,
+    {
+      revalidateSeconds: 15,
+      telemetryKey: "helpdesk.catalogue.request.detail",
+      mapResponse: (payload) => {
+        const raw =
+          payload && typeof payload === "object" && "data" in payload
+            ? (payload as { data: unknown }).data
+            : payload;
+        if (!raw || typeof raw !== "object") return null;
+        const r = raw as Record<string, unknown>;
+        if (typeof r.id !== "string") return null;
+        const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
+        const history = Array.isArray(r.stageHistory)
+          ? r.stageHistory
+              .filter((e): e is Record<string, unknown> => !!e && typeof e === "object")
+              .map((e) => ({
+                stage: typeof e.stage === "string" ? e.stage : "",
+                enteredAt: typeof e.enteredAt === "string" ? e.enteredAt : "",
+                note: typeof e.note === "string" ? e.note : null,
+              }))
+              .filter((e) => e.stage !== "")
+          : undefined;
+        return {
+          id: r.id,
+          offeringId: str(r.offeringId) ?? "",
+          ticketId: str(r.ticketId),
+          requestedBy: str(r.requestedBy) ?? "",
+          status: str(r.status) ?? "unknown",
+          currentStage: str(r.currentStage),
+          slaStatus: str(r.slaStatus) ?? "within_sla",
+          resolutionDeadline: str(r.resolutionDeadline),
+          breachEscalatedAt: str(r.breachEscalatedAt),
+          createdAt: str(r.createdAt) ?? "",
+          rejectionReason: str(r.rejectionReason),
+          stageHistory: history,
+        } satisfies ServiceRequestDetail;
+      },
+    },
+  );
 }
 
 /** SLA-breach report over service requests. */

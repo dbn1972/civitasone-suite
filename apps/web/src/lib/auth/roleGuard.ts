@@ -393,3 +393,19 @@ export const NOTIFICATION_SEND_ROLES = ["notification_admin", "super_admin", "pl
 /** Mirrors notification-service NOTIFY_READ_ROLES: send roles + audit_officer. */
 export const NOTIFICATION_READ_ROLES = [...NOTIFICATION_SEND_ROLES, "audit_officer"];
 export const NOTIFICATION_TEMPLATE_ADMIN_ROLES = ["platform_admin", "super_admin", "tenant_admin"];
+
+/**
+ * GAP-HELPDESK-INTERNAL-NEW-01: roles permitted to create and manage internal
+ * helpdesk tickets. Mirrors helpdesk-service's HELPDESK_ROLES in
+ * tickets/routes.ts; the server remains the authority. A plain citizen role
+ * gets a 403 from that endpoint by design.
+ */
+export const HELPDESK_ROLES = ["helpdesk_user", "helpdesk_admin", "super_admin"];
+
+/**
+ * GAP-HELPDESK-CATALOGUE-BREACHES-03: roles permitted to view the tenant-wide
+ * SLA breach report (includes requestedBy and stage data). This UI gate is
+ * deliberately stricter than the server (GET /v1/helpdesk/catalogue/requests/breaches
+ * allows USER_ROLES); the server remains the authority.
+ */
+export const HELPDESK_MANAGER_ROLES = ["helpdesk_admin", "super_admin"];

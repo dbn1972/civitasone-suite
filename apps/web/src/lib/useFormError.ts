@@ -110,7 +110,11 @@ export function useFormError(area: string): UseFormErrorResult {
       const fieldErrors = env.fieldErrors?.length
         ? Object.fromEntries(env.fieldErrors.map((f) => [f.field, f.message]))
         : {};
-      const human = humanErrorFromFailure({ status: res.status, code: env.code, kind, area, hasFieldErrors: Object.keys(fieldErrors).length > 0, ...extra });
+      // GAP-HELPDESK-INTERNAL-NEW-05: a 403 is a permanent permission problem,
+      // not a transient save failure — surface the "forbidden" copy instead of
+      // the generic "We couldn't save …" text (retrying a 403 never helps).
+      const effectiveKind: MessageKind = res.status === 403 && kind !== "load" ? "forbidden" : kind;
+      const human = humanErrorFromFailure({ status: res.status, code: env.code, kind: effectiveKind, area, hasFieldErrors: Object.keys(fieldErrors).length > 0, ...extra });
       const next: FormErrorState = {
         message: `${human.what} ${human.next}`,
         fieldErrors,

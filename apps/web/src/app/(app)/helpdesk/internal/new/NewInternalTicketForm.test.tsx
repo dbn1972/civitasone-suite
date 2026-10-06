@@ -37,12 +37,37 @@ describe("NewInternalTicketForm (staff-facing)", () => {
     fireEvent.change(screen.getByLabelText(/priority/i), { target: { value: "Low" } });
     fireEvent.click(screen.getByRole("button", { name: "Create ticket" }));
 
-    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/helpdesk/internal"));
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/helpdesk/internal/t1"));
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [url, init] = fetchSpy.mock.calls[0];
     expect(url).toBe("/api/proxy/v1/helpdesk/tickets");
     const body = JSON.parse((init as RequestInit).body as string);
     expect(body.priority).toBe("Low");
+  });
+
+  // GAP-HELPDESK-INTERNAL-NEW-04: the success toast should carry a ticket
+  // reference derived from the response, and navigate to the detail page.
+  it("includes a ticket reference in the toast and navigates to the detail page", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: "aaaabbbb-cccc-dddd-eeee-ffff00001111" } }), { status: 201 }),
+    );
+    render(<NewInternalTicketForm />);
+    fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: "Door lock jammed" } });
+    fireEvent.change(screen.getByLabelText(/description/i), { target: { value: "Main entrance." } });
+    fireEvent.click(screen.getByRole("button", { name: "Create ticket" }));
+
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalled());
+    expect(toastSuccess.mock.calls[0][0]).toContain("INT-AAAABBBB");
+    expect(pushMock).toHaveBeenCalledWith("/helpdesk/internal/aaaabbbb-cccc-dddd-eeee-ffff00001111");
+  });
+
+  // GAP-HELPDESK-INTERNAL-NEW-03: no hard-coded light-theme colours in the form.
+  it("renders no hard-coded #fff / #b91c1c / #047857 colours", () => {
+    const { container } = render(<NewInternalTicketForm />);
+    const html = container.innerHTML;
+    expect(html).not.toContain("#fff");
+    expect(html).not.toContain("#b91c1c");
+    expect(html).not.toContain("#047857");
   });
 });

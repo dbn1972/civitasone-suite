@@ -157,6 +157,11 @@ const STAT_ICON_MAP: Record<string, LucideIcon> = {
   "📨": Mail,
   "🌐": Globe,
   "💼": Briefcase,
+  // Helpdesk stat cards (GAP-HELPDESK-HOME-05): coloured circle emoji that
+  // have no glyph on headless Linux; map to a neutral CircleDot instead.
+  "🟠": CircleDot,
+  "🔵": CircleDot,
+  "⚠️": AlertTriangle,
   // Identity hub tiles (GAP-IDENTITY-HOME-01): these previously fell back to
   // the raw emoji — which renders as the ".notdef" box on headless/server
   // Linux with no color-emoji font — so the seven tiles were visually
