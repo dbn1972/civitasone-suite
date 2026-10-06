@@ -7,6 +7,7 @@
 import { sql, type SQL } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { emitWithAudit } from "../../shared/route-audit.js";
+import { recordStatusHistory, listStatusHistory } from "../../shared/case-status-history.js";
 import { EVENTS } from "../../topics.js";
 
 // ---------------------------------------------------------------------------
@@ -227,8 +228,8 @@ export async function createRti(data: RtiCreateData): Promise<RtiRow> {
         ? sql`(${data.feeAmountMinor}::numeric / 100)::numeric(10,2)`
         : sql`NULL`;
 
-  const rows = (await scopedRead((tx) =>
-    tx.execute(sql`
+  const rows = (await scopedRead(async (tx) => {
+    const inserted = (await tx.execute(sql`
       INSERT INTO crm.rti_requests (
         tenant_id, reference_no, section, department_ref,
         applicant_name, applicant_contact,
@@ -264,20 +265,34 @@ export async function createRti(data: RtiCreateData): Promise<RtiRow> {
                 received_at    AS "receivedAt",
                 due_at         AS "dueAt",
                 created_at     AS "createdAt"
-    `),
-  )) as unknown as RtiRow[];
+    `)) as unknown as RtiRow[];
+    // F6-01: seed the timeline with the opening transition (null -> RECEIVED).
+    await recordStatusHistory(tx, {
+      tenantId: data.tenantId,
+      resourceType: "rti_request",
+      resourceId: String(inserted[0]?.["id"]),
+      fromStatus: null,
+      toStatus: String(inserted[0]?.["status"] ?? "RECEIVED"),
+      note: null,
+      actorId: data.actorId,
+    });
+    return inserted;
+  })) as unknown as RtiRow[];
 
   return rows[0]!;
 }
 
 export async function forwardRti(
   tenantId: string,
-  _actorId: string,
+  actorId: string,
   id: string,
   departmentRef: string,
 ): Promise<RtiRow | null> {
-  const rows = (await scopedRead((tx) =>
-    tx.execute(sql`
+  return scopedRead(async (tx) => {
+    const prev = (await tx.execute(sql`
+      SELECT status FROM crm.rti_requests WHERE id = ${id}::uuid AND tenant_id = ${tenantId}
+    `)) as unknown as Array<{ status: string }>;
+    const rows = (await tx.execute(sql`
       UPDATE crm.rti_requests
       SET status         = 'TRANSFERRED',
           department_ref = ${departmentRef},
@@ -288,20 +303,32 @@ export async function forwardRti(
       RETURNING id, status,
                 department_ref AS "departmentRef",
                 updated_at     AS "updatedAt"
-    `),
-  )) as unknown as RtiRow[];
-
-  return rows[0] ?? null;
+    `)) as unknown as RtiRow[];
+    if (!rows[0]) return null;
+    await recordStatusHistory(tx, {
+      tenantId,
+      resourceType: "rti_request",
+      resourceId: id,
+      fromStatus: prev[0]?.status ?? null,
+      toStatus: "TRANSFERRED",
+      note: `Transferred to ${departmentRef}`,
+      actorId,
+    });
+    return rows[0];
+  });
 }
 
 export async function respondRti(
   tenantId: string,
-  _actorId: string,
+  actorId: string,
   id: string,
   responseText: string,
 ): Promise<RtiRow | null> {
-  const rows = (await scopedRead((tx) =>
-    tx.execute(sql`
+  return scopedRead(async (tx) => {
+    const prev = (await tx.execute(sql`
+      SELECT status FROM crm.rti_requests WHERE id = ${id}::uuid AND tenant_id = ${tenantId}
+    `)) as unknown as Array<{ status: string }>;
+    const rows = (await tx.execute(sql`
       UPDATE crm.rti_requests
       SET status        = 'RESPONDED',
           response_text = ${responseText},
@@ -314,20 +341,32 @@ export async function respondRti(
                 responded_at  AS "respondedAt",
                 response_text AS "responseText",
                 updated_at    AS "updatedAt"
-    `),
-  )) as unknown as RtiRow[];
-
-  return rows[0] ?? null;
+    `)) as unknown as RtiRow[];
+    if (!rows[0]) return null;
+    await recordStatusHistory(tx, {
+      tenantId,
+      resourceType: "rti_request",
+      resourceId: id,
+      fromStatus: prev[0]?.status ?? null,
+      toStatus: "RESPONDED",
+      note: responseText,
+      actorId,
+    });
+    return rows[0];
+  });
 }
 
 /** s.19 RTI Act — first-appeal within 30 days of response. */
 export async function firstAppeal(
   tenantId: string,
-  _actorId: string,
+  actorId: string,
   id: string,
 ): Promise<RtiRow | null> {
-  const rows = (await scopedRead((tx) =>
-    tx.execute(sql`
+  return scopedRead(async (tx) => {
+    const prev = (await tx.execute(sql`
+      SELECT status FROM crm.rti_requests WHERE id = ${id}::uuid AND tenant_id = ${tenantId}
+    `)) as unknown as Array<{ status: string }>;
+    const rows = (await tx.execute(sql`
       UPDATE crm.rti_requests
       SET status              = 'FIRST_APPEAL',
           first_appeal_due_at = COALESCE(responded_at, now()) + interval '30 days',
@@ -338,10 +377,19 @@ export async function firstAppeal(
       RETURNING id, status,
                 first_appeal_due_at AS "firstAppealDueAt",
                 updated_at          AS "updatedAt"
-    `),
-  )) as unknown as RtiRow[];
-
-  return rows[0] ?? null;
+    `)) as unknown as RtiRow[];
+    if (!rows[0]) return null;
+    await recordStatusHistory(tx, {
+      tenantId,
+      resourceType: "rti_request",
+      resourceId: id,
+      fromStatus: prev[0]?.status ?? null,
+      toStatus: "FIRST_APPEAL",
+      note: null,
+      actorId,
+    });
+    return rows[0];
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -365,8 +413,17 @@ async function transition(
   eventType: string,
   update: SQL,
   extraPayload: Record<string, unknown> = {},
+  note: string | null = null,
 ): Promise<RtiRow | null> {
   return scopedRead(async (tx) => {
+    // Capture the pre-transition status for the timeline (F6-01), inside the
+    // same tx as the guarded UPDATE.
+    const prevRows = (await tx.execute(sql`
+      SELECT status FROM crm.rti_requests
+      WHERE id = ${id}::uuid AND tenant_id = ${ctx.tenantId}
+    `)) as unknown as Array<{ status: string }>;
+    const fromStatus = prevRows[0]?.status ?? null;
+
     const rows = (await tx.execute(update)) as unknown as RtiRow[];
     const row = rows[0];
     if (!row) return null;
@@ -376,6 +433,16 @@ async function transition(
       resourceType: "rti_request",
       resourceId: id,
       payload: { rtiId: id, status: row["status"], ...extraPayload },
+    });
+    // F6-01: record the transition in the shared timeline, same tx.
+    await recordStatusHistory(tx, {
+      tenantId: ctx.tenantId,
+      resourceType: "rti_request",
+      resourceId: id,
+      fromStatus,
+      toStatus: String(row["status"]),
+      note,
+      actorId: ctx.actorId,
     });
     return row;
   });
@@ -410,6 +477,7 @@ export function decideFirstAppeal(
                 updated_at              AS "updatedAt"
     `,
     { outcome },
+    `First appeal decided (${outcome}): ${orderText}`,
   );
 }
 
@@ -441,6 +509,8 @@ export function recordSecondAppeal(
                 second_appeal_at AS "secondAppealAt",
                 updated_at       AS "updatedAt"
     `,
+    {},
+    `Second appeal filed: ${ref}`,
   );
 }
 
@@ -474,5 +544,15 @@ export function disposeRti(
                 disposed_at AS "disposedAt",
                 updated_at  AS "updatedAt"
     `,
+    {},
+    reason,
   );
+}
+
+/**
+ * F6-01: ordered status timeline for one RTI request (oldest first). Reads the
+ * shared crm.case_status_history table via the shared helper.
+ */
+export function getRtiHistory(tenantId: string, id: string) {
+  return listStatusHistory(tenantId, "rti_request", id);
 }

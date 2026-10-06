@@ -213,13 +213,39 @@ describe("ProductCatalogueEditor (QP-001)", () => {
     expect(qp.updateProduct).not.toHaveBeenCalled();
   });
 
-  // GAP-CRM-PRODUCTS-06: currency is visible per row (constrained to INR —
-  // decision recorded, no multi-currency money formatter yet).
-  it("shows the currency per product row", async () => {
-    vi.mocked(qp.getProducts).mockResolvedValue({ data: [product], source: "api" });
+  // F4-03: currency is a select constrained to the allow-list (INR/USD/EUR/GBP/AED);
+  // display uses formatMoneyIn so a non-INR price shows the right symbol.
+  it("offers a currency select from the allow-list per product row", async () => {
+    vi.mocked(qp.getProducts).mockResolvedValue({ data: [{ ...product, currency: "USD" }], source: "api" });
     renderWithIntl(<ProductCatalogueEditor />);
     await waitFor(() => expect(screen.getByDisplayValue("Rack server")).toBeInTheDocument());
-    const currency = screen.getByLabelText(/currency for product 1/i);
-    expect(currency).toHaveTextContent("INR");
+    const currency = screen.getByLabelText(/currency for product 1/i) as HTMLSelectElement;
+    expect(currency.tagName).toBe("SELECT");
+    expect(currency.value).toBe("USD");
+    const values = Array.from(currency.querySelectorAll("option")).map((o) => (o as HTMLOptionElement).value);
+    expect(values).toEqual(["INR", "USD", "EUR", "GBP", "AED"]);
+  });
+
+  // F4-02: an optional HSN/SAC classification code (4-8 digits) is captured and sent.
+  it("captures an HSN/SAC code and sends it on save; blocks a bad one", async () => {
+    vi.mocked(qp.getProducts).mockResolvedValue({ data: [], source: "api" });
+    vi.mocked(qp.createProduct).mockResolvedValue(undefined);
+    render(<ProductCatalogueEditor />);
+    await waitFor(() => expect(screen.getByText(/no products yet/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /add product/i }));
+    fireEvent.change(screen.getByLabelText(/code for product 1/i), { target: { value: "SRV-9" } });
+    fireEvent.change(screen.getByLabelText(/name for product 1/i), { target: { value: "Service" } });
+    fireEvent.change(screen.getByLabelText(/price for product 1/i), { target: { value: "100" } });
+    fireEvent.change(screen.getByLabelText(/^tax percent for product 1/i), { target: { value: "18" } });
+    // Bad HSN first — blocks save.
+    fireEvent.change(screen.getByLabelText(/hsn or sac classification for product 1/i), { target: { value: "12" } });
+    fireEvent.click(screen.getByRole("button", { name: /create/i }));
+    expect((await screen.findAllByText(/hsn\/sac must be 4/i)).length).toBeGreaterThan(0);
+    expect(qp.createProduct).not.toHaveBeenCalled();
+    // Valid HSN — saves with the code.
+    fireEvent.change(screen.getByLabelText(/hsn or sac classification for product 1/i), { target: { value: "998314" } });
+    fireEvent.click(screen.getByRole("button", { name: /create/i }));
+    await waitFor(() => expect(qp.createProduct).toHaveBeenCalled());
+    expect(vi.mocked(qp.createProduct).mock.calls[0][0].hsnSac).toBe("998314");
   });
 });

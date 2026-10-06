@@ -111,10 +111,12 @@ describe("RtiDetailPage", () => {
     expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
   });
 
-  // GAP-CRM-RTI-DETAIL-03: a CRM user who needs it to reply sees the contact
-  // in clear; an unprivileged viewer sees it masked and no action buttons.
-  it("shows the contact in clear to a CRM user", async () => {
-    getSessionRolesMock.mockReturnValue(["crm_user"]);
+  // GAP-CRM-RTI-DETAIL-03 / F1-02 + F1-06: the SERVER masks the applicant
+  // contact for roles outside the CRM PII-read set and sends the clear value
+  // only to those roles. A PII-read role (crm_admin) gets the clear value from
+  // the API and the page renders it verbatim (no client masking).
+  it("shows the contact in clear to a PII-read role (server sends the clear value)", async () => {
+    getSessionRolesMock.mockReturnValue(["crm_admin"]);
     fetchJsonMock.mockResolvedValue({ data: RTI, source: "api" });
     const ui = await RtiDetailPage({ params: { id: RTI.id } });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
@@ -122,13 +124,14 @@ describe("RtiDetailPage", () => {
     expect(screen.getByText(/Access is logged/)).toBeInTheDocument();
   });
 
-  it("masks the contact and hides actions for a viewer without a CRM role", async () => {
+  it("renders the server-masked contact and hides actions for a viewer without a CRM role", async () => {
     getSessionRolesMock.mockReturnValue(["citizen"]);
-    fetchJsonMock.mockResolvedValue({ data: RTI, source: "api" });
+    // The server returns the masked value for a non-PII role; the page renders it.
+    fetchJsonMock.mockResolvedValue({ data: { ...RTI, applicantName: "Anil S•••", applicantContact: "******0000" }, source: "api" });
     const ui = await RtiDetailPage({ params: { id: RTI.id } });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
     expect(screen.queryByText("9876500000")).not.toBeInTheDocument();
-    expect(screen.getByText(/•••• 0000/)).toBeInTheDocument();
+    expect(screen.getByText("******0000")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Respond" })).not.toBeInTheDocument();
     expect(screen.getAllByText(/do not have permission/i).length).toBeGreaterThan(0);
   });

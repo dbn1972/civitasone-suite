@@ -5,36 +5,16 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { ServiceRequestActions } from "./ServiceRequestActions";
 import { PriorityBadge } from "../PriorityBadge";
+import { CaseStatusTimeline, type CaseHistoryEntry } from "../../../../_components/crm/CaseStatusTimeline";
 
 /**
- * GAP-CRM-SERVICE-REQUESTS-DETAIL-02 (DPDP): a citizen's phone and email are
- * personal data. They are masked for ordinary desk staff and shown in clear
- * only to a privileged role. The clear value is rendered into the server HTML
- * ONLY for a privileged viewer — an ordinary viewer's response never carries
- * it — so this is a server-side gate, not a client-side hide.
+ * GAP-CRM-SERVICE-REQUESTS-DETAIL-02 (DPDP) / F1-04 + F1-06: a citizen's phone
+ * and email are personal data. The SERVER (crm-service
+ * modules/service-requests/routes.ts + shared/pii-reveal.ts) masks them for
+ * roles outside the CRM PII-read set and sends the clear value only to those
+ * roles, so the page renders what the server returned — no client-side masking.
  */
 const PII_REVEAL_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
-
-function maskPhone(v?: string): string {
-  if (!v) return "—";
-  const digits = v.replace(/\D/g, "");
-  if (digits.length < 4) return "•••";
-  return `${digits.slice(0, 2)}••••••${digits.slice(-2)}`;
-}
-
-function maskEmail(v?: string): string {
-  if (!v) return "—";
-  const at = v.indexOf("@");
-  if (at <= 0) return "•••";
-  const user = v.slice(0, at);
-  const domain = v.slice(at + 1);
-  const dot = domain.lastIndexOf(".");
-  const tld = dot >= 0 ? domain.slice(dot) : "";
-  const host = dot >= 0 ? domain.slice(0, dot) : domain;
-  const uHead = user.slice(0, 1);
-  const dHead = host.slice(0, 1);
-  return `${uHead}${"*".repeat(Math.max(2, user.length - 1))}@${dHead}${"*".repeat(Math.max(2, host.length - 1))}${tld}`;
-}
 
 interface ServiceRequestDetail {
   id: string;
@@ -120,6 +100,22 @@ export default async function ServiceRequestDetailPage({ params }: { params: { i
     ? t(`priority_${priorityKey}`)
     : undefined;
   const canRevealPii = PII_REVEAL_ROLES.some((role) => roles.includes(role));
+
+  // F6-01: status timeline — a separate GET so the detail contract is unchanged.
+  const { data: history } = await fetchJson<unknown, CaseHistoryEntry[]>(
+    `/api/v1/crm/service-requests/${params.id}/history`,
+    [],
+    {
+      revalidateSeconds: 0,
+      telemetryKey: "crm.service-request.history",
+      mapResponse: (p) => {
+        if (p && typeof p === "object" && Array.isArray((p as { data?: unknown }).data)) {
+          return (p as { data: CaseHistoryEntry[] }).data;
+        }
+        return [];
+      },
+    },
+  );
 
   return (
     <>
@@ -212,12 +208,12 @@ export default async function ServiceRequestDetailPage({ params }: { params: { i
               <Field label={t("name")}>{r.citizenName ?? "—"}</Field>
               <Field label={t("phone")}>
                 <span style={{ fontFamily: "monospace" }}>
-                  {canRevealPii ? (r.citizenPhone ?? "—") : maskPhone(r.citizenPhone)}
+                  {r.citizenPhone ?? "—"}
                 </span>
               </Field>
               <Field label={t("email")}>
                 <span style={{ fontFamily: "monospace" }}>
-                  {canRevealPii ? (r.citizenEmail ?? "—") : maskEmail(r.citizenEmail)}
+                  {r.citizenEmail ?? "—"}
                 </span>
               </Field>
               {!canRevealPii && (r.citizenPhone || r.citizenEmail) ? (
@@ -233,6 +229,8 @@ export default async function ServiceRequestDetailPage({ params }: { params: { i
               <Field label={t("lastUpdated")}>{fmt(r.updatedAt)}</Field>
             </dl>
           </Card>
+          {/* F6-01: status transition timeline. */}
+          <CaseStatusTimeline entries={history} />
         </div>
       </div>
     </>

@@ -135,6 +135,30 @@ describe("DQ-001 dedup rules + duplicate-check", () => {
     expect(res.statusCode).toBe(403);
   });
 
+  // F3-03: an empty dedup-rules PUT is a loud 422 EMPTY_CONFIG_REJECTED unless the
+  // caller explicitly confirms clearing all with ?confirmEmpty=true.
+  it("422 EMPTY_CONFIG_REJECTED for an empty rule list without confirmEmpty", async () => {
+    const res = await put("/v1/crm/dedup-rules", { rules: [] });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("EMPTY_CONFIG_REJECTED");
+  });
+
+  it("refuses confirmEmpty=false (z.coerce.boolean would read it as true)", async () => {
+    const res = await put("/v1/crm/dedup-rules?confirmEmpty=false", { rules: [] });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("EMPTY_CONFIG_REJECTED");
+  });
+
+  it("refuses a non-true/false confirmEmpty value (0)", async () => {
+    const res = await put("/v1/crm/dedup-rules?confirmEmpty=0", { rules: [] });
+    expect(res.statusCode).toBeGreaterThanOrEqual(400);
+  });
+
+  it("accepts an empty dedup-rules list with ?confirmEmpty=true", async () => {
+    const res = await put("/v1/crm/dedup-rules?confirmEmpty=true", { rules: [] });
+    expect(res.statusCode).toBe(200);
+  });
+
   // ── GAP-CRM-DEDUP-RULES-02: list-level optimistic concurrency ──────────────
   describe("optimistic concurrency (GAP-CRM-DEDUP-RULES-02)", () => {
     it("GET returns a list-level version + last-changed metadata", async () => {

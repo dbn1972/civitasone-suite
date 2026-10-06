@@ -41,6 +41,22 @@ function toView(r: ContactRow): ContactView {
   };
 }
 
+/**
+ * True when `agentId` is a member of this tenant's CRM agent directory
+ * (crm.agent_workload - the same directory the web OwnerPicker lists). Used to
+ * validate an account-owner change without reaching into another service's DB.
+ */
+export async function agentInDirectory(tenantId: string, agentId: string): Promise<boolean> {
+  const rows = (await scopedRead(async (tx) =>
+    tx.execute(sql`
+      SELECT 1 AS ok FROM crm.agent_workload
+      WHERE tenant_id = ${tenantId}::uuid AND agent_id = ${agentId}::uuid
+      LIMIT 1
+    `),
+  )) as unknown as Array<{ ok: number }>;
+  return rows.length > 0;
+}
+
 export async function findById(id: string, tenantId: string): Promise<ContactView | null> {
   const rows = await scopedRead((tx) => tx.select().from(contacts).where(and(eq(contacts.id, id), eq(contacts.tenantId, tenantId))).limit(1));
   return rows[0] ? toView(rows[0]) : null;
@@ -367,6 +383,39 @@ export async function insertAccount(tx: Writer, row: AccountInsert): Promise<voi
   await tx.insert(accounts).values(row);
 }
 
+/**
+ * F5-01: patch mutable account fields (currently the owner). Tenant-scoped and
+ * version-bumping like every other account write. Returns the number of rows
+ * touched so the consumer can tell "applied" from "not found / cross-tenant".
+ */
+export async function updateAccount(
+  tx: Writer,
+  id: string,
+  tenantId: string,
+  actorId: string,
+  patch: { ownerId?: string | null },
+): Promise<number> {
+  const set: Record<string, unknown> = { updatedAt: new Date(), updatedBy: actorId, version: sql`${accounts.version} + 1` };
+  if (patch.ownerId !== undefined) set.ownerId = patch.ownerId;
+  const rows = await (tx as typeof db).update(accounts).set(set)
+    .where(and(eq(accounts.id, id), eq(accounts.tenantId, tenantId)))
+    .returning({ id: accounts.id });
+  return rows.length;
+}
+
+/**
+ * F5-02: stamp an account's `last_contact_at` with the current instant when an
+ * activity is linked to it. Called by the activities consumer inside the same
+ * transaction as the activity write — the SAME denormalisation pattern as
+ * touchLastActivity() for contacts — so the accounts list / health watchlist
+ * "Last contact" column needs no cross-module JOIN into crm.activities.
+ */
+export async function touchAccountLastContact(tx: Writer, accountId: string, tenantId: string): Promise<void> {
+  await (tx as typeof db).update(accounts)
+    .set({ lastContactAt: new Date(), updatedAt: new Date() })
+    .where(and(eq(accounts.id, accountId), eq(accounts.tenantId, tenantId)));
+}
+
 export interface AccountListRow {
   id: string;
   name: string;
@@ -374,6 +423,11 @@ export interface AccountListRow {
   website: string | null;
   parentId: string | null;
   contactCount: number;
+  // F5-01 owner + F5-02 last-contact. Both nullable; `ownerId` is an opaque
+  // identity id the UI resolves to a name, `lastContactAt` is an ISO string
+  // (or null when no activity has been linked to the account yet).
+  ownerId: string | null;
+  lastContactAt: string | null;
 }
 
 export async function listAccounts(tenantId: string, limit = 500, offset = 0): Promise<AccountListRow[]> {
@@ -383,6 +437,8 @@ export async function listAccounts(tenantId: string, limit = 500, offset = 0): P
     industry: accounts.industry,
     website: accounts.website,
     parentId: accounts.parentId,
+    ownerId: accounts.ownerId,
+    lastContactAt: accounts.lastContactAt,
     contactCount: sql<string>`count(${contacts.id})`,
   })
     .from(accounts)
@@ -392,12 +448,17 @@ export async function listAccounts(tenantId: string, limit = 500, offset = 0): P
       eq(contacts.status, "active"),
     ))
     .where(and(eq(accounts.tenantId, tenantId), eq(accounts.status, "active")))
-    .groupBy(accounts.id, accounts.name, accounts.industry, accounts.website, accounts.parentId)
+    .groupBy(accounts.id, accounts.name, accounts.industry, accounts.website, accounts.parentId, accounts.ownerId, accounts.lastContactAt)
     .orderBy(accounts.name)
     .limit(limit)
     .offset(offset));
-  // count() arrives as a bigint string from pg — normalise to a JSON number.
-  return rows.map((r) => ({ ...r, contactCount: Number(r.contactCount ?? 0) }));
+  // count() arrives as a bigint string from pg — normalise to a JSON number;
+  // lastContactAt arrives as a Date — normalise to an ISO string for the view.
+  return rows.map((r) => ({
+    ...r,
+    contactCount: Number(r.contactCount ?? 0),
+    lastContactAt: r.lastContactAt ? new Date(r.lastContactAt as unknown as string).toISOString() : null,
+  }));
 }
 
 /**

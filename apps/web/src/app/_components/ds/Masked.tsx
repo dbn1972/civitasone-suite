@@ -11,7 +11,14 @@
  * No "use client" needed -- this is a pure, static render, so it works
  * directly inside a Server Component (e.g. perquisite/page.tsx) with no
  * client-boundary wrapper required.
+ *
+ * F1-05 update: `Masked` now accepts an optional `onReveal` config. When the
+ * viewer is allowed to reveal, it renders the client `MaskedReveal` control
+ * (audited reveal-with-reason against /api/v1/crm/pii/reveal). Without
+ * `onReveal` it stays a pure Server-Component-safe static render as before.
  */
+import { MaskedReveal, type PiiResourceType } from "./MaskedReveal";
+
 export type MaskedKind = "pan" | "account" | "last4" | "phone" | "email";
 
 /**
@@ -102,10 +109,49 @@ export interface MaskedProps {
   className?: string;
   /** Accessible name, e.g. "Account ending 1234" -- screen readers otherwise read the bullet glyphs. */
   ariaLabel?: string;
+  /**
+   * F1-05: optional audited-reveal config. When present AND the viewer is
+   * allowed to reveal (`onReveal.canReveal`), the masked value gains a "Reveal"
+   * control that opens a reason dialog and calls the server's audited
+   * `/api/v1/crm/pii/reveal` endpoint before showing the clear value (see
+   * MaskedReveal). Absent (or canReveal=false) -> the static masked render,
+   * unchanged, so existing callers and Server Components are untouched.
+   *
+   * `value` here is the SERVER-MASKED string (the page never holds the clear
+   * value for an unprivileged viewer); the reveal round-trips to the server.
+   */
+  onReveal?: {
+    canReveal: boolean;
+    resourceType: PiiResourceType;
+    resourceId: string;
+    field: string;
+    label: string;
+  };
 }
 
-export function Masked({ value, kind, fallback = null, className, ariaLabel }: MaskedProps) {
+export function Masked({ value, kind, fallback = null, className, ariaLabel, onReveal }: MaskedProps) {
   if (!value) return <>{fallback}</>;
+  // F1-05/F1-06: when an onReveal config is present, `value` is already the
+  // SERVER-masked string, so it is shown verbatim (never re-masked client-side).
+  if (onReveal) {
+    if (onReveal.canReveal) {
+      return (
+        <MaskedReveal
+          maskedText={value}
+          resourceType={onReveal.resourceType}
+          resourceId={onReveal.resourceId}
+          field={onReveal.field}
+          label={onReveal.label}
+          className={className}
+        />
+      );
+    }
+    return (
+      <span className={className} style={{ fontFamily: "monospace" }} aria-label={ariaLabel}>
+        {value}
+      </span>
+    );
+  }
   const masked =
     kind === "pan"
       ? maskPan(value)

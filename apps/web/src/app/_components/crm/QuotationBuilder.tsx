@@ -30,6 +30,8 @@ import {
   lineNetMinor,
   lineTaxMinor,
   quotationTotalMinor,
+  displayGrandTotalMinor,
+  gstSplit,
   isProductSelectable,
   templateLabel,
   ApprovalRequiredError,
@@ -106,6 +108,7 @@ interface QuotationBuilderProps {
 
 export function QuotationBuilder({ canApprove = false, currentUserId = null }: QuotationBuilderProps = {}) {
   const t = useTranslations("crmQuotationBuilder");
+  const tQ = useTranslations("crmQuotation");
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [source, setSource] = useState<QpSource | "loading">("loading");
   const [products, setProducts] = useState<Product[]>([]);
@@ -114,6 +117,9 @@ export function QuotationBuilder({ canApprove = false, currentUserId = null }: Q
 
   const [template, setTemplate] = useState<string>("standard");
   const [lines, setLines] = useState<LineDraft[]>([]);
+  // F4-02: Indian GST state codes driving the CGST/SGST vs IGST split in the footer.
+  const [placeOfSupply, setPlaceOfSupply] = useState("");
+  const [supplierState, setSupplierState] = useState("");
   // Account / opportunity for a quote built from scratch (an opened quote
   // carries its own; see save()). dealId must be a UUID server-side, so these
   // are only sent when non-empty. GAP-CRM-QUOTATIONS-02.
@@ -156,6 +162,8 @@ export function QuotationBuilder({ canApprove = false, currentUserId = null }: Q
     setSelected(q);
     setIsNew(false);
     setTemplate(q.template || "standard");
+    setPlaceOfSupply(q.placeOfSupply ?? "");
+    setSupplierState(q.supplierState ?? "");
     setLines(
       q.lines.map((l) =>
         newLine({
@@ -180,6 +188,8 @@ export function QuotationBuilder({ canApprove = false, currentUserId = null }: Q
     setIsNew(true);
     setTemplate("standard");
     setLines([]);
+    setPlaceOfSupply("");
+    setSupplierState("");
     setNewAccountId("");
     setNewOpportunityId("");
     setMessage("");
@@ -228,6 +238,9 @@ export function QuotationBuilder({ canApprove = false, currentUserId = null }: Q
   // total. BigInt throughout — no float touches a money value.
   const subtotalMinor = draftLines.reduce((sum, l) => sum + BigInt(lineNetMinor(l)), 0n).toString();
   const totalTaxMinor = draftLines.reduce((sum, l) => sum + BigInt(lineTaxMinor(l)), 0n).toString();
+  // F4-02: GST split for the footer, from the entered place-of-supply / supplier-state.
+  const gst = gstSplit(totalTaxMinor, placeOfSupply, supplierState);
+  const intraState = placeOfSupply.trim() !== "" && supplierState.trim() !== "" && placeOfSupply.trim() === supplierState.trim();
 
   function linesValid(): boolean {
     if (lines.length === 0) return false;
@@ -262,6 +275,8 @@ export function QuotationBuilder({ canApprove = false, currentUserId = null }: Q
       version: selected?.version ?? 1,
       status: selected?.status ?? "draft",
       lines: draftLines,
+      ...(placeOfSupply.trim() ? { placeOfSupply: placeOfSupply.trim() } : {}),
+      ...(supplierState.trim() ? { supplierState: supplierState.trim() } : {}),
     };
     setBusy(true);
     try {
@@ -380,7 +395,7 @@ export function QuotationBuilder({ canApprove = false, currentUserId = null }: Q
                   <td>{q.opportunityId || "—"}</td>
                   <td>{q.createdAt ? formatIndianDate(q.createdAt) : "—"}</td>
                   <td className="num">{q.lines.length}</td>
-                  <td className="num">{formatMoney(quotationTotalMinor(q.lines))}</td>
+                  <td className="num">{formatMoney(displayGrandTotalMinor(q))}</td>
                   <td><StatusPill status={q.status} /></td>
                   <td>
                     <Button type="button" variant="ghost" size="sm" onClick={() => openQuote(q)}>
@@ -445,6 +460,23 @@ export function QuotationBuilder({ canApprove = false, currentUserId = null }: Q
               Resolve price book
             </Button>
             {resolvedBook ? <span style={{ fontSize: 12, color: "var(--muted)" }}>Applicable book: {resolvedBook.name}</span> : null}
+          </div>
+
+          {/* F4-02: GST state codes drive the CGST/SGST (intra-state) vs IGST
+              (inter-state) split shown in the footer. Both optional; left blank the
+              tax is treated as inter-state (IGST). */}
+          <div style={{ display: "flex", gap: 12, padding: "0 12px 12px", flexWrap: "wrap", alignItems: "end" }}>
+            <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
+              {tQ("placeOfSupplyLabel")}
+              <input aria-label={tQ("placeOfSupplyAria")} value={placeOfSupply} onChange={(e) => setPlaceOfSupply(e.target.value)} style={inputStyle} placeholder={tQ("stateCodePlaceholder")} inputMode="numeric" />
+            </label>
+            <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
+              {tQ("supplierStateLabel")}
+              <input aria-label={tQ("supplierStateAria")} value={supplierState} onChange={(e) => setSupplierState(e.target.value)} style={inputStyle} placeholder={tQ("stateCodePlaceholder")} inputMode="numeric" />
+            </label>
+            <span style={{ fontSize: 12, color: "var(--muted)", maxWidth: 320 }}>
+              {intraState ? tQ("intraNote") : tQ("interNote")}
+            </span>
           </div>
 
           {isNew && !selected?.id ? (
@@ -564,6 +596,28 @@ export function QuotationBuilder({ canApprove = false, currentUserId = null }: Q
                     <td className="num" aria-label={t("totalTax")}>{formatMoney(totalTaxMinor)}</td>
                     <td />
                   </tr>
+                  {BigInt(totalTaxMinor) > 0n ? (
+                    intraState ? (
+                      <>
+                        <tr>
+                          <td colSpan={6} style={{ textAlign: "end", color: "var(--muted)" }}>{tQ("cgst")}</td>
+                          <td className="num" aria-label={tQ("cgst")}>{formatMoney(gst.cgstMinor)}</td>
+                          <td />
+                        </tr>
+                        <tr>
+                          <td colSpan={6} style={{ textAlign: "end", color: "var(--muted)" }}>{tQ("sgst")}</td>
+                          <td className="num" aria-label={tQ("sgst")}>{formatMoney(gst.sgstMinor)}</td>
+                          <td />
+                        </tr>
+                      </>
+                    ) : (
+                      <tr>
+                        <td colSpan={6} style={{ textAlign: "end", color: "var(--muted)" }}>{tQ("igst")}</td>
+                        <td className="num" aria-label={tQ("igst")}>{formatMoney(gst.igstMinor)}</td>
+                        <td />
+                      </tr>
+                    )
+                  ) : null}
                   <tr>
                     <td colSpan={6} style={{ textAlign: "end", fontWeight: 600 }}>
                       Grand total

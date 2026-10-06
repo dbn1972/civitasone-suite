@@ -5,6 +5,7 @@ import { useFormError } from "@/lib/useFormError";
 import { useRouter } from "next/navigation";
 import { DataTable, StatusPill, Button, ConfirmDialog } from "../../../_components/ds";
 import { LeadFormEditor } from "../../../_components/crm/LeadFormEditor";
+import { ServerExportButton } from "../../../_components/crm/ServerExportButton";
 import type { CRMLeadCaptureForm } from "@civitasone/types";
 import { setLeadFormEnabled, setLeadFormConsent } from "@/lib/crm/leadForms";
 import {
@@ -193,7 +194,12 @@ export function LeadFormsTable({ rows }: { rows: CRMLeadCaptureForm[] }) {
 
   return (
     <>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 12 }}>
+        <ServerExportButton
+          endpointPath="v1/crm/lead-capture-forms/export"
+          filenameBase="crm-lead-capture-forms"
+          kind="leadForms"
+        />
         <Button type="button" onClick={openRegister}>{t("registerForm")}</Button>
       </div>
 
@@ -263,13 +269,6 @@ export function LeadFormsTable({ rows }: { rows: CRMLeadCaptureForm[] }) {
         filterable
         filterPlaceholder="Filter by form…"
         filterKeys={["name", "healthLabel", "source", "origins"]}
-        exportable
-        exportFilename="crm-lead-capture-forms"
-        exportConfirm={{
-          title: t("exportTitle"),
-          description: t("exportDescription"),
-          confirmLabel: t("exportConfirmLabel"),
-        }}
         emptyIcon="🌐"
         emptyTitle={t("emptyTitle")}
         emptyMessage={t("emptyMessage")}

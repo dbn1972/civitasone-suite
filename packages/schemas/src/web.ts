@@ -211,6 +211,10 @@ export const crmAccountApiSchema = z.object({
   website: z.string().nullable(),
   parentId: z.string().uuid().nullable(),
   contactCount: z.number().int(),
+  // F5-01/F5-02: optional owner + last-contact context. Optional so older
+  // servers that don't send them still validate.
+  ownerId: z.string().uuid().nullable().optional(),
+  lastContactAt: z.string().nullable().optional(),
 });
 
 export const crmAccountHierarchyNodeSchema = z.object({

@@ -16,6 +16,8 @@ vi.mock("@/lib/auth/roleGuard", async () => {
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => "/crm/grievances",
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 import GrievancesPage from "./page";

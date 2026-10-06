@@ -78,6 +78,10 @@ export interface NamedAccountHealthEntry extends AccountHealthEntry {
    * the page avoid surfacing an unidentifiable row as "Call First".
    */
   unresolved: boolean;
+  /** F5-01/F5-02: owner id + last-contact timestamp from the matched account
+   *  (null when the account was unresolved or carries neither). */
+  ownerId: string | null;
+  lastContactAt: string | null;
 }
 
 /**
@@ -96,12 +100,16 @@ export function withAccountNames(
   unresolvedLabel: (shortId: string) => string = (shortId) => `Account ${shortId}`,
 ): NamedAccountHealthEntry[] {
   const nameById = new Map(accounts.map((a) => [a.id, a.name]));
+  const accountById = new Map(accounts.map((a) => [a.id, a]));
   return entries.map((entry) => {
     const name = nameById.get(entry.accountId);
+    const account = accountById.get(entry.accountId);
     return {
       ...entry,
       accountName: name ?? unresolvedLabel(entry.accountId.slice(0, 8)),
       unresolved: name === undefined,
+      ownerId: account?.ownerId ?? null,
+      lastContactAt: account?.lastContactAt ?? null,
     };
   });
 }

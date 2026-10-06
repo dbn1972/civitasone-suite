@@ -8,6 +8,7 @@ import { useFormError } from "@/lib/useFormError";
 import { browserFetch, errorMessageFromResponse, UserFacingError } from "@/lib/api/browserClient";
 import { referenceFromHeaders } from "@/lib/errorCatalogue";
 import { Button } from "@/app/_components/ds";
+import { OwnerPicker, type Owner } from "@/app/_components/crm/OwnerPicker";
 import { validateNewAccount } from "./newAccountSchema";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
@@ -35,6 +36,7 @@ type Outcome =
  * PATCH once the id is known.
  */
 export function NewAccountForm({ accounts }: { accounts: CRMAccountSummary[] }) {
+  const tOwner = useTranslations("crmOwner");
   const router = useRouter();
   const t = useTranslations("crmNewAccountForm");
   const [open, setOpen] = useState(false);
@@ -44,6 +46,8 @@ export function NewAccountForm({ accounts }: { accounts: CRMAccountSummary[] }) 
   const formError = useFormError("account");
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  // F5-01: optional account owner, picked by NAME (never a hand-typed UUID).
+  const [owner, setOwner] = useState<Owner | null>(null);
 
   // GAP-CRM-ACCOUNTS-04: one idempotency key per form-open. The create route is
   // queue-backed; sending the same key means an accidental re-submit of the
@@ -55,6 +59,7 @@ export function NewAccountForm({ accounts }: { accounts: CRMAccountSummary[] }) 
   function openForm() {
     idempotencyKey.current = crypto.randomUUID();
     setForm(EMPTY_FORM);
+    setOwner(null);
     setFieldErrors({});
     setError("");
     setOutcome({ kind: "none" });
@@ -102,7 +107,7 @@ export function NewAccountForm({ accounts }: { accounts: CRMAccountSummary[] }) 
       const res = await browserFetch("v1/crm/accounts", {
         method: "POST",
         headers: { "x-idempotency-key": idempotencyKey.current },
-        body: JSON.stringify({ name, industry: industry || undefined, website: website || undefined }),
+        body: JSON.stringify({ name, industry: industry || undefined, website: website || undefined, ownerId: owner?.id || undefined }),
       });
       if (!res.ok) throw new Error(await errorMessageFromResponse(res, "save", t("accountArea")));
       const body = (await res.json().catch(() => ({}))) as { id?: string };
@@ -110,6 +115,7 @@ export function NewAccountForm({ accounts }: { accounts: CRMAccountSummary[] }) 
       // The account was created. Reset the form and close it on EVERY created
       // path so reopening cannot re-create the same account (GAP-CRM-ACCOUNTS-03).
       setForm(EMPTY_FORM);
+      setOwner(null);
       setFieldErrors({});
       setOpen(false);
       idempotencyKey.current = crypto.randomUUID();
@@ -205,6 +211,14 @@ export function NewAccountForm({ accounts }: { accounts: CRMAccountSummary[] }) 
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
             </select>
+            <label htmlFor="account-owner" style={{ ...labelStyle, marginTop: 12 }}>{tOwner("label")}</label>
+            <OwnerPicker
+              id="account-owner"
+              value={owner}
+              onChange={setOwner}
+              aria-label={tOwner("ariaLabel")}
+              placeholder={tOwner("placeholder")}
+            />
             <Button type="submit" disabled={busy} loading={busy} style={{ marginTop: 16, minHeight: 44 }}>
               {busy ? "Creating…" : "Create account"}
             </Button>

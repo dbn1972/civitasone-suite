@@ -58,6 +58,22 @@ export async function exportContacts(tenantId: string, isAdmin = false, limit = 
   return isAdmin ? rows : rows.map(maskView);
 }
 
+/**
+ * F2-01: filtered contacts export. Honours the active list filters server-side
+ * (reusing repo.listByTenant so the export matches what the operator sees on the
+ * list) and masks PII for non-PII-read callers via the shared masking engine.
+ * The caller caps `limit`; a single export can never scan the whole registry.
+ */
+export async function exportContactsFiltered(
+  tenantId: string,
+  isAdmin: boolean,
+  limit: number,
+  filters: ListFilters = {},
+): Promise<ContactView[]> {
+  const rows = await repo.listByTenant(tenantId, limit, 0, filters);
+  return isAdmin ? rows : rows.map(maskView);
+}
+
 export async function listAccounts(tenantId: string, limit = 50, offset = 0) {
   return repo.listAccounts(tenantId, limit, offset);
 }

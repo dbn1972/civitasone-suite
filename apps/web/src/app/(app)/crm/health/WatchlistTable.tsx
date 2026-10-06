@@ -1,7 +1,9 @@
 "use client";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { DataTable, StatusPill } from "../../../_components/ds";
+import { getAgents } from "@/lib/crm/assignment";
 import { BAND_LABEL, type NamedAccountHealthEntry } from "./health";
 
 type WatchlistRow = {
@@ -10,6 +12,9 @@ type WatchlistRow = {
   score: number;
   band: string;
   computedAt: string;
+  ownerId: string | null;
+  ownerName: string;
+  lastContactAt: string | null;
 };
 
 /**
@@ -41,6 +46,10 @@ const FALLBACK: Record<string, string> = {
   columnBand: "Band",
   columnScore: "Health Score",
   columnLastScored: "Last Scored",
+  columnOwner: "Owner",
+  unassigned: "Unassigned",
+  unknownUser: "Unknown user",
+  columnLastContact: "Last Contact",
   filterPlaceholder: "Filter by account…",
   emptyTitle: "No accounts at risk",
   emptyMessage: "Accounts appear here once they are scored at risk or critical.",
@@ -59,12 +68,42 @@ export function WatchlistTable({ entries }: { entries: NamedAccountHealthEntry[]
   const tBand = useSafeT("crmWatchlistTable", BAND_FALLBACK);
   const bandText = (band: string): string =>
     band in BAND_LABEL ? tBand(`band_${band}`) : band;
+
+  // F5-01: resolve owner ids to display names via the CRM agent directory
+  // (never render a raw UUID). A failed load leaves the map empty and the
+  // Owner column falls back to "Unassigned"/a short id fragment.
+  const [ownerNames, setOwnerNames] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    let cancelled = false;
+    const ownerIds = Array.from(
+      new Set(entries.map((e) => e.ownerId).filter((v): v is string => typeof v === "string" && v.length > 0)),
+    );
+    if (ownerIds.length === 0) {
+      setOwnerNames(new Map());
+      return;
+    }
+    void getAgents().then(({ data }) => {
+      if (cancelled) return;
+      const map = new Map<string, string>();
+      for (const a of data) map.set(a.agentId, a.name);
+      setOwnerNames(map);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [entries]);
+
   const rows: WatchlistRow[] = entries.map((entry) => ({
     accountId: entry.accountId,
     accountName: entry.accountName,
     score: entry.score,
     band: entry.band,
     computedAt: entry.computedAt,
+    ownerId: entry.ownerId,
+    ownerName: entry.ownerId
+      ? ownerNames.get(entry.ownerId) ?? t("unknownUser")
+      : t("unassigned"),
+    lastContactAt: entry.lastContactAt,
   }));
 
   return (
@@ -83,6 +122,12 @@ export function WatchlistTable({ entries }: { entries: NamedAccountHealthEntry[]
           ),
         },
         { key: "score", label: t("columnScore"), align: "right", render: (row) => `${row.score}/100` },
+        { key: "ownerId", label: t("columnOwner"), render: (row) => row.ownerName },
+        {
+          key: "lastContactAt",
+          label: t("columnLastContact"),
+          render: (row) => (row.lastContactAt ? formatDate(row.lastContactAt) : "—"),
+        },
         { key: "computedAt", label: t("columnLastScored"), render: (row) => formatDate(row.computedAt) },
         {
           // GAP-CRM-HEALTH-05: an explicit per-row action to start a follow-up

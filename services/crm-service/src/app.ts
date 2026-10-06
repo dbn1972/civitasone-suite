@@ -81,6 +81,14 @@ import { grievanceCategoryRoutes } from "./modules/grievances/categories-routes.
 import { serviceRequestRoutes } from "./modules/service-requests/routes.js";
 import { serviceTypeRoutes } from "./modules/service-requests/types-routes.js";
 import { rtiRoutes } from "./modules/rti/rti-route.js";
+// F2 — server-side audited CSV exports (contacts, service-requests, grievances,
+// activities, lead-capture-forms).
+import { contactExportRoutes } from "./modules/contacts/export-routes.js";
+import { serviceRequestExportRoutes } from "./modules/service-requests/export-routes.js";
+import { grievanceExportRoutes } from "./modules/grievances/export-routes.js";
+import { activityExportRoutes } from "./modules/activities/export-routes.js";
+import { leadCaptureFormExportRoutes } from "./modules/leads/export-routes.js";
+import { piiRevealRoutes } from "./shared/pii-reveal-routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -217,6 +225,17 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(serviceTypeRoutes);
   // RTI Act 2005 — 30-day statutory response register
   await app.register(rtiRoutes);
+
+  // F1-05: audited server-side PII reveal (grievances/rti/service_request/
+  // onboarding/contact). One field per call, PII-read roles only, audited.
+  await app.register(piiRevealRoutes);
+
+  // ── F2: server-side audited CSV exports ──
+  await app.register(contactExportRoutes);
+  await app.register(serviceRequestExportRoutes);
+  await app.register(grievanceExportRoutes);
+  await app.register(activityExportRoutes);
+  await app.register(leadCaptureFormExportRoutes);
 
   return app;
 }

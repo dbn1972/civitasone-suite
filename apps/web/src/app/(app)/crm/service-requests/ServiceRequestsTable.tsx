@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { DataTable, StatusPill, Button } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { ServerExportButton } from "../../../_components/crm/ServerExportButton";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { CrmServiceRequestRow } from "../../../_data/loaders";
 import { PriorityBadge } from "./PriorityBadge";
@@ -26,13 +27,12 @@ function fmtDate(dt: string | null): string {
 }
 
 /**
- * GAP-CRM-SERVICE-REQUESTS-02: the enforceable controls shipped here are the
- * role gate (`canExport`), the mandatory purpose acknowledgement before the
- * file is built (`exportConfirm`), and DataTable's CSV-formula-injection
- * guard. A durable, immutable SERVER-SIDE audit record of each export is a
- * backend follow-up (a crm-service command + consumer): there is no CRM export
- * audit endpoint today, and this component must not invent one that silently
- * 404s. Flagged for HUMAN REVIEW.
+ * F2-02: the CSV export is now SERVER-AUDITED. The export button calls
+ * crm-service's GET /v1/crm/service-requests/export, which applies the active
+ * filters, masks citizen phone/email by role, enforces the admin gate and
+ * records a bulk-export audit event with the operator's stated purpose. The
+ * client-side DataTable Blob is disabled for this table — the server is the
+ * authority and the only path that can be audited.
  */
 
 /**
@@ -98,6 +98,22 @@ export function ServiceRequestsTable({
   return (
     <>
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
+      {canExport && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+          <ServerExportButton
+            endpointPath="v1/crm/service-requests/export"
+            filenameBase="service-requests"
+            filters={{
+              status: searchParams?.get("status") ?? undefined,
+              priority: searchParams?.get("priority") ?? undefined,
+              serviceType: searchParams?.get("serviceType") ?? undefined,
+              assignedTo: searchParams?.get("assignedTo") ?? undefined,
+              search: searchParams?.get("search") ?? searchParams?.get("q") ?? undefined,
+            }}
+            kind="serviceRequests"
+          />
+        </div>
+      )}
       <DataTable<CrmServiceRequestRow>
         columns={[
           {
@@ -178,13 +194,6 @@ export function ServiceRequestsTable({
           },
         ]}
         rows={rows}
-        exportable={canExport}
-        exportFilename="service-requests"
-        exportConfirm={{
-          title: t("exportTitle"),
-          description: t("exportDescription"),
-          confirmLabel: t("exportConfirm"),
-        }}
         emptyIcon="📭"
         emptyTitle={t("emptyTitle")}
         emptyMessage={t("emptyMessage")}

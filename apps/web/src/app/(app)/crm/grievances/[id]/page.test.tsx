@@ -51,19 +51,26 @@ describe("GrievanceDetailPage", () => {
     rolesMock.mockReturnValue(["crm_user"]);
   });
 
-  // GAP-CRM-GRIEVANCES-DETAIL-05 — citizen contact is masked for a base
-  // crm_user (no PII-read role). The clear value must never reach the DOM.
-  it("masks citizen phone and email for a role without PII-read rights", async () => {
-    fetchJsonMock.mockResolvedValue({ data: grievance(), source: "api" });
+  // GAP-CRM-GRIEVANCES-DETAIL-05 / F1-01 + F1-06 — citizen contact is masked
+  // by the SERVER for a base crm_user (no PII-read role); the API returns the
+  // already-masked value and the page renders it verbatim (no client masking).
+  // The clear value must never reach the DOM.
+  it("renders the server-masked citizen phone and email for a role without PII-read rights", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: grievance({ citizenPhone: "******3210", citizenEmail: "r***@example.com" }),
+      source: "api",
+    });
     const ui = await GrievanceDetailPage({ params: { id: ID } });
     render(ui);
 
     expect(screen.queryByText("9876543210")).not.toBeInTheDocument();
     expect(screen.queryByText("ravi@example.com")).not.toBeInTheDocument();
+    expect(screen.getByText("******3210")).toBeInTheDocument();
+    expect(screen.getByText("r***@example.com")).toBeInTheDocument();
     expect(screen.getByText(/masked under the DPDP Act/i)).toBeInTheDocument();
   });
 
-  it("shows citizen contact in clear for a PII-read role", async () => {
+  it("shows citizen contact in clear for a PII-read role (server sends the clear value)", async () => {
     rolesMock.mockReturnValue(["crm_admin"]);
     fetchJsonMock.mockResolvedValue({ data: grievance(), source: "api" });
     const ui = await GrievanceDetailPage({ params: { id: ID } });

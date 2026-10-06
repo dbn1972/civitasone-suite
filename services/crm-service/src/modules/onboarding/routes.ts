@@ -20,6 +20,7 @@ import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { listQuery, windowOf, listEnvelope } from "../../shared/list-query.js";
+import { maskList, maskRecord } from "../../shared/pii-reveal.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import {
@@ -96,14 +97,14 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
       ...(q.stage ? { stage: q.stage } : {}),
       ...(q.accountId ? { accountId: q.accountId } : {}),
     });
-    return reply.send(listEnvelope(rows, w, total));
+    return reply.send(listEnvelope(maskList("onboarding", rows as unknown as Array<Record<string, unknown>>, ctx.roles), w, total));
   });
 
   app.get("/v1/crm/onboarding-cases/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const { id } = idParam.parse(req.params);
-    return reply.send(await loadCase(ctx.tenantId, id));
+    return reply.send(maskRecord("onboarding", (await loadCase(ctx.tenantId, id)) as unknown as Record<string, unknown>, ctx.roles));
   });
 
   app.post("/v1/crm/onboarding-cases/:id/stage", async (req, reply) => {

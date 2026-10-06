@@ -247,4 +247,39 @@ describe("QuotationBuilder (QP-003/004/005)", () => {
     await waitFor(() => expect(qp.createQuotation).toHaveBeenCalled());
     expect(vi.mocked(qp.createQuotation).mock.calls[0][0].opportunityId).toBe("deal-xyz");
   });
+
+  // F4-02: entering matching state codes shows a CGST + SGST split in the footer;
+  // differing codes show IGST. 18% of 300 = 54 -> 27 + 27 intra, 54 IGST inter.
+  it("shows a CGST/SGST split for intra-state and IGST for inter-state", async () => {
+    render(<QuotationBuilder />);
+    await waitFor(() => expect(screen.getByText(/no quotations yet/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /new quotation/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add line/i }));
+    fireEvent.change(screen.getByLabelText(/product for line 1/i), { target: { value: "pr1" } });
+    fireEvent.change(screen.getByLabelText(/quantity for line 1/i), { target: { value: "3" } });
+    // Intra-state: place == supplier.
+    fireEvent.change(screen.getByLabelText(/place of supply state code/i), { target: { value: "27" } });
+    fireEvent.change(screen.getByLabelText(/supplier state code/i), { target: { value: "27" } });
+    expect(await screen.findByLabelText(/^cgst$/i)).toHaveTextContent("₹27.00");
+    expect(screen.getByLabelText(/^sgst$/i)).toHaveTextContent("₹27.00");
+    expect(screen.queryByLabelText(/^igst$/i)).not.toBeInTheDocument();
+    // Inter-state: differing codes → IGST only.
+    fireEvent.change(screen.getByLabelText(/supplier state code/i), { target: { value: "07" } });
+    expect(await screen.findByLabelText(/^igst$/i)).toHaveTextContent("₹54.00");
+    expect(screen.queryByLabelText(/^cgst$/i)).not.toBeInTheDocument();
+  });
+
+  // F4-01: the list Total column reads the server's grand_total_minor rather than
+  // re-summing the lines client-side.
+  it("shows the server-computed grand total in the list, not a client re-sum", async () => {
+    const q: qp.Quotation = {
+      id: "qg", quoteRef: "QTN/2026/G", template: "standard", version: 1, status: "sent",
+      lines: [{ productId: "pr1", productName: "Server", quantity: 3, unitPriceMinor: "10000", taxRateBps: 1800 }],
+      grandTotalMinor: "99999", // server authority — deliberately different to the re-sum (35400)
+    };
+    vi.mocked(qp.getQuotations).mockResolvedValue({ data: [q], source: "api" });
+    render(<QuotationBuilder />);
+    await waitFor(() => expect(screen.getByText("₹999.99")).toBeInTheDocument());
+    expect(screen.queryByText("₹354.00")).not.toBeInTheDocument();
+  });
 });

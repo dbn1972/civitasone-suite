@@ -22,7 +22,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { Button, ConfirmDialog, EmptyState, ErrorState, Masked, StatusPill } from "../../../../_components/ds";
+import { Button, ConfirmDialog, EmptyState, ErrorState, StatusPill } from "../../../../_components/ds";
 import { formatIndianDateTime } from "@/lib/formatters";
 import {
   advanceStage,
@@ -395,12 +395,15 @@ export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; ca
             )}
           </Field>
           <Field label={t("kycReference")}>
-            {/* GAP-CRM-ONBOARDING-DETAIL-05: the KYC reference is a DPDP-sensitive
-                identifier, so it is masked (all but last 4) by default for every
-                viewer. An audited reveal is a backend-dependent follow-up (there
-                is no read-access-log endpoint for onboarding yet, and a reveal
-                with no real audit behind it is worse than none). */}
-            <Masked value={item.kycReference} kind="last4" fallback="—" ariaLabel={t("kycReference")} />
+            {/* GAP-CRM-ONBOARDING-DETAIL-05 / F1-03 + F1-06: the KYC reference
+                is a DPDP-sensitive identifier. The SERVER (crm-service
+                modules/onboarding/routes.ts + shared/pii-reveal.ts) masks it
+                (last 4) for everyone except the KYC approver roles and sends
+                the clear value only to approvers, so the page renders what the
+                server returned — no client-side masking. */}
+            <span style={{ fontFamily: "monospace" }}>
+              {item.kycReference ?? "—"}
+            </span>
           </Field>
           <Field label={t("kycVerified")}>{fmtDate(item.kycVerifiedAt)}</Field>
           <Field label={t("completed")}>{fmtDate(item.completedAt)}</Field>

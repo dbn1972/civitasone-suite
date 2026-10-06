@@ -55,7 +55,9 @@ export function registerQuotationConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.createQuotation, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; dealId?: string | null; quoteRef: string; templateRef: string;
-      totalMinor: string; currency: string; validUntil?: string | null; lineItems: LineItemPayload[];
+      totalMinor: string; taxMinor?: string; grandTotalMinor?: string; currency: string;
+      placeOfSupply?: string | null; supplierState?: string | null;
+      validUntil?: string | null; lineItems: LineItemPayload[];
     };
     try {
       await db.transaction(async (tx) => {
@@ -63,11 +65,14 @@ export function registerQuotationConsumers(queue: Queue): void {
         await tx.execute(sql`
           INSERT INTO crm.quotations
             (id, tenant_id, deal_id, quote_ref, template_ref, version_number, status,
-             total_minor, currency, valid_until, line_items, created_by, updated_by)
+             total_minor, tax_minor, grand_total_minor, currency, place_of_supply, supplier_state,
+             valid_until, line_items, created_by, updated_by)
           VALUES (
             ${p.id}, ${p.tenantId}, ${p.dealId ?? null}, ${p.quoteRef},
             ${p.templateRef}, 1, 'draft', ${p.totalMinor}::bigint,
-            ${p.currency}, ${p.validUntil ?? null}::timestamptz,
+            ${p.taxMinor ?? "0"}::bigint, ${p.grandTotalMinor ?? p.totalMinor}::bigint,
+            ${p.currency}, ${p.placeOfSupply ?? null}, ${p.supplierState ?? null},
+            ${p.validUntil ?? null}::timestamptz,
             ${JSON.stringify(p.lineItems)}::jsonb, ${msg.actorId}, ${msg.actorId}
           )
         `);
@@ -79,7 +84,8 @@ export function registerQuotationConsumers(queue: Queue): void {
           resourceId: p.id,
           payload: {
             quotationId: p.id, quoteRef: p.quoteRef, versionNumber: 1,
-            totalMinor: p.totalMinor, currency: p.currency,
+            totalMinor: p.totalMinor, taxMinor: p.taxMinor ?? "0",
+            grandTotalMinor: p.grandTotalMinor ?? p.totalMinor, currency: p.currency,
           },
         });
       });
@@ -92,7 +98,9 @@ export function registerQuotationConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.versionQuotation, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; sourceId: string; nextVersionNumber: number;
-      totalMinor: string; validUntil?: string | null; lineItems: LineItemPayload[];
+      totalMinor: string; taxMinor?: string; grandTotalMinor?: string;
+      placeOfSupply?: string | null; supplierState?: string | null;
+      validUntil?: string | null; lineItems: LineItemPayload[];
       quoteRef: string;
     };
     try {
@@ -101,9 +109,11 @@ export function registerQuotationConsumers(queue: Queue): void {
         await tx.execute(sql`
           INSERT INTO crm.quotations
             (id, tenant_id, deal_id, quote_ref, template_ref, version_number, status,
-             total_minor, currency, valid_until, line_items, created_by, updated_by)
+             total_minor, tax_minor, grand_total_minor, currency, place_of_supply, supplier_state,
+             valid_until, line_items, created_by, updated_by)
           SELECT ${p.id}, tenant_id, deal_id, quote_ref, template_ref, ${p.nextVersionNumber}, 'draft',
-                 ${p.totalMinor}::bigint, currency,
+                 ${p.totalMinor}::bigint, ${p.taxMinor ?? "0"}::bigint, ${p.grandTotalMinor ?? p.totalMinor}::bigint,
+                 currency, ${p.placeOfSupply ?? null}, ${p.supplierState ?? null},
                  COALESCE(${p.validUntil ?? null}::timestamptz, valid_until),
                  ${JSON.stringify(p.lineItems)}::jsonb, ${msg.actorId}, ${msg.actorId}
           FROM crm.quotations
@@ -118,6 +128,7 @@ export function registerQuotationConsumers(queue: Queue): void {
           payload: {
             quotationId: p.id, clonedFrom: p.sourceId, quoteRef: p.quoteRef,
             versionNumber: p.nextVersionNumber, totalMinor: p.totalMinor,
+            taxMinor: p.taxMinor ?? "0", grandTotalMinor: p.grandTotalMinor ?? p.totalMinor,
           },
         });
       });

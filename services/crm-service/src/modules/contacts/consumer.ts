@@ -256,17 +256,37 @@ export function registerContactConsumers(rawQueue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.createAccount, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; name: string; industry: string | null; website: string | null; gstin: string | null; pan: string | null };
+    const p = msg.payload as { id: string; tenantId: string; name: string; industry: string | null; website: string | null; gstin: string | null; pan: string | null; ownerId?: string | null };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.insertAccount(tx, {
         id: p.id, tenantId: p.tenantId, name: p.name,
         industry: p.industry, website: p.website,
         gstin: p.gstin, pan: p.pan,
+        ownerId: p.ownerId ?? null,
         status: "active", createdBy: msg.actorId, updatedBy: msg.actorId, version: 1,
       });
-      await emit(tx, msg, EVENTS.accountCreated, { accountId: p.id, name: p.name }, "create_account", p.id);
+      await emit(tx, msg, EVENTS.accountCreated, { accountId: p.id, name: p.name, ownerId: p.ownerId ?? null }, "create_account", p.id);
     });
+  });
+
+  // F5-01: change an account's owner. Audit payload carries ids only (never a
+  // name), and the write + audit land in the same transaction. A no-match
+  // (unknown id / cross-tenant) records a rejected audit and makes no change.
+  queue.subscribe(COMMANDS.updateAccount, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; ownerId?: string | null };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const patch: { ownerId?: string | null } = {};
+      if (p.ownerId !== undefined) patch.ownerId = p.ownerId;
+      const touched = await repo.updateAccount(tx, p.id, p.tenantId, msg.actorId, patch);
+      if (touched === 0) {
+        await emitAudit(tx, msg, "update_account", p.id, "rejected_not_found_or_cross_tenant");
+        return;
+      }
+      await emit(tx, msg, EVENTS.accountUpdated, { accountId: p.id, ownerId: p.ownerId ?? null }, "update_account", p.id);
+    });
+    await cache.invalidateResource(msg.tenantId, "account");
   });
 }
 

@@ -118,23 +118,25 @@ describe("RtiTable status pill (GAP-CRM-RTI-03)", () => {
   });
 });
 
-describe("RtiTable applicant PII masking (GAP-CRM-RTI-04)", () => {
+describe("RtiTable applicant PII (GAP-CRM-RTI-04 / F1-02 + F1-06)", () => {
   beforeEach(() => mockedHook.mockReset());
 
   function namedRow(name: string): CrmRtiRow {
     return { ...row("1", "RECEIVED", "2026-10-20T00:00:00.000Z"), applicantName: name };
   }
 
-  it("masks the applicant name for a viewer without PII-read permission", () => {
-    const rows = [namedRow("Anil Sharma")];
+  // The SERVER now masks `applicantName` in the list for roles outside the CRM
+  // PII-read set; the table renders whatever the server returned verbatim and
+  // no longer masks client-side.
+  it("renders the server-masked applicant name verbatim for a non-PII viewer", () => {
+    const rows = [namedRow("Anil S•••")];
     seed(rows);
     render(<RtiTable rows={rows} canRevealPii={false} />);
     expect(screen.queryByText("Anil Sharma")).not.toBeInTheDocument();
-    expect(screen.getByText(/^Anil S/)).toBeInTheDocument();
-    expect(screen.getByText(/•/)).toBeInTheDocument();
+    expect(screen.getByText("Anil S•••")).toBeInTheDocument();
   });
 
-  it("shows the full applicant name to a PII-read viewer", () => {
+  it("renders the clear applicant name verbatim when the server sent it (PII viewer)", () => {
     const rows = [namedRow("Anil Sharma")];
     seed(rows);
     render(<RtiTable rows={rows} canRevealPii />);

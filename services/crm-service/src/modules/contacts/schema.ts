@@ -18,6 +18,15 @@ export const accounts = crmSchema.table("accounts", {
   status: varchar("status", { length: 24 }).notNull().default("active"),
   // Self-referencing org hierarchy (migration 0020). Null = root account.
   parentId: uuid("parent_id"),
+  // F5-01: the agent responsible for the account (nullable = unassigned,
+  // migration 0110). Resolved to a name in the UI, never shown as a raw UUID.
+  ownerId: uuid("owner_id"),
+  // F5-02: denormalised created_at of the latest activity linked to the
+  // account, maintained by the activities consumer in the same transaction as
+  // the activity write (mirrors contacts.last_activity_at), so the accounts
+  // list / health watchlist can show "Last contact" without a cross-module
+  // JOIN into crm.activities. NULL = no activity recorded yet.
+  lastContactAt: timestamp("last_contact_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),

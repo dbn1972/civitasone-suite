@@ -79,6 +79,23 @@ describe("withAccountNames", () => {
     const named = withAccountNames([entry({ accountId: "acc-1" })], [account("acc-1", "Bharat Steel")]);
     expect(named[0].unresolved).toBe(false);
   });
+
+  it("F5-02: carries ownerId and lastContactAt from the matched account", () => {
+    const acc: CRMAccountSummary = {
+      ...account("acc-1", "Bharat Steel"),
+      ownerId: "99999999-9999-4999-8999-999999999999",
+      lastContactAt: "2026-09-15T08:30:00.000Z",
+    };
+    const named = withAccountNames([entry({ accountId: "acc-1" })], [acc]);
+    expect(named[0].ownerId).toBe("99999999-9999-4999-8999-999999999999");
+    expect(named[0].lastContactAt).toBe("2026-09-15T08:30:00.000Z");
+  });
+
+  it("F5-02: defaults ownerId/lastContactAt to null for an unresolved account", () => {
+    const named = withAccountNames([entry({ accountId: "ghost-1" })], []);
+    expect(named[0].ownerId).toBeNull();
+    expect(named[0].lastContactAt).toBeNull();
+  });
 });
 
 describe("byUrgency", () => {

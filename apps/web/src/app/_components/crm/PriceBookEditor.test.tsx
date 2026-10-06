@@ -153,15 +153,16 @@ describe("PriceBookEditor (QP-002)", () => {
     expect(await screen.findByDisplayValue("Government")).toBeInTheDocument();
   });
 
-  // GAP-CRM-PRICE-BOOKS-04: currency is a constrained select (INR), not free text.
-  it("constrains currency to a select rather than free text", async () => {
+  // F4-03: currency is a constrained select from the allow-list (INR/USD/EUR/GBP/AED),
+  // not free text; display uses formatMoneyIn so a non-INR book shows the right symbol.
+  it("constrains currency to an allow-list select rather than free text", async () => {
     render(<PriceBookEditor />);
     await waitFor(() => expect(screen.getByText(/no price books yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /new price book/i }));
     const currency = screen.getAllByLabelText(/^currency$/i)[0]!;
     expect(currency.tagName).toBe("SELECT");
     const values = Array.from(currency.querySelectorAll("option")).map((o) => (o as HTMLOptionElement).value);
-    expect(values).toEqual(["INR"]);
+    expect(values).toEqual(["INR", "USD", "EUR", "GBP", "AED"]);
   });
 
   // GAP-CRM-PRICE-BOOKS-02: segment/geography/channel are backed by a datalist of

@@ -16,9 +16,16 @@ const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-3333-4000-8000-0000000000b1";
 const OTHER = "aaaaaaaa-3333-4000-8000-0000000000b2";
 const ACTOR = "cccccccc-3333-4000-8000-0000000000b1";
+// F3-01 maker ≠ checker: a separate actor who signs off approvals (never the requester
+// or quotation creator, which are both ACTOR in these tests).
+const APPROVER = "cccccccc-3333-4000-8000-0000000000b9";
 
 function headers(roles = ["crm_admin"], tenant = TENANT) {
   return { authorization: `Bearer ${signToken({ sub: ACTOR, tid: tenant, roles, sid: "s-qp" }, SECRET)}`, "x-tenant-id": tenant };
+}
+
+function approverHeaders(roles = ["crm_admin"], tenant = TENANT) {
+  return { authorization: `Bearer ${signToken({ sub: APPROVER, tid: tenant, roles, sid: "s-qp-appr" }, SECRET)}`, "x-tenant-id": tenant };
 }
 
 function scoped<T>(fn: (tx: Parameters<Parameters<typeof sqlClient.begin>[0]>[0]) => Promise<T>, tenant = TENANT): Promise<T> {
@@ -152,7 +159,7 @@ describe("QP-004 quotation discount-approval send-gate (server-derived)", () => 
     // Approve, then send goes through.
     const approvals = await app.inject({ method: "GET", url: `/v1/crm/quotations/${quotationId}/approvals`, headers: headers() });
     const approvalId = approvals.json().data[0].id;
-    await app.inject({ method: "POST", url: `/v1/crm/quotation-approvals/${approvalId}/decide`, headers: headers(), payload: { decision: "approve" } });
+    await app.inject({ method: "POST", url: `/v1/crm/quotation-approvals/${approvalId}/decide`, headers: approverHeaders(), payload: { decision: "approve" } });
     await drainQueue();
 
     const sent = await app.inject({ method: "POST", url: `/v1/crm/quotations/${quotationId}/send`, headers: headers() });
@@ -183,7 +190,7 @@ describe("QP-004 quotation discount-approval send-gate (server-derived)", () => 
     await drainQueue();
     const a2 = await app.inject({ method: "GET", url: `/v1/crm/quotations/${quotationId}/approvals`, headers: headers() });
     const pending = (a2.json().data as Array<{ id: string; status: string }>).find((x) => x.status === "pending")!;
-    await app.inject({ method: "POST", url: `/v1/crm/quotation-approvals/${pending.id}/decide`, headers: headers(), payload: { decision: "approve" } });
+    await app.inject({ method: "POST", url: `/v1/crm/quotation-approvals/${pending.id}/decide`, headers: approverHeaders(), payload: { decision: "approve" } });
     await drainQueue();
 
     const sent = await app.inject({ method: "POST", url: `/v1/crm/quotations/${quotationId}/send`, headers: headers() });

@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { useSearchParams } from "next/navigation";
 import { DataTable, StatusPill } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { ServerExportButton } from "../../../_components/crm/ServerExportButton";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { CrmGrievanceRow } from "../../../_data/loaders";
 
@@ -95,6 +97,7 @@ export function GrievancesTable({
     source,
     (d) => d.length === 0,
   );
+  const searchParams = useSearchParams();
 
   return (
     <>
@@ -104,6 +107,22 @@ export function GrievancesTable({
           (UX-002's pattern; the page used to render a second, independent
           badge from the raw `source` prop — removed). */}
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
+      {canExport && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+          <ServerExportButton
+            endpointPath="v1/crm/grievances/export"
+            filenameBase="grievances"
+            filters={{
+              status: searchParams?.get("status") ?? undefined,
+              priority: searchParams?.get("priority") ?? undefined,
+              category: searchParams?.get("category") ?? undefined,
+              assignedTo: searchParams?.get("assignedTo") ?? undefined,
+              search: searchParams?.get("search") ?? searchParams?.get("q") ?? undefined,
+            }}
+            kind="grievances"
+          />
+        </div>
+      )}
       <DataTable<CrmGrievanceRow>
         columns={[
           {
@@ -161,8 +180,6 @@ export function GrievancesTable({
         rows={rows}
         sortable
         pageSize={pageSize}
-        exportable={canExport}
-        exportFilename="grievances"
         emptyIcon="📭"
         emptyTitle={t("emptyTitle")}
         emptyMessage={t("emptyMessage")}

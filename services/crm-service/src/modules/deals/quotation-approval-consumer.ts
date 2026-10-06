@@ -75,9 +75,22 @@ export function registerQuotationApprovalConsumers(queue: Queue): void {
           SET status = ${newStatus}, approver = ${p.approver}, decided_at = now(),
               reason = COALESCE(${p.reason}, reason), updated_at = now(), version = version + 1
           WHERE id = ${p.id} AND tenant_id = ${p.tenantId} AND status = 'pending' AND version = ${p.expectedVersion}
+            -- F3-01 maker != checker, re-checked HERE (not only in the route) so a message
+            -- from another publisher or a replay cannot self-approve. Applies to approve only;
+            -- a requester may still reject (withdraw) their own request.
+            AND (${p.decision} <> 'approve' OR (
+              requested_by <> ${p.approver}::uuid
+              AND NOT EXISTS (
+                SELECT 1 FROM crm.quotations q
+                WHERE q.id = crm.quotation_approvals.quotation_id
+                  AND q.tenant_id = crm.quotation_approvals.tenant_id
+                  AND q.created_by = ${p.approver}::uuid)))
           RETURNING id
         `) as unknown as Array<{ id: string }>;
-        if (updated.length === 0) return;
+        if (updated.length === 0) {
+          log.warn({ messageId: msg.messageId, approvalId: p.id, decision: p.decision }, "decideQuotationApproval not applied (stale, already decided, or self-approval)");
+          return;
+        }
         await emitWithAudit(tx, ctxOf(msg), {
           eventType: EVENTS.quotationApprovalDecided, action: "decide_approval", resourceType: "quotation_approval",
           resourceId: p.id,

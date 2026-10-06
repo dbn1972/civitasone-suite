@@ -1,8 +1,8 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
 import { Button, PageHeader, EntityPicker, type EntityOption } from "../../../../_components/ds";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { useFormError } from "@/lib/useFormError";
@@ -87,6 +87,7 @@ function normaliseMobile(raw: string): string {
 
 export default function NewServiceRequestPage() {
   const t = useTranslations("crmServiceRequestNew");
+  const tSla = useTranslations("crmServiceTypes");
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [contactError, setContactError] = useState<string | null>(null);
@@ -101,6 +102,13 @@ export default function NewServiceRequestPage() {
   // fall back to the labelled standard list when none is configured / it fails.
   const [serviceTypes, setServiceTypes] = useState<string[]>(SERVICE_TYPES_FALLBACK);
   const [typesFellBack, setTypesFellBack] = useState(false);
+  // F6-03: keep the full configured types so a picked type's SLA can derive a
+  // suggested target date. Empty when the tenant has none (fallback labels only,
+  // which carry no SLA).
+  const [slaByLabel, setSlaByLabel] = useState<Record<string, number>>({});
+  const [selectedType, setSelectedType] = useState<string>("");
+  const [dueAtValue, setDueAtValue] = useState<string>("");
+  const [dueAtDerived, setDueAtDerived] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -110,11 +118,39 @@ export default function NewServiceRequestPage() {
       const { labels, fellBack } = serviceTypeOptions(result);
       setServiceTypes(labels);
       setTypesFellBack(fellBack);
+      // Build a label -> slaHours map from the configured (api) types only.
+      const map: Record<string, number> = {};
+      if (result.source === "api") {
+        for (const t of result.data) {
+          if (t.active && typeof t.slaHours === "number" && t.slaHours > 0) map[t.label] = t.slaHours;
+        }
+      }
+      setSlaByLabel(map);
     })();
     return () => {
       live = false;
     };
   }, []);
+
+  // F6-03: when a type with an SLA is picked and the user has not set a target
+  // date (or the current value was itself derived), suggest created-now + SLA as
+  // the target. The user can still override; a manual edit sticks.
+  useEffect(() => {
+    const sla = slaByLabel[selectedType];
+    if (sla === undefined) {
+      if (dueAtDerived) {
+        setDueAtValue("");
+        setDueAtDerived(false);
+      }
+      return;
+    }
+    if (dueAtValue === "" || dueAtDerived) {
+      const target = new Date(Date.now() + sla * 3_600_000);
+      const iso = target.toISOString().slice(0, 10);
+      setDueAtValue(iso);
+      setDueAtDerived(true);
+    }
+  }, [selectedType, slaByLabel, dueAtValue, dueAtDerived]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -322,7 +358,13 @@ export default function NewServiceRequestPage() {
                   <span style={{ color: "var(--ink)" }}>
                     {t("serviceType")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
                   </span>
-                  <select name="serviceType" required style={FIELD}>
+                  <select
+                    name="serviceType"
+                    required
+                    style={FIELD}
+                    value={selectedType}
+                    onChange={(e) => setSelectedType(e.target.value)}
+                  >
                     <option value="">{t("selectServiceType")}</option>
                     {serviceTypes.map((s) => (
                       <option key={s} value={s}>{s}</option>
@@ -366,7 +408,26 @@ export default function NewServiceRequestPage() {
                   <span style={{ color: "var(--ink)" }}>
                     {t("targetDate")} <span style={{ color: "var(--ink2)", fontWeight: 400 }}>{t("optional")}</span>
                   </span>
-                  <input name="dueAt" type="date" style={FIELD} />
+                  <input
+                    name="dueAt"
+                    type="date"
+                    style={FIELD}
+                    value={dueAtValue}
+                    onChange={(e) => {
+                      setDueAtValue(e.target.value);
+                      setDueAtDerived(false);
+                    }}
+                  />
+                  {/* F6-03: when the picked type carries an SLA, show the derived
+                      target so the clerk sees what the server will set; they can
+                      still override by editing the date. */}
+                  {slaByLabel[selectedType] !== undefined ? (
+                    <span role="note" style={{ fontSize: 12, color: "var(--ink2)" }}>
+                      {dueAtDerived
+                        ? tSla("slaDerived", { hours: slaByLabel[selectedType] ?? 0 })
+                        : tSla("slaInfo", { hours: slaByLabel[selectedType] ?? 0 })}
+                    </span>
+                  ) : null}
                 </label>
               </div>
               <label style={LABEL}>

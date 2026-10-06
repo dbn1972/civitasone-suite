@@ -19,6 +19,7 @@ import { queue } from "../src/shared/infra.js";
 import { registerAllConsumers } from "../src/consumers.js";
 import { drainQueue, captureHandlers, envelope } from "./consumer-harness.js";
 import { COMMANDS, CONSUMED_EVENTS } from "../src/topics.js";
+import { runWithTenant } from "@civitasone/db";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000c00100";
@@ -382,8 +383,24 @@ describe("CO-001 POST /v1/crm/communications/bulk-send", () => {
 
 describe("CO-001 Consumer — consent re-check", () => {
   it("marks communication as consent_revoked if consent changed between route and consumer", async () => {
-    // Temporarily give consent, accept at route, revoke, then drain
+    // The flake (F3-04): the previous version POSTed through the live route, then
+    // revoked consent, then drained. But MemoryQueue.publish is fire-and-forget —
+    // delivery to the send consumer starts the instant the route returns 202, so
+    // under parallel load the consumer could re-check consent BEFORE the test's
+    // revoke committed, read consent=true, and write a 'pending'/'sent' row — the
+    // assertion then saw the wrong status. There is no way to pause the shared
+    // live queue between publish and the revoke.
+    //
+    // Fix (deterministic, assertion preserved): revoke consent FIRST, then invoke
+    // the sendCommunication consumer handler directly (the harness's documented
+    // "state changed after the route accepted" path), wrapped in runWithTenant so
+    // the FORCE-RLS writes carry the tenant GUC the live queue would normally set.
+    // This models exactly "consent changed between route and consumer" with no
+    // timing dependency, and still asserts status === 'consent_revoked'.
     const contactId = randomUUID();
+    const commId = randomUUID();
+    const messageId = randomUUID();
+
     await sqlClient.begin(async (tx) => {
       await tx`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
       await tx`
@@ -392,33 +409,34 @@ describe("CO-001 Consumer — consent re-check", () => {
       `;
     });
 
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "POST",
-      url: "/v1/crm/communications/send",
-      headers: headers(),
-      payload: {
-        recipientContactId: contactId,
-        templateId: TEMPLATE_ID,
-        channel: "email",
-      },
-    });
-    await app.close();
-    expect(res.statusCode).toBe(202);
-    const { id } = res.json();
-
-    // Revoke consent before consumer processes
+    // Consent was present when the route would have accepted; it is revoked
+    // BEFORE the consumer runs — the exact window the re-check must catch.
     await sqlClient.begin(async (tx) => {
       await tx`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
       await tx`UPDATE crm.contacts SET marketing_consent = false WHERE id = ${contactId}`;
     });
 
-    await drainQueue();
+    const { handlerFor } = captureHandlers();
+    const handler = handlerFor(COMMANDS.sendCommunication);
+    const msg = envelope(
+      COMMANDS.sendCommunication,
+      {
+        id: commId,
+        tenantId: TENANT,
+        recipientContactId: contactId,
+        templateId: TEMPLATE_ID,
+        channel: "email",
+        variables: {},
+        scheduledAt: null,
+      },
+      { tenantId: TENANT, actorId: ACTOR, messageId },
+    );
+    await runWithTenant(TENANT, () => handler(msg));
 
     // Check the communication was marked consent_revoked
     const rows = await sqlClient.begin(async (tx) => {
       await tx`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
-      return tx`SELECT status FROM crm.communications WHERE id = ${id} AND tenant_id = ${TENANT}`;
+      return tx`SELECT status FROM crm.communications WHERE id = ${commId} AND tenant_id = ${TENANT}`;
     });
     expect(rows.length).toBe(1);
     expect(rows[0].status).toBe("consent_revoked");
@@ -426,6 +444,7 @@ describe("CO-001 Consumer — consent re-check", () => {
     // Cleanup
     await sqlClient.begin(async (tx) => {
       await tx`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
+      await tx`DELETE FROM crm.communications WHERE id = ${commId}`;
       await tx`DELETE FROM crm.contacts WHERE id = ${contactId}`;
     });
   });

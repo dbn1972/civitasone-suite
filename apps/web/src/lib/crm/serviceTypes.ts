@@ -26,6 +26,8 @@ export interface ServiceType {
   label: string;
   active: boolean;
   sortOrder: number;
+  /** F6-03: optional SLA target in hours; drives the SR new-form derived due date. */
+  slaHours?: number | null;
   version?: number;
 }
 
@@ -83,6 +85,12 @@ export function normaliseServiceType(raw: unknown): ServiceType | null {
     label,
     active: bool(r.active, true),
     sortOrder: num(r.sortOrder ?? r.sort_order, 0),
+    slaHours:
+      r.slaHours === null || r.sla_hours === null
+        ? null
+        : typeof (r.slaHours ?? r.sla_hours) === "number"
+          ? ((r.slaHours ?? r.sla_hours) as number)
+          : undefined,
     version: typeof r.version === "number" ? r.version : undefined,
   };
 }
@@ -132,6 +140,8 @@ export const serviceTypeSchema = z.object({
   label: z.string().trim().min(1, "Enter a label.").max(160, "Label is too long."),
   active: z.boolean(),
   sortOrder: z.number().int().min(0).max(9999),
+  // F6-03: optional SLA target. null/undefined = no SLA; otherwise 1..87600 hours.
+  slaHours: z.number().int().min(1, "SLA must be at least 1 hour.").max(87600, "SLA is too long.").nullish(),
 });
 
 export interface ServiceTypeErrors {
@@ -159,7 +169,13 @@ export function isServiceTypeValid(t: ServiceType): boolean {
 export async function createServiceType(t: ServiceType): Promise<void> {
   const res = await browserFetch("v1/crm/service-types", {
     method: "POST",
-    body: JSON.stringify({ code: t.code.trim(), label: t.label.trim(), active: t.active, sortOrder: t.sortOrder }),
+    body: JSON.stringify({
+      code: t.code.trim(),
+      label: t.label.trim(),
+      active: t.active,
+      sortOrder: t.sortOrder,
+      ...(t.slaHours != null ? { slaHours: t.slaHours } : {}),
+    }),
   });
   if (!res.ok) throw new UserFacingError(await errorMessageFromResponse(res), referenceFromHeaders(res.headers));
 }
@@ -167,7 +183,13 @@ export async function createServiceType(t: ServiceType): Promise<void> {
 export async function updateServiceType(id: string, t: ServiceType): Promise<void> {
   const res = await browserFetch(`v1/crm/service-types/${id}`, {
     method: "PUT",
-    body: JSON.stringify({ label: t.label.trim(), active: t.active, sortOrder: t.sortOrder }),
+    body: JSON.stringify({
+      label: t.label.trim(),
+      active: t.active,
+      sortOrder: t.sortOrder,
+      // Send null to clear, a number to set; omit only when undefined.
+      ...(t.slaHours !== undefined ? { slaHours: t.slaHours } : {}),
+    }),
   });
   if (!res.ok) throw new UserFacingError(await errorMessageFromResponse(res), referenceFromHeaders(res.headers));
 }

@@ -490,6 +490,10 @@ export interface CRMAccountSummary {
   website: string | null;
   parentId: string | null;
   contactCount: number;
+  /** F5-01: the account owner (an opaque user id, resolved to a name in the UI). */
+  ownerId?: string | null;
+  /** F5-02: ISO timestamp of the latest activity linked to the account. */
+  lastContactAt?: string | null;
 }
 
 /** Minimal account node used for hierarchy breadcrumbs and child lists. */

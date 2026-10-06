@@ -8,6 +8,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { commandId } from "../../shared/idempotency.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
+import { ALLOWED_CURRENCIES } from "../deals/quotation-domain.js";
 import * as repo from "./repo.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
@@ -16,6 +17,10 @@ const ADMIN_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
 const idParam = z.object({ id: z.string().uuid() });
 const minor = z.string().regex(/^\d{1,25}$/, "must be a non-negative integer string of minor units");
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+// F4-03: a product may carry a currency from the small allow-list (default INR).
+const currencyCode = z.enum(ALLOWED_CURRENCIES);
+// F4-02: optional HSN (goods) / SAC (services) code — 4 to 8 digits.
+const hsnSac = z.string().regex(/^\d{4,8}$/, "HSN/SAC must be 4 to 8 digits");
 
 const createBody = z.object({
   category: z.string().min(1).max(120).optional(),
@@ -23,8 +28,9 @@ const createBody = z.object({
   name: z.string().min(1).max(200),
   unit: z.string().min(1).max(32).default("unit"),
   taxRateBps: z.number().int().min(0).max(100000).default(0),
+  hsnSac: hsnSac.nullable().optional(),
   priceMinor: minor.default("0"),
-  currency: z.string().length(3).default("INR"),
+  currency: currencyCode.default("INR"),
   activeFrom: isoDate.nullable().optional(),
   activeTo: isoDate.nullable().optional(),
   enabled: z.boolean().default(true),
@@ -35,8 +41,9 @@ const updateBody = z.object({
   name: z.string().min(1).max(200).optional(),
   unit: z.string().min(1).max(32).optional(),
   taxRateBps: z.number().int().min(0).max(100000).optional(),
+  hsnSac: hsnSac.nullable().optional(),
   priceMinor: minor.optional(),
-  currency: z.string().length(3).optional(),
+  currency: currencyCode.optional(),
   activeFrom: isoDate.nullable().optional(),
   activeTo: isoDate.nullable().optional(),
   enabled: z.boolean().optional(),

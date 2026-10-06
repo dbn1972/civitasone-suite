@@ -44,6 +44,19 @@ export async function findApproval(tenantId: string, id: string): Promise<Approv
   return rows[0] ?? null;
 }
 
+/**
+ * QP-004 maker≠checker (F3-01): the actor who created the quotation. Returned so the
+ * decide route can forbid self-approval by the quotation's creator as well as by the
+ * person who raised the approval request. NULL when the row carries no creator.
+ */
+export async function quotationCreatedBy(tenantId: string, quotationId: string): Promise<string | null> {
+  const rows = await scopedRead(async (tx) => tx.execute(sql`
+    SELECT created_by AS "createdBy"
+    FROM crm.quotations WHERE id = ${quotationId} AND tenant_id = ${tenantId}
+  `)) as unknown as Array<{ createdBy: string | null }>;
+  return rows[0]?.createdBy ?? null;
+}
+
 export async function listApprovals(tenantId: string, quotationId: string): Promise<ApprovalRow[]> {
   return scopedRead(async (tx) => tx.execute(sql`
     SELECT id, quotation_id AS "quotationId", approval_type AS "approvalType", status,

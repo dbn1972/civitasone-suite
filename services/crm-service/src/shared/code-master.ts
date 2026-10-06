@@ -23,18 +23,27 @@ const AUDIT = "audit.event.record";
 const SELECT_COLS = sql`
   id, code, label, active, sort_order AS "sortOrder",
   created_at AS "createdAt", updated_at AS "updatedAt", version`;
+// F6-03: service types also carry an optional SLA target (hours).
+const SELECT_COLS_SLA = sql`
+  id, code, label, active, sort_order AS "sortOrder", sla_hours AS "slaHours",
+  created_at AS "createdAt", updated_at AS "updatedAt", version`;
+// Bounded 1h..10y to match the DB check constraint (0109).
+const slaHoursCreate = z.number().int().min(1).max(87600).nullish();
+const slaHoursUpdate = z.number().int().min(1).max(87600).nullable().optional();
 
 const createBody = z.object({
   code: z.string().min(1).max(64).regex(/^[a-z0-9_]+$/, "code must be lowercase snake_case"),
   label: z.string().min(1).max(160),
   active: z.boolean().default(true),
   sortOrder: z.number().int().min(0).max(9999).default(0),
+  slaHours: slaHoursCreate,
 });
 const updateBody = z
   .object({
     label: z.string().min(1).max(160).optional(),
     active: z.boolean().optional(),
     sortOrder: z.number().int().min(0).max(9999).optional(),
+    slaHours: slaHoursUpdate,
   })
   .refine((b) => Object.keys(b).length > 0, { message: "no fields to update" });
 const idParam = z.object({ id: z.string().uuid() });
@@ -49,17 +58,20 @@ export interface CodeMasterConfig {
   /** Human noun for error messages, e.g. "service type". */
   noun: string;
   commands: { create: string; update: string; remove: string };
+  /** True when the table has an sla_hours column (service types only). */
+  hasSla?: boolean;
 }
 
 export async function registerCodeMasterRoutes(app: FastifyInstance, cfg: CodeMasterConfig): Promise<void> {
   const base = `/v1/crm/${cfg.path}`;
   const tbl = sql.raw(cfg.table);
+  const cols = cfg.hasSla ? SELECT_COLS_SLA : SELECT_COLS;
 
   app.get(base, async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const rows = (await scopedRead((tx) => tx.execute(sql`
-      SELECT ${SELECT_COLS} FROM ${tbl}
+      SELECT ${cols} FROM ${tbl}
       WHERE tenant_id = ${ctx.tenantId} ORDER BY sort_order, label
     `))) as unknown as Array<Record<string, unknown>>;
     return reply.send({ data: rows, meta: { total: rows.length } });
@@ -68,7 +80,8 @@ export async function registerCodeMasterRoutes(app: FastifyInstance, cfg: CodeMa
   app.post(base, async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
-    const b = createBody.parse(req.body);
+    const { slaHours, ...rest } = createBody.parse(req.body);
+    const b = cfg.hasSla ? { ...rest, slaHours: slaHours ?? null } : rest;
     const dup = (await scopedRead((tx) => tx.execute(sql`
       SELECT 1 FROM ${tbl} WHERE tenant_id = ${ctx.tenantId} AND code = ${b.code}
     `))) as unknown as unknown[];
@@ -81,7 +94,8 @@ export async function registerCodeMasterRoutes(app: FastifyInstance, cfg: CodeMa
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
-    const b = updateBody.parse(req.body);
+    const { slaHours, ...rest } = updateBody.parse(req.body);
+    const b = cfg.hasSla && slaHours !== undefined ? { ...rest, slaHours } : rest;
     await assertExists(tbl, ctx.tenantId, id, cfg.noun);
     // `id` is the target row; a fresh messageId is derived per request/idempotency key.
     const accepted = await publishCrmCommand(ctx, cfg.commands.update, id, { ...b });
@@ -140,11 +154,13 @@ export function registerCodeMasterConsumers(queue: Queue, cfg: CodeMasterConfig)
     const m = msg as unknown as Msg;
     const p = m.payload as { id: string } & z.infer<typeof createBody>;
     if (!p?.id) return;
+    const slaCol = cfg.hasSla ? sql`, sla_hours` : sql``;
+    const slaVal = cfg.hasSla ? sql`, ${p.slaHours ?? null}` : sql``;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, m.messageId))) return;
       const inserted = (await tx.execute(sql`
-        INSERT INTO ${tbl} (id, tenant_id, code, label, active, sort_order, created_by, updated_by)
-        VALUES (${p.id}, ${m.tenantId}, ${p.code}, ${p.label}, ${p.active}, ${p.sortOrder}, ${m.actorId}, ${m.actorId})
+        INSERT INTO ${tbl} (id, tenant_id, code, label, active, sort_order${slaCol}, created_by, updated_by)
+        VALUES (${p.id}, ${m.tenantId}, ${p.code}, ${p.label}, ${p.active}, ${p.sortOrder}${slaVal}, ${m.actorId}, ${m.actorId})
         ON CONFLICT (tenant_id, code) DO NOTHING
         RETURNING id
       `)) as unknown as unknown[];
@@ -161,6 +177,7 @@ export function registerCodeMasterConsumers(queue: Queue, cfg: CodeMasterConfig)
     if (p.label !== undefined) sets.push(sql`label = ${p.label}`);
     if (p.active !== undefined) sets.push(sql`active = ${p.active}`);
     if (p.sortOrder !== undefined) sets.push(sql`sort_order = ${p.sortOrder}`);
+    if (cfg.hasSla && p.slaHours !== undefined) sets.push(sql`sla_hours = ${p.slaHours}`);
     sets.push(sql`updated_at = now()`, sql`updated_by = ${m.actorId}`, sql`version = version + 1`);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, m.messageId))) return;

@@ -3,7 +3,7 @@ import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { commandId } from "../../shared/idempotency.js";
 import { COMMANDS, RESOURCE } from "../../topics.js";
-import type { CreateContactBody, UpdateContactBody, MergeContactsBody, BulkImportBody, CreateAccountBody } from "./validators.js";
+import type { CreateContactBody, UpdateContactBody, MergeContactsBody, BulkImportBody, CreateAccountBody, UpdateAccountBody } from "./validators.js";
 import type { ContactView } from "./schema.js";
 import * as repo from "./repo.js";
 
@@ -132,8 +132,26 @@ export async function createAccount(ctx: RequestContext, body: CreateAccountBody
   await queue.publish(COMMANDS.createAccount, {
     messageId: id, type: COMMANDS.createAccount,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, name: body.name, industry: body.industry ?? null, website: body.website || null, gstin: body.gstin ?? null, pan: body.pan ?? null },
+    payload: { id, tenantId: ctx.tenantId, name: body.name, industry: body.industry ?? null, website: body.website || null, gstin: body.gstin ?? null, pan: body.pan ?? null, ownerId: body.ownerId ?? null },
   });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/**
+ * F5-01: change an account's owner (and any future mutable account field). The
+ * route validates + publishes; the contacts consumer applies the patch and
+ * emits the accountUpdated audit inside the same transaction. Idempotency key
+ * is scoped per account so a reused client key across two accounts does not
+ * collapse into one write.
+ */
+export async function updateAccount(ctx: RequestContext, id: string, body: UpdateAccountBody): Promise<Accepted> {
+  const msgId = commandId(ctx, `${COMMANDS.updateAccount}:${id}`);
+  await queue.publish(COMMANDS.updateAccount, {
+    messageId: msgId, type: COMMANDS.updateAccount,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, ...body },
+  });
+  await cache.invalidateResource(ctx.tenantId, "account");
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 

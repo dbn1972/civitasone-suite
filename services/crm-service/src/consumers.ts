@@ -52,6 +52,7 @@ import { registerOrderConsumers } from "./modules/deals/orders-consumer.js";
 import { registerDocumentConsumers } from "./modules/documents/consumer.js";
 import { registerCommissionConsumers } from "./modules/commissions/consumer.js";
 import { registerPaymentConsumers } from "./modules/subscriptions/payment-consumer.js";
+import { registerServiceRequestNotifyConsumer } from "./modules/service-requests/notify-consumer.js";
 
 export function registerAllConsumers(queue: Queue): void {
   registerContactConsumers(queue);
@@ -111,4 +112,6 @@ export function registerAllConsumers(queue: Queue): void {
   registerCommissionConsumers(queue);
   // Gap 6: payment-due and balance-alert event consumers
   registerPaymentConsumers(queue);
+  // F6-02: citizen notification when a service request is resolved/closed.
+  registerServiceRequestNotifyConsumer(queue);
 }

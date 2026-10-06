@@ -19,6 +19,8 @@ export const COMMANDS = {
   createActivity: "crm.activity.create",
   updateActivity: "crm.activity.update",
   createAccount: "crm.account.create",
+  /** F5-01: update mutable account fields (currently the owner). */
+  updateAccount: "crm.account.update",
   recalculateLeadScore: "crm.lead.score_recalculate",
   /** Inbound lead capture from any channel (email, telephony, chatbot, whatsapp, partner_api). */
   inboundCapture: "crm.lead.inbound_capture",
@@ -242,6 +244,15 @@ export const COMMANDS = {
   approveCampaign: "crm.campaign.approve",
   /** Reject a pending campaign with optional reason. */
   rejectCampaign: "crm.campaign.reject",
+  /**
+   * F6-02 — notify a citizen that their service request was resolved/closed.
+   * Payload: { serviceRequestId, tenantId, status, channelHint } — NO PII (the
+   * consumer reads the SR row for the citizen phone/email at send time, so the
+   * contact details never enter the queue envelope or any consumer's logs). The
+   * consumer calls notification-service out-of-band (never inline in the request)
+   * and writes the delivery result back as an activity.
+   */
+  notifyServiceRequestResolution: "crm.service_request.notify_citizen",
 } as const;
 
 export const EVENTS = {
@@ -262,6 +273,8 @@ export const EVENTS = {
   activityCreated: "crm.activity.created",
   activityUpdated: "crm.activity.updated",
   accountCreated: "crm.account.created",
+  /** F5-01: account fields (currently the owner) changed. */
+  accountUpdated: "crm.account.updated",
   leadScoreRecalculated: "crm.lead.score_recalculated",
   /** Lead entity updated — consumed by ml-service for feature recomputation. */
   leadUpdated: "crm.lead.updated",
@@ -479,6 +492,12 @@ export const EVENTS = {
   rtiSecondAppealRecorded: "crm.rti.second_appeal_recorded",
   /** An RTI request was disposed (closed). */
   rtiDisposed: "crm.rti.disposed",
+  /**
+   * F6-02 — a resolution/closure notification was dispatched to a citizen for a
+   * service request. Payload: { serviceRequestId, status, channel, outcome } —
+   * never the phone/email value.
+   */
+  serviceRequestCitizenNotified: "crm.service_request.citizen_notified",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */

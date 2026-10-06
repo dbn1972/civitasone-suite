@@ -106,7 +106,30 @@ describe("GET/PUT /v1/crm/lead-score-rules", () => {
 
   it("400 for an invalid rule body", async () => {
     expect((await call("PUT", "/v1/crm/lead-score-rules", { payload: { rules: [{ attribute: "email", weight: 200, scoreFnType: "presence", params: {}, enabled: true }] } })).statusCode).toBe(400);
-    expect((await call("PUT", "/v1/crm/lead-score-rules", { payload: { rules: [] } })).statusCode).toBe(400);
+  });
+
+  // F3-03: an empty rule-set PUT is a loud 422 EMPTY_CONFIG_REJECTED (not a silent
+  // no-op / generic 400) unless the caller explicitly confirms clearing all.
+  it("422 EMPTY_CONFIG_REJECTED for an empty rule set without confirmEmpty", async () => {
+    const res = await call("PUT", "/v1/crm/lead-score-rules", { payload: { rules: [] } });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("EMPTY_CONFIG_REJECTED");
+  });
+
+  it("refuses confirmEmpty=false (z.coerce.boolean would read it as true)", async () => {
+    const res = await call("PUT", "/v1/crm/lead-score-rules?confirmEmpty=false", { payload: { rules: [] } });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("EMPTY_CONFIG_REJECTED");
+  });
+
+  it("refuses a non-true/false confirmEmpty value (0)", async () => {
+    const res = await call("PUT", "/v1/crm/lead-score-rules?confirmEmpty=0", { payload: { rules: [] } });
+    expect(res.statusCode).toBeGreaterThanOrEqual(400);
+  });
+
+  it("accepts an empty rule set with ?confirmEmpty=true", async () => {
+    const res = await call("PUT", "/v1/crm/lead-score-rules?confirmEmpty=true", { payload: { rules: [] } });
+    expect(res.statusCode).toBe(200);
   });
 });
 

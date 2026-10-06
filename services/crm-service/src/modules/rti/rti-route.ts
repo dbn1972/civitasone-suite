@@ -16,6 +16,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { listQuery, windowOf, listEnvelope } from "../../shared/list-query.js";
+import { maskList, maskRecord } from "../../shared/pii-reveal.js";
 import * as repo from "./rti-repo.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
@@ -159,7 +160,7 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
       offset: w.offset,
     });
 
-    return reply.send(listEnvelope(rows, w, total));
+    return reply.send(listEnvelope(maskList("rti", rows as Array<Record<string, unknown>>, ctx.roles), w, total));
   });
 
   // GET /v1/crm/rti/:id — detail
@@ -170,7 +171,19 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
 
     const row = await repo.getRtiById(ctx.tenantId, id);
     if (!row) throw new HttpError(404, "NOT_FOUND", "RTI request not found");
-    return reply.send({ data: row });
+    return reply.send({ data: maskRecord("rti", row as Record<string, unknown>, ctx.roles) });
+  });
+
+  // GET /v1/crm/rti/:id/history — F6-01 status timeline
+  app.get("/v1/crm/rti/:id/history", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CRM_ROLES);
+    const { id } = idParam.parse(req.params);
+
+    const row = await repo.getRtiById(ctx.tenantId, id);
+    if (!row) throw new HttpError(404, "NOT_FOUND", "RTI request not found");
+    const data = await repo.getRtiHistory(ctx.tenantId, id);
+    return reply.send({ data, meta: { total: data.length } });
   });
 
   // PATCH /v1/crm/rti/:id/forward — transfer to another CPIO / department

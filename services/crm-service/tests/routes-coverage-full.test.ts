@@ -190,25 +190,35 @@ describe("GET /v1/crm/contacts", () => {
 });
 
 describe("GET /v1/crm/contacts/export", () => {
-  it("returns 200 with export data for admin", async () => {
+  // F2-01: the export is a purpose-logged CSV (DPDP accountability), replacing
+  // the old JSON { data, exportedAt } body.
+  const PURPOSE = encodeURIComponent("quarterly outreach planning");
+
+  it("returns 200 CSV for admin when a purpose is given", async () => {
+    const res = await app.inject({
+      method: "GET", url: `/v1/crm/contacts/export?purpose=${PURPOSE}`,
+      headers: authHeader(["crm_admin"]),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(String(res.headers["content-type"])).toMatch(/text\/csv/);
+    expect(res.body.split("\n")[0]).toMatch(/name/i);
+  });
+
+  it("returns 200 CSV (masked PII) for non-admin when a purpose is given", async () => {
+    const res = await app.inject({
+      method: "GET", url: `/v1/crm/contacts/export?purpose=${PURPOSE}`,
+      headers: authHeader(["crm_user"]),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(String(res.headers["content-type"])).toMatch(/text\/csv/);
+  });
+
+  it("returns 400 without a purpose", async () => {
     const res = await app.inject({
       method: "GET", url: "/v1/crm/contacts/export",
       headers: authHeader(["crm_admin"]),
     });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.data).toBeDefined();
-    expect(body.exportedAt).toBeDefined();
-  });
-
-  it("returns 200 with masked PII for non-admin", async () => {
-    const res = await app.inject({
-      method: "GET", url: "/v1/crm/contacts/export",
-      headers: authHeader(["crm_user"]),
-    });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.data).toBeDefined();
+    expect(res.statusCode).toBe(400);
   });
 
   it("returns 403 for unauthorized role", async () => {
