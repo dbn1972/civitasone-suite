@@ -6,11 +6,12 @@ export default function PolicyHubPage() {
       title="Policy"
       description="RBAC bindings, ABAC rules, permission evaluation and role-feature visibility."
       links={[
-        { href: "/tenant-admin/roles", label: "Roles", note: "Role catalogue and permission grids (existing)" },
-        { href: "/policy/bindings", label: "Bindings", note: "User ↔ role bindings and break-glass" },
+        { href: "/tenant-admin/roles", label: "Roles", note: "Role catalogue and permission grids · Opens Tenant Admin" },
+        { href: "/policy/bindings", label: "Bindings", note: "User ↔ role bindings" },
         { href: "/policy/abac", label: "ABAC Rules", note: "Attribute-based allow/deny rules" },
         { href: "/policy/evaluate", label: "Evaluate", note: "Test a permission decision" },
         { href: "/policy/role-features", label: "Role Features", note: "Feature visibility grants per role" },
+        { href: "/tenant-admin/breakglass", label: "Break-glass access", note: "Emergency access requests · Opens Tenant Admin" },
       ]}
     />
   );

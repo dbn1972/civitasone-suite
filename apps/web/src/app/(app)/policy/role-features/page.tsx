@@ -3,6 +3,7 @@ import { PageHeader, StatGrid, StatCard, Card, EmptyState, StatusPill, RefreshEr
 import { getRoleFeatureGrants } from "../_data";
 import { toHumanError } from "@/lib/messages";
 import { RoleFeatureGrantForm } from "./RoleFeatureGrantForm";
+import { GrantRowActions } from "./GrantRowActions";
 
 export const dynamic = "force-dynamic";
 
@@ -16,14 +17,15 @@ export default async function PolicyRoleFeaturesPage() {
     <div className="page-main wrap" aria-label="Role feature grants">
       <PageHeader
         title="Role Features"
-        subtitle="Feature visibility grants loaded from /api/v1/policy/role-features."
+        subtitle="Control which features each role can see. Granting is confirmed and audited."
         back="/policy"
       />
       {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
         <StatCard icon="🎛️" iconBg="#eff8ff" label="Grants" value={errored ? "—" : grants.length} />
         <StatCard icon="✅" iconBg="#dcfce7" label="Granted" value={errored ? "—" : granted} />
-        <StatCard icon="👤" iconBg="#faf5ff" label="Roles" value={errored ? "—" : roles} />
+        {/* GAP-POLICY-ROLE-FEATURES-05: label matches what is counted. */}
+        <StatCard icon="👤" iconBg="#faf5ff" label="Roles with grants" value={errored ? "—" : roles} />
       </StatGrid>
 
       <Card title="Grant a feature" padding>
@@ -46,8 +48,10 @@ export default async function PolicyRoleFeaturesPage() {
                 <tr>
                   <th scope="col">Role</th>
                   <th scope="col">Feature</th>
+                  {/* GAP-POLICY-ROLE-FEATURES-05: one vocabulary — Granted/Revoked. */}
                   <th scope="col">Granted</th>
                   <th scope="col">Id</th>
+                  <th scope="col">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -56,9 +60,21 @@ export default async function PolicyRoleFeaturesPage() {
                     <td>{g.roleName}</td>
                     <td><code>{g.featureKey}</code></td>
                     <td>
-                      <StatusPill status={g.granted ? "active" : "inactive"} label={g.granted ? "granted" : "revoked"} />
+                      <StatusPill
+                        status={g.granted ? "granted" : "revoked"}
+                        variant={g.granted ? "good" : "bad"}
+                        label={g.granted ? "Granted" : "Revoked"}
+                      />
                     </td>
                     <td><code>{g.id}</code></td>
+                    <td>
+                      <GrantRowActions
+                        grantId={g.id}
+                        roleName={g.roleName}
+                        featureKey={g.featureKey}
+                        granted={g.granted}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>
