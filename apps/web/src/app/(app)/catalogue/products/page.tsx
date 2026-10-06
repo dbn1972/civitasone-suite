@@ -13,7 +13,7 @@ export default async function Page() {
       </nav>
       <ModuleListPage
         title="Catalogue — Products"
-        description="Products and services from catalogue-service."
+        description="Products and services offered."
         rows={data}
         source={source}
       />

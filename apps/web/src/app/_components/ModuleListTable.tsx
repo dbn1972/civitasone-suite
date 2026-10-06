@@ -43,7 +43,21 @@ const MODULE_COLUMNS: ModuleCol[] = [
       </span>
     ),
   },
-  { key: "label", label: "Name" },
+  {
+    key: "label",
+    label: "Name",
+    // GAP-CATALOGUE-CATEGORIES-01: a flattened hierarchy row carries an optional
+    // 0-based `depth`; indent the Name cell by it so a sub-category reads as
+    // nested under its parent. Rows without `depth` render flush as before.
+    // DataTable owns the <td>, so the indent lives on a wrapper span.
+    render: (row) => (
+      <span style={row.depth ? { display: "inline-block", paddingLeft: `${row.depth * 16}px` } : undefined}>
+        {row.depth ? <span aria-hidden="true" style={{ opacity: 0.5 }}>└ </span> : null}
+        {row.label}
+        {row.parentLabel ? <span className="muted" style={{ fontSize: "0.85em" }}> · in {row.parentLabel}</span> : null}
+      </span>
+    ),
+  },
   { key: "sublabel", label: "Detail", render: (row) => row.sublabel ?? "—" },
   {
     key: "status",

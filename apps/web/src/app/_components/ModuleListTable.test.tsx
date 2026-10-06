@@ -183,4 +183,25 @@ describe("ModuleListTable", () => {
     expect(screen.getByText("Alpha module")).toBeInTheDocument();
     expect(screen.queryByText("Beta module")).not.toBeInTheDocument();
   });
+
+  // GAP-CATALOGUE-CATEGORIES-01 (TREE): a flattened hierarchy row carries an
+  // optional 0-based `depth`; the Name cell is indented by depth*16px and a
+  // nested row names its parent. Rows without `depth` render flush (asserted
+  // by every other test above, which pass no depth).
+  it("indents a nested tree row by its depth and shows its parent", () => {
+    const treeRows = [
+      { id: "root", label: "Banking", depth: 0 },
+      { id: "child", label: "Savings", depth: 1, parentLabel: "Banking" },
+    ];
+    mockedHook.mockReturnValue({ data: treeRows, fromCache: false, offline: false, cachedAt: null, provenance: "live" } as never);
+    render(<ModuleListTable cacheKey="test" rows={treeRows} source="api" />);
+
+    const childCell = screen.getByText("Savings");
+    expect(childCell).toHaveStyle({ paddingLeft: "16px" });
+    expect(childCell).toHaveTextContent(/in Banking/i);
+
+    const rootCell = screen.getByText("Banking");
+    // depth 0 (falsy) => no indent style applied.
+    expect(rootCell.getAttribute("style") ?? "").not.toContain("padding-left");
+  });
 });
