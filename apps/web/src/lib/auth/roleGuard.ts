@@ -393,3 +393,24 @@ export const NOTIFICATION_SEND_ROLES = ["notification_admin", "super_admin", "pl
 /** Mirrors notification-service NOTIFY_READ_ROLES: send roles + audit_officer. */
 export const NOTIFICATION_READ_ROLES = [...NOTIFICATION_SEND_ROLES, "audit_officer"];
 export const NOTIFICATION_TEMPLATE_ADMIN_ROLES = ["platform_admin", "super_admin", "tenant_admin"];
+
+/**
+ * GAP-LOYALTY-ACCRUALS-02 / MEMBERS-02 / HOME-03: roles permitted to READ
+ * loyalty data (programmes, enrolments/members, accruals, redemptions, tiers).
+ * Mirrors loyalty-service's READ_ROLES on every GET route
+ * (services/loyalty-service/src/modules/[module]/routes.ts): loyalty_user,
+ * loyalty_admin, super_admin. The service is the authority (every GET route
+ * calls requireRole and 403s others); this web gate is defence-in-depth so a
+ * user whose GET would 403 sees PermissionDenied instead of an unexplained
+ * failed fetch, and member references/balances are not loaded for them.
+ */
+export const LOYALTY_READ_ROLES = ["loyalty_user", "loyalty_admin", "super_admin"];
+
+/**
+ * GAP-LOYALTY-REDEMPTIONS-02 / PROGRAMS-02: roles permitted to perform loyalty
+ * admin actions (void a redemption; manage programmes). Mirrors
+ * loyalty-service's WRITE_ROLES / ADMIN_ROLES (loyalty_admin, super_admin). The
+ * service stays the real gate; this only decides whether the UI offers the
+ * control.
+ */
+export const LOYALTY_ADMIN_ROLES = ["loyalty_admin", "super_admin"];

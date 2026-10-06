@@ -1,22 +1,25 @@
-import { ModuleListPage } from "../../../_components/ModuleListPage";
+import { PageHeader } from "../../../_components/ds";
 import { getLoyaltyRedemptions } from "../_data";
-import { ArrowLeft } from "lucide-react";
+import { RedemptionsTable } from "./RedemptionsTable";
+import { getSessionRoles, hasAnyRole, LOYALTY_ADMIN_ROLES } from "@/lib/auth/roleGuard";
 
 export const dynamic = "force-dynamic";
 
-export default async function Page() {
-  const { data, source } = await getLoyaltyRedemptions();
+const PAGE_SIZE = 50;
+
+export default async function Page({ searchParams }: { searchParams?: { page?: string } }) {
+  const page = Math.max(1, Number(searchParams?.page ?? "1") || 1);
+  const { data, source } = await getLoyaltyRedemptions({ limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE });
+  const canManage = hasAnyRole(getSessionRoles(), LOYALTY_ADMIN_ROLES);
   return (
     <div className="page-main" aria-labelledby="page-heading">
-      <nav aria-label="Breadcrumb" className="back">
-        <ArrowLeft aria-hidden="true" size={14} /> <a href="/loyalty">Loyalty Programs</a>
-      </nav>
-      <ModuleListPage
+      <PageHeader
         title="Loyalty — Redemptions"
-        description="Point redemption history."
-        rows={data}
-        source={source}
+        subtitle="Point redemption history and reward fulfilment."
+        back="/loyalty"
+        backLabel="Loyalty Programs"
       />
+      <RedemptionsTable rows={data} source={source} canManage={canManage} />
     </div>
   );
 }

@@ -822,6 +822,46 @@ export function formatPercent(pct: number | null | undefined, decimals = 1): str
   return `${pct.toFixed(decimals)}%`;
 }
 
+/**
+ * GAP-LOYALTY-ACCRUALS-03: format a loyalty POINTS integer (NOT money — points
+ * are whole units, never paise) with en-IN lakh/crore grouping. Accepts the
+ * string the loyalty-service sends (bigint columns are serialised as strings)
+ * as well as a number/bigint. null/empty/unparseable renders "—" (UX-006
+ * convention), never a fabricated 0. Computed via BigInt so a points balance
+ * above 2^53 stays exact.
+ *
+ *   formatPoints("1234567") -> "12,34,567"
+ *   formatPoints(0)         -> "0"
+ *   formatPoints(null)      -> "—"
+ */
+export function formatPoints(points: bigint | number | string | null | undefined): string {
+  if (points === null || points === undefined || points === "") return "—";
+  let n: bigint;
+  try {
+    if (typeof points === "bigint") n = points;
+    else if (typeof points === "number") {
+      if (!Number.isFinite(points)) return "—";
+      n = BigInt(Math.round(points));
+    } else {
+      const t = points.trim();
+      if (!/^[+-]?\d+$/.test(t)) return "—";
+      n = BigInt(t);
+    }
+  } catch {
+    return "—";
+  }
+  const negative = n < 0n;
+  const abs = (negative ? -n : n).toString();
+  let grouped: string;
+  if (abs.length <= 3) grouped = abs;
+  else {
+    const head = abs.slice(0, abs.length - 3);
+    const tail = abs.slice(abs.length - 3);
+    grouped = head.replace(/\B(?=(\d{2})+(?!\d))/g, ",") + "," + tail;
+  }
+  return `${negative ? "-" : ""}${grouped}`;
+}
+
 const PERIOD_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /**
