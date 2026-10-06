@@ -159,6 +159,14 @@ const STATUS_MAP: Record<string, PillVariant> = {
   "hard close": "bad",
   computed: "warn",
   processing: "warn",
+  // GAP-REPORTS-LIST-05: report-service job lifecycle is
+  // queued | running | completed | failed (services/report-service jobs
+  // routes coerce to exactly that set). "queued"/"completed"/"failed" already
+  // map; "running" had no entry and fell through to the neutral "info"
+  // default, so an in-progress report job looked the same as an unknown
+  // status. A running job is an active in-progress state → "warn" (matching
+  // the sibling "processing").
+  running: "warn",
   // payroll.disbursement_transfers (GAP-PAYROLL-DISBURSEMENT-TRANSFERS):
   // "sent" = in a generated bank file, outcome not yet known; "returned" =
   // the bank bounced the credit (NACH return), money did not land.

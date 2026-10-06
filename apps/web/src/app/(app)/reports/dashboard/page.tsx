@@ -3,64 +3,73 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getReportsDashboard } from "../../../_data/loaders";
 import { EmptyState, PageHeader, RefreshErrorState, StatCard, StatGrid } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
-import { SpendSegmented } from "./SpendSegmented";
 
 const BAR_W = 640;
-const BAR_H = 160;
+const BAR_H = 180;
 const BAR_PAD = 10;
 const BAR_GAP = 8;
 const LABEL_H = 18;
+const VALUE_H = 14;
 
-function ModuleBarChart({ kpis }: { kpis: { id: string; title: string; module: string; value?: number }[] }) {
+type DashKpi = { id: string; title: string; module: string; value?: number };
+
+function ModuleBarChart({ kpis }: { kpis: DashKpi[] }) {
   const items = kpis.filter((k) => k.value !== undefined && k.value > 0).slice(0, 8);
-  if (items.length === 0) return null; // ux-001-ok: derived chart-only filter (top positive-value KPIs); the caller already branches on the loader's error state before this component ever renders
+  if (items.length === 0) return null;
 
   const maxVal = Math.max(...items.map((k) => k.value ?? 0), 1);
   const totalBars = items.length;
   const barW = Math.floor((BAR_W - BAR_PAD * 2 - BAR_GAP * (totalBars - 1)) / totalBars);
-  const chartH = BAR_H - LABEL_H;
+  const chartH = BAR_H - LABEL_H - VALUE_H;
 
   return (
-    <svg width="100%" viewBox={`0 0 ${BAR_W} ${BAR_H}`} aria-label="Module KPI value bar chart" role="img">
-      {items.map((kpi, i) => {
-        const ratio = (kpi.value ?? 0) / maxVal;
-        const barH = Math.max(4, Math.round(ratio * (chartH - 8)));
-        const x = BAR_PAD + i * (barW + BAR_GAP);
-        const y = chartH - barH;
-        const opacity = 0.45 + (i / Math.max(totalBars - 1, 1)) * 0.5;
-        const label = (kpi.module || kpi.title).slice(0, 10);
-        return (
-          <g key={kpi.id}>
-            <rect x={x} y={y} width={barW} height={barH} rx={4} fill="#0369a1" opacity={opacity} />
-            <text x={x + barW / 2} y={BAR_H - 2} textAnchor="middle" fontSize={9} fill="#667085">
-              {label}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
-function OutcomeDonut({ achievedPct }: { achievedPct: number }) {
-  const r = 53;
-  const cx = 66;
-  const cy = 66;
-  const circ = 2 * Math.PI * r;
-  const filled = (achievedPct / 100) * circ;
-  const offset = circ - filled;
-
-  return (
-    <svg width={132} height={132} viewBox="0 0 132 132" aria-label={`Outcome index: ${achievedPct.toFixed(0)}%`} role="img">
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="#eef0f4" strokeWidth={13} />
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="#0369a1" strokeWidth={13}
-        strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
-        transform={`rotate(-90 ${cx} ${cy})`} />
-      <text x="50%" y="46%" textAnchor="middle" dy=".1em" fontSize={22} fontWeight={780} fill="#101828">
-        {achievedPct.toFixed(0)}%
-      </text>
-      <text x="50%" y="63%" textAnchor="middle" fontSize={9.5} fill="#667085">composite</text>
-    </svg>
+    <figure style={{ margin: 0 }}>
+      <svg width="100%" viewBox={`0 0 ${BAR_W} ${BAR_H}`} role="img" aria-label="KPI current value by module">
+        {items.map((kpi, i) => {
+          const ratio = (kpi.value ?? 0) / maxVal;
+          const barH = Math.max(4, Math.round(ratio * (chartH - 8)));
+          const x = BAR_PAD + i * (barW + BAR_GAP);
+          const y = VALUE_H + (chartH - barH);
+          // GAP-REPORTS-DASHBOARD-05: a constant fill — the previous
+          // position-stepped opacity implied a ranking the unsorted bars do not
+          // have.
+          // GAP-REPORTS-DASHBOARD-04: theme tokens, not hard-coded hex, so bars
+          // and labels stay visible in dark mode; full module name (not sliced
+          // to 10 chars) and a value label above each bar at >= 11px.
+          const label = kpi.module || kpi.title;
+          return (
+            <g key={kpi.id}>
+              <rect x={x} y={y} width={barW} height={barH} rx={4} fill="var(--primary)" />
+              <text x={x + barW / 2} y={y - 4} textAnchor="middle" fontSize={11} fill="var(--ink)">
+                {(kpi.value ?? 0).toLocaleString("en-IN")}
+              </text>
+              <text x={x + barW / 2} y={BAR_H - 4} textAnchor="middle" fontSize={11} fill="var(--mut)">
+                {label}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      <figcaption style={{ fontSize: "12px", color: "var(--mut)", marginTop: 6 }}>
+        Current KPI value by owning module (top {items.length} by value).
+      </figcaption>
+      {/* GAP-REPORTS-DASHBOARD-04: a visually-hidden table so the same data is
+          available to screen readers, not only as an SVG. */}
+      <table className="sr-only">
+        <caption>Current KPI value by module</caption>
+        <thead>
+          <tr><th scope="col">Module</th><th scope="col">Value</th></tr>
+        </thead>
+        <tbody>
+          {items.map((kpi) => (
+            <tr key={kpi.id}>
+              <td>{kpi.module || kpi.title}</td>
+              <td>{(kpi.value ?? 0).toLocaleString("en-IN")}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </figure>
   );
 }
 
@@ -72,15 +81,13 @@ export default async function ReportsDashboardPage() {
   const downKpis = data.kpis.filter((k) => k.changeDirection === "down").length;
   const modules = [...new Set(data.kpis.map((k) => k.module))].length;
 
-  const avgChangePct =
-    data.kpis.filter((k) => k.changePct !== undefined).length > 0
-      ? data.kpis
-          .filter((k) => k.changePct !== undefined)
-          .reduce((s, k) => s + (k.changePct ?? 0), 0) /
-        data.kpis.filter((k) => k.changePct !== undefined).length
-      : 0;
+  // GAP-REPORTS-DASHBOARD-02: the old "Outcome index" was 50 + avg(changePct),
+  // a fabricated 0–100 score with no outcome definition that read 50% on flat
+  // data. Replace it with a real, traceable ratio: the share of KPIs that are
+  // trending up. Only shown when at least one KPI carries a direction.
+  const directedKpis = data.kpis.filter((k) => k.changeDirection === "up" || k.changeDirection === "down").length;
+  const trendingUpPct = directedKpis > 0 ? Math.round((upKpis / directedKpis) * 100) : null;
 
-  const outcomePct = Math.max(0, Math.min(100, 50 + avgChangePct));
   const alertKpis = data.kpis.filter((k) => k.changeDirection === "down").slice(0, 3);
 
   return (
@@ -94,11 +101,19 @@ export default async function ReportsDashboardPage() {
         }
       />
 
+      {/* GAP-REPORTS-DASHBOARD-01: no fabricated figures. On error every stat
+          reads "—" (StatCard renders null as an em dash), never the old
+          `modules || 12` or the constant "Real-time"/`delta="live"`. */}
       <StatGrid>
-        <StatCard icon="🗄️" iconBg="#e7f3fb" label="Data Sources" value={modules || 12} delta="modules" />
-        <StatCard icon="📊" iconBg="#eff6ff" label="KPIs Tracked" value={data.kpis.length} />
-        <StatCard icon="🤖" iconBg="#f3effe" label="Trending Up" value={upKpis} delta="live" up={upKpis > 0} />
-        <StatCard icon="⚡" iconBg="#ecfdf3" label="Refresh" value="Real-time" />
+        <StatCard icon="🗄️" tone="info" label="Data Sources" value={errored ? null : modules} delta="modules" />
+        <StatCard icon="📊" tone="info" label="KPIs Tracked" value={errored ? null : data.kpis.length} />
+        <StatCard icon="📈" tone="good" label="Trending Up" value={errored ? null : upKpis} up={upKpis > 0} />
+        <StatCard
+          icon="⚡"
+          tone="neutral"
+          label="Trending Up Share"
+          value={errored || trendingUpPct === null ? null : `${trendingUpPct}%`}
+        />
       </StatGrid>
 
       {errored ? (
@@ -110,8 +125,11 @@ export default async function ReportsDashboardPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
             <div className="card">
               <div className="card-h">
-                <h3>Cross-department spend vs outcome</h3>
-                <SpendSegmented />
+                {/* GAP-REPORTS-DASHBOARD-03: the chart plots KPI values, not
+                    spend-vs-outcome; title now matches the data. The non-wired
+                    FY/QTD SpendSegmented control (local state only, changed
+                    nothing) has been removed. */}
+                <h3>KPI values by module</h3>
               </div>
               <div className="pad"><ModuleBarChart kpis={data.kpis} /></div>
             </div>
@@ -127,12 +145,17 @@ export default async function ReportsDashboardPage() {
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
-            <div className="card">
-              <div className="card-h"><h3>Outcome index</h3></div>
-              <div className="pad" style={{ display: "grid", placeItems: "center" }}>
-                <OutcomeDonut achievedPct={outcomePct} />
+            {trendingUpPct !== null && (
+              <div className="card">
+                <div className="card-h"><h3>KPIs trending up</h3></div>
+                <div className="pad" style={{ display: "grid", placeItems: "center", gap: 6 }}>
+                  <div style={{ fontSize: 34, fontWeight: 780, color: "var(--ink)" }}>{trendingUpPct}%</div>
+                  <div style={{ fontSize: 12, color: "var(--mut)" }}>
+                    {upKpis} of {directedKpis} KPIs with a trend are improving
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="card">
               <div className="card-h">
@@ -150,7 +173,13 @@ export default async function ReportsDashboardPage() {
                         <div style={{ flex: 1, marginLeft: "6px" }}>
                           <div style={{ fontSize: "13px", fontWeight: 650 }}>{kpi.title} · {kpi.module}</div>
                           <div style={{ fontSize: "12px", color: "var(--mut)" }}>
-                            {kpi.changePct !== undefined ? `${kpi.changePct.toFixed(1)}%` : "trending down"}
+                            {/* GAP-REPORTS-DASHBOARD-05: the dashboard payload
+                                carries no period field, so the change is
+                                qualified as "vs previous period" rather than a
+                                bare percentage with no reference window. */}
+                            {kpi.changePct !== undefined
+                              ? `${kpi.changePct.toFixed(1)}% vs previous period`
+                              : "Trending down vs previous period"}
                           </div>
                         </div>
                       </li>

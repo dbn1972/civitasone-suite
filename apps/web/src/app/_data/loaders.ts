@@ -5456,6 +5456,36 @@ export async function getMISSummary(): Promise<LoaderResult<MISSummary[]>> {
   });
 }
 
+/**
+ * GAP-REPORTS-SCHEDULED-01: report templates for the scheduled-report picker.
+ * report-service GET /v1/reports/templates returns {data:[{id,name,status,...}]}
+ * (templates module routes.ts, verified in this worktree). Only id + name are
+ * surfaced here — enough to replace the free-typed Template UUID with a named
+ * dropdown and to resolve a schedule row's templateId back to a human name. An
+ * empty list is a legitimate "no templates yet" state (returns []), not an error.
+ */
+export type ReportTemplateOption = { id: string; name: string; status: string };
+
+export async function getReportTemplates(): Promise<LoaderResult<ReportTemplateOption[]>> {
+  return fetchJson<unknown, ReportTemplateOption[]>("/api/v1/reports/templates?limit=200", [], {
+    revalidateSeconds: 60,
+    telemetryKey: "reports.templates",
+    mapResponse: (p) => {
+      const rows = getArrayPayload(p);
+      if (!rows) return null;
+      const out: ReportTemplateOption[] = [];
+      for (const r of rows) {
+        if (!isRecord(r)) continue;
+        const id = toText(r.id);
+        const name = toText(r.name);
+        if (!id || !name) continue;
+        out.push({ id, name, status: toText(r.status) ?? "active" });
+      }
+      return out;
+    },
+  });
+}
+
 // ── Knowledge / DMS loaders ───────────────────────────────────────────────────
 
 export async function getKnowledgeDocs(): Promise<LoaderResult<KnowledgeDocSummary[]>> {
