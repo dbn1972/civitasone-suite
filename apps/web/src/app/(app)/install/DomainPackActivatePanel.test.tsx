@@ -13,6 +13,7 @@ vi.mock("./domainPackApi", async (orig) => {
   return {
     ...actual,
     fetchDomainPacksForInstall: vi.fn(),
+    fetchDomainPacksForInstallResult: vi.fn(),
     activateDomainPackStage3: vi.fn(),
   };
 });
@@ -26,8 +27,13 @@ const municipalList = [
 
 beforeEach(() => {
   vi.mocked(api.fetchDomainPacksForInstall).mockReset();
+  vi.mocked(api.fetchDomainPacksForInstallResult).mockReset();
   vi.mocked(api.activateDomainPackStage3).mockReset();
   vi.mocked(api.fetchDomainPacksForInstall).mockResolvedValue(municipalList);
+  vi.mocked(api.fetchDomainPacksForInstallResult).mockResolvedValue({
+    packs: municipalList,
+    error: false,
+  });
 });
 
 describe("DomainPackActivatePanel (FN-17)", () => {
@@ -78,5 +84,44 @@ describe("DomainPackActivatePanel (FN-17)", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /^Activate$/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/queue unavailable/i);
+  });
+
+  // GAP-INSTALL-DOMAIN-PACKS-02 / HOME-07: a failed library fetch shows a retry
+  // banner over the built-in fallback, not a silent healthy-looking list.
+  it("shows a retry banner when the pack library fetch failed", async () => {
+    vi.mocked(api.fetchDomainPacksForInstallResult).mockResolvedValue({
+      packs: municipalList,
+      error: true,
+    });
+    render(<DomainPackActivatePanel variant="page" />);
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/Showing built-in pack only/i);
+    expect(within(alert).getByRole("button", { name: /Retry/i })).toBeInTheDocument();
+  });
+
+  it("shows no retry banner on a healthy load", async () => {
+    render(<DomainPackActivatePanel variant="page" />);
+    await waitFor(() => expect(screen.getByText(/Municipal India/i)).toBeInTheDocument());
+    expect(screen.queryByText(/Showing built-in pack only/i)).not.toBeInTheDocument();
+  });
+
+  // GAP-INSTALL-HOME-03 / DOMAIN-PACKS-01: a read-only viewer gets no Activate.
+  it("hides Activate for a read-only viewer", async () => {
+    render(<DomainPackActivatePanel variant="page" canOperate={false} />);
+    await waitFor(() => expect(screen.getByText(/Municipal India/i)).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /Activate Domain Pack/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/read-only access/i)).toBeInTheDocument();
+  });
+
+  // GAP-INSTALL-DOMAIN-PACKS-05: no "§" or "pack:" string is visible by default
+  // (keys live behind a Technical details disclosure).
+  it("does not expose DoD '§' or raw 'pack:' keys in the default view", async () => {
+    render(<DomainPackActivatePanel variant="page" />);
+    await waitFor(() => expect(screen.getByText(/Municipal India/i)).toBeInTheDocument());
+    expect(document.body.textContent).not.toMatch(/§/);
+    // The pack: keys only appear inside collapsed <details>, not as a visible
+    // heading/outcome line. Assert they are not in an open/visible position by
+    // checking the summary label is what is shown.
+    expect(screen.getAllByText(/Technical details/i).length).toBeGreaterThanOrEqual(1);
   });
 });

@@ -162,7 +162,7 @@ export const POLICY_GROUPS: PolicyGroup[] = [
   {
     title: "Permitted committee types",
     description:
-      "Which body types this tenant may constitute. When none are toggled on, the full default set (standing, ad-hoc, statutory, board) applies.",
+      "Which body types this tenant may constitute. Important: if ALL types are switched off, the engine permits EVERY type (standing, ad-hoc, statutory, board) — switching everything off does NOT forbid everything. Keep at least one on to actually restrict the permitted set.",
     fields: [
       {
         namespace: COMMITTEE_TYPES_NS,

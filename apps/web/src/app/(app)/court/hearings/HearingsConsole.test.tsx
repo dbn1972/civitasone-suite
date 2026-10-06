@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 
 const scheduleHearingMock = vi.fn();
 const adjournHearingMock = vi.fn();
@@ -139,5 +139,77 @@ describe("HearingsConsole", () => {
     await waitFor(() =>
       expect(screen.getByText(/VERSION_CONFLICT: hearing was updated concurrently/)).toBeInTheDocument(),
     );
+  });
+
+  it("HEARINGS-01: adjourning with the (default-on) checkbox adjourns THEN schedules the next hearing on nextDate", async () => {
+    adjournHearingMock.mockResolvedValue(undefined);
+    scheduleHearingMock.mockResolvedValue(undefined);
+    render(
+      <HearingsConsole
+        caseId="case-1"
+        caseSummary={caseSummary}
+        initialHearings={[scheduledHearing]}
+        hearingsSource="api"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Adjourn the hearing/ }));
+    fireEvent.change(screen.getByLabelText(/Adjournment reason/), { target: { value: "Counsel unavailable" } });
+    fireEvent.change(screen.getByLabelText(/Next date/), { target: { value: "2099-07-01" } });
+    expect(screen.getByLabelText(/Also schedule the next hearing/)).toBeChecked();
+    // Inline button opens the ConfirmDialog…
+    fireEvent.click(screen.getByRole("button", { name: "Adjourn hearing" }));
+    // …then confirm inside the alertdialog.
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Adjourn hearing" }));
+    await waitFor(() => expect(adjournHearingMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(scheduleHearingMock).toHaveBeenCalledTimes(1));
+    expect(scheduleHearingMock.mock.calls[0][0]).toBe("case-1");
+    expect(scheduleHearingMock.mock.calls[0][1].scheduledAt).toContain("2099-07-01");
+  });
+
+  it("HEARINGS-01: does NOT schedule when the opt-out checkbox is unchecked", async () => {
+    adjournHearingMock.mockResolvedValue(undefined);
+    render(
+      <HearingsConsole
+        caseId="case-1"
+        caseSummary={caseSummary}
+        initialHearings={[scheduledHearing]}
+        hearingsSource="api"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Adjourn the hearing/ }));
+    fireEvent.change(screen.getByLabelText(/Adjournment reason/), { target: { value: "Counsel unavailable" } });
+    fireEvent.change(screen.getByLabelText(/Next date/), { target: { value: "2099-07-01" } });
+    fireEvent.click(screen.getByLabelText(/Also schedule the next hearing/)); // uncheck
+    fireEvent.click(screen.getByRole("button", { name: "Adjourn hearing" }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Adjourn hearing" }));
+    await waitFor(() => expect(adjournHearingMock).toHaveBeenCalledTimes(1));
+    expect(scheduleHearingMock).not.toHaveBeenCalled();
+  });
+
+  it("HEARINGS-01: on a partial failure (adjourn ok, schedule fails) shows an error and does not re-adjourn on retry", async () => {
+    adjournHearingMock.mockResolvedValue(undefined);
+    scheduleHearingMock.mockRejectedValueOnce(new Error("slot taken")).mockResolvedValueOnce(undefined);
+    render(
+      <HearingsConsole
+        caseId="case-1"
+        caseSummary={caseSummary}
+        initialHearings={[scheduledHearing]}
+        hearingsSource="api"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Adjourn the hearing/ }));
+    fireEvent.change(screen.getByLabelText(/Adjournment reason/), { target: { value: "x" } });
+    fireEvent.change(screen.getByLabelText(/Next date/), { target: { value: "2099-07-01" } });
+    fireEvent.click(screen.getByRole("button", { name: "Adjourn hearing" }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Adjourn hearing" }));
+    await waitFor(() => expect(screen.getByText(/Adjourned, but scheduling the next hearing failed: slot taken/)).toBeInTheDocument());
+    expect(adjournHearingMock).toHaveBeenCalledTimes(1);
+    // Retry → confirm label is now "Schedule next hearing"; re-schedule only.
+    fireEvent.click(within(dialog).getByRole("button", { name: "Schedule next hearing" }));
+    await waitFor(() => expect(scheduleHearingMock).toHaveBeenCalledTimes(2));
+    expect(adjournHearingMock).toHaveBeenCalledTimes(1);
   });
 });

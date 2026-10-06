@@ -103,6 +103,10 @@ a{color:inherit;text-decoration:none}
 .g-4{grid-template-columns:repeat(4,1fr)}
 .g-3{grid-template-columns:repeat(3,1fr)}
 .g-2{grid-template-columns:repeat(2,1fr)}
+/* GAP-FIELD-HOME-02: auto-fit tiles so a tile count that is not a multiple of
+   the column count (e.g. the Field hub's 5 tiles) wraps evenly instead of
+   leaving one orphan tile stretched on its own row. */
+.g-auto{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
 .g-main{grid-template-columns:1fr 360px;align-items:start}
 .g-main-l{grid-template-columns:300px 1fr;align-items:start}
 @media(max-width:1080px){.g-4{grid-template-columns:repeat(2,1fr)}.g-main,.g-main-l,.g-3,.g-2{grid-template-columns:1fr}}

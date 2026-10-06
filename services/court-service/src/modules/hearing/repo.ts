@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { hearings } from "./schema.js";
 
@@ -29,6 +29,52 @@ export async function listHearingsByCase(tenantId: string, caseId: string): Prom
   return scopedRead((tx) => tx.select().from(hearings)
     .where(and(eq(hearings.tenantId, tenantId), eq(hearings.caseId, caseId)))
     .orderBy(desc(hearings.scheduledDate)));
+}
+
+/**
+ * GAP-COURT-HEARINGS-03: a flat, tenant-scoped hearings read model with a
+ * scheduled-date range [from,to] (YYYY-MM-DD, inclusive, compared on the IST
+ * calendar day of the scheduled instant), optional status and benchId filters,
+ * and paging. Powers the "today's hearings" day view that could not be built
+ * while hearings were only reachable per-case. Tenant predicate always applied
+ * (defence in depth alongside RLS); never a cross-court leak.
+ */
+export async function listHearings(
+  filters: { tenantId: string; from?: string | undefined; to?: string | undefined; status?: string | undefined; benchId?: string | undefined },
+  limit: number,
+  offset: number,
+): Promise<HearingRow[]> {
+  const predicates = hearingRangePredicates(filters);
+  return scopedRead((tx) => tx.select().from(hearings)
+    .where(and(...predicates))
+    .orderBy(desc(hearings.scheduledDate))
+    .limit(limit)
+    .offset(offset));
+}
+
+export async function countHearings(
+  filters: { tenantId: string; from?: string | undefined; to?: string | undefined; status?: string | undefined; benchId?: string | undefined },
+): Promise<number> {
+  const predicates = hearingRangePredicates(filters);
+  const rows = await scopedRead<{ count: number }[]>((tx) => tx
+    .select({ count: sql<number>`cast(count(*) as int)` })
+    .from(hearings)
+    .where(and(...predicates)));
+  return rows[0]?.count ?? 0;
+}
+
+function hearingRangePredicates(filters: {
+  tenantId: string; from?: string | undefined; to?: string | undefined; status?: string | undefined; benchId?: string | undefined;
+}) {
+  const predicates = [eq(hearings.tenantId, filters.tenantId)];
+  // Compare on the IST calendar day of the scheduled instant so a range like
+  // {from: today, to: today} captures the whole IST day regardless of the
+  // stored UTC time.
+  if (filters.from) predicates.push(gte(sql`(${hearings.scheduledDate} at time zone 'Asia/Kolkata')::date`, filters.from));
+  if (filters.to) predicates.push(lte(sql`(${hearings.scheduledDate} at time zone 'Asia/Kolkata')::date`, filters.to));
+  if (filters.status) predicates.push(eq(hearings.status, filters.status));
+  if (filters.benchId) predicates.push(eq(hearings.benchId, filters.benchId));
+  return predicates;
 }
 
 /** Single-row read for a synchronous pre-check before publishing an adjourn/

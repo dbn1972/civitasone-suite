@@ -1,4 +1,24 @@
 {
+  "themes": {
+    "title": "थीम",
+    "description": "किरायेदार संस्करणों के लिए डिज़ाइन टोकन, टेम्पलेट और ब्रांडिंग। टोकन प्रकाशित करने से हर किरायेदार स्क्रीन पर दिखने वाली चीज़ बदल जाती है; ब्रांडिंग सूचियाँ केवल-पढ़ने के लिए हैं।",
+    "editBrandLabel": "किरायेदार ब्रांड संपादित करें",
+    "editBrandNote": "किरायेदारों को दिखने वाले लोगो और रंग बदलें",
+    "tokensLabel": "टोकन",
+    "tokensNote": "टोकन की समीक्षा करें और सभी किरायेदार स्क्रीन पर थीम संशोधन प्रकाशित करें",
+    "templatesLabel": "टेम्पलेट",
+    "templatesNote": "तैयार लुक जिनसे आप शुरुआत कर सकते हैं (केवल-पढ़ने के लिए)",
+    "brandingLabel": "ब्रांडिंग",
+    "brandingNote": "ब्रांडिंग पैक देखें (केवल-पढ़ने के लिए)",
+    "brandLabel": "ब्रांड प्रीसेट",
+    "brandNote": "सक्रिय ब्रांड देखें (केवल-पढ़ने के लिए)",
+    "brandPageTitle": "थीम — ब्रांड",
+    "brandPageSubtitle": "आपके संगठन के लिए सक्रिय ब्रांड और उपलब्ध प्रीसेट।",
+    "brandingPageTitle": "थीम — ब्रांडिंग",
+    "brandingPageSubtitle": "आपके संगठन के लिए ब्रांडिंग पैक।",
+    "templatesPageTitle": "थीम — टेम्पलेट",
+    "templatesPageSubtitle": "तैयार लुक जिनसे आप शुरुआत कर सकते हैं।"
+  },
   "action": {
     "save": "सहेजें",
     "cancel": "रद्द करें",
@@ -1791,43 +1811,154 @@
         "configuration": "विन्यास"
       },
       "tiles": {
-        "dashboard": { "title": "डैशबोर्ड", "description": "अवलोकन मीट्रिक और गतिविधि" },
-        "contacts": { "title": "संपर्क", "description": "विक्रेता, लाभार्थी और हितधारक संपर्क" },
-        "accounts": { "title": "खाते", "description": "संगठन और संस्थान" },
-        "deals": { "title": "विक्रेता / हितधारक सहभागिताएँ", "description": "सहभागिताएँ और खरीद अवसर" },
-        "activities": { "title": "गतिविधियाँ", "description": "कॉल, बैठकें और अनुवर्ती कार्य" },
-        "pipelineBoard": { "title": "पाइपलाइन बोर्ड", "description": "डील चरणों का विज़ुअल कानबान" },
-        "pipelines": { "title": "सहभागिता पाइपलाइनें", "description": "पाइपलाइन चरण विन्यस्त करें" },
-        "opportunities": { "title": "अवसर", "description": "अवसर फ़नल ट्रैक करें" },
-        "ageing": { "title": "चरण आयु", "description": "पुराने अवसरों के अलर्ट" },
-        "forecast": { "title": "खरीद पाइपलाइन पूर्वानुमान", "description": "पाइपलाइन खरीद अनुमान" },
-        "quotations": { "title": "कोटेशन", "description": "कोट और प्रस्ताव" },
-        "onboarding": { "title": "ग्राहक ऑनबोर्डिंग", "description": "डील-पश्चात ऑनबोर्डिंग वर्कफ़्लो" },
-        "grievances": { "title": "शिकायतें", "description": "नागरिक और विक्रेता शिकायत ट्रैकिंग" },
-        "serviceRequests": { "title": "सेवा अनुरोध", "description": "सहायता अनुरोध और समाधान" },
-        "campaigns": { "title": "अभियान", "description": "आउटरीच अभियान प्रदर्शन" },
-        "voiceOfCustomer": { "title": "नागरिक की आवाज़", "description": "प्रतिक्रिया और भावना" },
-        "health": { "title": "खाता स्वास्थ्य", "description": "संबंध स्वास्थ्य स्कोर" },
-        "controlTower": { "title": "कंट्रोल टावर", "description": "रीयल-टाइम संचालन अवलोकन" },
-        "leadForms": { "title": "वेबसाइट लीड फ़ॉर्म", "description": "सार्वजनिक फ़ॉर्म प्रस्तुतियाँ" },
-        "products": { "title": "उत्पाद सूची", "description": "सेवाएँ और पेशकश" },
-        "priceBooks": { "title": "मूल्य पुस्तिकाएँ", "description": "दर कार्ड और मूल्य स्तर" },
-        "documents": { "title": "दस्तावेज़", "description": "साझा दस्तावेज़ और अनुलग्नक" },
-        "documentTypes": { "title": "दस्तावेज़ प्रकार", "description": "दस्तावेज़ वर्गीकरण" },
-        "serviceTypes": { "title": "सेवा प्रकार", "description": "सेवा-अनुरोध वर्गीकरण" },
-        "grievanceCategories": { "title": "शिकायत श्रेणियाँ", "description": "शिकायत वर्गीकरण" },
-        "customFields": { "title": "कस्टम फ़ील्ड", "description": "डेटा मॉडल का विस्तार करें" },
-        "dedupRules": { "title": "मिलान नियम", "description": "डीडुप्लिकेशन तर्क" },
-        "leadScoring": { "title": "लीड स्कोरिंग", "description": "स्वचालित लीड प्राथमिकता" },
-        "qualificationFrameworks": { "title": "योग्यता फ़्रेमवर्क", "description": "डील योग्यता मानदंड" },
-        "leadReasonCodes": { "title": "लीड चरण कारण", "description": "चरण परिवर्तन कारण" },
-        "assignmentRules": { "title": "असाइनमेंट नियम", "description": "स्वतः-असाइन तर्क" },
-        "assignmentDirectory": { "title": "असाइनमेंट निर्देशिका", "description": "एजेंट मैपिंग" },
-        "agentWorkload": { "title": "एजेंट कार्यभार", "description": "क्षमता और उपयोग" },
-        "escalationRules": { "title": "एस्केलेशन नियम", "description": "एसएलए उल्लंघन एस्केलेशन" },
-        "taskEscalation": { "title": "कार्य एस्केलेशन", "description": "अतिदेय कार्य रूटिंग" },
-        "linkedAccounts": { "title": "जुड़े खाते", "description": "बाहरी एकीकरण" },
-        "dataQuality": { "title": "डेटा गुणवत्ता", "description": "डेटा पूर्णता स्कोरिंग" }
+        "dashboard": {
+          "title": "डैशबोर्ड",
+          "description": "अवलोकन मीट्रिक और गतिविधि"
+        },
+        "contacts": {
+          "title": "संपर्क",
+          "description": "विक्रेता, लाभार्थी और हितधारक संपर्क"
+        },
+        "accounts": {
+          "title": "खाते",
+          "description": "संगठन और संस्थान"
+        },
+        "deals": {
+          "title": "विक्रेता / हितधारक सहभागिताएँ",
+          "description": "सहभागिताएँ और खरीद अवसर"
+        },
+        "activities": {
+          "title": "गतिविधियाँ",
+          "description": "कॉल, बैठकें और अनुवर्ती कार्य"
+        },
+        "pipelineBoard": {
+          "title": "पाइपलाइन बोर्ड",
+          "description": "डील चरणों का विज़ुअल कानबान"
+        },
+        "pipelines": {
+          "title": "सहभागिता पाइपलाइनें",
+          "description": "पाइपलाइन चरण विन्यस्त करें"
+        },
+        "opportunities": {
+          "title": "अवसर",
+          "description": "अवसर फ़नल ट्रैक करें"
+        },
+        "ageing": {
+          "title": "चरण आयु",
+          "description": "पुराने अवसरों के अलर्ट"
+        },
+        "forecast": {
+          "title": "खरीद पाइपलाइन पूर्वानुमान",
+          "description": "पाइपलाइन खरीद अनुमान"
+        },
+        "quotations": {
+          "title": "कोटेशन",
+          "description": "कोट और प्रस्ताव"
+        },
+        "onboarding": {
+          "title": "ग्राहक ऑनबोर्डिंग",
+          "description": "डील-पश्चात ऑनबोर्डिंग वर्कफ़्लो"
+        },
+        "grievances": {
+          "title": "शिकायतें",
+          "description": "नागरिक और विक्रेता शिकायत ट्रैकिंग"
+        },
+        "serviceRequests": {
+          "title": "सेवा अनुरोध",
+          "description": "सहायता अनुरोध और समाधान"
+        },
+        "campaigns": {
+          "title": "अभियान",
+          "description": "आउटरीच अभियान प्रदर्शन"
+        },
+        "voiceOfCustomer": {
+          "title": "नागरिक की आवाज़",
+          "description": "प्रतिक्रिया और भावना"
+        },
+        "health": {
+          "title": "खाता स्वास्थ्य",
+          "description": "संबंध स्वास्थ्य स्कोर"
+        },
+        "controlTower": {
+          "title": "कंट्रोल टावर",
+          "description": "रीयल-टाइम संचालन अवलोकन"
+        },
+        "leadForms": {
+          "title": "वेबसाइट लीड फ़ॉर्म",
+          "description": "सार्वजनिक फ़ॉर्म प्रस्तुतियाँ"
+        },
+        "products": {
+          "title": "उत्पाद सूची",
+          "description": "सेवाएँ और पेशकश"
+        },
+        "priceBooks": {
+          "title": "मूल्य पुस्तिकाएँ",
+          "description": "दर कार्ड और मूल्य स्तर"
+        },
+        "documents": {
+          "title": "दस्तावेज़",
+          "description": "साझा दस्तावेज़ और अनुलग्नक"
+        },
+        "documentTypes": {
+          "title": "दस्तावेज़ प्रकार",
+          "description": "दस्तावेज़ वर्गीकरण"
+        },
+        "serviceTypes": {
+          "title": "सेवा प्रकार",
+          "description": "सेवा-अनुरोध वर्गीकरण"
+        },
+        "grievanceCategories": {
+          "title": "शिकायत श्रेणियाँ",
+          "description": "शिकायत वर्गीकरण"
+        },
+        "customFields": {
+          "title": "कस्टम फ़ील्ड",
+          "description": "डेटा मॉडल का विस्तार करें"
+        },
+        "dedupRules": {
+          "title": "मिलान नियम",
+          "description": "डीडुप्लिकेशन तर्क"
+        },
+        "leadScoring": {
+          "title": "लीड स्कोरिंग",
+          "description": "स्वचालित लीड प्राथमिकता"
+        },
+        "qualificationFrameworks": {
+          "title": "योग्यता फ़्रेमवर्क",
+          "description": "डील योग्यता मानदंड"
+        },
+        "leadReasonCodes": {
+          "title": "लीड चरण कारण",
+          "description": "चरण परिवर्तन कारण"
+        },
+        "assignmentRules": {
+          "title": "असाइनमेंट नियम",
+          "description": "स्वतः-असाइन तर्क"
+        },
+        "assignmentDirectory": {
+          "title": "असाइनमेंट निर्देशिका",
+          "description": "एजेंट मैपिंग"
+        },
+        "agentWorkload": {
+          "title": "एजेंट कार्यभार",
+          "description": "क्षमता और उपयोग"
+        },
+        "escalationRules": {
+          "title": "एस्केलेशन नियम",
+          "description": "एसएलए उल्लंघन एस्केलेशन"
+        },
+        "taskEscalation": {
+          "title": "कार्य एस्केलेशन",
+          "description": "अतिदेय कार्य रूटिंग"
+        },
+        "linkedAccounts": {
+          "title": "जुड़े खाते",
+          "description": "बाहरी एकीकरण"
+        },
+        "dataQuality": {
+          "title": "डेटा गुणवत्ता",
+          "description": "डेटा पूर्णता स्कोरिंग"
+        }
       }
     },
     "accounts": {
@@ -13789,5 +13920,23 @@
     "rtiPiiMasked": "RTI आवेदक का व्यक्तिगत डेटा। छिपा हुआ — आपको आवेदक का पूरा विवरण देखने की अनुमति नहीं है।",
     "srResolveDescription": "दर्ज करें कि अनुरोध कैसे पूरा किया गया। यदि नागरिक ने फ़ोन या ईमेल दिया है, तो उन्हें स्वतः सूचित किया जाता है।",
     "srCloseDescription": "बंद करना अंतिम है — अनुरोध पर आगे कार्रवाई नहीं हो सकेगी। यदि नागरिक ने फ़ोन या ईमेल दिया है, तो उन्हें स्वतः सूचित किया जाता है।"
+  },
+  "visitor": {
+    "home": {
+      "title": "आगंतुक प्रबंधन",
+      "subtitle": "गेट संचालन, मेज़बान अनुमोदन और परिसर नीति — एक ही स्थान पर।",
+      "statAwaiting": "अनुमोदन प्रतीक्षित",
+      "statExpectedToday": "आज अपेक्षित",
+      "statUpcoming": "अनुमोदित — आगामी",
+      "countsError": "हम आगंतुक गणना लोड नहीं कर सके।",
+      "countsErrorNext": "नीचे कुछ आँकड़े “—” दिखा रहे हैं। पुनः प्रयास करें।",
+      "guardTitle": "गार्ड कंसोल",
+      "guardDesc": "गेट पर पास सत्यापित करें, देखें कि आज कौन अपेक्षित है, और ओवरस्टे फ़्लैग के साथ लाइव इनसाइड-नाउ रोस्टर प्रबंधित करें।",
+      "hostTitle": "मेज़बान पोर्टल",
+      "hostDesc": "आपके लिए उठाए गए विज़िट अनुरोध स्वीकृत या अस्वीकृत करें, और दिन के लिए अपने अपेक्षित आगंतुकों की समीक्षा करें।",
+      "adminTitle": "व्यवस्थापक कॉन्फ़िगरेशन",
+      "adminDesc": "आगंतुक नीति समायोजित करें — प्रतिधारण, अनुमोदन, ओवरस्टे और पास नियम — या एक वर्टिकल प्रीसेट लागू करें।",
+      "open": "खोलें"
+    }
   }
 }

@@ -21,6 +21,9 @@ export function toView(r: TaskRow): TaskView {
     // COMP-008 mytasks-cleanup — was already fetched (full-row select) but
     // dropped by this projection; see schema.ts's TaskView comment.
     dueAt: r.dueAt ? r.dueAt.toISOString() : null,
+    // GAP-WORKFLOW-MY-TASKS-05 — surface the row's age so the inbox can show
+    // an Age column and sort oldest-first. ISO string, same convention as dueAt.
+    createdAt: r.createdAt ? r.createdAt.toISOString() : null,
     version: r.version,
   };
 }

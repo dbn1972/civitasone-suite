@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, asc, count } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { roleBindings, breakglass, type BindingInsert, type BreakglassInsert } from "./schema.js";
 import type { BindingView, BreakglassView } from "./domain.js";
@@ -10,6 +10,15 @@ export async function insertBinding(tx: Writer, row: BindingInsert): Promise<voi
 }
 export async function revokeBinding(tx: Writer, id: string, actorId: string, version: number): Promise<void> {
   await tx.update(roleBindings).set({ status: "revoked", updatedBy: actorId, version, updatedAt: new Date() }).where(eq(roleBindings.id, id));
+}
+export async function listBindings(tx: Writer, tenantId: string, limit = 100, offset = 0): Promise<BindingView[]> {
+  const rows = await tx.select().from(roleBindings).where(eq(roleBindings.tenantId, tenantId))
+    .orderBy(asc(roleBindings.createdAt), asc(roleBindings.id)).limit(limit).offset(offset);
+  return rows.map((r) => ({ id: r.id, tenantId: r.tenantId, userId: r.userId, roleId: r.roleId, status: r.status, version: r.version }));
+}
+export async function countBindings(tx: Writer, tenantId: string): Promise<number> {
+  const [r] = await tx.select({ n: count() }).from(roleBindings).where(eq(roleBindings.tenantId, tenantId));
+  return Number(r?.n ?? 0);
 }
 export async function findBindingByIdTx(tx: Writer, id: string): Promise<BindingView | null> {
   const rows = await tx.select().from(roleBindings).where(eq(roleBindings.id, id)).limit(1);

@@ -1,7 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { causeListIdParam, createCauseListBody, listCaseBody } from "./validators.js";
+import { causeListIdParam, createCauseListBody, listCaseBody, lookupCauseListQuery } from "./validators.js";
+import { deriveCauseListId } from "./domain.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 
@@ -16,6 +17,18 @@ export async function causeListRoutes(app: FastifyInstance): Promise<void> {
     const body = createCauseListBody.parse(req.body);
     const result = await commands.createCauseList(ctx, body);
     return reply.code(202).send(result);
+  });
+
+  // Look up an EXISTING cause-list for a court on a date (GAP-COURT-CAUSE-LIST-02).
+  // A court has exactly one cause-list per date (deterministic id), so this lets
+  // the UI re-open a day's list after reload and avoid a duplicate "generate".
+  app.get("/v1/court/cause-lists", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CAUSELIST_READ_ROLES);
+    const q = lookupCauseListQuery.parse(req.query);
+    const id = deriveCauseListId(ctx.tenantId, q.courtId, q.listDate);
+    const found = await repo.getCauseList(ctx.tenantId, id);
+    return reply.send({ causeList: found ?? null, exists: Boolean(found), source: "db" });
   });
 
   // List a case onto a slot/courtroom of a cause-list.

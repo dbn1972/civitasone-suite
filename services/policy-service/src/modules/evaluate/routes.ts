@@ -12,6 +12,11 @@ import type { AttrBag } from "../abac/domain.js";
 
 const AUDIT = "policy.decision";
 
+// GAP-POLICY-EVALUATE-01: roles permitted to evaluate a permission *for another
+// user* (admin "why was X denied?"). Mirrors the ADMIN set gating bindings/abac
+// in this service. A caller outside this set may only evaluate themselves.
+const EVAL_SUBJECT_ADMIN = ["platform_admin", "super_admin", "tenant_admin"];
+
 const evaluateBody = z.object({
   permissionKey: z.string().min(3),
   actor: z.object({
@@ -23,6 +28,10 @@ const evaluateBody = z.object({
   /** Trusted internal callers may pass the subject's org attributes explicitly
    * (office/jurisdiction) when evaluating on behalf of another principal. */
   subjectAttrs: z.record(z.unknown()).optional(),
+  /** GAP-POLICY-EVALUATE-01: an admin may evaluate on behalf of another user in
+   * their OWN tenant. The subject's effective roles are resolved from the
+   * binding store by this userId; the decision is audited with the subject. */
+  subjectUserId: z.string().uuid().optional(),
 });
 
 export async function evaluateRoutes(app: FastifyInstance): Promise<void> {
@@ -52,6 +61,27 @@ export async function evaluateRoutes(app: FastifyInstance): Promise<void> {
             roles: ctx.roles,
           };
 
+    // GAP-POLICY-EVALUATE-01: an end-user admin may evaluate on behalf of
+    // another user *in their own tenant*. This is gated on the admin role set
+    // and audited (subjectUserId recorded below). The subject's effective roles
+    // are resolved from the binding store by userId (jwtRoleNames=[]), so this
+    // never trusts client-asserted roles. Org/ABAC subject attributes are NOT
+    // available for a third party here (they live in that user's own JWT), so
+    // jurisdiction-fencing ABAC predicates are not applied to a subject-override
+    // evaluation — the RBAC decision and role-scoped ABAC rules still apply.
+    const isSubjectOverride =
+      !isInternalCaller &&
+      body.subjectUserId !== undefined &&
+      body.subjectUserId !== actor.userId;
+    if (isSubjectOverride) {
+      const allowed = EVAL_SUBJECT_ADMIN.some((r) => ctx.roles.includes(r));
+      if (!allowed) {
+        throw new HttpError(403, "FORBIDDEN", "Evaluating another user requires a policy admin role");
+      }
+    }
+    const subjectUserId = isSubjectOverride ? body.subjectUserId! : actor.userId;
+    const subjectRoles = isSubjectOverride ? [] : actor.roles;
+
     // Resolve the granted permissions for the subject from the binding store
     // (scoped to actor.tenantId), never from client-asserted permissions.
     // RLS (#146): resolution + audit run inside the EVALUATED actor's tenant
@@ -59,7 +89,7 @@ export async function evaluateRoutes(app: FastifyInstance): Promise<void> {
     // for external callers actor.tenantId IS ctx.tenantId; trusted internal
     // callers may evaluate a principal of another tenant.
     return runWithTenant(actor.tenantId, async () => {
-    const granted = await repo.findGrantedPermissions(actor.tenantId, actor.userId, actor.roles);
+    const granted = await repo.findGrantedPermissions(actor.tenantId, subjectUserId, subjectRoles);
 
     // EPIC-2 (G-09/G-10): run RBAC then ABAC. Subject org attributes come from
     // the authenticated context (office/position/jurisdiction claims); ABAC deny
@@ -67,23 +97,28 @@ export async function evaluateRoutes(app: FastifyInstance): Promise<void> {
     // trusted internal caller supplying an explicit actor, subject attrs may be
     // passed alongside; otherwise they derive from ctx.
     const [roleIds, compiledRules] = await Promise.all([
-      repo.resolveRoleIds(actor.tenantId, actor.userId, actor.roles),
+      repo.resolveRoleIds(actor.tenantId, subjectUserId, subjectRoles),
       loadCompiledRules(actor.tenantId),
     ]);
-    const subjectAttrs: AttrBag = {
-      ...((ctx as any).officeId ? { officeId: (ctx as any).officeId } : {}),
-      ...((ctx as any).positionId ? { positionId: (ctx as any).positionId } : {}),
-      ...((ctx as any).deptCode ? { deptCode: (ctx as any).deptCode } : {}),
-      ...((ctx as any).hierarchyDomain ? { hierarchyDomain: (ctx as any).hierarchyDomain } : {}),
-      ...((ctx as any).jurisdictionUnitIds ? { jurisdictionUnitIds: (ctx as any).jurisdictionUnitIds } : {}),
-      ...((ctx as any).clearanceLevel ? { clearanceLevel: (ctx as any).clearanceLevel } : {}),
-      ...(isInternalCaller && body.subjectAttrs ? body.subjectAttrs : {}),
-    };
+    // For a subject-override (admin evaluating another user) the caller's own
+    // ctx org attributes must NOT leak into the subject's attribute bag — the
+    // subject's attrs are unknown here, so start empty.
+    const subjectAttrs: AttrBag = isSubjectOverride
+      ? {}
+      : {
+          ...(ctx.officeId ? { officeId: ctx.officeId } : {}),
+          ...(ctx.positionId ? { positionId: ctx.positionId } : {}),
+          ...(ctx.deptCode ? { deptCode: ctx.deptCode } : {}),
+          ...(ctx.hierarchyDomain ? { hierarchyDomain: ctx.hierarchyDomain } : {}),
+          ...(ctx.jurisdictionUnitIds ? { jurisdictionUnitIds: ctx.jurisdictionUnitIds } : {}),
+          ...(ctx.clearanceLevel ? { clearanceLevel: ctx.clearanceLevel } : {}),
+          ...(isInternalCaller && body.subjectAttrs ? body.subjectAttrs : {}),
+        };
     const result = evaluateWithAbac({
       permissionKey: body.permissionKey,
-      userId: actor.userId,
+      userId: subjectUserId,
       tenantId: actor.tenantId,
-      roles: actor.roles,
+      roles: subjectRoles,
       roleIds,
       subjectAttrs,
       resource: (body.resource ?? {}) as AttrBag,
@@ -96,18 +131,22 @@ export async function evaluateRoutes(app: FastifyInstance): Promise<void> {
         topic: AUDIT,
         eventType: AUDIT,
         tenantId: actor.tenantId,
-        actorId: actor.userId,
+        // Subject override: audit under the admin asking. Otherwise keep the evaluated actor
+        // (trusted internal callers pass an explicit actor distinct from the service principal).
+        actorId: isSubjectOverride ? ctx.actorId : actor.userId,
         correlationId: ctx.correlationId,
         payload: {
           permissionKey: body.permissionKey,
           decision: result.decision,
           reason: result.reason,
           resource: body.resource ?? null,
+          subjectUserId,
+          onBehalfOf: isSubjectOverride ? subjectUserId : null,
         },
       });
     });
 
-    return reply.send(result);
+    return reply.send({ ...result, subjectUserId });
     });
   });
 

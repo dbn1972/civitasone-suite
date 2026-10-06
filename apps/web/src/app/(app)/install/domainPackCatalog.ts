@@ -1,6 +1,6 @@
 /**
  * FN-17 — Stage 3 Domain Pack catalogue (installer UX).
- * Mirrors DoD §13(f) / install-service MUNICIPAL_ONBOARDING_PACK_KEYS.
+ * Mirrors install-service MUNICIPAL_ONBOARDING_PACK_KEYS.
  */
 
 export const MUNICIPAL_DOMAIN_PACK_KEY = "municipal-in-v1";

@@ -3,14 +3,9 @@
 import { useMemo } from "react";
 import { DataTable, EmptyState } from "@/app/_components/ds";
 import type { ThemeTokenSummary } from "@civitasone/types";
+import { isCssColour } from "@/lib/colour";
 
 type TokenRow = ThemeTokenSummary & Record<string, unknown>;
-
-const HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
-
-function isColor(value: string): boolean {
-  return HEX.test(value.trim());
-}
 
 /**
  * Accessible, sortable, filterable view of tenant theme tokens.
@@ -55,7 +50,7 @@ export function ThemeTokenTable({ tokens }: { tokens: ThemeTokenSummary[] }) {
           label: "Value",
           render: (row) => {
             const value = String(row.value ?? "");
-            if (isColor(value)) {
+            if (isCssColour(value)) {
               return (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                   <span

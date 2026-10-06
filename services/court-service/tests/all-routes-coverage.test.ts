@@ -144,6 +144,7 @@ vi.mock("@civitasone/auth", async (importOriginal) => {
 
 vi.mock("../src/modules/case-registry/repo.js", () => ({
   listCases: async () => mockState.queryResult,
+  countCases: async () => mockState.countResult,
   getCaseById: async () => mockState.queryResult[0] ?? null,
   // A spy (not a bare arrow) so tests can assert the tenant-scoping args the
   // route passes — regression guard for the tenantId filter fix.
@@ -163,6 +164,8 @@ vi.mock("../src/modules/court-registry/repo.js", () => ({
 
 vi.mock("../src/modules/hearing/repo.js", () => ({
   listHearingsByCase: async () => mockState.queryResult,
+  listHearings: async () => mockState.queryResult,
+  countHearings: async () => mockState.countResult,
 }));
 
 vi.mock("../src/modules/filing/repo.js", () => ({

@@ -75,6 +75,26 @@ export function requireAnyRole(allowed: string[], redirectTo = "/dashboard"): vo
 export const PAYROLL_ADMIN_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 
 /**
+ * GAP-CATALOGUE-HOME-02: roles permitted to READ the service catalogue
+ * (products, categories, rates, bundles). Mirrors catalogue-service's own
+ * CATALOGUE_ROLES on every GET route (products/routes.ts, rates/routes.ts,
+ * bundles/routes.ts): catalogue_user, catalogue_admin, super_admin. A role
+ * outside this list already gets a 403 from the API; gating the catalogue
+ * layout on this constant shows the dashboard redirect instead of a page of
+ * failed fetches, and declares the module's owner. super_admin is included so
+ * platform operators keep access.
+ */
+export const CATALOGUE_READER_ROLES = ["catalogue_user", "catalogue_admin", "super_admin"];
+
+/**
+ * GAP-CATALOGUE-HOME-02: roles permitted to CREATE/EDIT catalogue entries.
+ * Mirrors catalogue-service's ADMIN_ROLES on every POST/PATCH/DELETE route:
+ * catalogue_admin, super_admin. UI write controls (none exist on the current
+ * read-only screens) must gate on this AND the server already enforces it.
+ */
+export const CATALOGUE_ADMIN_ROLES = ["catalogue_admin", "super_admin"];
+
+/**
  * Roles permitted to read payroll run data (list/detail). Mirrors
  * payroll-service's READER_ROLES (routes.ts): PAYROLL_ADMIN_ROLES plus
  * hr_admin/finance_officer -- deliberately NOT "employee" or "manager",
@@ -339,10 +359,48 @@ export const AUDIT_OBSERVATION_REFER_ROLES = ["audit_officer", "audit_admin", "s
  */
 export const AUDIT_OBSERVATION_REVIEW_ROLES = ["audit_admin", "super_admin"];
 
+/**
+ * GAP-INSTALL-HOME-03 / GAP-INSTALL-DOMAIN-PACKS-01 / GAP-INSTALL-SILOS-04:
+ * roles permitted to reach the /install segment (installer wizard, stages,
+ * steps, modules, silo provisions, Domain Pack activation). Mirrors
+ * install-service's own ROLES in modules/orchestrator/routes.ts and
+ * modules/stages/routes.ts (`install_user`, `install_admin`, `super_admin`,
+ * `tenant_admin`) — the server stays the authority (every route calls
+ * requireRole(ctx, ROLES)); this segment gate is defence-in-depth + UX so a
+ * viewer with none of these roles sees PermissionDenied instead of a wall of
+ * failed fetches. A plain employee/crm_user/etc. is excluded.
+ */
+export const INSTALL_VIEW_ROLES = ["install_user", "install_admin", "super_admin", "tenant_admin"];
+
+/**
+ * GAP-INSTALL-HOME-03 / GAP-INSTALL-DOMAIN-PACKS-01: roles permitted to RUN
+ * install mutations — run/skip/retry a step and activate a Domain Pack (Stage
+ * 3 tenant provisioning). The install-service accepts the same set for reads
+ * and writes today, so this currently equals INSTALL_VIEW_ROLES; it is kept as
+ * a separate constant so the write surface can be narrowed (e.g. drop
+ * install_user) without touching the read gate, and so the UI can hide
+ * mutation controls from a hypothetical read-only install role. The server
+ * remains the authority.
+ */
+export const INSTALL_OPERATE_ROLES = ["install_user", "install_admin", "super_admin", "tenant_admin"];
+
 /** True when any of the session roles is in `allowed`. Pure; for UI gating. */
 export function hasAnyRole(sessionRoles: string[], allowed: string[]): boolean {
   return allowed.some((r) => sessionRoles.includes(r));
 }
+
+/**
+ * GAP-POLICY-HOME-01 / GAP-POLICY-BINDINGS-01: roles permitted to reach the
+ * /policy segment. Every policy-service mutating/admin route (bindings, abac,
+ * role-features) gates on exactly this set (its `ADMIN` constant:
+ * platform_admin / super_admin / tenant_admin — see the policy-service module
+ * route files), so the web segment layout gates on the same set. The service remains the authority (requireRole + the
+ * new self-binding block); this is defence-in-depth + honest UX so a plain
+ * signed-in user is not shown Bindings / Role Features / ABAC that would only
+ * 403. The evaluate "evaluate as another user" picker is additionally gated on
+ * this set client-side and re-checked server-side (GAP-POLICY-EVALUATE-01).
+ */
+export const POLICY_ADMIN_ROLES = ["platform_admin", "super_admin", "tenant_admin"];
 
 /**
  * GAP-BILLING-HOME-01 / GAP-BILLING-GSTN-01: billing module role gating.
@@ -393,3 +451,94 @@ export const NOTIFICATION_SEND_ROLES = ["notification_admin", "super_admin", "pl
 /** Mirrors notification-service NOTIFY_READ_ROLES: send roles + audit_officer. */
 export const NOTIFICATION_READ_ROLES = [...NOTIFICATION_SEND_ROLES, "audit_officer"];
 export const NOTIFICATION_TEMPLATE_ADMIN_ROLES = ["platform_admin", "super_admin", "tenant_admin"];
+
+/**
+ * GAP-MEETING-HOME-04 / GAP-MEETING-ADMIN-02: roles permitted to administer
+ * tenant meeting configuration (policy knobs, presets, committee-type toggles).
+ * Mirrors meeting-service's CONFIG_WRITE_ROLES in
+ * services/meeting-service/src/modules/config-registry/routes.ts
+ * (`["tenant_admin","super_admin"]`) which guards POST /v1/meetings/config and
+ * the preset endpoint, PLUS `meeting_admin` who the same module admits to the
+ * config READ set and who operates these policies day-to-day. The service
+ * remains the authority (it 403s a non-admin write); this web gate only decides
+ * whether the UI offers the Admin Configuration tile / page controls so a plain
+ * member is not shown a page that is guaranteed to 403 on save.
+ */
+export const MEETING_CONFIG_ADMIN_ROLES = ["meeting_admin", "tenant_admin", "super_admin", "admin"];
+
+/**
+ * GAP-MEETING-MEETINGS-03: roles permitted to CREATE / schedule a meeting.
+ * Mirrors meeting-service's WRITE_ROLES in meeting-core/routes.ts
+ * (`["meeting_admin","committee_secretary","tenant_admin","super_admin","admin"]`)
+ * which guards POST /v1/meetings. The server is the authority; hiding the
+ * "+ New meeting" control for everyone else only avoids a guaranteed 403.
+ */
+export const MEETING_CREATE_ROLES = [
+  "meeting_admin",
+  "committee_secretary",
+  "tenant_admin",
+  "super_admin",
+  "admin",
+];
+
+/**
+ * GAP-THEMES-HOME-01 / GAP-THEMES-TOKENS-02 / GAP-THEMES-BRAND-05 /
+ * GAP-THEMES-BRANDING-05 / GAP-THEMES-TEMPLATES-04: theme-module role gating.
+ *
+ * The theme-service enforces roles server-side on every route (verified in
+ * services/theme-service/src/modules/*):
+ *  - token read/list/create: ["theme_user","theme_admin","super_admin"]
+ *    (modules/tokens/routes.ts ROLES)
+ *  - templates + branding (read AND write) and brand write/apply-preset +
+ *    POST /v1/themes/publish: ["theme_admin","super_admin"]
+ *    (modules/templates/routes.ts, modules/branding/routes.ts,
+ *     modules/tokens/brand-routes.ts ADMIN_ROLES, publish-routes.ts PUBLISH_ROLES)
+ *
+ * The web /themes tree had NO layout gate at all, so every signed-in user
+ * reached the hub and the publish control (and only learned they lacked
+ * access from a failed call). These constants mirror the server sets so the
+ * themes layout can add a matching requireAnyRole gate (defence-in-depth +
+ * honest UX); the server remains the authoritative gate.
+ *
+ * THEME_MODULE_ROLES is the UNION (anyone who can use ANY themes route) used
+ * by the themes hub layout so it never locks out a theme_user that the token
+ * read routes admit. THEME_ADMIN_ROLES is the narrower set that may publish /
+ * edit templates / branding / brand — the hub hides those tiles and controls
+ * from anyone outside it.
+ */
+export const THEME_ADMIN_ROLES = ["theme_admin", "super_admin"];
+export const THEME_MODULE_ROLES = ["theme_user", ...THEME_ADMIN_ROLES];
+
+/**
+ * GAP-FIELD-VISITS-03 (PII/DPDP): roles permitted to see a field worker's
+ * precise GPS location and to export the visits list. field-service admits
+ * field_admin/field_agent/super_admin to GET /v1/field/visits, but a plain
+ * field_agent must NOT be able to browse/export every colleague's location
+ * history. DECISION (safest default, pending DPO confirmation — flagged for
+ * HUMAN REVIEW): only supervisory roles (field_admin, super_admin) may view
+ * coordinates and export; everyone else sees the list with the GPS column and
+ * CSV export withheld. Coordinates are additionally rounded for everyone
+ * (COORD_DISPLAY_PRECISION in visits.ts). The server remains the authority for
+ * who may read the endpoint; this gate decides what the UI reveals/exports.
+ */
+export const FIELD_VISIT_LOCATION_ROLES = ["field_admin", "super_admin"];
+
+/**
+ * GAP-VISITOR-ADMIN-02 / GAP-VISITOR-HOME-02: roles permitted to administer
+ * visitor policy (/visitor/admin). Mirrors visitor-service config-registry
+ * CONFIG_WRITE_ROLES exactly (modules/config-registry/routes.ts) — only
+ * tenant/super admins may write visitor config; the POST /v1/visitor/config
+ * and preset endpoints 403 everyone else. This web gate (admin/layout.tsx +
+ * hiding the Admin tile on the hub) is defence-in-depth + honest UX; the
+ * service remains the authority.
+ */
+export const VISITOR_ADMIN_ROLES = ["tenant_admin", "super_admin"];
+
+/**
+ * GAP-VISITOR-HOME-02: roles permitted to operate the guard console
+ * (/visitor/guard). Mirrors visitor-service check-in ACTIVE_ROLES / GATE_ROLES
+ * (modules/check-in/routes.ts) — the roster/verify/check-in endpoints admit
+ * these roles and 403 others. The guard console is also reachable by the
+ * gate-terminal service account. Defence-in-depth; the service is the gate.
+ */
+export const VISITOR_GUARD_ROLES = ["security_admin", "gate_terminal", "protocol_officer", "employee", "tenant_admin", "super_admin"];

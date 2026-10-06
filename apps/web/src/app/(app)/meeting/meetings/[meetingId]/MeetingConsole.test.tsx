@@ -193,3 +193,96 @@ describe("MeetingConsole — ErrorState for genuine load failures (fix 8)", () =
     expect(screen.queryByText("The agenda couldn't be reached.")).not.toBeInTheDocument();
   });
 });
+
+describe("MeetingConsole — conclude vote confirmation (GAP-MEETING-MEETINGS-MEETINGID-01)", () => {
+  beforeEach(() => {
+    concludeVoteMock.mockReset().mockResolvedValue(undefined);
+    fetchActiveVotesMock.mockReset().mockResolvedValue([activeVote()]);
+  });
+
+  it("does not call concludeVote until the confirm dialog is accepted", () => {
+    render(<MeetingConsole {...baseProps()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Conclude vote" }));
+    expect(concludeVoteMock).not.toHaveBeenCalled();
+    const dialog = screen.getByRole("alertdialog");
+    expect(within(dialog).getByText(/Closes voting and computes the result/)).toBeInTheDocument();
+    // Tally is shown in the dialog.
+    expect(within(dialog).getByText(/For 2, Against 0, Abstain 0/)).toBeInTheDocument();
+  });
+
+  it("calls concludeVote only after confirming", async () => {
+    render(<MeetingConsole {...baseProps()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Conclude vote" }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Conclude vote" }));
+    await waitFor(() => expect(concludeVoteMock).toHaveBeenCalledWith("m1", "r1"));
+  });
+
+  it("cancelling leaves the vote open (concludeVote not called)", () => {
+    render(<MeetingConsole {...baseProps()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Conclude vote" }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(concludeVoteMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("MeetingConsole — Move to minutes is confirmed (GAP-MEETING-MEETINGS-MEETINGID-01)", () => {
+  beforeEach(() => transitionMeetingMock.mockReset().mockResolvedValue(undefined));
+
+  it("opens a dialog rather than transitioning on the first click", () => {
+    render(<MeetingConsole {...baseProps()} meeting={meeting({ status: "adjourned" })} />);
+    const btn = screen.getByRole("button", { name: "Move to minutes" });
+    expect(btn).toHaveClass("danger");
+    fireEvent.click(btn);
+    expect(transitionMeetingMock).not.toHaveBeenCalled();
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+  });
+});
+
+describe("MeetingConsole — participant names (GAP-MEETING-MEETINGS-MEETINGID-02)", () => {
+  it("renders the resolved name with the employee id as a caption", () => {
+    const attendance = {
+      meetingId: "m1",
+      generatedAt: "2026-09-01T05:00:00.000Z",
+      counts: { present: 1, absent: 0, joinedLate: 0, leftEarly: 0, attendingViaVc: 0, total: 1 },
+      participants: [
+        {
+          participantId: "p1",
+          employeeId: "EMP-42",
+          displayName: "Asha Rao",
+          designation: "Director",
+          role: "chairperson",
+          isMandatory: true,
+          status: "present",
+          mode: null,
+          method: null,
+          checkInAt: "2026-09-01T04:35:00.000Z",
+          checkOutAt: null,
+        },
+      ],
+    };
+    render(<MeetingConsole {...baseProps()} initialAttendance={attendance} />);
+    expect(screen.getByText("Asha Rao")).toBeInTheDocument();
+    expect(screen.getByText(/EMP-42/)).toBeInTheDocument();
+  });
+});
+
+describe("MeetingConsole — misc a11y/copy", () => {
+  it("GAP-MEETING-MEETINGS-MEETINGID-07: the VC link opens in a new tab safely", () => {
+    render(
+      <MeetingConsole
+        {...baseProps()}
+        meeting={meeting({ vcEnabled: true, vcLink: "https://vc.example/meet" })}
+      />,
+    );
+    const link = screen.getByRole("link", { name: /join video conference/i });
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", expect.stringContaining("noopener"));
+  });
+
+  it("GAP-MEETING-MEETINGS-MEETINGID-06: empty-voting copy names the actual button", () => {
+    render(<MeetingConsole {...baseProps()} initialActiveVotes={[]} activeVotesSource="api" />);
+    expect(screen.getByText(/Use "Open a vote" below to start a motion/)).toBeInTheDocument();
+  });
+});

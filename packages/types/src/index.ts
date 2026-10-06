@@ -524,6 +524,33 @@ export interface ModuleRowSummary {
   sublabel?: string;
   status?: string;
   meta?: string;
+  /**
+   * GAP-CATALOGUE-CATEGORIES-01: 0-based depth of this row within a flattened
+   * hierarchy tree (0 = root). Optional and additive: every existing
+   * ModuleListPage consumer omits it and renders unchanged. ModuleListTable
+   * indents the Name cell by `depth` when present.
+   */
+  depth?: number;
+  /**
+   * GAP-CATALOGUE-CATEGORIES-01: label of this row's parent in a flattened
+   * tree, for an optional "Parent" hint. Optional/additive.
+   */
+  parentLabel?: string;
+  /**
+   * GAP-CATALOGUE-{BUNDLES,CATEGORIES,PRODUCTS,RATES}-0x: a human-facing code
+   * (e.g. "SVC-BPA-01") kept distinct from `id` so the ID column never
+   * truncates a non-UUID code. Optional/additive.
+   */
+  code?: string;
+  /**
+   * GAP-FIELD-{AGENTS,ROUTES,SYNC,TASKS}-0x (UUID theme): how `meta` should be
+   * rendered. "date" means `meta` is an ISO timestamp that ModuleListTable
+   * formats with formatIndianDate at render time (so a raw
+   * "2026-09-27T09:14:00.000Z" never reaches the screen); omitted/"text"
+   * keeps the existing verbatim rendering. Additive and optional, so every
+   * existing loader/consumer of ModuleRowSummary is unaffected.
+   */
+  metaKind?: "date" | "text";
 }
 
 export interface PurchaseOrderSummary {

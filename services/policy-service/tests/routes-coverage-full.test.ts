@@ -272,7 +272,7 @@ describe("POST /policy/roles/:id/permissions", () => {
 describe("POST /policy/bindings", () => {
   it("returns 202 with valid binding", async () => {
     const res = await app.inject({
-      method: "POST", url: "/policy/bindings",
+      method: "POST", url: "/v1/policy/bindings",
       headers: adminH(),
       payload: { userId: randomUUID(), roleId: randomUUID() },
     });
@@ -282,7 +282,7 @@ describe("POST /policy/bindings", () => {
 
   it("rejects missing userId", async () => {
     const res = await app.inject({
-      method: "POST", url: "/policy/bindings",
+      method: "POST", url: "/v1/policy/bindings",
       headers: adminH(),
       payload: { roleId: randomUUID() },
     });
@@ -292,7 +292,7 @@ describe("POST /policy/bindings", () => {
 
   it("rejects invalid uuid fields", async () => {
     const res = await app.inject({
-      method: "POST", url: "/policy/bindings",
+      method: "POST", url: "/v1/policy/bindings",
       headers: adminH(),
       payload: { userId: "bad", roleId: "bad" },
     });
@@ -302,7 +302,7 @@ describe("POST /policy/bindings", () => {
 
   it("returns 403 for non-admin", async () => {
     const res = await app.inject({
-      method: "POST", url: "/policy/bindings",
+      method: "POST", url: "/v1/policy/bindings",
       headers: staffH(),
       payload: { userId: randomUUID(), roleId: randomUUID() },
     });
@@ -311,7 +311,7 @@ describe("POST /policy/bindings", () => {
 
   it("returns 401 without token", async () => {
     const res = await app.inject({
-      method: "POST", url: "/policy/bindings",
+      method: "POST", url: "/v1/policy/bindings",
       payload: { userId: randomUUID(), roleId: randomUUID() },
     });
     expect(res.statusCode).toBe(401);
@@ -321,7 +321,7 @@ describe("POST /policy/bindings", () => {
 describe("DELETE /policy/bindings/:id", () => {
   it("returns 202 with valid uuid", async () => {
     const res = await app.inject({
-      method: "DELETE", url: `/policy/bindings/${randomUUID()}`,
+      method: "DELETE", url: `/v1/policy/bindings/${randomUUID()}`,
       headers: adminH(),
     });
     expect(res.statusCode).toBe(202);
@@ -330,7 +330,7 @@ describe("DELETE /policy/bindings/:id", () => {
 
   it("rejects invalid uuid param", async () => {
     const res = await app.inject({
-      method: "DELETE", url: "/policy/bindings/not-valid",
+      method: "DELETE", url: "/v1/policy/bindings/not-valid",
       headers: adminH(),
     });
     expect(res.statusCode).toBeGreaterThanOrEqual(400);
@@ -339,7 +339,7 @@ describe("DELETE /policy/bindings/:id", () => {
 
   it("returns 403 for non-admin", async () => {
     const res = await app.inject({
-      method: "DELETE", url: `/policy/bindings/${randomUUID()}`,
+      method: "DELETE", url: `/v1/policy/bindings/${randomUUID()}`,
       headers: staffH(),
     });
     expect(res.statusCode).toBe(403);
@@ -349,7 +349,7 @@ describe("DELETE /policy/bindings/:id", () => {
 describe("POST /policy/breakglass", () => {
   it("returns 202 with valid body", async () => {
     const res = await app.inject({
-      method: "POST", url: "/policy/breakglass",
+      method: "POST", url: "/v1/policy/breakglass",
       headers: adminH(),
       payload: { scope: "finance.*", reason: "Emergency access needed for incident", durationMinutes: 60 },
     });
@@ -359,7 +359,7 @@ describe("POST /policy/breakglass", () => {
 
   it("returns 202 with default durationMinutes", async () => {
     const res = await app.inject({
-      method: "POST", url: "/policy/breakglass",
+      method: "POST", url: "/v1/policy/breakglass",
       headers: adminH(),
       payload: { scope: "hrms.*", reason: "Urgent payroll correction required" },
     });
@@ -368,7 +368,7 @@ describe("POST /policy/breakglass", () => {
 
   it("rejects short reason with error status", async () => {
     const res = await app.inject({
-      method: "POST", url: "/policy/breakglass",
+      method: "POST", url: "/v1/policy/breakglass",
       headers: adminH(),
       payload: { scope: "x", reason: "short" },
     });
@@ -378,7 +378,7 @@ describe("POST /policy/breakglass", () => {
 
   it("rejects empty scope with error status", async () => {
     const res = await app.inject({
-      method: "POST", url: "/policy/breakglass",
+      method: "POST", url: "/v1/policy/breakglass",
       headers: adminH(),
       payload: { scope: "", reason: "Some valid reason here for testing" },
     });
@@ -388,7 +388,7 @@ describe("POST /policy/breakglass", () => {
 
   it("rejects invalid durationMinutes with error status", async () => {
     const res = await app.inject({
-      method: "POST", url: "/policy/breakglass",
+      method: "POST", url: "/v1/policy/breakglass",
       headers: adminH(),
       payload: { scope: "x", reason: "Some valid reason here for testing", durationMinutes: 9999 },
     });
@@ -403,7 +403,7 @@ describe("POST /policy/breakglass", () => {
   // behavior instead.
   it("returns 403 for non-admin", async () => {
     const res = await app.inject({
-      method: "POST", url: "/policy/breakglass",
+      method: "POST", url: "/v1/policy/breakglass",
       headers: staffH(),
       payload: { scope: "finance.*", reason: "Emergency access required for incident" },
     });
@@ -412,7 +412,7 @@ describe("POST /policy/breakglass", () => {
 
   it("returns 401 without token", async () => {
     const res = await app.inject({
-      method: "POST", url: "/policy/breakglass",
+      method: "POST", url: "/v1/policy/breakglass",
       payload: { scope: "finance.*", reason: "Emergency access required for incident" },
     });
     expect(res.statusCode).toBe(401);
@@ -494,6 +494,40 @@ describe("POST /v1/policy/evaluate", () => {
     expect(res.statusCode).toBe(200);
     // Should NOT be allowed - actor override ignored
     expect(res.json().decision).toBe("deny");
+  });
+
+  it("GAP-POLICY-EVALUATE-01: a non-admin cannot evaluate on behalf of another user (403)", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/policy/evaluate",
+      headers: headers(["staff"]),
+      payload: { permissionKey: "hrms.leave.approve", subjectUserId: randomUUID() },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("GAP-POLICY-EVALUATE-01: an admin CAN evaluate on behalf of another user; result echoes the subject", async () => {
+    const subjectUserId = randomUUID();
+    const res = await app.inject({
+      method: "POST", url: "/v1/policy/evaluate",
+      headers: headers(["tenant_admin"]),
+      payload: { permissionKey: "hrms.leave.approve", subjectUserId },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    // The subject has no bound roles, so the decision is deny for THEM, not for
+    // the admin caller — proving the override takes effect.
+    expect(body.decision).toBe("deny");
+    expect(body.subjectUserId).toBe(subjectUserId);
+  });
+
+  it("GAP-POLICY-EVALUATE-01: without subjectUserId, the subject is the caller", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/policy/evaluate",
+      headers: headers(["super_admin"]),
+      payload: { permissionKey: "finance.budget.approve" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().decision).toBe("allow");
   });
 });
 

@@ -20,6 +20,8 @@ export const taskViewSchema = z.object({
   // value crossing this boundary is repo.ts's toView() output, which already
   // calls dueAt?.toISOString() before this schema ever sees it.
   dueAt: z.string().nullable().optional(),
+  // GAP-WORKFLOW-MY-TASKS-05 — task age (ISO string); see repo.ts toView.
+  createdAt: z.string().nullable().optional(),
   version: z.number().int(),
 });
 

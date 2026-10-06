@@ -444,3 +444,32 @@ describe("GAP-PROJECTS-WBS-05: project WBS status keys", () => {
     expect(pillTone("in_progress")).toBe("warn");
   });
 });
+
+// GAP-WORKFLOW-DEFINITIONS-03: a workflow definition version that is
+// "deployed" is live and must read green, not the neutral "info" fallback.
+describe("workflow definition status 'deployed'", () => {
+  it("maps 'deployed' to the green 'good' tone (same as 'active')", () => {
+    expect(pillTone("deployed")).toBe("good");
+    expect(pillTone("active")).toBe("good");
+  });
+});
+
+describe("GAP-POLICY-ABAC-02 / EVALUATE-02: policy effect/decision tones", () => {
+  it("renders allow and permit as the 'good' tone", () => {
+    expect(pillTone("allow")).toBe("good");
+    expect(pillTone("permit")).toBe("good");
+  });
+
+  it("renders deny as the 'bad' tone (not the neutral info fallback)", () => {
+    expect(pillTone("deny")).toBe("bad");
+  });
+
+  it("renders revoked as the 'bad' tone", () => {
+    expect(pillTone("revoked")).toBe("bad");
+  });
+
+  it("still carries humanized text so colour is not the only cue", () => {
+    render(<StatusPill status="deny" />);
+    expect(screen.getByText("Deny")).toBeInTheDocument();
+  });
+});

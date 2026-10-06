@@ -47,9 +47,29 @@ export function mergeDomainPackCatalog(apiRows: unknown[]): DomainPackListItem[]
     const key = str(row.domainPackKey);
     if (!key) continue;
     const catalog = findCatalogEntry(key);
-    const packKeys = Array.isArray(row.packKeys)
+    const apiPackKeys = Array.isArray(row.packKeys)
       ? row.packKeys.filter((k): k is string => typeof k === "string")
-      : catalog?.outcomes.map((o) => o.packKey) ?? [];
+      : [];
+    // GAP-INSTALL-DOMAIN-PACKS-03: the API is the source of truth for which
+    // packs a Domain Pack activates. When it returns packKeys, derive the
+    // outcome list from THOSE keys (using the static catalogue only to label
+    // keys it recognises), so a server-side change to the pack set shows up in
+    // both the preview and the activate request. Fall back to the static
+    // catalogue outcomes only when the API returns no packKeys.
+    const outcomes =
+      apiPackKeys.length > 0
+        ? apiPackKeys.map((packKey) => {
+            const known = catalog?.outcomes.find((o) => o.packKey === packKey);
+            return (
+              known ?? {
+                packKey,
+                label: packKey.replace(/^pack:/, ""),
+                shortLabel: packKey.replace(/^pack:/, "").slice(0, 12),
+                description: "Editable catalogue draft after activation.",
+              }
+            );
+          })
+        : (catalog?.outcomes ?? []);
     byKey.set(key, {
       domainPackKey: key,
       name: str(row.name) || catalog?.name || key,
@@ -57,14 +77,7 @@ export function mergeDomainPackCatalog(apiRows: unknown[]): DomainPackListItem[]
       jurisdiction: str(row.jurisdiction) || catalog?.jurisdiction || "",
       summary: catalog?.summary ?? "Import included service packs as editable catalogue drafts.",
       recommended: catalog?.recommended ?? key === MUNICIPAL_DOMAIN_PACK.domainPackKey,
-      outcomes:
-        catalog?.outcomes ??
-        packKeys.map((packKey) => ({
-          packKey,
-          label: packKey.replace(/^pack:/, ""),
-          shortLabel: packKey.replace(/^pack:/, "").slice(0, 12),
-          description: "Editable catalogue draft after activation.",
-        })),
+      outcomes,
       id: str(row.id) || undefined,
       version: typeof row.version === "number" ? row.version : undefined,
       fromApi: true,
@@ -78,15 +91,38 @@ export function mergeDomainPackCatalog(apiRows: unknown[]): DomainPackListItem[]
   });
 }
 
-export async function fetchDomainPacksForInstall(): Promise<DomainPackListItem[]> {
+export type DomainPackFetchResult = {
+  packs: DomainPackListItem[];
+  /** True when the live list fetch failed and only the built-in catalogue is shown. */
+  error: boolean;
+};
+
+/**
+ * GAP-INSTALL-DOMAIN-PACKS-02 / GAP-INSTALL-HOME-07: fetch the Domain Pack
+ * library, reporting whether the live fetch actually failed. A failed fetch
+ * used to be swallowed and returned as the static municipal catalogue, so an
+ * outage looked identical to a healthy single-pack library. The panel uses
+ * this to show a retry banner ("Showing built-in pack only") over the fallback
+ * instead of pretending the list loaded.
+ */
+export async function fetchDomainPacksForInstallResult(): Promise<DomainPackFetchResult> {
   try {
     const res = await fetch("/api/proxy/v1/citizen/packs/domain", { cache: "no-store" });
-    if (!res.ok) return mergeDomainPackCatalog([]);
+    if (!res.ok) return { packs: mergeDomainPackCatalog([]), error: true };
     const body = (await res.json()) as { data?: unknown[] };
-    return mergeDomainPackCatalog(Array.isArray(body.data) ? body.data : []);
+    return { packs: mergeDomainPackCatalog(Array.isArray(body.data) ? body.data : []), error: false };
   } catch {
-    return mergeDomainPackCatalog([]);
+    return { packs: mergeDomainPackCatalog([]), error: true };
   }
+}
+
+/**
+ * Back-compat wrapper returning just the pack list (built-in catalogue on
+ * failure). Prefer {@link fetchDomainPacksForInstallResult} in UI so an outage
+ * is not masked. Retained so existing callers/tests keep working unchanged.
+ */
+export async function fetchDomainPacksForInstall(): Promise<DomainPackListItem[]> {
+  return (await fetchDomainPacksForInstallResult()).packs;
 }
 
 export async function activateDomainPackStage3(

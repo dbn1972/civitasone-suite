@@ -31,18 +31,55 @@ export async function insertStateTransition(tx: Writer, row: CaseStateTransition
  * beyond the caller's tenant.
  */
 export async function listCases(
-  filters: { tenantId: string; status?: string | undefined; courtId?: string | undefined },
+  filters: { tenantId: string; status?: string | undefined; courtId?: string | undefined; q?: string | undefined },
   limit: number,
   offset: number,
 ): Promise<CaseRow[]> {
   const predicates = [eq(cases.tenantId, filters.tenantId)];
   if (filters.status) predicates.push(eq(cases.status, filters.status));
   if (filters.courtId) predicates.push(eq(cases.courtId, filters.courtId));
+  if (filters.q) predicates.push(caseSearchPredicate(filters.q));
   return scopedRead((tx) => tx.select().from(cases)
     .where(and(...predicates))
     .orderBy(desc(cases.createdAt))
     .limit(limit)
     .offset(offset));
+}
+
+/**
+ * Case-insensitive free-text match over title / CNR / filing number
+ * (GAP-COURT-HEARINGS-02). The term is escaped so a user-typed `%`/`_` is a
+ * literal, not a wildcard, then wrapped for a contains match. Drizzle
+ * parameterises the value — no SQL injection surface.
+ */
+function caseSearchPredicate(q: string) {
+  const escaped = q.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+  const term = `%${escaped}%`;
+  return sql`(
+    ${cases.title} ilike ${term} escape '\\'
+    or ${cases.cnrNumber} ilike ${term} escape '\\'
+    or ${cases.filingNumber} ilike ${term} escape '\\'
+  )`;
+}
+
+/**
+ * Total count for the SAME tenant/status/court filters as listCases, so a
+ * paginated list can show "Showing X–Y of N" with a true total rather than
+ * the capped page length (GAP-COURT-CASES-01). Tenant predicate always
+ * applied, mirroring listCases, so a forged filter cannot widen the scan.
+ */
+export async function countCases(
+  filters: { tenantId: string; status?: string | undefined; courtId?: string | undefined; q?: string | undefined },
+): Promise<number> {
+  const predicates = [eq(cases.tenantId, filters.tenantId)];
+  if (filters.status) predicates.push(eq(cases.status, filters.status));
+  if (filters.courtId) predicates.push(eq(cases.courtId, filters.courtId));
+  if (filters.q) predicates.push(caseSearchPredicate(filters.q));
+  const rows = await scopedRead<{ count: number }[]>((tx) => tx
+    .select({ count: sql<number>`cast(count(*) as int)` })
+    .from(cases)
+    .where(and(...predicates)));
+  return rows[0]?.count ?? 0;
 }
 
 /**

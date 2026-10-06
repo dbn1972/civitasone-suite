@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 
 vi.mock("@/lib/sync/resource", () => ({ useSeededResource: vi.fn() }));
 // RefreshErrorState uses next/navigation's useRouter for its retry action
@@ -114,5 +114,120 @@ describe("ModuleListTable", () => {
     expect(screen.getByText("hrms-leave-approvals")).toBeInTheDocument();
     const short = screen.getByText("3f2a9c1e");
     expect(short).toHaveAttribute("title", "3f2a9c1e-1111-4000-8000-000000000001");
+  });
+
+  // GAP-INSTALL-{MODULES,SILOS,STAGES}-03 (CAP): the status cell renders a
+  // StatusPill (humanized label + non-colour cue via the `pill` class), not a
+  // bare raw lowercase enum string.
+  it("renders the status column as a StatusPill with a humanized label", () => {
+    mockedHook.mockReturnValue({
+      data: [{ id: "s1", label: "Row", status: "in_progress" }],
+      fromCache: false,
+      offline: false,
+      cachedAt: null,
+      provenance: "live",
+    } as never);
+    render(<ModuleListTable cacheKey="test" rows={[]} source="api" />);
+    const pill = screen.getByText("In Progress");
+    expect(pill).toHaveClass("pill");
+  });
+
+  // GAP-INSTALL-STEPS-03 (CAP): the raw <table className="tbl"> had no
+  // pagination — all N rows rendered at once. The DataTable paginates at
+  // pageSize=15, so 30 rows render only 15 and expose a pager. Fails on the
+  // old code (which rendered all 30 and had no pager).
+  it("paginates at 15 rows per page and shows a pager for 30 rows", () => {
+    const many = Array.from({ length: 30 }, (_, i) => ({
+      id: `row-${String(i + 1).padStart(2, "0")}`,
+      label: `Record ${i + 1}`,
+    }));
+    mockedHook.mockReturnValue({
+      data: many,
+      fromCache: false,
+      offline: false,
+      cachedAt: null,
+      provenance: "live",
+    } as never);
+    render(<ModuleListTable cacheKey="test" rows={[]} source="api" />);
+
+    // First page only: Record 1 is visible, Record 16 (page 2) is not.
+    expect(screen.getByText("Record 1")).toBeInTheDocument();
+    expect(screen.queryByText("Record 16")).not.toBeInTheDocument();
+    // A pager control exists and advances to the next page.
+    const next = screen.getByText("Next →");
+    expect(next).toBeInTheDocument();
+    fireEvent.click(next);
+    expect(screen.getByText("Record 16")).toBeInTheDocument();
+    expect(screen.queryByText("Record 1")).not.toBeInTheDocument();
+  });
+
+  // GAP-INSTALL-STEPS-03 (CAP): the old table had no filter box. The DataTable
+  // exposes a filterable searchbox that narrows the visible rows. Fails on the
+  // old code (no textbox at all).
+  it("exposes a filter box that narrows the visible rows", () => {
+    const data = [
+      { id: "a1", label: "Alpha module" },
+      { id: "b2", label: "Beta module" },
+    ];
+    mockedHook.mockReturnValue({
+      data,
+      fromCache: false,
+      offline: false,
+      cachedAt: null,
+      provenance: "live",
+    } as never);
+    render(<ModuleListTable cacheKey="test" rows={[]} source="api" />);
+
+    const box = screen.getByRole("searchbox");
+    fireEvent.change(box, { target: { value: "Alpha" } });
+    expect(screen.getByText("Alpha module")).toBeInTheDocument();
+    expect(screen.queryByText("Beta module")).not.toBeInTheDocument();
+  });
+
+  // GAP-CATALOGUE-CATEGORIES-01 (TREE): a flattened hierarchy row carries an
+  // optional 0-based `depth`; the Name cell is indented by depth*16px and a
+  // nested row names its parent. Rows without `depth` render flush (asserted
+  // by every other test above, which pass no depth).
+  it("indents a nested tree row by its depth and shows its parent", () => {
+    const treeRows = [
+      { id: "root", label: "Banking", depth: 0 },
+      { id: "child", label: "Savings", depth: 1, parentLabel: "Banking" },
+    ];
+    mockedHook.mockReturnValue({ data: treeRows, fromCache: false, offline: false, cachedAt: null, provenance: "live" } as never);
+    render(<ModuleListTable cacheKey="test" rows={treeRows} source="api" />);
+
+    const childCell = screen.getByText("Savings");
+    expect(childCell).toHaveStyle({ paddingLeft: "16px" });
+    expect(childCell).toHaveTextContent(/in Banking/i);
+
+    const rootCell = screen.getByText("Banking");
+    // depth 0 (falsy) => no indent style applied.
+    expect(rootCell.getAttribute("style") ?? "").not.toContain("padding-left");
+  });
+
+  // GAP-FIELD-{AGENTS,ROUTES,SYNC,TASKS}-0x (UUID theme): status renders as a
+  // coloured StatusPill (humanized), never raw lowercase text; a date-typed
+  // meta is formatted with formatIndianDate, never a raw ISO timestamp.
+  it("renders status as a StatusPill and formats a date-typed meta", () => {
+    const fieldRows = [
+      { id: "a1b2c3d4-0000-4000-8000-000000000001", label: "Task A", status: "pending", meta: "2026-09-27T09:14:00.000Z", metaKind: "date" as const },
+    ];
+    mockedHook.mockReturnValue({ data: fieldRows, fromCache: false, offline: false, cachedAt: null, provenance: "live" } as never);
+    render(<ModuleListTable cacheKey="test" rows={fieldRows} source="api" />);
+    // StatusPill humanizes "pending" -> "Pending" inside a .pill span.
+    const pill = screen.getByText("Pending");
+    expect(pill).toHaveClass("pill");
+    // Date meta is formatted "27 Sep 2026", never the raw ISO string.
+    expect(screen.getByText("27 Sep 2026")).toBeInTheDocument();
+    expect(screen.queryByText("2026-09-27T09:14:00.000Z")).not.toBeInTheDocument();
+  });
+
+  it("leaves a text-typed meta verbatim (no date coercion)", () => {
+    const fieldRows = [
+      { id: "x", label: "Agent 1", meta: "3", metaKind: "text" as const },
+    ];
+    mockedHook.mockReturnValue({ data: fieldRows, fromCache: false, offline: false, cachedAt: null, provenance: "live" } as never);
+    render(<ModuleListTable cacheKey="test" rows={fieldRows} source="api" />);
+    expect(screen.getByText("3")).toBeInTheDocument();
   });
 });

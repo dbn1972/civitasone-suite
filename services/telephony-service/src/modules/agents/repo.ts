@@ -3,14 +3,16 @@ import { eq, and, asc, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { runWithTenant } from "@civitasone/db";
 import { agents, type AgentRow, type AgentInsert, type AgentView, type AgentStatus } from "./schema.js";
+import { queues } from "../queues/schema.js";
 
-export function toView(r: AgentRow): AgentView {
+export function toView(r: AgentRow, queueName: string | null = null): AgentView {
   return {
     id: r.id,
     tenantId: r.tenantId,
     userId: r.userId,
     displayName: r.displayName,
     queueId: r.queueId ?? null,
+    queueName: queueName ?? null,
     status: r.status as AgentStatus,
     extension: r.extension ?? null,
     version: r.version,
@@ -32,33 +34,40 @@ function readScoped<T>(tenantId: string, fn: (tx: typeof db) => Promise<T>): Pro
 
 export async function findById(id: string, tenantId: string): Promise<AgentView | null> {
   const rows = await readScoped(tenantId, (tx) =>
-    tx.select().from(agents).where(and(eq(agents.id, id), eq(agents.tenantId, tenantId))).limit(1),
+    tx
+      .select({ agent: agents, queueName: queues.name })
+      .from(agents)
+      .leftJoin(queues, eq(agents.queueId, queues.id))
+      .where(and(eq(agents.id, id), eq(agents.tenantId, tenantId)))
+      .limit(1),
   );
-  return rows[0] ? toView(rows[0]) : null;
+  return rows[0] ? toView(rows[0].agent, rows[0].queueName ?? null) : null;
 }
 
 export async function findByUser(userId: string, tenantId: string): Promise<AgentView | null> {
   const rows = await readScoped(tenantId, (tx) =>
     tx
-      .select()
+      .select({ agent: agents, queueName: queues.name })
       .from(agents)
+      .leftJoin(queues, eq(agents.queueId, queues.id))
       .where(and(eq(agents.userId, userId), eq(agents.tenantId, tenantId)))
       .limit(1),
   );
-  return rows[0] ? toView(rows[0]) : null;
+  return rows[0] ? toView(rows[0].agent, rows[0].queueName ?? null) : null;
 }
 
 export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<AgentView[]> {
   const rows = await readScoped(tenantId, (tx) =>
     tx
-      .select()
+      .select({ agent: agents, queueName: queues.name })
       .from(agents)
+      .leftJoin(queues, eq(agents.queueId, queues.id))
       .where(eq(agents.tenantId, tenantId))
       .orderBy(asc(agents.displayName))
       .limit(limit)
       .offset(offset),
   );
-  return rows.map(toView);
+  return rows.map((r) => toView(r.agent, r.queueName ?? null));
 }
 
 /**

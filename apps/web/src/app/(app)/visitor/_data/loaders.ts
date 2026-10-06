@@ -67,13 +67,21 @@ function mapLocations(payload: unknown): VisitorLocation[] {
 }
 
 function mapRoster(payload: unknown): RosterEntry[] {
-  return asArray(pickData(payload)).map((o) => ({
+  // GAP-VISITOR-GUARD-01: the non-emergency active endpoint responds with
+  // { data: { visitors: [...] } }. No raw phone/email is returned.
+  const data = pickData(payload);
+  const visitors =
+    data && typeof data === "object" && "visitors" in data
+      ? (data as { visitors: unknown }).visitors
+      : data;
+  return asArray(visitors).map((o) => ({
     passId: str(o.passId),
     visitorName: str(o.visitorName),
-    hostName: str(o.hostName),
+    hostEmployeeId: str(o.hostEmployeeId),
+    locationId: str(o.locationId),
     checkInTime: str(o.checkInTime),
-    lastKnownGate: str(o.lastKnownGate),
-    contactNumber: str(o.contactNumber),
+    validUntil: strOrNull(o.validUntil),
+    overstay: Boolean(o.overstay),
     evacuated: Boolean(o.evacuated),
   }));
 }
@@ -126,16 +134,18 @@ export function getVisitorLocations(): Promise<LoaderResult<VisitorLocation[]>> 
 }
 
 /**
- * Live premises roster for a location. NOTE: the underlying evacuation roster
- * endpoint is fail-closed IP-allowlisted (emergency break-glass), so from a
- * non-allowlisted BFF this typically returns source:"error" — the guard
- * console degrades to an empty "inside now" panel. See DELIVER notes.
+ * Live premises roster for a location, via the NORMAL role-gated
+ * `GET /v1/visitor/check-ins/active` endpoint (GAP-VISITOR-GUARD-01). This is
+ * the everyday "inside now" read for the guard console; it returns no raw
+ * phone/email/identity document. The separate evacuation roster
+ * (/evacuation/roster) stays fail-closed IP-allowlisted for break-glass only.
  */
 export function getRoster(
   locationId: string,
 ): Promise<LoaderResult<RosterEntry[]>> {
+  const qs = locationId ? `?locationId=${encodeURIComponent(locationId)}` : "";
   return fetchJson<unknown, RosterEntry[]>(
-    `/api/v1/visitor/evacuation/roster?locationId=${encodeURIComponent(locationId)}`,
+    `/api/v1/visitor/check-ins/active${qs}`,
     [],
     {
       telemetryKey: "visitor.roster",

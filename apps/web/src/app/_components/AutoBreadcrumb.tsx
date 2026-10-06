@@ -47,6 +47,16 @@ const SEGMENT_LABELS: Record<string, string> = {
   analytics: "Analytics",
   workflow: "Workflow",
   admin: "Admin",
+  // GAP-INSTALL-{MODULES,SILOS,STAGES}-05: install segment labels so the
+  // global breadcrumb reads "Install / Modules" instead of the raw segment,
+  // letting the subpages drop their duplicate local Breadcrumb landmark.
+  install: "Install",
+  console: "Console",
+  stages: "Stages",
+  steps: "Steps",
+  modules: "Modules",
+  silos: "Silo Provisions",
+  "domain-packs": "Domain Packs",
   // HR sub-routes
   employees: "Employees",
   attendance: "Attendance",

@@ -107,4 +107,22 @@ describe("PropertyPanel", () => {
     fireEvent.change(assigneeInput, { target: { value: "procurement_admin" } });
     expect(onPropertyChange).toHaveBeenCalledWith("node-1", "assignee", "procurement_admin");
   });
+
+  // GAP-WORKFLOW-DESIGNER-03 — keyboard edge creation via "Connect to…".
+  it("creates an edge via the keyboard-operable Connect to… control", () => {
+    const onConnectTo = vi.fn();
+    const other: Node = { id: "node-2", type: "endEvent", position: { x: 300, y: 200 }, data: { label: "Done" } };
+    render(
+      <PropertyPanel
+        selectedNode={mockNode}
+        nodes={[mockNode, other]}
+        onLabelChange={vi.fn()}
+        onPropertyChange={vi.fn()}
+        onConnectTo={onConnectTo}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Connect to…"), { target: { value: "node-2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    expect(onConnectTo).toHaveBeenCalledWith("node-1", "node-2");
+  });
 });

@@ -10,6 +10,7 @@ import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
 import { tokensRoutes } from "./modules/tokens/routes.js";
 import { brandRoutes } from "./modules/tokens/brand-routes.js";
+import { publishRoutes } from "./modules/tokens/publish-routes.js";
 import { brandingRoutes } from "./modules/branding/routes.js";
 import { templatesRoutes } from "./modules/templates/routes.js";
 
@@ -23,6 +24,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   registerOpsRoutes(app, { service: "theme-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
   await app.register(tokensRoutes);
   await app.register(brandRoutes);
+  await app.register(publishRoutes);
   await app.register(brandingRoutes);
   await app.register(templatesRoutes);
   registerSchemaErrorHandler(app, HttpError);

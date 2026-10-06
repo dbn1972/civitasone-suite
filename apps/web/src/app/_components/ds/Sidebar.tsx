@@ -9,8 +9,9 @@ import {
   Users, ShoppingCart, BarChart2, Gift, Building2, HardHat, Package,
   GraduationCap, BookOpen, CalendarDays, Target, ClipboardList, BadgeCheck,
   Handshake, Headphones, FolderOpen, Landmark, Puzzle, ShieldCheck, Scale, CalendarCheck, Search, Telescope, Castle,
+  PhoneCall,
   MapPin, Map, Satellite,
-  ScanSearch, Gavel,
+  ScanSearch, Gavel, GitBranch,
   Bot, Truck, Star, Archive, Dna, Compass, Sparkles,
   TrendingUp, BookMarked, ScrollText, MessageCircleQuestion, Bell, CreditCard, Building, Shield, Wrench,
   Diamond, ChevronDown,
@@ -96,10 +97,20 @@ const NAV: NavGroup[] = [
       { icon: FolderOpen, label: "Service Catalogue", href: "/helpdesk/catalogue", moduleKey: "helpdesk" },
       { icon: Landmark, label: "Citizen Portal", href: "/citizen", moduleKey: "citizen" },
       { icon: Puzzle, label: "Service Designer", href: "/designer", moduleKey: "citizen" },
+      // GAP-WORKFLOW-LIST-05 / GAP-WORKFLOW-MY-TASKS-07: Workflow had no sidebar
+      // entry (reachable only from the dashboard, RoleCommandCenter and
+      // GlobalSearch). Gated on the "workflow" module like every other item.
+      { icon: GitBranch, label: "Workflow", href: "/workflow", moduleKey: "workflow" },
       { icon: ShieldCheck, label: "Visitor Mgmt", href: "/visitor", moduleKey: "visitor" },
       { icon: CalendarCheck, label: "Meeting Mgmt", href: "/meeting", moduleKey: "meeting" },
       { icon: Gavel, label: "Court Mgmt", href: "/court", moduleKey: "court" },
       { icon: Search, label: "Inspection", href: "/inspection", moduleKey: "inspection" },
+      // GAP-TELEPHONY-HOME-01: the Telephony call-centre module had no sidebar
+      // entry (only navRouteManifest + GlobalSearch knew the route), so an
+      // agent could reach it only by typing the URL. moduleKey "telephony"
+      // matches the ModuleGate key in telephony/layout.tsx, so the item is
+      // hidden when the module is disabled.
+      { icon: PhoneCall, label: "Telephony", href: "/telephony", moduleKey: "telephony" },
     ],
   },
   {

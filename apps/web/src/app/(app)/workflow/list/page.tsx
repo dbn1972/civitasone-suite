@@ -1,37 +1,52 @@
 import { Suspense } from "react";
-import { PageHeader, StatCard, StatGrid, Card, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, Card, EmptyState, RefreshErrorState, SkeletonTable } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { Breadcrumbs } from "../_components/Breadcrumbs";
+import { toHumanError } from "@/lib/messages";
 import { InstancesTable } from "../_components/InstancesTable";
-import { getInstances, getAnalyticsSummary, titleCase } from "../_data/workflowData";
+import { getInstances, getAnalyticsSummary, inProgressCount } from "../_data/workflowData";
+
+const LIST_LIMIT = 200;
 
 export default async function WorkflowInstancesPage() {
-  const [{ data: instances, source }, { data: analytics }] = await Promise.all([
+  const [{ data: instances, source }, { data: analytics, source: analyticsSource }] = await Promise.all([
     getInstances(),
     getAnalyticsSummary(),
   ]);
 
-  const active =
-    (analytics.instancesByStatus["active"] ?? 0) +
-    (analytics.instancesByStatus["running"] ?? 0);
-  const completed = analytics.instancesByStatus["completed"] ?? 0;
-  const cancelled =
-    (analytics.instancesByStatus["cancelled"] ?? 0) +
-    (analytics.instancesByStatus["canceled"] ?? 0);
+  // GAP-WORKFLOW-LIST-01 — do NOT discard the analytics source. When analytics
+  // failed, the EMPTY_ANALYTICS fallback would render active/completed/
+  // cancelled as a fabricated 0 above a full table, and Total would silently
+  // fall back to the (capped) row count. Pass null so StatCard shows "—"
+  // instead of a lie.
+  const analyticsOk = analyticsSource !== "error";
+  // GAP-WORKFLOW-HOME-03 — "In progress" counts active + pending + running,
+  // matching the hub (page.tsx) so the same cohort isn't two different numbers
+  // one click apart. Still null (→ "—") when analytics errored (LIST-01).
+  const active = analyticsOk ? inProgressCount(analytics.instancesByStatus) : null;
+  const completed = analyticsOk ? analytics.instancesByStatus["completed"] ?? 0 : null;
+  const cancelled = analyticsOk
+    ? (analytics.instancesByStatus["cancelled"] ?? 0) + (analytics.instancesByStatus["canceled"] ?? 0)
+    : null;
+  // Total uses the authoritative analytics count; no rows.length fallback (which
+  // is capped at LIST_LIMIT and would disagree with Completed for large tenants).
+  const total = analyticsOk ? analytics.totalInstances : null;
+
+  // GAP-WORKFLOW-LIST-01 — honest "first N of M" notice when the row window is
+  // capped and the true total is known to be larger.
+  const capped = instances.length >= LIST_LIMIT;
 
   return (
     <>
-      <Breadcrumbs items={[{ label: "Workflow", href: "/workflow" }, { label: "Instances" }]} />
       <PageHeader
         title="Workflow — Instances"
         subtitle="Running and completed process instances, loaded live from the workflow service."
         back="/workflow"
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
+        actions={source === "error" || !analyticsOk ? <DataSourceBadge source="error" /> : null}
       />
 
       <StatGrid>
-        <StatCard icon="🧩" iconBg="#eef2ff" label="Total" value={analytics.totalInstances || instances.length} />
-        <StatCard icon="⏳" iconBg="#fff7ed" label="Active" value={active} />
+        <StatCard icon="🧩" iconBg="#eef2ff" label="Total" value={total} />
+        <StatCard icon="⏳" iconBg="#fff7ed" label="In progress" value={active} />
         <StatCard icon="✅" iconBg="#ecfdf5" label="Completed" value={completed} />
         <StatCard icon="🚫" iconBg="#fef2f2" label="Cancelled" value={cancelled} />
       </StatGrid>
@@ -39,12 +54,10 @@ export default async function WorkflowInstancesPage() {
       <div style={{ marginTop: 18 }}>
         <Card title="Instances">
           {source === "error" ? (
+            // GAP-WORKFLOW-LIST-02 — a real retry (RefreshErrorState → router.refresh),
+            // not a dead-end warning EmptyState.
             <div className="pad">
-              <EmptyState
-                icon="⚠️"
-                title="Could not load instances"
-                message="The workflow service did not return data. Check that you are signed in and the service is reachable."
-              />
+              <RefreshErrorState error={toHumanError("load", { area: "instances" })} source={{ area: "instances", status: 500 }} />
             </div>
           ) : instances.length === 0 ? (
             <div className="pad">
@@ -52,7 +65,13 @@ export default async function WorkflowInstancesPage() {
             </div>
           ) : (
             <div className="pad">
-              <Suspense fallback={null}>
+              {capped ? (
+                <p className="mut" style={{ margin: "0 0 10px", fontSize: 13 }}>
+                  Showing the first {LIST_LIMIT}
+                  {total != null && total > LIST_LIMIT ? ` of ${total}` : ""} instances. Use filters to narrow the list.
+                </p>
+              ) : null}
+              <Suspense fallback={<SkeletonTable rows={6} />}>
                 <InstancesTable instances={instances} />
               </Suspense>
             </div>

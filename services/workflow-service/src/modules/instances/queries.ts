@@ -7,7 +7,9 @@ import * as defRepo from "../definitions/repo.js";
 
 export async function listInstances(tenantId: string, limit: number, offset: number) {
   return cache.listOrLoad(tenantId, INSTANCE_RESOURCE, `list:${limit}:${offset}`, async () => {
-    const rows = await repo.listByTenant(tenantId, limit, offset);
+    // GAP-WORKFLOW-LIST-03 — enriched rows (subject/definition/current step/
+    // dates) so the list surface can show what each instance is about.
+    const rows = await repo.listByTenantEnriched(tenantId, limit, offset);
     return {
       data: rows,
       pagination: {

@@ -20,13 +20,25 @@ interface ModuleListPageProps {
   backLabel?: string;
   /** Human noun for the failure state (GAP-IDENTITY-*-05), e.g. "sessions". */
   errorArea?: string;
+  /**
+   * GAP-THEMES-TEMPLATES-06: optional fixed offline cache key. ModuleListPage
+   * normally derives the key from slugify(title); when the title is
+   * translated (next-intl) that would change/split the per-user cache on a
+   * locale switch, so a locale-independent key can be passed instead.
+   *
+   * GAP-FIELD-TASKS-04: pin the offline cache key explicitly, so renaming the
+   * page title (which otherwise derives the key via slugify) does not silently
+   * drop the existing cached list. Optional — consumers that omit it keep the
+   * title-derived key exactly as before.
+   */
+  cacheKey?: string;
 }
 
 function slugify(s: string): string {
   return `module.${s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}`;
 }
 
-export function ModuleListPage({ title, description, rows, source, children, back, backLabel, errorArea }: ModuleListPageProps) {
+export function ModuleListPage({ title, description, rows, source, children, back, backLabel, errorArea, cacheKey }: ModuleListPageProps) {
   return (
     <>
       <PageHeader
@@ -41,7 +53,7 @@ export function ModuleListPage({ title, description, rows, source, children, bac
           disagree with the table's own cache state (UX-002's pattern). */}
       {children}
       <ModuleListTable
-        cacheKey={slugify(title)}
+        cacheKey={cacheKey ?? slugify(title)}
         rows={rows}
         source={source === "error" ? "error" : "api"}
         {...(errorArea ? { errorArea } : {})}

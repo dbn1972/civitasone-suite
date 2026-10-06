@@ -11,8 +11,15 @@ const nodes: Node[] = [
 ];
 
 describe("ValidationIndicators", () => {
-  it("shows no issues message when violations is empty", () => {
+  it("shows a neutral 'Not validated yet' state before validation runs", () => {
     render(<ValidationIndicators violations={[]} nodes={nodes} />);
+
+    expect(screen.getByText("Not validated yet")).toBeInTheDocument();
+    expect(screen.queryByText("No issues found")).not.toBeInTheDocument();
+  });
+
+  it("shows no issues message when validated and violations is empty", () => {
+    render(<ValidationIndicators violations={[]} nodes={nodes} hasValidated />);
 
     expect(screen.getByText("No issues found")).toBeInTheDocument();
   });
@@ -23,7 +30,7 @@ describe("ValidationIndicators", () => {
       { elementId: "__canvas", type: "MISSING_END", message: "Process must have at least one end event" },
     ];
 
-    render(<ValidationIndicators violations={violations} nodes={nodes} />);
+    render(<ValidationIndicators violations={violations} nodes={nodes} hasValidated />);
 
     expect(screen.getByText("Validation (2 issues)")).toBeInTheDocument();
   });
@@ -33,7 +40,7 @@ describe("ValidationIndicators", () => {
       { elementId: "__canvas", type: "MISSING_START", message: "Process must have at least one start event" },
     ];
 
-    render(<ValidationIndicators violations={violations} nodes={nodes} />);
+    render(<ValidationIndicators violations={violations} nodes={nodes} hasValidated />);
 
     expect(screen.getByText("Validation (1 issue)")).toBeInTheDocument();
   });
@@ -43,7 +50,7 @@ describe("ValidationIndicators", () => {
       { elementId: "gw-1", type: "GATEWAY_NO_OUTGOING", message: 'Gateway "Decision" has no outgoing flows' },
     ];
 
-    render(<ValidationIndicators violations={violations} nodes={nodes} />);
+    render(<ValidationIndicators violations={violations} nodes={nodes} hasValidated />);
 
     expect(screen.getByText('Gateway "Decision" has no outgoing flows')).toBeInTheDocument();
   });
@@ -53,7 +60,7 @@ describe("ValidationIndicators", () => {
       { elementId: "gw-1", type: "GATEWAY_NO_OUTGOING", message: "No outgoing flows" },
     ];
 
-    render(<ValidationIndicators violations={violations} nodes={nodes} />);
+    render(<ValidationIndicators violations={violations} nodes={nodes} hasValidated />);
 
     expect(screen.getByText("Decision")).toBeInTheDocument();
   });
@@ -63,7 +70,7 @@ describe("ValidationIndicators", () => {
       { elementId: "__canvas", type: "MISSING_START", message: "Process must have at least one start event" },
     ];
 
-    render(<ValidationIndicators violations={violations} nodes={nodes} />);
+    render(<ValidationIndicators violations={violations} nodes={nodes} hasValidated />);
 
     expect(screen.getByText("Canvas")).toBeInTheDocument();
   });
@@ -73,13 +80,13 @@ describe("ValidationIndicators", () => {
       { elementId: "__canvas", type: "MISSING_START", message: "Need start" },
     ];
 
-    render(<ValidationIndicators violations={violations} nodes={nodes} />);
+    render(<ValidationIndicators violations={violations} nodes={nodes} hasValidated />);
 
     expect(screen.getByRole("alert")).toBeInTheDocument();
   });
 
   it("no-violations panel uses status role for polite announcement", () => {
-    render(<ValidationIndicators violations={[]} nodes={nodes} />);
+    render(<ValidationIndicators violations={[]} nodes={nodes} hasValidated />);
 
     expect(screen.getByRole("status")).toBeInTheDocument();
   });

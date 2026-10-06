@@ -29,6 +29,7 @@ import { resolveInitialStatus } from "../src/modules/visit-request/domain.js";
 import { computeValidityWindow, MULTI_DAY_MAX_MS } from "../src/modules/digital-pass/domain.js";
 import { isOverstayed } from "../src/modules/check-in/domain.js";
 import { isTailgating, isPassageAllowed } from "../src/modules/turnstile-control/domain.js";
+import { setConfigBody } from "../src/modules/config-registry/validators.js";
 
 const A = "11111111-1111-1111-1111-111111111111";
 const B = "22222222-2222-2222-2222-222222222222";
@@ -189,5 +190,23 @@ describe("migrated knob: turnstile tolerance + anti-passback", () => {
     const repeat = { passId: "p", requestedDirection: "in" as const, lastKnownDirection: "in" as const };
     expect(isPassageAllowed(repeat)).toBe(false); // enforced by default
     expect(isPassageAllowed(repeat, false)).toBe(true); // disabled → allowed
+  });
+});
+
+// GAP-VISITOR-ADMIN-01 / ADMIN-03: the setConfig boundary accepts an optional
+// free-text audit `reason`, so a policy change (retention/approval/anti-passback)
+// carries why it was made into the config.changed audit event.
+describe("config-registry setConfigBody — audit reason", () => {
+  const base = { namespace: "visitor_policy", configKey: "retention.pii_days", value: 365 };
+  it("accepts and preserves an optional reason", () => {
+    const parsed = setConfigBody.parse({ ...base, reason: "DPDP review 2026-Q1" });
+    expect(parsed.reason).toBe("DPDP review 2026-Q1");
+  });
+  it("is valid without a reason (backward compatible)", () => {
+    const parsed = setConfigBody.parse(base);
+    expect(parsed.reason).toBeUndefined();
+  });
+  it("rejects a reason over the 2000-char cap", () => {
+    expect(() => setConfigBody.parse({ ...base, reason: "x".repeat(2001) })).toThrow();
   });
 });

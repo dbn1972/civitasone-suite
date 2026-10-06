@@ -30,6 +30,8 @@ export type RegisterCaseBody = z.infer<typeof registerCaseBody>;
 export const listCasesQuery = z.object({
   status:  z.string().trim().max(24).optional(),
   courtId: z.string().uuid().optional(),
+  /** Free-text search over title / CNR / filing number (GAP-COURT-HEARINGS-02). */
+  q:       z.string().trim().min(1).max(120).optional(),
   limit:   z.coerce.number().int().min(1).max(100).default(20),
   offset:  z.coerce.number().int().min(0).default(0),
 });

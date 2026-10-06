@@ -14,6 +14,7 @@
  */
 import { browserFetch } from "@/lib/api/browserClient";
 import { toHumanError, type MessageKind } from "@/lib/messages";
+import { UserFacingError } from "@/lib/userFacingError";
 import type {
   ActiveVote,
   CommitteeSummary,
@@ -62,14 +63,14 @@ async function send<T>(
     ...(opts.headers ? { headers: opts.headers } : {}),
     ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
   });
-  if (!res.ok) throw new Error(readError("save"));
+  if (!res.ok) throw new UserFacingError(readError("save"));
   const text = await res.text();
   return (text ? JSON.parse(text) : {}) as T;
 }
 
 async function get<T>(path: string): Promise<T> {
   const res = await browserFetch(path);
-  if (!res.ok) throw new Error(readError("load"));
+  if (!res.ok) throw new UserFacingError(readError("load"));
   return (await res.json()) as T;
 }
 
@@ -116,8 +117,21 @@ export async function fetchMinutes(meetingId: string): Promise<Minutes | null> {
  * doesn't call requireIdempotencyKey — unlike voting/attendance), 202
  * envelope with the server-minted id.
  */
-export async function createMeeting(input: CreateMeetingInput): Promise<{ id?: string }> {
-  const out = await send<{ data?: { id?: string } }>("POST", "v1/meeting", { body: input });
+/**
+ * Schedule a new meeting (COMMANDS.meetingCreate). Accepts an optional
+ * idempotency key (GAP-MEETING-MEETINGS-NEW-04): minted once per form mount and
+ * reused on retry so a double-submit on a slow network can't create two
+ * meetings. meeting-core's create route does not *require* the header (unlike
+ * voting/attendance), but honours it when present.
+ */
+export async function createMeeting(
+  input: CreateMeetingInput,
+  opts: { idempotencyKey?: string } = {},
+): Promise<{ id?: string }> {
+  const out = await send<{ data?: { id?: string } }>("POST", "v1/meeting", {
+    body: input,
+    ...(opts.idempotencyKey ? { headers: { "x-idempotency-key": opts.idempotencyKey } } : {}),
+  });
   return out.data ?? {};
 }
 

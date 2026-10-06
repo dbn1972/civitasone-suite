@@ -1,15 +1,21 @@
 "use client";
 
-import { useCallback, type ChangeEvent } from "react";
+import { useCallback, useState, type ChangeEvent } from "react";
 import type { Node } from "reactflow";
 
 interface Props {
   selectedNode: Node | null;
+  /** All canvas nodes — the "Connect to…" list of possible targets. */
+  nodes?: Node[];
   onLabelChange: (nodeId: string, label: string) => void;
   onPropertyChange: (nodeId: string, key: string, value: string) => void;
+  /** GAP-WORKFLOW-DESIGNER-03 — keyboard edge creation from the selected node. */
+  onConnectTo?: (sourceId: string, targetId: string) => void;
 }
 
-export function PropertyPanel({ selectedNode, onLabelChange, onPropertyChange }: Props) {
+export function PropertyPanel({ selectedNode, nodes = [], onLabelChange, onPropertyChange, onConnectTo }: Props) {
+  const [connectTarget, setConnectTarget] = useState("");
+
   const handleLabelChange = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
       if (!selectedNode) return;
@@ -152,6 +158,45 @@ export function PropertyPanel({ selectedNode, onLabelChange, onPropertyChange }:
               placeholder="e.g. amount > 100000"
               className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
+          </div>
+        )}
+
+        {/* GAP-WORKFLOW-DESIGNER-03 — keyboard edge creation. */}
+        {onConnectTo && (
+          <div>
+            <label htmlFor="prop-connect" className="block text-xs font-medium text-slate-700 mb-1">
+              Connect to…
+            </label>
+            <div className="flex gap-2">
+              <select
+                id="prop-connect"
+                value={connectTarget}
+                onChange={(e) => setConnectTarget(e.target.value)}
+                className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select a target node…</option>
+                {nodes
+                  .filter((n) => n.id !== selectedNode.id)
+                  .map((n) => (
+                    <option key={n.id} value={n.id}>
+                      {(n.data as { label?: string })?.label || n.id}
+                    </option>
+                  ))}
+              </select>
+              <button
+                type="button"
+                className="rounded-md border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                disabled={!connectTarget}
+                onClick={() => {
+                  if (connectTarget) {
+                    onConnectTo(selectedNode.id, connectTarget);
+                    setConnectTarget("");
+                  }
+                }}
+              >
+                Connect
+              </button>
+            </div>
           </div>
         )}
 

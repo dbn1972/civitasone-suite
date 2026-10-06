@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { actionErrorText } from "../../_data/errorText";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card } from "@/app/_components/ds";
+import { Card, ConfirmDialog } from "@/app/_components/ds";
 import {
   CONFIDENTIALITY_LEVELS,
   MEETING_TYPES,
@@ -12,7 +13,20 @@ import {
   type MeetingType,
 } from "../../_data/types";
 import { createMeeting, listCommittees } from "../../_data/client";
-import { humanize } from "../../_data/format";
+import { humanize, istLocalToIso } from "../../_data/format";
+
+/**
+ * GAP-MEETING-MEETINGS-NEW-03: plain-language description of what each
+ * confidentiality level restricts, shown under the select so a clerk isn't
+ * choosing from bare enum tokens.
+ */
+const CONFIDENTIALITY_HELP: Record<ConfidentialityLevel, string> = {
+  public: "Public — anyone in the organisation may view the meeting and its record.",
+  internal: "Internal (default) — visible to meeting participants and the secretariat.",
+  confidential: "Confidential — restricted to participants and authorised officers.",
+  secret: "Secret — restricted to named participants; minutes access is tightly controlled.",
+  top_secret: "Top secret — the most restricted level; access is limited to cleared members only.",
+};
 
 const labelStyle: React.CSSProperties = {
   display: "block",
@@ -126,6 +140,16 @@ function validate(f: FormState): Errors {
     errors.convenerId = "Enter a valid user ID (UUID format), or leave this blank.";
   }
 
+  // GAP-MEETING-MEETINGS-NEW-01: the chair and secretary are distinct offices —
+  // the same person can't hold both on one meeting. A valid-but-identical id is
+  // almost always a copy-paste mistake, so catch it before it assigns one
+  // person to both roles.
+  const chair = f.chairpersonId.trim().toLowerCase();
+  const secretary = f.secretaryId.trim().toLowerCase();
+  if (chair && secretary && UUID_RE.test(chair) && chair === secretary) {
+    errors.secretaryId = "The secretary must be a different person from the chairperson.";
+  }
+
   if (f.venue.trim().length > 1000) errors.venue = "Keep the venue under 1000 characters.";
   if (f.description.trim().length > 20_000) {
     errors.description = "Keep the description under 20,000 characters.";
@@ -143,6 +167,20 @@ export function NewMeetingForm() {
   const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [created, setCreated] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+
+  // GAP-MEETING-MEETINGS-NEW-04: one idempotency key per form mount, reused on
+  // every retry of THIS form, so a retried create (slow network) is de-duped
+  // by the gateway/service rather than creating a second meeting.
+  const idempotencyKeyRef = useRef<string>(
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `nm-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  );
+
+  // GAP-MEETING-MEETINGS-NEW-05: a form the clerk has started editing is
+  // "dirty"; discarding it should warn.
+  const dirty = JSON.stringify(form) !== JSON.stringify(INITIAL);
 
   useEffect(() => {
     let cancelled = false;
@@ -157,6 +195,26 @@ export function NewMeetingForm() {
       cancelled = true;
     };
   }, []);
+
+  // GAP-MEETING-MEETINGS-NEW-05: warn on tab close/reload while dirty (unless
+  // the create just succeeded and we're navigating away).
+  useEffect(() => {
+    if (!dirty || created) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty, created]);
+
+  function onCancel() {
+    if (dirty && !busy) {
+      setConfirmCancel(true);
+    } else {
+      router.push("/meeting/meetings");
+    }
+  }
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -175,10 +233,17 @@ export function NewMeetingForm() {
     setBusy(true);
     setSubmitError(null);
     try {
+      const scheduledIso = istLocalToIso(form.scheduledAt);
+      if (!scheduledIso) {
+        setErrors((prev) => ({ ...prev, scheduledAt: "Enter a valid date and time." }));
+        setSubmitError("Fix the highlighted fields and try again.");
+        setBusy(false);
+        return;
+      }
       const input: CreateMeetingInput = {
         title: form.title.trim(),
         type: form.type,
-        scheduledAt: new Date(form.scheduledAt).toISOString(),
+        scheduledAt: scheduledIso,
         durationMinutes: Number(form.durationMinutes),
         chairpersonId: form.chairpersonId.trim(),
         secretaryId: form.secretaryId.trim(),
@@ -189,21 +254,21 @@ export function NewMeetingForm() {
         ...(form.confidentialityLevel ? { confidentialityLevel: form.confidentialityLevel } : {}),
         ...(form.description.trim() ? { description: form.description.trim() } : {}),
       };
-      const { id } = await createMeeting(input);
+      const { id } = await createMeeting(input, { idempotencyKey: idempotencyKeyRef.current });
       setCreated(true);
       if (id) {
         await new Promise((r) => setTimeout(r, NAVIGATE_DELAY_MS));
         router.push(`/meeting/meetings/${id}`);
       } else {
-        // Accepted but no id came back (shouldn't happen per the contract,
-        // but don't strand the user on a form that looks like it did
-        // nothing) — send them to the list instead of guessing a URL.
+        // Accepted but no id came back — tell the user plainly it was
+        // scheduled and send them to the list to find it (GAP-...-NEW-05).
+        setSubmitError(null);
         await new Promise((r) => setTimeout(r, NAVIGATE_DELAY_MS));
         router.push("/meeting/meetings");
       }
     } catch (err) {
       setCreated(false);
-      setSubmitError(err instanceof Error ? err.message : "Could not schedule the meeting.");
+      setSubmitError(actionErrorText(err));
     } finally {
       setBusy(false);
     }
@@ -268,7 +333,7 @@ export function NewMeetingForm() {
 
             <div>
               <label htmlFor="nm-when" style={labelStyle}>
-                Scheduled date &amp; time
+                Scheduled date &amp; time (IST)
               </label>
               <input
                 id="nm-when"
@@ -277,11 +342,15 @@ export function NewMeetingForm() {
                 onChange={(e) => set("scheduledAt", e.target.value)}
                 style={fieldStyle(Boolean(errors.scheduledAt))}
                 aria-invalid={Boolean(errors.scheduledAt)}
-                aria-describedby={errors.scheduledAt ? "nm-when-err" : undefined}
+                aria-describedby={errors.scheduledAt ? "nm-when-err" : "nm-when-help"}
               />
-              {errors.scheduledAt && (
+              {errors.scheduledAt ? (
                 <div id="nm-when-err" style={errStyle}>
                   {errors.scheduledAt}
+                </div>
+              ) : (
+                <div id="nm-when-help" style={helpStyle}>
+                  Interpreted as Indian Standard Time (IST), whatever your device's time zone.
                 </div>
               )}
             </div>
@@ -438,6 +507,7 @@ export function NewMeetingForm() {
                 value={form.confidentialityLevel}
                 onChange={(e) => set("confidentialityLevel", e.target.value as ConfidentialityLevel | "")}
                 style={fieldStyle(false)}
+                aria-describedby="nm-confidentiality-help"
               >
                 <option value="">— default (internal) —</option>
                 {CONFIDENTIALITY_LEVELS.map((c) => (
@@ -446,6 +516,11 @@ export function NewMeetingForm() {
                   </option>
                 ))}
               </select>
+              <div id="nm-confidentiality-help" style={helpStyle}>
+                {form.confidentialityLevel
+                  ? CONFIDENTIALITY_HELP[form.confidentialityLevel]
+                  : CONFIDENTIALITY_HELP.internal}
+              </div>
             </div>
 
             <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 10 }}>
@@ -484,11 +559,25 @@ export function NewMeetingForm() {
           type="button"
           className="btn ghost"
           disabled={busy}
-          onClick={() => router.push("/meeting/meetings")}
+          onClick={onCancel}
         >
           Cancel
         </button>
       </div>
+
+      <ConfirmDialog
+        open={confirmCancel}
+        title="Discard this meeting?"
+        description="You've started filling in this meeting. Leaving now discards everything you've entered."
+        confirmLabel="Discard"
+        cancelLabel="Keep editing"
+        danger
+        onConfirm={() => {
+          setConfirmCancel(false);
+          router.push("/meeting/meetings");
+        }}
+        onCancel={() => setConfirmCancel(false)}
+      />
     </form>
   );
 }

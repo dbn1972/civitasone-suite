@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   activateDomainPackStage3,
   fetchDomainPacksForInstall,
+  fetchDomainPacksForInstallResult,
   mergeDomainPackCatalog,
 } from "./domainPackApi";
 
@@ -29,6 +30,22 @@ describe("mergeDomainPackCatalog", () => {
     expect(municipal.version).toBe(2);
     expect(municipal.outcomes.map((o) => o.shortLabel)).toEqual(["TL", "PGR", "Water"]);
   });
+
+  // GAP-INSTALL-DOMAIN-PACKS-03: the API's packKeys drive the outcome list.
+  it("derives outcomes from API packKeys, labelling unknown keys with a fallback", () => {
+    const merged = mergeDomainPackCatalog([
+      {
+        domainPackKey: "municipal-in-v1",
+        name: "Municipal IN v1",
+        packKeys: ["pack:trade-license", "pack:pgr", "pack:water-connection", "pack:birth-cert"],
+      },
+    ]);
+    const municipal = merged.find((p) => p.domainPackKey === "municipal-in-v1")!;
+    expect(municipal.outcomes).toHaveLength(4);
+    expect(municipal.outcomes.map((o) => o.packKey)).toContain("pack:birth-cert");
+    const fallback = municipal.outcomes.find((o) => o.packKey === "pack:birth-cert")!;
+    expect(fallback.label).toBe("birth-cert");
+  });
 });
 
 describe("domainPackApi HTTP", () => {
@@ -46,6 +63,25 @@ describe("domainPackApi HTTP", () => {
     vi.mocked(fetch).mockResolvedValue({ ok: false, status: 500 } as Response);
     const packs = await fetchDomainPacksForInstall();
     expect(packs.some((p) => p.domainPackKey === "municipal-in-v1")).toBe(true);
+  });
+
+  // GAP-INSTALL-DOMAIN-PACKS-02 / HOME-07: a failed fetch is reported as error,
+  // not silently masked as a healthy single-pack library.
+  it("fetchDomainPacksForInstallResult reports error:true on a failed fetch", async () => {
+    vi.mocked(fetch).mockResolvedValue({ ok: false, status: 500 } as Response);
+    const { packs, error } = await fetchDomainPacksForInstallResult();
+    expect(error).toBe(true);
+    expect(packs.some((p) => p.domainPackKey === "municipal-in-v1")).toBe(true);
+  });
+
+  it("fetchDomainPacksForInstallResult reports error:false on a healthy empty list", async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: [] }),
+    } as Response);
+    const { error } = await fetchDomainPacksForInstallResult();
+    expect(error).toBe(false);
   });
 
   it("activateDomainPackStage3 POSTs Stage 3 endpoint and parses 202", async () => {

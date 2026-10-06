@@ -67,4 +67,20 @@ describe("AutoBreadcrumb", () => {
     // the id is not shown as its own crumb
     expect(screen.queryByText(/def012345678/)).toBeNull();
   });
+
+  // GAP-INSTALL-STEPS-05: /install/<child> now has controlled SEGMENT_LABELS
+  // and /install is a linkable intermediate crumb, so the trail reads
+  // Install / Modules with Install linking to its own index page. Fails on the
+  // old code (where "install" had no label entry — it still title-cased to
+  // "Install", but this pins the label + the resolving link so a future
+  // rename can't silently break it).
+  it("renders a linked Install crumb and a current Modules crumb for /install/modules", () => {
+    mockPathname = "/install/modules";
+    render(<AutoBreadcrumb />);
+    const install = screen.getByText("Install").closest("a");
+    expect(install).toHaveAttribute("href", "/install");
+    const modules = screen.getByText("Modules");
+    expect(modules.closest("a")).toBeNull();
+    expect(modules).toHaveAttribute("aria-current", "page");
+  });
 });

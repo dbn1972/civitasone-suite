@@ -1,15 +1,78 @@
 "use client";
 
-import { Card, EmptyState } from "./ds";
+import type { ReactNode } from "react";
+import { Card, EmptyState, DataTable } from "./ds";
+import { StatusPill } from "./ds/StatusPill";
 import { DataSourceBadge } from "./DataSourceBadge";
 import { RefreshErrorState } from "./ds/RefreshErrorState";
 import type { ModuleRowSummary } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
 import { toHumanError } from "@/lib/messages";
+import { formatIndianDate } from "@/lib/formatters";
 
 // GAP-ADMIN-GATEWAY-ROUTES-02: only UUID-shaped ids are shortened; slug ids
 // ("hrms-leave-requests") used to collapse to a shared 8-char prefix.
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// GAP-INSTALL-STEPS-03: the bare <table className="tbl"> had no search, sort,
+// pagination or mobile card transform, and status was plain text. The shared
+// DataTable gives every ModuleListPage consumer all four plus StatusPill, with
+// no per-consumer change. Columns are built once; `render` is client-safe here
+// because this is a "use client" component.
+//
+// DataTable's generic is `T extends Record<string, unknown>`; ModuleRowSummary
+// is an interface (no implicit index signature), so an intersection alias is
+// used purely to satisfy that constraint — the shape is unchanged.
+type ModuleRow = ModuleRowSummary & Record<string, unknown>;
+type ModuleCol = {
+  key: keyof ModuleRowSummary & string;
+  label: string;
+  align?: "left" | "right" | "center";
+  render?: (row: ModuleRowSummary) => ReactNode;
+  sortable?: boolean;
+};
+
+const MODULE_COLUMNS: ModuleCol[] = [
+  {
+    key: "id",
+    label: "ID",
+    // Slug/code ids are shown in full; only a bare UUID is shortened, with the
+    // full id kept in a title for copy/disambiguation (GAP-ADMIN-GATEWAY-ROUTES-02).
+    render: (row) => (
+      <span className="mono" title={row.id}>
+        {UUID_RE.test(row.id) ? row.id.slice(0, 8) : row.id}
+      </span>
+    ),
+  },
+  {
+    key: "label",
+    label: "Name",
+    // GAP-CATALOGUE-CATEGORIES-01: a flattened hierarchy row carries an optional
+    // 0-based `depth`; indent the Name cell by it so a sub-category reads as
+    // nested under its parent. Rows without `depth` render flush as before.
+    // DataTable owns the <td>, so the indent lives on a wrapper span.
+    render: (row) => (
+      <span style={row.depth ? { display: "inline-block", paddingLeft: `${row.depth * 16}px` } : undefined}>
+        {row.depth ? <span aria-hidden="true" style={{ opacity: 0.5 }}>└ </span> : null}
+        {row.label}
+        {row.parentLabel ? <span className="muted" style={{ fontSize: "0.85em" }}> · in {row.parentLabel}</span> : null}
+      </span>
+    ),
+  },
+  { key: "sublabel", label: "Detail", render: (row) => row.sublabel ?? "—" },
+  {
+    key: "status",
+    label: "Status",
+    render: (row) => (row.status ? <StatusPill status={row.status} /> : "—"),
+  },
+  {
+    key: "meta",
+    label: "Meta",
+    // GAP-FIELD-{AGENTS,ROUTES,SYNC,TASKS}-0x: a date-typed meta is formatted
+    // with formatIndianDate so a raw ISO timestamp never reaches the screen.
+    render: (row) => (row.meta ? (row.metaKind === "date" ? formatIndianDate(row.meta) : row.meta) : "—"),
+  },
+];
 
 /** Offline-capable table body for ModuleListPage. Cache key is derived from the
  * page title so each module list keeps its own encrypted cached copy. */
@@ -72,28 +135,14 @@ export function ModuleListTable({
       {data.length === 0 ? (
         <EmptyState icon="📋" title="No records" message="Nothing to show yet for this module." />
       ) : (
-        <div className="tbl-wrap"><table className="tbl">
-          <thead>
-            <tr>
-              <th scope="col">ID</th>
-              <th scope="col">Name</th>
-              <th scope="col">Detail</th>
-              <th scope="col">Status</th>
-              <th scope="col">Meta</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((row) => (
-              <tr key={row.id}>
-                <td><span className="mono" title={row.id}>{UUID_RE.test(row.id) ? row.id.slice(0, 8) : row.id}</span></td>
-                <td>{row.label}</td>
-                <td>{row.sublabel ?? "—"}</td>
-                <td>{row.status ?? "—"}</td>
-                <td>{row.meta ?? "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table></div>
+        <DataTable<ModuleRow>
+          columns={MODULE_COLUMNS}
+          rows={data as ModuleRow[]}
+          sortable
+          filterable
+          filterPlaceholder="Filter records…"
+          pageSize={15}
+        />
       )}
     </Card>
   );

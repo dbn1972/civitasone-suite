@@ -6,7 +6,7 @@ import { StatusPill } from "./ds/StatusPill";
 
 interface LinkTilesProps {
   tiles: NavTile[];
-  columns?: "three" | "four";
+  columns?: "three" | "four" | "auto";
 }
 
 const TILE_ICONS: Record<string, string> = {
@@ -68,6 +68,30 @@ const TILE_ICONS: Record<string, string> = {
   Subscriptions: "🔁",
   Invoices: "🧾",
   "GSTN Console": "🏛️",
+  // GAP-TELEPHONY-HOME-04: the telephony hub tiles ("Call Log", "Agent Queue",
+  // "Dispositions") had no TILE_ICONS entry and no matching href substring, so
+  // all fell through to the generic 📁 folder glyph. Keyed by their hub labels
+  // (ModuleHub links in telephony/page.tsx).
+  "Call Log": "📞",
+  "Agent Queue": "🎧",
+  Dispositions: "🗂",
+  // GAP-CATALOGUE-HOME-04: the Service Catalogue hub's four tiles (Products,
+  // Categories, Rates, Bundles) had no TILE_ICONS entry and no matching href
+  // substring, so all four fell through to the generic 📁 folder glyph with no
+  // visual differentiation. Keyed by their hub titles (catalogue/page.tsx).
+  Products: "📦",
+  Categories: "🗂",
+  Rates: "💵",
+  Bundles: "🎁",
+  // GAP-FIELD-HOME-01: the Field hub's five tiles (Tasks, Visits, Routes,
+  // Agents, Offline Sync) matched no title key and no href heuristic below, so
+  // all five fell through to the generic 📁 folder glyph — the hub had no
+  // visual cue to tell the lists apart. Distinct icons per tile title.
+  Tasks: "✅",
+  Visits: "📍",
+  Routes: "🧭",
+  Agents: "👷",
+  "Offline Sync": "🔄",
 };
 
 const TILE_BG = ["#eef2ff", "#ecfdf3", "#fffaeb", "#fce7ee", "#e7edfd", "#f1f5f9"];
@@ -84,7 +108,7 @@ function tileIcon(tile: NavTile): string {
 }
 
 export function LinkTiles({ tiles, columns = "three" }: LinkTilesProps) {
-  const gridClass = columns === "four" ? "g-4" : "g-3";
+  const gridClass = columns === "four" ? "g-4" : columns === "auto" ? "g-auto" : "g-3";
 
   // Group tiles by their `section` label, preserving insertion order.
   const sections: Array<{ label: string | null; tiles: NavTile[] }> = [];

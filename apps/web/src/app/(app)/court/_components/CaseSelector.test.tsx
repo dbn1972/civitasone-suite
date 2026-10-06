@@ -51,13 +51,21 @@ describe("CaseSelector", () => {
 
   it("lists cases and navigates to the base path with the chosen caseId", () => {
     render(<CaseSelector cases={[c1]} casesSource="api" basePath="/court/hearings" selectedCaseId="" />);
-    fireEvent.change(screen.getByLabelText("Case"), { target: { value: "case-1" } });
+    const input = screen.getByLabelText("Case");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "Sharma" } });
+    // Pick the filtered option (role=option → button).
+    fireEvent.mouseDown(screen.getByRole("option", { name: /State vs\. Sharma/ }).querySelector("button")!);
     expect(pushMock).toHaveBeenCalledWith("/court/hearings?caseId=case-1");
   });
 
-  it("navigates back to the bare base path when cleared", () => {
-    render(<CaseSelector cases={[c1]} casesSource="api" basePath="/court/orders" selectedCaseId="case-1" />);
-    fireEvent.change(screen.getByLabelText("Case"), { target: { value: "" } });
-    expect(pushMock).toHaveBeenCalledWith("/court/orders");
+  it("filters options as the user types (searchable combobox)", () => {
+    const c2: CourtCase = { ...c1, id: "case-2", title: "Rao v. State", cnrNumber: "DLHC020000022026" };
+    render(<CaseSelector cases={[c1, c2]} casesSource="api" basePath="/court/orders" selectedCaseId="" />);
+    const input = screen.getByLabelText("Case");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "Rao" } });
+    expect(screen.getByRole("option", { name: /Rao v\. State/ })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /State vs\. Sharma/ })).not.toBeInTheDocument();
   });
 });
