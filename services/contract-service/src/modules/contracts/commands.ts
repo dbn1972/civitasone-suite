@@ -37,6 +37,22 @@ async function loadScoped(ctx: RequestContext, id: string) {
 }
 
 export async function createContract(ctx: RequestContext, body: CreateContractBody): Promise<Accepted> {
+  // GAP-CONTRACTS-NEW-06: the expiry must not precede the start date. The DB
+  // columns are both NOT NULL dates with no CHECK on their ordering, and the
+  // queue-first write would otherwise persist a contract whose window is
+  // inverted. Reject synchronously with a 400 so the officer sees it before a
+  // round-trip. (ISO YYYY-MM-DD strings compare correctly lexicographically.)
+  if (body.expiry < body.startDate) {
+    throw new HttpError(400, "VALIDATION_FAILED", "expiry must be on or after startDate");
+  }
+  // GAP-CONTRACTS-NEW-05: reject a duplicate contract number up front with a
+  // 409 instead of letting the queue consumer trip the UNIQUE(tenant_id,
+  // contract_no) constraint asynchronously (which would surface only as a
+  // failed/retrying message, never as feedback to the caller).
+  const existing = await repo.findContractByTenantAndNo(ctx.tenantId, body.contractNo);
+  if (existing) {
+    throw new HttpError(409, "DUPLICATE_NUMBER", "a contract with this number already exists");
+  }
   const id = randomUUID();
   await queue.publish(COMMANDS.contractCreate, {
     messageId: id, type: COMMANDS.contractCreate,

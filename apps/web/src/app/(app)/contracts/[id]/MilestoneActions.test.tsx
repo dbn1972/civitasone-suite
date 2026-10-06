@@ -31,7 +31,7 @@ describe("MilestoneActions", () => {
     expect(screen.getByRole("alertdialog")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Yes, mark complete" }));
-    await waitFor(() => expect(screen.getByText(/accepted \(queued\)/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/request received/i)).toBeInTheDocument());
     expect(fetchSpy.mock.calls[0][0]).toContain("/milestones/m1/complete");
     expect((fetchSpy.mock.calls[0][1] as RequestInit).method).toBe("PATCH");
     expect(refreshMock).toHaveBeenCalled();
@@ -71,9 +71,20 @@ describe("MilestoneActions", () => {
     expect(confirmBtn).toBeEnabled();
     fireEvent.click(confirmBtn);
 
-    await waitFor(() => expect(screen.getByText(/accepted \(queued\)/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/request received/i)).toBeInTheDocument());
     expect(fetchSpy.mock.calls[0][0]).toContain("/milestones/m1/late");
     const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
     expect(body.notes).toBe("Vendor delayed material delivery by 2 weeks");
+  });
+
+  it("shows the due date next to each milestone action (GAP-CONTRACTS-DETAIL-05)", () => {
+    render(
+      <MilestoneActions
+        contractId="cccccccc-dddd-4000-8000-0000000000cc"
+        milestones={[{ id: "m1", title: "Earthwork", status: "pending", dueDate: "2026-09-01" }]}
+      />,
+    );
+    // formatIndianDate("2026-09-01") -> "01 Sep 2026".
+    expect(screen.getByText(/due 01 Sep 2026/)).toBeInTheDocument();
   });
 });

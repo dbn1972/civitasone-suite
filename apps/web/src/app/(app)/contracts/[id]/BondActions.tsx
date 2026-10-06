@@ -4,6 +4,8 @@ import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ActionButton } from "../../../_components/ds";
+import { rupeesToMinorString } from "@/lib/money";
+import { formatIndianDate, formatMoney } from "@/lib/formatters";
 
 export type ContractBond = {
   id: string;
@@ -11,7 +13,19 @@ export type ContractBond = {
   status: string;
   amountMinor?: string | number;
   bondType?: string;
+  validFrom?: string;
+  validTo?: string;
 };
+
+// GAP-CONTRACTS-DETAIL-02: contract-service's registerBondBody accepts exactly
+// these three bond types (see contract-service .../contracts/validators.ts
+// registerBondBody). The officer picks the real one rather than every bond
+// being silently filed as "performance".
+const BOND_TYPES: Array<{ value: "performance" | "bank_guarantee" | "security_deposit"; label: string }> = [
+  { value: "performance", label: "Performance bond" },
+  { value: "bank_guarantee", label: "Bank guarantee" },
+  { value: "security_deposit", label: "Security deposit" },
+];
 
 type Props = { contractId: string; bonds: ContractBond[]; canRegister: boolean };
 
@@ -79,41 +93,61 @@ export function BondActions({ contractId, bonds, canRegister }: Props) {
   const [busyBondId, setBusyBondId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | undefined>();
+  const [bondType, setBondType] = useState<"performance" | "bank_guarantee" | "security_deposit">("performance");
   const [issuer, setIssuer] = useState("SBI");
   const [referenceNo, setReferenceNo] = useState("");
   const [amountInr, setAmountInr] = useState("");
+  const [validFrom, setValidFrom] = useState("");
+  const [validTo, setValidTo] = useState("");
+
+  // GAP-CONTRACTS-DETAIL-02: live paise preview of the typed rupees, computed
+  // with the same exact string parser used on submit (null when invalid).
+  const amountPreviewMinor = rupeesToMinorString(amountInr);
+  const amountPreview = amountPreviewMinor ? formatMoney(amountPreviewMinor) : null;
 
   async function register() {
     setBusy(true);
     setError(undefined);
     setMessage("");
     try {
-      const rupees = Number(amountInr);
-      if (!Number.isFinite(rupees) || rupees <= 0) {
-        throw new Error("Enter a positive bond amount in ₹");
+      // GAP-CONTRACTS-DETAIL-02: exact rupees->paise with string math (no
+      // Number()*100 float path, which mis-rounds e.g. 1234.10). Rejects
+      // anything with more than two decimals rather than silently rounding
+      // a security amount.
+      const amountMinor = rupeesToMinorString(amountInr);
+      if (amountMinor === null) {
+        throw new Error("Enter a positive bond amount in ₹ (up to two decimals)");
       }
       if (!referenceNo.trim()) throw new Error("Reference number is required");
-      const today = new Date().toISOString().slice(0, 10);
-      const year = today.slice(0, 4);
+      if (!validFrom) throw new Error("'Valid from' date is required");
+      if (!validTo) throw new Error("'Valid to' date is required");
+      // GAP-CONTRACTS-DETAIL-02: validity window must be ordered. The server
+      // enforces this too (registerPerformanceBond: validTo >= validFrom), but
+      // catch it inline so the officer sees it before a round-trip.
+      if (validTo < validFrom) {
+        throw new Error("'Valid to' must be on or after 'Valid from'");
+      }
       const res = await fetch(`/api/proxy/v1/contract/contracts/${contractId}/bonds`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          bondType: "performance",
-          amountMinor: Math.round(rupees * 100),
+          bondType,
+          amountMinor: Number(amountMinor),
           currency: "INR",
           issuer,
           referenceNo: referenceNo.trim(),
-          validFrom: today,
-          validTo: `${Number(year) + 1}-12-31`,
+          validFrom,
+          validTo,
         }),
       });
       if (res.status !== 202 && !res.ok) {
         throw await userFacingErrorFromResponse(res, "save");
       }
-      setMessage("Performance bond registration accepted (queued).");
+      setMessage("Performance bond registration received — it will appear shortly.");
       setReferenceNo("");
       setAmountInr("");
+      setValidFrom("");
+      setValidTo("");
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Bond register failed");
@@ -140,7 +174,7 @@ export function BondActions({ contractId, bonds, canRegister }: Props) {
       if (res.status !== 202 && !res.ok) {
         throw await userFacingErrorFromResponse(res, "save");
       }
-      setMessage(`Bond ${toStatus} accepted (queued).`);
+      setMessage(`Bond ${toStatus} request received — the status will update shortly.`);
       router.refresh();
     } finally {
       setBusyBondId(null);
@@ -156,6 +190,13 @@ export function BondActions({ contractId, bonds, canRegister }: Props) {
           {bonds.map((b) => (
             <li key={b.id} style={{ marginBottom: 8, fontSize: 13 }}>
               <strong>{b.referenceNo ?? b.id.slice(0, 8)}</strong> — {b.status}
+              {/* GAP-CONTRACTS-DETAIL-02: surface the bond's validity window so
+                  an officer can see at a glance when the security lapses. */}
+              {b.validFrom || b.validTo ? (
+                <span style={{ color: "var(--ink2)" }}>
+                  {" "}· valid {formatIndianDate(b.validFrom ?? null)} – {formatIndianDate(b.validTo ?? null)}
+                </span>
+              ) : null}
               {b.status === "held" ? (
                 <span style={{ display: "inline-flex", gap: 6, marginLeft: 8 }}>
                   {TRANSITIONS.map((t) => (
@@ -188,6 +229,18 @@ export function BondActions({ contractId, bonds, canRegister }: Props) {
       {canRegister ? (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "end" }}>
           <label style={{ fontSize: 12 }}>
+            Bond type
+            <select
+              className="inp"
+              value={bondType}
+              onChange={(e) => setBondType(e.target.value as typeof bondType)}
+            >
+              {BOND_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+          </label>
+          <label style={{ fontSize: 12 }}>
             Issuer
             <input className="inp" value={issuer} onChange={(e) => setIssuer(e.target.value)} />
           </label>
@@ -197,7 +250,18 @@ export function BondActions({ contractId, bonds, canRegister }: Props) {
           </label>
           <label style={{ fontSize: 12 }}>
             Amount (₹)
-            <input className="inp" value={amountInr} onChange={(e) => setAmountInr(e.target.value)} placeholder="100000" />
+            <input className="inp" inputMode="decimal" value={amountInr} onChange={(e) => setAmountInr(e.target.value)} placeholder="100000" />
+            {amountPreview ? (
+              <span style={{ display: "block", fontSize: 11, color: "var(--ink2)", marginTop: 2 }}>{amountPreview}</span>
+            ) : null}
+          </label>
+          <label style={{ fontSize: 12 }}>
+            Valid from
+            <input className="inp" type="date" value={validFrom} onChange={(e) => setValidFrom(e.target.value)} />
+          </label>
+          <label style={{ fontSize: 12 }}>
+            Valid to
+            <input className="inp" type="date" value={validTo} onChange={(e) => setValidTo(e.target.value)} />
           </label>
           <button type="button" className="btn" disabled={busy} onClick={() => void register()}>
             Register bond

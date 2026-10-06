@@ -167,4 +167,15 @@ describe("Sidebar", () => {
       expect(screen.queryByRole("link", { name: /Administration/ })).not.toBeInTheDocument();
     });
   });
+  // GAP-CONTRACTS-HOME-02
+  describe("Contracts entry", () => {
+    it("links to /contracts when the contracts module is enabled", () => {
+      render(<Sidebar enabledModules={["contracts"]} />);
+      expect(screen.getByRole("link", { name: /^Contracts$/ })).toHaveAttribute("href", "/contracts");
+    });
+    it("is hidden when the contracts module is not enabled", () => {
+      render(<Sidebar enabledModules={["finance"]} />);
+      expect(screen.queryByRole("link", { name: /^Contracts$/ })).not.toBeInTheDocument();
+    });
+  });
 });
