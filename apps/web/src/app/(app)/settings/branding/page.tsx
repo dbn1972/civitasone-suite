@@ -4,47 +4,37 @@
  * Brand Editor — Visual, no-code theming for tenant admins.
  *
  * Flow: Pick preset → Customize colors → Upload logo → Preview live → Save
- * No hex codes needed. Color picker + drag-drop logo + instant preview.
+ * No hex codes needed. Color picker + logo URL + instant preview.
  *
- * This page renders a split-screen:
- * - Left: Editor panel (presets, color pickers, logo upload, font selector)
- * - Right: Live preview (miniature app shell that updates in real-time)
+ * This page renders a responsive split-screen:
+ * - Editor panel (presets, color pickers, logo, footer/tagline/powered-by text)
+ * - Live preview (miniature app shell that updates in real-time)
+ * On small screens the panels stack; on lg+ they sit side by side.
+ *
+ * Foreground/contrast maths lives in @/lib/contrast (readableForeground,
+ * contrastRatio) so every surface that needs an accessible pairing shares one
+ * WCAG implementation rather than re-deriving luminance locally.
  */
 
 import { useState, useEffect, useCallback } from "react";
+import {
+  readableForeground,
+  contrastRatio,
+  WCAG_AA_NORMAL,
+} from "@/lib/contrast";
+import { useSessionIdentity } from "@/lib/auth/useSessionIdentity";
+import { ConfirmDialog } from "@/app/_components/ds";
 
-/**
- * Pick black or white text for a given background so the pair meets WCAG 2.2 AA
- * (SC 1.4.3, 4.5:1) whatever colour a tenant chooses.
- *
- * Uses the WCAG relative-luminance formula rather than a naive brightness
- * average, because the two disagree near mid-tones — and mid-tones (amber,
- * teal) are exactly where a hardcoded white foreground fails.
- */
-function readableForeground(background: string): string {
-  const hex = background.replace("#", "");
-  const full =
-    hex.length === 3
-      ? hex
-          .split("")
-          .map((c) => c + c)
-          .join("")
-      : hex;
-  const n = Number.parseInt(full, 16);
-  if (!Number.isFinite(n) || full.length !== 6) return "#111827";
-  const channel = (c: number): number => {
-    const s = c / 255;
-    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-  };
-  const luminance =
-    0.2126 * channel((n >> 16) & 255) +
-    0.7152 * channel((n >> 8) & 255) +
-    0.0722 * channel(n & 255);
-  // Contrast against white vs against near-black; pick the stronger one.
-  const againstWhite = 1.05 / (luminance + 0.05);
-  const againstBlack = (luminance + 0.05) / 0.05;
-  return againstWhite >= againstBlack ? "#ffffff" : "#111827";
-}
+// Roles allowed to edit tenant-wide branding. This is a DISPLAY gate only —
+// theme-service PUT /v1/themes/brand independently calls requireRole with the
+// same set (see tokens/brand-routes.ts ADMIN_ROLES), so hiding the controls
+// here can never grant access, only avoid offering a Save that would 403.
+const BRANDING_ADMIN_ROLES = ["theme_admin", "super_admin", "tenant_admin"];
+
+// Logo upload constraints (GAP-SETTINGS-BRANDING-04). Module scope so the
+// handler's useCallback deps stay stable.
+const MAX_LOGO_BYTES = 200 * 1024;
+const ALLOWED_LOGO_TYPES = ["image/png", "image/svg+xml"];
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -191,6 +181,11 @@ function LivePreview({ config }: { config: BrandConfig }) {
         >
           {config.appName}
         </span>
+        {config.tagline && (
+          <span className="text-xs opacity-80" style={{ color: config.colorPrimaryFg }}>
+            {config.tagline}
+          </span>
+        )}
       </div>
 
       <div className="flex h-[400px]">
@@ -307,6 +302,11 @@ function LivePreview({ config }: { config: BrandConfig }) {
         className="px-4 py-2 text-center border-t"
         style={{ borderColor: config.colorBorder }}
       >
+        {config.footerText && (
+          <p className="text-xs" style={{ color: config.colorText }}>
+            {config.footerText}
+          </p>
+        )}
         <p className="text-xs" style={{ color: config.colorMuted }}>
           {config.poweredBy ?? "Powered by CivitasOne"}
         </p>
@@ -349,11 +349,19 @@ export default function BrandingPage() {
 
   const [presets, setPresets] = useState<Preset[]>([]);
   const [activePreset, setActivePreset] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [confirmingSave, setConfirmingSave] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  const identity = useSessionIdentity();
+  const canEdit =
+    !identity.loaded ||
+    identity.roles.some((r) => BRANDING_ADMIN_ROLES.includes(r));
 
   // Load current brand + presets on mount.
   //
@@ -373,6 +381,7 @@ export default function BrandingPage() {
   useEffect(() => {
     const controller = new AbortController();
     setLoadError(null);
+    setLoading(true);
     // Independent requests, independent failure handling: presets are a
     // secondary, non-essential convenience (quick-pick color themes), so a
     // presets-endpoint hiccup shouldn't block the editor from showing the
@@ -380,19 +389,28 @@ export default function BrandingPage() {
     // error banner and degrade gracefully (empty preset list) for whichever
     // one actually failed, rather than discarding a perfectly good response
     // just because the other request in the pair had a problem.
-    fetch("/api/proxy/v1/themes/brand", { signal: controller.signal })
+    const brandLoad = fetch("/api/proxy/v1/themes/brand", { signal: controller.signal })
       .then((r) => {
         if (!r.ok) throw new Error(`brand config: HTTP ${r.status}`);
         return r.json();
       })
-      .then(setConfig)
+      .then((loaded: BrandConfig) => {
+        // The stored colorPrimaryFg can be stale (e.g. saved before this
+        // editor derived it). Recompute it from the loaded primary so the
+        // header / active nav / Primary Action never render an unreadable
+        // pair, even on first paint. (GAP-SETTINGS-BRANDING-01)
+        setConfig({
+          ...loaded,
+          colorPrimaryFg: readableForeground(loaded.colorPrimary),
+        });
+      })
       .catch((e) => {
         if (e.name === "AbortError") return;
         setLoadError(
-          "Couldn't load your current branding. Showing defaults — saving will still work.",
+          "Couldn't load your current branding. Showing defaults — review before saving.",
         );
       });
-    fetch("/api/proxy/v1/themes/brand/presets", { signal: controller.signal })
+    const presetLoad = fetch("/api/proxy/v1/themes/brand/presets", { signal: controller.signal })
       .then((r) => {
         if (!r.ok) throw new Error(`presets: HTTP ${r.status}`);
         return r.json();
@@ -406,11 +424,22 @@ export default function BrandingPage() {
             "Couldn't load color presets. You can still set colors manually.",
         );
       });
+    void Promise.allSettled([brandLoad, presetLoad]).then(() => {
+      if (!controller.signal.aborted) setLoading(false);
+    });
     return () => controller.abort();
   }, []);
 
   const updateColor = useCallback((key: keyof BrandConfig, value: string) => {
-    setConfig((prev) => ({ ...prev, [key]: value }));
+    setConfig((prev) => {
+      const next = { ...prev, [key]: value };
+      // Keep the primary foreground readable for ANY chosen primary; the one
+      // persisted pair must meet WCAG AA. (GAP-SETTINGS-BRANDING-01)
+      if (key === "colorPrimary") {
+        next.colorPrimaryFg = readableForeground(value);
+      }
+      return next;
+    });
     setDirty(true);
     setSaved(false);
   }, []);
@@ -419,6 +448,7 @@ export default function BrandingPage() {
     setConfig((prev) => ({
       ...prev,
       colorPrimary: preset.colorPrimary,
+      colorPrimaryFg: readableForeground(preset.colorPrimary),
       colorSecondary: preset.colorSecondary,
       colorAccent: preset.colorAccent,
     }));
@@ -426,6 +456,57 @@ export default function BrandingPage() {
     setDirty(true);
     setSaved(false);
   }, []);
+
+  // Logo handling (GAP-SETTINGS-BRANDING-04).
+  // Accept only PNG/SVG up to 200KB. We read the file to a data: URL, which
+  // the app CSP already permits (img-src 'self' data: blob:) — an arbitrary
+  // external https URL would be blocked in the browser and also leaks viewer
+  // IPs, so the free-text URL box is validated separately below and is an
+  // advanced fallback only. SVG can carry script; the backend sanitises /
+  // restricts on upload, and in-browser an <img src=data:svg> cannot run
+  // script, so the preview is safe.
+  const handleLogoFile = useCallback((file: File | null | undefined) => {
+    if (!file) return;
+    setLogoError(null);
+    if (!ALLOWED_LOGO_TYPES.includes(file.type)) {
+      setLogoError("Logo must be a PNG or SVG image.");
+      return;
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      setLogoError("Logo must be 200KB or smaller.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : null;
+      if (!result) {
+        setLogoError("Couldn't read that file. Please try another.");
+        return;
+      }
+      updateColor("logoUrl", result);
+    };
+    reader.onerror = () => setLogoError("Couldn't read that file. Please try another.");
+    reader.readAsDataURL(file);
+  }, [updateColor]);
+
+  const setLogoUrlFromText = useCallback((raw: string) => {
+    setLogoError(null);
+    const value = raw.trim();
+    if (value === "") {
+      updateColor("logoUrl", "");
+      return;
+    }
+    // Allow only https:// or data: image URLs. http/javascript/other schemes
+    // are rejected: they either leak viewer IPs, break under the CSP, or are
+    // an injection vector.
+    const isHttps = /^https:\/\//i.test(value);
+    const isDataImage = /^data:image\/(png|svg\+xml);/i.test(value);
+    if (!isHttps && !isDataImage) {
+      setLogoError("Enter an https:// image URL (or upload a file).");
+      return;
+    }
+    updateColor("logoUrl", value);
+  }, [updateColor]);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
@@ -453,6 +534,41 @@ export default function BrandingPage() {
     }
   }, [config]);
 
+  // Contrast checks for the pairs a tenant can actually make unreadable.
+  // Text-on-Background / Text-on-Surface / Primary-on-PrimaryFg below AA are
+  // "critical" (they make core UI unreadable) and block Save until fixed;
+  // Muted-on-Background is a warning only. (GAP-SETTINGS-BRANDING-06)
+  const contrastIssues = (() => {
+    const checks: { label: string; ratio: number; critical: boolean }[] = [
+      { label: "Text on Background", ratio: contrastRatio(config.colorText, config.colorBackground), critical: true },
+      { label: "Text on Surface", ratio: contrastRatio(config.colorText, config.colorSurface), critical: true },
+      { label: "Primary button text", ratio: contrastRatio(config.colorPrimaryFg, config.colorPrimary), critical: true },
+      { label: "Muted text on Background", ratio: contrastRatio(config.colorMuted, config.colorBackground), critical: false },
+    ];
+    return checks.filter((c) => c.ratio < WCAG_AA_NORMAL);
+  })();
+  const hasCriticalContrastIssue = contrastIssues.some((c) => c.critical);
+
+  const requestSave = useCallback(() => {
+    setConfirmingSave(true);
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="p-6 space-y-4" aria-busy="true" aria-live="polite">
+        <span className="sr-only">Loading your branding…</span>
+        <div className="h-8 w-48 animate-pulse rounded bg-gray-200" />
+        <div className="h-4 w-72 animate-pulse rounded bg-gray-100" />
+        <div className="space-y-3 pt-4">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="h-10 animate-pulse rounded-lg bg-gray-100" />
+          ))}
+        </div>
+        <div className="h-64 animate-pulse rounded-xl bg-gray-100" />
+      </div>
+    );
+  }
+
   return (
     // A bespoke split-screen editor (live preview on the right), not a list/detail
     // page, so it deliberately doesn't use the shared PageHeader chrome (back link
@@ -461,18 +577,30 @@ export default function BrandingPage() {
     // aria-labelledby every other page has (UX-007) — on a <div> here rather than
     // a <main>, since AppShell already supplies the page's one true <main> landmark
     // and a second one would violate the one-main-per-document rule (a11y HIGH-1).
-    <div className="flex h-screen" aria-labelledby="page-heading">
-      {/* Left: Editor Panel */}
-      <div className="w-[420px] border-e overflow-y-auto p-6 space-y-6 bg-white">
+    <div
+      className="flex min-h-0 flex-col lg:h-screen lg:flex-row"
+      aria-labelledby="page-heading"
+    >
+      {/* Editor Panel — full width on small screens, fixed rail on lg+ */}
+      <div className="w-full border-b lg:w-[420px] lg:border-b-0 lg:border-e lg:overflow-y-auto p-6 space-y-6 bg-white">
         <div>
           <h1 id="page-heading" className="text-2xl font-bold text-gray-900">
             Brand & Theme
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Customize how your portal looks. Changes preview instantly on the
-            right.
+            Customize how your portal looks. Changes preview instantly below.
           </p>
         </div>
+
+        {!canEdit && identity.loaded && (
+          <div
+            role="status"
+            className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700"
+          >
+            You can preview the current branding, but only a tenant or theme
+            administrator can change it. Save is disabled.
+          </div>
+        )}
 
         {loadError && (
           <div
@@ -493,40 +621,125 @@ export default function BrandingPage() {
             type="text"
             value={config.appName}
             onChange={(e) => updateColor("appName", e.target.value)}
-            className="w-full px-3 py-2 border rounded-lg text-sm"
+            disabled={!canEdit}
+            className="w-full px-3 py-2 border rounded-lg text-sm disabled:bg-gray-50 disabled:text-gray-400"
             placeholder="e.g. CBSE Administration Portal"
           />
         </div>
 
-        {/* Logo Upload */}
+        {/* Tagline */}
         <div>
-          {/* Not a <label>: this heads a drag-and-drop zone plus a fallback
-              text input, not one single control it could be htmlFor-linked
-              to — the fallback input already carries its own
-              aria-label="Logo image URL" below. */}
+          <label htmlFor="branding-tagline" className="block text-sm font-medium text-gray-700 mb-1">
+            Tagline
+          </label>
+          <input
+            id="branding-tagline"
+            type="text"
+            value={config.tagline ?? ""}
+            onChange={(e) => updateColor("tagline", e.target.value)}
+            disabled={!canEdit}
+            maxLength={256}
+            className="w-full px-3 py-2 border rounded-lg text-sm disabled:bg-gray-50 disabled:text-gray-400"
+            placeholder="e.g. Serving citizens, digitally"
+          />
+        </div>
+
+        {/* Footer text */}
+        <div>
+          <label htmlFor="branding-footer-text" className="block text-sm font-medium text-gray-700 mb-1">
+            Footer text
+          </label>
+          <input
+            id="branding-footer-text"
+            type="text"
+            value={config.footerText ?? ""}
+            onChange={(e) => updateColor("footerText", e.target.value)}
+            disabled={!canEdit}
+            maxLength={512}
+            className="w-full px-3 py-2 border rounded-lg text-sm disabled:bg-gray-50 disabled:text-gray-400"
+            placeholder="e.g. © 2026 Municipal Corporation"
+          />
+        </div>
+
+        {/* Powered-by line */}
+        <div>
+          <label htmlFor="branding-powered-by" className="block text-sm font-medium text-gray-700 mb-1">
+            Powered-by line
+          </label>
+          <input
+            id="branding-powered-by"
+            type="text"
+            value={config.poweredBy ?? ""}
+            onChange={(e) => updateColor("poweredBy", e.target.value)}
+            disabled={!canEdit}
+            maxLength={128}
+            className="w-full px-3 py-2 border rounded-lg text-sm disabled:bg-gray-50 disabled:text-gray-400"
+            placeholder="Powered by CivitasOne"
+          />
+        </div>
+
+        {/* Logo */}
+        <div>
+          {/* Not a <label>: this heads a drag-and-drop zone plus a file input
+              and a fallback URL text input, not one single control it could be
+              htmlFor-linked to — each inner control carries its own label. */}
           <p className="block text-sm font-medium text-gray-700 mb-1">
             Logo
           </p>
-          <div className="border-2 border-dashed rounded-xl p-4 text-center cursor-pointer hover:border-blue-400 transition-colors">
+          <div
+            onDragOver={(e) => {
+              if (!canEdit) return;
+              e.preventDefault();
+            }}
+            onDrop={(e) => {
+              if (!canEdit) return;
+              e.preventDefault();
+              handleLogoFile(e.dataTransfer.files?.[0]);
+            }}
+            className="border-2 border-dashed rounded-xl p-4 text-center hover:border-blue-400 transition-colors"
+          >
             {config.logoUrl ? (
-              <img src={config.logoUrl} alt="Logo" className="h-12 mx-auto" />
+              <img src={config.logoUrl} alt="Logo preview" className="h-12 mx-auto" />
             ) : (
               <div>
-                <p className="text-sm text-gray-500">Drag & drop logo here</p>
-                <p className="text-xs text-gray-500 mt-1">
-                  SVG or PNG, max 200KB
-                </p>
+                <p className="text-sm text-gray-500">Drag &amp; drop a logo here</p>
+                <p className="text-xs text-gray-500 mt-1">PNG or SVG, max 200KB</p>
               </div>
             )}
+            <label
+              htmlFor="branding-logo-file"
+              className="mt-3 inline-block cursor-pointer rounded-lg border px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Choose file
+            </label>
             <input
-              type="text"
-              aria-label="Logo image URL"
-              value={config.logoUrl ?? ""}
-              onChange={(e) => updateColor("logoUrl", e.target.value)}
-              className="w-full px-2 py-1 border rounded text-xs mt-2"
-              placeholder="Or paste image URL"
+              id="branding-logo-file"
+              type="file"
+              accept="image/png,image/svg+xml"
+              disabled={!canEdit}
+              onChange={(e) => handleLogoFile(e.target.files?.[0])}
+              className="sr-only"
             />
+            <details className="mt-3 text-start">
+              <summary className="cursor-pointer text-xs text-gray-500">
+                Advanced: use an image URL
+              </summary>
+              <input
+                type="text"
+                aria-label="Logo image URL"
+                defaultValue={config.logoUrl ?? ""}
+                onBlur={(e) => setLogoUrlFromText(e.target.value)}
+                disabled={!canEdit}
+                className="w-full px-2 py-1 border rounded text-xs mt-2 disabled:bg-gray-50"
+                placeholder="https://… (https only)"
+              />
+            </details>
           </div>
+          {logoError && (
+            <p role="alert" className="text-xs text-red-700 mt-1">
+              {logoError}
+            </p>
+          )}
         </div>
 
         {/* Presets */}
@@ -596,6 +809,24 @@ export default function BrandingPage() {
               onChange={(v) => updateColor("colorError", v)}
             />
           </div>
+          {contrastIssues.length > 0 && (
+            <div
+              role="alert"
+              className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 space-y-1"
+            >
+              <p className="font-medium">
+                Some colour pairs are hard to read (WCAG AA needs 4.5:1):
+              </p>
+              <ul className="list-disc ps-4">
+                {contrastIssues.map((c) => (
+                  <li key={c.label}>
+                    {c.label}: {c.ratio.toFixed(2)}:1
+                    {c.critical ? " — must fix before saving" : " — consider adjusting"}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
         {/* Border Radius */}
@@ -618,6 +849,7 @@ export default function BrandingPage() {
             onChange={(e) =>
               updateColor("borderRadius", `${Number(e.target.value) / 16}rem`)
             }
+            disabled={!canEdit}
             className="w-full"
             aria-describedby="branding-border-radius-value"
           />
@@ -640,10 +872,17 @@ export default function BrandingPage() {
             </div>
           )}
           <button
-            onClick={handleSave}
-            disabled={!dirty || saving}
+            onClick={requestSave}
+            disabled={!canEdit || !dirty || saving || hasCriticalContrastIssue}
+            title={
+              !canEdit
+                ? "You don't have permission to change branding"
+                : hasCriticalContrastIssue
+                  ? "Fix the critical contrast issues before saving"
+                  : undefined
+            }
             className={`w-full py-3 rounded-xl font-medium text-sm transition-all ${
-              dirty
+              dirty && canEdit && !hasCriticalContrastIssue
                 ? "bg-blue-600 text-white hover:bg-blue-700 shadow-lg"
                 : saved
                   ? "bg-green-100 text-green-700"
@@ -654,15 +893,17 @@ export default function BrandingPage() {
               ? "Saving..."
               : saved
                 ? "✓ Saved!"
-                : dirty
-                  ? "Save Changes"
-                  : "No Changes"}
+                : hasCriticalContrastIssue
+                  ? "Fix contrast to save"
+                  : dirty
+                    ? "Save Changes"
+                    : "No Changes"}
           </button>
         </div>
       </div>
 
-      {/* Right: Live Preview */}
-      <div className="flex-1 p-8 bg-gray-50 overflow-y-auto">
+      {/* Live Preview — stacks below the editor on small screens */}
+      <div className="flex-1 p-6 lg:p-8 bg-gray-50 lg:overflow-y-auto">
         <div className="max-w-3xl mx-auto">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-medium text-gray-500">LIVE PREVIEW</h2>
@@ -673,6 +914,20 @@ export default function BrandingPage() {
           <LivePreview config={config} />
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmingSave}
+        title="Save branding for everyone in this tenant?"
+        description="These colours, logo and text apply to every user in your organisation. Saving replaces the current branding."
+        confirmLabel="Save branding"
+        cancelLabel="Keep editing"
+        busy={saving}
+        onCancel={() => setConfirmingSave(false)}
+        onConfirm={() => {
+          setConfirmingSave(false);
+          void handleSave();
+        }}
+      />
     </div>
   );
 }

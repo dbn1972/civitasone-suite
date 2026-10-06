@@ -28,3 +28,35 @@ export function contrast(hexA: string, hexB: string): number {
   const darker = Math.min(lA, lB);
   return (lighter + 0.05) / (darker + 0.05);
 }
+
+/**
+ * Alias of {@link contrast} with the name the branding editor reads for.
+ * Kept as a distinct export so call-sites that talk about a foreground /
+ * background *ratio* read naturally, without re-implementing the formula.
+ */
+export const contrastRatio = contrast;
+
+/** WCAG 2.2 AA (SC 1.4.3) normal-text threshold. */
+export const WCAG_AA_NORMAL = 4.5;
+
+/**
+ * Pick black (#111827) or white (#ffffff) foreground for a given background so
+ * the pair clears WCAG 2.2 AA whatever colour a tenant chooses. Uses the WCAG
+ * relative-luminance formula (not a naive brightness average) because the two
+ * disagree near mid-tones — amber/teal — which is exactly where a hardcoded
+ * white foreground fails. Invalid/short hex falls back to near-black.
+ */
+export function readableForeground(background: string): string {
+  const hex = background.replace("#", "");
+  const full =
+    hex.length === 3
+      ? hex
+          .split("")
+          .map((c) => c + c)
+          .join("")
+      : hex;
+  if (full.length !== 6 || !/^[0-9a-fA-F]{6}$/.test(full)) return "#111827";
+  const againstWhite = contrast(`#${full}`, "#ffffff");
+  const againstBlack = contrast(`#${full}`, "#111827");
+  return againstBlack >= againstWhite ? "#111827" : "#ffffff";
+}
