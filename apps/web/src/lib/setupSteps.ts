@@ -55,14 +55,20 @@ export const WIZARD_STEPS: WizardStep[] = [
     example: "e.g. District Industries Centre, Bhubaneswar",
     cta: "Add office details",
     required: true,
-    entryHref: "/tenant-admin/settings",
+    // GAP-SETUP-HOME-04: distinct from the modules step (step 5) so returning
+    // from the office-profile editor lands on its own section, not the module
+    // toggles. The org profile is edited on the dedicated org-type screen.
+    entryHref: "/tenant-admin/org-type",
   },
   {
     key: "branches",
     num: 2,
     icon: "📍",
-    title: "Add your branch offices",
-    explanation: "Add your head office first, then add branches under it. You can pick which office each branch reports to.",
+    // GAP-SETUP-HOME-03: completion is >=1 location, so a single head office
+    // satisfies the step. Word the title to match that rule honestly rather
+    // than implying multiple branch offices are required.
+    title: "Add your head office",
+    explanation: "Add your head office first, then add any branches under it. You can pick which office each branch reports to.",
     example: "e.g. Head Office → Bhubaneswar Branch, Cuttack Branch",
     cta: "Add offices",
     required: true,
@@ -76,8 +82,14 @@ export const WIZARD_STEPS: WizardStep[] = [
     explanation: "Create the teams in your office so you can sort people and work by department.",
     example: "e.g. Finance, HR, Establishment",
     cta: "Add departments",
+    // GAP-SETUP-HOME-01: departments live in the HRMS module, so this step must
+    // be scoped to it — otherwise a tenant with HR off can never complete a
+    // required step and allRequiredComplete() can never return true.
     required: true,
-    entryHref: "/hr/directory",
+    // GAP-SETUP-HOME-04: send the clerk to the real departments management
+    // screen (which creates departments) rather than the people directory.
+    entryHref: "/hr/departments",
+    moduleKey: "hrms",
   },
   {
     key: "people",
@@ -99,7 +111,9 @@ export const WIZARD_STEPS: WizardStep[] = [
     example: "e.g. Turn on Finance and HR, leave the rest off for now",
     cta: "Choose modules",
     required: true,
-    entryHref: "/tenant-admin/settings",
+    // GAP-SETUP-HOME-04: anchor the module toggles section so this is a
+    // distinct destination from the office-profile step (step 1).
+    entryHref: "/tenant-admin/settings#modules",
   },
   {
     key: "finance-year-coa",
@@ -153,9 +167,22 @@ export function progressPct(statuses: Record<string, StepStatus>, keys: WizardSt
   return Math.round((countComplete(statuses, keys) / keys.length) * 100);
 }
 
-/** True when every required step is complete — enables the readiness state. (R7.7) */
-export function allRequiredComplete(statuses: Record<string, StepStatus>): boolean {
-  return REQUIRED_STEP_KEYS.every((k) => statuses[k] === "complete");
+/** True when every required step is complete — enables the readiness state. (R7.7)
+ *
+ * GAP-SETUP-HOME-01: readiness is evaluated over the steps actually VISIBLE to
+ * the tenant. Module-scoped required steps (e.g. departments when HRMS is off)
+ * are filtered out upstream, so checking the static REQUIRED_STEP_KEYS would
+ * demand completion of a step the tenant can never see — leaving the ready card
+ * permanently unreachable. Pass the visible steps so only shown required steps
+ * gate readiness. Called with no steps it falls back to the full step list.
+ */
+export function allRequiredComplete(
+  statuses: Record<string, StepStatus>,
+  visibleSteps: WizardStep[] = WIZARD_STEPS,
+): boolean {
+  const requiredVisible = visibleSteps.filter((s) => s.required).map((s) => s.key);
+  if (requiredVisible.length === 0) return false;
+  return requiredVisible.every((k) => statuses[k] === "complete");
 }
 
 /** Index of the first step that is not complete, for resume-on-return. (R9.2) */

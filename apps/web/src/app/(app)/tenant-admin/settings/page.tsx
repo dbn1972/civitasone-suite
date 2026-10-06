@@ -45,7 +45,7 @@ export default async function TenantSettingsPage() {
           <RefreshErrorState error={toHumanError("load", { area: "modules" })} backHref="/tenant-admin" />
         </Card>
       ) : (
-        <div className="grid g-2" style={{ marginTop: 18 }}>
+        <div className="grid g-2" style={{ marginTop: 18 }} id="modules">
           <ModuleToggleActions modules={modules} />
           <div className="card">
             <div className="card-h"><h3>Module details</h3></div>
