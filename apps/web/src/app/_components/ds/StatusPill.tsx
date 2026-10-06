@@ -365,6 +365,18 @@ const STATUS_MAP: Record<string, PillVariant> = {
   generated: "good",
   "partially paid": "warn",
   trial: "warn",
+
+  // GAP-FLEET-VEHICLES-02: fleet vehicle lifecycle (asset-service fleet
+  // vehicles status enum: active | in_maintenance | decommissioned; see
+  // services/asset-service/src/modules/fleet/routes.ts PATCH z.enum). "active"
+  // already maps to "good" above. Without these keys a vehicle in the shop or
+  // one taken off the road fell through to the neutral "info" pill -- visually
+  // identical to an unknown value and to a serviceable vehicle. A vehicle in
+  // maintenance is a temporary, attention-needing state (warn); a
+  // decommissioned one is a quiet terminal state (mut). normalizeStatusKey()
+  // turns the on-wire "in_maintenance" into "in maintenance" before lookup.
+  "in maintenance": "warn",
+  decommissioned: "mut",
 };
 // Deliberately NOT added: a generic "flagged" key. tenant-admin/security/SecurityTable.tsx
 // has its own inline outcome->variant mapping that fails closed to "bad" for any
