@@ -129,7 +129,7 @@ describe("GET /v1/admin/data-exports", () => {
     const create = await app.inject({
       method: "POST", url: "/v1/admin/data-export",
       headers: authHeader(["tenant_admin"]),
-      payload: { type: "full", format: "json" },
+      payload: { type: "full", format: "json", purpose: "Annual statutory audit export" },
     });
     expect(create.statusCode).toBe(202);
     await queue.drain();

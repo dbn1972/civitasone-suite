@@ -28,11 +28,11 @@ export async function createSession(ctx: RequestContext, body: CreateSessionBody
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function revokeSession(ctx: RequestContext, id: string): Promise<Accepted> {
+export async function revokeSession(ctx: RequestContext, id: string, reason?: string): Promise<Accepted> {
   await queue.publish(COMMANDS.revokeSession, {
     messageId: randomUUID(),
     type: COMMANDS.revokeSession, tenantId: ctx.tenantId, actorId: ctx.actorId,
-    correlationId: ctx.correlationId, schemaVersion: "1.0", payload: { id },
+    correlationId: ctx.correlationId, schemaVersion: "1.0", payload: { id, reason: reason ?? null },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, RESOURCE.session, id));
   return { id, status: "accepted", correlationId: ctx.correlationId };
@@ -42,11 +42,11 @@ export async function revokeSession(ctx: RequestContext, id: string): Promise<Ac
 // The consumer enumerates + revokes that user's active sessions inside one
 // transaction and emits the audit via the outbox. Returns the userId as the
 // accepted resource id so the caller can correlate.
-export async function revokeAllSessions(ctx: RequestContext, userId: string): Promise<Accepted> {
+export async function revokeAllSessions(ctx: RequestContext, userId: string, reason?: string): Promise<Accepted> {
   await queue.publish(COMMANDS.revokeAllSessions, {
     messageId: randomUUID(),
     type: COMMANDS.revokeAllSessions, tenantId: ctx.tenantId, actorId: ctx.actorId,
-    correlationId: ctx.correlationId, schemaVersion: "1.0", payload: { userId },
+    correlationId: ctx.correlationId, schemaVersion: "1.0", payload: { userId, reason: reason ?? null },
   });
   // The session list cache for this tenant is rebuilt on next read; invalidate
   // the per-user/listing keys so a refresh reflects the revocations.

@@ -10,12 +10,16 @@ const log = pino({ name: "admin-config-consumer" });
 const AUDIT_TOPIC = "audit.event.record";
 
 export function registerConfigConsumers(queue: Queue): void {
-  queue.subscribe<{ tenantId: string; moduleKey: string; enabled: boolean }>(COMMANDS.moduleToggle, async (msg) => {
+  queue.subscribe<{ tenantId: string; moduleKey: string; enabled: boolean; reason?: string | null }>(COMMANDS.moduleToggle, async (msg) => {
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         await repo.upsertModule(tx, msg.payload.tenantId, msg.payload.moduleKey, msg.payload.enabled, msg.actorId);
-        await audit(tx, msg, "module_toggle", msg.payload.tenantId);
+        await audit(tx, msg, "module_toggle", msg.payload.moduleKey, {
+          moduleKey: msg.payload.moduleKey,
+          enabled: msg.payload.enabled,
+          reason: msg.payload.reason ?? null,
+        });
       });
       await cache.invalidate(cache.makeKey(msg.payload.tenantId, "config", msg.payload.tenantId));
     } catch (err) {
@@ -50,10 +54,10 @@ export function registerConfigConsumers(queue: Queue): void {
   });
 }
 
-async function audit(tx: unknown, msg: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceId: string): Promise<void> {
+async function audit(tx: unknown, msg: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceId: string, extra?: Record<string, unknown>): Promise<void> {
   const t = tx as any;
   await enqueue(t, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "admin", action, resourceType: "config", resourceId, outcome: "success" },
+    payload: { service: "admin", action, resourceType: "config", resourceId, outcome: "success", ...(extra ?? {}) },
   });
 }

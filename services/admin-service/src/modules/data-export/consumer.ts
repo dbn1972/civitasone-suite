@@ -23,6 +23,7 @@ export function registerDataExportConsumers(queue: Queue): void {
     id: string; tenantId: string; requestedBy: string;
     type: "full" | "module" | "entity"; moduleFilter: string | null;
     format: "csv" | "json" | "pdf";
+    purpose?: string | null; entityId?: string | null;
   }>("admin.data_export.request", async (msg) => {
     try {
       await db.transaction(async (tx) => {
@@ -40,7 +41,12 @@ export function registerDataExportConsumers(queue: Queue): void {
           updatedBy: msg.actorId,
           version: 1,
         });
-        await emit(tx, msg, "admin.data_export.requested", p, "request", p.id);
+        // GAP-TENANT-ADMIN-DATA-EXPORT-02: record purpose/entity in the audit event.
+        await emit(tx, msg, "admin.data_export.requested", {
+          ...p,
+          purpose: p.purpose ?? null,
+          entityId: p.entityId ?? null,
+        }, "request", p.id);
       });
       await cache.invalidate(cacheKey(msg.payload.tenantId));
     } catch (err) {
@@ -89,6 +95,12 @@ async function emit(
   await enqueue(t, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId,
     correlationId: msg.correlationId,
-    payload: { service: "admin", action, resourceType: RESOURCE, resourceId, outcome: "success" },
+    payload: {
+      service: "admin", action, resourceType: RESOURCE, resourceId, outcome: "success",
+      // GAP-TENANT-ADMIN-DATA-EXPORT-02: surface the recorded purpose/entity on
+      // the audit record when present (personal-data egress must be reasoned).
+      ...(typeof payload.purpose === "string" ? { purpose: payload.purpose } : {}),
+      ...(typeof payload.entityId === "string" ? { entityId: payload.entityId } : {}),
+    },
   });
 }

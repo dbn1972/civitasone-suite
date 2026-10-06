@@ -137,7 +137,7 @@ export function registerUserConsumers(rawQueue: Queue): void {
   // change is delegated to Keycloak (best-effort, post-commit): when Keycloak is
   // configured we set the UPDATE_PASSWORD required action; when it is not, the
   // request is still audited but no credential changes (honest dev behaviour).
-  queue.subscribe<{ id: string }>(COMMANDS.resetPassword, async (msg) => {
+  queue.subscribe<{ id: string; reason?: string | null }>(COMMANDS.resetPassword, async (msg) => {
     let userEmail: string | null = null;
     let kcEnabled = false;
     await db.transaction(async (tx) => {
@@ -148,7 +148,9 @@ export function registerUserConsumers(rawQueue: Queue): void {
       kcEnabled = keycloak.isKeycloakEnabled();
       await emitAudit(
         tx, msg, EVENTS.passwordResetRequested,
-        { userId: msg.payload.id, keycloakEnabled: kcEnabled },
+        // GAP-TENANT-ADMIN-USERS-DETAIL-01: record the admin's reason in the
+        // audit trail when supplied.
+        { userId: msg.payload.id, keycloakEnabled: kcEnabled, reason: msg.payload.reason ?? null },
         "reset_password", msg.payload.id,
       );
     });

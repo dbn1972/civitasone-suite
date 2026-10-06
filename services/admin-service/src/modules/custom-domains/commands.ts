@@ -43,7 +43,7 @@ export async function domainVerify(ctx: RequestContext, domainId: string): Promi
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function domainDelete(ctx: RequestContext, domainId: string): Promise<Accepted> {
+export async function domainDelete(ctx: RequestContext, domainId: string, reason?: string): Promise<Accepted> {
   const id = randomUUID();
   await queue.publish(COMMANDS.customDomainDelete, {
     messageId: id,
@@ -52,7 +52,7 @@ export async function domainDelete(ctx: RequestContext, domainId: string): Promi
     actorId: ctx.actorId,
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
-    payload: { domainId, tenantId: ctx.tenantId },
+    payload: { domainId, tenantId: ctx.tenantId, reason: reason ?? null },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

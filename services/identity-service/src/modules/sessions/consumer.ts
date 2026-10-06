@@ -25,13 +25,13 @@ export function registerSessionConsumers(q: Queue): void {
     }
   );
 
-  q.subscribe<{ id: string }>(COMMANDS.revokeSession, async (msg) => {
+  q.subscribe<{ id: string; reason?: string | null }>(COMMANDS.revokeSession, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const cur = await repo.findByIdTx(tx, msg.tenantId, msg.payload.id);
       if (!cur) return;
       await repo.update(tx, msg.tenantId, msg.payload.id, { status: "revoked", updatedBy: msg.actorId, version: cur.version + 1 });
-      await emitAudit(tx, msg, EVENTS.sessionRevoked, { sessionId: msg.payload.id }, "revoke", msg.payload.id);
+      await emitAudit(tx, msg, EVENTS.sessionRevoked, { sessionId: msg.payload.id, reason: msg.payload.reason ?? null }, "revoke", msg.payload.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE.session, msg.payload.id));
     // SEC-006: this session's id doubles as the JWT `sid` this system tracks
@@ -43,7 +43,7 @@ export function registerSessionConsumers(q: Queue): void {
     await denylistSession(msg.payload.id);
   });
 
-  q.subscribe<{ userId: string }>(COMMANDS.revokeAllSessions, async (msg) => {
+  q.subscribe<{ userId: string; reason?: string | null }>(COMMANDS.revokeAllSessions, async (msg) => {
     let revokedIds: string[] = [];
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -53,7 +53,8 @@ export function registerSessionConsumers(q: Queue): void {
       // admin action so the attempt is on the record.
       await emitAudit(
         tx, msg, EVENTS.sessionRevokedAll,
-        { userId: msg.payload.userId, revokedCount: revokedIds.length, sessionIds: revokedIds },
+        // GAP-TENANT-ADMIN-USERS-DETAIL-01: record the admin's reason.
+        { userId: msg.payload.userId, revokedCount: revokedIds.length, sessionIds: revokedIds, reason: msg.payload.reason ?? null },
         "revoke_all", msg.payload.userId,
       );
     });

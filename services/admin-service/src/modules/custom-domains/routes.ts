@@ -8,7 +8,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { cache } from "../../shared/infra.js";
 import { scopedRead } from "../../shared/db.js";
 import * as commands from "./commands.js";
-import { registerDomainBody, domainIdParam } from "./validators.js";
+import { registerDomainBody, domainIdParam, deleteDomainBody } from "./validators.js";
 import { customDomains } from "./schema.js";
 import { eq, and } from "drizzle-orm";
 
@@ -69,7 +69,9 @@ export async function customDomainRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = safeParse(domainIdParam, req.params);
-    const result = await commands.domainDelete(ctx, id);
+    // GAP-TENANT-ADMIN-DOMAIN-01: capture an optional reason for the audit log.
+    const { reason } = safeParse(deleteDomainBody, req.body ?? {});
+    const result = await commands.domainDelete(ctx, id, reason);
     return reply.code(202).send(result);
   });
 

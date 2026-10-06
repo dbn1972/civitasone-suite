@@ -1,12 +1,15 @@
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatCard, DataTable } from "../../../_components/ds";
+import { PageHeader, StatCard, DataTable, Card, RefreshErrorState } from "../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { getTenantModules } from "../../../_data/loaders";
+import { toResourceState } from "../../../_data/useResource";
+import { toHumanError } from "@/lib/messages";
 import { Breadcrumb } from "../Breadcrumb";
 import { ModuleToggleActions } from "./ModuleToggleActions";
 
 export default async function TenantSettingsPage() {
-  const { data: modules, source } = await getTenantModules();
+  const result = await getTenantModules();
+  const { data: modules } = result;
+  const errored = toResourceState(result).status === "error";
 
   const total = modules.length;
   const enabled = modules.filter((m) => m.enabled).length;
@@ -21,38 +24,49 @@ export default async function TenantSettingsPage() {
         subtitle="Module configuration and toggle state for this tenant."
         actions={
           <>
-            <a className="btn ghost" href="/tenant-admin/audit" style={{ minHeight: 44 }}>Audit changes</a>
+            {/* GAP-TENANT-ADMIN-SETTINGS-06: the tenant audit page takes no
+                filter params today, so this is an honest "view the log" link,
+                not a filtered one. */}
+            <a className="btn ghost" href="/tenant-admin/audit" style={{ minHeight: 44 }}>View audit log</a>
           </>
         }
       />
-      <div className="grid g-4" style={{ marginBottom: 18 }}>
-        <StatCard icon="🧩" iconBg="#f1f5f9" label="Total Modules" value={total} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={enabled} />
-        <StatCard icon="⏸️" iconBg="#fffaeb" label="Disabled" value={disabled} />
-        <StatCard icon="⚙️" iconBg="#eff6ff" label="Configured" value={total} />
+      {/* GAP-TENANT-ADMIN-SETTINGS-04: one vocabulary — "Enabled"/"Disabled"
+          — across tiles, toggle pill and the details table. The old
+          "Configured" tile was always == Total Modules, carrying no
+          information, so it is removed (three honest tiles). */}
+      <div className="grid g-3" style={{ marginBottom: 18 }}>
+        <StatCard icon="🧩" iconBg="#f1f5f9" label="Total Modules" value={errored ? "—" : total} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Enabled" value={errored ? "—" : enabled} />
+        <StatCard icon="⏸️" iconBg="#fffaeb" label="Disabled" value={errored ? "—" : disabled} />
       </div>
-      {source === "error" && <DataSourceBadge source={source} />}
-      <div className="grid g-2" style={{ marginTop: 18 }}>
-        <ModuleToggleActions modules={modules} />
-        <div className="card">
-          <div className="card-h"><h3>Module details</h3></div>
-          <DataTable
-            columns={[
-              { key: "moduleName", label: "Module" },
-              { key: "moduleKey", label: "Key" },
-              { key: "enabledSince", label: "Enabled since" },
-              { key: "status", label: "Status", cellType: "status" },
-            ]}
-            rows={modules.map((mod) => ({
-              moduleName: mod.moduleName,
-              moduleKey: mod.moduleKey,
-              enabledSince: mod.enabledAt ? formatIndianDate(mod.enabledAt) : "—",
-              status: mod.enabled ? "Active" : "Inactive",
-            }))}
-            sortable
-          />
+      {errored ? (
+        <Card title="Module toggles">
+          <RefreshErrorState error={toHumanError("load", { area: "modules" })} backHref="/tenant-admin" />
+        </Card>
+      ) : (
+        <div className="grid g-2" style={{ marginTop: 18 }}>
+          <ModuleToggleActions modules={modules} />
+          <div className="card">
+            <div className="card-h"><h3>Module details</h3></div>
+            <DataTable
+              columns={[
+                { key: "moduleName", label: "Module" },
+                { key: "moduleKey", label: "Key" },
+                { key: "enabledSince", label: "Enabled since" },
+                { key: "status", label: "Status", cellType: "status" },
+              ]}
+              rows={modules.map((mod) => ({
+                moduleName: mod.moduleName,
+                moduleKey: mod.moduleKey,
+                enabledSince: mod.enabledAt ? formatIndianDate(mod.enabledAt) : "—",
+                status: mod.enabled ? "Enabled" : "Disabled",
+              }))}
+              sortable
+            />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -14,6 +14,11 @@ const createBody = z.object({
   type: z.enum(["full", "module", "entity"]),
   moduleFilter: z.string().min(1).max(100).optional(),
   format: z.enum(["csv", "json", "pdf"]),
+  // GAP-TENANT-ADMIN-DATA-EXPORT-02: a reason/purpose for exporting personal
+  // data (payroll/HRMS). Recorded in the audit event. Required for a full
+  // export (the broadest personal-data egress); optional otherwise.
+  purpose: z.string().min(10).max(2000).optional(),
+  entityId: z.string().min(1).max(160).optional(),
 });
 
 const idParam = z.object({ id: z.string().uuid() });
@@ -33,9 +38,15 @@ export async function dataExportRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, [...TENANT_ADMIN_ROLES]);
     const body = safeParse(createBody, req.body);
+    if (body.type === "full" && !body.purpose) {
+      throw new HttpError(400, "PURPOSE_REQUIRED", "purpose is required for a full export");
+    }
     if (body.type === "module" && !body.moduleFilter) {
       throw new HttpError(400, "MODULE_REQUIRED", "moduleFilter is required when type is 'module'");
     }
+    // GAP-TENANT-ADMIN-DATA-EXPORT-02/03: purpose is REQUIRED server-side for a
+    // full export (enforced above) and audited whenever supplied; entityId is
+    // captured and audited when supplied.
     // exactOptionalPropertyTypes: only spread moduleFilter into the payload
     // when it's actually provided, so we never assign `undefined` to a
     // property typed as optional-string (never optional-string-or-undefined).
@@ -43,6 +54,8 @@ export async function dataExportRoutes(app: FastifyInstance): Promise<void> {
       type: body.type,
       format: body.format,
       ...(body.moduleFilter !== undefined ? { moduleFilter: body.moduleFilter } : {}),
+      ...(body.purpose !== undefined ? { purpose: body.purpose } : {}),
+      ...(body.entityId !== undefined ? { entityId: body.entityId } : {}),
     });
     return reply.code(202).send(result);
   });

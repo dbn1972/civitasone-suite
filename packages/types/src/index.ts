@@ -2180,6 +2180,8 @@ export type UserDetail = {
   id: string;
   email: string;
   name?: string;
+  /** Employee code, when the directory carries one (identity-service users.emp_code). GAP-TENANT-ADMIN-USERS-DETAIL-04. */
+  empCode?: string | null;
   roles: string[];
   mfaEnabled: boolean;
   lastLoginAt?: string;

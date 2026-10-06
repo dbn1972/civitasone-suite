@@ -20,10 +20,20 @@ import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import * as auditLogExportCommands from "../audit-log-export/commands.js";
 import * as userExportCommands from "../user-export/commands.js";
+import * as securityExportCommands from "../security-export/commands.js";
+import * as mfaExportCommands from "../mfa-export/commands.js";
 // Mirrors the web ADMIN_USERS_LIST_LIMIT: the browser can only ever export the rows it loaded.
 const USER_EXPORT_MAX_ROWS = 200;
 
 const ROLES = ["tenant_admin", "platform_admin", "super_admin"];
+
+// GAP-TENANT-ADMIN-MFA-05: the ONLY two mfaStatus values this platform emits.
+// identity-service tracks MFA as a boolean (mfaEnabled); there is no
+// "active"/"pending"/"locked" enum. Exported so the contract is pinned by a
+// test and the web status->label map stays exhaustive.
+export function mfaStatusLabel(mfaEnabled: boolean): "enabled" | "disabled" {
+  return mfaEnabled ? "enabled" : "disabled";
+}
 // Tighter gates matching the CANONICAL module for a resource, used only where
 // that module's own role list is narrower than ROLES above — never looser:
 // aliasing a route must never grant a caller a capability the real owning
@@ -120,6 +130,17 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
       certInReadiness: posture.overallScore ?? 0,
       retentionStatus,
       checks,
+      // GAP-TENANT-ADMIN-COMPLIANCE-02: provenance so a board-level DPDP score
+      // is defensible — how it was computed, its scope, and as-of when.
+      provenance: {
+        method: "Derived from persisted compliance controls (pass/fail over testable controls).",
+        scope: `tenant:${ctx.tenantId}`,
+        asOf: (controls as { updatedAt: unknown }[]).reduce<string | null>((latest, c) => {
+          const iso = c.updatedAt ? new Date(c.updatedAt as string).toISOString() : null;
+          return iso && (!latest || iso > latest) ? iso : latest;
+        }, null),
+        complete: posture.complete,
+      },
     });
   });
 
@@ -294,6 +315,36 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await userExportCommands.recordUserExport(ctx, parsed.data.rowCount, parsed.data.filter));
   });
 
+  // ─── Audit record for a Security Center events CSV export (GAP-TENANT-ADMIN-SECURITY-04) ───
+  // Actor emails + source IPs are personal data under DPDP; this must be
+  // recorded before the (masked-by-default) file leaves the browser. Mirrors
+  // the user-exports/audit route above.
+  app.post("/v1/admin/security-exports/audit", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const parsed = z.object({
+      rowCount: z.number().int().min(0).max(1000),
+      filtered: z.boolean().optional().default(false),
+    }).safeParse(req.body);
+    if (!parsed.success) throw new HttpError(400, "VALIDATION_FAILED", "body must be { rowCount: number (0-1000), filtered?: boolean }");
+    return sendAccepted(reply, acceptedResponseSchema, await securityExportCommands.recordSecurityEventsExport(ctx, parsed.data.rowCount, parsed.data.filtered));
+  });
+
+  // ─── Audit record for an MFA-status CSV export (GAP-TENANT-ADMIN-MFA-03) ───
+  // Staff names + emails are personal data under DPDP; bulk extraction must be
+  // recorded before the (email-masked-by-default) file leaves the browser.
+  // Mirrors the user-exports / security-exports audit routes above.
+  app.post("/v1/admin/mfa-exports/audit", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const parsed = z.object({
+      rowCount: z.number().int().min(0).max(10000),
+      filtered: z.boolean().optional().default(false),
+    }).safeParse(req.body);
+    if (!parsed.success) throw new HttpError(400, "VALIDATION_FAILED", "body must be { rowCount: number (0-10000), filtered?: boolean }");
+    return sendAccepted(reply, acceptedResponseSchema, await mfaExportCommands.recordMfaExport(ctx, parsed.data.rowCount, parsed.data.filtered === true));
+  });
+
   // ─── Effective roles for a user — real, forwarded to identity-service RBAC ───
   //
   // Deliberately NOT /v1/admin/users/:id/roles: the gateway has a pre-existing,
@@ -382,7 +433,7 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
     // department/enrolledAt are not tracked at this layer — left honestly
     // blank/null rather than invented (the existing UsersTable component
     // already renders department as "—" unconditionally for the same reason).
-    const data = rows.map((u) => ({ id: u.id, name: u.name, email: u.email, department: "", mfaStatus: u.mfaEnabled ? "enabled" : "disabled", enrolledAt: null }));
+    const data = rows.map((u) => ({ id: u.id, name: u.name, email: u.email, department: "", mfaStatus: mfaStatusLabel(u.mfaEnabled), enrolledAt: null }));
     return reply.send({ data, meta: pageMeta(q.limit, q.offset, data.length) });
   });
 

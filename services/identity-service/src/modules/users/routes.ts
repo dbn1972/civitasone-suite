@@ -4,7 +4,7 @@ import { userListResponseSchema } from "@civitasone/schemas/web";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createUserBody, updateUserBody, statusBody, userIdParam, tenantIdQuery, userSearchQuery } from "./validators.js";
+import { createUserBody, updateUserBody, statusBody, userIdParam, tenantIdQuery, userSearchQuery, reasonBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as sessionCommands from "../sessions/commands.js";
@@ -102,9 +102,12 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);
     const { id } = userIdParam.parse(req.params);
+    // GAP-TENANT-ADMIN-USERS-DETAIL-01: optional, audited reason (additive —
+    // older callers that send no body still work).
+    const { reason } = reasonBody.parse(req.body ?? {});
     const view = await queries.getUser(ctx.tenantId, id);
     if (!view) throw new HttpError(404, "NOT_FOUND", "user not found");
-    return sendAccepted(reply, acceptedResponseSchema, await sessionCommands.revokeAllSessions(ctx, id));
+    return sendAccepted(reply, acceptedResponseSchema, await sessionCommands.revokeAllSessions(ctx, id, reason));
   });
 
   // P0 security — Reset a user's password. Admin-gated and tenant-scoped. The
@@ -115,9 +118,11 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);
     const { id } = userIdParam.parse(req.params);
+    // GAP-TENANT-ADMIN-USERS-DETAIL-01: optional, audited reason.
+    const { reason } = reasonBody.parse(req.body ?? {});
     const view = await queries.getUser(ctx.tenantId, id);
     if (!view) throw new HttpError(404, "NOT_FOUND", "user not found");
-    return sendAccepted(reply, acceptedResponseSchema, await commands.requestPasswordReset(ctx, id));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.requestPasswordReset(ctx, id, reason));
   });
 
   app.setErrorHandler((err, req, reply) => {

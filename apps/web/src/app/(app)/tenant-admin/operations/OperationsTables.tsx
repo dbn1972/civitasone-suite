@@ -22,16 +22,20 @@ function formatDuration(seconds: number | null): string {
 function formatDate(value?: string): string {
   if (!value) return "Not recorded";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "Not recorded" : date.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+  // GAP-TENANT-ADMIN-OPERATIONS-05: pin to IST (fixes SSR/client mismatch) and
+  // label the value so there is no ambiguity about the zone.
+  return Number.isNaN(date.getTime())
+    ? "Not recorded"
+    : `${date.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" })} IST`;
 }
 
 type ProcessRow = AdminOperationProcess & Record<string, unknown>;
 type SchedulerRow = AdminOperationScheduler & Record<string, unknown>;
 type ErrorRow = { source: string; line: string } & Record<string, unknown>;
 
-export function ProcessesTable({ processes }: { processes: AdminOperationProcess[] }) {
+export function ProcessesTable({ processes, emptyTitle = "No PM2 data", emptyMessage = "Install PM2 on the app host and expose it to admin-service to populate process health." }: { processes: AdminOperationProcess[]; emptyTitle?: string; emptyMessage?: string }) {
   if (processes.length === 0) {
-    return <EmptyState icon="🖥️" title="No PM2 data" message="Install PM2 on the app host and expose it to admin-service to populate process health." />;
+    return <EmptyState icon="🖥️" title={emptyTitle} message={emptyMessage} />;
   }
   const rows = processes as ProcessRow[];
   return (

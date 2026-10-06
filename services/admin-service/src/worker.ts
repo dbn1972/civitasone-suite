@@ -18,6 +18,8 @@ import { registerAuditLogExportConsumers } from "./modules/audit-log-export/cons
 import { registerPlatformOpsConsumers } from "./modules/platform-ops/consumer.js";
 import { registerApiMonitoringConsumers, startApiMetricsPurge } from "./modules/api-monitoring/consumer.js";
 import { registerUserExportConsumers } from "./modules/user-export/consumer.js";
+import { registerSecurityExportConsumers } from "./modules/security-export/consumer.js";
+import { registerMfaExportConsumers } from "./modules/mfa-export/consumer.js";
 import { registerTenantSettingsConsumers } from "./modules/tenant-settings/consumer.js";
 // WC-009: subscriber for the admin.sandbox_refresh.execute command published by
 // the approve route. Without this the command would have no consumer.
@@ -36,6 +38,8 @@ registerDataExportConsumers(queue);
 registerFeatureFlagConsumers(queue);
 registerAuditLogExportConsumers(queue);
 registerUserExportConsumers(queue);
+registerSecurityExportConsumers(queue);
+registerMfaExportConsumers(queue);
 registerPlatformOpsConsumers(queue);
 registerTenantSettingsConsumers(tenantScoped(queue));
 registerApiMonitoringConsumers(queue);

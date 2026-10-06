@@ -18,7 +18,7 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { resolveContext, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sqlClient } from "../../shared/db.js";
 import { withRawTenantGuc } from "@civitasone/db";
 
@@ -281,6 +281,13 @@ export async function aiPluginRegistryRoutes(app: FastifyInstance): Promise<void
    */
   app.patch("/v1/hrms/ai/plugins/:pluginId", async (req, reply) => {
     const ctx = resolveContext(req);
+    // GAP-TENANT-ADMIN-AI-PLUGINS-03: this PATCH changes tenant-wide AI
+    // behaviour (enable/mode/autoAction can e.g. auto-shortlist candidates),
+    // so it is a tenant-admin action, not a general authenticated-user one.
+    // It previously only called resolveContext (authn), leaving any
+    // authenticated tenant user able to flip these. Enforce the same roles
+    // the web layout already gates the page on (tenant-admin/layout.tsx).
+    requireRole(ctx, ["tenant_admin", "platform_admin", "super_admin"]);
     const { pluginId } = req.params as { pluginId: string };
     const body = configUpdateSchema.parse(req.body);
 
@@ -288,10 +295,21 @@ export async function aiPluginRegistryRoutes(app: FastifyInstance): Promise<void
     const plugin = ML_PLUGINS.find((p) => p.id === pluginId);
     if (!plugin) throw new HttpError(404, "NOT_FOUND", `Unknown AI plugin: ${pluginId}`);
 
+    // GAP-TENANT-ADMIN-AI-PLUGINS-01: the INSERT branch (a plugin's FIRST-ever
+    // PATCH) must not write NULL into the NOT NULL columns when the caller
+    // omits an optional field. COALESCE each VALUES slot to the column's own
+    // default so a first PATCH of e.g. {enabled:true} succeeds instead of
+    // 500-ing on a NOT NULL violation. confidence_threshold falls back to the
+    // plugin's own defaultThreshold (not the generic column default) so a
+    // freshly-enabled plugin starts at its intended threshold. The ON CONFLICT
+    // UPDATE branch keeps using COALESCE against the existing row so a partial
+    // PATCH of an already-configured plugin only changes the fields supplied.
     await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `INSERT INTO hrms.ai_plugin_configs (id, tenant_id, plugin_id, enabled, mode,
         confidence_threshold, notify_on_prediction, auto_action, max_predictions_per_day, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+       VALUES ($1, $2, $3, COALESCE($4, false), COALESCE($5, 'disabled'),
+        COALESCE($6::int, $10::int), COALESCE($7, false), COALESCE($8, false),
+        COALESCE($9::int, 1000), NOW())
        ON CONFLICT (tenant_id, plugin_id) DO UPDATE SET
         enabled = COALESCE($4, hrms.ai_plugin_configs.enabled),
         mode = COALESCE($5, hrms.ai_plugin_configs.mode),
@@ -305,6 +323,7 @@ export async function aiPluginRegistryRoutes(app: FastifyInstance): Promise<void
         body.enabled ?? null, body.mode ?? null,
         body.confidenceThreshold ?? null, body.notifyOnPrediction ?? null,
         body.autoAction ?? null, body.maxPredictionsPerDay ?? null,
+        plugin.defaultThreshold,
       ],
     ));
 
@@ -384,6 +403,13 @@ export async function aiPluginRegistryRoutes(app: FastifyInstance): Promise<void
   app.get("/v1/hrms/ai/plugins/summary", async (req, reply) => {
     const ctx = resolveContext(req);
 
+    // GAP-TENANT-ADMIN-AI-PLUGINS-06: `predictions_today` is a ROLLING 24h
+    // window (created_at > NOW() - INTERVAL '24 hours'), not an IST calendar
+    // day. Decision: keep the rolling-24h semantics (a stable "last day of
+    // activity" figure that does not reset at IST midnight) and correct the
+    // UI card label to "Predictions (24h)" so the name matches the metric —
+    // see apps/web/.../ai-plugins/page.tsx. The field name is left as-is to
+    // avoid a breaking contract change for any other consumer.
     const [totals] = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT
         (SELECT COUNT(*)::int FROM hrms.ai_plugin_configs WHERE tenant_id = $1 AND enabled = true) AS active_plugins,

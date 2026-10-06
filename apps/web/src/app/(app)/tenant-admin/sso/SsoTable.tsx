@@ -2,6 +2,7 @@
 
 import { DataTable, StatusPill } from "@/app/_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
+import { formatIndianDateTime } from "@/lib/formatters";
 import type { SsoProvider } from "@/app/_data/loaders";
 
 export function SsoTable({ providers, source }: { providers: SsoProvider[]; source: "api" | "error" }) {
@@ -14,7 +15,10 @@ export function SsoTable({ providers, source }: { providers: SsoProvider[]; sour
         { key: "protocol", label: "Protocol" },
         { key: "entityId", label: "Entity ID", render: (row) => <span className="mono" style={{ fontSize: 12 }}>{row.entityId as string}</span> },
         { key: "status", label: "Status", render: (row) => <StatusPill status={row.status as string} /> },
-        { key: "lastSync", label: "Last Sync", render: (row) => new Date(row.lastSync as string).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) },
+        // GAP-TENANT-ADMIN-SSO-04: formatIndianDateTime returns "—" for
+        // missing/invalid input, so a provider that never synced no longer
+        // renders "Invalid Date"/1970.
+        { key: "lastSync", label: "Last Sync", render: (row) => formatIndianDateTime(row.lastSync as string | undefined) },
       ]}
       rows={data as (SsoProvider & Record<string, unknown>)[]}
       sortable

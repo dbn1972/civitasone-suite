@@ -4,7 +4,7 @@ import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
 import { SessionSummaryListSchema } from "@civitasone/schemas/web";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createSessionBody, sessionIdParam } from "./validators.js";
+import { createSessionBody, sessionIdParam, sessionRevokeBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -41,13 +41,16 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
   app.delete("/identity/sessions/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     const { id } = sessionIdParam.parse(req.params);
+    // GAP-TENANT-ADMIN-USERS-DETAIL-02: optional, audited reason (additive;
+    // the self-service sign-out path sends no body and still works).
+    const { reason } = sessionRevokeBody.parse(req.body ?? {});
     // P1-1: authorize the revoke. Load the session (tenant-scoped) and require
     // the caller to be the session owner OR a session admin. A miss (wrong
     // tenant or unknown id) is a 404, not an implicit revoke.
     const view = await queries.getSession(ctx.tenantId, id);
     if (!view) throw new HttpError(404, "NOT_FOUND", "session not found");
     if (view.userId !== ctx.actorId) requireRole(ctx, SESSION_ADMIN);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.revokeSession(ctx, id));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.revokeSession(ctx, id, reason));
   });
 
   app.get("/identity/sessions/:id", async (req, reply) => {

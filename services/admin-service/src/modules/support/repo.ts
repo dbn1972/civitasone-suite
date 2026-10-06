@@ -90,6 +90,25 @@ export async function listBreakGlass(limit: number, tenantId?: string) {
 }
 
 
+// GAP-TENANT-ADMIN-BREAKGLASS-DETAIL-01: a single break-glass grant by id for
+// the tenant-admin detail page. Platform-wide review tool like listBreakGlass:
+// an explicit tenantId (super_admin) scopes to that tenant via strict RLS; an
+// omitted tenantId uses the platform-bypass read so a super_admin can open any
+// grant by id. Returns undefined when no such grant exists.
+export async function findBreakGlassById(id: string, tenantId?: string): Promise<BreakGlassRow | undefined> {
+  if (tenantId) {
+    const rows = await scopedRead((tx) => tx.select().from(adminBreakGlassLog)
+      .where(and(eq(adminBreakGlassLog.id, id), eq(adminBreakGlassLog.tenantId, tenantId)))
+      .limit(1));
+    return rows[0];
+  }
+  const rows = await scopedPlatformRead((tx) => tx.select().from(adminBreakGlassLog)
+    .where(eq(adminBreakGlassLog.id, id))
+    .limit(1));
+  return rows[0];
+}
+
+
 // ── data corrections (maker-checker governance) ──────────────────────────────
 
 export async function insertCorrection(tx: Writer, row: AdminDataCorrectionInsert): Promise<AdminDataCorrectionRow> {

@@ -2,8 +2,8 @@
 
 import { UserFacingError } from "@/lib/userFacingError";
 import { useId, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Button, StatusPill, Segmented, ConfirmDialog, DataTable } from "../../../_components/ds";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Button, StatusPill, Segmented, ConfirmDialog, DataTable, useToast } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import { useFormError } from "@/lib/useFormError";
@@ -22,6 +22,7 @@ const FILTERS = ["All", "Active", "Suspended"] as const;
 
 export function UsersTable({ users, source = "api" }: { users: AdminUser[]; source?: "api" | "error" }) {
   const router = useRouter();
+  const { toast } = useToast();
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<AdminUser[]>(
     "tenantAdmin.users",
     users,
@@ -30,7 +31,10 @@ export function UsersTable({ users, source = "api" }: { users: AdminUser[]; sour
   );
 
   const [filter, setFilter] = useState<string>("All");
-  const [inviteOpen, setInviteOpen] = useState(false);
+  // GAP-TENANT-ADMIN-HOME-03: the tenant-admin home "Invite user" CTA links
+  // here with ?invite=1 so the existing invite dialog opens on arrival.
+  const searchParams = useSearchParams();
+  const [inviteOpen, setInviteOpen] = useState(searchParams?.get("invite") === "1");
 
   const visible = useMemo(() => {
     if (filter === "All") return rows;
@@ -103,11 +107,14 @@ export function UsersTable({ users, source = "api" }: { users: AdminUser[]; sour
               </div>
             ),
           },
-          { key: "department", label: "Department", sortable: false, render: () => "—" },
-          { key: "roles", label: "Role", render: (user) => (user.roles.length > 0 ? user.roles[0] : "—") },
+          { key: "roles", label: "Role", sortable: false, render: (user) => <RoleList roles={user.roles} /> },
           {
             key: "mfaEnabled",
-            label: "SSO / MFA",
+            // GAP-TENANT-ADMIN-USERS-04: identity-service exposes no SSO flag on
+            // the user directory (users.users has only mfaEnabled), so the old
+            // "SSO / MFA" header promised data that never rendered. Honest
+            // "MFA" header until an SSO field exists.
+            label: "MFA",
             render: (user) =>
               user.mfaEnabled ? <span className="pill good">MFA on</span> : <span className="pill mut">MFA off</span>,
           },
@@ -147,13 +154,43 @@ export function UsersTable({ users, source = "api" }: { users: AdminUser[]; sour
       <InviteUserDialog
         open={inviteOpen}
         onClose={() => setInviteOpen(false)}
-        onCreated={() => { setInviteOpen(false); router.refresh(); }}
+        onCreated={(invitedEmail) => {
+          setInviteOpen(false);
+          // GAP-TENANT-ADMIN-USERS-03: the dialog used to just close silently.
+          // The directory is an async projection, so the new row may not appear
+          // on the immediate refresh — tell the admin the invite was sent and
+          // that it may take a moment to show up, so a missing row isn't read
+          // as a failed invite.
+          toast.success(`Invitation sent to ${invitedEmail}. It may take a moment to appear in the directory.`);
+          router.refresh();
+        }}
       />
     </div>
   );
 }
 
-function InviteUserDialog({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: () => void }) {
+/**
+ * GAP-TENANT-ADMIN-USERS-04: show ALL of a user's roles, not just roles[0]
+ * (which silently under-reported multi-role users). First role is shown as a
+ * pill; any remainder collapse into a "+N" pill whose title lists them so the
+ * row stays scannable without a tooltip library.
+ */
+function RoleList({ roles }: { roles: string[] }) {
+  if (roles.length === 0) return <span style={{ color: "var(--mut)" }}>—</span>;
+  const [first, ...rest] = roles;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+      <span className="pill mut">{first}</span>
+      {rest.length > 0 && (
+        <span className="pill mut" title={roles.join(", ")} aria-label={`${rest.length} more role${rest.length > 1 ? "s" : ""}: ${rest.join(", ")}`}>
+          +{rest.length}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function InviteUserDialog({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (email: string) => void }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [empCode, setEmpCode] = useState("");
@@ -172,19 +209,20 @@ function InviteUserDialog({ open, onClose, onCreated }: { open: boolean; onClose
     setNameErr(""); setEmailErr(""); setError(undefined);
   }
 
-  async function submit(): Promise<void> {
+  async function submit(): Promise<string> {
     let ok = true;
     setNameErr(""); setEmailErr("");
     if (name.trim().length === 0) { setNameErr("Name is required."); ok = false; }
     if (!EMAIL_RE.test(email.trim())) { setEmailErr("Enter a valid email address."); ok = false; }
     if (!ok) throw new Error("Please correct the highlighted fields.");
     formError.clear();
+    const invitedEmail = email.trim();
     const res = await fetch("/api/proxy/v1/admin/users", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         name: name.trim(),
-        email: email.trim(),
+        email: invitedEmail,
         ...(empCode.trim() ? { empCode: empCode.trim() } : {}),
       }),
     });
@@ -192,6 +230,7 @@ function InviteUserDialog({ open, onClose, onCreated }: { open: boolean; onClose
       throw UserFacingError.from(await formError.fromResponse(res, "save"));
     }
     reset();
+    return invitedEmail;
   }
 
   if (!open) return null;
@@ -228,8 +267,8 @@ function InviteUserDialog({ open, onClose, onCreated }: { open: boolean; onClose
         setBusy(true);
         setError(undefined);
         try {
-          await submit();
-          onCreated();
+          const invitedEmail = await submit();
+          onCreated(invitedEmail);
         } catch (err) {
           setError(err instanceof Error ? err.message : "Failed to invite user.");
         } finally {

@@ -102,6 +102,86 @@ export function formatIndianDate(isoDate: string | null | undefined): string {
 }
 
 /**
+ * GAP-TENANT-ADMIN-IDP-03: show only the scheme+host of an identity-provider
+ * endpoint so a realm path, bind details, userinfo, or query string are not
+ * exposed in the table or CSV. For a value that does not parse as a URL
+ * (e.g. an ldaps host:port), the host[:port] portion before the first path
+ * separator is returned. Empty/invalid → "—".
+ *
+ *   endpointOrigin("https://user:pw@idp.example/realms/x?a=b") -> "https://idp.example"
+ *   endpointOrigin("ldaps://ldap.example:636/dc=x")            -> "ldaps://ldap.example:636"
+ *   endpointOrigin("")                                          -> "—"
+ */
+export function endpointOrigin(endpoint: string | null | undefined): string {
+  if (!endpoint || !endpoint.trim()) return "—";
+  const value = endpoint.trim();
+  try {
+    const u = new URL(value);
+    return `${u.protocol}//${u.host}`;
+  } catch {
+    // Not a parseable URL: strip any scheme, userinfo, path and query by hand.
+    const schemeMatch = /^([a-z][a-z0-9+.-]*:\/\/)/i.exec(value);
+    const scheme = schemeMatch ? schemeMatch[1] : "";
+    let rest = value.slice(scheme.length);
+    const at = rest.indexOf("@");
+    if (at >= 0) rest = rest.slice(at + 1);
+    rest = rest.split(/[/?#]/)[0];
+    return rest ? `${scheme}${rest}` : "—";
+  }
+}
+
+/**
+ * GAP-TENANT-ADMIN-IDP-03: a date+time in Asia/Kolkata with an explicit "IST"
+ * suffix, for tables where the raw `toLocaleString` output (no timeZone, no
+ * label) would render in the viewer's own zone and could not be told apart
+ * from UTC. Returns "—" for null/invalid rather than "Invalid Date".
+ *
+ *   formatDateTimeIST("2026-09-29T00:00:00Z") -> "29 Sep 2026, 05:30 am IST"
+ *   formatDateTimeIST("")                       -> "—"
+ */
+export function formatDateTimeIST(value: string | Date | null | undefined): string {
+  if (!value) return "—";
+  const d = value instanceof Date ? value : new Date(value);
+  if (isNaN(d.getTime())) return "—";
+  const datePart = formatDateInZone(d, IST_TIME_ZONE);
+  const timePart = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: IST_TIME_ZONE });
+  return `${datePart}, ${timePart} IST`;
+}
+
+/**
+ * GAP-TENANT-ADMIN-BREAKGLASS-03: elapsed duration between two instants as a
+ * compact "Xh Ym" / "Ym" / "Xd Yh" string. When `endedAt` is omitted the
+ * duration runs to `now` (defaulting to the current time) — used to show a
+ * live "ongoing" elapsed time. Returns "—" for a missing/invalid start, and
+ * "0m" for a non-positive span (clock skew / same instant).
+ *
+ *   formatDuration("2026-01-01T10:00:00Z", "2026-01-01T12:15:00Z") -> "2h 15m"
+ *   formatDuration("2026-01-01T10:00:00Z", "2026-01-01T10:00:30Z") -> "0m"
+ */
+export function formatDuration(
+  startedAt: string | null | undefined,
+  endedAt?: string | null | undefined,
+  now: Date = new Date(),
+): string {
+  if (!startedAt) return "—";
+  const start = new Date(startedAt);
+  if (isNaN(start.getTime())) return "—";
+  const end = endedAt ? new Date(endedAt) : now;
+  if (isNaN(end.getTime())) return "—";
+  let totalMinutes = Math.floor((end.getTime() - start.getTime()) / 60000);
+  if (totalMinutes <= 0) return "0m";
+  const days = Math.floor(totalMinutes / 1440);
+  totalMinutes -= days * 1440;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes - hours * 60;
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0 || parts.length === 0) parts.push(`${minutes}m`);
+  return parts.join(" ");
+}
+
+/**
  * Like formatIndianDate, but for a value that also carries a time of day
  * (e.g. an interview slot, "last active at") -- "dd Mon yyyy, hh:mm am/pm",
  * always resolved via Asia/Kolkata. Unlike formatIndianDate there is no bare
@@ -750,4 +830,29 @@ export function sumMinor(values: readonly (string | number | bigint | null | und
     total += BigInt(text);
   }
   return { total, invalid };
+}
+
+/**
+ * GAP-TENANT-ADMIN-AUDIT-01: count events whose timestamp falls within a
+ * ROLLING 24-hour window ending at `now`, as opposed to the old
+ * `timestamp.slice(0,10) === new Date().toISOString().slice(0,10)` check,
+ * which compared UTC *calendar* dates — neither a rolling 24h window nor IST,
+ * and which under-counted between 00:00–05:30 IST (when the UTC date is still
+ * "yesterday"). An unparseable timestamp is skipped (never counted, never
+ * throws). `now` is injectable for deterministic tests.
+ *
+ *   countLast24h([{timestamp:"2025-12-31T23:00:00Z"}], Date.parse("2026-01-01T01:00:00Z")) -> 1
+ *   countLast24h([{timestamp:"2025-12-30T23:00:00Z"}], Date.parse("2026-01-01T01:00:00Z")) -> 0
+ */
+export function countLast24h(
+  events: readonly { timestamp: string }[],
+  now: number = Date.now(),
+): number {
+  const cutoff = now - 24 * 3600 * 1000;
+  let count = 0;
+  for (const e of events) {
+    const t = Date.parse(e.timestamp);
+    if (!Number.isNaN(t) && t >= cutoff && t <= now) count += 1;
+  }
+  return count;
 }

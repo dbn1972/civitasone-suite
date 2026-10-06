@@ -29,7 +29,7 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, TENANT_ADMIN);
     const { key } = moduleKeyParam.parse(req.params);
     const body = toggleBody.parse(req.body);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.toggleModule(ctx, ctx.tenantId, key, body.enabled));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.toggleModule(ctx, ctx.tenantId, key, body.enabled, body.reason));
   });
 
   app.get("/v1/admin/config", async (req, reply) => {
@@ -54,7 +54,7 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
     requireSuperAdmin(ctx);
     const { id, module } = moduleParam.parse(req.params);
     const body = toggleBody.parse(req.body);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.toggleModule(ctx, id, module, body.enabled));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.toggleModule(ctx, id, module, body.enabled, body.reason));
   });
 
   app.post("/v1/admin/feature-flags", async (req, reply) => {

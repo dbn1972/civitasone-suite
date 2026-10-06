@@ -43,4 +43,20 @@ describe("ProgressBar", () => {
     const { container } = render(<ProgressBar value={50} />);
     expect(container.querySelector(".bar")).toBeInTheDocument();
   });
+
+  // GAP-TENANT-ADMIN-READINESS-05: labelled progress bar exposes ARIA so a
+  // screen reader announces "Overall completion 75%".
+  it("exposes role=progressbar with aria values when a label is given", () => {
+    const { getByRole } = render(<ProgressBar value={75} label="Overall completion" />);
+    const bar = getByRole("progressbar", { name: "Overall completion" });
+    expect(bar).toHaveAttribute("aria-valuenow", "75");
+    expect(bar).toHaveAttribute("aria-valuemin", "0");
+    expect(bar).toHaveAttribute("aria-valuemax", "100");
+    expect(bar).toHaveAttribute("aria-valuetext", "75%");
+  });
+
+  it("stays presentation-only (no progressbar role) without a label", () => {
+    const { queryByRole } = render(<ProgressBar value={50} />);
+    expect(queryByRole("progressbar")).toBeNull();
+  });
 });

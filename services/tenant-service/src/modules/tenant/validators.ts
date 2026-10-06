@@ -10,11 +10,28 @@ export const createTenantBody = z.object({
 });
 export type CreateTenantBody = z.infer<typeof createTenantBody>;
 
+// GAP-TENANT-ADMIN-ORG-TYPE-05: the organisation types the platform supports.
+// Mirrors apps/web/src/lib/orgConfig.ts ORG_TYPES (kept in sync by the
+// org-type-validation test). When a PATCH carries settings.orgType it MUST be
+// one of these — a bogus value is a 422/400, not silently stored.
+export const ORG_TYPES = [
+  "govt_dept", "govt_autonomous", "psu", "private", "ngo", "cooperative", "municipal", "educational",
+] as const;
+
 export const updateTenantBody = z.object({
   name: z.string().min(2).max(200).optional(),
   settings: z.record(z.unknown()).optional(),
 }).refine((b) => b.name !== undefined || b.settings !== undefined, {
   message: "at least one of name, settings is required",
+}).superRefine((b, ctx) => {
+  const orgType = b.settings?.orgType;
+  if (orgType !== undefined && (typeof orgType !== "string" || !ORG_TYPES.includes(orgType as (typeof ORG_TYPES)[number]))) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["settings", "orgType"],
+      message: `orgType must be one of: ${ORG_TYPES.join(", ")}`,
+    });
+  }
 });
 export type UpdateTenantBody = z.infer<typeof updateTenantBody>;
 

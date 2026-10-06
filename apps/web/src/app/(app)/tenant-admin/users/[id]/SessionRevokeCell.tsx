@@ -1,31 +1,49 @@
 "use client";
 
-import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Button } from "../../../../_components/ds";
+import { Button, ConfirmDialog } from "../../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 type Props = { sessionId: string; active: boolean };
 
 /**
- * Per-session "Revoke" control. Replaces the dead <span style="cursor:not-allowed">
- * with a real <button> that calls DELETE /identity/sessions/:id via the proxy.
- * Disabled for sessions that are not active (already revoked/expired).
+ * Per-session "Revoke" control.
+ *
+ * GAP-TENANT-ADMIN-USERS-DETAIL-02:
+ *  - No DELETE fires until an admin confirms a reason in a ConfirmDialog
+ *    (danger, requireReason), mirroring tenant-admin/sessions/SessionsTable.
+ *    The reason is sent as a JSON {reason} body, which identity-service records
+ *    in the session-revoked audit event.
+ *  - On failure we show a clerk-safe message from useFormError, never the raw
+ *    `await res.text()` server body that could leak internals.
+ *  - A non-active row shows a disabled control.
  */
 export function SessionRevokeCell({ sessionId, active }: Props) {
   const router = useRouter();
+  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<string | undefined>(undefined);
+  const formError = useFormError("session");
 
-  async function revoke() {
+  async function revoke(reason?: string) {
     setBusy(true);
-    setError("");
+    setError(undefined);
+    formError.clear();
     try {
-      const res = await fetch(`/api/proxy/identity/sessions/${sessionId}`, { method: "DELETE" });
-      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
+      const res = await fetch(`/api/proxy/identity/sessions/${sessionId}`, {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      if (!res.ok) {
+        setError((await formError.fromResponse(res, "save")).message);
+        return;
+      }
+      setOpen(false);
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed");
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }
@@ -43,11 +61,24 @@ export function SessionRevokeCell({ sessionId, active }: Props) {
         disabled={busy}
         aria-busy={busy}
         aria-label="Revoke this session"
-        onClick={() => void revoke()}
+        onClick={() => { setError(undefined); setOpen(true); }}
       >
-        {busy ? "Revoking…" : "Revoke"}
+        Revoke
       </Button>
-      {error ? <span role="alert" aria-live="assertive" style={{ fontSize: 11, color: "var(--bad)", marginLeft: 6 }}>{error}</span> : null}
+      <ConfirmDialog
+        open={open}
+        title="Revoke this session?"
+        description="This signs the user out of this session immediately. They will need to sign in again. This cannot be undone."
+        confirmLabel="Revoke session"
+        danger
+        requireReason
+        minReasonLength={3}
+        reasonLabel="Reason (recorded in the audit log)"
+        busy={busy}
+        errorMessage={error}
+        onConfirm={(reason) => void revoke(reason)}
+        onCancel={() => { if (!busy) { setOpen(false); setError(undefined); } }}
+      />
     </>
   );
 }

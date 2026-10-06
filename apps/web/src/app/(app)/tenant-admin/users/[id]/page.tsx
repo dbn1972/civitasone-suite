@@ -33,6 +33,8 @@ export default async function AdminUserDetailPage({ params }: { params: { id: st
     );
   }
 
+  const activeSessionCount = user.sessions.filter((s) => s.status === "active").length;
+
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Users", href: "/tenant-admin/users" }, { label: user.name ?? user.email }]} />
@@ -40,7 +42,7 @@ export default async function AdminUserDetailPage({ params }: { params: { id: st
         back="/tenant-admin/users"
         title={user.name ?? user.email}
         subtitle={user.email}
-        actions={<UserSecurityActions userId={user.id} />}
+        actions={<UserSecurityActions userId={user.id} email={user.email} activeSessionCount={activeSessionCount} status={user.status} />}
       />
       <div className="grid g-main" style={{ alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -49,7 +51,23 @@ export default async function AdminUserDetailPage({ params }: { params: { id: st
             <div className="fields">
               <div className="fld"><div className="l">Email</div><div className="v">{user.email}</div></div>
               <div className="fld"><div className="l">Name</div><div className="v">{user.name ?? "—"}</div></div>
-              <div className="fld"><div className="l">Roles</div><div className="v">{user.roles.length > 0 ? user.roles.join(", ") : "—"}</div></div>
+              {/* GAP-TENANT-ADMIN-USERS-DETAIL-04: show the employee code the
+                  invite dialog collects, when the directory carries one. */}
+              {user.empCode ? (
+                <div className="fld"><div className="l">Employee code</div><div className="v">{user.empCode}</div></div>
+              ) : null}
+              <div className="fld">
+                <div className="l">Roles</div>
+                <div className="v">
+                  {/* GAP-TENANT-ADMIN-USERS-DETAIL-03: readable pills, not a raw
+                      comma-joined token list. */}
+                  {user.roles.length > 0 ? (
+                    <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 4 }}>
+                      {user.roles.map((r) => <span key={r} className="pill mut">{r}</span>)}
+                    </span>
+                  ) : "—"}
+                </div>
+              </div>
               <div className="fld"><div className="l">MFA</div><div className="v">{user.mfaEnabled ? <span className="pill good">Enabled</span> : <span className="pill mut">Disabled</span>}</div></div>
               <div className="fld"><div className="l">Status</div><div className="v"><StatusPill status={user.status} label={user.status.replace(/_/g, " ")} /></div></div>
               <div className="fld"><div className="l">Last login</div><div className="v">{user.lastLoginAt ? formatIndianDate(user.lastLoginAt) : "—"}</div></div>

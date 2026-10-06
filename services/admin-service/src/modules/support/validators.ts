@@ -8,6 +8,9 @@ export const breakGlassBody = z.object({
 
 export const closeParam = z.object({ id: z.string().uuid() });
 
+// GAP-TENANT-ADMIN-BREAKGLASS-DETAIL-01: id param for the break-glass detail route.
+export const breakGlassIdParam = z.object({ id: z.string().uuid() });
+
 // P1-3: optional target tenant for platform-wide break-glass review (super_admin).
 export const breakGlassListQuery = z.object({
   tenantId: z.string().uuid().optional(),

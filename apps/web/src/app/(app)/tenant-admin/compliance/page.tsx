@@ -1,21 +1,9 @@
-import { PageHeader, StatCard, StatGrid, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { PageHeader, StatCard, StatGrid, Card, EmptyState, RefreshErrorState, StatusPill } from "@/app/_components/ds";
 import { Breadcrumb } from "../Breadcrumb";
 import { getComplianceOverview } from "@/app/_data/loaders";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
-
-function resultColor(result: string): string {
-  if (result === "pass") return "#16a34a";
-  if (result === "warn") return "#d97706";
-  return "#dc2626";
-}
-
-function resultIcon(result: string): string {
-  if (result === "pass") return "✅";
-  if (result === "warn") return "⚠️";
-  return "❌";
-}
+import { formatPercent } from "@/lib/formatters";
 
 export default async function ComplianceDashboardPage() {
   const result = await getComplianceOverview();
@@ -31,11 +19,15 @@ export default async function ComplianceDashboardPage() {
         title="Compliance Dashboard"
         subtitle="DPDP Act compliance, CERT-In readiness, data retention policy status, and recent compliance checks."
       />
-      <DataSourceBadge source={result.source} />
+      {/* GAP-TENANT-ADMIN-COMPLIANCE-04: the error state below already carries a
+          RefreshErrorState message; the separate DataSourceBadge is dropped so
+          an errored page shows exactly one error message. */}
 
       <StatGrid>
-        <StatCard icon="📋" iconBg="#eff6ff" label="DPDP Score" value={errored ? "—" : `${overview.dpdpScore}%`} />
-        <StatCard icon="🛡️" iconBg="#ecfdf3" label="CERT-In Readiness" value={errored ? "—" : `${overview.certInReadiness}%`} />
+        {/* GAP-TENANT-ADMIN-COMPLIANCE-03: "—" for a missing/errored score (null),
+            never a fabricated "0%" or "undefined%"; a real 0 shows "0.0%". */}
+        <StatCard icon="📋" iconBg="#eff6ff" label="DPDP Score" value={errored ? "—" : formatPercent(overview.dpdpScore)} />
+        <StatCard icon="🛡️" iconBg="#ecfdf3" label="CERT-In Readiness" value={errored ? "—" : formatPercent(overview.certInReadiness)} />
         <StatCard icon="🗄️" iconBg="#f1f5f9" label="Data Retention" value={errored ? "—" : overview.retentionStatus} />
         <StatCard icon="✅" iconBg="#ecfdf3" label="Checks Passed" value={errored ? "—" : `${overview.checks.filter((c) => c.result === "pass").length}/${overview.checks.length}`} />
       </StatGrid>
@@ -52,17 +44,16 @@ export default async function ComplianceDashboardPage() {
         <Card title="Recent Compliance Checks" padding>
           <ol className="timeline" aria-label="Compliance check timeline" style={{ listStyle: "none", padding: 0, margin: 0 }}>
             {overview.checks.map((check) => (
-              <li key={check.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "10px 0", borderBottom: "1px solid var(--border, #e2e8f0)" }}>
-                <span aria-hidden="true" style={{ fontSize: 16, flexShrink: 0 }}>{resultIcon(check.result)}</span>
+              <li key={check.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid var(--border, #e2e8f0)" }}>
                 <div style={{ flex: 1 }}>
                   <p style={{ margin: 0, fontWeight: 500, fontSize: 14 }}>{check.title}</p>
                   <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--ink2)" }}>
                     {new Date(check.timestamp).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
                   </p>
                 </div>
-                <span style={{ fontSize: 12, fontWeight: 600, color: resultColor(check.result), textTransform: "capitalize" }}>
-                  {check.result}
-                </span>
+                {/* GAP-TENANT-ADMIN-COMPLIANCE-01: token-based, contrast-checked
+                    pill instead of inline amber/green hex text. */}
+                <StatusPill status={check.result} />
               </li>
             ))}
           </ol>

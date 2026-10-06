@@ -124,4 +124,36 @@ describe("config consumer — module toggle (integration)", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]?.enabled).toBe(true);
   });
+
+  it("writes the audited reason into the module_toggle audit event (GAP-TENANT-ADMIN-SETTINGS-02)", async () => {
+    const MSG_3 = "f1111111-1111-4000-8000-000000000003";
+    await runWithTenant(T1, () => db.transaction(async (tx) => {
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, T1));
+      await tx.delete(processed).where(eq(processed.messageId, MSG_3));
+    }));
+
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerConfigConsumers(q);
+    await q.start();
+    await q.publish("admin.module.toggle", {
+      messageId: MSG_3, type: "admin.module.toggle", tenantId: T1,
+      actorId: ACTOR, correlationId: "corr-tog-3", schemaVersion: "1.0",
+      timestamp: new Date().toISOString(),
+      payload: { tenantId: T1, moduleKey: MODULE_KEY, enabled: false, reason: "Finance disabled pending audit" },
+    });
+    await new Promise((r) => setTimeout(r, 500));
+    await q.stop();
+
+    const audit = await runWithTenant(T1, () =>
+      db.transaction((tx) => tx.select().from(outboxMessages).where(and(eq(outboxMessages.tenantId, T1), eq(outboxMessages.eventType, "audit.event.record")))));
+    const toggleAudit = audit.find((r) => (r.payload as { action?: string }).action === "module_toggle");
+    expect(toggleAudit).toBeDefined();
+    expect((toggleAudit!.payload as { reason?: string }).reason).toBe("Finance disabled pending audit");
+    expect((toggleAudit!.payload as { enabled?: boolean }).enabled).toBe(false);
+    expect((toggleAudit!.payload as { moduleKey?: string }).moduleKey).toBe(MODULE_KEY);
+
+    await runWithTenant(T1, () => db.transaction(async (tx) => {
+      await tx.delete(processed).where(eq(processed.messageId, MSG_3));
+    }));
+  });
 });

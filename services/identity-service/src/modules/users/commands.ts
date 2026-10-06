@@ -69,11 +69,11 @@ export async function changeUserStatus(ctx: RequestContext, id: string, body: St
 // consumer durably records the request via an audit event (outbox) and triggers
 // the best-effort Keycloak UPDATE_PASSWORD action. See the consumer + keycloak
 // helper for the honest semantics when Keycloak is not configured.
-export async function requestPasswordReset(ctx: RequestContext, id: string): Promise<Accepted> {
+export async function requestPasswordReset(ctx: RequestContext, id: string, reason?: string): Promise<Accepted> {
   await queue.publish(COMMANDS.resetPassword, {
     messageId: randomUUID(),
     type: COMMANDS.resetPassword, tenantId: ctx.tenantId, actorId: ctx.actorId,
-    correlationId: ctx.correlationId, schemaVersion: "1.0", payload: { id },
+    correlationId: ctx.correlationId, schemaVersion: "1.0", payload: { id, reason: reason ?? null },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

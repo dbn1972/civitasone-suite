@@ -1,4 +1,4 @@
-import type { z } from "zod";
+import { z } from "zod";
 import { GL_JOURNAL_LIMIT } from "@/lib/financeLimits";
 import { pathSeg } from "@/lib/pathSegment";
 import { mapEstabScannedDocuments, estabScannedDocumentsPath, type EstabScannedDocument } from "@/lib/estab/scannedDocuments";
@@ -344,6 +344,7 @@ import {
   CourtOrderSummaryListSchema,
   LegalOpinionSummaryListSchema,
   SessionSummaryListSchema,
+  SessionDetailSchema,
   BreakglassSummaryListSchema,
   APIKeySummaryListSchema,
   InstallStepSummaryListSchema,
@@ -941,6 +942,35 @@ export async function getTenantSettings(): Promise<LoaderResult<TenantSettingSum
 }
 
 /**
+ * GAP-TENANT-ADMIN-ORG-TYPE-01: the tenant's current organisation type, read
+ * from the tenant record's settings (tenant-service /v1/tenants/current). Also
+ * returns the id + the full current settings object so a PATCH can MERGE
+ * orgType into existing settings rather than replace the whole object. Falls
+ * back to a null orgType (not a fabricated default) when the backend is
+ * unreachable or the setting is unset.
+ */
+export async function getCurrentTenantOrgType(): Promise<LoaderResult<{ tenantId: string | null; orgType: string | null; settings: Record<string, unknown> }>> {
+  return fetchJson<unknown, { tenantId: string | null; orgType: string | null; settings: Record<string, unknown> }>(
+    "/api/v1/tenants/current",
+    { tenantId: null, orgType: null, settings: {} },
+    {
+      revalidateSeconds: 30,
+      telemetryKey: "tenant.org_type",
+      mapResponse: (p) => {
+        const view = (p && typeof p === "object" && "data" in p ? (p as { data?: unknown }).data : p) as
+          | { tenantId?: unknown; id?: unknown; settings?: unknown }
+          | null;
+        if (!view || typeof view !== "object") return null;
+        const settings = (view.settings && typeof view.settings === "object" ? view.settings : {}) as Record<string, unknown>;
+        const orgType = typeof settings.orgType === "string" ? settings.orgType : null;
+        const tenantId = typeof view.tenantId === "string" ? view.tenantId : typeof view.id === "string" ? view.id : null;
+        return { tenantId, orgType, settings };
+      },
+    },
+  );
+}
+
+/**
  * The tenant's own enabled modules for NAV visibility, sourced from the module
  * composition engine (any authenticated user; RLS-scoped to their tenant).
  * Shape matches getTenantSettings so mapTenantSettings + the schema are reused;
@@ -957,10 +987,21 @@ export async function getNavModules(): Promise<LoaderResult<TenantSettingSummary
 
 export type ServiceHealthRow = { service: string; status: string };
 
+export type ReadinessGate = {
+  key: string;
+  passed: boolean;
+};
+
 export type TenantAdminReadiness = {
   overall: number;
   productionReady: boolean;
   allGreen: boolean;
+  // GAP-TENANT-ADMIN-READINESS-01: per-gate results come from admin-service's
+  // /v1/admin/health/readiness `gates` map (ProductionReadiness.gates). When
+  // the backend omits a gate map (older deployments), this is an empty array
+  // and the page shows an honest "detailed checks not available" state rather
+  // than a hard-coded Pass/Fail list.
+  gates: ReadinessGate[];
 };
 
 export type TenantAdminDashboard = {
@@ -990,14 +1031,24 @@ function mapAggregateHealth(payload: unknown): TenantAdminDashboard["health"] | 
   return { status, services };
 }
 
-function mapReadiness(payload: unknown): TenantAdminReadiness | null {
+export function mapReadiness(payload: unknown): TenantAdminReadiness | null {
   if (!isRecord(payload)) return null;
   const overall = typeof payload.overall === "number" ? Math.round(payload.overall) : null;
   if (overall === null) return null;
+  // GAP-TENANT-ADMIN-READINESS-01: map the backend `gates` object
+  // (Record<string, boolean>) into a stable ordered array. Non-boolean
+  // values are ignored so a malformed gate never renders a fake status.
+  const gates: ReadinessGate[] = [];
+  if (isRecord(payload.gates)) {
+    for (const [key, value] of Object.entries(payload.gates)) {
+      if (typeof value === "boolean") gates.push({ key, passed: value });
+    }
+  }
   return {
     overall,
     productionReady: payload.productionReady === true,
     allGreen: payload.allGreen === true,
+    gates,
   };
 }
 
@@ -5116,6 +5167,53 @@ export async function getActiveSessions(): Promise<LoaderResult<SessionSummary[]
   });
 }
 
+/**
+ * GAP-TENANT-ADMIN-SESSIONS-DETAIL-01: one session by id, from identity-service
+ * GET /identity/sessions/:id (tenant-scoped + role-gated server-side; 404 for a
+ * session outside the caller's tenant). Normalised to the same field names the
+ * list uses (ipAddress/userAgent/mfaVerified) so the detail page and the list
+ * speak one vocabulary. A 404 surfaces as source:"error" with status 404 so the
+ * page can call notFound() rather than show fabricated data.
+ */
+export type SessionDetailView = {
+  id: string;
+  userId: string;
+  userEmail: string;
+  userName?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  mfaVerified: boolean;
+  status: "active" | "expired" | "revoked";
+  lastActiveAt: string;
+  startedAt?: string;
+  expiresAt?: string;
+};
+
+export async function getSessionById(id: string): Promise<LoaderResult<SessionDetailView | null>> {
+  return fetchJson<unknown, SessionDetailView | null>(`/api/identity/sessions/${encodeURIComponent(id)}`, null, {
+    revalidateSeconds: 15,
+    telemetryKey: "admin.session.detail",
+    responseSchema: SessionDetailSchema,
+    mapResponse: (p) => {
+      if (!isRecord(p)) return null;
+      const v = p as Record<string, unknown>;
+      return {
+        id: String(v.id),
+        userId: String(v.userId),
+        userEmail: String(v.userEmail),
+        userName: typeof v.userName === "string" ? v.userName : undefined,
+        ipAddress: typeof v.ip === "string" ? v.ip : undefined,
+        userAgent: typeof v.userAgent === "string" ? v.userAgent : undefined,
+        mfaVerified: v.mfaMethod != null && v.mfaMethod !== "",
+        status: v.status as "active" | "expired" | "revoked",
+        lastActiveAt: String(v.lastActiveAt),
+        startedAt: typeof v.startedAt === "string" ? v.startedAt : undefined,
+        expiresAt: typeof v.expiresAt === "string" ? v.expiresAt : undefined,
+      };
+    },
+  });
+}
+
 export async function getSubscription(): Promise<LoaderResult<SubscriptionSummary | null>> {
   return fetchJson<unknown, SubscriptionSummary | null>("/api/v1/billing/subscriptions", null, {
     revalidateSeconds: 300,
@@ -5141,6 +5239,68 @@ export async function getBreakglassLog(): Promise<LoaderResult<BreakglassSummary
     responseSchema: BreakglassSummaryListSchema,
     mapResponse: (p) => getArrayPayload(p) as BreakglassSummary[] | null,
   });
+}
+
+/**
+ * GAP-TENANT-ADMIN-BREAKGLASS-DETAIL-01: a single break-glass event by id.
+ * The detail page used to render a hard-coded sample record for every id
+ * (misleading on a security screen). This loader fetches the real record and
+ * renders only the fields the identity service actually returns — resources
+ * accessed and the approval chain are optional and are omitted (not invented)
+ * when the API does not supply them. A 404 is surfaced via `status` so the
+ * page can call notFound(); any other failure drives a RefreshErrorState.
+ */
+export type BreakglassEventDetail = {
+  id: string;
+  actor: string;
+  actorEmail: string | null;
+  reason: string;
+  startedAt: string;
+  endedAt: string | null;
+  status: string;
+  closedBy: string | null;
+  closeReason: string | null;
+  resourcesAccessed: string[] | null;
+  approvalChain: { name: string; role: string; decision: string; timestamp: string | null }[] | null;
+};
+
+const BreakglassEventDetailSchema: z.ZodType<BreakglassEventDetail, z.ZodTypeDef, unknown> = z
+  .object({
+    id: z.string(),
+    actor: z.string(),
+    actorEmail: z.string().nullish().transform((v) => v ?? null),
+    reason: z.string(),
+    startedAt: z.string(),
+    endedAt: z.string().nullish().transform((v) => v ?? null),
+    status: z.string(),
+    closedBy: z.string().nullish().transform((v) => v ?? null),
+    closeReason: z.string().nullish().transform((v) => v ?? null),
+    resourcesAccessed: z.array(z.string()).nullish().transform((v) => v ?? null),
+    approvalChain: z
+      .array(
+        z.object({
+          name: z.string(),
+          role: z.string(),
+          decision: z.string(),
+          timestamp: z.string().nullish().transform((v) => v ?? null),
+        }),
+      )
+      .nullish()
+      .transform((v) => v ?? null),
+  })
+  .passthrough() as unknown as z.ZodType<BreakglassEventDetail, z.ZodTypeDef, unknown>;
+
+export async function getBreakglassEvent(id: string): Promise<LoaderResult<BreakglassEventDetail | null>> {
+  return fetchJson<BreakglassEventDetail, BreakglassEventDetail | null>(
+    `/api/v1/admin/breakglass/${pathSeg(id)}`,
+    null,
+    {
+      revalidateSeconds: 30,
+      telemetryKey: "admin.breakglass.detail",
+      responseSchema: BreakglassEventDetailSchema,
+      mapResponse: (p) => p,
+    },
+  );
 }
 
 export async function getNotificationPreferences(): Promise<LoaderResult<NotificationPrefSummary[]>> {
@@ -5475,6 +5635,33 @@ export type SecurityOverview = {
   events: SecurityEvent[];
 };
 
+// GAP-TENANT-ADMIN-SECURITY-02: validate the payload shape so a response
+// missing `events` (or with non-numeric counts) becomes source="error" and the
+// friendly RefreshErrorState card instead of throwing into error.tsx when the
+// page reads overview.events.length. Numbers coerce defensively; events
+// defaults to [] and each event is individually validated.
+const securityEventSchema = z.object({
+  id: z.string(),
+  timestamp: z.string(),
+  type: z.string(),
+  actor: z.string(),
+  ipAddress: z.string(),
+  outcome: z.string(),
+});
+
+const securityOverviewSchema = z.object({
+  activeSessions: z.number().finite(),
+  failedLogins24h: z.number().finite(),
+  mfaAdoptionRate: z.number().finite(),
+  trustedDevices: z.number().finite(),
+  events: z.array(securityEventSchema),
+});
+
+export function mapSecurityOverview(payload: unknown): SecurityOverview | null {
+  const parsed = securityOverviewSchema.safeParse(payload);
+  return parsed.success ? parsed.data : null;
+}
+
 export async function getSecurityOverview(): Promise<LoaderResult<SecurityOverview>> {
   return fetchJson<unknown, SecurityOverview>(
     "/api/v1/admin/security/overview",
@@ -5482,7 +5669,7 @@ export async function getSecurityOverview(): Promise<LoaderResult<SecurityOvervi
     {
       revalidateSeconds: 30,
       telemetryKey: "admin.security.overview",
-      mapResponse: (p) => (isRecord(p) ? (p as SecurityOverview) : null),
+      mapResponse: mapSecurityOverview,
     },
   );
 }
@@ -5496,9 +5683,12 @@ export type DataExportRequest = {
   fileSizeBytes: number | null;
   createdAt: string;
   expiresAt: string | null;
+  downloadUrl: string | null;
 };
 
 export async function getDataExports(): Promise<LoaderResult<DataExportRequest[]>> {
+  // GAP-TENANT-ADMIN-DATA-EXPORT-03: LIST is served by the gap aggregator at
+  // the plural path; CREATE/DOWNLOAD use the singular data-export module route.
   return fetchJson<unknown, DataExportRequest[]>("/api/v1/admin/data-exports", [], {
     revalidateSeconds: 30,
     telemetryKey: "admin.data-exports",
@@ -5509,7 +5699,15 @@ export async function getDataExports(): Promise<LoaderResult<DataExportRequest[]
 export type OrgHierarchyNode = {
   id: string;
   name: string;
-  headCount: number;
+  /**
+   * Per-node DIRECT staff count. GAP-TENANT-ADMIN-ORG-HIERARCHY-02: the
+   * tenant-service org_units contract carries no rolled-up total, so summing
+   * headCount at every level is the correct whole-org figure (NOT a
+   * double-count of parent + children). It is optional because the current
+   * backend read (GET /v1/org/hierarchy -> flat org_units) does not populate
+   * it at all; absent means "unknown", rendered as "—", never a fabricated 0.
+   */
+  headCount?: number | null;
   children?: OrgHierarchyNode[];
 };
 
@@ -5583,20 +5781,44 @@ export type ComplianceCheck = {
 };
 
 export type ComplianceOverview = {
-  dpdpScore: number;
-  certInReadiness: number;
+  dpdpScore: number | null;
+  certInReadiness: number | null;
   retentionStatus: string;
   checks: ComplianceCheck[];
 };
 
+// GAP-TENANT-ADMIN-COMPLIANCE-03: a zod schema so a malformed 200 body (missing
+// fields) becomes source "error" instead of rendering "undefined%" or crashing
+// `checks.filter`. Scores are nullable so a genuine "no score yet" renders "—"
+// (never a fabricated 0%); a real 0 is preserved.
+const ComplianceOverviewSchema: z.ZodType<ComplianceOverview, z.ZodTypeDef, unknown> = z
+  .object({
+    dpdpScore: z.number().min(0).max(100).nullish().transform((v) => v ?? null),
+    certInReadiness: z.number().min(0).max(100).nullish().transform((v) => v ?? null),
+    retentionStatus: z.string().nullish().transform((v) => v ?? "Unknown"),
+    checks: z
+      .array(
+        z.object({
+          id: z.string(),
+          timestamp: z.string(),
+          title: z.string(),
+          result: z.enum(["pass", "warn", "fail"]),
+        }),
+      )
+      .nullish()
+      .transform((v) => v ?? []),
+  })
+  .passthrough() as unknown as z.ZodType<ComplianceOverview, z.ZodTypeDef, unknown>;
+
 export async function getComplianceOverview(): Promise<LoaderResult<ComplianceOverview>> {
-  return fetchJson<unknown, ComplianceOverview>(
+  return fetchJson<ComplianceOverview, ComplianceOverview>(
     "/api/v1/admin/compliance",
-    { dpdpScore: 0, certInReadiness: 0, retentionStatus: "Unknown", checks: [] },
+    { dpdpScore: null, certInReadiness: null, retentionStatus: "Unknown", checks: [] },
     {
       revalidateSeconds: 120,
       telemetryKey: "admin.compliance",
-      mapResponse: (p) => (isRecord(p) ? (p as ComplianceOverview) : null),
+      responseSchema: ComplianceOverviewSchema,
+      mapResponse: (p) => p,
     },
   );
 }
@@ -5616,8 +5838,22 @@ export type WebhookDelivery = {
   eventType: string;
   statusCode: number;
   attempt: number;
+  /** Max retry attempts, when the API provides it (webhook_deliveries.max_attempts). */
+  maxAttempts?: number | null;
   deliveredAt: string;
   responseBody: string;
+};
+
+/**
+ * GAP-TENANT-ADMIN-WEBHOOKS-02: the create endpoint returns the signing secret
+ * exactly once (admin-service webhookCreate -> { id, status, correlationId,
+ * secret }). The secret is shown once in a modal and never persisted. maxAttempts
+ * lets the delivery log render the real denominator (GAP-WEBHOOKS-06) instead of
+ * a hard-coded "/3".
+ */
+export type WebhookCreated = {
+  id: string;
+  secret: string;
 };
 
 export async function getWebhooks(): Promise<LoaderResult<WebhookSummary[]>> {

@@ -72,14 +72,17 @@ async function seedSession(id: string, userId: string, tenantId: string, status:
 
 async function cleanup() {
   await runWithTenant(T1, () => db.transaction(async (tx) => {
-    for (const id of [SESS_A, SESS_B, SESS_REVOKED, SESS_OTHER]) {
+    for (const id of [SESS_A, SESS_B, SESS_REVOKED, SESS_OTHER, "c1111111-1111-4000-8000-000000000005"]) {
       await tx.delete(sessions).where(eq(sessions.id, id));
     }
     for (const id of [USER_REVOKE, USER_RESET, OTHER_USER]) {
       await tx.delete(users).where(eq(users.id, id));
     }
     await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, T1));
-    for (const id of [MSG_REVOKE_1, MSG_REVOKE_2, MSG_RESET_1]) {
+    for (const id of [MSG_REVOKE_1, MSG_REVOKE_2, MSG_RESET_1,
+                      "d2222222-2222-4000-8000-000000000002",
+                      "d1111111-1111-4000-8000-000000000003",
+                      "d3333333-3333-4000-8000-000000000001"]) {
       await tx.delete(processed).where(eq(processed.messageId, id));
     }
   }));
@@ -240,5 +243,73 @@ describe("reset-password consumer — CQRS (integration)", () => {
         .where(and(eq(outboxMessages.tenantId, T1), eq(outboxMessages.eventType, "audit.event.record")))));
     const actions = audit.map((r) => (r.payload as { action?: string }).action);
     expect(actions).toContain("reset_password");
+  });
+});
+
+// GAP-TENANT-ADMIN-USERS-DETAIL-01/02: the admin's confirmation reason must be
+// recorded in the audit trail for reset-password, revoke-all and single-session
+// revoke. These assert the reason survives the command -> consumer -> outbox path.
+const MSG_RESET_REASON = "d2222222-2222-4000-8000-000000000002";
+const MSG_REVOKE_REASON = "d1111111-1111-4000-8000-000000000003";
+const MSG_SINGLE_REVOKE = "d3333333-3333-4000-8000-000000000001";
+const SESS_REASON = "c1111111-1111-4000-8000-000000000005";
+
+describe("GAP-TENANT-ADMIN-USERS-DETAIL-01/02 — reason is audited", () => {
+  it("reset-password: the reason appears in the password_reset_requested event payload", async () => {
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerUserConsumers(q);
+    await q.start();
+    await q.publish("identity.user.reset_password", {
+      messageId: MSG_RESET_REASON, type: "identity.user.reset_password", tenantId: T1,
+      actorId: ACTOR, correlationId: "corr-reset-reason", schemaVersion: "1.0",
+      timestamp: new Date().toISOString(), payload: { id: USER_RESET, reason: "offboarding per HR ticket 42" },
+    });
+    await new Promise((r) => setTimeout(r, 500));
+    await q.stop();
+
+    const evt = await runWithTenant(T1, () => db.transaction(async (tx) =>
+      tx.select().from(outboxMessages)
+        .where(and(eq(outboxMessages.tenantId, T1), eq(outboxMessages.eventType, "identity.user.password_reset_requested")))));
+    const reasons = evt.map((r) => (r.payload as { reason?: string }).reason);
+    expect(reasons).toContain("offboarding per HR ticket 42");
+  });
+
+  it("revoke-all: the reason appears in the revoked_all event payload", async () => {
+    await seedSession(SESS_REASON, USER_RESET, T1, "active");
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerSessionConsumers(q);
+    await q.start();
+    await q.publish("identity.session.revoke_all", {
+      messageId: MSG_REVOKE_REASON, type: "identity.session.revoke_all", tenantId: T1,
+      actorId: ACTOR, correlationId: "corr-revoke-reason", schemaVersion: "1.0",
+      timestamp: new Date().toISOString(), payload: { userId: USER_RESET, reason: "compromised credentials" },
+    });
+    await new Promise((r) => setTimeout(r, 500));
+    await q.stop();
+
+    const evt = await runWithTenant(T1, () => db.transaction(async (tx) =>
+      tx.select().from(outboxMessages)
+        .where(and(eq(outboxMessages.tenantId, T1), eq(outboxMessages.eventType, "identity.session.revoked_all")))));
+    const reasons = evt.map((r) => (r.payload as { reason?: string }).reason);
+    expect(reasons).toContain("compromised credentials");
+  });
+
+  it("single-session revoke: the reason appears in the revoked event payload", async () => {
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerSessionConsumers(q);
+    await q.start();
+    await q.publish("identity.session.revoke", {
+      messageId: MSG_SINGLE_REVOKE, type: "identity.session.revoke", tenantId: T1,
+      actorId: ACTOR, correlationId: "corr-single-revoke", schemaVersion: "1.0",
+      timestamp: new Date().toISOString(), payload: { id: SESS_REASON, reason: "stolen laptop" },
+    });
+    await new Promise((r) => setTimeout(r, 500));
+    await q.stop();
+
+    const evt = await runWithTenant(T1, () => db.transaction(async (tx) =>
+      tx.select().from(outboxMessages)
+        .where(and(eq(outboxMessages.tenantId, T1), eq(outboxMessages.eventType, "identity.session.revoked")))));
+    const reasons = evt.map((r) => (r.payload as { reason?: string }).reason);
+    expect(reasons).toContain("stolen laptop");
   });
 });

@@ -1,23 +1,35 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { PageHeader } from "../../../../_components/ds";
+import { PageHeader, Card, RefreshErrorState } from "../../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 import { getAdminRoleById } from "../../../../_data/loaders";
+import { notFound } from "next/navigation";
 import { Breadcrumb } from "../../Breadcrumb";
 import { PermissionGrid } from "./PermissionGrid";
 import { EditRoleButton } from "./EditRoleButton";
-import { ArrowLeft } from "lucide-react";
 
 export default async function AdminRoleDetailPage({ params }: { params: { id: string } }) {
-  const { data: role, source } = await getAdminRoleById(params.id);
+  const result = await getAdminRoleById(params.id);
+  const { data: role, source } = result;
 
+  // GAP-TENANT-ADMIN-ROLES-DETAIL-03: a failed fetch (5xx/network) must NOT look
+  // like a deleted role. Only a genuine 404 renders the not-found page; any
+  // other error shows a retryable error card.
   if (!role) {
-    return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
-        <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Manage Roles", href: "/tenant-admin/roles" }, { label: "Not found" }]} />
-        <a href="/tenant-admin/roles" className="back"><ArrowLeft aria-hidden="true" size={14} /> Back</a>
-        <p style={{ color: "var(--civitas-color-text-muted)", marginTop: 16 }}>Role not found.</p>
-      </div>
-    );
+    if (result.status === 404) notFound();
+    if (source === "error") {
+      return (
+        <div className="page-main wrap" aria-labelledby="page-heading">
+          <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Manage Roles", href: "/tenant-admin/roles" }, { label: "Unavailable" }]} />
+          <PageHeader back="/tenant-admin/roles" title="Role" subtitle="" />
+          <Card title="Role" padding>
+            <RefreshErrorState error={toHumanError("load", { area: "role" })} backHref="/tenant-admin/roles" />
+          </Card>
+        </div>
+      );
+    }
+    // No data, no error status: treat as not found.
+    notFound();
   }
 
   return (
@@ -26,7 +38,9 @@ export default async function AdminRoleDetailPage({ params }: { params: { id: st
       <PageHeader
         back="/tenant-admin/roles"
         title={role.name}
-        subtitle={role.description ?? "Role permissions and user assignments"}
+        // GAP-TENANT-ADMIN-ROLES-DETAIL-05: the fallback no longer promises
+        // "user assignments" the page doesn't render — just "Role permissions".
+        subtitle={role.description ?? "Role permissions"}
         actions={
           <>
             {role.isSystemRole

@@ -1,9 +1,28 @@
-import { PageHeader, StatCard, StatGrid, Card, DataTable, StatusPill, EmptyState, RefreshErrorState } from "@/app/_components/ds";
+import { PageHeader, StatCard, StatGrid, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { Breadcrumb } from "../Breadcrumb";
-import { getSsoProviders, type SsoProvider } from "@/app/_data/loaders";
+import { getSsoProviders } from "@/app/_data/loaders";
 import { SsoTable } from "./SsoTable";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
+import { formatIndianDateTime } from "@/lib/formatters";
+
+/** Latest valid lastSync across providers as an ISO string, or null. */
+function latestSyncIso(providers: { lastSync?: string }[]): string | null {
+  let best: number | null = null;
+  for (const p of providers) {
+    if (!p.lastSync) continue;
+    const t = new Date(p.lastSync).getTime();
+    if (!Number.isNaN(t) && (best === null || t > best)) best = t;
+  }
+  return best === null ? null : new Date(best).toISOString();
+}
+
+/** Distinct protocols actually configured, e.g. "OIDC" or "SAML / OIDC". */
+function configuredProtocols(providers: { protocol?: string }[]): string {
+  const set = new Set<string>();
+  for (const p of providers) if (p.protocol) set.add(p.protocol.toUpperCase());
+  return set.size === 0 ? "—" : [...set].sort().join(" / ");
+}
 
 export default async function SSOPage() {
   const result = await getSsoProviders();
@@ -11,26 +30,29 @@ export default async function SSOPage() {
   const resource = toResourceState(result);
   const errored = resource.status === "error";
   const activeProviders = errored ? null : providers.filter((p) => p.status === "active").length;
-  const totalUsers = providers.reduce((sum, p) => sum + (p.status === "active" ? 1 : 0), 0);
+  const latest = errored ? null : latestSyncIso(providers);
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "SSO & Identity Providers" }]} />
+      {/* GAP-TENANT-ADMIN-SSO-01 (DECISION, recorded): there is no SSO/IdP
+          provider store yet — admin-service GET /v1/admin/sso/providers returns
+          501 and identity-service's SAML config route is an unfinished stub
+          that persists nothing. The old "Configure IDP" button bounced to
+          /tenant-admin/idp whose own "Add Provider" bounced back here, so no
+          screen ever added a provider. Rather than ship a form that POSTs to a
+          501, this page is honestly read-only until the backend provider store
+          + test-connection flow exists (HUMAN REVIEW). No circular link. */}
       <PageHeader
         back="/tenant-admin"
         title="SSO & Identity Providers"
-        subtitle="Configure SAML/OIDC identity providers for single sign-on authentication."
-        actions={
-          <a href="/tenant-admin/idp" className="btn primary" aria-label="Configure Identity Provider" style={{ minHeight: 44 }}>
-            Configure IDP
-          </a>
-        }
+        subtitle="SAML/OIDC identity providers configured for single sign-on. Read-only — providers are provisioned by platform operations."
       />
       <StatGrid>
         <StatCard icon="🔗" iconBg="#eff6ff" label="Active Providers" value={activeProviders ?? "—"} />
-        <StatCard icon="👥" iconBg="#ecfdf3" label="Total Providers" value={errored ? "—" : providers.length} />
-        <StatCard icon="🛡️" iconBg="#f1f5f9" label="Protocols" value="SAML / OIDC" />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Last Sync" value={!errored && providers.length > 0 ? "Recent" : "—"} />
+        <StatCard icon="🔗" iconBg="#ecfdf3" label="Total Providers" value={errored ? "—" : providers.length} />
+        <StatCard icon="🛡️" iconBg="#f1f5f9" label="Protocols" value={errored ? "—" : configuredProtocols(providers)} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Last Sync" value={errored ? "—" : formatIndianDateTime(latest)} />
       </StatGrid>
 
       {errored ? (
@@ -42,8 +64,7 @@ export default async function SSOPage() {
           <EmptyState
             icon="🔗"
             title="No identity providers configured"
-            message="Add an OIDC or SAML provider to enable single sign-on for your organisation."
-            action={<a href="/tenant-admin/idp" className="btn primary">Configure IDP</a>}
+            message="Single sign-on providers are provisioned by platform operations. Contact your platform administrator to add one."
           />
         </Card>
       ) : (

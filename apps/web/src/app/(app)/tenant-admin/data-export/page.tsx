@@ -13,12 +13,18 @@ export default async function DataExportPage() {
           driven by the same useSeededResource call that produces its rows —
           not a second, independent read of `source` here that could
           disagree with the client's own cache state (UX-002's pattern). */}
-      <PageHeader title="Data Export" subtitle="Export your organisation's data under DPDP Act 2023 compliance." back="/tenant-admin" />
+      <PageHeader title="Data Export" subtitle="Export your organisation's data held in CivitasOne under DPDP Act 2023." back="/tenant-admin" />
 
-      <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8, padding: 16, marginBottom: 24 }}>
-        <p style={{ margin: 0, fontSize: 14, color: "#1e40af" }}>
-          📋 <strong>DPDP Notice:</strong> Under the Digital Personal Data Protection Act 2023, you have the right to export your data.
-          Exports are available for download for 48 hours after generation.
+      {/* GAP-TENANT-ADMIN-DATA-EXPORT-04: the organisation is a data fiduciary
+          exporting data it holds — not a data principal exercising a personal
+          right. Copy reworded; the hard-coded "48 hours" window removed (the
+          per-row expiry is shown from the API). Token-based colours (no inline
+          hex) so it themes in dark mode. Final wording to be confirmed by DPO. */}
+      <div className="card" style={{ marginBottom: 24, padding: 16, borderInlineStart: "4px solid var(--primary, #2563eb)" }}>
+        <p style={{ margin: 0, fontSize: 14, color: "var(--ink)" }}>
+          📋 <strong>DPDP notice:</strong> Your organisation can export the data it holds in CivitasOne. Exports that
+          include personal data are recorded with the requester&apos;s identity and purpose. Each export link remains
+          downloadable only until it expires (see the expiry shown against each export).
         </p>
       </div>
 
