@@ -102,6 +102,15 @@ export interface AttendanceCounts {
 export interface AttendanceParticipant {
   participantId: string;
   employeeId: string;
+  /**
+   * Resolved person name for check-in/out (GAP-MEETING-MEETINGS-MEETINGID-02):
+   * a secretary cannot run attendance against raw UUIDs. Null when the
+   * attendance payload does not yet carry a name, in which case the UI falls
+   * back to the employeeId.
+   */
+  displayName: string | null;
+  /** Optional designation/title shown as a secondary caption. */
+  designation: string | null;
   role: string;
   isMandatory: boolean;
   status: string;
@@ -210,6 +219,24 @@ export interface Minutes {
   createdAt: string | null;
   updatedAt: string | null;
   version: number;
+  /**
+   * Resolved display names for the drafter/approver ids (GAP-MEETING-
+   * MEETINGS-MEETINGID-MINUTES-02): a chairperson must be able to see WHO
+   * drafted and WHO approved to verify maker-checker separation, not raw
+   * UUIDs. Null when the payload does not carry a name; the UI falls back to
+   * the id.
+   */
+  createdByName: string | null;
+  approvedByName: string | null;
+  /**
+   * Why a submitted draft was returned to the secretary (GAP-MEETING-
+   * MEETINGS-MEETINGID-MINUTES-04): the secretary revising the draft must see
+   * the reason it came back. Null when the draft was never rejected.
+   */
+  rejectionComments: string | null;
+  rejectedAt: string | null;
+  rejectedBy: string | null;
+  rejectedByName: string | null;
 }
 
 /** A tenant config entry (config-registry/schema.ts config). */

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, ConfirmDialog, EmptyState, ErrorState, StatCard, StatGrid, StatusPill } from "@/app/_components/ds";
@@ -77,7 +77,7 @@ function nextTransitions(status: string): { toState: string; label: string; dang
     case "in_progress":
       return [{ toState: "adjourned", label: "Adjourn meeting", danger: true }];
     case "adjourned":
-      return [{ toState: "minutes_pending", label: "Move to minutes" }];
+      return [{ toState: "minutes_pending", label: "Move to minutes", danger: true }];
     default:
       return [];
   }
@@ -94,6 +94,8 @@ function transitionConsequence(toState: string): string {
   switch (toState) {
     case "adjourned":
       return "Adjourning ends the live session — attendance and voting close, and the meeting moves toward minutes. This can't be undone.";
+    case "minutes_pending":
+      return "This moves the meeting into the minutes workflow — the live console closes and the secretary begins drafting minutes. This can't be undone.";
     default:
       return `This moves the meeting to "${humanize(toState)}" and can't be undone.`;
   }
@@ -216,6 +218,33 @@ export function MeetingConsole({
     }
   }, [meeting.id]);
 
+  // GAP-MEETING-MEETINGS-MEETINGID-01/04: live polling. While the meeting is
+  // in_progress and the tab is visible, re-fetch attendance + active votes on
+  // an interval so a quorum/tally on one device doesn't go stale across the
+  // several devices in a live room. Pauses while any request/dialog is in
+  // flight (busy) and when the tab is hidden; backs off is implicit (one
+  // request per tick, skipped while busy).
+  const POLL_MS = 8000;
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const busyRef = useRef<string | null>(busy);
+  busyRef.current = busy;
+  useEffect(() => {
+    if (status !== "in_progress") return;
+    let cancelled = false;
+    async function tick() {
+      if (cancelled) return;
+      if (busyRef.current !== null) return;
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      await Promise.all([refreshAttendance(), refreshVotes()]);
+      if (!cancelled) setLastUpdated(new Date());
+    }
+    const id = setInterval(() => void tick(), POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [status, refreshAttendance, refreshVotes]);
+
   async function onTransition(toState: string) {
     setBusy(`transition:${toState}`);
     setError(null);
@@ -311,7 +340,14 @@ export function MeetingConsole({
               <span style={{ fontSize: 13, color: "var(--ink2)" }}>· {meeting.venue}</span>
             )}
             {meeting.vcEnabled && meeting.vcLink && (
-              <a href={meeting.vcLink} className="lnk" style={{ fontSize: 13 }} rel="noreferrer">
+              <a
+                href={meeting.vcLink}
+                className="lnk"
+                style={{ fontSize: 13 }}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Join video conference (opens in a new tab)"
+              >
                 Join VC ↗
               </a>
             )}
@@ -385,7 +421,7 @@ export function MeetingConsole({
           <EmptyState
             icon="🗳️"
             title="No motion is open for voting"
-            message="Open a resolution below to start a vote. The live tally and result appear here."
+            message={'Use "Open a vote" below to start a motion. The live tally and result appear here.'}
           />
         ) : (
           <div style={{ display: "grid", gap: 14 }}>
@@ -487,9 +523,16 @@ export function MeetingConsole({
       <Card
         title="Attendance & quorum"
         link={
-          <button type="button" className="btn ghost sm" onClick={() => void refreshAttendance()}>
-            Refresh
-          </button>
+          <span style={{ display: "inline-flex", gap: 10, alignItems: "center" }}>
+            {status === "in_progress" && lastUpdated && (
+              <span style={{ fontSize: 11.5, color: "var(--ink2)" }}>
+                Updated {fmtTime(lastUpdated.toISOString())}
+              </span>
+            )}
+            <button type="button" className="btn ghost sm" onClick={() => void refreshAttendance()}>
+              Refresh
+            </button>
+          </span>
         }
         padding
       >
@@ -540,7 +583,9 @@ export function MeetingConsole({
                     <th style={labelStyle}>Role</th>
                     <th style={labelStyle}>Status</th>
                     <th style={labelStyle}>Checked in</th>
-                    <th style={labelStyle} />
+                    <th style={labelStyle}>
+                      <span className="sr-only">Actions</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -549,9 +594,19 @@ export function MeetingConsole({
                     return (
                       <tr key={p.participantId}>
                         <td>
-                          <div style={{ fontWeight: 600, ...monoStyle, fontSize: 12.5 }}>
-                            {p.employeeId || p.participantId}
-                          </div>
+                          {p.displayName ? (
+                            <>
+                              <div style={{ fontWeight: 600 }}>{p.displayName}</div>
+                              <div style={{ ...monoStyle, fontSize: 12, color: "var(--ink2)" }}>
+                                {p.designation ? `${p.designation} · ` : ""}
+                                {p.employeeId || p.participantId}
+                              </div>
+                            </>
+                          ) : (
+                            <div style={{ fontWeight: 600, ...monoStyle, fontSize: 12.5 }}>
+                              {p.employeeId || p.participantId}
+                            </div>
+                          )}
                           {p.isMandatory && (
                             <span style={{ fontSize: 11, color: "#b45309" }}>Mandatory</span>
                           )}
@@ -629,7 +684,6 @@ function VotePanel({
   vote,
   busy,
   setBusy,
-  setError,
   setToast,
   onChanged,
   myPosition,
@@ -648,6 +702,11 @@ function VotePanel({
   // treatment as MinutesPanel's approve/reject actions.
   const [confirmPosition, setConfirmPosition] = useState<VotePosition | null>(null);
   const [castErr, setCastErr] = useState<string | undefined>(undefined);
+  // GAP-MEETING-MEETINGS-MEETINGID-01: concluding closes voting and computes
+  // the result — ballots can't be added afterwards and there is no reopen — so
+  // it must be confirmed, like cast/adjourn, not fire on a single click.
+  const [concludeConfirm, setConcludeConfirm] = useState(false);
+  const [concludeErr, setConcludeErr] = useState<string | undefined>(undefined);
 
   async function castConfirmed() {
     if (!confirmPosition) return;
@@ -677,14 +736,15 @@ function VotePanel({
 
   async function conclude() {
     setBusy(`conclude:${vote.resolutionId}`);
-    setError(null);
+    setConcludeErr(undefined);
     setToast(null);
     try {
       await concludeVote(meetingId, vote.resolutionId);
       setToast("Vote concluded — result computed.");
+      setConcludeConfirm(false);
       await onChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not conclude the vote.");
+      setConcludeErr(err instanceof Error ? err.message : "Could not conclude the vote.");
     } finally {
       setBusy(null);
     }
@@ -770,7 +830,10 @@ function VotePanel({
           type="button"
           className="btn primary sm"
           disabled={busy !== null}
-          onClick={() => void conclude()}
+          onClick={() => {
+            setConcludeErr(undefined);
+            setConcludeConfirm(true);
+          }}
           style={{ marginLeft: "auto" }}
         >
           {busy === `conclude:${vote.resolutionId}` ? "…" : "Conclude vote"}
@@ -781,6 +844,20 @@ function VotePanel({
           Secret ballot — individual positions are withheld; only the aggregate tally is shown.
         </p>
       )}
+
+      <ConfirmDialog
+        open={concludeConfirm}
+        title="Conclude this vote?"
+        description={`Closes voting and computes the result per the ${humanize(vote.majorityRule)} rule. Ballots can't be added afterwards and the vote can't be reopened. Current tally — For ${vote.tally.votesFor}, Against ${vote.tally.votesAgainst}, Abstain ${vote.tally.votesAbstain} (total ${vote.tally.total}).`}
+        confirmLabel="Conclude vote"
+        danger
+        busy={busy !== null}
+        errorMessage={concludeErr}
+        onConfirm={() => void conclude()}
+        onCancel={() => {
+          if (busy === null) setConcludeConfirm(false);
+        }}
+      />
 
       <ConfirmDialog
         open={confirmPosition !== null}

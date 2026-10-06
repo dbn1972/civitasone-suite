@@ -193,4 +193,14 @@ describe("config-registry routes", () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  // GAP-MEETING-ADMIN-02: applying a preset is a config WRITE and must be
+  // admin-only — a non-admin is rejected before any policy is overwritten.
+  it("403 preset apply for a non-admin role", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/meetings/config/presets/board-of-directors",
+      headers: { authorization: `Bearer ${token(["committee_member"])}` }, payload: {},
+    });
+    expect(res.statusCode).toBe(403);
+  });
 });

@@ -136,3 +136,68 @@ describe("NewMeetingForm", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("NewMeetingForm — gap items", () => {
+  beforeEach(() => {
+    pushMock.mockClear();
+    createMeetingMock.mockReset();
+    listCommitteesMock.mockReset().mockResolvedValue([]);
+  });
+
+  it("GAP-MEETING-MEETINGS-NEW-01: rejects chairperson == secretary", async () => {
+    render(<NewMeetingForm />);
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Dup roles" } });
+    fireEvent.change(screen.getByLabelText(/Scheduled date/), { target: { value: "2027-01-15T10:00" } });
+    fireEvent.change(screen.getByLabelText(/Chairperson user ID/), { target: { value: VALID_UUID_1 } });
+    fireEvent.change(screen.getByLabelText(/Secretary user ID/), { target: { value: VALID_UUID_1 } });
+    fireEvent.click(screen.getByRole("button", { name: "Schedule meeting" }));
+    expect(
+      await screen.findByText("The secretary must be a different person from the chairperson."),
+    ).toBeInTheDocument();
+    expect(createMeetingMock).not.toHaveBeenCalled();
+  });
+
+  it("GAP-MEETING-MEETINGS-NEW-02: converts the datetime-local as IST (+05:30) regardless of TZ", async () => {
+    createMeetingMock.mockResolvedValue({ id: "m-1" });
+    render(<NewMeetingForm />);
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole("button", { name: "Schedule meeting" }));
+    await waitFor(() => expect(createMeetingMock).toHaveBeenCalledTimes(1));
+    // 10:00 IST == 04:30 UTC.
+    expect(createMeetingMock.mock.calls[0][0].scheduledAt).toBe("2027-01-15T04:30:00.000Z");
+  });
+
+  it("GAP-MEETING-MEETINGS-NEW-04: reuses one idempotency key across retries", async () => {
+    createMeetingMock.mockRejectedValueOnce(new Error("transient")).mockResolvedValueOnce({ id: "m-2" });
+    render(<NewMeetingForm />);
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole("button", { name: "Schedule meeting" }));
+    await waitFor(() => expect(createMeetingMock).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "Schedule meeting" }));
+    await waitFor(() => expect(createMeetingMock).toHaveBeenCalledTimes(2));
+    const key1 = createMeetingMock.mock.calls[0][1]?.idempotencyKey;
+    const key2 = createMeetingMock.mock.calls[1][1]?.idempotencyKey;
+    expect(key1).toBeTruthy();
+    expect(key1).toBe(key2);
+  });
+
+  it("GAP-MEETING-MEETINGS-NEW-05: Cancel on a dirty form opens a discard confirmation", () => {
+    render(<NewMeetingForm />);
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Edited" } });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it("GAP-MEETING-MEETINGS-NEW-05: Cancel on a pristine form navigates immediately", () => {
+    render(<NewMeetingForm />);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(pushMock).toHaveBeenCalledWith("/meeting/meetings");
+  });
+
+  it("GAP-MEETING-MEETINGS-NEW-03: shows a confidentiality explanation", () => {
+    render(<NewMeetingForm />);
+    fireEvent.change(screen.getByLabelText(/Confidentiality/), { target: { value: "secret" } });
+    expect(screen.getByText(/Secret — restricted to named participants/)).toBeInTheDocument();
+  });
+});

@@ -139,6 +139,8 @@ function mapLiveAttendance(payload: unknown): LiveAttendance | null {
     participants: asArray(o.participants).map((p) => ({
       participantId: str(p.participantId),
       employeeId: str(p.employeeId),
+      displayName: strOrNull(p.displayName) ?? strOrNull(p.name),
+      designation: strOrNull(p.designation) ?? strOrNull(p.title),
       role: str(p.role),
       isMandatory: bool(p.isMandatory),
       status: str(p.status, "absent"),
@@ -233,6 +235,12 @@ function mapMinutes(payload: unknown): Minutes | null {
     createdAt: strOrNull(o.createdAt),
     updatedAt: strOrNull(o.updatedAt),
     version: num(o.version, 1),
+    createdByName: strOrNull(o.createdByName),
+    approvedByName: strOrNull(o.approvedByName),
+    rejectionComments: strOrNull(o.rejectionComments),
+    rejectedAt: strOrNull(o.rejectedAt),
+    rejectedBy: strOrNull(o.rejectedBy),
+    rejectedByName: strOrNull(o.rejectedByName),
   };
 }
 
@@ -264,6 +272,60 @@ export function getMeetings(status?: MeetingStatus): Promise<LoaderResult<Meetin
     revalidateSeconds: 15,
     telemetryKey: `meeting.list.${status ?? "all"}`,
     mapResponse: mapMeetings,
+  });
+}
+
+/**
+ * Paginated/filterable meetings list (GAP-MEETING-MEETINGS-01 / GAP-MEETING-HOME-02).
+ * The service list endpoint paginates (`{ data, meta: { page, pageSize, total } }`,
+ * meeting-core/repo.listMeetings) and accepts `status` + `limit`/`offset`
+ * (listMeetingsQuerySchema extends the shared listQuerySchema), so the page can
+ * request a filtered slice and show the TRUE total instead of counting a single
+ * unpaginated page client-side. Free-text search is a separate POST /search
+ * endpoint and is intentionally out of scope here.
+ */
+export interface MeetingListQuery {
+  status?: MeetingStatus;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface MeetingListPage {
+  rows: Meeting[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
+function mapMeetingsMeta(payload: unknown): MeetingListPage | null {
+  const rows = mapMeetings(payload);
+  const meta =
+    payload && typeof payload === "object" && "meta" in payload
+      ? asObj((payload as { meta: unknown }).meta)
+      : null;
+  return {
+    rows,
+    page: num(meta?.page, 1),
+    pageSize: num(meta?.pageSize, rows.length),
+    total: num(meta?.total, rows.length),
+  };
+}
+
+export function getMeetingsPage(
+  query: MeetingListQuery = {},
+): Promise<LoaderResult<MeetingListPage>> {
+  const pageSize = query.pageSize && query.pageSize > 0 ? query.pageSize : 25;
+  const page = query.page && query.page > 1 ? query.page : 1;
+  const offset = (page - 1) * pageSize;
+  const params = new URLSearchParams();
+  if (query.status) params.set("status", query.status);
+  params.set("limit", String(pageSize));
+  if (offset > 0) params.set("offset", String(offset));
+  const empty: MeetingListPage = { rows: [], page, pageSize, total: 0 };
+  return fetchJson<unknown, MeetingListPage>(`/api/v1/meeting?${params.toString()}`, empty, {
+    revalidateSeconds: 15,
+    telemetryKey: `meeting.listpage.${query.status ?? "all"}`,
+    mapResponse: mapMeetingsMeta,
   });
 }
 

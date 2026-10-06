@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Card, EmptyState, StatusPill } from "@/app/_components/ds";
+import { Card, ConfirmDialog, EmptyState, StatusPill } from "@/app/_components/ds";
 import type { ConfigEntry, PresetName } from "../_data/types";
 import { PRESET_NAMES } from "../_data/types";
 import {
@@ -18,6 +18,13 @@ const monoStyle: React.CSSProperties = {
   fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
   fontVariantNumeric: "tabular-nums",
 };
+
+/** GAP-MEETING-ADMIN-06: always-visible allowed-range helper text for a number field. */
+function rangeHint(field: PolicyField): string {
+  if (field.min === undefined && field.max === undefined) return "";
+  const unit = field.unit ? ` ${field.unit}` : "";
+  return `Allowed: ${field.min ?? 0}–${field.max ?? "∞"}${unit}`;
+}
 
 function keyOf(namespace: string, configKey: string): string {
   return `${namespace}::${configKey}`;
@@ -42,6 +49,12 @@ export function AdminConfig({
   const [toast, setToast] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  // GAP-MEETING-ADMIN-01: a preset overwrites tenant governance — confirm first.
+  const [pendingPreset, setPendingPreset] = useState<PresetName | null>(null);
+  const [presetErr, setPresetErr] = useState<string | undefined>(undefined);
+  // GAP-MEETING-ADMIN-03/04: confirm turning a committee type Off.
+  const [pendingToggleOff, setPendingToggleOff] = useState<PolicyField | null>(null);
+  const [toggleErr, setToggleErr] = useState<string | undefined>(undefined);
 
   const byKey = useMemo(() => {
     const m = new Map<string, ConfigEntry>();
@@ -88,15 +101,31 @@ export function AdminConfig({
     setPresetBusy(preset);
     setError(null);
     setToast(null);
+    setPresetErr(undefined);
     try {
       await applyPreset(preset);
       setToast(`Applied the ${PRESET_LABELS[preset]} preset.`);
+      setPendingPreset(null);
       await reload();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not apply the preset.");
+      setPresetErr(err instanceof Error ? err.message : "Could not apply the preset.");
     } finally {
       setPresetBusy(null);
     }
+  }
+
+  // Count of policy values a preset will overwrite (every known policy knob +
+  // committee type), used in the confirmation copy.
+  const overwriteCount = POLICY_GROUPS.reduce((n, g) => n + g.fields.length, 0);
+
+  /** Committee-type fields and how many are currently enabled, for ADMIN-04. */
+  const committeeTypeFields = POLICY_GROUPS.flatMap((g) =>
+    g.fields.filter((f) => f.namespace === COMMITTEE_TYPES_NS),
+  );
+  function enabledCommitteeTypeCount(): number {
+    return committeeTypeFields.filter((f) =>
+      readBooleanValue(byKey.get(keyOf(f.namespace, f.configKey))?.value, f),
+    ).length;
   }
 
   return (
@@ -124,7 +153,10 @@ export function AdminConfig({
               type="button"
               className="btn ghost"
               disabled={presetBusy !== null}
-              onClick={() => void onApplyPreset(p)}
+              onClick={() => {
+                setPresetErr(undefined);
+                setPendingPreset(p);
+              }}
             >
               {presetBusy === p ? "Applying…" : PRESET_LABELS[p]}
             </button>
@@ -181,9 +213,22 @@ export function AdminConfig({
                     </div>
                     <button
                       type="button"
+                      role="switch"
+                      aria-checked={current}
+                      aria-label={field.label}
                       className={current ? "btn primary" : "btn ghost"}
                       disabled={busy}
-                      onClick={() => void save(field, encodeBooleanValue(field.namespace, !current))}
+                      onClick={() => {
+                        if (current && field.namespace === COMMITTEE_TYPES_NS) {
+                          // GAP-MEETING-ADMIN-03/04: turning a committee type OFF
+                          // changes tenant governance — confirm, and warn when
+                          // it's the last one enabled (all-off = all permitted).
+                          setToggleErr(undefined);
+                          setPendingToggleOff(field);
+                        } else {
+                          void save(field, encodeBooleanValue(field.namespace, !current));
+                        }
+                      }}
                     >
                       {busy ? "…" : current ? "On" : "Off"}
                     </button>
@@ -233,6 +278,7 @@ export function AdminConfig({
                         type="number"
                         aria-label={field.label}
                         aria-invalid={outOfRange || undefined}
+                        aria-describedby={`${k}-range`}
                         value={draft}
                         min={field.min}
                         max={field.max}
@@ -243,14 +289,25 @@ export function AdminConfig({
                           borderRadius: 8,
                           border: `1px solid ${outOfRange ? "var(--bad)" : "var(--line)"}`,
                           ...monoStyle,
-                          textAlign: "right",
+                          textAlign: "end",
                         }}
                       />
-                      {outOfRange && (
-                        <div style={{ fontSize: 11, color: "var(--bad)", marginTop: 3, textAlign: "right" }}>
-                          {field.min}–{field.max}
-                        </div>
-                      )}
+                      {/* GAP-MEETING-ADMIN-06: show the allowed range ALWAYS
+                          (before typing), and a full-sentence error when the
+                          value is out of range. */}
+                      <div
+                        id={`${k}-range`}
+                        style={{
+                          fontSize: 11,
+                          color: outOfRange ? "var(--bad)" : "var(--ink2)",
+                          marginTop: 3,
+                          textAlign: "end",
+                        }}
+                      >
+                        {outOfRange
+                          ? `Enter a value between ${field.min} and ${field.max}${field.unit ? " " + field.unit : ""}.`
+                          : rangeHint(field)}
+                      </div>
                     </div>
                     {field.unit && (
                       <span style={{ fontSize: 12.5, color: "var(--ink2)", minWidth: 52 }}>
@@ -272,6 +329,45 @@ export function AdminConfig({
           </div>
         </Card>
       ))}
+
+      <ConfirmDialog
+        open={pendingPreset !== null}
+        title={pendingPreset ? `Apply the ${PRESET_LABELS[pendingPreset]} preset?` : "Apply preset?"}
+        description={`This overwrites all ${overwriteCount} tenant policy values below with the preset's baseline — agenda, minutes, escalation and committee-type settings. Your current tuned values will be replaced. This can't be undone.`}
+        confirmLabel="Overwrite and apply"
+        danger
+        busy={presetBusy !== null}
+        errorMessage={presetErr}
+        onConfirm={() => {
+          if (pendingPreset) void onApplyPreset(pendingPreset);
+        }}
+        onCancel={() => {
+          if (presetBusy === null) setPendingPreset(null);
+        }}
+      />
+
+      <ConfirmDialog
+        open={pendingToggleOff !== null}
+        title={pendingToggleOff ? `Turn off “${pendingToggleOff.label}”?` : "Turn off committee type?"}
+        description={
+          enabledCommitteeTypeCount() <= 1
+            ? "This is the last enabled committee type. With none enabled, the engine permits EVERY committee type by default — the opposite of restricting them. Turn one on explicitly if you mean to limit the permitted types."
+            : "This changes which committee types this tenant may constitute. Members won't be able to constitute a committee of this type."
+        }
+        confirmLabel="Turn off"
+        danger
+        busy={busyKey !== null}
+        errorMessage={toggleErr}
+        onConfirm={() => {
+          if (!pendingToggleOff) return;
+          const f = pendingToggleOff;
+          setPendingToggleOff(null);
+          void save(f, encodeBooleanValue(f.namespace, false));
+        }}
+        onCancel={() => {
+          if (busyKey === null) setPendingToggleOff(null);
+        }}
+      />
     </>
   );
 }
