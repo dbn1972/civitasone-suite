@@ -5,7 +5,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "CivitasOne — The ERP that works without internet",
   description:
-    "Built for Indian Government, PSU, and Small Offices. Offline-first. Zero training. ₹0 licensing.",
+    "Built for Indian Government, PSU, and Small Offices. Offline-first. Zero training. ₹0 licensing for Small Office.",
 };
 
 function NavBar() {
@@ -93,8 +93,14 @@ function Footer() {
 }
 
 export default function MarketingLayout({ children }: { children: ReactNode }) {
+  // GAP-PRICING-HOME-05 decision: the marketing site uses a single, consistent
+  // light Tailwind palette by design (the landing, pricing, sandbox and docs
+  // pages all share it) and has no dark: variants. Rather than invent a
+  // half-done dark theme, the marketing surface is explicitly declared
+  // light-only via `color-scheme: light`, so a user agent in dark mode will
+  // not auto-invert form controls / scrollbars and render it illegibly.
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white [color-scheme:light]" data-color-scheme="light">
       <NavBar />
       <main id="main">{children}</main>
       <Footer />

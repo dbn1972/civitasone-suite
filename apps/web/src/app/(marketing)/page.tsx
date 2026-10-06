@@ -5,6 +5,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { MODULE_COUNT } from "@/app/_data/moduleRegistry";
+import { SMALL_OFFICE_LICENSING_LABEL } from "./_data/pricing";
 
 /* ─────────────────────────────────────────────────────────────────────────────
  * CivitasOne Landing Page — Hero, Features, Modules, Comparison, CTA
@@ -87,7 +88,8 @@ export default function LandingPage() {
                 The ERP that works without internet.
               </h1>
               <p className="mt-6 text-lg text-gray-600 sm:text-xl">
-                Built for Indian Government, PSU, and Small Offices. Offline-first. Zero training. ₹0 licensing for Small Office (open source).
+                Built for Indian Government, PSU, and Small Offices. Offline-first. Zero training.{" "}
+                {SMALL_OFFICE_LICENSING_LABEL} (open source).
               </p>
               <div className="mt-8 flex flex-wrap gap-4">
                 <Link

@@ -178,7 +178,10 @@ describe("Pricing Page", () => {
   it("renders CTA buttons for each plan", () => {
     render(<PricingPage />);
     expect(screen.getByRole("link", { name: "Download" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Start Free Trial" })).toBeInTheDocument();
+    // GAP-PRICING-HOME-01: PSU CTA relabelled from "Start Free Trial" (which
+    // pointed at a non-existent /auth/register route) to an honest demo
+    // request routed to the existing /contact page.
+    expect(screen.getByRole("link", { name: "Request a demo" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Contact Sales" })).toBeInTheDocument();
   });
 });
