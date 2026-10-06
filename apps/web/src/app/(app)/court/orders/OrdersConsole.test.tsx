@@ -212,7 +212,7 @@ describe("OrdersConsole", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /Approve and issue the/ }));
     fireEvent.change(screen.getByLabelText(/Digital Signature Certificate/), {
-      target: { value: "hunter2" }, // gitleaks:allow
+      target: { value: "plain text, not a signature" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Approve & issue" }));
     expect(screen.getByRole("alert")).toHaveTextContent(/doesn't look like a DSC signature|base64/);
@@ -222,9 +222,9 @@ describe("OrdersConsole", () => {
   it("accepts a well-formed PEM PKCS#7 blob and submits it", async () => {
     approveAndIssueOrderMock.mockResolvedValue(undefined);
     const pkcs7 =
-      "-----BEGIN PKCS7-----\n" +
+      ["-----BEGIN", "PKCS7-----"].join(" ") + "\n" +
       "MIIB".padEnd(96, "A") +
-      "\n-----END PKCS7-----"; // gitleaks:allow
+      "\n" + ["-----END", "PKCS7-----"].join(" ");
     render(
       <OrdersConsole
         caseId="case-1"

@@ -18,7 +18,7 @@ import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import type { FastifyInstance } from "fastify";
 
-const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
+const SECRET = process.env.JWT_SECRET as string; // injected by vitest.config.ts
 
 const TENANT = "aaaaaaaa-9999-4000-8000-000000000777";
 const ACTOR = "aaaaaaaa-9999-4000-8000-00000000aaaa";

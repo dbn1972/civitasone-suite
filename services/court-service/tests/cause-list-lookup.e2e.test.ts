@@ -13,7 +13,7 @@ import { sqlClient } from "../src/shared/db.js";
 import { deriveCauseListId } from "../src/modules/cause-list/domain.js";
 
 const RUN = process.env.COURT_E2E === "1";
-const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr"; // gitleaks:allow
+const SECRET = process.env.JWT_SECRET as string; // injected by vitest.config.ts
 
 const T = randomUUID();
 const ACTOR = "9999aaaa-9999-4999-8999-999999999999";
