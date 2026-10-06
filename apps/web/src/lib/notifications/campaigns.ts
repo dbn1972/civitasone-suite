@@ -24,6 +24,14 @@ export type Source = "api" | "error";
 export interface LoaderResult<T> {
   data: T;
   source: Source;
+  /**
+   * GAP-NOTIFICATIONS-CAMPAIGNS-DETAIL-02: true when the fetch failed because
+   * the resource genuinely does not exist (HTTP 404), as distinct from any
+   * other failed load (network/5xx). A screen must render "not found" (a dead
+   * end for an unknown id) differently from a transient "couldn't load" with a
+   * Retry. Only ever set alongside source === "error".
+   */
+  notFound?: boolean;
 }
 
 /* --------------------------------------------------------------- helpers -- */
@@ -265,7 +273,7 @@ export async function getCampaigns(limit = 50, offset = 0): Promise<CampaignList
 export async function getCampaign(id: string): Promise<LoaderResult<Campaign | null>> {
   try {
     const res = await browserFetch(`notification/campaigns/${encodeURIComponent(id)}`);
-    if (!res.ok) return { data: null, source: "error" };
+    if (!res.ok) return { data: null, source: "error", notFound: res.status === 404 };
     const raw = await res.json();
     const unwrapped = raw && typeof raw === "object" && "data" in raw ? (raw as Record<string, unknown>).data : raw;
     return { data: normaliseCampaign(unwrapped), source: "api" };
@@ -277,7 +285,7 @@ export async function getCampaign(id: string): Promise<LoaderResult<Campaign | n
 export async function getCampaignMetrics(id: string): Promise<LoaderResult<CampaignMetrics | null>> {
   try {
     const res = await browserFetch(`notification/campaigns/${encodeURIComponent(id)}/metrics`);
-    if (!res.ok) return { data: null, source: "error" };
+    if (!res.ok) return { data: null, source: "error", notFound: res.status === 404 };
     const raw = await res.json();
     const unwrapped = raw && typeof raw === "object" && "data" in raw ? (raw as Record<string, unknown>).data : raw;
     return { data: normaliseMetrics(unwrapped), source: "api" };

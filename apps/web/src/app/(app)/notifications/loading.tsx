@@ -1,11 +1,8 @@
+import { RouteSkeleton } from "../../_components/RouteSkeleton";
+
+// GAP-NOTIFICATIONS-HOME-02: the hub is a tile grid, so its loading state is a
+// 3×2 tile skeleton that follows dark mode (DS tokens) and does not force a
+// light min-h-screen background that fights the app shell.
 export default function NotificationsLoading() {
-  return (
-    <div className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <div className="mx-auto max-w-7xl animate-pulse space-y-5">
-        <div className="h-4 w-40 rounded bg-slate-200" />
-        <div className="h-9 w-52 rounded bg-slate-200" />
-        <div className="h-72 rounded-xl bg-slate-200" />
-      </div>
-    </div>
-  );
+  return <RouteSkeleton variant="tiles" />;
 }

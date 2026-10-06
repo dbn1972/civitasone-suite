@@ -1,12 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import type { NotificationItem } from "@civitasone/types";
 import { PageHeader, StatCard, StatGrid, DataTable, Segmented, EmptyState, ErrorState } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import type { DataProvenance } from "@/lib/sync/resource";
 import { useOfflineResource } from "@/lib/sync/resource";
 import { toHumanError } from "@/lib/messages";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDateTime, maskRecipient } from "@/lib/formatters";
 import { StatusBadge } from "../_components/StatusBadge";
+import { bucketCounts, isUnread } from "../_components/classifyStatus";
 
 type NotifRow = {
   id: string;
@@ -30,6 +34,13 @@ function toArray(payload: unknown): NotificationItem[] {
 
 const TABS = ["All", "Unread", "Failed"] as const;
 
+const HEADER_LINKS = [
+  { href: "/notifications/templates", label: "Templates", variant: "ghost" },
+  { href: "/notifications/deliveries", label: "Deliveries", variant: "ghost" },
+  { href: "/tenant-admin/notifications", label: "Settings", variant: "ghost" },
+  { href: "/notifications/compose", label: "Send notification", variant: "primary" },
+] as const;
+
 export default function NotificationsListPage() {
   const { data: notifications, source, offline, cachedAt, loading, error, refresh } = useOfflineResource<unknown, NotificationItem[]>(
     "notifications.list",
@@ -39,28 +50,42 @@ export default function NotificationsListPage() {
 
   const [tab, setTab] = useState<string>("All");
 
-  const sent = notifications.filter((n) => n.status === "sent").length;
-  const failed = notifications.filter((n) => n.status === "failed").length;
-  const read = notifications.filter((n) => n.status === "read").length;
+  // GAP-NOTIFICATIONS-LIST-02: counts come from one shared classifier so the
+  // tiles always sum to Total and failed/queued events are not miscounted.
+  const counts = bucketCounts(notifications.map((n) => n.status));
 
-  const cacheNote =
-    offline || source === "cache"
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
-      : null;
+  // GAP-NOTIFICATIONS-LIST-03: never render a fabricated 0 while loading or on
+  // error — show "—" so the clerk doesn't read a failed/pending fetch as an
+  // empty inbox. (These counts describe this page of results; see HUMAN REVIEW
+  // on server-side aggregate totals.)
+  const unknown = loading || Boolean(error);
+  const stat = (n: number) => (unknown ? "—" : n.toLocaleString("en-IN"));
+
+  // GAP-NOTIFICATIONS-LIST-04: one provenance value, derived from the SAME hook
+  // call the table renders from, drives the badge — no second, separately
+  // derived cache note that could disagree. Hidden entirely when the error
+  // state is shown (we don't claim "saved data" and "couldn't load" at once).
+  const provenance: DataProvenance = error && notifications.length === 0 // ux-001-ok: this IS the error branch (error is checked first); length only distinguishes error-no-data from error-with-stale-rows, never renders an empty state
+    ? "error-no-data"
+    : offline || source === "cache"
+      ? "cached"
+      : "live";
 
   const tableRows: NotifRow[] = notifications.map((n) => ({
     id: n.id,
     title: n.title,
     module: n.module,
-    recipient: n.recipient,
+    // GAP-NOTIFICATIONS-LIST-01: recipient is DPDP personal data — never printed verbatim.
+    recipient: maskRecipient(n.recipient),
     channel: n.channel.replace(/_/g, " "),
     status: n.status,
-    createdAt: formatIndianDate(n.createdAt),
+    // GAP-NOTIFICATIONS-LIST-05: show date AND time — inbox events can be minutes old.
+    createdAt: formatIndianDateTime(n.createdAt),
   }));
 
   const filtered =
     tab === "Unread"
-      ? tableRows.filter((r) => r.status !== "read")
+      ? tableRows.filter((r) => isUnread(r.status))
       : tab === "Failed"
         ? tableRows.filter((r) => r.status === "failed")
         : tableRows;
@@ -72,23 +97,20 @@ export default function NotificationsListPage() {
         subtitle="All notification events across the platform."
         actions={
           <>
-            <a className="btn ghost" href="/notifications/templates">Templates</a>
-            <a className="btn ghost" href="/notifications/deliveries">Deliveries</a>
-            <a className="btn ghost" href="/tenant-admin/notifications">Settings</a>
-            <a className="btn primary" href="/notifications/compose">Send notification</a>
+            {HEADER_LINKS.map((l) => (
+              <Link key={l.href} className={`btn ${l.variant}`} href={l.href}>
+                {l.label}
+              </Link>
+            ))}
           </>
         }
       />
-      {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>
-          {cacheNote}
-        </p>
-      ) : null}
+      {!error ? <DataSourceBadge provenance={provenance} cachedAt={cachedAt} offline={offline} /> : null}
       <StatGrid>
-        <StatCard icon="🔔" iconBg="#eef2ff" label="Total" value={notifications.length.toLocaleString("en-IN")} />
-        <StatCard icon="✅" iconBg="#ecfdf5" label="Sent" value={sent.toLocaleString("en-IN")} />
-        <StatCard icon="❌" iconBg="#fef2f2" label="Failed" value={failed.toLocaleString("en-IN")} />
-        <StatCard icon="👁" iconBg="#f8fafc" label="Read" value={read.toLocaleString("en-IN")} />
+        <StatCard icon="🔔" iconBg="#eef2ff" label="Total" value={stat(counts.total)} />
+        <StatCard icon="✅" iconBg="#ecfdf5" label="Delivered" value={stat(counts.delivered)} />
+        <StatCard icon="❌" iconBg="#fef2f2" label="Failed" value={stat(counts.failed)} />
+        <StatCard icon="⏳" iconBg="#fffbeb" label="In progress" value={stat(counts.inProgress)} />
       </StatGrid>
       <div className="card">
         <div className="card-h">
@@ -120,6 +142,7 @@ export default function NotificationsListPage() {
               { key: "createdAt", label: "Created At" },
             ]}
             rows={filtered}
+            rowHref={(r) => `/notifications/deliveries/${r.id}`}
             sortable
             filterable
             filterPlaceholder="Filter notifications…"

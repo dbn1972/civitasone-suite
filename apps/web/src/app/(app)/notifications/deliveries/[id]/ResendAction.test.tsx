@@ -12,7 +12,7 @@ describe("ResendAction", () => {
     return waitFor(() => expect(screen.getByText("Resend this notification?")).toBeInTheDocument());
   }
 
-  it("resends to the correct proxied endpoint and reports success", async () => {
+  it("resends to the correct proxied endpoint and links the new delivery on success", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 202 }));
     const onResent = vi.fn();
 
@@ -28,12 +28,18 @@ describe("ResendAction", () => {
       recipient: "clerk@example.gov.in",
       channel: "email",
     });
+    // DETAIL-06: success message links to Deliveries.
+    expect(await screen.findByRole("link", { name: /deliveries/i })).toHaveAttribute("href", "/notifications/deliveries");
   });
 
-  // UX-016: this used to show the RAW response body text verbatim
-  // (`text || \`Resend failed (HTTP ${status})\``), not even parsed as JSON.
-  // It must now show only the catalogued, clerk-safe copy — never the raw
-  // server text.
+  // DETAIL-01: the confirm dialog is honest that fill-in fields use defaults.
+  it("warns in the dialog that fill-in fields use default values", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 202 }));
+    render(<ResendAction templateId="tmpl-1" recipient="clerk@example.gov.in" channel="email" />);
+    await openAndConfirm();
+    expect(screen.getByText(/default values/i)).toBeInTheDocument();
+  });
+
   it("shows a clerk-safe error, not the raw server text, when the resend fails", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response("notification-service: template has been archived", { status: 422 }),

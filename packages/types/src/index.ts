@@ -435,6 +435,14 @@ export interface NotificationExperiment {
   name: string;
   status: string;
   winnerVariantId: string | null;
+  /**
+   * GAP-NOTIFICATIONS-EXPERIMENTS-04: the human-readable key of the winning
+   * variant (e.g. "B"), resolved server-side from winnerVariantId so approvers
+   * see which variant won rather than an opaque uuid. Null when no winner is
+   * set or the variant could not be resolved. Optional for backward
+   * compatibility with older payloads that predate this field.
+   */
+  winnerVariantKey?: string | null;
   winnerMarginPct: number | null;
   concludedAt: string | null;
 }

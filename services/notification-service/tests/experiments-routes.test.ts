@@ -250,6 +250,32 @@ describe("GET /v1/notification/experiments", () => {
     await app.close();
     expect(res.statusCode).toBe(403);
   });
+
+  // GAP-NOTIFICATIONS-EXPERIMENTS-04: the list must resolve the winner's short
+  // variant key so the UI can show "Variant B" rather than an opaque uuid.
+  it("resolves winnerVariantKey from winnerVariantId for a concluded experiment", async () => {
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.update(experiments).set({
+        status: "concluded", winnerVariantId: VAR_B, winnerMarginPct: 9,
+      }).where(eq(experiments.id, EXP));
+    }));
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET", url: "/v1/notification/experiments?limit=50", headers: bearer(["marketing_admin"]),
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    const row = res.json().data.find((r: { id: string }) => r.id === EXP);
+    expect(row.winnerVariantId).toBe(VAR_B);
+    expect(row.winnerVariantKey).toBe("b");
+    expect(row.winnerMarginPct).toBe(9);
+    // Reset so later specs in this describe see the seeded running state.
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.update(experiments).set({
+        status: "running", winnerVariantId: null, winnerMarginPct: null,
+      }).where(eq(experiments.id, EXP));
+    }));
+  });
 });
 
 describe("POST /v1/notification/experiments/:id/events", () => {
@@ -598,6 +624,73 @@ describe("POST /v1/notification/experiments/:id/conclude", () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST", url: `/v1/notification/experiments/${EXP}/conclude`, headers: bearer(["audit_officer"]),
+    });
+    await app.close();
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+describe("POST /v1/notification/experiments/:id/approve-winner — maker-checker (GAP-NOTIFICATIONS-EXPERIMENTS-01)", () => {
+  const APPROVER = "eeeebbbb-1111-4000-8000-0000000000bb";
+  function tokenAs(sub: string, roles: string[]): string {
+    return signToken({ sub, tid: TENANT, roles, sid: "sess-approve" }, SECRET, 3600);
+  }
+  const bearerAs = (sub: string, roles: string[]) => ({ authorization: `Bearer ${tokenAs(sub, roles)}` });
+
+  beforeEach(cleanup);
+
+  async function seedPendingApprovalBy(requester: string): Promise<void> {
+    // Seed a running experiment, then move it to pending_approval with
+    // updatedBy = the requester (mirrors requestWinnerApproval's setStatus).
+    await seedExperiment("running", 100);
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.update(experiments).set({
+        status: "pending_approval", updatedBy: requester, version: 2,
+      }).where(eq(experiments.id, EXP));
+    }));
+  }
+
+  it("403 when the actor who requested conclusion tries to self-approve the winner", async () => {
+    await seedPendingApprovalBy(ACTOR);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST", url: `/v1/notification/experiments/${EXP}/approve-winner`,
+      headers: bearerAs(ACTOR, ["marketing_admin"]),
+    });
+    await app.close();
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("MAKER_CHECKER_SAME_ACTOR");
+  });
+
+  it("202 when a different reviewer approves the winner", async () => {
+    await seedPendingApprovalBy(ACTOR);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST", url: `/v1/notification/experiments/${EXP}/approve-winner`,
+      headers: bearerAs(APPROVER, ["marketing_admin"]),
+    });
+    await app.close();
+    expect(res.statusCode).toBe(202);
+  });
+
+  it("409 when the experiment is not pending approval", async () => {
+    await seedExperiment("running", 100);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST", url: `/v1/notification/experiments/${EXP}/approve-winner`,
+      headers: bearerAs(APPROVER, ["marketing_admin"]),
+    });
+    await app.close();
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("NOT_PENDING_APPROVAL");
+  });
+
+  it("403 for a read-only role even if a different actor", async () => {
+    await seedPendingApprovalBy(ACTOR);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST", url: `/v1/notification/experiments/${EXP}/approve-winner`,
+      headers: bearerAs(APPROVER, ["audit_officer"]),
     });
     await app.close();
     expect(res.statusCode).toBe(403);

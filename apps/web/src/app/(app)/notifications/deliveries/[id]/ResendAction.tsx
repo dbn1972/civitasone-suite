@@ -22,6 +22,14 @@ function resendActionError(): string {
  * honestly issues a fresh send for the same template + recipient via
  * POST /notification/send. The action is gated behind the DS ConfirmDialog
  * (maker-checker) and announces the result through a polite aria-live region.
+ *
+ * GAP-NOTIFICATIONS-DELIVERIES-DETAIL-01: this re-send carries only
+ * templateId + recipient + channel — it does NOT re-send the original rendered
+ * payload/variables (the delivery row doesn't store them), so a template with
+ * {{placeholders}} would be re-rendered with the service's defaults. The
+ * confirm dialog says so honestly rather than silently sending blanks. The
+ * button itself is shown only to roles that may send (resolved in page.tsx);
+ * the service's send route stays the authority.
  */
 export function ResendAction({
   templateId,
@@ -34,7 +42,7 @@ export function ResendAction({
   channel: string;
   onResent?: () => void;
 }) {
-  const [result, setResult] = useState<string>("");
+  const [done, setDone] = useState(false);
 
   const channelEnum =
     channel === "in_app" || channel === "email" || channel === "sms" || channel === "push" || channel === "whatsapp"
@@ -42,7 +50,6 @@ export function ResendAction({
       : undefined;
 
   async function resend() {
-    setResult("");
     const res = await fetch(`/api/proxy/notification/send`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -60,21 +67,23 @@ export function ResendAction({
         confirmTitle="Resend this notification?"
         confirmDescription={
           <>
-            This issues a fresh send of the same template to <strong>{recipient}</strong>. The original
-            failed delivery is left unchanged for audit. The service queues the new send asynchronously.
+            This issues a fresh send of the same template to this recipient. The original failed
+            delivery is left unchanged for audit, and a new delivery is created. If the template has
+            fill-in fields, they are re-filled with the template&apos;s default values (the original
+            values aren&apos;t stored on the delivery).
           </>
         }
         confirmLabel="Resend"
         onConfirm={resend}
         onSuccess={() => {
-          setResult("Resend queued. A new delivery will appear once the send is processed.");
+          setDone(true);
           onResent?.();
         }}
       />
-      <span role="status" aria-live="polite" className="sr-only">{result}</span>
-      {result ? (
+      {done ? (
         <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#067647", margin: "8px 0 0" }}>
-          {result}
+          Resend queued. The new delivery will appear in{" "}
+          <a href="/notifications/deliveries">Deliveries</a> once the send is processed.
         </p>
       ) : null}
     </>

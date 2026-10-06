@@ -1,7 +1,7 @@
 /**
  * CR-MKT-05 — experiment reads/writes.
  */
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { db, readScoped } from "../../shared/db.js";
 import {
   experiments,
@@ -126,6 +126,31 @@ export async function listVariants(
       eq(experimentVariants.experimentId, experimentId),
     ))
     .orderBy(experimentVariants.variantKey));
+}
+
+/**
+ * GAP-NOTIFICATIONS-EXPERIMENTS-04: resolve the short variant keys for a set of
+ * winner variant ids, so the experiments list can show "Variant B" instead of
+ * an opaque uuid. Stays within the experiments module schema (same-module read,
+ * no cross-module join). Returns an id -> key map; ids with no matching variant
+ * are simply absent.
+ */
+export async function variantKeysByIds(
+  tenantId: string, variantIds: readonly string[],
+): Promise<Record<string, string>> {
+  const unique = [...new Set(variantIds)].filter((v): v is string => Boolean(v));
+  if (unique.length === 0) return {};
+  const rows = await readScoped(tenantId, (tx) => tx.select({
+    id: experimentVariants.id,
+    key: experimentVariants.variantKey,
+  }).from(experimentVariants)
+    .where(and(
+      eq(experimentVariants.tenantId, tenantId),
+      inArray(experimentVariants.id, unique),
+    )));
+  const map: Record<string, string> = {};
+  for (const r of rows) map[r.id] = r.key;
+  return map;
 }
 
 export async function listEvents(

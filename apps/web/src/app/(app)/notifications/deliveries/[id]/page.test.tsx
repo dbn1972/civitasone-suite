@@ -1,53 +1,52 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render } from "@testing-library/react";
 
-vi.mock("next/navigation", () => ({
-  useParams: () => ({ id: "del-1" }),
+const mockGet = vi.fn();
+vi.mock("next/headers", () => ({
+  cookies: () => ({ get: mockGet }),
 }));
+
+// Capture the props the server wrapper passes into the client component.
+const captured: { canResend?: boolean; canSeeTechnicalDetail?: boolean } = {};
+vi.mock("./DeliveryDetail", () => ({
+  DeliveryDetail: (props: { canResend: boolean; canSeeTechnicalDetail: boolean }) => {
+    captured.canResend = props.canResend;
+    captured.canSeeTechnicalDetail = props.canSeeTechnicalDetail;
+    return null;
+  },
+}));
+
+function makeJwt(payload: Record<string, unknown>): string {
+  const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
+  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  return `${header}.${body}.fakesig`;
+}
+function sessionWithRoles(roles: string[]) {
+  mockGet.mockReturnValue({ value: makeJwt({ sub: "u-1", roles }) });
+}
 
 import DeliveryDetailPage from "./page";
 
-describe("DeliveryDetailPage", () => {
+describe("DeliveryDetailPage role capabilities", () => {
   beforeEach(() => {
-    vi.restoreAllMocks();
+    mockGet.mockReset();
+    captured.canResend = undefined;
+    captured.canSeeTechnicalDetail = undefined;
   });
 
-  it("renders delivery details on success", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          id: "del-1",
-          templateId: "tmpl-1",
-          recipient: "clerk@example.gov.in",
-          channel: "email",
-          status: "delivered",
-        }),
-        { status: 200 },
-      ),
-    );
-
-    render(<DeliveryDetailPage />);
-    expect(await screen.findByText("clerk@example.gov.in")).toBeInTheDocument();
+  it("grants resend + technical detail to a notification_admin", () => {
+    sessionWithRoles(["notification_admin"]);
+    render(DeliveryDetailPage());
+    expect(captured.canResend).toBe(true);
+    expect(captured.canSeeTechnicalDetail).toBe(true);
   });
 
-  // UX-016 (beyond the guard's own regex): the load path used to throw
-  // `HTTP_${status}` and the catch used to read the caught exception's own
-  // `.message` directly, surfacing that raw sentinel to the clerk. It must
-  // now show only the catalogued, clerk-safe copy.
-  it("shows a clerk-safe load error, not the raw HTTP_<status> sentinel, when the fetch fails", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));
-
-    render(<DeliveryDetailPage />);
-
-    expect(await screen.findByText("Couldn't load this delivery")).toBeInTheDocument();
-    expect(screen.queryByText(/HTTP_500/)).not.toBeInTheDocument();
-  });
-
-  it("shows the honest not-found state for a 404, distinct from a real load error", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 404 }));
-
-    render(<DeliveryDetailPage />);
-
-    expect(await screen.findByText("Delivery not found")).toBeInTheDocument();
+  // audit_officer may read (deliveries/layout admits it) but may NOT send and
+  // is NOT an admin, so neither resend nor raw technical detail is offered.
+  it("denies resend + technical detail to an audit_officer", () => {
+    sessionWithRoles(["audit_officer"]);
+    render(DeliveryDetailPage());
+    expect(captured.canResend).toBe(false);
+    expect(captured.canSeeTechnicalDetail).toBe(false);
   });
 });

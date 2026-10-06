@@ -78,12 +78,19 @@ export async function experimentRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READ_ROLES);
     const q = listQuery.parse(req.query);
     const { rows, total } = await repo.listExperiments(ctx.tenantId, q.limit, q.offset);
+    // GAP-NOTIFICATIONS-EXPERIMENTS-04: resolve winner variant keys so the UI
+    // can show "Variant B" rather than an opaque uuid. Same-module read.
+    const winnerIds = rows
+      .map((r) => r.winnerVariantId)
+      .filter((v): v is string => Boolean(v));
+    const keyById = await repo.variantKeysByIds(ctx.tenantId, winnerIds);
     return reply.send({
       data: rows.map((r) => ({
         id: r.id,
         name: r.name,
         status: r.status,
         winnerVariantId: r.winnerVariantId,
+        winnerVariantKey: r.winnerVariantId ? (keyById[r.winnerVariantId] ?? null) : null,
         winnerMarginPct: r.winnerMarginPct,
         concludedAt: r.concludedAt ? r.concludedAt.toISOString() : null,
       })),
@@ -194,6 +201,18 @@ export async function experimentRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "ALREADY_CONCLUDED", "experiment is already concluded");
     }
     if (blocked) throw new HttpError(409, "NOT_PENDING_APPROVAL", "conclude the experiment before approving a winner");
+    // GAP-NOTIFICATIONS-EXPERIMENTS-01 — maker-checker separation: the actor who
+    // requested conclusion (recorded as updatedBy when the experiment moved to
+    // pending_approval) must NOT be the one who approves promotion of the
+    // winner. Fail closed with 403 rather than letting a single person both
+    // request and self-approve. See the HUMAN REVIEW note in the batch report.
+    if (experiment.updatedBy === ctx.actorId) {
+      throw new HttpError(
+        403,
+        "MAKER_CHECKER_SAME_ACTOR",
+        "the winner must be approved by a different reviewer than the one who requested conclusion",
+      );
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveWinner(ctx, id));
   });
 

@@ -7,6 +7,8 @@ function toTemplateView(r: typeof notificationTemplates.$inferSelect): TemplateV
   return {
     id: r.id, tenantId: r.tenantId, channel: r.channel, name: r.name, subject: r.subject ?? null,
     body: r.body, status: r.status, version: r.version, supersededBy: r.supersededBy ?? null,
+    createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : (r.createdAt ?? null),
+    createdBy: r.createdBy ?? null,
     contentType: r.contentType ?? null, submittedBy: r.submittedBy ?? null,
     submittedAt: r.submittedAt ?? null, approvedBy: r.approvedBy ?? null,
     approvedAt: r.approvedAt ?? null, rejectionReason: r.rejectionReason ?? null,

@@ -63,10 +63,13 @@ describe("campaign loaders (paths + error gating)", () => {
     expect(r.source).toBe("api");
   });
 
-  it("getCampaign returns error on failure", async () => {
+  // GAP-NOTIFICATIONS-CAMPAIGNS-DETAIL-02: a 404 is flagged notFound so the
+  // detail page can say "Campaign not found" instead of a generic retry.
+  it("getCampaign returns error on failure and flags notFound only for 404", async () => {
     bf().mockResolvedValue(fail(404));
-    const r = await getCampaign("missing");
-    expect(r).toEqual({ data: null, source: "error" });
+    expect(await getCampaign("missing")).toEqual({ data: null, source: "error", notFound: true });
+    bf().mockResolvedValue(fail(500));
+    expect(await getCampaign("c1")).toEqual({ data: null, source: "error", notFound: false });
   });
 
   it("getCampaignMetrics hits the /metrics sub-path and keeps roiBps null", async () => {
