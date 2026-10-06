@@ -393,3 +393,17 @@ export const NOTIFICATION_SEND_ROLES = ["notification_admin", "super_admin", "pl
 /** Mirrors notification-service NOTIFY_READ_ROLES: send roles + audit_officer. */
 export const NOTIFICATION_READ_ROLES = [...NOTIFICATION_SEND_ROLES, "audit_officer"];
 export const NOTIFICATION_TEMPLATE_ADMIN_ROLES = ["platform_admin", "super_admin", "tenant_admin"];
+
+/**
+ * GAP-FIELD-VISITS-03 (PII/DPDP): roles permitted to see a field worker's
+ * precise GPS location and to export the visits list. field-service admits
+ * field_admin/field_agent/super_admin to GET /v1/field/visits, but a plain
+ * field_agent must NOT be able to browse/export every colleague's location
+ * history. DECISION (safest default, pending DPO confirmation — flagged for
+ * HUMAN REVIEW): only supervisory roles (field_admin, super_admin) may view
+ * coordinates and export; everyone else sees the list with the GPS column and
+ * CSV export withheld. Coordinates are additionally rounded for everyone
+ * (COORD_DISPLAY_PRECISION in visits.ts). The server remains the authority for
+ * who may read the endpoint; this gate decides what the UI reveals/exports.
+ */
+export const FIELD_VISIT_LOCATION_ROLES = ["field_admin", "super_admin"];

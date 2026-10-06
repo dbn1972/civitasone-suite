@@ -3,9 +3,11 @@
 import { Card, EmptyState } from "./ds";
 import { DataSourceBadge } from "./DataSourceBadge";
 import { RefreshErrorState } from "./ds/RefreshErrorState";
+import { StatusPill } from "./ds/StatusPill";
 import type { ModuleRowSummary } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
 import { toHumanError } from "@/lib/messages";
+import { formatIndianDate } from "@/lib/formatters";
 
 // GAP-ADMIN-GATEWAY-ROUTES-02: only UUID-shaped ids are shortened; slug ids
 // ("hrms-leave-requests") used to collapse to a shared 8-char prefix.
@@ -88,8 +90,15 @@ export function ModuleListTable({
                 <td><span className="mono" title={row.id}>{UUID_RE.test(row.id) ? row.id.slice(0, 8) : row.id}</span></td>
                 <td>{row.label}</td>
                 <td>{row.sublabel ?? "—"}</td>
-                <td>{row.status ?? "—"}</td>
-                <td>{row.meta ?? "—"}</td>
+                {/* GAP-FIELD-{AGENTS,ROUTES,SYNC,TASKS}-0x (UUID theme): render
+                    the status as a coloured StatusPill (humanized by the
+                    component) instead of raw lowercase text, and format a
+                    date-typed meta with formatIndianDate so a raw ISO
+                    timestamp never reaches the screen. Both are no-ops for
+                    callers that never set metaKind and whose status words are
+                    already in STATUS_MAP, so other modules are unaffected. */}
+                <td>{row.status ? <StatusPill status={row.status} /> : "—"}</td>
+                <td>{row.meta ? (row.metaKind === "date" ? formatIndianDate(row.meta) : row.meta) : "—"}</td>
               </tr>
             ))}
           </tbody>

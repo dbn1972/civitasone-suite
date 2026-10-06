@@ -524,6 +524,15 @@ export interface ModuleRowSummary {
   sublabel?: string;
   status?: string;
   meta?: string;
+  /**
+   * GAP-FIELD-{AGENTS,ROUTES,SYNC,TASKS}-0x (UUID theme): how `meta` should be
+   * rendered. "date" means `meta` is an ISO timestamp that ModuleListTable
+   * formats with formatIndianDate at render time (so a raw
+   * "2026-09-27T09:14:00.000Z" never reaches the screen); omitted/"text"
+   * keeps the existing verbatim rendering. Additive and optional, so every
+   * existing loader/consumer of ModuleRowSummary is unaffected.
+   */
+  metaKind?: "date" | "text";
 }
 
 export interface PurchaseOrderSummary {
