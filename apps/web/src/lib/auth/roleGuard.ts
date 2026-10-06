@@ -393,3 +393,32 @@ export const NOTIFICATION_SEND_ROLES = ["notification_admin", "super_admin", "pl
 /** Mirrors notification-service NOTIFY_READ_ROLES: send roles + audit_officer. */
 export const NOTIFICATION_READ_ROLES = [...NOTIFICATION_SEND_ROLES, "audit_officer"];
 export const NOTIFICATION_TEMPLATE_ADMIN_ROLES = ["platform_admin", "super_admin", "tenant_admin"];
+
+/**
+ * GAP-MEETING-HOME-04 / GAP-MEETING-ADMIN-02: roles permitted to administer
+ * tenant meeting configuration (policy knobs, presets, committee-type toggles).
+ * Mirrors meeting-service's CONFIG_WRITE_ROLES in
+ * services/meeting-service/src/modules/config-registry/routes.ts
+ * (`["tenant_admin","super_admin"]`) which guards POST /v1/meetings/config and
+ * the preset endpoint, PLUS `meeting_admin` who the same module admits to the
+ * config READ set and who operates these policies day-to-day. The service
+ * remains the authority (it 403s a non-admin write); this web gate only decides
+ * whether the UI offers the Admin Configuration tile / page controls so a plain
+ * member is not shown a page that is guaranteed to 403 on save.
+ */
+export const MEETING_CONFIG_ADMIN_ROLES = ["meeting_admin", "tenant_admin", "super_admin", "admin"];
+
+/**
+ * GAP-MEETING-MEETINGS-03: roles permitted to CREATE / schedule a meeting.
+ * Mirrors meeting-service's WRITE_ROLES in meeting-core/routes.ts
+ * (`["meeting_admin","committee_secretary","tenant_admin","super_admin","admin"]`)
+ * which guards POST /v1/meetings. The server is the authority; hiding the
+ * "+ New meeting" control for everyone else only avoids a guaranteed 403.
+ */
+export const MEETING_CREATE_ROLES = [
+  "meeting_admin",
+  "committee_secretary",
+  "tenant_admin",
+  "super_admin",
+  "admin",
+];

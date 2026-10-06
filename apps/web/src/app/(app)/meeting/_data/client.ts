@@ -116,8 +116,21 @@ export async function fetchMinutes(meetingId: string): Promise<Minutes | null> {
  * doesn't call requireIdempotencyKey — unlike voting/attendance), 202
  * envelope with the server-minted id.
  */
-export async function createMeeting(input: CreateMeetingInput): Promise<{ id?: string }> {
-  const out = await send<{ data?: { id?: string } }>("POST", "v1/meeting", { body: input });
+/**
+ * Schedule a new meeting (COMMANDS.meetingCreate). Accepts an optional
+ * idempotency key (GAP-MEETING-MEETINGS-NEW-04): minted once per form mount and
+ * reused on retry so a double-submit on a slow network can't create two
+ * meetings. meeting-core's create route does not *require* the header (unlike
+ * voting/attendance), but honours it when present.
+ */
+export async function createMeeting(
+  input: CreateMeetingInput,
+  opts: { idempotencyKey?: string } = {},
+): Promise<{ id?: string }> {
+  const out = await send<{ data?: { id?: string } }>("POST", "v1/meeting", {
+    body: input,
+    ...(opts.idempotencyKey ? { headers: { "x-idempotency-key": opts.idempotencyKey } } : {}),
+  });
   return out.data ?? {};
 }
 

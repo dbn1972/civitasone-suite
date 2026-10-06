@@ -1,6 +1,7 @@
 import { PageHeader, Card, EmptyState, RefreshErrorState, StatusPill } from "@/app/_components/ds";
+import { getSessionUserId } from "@/lib/auth/roleGuard";
 import { getMeeting, getMinutes, getResolutions } from "../../../_data/loaders";
-import { humanize, votePillStatus } from "../../../_data/format";
+import { fmtDateTime, humanize, meetingPillStatus, meetingStatusLabel, votePillStatus } from "../../../_data/format";
 import { MinutesPanel } from "./MinutesPanel";
 
 export const dynamic = "force-dynamic";
@@ -32,9 +33,22 @@ export default async function MinutesPage({
   ]);
 
   const title = meeting.data?.title ? `Minutes — ${meeting.data.title}` : "Minutes";
-  // getMinutes returns source:"error" both on a real failure AND on a 404 (no
-  // minutes drafted yet). We treat a null payload as "not yet drafted" and let
-  // the panel offer to create the draft, rather than showing a hard error.
+
+  // GAP-MEETING-MEETINGS-MEETINGID-MINUTES-05: distinguish "not drafted" (404,
+  // or a clean read with no record) from an outage. Only a 404 / clean-null
+  // should offer the Create button; an outage must not, to avoid duplicate
+  // drafts.
+  const notDrafted =
+    minutes.status === 404 || (minutes.source === "api" && minutes.data === null);
+  const minutesOutage =
+    minutes.data === null && minutes.source === "error" && minutes.status !== 404;
+
+  const currentUserId = getSessionUserId();
+
+  // GAP-MEETING-MEETINGS-MEETINGID-MINUTES-06: give the header the meeting's
+  // status + scheduled time so the record has context (falls back to the plain
+  // title if the meeting fetch failed).
+  const meetingData = meeting.data;
 
   return (
     <>
@@ -45,10 +59,31 @@ export default async function MinutesPage({
         backLabel="Console"
       />
 
+      {meetingData && (
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 14 }}>
+          <StatusPill
+            status={meetingPillStatus(meetingData.status)}
+            label={meetingStatusLabel(meetingData.status)}
+          />
+          {meetingData.scheduledAt && (
+            <span style={{ fontSize: 13, color: "var(--ink2)", ...monoStyle }}>
+              {fmtDateTime(meetingData.scheduledAt)}
+            </span>
+          )}
+          {meetingData.meetingNumber && (
+            <span style={{ fontSize: 13, color: "var(--ink2)", ...monoStyle }}>
+              {meetingData.meetingNumber}
+            </span>
+          )}
+        </div>
+      )}
+
       <MinutesPanel
         meetingId={meetingId}
         initialMinutes={minutes.data}
         minutesReachable={minutes.source === "api" || minutes.data !== null}
+        notDrafted={notDrafted && !minutesOutage}
+        currentUserId={currentUserId}
       />
 
       {/* Vote records for this meeting (Req 11.4) */}

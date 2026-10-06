@@ -1,5 +1,5 @@
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
-import { PageHeader, RefreshErrorState } from "@/app/_components/ds";
+import { PageHeader, RefreshErrorState, EmptyState } from "@/app/_components/ds";
 import {
   getMeeting,
   getAgenda,
@@ -24,23 +24,53 @@ export default async function MeetingConsolePage({
   ]);
 
   if (meeting.source === "error" || !meeting.data) {
-    // Note: the loader (fetchJson) folds a real 404 ("this meeting doesn't
-    // exist / was cancelled") and a transient failure (network/gateway down)
-    // into the same source:"error" signal — there isn't enough information
-    // at this layer to tell them apart, so we show one message that's
-    // truthful for both and offer a real retry via RefreshErrorState.
+    // GAP-MEETING-MEETINGS-MEETINGID-05: the loader carries the raw HTTP
+    // `status`, so a real 404 (cancelled / never existed) and an access
+    // boundary (401/403) can be told apart from a transient failure instead
+    // of all collapsing into "couldn't be loaded". Only a transient failure
+    // gets a Retry — retrying a 404 or a 403 can never succeed.
+    const header = (
+      <PageHeader
+        title="Meeting console"
+        subtitle="Run the agenda, attendance, quorum and voting for a meeting."
+        back="/meeting/meetings"
+        backLabel="Meetings"
+      />
+    );
+
+    if (meeting.status === 404) {
+      return (
+        <>
+          {header}
+          <EmptyState
+            icon="🗂️"
+            title="Meeting not found"
+            message="This meeting may have been cancelled or never existed. Go back and pick another meeting."
+          />
+        </>
+      );
+    }
+
+    if (meeting.status === 401 || meeting.status === 403) {
+      return (
+        <>
+          {header}
+          <EmptyState
+            icon="🔒"
+            title="You don't have access to this meeting"
+            message="You may not be a participant, or your role doesn't permit viewing it. Contact the secretariat if you believe this is an error."
+          />
+        </>
+      );
+    }
+
     return (
       <>
-        <PageHeader
-          title="Meeting console"
-          subtitle="Run the agenda, attendance, quorum and voting for a meeting."
-          back="/meeting/meetings"
-          backLabel="Meetings"
-        />
+        {header}
         <RefreshErrorState
           error={{
             what: "This meeting couldn't be loaded.",
-            next: "It may have been cancelled, or live data couldn't be reached. Try again, or go back and pick another meeting.",
+            next: "Live data couldn't be reached. Try again, or go back and pick another meeting.",
             actions: ["retry", "back", "help"],
           }}
           backHref="/meeting/meetings"
