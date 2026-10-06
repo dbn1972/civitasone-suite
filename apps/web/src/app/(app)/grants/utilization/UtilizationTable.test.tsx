@@ -18,7 +18,7 @@ vi.mock("@/lib/sync/resource", () => ({
 import { UtilizationTable } from "./UtilizationTable";
 import type { GrantUtilization } from "@civitasone/types";
 
-const ROW: GrantUtilization = {
+const SUBMITTED: GrantUtilization = {
   id: "uc-1",
   ucNo: "UC-2026-11",
   grantNo: "GR-2026-04",
@@ -30,6 +30,14 @@ const ROW: GrantUtilization = {
   status: "submitted",
 } as unknown as GrantUtilization;
 
+const PENDING: GrantUtilization = {
+  ...SUBMITTED,
+  id: "uc-2",
+  ucNo: "UC-2026-12",
+  submittedDate: undefined,
+  status: "pending",
+} as unknown as GrantUtilization;
+
 describe("UtilizationTable", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -39,7 +47,7 @@ describe("UtilizationTable", () => {
   it("verifies a submitted UC against the correct proxied endpoint and refreshes on success", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 200 }));
 
-    render(<UtilizationTable ucs={[ROW]} source="api" />);
+    render(<UtilizationTable ucs={[SUBMITTED]} source="api" canVerify />);
     fireEvent.click(screen.getByRole("button", { name: "Verify" }));
     await waitFor(() => expect(screen.getByText(/Verify UC UC-2026-11\?/)).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText(/Verification remarks/), { target: { value: "Matches vouchers." } });
@@ -51,15 +59,37 @@ describe("UtilizationTable", () => {
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({ status: "validated", remarks: "Matches vouchers." });
   });
 
-  // UX-016: postAction used to build the error from `Action failed
-  // (${status}). ${rawResponseText}` verbatim. It must now show only the
-  // catalogued, clerk-safe copy — never the raw server text.
+  // GAP-GRANTS-UTILIZATION-01: no Verify/Reject for a non-checker.
+  it("hides Verify/Reject when the viewer is not a checker", () => {
+    render(<UtilizationTable ucs={[SUBMITTED]} source="api" canVerify={false} />);
+    expect(screen.queryByRole("button", { name: "Verify" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
+  });
+
+  // GAP-GRANTS-UTILIZATION-03: a pending (not-yet-filed) UC cannot be verified.
+  it("does not offer Verify on a pending UC with no submitted date", () => {
+    render(<UtilizationTable ucs={[PENDING]} source="api" canVerify />);
+    expect(screen.queryByRole("button", { name: "Verify" })).not.toBeInTheDocument();
+  });
+
+  // GAP-GRANTS-UTILIZATION-04: Reject requires a reason of at least 10 chars.
+  it("keeps Reject disabled until the reason meets the minimum length", async () => {
+    render(<UtilizationTable ucs={[SUBMITTED]} source="api" canVerify />);
+    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+    await waitFor(() => expect(screen.getByText(/Reject UC UC-2026-11\?/)).toBeInTheDocument());
+    const confirmBtn = screen.getByRole("button", { name: "Reject UC" });
+    fireEvent.change(screen.getByLabelText(/Reason for rejection/), { target: { value: "no" } });
+    expect(confirmBtn).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/Reason for rejection/), { target: { value: "Vouchers do not reconcile." } });
+    expect(confirmBtn).not.toBeDisabled();
+  });
+
   it("shows a clerk-safe error, not the raw server text, when the verify fails", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response("grant-service: uc already validated by another officer", { status: 409 }),
     );
 
-    render(<UtilizationTable ucs={[ROW]} source="api" />);
+    render(<UtilizationTable ucs={[SUBMITTED]} source="api" canVerify />);
     fireEvent.click(screen.getByRole("button", { name: "Verify" }));
     await waitFor(() => expect(screen.getByText(/Verify UC UC-2026-11\?/)).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText(/Verification remarks/), { target: { value: "Matches vouchers." } });

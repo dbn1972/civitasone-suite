@@ -4,6 +4,14 @@ export default function GranteesLoading() {
       <div className="mx-auto max-w-7xl animate-pulse space-y-5">
         <div className="h-4 w-40 rounded bg-slate-200" />
         <div className="h-9 w-48 rounded bg-slate-200" />
+        {/* GAP-GRANTS-GRANTEES-05: the page renders four StatCards above the
+            table, but this skeleton drew none, so the layout jumped on load.
+            Mirror installments/loading.tsx's four-tile grid. */}
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-24 rounded-xl bg-slate-200" />
+          ))}
+        </div>
         <div className="h-80 rounded-xl bg-slate-200" />
       </div>
     </div>

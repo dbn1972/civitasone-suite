@@ -84,6 +84,50 @@ export async function listGrantSummaries(tenantId: string, limit: number) {
   return Promise.all((rows ?? []).map(mapApplicationRow));
 }
 
+/**
+ * GAP-GRANTS-APPLICATIONS-01 / HOME-02: a distinct projection for the
+ * /grants/applications SURFACE. Unlike listGrantSummaries (which collapses
+ * every pre-decision status into "active" via mapGrantStatus — correct for the
+ * sanctioned-GRANTS view), this preserves the real application-stage status
+ * (draft|submitted|under_review|approved|rejected|withdrawn|cancelled) so a
+ * submitted application in review is visible AS such, not mislabelled "active".
+ * Same row id as the detail route (both read grant_applications by id), so a
+ * row never 404s. One batched beneficiary lookup, no N+1.
+ */
+export async function listApplicationSummaries(tenantId: string, limit: number) {
+  const rows = await cache.getOrLoad(
+    cache.makeKey(tenantId, "grant_applications_list", `list:${limit}`),
+    () => repo.listApplicationsByTenant(tenantId, limit),
+  );
+  const list = rows ?? [];
+
+  const beneficiaryIds = [...new Set(list.map((r) => r.beneficiaryId))];
+  const beneficiaries = await beneficiaryRepo.findBeneficiariesByIds(beneficiaryIds, tenantId);
+  const beneficiaryById = new Map(beneficiaries.map((b) => [b.id, b]));
+
+  return Promise.all(
+    list.map(async (row) => {
+      const disbursedMinor = await disbursementRepo.sumDisbursedForApplication(db, row.id, tenantId);
+      const totalMinor = BigInt(row.amountApprovedMinor || row.amountRequestedMinor || 0);
+      const disbursed = BigInt(disbursedMinor);
+      const pendingMinor = totalMinor > disbursed ? totalMinor - disbursed : 0n;
+      return {
+        id: row.id,
+        grantNo: row.grantNo,
+        title: row.purpose,
+        granteeName: beneficiaryById.get(row.beneficiaryId)?.name,
+        totalAmount: minorToAmount(totalMinor),
+        disbursedAmount: minorToAmount(disbursed),
+        pendingAmount: minorToAmount(pendingMinor),
+        sanctionDate: toDateOnly(row.approvedAt ?? row.submittedAt ?? row.createdAt),
+        purpose: row.purpose,
+        // RAW application-stage status (NOT mapped through mapGrantStatus).
+        status: row.status,
+      };
+    }),
+  );
+}
+
 export async function getGrantDetail(id: string, tenantId: string) {
   const row = await getApplication(tenantId, id);
   if (!row || row.tenantId !== tenantId) return null;

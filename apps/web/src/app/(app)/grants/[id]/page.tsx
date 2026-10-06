@@ -1,16 +1,40 @@
 import { notFound } from "next/navigation";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, Card, StatusPill } from "@/app/_components/ds";
+import { PageHeader, Card, StatusPill, RefreshErrorState } from "@/app/_components/ds";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { hasAnyRole } from "@/lib/auth/roleGuard";
+import { GRANTS_DISBURSE_ROLES, GRANTS_UC_VALIDATE_ROLES } from "../roles";
 import { getGrantById } from "../../../_data/loaders";
 import { GrantInstallmentsTable, GrantUCsTable } from "./GrantDetailTables";
 
 export default async function GrantDetailPage({ params }: { params: { id: string } }) {
-  const { data: grant, source } = await getGrantById(params.id);
+  const { data: grant, source, status } = await getGrantById(params.id);
+
+  // GAP-GRANTS-DETAIL-02: a failed fetch must NOT masquerade as a genuine
+  // 404 "that grant was removed". Only a real 404 (or a successful null)
+  // calls notFound(); every other failure shows a retry state.
+  if (!grant && source === "error" && status !== 404) {
+    return (
+      <>
+        <PageHeader back="/grants/list" backLabel="All grants" title="Grant" />
+        <RefreshErrorState
+          error={toHumanError("load", { area: "grant" })}
+          backHref="/grants/list"
+          source={{ status, area: "grant" }}
+        />
+      </>
+    );
+  }
 
   if (!grant) {
     notFound();
   }
+
+  const roles = getSessionRoles();
+  const canRelease = hasAnyRole(roles, GRANTS_DISBURSE_ROLES);
+  const canVerify = hasAnyRole(roles, GRANTS_UC_VALIDATE_ROLES);
 
   return (
     <>
@@ -68,11 +92,16 @@ export default async function GrantDetailPage({ params }: { params: { id: string
         </Card>
 
         <Card title="Installments">
-          <GrantInstallmentsTable installments={grant.installments} />
+          <GrantInstallmentsTable
+            installments={grant.installments}
+            grantStatus={grant.status}
+            granteeName={grant.granteeName}
+            canRelease={canRelease}
+          />
         </Card>
 
         <Card title="Utilization Certificates">
-          <GrantUCsTable ucs={grant.ucs} />
+          <GrantUCsTable ucs={grant.ucs} canVerify={canVerify} />
         </Card>
       </div>
     </>

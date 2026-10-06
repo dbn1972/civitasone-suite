@@ -3,10 +3,6 @@ import * as repo from "./repo.js";
 import * as applicationRepo from "../application/repo.js";
 import * as beneficiaryRepo from "../beneficiary/repo.js";
 
-function minorToAmount(minor: bigint): number {
-  return Number(minor) / 100;
-}
-
 function toDateOnly(value: Date | string | null | undefined): string {
   if (!value) return new Date().toISOString().slice(0, 10);
   return new Date(value as string).toISOString().slice(0, 10);
@@ -59,8 +55,15 @@ export async function listGrantReleases(tenantId: string, limit: number) {
       releaseNo: row.pfmsTxnId ?? row.id.slice(0, 8).toUpperCase(),
       grantId: installment?.applicationId ?? row.id,
       grantNo: application?.grantNo ?? "—",
-      granteeName: beneficiary?.name ?? "—",
-      amount: minorToAmount(row.amountMinor),
+      granteeName: beneficiary?.name ?? null,
+      // GAP-GRANTS-DISBURSEMENTS-DETAIL-02 (money unit): amount is MINOR units
+      // (paise) on the wire, consistent with CLAUDE.md rule 11 (money is bigint
+      // paise end to end). grant_disbursements.amount_minor is bigint paise;
+      // we pass it through as a JSON-safe integer. Both consumers — the releases
+      // list (formatMoney) and the disbursement detail (formatMoney + amountMinor
+      // forwarded straight to the eOffice note) — treat it as paise, so the two
+      // screens stay reconciled with no float *100 / /100 conversion anywhere.
+      amount: Number(row.amountMinor),
       releaseDate: toDateOnly(row.disbursedAt ?? row.createdAt),
       bankRef: row.pfmsTxnId ?? undefined,
       status: (row.status === "completed" ? "credited" : row.status === "failed" ? "pending" : "processed") as "pending" | "processed" | "credited",

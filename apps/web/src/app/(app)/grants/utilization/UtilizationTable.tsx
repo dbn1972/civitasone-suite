@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { DataTable, StatusPill, ActionButton } from "@/app/_components/ds";
+import { DataTable, StatusPill, ActionButton, RefreshErrorState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
@@ -17,13 +17,13 @@ type Col = {
 };
 
 /**
- * Plain-language failure message for a failed UC verify/reject action.
- * postAction is a plain async helper, not a component or hook, so it can't
- * call the useFormError hook; toHumanError is the same catalogued-message
- * building block that hook is built on -- never the backend's own
- * message/error text or the raw HTTP status. See
- * docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-003/UX-016.
+ * Minimum rejection/verification remark length — kept in parity with the
+ * application rejection control (applications/[id]/ApplicationActions.tsx uses
+ * 10). GAP-GRANTS-UTILIZATION-04.
  */
+const REASON_MIN = 10;
+const REASON_MAX = 1000;
+
 function grantActionError(): string {
   const human = toHumanError("save", { area: "grant action" });
   return `${human.what} ${human.next}`;
@@ -40,7 +40,16 @@ async function postAction(url: string, body: unknown): Promise<void> {
   }
 }
 
-export function UtilizationTable({ ucs, source = "api" }: { ucs: GrantUtilization[]; source?: "api" | "error" }) {
+export function UtilizationTable({
+  ucs,
+  source = "api",
+  canVerify = false,
+}: {
+  ucs: GrantUtilization[];
+  source?: "api" | "error";
+  /** GAP-GRANTS-UTILIZATION-01: only a checker role gets Verify/Reject. */
+  canVerify?: boolean;
+}) {
   const router = useRouter();
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<GrantUtilization[]>(
     "grants.utilization",
@@ -66,8 +75,16 @@ export function UtilizationTable({ ucs, source = "api" }: { ucs: GrantUtilizatio
       key: "id",
       label: "Action",
       align: "right",
-      render: (row) =>
-        row.status === "submitted" || row.status === "pending" ? (
+      render: (row) => {
+        // GAP-GRANTS-UTILIZATION-01: no action column for non-checkers.
+        // GAP-GRANTS-UTILIZATION-03: only a UC the grantee has actually filed
+        // ("submitted" AND with a submitted date) can be verified — a "pending"
+        // (not-yet-filed) UC must not be certifiable from the UI.
+        const canAct = canVerify && row.status === "submitted" && Boolean(row.submittedDate);
+        if (!canAct) {
+          return <span aria-hidden="true">—</span>;
+        }
+        return (
           <span style={{ display: "inline-flex", gap: 6, justifyContent: "flex-end" }}>
             <ActionButton
               label="Verify"
@@ -82,6 +99,8 @@ export function UtilizationTable({ ucs, source = "api" }: { ucs: GrantUtilizatio
               confirmLabel="Verify UC"
               requireReason
               reasonLabel="Verification remarks (required)"
+              minReasonLength={REASON_MIN}
+              maxReasonLength={REASON_MAX}
               onConfirm={async (reason) => {
                 await postAction(`/api/proxy/v1/grants/utilization-certs/${row.id}/validate`, {
                   status: "validated",
@@ -104,6 +123,8 @@ export function UtilizationTable({ ucs, source = "api" }: { ucs: GrantUtilizatio
               confirmLabel="Reject UC"
               requireReason
               reasonLabel="Reason for rejection (required)"
+              minReasonLength={REASON_MIN}
+              maxReasonLength={REASON_MAX}
               onConfirm={async (reason) => {
                 await postAction(`/api/proxy/v1/grants/utilization-certs/${row.id}/validate`, {
                   status: "rejected",
@@ -113,19 +134,25 @@ export function UtilizationTable({ ucs, source = "api" }: { ucs: GrantUtilizatio
               }}
             />
           </span>
-        ) : (
-          <span aria-hidden="true">—</span>
-        ),
+        );
+      },
     },
   ];
 
+  // GAP-GRANTS-UTILIZATION-05: a failed fetch with no cache shows a retry state,
+  // not an empty table + four zeros.
+  if (provenance === "error-no-data" && rows.length === 0) {
+    return (
+      <RefreshErrorState
+        error={toHumanError("load", { area: "utilisation certificates" })}
+        backHref="/grants"
+        source={{ area: "utilisation certificates" }}
+      />
+    );
+  }
+
   return (
     <>
-      {/* UX-012: this badge is the ONLY place that reports data provenance for
-          the rows shown below — it reads the same useSeededResource call as
-          `rows`, so it can never disagree with what the table shows
-          (UX-002's pattern; the page used to render a second, independent
-          badge from the raw `source` prop — removed). */}
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <DataTable<GrantUtilization> columns={columns} rows={rows} sortable filterable filterPlaceholder="Filter UCs…" pageSize={15} />
     </>

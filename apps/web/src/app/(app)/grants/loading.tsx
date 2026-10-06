@@ -1,16 +1,12 @@
+import { SkeletonTable } from "@/app/_components/ds/Skeleton";
+
+/**
+ * GAP-GRANTS-HOME-04: the old skeleton hard-coded `min-h-screen bg-slate-50`
+ * + `bg-slate-200` blocks, so it stayed light in dark mode and double-padded
+ * inside the app shell. Reuse the shared, theme-token-based SkeletonTable
+ * (var(--panel)/--line via Skeleton.tsx) which renders no page-level
+ * background or min-height wrapper, so it inherits the shell padding.
+ */
 export default function GrantsLoading() {
-  return (
-    <div className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <div className="mx-auto max-w-7xl animate-pulse space-y-5">
-        <div className="h-4 w-40 rounded bg-slate-200" />
-        <div className="h-9 w-64 rounded bg-slate-200" />
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-24 rounded-xl bg-slate-200" />
-          ))}
-        </div>
-        <div className="h-72 rounded-xl bg-slate-200" />
-      </div>
-    </div>
-  );
+  return <SkeletonTable rows={8} />;
 }

@@ -1,32 +1,70 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { Button, PageHeader, Card, StatGrid, StatCard, StatusPill, EmptyState } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
-import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { PageHeader, Card, StatGrid, StatCard, StatusPill, RefreshErrorState, ProgressBar } from "@/app/_components/ds";
+import { formatMoney, formatIndianDate, formatPercent, percentOfMinor } from "@/lib/formatters";
+import { getSessionRoles, hasAnyRole } from "@/lib/auth/roleGuard";
+import { toHumanError } from "@/lib/messages";
 import { getSchemeById } from "../../_data";
-
-const SECTOR_LABELS: Record<string, string> = {
-  agriculture: "Agriculture", education: "Education", health: "Health",
-  infrastructure: "Infrastructure", social: "Social", other: "Other",
-};
+import { GRANTS_MAKER_ROLES } from "../../roles";
+import { schemeWindowState } from "../../schemeWindow";
+import { CloseSchemeButton } from "./CloseSchemeButton";
 
 export default async function SchemeDetailPage({ params }: { params: { id: string } }) {
-  const { data: scheme, source } = await getSchemeById(params.id);
+  const { data: scheme, source, status } = await getSchemeById(params.id);
 
+  // GAP-GRANTS-SCHEMES-DETAIL-03: a network/5xx failure must show a retry state,
+  // NOT "Page not found". notFound() is reserved for a genuine 404 from the API.
+  if (source === "error" && status !== 404) {
+    return (
+      <>
+        <PageHeader back="/grants/schemes" backLabel="Schemes" title="Scheme" />
+        <RefreshErrorState
+          error={toHumanError("load", { area: "scheme" })}
+          backHref="/grants/schemes"
+          source={{ status, area: "scheme" }}
+        />
+      </>
+    );
+  }
   if (!scheme) {
     notFound();
   }
 
-  const utilizationPct = scheme.budgetMinor > 0 ? 0 : 0; // disbursed not in this view yet
-  const isOpen = scheme.status === "open";
+  // GAP-GRANTS-SCHEMES-DETAIL-01: management actions are maker-only.
+  const canMaintain = hasAnyRole(getSessionRoles(), GRANTS_MAKER_ROLES);
+
+  // GAP-GRANTS-SCHEMES-DETAIL-05: respect the window, not just status==="open".
+  const window = schemeWindowState(scheme);
+  const accepting = window.accepting;
+
+  // GAP-GRANTS-SCHEMES-DETAIL-04: real budget-vs-disbursed utilisation.
+  const utilisationPct = percentOfMinor(scheme.disbursedMinor, scheme.budgetMinor);
+  const remainingMinor = Math.max(scheme.budgetMinor - scheme.disbursedMinor, 0);
+
+  function applyButton() {
+    if (accepting) {
+      return (
+        <Link href={`/grants/schemes/${params.id}/apply`} className="btn primary">
+          + New Application
+        </Link>
+      );
+    }
+    // Not accepting: show a disabled control with the reason, never a live CTA.
+    const note =
+      window.accepting === false && window.reason === "before-open" && window.at
+        ? `Opens ${formatIndianDate(window.at)}`
+        : window.accepting === false && window.reason === "after-close" && window.at
+          ? `Closed ${formatIndianDate(window.at)}`
+          : "Not accepting applications";
+    return (
+      <button type="button" className="btn" disabled aria-disabled="true" title={note}>
+        {note}
+      </button>
+    );
+  }
 
   return (
     <>
-      {/* UX: PageHeader's `back`/`backLabel` props already render the single
-          breadcrumb (icon + "Schemes" link) below — this page used to ALSO
-          render its own manual <nav aria-label="Breadcrumb"> here, doubling
-          it. Removed; do not re-add a second breadcrumb alongside the
-          `back` prop. */}
       <PageHeader
         back="/grants/schemes"
         backLabel="Schemes"
@@ -35,52 +73,35 @@ export default async function SchemeDetailPage({ params }: { params: { id: strin
         actions={
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <StatusPill status={scheme.status} />
-            {source === "error" && <DataSourceBadge source="error" />}
-            {isOpen && (
-              <Link href={`/grants/schemes/${params.id}/apply`} className="btn primary">
-                + New Application
-              </Link>
-            )}
+            {/* GAP-GRANTS-SCHEMES-DETAIL-06: a single "+ New Application" entry
+                (header only); the duplicate in Management Actions was removed. */}
+            {canMaintain && applyButton()}
           </div>
         }
       />
 
       <StatGrid>
-        <StatCard
-          icon="💰"
-          iconBg="#ecfdf5"
-          label="Total Budget"
-          value={formatMoney(scheme.budgetMinor)}
-        />
-        <StatCard
-          icon="⬆️"
-          iconBg="#dbeafe"
-          label="Max Grant"
-          value={formatMoney(scheme.maxAmountMinor)}
-        />
-        <StatCard
-          icon="📅"
-          iconBg="#f1f5f9"
-          label="Opens"
-          value={scheme.openAt ? formatIndianDate(scheme.openAt) : "—"}
-        />
-        <StatCard
-          icon="🔒"
-          iconBg="#fef3c7"
-          label="Closes"
-          value={scheme.closeAt ? formatIndianDate(scheme.closeAt) : "—"}
-        />
+        <StatCard icon="💰" iconBg="#ecfdf5" label="Total Budget" value={formatMoney(scheme.budgetMinor)} />
+        <StatCard icon="📤" iconBg="#dbeafe" label="Disbursed" value={formatMoney(scheme.disbursedMinor)} />
+        <StatCard icon="🧮" iconBg="#f1f5f9" label="Remaining" value={formatMoney(remainingMinor)} />
+        <StatCard icon="📈" iconBg="#fef3c7" label="Utilisation" value={formatPercent(utilisationPct)} />
       </StatGrid>
+
+      {/* GAP-GRANTS-SCHEMES-DETAIL-04: budget-vs-disbursed bar (replaces dead
+          utilizationPct = 0). */}
+      <Card title="Budget Utilisation" padding>
+        <ProgressBar value={utilisationPct ?? 0} />
+        <p style={{ fontSize: 13, color: "var(--ink2)", marginTop: 8 }}>
+          {formatMoney(scheme.disbursedMinor)} disbursed of {formatMoney(scheme.budgetMinor)} budget
+          {utilisationPct != null ? ` (${formatPercent(utilisationPct)})` : ""}.
+        </p>
+      </Card>
 
       <Card title="Scheme Details" padding>
         <dl className="fields">
           <div>
             <dt className="lab">Code</dt>
             <dd style={{ fontFamily: "monospace" }}>{scheme.code}</dd>
-          </div>
-          <div>
-            <dt className="lab">Name</dt>
-            <dd>{scheme.name}</dd>
           </div>
           <div>
             <dt className="lab">Status</dt>
@@ -91,10 +112,6 @@ export default async function SchemeDetailPage({ params }: { params: { id: strin
             <dd>{scheme.currency}</dd>
           </div>
           <div>
-            <dt className="lab">Total Budget</dt>
-            <dd>{formatMoney(scheme.budgetMinor)}</dd>
-          </div>
-          <div>
             <dt className="lab">Min Amount</dt>
             <dd>{scheme.minAmountMinor > 0 ? formatMoney(scheme.minAmountMinor) : "No minimum"}</dd>
           </div>
@@ -102,7 +119,17 @@ export default async function SchemeDetailPage({ params }: { params: { id: strin
             <dt className="lab">Max Amount</dt>
             <dd>{formatMoney(scheme.maxAmountMinor)}</dd>
           </div>
-          {scheme.reportingFrequencyDays && (
+          <div>
+            <dt className="lab">Opens</dt>
+            <dd>{scheme.openAt ? formatIndianDate(scheme.openAt) : "—"}</dd>
+          </div>
+          <div>
+            <dt className="lab">Closes</dt>
+            <dd>{scheme.closeAt ? formatIndianDate(scheme.closeAt) : "—"}</dd>
+          </div>
+          {/* GAP-GRANTS-SCHEMES-DETAIL-06: `&&` on a numeric 0 printed a stray
+              "0" — guard with an explicit > 0 check. */}
+          {scheme.reportingFrequencyDays != null && scheme.reportingFrequencyDays > 0 && (
             <div>
               <dt className="lab">Reporting Cycle</dt>
               <dd>
@@ -119,34 +146,13 @@ export default async function SchemeDetailPage({ params }: { params: { id: strin
               <dd>{scheme.sanctionRef}</dd>
             </div>
           )}
-          {scheme.openAt && (
-            <div>
-              <dt className="lab">Opens At</dt>
-              <dd>{formatIndianDate(scheme.openAt)}</dd>
-            </div>
-          )}
-          {scheme.closeAt && (
-            <div>
-              <dt className="lab">Closes At</dt>
-              <dd>{formatIndianDate(scheme.closeAt)}</dd>
-            </div>
-          )}
         </dl>
       </Card>
 
       <Card title="Management Actions" padding>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {isOpen && (
-            <Link href={`/grants/schemes/${params.id}/apply`} className="btn primary">
-              + New Application
-            </Link>
-          )}
-          {(scheme.status === "draft" || isOpen) && (
-            <form action={`/api/proxy/v1/grants/schemes/${params.id}/close`} method="POST">
-              <Button type="submit" variant="danger">
-                Close Scheme
-              </Button>
-            </form>
+          {canMaintain && (scheme.status === "draft" || scheme.status === "open") && (
+            <CloseSchemeButton schemeId={params.id} schemeName={scheme.name} />
           )}
           <Link href="/grants/applications" className="btn">
             View Applications

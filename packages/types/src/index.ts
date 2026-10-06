@@ -1590,6 +1590,22 @@ export type GranteeSummary = {
   ucCompliancePct: number;
 };
 
+// GAP-GRANTS-GRANTEES-04: single-grantee read for the grantee detail route.
+// Mirrors grant-service beneficiary.grant_beneficiaries (name/type/category/
+// geography/status/incomeAnnualMinor). PII identifiers (registration/PAN) are
+// masked at the UI boundary for non-privileged roles.
+export type GranteeDetail = {
+  id: string;
+  name: string;
+  type: "individual" | "institution" | "society" | "mission";
+  category?: string | null;
+  geography?: string | null;
+  status: string;
+  incomeAnnualMinor?: string | null;
+  registrationNo?: string | null;
+  panNo?: string | null;
+};
+
 export type GrantInstallmentSummary = {
   id: string;
   grantId: string;
@@ -1607,7 +1623,11 @@ export type GrantRelease = {
   releaseNo: string;
   grantId: string;
   grantNo: string;
-  granteeName: string;
+  /** GAP-GRANTS-DISBURSEMENTS-DETAIL-08: null when the grantee is unresolved
+   *  (was a magic "—" sentinel string). */
+  granteeName: string | null;
+  /** GAP-GRANTS-DISBURSEMENTS-DETAIL-02 (money unit): MINOR units (paise),
+   *  bigint-safe integer on the wire — not rupees. Display with formatMoney. */
   amount: number;
   releaseDate: string;
   bankRef?: string;

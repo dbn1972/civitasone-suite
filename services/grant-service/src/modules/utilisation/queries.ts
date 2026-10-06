@@ -14,6 +14,20 @@ function mapUcStatus(status: string): "pending" | "submitted" | "verified" | "re
   return "pending";
 }
 
+/**
+ * GAP-GRANTS-DETAIL-05: the APPROVED outcome of a UC lives in
+ * `validation_status` ("validated"/"rejected"), set when an officer verifies
+ * the UC on the grant-detail page — NOT in the lifecycle `status` column
+ * (which stays "submitted"). Reading only `status` undercounted a UC that had
+ * just been verified. Prefer the validation decision when one has been made,
+ * mapping "validated" → the web read model's "verified".
+ */
+export function resolveUcWebStatus(lifecycleStatus: string, validationStatus: string): "pending" | "submitted" | "verified" | "rejected" {
+  if (validationStatus === "validated") return "verified";
+  if (validationStatus === "rejected") return "rejected";
+  return mapUcStatus(lifecycleStatus);
+}
+
 export async function getUcStatements(tenantId: string, applicationId: string) {
   return repo.listUcByApplication(applicationId, tenantId);
 }
@@ -53,7 +67,7 @@ export async function listUtilizationCerts(tenantId: string, limit: number) {
       periodFrom: `${row.period}-01`,
       periodTo: `${row.period}-28`,
       submittedDate: new Date(row.submittedAt as unknown as string).toISOString().slice(0, 10),
-      status: mapUcStatus(row.status),
+      status: resolveUcWebStatus(row.status, row.validationStatus),
     };
   });
 }

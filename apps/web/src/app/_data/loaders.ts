@@ -128,6 +128,7 @@ import type {
   GrantSummary,
   GrantDetail,
   GranteeSummary,
+  GranteeDetail,
   GrantInstallmentSummary,
   GrantRelease,
   GrantUtilization,
@@ -305,6 +306,7 @@ import {
   GrantSummaryListSchema,
   GrantDetailSchema,
   GranteeSummaryListSchema,
+  GranteeDetailSchema,
   GrantInstallmentSummaryListSchema,
   GrantReleaseListSchema,
   GrantUtilizationListSchema,
@@ -4275,6 +4277,16 @@ export async function getGrantees(): Promise<LoaderResult<GranteeSummary[]>> {
     telemetryKey: "grants.grantees",
     responseSchema: GranteeSummaryListSchema,
     mapResponse: (p) => getArrayPayload(p) as GranteeSummary[] | null,
+  });
+}
+
+// GAP-GRANTS-GRANTEES-04: single-grantee read for the grantee detail route.
+export async function getGranteeById(id: string): Promise<LoaderResult<GranteeDetail | null>> {
+  return fetchJson<unknown, GranteeDetail | null>(`/api/v1/grants/grantees/${id}`, null, {
+    revalidateSeconds: 120,
+    telemetryKey: "grants.grantee.detail",
+    responseSchema: GranteeDetailSchema,
+    mapResponse: (p) => (isRecord(p) ? (p as GranteeDetail) : null),
   });
 }
 

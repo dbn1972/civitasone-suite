@@ -2,9 +2,10 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { DataTable, StatusPill, EmptyState } from "@/app/_components/ds";
+import { DataTable, StatusPill, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { GrantSchemeSummary } from "../_data";
 
@@ -30,11 +31,24 @@ const columns: Col[] = [
     align: "right",
     render: (row) => formatMoney(row.disbursedMinor),
   },
-  { key: "applicationCount", label: "Applications", align: "right" },
+  {
+    // GAP-GRANTS-SCHEMES-04: "—" when the count is unknown, 0 only when the API
+    // actually sent 0.
+    key: "applicationCount",
+    label: "Applications",
+    align: "right",
+    render: (row) => (row.applicationCount == null ? "—" : row.applicationCount),
+  },
   {
     key: "openAt",
     label: "Opens",
     render: (row) => (row.openAt ? formatIndianDate(row.openAt) : "—"),
+  },
+  {
+    // GAP-GRANTS-SCHEMES-06: the window's close date was mapped but never shown.
+    key: "closeAt",
+    label: "Closes",
+    render: (row) => (row.closeAt ? formatIndianDate(row.closeAt) : "—"),
   },
   {
     key: "status",
@@ -46,9 +60,12 @@ const columns: Col[] = [
 export function SchemesTable({
   schemes,
   source = "api",
+  canMaintain = false,
 }: {
   schemes: GrantSchemeSummary[];
   source?: "api" | "error";
+  /** GAP-GRANTS-SCHEMES-01: only grant makers get the empty-state create CTA. */
+  canMaintain?: boolean;
 }) {
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<GrantSchemeSummary[]>(
     "grants.schemes",
@@ -57,20 +74,35 @@ export function SchemesTable({
     (d) => d.length === 0,
   );
 
+  // GAP-GRANTS-SCHEMES-02: a failed fetch with no cached data must NOT render
+  // the first-run "No grant schemes yet" empty state (which nudges a clerk to
+  // create a duplicate during an outage). Show a real retry state instead; the
+  // first-run empty state is reserved for a genuine live-but-empty list.
+  if (provenance === "error-no-data" && rows.length === 0) {
+    return (
+      <RefreshErrorState
+        error={toHumanError("load", { area: "grant schemes" })}
+        backHref="/grants"
+        source={{ area: "grant schemes" }}
+      />
+    );
+  }
+
   return (
     <>
-      {/* UX-012: this badge is the ONLY place that reports data provenance for
-          the rows shown below — it reads the same useSeededResource call as
-          `rows`, so it can never disagree with what the table shows
-          (UX-002's pattern; the page used to render a second, independent
-          badge from the raw `source` prop — removed). */}
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       {rows.length === 0 ? (
         <EmptyState
           icon="🎁"
           title="No grant schemes yet"
           message="Create your first scheme to start tracking grant funding and applications."
-          action={<Link href="/grants/schemes/new" className="btn primary">+ New Scheme</Link>}
+          action={
+            canMaintain ? (
+              <Link href="/grants/schemes/new" className="btn primary">
+                + New Scheme
+              </Link>
+            ) : undefined
+          }
         />
       ) : (
         <DataTable<GrantSchemeSummary>

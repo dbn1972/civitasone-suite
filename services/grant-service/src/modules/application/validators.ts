@@ -18,6 +18,9 @@ export type ScoreApplicationBody = z.infer<typeof scoreApplicationBody>;
 
 export const approveApplicationBody = z.object({
   amountApprovedMinor: z.number().int().positive(),
+  // GAP-GRANTS-APPLICATIONS-DETAIL-04/02: an optional sanction reason/remarks,
+  // recorded in the audit trail (parity with reject, which requires a reason).
+  reason: z.string().trim().min(1).max(1000).optional(),
 });
 export type ApproveApplicationBody = z.infer<typeof approveApplicationBody>;
 

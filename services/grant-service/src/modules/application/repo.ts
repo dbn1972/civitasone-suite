@@ -68,6 +68,21 @@ export async function findScoreByApplicationAndReviewer(applicationId: string, r
   }));
 }
 
+/**
+ * GAP-GRANTS-APPLICATIONS-DETAIL-05: the most recent score for an application
+ * (by createdAt), so the detail page can show the technical/financial scores
+ * and recommendation after an evaluation is submitted. Tenant-scoped.
+ */
+export async function findLatestScoreByApplication(applicationId: string, tenantId: string): Promise<ScoreRow | null> {
+  return runWithTenant(tenantId, () => db.transaction(async (tx) => {
+    const rows = await tx.select().from(grantScores)
+      .where(and(eq(grantScores.applicationId, applicationId), eq(grantScores.tenantId, tenantId)))
+      .orderBy(sql`${grantScores.createdAt} DESC`)
+      .limit(1);
+    return rows[0] ?? null;
+  }));
+}
+
 export async function listApplicationsByTenant(tenantId: string, limit: number): Promise<ApplicationRow[]> {
   return runWithTenant(tenantId, () => scopedRead(async (tx) =>
     tx.select().from(grantApplications)

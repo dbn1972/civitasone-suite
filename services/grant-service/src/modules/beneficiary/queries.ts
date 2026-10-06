@@ -18,6 +18,28 @@ export async function getBeneficiary(tenantId: string, id: string): Promise<Bene
   return row;
 }
 
+/**
+ * GAP-GRANTS-GRANTEES-04: single-grantee read for the grantee detail route.
+ * Maps the beneficiary row to the GranteeDetail wire shape (bigint income is
+ * stringified; the registry has no registration/PAN column yet, so those are
+ * null — the UI masks them when present). Returns null when not found.
+ */
+export async function getGranteeDetail(tenantId: string, id: string) {
+  const row = await getBeneficiary(tenantId, id);
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    type: mapBeneficiaryType(row.type),
+    category: row.category ?? null,
+    geography: row.geography ?? null,
+    status: row.status,
+    incomeAnnualMinor: row.incomeAnnualMinor != null ? row.incomeAnnualMinor.toString() : null,
+    registrationNo: null,
+    panNo: null,
+  };
+}
+
 export async function listGranteeSummaries(tenantId: string, limit: number) {
   const rows = await cache.getOrLoad(
     cache.makeKey(tenantId, "grantees", `list:${limit}`),

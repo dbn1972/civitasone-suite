@@ -3,7 +3,7 @@ import { ZodError } from "zod";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createSchemeBody, updateSchemeBody, createCriterionBody, idParam } from "./validators.js";
+import { createSchemeBody, updateSchemeBody, createCriterionBody, closeSchemeBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
@@ -43,7 +43,7 @@ export async function schemeRoutes(app: FastifyInstance): Promise<void> {
     if (scheme.status === "closed" || scheme.status === "completed") {
       throw new HttpError(409, "ALREADY_CLOSED", "scheme is already closed or completed");
     }
-    return sendAccepted(reply, acceptedResponseSchema, await commands.closeScheme(ctx, id));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.closeScheme(ctx, id, closeSchemeBody.parse(req.body ?? {})));
   });
 
   app.post("/v1/grants/schemes/:id/criteria", async (req, reply) => {
