@@ -390,6 +390,19 @@ export function hasAnyRole(sessionRoles: string[], allowed: string[]): boolean {
 }
 
 /**
+ * GAP-POLICY-HOME-01 / GAP-POLICY-BINDINGS-01: roles permitted to reach the
+ * /policy segment. Every policy-service mutating/admin route (bindings, abac,
+ * role-features) gates on exactly this set (its `ADMIN` constant:
+ * platform_admin / super_admin / tenant_admin — see the policy-service module
+ * route files), so the web segment layout gates on the same set. The service remains the authority (requireRole + the
+ * new self-binding block); this is defence-in-depth + honest UX so a plain
+ * signed-in user is not shown Bindings / Role Features / ABAC that would only
+ * 403. The evaluate "evaluate as another user" picker is additionally gated on
+ * this set client-side and re-checked server-side (GAP-POLICY-EVALUATE-01).
+ */
+export const POLICY_ADMIN_ROLES = ["platform_admin", "super_admin", "tenant_admin"];
+
+/**
  * GAP-BILLING-HOME-01 / GAP-BILLING-GSTN-01: billing module role gating.
  *
  * The billing-service enforces roles server-side on every route (verified):

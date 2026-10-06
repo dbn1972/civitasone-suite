@@ -11,6 +11,10 @@ export async function insertBinding(tx: Writer, row: BindingInsert): Promise<voi
 export async function revokeBinding(tx: Writer, id: string, actorId: string, version: number): Promise<void> {
   await tx.update(roleBindings).set({ status: "revoked", updatedBy: actorId, version, updatedAt: new Date() }).where(eq(roleBindings.id, id));
 }
+export async function listBindings(tx: Writer, tenantId: string, limit = 500): Promise<BindingView[]> {
+  const rows = await tx.select().from(roleBindings).where(eq(roleBindings.tenantId, tenantId)).limit(limit);
+  return rows.map((r) => ({ id: r.id, tenantId: r.tenantId, userId: r.userId, roleId: r.roleId, status: r.status, version: r.version }));
+}
 export async function findBindingByIdTx(tx: Writer, id: string): Promise<BindingView | null> {
   const rows = await tx.select().from(roleBindings).where(eq(roleBindings.id, id)).limit(1);
   if (!rows[0]) return null;

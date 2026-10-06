@@ -126,7 +126,7 @@ describe("COMP-007: bindings -- POST /policy/bindings", () => {
   it("returns 401 without a token", async () => {
     const res = await app.inject({
       method: "POST",
-      url: "/policy/bindings",
+      url: "/v1/policy/bindings",
       payload: { userId: USER_ID, roleId: ROLE_ID },
     });
     expect(res.statusCode).toBe(401);
@@ -135,30 +135,60 @@ describe("COMP-007: bindings -- POST /policy/bindings", () => {
   it("returns 403 for a non-admin role", async () => {
     const res = await app.inject({
       method: "POST",
-      url: "/policy/bindings",
+      url: "/v1/policy/bindings",
       headers: { authorization: `Bearer ${token(["staff"])}` },
       payload: { userId: USER_ID, roleId: ROLE_ID },
     });
     expect(res.statusCode).toBe(403);
   });
 
-  it("BUG regression guard (see file header): an invalid body currently 500s, not 400s", async () => {
+  it("GAP-POLICY-BINDINGS-03: GET lists bindings for the tenant (admin-gated)", async () => {
+    const noAuth = await app.inject({ method: "GET", url: "/v1/policy/bindings" });
+    expect(noAuth.statusCode).toBe(401);
+    const nonAdmin = await app.inject({
+      method: "GET",
+      url: "/v1/policy/bindings",
+      headers: { authorization: `Bearer ${token(["staff"])}` },
+    });
+    expect(nonAdmin.statusCode).toBe(403);
+    const ok = await app.inject({
+      method: "GET",
+      url: "/v1/policy/bindings",
+      headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(Array.isArray(ok.json().data)).toBe(true);
+  });
+
+  it("GAP-POLICY-BINDINGS-01: forbids granting a role to one's own account (403)", async () => {
     const res = await app.inject({
       method: "POST",
-      url: "/policy/bindings",
+      url: "/v1/policy/bindings",
+      headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
+      // userId === the token's own `sub` (ACTOR_SUB) -> self-escalation
+      payload: { userId: ACTOR_SUB, roleId: ROLE_ID },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("SELF_BINDING_FORBIDDEN");
+  });
+
+  it("GAP-POLICY-BINDINGS-03: an invalid body now returns the 400 VALIDATION_FAILED envelope", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/policy/bindings",
       headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
       payload: { userId: "not-a-uuid" },
     });
-    // NOT the correct/desired behavior -- documents today's actual bug so this
-    // test fails (loudly, in the right direction) the moment it's fixed.
-    expect(res.statusCode).toBe(500);
-    expect(res.json().code).not.toBe("VALIDATION_FAILED");
+    // Previously 500 (raw Fastify default); the route now parses via safeParse
+    // and maps to this service's uniform 400 envelope.
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("VALIDATION_FAILED");
   });
 
   it("accepts as tenant_admin, and the consumer really writes an active binding row, then revoke transitions it", async () => {
     const res = await app.inject({
       method: "POST",
-      url: "/policy/bindings",
+      url: "/v1/policy/bindings",
       headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
       payload: { userId: USER_ID, roleId: ROLE_ID },
     });
@@ -174,7 +204,7 @@ describe("COMP-007: bindings -- POST /policy/bindings", () => {
 
     const del = await app.inject({
       method: "DELETE",
-      url: `/policy/bindings/${id}`,
+      url: `/v1/policy/bindings/${id}`,
       headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
     });
     expect(del.statusCode).toBe(202);
@@ -188,14 +218,10 @@ describe("COMP-007: bindings -- POST /policy/bindings", () => {
 
   it("a binding created under tenant A is invisible when read back under tenant B's RLS scope", async () => {
     // Deliberately its OWN fresh (userId, roleId) pair, distinct from every
-    // other test in this file -- see the unique-index bug documented and
-    // proven below. Reusing USER_ID/ROLE_ID here would silently collide with
-    // the already-revoked binding the earlier test leaves behind for that
-    // exact (tenant, user, role) triple, which is a different bug than the
-    // tenant-isolation behavior this test exists to prove.
+    // other test in this file.
     const res = await app.inject({
       method: "POST",
-      url: "/policy/bindings",
+      url: "/v1/policy/bindings",
       headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
       payload: { userId: randomUUID(), roleId: randomUUID() },
     });
@@ -205,22 +231,18 @@ describe("COMP-007: bindings -- POST /policy/bindings", () => {
     expect(crossTenantRow).toBeNull();
   }, 15000);
 
-  it("BUG (found while writing this test, not fixed here -- see PR description): a revoked binding can never be re-granted for the same (tenant, user, role)", async () => {
-    // migrations/0001_init.sql: `CREATE UNIQUE INDEX ... ON bindings.bindings
-    // (tenant_id, user_id, role_id)` -- a PLAIN unique index, not partial
-    // (no `WHERE status = 'active'`). So once ANY binding, active or
-    // revoked, has existed for a given triple, Postgres permanently refuses
-    // a second row for that same triple. An admin who revokes a role and
-    // later wants to re-grant it to the same user is silently unable to,
-    // forever -- the create route still replies 202 "accepted" (the route
-    // itself never touches the DB; only the async consumer does), so nothing
-    // in the HTTP response reveals the failure.
+  it("GAP-POLICY-BINDINGS-05: a revoked binding CAN be re-granted for the same (tenant, user, role)", async () => {
+    // migrations/0012_bindings_partial_unique_active.sql replaced the plain
+    // unique index on (tenant_id, user_id, role_id) with a PARTIAL one scoped
+    // to `status = 'active'`, so a revoked history row no longer blocks a
+    // re-grant to the same user. Previously the re-grant's consumer INSERT
+    // failed on idx_bindings_user_role and dead-lettered silently.
     const userId = randomUUID();
     const roleId = randomUUID();
 
     const first = await app.inject({
       method: "POST",
-      url: "/policy/bindings",
+      url: "/v1/policy/bindings",
       headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
       payload: { userId, roleId },
     });
@@ -229,7 +251,7 @@ describe("COMP-007: bindings -- POST /policy/bindings", () => {
 
     const revoke = await app.inject({
       method: "DELETE",
-      url: `/policy/bindings/${firstId}`,
+      url: `/v1/policy/bindings/${firstId}`,
       headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
     });
     expect(revoke.statusCode).toBe(202);
@@ -238,36 +260,29 @@ describe("COMP-007: bindings -- POST /policy/bindings", () => {
       return r && r.status === "revoked" ? r : null;
     });
 
-    // Re-grant attempt: same tenant, same userId, same roleId, a brand-new
-    // binding id. The route still says 202...
+    // Re-grant: same tenant, same userId, same roleId, a brand-new binding id.
     const second = await app.inject({
       method: "POST",
-      url: "/policy/bindings",
+      url: "/v1/policy/bindings",
       headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
       payload: { userId, roleId },
     });
     expect(second.statusCode).toBe(202);
     const secondId = second.json().id;
 
-    // ...but it never materializes. Let the consumer exhaust its 5 retries
-    // and dead-letter, then prove exactly why via the DLQ entry itself,
-    // rather than merely asserting an absence.
-    await (queue as unknown as { drain(): Promise<void> }).drain();
-    const neverAppeared = await findBinding(secondId, TENANT_A);
-    expect(neverAppeared).toBeNull();
-
-    const dlq = (queue as unknown as { dlq: Array<{ topic: string; msg: { messageId: string }; error: string }> }).dlq;
-    const dlqEntry = dlq.find((d) => d.msg.messageId === secondId);
-    expect(dlqEntry, "expected the re-grant attempt to be dead-lettered").toBeTruthy();
-    expect(dlqEntry!.error).toContain("idx_bindings_user_role");
+    // It now materializes as a fresh active row (no longer dead-lettered).
+    const regranted = await waitFor(() => findBinding(secondId, TENANT_A));
+    expect(regranted.status).toBe("active");
+    expect(regranted.userId).toBe(userId);
+    expect(regranted.roleId).toBe(roleId);
   }, 20000);
 });
 
-describe("COMP-007: bindings -- POST /policy/breakglass", () => {
+describe("COMP-007: bindings -- POST /v1/policy/breakglass", () => {
   it("returns 403 for a non-admin role", async () => {
     const res = await app.inject({
       method: "POST",
-      url: "/policy/breakglass",
+      url: "/v1/policy/breakglass",
       headers: { authorization: `Bearer ${token(["staff"])}` },
       payload: { scope: "finance:*", reason: "need emergency access to close month-end" },
     });
@@ -277,7 +292,7 @@ describe("COMP-007: bindings -- POST /policy/breakglass", () => {
   it("accepts as tenant_admin, and the consumer really writes a pending breakglass row", async () => {
     const res = await app.inject({
       method: "POST",
-      url: "/policy/breakglass",
+      url: "/v1/policy/breakglass",
       headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
       payload: { scope: "finance:*", reason: "need emergency access to close month-end", durationMinutes: 30 },
     });
@@ -289,16 +304,14 @@ describe("COMP-007: bindings -- POST /policy/breakglass", () => {
     expect(row.requesterId).toBeTruthy();
   }, 15000);
 
-  it("BUG regression guard (see file header): an invalid body currently 500s, not 400s", async () => {
+  it("GAP-POLICY-BINDINGS-03: an invalid body now returns the 400 VALIDATION_FAILED envelope", async () => {
     const res = await app.inject({
       method: "POST",
-      url: "/policy/breakglass",
+      url: "/v1/policy/breakglass",
       headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
       payload: { scope: "finance:*", reason: "too short" },
     });
-    // NOT the correct/desired behavior -- documents today's actual bug so this
-    // test fails (loudly, in the right direction) the moment it's fixed.
-    expect(res.statusCode).toBe(500);
-    expect(res.json().code).not.toBe("VALIDATION_FAILED");
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("VALIDATION_FAILED");
   });
 });

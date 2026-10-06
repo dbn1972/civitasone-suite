@@ -1,3 +1,10 @@
+import { SkeletonTable } from "@/app/_components/ds";
+
+/** GAP-POLICY-HOME-03: table skeleton instead of a bare paragraph. */
 export default function Loading() {
-  return <p aria-busy="true">Loading role features…</p>;
+  return (
+    <div className="page-main wrap" aria-busy="true" aria-label="Loading role features">
+      <SkeletonTable rows={6} />
+    </div>
+  );
 }

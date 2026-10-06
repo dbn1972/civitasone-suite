@@ -369,6 +369,17 @@ const STATUS_MAP: Record<string, PillVariant> = {
   generated: "good",
   "partially paid": "warn",
   trial: "warn",
+
+  // GAP-POLICY-ABAC-02 / GAP-POLICY-EVALUATE-02: ABAC rule effects and policy
+  // decisions. The ABAC Rules page and the Evaluate result both render these;
+  // without a key, "allow"/"deny" (and the engine's "permit") fell through to
+  // the neutral blue "info" pill, so an allow rule and a deny rule looked
+  // identical on a page whose whole purpose is spotting deny rules. "revoked"
+  // already maps to "bad" above (bindings/role-features reuse it). Colour is
+  // never the only cue — the pill always carries its humanized text label.
+  allow: "good",
+  permit: "good",
+  deny: "bad",
 };
 // Deliberately NOT added: a generic "flagged" key. tenant-admin/security/SecurityTable.tsx
 // has its own inline outcome->variant mapping that fails closed to "bad" for any
