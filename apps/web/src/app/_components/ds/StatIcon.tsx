@@ -60,6 +60,11 @@ import {
   Mail,
   Briefcase,
   CircleDot,
+  Monitor,
+  Siren,
+  Smartphone,
+  UserRound,
+  Fingerprint,
 } from "lucide-react";
 
 /**
@@ -152,6 +157,15 @@ const STAT_ICON_MAP: Record<string, LucideIcon> = {
   "📨": Mail,
   "🌐": Globe,
   "💼": Briefcase,
+  // Identity hub tiles (GAP-IDENTITY-HOME-01): these previously fell back to
+  // the raw emoji — which renders as the ".notdef" box on headless/server
+  // Linux with no color-emoji font — so the seven tiles were visually
+  // indistinguishable. Map them to vector icons like the other hub tiles.
+  "👤": UserRound,     // Users
+  "🖥": Monitor,       // Sessions
+  "🚨": Siren,         // Break-glass
+  "🔐": Fingerprint,   // WebAuthn / passkeys
+  "📱": Smartphone,    // MFA policy
 };
 
 // Variation Selector-16 (U+FE0F) makes an otherwise-identical emoji string

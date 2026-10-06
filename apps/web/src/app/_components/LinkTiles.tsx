@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import type { NavTile } from "@civitasone/types";
 import { StatIcon } from "./ds/StatIcon";
 import { StatusPill } from "./ds/StatusPill";
@@ -47,6 +48,18 @@ const TILE_ICONS: Record<string, string> = {
   Knowledge: "📚",
   Notifications: "🔔",
   Workflow: "🔁",
+  // GAP-IDENTITY-HOME-01: the identity hub's seven tiles previously all fell
+  // through to the 📁 default (no title matched, and no identity href matched
+  // the href heuristics below), giving the hub no visual differentiation
+  // between users, sessions, keys and emergency access. Distinct icons per
+  // tile title:
+  Users: "👤",
+  Sessions: "🖥️",
+  "API keys": "🔑",
+  "Break-glass": "🚨",
+  WebAuthn: "🔐",
+  "MFA (admin)": "📱",
+  "SSO (admin)": "🪪",
 };
 
 const TILE_BG = ["#eef2ff", "#ecfdf3", "#fffaeb", "#fce7ee", "#e7edfd", "#f1f5f9"];
@@ -96,7 +109,15 @@ export function LinkTiles({ tiles, columns = "three" }: LinkTilesProps) {
                   className="mtile"
                   style={{ textDecoration: "none", color: "inherit", display: "block" }}
                 >
-                  <div className="ic" style={{ background: TILE_BG[idx % TILE_BG.length] }}>
+                  {/* GAP-IDENTITY-HOME-01: the pastel is set via a CSS custom
+                      property rather than a hard `background` so the dark theme
+                      can override it ( .dark .mtile .ic { --tile-ic-bg: … } in
+                      civitas-ds.css) instead of being stuck with a light pastel
+                      that is unreadable on a dark panel. */}
+                  <div
+                    className="ic"
+                    style={{ "--tile-ic-bg": TILE_BG[idx % TILE_BG.length], background: "var(--tile-ic-bg)" } as CSSProperties}
+                  >
                     <StatIcon icon={tileIcon(tile)} size={18} />
                   </div>
                   <h3 className="v">{tile.title}</h3>

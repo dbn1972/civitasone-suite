@@ -366,6 +366,12 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 .dark .seg .on{background:var(--panel);color:var(--ink)}
 .dark .kb-col{background:var(--bg)}
 .dark .kb-card,.dark .mcard,.dark .mtile,.dark .org .node{background:var(--panel)}
+/* GAP-IDENTITY-HOME-01: LinkTiles sets each tile icon's background via the
+   --tile-ic-bg custom property (default = a light pastel). Overriding the
+   variable (not the `background` property, which is set inline and would win)
+   gives tiles a readable, theme-appropriate wash on dark panels instead of a
+   fixed light pastel. */
+.dark .mtile .ic{--tile-ic-bg:rgba(148,163,184,.16)}
 .dark .alert{background:var(--panel);border-color:var(--line)}
 .dark .cd-panel{background:var(--panel)}
 .dark .cd-field input,.dark .cd-field textarea{background:var(--bg);border-color:var(--line);color:var(--ink)}

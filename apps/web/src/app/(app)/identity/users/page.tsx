@@ -1,22 +1,15 @@
-import { ModuleListPage } from "../../../_components/ModuleListPage";
-import { getIdentityUsers } from "../_data";
-import { ArrowLeft } from "lucide-react";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export default async function Page() {
-  const { data, source } = await getIdentityUsers();
-  return (
-    <div className="page-main" aria-labelledby="page-heading">
-      <nav aria-label="Breadcrumb" className="back">
-        <ArrowLeft aria-hidden="true" size={14} /> <a href="/identity">Identity</a>
-      </nav>
-      <ModuleListPage
-        title="Identity — Users"
-        description="Users from identity-service."
-        rows={data}
-        source={source}
-      />
-    </div>
-  );
+/**
+ * GAP-IDENTITY-USERS-02 / USERS-03: the old /identity/users rendered a read-only
+ * generic ModuleListPage — no invite / lock / role change, and a generic mapper
+ * that dropped email/role and could print a bare UUID in the Name column. The
+ * canonical /tenant-admin/users page reads the SAME /api/identity/users endpoint
+ * via the typed getAdminUsers loader and provides name/email/role/status columns
+ * plus the full management actions (UsersTable), all behind the same admin role
+ * gate. We redirect to it rather than keep a second, weaker, PII-leaky copy.
+ * Preserves /identity/users bookmarks.
+ */
+export default function Page() {
+  redirect("/tenant-admin/users");
 }
