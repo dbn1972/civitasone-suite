@@ -92,6 +92,17 @@ const TILE_ICONS: Record<string, string> = {
   Routes: "🧭",
   Agents: "👷",
   "Offline Sync": "🔄",
+  // GAP-LOYALTY-HOME-02: the loyalty hub's five tiles previously all fell
+  // through to the 📁 default (no title matched and no loyalty href matched
+  // the href heuristics below). The loyalty hub now sets each tile's own
+  // `icon` (NavTile.icon, preferred), but these keyed fallbacks give the same
+  // distinct glyphs to any other caller that lists a loyalty tile without an
+  // explicit icon.
+  Programs: "🏆",
+  Members: "👤",
+  Accruals: "➕",
+  Redemptions: "🎁",
+  Tiers: "🏅",
 };
 
 const TILE_BG = ["#eef2ff", "#ecfdf3", "#fffaeb", "#fce7ee", "#e7edfd", "#f1f5f9"];

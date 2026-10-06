@@ -1,22 +1,23 @@
-import { ModuleListPage } from "../../../_components/ModuleListPage";
+import { PageHeader } from "../../../_components/ds";
 import { getLoyaltyPrograms } from "../_data";
-import { ArrowLeft } from "lucide-react";
+import { ProgramsTable } from "./ProgramsTable";
 
 export const dynamic = "force-dynamic";
 
-export default async function Page() {
-  const { data, source } = await getLoyaltyPrograms();
+const PAGE_SIZE = 50;
+
+export default async function Page({ searchParams }: { searchParams?: { page?: string } }) {
+  const page = Math.max(1, Number(searchParams?.page ?? "1") || 1);
+  const { data, source } = await getLoyaltyPrograms({ limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE });
   return (
     <div className="page-main" aria-labelledby="page-heading">
-      <nav aria-label="Breadcrumb" className="back">
-        <ArrowLeft aria-hidden="true" size={14} /> <a href="/loyalty">Loyalty Programs</a>
-      </nav>
-      <ModuleListPage
+      <PageHeader
         title="Loyalty — Programs"
-        description="Loyalty programmes from loyalty-service."
-        rows={data}
-        source={source}
+        subtitle="Loyalty programmes from loyalty-service."
+        back="/loyalty"
+        backLabel="Loyalty Programs"
       />
+      <ProgramsTable rows={data} source={source} />
     </div>
   );
 }
