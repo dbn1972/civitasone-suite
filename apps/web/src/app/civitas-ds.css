@@ -255,6 +255,9 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 /* Navigation tile (HR hub): a destination label, not a metric -- smaller title and a compact icon chip (GAP-HR-HOME-03). */
 .mtile.nav .v{font-size:15px;font-weight:650;letter-spacing:-.1px}
 .mtile.nav .ic{width:32px;height:32px;border-radius:9px;font-size:16px;margin-bottom:8px;background:var(--line2,#f1f5f9)}
+/* Help Centre guide tile icon chip — token-based soft-brand background so it
+   follows the theme instead of a hard-coded #eef2ff (GAP-HELP-HOME-05). */
+.mtile .ic.brand{background:var(--primary-soft)}
 .mqa{display:flex;gap:10px;overflow:auto;padding:2px 0 4px}
 .mqa a{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:7px;width:70px}
 .mqa .b{width:54px;height:54px;border-radius:16px;display:grid;place-items:center;font-size:22px;color:#fff;box-shadow:var(--sh-md)}
