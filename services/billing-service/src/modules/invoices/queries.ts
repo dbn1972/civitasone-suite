@@ -3,8 +3,14 @@ import * as repo from "./repo.js";
 import { outstandingMinor } from "./domain.js";
 import type { BillingInvoiceRow } from "./schema.js";
 
-export async function listInvoices(tenantId: string) {
-  const rows = await cache.getOrLoad(cache.makeKey(tenantId, "invoices", tenantId), () => repo.listByTenant(tenantId));
+export async function listInvoices(tenantId: string, opts?: { status?: string }) {
+  // GAP-BILLING-INVOICES-06: the status filter is pushed into the repo SQL so it
+  // applies BEFORE the 100-row cap (filtering after the cap would miss matching
+  // rows for a tenant with >100 invoices). A status-specific cache key keeps the
+  // filtered and unfiltered reads from colliding.
+  const status = opts?.status;
+  const cacheKey = cache.makeKey(tenantId, "invoices", status ? `${tenantId}:status:${status}` : tenantId);
+  const rows = await cache.getOrLoad(cacheKey, () => repo.listByTenant(tenantId, 100, status));
   return (rows ?? []).map(summarize);
 }
 

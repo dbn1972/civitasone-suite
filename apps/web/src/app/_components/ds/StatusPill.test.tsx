@@ -396,3 +396,33 @@ describe("CRM service-request statuses", () => {
     expect(pillTone(status)).toBe(tone);
   });
 });
+
+// GAP-BILLING-GSTN-07 / GAP-BILLING-INVOICES-03 / GAP-BILLING-INVOICES-DETAIL-07:
+// invoice + GST return / e-invoice status words. "generated"/"partially paid"/
+// "trial" previously had no key and fell through to the neutral "info" pill;
+// these assertions fail on the old STATUS_MAP. The already-mapped words are
+// locked in so a future edit can't recolour them.
+describe("billing invoice + GSTN return status keys", () => {
+  it.each([
+    ["issued", "info"],
+    ["cancelled", "bad"],
+    ["filed", "warn"],
+    ["processing", "warn"],
+    ["suspended", "bad"],
+    ["generated", "good"],
+    ["partially_paid", "warn"],
+    ["partially paid", "warn"],
+    ["trial", "warn"],
+  ])("%s -> %s", (status, tone) => {
+    expect(pillTone(status)).toBe(tone);
+  });
+
+  it("an issued and a cancelled invoice render visually distinct pills", () => {
+    expect(pillTone("issued")).not.toBe(pillTone("cancelled"));
+  });
+
+  it("a generated IRN is not the neutral info fallback", () => {
+    expect(pillTone("generated")).toBe("good");
+    expect(pillTone("generated")).not.toBe("info");
+  });
+});

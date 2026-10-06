@@ -60,6 +60,14 @@ const TILE_ICONS: Record<string, string> = {
   WebAuthn: "🔐",
   "MFA (admin)": "📱",
   "SSO (admin)": "🪪",
+  // GAP-BILLING-HOME-03: the billing hub tiles (Plans, Subscriptions, Invoices,
+  // GSTN Console) had no TILE_ICONS entry and no matching href substring, so
+  // all fell through to the generic 📁 folder glyph. Keyed by their hub labels
+  // (ModuleHub links in billing/page.tsx). "Payments" already maps to 💳 above.
+  Plans: "📋",
+  Subscriptions: "🔁",
+  Invoices: "🧾",
+  "GSTN Console": "🏛️",
 };
 
 const TILE_BG = ["#eef2ff", "#ecfdf3", "#fffaeb", "#fce7ee", "#e7edfd", "#f1f5f9"];

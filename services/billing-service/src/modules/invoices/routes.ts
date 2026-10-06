@@ -1,7 +1,7 @@
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 import { resolveContext, requireSuperAdmin, requireRole, HttpError } from "../../shared/context.js";
 import { DomainError } from "./domain.js";
 import {
@@ -10,6 +10,8 @@ import {
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+
+const INVOICE_STATUS_FILTER = z.enum(["draft", "issued", "partially_paid", "paid", "overdue", "waived", "cancelled"]);
 
 const BILLING_ROLES = ["billing_admin", "tenant_admin", "super_admin", "platform_admin"];
 
@@ -109,10 +111,14 @@ export async function invoicesRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/billing/invoices", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, BILLING_ROLES);
-    const q = req.query as { limit?: string; offset?: string };
+    const q = req.query as { limit?: string; offset?: string; status?: string };
     const limit = Math.min(100, Math.max(1, Number(q.limit) || 100));
     const offset = Math.max(0, Number(q.offset) || 0);
-    const all = await queries.listInvoices(ctx.tenantId);
+    // GAP-BILLING-INVOICES-06: optional status filter + capped paging. The
+    // status is validated against the invoice status enum so an arbitrary
+    // string can never mint an unbounded set of cache keys (400 otherwise).
+    const status = q.status ? INVOICE_STATUS_FILTER.parse(q.status) : undefined;
+    const all = await queries.listInvoices(ctx.tenantId, status ? { status } : undefined);
     return reply.send(all.slice(offset, offset + limit));
   });
 

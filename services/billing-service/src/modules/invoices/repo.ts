@@ -40,11 +40,13 @@ export async function itemsByInvoice(invoiceId: string, limit = 200): Promise<Bi
   return scopedRead((tx) => tx.select().from(billingInvoiceItems).where(eq(billingInvoiceItems.invoiceId, invoiceId)).limit(limit));
 }
 
-export async function listByTenant(tenantId: string, limit = 100): Promise<BillingInvoiceRow[]> {
+export async function listByTenant(tenantId: string, limit = 100, status?: string): Promise<BillingInvoiceRow[]> {
   return scopedRead((tx) => tx
     .select()
     .from(billingInvoices)
-    .where(eq(billingInvoices.tenantId, tenantId))
+    .where(status
+      ? and(eq(billingInvoices.tenantId, tenantId), eq(billingInvoices.status, status))
+      : eq(billingInvoices.tenantId, tenantId))
     .orderBy(desc(billingInvoices.createdAt))
     .limit(limit));
 }

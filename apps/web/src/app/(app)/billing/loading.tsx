@@ -1,16 +1,17 @@
+import { TileHubSkeleton } from "../../_components/ds/Skeleton";
+
+/**
+ * GAP-BILLING-HOME-04: the old skeleton drew four stat-card blocks and a 288px
+ * table block inside a `min-h-screen bg-slate-50` wrapper, none of which the
+ * loaded hub has — the hub is a ModuleHub (PageHeader + a single LinkTiles
+ * tile grid). That mismatch caused a layout shift on load. This mirrors the
+ * real shape: the `page-main` wrapper ModuleHub uses, a header, and one
+ * section of tile placeholders (the hub has five tiles).
+ */
 export default function BillingLoading() {
   return (
-    <div className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <div className="mx-auto max-w-7xl animate-pulse space-y-5">
-        <div className="h-4 w-40 rounded bg-slate-200" />
-        <div className="h-9 w-64 rounded bg-slate-200" />
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-24 rounded-xl bg-slate-200" />
-          ))}
-        </div>
-        <div className="h-72 rounded-xl bg-slate-200" />
-      </div>
+    <div className="page-main" aria-labelledby="page-heading">
+      <TileHubSkeleton sections={1} tilesPerSection={5} />
     </div>
   );
 }

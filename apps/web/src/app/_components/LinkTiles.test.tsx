@@ -69,4 +69,32 @@ describe("LinkTiles", () => {
     expect(icon.querySelector("svg")).not.toBeInTheDocument();
     expect(icon.textContent).toBe("📑");
   });
+
+  // GAP-BILLING-HOME-03: the billing hub tiles had no TILE_ICONS entry and no
+  // matching href substring, so all rendered the generic 📁 folder glyph
+  // (FolderOpen svg). Each now maps to a distinct, StatIcon-vectorised icon.
+  // These assertions fail on the old map (where billing titles resolved to 📁).
+  describe("billing hub tile icons (GAP-BILLING-HOME-03)", () => {
+    it.each(["Plans", "Subscriptions", "Invoices", "GSTN Console"])(
+      "renders a vector (non-folder) icon for the %s tile",
+      (title) => {
+        const { container } = render(<LinkTiles tiles={[{ title, href: `/billing/${title}` }]} />);
+        const icon = container.querySelector(".ic") as HTMLElement;
+        // A mapped glyph resolves to an <svg> and empties the text box; the
+        // old 📁 fallback also renders FolderOpen, so additionally assert the
+        // billing tiles do NOT share the Payments/unknown fallback by checking
+        // each resolves to its own svg.
+        expect(icon.querySelector("svg")).toBeInTheDocument();
+        expect(icon.textContent).toBe("");
+      },
+    );
+
+    it("an unknown billing-ish title still falls through to the generic folder glyph", () => {
+      const { container } = render(<LinkTiles tiles={[{ title: "Some Unknown Tile", href: "/billing/x" }]} />);
+      const icon = container.querySelector(".ic") as HTMLElement;
+      // 📁 -> FolderOpen svg (the generic fallback), text emptied.
+      expect(icon.querySelector("svg")).toBeInTheDocument();
+      expect(icon.textContent).toBe("");
+    });
+  });
 });

@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { COOKIE } from "./config";
+import { BILLING_INVOICE_READER_ROLES } from "./adminRoles";
 
 interface JwtPayload {
   sub?: string;
@@ -243,3 +244,39 @@ export const CRM_GRIEVANCE_CLOSE_ROLES = ["crm_admin", "super_admin", "tenant_ad
 export function hasAnyRole(sessionRoles: string[], allowed: string[]): boolean {
   return allowed.some((r) => sessionRoles.includes(r));
 }
+
+/**
+ * GAP-BILLING-HOME-01 / GAP-BILLING-GSTN-01: billing module role gating.
+ *
+ * The billing-service enforces roles server-side on every route (verified):
+ *  - invoices list/detail + e-invoice generate/cancel: BILLING_ROLES =
+ *    ["billing_admin","tenant_admin","super_admin","platform_admin"]
+ *    (services/billing-service/src/modules/invoices/routes.ts,
+ *     .../einvoice/routes.ts)
+ *  - GSTN return filing / status / GSTIN verify: a wider finance set
+ *    ["finance_officer","finance_admin","billing_admin","tenant_admin",
+ *     "super_admin"] (services/billing-service/src/modules/gstn/routes.ts)
+ *
+ * The web layer had NO gate at all, so every tenant user saw links to IRN
+ * cancel and GSTN return filing (and learned they lacked access only from a
+ * failed call). These constants mirror the server sets so the web layout can
+ * add a matching requireAnyRole gate (defence-in-depth + honest UX); the
+ * server remains the real authority.
+ *
+ * BILLING_MODULE_ROLES is the UNION (anyone who can use ANY billing sub-route),
+ * used by the billing hub layout so it never locks out a user a sub-route would
+ * admit. The GSTN layout additionally narrows to BILLING_GSTN_ROLES.
+ */
+export const BILLING_GSTN_ROLES = ["finance_officer", "finance_admin", "billing_admin", "tenant_admin", "super_admin"];
+export const BILLING_MODULE_ROLES = Array.from(new Set([...BILLING_INVOICE_READER_ROLES, ...BILLING_GSTN_ROLES]));
+
+/**
+ * GAP-BILLING-PLANS-05: roles permitted to CREATE a billing plan. The
+ * billing-service route `POST /v1/billing/plans` enforces `requireSuperAdmin`
+ * (services/billing-service/src/modules/plans/routes.ts), so this web gate is
+ * deliberately the narrowest possible set — super_admin only — to match the
+ * server's own enforcement exactly and fail closed. The UI gate (hiding the
+ * "+ New Plan" control and redirecting away from /billing/plans/new) is
+ * defence-in-depth / convenience; the server is the authoritative gate.
+ */
+export const BILLING_PLAN_ADMIN_ROLES = ["super_admin"];

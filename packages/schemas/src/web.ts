@@ -2314,14 +2314,16 @@ export const SubscriptionSummarySchema = z.object({
   id: z.string(),
   plan: z.string(),
   status: z.enum(["active", "past_due", "cancelled", "trial"]),
-  currentPeriodStart: z.string(),
-  currentPeriodEnd: z.string(),
+  // Nullable: the billing service has no real period/usage data yet and must
+  // not fabricate it (null = unknown, rendered as an em dash).
+  currentPeriodStart: z.string().nullable(),
+  currentPeriodEnd: z.string().nullable(),
   userLimit: z.number().optional(),
-  activeUsers: z.number().default(0),
+  activeUsers: z.number().nullable(),
   moduleAccess: z.array(z.string()).default([]),
   billingEmail: z.string().optional(),
   amount: z.number().optional(),
-  currency: z.string().default("INR"),
+  currency: z.string().nullable(),
 });
 
 export const TenantModuleSchema = z.object({
