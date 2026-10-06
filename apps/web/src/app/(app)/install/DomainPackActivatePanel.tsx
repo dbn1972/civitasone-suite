@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { ConfirmDialog } from "@/app/_components/ds";
 import {
   activateDomainPackStage3,
-  fetchDomainPacksForInstall,
+  fetchDomainPacksForInstallResult,
   type DomainPackActivateResult,
   type DomainPackListItem,
 } from "./domainPackApi";
@@ -21,15 +21,26 @@ export type DomainPackActivatePanelProps = {
   variant?: "embedded" | "page";
   /** Pre-select a pack key (defaults to municipal-in-v1). */
   initialPackKey?: string;
+  /**
+   * GAP-INSTALL-HOME-03 / GAP-INSTALL-DOMAIN-PACKS-01: whether the current
+   * session may run Stage 3 activation (tenant provisioning). When false the
+   * Activate control is hidden and a read-only note is shown instead. The
+   * install-service enforces the same role check server-side; this only
+   * decides whether the UI offers the mutation.
+   */
+  canOperate?: boolean;
 };
 
 export function DomainPackActivatePanel({
   variant = "page",
   initialPackKey = MUNICIPAL_DOMAIN_PACK_KEY,
+  canOperate = true,
 }: DomainPackActivatePanelProps) {
   const router = useRouter();
   const [packs, setPacks] = useState<DomainPackListItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadNonce, setReloadNonce] = useState(0);
   const [selectedKey, setSelectedKey] = useState(initialPackKey);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,9 +51,10 @@ export function DomainPackActivatePanel({
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const data = await fetchDomainPacksForInstall();
+      const { packs: data, error: fetchError } = await fetchDomainPacksForInstallResult();
       if (!cancelled) {
         setPacks(data);
+        setLoadError(fetchError);
         setSelectedKey((current) =>
           data.some((p) => p.domainPackKey === current) ? current : (data[0]?.domainPackKey ?? current),
         );
@@ -52,7 +64,7 @@ export function DomainPackActivatePanel({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadNonce]);
 
   const selected = packs.find((p) => p.domainPackKey === selectedKey) ?? packs[0];
 
@@ -96,11 +108,12 @@ export function DomainPackActivatePanel({
             Domain Pack — browse &amp; activate
           </h2>
           <p className="mt-1 max-w-2xl text-sm text-slate-600">
-            Choose a Domain Pack to import service drafts for local review. For{" "}
-            <span className="font-medium text-slate-800">{MUNICIPAL_DOMAIN_PACK_KEY}</span>, activation
-            yields editable <span className="font-medium">TL</span>,{" "}
-            <span className="font-medium">PGR</span>, and <span className="font-medium">Water</span>{" "}
-            catalogue drafts (DoD §13(f)).
+            Choose a Domain Pack to import service drafts for local review. Activating{" "}
+            <span className="font-medium text-slate-800">Municipal India (ULB)</span> yields editable{" "}
+            <span className="font-medium">Trade License</span>,{" "}
+            <span className="font-medium">Public Grievance Redressal</span>, and{" "}
+            <span className="font-medium">Water Connection</span> catalogue drafts. Nothing goes live
+            until your office publishes.
           </p>
         </div>
         {variant === "embedded" ? (
@@ -155,7 +168,6 @@ export function DomainPackActivatePanel({
                       </span>
                     ) : null}
                   </div>
-                  <p className="mt-1 font-mono text-xs text-slate-500">{pack.domainPackKey}</p>
                   <p className="mt-2 text-sm text-slate-600">{pack.summary}</p>
                   <p className="mt-2 text-xs font-medium text-slate-700">
                     Outcome: {outcomeLabels(pack)}
@@ -167,6 +179,26 @@ export function DomainPackActivatePanel({
         </ul>
       )}
 
+      {loadError ? (
+        <div
+          role="alert"
+          className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
+        >
+          <p className="font-medium">Showing built-in pack only</p>
+          <p className="mt-1">
+            The Domain Pack library could not be loaded, so only the built-in municipal pack is
+            shown. Other packs may be missing.
+          </p>
+          <button
+            type="button"
+            className="mt-2 inline-flex min-h-[36px] items-center rounded-md border border-amber-300 bg-white px-3 text-sm font-medium text-amber-900 hover:bg-amber-100"
+            onClick={() => setReloadNonce((n) => n + 1)}
+          >
+            Retry
+          </button>
+        </div>
+      ) : null}
+
       {selected ? <OutcomePreview pack={selected} /> : null}
 
       {result ? (
@@ -176,7 +208,7 @@ export function DomainPackActivatePanel({
         >
           <p className="font-medium">Activation accepted (Stage {result.stageNumber})</p>
           <p className="mt-1">
-            Pack <span className="font-mono">{result.domainPackKey}</span> queued. Expected drafts:{" "}
+            {selected?.name ?? "Domain Pack"} queued. Expected drafts:{" "}
             {result.packKeys.length > 0
               ? result.packKeys.map((k) => k.replace(/^pack:/, "")).join(", ")
               : outcomeLabels(selected!)}
@@ -196,15 +228,22 @@ export function DomainPackActivatePanel({
       ) : null}
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <button
-          type="button"
-          className={`${btn} bg-indigo-600 text-white hover:bg-indigo-700`}
-          disabled={busy || loading || !selected || Boolean(result)}
-          aria-busy={busy}
-          onClick={() => setConfirmOpen(true)}
-        >
-          {result ? "Activated" : "Activate Domain Pack"}
-        </button>
+        {canOperate ? (
+          <button
+            type="button"
+            className={`${btn} bg-indigo-600 text-white hover:bg-indigo-700`}
+            disabled={busy || loading || !selected || Boolean(result)}
+            aria-busy={busy}
+            onClick={() => setConfirmOpen(true)}
+          >
+            {result ? "Activated" : "Activate Domain Pack"}
+          </button>
+        ) : (
+          <p className="text-sm text-slate-600" role="note">
+            You have read-only access. Activating a Domain Pack requires an installer or tenant-admin
+            role.
+          </p>
+        )}
         {result ? (
           <Link
             href="/designer"
@@ -215,47 +254,40 @@ export function DomainPackActivatePanel({
         ) : null}
       </div>
 
-      <ConfirmDialog
-        open={confirmOpen}
-        title={`Activate ${selected?.name ?? "Domain Pack"}?`}
-        description={
-          selected ? (
-            <span>
-              This runs Install Stage 3 for{" "}
-              <strong className="font-mono">{selected.domainPackKey}</strong> and imports{" "}
-              <strong>{outcomeLabels(selected)}</strong> as editable catalogue drafts. Services stay
-              draft until published.
-            </span>
-          ) : undefined
-        }
-        confirmLabel="Activate"
-        cancelLabel="Cancel"
-        busy={busy}
-        errorMessage={error ?? undefined}
-        onConfirm={() => void doActivate()}
-        onCancel={() => setConfirmOpen(false)}
-      />
+      {canOperate ? (
+        <ConfirmDialog
+          open={confirmOpen}
+          title={`Activate ${selected?.name ?? "Domain Pack"}?`}
+          description={
+            selected ? (
+              <span>
+                This runs Install Stage 3 for{" "}
+                <strong>{selected.name}</strong> and imports{" "}
+                <strong>{outcomeLabels(selected)}</strong> as editable catalogue drafts. Services stay
+                draft until published.
+              </span>
+            ) : undefined
+          }
+          confirmLabel="Activate"
+          cancelLabel="Cancel"
+          busy={busy}
+          errorMessage={error ?? undefined}
+          onConfirm={() => void doActivate()}
+          onCancel={() => setConfirmOpen(false)}
+        />
+      ) : null}
     </section>
   );
 }
 
 function OutcomePreview({ pack }: { pack: DomainPackCatalogEntry }) {
-  const isMunicipal = pack.domainPackKey === MUNICIPAL_DOMAIN_PACK_KEY;
   return (
     <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
       <p className="text-sm font-medium text-slate-900">
-        {isMunicipal ? (
-          <>
-            <span className="font-mono text-indigo-800">{pack.domainPackKey}</span>
-            {" → "}
-            <span className="text-slate-800">TL / PGR / Water</span>
-            <span className="ms-1 font-normal text-slate-600">editable drafts</span>
-          </>
-        ) : (
-          <>
-            Activation outcome for <span className="font-mono">{pack.domainPackKey}</span>
-          </>
-        )}
+        {pack.name}
+        {" → "}
+        <span className="text-slate-800">{outcomeLabels(pack)}</span>
+        <span className="ms-1 font-normal text-slate-600">editable drafts</span>
       </p>
       <ol className="mt-3 space-y-2" aria-label="Service packs imported on activate">
         {pack.outcomes.map((o) => (
@@ -269,12 +301,22 @@ function OutcomePreview({ pack }: { pack: DomainPackCatalogEntry }) {
             <div className="min-w-0 flex-1">
               <p className="font-medium text-slate-900">{o.label}</p>
               <p className="text-xs text-slate-500">{o.description}</p>
-              <p className="mt-0.5 font-mono text-[11px] text-slate-500">{o.packKey}</p>
             </div>
             <span className="text-xs text-slate-500">draft</span>
           </li>
         ))}
       </ol>
+      <details className="mt-3">
+        <summary className="cursor-pointer text-xs text-slate-500">Technical details</summary>
+        <p className="mt-1 font-mono text-[11px] text-slate-500">{pack.domainPackKey}</p>
+        <ul className="mt-1 space-y-0.5">
+          {pack.outcomes.map((o) => (
+            <li key={o.packKey} className="font-mono text-[11px] text-slate-500">
+              {o.packKey}
+            </li>
+          ))}
+        </ul>
+      </details>
     </div>
   );
 }

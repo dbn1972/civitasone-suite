@@ -1,16 +1,24 @@
+import { SkeletonBar, SkeletonCard } from "@/app/_components/ds";
+
+/**
+ * GAP-INSTALL-CONSOLE-04: segment-wide loading placeholder for /install. Uses
+ * DS skeleton primitives (--line/--panel tokens, dark-mode safe) instead of
+ * hard-coded bg-slate-50 + min-h-screen, so the shimmer respects theming and
+ * does not double-pad inside the app shell.
+ */
 export default function InstallLoading() {
   return (
-    <div className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <div className="mx-auto max-w-7xl animate-pulse space-y-5">
-        <div className="h-4 w-40 rounded bg-slate-200" />
-        <div className="h-9 w-64 rounded bg-slate-200" />
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-24 rounded-xl bg-slate-200" />
-          ))}
-        </div>
-        <div className="h-72 rounded-xl bg-slate-200" />
+    <div aria-busy="true" aria-label="Loading…" className="page-main space-y-5">
+      <SkeletonBar w={160} h={14} />
+      <SkeletonBar w={260} h={28} />
+      <div
+        style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}
+      >
+        {Array.from({ length: 4 }).map((_, i) => (
+          <SkeletonCard key={i} />
+        ))}
       </div>
+      <SkeletonBar w="100%" h={280} style={{ borderRadius: 12 }} />
     </div>
   );
 }

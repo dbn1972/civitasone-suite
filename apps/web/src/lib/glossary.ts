@@ -100,6 +100,9 @@ export const GLOSSARY: Record<string, string> = {
   "Maker-checker": "One person submits, a second person approves — to prevent mistakes and fraud.",
   "Break-glass": "Emergency access granted for a short time, fully recorded, when something urgent breaks.",
   "LGD code": "Local Government Directory code — the official ID for a state, district, block or village.",
+  // GAP-INSTALL-CONSOLE-02: terms used by the Setup & Install help guide.
+  "Domain Pack": "A ready-made bundle of service templates (for example Trade License or Water Connection) you can import as editable drafts.",
+  Silo: "A separate, isolated workspace set up for one office so its data stays private.",
 };
 
 /** Look up a term's plain definition (case-insensitive on the key). */

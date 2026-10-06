@@ -385,6 +385,35 @@ export const HELP_MODULES: HelpModule[] = [
     ],
     terms: ["GST", "GSTIN", "IRN", "e-invoice", "GSTN"],
   },
+  {
+    slug: "install",
+    icon: "🧩",
+    title: "Setup & Install",
+    summary:
+      "Get a new office ready — run the setup steps in order, then import ready-made service templates (Domain Packs).",
+    href: "/install/console",
+    moduleKey: null,
+    major: false,
+    tasks: [
+      {
+        title: "Run the setup steps",
+        steps: [
+          "Open Setup & Install, then the Installer wizard.",
+          "Run each step in order; retry a step that failed, or skip one you don't need.",
+          "The progress bar shows how far setup has gone.",
+        ],
+      },
+      {
+        title: "Import a Domain Pack",
+        steps: [
+          "Open Domain Packs.",
+          "Pick a pack (for example Municipal India) and activate it.",
+          "The pack's services are imported as editable drafts — nothing goes live until your office publishes them.",
+        ],
+      },
+    ],
+    terms: ["Domain Pack", "Silo", "Role"],
+  },
 ];
 
 /** Find a single module guide by its slug. */

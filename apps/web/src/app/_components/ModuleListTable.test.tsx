@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 
 vi.mock("@/lib/sync/resource", () => ({ useSeededResource: vi.fn() }));
 // RefreshErrorState uses next/navigation's useRouter for its retry action
@@ -114,5 +114,73 @@ describe("ModuleListTable", () => {
     expect(screen.getByText("hrms-leave-approvals")).toBeInTheDocument();
     const short = screen.getByText("3f2a9c1e");
     expect(short).toHaveAttribute("title", "3f2a9c1e-1111-4000-8000-000000000001");
+  });
+
+  // GAP-INSTALL-{MODULES,SILOS,STAGES}-03 (CAP): the status cell renders a
+  // StatusPill (humanized label + non-colour cue via the `pill` class), not a
+  // bare raw lowercase enum string.
+  it("renders the status column as a StatusPill with a humanized label", () => {
+    mockedHook.mockReturnValue({
+      data: [{ id: "s1", label: "Row", status: "in_progress" }],
+      fromCache: false,
+      offline: false,
+      cachedAt: null,
+      provenance: "live",
+    } as never);
+    render(<ModuleListTable cacheKey="test" rows={[]} source="api" />);
+    const pill = screen.getByText("In Progress");
+    expect(pill).toHaveClass("pill");
+  });
+
+  // GAP-INSTALL-STEPS-03 (CAP): the raw <table className="tbl"> had no
+  // pagination — all N rows rendered at once. The DataTable paginates at
+  // pageSize=15, so 30 rows render only 15 and expose a pager. Fails on the
+  // old code (which rendered all 30 and had no pager).
+  it("paginates at 15 rows per page and shows a pager for 30 rows", () => {
+    const many = Array.from({ length: 30 }, (_, i) => ({
+      id: `row-${String(i + 1).padStart(2, "0")}`,
+      label: `Record ${i + 1}`,
+    }));
+    mockedHook.mockReturnValue({
+      data: many,
+      fromCache: false,
+      offline: false,
+      cachedAt: null,
+      provenance: "live",
+    } as never);
+    render(<ModuleListTable cacheKey="test" rows={[]} source="api" />);
+
+    // First page only: Record 1 is visible, Record 16 (page 2) is not.
+    expect(screen.getByText("Record 1")).toBeInTheDocument();
+    expect(screen.queryByText("Record 16")).not.toBeInTheDocument();
+    // A pager control exists and advances to the next page.
+    const next = screen.getByText("Next →");
+    expect(next).toBeInTheDocument();
+    fireEvent.click(next);
+    expect(screen.getByText("Record 16")).toBeInTheDocument();
+    expect(screen.queryByText("Record 1")).not.toBeInTheDocument();
+  });
+
+  // GAP-INSTALL-STEPS-03 (CAP): the old table had no filter box. The DataTable
+  // exposes a filterable searchbox that narrows the visible rows. Fails on the
+  // old code (no textbox at all).
+  it("exposes a filter box that narrows the visible rows", () => {
+    const data = [
+      { id: "a1", label: "Alpha module" },
+      { id: "b2", label: "Beta module" },
+    ];
+    mockedHook.mockReturnValue({
+      data,
+      fromCache: false,
+      offline: false,
+      cachedAt: null,
+      provenance: "live",
+    } as never);
+    render(<ModuleListTable cacheKey="test" rows={[]} source="api" />);
+
+    const box = screen.getByRole("searchbox");
+    fireEvent.change(box, { target: { value: "Alpha" } });
+    expect(screen.getByText("Alpha module")).toBeInTheDocument();
+    expect(screen.queryByText("Beta module")).not.toBeInTheDocument();
   });
 });

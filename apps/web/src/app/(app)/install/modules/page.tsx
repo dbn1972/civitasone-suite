@@ -1,6 +1,5 @@
 import { ModuleListPage } from "../../../_components/ModuleListPage";
 import { getInstallModules } from "../_data";
-import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -8,14 +7,18 @@ export default async function Page() {
   const { data, source } = await getInstallModules();
   return (
     <div className="page-main" aria-labelledby="page-heading">
-      <nav aria-label="Breadcrumb" className="back">
-        <ArrowLeft aria-hidden="true" size={14} /> <a href="/install/console">Install console</a>
-      </nav>
+      {/* GAP-INSTALL-MODULES-05: the global AutoBreadcrumb (AppShell TopBar)
+          already provides the Home / Install / Modules trail, so the local
+          <nav aria-label="Breadcrumb"> was a second landmark with the same
+          name. Removed; the back action is the PageHeader's own next/link. */}
       <ModuleListPage
-        title="Install — Modules"
+        title="Modules"
         description="Module resolution catalogue."
         rows={data}
         source={source}
+        back="/install/console"
+        backLabel="Install console"
+        errorArea="install modules"
       />
     </div>
   );
