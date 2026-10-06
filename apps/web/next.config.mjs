@@ -87,6 +87,13 @@ const nextConfig = {
       // and their orphaned components were deleted.
       { source: '/finance/expenses', destination: '/hr/expenses', permanent: true },
       { source: '/finance/loans', destination: '/hr/loans', permanent: true },
+      // GAP-BILLING-HOME-02 / GAP-BILLING-LIST-01: /billing/list was an orphan
+      // duplicate of /billing/plans (same getBillingPlans loader, same
+      // "Billing — Plans" title) that was never linked from the hub, sidebar or
+      // navRouteManifest. The route folder was deleted; this permanent redirect
+      // keeps any external bookmark to the old URL working by sending it to the
+      // canonical plans list.
+      { source: '/billing/list', destination: '/billing/plans', permanent: true },
       { source: '/stock/:path*', destination: '/inventory/:path*', permanent: true },
     ];
   },

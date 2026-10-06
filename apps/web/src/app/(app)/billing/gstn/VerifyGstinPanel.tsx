@@ -3,6 +3,7 @@
 import { useId, useRef, useState } from "react";
 import { Button, StatusPill } from "@/app/_components/ds";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
+import { isValidGstin } from "@/lib/gstin";
 
 interface GstinVerificationResult {
   gstin: string;
@@ -13,11 +14,9 @@ interface GstinVerificationResult {
   lastUpdated: string;
 }
 
-// Standard 15-char GSTIN structure: 2-digit state code, 10-char PAN
-// (5 letters + 4 digits + 1 letter), 1-char entity number, literal "Z", 1-char checksum.
-const GSTIN_RE = /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+// Structure + mod-36 checksum validation lives in lib/gstin (GAP-BILLING-GSTN-06).
 
-export function VerifyGstinPanel() {
+export function VerifyGstinPanel({ disabled = false }: { disabled?: boolean } = {}) {
   const [gstin, setGstin] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<GstinVerificationResult | null>(null);
@@ -33,8 +32,8 @@ export function VerifyGstinPanel() {
     setLookupError(null);
     setResult(null);
 
-    if (!GSTIN_RE.test(gstin.toUpperCase())) {
-      setFieldError("Enter a valid 15-character GSTIN (e.g. 22AAAAA0000A1Z5).");
+    if (!isValidGstin(gstin)) {
+      setFieldError("Enter a valid 15-character GSTIN (checksum must match, e.g. 27AAPFU0939F1ZV).");
       gstinRef.current?.focus();
       return;
     }
@@ -81,7 +80,7 @@ export function VerifyGstinPanel() {
       </div>
 
       <div>
-        <Button type="submit" variant="primary" style={{ minHeight: 44 }} disabled={busy}>
+        <Button type="submit" variant="primary" style={{ minHeight: 44 }} disabled={busy || disabled}>
           {busy ? "Verifying…" : "Verify GSTIN"}
         </Button>
       </div>

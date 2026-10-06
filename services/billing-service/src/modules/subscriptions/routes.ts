@@ -48,11 +48,14 @@ export async function subscriptionsRoutes(app: FastifyInstance): Promise<void> {
       id: sub.id,
       plan: sub.planId,
       status: (sub.status === "active" ? "active" : sub.status === "cancelled" ? "cancelled" : sub.status === "past_due" ? "past_due" : "trial") as "active" | "past_due" | "cancelled" | "trial",
-      currentPeriodStart: new Date().toISOString().slice(0, 10),
-      currentPeriodEnd: sub.trialExpiresAt?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
-      activeUsers: 0,
+      // No real billing-period / usage / currency data exists yet: return null
+      // (unknown) rather than inventing values. The trial expiry is the only
+      // real date we hold.
+      currentPeriodStart: null,
+      currentPeriodEnd: sub.trialExpiresAt?.slice(0, 10) ?? null,
+      activeUsers: null,
       moduleAccess: [],
-      currency: "INR",
+      currency: null,
     });
   });
 

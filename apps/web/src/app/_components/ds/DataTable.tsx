@@ -7,7 +7,7 @@ import { csvFormulaSafe } from "@/lib/csv";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { EmptyState } from "./EmptyState";
 import { StatusPill } from "./StatusPill";
-import { formatMoney, formatRupees, formatIndianDate, formatPercent } from "@/lib/formatters";
+import { formatMoney, formatRupees, formatIndianDate, formatPercent, formatPeriod, formatMoneyIn } from "@/lib/formatters";
 import { minorToDecimalString } from "@/lib/money";
 
 /**
@@ -80,8 +80,17 @@ interface Column<T> {
    * bad value reaches a mounted client tree without ever hitting that CI guard.
    */
   render?: (row: T) => ReactNode;
-  /** Server-safe: renders StatusPill/formatMoney/formatRupees/formatIndianDate/a date+time stamp/a percent from the row value at `key` */
-  cellType?: "status" | "amount" | "rupees" | "date" | "datetime" | "percent";
+  /** Server-safe: renders StatusPill/formatMoney/formatRupees/formatIndianDate/a date+time stamp/a percent/a YYYY-MM period from the row value at `key` */
+  cellType?: "status" | "amount" | "rupees" | "date" | "datetime" | "percent" | "period" | "money";
+  /**
+   * Opt-in, server-safe (plain data, not a function): for cellType "money",
+   * the row field holding this row's ISO-4217 currency code. The minor-unit
+   * value at `key` is then rendered with formatMoneyIn(value, row[currencyKey])
+   * so a non-INR invoice shows its own symbol instead of a hard-coded ₹.
+   * INR (or a missing/invalid code) renders identically to cellType "amount"
+   * (GAP-BILLING-INVOICES-04 / GAP-BILLING-INVOICES-DETAIL-08).
+   */
+  currencyKey?: keyof T & string;
   /**
    * Opt-in, server-safe: when cellType is "status", looks up the raw status
    * value in this map to pass StatusPill a translated label instead of its
@@ -309,6 +318,13 @@ function cellValue<T extends Record<string, unknown>>(col: Column<T>, row: T): R
   if (col.cellType === "percent") {
     return formatPercent(toPercentNumber(row[col.key]));
   }
+  if (col.cellType === "period") {
+    return formatPeriod(row[col.key] as string | null | undefined);
+  }
+  if (col.cellType === "money") {
+    const currency = col.currencyKey ? (row[col.currencyKey] as string | null | undefined) : null;
+    return formatMoneyIn(row[col.key] as bigint | number | string | null | undefined, currency);
+  }
   const raw = row[col.key];
   if (process.env.NODE_ENV !== "production" && typeof raw === "object" && raw !== null) {
     const dedupeKey = `${col.key}::${col.label}::object`;
@@ -476,6 +492,14 @@ export function DataTable<T extends Record<string, unknown>>({
     if (col.cellType === "date") return formatIndianDate(row[col.key] as string | null | undefined);
     if (col.cellType === "datetime") return formatDateTimeIST(row[col.key] as string | null | undefined);
     if (col.cellType === "percent") return String(formatPercent(toPercentNumber(row[col.key])) ?? "");
+    if (col.cellType === "period") return formatPeriod(row[col.key] as string | null | undefined);
+    if (col.cellType === "money") {
+      if (csvPlainAmounts) {
+        return minorToDecimalString(row[col.key] as string | number | bigint | null | undefined) ?? "";
+      }
+      const currency = col.currencyKey ? (row[col.currencyKey] as string | null | undefined) : null;
+      return String(formatMoneyIn(row[col.key] as bigint | number | string | null | undefined, currency) ?? "");
+    }
     if (col.cellType === "status") return String(row[col.key] ?? "");
     return String(row[col.key] ?? "");
   }

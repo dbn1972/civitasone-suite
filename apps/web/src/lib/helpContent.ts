@@ -348,6 +348,43 @@ export const HELP_MODULES: HelpModule[] = [
     ],
     terms: ["Role", "MFA", "SSO", "Maker-checker", "Break-glass", "LGD code"],
   },
+  {
+    slug: "billing",
+    icon: "🧾",
+    title: "Billing",
+    summary:
+      "Manage your office's billing plans, subscriptions, invoices and GST e-invoicing in one place.",
+    href: "/billing",
+    moduleKey: "billing",
+    major: false,
+    tasks: [
+      {
+        title: "Open and read an invoice",
+        steps: [
+          "Open Billing, then Invoices.",
+          "Each row shows a readable invoice reference, its period, and status.",
+          "Click a row to see the full invoice, its line items, and the amounts.",
+        ],
+      },
+      {
+        title: "Generate a GST e-invoice (IRN)",
+        steps: [
+          "Open the invoice you want to register.",
+          "Press Generate e-invoice / IRN and confirm.",
+          "The government portal returns an IRN and a signed QR code once it finishes; the page updates as it lands.",
+        ],
+      },
+      {
+        title: "File a GST return",
+        steps: [
+          "Open Billing, then GSTN Console.",
+          "Enter the GSTIN, the return period, the type, and the amounts in rupees.",
+          "Check the summary that appears, then confirm to file. Filing is final, so review it first.",
+        ],
+      },
+    ],
+    terms: ["GST", "GSTIN", "IRN", "e-invoice", "GSTN"],
+  },
 ];
 
 /** Find a single module guide by its slug. */

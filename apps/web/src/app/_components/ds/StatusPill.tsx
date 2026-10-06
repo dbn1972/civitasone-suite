@@ -304,6 +304,25 @@ const STATUS_MAP: Record<string, PillVariant> = {
   unqualified: "mut",
   disqualified: "bad",
   customer: "good",
+
+  // --- GAP-BILLING-GSTN-07 / GAP-BILLING-INVOICES-03 / GAP-BILLING-INVOICES-DETAIL-07
+  // (additive). The billing invoice status enum
+  // (services/billing-service/src/modules/invoices/schema.ts) and the GSTN
+  // return / e-invoice status enums produce several words that had no key here
+  // and so fell through to the neutral "info" pill -- making, e.g., an "issued"
+  // invoice and a "cancelled" one look identical, and a filed/processing GST
+  // return indistinguishable from an unknown value. "issued" (info), "filed"
+  // (warn), "processing" (warn), "suspended" (bad) and "cancelled" (bad) are
+  // ALREADY mapped above from earlier gap work and are deliberately left as-is.
+  // The two invoice/e-invoice words with no entry at all were "generated" (an
+  // active IRN -- a successful terminal state, like paid/completed -> good) and
+  // "partially_paid" (an invoice with an outstanding balance remaining, an
+  // attention/waiting state -> warn). "trial" is a GSTN/subscription trial
+  // period -- a time-boxed, not-yet-committed state (warn). Keyed explicitly so
+  // each is a decision, not a fallthrough.
+  generated: "good",
+  "partially paid": "warn",
+  trial: "warn",
 };
 // Deliberately NOT added: a generic "flagged" key. tenant-admin/security/SecurityTable.tsx
 // has its own inline outcome->variant mapping that fails closed to "bad" for any

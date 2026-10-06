@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Button, StatusPill } from "@/app/_components/ds";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 
@@ -13,12 +13,23 @@ interface ReturnStatusResult {
   lastUpdated: string;
 }
 
-export function ReturnStatusPanel() {
-  const [ref, setRef] = useState("");
+export function ReturnStatusPanel({ initialRef = "" }: { initialRef?: string } = {}) {
+  const [ref, setRef] = useState(initialRef);
+  const lastSeeded = useRef(initialRef);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ReturnStatusResult | null>(null);
   const [fieldError, setFieldError] = useState<string | undefined>();
   const [lookupError, setLookupError] = useState<string | null>(null);
+
+  // GAP-BILLING-GSTN-04: when the console hands us a fresh reference id (after a
+  // successful submit + "Check status"), prefill the field — but never clobber
+  // what the user is actively typing: only seed when the incoming id changes.
+  useEffect(() => {
+    if (initialRef && initialRef !== lastSeeded.current) {
+      lastSeeded.current = initialRef;
+      setRef(initialRef);
+    }
+  }, [initialRef]);
 
   const refId = useId();
   const refErrorId = `${refId}-error`;
@@ -54,6 +65,15 @@ export function ReturnStatusPanel() {
 
   return (
     <form onSubmit={handleSubmit} aria-label="Check GST return status" style={{ display: "grid", gap: 14, maxWidth: 480 }}>
+      {/* GAP-BILLING-GSTN-05: there is no per-GSTIN/period filing-history list yet
+          — status can only be looked up by a specific reference id. A history
+          list needs a backend endpoint that persists past filings (billing-service
+          has no gstn_returns table today); flagged for review. Until then, be
+          honest that this is a single-reference lookup. */}
+      <p style={{ margin: 0, fontSize: 12.5, color: "var(--ink2)" }} role="note">
+        Look up a return by its reference ID. A full filing history for a GSTIN/period is not
+        available here yet — keep a note of each reference ID when you file.
+      </p>
       <div style={{ display: "grid", gap: 6 }}>
         <label htmlFor={refId} style={{ fontSize: 13, fontWeight: 600 }}>
           Return Reference ID <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>

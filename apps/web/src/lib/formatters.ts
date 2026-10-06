@@ -202,6 +202,24 @@ export function formatIndianDateTime(isoStringOrDate: string | Date | null | und
 }
 
 /**
+ * GAP-BILLING-INVOICES-DETAIL-02: the NIC e-invoice cancellation window is 24h
+ * from the IRN acknowledgement (ackDate). Returns the deadline Date, or null
+ * when ackDate is missing/unparseable (caller then treats the window as unknown
+ * and lets the server decide, rather than hard-blocking). The server remains
+ * authoritative; this is only to disable the button and show honest copy before
+ * a doomed round-trip.
+ *
+ *   irnCancelDeadline("2026-07-02T10:00:00.000Z") -> Date(2026-07-03T10:00:00.000Z)
+ *   irnCancelDeadline(null)                         -> null
+ */
+export function irnCancelDeadline(ackDate: string | null | undefined): Date | null {
+  if (!ackDate) return null;
+  const d = new Date(ackDate);
+  if (isNaN(d.getTime())) return null;
+  return new Date(d.getTime() + 24 * 60 * 60 * 1000);
+}
+
+/**
  * Today's calendar date in Asia/Kolkata, as "YYYY-MM-DD" -- the same
  * date-only shape the codebase's own date-comparison logic already uses
  * everywhere (e.g. `new Date().toISOString().slice(0, 10)` /

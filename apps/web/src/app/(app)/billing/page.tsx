@@ -5,6 +5,7 @@ export default function Page() {
     <ModuleHub
       title="Billing"
       description="Manage plans, subscriptions, invoices, and payments."
+      help="billing"
       links={[
         { href: "/billing/plans", label: "Plans", note: "Billing plans and pricing" },
         { href: "/billing/subscriptions", label: "Subscriptions", note: "Active subscriptions" },

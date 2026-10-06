@@ -20,6 +20,8 @@ import {
   fetchReturnStatus,
   GstnAdapterError,
   CircuitBreakerOpenError,
+  isEnabled,
+  getBreakerState,
 } from "./adapter.js";
 
 const BILLING_ROLES = ["finance_officer", "finance_admin", "billing_admin", "tenant_admin", "super_admin"];
@@ -87,6 +89,20 @@ function handleAdapterError(err: unknown, correlationId: string): { code: number
 }
 
 export async function gstnRoutes(app: FastifyInstance): Promise<void> {
+  /**
+   * GET /v1/billing/gstn/status
+   *
+   * GAP-BILLING-GSTN-08: lets the console tell up-front whether GSTN is enabled
+   * in this environment (instead of the user learning only from a failed
+   * filing). Read-only, role-gated like the rest of the console. Returns the
+   * adapter's enabled flag and the circuit-breaker state. No PII, no secrets.
+   */
+  app.get("/v1/billing/gstn/status", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, BILLING_ROLES);
+    return reply.send({ data: { enabled: isEnabled(), breaker: getBreakerState() } });
+  });
+
   /**
    * POST /v1/billing/gstn/returns
    *
