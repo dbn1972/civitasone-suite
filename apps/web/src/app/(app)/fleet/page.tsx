@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { PageHeader, Card } from "@/app/_components/ds";
+import { PageHeader, Card, StatCard, StatGrid, RefreshErrorState } from "@/app/_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 
 type DashboardStats = {
   totalVehicles: number;
@@ -29,33 +28,77 @@ async function getFleetDashboard(): Promise<LoaderResult<DashboardStats>> {
 }
 
 export default async function FleetDashboardPage() {
-  const { data: stats, source } = await getFleetDashboard();
+  const { data: stats, source, status } = await getFleetDashboard();
 
+  // GAP-FLEET-HOME-01: a failed fetch used to render a confident {0,0,0,0}
+  // KPI strip -- "0 Overdue Maintenance" read as "nothing overdue" for a
+  // safety-relevant number. Fail honestly instead: show a retryable error
+  // state, never fabricated zeros. A real zero on a successful load still
+  // renders 0 (handled by the success branch below).
+  if (source === "error") {
+    return (
+      <div className="page-main wrap" aria-labelledby="page-heading">
+        <PageHeader
+          title="Fleet Management"
+          subtitle="Government vehicles, trips, fuel, maintenance, and telematics."
+        />
+        <RefreshErrorState
+          error={{
+            what: "Could not load fleet figures",
+            next: "The fleet service may be temporarily unavailable. Try again in a moment.",
+            actions: ["retry", "back"],
+          }}
+          backHref="/dashboard"
+          source={{ status, area: "fleet" }}
+        />
+      </div>
+    );
+  }
+
+  // GAP-FLEET-HOME-02: use the DS StatCard/StatGrid (token-based tones that
+  // follow the dark theme) instead of a local KpiCard with hard-coded hex
+  // fallbacks; format counts with en-IN grouping; link the maintenance KPIs
+  // to the filtered-list screen so they are a drill-down, not dead numbers.
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Fleet Management"
         subtitle="Government vehicles, trips, fuel, maintenance, and telematics."
-        actions={source === "error" ? <DataSourceBadge source="error" /> : null}
       />
 
-      {/* KPI strip */}
-      <div
-        style={{
-          display: "grid",
-          gap: 16,
-          gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
-          marginBottom: 24,
-        }}
-      >
-        <KpiCard label="Total Vehicles"        value={stats.totalVehicles}        variant="neutral" />
-        <KpiCard label="Available"             value={stats.availableVehicles}    variant="good"    />
-        <KpiCard label="Due Maintenance (7d)"  value={stats.scheduledMaintenance} variant="warn"    />
-        <KpiCard label="Overdue Maintenance"   value={stats.overdueMaintenance}   variant="bad"     />
-      </div>
+      <StatGrid>
+        <StatCard
+          icon="🚍"
+          tone="neutral"
+          label="Total Vehicles"
+          value={stats.totalVehicles.toLocaleString("en-IN")}
+        />
+        <StatCard
+          icon="✅"
+          tone="good"
+          label="Available"
+          value={stats.availableVehicles.toLocaleString("en-IN")}
+        />
+        <StatCard
+          icon="🛠️"
+          tone="warn"
+          href="/assets/fleet/maintenance"
+          hint="Vehicles with maintenance scheduled in the next 7 days."
+          label="Due Maintenance (7d)"
+          value={stats.scheduledMaintenance.toLocaleString("en-IN")}
+        />
+        <StatCard
+          icon="⚠️"
+          tone="bad"
+          href="/assets/fleet/maintenance"
+          hint="Vehicles whose scheduled maintenance date has already passed."
+          label="Overdue Maintenance"
+          value={stats.overdueMaintenance.toLocaleString("en-IN")}
+        />
+      </StatGrid>
 
       {/* Navigation tiles */}
-      <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))" }}>
+      <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", marginTop: 24 }}>
         <NavCard
           href="/fleet/vehicles"
           title="Vehicles"
@@ -78,40 +121,6 @@ export default async function FleetDashboardPage() {
         />
       </div>
     </div>
-  );
-}
-
-function KpiCard({
-  label,
-  value,
-  variant,
-}: {
-  label: string;
-  value: number;
-  variant: "neutral" | "good" | "warn" | "bad";
-}) {
-  const colorMap = {
-    neutral: "var(--text)",
-    good:    "var(--good, #27ae60)",
-    warn:    "var(--warn, #e67e22)",
-    bad:     "var(--bad, #c0392b)",
-  };
-  return (
-    <Card padding>
-      <div style={{ textAlign: "center" }}>
-        <div
-          style={{
-            fontSize: 36,
-            fontWeight: 700,
-            color: colorMap[variant],
-            lineHeight: 1.1,
-          }}
-        >
-          {value}
-        </div>
-        <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>{label}</div>
-      </div>
-    </Card>
   );
 }
 

@@ -93,6 +93,9 @@ const NAV: NavGroup[] = [
       { icon: Gift, label: "Grants", href: "/grants", moduleKey: "grants" },
       { icon: Building2, label: "Establishment", href: "/estab", moduleKey: "establishment" },
       { icon: HardHat, label: "Assets", href: "/assets", moduleKey: "assets" },
+      // GAP-FLEET-HOME-03: the /fleet hub (gated on the "assets" module, see
+      // fleet/layout.tsx) had no sidebar entry though navRouteManifest lists it.
+      { icon: Truck, label: "Fleet", href: "/fleet", moduleKey: "assets" },
       { icon: Package, label: "Stock", href: "/stock", moduleKey: "stock" },
     ],
   },
