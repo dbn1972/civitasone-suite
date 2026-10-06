@@ -466,7 +466,10 @@ function mapAuditRows(payload: unknown): AuditRowSummary[] | null {
     const rowPayload = isRecord(row.payload) ? row.payload : null;
     const resourceType = (rowPayload ? toText(rowPayload.resourceType) : null) ?? undefined;
     const resourceId = toText(row.resourceId) ?? (rowPayload ? toText(rowPayload.resourceId) : null) ?? toText(row.target) ?? undefined;
-    mapped.push({ actor, action, resource, outcome, at, ...(resourceType ? { resourceType } : {}), ...(resourceId ? { resourceId } : {}) });
+    // GAP-AUDIT-HOME-03: keep the event's own id so the Event Log can show an
+    // event reference; previously discarded by this mapper.
+    const eventId = toText(row.id) ?? undefined;
+    mapped.push({ actor, action, resource, outcome, at, ...(resourceType ? { resourceType } : {}), ...(resourceId ? { resourceId } : {}), ...(eventId ? { id: eventId } : {}) });
   }
   // GAP-HR-AUDIT-LOG-01: an empty but VALID array must stay a clean "no
   // records", never the error badge -- only fall back to null when the
@@ -4863,26 +4866,33 @@ export async function getCagParas(): Promise<LoaderResult<CagParaSummary[]>> {
         if (!isRecord(row)) continue;
         const id = toText(row.id);
         const paraNo = toText(row.paraNo) ?? "";
-        const reportYear = toText(row.reportYear) ?? toText(row.sourceRef) ?? "";
-        const department = toText(row.department) ?? toText(row.deptRef) ?? "";
+        // GAP-AUDIT-CAG-04: do NOT fall back to the raw reference ids
+        // (sourceRef / deptRef) for display — those are opaque internal
+        // references, not a human-readable report year or department name.
+        // Leave them null so the table/KPIs can render "—" and ignore them,
+        // rather than leaking a reference id into a user-facing cell.
+        const reportYear = toText(row.reportYear);
+        const department = toText(row.department);
         const status = row.status === "settled" ? "settled" :
                        row.status === "closed" ? "settled" :
                        row.status === "replied" ? "partially_settled" :
                        row.status === "pending_recovery" ? "nearly_settled" :
                        "under_review";
         if (!id) continue;
-        mapped.push({
-          id,
-          reportYear,
-          paraNo,
-          department,
-          totalParas: 1,
-          settled: status === "settled" ? 1 : 0,
-          pending: status === "settled" ? 0 : 1,
-          status,
-        });
+        // GAP-AUDIT-CAG-01: audit-service's GET /v1/audit/paras returns one
+        // row PER paragraph (id, paraNo, deptRef, status, amount) and carries
+        // NO per-report totalParas/settled/pending aggregate. The previous
+        // mapper fabricated totalParas:1 and settled/pending as 0|1 from the
+        // row's own status, so those three table columns were constants and
+        // the "Total Paras" KPI was just the row count dressed up as a total.
+        // Dropped — the page now derives real counts from the row statuses.
+        mapped.push({ id, reportYear, paraNo, department, status });
       }
-      return mapped.length > 0 ? mapped : null;
+      // GAP-AUDIT-CAG-02: a valid but EMPTY array is an empty register, not a
+      // fetch failure. Return [] (source stays "api") so the "No CAG
+      // paragraphs found" empty state is reachable; only a payload with rows
+      // that ALL fail to parse (a real schema break) falls back to null/error.
+      return rows.length > 0 && mapped.length === 0 ? null : mapped;
     },
   });
 }
@@ -4911,7 +4921,12 @@ export async function getVigilanceCases(): Promise<LoaderResult<VigilanceCaseSum
         if (!id) continue;
         mapped.push({ id, caseNo, officer, charges, inquiryStatus, outcome });
       }
-      return mapped.length > 0 ? mapped : null;
+      // GAP-AUDIT-VIGILANCE-01: a valid array (incl. an empty one) must stay
+      // source:"api" so the "No vigilance cases found" empty state is reachable
+      // for a department with no cases. Only surface source:"error" when rows
+      // were received but every row was dropped (missing id / schema break).
+      if (rows.length > 0 && mapped.length === 0) return null;
+      return mapped;
     },
   });
 }
@@ -4933,13 +4948,23 @@ export async function getInvestigations(): Promise<LoaderResult<InvestigationSum
         const assignedTo = toText(row.assignedTo) ?? "";
         const started = toText(row.started) ?? "";
         const findings = toText(row.findings) ?? "";
-        const rawStatus = toText(row.status) ?? "in_progress";
-        const status = (rawStatus === "in_progress" || rawStatus === "findings_submitted" || rawStatus === "closed")
-          ? rawStatus : "in_progress";
+        const rawStatus = toText(row.status) ?? "unknown";
+        // GAP-AUDIT-INVESTIGATION-04: do NOT coerce unmodelled statuses to
+        // in_progress (that inflated "Active Investigations"); map them to
+        // "unknown" so the KPI and pill are honest.
+        const status: InvestigationSummary["status"] =
+          rawStatus === "in_progress" || rawStatus === "findings_submitted" || rawStatus === "closed"
+            ? rawStatus
+            : "unknown";
         if (!id) continue;
         mapped.push({ id, caseId, subject, assignedTo, started, findings, status });
       }
-      return mapped.length > 0 ? mapped : null;
+      // GAP-AUDIT-INVESTIGATION-01: a valid array (incl. empty) must stay
+      // source:"api" so a fresh tenant sees "No investigations found" instead
+      // of a failure card. Only return null (→ error) when rows were received
+      // but every one was dropped as malformed (missing id).
+      if (rows.length > 0 && mapped.length === 0) return null;
+      return mapped;
     },
   });
 }

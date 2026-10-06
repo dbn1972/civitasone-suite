@@ -247,9 +247,23 @@ describe("export PII gating & window caps", () => {
     const res = await app.inject({
       method: "POST", url: "/audit/exports",
       headers: { authorization: `Bearer ${jwt}`, "x-tenant-id": TENANT, "content-type": "application/json" },
-      payload: { from: "2026-06-23T00:00:00Z", to: "2026-06-24T00:00:00Z", format: "json", includePii: true },
+      payload: { from: "2026-06-23T00:00:00Z", to: "2026-06-24T00:00:00Z", format: "json", includePii: true, reason: "Statutory inquiry ref 42" },
     });
     expect(res.statusCode).toBe(202);
+    await app.close();
+  });
+
+  it("audit_admin + includePii without a reason → 400 REASON_REQUIRED", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const jwt = await token(["audit_admin"]);
+    const res = await app.inject({
+      method: "POST", url: "/audit/exports",
+      headers: { authorization: `Bearer ${jwt}`, "x-tenant-id": TENANT, "content-type": "application/json" },
+      payload: { from: "2026-06-23T00:00:00Z", to: "2026-06-24T00:00:00Z", format: "json", includePii: true },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("REASON_REQUIRED");
     await app.close();
   });
 

@@ -267,6 +267,41 @@ export const PLATFORM_ADMIN_ROLES = ["platform_admin", "super_admin", "tenant_ad
  */
 export const PLATFORM_AUDIT_VIEW_ROLES = ["auditor", "audit_admin", "audit_officer"];
 
+/**
+ * Roles permitted to include PII columns in an audit export.
+ * MUST mirror audit-service PII_EXPORT_ROLES (exports/validators.ts). The server
+ * is the authority; this constant only drives UI gating of the PII checkbox.
+ */
+export const AUDIT_PII_EXPORT_ROLES = ["audit_admin", "super_admin", "platform_admin"];
+
+/**
+ * GAP-AUDIT-INVESTIGATION-02: roles permitted to read the free-text subject /
+ * findings of an internal investigation and to export the register to CSV.
+ * Conservative default (DPDP): audit roles only — finance_admin / dept_head
+ * reach the audit layout but must NOT read every sensitive case's free text.
+ * UI masking alone is advisory; server-side redaction is tracked for HUMAN
+ * REVIEW (see batch report).
+ */
+export const AUDIT_INVESTIGATION_DETAIL_ROLES = ["audit_officer", "audit_admin", "super_admin"];
+
+/**
+ * GAP-AUDIT-OBSERVATIONS-DETAIL-02: who may act on an observation. Mirrors
+ * audit-service observation/routes.ts role lists; the server is the authority.
+ * - reply (compliance ATN): AUDITEE_ROLES
+ * - refer (draft audit para): AUDIT_ROLES
+ */
+export const AUDIT_OBSERVATION_REPLY_ROLES = ["dept_head", "dept_officer", "finance_officer", "audit_officer", "audit_admin", "super_admin"];
+export const AUDIT_OBSERVATION_REFER_ROLES = ["audit_officer", "audit_admin", "super_admin"];
+
+/**
+ * GAP-AUDIT-OBSERVATIONS-DETAIL-05: who may accept/reject the auditee's
+ * compliance reply (ATN). MUST mirror audit-service observation/routes.ts
+ * REVIEW_ROLES — the server is the authority (POST /v1/audit/observations/:id/review
+ * is gated to these roles and 403s everyone else). Accepting a reply is a
+ * compliance-closing action, so this is deliberately the narrow authority set.
+ */
+export const AUDIT_OBSERVATION_REVIEW_ROLES = ["audit_admin", "super_admin"];
+
 /** True when any of the session roles is in `allowed`. Pure; for UI gating. */
 export function hasAnyRole(sessionRoles: string[], allowed: string[]): boolean {
   return allowed.some((r) => sessionRoles.includes(r));

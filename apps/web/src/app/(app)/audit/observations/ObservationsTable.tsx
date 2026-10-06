@@ -4,24 +4,23 @@ import { useMemo, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DataTable, Segmented } from "@/app/_components/ds";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { severityMeta, statusMeta, isOpen, isSettled } from "@/lib/audit/observationLabels";
 import type { AuditObservationSummary } from "@civitasone/types";
+import { LogObservationButton } from "./LogObservationButton";
 
 type Filter = "All" | "Open" | "Settled";
 const FILTERS: Filter[] = ["All", "Open", "Settled"];
 
+// GAP-AUDIT-OBSERVATIONS-01: one vocabulary via observationLabels — unknown
+// severity/status renders raw text in a neutral pill, never silently "Low"/"Open".
 function riskPill(severity: string): ReactNode {
-  if (severity === "critical" || severity === "major") return <span className="pill bad">{severity}</span>;
-  if (severity === "minor") return <span className="pill warn">Medium</span>;
-  return <span className="pill mut">Low</span>;
+  const { label, pill } = severityMeta(severity);
+  return <span className={`pill ${pill}`}>{label}</span>;
 }
 
 function statusPill(status: string): ReactNode {
-  if (status === "open") return <span className="pill warn">Open</span>;
-  if (status === "closed") return <span className="pill good">Settled</span>;
-  if (status === "replied") return <span className="pill info">Under reply</span>;
-  if (status === "partially_closed") return <span className="pill info">Part-settled</span>;
-  if (status === "compliance_pending") return <span className="pill warn">Compliance pending</span>;
-  return <span className="pill mut">{status}</span>;
+  const { label, pill } = statusMeta(status);
+  return <span className={`pill ${pill}`}>{label}</span>;
 }
 
 export function ObservationsTable({ items }: { items: AuditObservationSummary[] }) {
@@ -31,8 +30,9 @@ export function ObservationsTable({ items }: { items: AuditObservationSummary[] 
   const active: Filter = raw === "open" ? "Open" : raw === "settled" ? "Settled" : "All";
 
   const rows = useMemo(() => {
-    if (active === "Open") return items.filter((i) => i.status !== "closed");
-    if (active === "Settled") return items.filter((i) => i.status === "closed");
+    // GAP-AUDIT-OBSERVATIONS-02: segment predicates identical to the KPI tiles.
+    if (active === "Open") return items.filter((i) => isOpen(i.status));
+    if (active === "Settled") return items.filter((i) => isSettled(i.status));
     return items;
   }, [items, active]);
 
@@ -59,7 +59,7 @@ export function ObservationsTable({ items }: { items: AuditObservationSummary[] 
             { key: "title", label: "Finding" },
             { key: "severity", label: "Risk", render: (r) => riskPill(r.severity) },
             { key: "raisedDate", label: "Raised", render: (r) => formatIndianDate(r.raisedDate) },
-            { key: "amount", label: "Money value", align: "right", render: (r) => (r.amount ? formatMoney(r.amount) : "—") },
+            { key: "amount", label: "Money value", align: "right", render: (r) => (r.amount != null && String(r.amount) !== "0" ? formatMoney(r.amount as number) : "—") },
             { key: "status", label: "Status", render: (r) => statusPill(r.status) },
           ]}
           rows={rows}
@@ -68,6 +68,14 @@ export function ObservationsTable({ items }: { items: AuditObservationSummary[] 
           filterable
           filterPlaceholder="Filter by finding, auditee, status…"
           pageSize={12}
+          emptyIcon="📋"
+          emptyTitle={active === "All" ? "No observations yet" : `No ${active.toLowerCase()} observations`}
+          emptyMessage={
+            active === "All"
+              ? "Log your first audit observation to start tracking findings, risk and money exposure."
+              : "No observations match this filter. Switch to All to see every observation."
+          }
+          emptyAction={active === "All" ? <LogObservationButton /> : undefined}
         />
       </div>
     </div>

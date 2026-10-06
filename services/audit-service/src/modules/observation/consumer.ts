@@ -22,7 +22,7 @@ export function registerObservationConsumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; obsNo: string; planId?: string; auditeeRef: string;
       // P0-3: amountInvolvedMinor (PAISE) carried as string end-to-end; BigInt()-parsed here.
-      finding: string; category?: string; riskLevel?: string; amountInvolvedMinor?: string | number;
+      finding: string; category?: string; riskLevel?: string; amountInvolvedMinor?: string | number; reason?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -32,7 +32,7 @@ export function registerObservationConsumers(queue: Queue): void {
         riskLevel: p.riskLevel ?? "medium", amountInvolvedMinor: BigInt(p.amountInvolvedMinor ?? 0n),
         status: "open", createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      await audit(tx, msg, "create", "observation", p.id);
+      await audit(tx, msg, "create", "observation", p.id, p.reason);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "observations", `list:50`));
   });
@@ -45,7 +45,7 @@ export function registerObservationConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.observationReply, async (msg) => {
     const p = msg.payload as {
       id: string; observationId: string; tenantId: string;
-      replyText: string; respondedByRef: string; attachmentRef?: string;
+      replyText: string; respondedByRef: string; attachmentRef?: string; reason?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -59,7 +59,7 @@ export function registerObservationConsumers(queue: Queue): void {
         status: "replied", updatedBy: msg.actorId, version: (obs.version ?? 1) + 1,
       });
       if (replyRows !== 1) throw new StaleWriteError("observation", p.observationId);
-      await audit(tx, msg, "reply", "observation", p.observationId);
+      await audit(tx, msg, "reply", "observation", p.observationId, p.reason);
       // Notify the audit team
       await enqueue(tx, {
         topic: "notification.send", eventType: "notification.send",
@@ -97,7 +97,7 @@ export function registerObservationConsumers(queue: Queue): void {
         status: newStatus, updatedBy: msg.actorId, version: (obs.version ?? 1) + 1,
       });
       if (reviewRows !== 1) throw new StaleWriteError("observation", p.observationId);
-      await audit(tx, msg, p.decision === "accepted" ? "reply_accepted" : "reply_rejected", "observation", p.observationId);
+      await audit(tx, msg, p.decision === "accepted" ? "reply_accepted" : "reply_rejected", "observation", p.observationId, p.remarks);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "observation", p.observationId));
     await cache.invalidate(cache.makeKey(msg.tenantId, "observations", `list:50`));
@@ -137,10 +137,10 @@ export function registerObservationConsumers(queue: Queue): void {
   });
 }
 
-async function audit(tx: any, msg: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceType: string, resourceId: string): Promise<void> {
+async function audit(tx: any, msg: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceType: string, resourceId: string, reason?: string): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "audit", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "audit", action, resourceType, resourceId, outcome: "success", ...(reason ? { reason } : {}) },
   });
 }

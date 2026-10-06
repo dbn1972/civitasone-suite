@@ -21,7 +21,8 @@ import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
-import { auditPlans } from "../src/modules/plan/schema.js";
+import { auditPlans, auditPlanItems } from "../src/modules/plan/schema.js";
+import { eq } from "drizzle-orm";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 function token(roles: string[], tenantId: string, actorId: string) {
@@ -287,5 +288,52 @@ describe("GET /v1/audit/plans (list)", () => {
     const body = res.json();
     const data = Array.isArray(body) ? body : body.data ?? [];
     expect(data.some((p: { id?: string }) => p.id === SEEDED_PLAN)).toBe(false);
+  });
+});
+
+// GAP-AUDIT-PLAN-01 / PLAN-03: GET /v1/audit/plan lists plan ITEMS; it must
+// now carry the parent plan's planNo, title and planner-chosen riskLevel
+// (projected via the LEFT JOIN in queries.listPlanItems). Previously those
+// fields never left the service and the web table derived "Risk" from type.
+describe("GET /v1/audit/plan — item list carries parent plan no./title/riskLevel", () => {
+  const SEEDED_ITEM = randomUUID();
+
+  beforeAll(async () => {
+    await runWithTenant(TENANT, () => db.transaction((tx) => tx.insert(auditPlanItems).values({
+      id: SEEDED_ITEM,
+      tenantId: TENANT,
+      planId: SEEDED_PLAN,
+      deptRef: "dept:finance",
+      unitRef: "unit:fin-audit",
+      scheduledFrom: "2026-05-01",
+      scheduledTo: "2026-05-15",
+      status: "scheduled",
+      createdBy: ACTOR,
+      updatedBy: ACTOR,
+    })));
+  });
+
+  afterAll(async () => {
+    await runWithTenant(TENANT, () => db.transaction((tx) => tx.delete(auditPlanItems).where(eq(auditPlanItems.id, SEEDED_ITEM))));
+  });
+
+  it("projects planNo, title and riskLevel from the parent audit_plans row", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/audit/plan",
+      headers: { authorization: `Bearer ${token(["audit_officer"], TENANT, ACTOR)}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    const rows = Array.isArray(body) ? body : body.data ?? [];
+    const item = rows.find((r: { id?: string }) => r.id === SEEDED_ITEM);
+    expect(item).toBeDefined();
+    // These three fields are the PLAN-01/03 fix — previously absent entirely.
+    expect(item.planNo).toBe("PLAN-ROUTES-SEED-1");
+    expect(item.title).toBe("Seeded Plan For Route Tests");
+    expect(item.riskLevel).toBe("medium");
+    // Area still projected for the secondary line.
+    expect(item.auditUnit).toBe("unit:fin-audit");
+    expect(item.department).toBe("dept:finance");
   });
 });

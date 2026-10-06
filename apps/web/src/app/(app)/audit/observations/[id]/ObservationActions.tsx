@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button, ConfirmDialog } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
-type Mode = "reply" | "refer";
+type Mode = "reply" | "refer" | "review-accept" | "review-reject";
 
 function Dialog({
   mode,
@@ -45,6 +45,12 @@ function Dialog({
   }, [busy, confirmOpen, onClose]);
 
   function validateForm(): boolean {
+    if (mode === "review-accept" || mode === "review-reject") {
+      // Review decisions carry no form fields; the ConfirmDialog's required
+      // reason becomes the audit remark. Nothing to validate here.
+      setValidationError(null);
+      return true;
+    }
     if (mode === "reply") {
       if (!replyText.trim() || !respondedByRef.trim()) {
         setValidationError("Reply text and responder are required.");
@@ -79,6 +85,17 @@ function Dialog({
           respondedByRef: respondedByRef.trim(),
           ...(reason ? { reason: reason.trim() } : {}),
         };
+      } else if (mode === "review-accept" || mode === "review-reject") {
+        // GAP-AUDIT-OBSERVATIONS-DETAIL-05: accept/reject the auditee reply via
+        // the existing audit-service review endpoint. Accepting is a
+        // compliance-closing action; the required reason is carried as the
+        // audit `remarks`. The server re-enforces REVIEW_ROLES and the
+        // 'replied' status precondition.
+        url = `/api/proxy/v1/audit/observations/${obsId}/review`;
+        payload = {
+          decision: mode === "review-accept" ? "accepted" : "rejected",
+          ...(reason ? { remarks: reason.trim() } : {}),
+        };
       } else {
         url = `/api/proxy/v1/audit/observations/${obsId}/draft-para`;
         payload = {
@@ -112,8 +129,11 @@ function Dialog({
   // eslint-disable-next-line react-hooks/exhaustive-deps -- formError.fromResponse/fromException/clear are stable (useCallback'd on a fixed area string in useFormError); the wrapping object is recreated every render but isn't read here.
   }, [mode, obsId, replyText, respondedByRef, paraNo, deptRef, paraBody, onClose, router]);
 
+  const isReview = mode === "review-accept" || mode === "review-reject";
+
   return (
     <>
+      {!isReview && (
       <div
         role="dialog"
         aria-modal="true"
@@ -165,34 +185,75 @@ function Dialog({
           </div>
         </div>
       </div>
+      )}
 
       {/* Confirm gate — required reason before the irreversible audit action executes */}
       <ConfirmDialog
-        open={confirmOpen}
-        title={mode === "reply" ? "Record auditee reply?" : "Refer observation as audit para?"}
+        open={confirmOpen || isReview}
+        title={
+          mode === "reply" ? "Record auditee reply?"
+            : mode === "review-accept" ? "Accept auditee reply?"
+            : mode === "review-reject" ? "Reject auditee reply?"
+            : "Refer observation as audit para?"
+        }
         description={
           mode === "reply"
             ? "Recording this reply is permanent and will be added to the audit trail. Provide a reason (e.g., ATN reference or officer order no.)."
+            : mode === "review-accept"
+            ? "Accepting the auditee reply moves the observation toward compliance closure and is recorded in the audit trail. Provide the reason / order reference."
+            : mode === "review-reject"
+            ? "Rejecting returns the observation to the auditee for a fresh reply and is recorded in the audit trail. Provide the reason for rejection."
             : "Raising an audit para is an irreversible compliance action. Provide the authorisation reference or reason for raising."
         }
-        confirmLabel={mode === "reply" ? "Confirm & record" : "Confirm & refer"}
+        confirmLabel={
+          mode === "reply" ? "Confirm & record"
+            : mode === "review-accept" ? "Confirm & accept"
+            : mode === "review-reject" ? "Confirm & reject"
+            : "Confirm & refer"
+        }
         requireReason
-        reasonLabel={mode === "reply" ? "Reason / ATN reference (required)" : "Authorisation / reason for raising para (required)"}
+        reasonLabel={
+          mode === "reply" ? "Reason / ATN reference (required)"
+            : mode === "review-accept" ? "Reason / order reference (required)"
+            : mode === "review-reject" ? "Reason for rejection (required)"
+            : "Authorisation / reason for raising para (required)"
+        }
         busy={busy}
         errorMessage={error ?? undefined}
         onConfirm={(reason) => void submit(reason)}
-        onCancel={() => { if (!busy) { setConfirmOpen(false); setError(null); } }}
+        onCancel={() => { if (!busy) { setConfirmOpen(false); setError(null); if (isReview) onClose(); } }}
       />
     </>
   );
 }
 
-export function ObservationActions({ obsId, department }: { obsId: string; department?: string }) {
+export function ObservationActions({
+  obsId,
+  department,
+  status,
+  canReply = false,
+  canRefer = false,
+  canReview = false,
+}: {
+  obsId: string;
+  department?: string;
+  status?: string;
+  canReply?: boolean;
+  canRefer?: boolean;
+  canReview?: boolean;
+}) {
   const [mode, setMode] = useState<Mode | null>(null);
+  // GAP-AUDIT-OBSERVATIONS-DETAIL-02 / DETAIL-05: only render actions the user
+  // may perform (and only in a valid status). The server re-enforces
+  // REVIEW_ROLES and the 'replied' precondition regardless.
+  // Accept/Reject are only meaningful once the auditee has replied.
+  const canReviewNow = canReview && status === "replied";
   return (
     <>
-      <Button variant="ghost" onClick={() => setMode("refer")}>Refer</Button>
-      <Button onClick={() => setMode("reply")}>Record Reply</Button>
+      {canRefer && <Button variant="ghost" onClick={() => setMode("refer")}>Refer</Button>}
+      {canReply && <Button onClick={() => setMode("reply")}>Record Reply</Button>}
+      {canReviewNow && <Button variant="ghost" onClick={() => setMode("review-reject")}>Reject reply</Button>}
+      {canReviewNow && <Button onClick={() => setMode("review-accept")}>Accept reply</Button>}
       {mode && <Dialog mode={mode} obsId={obsId} department={department} onClose={() => setMode(null)} />}
     </>
   );

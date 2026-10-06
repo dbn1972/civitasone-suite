@@ -53,8 +53,8 @@ describe("ExportConsole", () => {
     };
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
-      if (url === "/api/proxy/audit/exports") {
-        return new Response(JSON.stringify({ id: "exp-1" }), { status: 200 });
+      if (url === "/api/proxy/v1/audit/exports") {
+        return new Response(JSON.stringify({ id: "exp-1", status: "accepted", correlationId: "c1" }), { status: 202 });
       }
       if (url === "/api/proxy/v1/audit/exports/exp-1/verify") {
         return new Response("signature verification backend timed out", { status: 504 });
@@ -78,5 +78,89 @@ describe("ExportConsole", () => {
 
     expect(await screen.findByText(/We couldn't connect\. Check your internet connection and try again\./)).toBeInTheDocument();
     expect(screen.queryByText(/backend timed out/)).not.toBeInTheDocument();
+  });
+
+  // GAP-AUDIT-EXPORTS-01: create must POST to the v1 proxy path and read the id
+  // from the accepted envelope (data.id ?? id).
+  it("POSTs the create to /api/proxy/v1/audit/exports and reads data.id", async () => {
+    const seen: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      seen.push(url);
+      if (url === "/api/proxy/v1/audit/exports") {
+        return new Response(
+          JSON.stringify({ id: "flat-ignored", status: "accepted", correlationId: "c1", data: { id: "env-9" } }),
+          { status: 202 },
+        );
+      }
+      if (url.startsWith("/api/proxy/v1/audit/exports/env-9")) {
+        return new Response(JSON.stringify({ data: { id: "env-9", status: "processing", format: "json", ready: false, download: null, rowCount: null, includesPii: false, retentionUntil: null, expiresAt: null, error: null, contentSha256: null, signature: null, signatureAlg: null, signingKeyId: null, signedAt: null } }), { status: 200 });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    render(<ExportConsole canExportPii={false} />);
+    fireEvent.click(screen.getByRole("button", { name: "Generate export" }));
+    await waitFor(() => expect(screen.getByText("Generate signed audit export?")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+
+    // The job id taken from data.id must appear in the Current job card.
+    await waitFor(() => expect(screen.getByText("env-9")).toBeInTheDocument());
+    expect(seen).toContain("/api/proxy/v1/audit/exports");
+    expect(seen.some((u) => u === "/api/proxy/audit/exports")).toBe(false);
+  });
+
+  // GAP-AUDIT-EXPORTS-02: PII checkbox disabled for roles that cannot export PII.
+  it("disables the PII checkbox when the role cannot export PII", () => {
+    render(<ExportConsole canExportPii={false} />);
+    const cb = screen.getByRole("checkbox", { name: /Include PII columns/i });
+    expect(cb).toBeDisabled();
+  });
+
+  // GAP-AUDIT-EXPORTS-02: with PII included, the confirm dialog demands a reason
+  // and that reason is sent in the create payload.
+  it("requires a reason for a PII export and sends it in the POST body", async () => {
+    let createBody: Record<string, unknown> | null = null;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === "/api/proxy/v1/audit/exports") {
+        createBody = JSON.parse(String(init?.body ?? "{}"));
+        return new Response(JSON.stringify({ id: "p-1", status: "accepted", correlationId: "c1", data: { id: "p-1" } }), { status: 202 });
+      }
+      if (url.startsWith("/api/proxy/v1/audit/exports/p-1")) {
+        return new Response(JSON.stringify({ data: { id: "p-1", status: "processing", format: "json", ready: false, download: null, rowCount: null, includesPii: true, retentionUntil: null, expiresAt: null, error: null, contentSha256: null, signature: null, signatureAlg: null, signingKeyId: null, signedAt: null } }), { status: 200 });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    render(<ExportConsole canExportPii />);
+    fireEvent.click(screen.getByRole("checkbox", { name: /Include PII columns/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate export" }));
+    await waitFor(() => expect(screen.getByText("Generate signed audit export?")).toBeInTheDocument());
+
+    // The reason field must be present (requireReason). Confirm with a reason.
+    const reason = screen.getByRole("textbox");
+    fireEvent.change(reason, { target: { value: "Regulator SEBI request #42" } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+
+    await waitFor(() => expect(createBody).not.toBeNull());
+    expect(createBody).toMatchObject({ includePii: true, reason: "Regulator SEBI request #42" });
+  });
+
+  // GAP-AUDIT-EXPORTS-05: a running job persisted in sessionStorage resumes
+  // polling on mount, so a page reload does not lose the Current job.
+  it("resumes polling from sessionStorage on mount", async () => {
+    window.sessionStorage.setItem("audit.exports.currentJob", "resumed-7");
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.startsWith("/api/proxy/v1/audit/exports/resumed-7")) {
+        return new Response(JSON.stringify({ data: { id: "resumed-7", status: "processing", format: "json", ready: false, download: null, rowCount: null, includesPii: false, retentionUntil: null, expiresAt: null, error: null, contentSha256: null, signature: null, signatureAlg: null, signingKeyId: null, signedAt: null } }), { status: 200 });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    render(<ExportConsole />);
+    expect(await screen.findByText("resumed-7")).toBeInTheDocument();
+    window.sessionStorage.removeItem("audit.exports.currentJob");
   });
 });

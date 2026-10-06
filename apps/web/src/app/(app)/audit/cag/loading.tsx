@@ -1,3 +1,5 @@
+import { AuditListSkeleton } from "../_components/AuditListSkeleton";
+
 export default function Loading() {
-  return <div className="page-main wrap"><div className="skeleton" aria-label="Loading…" /></div>;
+  return <AuditListSkeleton label="Loading CAG audit paragraphs" />;
 }

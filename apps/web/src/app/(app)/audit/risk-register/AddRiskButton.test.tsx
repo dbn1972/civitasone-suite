@@ -48,4 +48,31 @@ describe("AddRiskButton", () => {
     expect(screen.queryByText(/risk_code already exists/)).not.toBeInTheDocument();
     expect(refreshMock).not.toHaveBeenCalled();
   });
+
+  // GAP-AUDIT-RISK-REGISTER-01: the dialog must preview score = L x I live,
+  // matching the server formula (default possible x moderate = 9, Medium).
+  it("previews the score and band live, matching the server formula", () => {
+    render(<AddRiskButton />);
+    fireEvent.click(screen.getByRole("button", { name: "+ Add Risk" }));
+
+    // Default possible(3) x moderate(3) = 9 => Medium.
+    expect(screen.getByText("9")).toBeInTheDocument();
+    expect(screen.getByText(/Medium/)).toBeInTheDocument();
+
+    // Change to almost_certain x catastrophic = 25 => High.
+    fireEvent.change(screen.getByLabelText("Likelihood"), { target: { value: "almost_certain" } });
+    fireEvent.change(screen.getByLabelText("Impact"), { target: { value: "catastrophic" } });
+    expect(screen.getByText("25")).toBeInTheDocument();
+    expect(screen.getByText(/High/)).toBeInTheDocument();
+  });
+
+  // GAP-AUDIT-RISK-REGISTER-04: option text is human-readable, not raw enums.
+  it("renders human-readable category / likelihood / impact option labels", () => {
+    render(<AddRiskButton />);
+    fireEvent.click(screen.getByRole("button", { name: "+ Add Risk" }));
+
+    expect(screen.getByRole("option", { name: "IT" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Almost certain" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Catastrophic" })).toBeInTheDocument();
+  });
 });

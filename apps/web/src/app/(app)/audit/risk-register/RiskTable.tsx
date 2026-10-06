@@ -4,35 +4,46 @@ import { useMemo, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DataTable, Segmented } from "@/app/_components/ds";
 import type { RiskSummary } from "@civitasone/types";
+import { band, BAND_LABEL, statusLabel } from "@/lib/audit/riskScoring";
 
-const FILTERS = ["All", "High"];
+const FILTERS = ["All", "High", "Medium", "Low"];
+const BAND_BY_FILTER: Record<string, "high" | "medium" | "low" | null> = {
+  All: null,
+  High: "high",
+  Medium: "medium",
+  Low: "low",
+};
 
-function ratingPill(score: number): ReactNode {
-  if (score >= 15) return <span className="pill bad">High</span>;
-  if (score >= 6) return <span className="pill warn">Medium</span>;
-  return <span className="pill mut">Low</span>;
+// GAP-AUDIT-RISK-REGISTER-01: show the numeric score alongside its band so the
+// page can justify why a risk is High (e.g. "12 — Medium").
+function ratingCell(score: number): ReactNode {
+  const b = band(score);
+  const cls = b === "high" ? "bad" : b === "medium" ? "warn" : "mut";
+  return <span><span className={`pill ${cls}`}>{BAND_LABEL[b]}</span> <span className="mono" style={{ marginInlineStart: 6 }}>{score}</span></span>;
 }
 
+// GAP-AUDIT-RISK-REGISTER-03: map each status one-to-one; unknown statuses get
+// a neutral pill with their raw text rather than being shown as "Monitored".
 function statusPill(status: string): ReactNode {
-  if (status === "mitigated") return <span className="pill warn">Mitigating</span>;
-  if (status === "closed") return <span className="pill good">Controlled</span>;
-  if (status === "escalated") return <span className="pill bad">Escalated</span>;
-  return <span className="pill info">Monitored</span>;
+  const { label, tone } = statusLabel(status);
+  return <span className={`pill ${tone}`} title={status}>{label}</span>;
 }
 
 export function RiskTable({ items }: { items: RiskSummary[] }) {
   const router = useRouter();
   const params = useSearchParams();
-  const active = params.get("band") === "high" ? "High" : "All";
+  const bandParam = params.get("band");
+  const active = bandParam === "high" ? "High" : bandParam === "medium" ? "Medium" : bandParam === "low" ? "Low" : "All";
 
-  const rows = useMemo(
-    () => (active === "High" ? items.filter((i) => i.riskScore >= 15) : items),
-    [items, active],
-  );
+  const rows = useMemo(() => {
+    const target = BAND_BY_FILTER[active];
+    return target ? items.filter((i) => band(i.riskScore) === target) : items;
+  }, [items, active]);
 
   const onSegment = (v: string) => {
     const sp = new URLSearchParams(Array.from(params.entries()));
-    if (v === "High") sp.set("band", "high"); else sp.delete("band");
+    const target = BAND_BY_FILTER[v];
+    if (target) sp.set("band", target); else sp.delete("band");
     const qs = sp.toString();
     router.replace(qs ? `/audit/risk-register?${qs}` : "/audit/risk-register");
   };
@@ -49,7 +60,7 @@ export function RiskTable({ items }: { items: RiskSummary[] }) {
             { key: "riskCode", label: "Risk ID", render: (r) => <span className="mono">{r.riskCode}</span> },
             { key: "title", label: "Risk" },
             { key: "owner", label: "Owner area", render: (r) => r.owner ?? "—" },
-            { key: "riskScore", label: "Rating", render: (r) => ratingPill(r.riskScore) },
+            { key: "riskScore", label: "Rating", render: (r) => ratingCell(r.riskScore) },
             { key: "status", label: "Status", render: (r) => statusPill(r.status) },
           ]}
           rows={rows}
@@ -57,6 +68,9 @@ export function RiskTable({ items }: { items: RiskSummary[] }) {
           filterable
           filterPlaceholder="Filter by risk, owner, status…"
           pageSize={12}
+          emptyIcon="⚠️"
+          emptyTitle="No risks recorded yet"
+          emptyMessage="Add your first risk to start building the enterprise risk register."
         />
       </div>
     </div>

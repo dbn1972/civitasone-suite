@@ -144,6 +144,12 @@ const STATUS_MAP: Record<string, PillVariant> = {
   // Medical claims / payroll settlement -- settled/credited/disbursed share the
   // "money actually moved, favourably" tone as the existing paid/cleared keys
   settled: "good",
+  // GAP-AUDIT-CAG-03: CAG para settlement progression. "settled" (above) is the
+  // favourable terminal state (good); the two partial states are in-progress
+  // (warn). Without these keys the CAG table rendered them in the neutral
+  // "info" blue, so a settled para looked no different from a partial one.
+  "partially settled": "warn",
+  "nearly settled": "warn",
   credited: "good",
   disbursed: "good",
   // GAP-FINANCE-PAYMENTS-03 / PAYMENTS-DETAIL-07: a payment instruction that is

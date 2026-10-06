@@ -37,6 +37,12 @@ export function PlanAuditButton() {
       setError("Plan no., title, area and both dates are required.");
       return;
     }
+    // GAP-AUDIT-PLAN-04: the date inputs set max/min, but typed/pasted/
+    // programmatic values can still invert the range, so enforce it here too.
+    if (periodTo < periodFrom) {
+      setError("Planned-to must be on or after planned-from.");
+      return;
+    }
     setBusy(true);
     try {
       const res = await fetch("/api/proxy/v1/audit/plans", {

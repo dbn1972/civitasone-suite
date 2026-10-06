@@ -26,7 +26,7 @@ export function registerParaConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.paraDraft, async (msg) => {
     const p = msg.payload as {
       id: string; observationId: string; tenantId: string; paraNo: string;
-      deptRef: string; body: string; sourceRef?: string;
+      deptRef: string; body: string; sourceRef?: string; reason?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -48,7 +48,7 @@ export function registerParaConsumers(queue: Queue): void {
         status: "para_drafted", updatedBy: msg.actorId, version: (obs.version ?? 1) + 1,
       });
       if (obsRows !== 1) throw new StaleWriteError("observation", p.observationId);
-      await audit(tx, msg, "draft", "para", p.id);
+      await audit(tx, msg, "draft", "para", p.id, p.reason);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "para", p.id));
   });
@@ -200,10 +200,10 @@ export function registerParaConsumers(queue: Queue): void {
   });
 }
 
-async function audit(tx: any, msg: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceType: string, resourceId: string): Promise<void> {
+async function audit(tx: any, msg: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceType: string, resourceId: string, reason?: string): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "audit", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "audit", action, resourceType, resourceId, outcome: "success", ...(reason ? { reason } : {}) },
   });
 }
