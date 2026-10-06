@@ -97,4 +97,27 @@ describe("LinkTiles", () => {
       expect(icon.textContent).toBe("");
     });
   });
+
+  // GAP-FIELD-HOME-01: the Field hub's five tiles matched no title key and no
+  // href heuristic, so all rendered the generic 📁 folder glyph. Each now maps
+  // to its own vector icon — these fail on the old TILE_ICONS map.
+  describe("field hub tile icons (GAP-FIELD-HOME-01)", () => {
+    it.each([
+      ["Tasks", "/field/tasks"],
+      ["Visits", "/field/visits"],
+      ["Routes", "/field/routes"],
+      ["Agents", "/field/agents"],
+      ["Offline Sync", "/field/sync"],
+    ])("renders a vector (non-folder) icon for the %s tile", (title, href) => {
+      const { container } = render(<LinkTiles tiles={[{ title, href }]} />);
+      const icon = container.querySelector(".ic") as HTMLElement;
+      expect(icon.querySelector("svg")).toBeInTheDocument();
+      expect(icon.textContent).toBe("");
+    });
+  });
+
+  it("applies the auto-fit grid when columns='auto' (GAP-FIELD-HOME-02)", () => {
+    const { container } = render(<LinkTiles tiles={tiles} columns="auto" />);
+    expect(container.querySelector(".grid.g-auto")).toBeInTheDocument();
+  });
 });

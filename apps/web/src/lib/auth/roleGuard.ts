@@ -495,3 +495,17 @@ export const MEETING_CREATE_ROLES = [
  */
 export const THEME_ADMIN_ROLES = ["theme_admin", "super_admin"];
 export const THEME_MODULE_ROLES = ["theme_user", ...THEME_ADMIN_ROLES];
+
+/**
+ * GAP-FIELD-VISITS-03 (PII/DPDP): roles permitted to see a field worker's
+ * precise GPS location and to export the visits list. field-service admits
+ * field_admin/field_agent/super_admin to GET /v1/field/visits, but a plain
+ * field_agent must NOT be able to browse/export every colleague's location
+ * history. DECISION (safest default, pending DPO confirmation — flagged for
+ * HUMAN REVIEW): only supervisory roles (field_admin, super_admin) may view
+ * coordinates and export; everyone else sees the list with the GPS column and
+ * CSV export withheld. Coordinates are additionally rounded for everyone
+ * (COORD_DISPLAY_PRECISION in visits.ts). The server remains the authority for
+ * who may read the endpoint; this gate decides what the UI reveals/exports.
+ */
+export const FIELD_VISIT_LOCATION_ROLES = ["field_admin", "super_admin"];

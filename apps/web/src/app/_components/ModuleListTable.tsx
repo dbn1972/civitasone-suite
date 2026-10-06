@@ -8,6 +8,7 @@ import { RefreshErrorState } from "./ds/RefreshErrorState";
 import type { ModuleRowSummary } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
 import { toHumanError } from "@/lib/messages";
+import { formatIndianDate } from "@/lib/formatters";
 
 // GAP-ADMIN-GATEWAY-ROUTES-02: only UUID-shaped ids are shortened; slug ids
 // ("hrms-leave-requests") used to collapse to a shared 8-char prefix.
@@ -64,7 +65,13 @@ const MODULE_COLUMNS: ModuleCol[] = [
     label: "Status",
     render: (row) => (row.status ? <StatusPill status={row.status} /> : "—"),
   },
-  { key: "meta", label: "Meta", render: (row) => row.meta ?? "—" },
+  {
+    key: "meta",
+    label: "Meta",
+    // GAP-FIELD-{AGENTS,ROUTES,SYNC,TASKS}-0x: a date-typed meta is formatted
+    // with formatIndianDate so a raw ISO timestamp never reaches the screen.
+    render: (row) => (row.meta ? (row.metaKind === "date" ? formatIndianDate(row.meta) : row.meta) : "—"),
+  },
 ];
 
 /** Offline-capable table body for ModuleListPage. Cache key is derived from the

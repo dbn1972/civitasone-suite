@@ -204,4 +204,30 @@ describe("ModuleListTable", () => {
     // depth 0 (falsy) => no indent style applied.
     expect(rootCell.getAttribute("style") ?? "").not.toContain("padding-left");
   });
+
+  // GAP-FIELD-{AGENTS,ROUTES,SYNC,TASKS}-0x (UUID theme): status renders as a
+  // coloured StatusPill (humanized), never raw lowercase text; a date-typed
+  // meta is formatted with formatIndianDate, never a raw ISO timestamp.
+  it("renders status as a StatusPill and formats a date-typed meta", () => {
+    const fieldRows = [
+      { id: "a1b2c3d4-0000-4000-8000-000000000001", label: "Task A", status: "pending", meta: "2026-09-27T09:14:00.000Z", metaKind: "date" as const },
+    ];
+    mockedHook.mockReturnValue({ data: fieldRows, fromCache: false, offline: false, cachedAt: null, provenance: "live" } as never);
+    render(<ModuleListTable cacheKey="test" rows={fieldRows} source="api" />);
+    // StatusPill humanizes "pending" -> "Pending" inside a .pill span.
+    const pill = screen.getByText("Pending");
+    expect(pill).toHaveClass("pill");
+    // Date meta is formatted "27 Sep 2026", never the raw ISO string.
+    expect(screen.getByText("27 Sep 2026")).toBeInTheDocument();
+    expect(screen.queryByText("2026-09-27T09:14:00.000Z")).not.toBeInTheDocument();
+  });
+
+  it("leaves a text-typed meta verbatim (no date coercion)", () => {
+    const fieldRows = [
+      { id: "x", label: "Agent 1", meta: "3", metaKind: "text" as const },
+    ];
+    mockedHook.mockReturnValue({ data: fieldRows, fromCache: false, offline: false, cachedAt: null, provenance: "live" } as never);
+    render(<ModuleListTable cacheKey="test" rows={fieldRows} source="api" />);
+    expect(screen.getByText("3")).toBeInTheDocument();
+  });
 });

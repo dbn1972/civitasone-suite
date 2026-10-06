@@ -65,6 +65,9 @@ import {
   Smartphone,
   UserRound,
   Fingerprint,
+  MapPin,
+  Navigation,
+  RefreshCw,
 } from "lucide-react";
 
 /**
@@ -166,6 +169,13 @@ const STAT_ICON_MAP: Record<string, LucideIcon> = {
   "🚨": Siren,         // Break-glass
   "🔐": Fingerprint,   // WebAuthn / passkeys
   "📱": Smartphone,    // MFA policy
+  // Field hub tiles (GAP-FIELD-HOME-01): previously all five fell through to
+  // the generic 📁 folder glyph. ✅ (Tasks) and 👷 (HardHat, Agents) already
+  // map; add the remaining three as vector icons like the other hub tiles.
+  "📍": MapPin,        // Visits
+  "🧭": Navigation,    // Routes
+  "👷": HardHat,       // Agents
+  "🔄": RefreshCw,     // Offline Sync
 };
 
 // Variation Selector-16 (U+FE0F) makes an otherwise-identical emoji string

@@ -25,6 +25,11 @@ interface ModuleListPageProps {
    * normally derives the key from slugify(title); when the title is
    * translated (next-intl) that would change/split the per-user cache on a
    * locale switch, so a locale-independent key can be passed instead.
+   *
+   * GAP-FIELD-TASKS-04: pin the offline cache key explicitly, so renaming the
+   * page title (which otherwise derives the key via slugify) does not silently
+   * drop the existing cached list. Optional — consumers that omit it keep the
+   * title-derived key exactly as before.
    */
   cacheKey?: string;
 }

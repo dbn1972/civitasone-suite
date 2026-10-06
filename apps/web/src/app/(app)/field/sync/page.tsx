@@ -1,6 +1,5 @@
 import { ModuleListPage } from "../../../_components/ModuleListPage";
-import { getFieldSync } from "../_data";
-import { ArrowLeft } from "lucide-react";
+import { getFieldSync, FIELD_SYNC_WINDOW_DAYS } from "../_data";
 
 export const dynamic = "force-dynamic";
 
@@ -8,14 +7,15 @@ export default async function Page() {
   const { data, source } = await getFieldSync();
   return (
     <div className="page-main" aria-labelledby="page-heading">
-      <nav aria-label="Breadcrumb" className="back">
-        <ArrowLeft aria-hidden="true" size={14} /> <a href="/field">Field Operations</a>
-      </nav>
       <ModuleListPage
-        title="Field — Offline Sync"
-        description="Pending device sync changes since epoch (pull window)."
+        title="Offline Sync"
+        description={`Device sync changes pulled from the last ${FIELD_SYNC_WINDOW_DAYS} days.`}
         rows={data}
         source={source}
+        back="/field"
+        backLabel="Field Operations"
+        errorArea="sync changes"
+        cacheKey="module.field-offline-sync"
       />
     </div>
   );
