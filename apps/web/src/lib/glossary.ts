@@ -120,3 +120,50 @@ export function explain(term: string): string | undefined {
 export function hasDefinition(term: string): boolean {
   return explain(term) !== undefined;
 }
+
+/**
+ * Alias → canonical display term. These are duplicate rows in GLOSSARY where an
+ * abbreviation and its expansion share one meaning (e.g. "HoA" and
+ * "Head of Account"). The /help glossary folds the alias into the canonical row
+ * so it reads "Head of Account (HoA)" once instead of two near-identical rows
+ * (GAP-HELP-HOME-02). The GLOSSARY keys themselves are UNCHANGED, so explain()
+ * and the on-screen tooltips keep resolving every spelling. (R12.1)
+ */
+export const GLOSSARY_ALIASES: Record<string, string> = {
+  HoA: "Head of Account",
+  GL: "General Ledger",
+  UC: "Utilisation Certificate",
+};
+
+export type GlossaryRow = {
+  /** The canonical display term, e.g. "Head of Account". */
+  term: string;
+  definition: string;
+  /** The short alias to show in brackets, e.g. "HoA"; absent when none. */
+  alias?: string;
+};
+
+/**
+ * Collapse GLOSSARY into display rows, folding each alias into its canonical
+ * term so an abbreviation and its expansion appear as one row. Pure and
+ * side-effect free; the on-screen tooltip lookups are unaffected. (R12.1)
+ */
+export function collapseGlossary(): GlossaryRow[] {
+  // alias (abbrev) -> canonical (full) and the reverse, both case-folded.
+  const aliasToCanonical = new Map<string, string>();
+  const canonicalToAlias = new Map<string, string>();
+  for (const [alias, canonical] of Object.entries(GLOSSARY_ALIASES)) {
+    aliasToCanonical.set(alias.toLowerCase(), canonical);
+    canonicalToAlias.set(canonical.toLowerCase(), alias);
+  }
+
+  const rows: GlossaryRow[] = [];
+  for (const [term, definition] of Object.entries(GLOSSARY)) {
+    // Skip the alias rows; they are folded into their canonical row below.
+    if (aliasToCanonical.has(term.toLowerCase())) continue;
+    const alias = canonicalToAlias.get(term.toLowerCase());
+    rows.push(alias ? { term, definition, alias } : { term, definition });
+  }
+  rows.sort((a, b) => a.term.localeCompare(b.term));
+  return rows;
+}

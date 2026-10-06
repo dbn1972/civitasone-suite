@@ -1,7 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { HELP_MODULES, MAJOR_MODULE_SLUGS, getHelpModule } from "./helpContent";
+import type { HelpStep } from "./helpContent";
 import { explain } from "./glossary";
 import { findBannedTerms } from "./labels";
+
+/** GAP-HELP-MODULE-03: a step is now `string | { text, href? }`. */
+function stepText(step: HelpStep): string {
+  return typeof step === "string" ? step : step.text;
+}
 
 describe("Major-Module help coverage (R3.3, R3.4, R3.6, R3.7, R4.4)", () => {
   it.each(MAJOR_MODULE_SLUGS)("has a complete guide for %s", (slug) => {
@@ -38,7 +44,7 @@ describe("term consistency and plain language (R1.5, R12.1, R12.2, R14.4)", () =
 
   it("guide copy contains no banned platform jargon", () => {
     for (const mod of HELP_MODULES) {
-      const copy = [mod.summary, ...mod.tasks.flatMap((t) => [t.title, ...t.steps])].join(" ");
+      const copy = [mod.summary, ...mod.tasks.flatMap((t) => [t.title, ...t.steps.map(stepText)])].join(" ");
       expect(findBannedTerms(copy), `banned terms in ${mod.slug}`).toEqual([]);
     }
   });

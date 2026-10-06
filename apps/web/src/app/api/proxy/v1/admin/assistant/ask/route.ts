@@ -84,7 +84,10 @@ function searchHelpModules(
   for (const mod of modulesToSearch) {
     for (const task of mod.tasks) {
       const titleLower = task.title.toLowerCase();
-      const stepsText = task.steps.join(" ").toLowerCase();
+      // GAP-HELP-MODULE-03: a step is now `string | { text, href? }`; use the
+      // plain text for keyword matching and for the assistant's string[] reply.
+      const stepTexts = task.steps.map((s) => (typeof s === "string" ? s : s.text));
+      const stepsText = stepTexts.join(" ").toLowerCase();
       let score = 0;
 
       for (const kw of keywords) {
@@ -96,7 +99,7 @@ function searchHelpModules(
       if (moduleSlug && mod.slug === moduleSlug) score += 3;
 
       if (score > 0) {
-        results.push({ module: mod.title, task: task.title, steps: task.steps, score });
+        results.push({ module: mod.title, task: task.title, steps: stepTexts, score });
       }
     }
   }
