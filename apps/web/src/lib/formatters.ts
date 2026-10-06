@@ -874,3 +874,18 @@ export function countLast24h(
   }
   return count;
 }
+
+/**
+ * GAP-LEARNING-COURSES-03: render a numeric-string credit-hours value as a
+ * clean label. A DB numeric arrives as a string like "12.0" or "1.50"; show
+ * "12 hrs" / "1.5 hrs" (strip trailing-zero decimals), singular "1 hr", and
+ * "—" for a missing / unparseable value. Never prints "12.0 hrs".
+ */
+export function formatCreditHours(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return "—";
+  // Drop trailing zeros: 12.0 -> "12", 1.50 -> "1.5", 1.25 -> "1.25".
+  const text = Number(n.toFixed(2)).toString();
+  return `${text} ${n === 1 ? "hr" : "hrs"}`;
+}

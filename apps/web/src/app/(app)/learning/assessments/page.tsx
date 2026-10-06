@@ -1,15 +1,30 @@
 import Link from "next/link";
 import { PageHeader, DataTable, EmptyState, RefreshErrorState } from "@/app/_components/ds";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { toHumanError } from "@/lib/messages";
 import { getAssessments } from "../_data";
 
 type Row = { id: string; title: string; passing: string; duration: string; attempts: number; status: string };
 
+// Mirrors services/hrms-service/src/modules/assessment/routes.ts HR_ROLES.
+const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+
 export default async function Page() {
   const { data: assessments, source } = await getAssessments();
 
-  const rows: Row[] = assessments.map((a) => ({
-    id: a.id, title: a.title, passing: `${a.passingScore}`,
+  // GAP-LEARNING-ASSESSMENTS-02 (defence in depth): the backend already scopes
+  // non-HR callers to published assessments; the page also filters here so a
+  // learner view never lists draft/pending/retired even if the API changes.
+  const roles = getSessionRoles();
+  const isHr = roles.some((r: string) => HR_ROLES.includes(r));
+  const visible = isHr ? assessments : assessments.filter((a) => a.status === "published");
+
+  const rows: Row[] = visible.map((a) => ({
+    id: a.id, title: a.title,
+    // GAP-LEARNING-ASSESSMENTS-04: passingScore is a raw marks total (0..100000
+    // in the backend validator), NOT a percentage — labelling it "%" would be
+    // wrong. Show it as a marks figure. (Decision recorded in the GAP report.)
+    passing: `${a.passingScore} marks`,
     duration: `${a.durationMins} min`, attempts: a.maxAttempts, status: a.status,
   }));
 
@@ -37,6 +52,9 @@ export default async function Page() {
               { key: "status", label: "Status", cellType: "status" },
             ]}
             rows={rows}
+            rowLinkKey="id"
+            rowLinkPrefix="/learning/assessments/"
+            identifyingColumnKey="title"
             sortable
             filterable
             filterPlaceholder="Filter assessments…"
