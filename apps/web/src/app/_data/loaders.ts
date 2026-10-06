@@ -4397,6 +4397,19 @@ export async function getEstabFiles(): Promise<LoaderResult<EstabFileSummary[]>>
   });
 }
 
+/**
+ * GAP-ESTAB-INBOX-01: files currently on the authenticated officer's desk
+ * ("My Desk"), filtered server-side by the backend (currentWith = actor) at
+ * /api/v1/estab/files/mine — never the whole register.
+ */
+export async function getEstabDeskFiles(): Promise<LoaderResult<EstabFileSummary[]>> {
+  return fetchJson<unknown, EstabFileSummary[]>("/api/v1/estab/files/mine", [], {
+    revalidateSeconds: 30,
+    telemetryKey: "estab.files.mine",
+    mapResponse: mapEstabFileSummaries,
+  });
+}
+
 export async function getEstabFileById(id: string): Promise<LoaderResult<EstabFileDetail | null>> {
   return fetchJson<unknown, EstabFileDetail | null>(`/api/v1/estab/files/${id}`, null, {
     revalidateSeconds: 30,
@@ -4472,9 +4485,10 @@ export async function getLibraryBookById(id: string): Promise<LoaderResult<Libra
   });
 }
 
-export async function getLibraryIssues(status?: "issued" | "returned" | "overdue"): Promise<LoaderResult<LibraryIssueSummary[]>> {
+export async function getLibraryIssues(status?: "issued" | "returned" | "overdue", bookId?: string): Promise<LoaderResult<LibraryIssueSummary[]>> {
   const params = new URLSearchParams();
   if (status) params.set("status", status);
+  if (bookId) params.set("bookId", bookId);
   return fetchJson<unknown, LibraryIssueSummary[]>(`/api/v1/estab/library/issues?${params.toString()}`, [], {
     revalidateSeconds: 30,
     telemetryKey: "estab.library.issues",

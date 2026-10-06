@@ -180,3 +180,42 @@ describe("concurrent booking race", () => {
     )).toThrow(DomainError);
   });
 });
+
+// ─── 6. assignedToName enrichment (GAP-ESTAB-VEHICLES-02) ────────────────────
+
+import { toVehicleSummary } from "../src/modules/assets/queries.js";
+import { VehicleSummarySchema } from "@civitasone/schemas/web";
+
+describe("toVehicleSummary — officer name enrichment (GAP-ESTAB-VEHICLES-02)", () => {
+  const baseRow = {
+    id: "99999999-cccc-4000-8000-000000000001",
+    regNo: "DL 01 CA 1234",
+    makeModel: "Toyota Innova",
+    allocatedTo: "88888888-cccc-4000-8000-000000000002",
+    fuelType: "diesel",
+    status: "in_use",
+    odometerKm: 54210,
+  };
+
+  it("resolves assignedTo to a display name when the directory map has it", () => {
+    const map = new Map([[baseRow.allocatedTo, { fullName: "A. Kumar" }]]);
+    const summary = toVehicleSummary(baseRow, map);
+    expect(summary.assignedTo).toBe(baseRow.allocatedTo);
+    expect(summary.assignedToName).toBe("A. Kumar");
+    // Output must satisfy the shared web contract.
+    expect(() => VehicleSummarySchema.parse(summary)).not.toThrow();
+  });
+
+  it("omits assignedToName (never fabricates) when the directory cannot resolve the id", () => {
+    const summary = toVehicleSummary(baseRow, new Map());
+    expect(summary.assignedTo).toBe(baseRow.allocatedTo);
+    expect(summary.assignedToName).toBeUndefined();
+    expect(() => VehicleSummarySchema.parse(summary)).not.toThrow();
+  });
+
+  it("leaves assignedTo/assignedToName off for a pool (unallocated) vehicle", () => {
+    const summary = toVehicleSummary({ ...baseRow, allocatedTo: null }, new Map());
+    expect(summary.assignedTo).toBeUndefined();
+    expect(summary.assignedToName).toBeUndefined();
+  });
+});

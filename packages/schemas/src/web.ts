@@ -1770,6 +1770,12 @@ export const VehicleSummarySchema = z.object({
   model: z.string(),
   type: z.enum(["sedan", "suv", "bus", "van", "truck", "ambulance", "other"]),
   assignedTo: z.string().optional(),
+  // GAP-ESTAB-VEHICLES-02: best-effort display name for `assignedTo` (an hrms
+  // employee id), resolved server-side via the estab→hrms employee-summaries
+  // enrichment (same pattern as quarter-allotments' employeeName). Optional:
+  // absent when the directory lookup fails, so the UI falls back to "—"
+  // (never the raw UUID).
+  assignedToName: z.string().optional(),
   driverName: z.string().optional(),
   fuelType: z.enum(["petrol", "diesel", "cng", "electric"]),
   status: z.enum(["available", "in_use", "maintenance", "reserved", "disposed"]),
@@ -1803,7 +1809,7 @@ export const LibraryBookSummarySchema = z.object({
   category: z.string().optional(),
   copiesTotal: z.number(),
   copiesAvailable: z.number(),
-  status: z.enum(["available", "unavailable"]),
+  status: z.enum(["available", "unavailable", "withdrawn"]),
 });
 export const LibraryBookSummaryListSchema = z.array(LibraryBookSummarySchema);
 

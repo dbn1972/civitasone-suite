@@ -219,6 +219,21 @@ export function todayIST(): string {
 }
 
 /**
+ * GAP-ESTAB-DASHBOARD-03: format a (possibly fractional) day count for display.
+ * The estab dashboard's avgPendencyDays arrives as a float (e.g. 6.428571);
+ * printing it raw via String() is ugly and locale-wrong. This clamps to at most
+ * one decimal in en-IN and returns "—" for a non-finite / missing value.
+ *
+ *   formatDays(6.428571) -> "6.4"
+ *   formatDays(7)        -> "7"
+ *   formatDays(NaN)      -> "—"
+ */
+export function formatDays(n: number | null | undefined): string {
+  if (n === null || n === undefined || !Number.isFinite(n)) return "—";
+  return n.toLocaleString("en-IN", { maximumFractionDigits: 1 });
+}
+
+/**
  * GAP-HR-DASHBOARD-08: pure, hour-in/greeting-out so it's unit-testable with
  * no Date/timezone mocking (see page.test.tsx). Replaces the previous
  * `dayName.startsWith("S") ? "Good day" : "Good morning"` weekday hack
@@ -440,6 +455,26 @@ export function humanizeStatus(status: string): string {
     .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
+}
+
+/**
+ * GAP-ESTAB-QUARTERS-DETAIL-04: humanize a raw stored enum/code
+ * (snake_case or free string) for display as SENTENCE case -- first word
+ * capitalised, the rest lower -- e.g. a quarter condition "needs_repair" ->
+ * "Needs repair". Distinct from humanizeStatus (which Title-Cases every
+ * word, right for a short status pill but wrong for a phrase like this).
+ * null/undefined/empty renders "—" (UX-006), never a fabricated blank.
+ *
+ *   formatEnumLabel("needs_repair") -> "Needs repair"
+ *   formatEnumLabel("GOOD")          -> "Good"
+ *   formatEnumLabel(null)            -> "—"
+ */
+export function formatEnumLabel(value: string | null | undefined): string {
+  if (value === null || value === undefined) return "—";
+  const words = value.trim().toLowerCase().split(/[\s_]+/).filter(Boolean);
+  if (words.length === 0) return "—";
+  const joined = words.join(" ");
+  return joined.charAt(0).toUpperCase() + joined.slice(1);
 }
 
 /**

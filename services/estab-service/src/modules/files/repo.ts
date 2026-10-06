@@ -177,6 +177,39 @@ export async function listFilesByTenant(tenantId: string, limit: number): Promis
   return db.transaction((tx) => tx.select().from(estabFiles).where(eq(estabFiles.tenantId, tenantId)).limit(limit));
 }
 
+/**
+ * GAP-ESTAB-HANDOVER-03: count the files CURRENTLY on an officer's desk
+ * (currentWith = officerId), excluding terminal states (archived/disposed) —
+ * those don't move in a charge handover. Server-side count so the confirm
+ * dialog preview isn't understated by a capped client list. Tenant-scoped,
+ * runs inside db.transaction so the RLS GUC is set.
+ */
+export async function countFilesByHolder(tenantId: string, officerId: string): Promise<number> {
+  const rows = await db.transaction((tx) => tx.execute(sql`
+    SELECT count(*)::int AS n
+      FROM files.estab_files f
+     WHERE f.tenant_id = ${tenantId}::uuid
+       AND f.current_with = ${officerId}::uuid
+       AND f.status NOT IN ('archived', 'disposed')
+  `));
+  return Number((rows as unknown as Array<{ n: number }>)[0]?.n ?? 0);
+}
+
+/**
+ * GAP-ESTAB-INBOX-01: list files held by a specific officer — this is "My
+ * Desk". Returns ALL non-terminal files where currentWith matches, no limit
+ * (desk can have many files; a limit would silently hide pending work). Runs
+ * inside db.transaction for RLS GUC injection.
+ */
+export async function listFilesByHolder(tenantId: string, officerId: string): Promise<FileRow[]> {
+  return db.transaction((tx) =>
+    tx.select().from(estabFiles).where(and(
+      eq(estabFiles.tenantId, tenantId),
+      eq(estabFiles.currentWith, officerId),
+    )),
+  );
+}
+
 export type FileSearchHit = {
   id: string; fileNo: string; subject: string; dept: string;
   classification: string; status: string; rank: number; matchedIn: string;
@@ -232,6 +265,23 @@ export async function listDispatchByTenant(tenantId: string, limit: number) {
 
 // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
 // before this read — a bare db.select() runs with no RLS GUC set.
+/**
+ * GAP-ESTAB-FILES-DETAIL-02: look up a single attachment by id + tenantId,
+ * returning storageRef for the download endpoint.
+ */
+export async function findAttachmentById(
+  attachmentId: string, fileId: string, tenantId: string,
+): Promise<AttachmentRow | null> {
+  const rows = await db.transaction((tx) =>
+    tx.select().from(estabFileAttachments).where(and(
+      eq(estabFileAttachments.id, attachmentId),
+      eq(estabFileAttachments.fileId, fileId),
+      eq(estabFileAttachments.tenantId, tenantId),
+    )).limit(1),
+  );
+  return rows[0] ?? null;
+}
+
 export async function listAttachmentsByFile(fileId: string, tenantId: string): Promise<AttachmentRow[]> {
   return db.transaction((tx) => tx.select().from(estabFileAttachments).where(and(
     eq(estabFileAttachments.fileId, fileId),

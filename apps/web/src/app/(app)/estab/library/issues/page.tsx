@@ -15,11 +15,16 @@ export default async function LibraryIssuesPage({
     getLibraryBooks(),
   ]);
 
-  const overallSource = issuesSource === "error" || booksSource === "error" ? "error" : "api";
-  const errored = overallSource === "error";
+  // GAP-ESTAB-LIBRARY-ISSUES-05: gate the loan stats on the ISSUES loader
+  // alone — a catalogue (books) failure must not blank valid loan counts.
+  const issuesErrored = issuesSource === "error";
+  const booksErrored = booksSource === "error";
 
-  const activeCount = issues.filter((i) => i.status === "issued").length;
+  // GAP-ESTAB-LIBRARY-ISSUES-02: a book that is overdue is still physically on
+  // loan, so "On Loan" counts issued + overdue; "Overdue" remains a subset.
+  const issuedCount = issues.filter((i) => i.status === "issued").length;
   const overdueCount = issues.filter((i) => i.status === "overdue").length;
+  const activeCount = issuedCount + overdueCount;
   const returnedCount = issues.filter((i) => i.status === "returned").length;
 
   const issuableBooks = books.filter((b) => b.copiesAvailable > 0);
@@ -30,18 +35,18 @@ export default async function LibraryIssuesPage({
         title="Library Issues &amp; Loans"
         subtitle="Issue books to staff and record returns."
         back="/estab/library"
-        actions={overallSource === "error" ? <DataSourceBadge source="error" /> : null}
+        actions={issuesErrored || booksErrored ? <DataSourceBadge source="error" /> : null}
       />
 
-      {/* Counts below are computed from `issues`, which is [] whenever either
-          loader errored — never render them as authoritative facts in that case. */}
+      {/* GAP-ESTAB-LIBRARY-ISSUES-05: loan stats depend only on the issues
+          loader; a catalogue failure affects the form card, not these counts. */}
       <StatGrid>
-        <StatCard icon="📖" iconBg="#eff6ff" label="On Loan" value={errored ? "—" : activeCount.toLocaleString("en-IN")} />
-        <StatCard icon="⏰" iconBg="#fef2f2" label="Overdue" value={errored ? "—" : overdueCount.toLocaleString("en-IN")} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Returned" value={errored ? "—" : returnedCount.toLocaleString("en-IN")} />
+        <StatCard icon="📖" iconBg="#eff6ff" label="On Loan" value={issuesErrored ? "—" : activeCount.toLocaleString("en-IN")} />
+        <StatCard icon="⏰" iconBg="#fef2f2" label="Overdue" value={issuesErrored ? "—" : overdueCount.toLocaleString("en-IN")} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Returned" value={issuesErrored ? "—" : returnedCount.toLocaleString("en-IN")} />
       </StatGrid>
 
-      {booksSource === "error" ? (
+      {booksErrored ? (
         // The catalogue failed to load — do NOT let the form claim "no copies
         // are available to issue", which is a different (false) statement.
         <Card title="Issue a book">
@@ -52,8 +57,11 @@ export default async function LibraryIssuesPage({
       )}
 
       <Card title="Loans">
-        {issuesSource === "error" && issues.length === 0 ? (
-          <DataSourceBadge source="error" />
+        {issuesErrored && issues.length === 0 ? (
+          // GAP-ESTAB-LIBRARY-ISSUES-04: a failed loans fetch gets a retryable
+          // error state, not a bare badge, so an outage is not mistaken for
+          // "no loans yet".
+          <RefreshErrorState error={toHumanError("load", { area: "loans" })} backHref="/estab/library" />
         ) : issues.length === 0 ? (
           <EmptyState icon="📖" title="No loans yet" message="Issued books will appear here." />
         ) : (

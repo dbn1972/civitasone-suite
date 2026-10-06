@@ -1,87 +1,78 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
-const getMeetingsMock = vi.fn();
-vi.mock("../../../_data/loaders", () => ({
-  getMeetings: (...args: unknown[]) => getMeetingsMock(...args),
+const fetchJsonMock = vi.fn();
+vi.mock("@/app/_data/apiClient", () => ({
+  fetchJson: (...args: unknown[]) => fetchJsonMock(...args),
+}));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
 import MeetingsPage from "./page";
 
-const MEETING = {
-  id: "m1",
-  meetingNo: "MTG-1",
-  title: "Ward Committee",
-  type: "committee",
-  scheduledDate: "2027-03-15",
-  scheduledTime: "10:00",
-  attendeesCount: 5,
-  agendaItemsCount: 2,
-  status: "scheduled",
-};
+function makeMeeting(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "m1",
+    meetingNo: "MTG-001",
+    title: "Budget Review",
+    scheduledDate: "2026-12-01",
+    scheduledTime: "10:00",
+    venue: "Room 101",
+    attendeesCount: 5,
+    agendaItemsCount: 3,
+    status: "scheduled",
+    ...overrides,
+  };
+}
 
-describe("estab/meetings/page.tsx (fix 3 + fix 8-style error/empty split)", () => {
+describe("MeetingsPage", () => {
   beforeEach(() => {
-    getMeetingsMock.mockReset();
+    fetchJsonMock.mockReset();
   });
 
-  it("shows a real error state (not the generic 'No meetings found' empty copy) when the load fails", async () => {
-    getMeetingsMock.mockResolvedValue({ data: [], source: "error" });
-    render(await MeetingsPage({}));
-    expect(screen.getByText("We couldn't load meetings.")).toBeInTheDocument();
-    expect(screen.queryByText("No meetings found")).not.toBeInTheDocument();
+  it("GAP-ESTAB-MEETINGS-01: all stats show '—' on error", async () => {
+    fetchJsonMock.mockResolvedValueOnce({ data: [], source: "error" });
+    const ui = await MeetingsPage({ searchParams: {} });
+    const { container } = render(ui);
+
+    const vals = Array.from(container.querySelectorAll(".val"));
+    // Every stat should show '—'.
+    expect(vals.every((v) => v.textContent === "—")).toBe(true);
+    expect(vals.length).toBe(4);
   });
 
-  it("shows the genuine empty state when the load succeeds with zero meetings", async () => {
-    getMeetingsMock.mockResolvedValue({ data: [], source: "api" });
-    render(await MeetingsPage({}));
-    expect(screen.getByText("No meetings found")).toBeInTheDocument();
+  it("GAP-ESTAB-MEETINGS-02: empty state does not say 'Schedule a meeting to get started'", async () => {
+    fetchJsonMock.mockResolvedValueOnce({ data: [], source: "api" });
+    const ui = await MeetingsPage({ searchParams: {} });
+    render(ui);
+
+    expect(screen.queryByText("Schedule a meeting to get started.")).not.toBeInTheDocument();
+    expect(screen.getByText(/created from within a committee/)).toBeInTheDocument();
   });
 
-  it("renders the table by default and the calendar when ?view=calendar is set", async () => {
-    getMeetingsMock.mockResolvedValue({ data: [MEETING], source: "api" });
+  it("GAP-ESTAB-MEETINGS-02: '+ Schedule' links to /meeting/meetings/new", async () => {
+    fetchJsonMock.mockResolvedValueOnce({ data: [], source: "api" });
+    const ui = await MeetingsPage({ searchParams: {} });
+    render(ui);
 
-    const { unmount } = render(await MeetingsPage({}));
-    expect(screen.getByText("Ward Committee")).toBeInTheDocument(); // table row
-    unmount();
-
-    render(await MeetingsPage({ searchParams: { view: "calendar" } }));
-    expect(screen.getByText("March 2027")).toBeInTheDocument(); // calendar heading
+    const scheduleLink = screen.getByRole("link", { name: "+ Schedule" });
+    expect(scheduleLink).toBeInTheDocument();
+    expect(scheduleLink.getAttribute("href")).toBe("/meeting/meetings/new");
   });
 
-  it("disables + Schedule instead of linking to the nonexistent /estab/meetings/new route", async () => {
-    getMeetingsMock.mockResolvedValue({ data: [], source: "api" });
-    render(await MeetingsPage({}));
-    const scheduleBtn = screen.getByRole("button", { name: /Schedule/ });
-    expect(scheduleBtn).toBeDisabled();
-  });
-
-  it("shows the corrected stat cards: real agenda-item total (not meeting count), an honest upcoming-meetings label, and no fabricated compliance trend", async () => {
-    getMeetingsMock.mockResolvedValue({
-      data: [
-        { ...MEETING, id: "m1", agendaItemsCount: 2, attendeesCount: 5, status: "scheduled" },
-        { ...MEETING, id: "m2", agendaItemsCount: 5, attendeesCount: 3, status: "completed" },
-      ],
+  it("GAP-ESTAB-MEETINGS-03: stat label reads 'In Progress', not 'MOM Pending'; 'Meetings Held' not 'Compliance'", async () => {
+    fetchJsonMock.mockResolvedValueOnce({
+      data: [makeMeeting({ status: "in_progress" }), makeMeeting({ id: "m2", status: "completed" })],
       source: "api",
     });
-    render(await MeetingsPage({}));
+    const ui = await MeetingsPage({ searchParams: {} });
+    const { container } = render(ui);
 
-    // Was `meetings.length` (2), mislabeled -- but summing agendaItemsCount would have been
-    // an equally hollow fix while the backend never populated it, so the label stays "Action
-    // Items" (matching what estab-service now actually computes it from: real resolutions,
-    // this feature's action-point equivalent -- see estab-service's queries.ts) and the value
-    // is the real sum (2 + 5 = 7), not the meeting count.
-    expect(screen.getByText("Action Items")).toBeInTheDocument();
-    expect(screen.getByText("7")).toBeInTheDocument();
-
-    // "Meetings (wk)" implied a 7-day window; the underlying count is an
-    // unbounded upcoming-scheduled count, so the label is fixed to match it
-    // instead of arbitrarily truncating the data to fit a fake window.
-    expect(screen.getByText("Upcoming Meetings")).toBeInTheDocument();
-    expect(screen.queryByText("Meetings (wk)")).not.toBeInTheDocument();
-
-    // Compliance's "+3%" delta was a hardcoded literal with no real trend
-    // data behind it -- dropped rather than replaced with another fake number.
-    expect(screen.queryByText("+3%")).not.toBeInTheDocument();
+    const labs = Array.from(container.querySelectorAll(".lab")).map((l) => l.textContent);
+    expect(labs).toContain("In Progress");
+    expect(labs).not.toContain("MOM Pending");
+    expect(labs).toContain("Meetings Held");
+    expect(labs).not.toContain("Compliance");
   });
 });

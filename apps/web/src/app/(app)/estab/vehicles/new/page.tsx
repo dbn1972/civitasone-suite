@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { Button, PageHeader } from "@/app/_components/ds";
+import { useRef, useState } from "react";
+import { Button, EntityPicker, Field, Input, PageHeader, Select } from "@/app/_components/ds";
+import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 import { useFormError } from "@/lib/useFormError";
 
 const FUEL_TYPES = [
@@ -12,55 +13,58 @@ const FUEL_TYPES = [
   { value: "ev", label: "Electric (EV)" },
 ] as const;
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const inputStyle = {
-  width: "100%",
-  padding: "8px 12px",
-  border: "1px solid var(--line)",
-  borderRadius: 8,
-  fontSize: 13,
-} as const;
+type FieldErrors = { regNo?: string; makeModel?: string };
 
 export default function NewVehiclePage() {
   const router = useRouter();
   const [regNo, setRegNo] = useState("");
   const [makeModel, setMakeModel] = useState("");
   const [fuelType, setFuelType] = useState("petrol");
-  const [allocatedTo, setAllocatedTo] = useState("");
+  // GAP-ESTAB-VEHICLES-NEW-02: a chosen hrms employee id (or null = Pool),
+  // selected via a searchable picker — no hand-typed UUIDs.
+  const [allocatedTo, setAllocatedTo] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [toast, setToast] = useState<{
-    type: "success" | "error";
-    message: string;
-  } | null>(null);
-  const [fieldError, setFieldError] = useState("");
+  // `done` stays true after a successful accept so the button never re-enables
+  // during the redirect window (GAP-ESTAB-VEHICLES-NEW-03: double-submit guard).
+  const [done, setDone] = useState(false);
+  // A persistent error banner — NOT auto-dismissed (WCAG 2.2.1): it clears on
+  // the next submit, never on a timer.
+  const [submitError, setSubmitError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const formError = useFormError("vehicle");
+
+  const regNoRef = useRef<HTMLInputElement>(null);
+  const makeModelRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFieldError("");
-    if (!regNo.trim()) {
-      setFieldError("Registration number is required.");
+    if (submitting || done) return; // hard double-submit guard
+    setSubmitError("");
+
+    // GAP-ESTAB-VEHICLES-NEW-04: validate every field at once, show per-field
+    // messages, and move focus to the first invalid control.
+    const normalisedRegNo = regNo.trim().toUpperCase();
+    const errors: FieldErrors = {};
+    if (!normalisedRegNo) errors.regNo = "Registration number is required.";
+    if (!makeModel.trim()) errors.makeModel = "Make & model is required.";
+    setFieldErrors(errors);
+    if (errors.regNo) {
+      regNoRef.current?.focus();
       return;
     }
-    if (!makeModel.trim()) {
-      setFieldError("Make & model is required.");
+    if (errors.makeModel) {
+      makeModelRef.current?.focus();
       return;
     }
-    if (allocatedTo.trim() && !UUID_RE.test(allocatedTo.trim())) {
-      setFieldError(
-        "Allocated-to must be a valid officer ID (UUID), or leave it blank for the pool.",
-      );
-      return;
-    }
+
     setSubmitting(true);
     formError.clear();
     try {
       const payload = {
-        regNo: regNo.trim(),
+        regNo: normalisedRegNo,
         makeModel: makeModel.trim(),
         fuelType,
-        ...(allocatedTo.trim() ? { allocatedTo: allocatedTo.trim() } : {}),
+        ...(allocatedTo ? { allocatedTo } : {}),
       };
       const res = await fetch("/api/proxy/v1/estab/vehicles", {
         method: "POST",
@@ -68,22 +72,25 @@ export default function NewVehiclePage() {
         body: JSON.stringify(payload),
       });
       if (res.status === 202 || res.ok) {
-        setToast({
-          type: "success",
-          message: `Vehicle ${regNo.trim()} added to the fleet.`,
-        });
-        setTimeout(() => router.push("/estab/vehicles"), 800);
-      } else {
-        setToast({
-          type: "error",
-          message: (await formError.fromResponse(res, "save")).message,
-        });
+        setDone(true);
+        // GAP-ESTAB-VEHICLES-NEW-03: redirect immediately and tell the list to
+        // revalidate (router.refresh busts the server data cache so the new
+        // vehicle appears without waiting for revalidateSeconds to expire).
+        router.push(`/estab/vehicles?added=${encodeURIComponent(normalisedRegNo)}`);
+        router.refresh();
+        return;
       }
-    } catch (caught) {
-      setToast({ type: "error", message: formError.fromException("save", caught).message });
-    } finally {
+      const result = await formError.fromResponse(res, "save");
+      setSubmitError(result.message);
+      setFieldErrors((prev) => ({
+        ...prev,
+        ...(result.fieldErrors.regNo ? { regNo: result.fieldErrors.regNo } : {}),
+        ...(result.fieldErrors.makeModel ? { makeModel: result.fieldErrors.makeModel } : {}),
+      }));
       setSubmitting(false);
-      setTimeout(() => setToast(null), 5000);
+    } catch (caught) {
+      setSubmitError(formError.fromException("save", caught).message);
+      setSubmitting(false);
     }
   };
 
@@ -91,27 +98,27 @@ export default function NewVehiclePage() {
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Add Vehicle"
-        subtitle="Register a vehicle for fleet operations (allocation, logbook, fuel)."
+        subtitle="Register a vehicle for fleet operations and allocation."
         back="/estab/vehicles"
         help="estab"
       />
 
-      {toast && (
+      {submitError && (
         <div
-          className="banner"
-          role={toast.type === "error" ? "alert" : "status"}
-          aria-live={toast.type === "error" ? "assertive" : "polite"}
+          className="alert"
+          role="alert"
+          aria-live="assertive"
           style={{
-            background: toast.type === "success" ? "#ecfdf3" : "#fef2f2",
-            border: `1px solid ${toast.type === "success" ? "#6ee7b7" : "#fca5a5"}`,
-            color: toast.type === "success" ? "#065f46" : "#991b1b",
+            background: "var(--badbg)",
+            border: "1px solid var(--badbd)",
+            color: "var(--bad)",
             borderRadius: 12,
             padding: "13px 16px",
             marginBottom: 18,
             fontSize: 13,
           }}
         >
-          {toast.message}
+          {submitError}
         </div>
       )}
 
@@ -119,115 +126,55 @@ export default function NewVehiclePage() {
         <div className="card-h">
           <h3>Vehicle details</h3>
         </div>
-        <form onSubmit={handleSubmit}>
-          <div className="fields">
-            <div
-              className="fld"
-              style={{
-                flexDirection: "column",
-                alignItems: "flex-start",
-                gap: 4,
-              }}
-            >
-              <label htmlFor="regNo" className="l">
-                Registration number <span style={{ color: "#ef4444" }}>*</span>
-              </label>
-              <input
-                id="regNo"
-                type="text"
+        {/* noValidate: our own per-field messages replace the browser's native
+            required bubbles (GAP-ESTAB-VEHICLES-NEW-04). */}
+        <form onSubmit={handleSubmit} noValidate>
+          <div className="fields" style={{ display: "grid", gap: 14, padding: 16 }}>
+            <Field label="Registration number" required error={fieldErrors.regNo}>
+              <Input
+                ref={regNoRef}
                 value={regNo}
                 onChange={(e) => setRegNo(e.target.value)}
-                required
                 placeholder="e.g. DL 01 CA 1234"
-                style={inputStyle}
               />
-            </div>
-            <div
-              className="fld"
-              style={{
-                flexDirection: "column",
-                alignItems: "flex-start",
-                gap: 4,
-              }}
-            >
-              <label htmlFor="makeModel" className="l">
-                Make &amp; model <span style={{ color: "#ef4444" }}>*</span>
-              </label>
-              <input
-                id="makeModel"
-                type="text"
+            </Field>
+            <Field label="Make & model" required error={fieldErrors.makeModel}>
+              <Input
+                ref={makeModelRef}
                 value={makeModel}
                 onChange={(e) => setMakeModel(e.target.value)}
-                required
                 placeholder="e.g. Toyota Innova Crysta"
-                style={inputStyle}
               />
-            </div>
-            <div
-              className="fld"
-              style={{
-                flexDirection: "column",
-                alignItems: "flex-start",
-                gap: 4,
-              }}
-            >
-              <label htmlFor="fuelType" className="l">
-                Fuel type
-              </label>
-              <select
-                id="fuelType"
-                value={fuelType}
-                onChange={(e) => setFuelType(e.target.value)}
-                style={inputStyle}
-              >
+            </Field>
+            <Field label="Fuel type">
+              <Select value={fuelType} onChange={(e) => setFuelType(e.target.value)}>
                 {FUEL_TYPES.map((f) => (
                   <option key={f.value} value={f.value}>
                     {f.label}
                   </option>
                 ))}
-              </select>
-            </div>
-            <div
-              className="fld"
-              style={{
-                flexDirection: "column",
-                alignItems: "flex-start",
-                gap: 4,
-              }}
-            >
-              <label htmlFor="allocatedTo" className="l">
-                Allocated to (optional)
-              </label>
-              <input
-                id="allocatedTo"
-                type="text"
+              </Select>
+            </Field>
+            <Field label="Allocated to">
+              {/* GAP-ESTAB-VEHICLES-NEW-02: searchable officer picker (name +
+                  designation), returns a real hrms id; clearing means Pool. No
+                  hand-typed UUIDs. */}
+              <EntityPicker
                 value={allocatedTo}
-                onChange={(e) => setAllocatedTo(e.target.value)}
-                placeholder="Officer ID (UUID) — leave blank for the pool"
-                style={inputStyle}
+                onChange={(v) => setAllocatedTo(Array.isArray(v) ? (v[0] ?? null) : v)}
+                search={searchEmployees}
+                resolve={resolveEmployees}
+                placeholder="Search an officer by name — or leave blank for the pool"
+                aria-label="Allocated to"
               />
-            </div>
+            </Field>
           </div>
-          {fieldError && (
-            <div
-              className="pad"
-              role="alert"
-              aria-live="assertive"
-              style={{ color: "var(--bad)", fontSize: 13, paddingTop: 0 }}
-            >
-              {fieldError}
-            </div>
-          )}
           <div
             className="pad"
-            style={{
-              borderTop: "1px solid var(--line)",
-              display: "flex",
-              gap: 8,
-            }}
+            style={{ borderTop: "1px solid var(--line)", display: "flex", gap: 8 }}
           >
-            <Button type="submit" disabled={submitting}>
-              {submitting ? "Adding…" : "Add Vehicle"}
+            <Button type="submit" disabled={submitting || done}>
+              {submitting || done ? "Adding…" : "Add Vehicle"}
             </Button>
             <a href="/estab/vehicles" className="btn ghost">
               Cancel

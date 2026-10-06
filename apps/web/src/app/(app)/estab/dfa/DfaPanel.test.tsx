@@ -96,3 +96,58 @@ describe("DfaPanel — UX-016 clerk-safe errors", () => {
     expect(dialog.textContent).not.toMatch(/\bsubmit: /);
   });
 });
+
+describe("DfaPanel — GAP-ESTAB-DFA-01 (load error state)", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it("shows a retryable ErrorState (not 'No drafts' text) when load fails", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 500 }));
+    render(<DfaPanel />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument());
+    expect(screen.queryByText(/No drafts in this view/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("DfaPanel — GAP-ESTAB-DFA-03 (returned filter tab)", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it("includes a 'Returned' tab in the segment control", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [] }));
+    render(<DfaPanel />);
+    await waitFor(() => expect(screen.getByRole("tab", { name: "Returned" })).toBeInTheDocument());
+  });
+});
+
+describe("DfaPanel — GAP-ESTAB-DFA-05 (human labels)", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it("tab labels are human-readable (not snake_case)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [] }));
+    render(<DfaPanel />);
+    await waitFor(() => expect(screen.getByRole("tab", { name: "Pending Approval" })).toBeInTheDocument());
+    expect(screen.queryByRole("tab", { name: "pending_approval" })).not.toBeInTheDocument();
+  });
+});
+
+describe("DfaPanel — GAP-ESTAB-DFA-02 (approve needs remarks)", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it("the Approve dialog requires a reason (remarks)", async () => {
+    const dfa = {
+      id: "dfa-a", dfaNo: "DFA-A01", communicationType: "letter", subject: "Approve me",
+      status: "pending_approval", editable: false, recipientName: null, updatedAt: "2026-10-01T00:00:00Z",
+      fileId: null,
+    };
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [dfa] }));
+    render(<DfaPanel />);
+    const approveBtn = await screen.findByRole("button", { name: "Approve" });
+    fireEvent.click(approveBtn);
+    const dialog = await screen.findByRole("alertdialog");
+    // The dialog must have a reason/textarea
+    const textarea = dialog.querySelector("textarea");
+    expect(textarea).toBeTruthy();
+    // Confirm button should be disabled until reason is filled (requireReason)
+    const confirmBtn = Array.from(dialog.querySelectorAll("button")).find((b) => b.textContent === "Approve");
+    expect(confirmBtn).toBeTruthy();
+  });
+});

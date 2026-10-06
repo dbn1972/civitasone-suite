@@ -60,3 +60,5 @@ export { Masked, maskAccount, maskLast4, maskPhone, maskEmail } from "./Masked";
 export type { MaskedProps, MaskedKind } from "./Masked";
 export { RevealableValue } from "./RevealableValue";
 export type { RevealableValueProps } from "./RevealableValue";
+export { Stepper } from "./Stepper";
+export type { StepperProps } from "./Stepper";

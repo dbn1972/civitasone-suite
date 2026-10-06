@@ -192,6 +192,29 @@ export async function findSimilarOpenFiles(tenantId: string, subject: string, li
   return repo.findSimilarOpenFiles(tenantId, subject, limit);
 }
 
+/** GAP-ESTAB-HANDOVER-03: count files held by a specific officer (non-terminal). */
+export async function countFilesByHolder(tenantId: string, officerId: string): Promise<number> {
+  return repo.countFilesByHolder(tenantId, officerId);
+}
+
+/** GAP-ESTAB-INBOX-01: files held by a specific officer ("My Desk"). */
+export async function listFilesByHolder(tenantId: string, officerId: string): Promise<FileRow[]> {
+  return repo.listFilesByHolder(tenantId, officerId);
+}
+
+/**
+ * GAP-ESTAB-FILES-DETAIL-02: look up a specific attachment's storageRef for
+ * the download endpoint. Returns null if the attachment doesn't exist or
+ * doesn't belong to the given file/tenant.
+ */
+export async function getAttachmentForDownload(
+  tenantId: string, fileId: string, attachmentId: string,
+): Promise<{ storageRef: string | null; fileName: string; fileType: string } | null> {
+  const row = await repo.findAttachmentById(attachmentId, fileId, tenantId);
+  if (!row) return null;
+  return { storageRef: row.storageRef, fileName: row.fileName, fileType: row.fileType };
+}
+
 /** @deprecated use getFileDetail */
 export async function getFile(tenantId: string, id: string) {
   return getFileDetail(tenantId, id);

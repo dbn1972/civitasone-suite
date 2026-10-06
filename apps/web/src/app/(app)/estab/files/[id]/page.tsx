@@ -1,20 +1,21 @@
 import { getEstabFileById } from "../../../../_data/loaders";
 import { PageHeader, StatusPill, EmptyState, DataTable, RefreshErrorState } from "../../../../_components/ds";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, formatIndianDateTime } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { FileDetailActions } from "./FileDetailActions";
 import { FileAttachments } from "./FileAttachments";
 import { ScannedDocumentsSection } from "./ScannedDocumentsSection";
 import { OfficerName } from "./OfficerName";
 import { MovementTimeline } from "./MovementTimeline";
-import type { EstabFileDetail } from "@civitasone/types";
 
 type NoteRow = {
   idx: number;
   content: string;
-  author: string;
+  authorId: string;
+  when: string;
   type: string;
   status: string;
+  signedAt?: string | null;
 };
 
 type DispatchRow = {
@@ -49,36 +50,28 @@ export default async function EstabFileDetailPage({ params }: { params: { id: st
     );
   }
 
-  const draftNoting = file.noteSheets.find(
-    (n) => (n as { noteType?: string; noteStatus?: string }).noteType === "yellow"
-      && (n as { noteStatus?: string }).noteStatus === "draft",
-  );
+  const draftNoting = [...file.noteSheets]
+    .filter((n) => n.noteType === "yellow" && n.noteStatus === "draft")
+    .sort((a, b) => (b.timestamp ?? "").localeCompare(a.timestamp ?? ""))[0];
 
-  const ext = file as EstabFileDetail & {
-    dakNo?: string;
-    dueBy?: string;
-    movementHistory?: Array<{
-      id: string;
-      fromOfficerId?: string | null;
-      toOfficerId: string;
-      action?: string | null;
-      movedAt: string;
-      status?: string | null;
-      remarks?: string | null;
-    }>;
-  };
+  // dakNo/dueBy/movementHistory are now first-class on EstabFileDetail
+  // (GAP-ESTAB-FILES-DETAIL-06) — no ad-hoc casts.
+  const ext = file;
 
-  const noteRows: NoteRow[] = file.noteSheets.map((ns, idx) => {
-    const n = ns as { noteType?: string; noteStatus?: string; eSigned?: boolean };
-    const typeLabel = n.noteType === "green" ? "Green (approved)" : n.noteType === "yellow" ? "Yellow (draft)" : ns.type;
-    return {
-      idx: idx + 1,
-      content: ns.content,
-      author: ns.author,
-      type: `${typeLabel}${n.eSigned ? " · e-Signed" : ""}`,
-      status: (n.noteStatus ?? "—").replace(/_/g, " "),
-    };
-  });
+  const noteRows: NoteRow[] = [...file.noteSheets]
+    .sort((a, b) => (a.timestamp ?? "").localeCompare(b.timestamp ?? ""))
+    .map((ns, idx) => {
+      const typeLabel = ns.noteType === "green" ? "Green (approved)" : ns.noteType === "yellow" ? "Yellow (draft)" : ns.type;
+      return {
+        idx: idx + 1,
+        content: ns.content,
+        authorId: ns.author,
+        when: ns.timestamp ? formatIndianDate(ns.timestamp) : "—",
+        type: `${typeLabel}${ns.eSigned ? " · e-Signed" : ""}`,
+        status: (ns.noteStatus ?? "—").replace(/_/g, " "),
+        signedAt: ns.signedAt ?? null,
+      };
+    });
 
   const dispatchRows: DispatchRow[] = file.dispatchHistory.map((d) => ({
     dispatchedTo: d.dispatchedTo,
@@ -142,8 +135,22 @@ export default async function EstabFileDetailPage({ params }: { params: { id: st
                 columns={[
                   { key: "idx", label: "#", align: "right" },
                   { key: "content", label: "Note" },
-                  { key: "author", label: "Officer" },
-                  { key: "type", label: "Type" },
+                  { key: "when", label: "When" },
+                  { key: "authorId", label: "Officer", render: (r) => (r.authorId ? <OfficerName id={r.authorId} /> : <>—</>) },
+                  {
+                    key: "type",
+                    label: "Type",
+                    render: (r) => (
+                      <>
+                        {r.type}
+                        {r.signedAt ? (
+                          <span style={{ color: "var(--mut)", marginLeft: 6, fontSize: 12 }}>
+                            (signed {formatIndianDateTime(r.signedAt)})
+                          </span>
+                        ) : null}
+                      </>
+                    ),
+                  },
                   { key: "status", label: "Status", cellType: "status" },
                 ]}
                 rows={noteRows}

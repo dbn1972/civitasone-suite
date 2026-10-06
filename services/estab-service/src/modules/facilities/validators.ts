@@ -33,6 +33,22 @@ export const addBookBody = z.object({
 });
 export type AddBookBody = z.infer<typeof addBookBody>;
 
+// GAP-ESTAB-LIBRARY-DETAIL-01: edit catalogue metadata + adjust total copies.
+// copiesTotal is optional; the command enforces it can't drop below copies out.
+export const editBookBody = z.object({
+  title:       z.string().min(1).optional(),
+  author:      z.string().optional(),
+  isbn:        z.string().optional(),
+  category:    z.string().optional(),
+  copiesTotal: z.number().int().positive().optional(),
+}).refine((b) => Object.keys(b).length > 0, { message: "at least one field is required" });
+export type EditBookBody = z.infer<typeof editBookBody>;
+
+export const withdrawBookBody = z.object({
+  reason: z.string().min(3),
+});
+export type WithdrawBookBody = z.infer<typeof withdrawBookBody>;
+
 export const issueBookBody = z.object({
   bookId:      z.string().uuid(),
   employeeRef: z.string().uuid(),
@@ -52,6 +68,7 @@ export const libraryIssuesQuery = z.object({
   limit:  z.coerce.number().int().min(1).max(500).default(50),
   offset: z.coerce.number().int().min(0).default(0),
   status: z.enum(["issued", "returned", "overdue"]).optional(),
+  bookId: z.string().uuid().optional(),
 });
 export type LibraryIssuesQuery = z.infer<typeof libraryIssuesQuery>;
 

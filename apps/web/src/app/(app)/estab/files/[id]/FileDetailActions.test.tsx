@@ -5,7 +5,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
-import { FileDetailActions } from "./FileDetailActions";
+import { FileDetailActions, isFileReadOnly } from "./FileDetailActions";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -133,5 +133,70 @@ describe("FileDetailActions — officer of record is never client-supplied (secu
     expect(await screen.findByText(/Pick an officer or enter a valid officer ID/)).toBeInTheDocument();
     expect(screen.queryByRole("alertdialog")).toBeNull();
     expect(fetchSpy.mock.calls.some((c) => urlOf(c).includes("/move"))).toBe(false);
+  });
+});
+
+describe("FileDetailActions — write controls hidden on terminal register states (GAP-ESTAB-FILES-DETAIL-01)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("isFileReadOnly is true for archived/disposed and false for active/pending", () => {
+    expect(isFileReadOnly("archived")).toBe(true);
+    expect(isFileReadOnly("disposed")).toBe(true);
+    expect(isFileReadOnly("active")).toBe(false);
+    expect(isFileReadOnly("pending")).toBe(false);
+    // The dead "closed" value from the audit snapshot is NOT read-only here.
+    expect(isFileReadOnly("closed")).toBe(false);
+  });
+
+  for (const status of ["archived", "disposed"]) {
+    it(`renders a read-only notice and no Submit/Sign/Refer buttons when status is ${status}`, () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [] }));
+      render(<FileDetailActions fileId="file-1" draftNotingId="note-1" status={status} />);
+
+      expect(screen.queryByRole("button", { name: "Submit for approval" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Sign note (green)" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Refer back" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Save yellow note" })).toBeNull();
+      expect(screen.getByText(new RegExp(`This file is ${status}`))).toBeInTheDocument();
+    });
+  }
+
+  for (const status of ["active", "pending"]) {
+    it(`keeps Submit/Sign/Refer available when status is ${status}`, async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [] }));
+      render(<FileDetailActions fileId="file-1" draftNotingId="note-1" status={status} />);
+      await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+
+      expect(screen.getByRole("button", { name: "Submit for approval" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Sign note (green)" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Refer back" })).toBeInTheDocument();
+    });
+  }
+});
+
+describe("FileDetailActions — disabled Submit/Sign explain why (GAP-ESTAB-FILES-DETAIL-07)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("shows 'Save a yellow note first' when there is no draft note", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [] }));
+    render(<FileDetailActions fileId="file-1" status="active" />);
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+
+    expect(screen.getByText(/Save a yellow note first/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Submit for approval" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Sign note (green)" })).toBeDisabled();
+  });
+
+  it("hides the helper once a draft note exists", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [] }));
+    render(<FileDetailActions fileId="file-1" draftNotingId="note-1" status="active" />);
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+
+    expect(screen.queryByText(/Save a yellow note first/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Submit for approval" })).not.toBeDisabled();
   });
 });

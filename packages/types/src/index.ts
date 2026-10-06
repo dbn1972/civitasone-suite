@@ -1674,12 +1674,30 @@ export type EstabFileSummary = {
 };
 
 export type EstabFileDetail = EstabFileSummary & {
+  // GAP-ESTAB-FILES-DETAIL-06: these fields are produced by mapEstabFileDetail
+  // and read by the detail page; declaring them here removes ad-hoc `as` casts
+  // in page.tsx / the mapper so an API-shape change is caught by tsc.
+  dakNo?: string;
+  dueBy?: string;
+  movementHistory?: Array<{
+    id: string;
+    fromOfficerId?: string | null;
+    toOfficerId: string;
+    action?: string | null;
+    movedAt: string;
+    status?: string | null;
+    remarks?: string | null;
+  }>;
   noteSheets: Array<{
     id: string;
     author: string;
     content: string;
     timestamp: string;
     type: "note" | "order" | "remark";
+    noteType?: string;
+    noteStatus?: string;
+    eSigned?: boolean;
+    signedAt?: string | null;
   }>;
   dispatchHistory: Array<{
     id: string;
@@ -1785,7 +1803,7 @@ export type LibraryBookSummary = {
   category?: string;
   copiesTotal: number;
   copiesAvailable: number;
-  status: "available" | "unavailable";
+  status: "available" | "unavailable" | "withdrawn";
 };
 
 export type LibraryIssueSummary = {

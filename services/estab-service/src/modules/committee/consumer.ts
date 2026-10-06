@@ -88,6 +88,27 @@ export function registerCommitteeConsumers(queue: Queue): void {
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "meeting", p.meetingId));
   });
+
+  // GAP-ESTAB-COMPLIANCE-03: mark a compliance register item complied, with an
+  // audit event emitted in the same transaction as the status update.
+  queue.subscribe(COMMANDS.complianceComply, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; remarks: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const compliedDate = new Date().toISOString().slice(0, 10);
+      const updated = await repo.markComplianceComplied(tx, p.id, p.tenantId, compliedDate, msg.actorId);
+      if (!updated) return; // not found / wrong tenant — nothing to audit
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          service: "estab", action: "compliance.comply", resourceType: "compliance",
+          resourceId: p.id, outcome: "success", metadata: { remarks: p.remarks, compliedDate },
+        },
+      });
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "compliance", "list:100"));
+  });
 }
 
 async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {

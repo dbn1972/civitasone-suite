@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { formatMoneyCompact, formatMoney, formatIndianDate, formatIndianDateTime, todayIST, istDatePart, addDaysIST, minorToRupeesOrNull, formatClockTime12h, percentOfMinor, humanizeStatus, formatEntityRef, utilisationPercent, isOverUtilised } from "./formatters";
+import { formatMoneyCompact, formatMoney, formatIndianDate, formatIndianDateTime, todayIST, istDatePart, addDaysIST, minorToRupeesOrNull, formatClockTime12h, percentOfMinor, humanizeStatus, formatEnumLabel, formatEntityRef, utilisationPercent, isOverUtilised, formatDays } from "./formatters";
 
 // ---------------------------------------------------------------------------
 // formatClockTime12h -- GAP-HR-ATTENDANCE-CONFIG-02
@@ -502,5 +502,38 @@ describe("todayIST at the IST day boundary (GAP-CRM-ACTIVITIES-03)", () => {
     // 00:30 IST on 11 Mar 2026 is still 10 Mar in UTC.
     vi.setSystemTime(new Date("2026-03-10T19:00:00.000Z"));
     expect(todayIST()).toBe("2026-03-11");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatEnumLabel -- GAP-ESTAB-QUARTERS-DETAIL-04
+// ---------------------------------------------------------------------------
+describe("formatEnumLabel", () => {
+  it("sentence-cases a snake_case code", () => {
+    expect(formatEnumLabel("needs_repair")).toBe("Needs repair");
+  });
+  it("sentence-cases an all-caps value", () => {
+    expect(formatEnumLabel("GOOD")).toBe("Good");
+  });
+  it("renders — for null/undefined/empty", () => {
+    expect(formatEnumLabel(null)).toBe("—");
+    expect(formatEnumLabel(undefined)).toBe("—");
+    expect(formatEnumLabel("   ")).toBe("—");
+  });
+});
+
+// GAP-ESTAB-DASHBOARD-03
+describe("formatDays", () => {
+  it("rounds to one decimal", () => {
+    expect(formatDays(6.428571)).toBe("6.4");
+  });
+  it("shows whole number without decimal", () => {
+    expect(formatDays(7)).toBe("7");
+  });
+  it("shows — for NaN", () => {
+    expect(formatDays(NaN)).toBe("—");
+  });
+  it("shows — for null", () => {
+    expect(formatDays(null)).toBe("—");
   });
 });

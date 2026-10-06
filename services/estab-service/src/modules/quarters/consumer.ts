@@ -202,6 +202,38 @@ export function registerQuarterConsumers(queue: Queue): void {
     } catch (err) { log.error({ err, messageId: msg.messageId }, "quarterVacate failed"); }
   });
 
+  // ── Cancel / Reject Allotment (GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-05) ───
+  queue.subscribe(COMMANDS.quarterCancel, async (msg) => {
+    try {
+      const p = msg.payload as { id: string; tenantId: string; version: number; cancelReason: string };
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        const rows = await tx.select().from(estabQuarterAllotments)
+          .where(and(eq(estabQuarterAllotments.id, p.id), eq(estabQuarterAllotments.tenantId, p.tenantId))).limit(1);
+        const allotment = rows[0];
+        if (!allotment) throw new Error("ALLOTMENT_NOT_FOUND");
+        assertValidTransition(allotment.status, "cancelled");
+        await tx.update(estabQuarterAllotments)
+          .set({
+            status: "cancelled",
+            cancelledAt: new Date(),
+            cancelReason: p.cancelReason,
+            updatedBy: msg.actorId,
+            updatedAt: new Date(),
+            version: sql`${estabQuarterAllotments.version} + 1`,
+          })
+          .where(and(eq(estabQuarterAllotments.id, p.id), eq(estabQuarterAllotments.version, p.version)));
+        // If the allotment was "allotted", the quarter should revert to vacant.
+        if (allotment.status === "allotted") {
+          await tx.update(estabQuarters)
+            .set({ status: "vacant", updatedBy: msg.actorId, updatedAt: new Date() })
+            .where(eq(estabQuarters.id, allotment.quarterId));
+        }
+        await audit(tx, msg, "allotment_cancelled", "quarter_allotment", p.id);
+      });
+    } catch (err) { log.error({ err, messageId: msg.messageId }, "quarterCancel failed"); }
+  });
+
   // ── Create Licence-Fee Rate ────────────────────────────────────────────
   queue.subscribe(COMMANDS.quarterLicenceFeeRate, async (msg) => {
     try {

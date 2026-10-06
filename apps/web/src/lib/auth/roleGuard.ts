@@ -266,7 +266,66 @@ export const PLATFORM_ADMIN_ROLES = ["platform_admin", "super_admin", "tenant_ad
  */
 export const PLATFORM_AUDIT_VIEW_ROLES = ["auditor", "audit_admin", "audit_officer"];
 
+/**
+ * GAP-ESTAB-HOME-04 / GAP-ESTAB-APPROVAL-MATRIX-02: roles permitted to reach
+ * the Establishment administration tools — the Approval Matrix (who signs
+ * sanctions/payments/disciplinary actions) and Data Migration. Mirrors
+ * estab-service's ADMIN_ROLES in modules/approval-rules/routes.ts
+ * (["estab_admin", "super_admin", "tenant_admin"]) which already 403s a plain
+ * clerk from POST/PATCH /v1/estab/approval-rules. The server stays the
+ * authority; this only decides whether the hub advertises the tile and
+ * whether the page offers the create/toggle controls.
+ */
+export const ESTAB_ADMIN_ROLES = ["estab_admin", "super_admin", "tenant_admin"];
+
+/**
+ * GAP-ESTAB-HOME-04: roles permitted to enrol/manage eOffice file operators.
+ * Mirrors estab-service's ADMIN_ROLES in modules/operators/routes.ts
+ * (["estab_division_admin", "estab_admin", "super_admin"]). Division admins
+ * manage their own desks, so this is a slightly different set from
+ * ESTAB_ADMIN_ROLES. The server stays the authority.
+ */
+export const ESTAB_OPERATOR_ADMIN_ROLES = ["estab_division_admin", "estab_admin", "super_admin"];
+
+/**
+ * GAP-ESTAB-APPROVALS-04: roles permitted to act on an establishment approval
+ * (approve/reject a yellow→green noting). The page is labelled "Deputy
+ * Secretary and above"; the workflow task's own roleRef is the finest gate,
+ * but these roles bound who may even see the Approve/Reject controls. The
+ * server (workflow-service task-complete) remains the authority on the
+ * specific task role; this is defence-in-depth + UX.
+ */
+export const ESTAB_APPROVER_ROLES = [
+  "estab_deputy_secretary",
+  "estab_secretary",
+  "estab_admin",
+  "super_admin",
+  "tenant_admin",
+];
+
 /** True when any of the session roles is in `allowed`. Pure; for UI gating. */
 export function hasAnyRole(sessionRoles: string[], allowed: string[]): boolean {
   return allowed.some((r) => sessionRoles.includes(r));
 }
+
+/**
+ * GAP-ESTAB-LIBRARY-05 / GAP-ESTAB-LIBRARY-DETAIL-01: roles permitted to add a
+ * book to the staff-library catalogue and issue/return loans. Mirrors
+ * estab-service's ESTAB_ROLES in modules/facilities/routes.ts
+ * (["estab_officer", "estab_admin", "super_admin"]) which already 403s a plain
+ * reader from POST /v1/estab/library/books and the issue/return endpoints. The
+ * server stays the authority; this only decides whether the UI offers the
+ * Add-a-Book form so a non-librarian is not shown a control guaranteed to 403.
+ */
+export const ESTAB_LIBRARY_WRITE_ROLES = ["estab_officer", "estab_admin", "super_admin"];
+
+/**
+ * GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-04 / QUARTERS-03: roles permitted to
+ * act on quarter allotment lifecycle transitions and to create quarters.
+ * Mirrors estab-service's quarters module ESTAB_ROLES in
+ * modules/quarters/routes.ts (["estab_officer", "estab_admin",
+ * "quarter_officer", "super_admin"]) which already 403s others on the
+ * POST/PATCH endpoints. The server stays the authority; this only hides
+ * controls that would otherwise bounce a non-authorised user.
+ */
+export const ESTAB_QUARTER_ACTION_ROLES = ["estab_officer", "estab_admin", "quarter_officer", "super_admin"];

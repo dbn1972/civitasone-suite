@@ -91,6 +91,48 @@ export function registerFacilitiesConsumers(queue: Queue): void {
     });
   });
 
+  queue.subscribe(COMMANDS.libraryEdit, async (msg) => {
+    const p = msg.payload as {
+      bookId: string; tenantId: string;
+      title?: string; author?: string; isbn?: string; category?: string; copiesTotal?: number;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const book = await repo.getLibraryBookByIdTx(tx, p.bookId);
+      if (!book || book.status === "withdrawn") return;
+      const patch: Record<string, unknown> = {};
+      if (p.title !== undefined) patch.title = p.title;
+      if (p.author !== undefined) patch.author = p.author;
+      if (p.isbn !== undefined) patch.isbn = p.isbn;
+      if (p.category !== undefined) patch.category = p.category;
+      if (p.copiesTotal !== undefined) {
+        const copiesOut = book.copiesTotal - book.copiesAvailable;
+        // Guard again at write time against a stale command.
+        if (p.copiesTotal < copiesOut) return;
+        patch.copiesTotal = p.copiesTotal;
+        // New total minus the copies still out = what's now on the shelf.
+        patch.copiesAvailable = p.copiesTotal - copiesOut;
+      }
+      await repo.updateLibraryBook(tx, p.bookId, patch, msg.actorId);
+      await audit(tx, msg, "edit", "library_book", p.bookId);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "library_books", `list:50`));
+  });
+
+  queue.subscribe(COMMANDS.libraryWithdraw, async (msg) => {
+    const p = msg.payload as { bookId: string; tenantId: string; reason: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const book = await repo.getLibraryBookByIdTx(tx, p.bookId);
+      if (!book || book.status === "withdrawn") return;
+      // Loan integrity: never withdraw while copies are out.
+      if (book.copiesTotal - book.copiesAvailable > 0) return;
+      await repo.withdrawLibraryBook(tx, p.bookId, msg.actorId);
+      await audit(tx, msg, "withdraw", "library_book", p.bookId);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "library_books", `list:50`));
+  });
+
   queue.subscribe(COMMANDS.libraryIssue, async (msg) => {
     const p = msg.payload as { id: string; bookId: string; tenantId: string; employeeRef: string; dueAt: string };
     await db.transaction(async (tx) => {

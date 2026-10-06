@@ -799,6 +799,7 @@ export function mapEstabFileDetail(payload: unknown): import("@civitasone/types"
       noteType: toText(row.noteType) ?? undefined,
       noteStatus: toText(row.noteStatus) ?? undefined,
       eSigned: Boolean(row.eSigned),
+      signedAt: toText(row.signedAt) ?? null,
     }];
   });
 
@@ -830,6 +831,23 @@ export function mapEstabFileDetail(payload: unknown): import("@civitasone/types"
     }];
   });
 
+  const movementRaw = Array.isArray(payload.movementHistory) ? payload.movementHistory : [];
+  const movementHistory = movementRaw.flatMap((row) => {
+    if (!isRecord(row)) return [];
+    const mid = toText(row.id);
+    const toOfficerId = toText(row.toOfficerId);
+    if (!mid || !toOfficerId) return [];
+    return [{
+      id: mid,
+      fromOfficerId: toText(row.fromOfficerId) ?? null,
+      toOfficerId,
+      action: toText(row.action) ?? null,
+      movedAt: toText(row.movedAt) ?? "",
+      status: toText(row.status) ?? null,
+      remarks: toText(row.remarks) ?? null,
+    }];
+  });
+
   return {
     ...base,
     dakNo: toText(payload.dakNo) ?? undefined,
@@ -837,8 +855,8 @@ export function mapEstabFileDetail(payload: unknown): import("@civitasone/types"
     noteSheets,
     dispatchHistory,
     attachments,
-    movementHistory: Array.isArray(payload.movementHistory) ? payload.movementHistory : [],
-  } as import("@civitasone/types").EstabFileDetail & { dakNo?: string; dueBy?: string; movementHistory?: unknown[] };
+    movementHistory,
+  };
 }
 
 export function mapAssetSummaries(payload: unknown): AssetSummary[] | null {

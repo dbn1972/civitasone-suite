@@ -1,6 +1,7 @@
 "use client";
 
 import { DataTable, StatusPill } from "../../../../_components/ds";
+import { formatIndianDate } from "@/lib/formatters";
 
 type ActionPointRow = {
   id: string;
@@ -22,7 +23,7 @@ export function ActionPointsTable({ rows }: { rows: ActionPointRow[] }) {
       columns={[
         { key: "description", label: "Action" },
         { key: "assignedTo", label: "Owner" },
-        { key: "dueDate", label: "Due", render: (r) => <>{r.dueDate ?? "—"}</> },
+        { key: "dueDate", label: "Due", render: (r) => <>{r.dueDate ? formatIndianDate(r.dueDate) : "—"}</> },
         {
           key: "status",
           label: "Status",
@@ -46,7 +47,9 @@ export function AttendeesTable({ rows }: { rows: AttendeeRow[] }) {
           key: "present",
           label: "Present",
           render: (r) => (
-            <StatusPill status={r.present ? "active" : "rejected"} label={r.present ? "Yes" : "No"} />
+            // GAP-ESTAB-MEETINGS-DETAIL-06: absence is not a rejection — use a
+            // neutral/muted "Absent" pill, not a red "rejected" one.
+            <StatusPill status={r.present ? "present" : "absent"} label={r.present ? "Present" : "Absent"} variant={r.present ? "good" : "mut"} />
           ),
         },
       ]}

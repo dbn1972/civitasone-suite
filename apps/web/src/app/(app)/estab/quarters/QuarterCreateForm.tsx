@@ -7,6 +7,13 @@ import { browserJson } from "@/lib/api/browserClient";
 
 const QUARTER_TYPES = ["type_i", "type_ii", "type_iii", "type_iv", "type_v", "type_vi"] as const;
 
+/**
+ * GAP-ESTAB-QUARTERS-04: common quarter categories as a datalist; a hard
+ * <select> enum risks locking out legacy free-text values already in the DB.
+ * The datalist offers consistent values while still allowing arbitrary text.
+ */
+const QUARTER_CATEGORIES = ["general", "physically_handicapped", "medical", "defence", "other"] as const;
+
 type FieldErrors = {
   quarterNo?: string;
   carpetAreaSqft?: string;
@@ -35,6 +42,7 @@ export function QuarterCreateForm() {
   const areaErrId = useId();
   const typeField = useId();
   const categoryField = useId();
+  const categoryListId = useId();
   const addressField = useId();
   const localityField = useId();
   const orgUnitField = useId();
@@ -136,13 +144,24 @@ export function QuarterCreateForm() {
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={categoryField} style={{ fontSize: 13, fontWeight: 600 }}>Category</label>
+              {/* GAP-ESTAB-QUARTERS-04: a datalist combobox offers the common
+                  categories so operators pick a consistent value, while still
+                  accepting a legacy free-text value already in the DB (a hard
+                  <select> enum would lock those out). Decision recorded in the
+                  per-GAP report. */}
               <input
                 id={categoryField}
+                list={categoryListId}
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 placeholder="general"
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
+              <datalist id={categoryListId}>
+                {QUARTER_CATEGORIES.map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>

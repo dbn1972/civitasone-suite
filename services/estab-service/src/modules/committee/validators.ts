@@ -34,3 +34,10 @@ export const recordAttendanceBody = z.object({
   attended:  z.boolean(),
 });
 export type RecordAttendanceBody = z.infer<typeof recordAttendanceBody>;
+
+// GAP-ESTAB-COMPLIANCE-03: mark a compliance register item as complied.
+// `remarks` is required so there is an auditable reason for the closure.
+export const markComplianceBody = z.object({
+  remarks: z.string().trim().min(1).max(1000),
+});
+export type MarkComplianceBody = z.infer<typeof markComplianceBody>;
