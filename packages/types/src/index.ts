@@ -1880,6 +1880,8 @@ export type MaintenanceSummary = {
 export type StockDashboard = {
   totalSKUs: number;
   lowStockAlerts: number;
+  /** GAP-STOCK-DASHBOARD-04: active items with on-hand qty <= 0. */
+  stockOuts: number;
   grnsThisMonth: number;
   inventoryValue: number;
 };

@@ -68,6 +68,11 @@ const TILE_ICONS: Record<string, string> = {
   Subscriptions: "🔁",
   Invoices: "🧾",
   "GSTN Console": "🏛️",
+  // GAP-STOCK-HOME-04: distinct icons for stock hub tiles
+  "Stock List": "📦",
+  "Stock Ledger": "📒",
+  "New Item": "➕",
+  "New Stock Entry": "📝",
 };
 
 const TILE_BG = ["#eef2ff", "#ecfdf3", "#fffaeb", "#fce7ee", "#e7edfd", "#f1f5f9"];

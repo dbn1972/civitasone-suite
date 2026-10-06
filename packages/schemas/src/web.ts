@@ -1912,6 +1912,8 @@ export const MaintenanceSummaryListSchema = z.array(MaintenanceSummarySchema);
 export const StockDashboardSchema = z.object({
   totalSKUs: z.number().default(0),
   lowStockAlerts: z.number().default(0),
+  // GAP-STOCK-DASHBOARD-04: real stock-out count from the dashboard query.
+  stockOuts: z.number().default(0),
   grnsThisMonth: z.number().default(0),
   inventoryValue: z.number().default(0),
 });

@@ -385,6 +385,37 @@ export const HELP_MODULES: HelpModule[] = [
     ],
     terms: ["GST", "GSTIN", "IRN", "e-invoice", "GSTN"],
   },
+  {
+    // GAP-STOCK-HOME-05: a Help Centre guide so the Stock hub's "How this
+    // works" link resolves instead of 404ing.
+    slug: "stock",
+    icon: "📦",
+    title: "Stock",
+    summary:
+      "Keep track of what your office holds in store — items, how many are left, and what the stock is worth.",
+    href: "/stock",
+    moduleKey: "stock",
+    major: false,
+    tasks: [
+      {
+        title: "Add a stock item",
+        steps: [
+          "Open Stock, then New Item.",
+          "Give it a name and a short code, and pick its category and unit.",
+          "Set the reorder level so you get a low-stock warning in time.",
+        ],
+      },
+      {
+        title: "Record a stock movement",
+        steps: [
+          "Open Stock, then New Stock Entry.",
+          "Choose whether stock is coming in, going out, or being adjusted.",
+          "Pick the item and the quantity, then save. The ledger updates on its own.",
+        ],
+      },
+    ],
+    terms: ["SKU", "GRN"],
+  },
 ];
 
 /** Find a single module guide by its slug. */

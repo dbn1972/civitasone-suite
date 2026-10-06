@@ -4711,18 +4711,28 @@ export async function getAssetMaintenance(): Promise<LoaderResult<MaintenanceSum
 const STOCK_DASHBOARD_EMPTY: StockDashboard = {
   totalSKUs: 0,
   lowStockAlerts: 0,
+  stockOuts: 0,
   grnsThisMonth: 0,
   inventoryValue: 0,
 };
 
-function mapStockDashboard(payload: unknown): StockDashboard | null {
+// GAP-STOCK-DASHBOARD-02: a dashboard field that is not a number is a broken
+// payload, not a real zero. Return null so fetchJson reports source:"error"
+// and the page shows an honest error/"—" state instead of fabricated zeros
+// (a hidden low-stock/stock-out count masks a stock-out).
+export function mapStockDashboard(payload: unknown): StockDashboard | null {
   if (!isRecord(payload)) return null;
-  return {
-    totalSKUs: typeof payload.totalSKUs === "number" ? payload.totalSKUs : 0,
-    lowStockAlerts: typeof payload.lowStockAlerts === "number" ? payload.lowStockAlerts : 0,
-    grnsThisMonth: typeof payload.grnsThisMonth === "number" ? payload.grnsThisMonth : 0,
-    inventoryValue: typeof payload.inventoryValue === "number" ? payload.inventoryValue : 0,
-  };
+  const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  const totalSKUs = num(payload.totalSKUs);
+  const lowStockAlerts = num(payload.lowStockAlerts);
+  const grnsThisMonth = num(payload.grnsThisMonth);
+  const inventoryValue = num(payload.inventoryValue);
+  if (totalSKUs === null || lowStockAlerts === null || grnsThisMonth === null || inventoryValue === null) {
+    return null;
+  }
+  // stockOuts may be absent on an older backend; default it rather than failing.
+  const stockOuts = num(payload.stockOuts) ?? 0;
+  return { totalSKUs, lowStockAlerts, stockOuts, grnsThisMonth, inventoryValue };
 }
 
 export async function getStockDashboard(): Promise<LoaderResult<StockDashboard>> {

@@ -1,15 +1,16 @@
 "use client";
 
 /**
- * PrintExportButton — a real, keyboard-focusable header action that exports /
- * prints the current view via the browser print-to-PDF dialog (window.print()).
+ * PrintExportButton — a real, keyboard-focusable header action that prints the
+ * current view via the browser print-to-PDF dialog (window.print()).
  *
- * stock-service exposes no ledger export or label-print endpoint, so "Export"
- * and "Print Label" are wired to print-to-PDF — a genuine action rather than a
- * dead control.
+ * GAP-STOCK-DASHBOARD-07: stock-service exposes no data-export endpoint, so this
+ * is honestly labelled "Print" (print-to-PDF) by default rather than "Export",
+ * which would imply a data download that does not exist. A genuine action, not
+ * a dead control.
  */
 export function PrintExportButton({
-  label = "Export",
+  label = "Print",
   className = "btn ghost",
   documentTitle,
 }: {
