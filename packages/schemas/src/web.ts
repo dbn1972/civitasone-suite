@@ -454,7 +454,20 @@ const cdpProfileApiSchema = z.object({
 });
 
 export const cdpProfileSchema = z.object({ data: cdpProfileApiSchema });
-export const cdpProfileListSchema = z.object({ data: z.array(cdpProfileApiSchema) });
+// GAP-CDP-PROFILES-04: the service reports the full distinct-profile count in
+// meta.total alongside the (limit-capped) data rows, so the list can show
+// "N of M" instead of presenting a capped page as the whole set. Optional and
+// additive — existing callers that read only `data` are unaffected.
+export const cdpProfileListSchema = z.object({
+  data: z.array(cdpProfileApiSchema),
+  meta: z
+    .object({
+      total: z.number().int().optional(),
+      page: z.number().int().optional(),
+      pageSize: z.number().int().optional(),
+    })
+    .optional(),
+});
 
 export const cdpIdentityLinkListSchema = z.object({
   data: z.array(z.object({

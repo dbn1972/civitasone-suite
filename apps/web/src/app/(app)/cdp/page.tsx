@@ -5,7 +5,7 @@ import { PageHeader } from "../../_components/ds";
 const sections: NavTile[] = [
 	{ title: "Profiles", description: "Golden customer profiles with identity resolution.", href: "/cdp/profiles" },
 	{ title: "Identity Graph", description: "Anonymous visitors pending identity resolution.", href: "/cdp/identity" },
-	{ title: "Segments", description: "Create and manage audience segments for campaigns.", href: "/cdp/segments" },
+	{ title: "Segments", description: "View audience segments for campaigns.", href: "/cdp/segments" },
 	{ title: "Events", description: "Event taxonomy for interaction streams.", href: "/cdp/events" },
 	{ title: "Data Steward", description: "Merge review and data quality governance.", href: "/cdp/steward" },
 ];

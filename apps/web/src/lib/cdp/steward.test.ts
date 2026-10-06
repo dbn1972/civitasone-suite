@@ -105,3 +105,56 @@ describe("decideMerge", () => {
     );
   });
 });
+
+describe("getProfileSummary (GAP-CDP-STEWARD-02)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("fetches /v1/cdp/profiles/:id/summary and returns the summary data", async () => {
+    const summary = { id: "p1", profileType: "individual", attributes: { name: "Asha", email: "asha@x.gov.in" } };
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(JSON.stringify({ data: summary }), { status: 200 }));
+
+    const { getProfileSummary } = await import("./steward");
+    const result = await getProfileSummary("p1");
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/proxy/v1/cdp/profiles/p1/summary",
+      expect.objectContaining({ credentials: "same-origin" }),
+    );
+    expect(result).toEqual(summary);
+  });
+
+  it("returns null (details unavailable, never blocks the queue) on a non-ok response", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 404 }));
+    const { getProfileSummary } = await import("./steward");
+    expect(await getProfileSummary("p1")).toBeNull();
+  });
+
+  it("returns null on a network failure", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network down"));
+    const { getProfileSummary } = await import("./steward");
+    expect(await getProfileSummary("p1")).toBeNull();
+  });
+});
+
+describe("summaryAttr / profileDisplayName (GAP-CDP-STEWARD-02)", () => {
+  it("reads a present string attribute and ignores missing/non-string ones", async () => {
+    const { summaryAttr } = await import("./steward");
+    const s = { id: "p1", profileType: "individual", attributes: { name: "Asha", age: 42, blank: "" } };
+    expect(summaryAttr(s, "name")).toBe("Asha");
+    expect(summaryAttr(s, "age")).toBeNull();
+    expect(summaryAttr(s, "blank")).toBeNull();
+    expect(summaryAttr(s, "missing")).toBeNull();
+    expect(summaryAttr(null, "name")).toBeNull();
+  });
+
+  it("prefers the name, falling back to a short id when the summary is unavailable", async () => {
+    const { profileDisplayName } = await import("./steward");
+    const s = { id: "p1", profileType: "individual", attributes: { name: "Asha" } };
+    expect(profileDisplayName(s, "0123456789abcdef")).toBe("Asha");
+    expect(profileDisplayName(null, "0123456789abcdef")).toBe("01234567…");
+  });
+});

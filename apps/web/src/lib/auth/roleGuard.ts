@@ -384,6 +384,16 @@ export const INSTALL_VIEW_ROLES = ["install_user", "install_admin", "super_admin
  */
 export const INSTALL_OPERATE_ROLES = ["install_user", "install_admin", "super_admin", "tenant_admin"];
 
+/**
+ * GAP-CDP-STEWARD-01: roles permitted to decide (approve/reject) profile-merge
+ * suggestions in /cdp/steward. Mirrors cdp-service's STEWARD_ROLES
+ * (services/cdp-service/src/modules/steward/routes.ts), which is the authority —
+ * the POST /v1/cdp/steward/decide route already enforces 403 for anyone outside
+ * this set. This constant drives the defence-in-depth UI gate so a non-steward
+ * is not offered Approve/Reject controls that would only 403 server-side.
+ */
+export const CDP_STEWARD_ROLES = ["cdp_steward", "cdp_admin", "super_admin"];
+
 /** True when any of the session roles is in `allowed`. Pure; for UI gating. */
 export function hasAnyRole(sessionRoles: string[], allowed: string[]): boolean {
   return allowed.some((r) => sessionRoles.includes(r));
