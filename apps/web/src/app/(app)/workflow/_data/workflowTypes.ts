@@ -51,6 +51,15 @@ export interface WorkflowInstance {
   name: string;
   status: string;
   version: number;
+  // GAP-WORKFLOW-LIST-03 — optional subject/definition/step/date fields the
+  // list mapper now reads so the table can show what/where/how-old. Optional
+  // so callers that only have the slim shape still typecheck.
+  definitionName?: string | null;
+  definitionCode?: string | null;
+  refType?: string | null;
+  refId?: string | null;
+  currentNode?: string | null;
+  createdAt?: string | null;
 }
 
 /** Full single-instance detail from GET /v1/workflow/instances/:id. */
@@ -87,6 +96,10 @@ export interface WorkflowTask {
   refId: string | null;
   decision: string | null;
   assigneeId: string | null;
+  // GAP-WORKFLOW-MY-TASKS-05 — age (createdAt) + SLA (dueAt) so the inbox can
+  // show Age/Due columns and sort oldest/most-overdue first. Optional/null.
+  createdAt?: string | null;
+  dueAt?: string | null;
   version: number;
 }
 
@@ -115,4 +128,41 @@ export function formatDuration(seconds: number | null): string {
 
 export function titleCase(s: string): string {
   return s.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * GAP-WORKFLOW-HOME-03 — single source of truth for the "in progress" instance
+ * population. Both the hub (page.tsx) and the Instances list (list/page.tsx)
+ * must count the same statuses (active + pending + running) so the same cohort
+ * is never shown as two different numbers one click apart.
+ */
+export function inProgressCount(instancesByStatus: Record<string, number>): number {
+  return (
+    (instancesByStatus["active"] ?? 0) +
+    (instancesByStatus["pending"] ?? 0) +
+    (instancesByStatus["running"] ?? 0)
+  );
+}
+
+/**
+ * GAP-WORKFLOW-HOME-04 — format the SLA breach rate for display. The
+ * workflow-service analytics contract returns `slaBreachRate` as a 0..1
+ * fraction (breachedTasks / trackedTasks; see analytics/queries.ts summary()).
+ * Render as a percentage; when there are no SLA-tracked tasks the rate is a
+ * meaningless 0, so show an explicit em dash instead of a false "0.0%".
+ */
+export function formatBreachRate(rate: number, trackedTasks: number): string {
+  if (!Number.isFinite(rate) || trackedTasks <= 0) return "—";
+  const clamped = Math.max(0, Math.min(1, rate));
+  return `${(clamped * 100).toFixed(1)}%`;
+}
+
+/**
+ * GAP-WORKFLOW-DEFINITIONS-DETAIL-04 — human-readable SLA from a minutes value
+ * (reuses formatDuration's day/hour/minute logic). Returns null for a missing
+ * SLA so callers can omit the pill entirely.
+ */
+export function formatSlaMinutes(slaMinutes: number | null): string | null {
+  if (slaMinutes == null || !Number.isFinite(slaMinutes)) return null;
+  return formatDuration(slaMinutes * 60);
 }

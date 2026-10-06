@@ -40,7 +40,10 @@ export type {
   WorkflowTask,
   WorkflowAnalytics,
 } from "./workflowTypes";
-export { formatDuration, titleCase } from "./workflowTypes";
+export { formatDuration, titleCase, inProgressCount, formatBreachRate, formatSlaMinutes } from "./workflowTypes";
+// Local value import (the line above only re-exports): mapInstance uses titleCase
+// to prefer a human definition name over a raw UUID (GAP-WORKFLOW-LIST-03).
+import { titleCase } from "./workflowTypes";
 
 function gatewayBaseUrl(): string | null {
   const base =
@@ -83,6 +86,21 @@ async function getJson<T>(
 }
 
 /* ── shape helpers ──────────────────────────────────────────────── */
+
+/**
+ * GAP-WORKFLOW-DEFINITIONS-DETAIL-03 / INSTANCES-DETAIL-06 — path-segment
+ * guard. Every id-taking getter interpolates its id into the upstream gateway
+ * path; an unvalidated segment (e.g. "x%2F..%2Fv1%2Fother") would address a
+ * different path once Next decodes params. The workflow-service itself requires
+ * a UUID for these routes, so we validate the same shape here and refuse to
+ * issue a fetch for anything else (returning a 404-shaped error so callers can
+ * render not-found). Valid ids are still encodeURIComponent'd at the call site.
+ */
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isUuid(id: string): boolean {
+  return UUID_RE.test(id);
+}
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -134,8 +152,9 @@ export async function getDefinitions(): Promise<WorkflowResult<WorkflowDefinitio
 export async function getDefinitionById(
   id: string,
 ): Promise<WorkflowResult<WorkflowDefinitionDetail | null>> {
+  if (!isUuid(id)) return { data: null, source: "error", status: 404 };
   return getJson<WorkflowDefinitionDetail | null>(
-    `/v1/workflow/definitions/${id}`,
+    `/v1/workflow/definitions/${encodeURIComponent(id)}`,
     null,
     (raw) => {
       const v = unwrap(raw);
@@ -170,11 +189,21 @@ export async function getDefinitionById(
 
 function mapInstance(v: unknown): WorkflowInstance | null {
   if (!isRecord(v) || typeof v.id !== "string") return null;
+  // GAP-WORKFLOW-LIST-03 — read the subject/definition/step/date fields the
+  // enriched list endpoint now returns (same optStr convention as the detail
+  // mapper). Prefer a human definition name over the raw UUID for `name`.
+  const definitionName = optStr(v.definitionName);
   return {
     id: v.id,
-    name: str(v.name) || v.id,
+    name: str(v.name) || (definitionName ? titleCase(definitionName) : v.id),
     status: str(v.status) || "active",
     version: num(v.version, 1),
+    definitionName,
+    definitionCode: optStr(v.definitionCode),
+    refType: optStr(v.refType),
+    refId: optStr(v.refId),
+    currentNode: optStr(v.currentNode),
+    createdAt: optStr(v.createdAt),
   };
 }
 
@@ -218,8 +247,9 @@ function mapInstanceDetail(v: unknown): WorkflowInstanceDetail | null {
 export async function getInstanceById(
   id: string,
 ): Promise<WorkflowResult<WorkflowInstanceDetail | null>> {
+  if (!isUuid(id)) return { data: null, source: "error", status: 404 };
   return getJson<WorkflowInstanceDetail | null>(
-    `/v1/workflow/instances/${id}`,
+    `/v1/workflow/instances/${encodeURIComponent(id)}`,
     null,
     (raw) => mapInstanceDetail(unwrap(raw)),
     20,
@@ -231,8 +261,9 @@ export async function getInstanceById(
 export async function getInstanceHistory(
   id: string,
 ): Promise<WorkflowResult<WorkflowTransition[]>> {
+  if (!isUuid(id)) return { data: [], source: "error", status: 404 };
   return getJson<WorkflowTransition[]>(
-    `/v1/workflow/instances/${id}/history`,
+    `/v1/workflow/instances/${encodeURIComponent(id)}/history`,
     [],
     (raw) => {
       const arr = unwrap(raw);
@@ -267,6 +298,9 @@ function mapTask(v: unknown): WorkflowTask | null {
     refId: optStr(v.refId),
     decision: optStr(v.decision),
     assigneeId: optStr(v.assigneeId),
+    // GAP-WORKFLOW-MY-TASKS-05 — age + SLA from the task view.
+    createdAt: optStr(v.createdAt),
+    dueAt: optStr(v.dueAt),
     version: num(v.version, 1),
   };
 }
@@ -300,8 +334,9 @@ export async function getTasks(
 export async function getTasksForInstance(
   instanceId: string,
 ): Promise<WorkflowResult<WorkflowTask[]>> {
+  if (!isUuid(instanceId)) return { data: [], source: "error", status: 404 };
   return getJson<WorkflowTask[]>(
-    `/v1/workflow/tasks?instanceId=${instanceId}&limit=200`,
+    `/v1/workflow/tasks?instanceId=${encodeURIComponent(instanceId)}&limit=200`,
     [],
     (raw) => {
       const arr = unwrap(raw);

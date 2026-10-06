@@ -4,6 +4,10 @@ export type PillVariant = "good" | "warn" | "mut" | "bad" | "info";
 
 const STATUS_MAP: Record<string, PillVariant> = {
   active: "good",
+  // GAP-WORKFLOW-DEFINITIONS-03: a workflow definition version that is
+  // "deployed" is live/active and must read green, not the neutral "info"
+  // fallback it previously fell through to (while "active" was green).
+  deployed: "good",
   approved: "good",
   paid: "good",
   completed: "good",

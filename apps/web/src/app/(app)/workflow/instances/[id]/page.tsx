@@ -1,21 +1,22 @@
 import { Suspense } from "react";
+import { notFound } from "next/navigation";
 import { PageHeader, Card, StatCard, StatGrid, StatusPill, EmptyState, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { toHumanError } from "@/lib/messages";
-import { Breadcrumbs } from "../../_components/Breadcrumbs";
 import { HistoryTimeline } from "../../_components/HistoryTimeline";
 import { TasksTable } from "../../_components/TasksTable";
 import {
   getInstanceById,
   getInstanceHistory,
   getTasksForInstance,
+  titleCase,
 } from "../../_data/workflowData";
 
 export const dynamic = "force-dynamic";
 
 export default async function InstanceDetailPage({ params }: { params: { id: string } }) {
   const [
-    { data: instance, source },
+    { data: instance, source, status },
     { data: history, source: historySource },
     { data: tasks, source: tasksSource },
   ] = await Promise.all([
@@ -24,26 +25,21 @@ export default async function InstanceDetailPage({ params }: { params: { id: str
     getTasksForInstance(params.id),
   ]);
 
+  // GAP-WORKFLOW-INSTANCES-DETAIL-06 — a 404 (incl. an invalid id the loader
+  // maps to 404) is a genuine not-found, not a transient load failure.
+  if (!instance && status === 404) {
+    notFound();
+  }
+
   if (!instance) {
     return (
       <>
-        <Breadcrumbs
-          items={[
-            { label: "Workflow", href: "/workflow" },
-            { label: "Instances", href: "/workflow/list" },
-            { label: "Not found" },
-          ]}
-        />
         <PageHeader title="Instance" back="/workflow/list" actions={source === "error" ? <DataSourceBadge source={source} /> : null} />
-        <EmptyState
-          icon="🧩"
-          title={source === "error" ? "Could not load instance" : "Instance not found"}
-          message={
-            source === "error"
-              ? "The workflow service did not return this instance. Check that you are signed in and the service is reachable."
-              : "This instance may have been removed or the ID is invalid."
-          }
-        />
+        <Card>
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "instance" })} backHref="/workflow/list" />
+          </div>
+        </Card>
       </>
     );
   }
@@ -52,17 +48,15 @@ export default async function InstanceDetailPage({ params }: { params: { id: str
   const latest = [...history].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   )[0];
-  const currentStep = latest?.toNode ?? "—";
+  // GAP-WORKFLOW-INSTANCES-DETAIL-03 — prefer the instance's own currentNode;
+  // only fall back to the newest history row when history actually loaded, so a
+  // failed history fetch does not blank out a step the instance really has.
+  const currentStepKey =
+    instance.currentNode ?? (historySource === "error" ? null : latest?.toNode ?? null);
+  const currentStep = currentStepKey ? titleCase(currentStepKey) : null;
 
   return (
     <>
-      <Breadcrumbs
-        items={[
-          { label: "Workflow", href: "/workflow" },
-          { label: "Instances", href: "/workflow/list" },
-          { label: instance.name },
-        ]}
-      />
       <PageHeader
         title={instance.name}
         subtitle={
@@ -81,8 +75,8 @@ export default async function InstanceDetailPage({ params }: { params: { id: str
 
       <StatGrid>
         <StatCard icon="📍" iconBg="#eef2ff" label="Current step" value={currentStep} />
-        <StatCard icon="📋" iconBg="#fef9c3" label="Open tasks" value={openTasks.length} />
-        <StatCard icon="🕘" iconBg="#f5f3ff" label="Transitions" value={history.length} />
+        <StatCard icon="📋" iconBg="#fef9c3" label="Open tasks" value={tasksSource === "error" ? null : openTasks.length} />
+        <StatCard icon="🕘" iconBg="#f5f3ff" label="Transitions" value={historySource === "error" ? null : history.length} />
         <StatCard icon="#️⃣" iconBg="#ecfdf5" label="Version" value={instance.version} />
       </StatGrid>
 

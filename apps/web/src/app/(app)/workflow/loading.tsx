@@ -1,21 +1,37 @@
+import { SkeletonBar, SkeletonCard } from "../../_components/ds";
+
+/**
+ * GAP-WORKFLOW-HOME-05 — hub loading skeleton. Uses DS token-based skeletons
+ * (var(--line2)/var(--panel) via SkeletonBar/SkeletonCard) instead of Tailwind
+ * `slate-*` utilities so the placeholders respect dark mode. Mirrors the hub:
+ * 4 stat cards, 2 info cards, and 4 nav tiles (matching columns="four").
+ */
 export default function WorkflowLoading() {
   return (
-    <div className="animate-pulse" aria-busy="true" aria-live="polite">
+    <div aria-busy="true" aria-live="polite">
       <span className="sr-only">Loading workflow…</span>
-      <div className="h-9 w-72 rounded bg-slate-200" />
-      <div className="mt-2 h-4 w-[28rem] max-w-full rounded bg-slate-200" />
-      <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div style={{ display: "grid", gap: 8 }}>
+        <SkeletonBar w={288} h={30} />
+        <SkeletonBar w={448} h={16} />
+      </div>
+      <div
+        style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginTop: 24 }}
+      >
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-28 rounded-xl bg-slate-200" />
+          <SkeletonCard key={i} />
         ))}
       </div>
-      <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="h-56 rounded-xl bg-slate-200" />
-        <div className="h-56 rounded-xl bg-slate-200" />
+      <div
+        style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16, marginTop: 20 }}
+      >
+        <SkeletonBar h={224} style={{ borderRadius: 12 }} />
+        <SkeletonBar h={224} style={{ borderRadius: 12 }} />
       </div>
-      <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="h-28 rounded-xl bg-slate-200" />
+      <div
+        style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginTop: 20 }}
+      >
+        {Array.from({ length: 4 }).map((_, i) => (
+          <SkeletonBar key={i} h={112} style={{ borderRadius: 12 }} />
         ))}
       </div>
     </div>

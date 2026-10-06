@@ -1,6 +1,6 @@
 import { PageHeader, StatCard, StatGrid, Card, EmptyState, RefreshErrorState } from "../../_components/ds";
 import { LinkTiles } from "../../_components/LinkTiles";
-import { getAnalyticsSummary, formatDuration, titleCase } from "./_data/workflowData";
+import { getAnalyticsSummary, formatDuration, titleCase, inProgressCount, formatBreachRate } from "./_data/workflowData";
 import { toResourceState } from "../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 
@@ -10,10 +10,7 @@ export default async function WorkflowHubPage() {
   const resource = toResourceState(result, (data) => Object.keys(data.instancesByStatus).length === 0 && data.totalInstances === 0);
   const errored = resource.status === "error";
 
-  const pendingInstances =
-    (a.instancesByStatus["active"] ?? 0) +
-    (a.instancesByStatus["pending"] ?? 0) +
-    (a.instancesByStatus["running"] ?? 0);
+  const pendingInstances = inProgressCount(a.instancesByStatus);
 
   return (
     <>
@@ -47,7 +44,7 @@ export default async function WorkflowHubPage() {
               <div className="fields">
                 <div className="field">
                   <span className="label">Breach rate</span>
-                  <span>{(a.slaBreachRate * 100).toFixed(1)}%</span>
+                  <span>{formatBreachRate(a.slaBreachRate, a.slaTrackedTasks)}</span>
                 </div>
                 <div className="field">
                   <span className="label">Breached tasks</span>
@@ -84,11 +81,11 @@ export default async function WorkflowHubPage() {
 
       <div style={{ marginTop: 18 }}>
         <LinkTiles
-          columns="three"
+          columns="four"
           tiles={[
             { title: "My tasks", href: "/workflow/my-tasks", description: "Your task inbox — claim, approve, return or reject" },
             { title: "Instances", href: "/workflow/list", description: "Running & completed process instances" },
-            { title: "Definitions", href: "/workflow/definitions", description: "Process definitions, versions and graphs" },
+            { title: "Approval workflows", href: "/workflow/definitions", description: "Process definitions, versions and graphs" },
             { title: "BPMN Designer", href: "/workflow/designer", description: "Visual drag-and-drop process modeling with BPMN 2.0" },
           ]}
         />

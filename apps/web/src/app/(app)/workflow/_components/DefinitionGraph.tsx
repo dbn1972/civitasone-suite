@@ -1,11 +1,11 @@
 /**
  * Accessible workflow graph view (server component). Renders the definition's
- * nodes as cards with their outgoing transitions, plus an SVG flow strip when
- * the graph is small. No client JS — purely structural so screen readers and
- * print both work. Edge conditions are shown inline (XOR/guards).
+ * nodes as cards with their outgoing transitions. No client JS — purely
+ * structural so screen readers and print both work. Edge conditions are shown
+ * inline (XOR/guards) as labelled chips.
  */
 import type { WorkflowNode, WorkflowEdge } from "../_data/workflowTypes";
-import { titleCase } from "../_data/workflowTypes";
+import { titleCase, formatSlaMinutes } from "../_data/workflowTypes";
 
 const NODE_ICON: Record<string, string> = {
   start: "▶",
@@ -67,14 +67,21 @@ export function DefinitionGraph({ nodes, edges }: { nodes: WorkflowNode[]; edges
               </span>
               <span style={{ fontWeight: 650, fontSize: 14 }}>{n.name}</span>
               <span className="pill mut np" style={{ fontSize: 11 }}>{titleCase(n.nodeType)}</span>
-              {n.roleRef && <span className="pill info np" style={{ fontSize: 11 }}>{n.roleRef}</span>}
-              {typeof n.slaMinutes === "number" && (
-                <span className="pill warn np" style={{ fontSize: 11 }}>SLA {n.slaMinutes}m</span>
+              {n.roleRef && <span className="pill info np" style={{ fontSize: 11 }}>{titleCase(n.roleRef)}</span>}
+              {formatSlaMinutes(n.slaMinutes) && (
+                <span className="pill warn np" style={{ fontSize: 11 }}>SLA {formatSlaMinutes(n.slaMinutes)}</span>
               )}
               {n.assignStrategy && n.assignStrategy !== "none" && (
                 <span className="pill mut np" style={{ fontSize: 11 }}>{titleCase(n.assignStrategy)}</span>
               )}
-              <span className="mono" style={{ fontSize: 11, color: "var(--mut)", marginLeft: "auto" }}>{n.nodeKey}</span>
+              <span
+                className="mono"
+                style={{ fontSize: 11, color: "var(--mut)", marginLeft: "auto" }}
+                title={`Node key: ${n.nodeKey}`}
+                aria-label={`Node key ${n.nodeKey}`}
+              >
+                {n.nodeKey}
+              </span>
             </div>
             {outs.length > 0 && (
               <ul style={{ listStyle: "none", margin: "10px 0 0", padding: 0, display: "grid", gap: 4 }}>
@@ -84,7 +91,11 @@ export function DefinitionGraph({ nodes, edges }: { nodes: WorkflowNode[]; edges
                     <span>
                       {nameByKey.get(e.toNode) ?? e.toNode}
                       {e.condition && (
-                        <span className="mono" style={{ marginLeft: 8, color: "var(--mut)", fontSize: 11.5 }}>
+                        <span
+                          className="mono"
+                          style={{ marginLeft: 8, color: "var(--mut)", fontSize: 11.5 }}
+                          aria-label={`when ${e.condition}`}
+                        >
                           [{e.condition}]
                         </span>
                       )}

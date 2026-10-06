@@ -1,14 +1,21 @@
 import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard, RefreshErrorState } from "../../../_components/ds";
+import Link from "next/link";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { combineResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
+import { TemplatesTable, type TemplateRow } from "../_components/TemplatesTable";
 
+// GAP-WORKFLOW-DEFINITIONS-02 — the workflow-service definitions list
+// (GET /v1/workflow/definitions, repo.findByTenant) returns the definitions
+// table columns: id, code, name, description, version, status, isTemplate.
+// There is NO `module`, `triggerEvent` or `steps` column anywhere in the
+// schema (services/workflow-service/.../definitions/schema.ts), so the old
+// Module/Trigger/Steps columns rendered permanently blank. The type below is
+// aligned to the real contract; extra keys stay optional (never required).
 type Definition = {
   id: string;
+  code?: string;
   name: string;
-  module?: string;
-  triggerEvent?: string;
-  steps?: number;
   status: string;
   version?: number;
 } & Record<string, unknown>;
@@ -57,6 +64,11 @@ export default async function WorkflowDefinitionsPage() {
         subtitle="Configure who approves what — set up approval chains for bills, leave, procurement, and other actions."
         back="/workflow"
         backLabel="Workflow"
+        actions={
+          <Link href="/workflow/designer" className="btn primary sm">
+            New workflow
+          </Link>
+        }
       />
 
       <StatGrid>
@@ -74,14 +86,14 @@ export default async function WorkflowDefinitionsPage() {
           <EmptyState
             icon="🔁"
             title="No approval workflows configured"
-            message="Set up your first workflow to route approvals based on amount, department, or type. Start from a template below."
+            message="Set up your first workflow to route approvals based on amount, department, or type. Use a template below or start a new workflow in the designer."
           />
         ) : (
           <DataTable<Definition>
             columns={[
               { key: "name", label: "Workflow Name" },
-              { key: "module", label: "Module" },
-              { key: "triggerEvent", label: "Trigger" },
+              { key: "code", label: "Code" },
+              { key: "version", label: "Version", align: "right" },
               { key: "status", label: "Status", cellType: "status" },
             ]}
             rows={definitions}
@@ -99,17 +111,9 @@ export default async function WorkflowDefinitionsPage() {
         <Card title="Templates (ready to use)">
           <div className="pad">
             <p style={{ color: "var(--mut)", fontSize: 13.5, marginBottom: 12 }}>
-              Clone a template to get started quickly — then customise the approval steps for your office.
+              Use a template to get started quickly — it creates an editable draft in your tenant that you can customise for your office.
             </p>
-            <DataTable<Definition>
-              columns={[
-                { key: "name", label: "Template" },
-                { key: "module", label: "Module" },
-                { key: "steps", label: "Steps" },
-              ]}
-              rows={templates}
-              sortable
-            />
+            <TemplatesTable templates={templates as TemplateRow[]} />
           </div>
         </Card>
       )}

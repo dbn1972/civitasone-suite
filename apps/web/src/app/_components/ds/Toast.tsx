@@ -145,3 +145,14 @@ export function useToast(): ToastContextValue {
   if (!ctx) throw new Error("useToast must be used within a ToastProvider");
   return ctx;
 }
+
+/**
+ * GAP-WORKFLOW-INSTANCES-DETAIL-04 — non-throwing variant: returns null when
+ * there is no ToastProvider above (e.g. an isolated component unit test),
+ * instead of throwing. Lets a component prefer the global, unmount-surviving
+ * toast when mounted in the real app shell while still rendering a local
+ * fallback when used standalone. Additive; existing useToast() is unchanged.
+ */
+export function useToastOptional(): ToastContextValue | null {
+  return useContext(ToastContext);
+}

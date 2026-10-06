@@ -3,8 +3,13 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getDesignerDefinitions } from "./_data/designerData";
 import { DesignerCanvas } from "./_components/DesignerCanvasClient";
 
-export default async function WorkflowDesignerPage() {
+export default async function WorkflowDesignerPage({
+  searchParams,
+}: {
+  searchParams?: { definitionId?: string };
+}) {
   const { data: definitions, source } = await getDesignerDefinitions();
+  const initialDefinitionId = searchParams?.definitionId;
 
   return (
     <div className="page-main" aria-labelledby="page-heading">
@@ -15,7 +20,7 @@ export default async function WorkflowDesignerPage() {
         backLabel="Workflow"
         actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />
-      <DesignerCanvas definitions={definitions} />
+      <DesignerCanvas definitions={definitions} {...(initialDefinitionId ? { initialDefinitionId } : {})} />
     </div>
   );
 }

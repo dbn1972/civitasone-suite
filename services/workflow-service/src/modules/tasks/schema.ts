@@ -66,6 +66,8 @@ export type TaskView = {
   // `dueAt?.toISOString() ?? null` convention already used in sweeper.ts for
   // this same column).
   dueAt?: string | null;
+  // GAP-WORKFLOW-MY-TASKS-05 — task age (ISO string). Same convention as dueAt.
+  createdAt?: string | null;
   version: number;
 };
 

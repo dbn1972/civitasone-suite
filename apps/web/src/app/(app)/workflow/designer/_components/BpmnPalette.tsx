@@ -3,7 +3,17 @@
 import { type DragEvent } from "react";
 import { PALETTE_ITEMS, type BpmnElementType } from "../_data/designerTypes";
 
-export function BpmnPalette() {
+interface BpmnPaletteProps {
+  /**
+   * GAP-WORKFLOW-DESIGNER-03 — keyboard/click alternative to drag. Clicking or
+   * pressing Enter/Space on a palette item adds that node to the canvas (at
+   * viewport centre) and selects it, so the designer's primary task is usable
+   * without a pointer (WCAG 2.1.1). Drag remains as a progressive enhancement.
+   */
+  onAdd?: (type: BpmnElementType) => void;
+}
+
+export function BpmnPalette({ onAdd }: BpmnPaletteProps = {}) {
   const onDragStart = (event: DragEvent<HTMLButtonElement>, type: BpmnElementType) => {
     event.dataTransfer.setData("application/bpmn-type", type);
     event.dataTransfer.effectAllowed = "move";
@@ -25,7 +35,8 @@ export function BpmnPalette() {
               className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-start text-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-grab active:cursor-grabbing transition-colors"
               draggable
               onDragStart={(e) => onDragStart(e, item.type)}
-              aria-label={`Drag ${item.label} onto canvas`}
+              onClick={() => onAdd?.(item.type)}
+              aria-label={`Add ${item.label} to canvas`}
               title={item.description}
             >
               <span
@@ -52,8 +63,9 @@ export function BpmnPalette() {
           Instructions
         </h3>
         <p className="text-xs text-slate-500 leading-relaxed">
-          Drag elements from this palette onto the canvas. Connect nodes by
-          dragging from a source handle to a target handle.
+          Click an element (or press Enter) to add it to the canvas, or drag it
+          onto the canvas. Connect nodes with the &quot;Connect to…&quot; control
+          in the properties panel, or by dragging between handles.
         </p>
       </div>
     </aside>

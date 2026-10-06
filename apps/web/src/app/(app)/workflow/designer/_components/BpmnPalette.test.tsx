@@ -35,9 +35,9 @@ describe("BpmnPalette", () => {
   it("has accessible labels on palette items", () => {
     render(<BpmnPalette />);
 
-    expect(screen.getByLabelText("Drag Start Event onto canvas")).toBeInTheDocument();
-    expect(screen.getByLabelText("Drag End Event onto canvas")).toBeInTheDocument();
-    expect(screen.getByLabelText("Drag Task onto canvas")).toBeInTheDocument();
+    expect(screen.getByLabelText("Add Start Event to canvas")).toBeInTheDocument();
+    expect(screen.getByLabelText("Add End Event to canvas")).toBeInTheDocument();
+    expect(screen.getByLabelText("Add Task to canvas")).toBeInTheDocument();
   });
 
   it("renders the palette aside with proper aria-label", () => {
@@ -49,6 +49,26 @@ describe("BpmnPalette", () => {
   it("renders instruction text for users", () => {
     render(<BpmnPalette />);
 
-    expect(screen.getByText(/Drag elements from this palette/)).toBeInTheDocument();
+    expect(screen.getByText(/Click an element/)).toBeInTheDocument();
+  });
+
+  // GAP-WORKFLOW-DESIGNER-03 — keyboard/click add (WCAG 2.1.1).
+  it("calls onAdd when a palette item is clicked", async () => {
+    const { fireEvent } = await import("@testing-library/react");
+    const onAdd = (await import("vitest")).vi.fn();
+    render(<BpmnPalette onAdd={onAdd} />);
+    fireEvent.click(screen.getByLabelText("Add Task to canvas"));
+    expect(onAdd).toHaveBeenCalledWith("task");
+  });
+
+  it("adds a node when Enter is pressed on a palette item (native button activation)", async () => {
+    const { fireEvent } = await import("@testing-library/react");
+    const onAdd = (await import("vitest")).vi.fn();
+    render(<BpmnPalette onAdd={onAdd} />);
+    const btn = screen.getByLabelText("Add Start Event to canvas");
+    // A native <button> fires click on Enter; emulate the resulting click.
+    fireEvent.keyDown(btn, { key: "Enter" });
+    fireEvent.click(btn);
+    expect(onAdd).toHaveBeenCalledWith("startEvent");
   });
 });

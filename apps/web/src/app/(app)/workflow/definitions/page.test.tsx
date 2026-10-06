@@ -32,6 +32,29 @@ describe("WorkflowDefinitionsPage", () => {
     expect(screen.getByText("Leave Approval")).toBeInTheDocument();
   });
 
+  // GAP-WORKFLOW-DEFINITIONS-01 — the page must offer a way to start authoring.
+  it("renders a 'New workflow' action linking to the designer", async () => {
+    mockFetchJson({ data: MOCK_DEFINITIONS, source: "api" }, { data: MOCK_TEMPLATES, source: "api" });
+    render(await WorkflowDefinitionsPage());
+    const link = screen.getByRole("link", { name: "New workflow" });
+    expect(link).toHaveAttribute("href", "/workflow/designer");
+  });
+
+  // GAP-WORKFLOW-DEFINITIONS-01 — each template row offers a working clone action.
+  it("renders a 'Use template' action per template row", async () => {
+    mockFetchJson({ data: MOCK_DEFINITIONS, source: "api" }, { data: MOCK_TEMPLATES, source: "api" });
+    render(await WorkflowDefinitionsPage());
+    expect(screen.getByRole("button", { name: "Use template" })).toBeInTheDocument();
+  });
+
+  // GAP-WORKFLOW-DEFINITIONS-02 — the blank Module/Trigger columns are gone.
+  it("does not render the permanently-blank Module/Trigger columns", async () => {
+    mockFetchJson({ data: MOCK_DEFINITIONS, source: "api" }, { data: MOCK_TEMPLATES, source: "api" });
+    render(await WorkflowDefinitionsPage());
+    expect(screen.queryByRole("columnheader", { name: "Trigger" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("columnheader", { name: "Code" }).length).toBeGreaterThan(0);
+  });
+
   it("shows the honest empty state when the tenant genuinely has no workflows (both calls succeed, empty)", async () => {
     mockFetchJson({ data: [], source: "api" }, { data: [], source: "api" });
     render(await WorkflowDefinitionsPage());

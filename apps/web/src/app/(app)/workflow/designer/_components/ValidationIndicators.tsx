@@ -6,10 +6,40 @@ import type { DesignerViolation } from "../_data/designerTypes";
 interface Props {
   violations: DesignerViolation[];
   nodes: Node[];
+  /**
+   * GAP-WORKFLOW-DESIGNER-04 — whether Validate has been run since the last
+   * graph change. Before any validation (and after any edit) the panel reads
+   * "Not validated yet" instead of a false "No issues found".
+   */
+  hasValidated?: boolean;
 }
 
-export function ValidationIndicators({ violations, nodes }: Props) {
+export function ValidationIndicators({ violations, nodes, hasValidated = false }: Props) {
   const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+
+  if (!hasValidated) {
+    return (
+      <div
+        className="rounded-xl border border-slate-200 bg-white p-4"
+        aria-label="Validation results"
+        role="status"
+        aria-live="polite"
+      >
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+          Validation
+        </h2>
+        <div className="flex items-center gap-2">
+          <span className="w-5 h-5 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 text-xs" aria-hidden="true">
+            –
+          </span>
+          <span className="text-sm text-slate-600">Not validated yet</span>
+        </div>
+        <p className="mt-2 text-xs text-slate-500">
+          Click &quot;Validate&quot; to check the graph for errors.
+        </p>
+      </div>
+    );
+  }
 
   if (violations.length === 0) {
     return (
