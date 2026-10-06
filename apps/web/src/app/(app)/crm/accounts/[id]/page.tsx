@@ -56,7 +56,7 @@ export default async function Page({ params }: { params: { id: string } }) {
       return (
         <>
           <PageHeader title="Account Detail" back="/crm/accounts" backLabel="Accounts" />
-          <RefreshErrorState error={toHumanError("load", { area: "account" })} backHref="/crm/accounts" />
+          <RefreshErrorState error={toHumanError("load", { area: "account details" })} backHref="/crm/accounts" />
         </>
       );
     }

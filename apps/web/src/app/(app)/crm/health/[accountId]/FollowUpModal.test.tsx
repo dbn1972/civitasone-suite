@@ -92,6 +92,20 @@ describe("FollowUpModal", () => {
     expect(subject.value).not.toContain(ACCOUNT_ID);
   });
 
+  // GAP-CRM-HEALTH-05: the watchlist row link (?followUp=1) lands straight in the
+  // form, prefilled with the account — no extra click.
+  it("opens prefilled on mount when defaultOpen is set", () => {
+    render(<FollowUpModal accountId={ACCOUNT_ID} accountName="Bharat Steel Ltd" defaultOpen />);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    const subject = screen.getByLabelText(/subject/i) as HTMLInputElement;
+    expect(subject.value).toContain("Bharat Steel Ltd");
+  });
+
+  it("stays closed on mount by default", () => {
+    render(<FollowUpModal accountId={ACCOUNT_ID} accountName="Bharat Steel Ltd" />);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
   // Fallback: with no name resolved the dialog still renders, showing the id so
   // the clerk at least has a reference.
   it("falls back to the account id when no name is available", () => {
@@ -122,5 +136,19 @@ describe("FollowUpModal", () => {
     const subject = screen.getByLabelText(/subject/i) as HTMLInputElement;
     expect(subject.value).toContain("this account");
     expect(subject.value).not.toContain(ACCOUNT_ID);
+  });
+
+  // GAP-CRM-HEALTH-ACCOUNTID-06 — the dialog is now the shared ds Modal
+  // primitive (role=dialog, aria-modal, portaled to document.body, focus
+  // trapped), not a hand-rolled position:fixed overlay. Opening moves focus
+  // into the panel.
+  it("renders the shared Modal shell (role=dialog, aria-modal) and traps focus", () => {
+    render(<FollowUpModal accountId={ACCOUNT_ID} accountName="Bharat Steel" />);
+    fireEvent.click(screen.getByRole("button", { name: "Create Follow-up" }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    // Modal moves focus into the panel on open.
+    expect(dialog.contains(document.activeElement)).toBe(true);
   });
 });

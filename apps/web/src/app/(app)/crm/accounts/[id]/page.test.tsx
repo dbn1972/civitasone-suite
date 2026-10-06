@@ -93,6 +93,9 @@ describe("Account detail page (GAP-CRM-ACCOUNTS-DETAIL-01)", () => {
 
     render(await Page({ params: { id: "acc-99" } }));
     expect(screen.queryByText("Account not found")).not.toBeInTheDocument();
+    // GAP-CRM-ACCOUNTS-DETAIL-08: the error reads naturally with a determiner-
+    // free plural noun, "We couldn't load account details." (not "account.").
+    expect(screen.getByText("We couldn't load account details.")).toBeInTheDocument();
   });
 });
 

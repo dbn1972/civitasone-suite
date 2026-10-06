@@ -1,4 +1,5 @@
 import { NextIntlClientProvider } from "next-intl";
+import { renderWithIntl } from "@/lib/testUtils/intl";
 import enMessages from "@/messages/en.json";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
@@ -29,7 +30,7 @@ beforeEach(() => {
 describe("ReasonCodesEditor (LQ-004 admin)", () => {
   it("shows a recoverable error (no Save/Add, no PUT) on a failed load", async () => {
     vi.mocked(lq.getReasonCodes).mockResolvedValue({ data: [], source: "error" });
-    render(<ReasonCodesEditor />);
+    renderWithIntl(<ReasonCodesEditor />);
     await waitFor(() => expect(screen.getByText(/couldn.t load reason codes/i)).toBeInTheDocument());
     expect(screen.queryByText(/no reason codes yet/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /save reason codes/i })).not.toBeInTheDocument();
@@ -41,7 +42,7 @@ describe("ReasonCodesEditor (LQ-004 admin)", () => {
     vi.mocked(lq.getReasonCodes)
       .mockResolvedValueOnce({ data: [], source: "error" })
       .mockResolvedValueOnce({ data: [code], source: "api" });
-    render(<ReasonCodesEditor />);
+    renderWithIntl(<ReasonCodesEditor />);
     await waitFor(() => expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /try again/i }));
     await waitFor(() => expect(screen.getByDisplayValue("No budget")).toBeInTheDocument());
@@ -50,7 +51,7 @@ describe("ReasonCodesEditor (LQ-004 admin)", () => {
 
   it("blocks save when a row has no code", async () => {
     vi.mocked(lq.getReasonCodes).mockResolvedValue({ data: [], source: "api" });
-    render(<ReasonCodesEditor />);
+    renderWithIntl(<ReasonCodesEditor />);
     await waitFor(() => expect(screen.getByText(/no reason codes yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add reason code/i }));
     fireEvent.click(screen.getByRole("button", { name: /save reason codes/i }));
@@ -62,7 +63,7 @@ describe("ReasonCodesEditor (LQ-004 admin)", () => {
   // validated the code).
   it("blocks save when the label is blank, marking the field invalid", async () => {
     vi.mocked(lq.getReasonCodes).mockResolvedValue({ data: [{ ...code, label: "" }], source: "api" });
-    render(<ReasonCodesEditor />);
+    renderWithIntl(<ReasonCodesEditor />);
     await waitFor(() => expect(screen.getByLabelText(/code for reason 1/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /save reason codes/i }));
     expect(await screen.findByText(/fix the highlighted rows/i)).toBeInTheDocument();
@@ -74,7 +75,7 @@ describe("ReasonCodesEditor (LQ-004 admin)", () => {
   // block Save (old code allowed duplicates).
   it("blocks save on a duplicate code for the same status", async () => {
     vi.mocked(lq.getReasonCodes).mockResolvedValue({ data: [code, { ...code }], source: "api" });
-    render(<ReasonCodesEditor />);
+    renderWithIntl(<ReasonCodesEditor />);
     await waitFor(() => expect(screen.getAllByLabelText(/code for reason/i)).toHaveLength(2));
     fireEvent.click(screen.getByRole("button", { name: /save reason codes/i }));
     expect(await screen.findByText(/duplicate code/i)).toBeInTheDocument();
@@ -86,7 +87,7 @@ describe("ReasonCodesEditor (LQ-004 admin)", () => {
   it("lowercases a typed code so it matches the backend regex", async () => {
     vi.mocked(lq.getReasonCodes).mockResolvedValue({ data: [], source: "api" });
     vi.mocked(lq.saveReasonCodes).mockResolvedValue(undefined);
-    render(<ReasonCodesEditor />);
+    renderWithIntl(<ReasonCodesEditor />);
     await waitFor(() => expect(screen.getByText(/no reason codes yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add reason code/i }));
     fireEvent.change(screen.getByLabelText(/code for reason 1/i), { target: { value: "No_Budget" } });
@@ -100,7 +101,7 @@ describe("ReasonCodesEditor (LQ-004 admin)", () => {
   it("loads, edits and saves reason codes (no removal → no confirm)", async () => {
     vi.mocked(lq.getReasonCodes).mockResolvedValue({ data: [code], source: "api" });
     vi.mocked(lq.saveReasonCodes).mockResolvedValue(undefined);
-    render(<ReasonCodesEditor />);
+    renderWithIntl(<ReasonCodesEditor />);
     await waitFor(() => expect(screen.getByDisplayValue("No budget")).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText(/label for reason 1/i), { target: { value: "No funds" } });
     fireEvent.click(screen.getByRole("button", { name: /save reason codes/i }));
@@ -114,7 +115,7 @@ describe("ReasonCodesEditor (LQ-004 admin)", () => {
   it("confirms before saving when a loaded code is removed, and Cancel aborts the PUT", async () => {
     vi.mocked(lq.getReasonCodes).mockResolvedValue({ data: [code], source: "api" });
     vi.mocked(lq.saveReasonCodes).mockResolvedValue(undefined);
-    render(<ReasonCodesEditor />);
+    renderWithIntl(<ReasonCodesEditor />);
     await waitFor(() => expect(screen.getByDisplayValue("No budget")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /remove reason 1/i }));
     fireEvent.click(screen.getByRole("button", { name: /save reason codes/i }));
@@ -130,7 +131,7 @@ describe("ReasonCodesEditor (LQ-004 admin)", () => {
   it("saves after confirming the removal", async () => {
     vi.mocked(lq.getReasonCodes).mockResolvedValue({ data: [code], source: "api" });
     vi.mocked(lq.saveReasonCodes).mockResolvedValue(undefined);
-    render(<ReasonCodesEditor />);
+    renderWithIntl(<ReasonCodesEditor />);
     await waitFor(() => expect(screen.getByDisplayValue("No budget")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /remove reason 1/i }));
     fireEvent.click(screen.getByRole("button", { name: /save reason codes/i }));
@@ -141,7 +142,7 @@ describe("ReasonCodesEditor (LQ-004 admin)", () => {
 
   it("keeps a reason code's own value and focus attached to it after an earlier one is removed", async () => {
     vi.mocked(lq.getReasonCodes).mockResolvedValue({ data: [], source: "api" });
-    render(<ReasonCodesEditor />);
+    renderWithIntl(<ReasonCodesEditor />);
     await waitFor(() => expect(screen.getByText(/no reason codes yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add reason code/i }));
     fireEvent.click(screen.getByRole("button", { name: /add reason code/i }));
@@ -167,7 +168,7 @@ describe("ReasonCodesEditor (LQ-004 admin)", () => {
       meta: { version: "7", updatedBy: "admin-123", updatedAt: "2026-10-01T10:00:00.000Z" },
     });
     vi.mocked(lq.saveReasonCodes).mockResolvedValue("8");
-    render(<ReasonCodesEditor />);
+    renderWithIntl(<ReasonCodesEditor />);
     await waitFor(() => expect(screen.getByDisplayValue("No budget")).toBeInTheDocument());
     expect(screen.getByText(/last changed/i)).toBeInTheDocument();
     expect(screen.getByText(/admin-123/)).toBeInTheDocument();
@@ -181,10 +182,27 @@ describe("ReasonCodesEditor (LQ-004 admin)", () => {
   it("shows a reload message on a 409 ConfigConflictError without clobbering", async () => {
     vi.mocked(lq.getReasonCodes).mockResolvedValue({ data: [code], source: "api", meta: { version: "7" } });
     vi.mocked(lq.saveReasonCodes).mockRejectedValue(new lq.ConfigConflictError());
-    render(<ReasonCodesEditor />);
+    renderWithIntl(<ReasonCodesEditor />);
     await waitFor(() => expect(screen.getByDisplayValue("No budget")).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText(/label for reason 1/i), { target: { value: "No funds" } });
     fireEvent.click(screen.getByRole("button", { name: /save reason codes/i }));
     expect(await screen.findByText(/changed by another admin/i)).toBeInTheDocument();
+  });
+
+  // GAP-CRM-LEAD-REASON-CODES-05 (COPY): the card heading matches the page
+  // title "Lead Stage Reasons" (was "Reason codes"), and the status select
+  // shows the human label "Disqualified", never the raw enum "disqualified".
+  it("titles the card 'Lead Stage Reasons' and labels statuses in the picker", async () => {
+    vi.mocked(lq.getReasonCodes).mockResolvedValue({ data: [code], source: "api" });
+    renderWithIntl(<ReasonCodesEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("No budget")).toBeInTheDocument());
+    expect(screen.getByRole("heading", { name: "Lead Stage Reasons" })).toBeInTheDocument();
+    const statusSelect = screen.getByLabelText(/applies-to status for reason 1/i);
+    const options = Array.from(statusSelect.querySelectorAll("option"));
+    const labels = options.map((o) => o.textContent);
+    expect(labels).toContain("Disqualified");
+    expect(labels).not.toContain("disqualified");
+    // The underlying value stays the raw enum.
+    expect(options.find((o) => o.textContent === "Disqualified")).toHaveValue("disqualified");
   });
 });

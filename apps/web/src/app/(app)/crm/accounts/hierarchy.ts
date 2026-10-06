@@ -52,6 +52,53 @@ export function countSubsidiaries(accounts: CRMAccountSummary[]): number {
   return accounts.filter((a) => a.parentId && present.has(a.parentId)).length;
 }
 
+export type AccountTreeNode = CRMAccountSummary & { children: AccountTreeNode[] };
+
+/**
+ * Builds a true nested parent→children tree (not a flat depth-annotated list)
+ * so the UI can emit nested <ul>/<li> that assistive tech announces as a list
+ * with real nesting, instead of a role="tree" widget that lacks arrow-key
+ * behaviour (GAP-CRM-ACCOUNTS-06). Same root/cycle rules as buildAccountTree:
+ * an account whose parent is absent is a root, and cycles are broken by
+ * visiting each account at most once.
+ */
+export function buildNestedAccountTree(accounts: CRMAccountSummary[]): AccountTreeNode[] {
+  const byParent = new Map<string | null, CRMAccountSummary[]>();
+  const present = new Set(accounts.map((a) => a.id));
+
+  for (const account of accounts) {
+    const key = account.parentId && present.has(account.parentId) ? account.parentId : null;
+    const siblings = byParent.get(key);
+    if (siblings) siblings.push(account);
+    else byParent.set(key, [account]);
+  }
+
+  const visited = new Set<string>();
+
+  const build = (parentId: string | null): AccountTreeNode[] => {
+    const nodes: AccountTreeNode[] = [];
+    for (const account of byParent.get(parentId) ?? []) {
+      if (visited.has(account.id)) continue;
+      visited.add(account.id);
+      nodes.push({ ...account, children: build(account.id) });
+    }
+    return nodes;
+  };
+
+  const roots = build(null);
+
+  // Anything still unvisited sits in a cycle — surface it at the root rather
+  // than drop it.
+  for (const account of accounts) {
+    if (!visited.has(account.id)) {
+      visited.add(account.id);
+      roots.push({ ...account, children: [] });
+    }
+  }
+
+  return roots;
+}
+
 /**
  * All descendant ids of `rootId` within the supplied list (children, their
  * children, …), excluding `rootId` itself. Used by the re-parent form to stop

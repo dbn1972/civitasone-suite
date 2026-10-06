@@ -7,18 +7,103 @@ import { DataTable, StatusPill, Button, ConfirmDialog } from "../../../_componen
 import { LeadFormEditor } from "../../../_components/crm/LeadFormEditor";
 import type { CRMLeadCaptureForm } from "@civitasone/types";
 import { setLeadFormEnabled, setLeadFormConsent } from "@/lib/crm/leadForms";
-import { formHealth, originSummary, publicSubmitPath, type FormHealth } from "./leadForms";
+import {
+  formHealth,
+  originSummary,
+  originTitle,
+  publicSubmitPath,
+  absoluteSubmitUrl,
+  embedSnippet,
+  HEALTH_LABEL,
+  type FormHealth,
+} from "./leadForms";
 
 type Row = {
   id: string;
   name: string;
   health: string;
+  healthLabel: string;
   submitUrl: string;
   origins: string;
+  originsTitle: string;
   source: string;
   rate: string;
   form: CRMLeadCaptureForm;
 };
+
+/**
+ * GAP-CRM-LEAD-FORMS-05: copy the absolute public submit URL (built from the
+ * live browser origin, not the gateway-relative path) and reveal an embeddable
+ * HTML snippet. Uses navigator.clipboard like the existing api-keys screen.
+ */
+function SubmitUrlCell({ form }: { form: CRMLeadCaptureForm }) {
+  const [copied, setCopied] = useState(false);
+  const [snippetCopied, setSnippetCopied] = useState(false);
+  const [showEmbed, setShowEmbed] = useState(false);
+
+  function origin(): string {
+    return typeof window !== "undefined" ? window.location.origin : "";
+  }
+
+  async function copyUrl() {
+    try {
+      await navigator.clipboard.writeText(absoluteSubmitUrl(origin(), form.formKey));
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  async function copySnippet() {
+    try {
+      await navigator.clipboard.writeText(embedSnippet(origin(), form.formKey));
+      setSnippetCopied(true);
+    } catch {
+      setSnippetCopied(false);
+    }
+  }
+
+  return (
+    <span style={{ display: "inline-flex", flexDirection: "column", gap: 4, maxWidth: 320 }}>
+      <code style={{ overflowWrap: "anywhere", fontSize: 12 }}>{publicSubmitPath(form.formKey)}</code>
+      <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap" }}>
+        <Button type="button" variant="ghost" size="sm" onClick={() => void copyUrl()}>
+          {copied ? "Copied ✓" : "Copy URL"}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-expanded={showEmbed}
+          onClick={() => setShowEmbed((v) => !v)}
+        >
+          Embed snippet
+        </Button>
+      </span>
+      {showEmbed ? (
+        <span style={{ display: "inline-flex", flexDirection: "column", gap: 4 }}>
+          <code
+            style={{
+              display: "block",
+              whiteSpace: "pre-wrap",
+              overflowWrap: "anywhere",
+              background: "var(--panel)",
+              border: "1px solid var(--line)",
+              borderRadius: "var(--r)",
+              padding: 8,
+              fontSize: 11,
+            }}
+          >
+            {embedSnippet(origin(), form.formKey)}
+          </code>
+          <Button type="button" variant="ghost" size="sm" onClick={() => void copySnippet()}>
+            {snippetCopied ? "Copied ✓" : "Copy snippet"}
+          </Button>
+        </span>
+      ) : null}
+    </span>
+  );
+}
 
 export function LeadFormsTable({ rows }: { rows: CRMLeadCaptureForm[] }) {
   const router = useRouter();
@@ -93,11 +178,13 @@ export function LeadFormsTable({ rows }: { rows: CRMLeadCaptureForm[] }) {
       id: form.id,
       name: form.name,
       health,
+      healthLabel: HEALTH_LABEL[health] ?? health,
       submitUrl: publicSubmitPath(form.formKey),
       origins: originSummary(form.allowedOrigins, {
         any: t("anyOrigin"),
         more: (count) => t("originsMore", { count }),
       }),
+      originsTitle: originTitle(form.allowedOrigins),
       source: form.defaultLeadSource ?? "—",
       rate: t("ratePerMinute", { rate: form.maxPerMinute }),
       form,
@@ -141,8 +228,14 @@ export function LeadFormsTable({ rows }: { rows: CRMLeadCaptureForm[] }) {
               return <StatusPill status={row.health} label={h === "live" || h === "paused" || h === "unlawful" ? t(`health_${h}`) : row.health} variant={tone} />;
             },
           },
-          { key: "submitUrl", label: t("colSubmitUrl") },
-          { key: "origins", label: t("colOrigins") },
+          { key: "submitUrl", label: t("colSubmitUrl"), render: (row) => <SubmitUrlCell form={row.form} /> },
+          {
+            key: "origins",
+            label: t("colOrigins"),
+            // GAP-CRM-LEAD-FORMS-05: the collapsed "first +N more" summary is
+            // backed by a title tooltip listing every allowed origin.
+            render: (row) => <span title={row.originsTitle}>{row.origins}</span>,
+          },
           { key: "source", label: t("colSource") },
           { key: "rate", label: t("colRate"), align: "right" },
           {
@@ -167,6 +260,9 @@ export function LeadFormsTable({ rows }: { rows: CRMLeadCaptureForm[] }) {
         ]}
         rows={tableRows}
         sortable
+        filterable
+        filterPlaceholder="Filter by form…"
+        filterKeys={["name", "healthLabel", "source", "origins"]}
         exportable
         exportFilename="crm-lead-capture-forms"
         exportConfirm={{

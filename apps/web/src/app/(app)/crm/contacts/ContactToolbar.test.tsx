@@ -110,3 +110,29 @@ describe("ContactToolbar filter state (GAP-CRM-CONTACTS-04)", () => {
     expect(pushMock).toHaveBeenCalledWith("/crm/contacts");
   });
 });
+
+describe("ContactToolbar view selector label (GAP-CRM-CONTACTS-07)", () => {
+  beforeEach(() => {
+    browserFetchMock.mockReset();
+    pushMock.mockReset();
+    currentParams = new URLSearchParams();
+  });
+
+  it("labels the view-mode select 'View' (not 'segment') and keeps the backend key", () => {
+    renderToolbar({ initialSearch: "" });
+    // Visible label reads "View".
+    expect(screen.getByText("View")).toBeInTheDocument();
+    // Accessible name is view-oriented, not "segment".
+    const select = screen.getByLabelText("Filter contacts by view");
+    expect(select).toBeInTheDocument();
+    expect(screen.queryByLabelText("Filter contacts by segment")).not.toBeInTheDocument();
+  });
+
+  it("still maps the view selection to the backend `segment` key on the URL", () => {
+    renderToolbar({ initialSearch: "" });
+    fireEvent.change(screen.getByLabelText("Filter contacts by view"), { target: { value: "mine" } });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    const url = pushMock.mock.calls[0][0] as string;
+    expect(url).toContain("segment=mine");
+  });
+});

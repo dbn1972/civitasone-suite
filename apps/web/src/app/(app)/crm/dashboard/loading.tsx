@@ -1,9 +1,14 @@
+import { useTranslations } from "next-intl";
 export default function Loading() {
+  const t = useTranslations("crm.loading");
   return (
     <div className="page-main" aria-labelledby="page-heading">
       <div className="ph">
         <div>
-          <h1 id="page-heading">Dashboard</h1>
+          {/* GAP-CRM-DASHBOARD-03: same h1 the loaded page shows (crm.dashboard.title
+              default) so the heading does not flip from "Dashboard" to the real
+              title on paint. */}
+          <h1 id="page-heading">{t("dashboardTitle")}</h1>
         </div>
       </div>
       <div className="animate-pulse" style={{ display: "grid", gap: 16 }}>

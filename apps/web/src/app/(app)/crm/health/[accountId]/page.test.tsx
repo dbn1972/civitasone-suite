@@ -127,4 +127,24 @@ describe("AccountHealthDetailPage title (GAP-CRM-HEALTH-ACCOUNTID-01)", () => {
     // The Clamped help affordance is present.
     expect(screen.getByRole("button", { name: /What is Clamped/i })).toBeInTheDocument();
   });
+
+  // GAP-CRM-HEALTH-ACCOUNTID-07 — the stored-vs-computed card shows the compute
+  // time and uses theme tokens, not a hard-coded #475569 / pastel hex.
+  it("shows the compute time inside the recompute card and uses no literal hex", async () => {
+    getBreakdownMock.mockResolvedValue({
+      data: { ...breakdown(), storedScore: 50, score: 42 },
+      source: "api",
+    });
+    getAccountsMock.mockResolvedValue({ data: [account(ACCOUNT_ID, "Bharat Steel")], source: "api" });
+
+    const ui = await AccountHealthDetailPage({ params: { accountId: ACCOUNT_ID } });
+    const { container } = render(ui);
+
+    expect(screen.getByText("Score Recomputed From Signals")).toBeInTheDocument();
+    expect(screen.getByText(/Computed/)).toBeInTheDocument();
+    const html = container.innerHTML;
+    for (const hex of ["#475569", "#fee2e2", "#fef3c7", "#e0f2fe", "#dcfce7"]) {
+      expect(html).not.toContain(hex);
+    }
+  });
 });

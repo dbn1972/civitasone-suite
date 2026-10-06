@@ -192,7 +192,6 @@ export function LinkedAccountsPanel() {
             <p role="alert" style={{ fontSize: 13, color: "var(--muted)", margin: 0, display: "flex", gap: 8, alignItems: "center" }}>
               {t("connectionsUnavailable")}
               <Button type="button" variant="ghost" size="sm" onClick={() => void load()}>{t("retry")}</Button>
-              <DataSourceBadge source="error" />
             </p>
           ) : accounts.length === 0 ? (
             <EmptyState icon="🔌" title="No connected accounts" message="Connect a mailbox or calendar above to get started." />

@@ -28,9 +28,9 @@ export default async function LeadFormsPage() {
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
-        <StatCard icon="🌐" iconBg="#e0f2fe" label={t("statForms")} value={stat(forms.length)} />
-        <StatCard icon="✅" iconBg="#dcfce7" label={t("statLive")} value={stat(live)} />
-        <StatCard icon="⛔" iconBg="#fee2e2" label={t("statConsentGaps")} value={stat(unlawful)} />
+        <StatCard icon="🌐" tone="info" label={t("statForms")} value={stat(forms.length)} />
+        <StatCard icon="✅" tone="good" label={t("statLive")} value={stat(live)} />
+        <StatCard icon="⛔" tone="bad" label={t("statConsentGaps")} value={stat(unlawful)} />
       </StatGrid>
 
       {/* GAP-CRM-LEAD-FORMS-03: explain the "Consent gaps" condition in DPDP

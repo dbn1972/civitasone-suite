@@ -91,3 +91,34 @@ describe("GET /identity/internal/users/:id/email", () => {
     expect(res.statusCode).toBe(401);
   });
 });
+
+describe("GET /identity/internal/users/:id/status", () => {
+  const internal = { "x-internal": "1", "x-tenant-id": TENANT, "x-service-secret": INTERNAL_SECRET };
+
+  it("403 for an ordinary authenticated employee", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: `/identity/internal/users/${USER_ID}/status`,
+      headers: { authorization: `Bearer ${signToken({ sub: "some-employee", tid: TENANT, roles: ["employee"], sid: "s2" }, SECRET, 3600)}` },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("200 with only id + status for an internal-elevated caller", async () => {
+    const res = await app.inject({ method: "GET", url: `/identity/internal/users/${USER_ID}/status`, headers: internal });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ id: USER_ID, status: "active" });
+  });
+
+  it("reports a non-active status verbatim", async () => {
+    await asTenant((tx) => tx`UPDATE users.users SET status = 'deactivated' WHERE id = ${USER_ID}`);
+    const res = await app.inject({ method: "GET", url: `/identity/internal/users/${USER_ID}/status`, headers: internal });
+    expect(res.json()).toEqual({ id: USER_ID, status: "deactivated" });
+    await asTenant((tx) => tx`UPDATE users.users SET status = 'active' WHERE id = ${USER_ID}`);
+  });
+
+  it("404 for an id that is not in this tenant", async () => {
+    const res = await app.inject({ method: "GET", url: `/identity/internal/users/${UNKNOWN_ID}/status`, headers: internal });
+    expect(res.statusCode).toBe(404);
+  });
+});

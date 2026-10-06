@@ -293,7 +293,31 @@ export function registerAssignmentConsumers(queue: Queue): void {
         await auditEvent(tx, msg, EVENTS.escalationRuleUpserted, "escalation_rule_upsert", "escalation_rule", p.id);
       });
       await cache.invalidateResource(p.tenantId, "escalation_rule");
-    } catch (err) { log.error({ err, messageId: msg.messageId }, "upsertEscalationRule failed"); throw err; }
+    } catch (err) {
+      // uq_escalation_rules_dedupe (migration 0106): the route-level duplicate check is
+      // check-then-act, so two concurrent identical creates (or a PUT that turns a rule
+      // into a duplicate) can still race to the unique index. Consume the message rather
+      // than redelivering forever: mark it processed and audit the rejection in a fresh
+      // transaction (the failed one is aborted and cannot write).
+      if (isUniqueViolation(err)) {
+        log.warn({ messageId: msg.messageId, ruleId: p.id }, "upsertEscalationRule rejected: duplicate rule");
+        try {
+          await db.transaction(async (tx) => {
+            if (!(await markProcessed(tx, msg.messageId))) return;
+            await enqueue(tx, {
+              topic: AUDIT, eventType: AUDIT, tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+              payload: { service: "crm", action: "escalation_rule_upsert", resourceType: "escalation_rule", resourceId: p.id, outcome: "rejected_duplicate" },
+            });
+          });
+        } catch (auditErr) {
+          log.error({ err: auditErr, messageId: msg.messageId }, "failed to audit duplicate escalation-rule rejection");
+          throw auditErr;
+        }
+        return;
+      }
+      log.error({ err, messageId: msg.messageId }, "upsertEscalationRule failed");
+      throw err;
+    }
   });
 
   queue.subscribe(COMMANDS.deleteEscalationRule, async (msg) => {

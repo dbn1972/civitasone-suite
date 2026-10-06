@@ -3,6 +3,7 @@ import { getCrmCampaignRoi } from "../../../../_data/loaders";
 import { getTranslations } from "next-intl/server";
 import { formatMoneyIn } from "@/lib/formatters";
 import { formatRoiPercent, orderPeriods, periodLabel } from "../campaigns";
+import { PostPeriodForm } from "./PostPeriodForm";
 
 export const dynamic = "force-dynamic";
 
@@ -120,11 +121,17 @@ export default async function CampaignRoiPage({ params }: { params: { id: string
           sortable
           exportable
           exportFilename={`crm-campaign-${campaign.campaignId}-roi`}
+          exportNotice="Exports leave the system; handle spend and revenue figures per policy."
           emptyIcon="🗓️"
           emptyTitle="No periods recorded"
           emptyMessage="Post a reporting period's cost and revenue to see the breakdown."
         />
       </Card>
+
+      {/* GAP-CRM-CAMPAIGNS-DETAIL-04: the empty-state instruction to "post a
+          reporting period's cost and revenue" is now actionable from here.
+          The write is admin-gated server-side; a non-admin's submit 403s. */}
+      <PostPeriodForm campaignId={campaign.campaignId} currency={currency} />
     </>
   );
 }

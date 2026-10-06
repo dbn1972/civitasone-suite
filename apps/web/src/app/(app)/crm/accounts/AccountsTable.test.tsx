@@ -65,3 +65,40 @@ describe("AccountsTable outage vs empty (GAP-CRM-ACCOUNTS-01)", () => {
     expect(screen.queryByText("No accounts yet")).not.toBeInTheDocument();
   });
 });
+
+describe("AccountsTable missing-parent copy (GAP-CRM-ACCOUNTS-08)", () => {
+  beforeEach(() => mockedHook.mockReset());
+
+  const child: CRMAccountSummary = {
+    id: "c1",
+    name: "Directorate",
+    industry: "Admin",
+    website: "https://d.gov.in",
+    contactCount: 1,
+    parentId: "p9",
+  } as unknown as CRMAccountSummary;
+
+  it("links to the parent's route when the parent is not in the loaded rows", () => {
+    seed([child], "live");
+    render(<AccountsTable accounts={[child]} source="api" />);
+    const link = screen.getByRole("link", { name: "Reports to a parent not shown here" });
+    expect(link).toHaveAttribute("href", "/crm/accounts/p9");
+  });
+
+  it("shows 'Reports to <name>' when the parent is present in the rows", () => {
+    const parent: CRMAccountSummary = {
+      id: "p9",
+      name: "Ministry",
+      industry: "Admin",
+      website: "https://m.gov.in",
+      contactCount: 0,
+      parentId: undefined,
+    } as unknown as CRMAccountSummary;
+    seed([parent, child], "live");
+    render(<AccountsTable accounts={[parent, child]} source="api" />);
+    expect(screen.getByText("Reports to Ministry")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Reports to a parent not shown here"),
+    ).not.toBeInTheDocument();
+  });
+});

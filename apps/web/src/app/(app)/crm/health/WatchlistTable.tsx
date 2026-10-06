@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { DataTable, StatusPill } from "../../../_components/ds";
 import { BAND_LABEL, type NamedAccountHealthEntry } from "./health";
@@ -44,6 +45,7 @@ const FALLBACK: Record<string, string> = {
   emptyTitle: "No accounts at risk",
   emptyMessage: "Accounts appear here once they are scored at risk or critical.",
   bandLabel: "Health band",
+  logFollowUp: "Log follow-up",
 };
 
 function formatDate(iso: string): string {
@@ -82,6 +84,29 @@ export function WatchlistTable({ entries }: { entries: NamedAccountHealthEntry[]
         },
         { key: "score", label: t("columnScore"), align: "right", render: (row) => `${row.score}/100` },
         { key: "computedAt", label: t("columnLastScored"), render: (row) => formatDate(row.computedAt) },
+        {
+          // GAP-CRM-HEALTH-05: an explicit per-row action to start a follow-up
+          // without first drilling into the account. It opens the account's
+          // health detail page, which hosts the Create-Follow-up dialog
+          // (FollowUpModal → a service request linked to this account). A
+          // deep-link straight into a prefilled activity/service-request form is
+          // deferred: /crm/service-requests/new has no accountId prefill param
+          // and /crm/activities/new does not exist (verified), so linking there
+          // would not actually prefill the account. stopPropagation keeps the
+          // button click from also triggering the row's rowHref navigation.
+          key: "accountId",
+          label: "",
+          render: (row) => (
+            <Link
+              href={`/crm/health/${row.accountId}?followUp=1`}
+              className="btn"
+              style={{ fontSize: 13 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {t("logFollowUp")}
+            </Link>
+          ),
+        },
       ]}
       rows={rows}
       rowHref={(row) => `/crm/health/${row.accountId}`}

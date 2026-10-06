@@ -9,7 +9,7 @@ export default function ErrorBoundary({ error, reset }: { error: Error & { diges
       reset={reset}
       backHref="/crm"
       backLabel="Back to CRM"
-      area="CRM Lead Reason Codes"
+      area="Lead Stage Reasons"
     />
   );
 }

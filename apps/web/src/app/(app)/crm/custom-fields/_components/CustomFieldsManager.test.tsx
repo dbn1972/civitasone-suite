@@ -219,8 +219,10 @@ describe("CustomFieldsManager", () => {
     fireEvent.change(screen.getByLabelText(/custom field name/i), { target: { value: "Priority" } });
     fireEvent.click(screen.getByRole("button", { name: /^Save$/i }));
     await waitFor(() => expect(cf.createCustomField).toHaveBeenCalled());
-    // switch entity while the create is still in flight
-    fireEvent.click(screen.getByRole("tab", { name: /^Deals$/i }));
+    // switch entity while the create is still in flight — the unsaved "Priority"
+    // row makes the form dirty, so confirm the discard (GAP-CRM-CUSTOM-FIELDS-06).
+    fireEvent.click(screen.getByRole("tab", { name: /^Engagements$/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /Discard and switch/i }));
     await waitFor(() => expect(cf.listCustomFields).toHaveBeenCalledWith("deals"));
     // now the stale create resolves
     resolveCreate();
@@ -234,7 +236,7 @@ describe("CustomFieldsManager", () => {
     vi.mocked(cf.listCustomFields).mockResolvedValue({ data: [], source: "api" });
     render(<CustomFieldsManager />);
     await waitFor(() => expect(cf.listCustomFields).toHaveBeenCalledWith("leads"));
-    fireEvent.click(screen.getByRole("tab", { name: /^Deals$/i }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Engagements$/i }));
     await waitFor(() => expect(cf.listCustomFields).toHaveBeenCalledWith("deals"));
   });
 
@@ -322,5 +324,61 @@ describe("CustomFieldsManager", () => {
       expect(screen.getByLabelText(/visible to super_admin/i)).toBeChecked();
       expect(screen.getByLabelText(/visible to crm_admin/i)).not.toBeChecked();
     });
+  });
+});
+
+describe("validateDraft duplicate name (GAP-CRM-CUSTOM-FIELDS-05)", () => {
+  const base: cf.CustomFieldDraft = {
+    entityType: "leads", fieldName: "", fieldType: "text", required: false,
+    options: [], ordinal: 0, sensitive: false, visibleToRoles: [],
+  };
+  it("flags a case/whitespace-insensitive duplicate name among siblings", () => {
+    const a = { ...base, id: "a", fieldName: "Grade" };
+    const b = { ...base, id: "b", fieldName: " grade " };
+    const errors = cf.validateDraft(b, [a, b]);
+    expect(errors.fieldName).toBe("A field with this name already exists.");
+  });
+  it("does not flag a row against itself (unchanged name)", () => {
+    const a = { ...base, id: "a", fieldName: "Grade" };
+    expect(cf.validateDraft(a, [a]).fieldName).toBeUndefined();
+  });
+  it("accepts a unique name", () => {
+    const a = { ...base, id: "a", fieldName: "Grade" };
+    const b = { ...base, id: "b", fieldName: "Region" };
+    expect(cf.validateDraft(b, [a, b]).fieldName).toBeUndefined();
+  });
+});
+
+describe("ENTITY_TYPE_LABELS canonical term (GAP-CRM-CUSTOM-FIELDS-07)", () => {
+  it("labels deals as 'Engagements' while keeping the API key 'deals'", () => {
+    expect(cf.ENTITY_TYPE_LABELS.deals).toBe("Engagements");
+    expect(cf.ENTITY_TYPES).toContain("deals");
+  });
+});
+
+describe("CustomFieldsManager entity-switch dirty guard (GAP-CRM-CUSTOM-FIELDS-06)", () => {
+  it("confirms before discarding an unsaved new row; Keep editing stays put", async () => {
+    vi.mocked(cf.listCustomFields).mockResolvedValue({ data: [], source: "api" });
+    render(<CustomFieldsManager />);
+    await waitFor(() => expect(cf.listCustomFields).toHaveBeenCalledWith("leads"));
+    // Add a blank new row -> dirty.
+    fireEvent.click(screen.getByRole("button", { name: /add custom field/i }));
+    fireEvent.change(screen.getByLabelText(/custom field name/i), { target: { value: "Priority" } });
+    // Switching entity now prompts a discard confirm.
+    fireEvent.click(screen.getByRole("tab", { name: /^Engagements$/i }));
+    expect(await screen.findByText("Discard unsaved changes?")).toBeInTheDocument();
+    // Keep editing -> no reload for deals, row preserved.
+    fireEvent.click(screen.getByRole("button", { name: /Keep editing/i }));
+    expect(vi.mocked(cf.listCustomFields).mock.calls.filter((c) => c[0] === "deals")).toHaveLength(0);
+    expect(screen.getByDisplayValue("Priority")).toBeInTheDocument();
+  });
+
+  it("switches immediately with no confirm when nothing is dirty", async () => {
+    vi.mocked(cf.listCustomFields).mockResolvedValue({ data: [], source: "api" });
+    render(<CustomFieldsManager />);
+    await waitFor(() => expect(cf.listCustomFields).toHaveBeenCalledWith("leads"));
+    fireEvent.click(screen.getByRole("tab", { name: /^Engagements$/i }));
+    expect(screen.queryByText("Discard unsaved changes?")).not.toBeInTheDocument();
+    await waitFor(() => expect(cf.listCustomFields).toHaveBeenCalledWith("deals"));
   });
 });

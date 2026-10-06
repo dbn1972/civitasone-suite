@@ -1,4 +1,5 @@
 import { NextIntlClientProvider } from "next-intl";
+import { renderWithIntl } from "@/lib/testUtils/intl";
 import enMessages from "@/messages/en.json";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render as rtlRender, screen, fireEvent, waitFor, within } from "@testing-library/react";
@@ -29,6 +30,25 @@ beforeEach(() => {
 });
 
 describe("DedupRulesEditor (GAP-CRM-DEDUP-RULES-01)", () => {
+  it("GAP-CRM-DEDUP-RULES-06: field/match options show human labels, not raw enum tokens", async () => {
+    vi.mocked(dq.getDedupRules).mockResolvedValue({
+      data: [{ field: "gstin", matchType: "exact", weight: 50, threshold: 90, enabled: true }],
+      source: "api",
+    });
+    renderWithIntl(<DedupRulesEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("50")).toBeInTheDocument());
+
+    // GSTIN option reads "GSTIN" (label) while its value stays "gstin" (enum).
+    const gstinOption = screen.getByRole("option", { name: "GSTIN" }) as HTMLOptionElement;
+    expect(gstinOption.value).toBe("gstin");
+    // Exact-match option reads "Exact match" while its value stays "exact".
+    const exactOption = screen.getByRole("option", { name: "Exact match" }) as HTMLOptionElement;
+    expect(exactOption.value).toBe("exact");
+    // The raw lowercase tokens are not presented to the user as option text.
+    expect(screen.queryByRole("option", { name: "gstin" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "exact" })).not.toBeInTheDocument();
+  });
+
   it("renders an error state with retry (not the empty state / Save) when the load fails", async () => {
     vi.mocked(dq.getDedupRules).mockResolvedValue({ data: [], source: "error" });
     render(<NextIntlClientProvider locale="en" messages={enMessages}><DedupRulesEditor /></NextIntlClientProvider>);
@@ -80,7 +100,7 @@ describe("DedupRulesEditor (GAP-CRM-DEDUP-RULES-01)", () => {
   it("GAP-CRM-DEDUP-RULES-02: sends the version as If-Match and shows a reload message on 409", async () => {
     vi.mocked(dq.getDedupRules).mockResolvedValue({ data: [rule], source: "api", version: "v7" });
     vi.mocked(dq.saveDedupRules).mockRejectedValue(new dq.DedupRulesConflictError());
-    render(<DedupRulesEditor />);
+    renderWithIntl(<DedupRulesEditor />);
     await waitFor(() => expect(screen.getByDisplayValue("50")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
@@ -92,7 +112,7 @@ describe("DedupRulesEditor (GAP-CRM-DEDUP-RULES-01)", () => {
 
   it("GAP-CRM-DEDUP-RULES-02: shows an unsaved-changes warning after an edit", async () => {
     vi.mocked(dq.getDedupRules).mockResolvedValue({ data: [rule], source: "api" });
-    render(<DedupRulesEditor />);
+    renderWithIntl(<DedupRulesEditor />);
     await waitFor(() => expect(screen.getByDisplayValue("50")).toBeInTheDocument());
 
     expect(screen.queryByText(/unsaved changes/i)).not.toBeInTheDocument();
@@ -110,7 +130,7 @@ describe("DedupRulesEditor (GAP-CRM-DEDUP-RULES-01)", () => {
       updatedAt: "2026-10-03T08:00:00.000Z",
     });
     vi.mocked(dq.saveDedupRules).mockResolvedValue("4");
-    render(<DedupRulesEditor />);
+    renderWithIntl(<DedupRulesEditor />);
     await waitFor(() => expect(screen.getByDisplayValue("50")).toBeInTheDocument());
     expect(screen.getByText(/last changed/i)).toBeInTheDocument();
     expect(screen.getByText(/admin-9/)).toBeInTheDocument();
@@ -131,7 +151,7 @@ describe("DedupRulesEditor (GAP-CRM-DEDUP-RULES-01)", () => {
       { field: "email", matchType: "fuzzy", weight: 40, threshold: 80, enabled: true },
     ];
     vi.mocked(dq.getDedupRules).mockResolvedValue({ data: dupRules, source: "api" });
-    render(<DedupRulesEditor />);
+    renderWithIntl(<DedupRulesEditor />);
     await waitFor(() => expect(screen.getByDisplayValue("50")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
@@ -141,7 +161,7 @@ describe("DedupRulesEditor (GAP-CRM-DEDUP-RULES-01)", () => {
 
   it("GAP-CRM-DEDUP-RULES-03: a newly added rule defaults to a meaningful weight (not 1)", async () => {
     vi.mocked(dq.getDedupRules).mockResolvedValue({ data: [rule], source: "api" });
-    render(<DedupRulesEditor />);
+    renderWithIntl(<DedupRulesEditor />);
     await waitFor(() => expect(screen.getByDisplayValue("50")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: /add rule/i }));
@@ -157,7 +177,7 @@ describe("DedupRulesEditor (GAP-CRM-DEDUP-RULES-01)", () => {
       { field: "name", matchType: "fuzzy", weight: 20, threshold: 70, enabled: false },
     ];
     vi.mocked(dq.getDedupRules).mockResolvedValue({ data: rules, source: "api" });
-    render(<DedupRulesEditor />);
+    renderWithIntl(<DedupRulesEditor />);
     await waitFor(() => expect(screen.getByDisplayValue("50")).toBeInTheDocument());
 
     // help tooltips present on the headers

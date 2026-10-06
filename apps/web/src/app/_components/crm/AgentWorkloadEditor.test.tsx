@@ -38,8 +38,8 @@ describe("AgentWorkloadEditor (AS-003 admin)", () => {
     await waitFor(() => expect(screen.getByText("Asha")).toBeInTheDocument());
     expect(screen.getByText(/\(over\)/i)).toBeInTheDocument();
     // Raise capacity (not risky) and save — no confirm needed.
-    fireEvent.change(screen.getByLabelText(/max leads for agent 1/i), { target: { value: "15" } });
-    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    fireEvent.change(screen.getByLabelText(/max leads for Asha/i), { target: { value: "15" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save capacity for Asha" }));
     await waitFor(() =>
       expect(as.updateAgentCapacity).toHaveBeenCalledWith("a1", { maxLeads: 15, available: true, onLeave: false }),
     );
@@ -50,9 +50,9 @@ describe("AgentWorkloadEditor (AS-003 admin)", () => {
     vi.mocked(as.getAgents).mockResolvedValue({ data: [agent], source: "api" });
     render(<AgentWorkloadEditor />);
     await waitFor(() => expect(screen.getByText("Asha")).toBeInTheDocument());
-    fireEvent.change(screen.getByLabelText(/max leads for agent 1/i), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText(/max leads for Asha/i), { target: { value: "" } });
     // Save is disabled while the value is missing (GAP-CRM-AGENT-WORKLOAD-03).
-    expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save capacity for Asha" })).toBeDisabled();
     expect(as.updateAgentCapacity).not.toHaveBeenCalled();
   });
 
@@ -63,10 +63,10 @@ describe("AgentWorkloadEditor (AS-003 admin)", () => {
     vi.mocked(as.updateAgentCapacity).mockResolvedValue(undefined);
     render(<AgentWorkloadEditor />);
     await waitFor(() => expect(screen.getByText("Asha")).toBeInTheDocument());
-    fireEvent.change(screen.getByLabelText(/max leads for agent 1/i), { target: { value: "15" } });
-    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    fireEvent.change(screen.getByLabelText(/max leads for Asha/i), { target: { value: "15" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save capacity for Asha" }));
     await waitFor(() => expect(as.updateAgentCapacity).toHaveBeenCalled());
-    await waitFor(() => expect(screen.getByLabelText(/max leads for agent 1/i)).toHaveValue(12));
+    await waitFor(() => expect(screen.getByLabelText(/max leads for Asha/i)).toHaveValue(12));
     expect(as.getAgents).toHaveBeenCalledTimes(2);
   });
 
@@ -76,8 +76,8 @@ describe("AgentWorkloadEditor (AS-003 admin)", () => {
     render(<AgentWorkloadEditor />);
     await waitFor(() => expect(screen.getByText("Asha")).toBeInTheDocument());
     // Raise capacity (non-risky) so it attempts the PATCH directly.
-    fireEvent.change(screen.getByLabelText(/max leads for agent 1/i), { target: { value: "20" } });
-    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    fireEvent.change(screen.getByLabelText(/max leads for Asha/i), { target: { value: "20" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save capacity for Asha" }));
     expect(await screen.findByText(/capacity_locked/i)).toBeInTheDocument();
     expect(screen.queryByText(/capacity saved/i)).not.toBeInTheDocument();
   });
@@ -97,15 +97,14 @@ describe("AgentWorkloadEditor keeps unsaved edits on other rows (WORKLOAD-02)", 
     await waitFor(() => expect(screen.getByText("Asha")).toBeInTheDocument());
 
     // Edit B (raise 5→9, non-risky) but DON'T save it.
-    fireEvent.change(screen.getByLabelText(/max leads for agent 2/i), { target: { value: "9" } });
+    fireEvent.change(screen.getByLabelText(/max leads for Biju/i), { target: { value: "9" } });
     // Raise + save A.
-    fireEvent.change(screen.getByLabelText(/max leads for agent 1/i), { target: { value: "11" } });
-    const saveButtons = screen.getAllByRole("button", { name: /^save$/i });
-    fireEvent.click(saveButtons[0]);
+    fireEvent.change(screen.getByLabelText(/max leads for Asha/i), { target: { value: "11" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save capacity for Asha" }));
     await waitFor(() => expect(as.updateAgentCapacity).toHaveBeenCalledWith("a1", expect.objectContaining({ maxLeads: 11 })));
 
     // B's unsaved edit survives (no full "Loading…" flash / table remount).
-    expect(screen.getByLabelText(/max leads for agent 2/i)).toHaveValue(9);
+    expect(screen.getByLabelText(/max leads for Biju/i)).toHaveValue(9);
     expect(screen.queryByText("Loading agent workload…")).not.toBeInTheDocument();
   });
 });
@@ -132,8 +131,8 @@ describe("AgentWorkloadEditor max-leads semantics (WORKLOAD-03)", () => {
     vi.mocked(as.getAgents).mockResolvedValue({ data: [missing] as never, source: "api" });
     render(<AgentWorkloadEditor />);
     await waitFor(() => expect(screen.getByText("Asha")).toBeInTheDocument());
-    expect(screen.getByLabelText(/max leads for agent 1/i)).toHaveValue(null);
-    expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
+    expect(screen.getByLabelText(/max leads for Asha/i)).toHaveValue(null);
+    expect(screen.getByRole("button", { name: "Save capacity for Asha" })).toBeDisabled();
   });
 });
 
@@ -144,8 +143,8 @@ describe("AgentWorkloadEditor risky-change confirmation (WORKLOAD-04)", () => {
     vi.mocked(as.updateAgentCapacity).mockResolvedValue(undefined);
     render(<AgentWorkloadEditor />);
     await waitFor(() => expect(screen.getByText("Asha")).toBeInTheDocument());
-    fireEvent.click(screen.getByLabelText(/on leave for agent 1/i));
-    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    fireEvent.click(screen.getByLabelText(/on leave: Asha/i));
+    fireEvent.click(screen.getByRole("button", { name: "Save capacity for Asha" }));
 
     const dialog = await screen.findByRole("alertdialog");
     expect(within(dialog).getByText(/recorded in the audit trail/i)).toBeInTheDocument();
@@ -157,8 +156,8 @@ describe("AgentWorkloadEditor risky-change confirmation (WORKLOAD-04)", () => {
     vi.mocked(as.updateAgentCapacity).mockResolvedValue(undefined);
     render(<AgentWorkloadEditor />);
     await waitFor(() => expect(screen.getByText("Asha")).toBeInTheDocument());
-    fireEvent.click(screen.getByLabelText(/available for agent 1/i)); // true -> false (risky)
-    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    fireEvent.click(screen.getByLabelText(/available: Asha/i)); // true -> false (risky)
+    fireEvent.click(screen.getByRole("button", { name: "Save capacity for Asha" }));
 
     const dialog = await screen.findByRole("alertdialog");
     fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "Reassigned to backup team" } });
@@ -176,10 +175,64 @@ describe("AgentWorkloadEditor risky-change confirmation (WORKLOAD-04)", () => {
     vi.mocked(as.getAgents).mockResolvedValue({ data: [agent], source: "api" });
     render(<AgentWorkloadEditor />);
     await waitFor(() => expect(screen.getByText("Asha")).toBeInTheDocument());
-    fireEvent.click(screen.getByLabelText(/on leave for agent 1/i));
-    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    fireEvent.click(screen.getByLabelText(/on leave: Asha/i));
+    fireEvent.click(screen.getByRole("button", { name: "Save capacity for Asha" }));
     const dialog = await screen.findByRole("alertdialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /cancel/i }));
     expect(as.updateAgentCapacity).not.toHaveBeenCalled();
+  });
+});
+
+// GAP-CRM-AGENT-WORKLOAD-05: never show a raw agentId (UUID) as the name.
+describe("normaliseAgents name fallback (WORKLOAD-05)", () => {
+  it("falls back through displayName/fullName/email, never the agentId", () => {
+    const uuid = "3f2a1b4c-0000-4000-8000-000000000001";
+    expect(as.normaliseAgents([{ agentId: uuid }])[0]!.name).toBe("Unnamed agent");
+    expect(as.normaliseAgents([{ agentId: uuid, displayName: "Asha D" }])[0]!.name).toBe("Asha D");
+    expect(as.normaliseAgents([{ agentId: uuid, fullName: "Asha Devi" }])[0]!.name).toBe("Asha Devi");
+    expect(as.normaliseAgents([{ agentId: uuid, email: "asha@gov.in" }])[0]!.name).toBe("asha@gov.in");
+    // The id is still the stable key, just never the label.
+    expect(as.normaliseAgents([{ agentId: uuid }])[0]!.agentId).toBe(uuid);
+  });
+});
+
+// GAP-CRM-AGENT-WORKLOAD-06: controls labelled by agent name, name is a row header.
+describe("AgentWorkloadEditor name-based a11y (WORKLOAD-06)", () => {
+  it("labels inputs/checkboxes/Save by the agent's name and makes the name a row header", async () => {
+    vi.mocked(as.getAgents).mockResolvedValue({ data: [agent], source: "api" });
+    render(<AgentWorkloadEditor />);
+    await waitFor(() => expect(screen.getByText("Asha")).toBeInTheDocument());
+    expect(screen.getByRole("spinbutton", { name: "Max leads for Asha" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Available: Asha" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "On leave: Asha" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save capacity for Asha" })).toBeInTheDocument();
+    // The agent name is a row header (<th scope="row">).
+    expect(screen.getByRole("rowheader", { name: "Asha" })).toBeInTheDocument();
+  });
+});
+
+// GAP-CRM-AGENT-WORKLOAD-07: first-load skeleton + a Retry on error.
+describe("AgentWorkloadEditor loading + retry (WORKLOAD-07)", () => {
+  it("shows a busy skeleton while the first load is pending", async () => {
+    let resolve: (v: { data: as.AgentWorkload[]; source: as.AsSource }) => void = () => {};
+    vi.mocked(as.getAgents).mockReturnValue(
+      new Promise((r) => { resolve = r; }) as ReturnType<typeof as.getAgents>,
+    );
+    const { container } = render(<AgentWorkloadEditor />);
+    expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
+    // Settle so the test teardown is clean.
+    resolve({ data: [agent], source: "api" });
+    await waitFor(() => expect(screen.getByText("Asha")).toBeInTheDocument());
+  });
+
+  it("offers a Retry that re-invokes getAgents after a failed load", async () => {
+    vi.mocked(as.getAgents)
+      .mockResolvedValueOnce({ data: [], source: "error" })
+      .mockResolvedValueOnce({ data: [agent], source: "api" });
+    render(<AgentWorkloadEditor />);
+    await waitFor(() => expect(screen.getByText(/workload unavailable/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(screen.getByText("Asha")).toBeInTheDocument());
+    expect(as.getAgents).toHaveBeenCalledTimes(2);
   });
 });

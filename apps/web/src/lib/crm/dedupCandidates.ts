@@ -49,7 +49,7 @@ export type DedupSource = "api" | "error";
 
 export async function getDedupCandidates(): Promise<{ data: DedupPair[]; source: DedupSource }> {
   try {
-    const res = await browserFetch("/v1/crm/contacts/dedup-candidates");
+    const res = await browserFetch("v1/crm/contacts/dedup-candidates");
     if (!res.ok) return { data: [], source: "error" };
     const body = (await res.json()) as { data: DedupPair[] };
     return { data: body.data ?? [], source: "api" };
@@ -70,7 +70,7 @@ export async function getDedupCandidates(): Promise<{ data: DedupPair[]; source:
  * read it.
  */
 export async function mergeDedupPair(leftId: string, rightId: string, reason?: string): Promise<void> {
-  const res = await browserFetch("/v1/crm/contacts/merge", {
+  const res = await browserFetch("v1/crm/contacts/merge", {
     method: "POST",
     body: JSON.stringify({
       primaryId: leftId,
@@ -89,7 +89,7 @@ export async function mergeDedupPair(leftId: string, rightId: string, reason?: s
  * for review; additive and ignored by a backend that does not read it.
  */
 export async function dismissDedupPair(pairId: string, reason?: string): Promise<void> {
-  const res = await browserFetch(`/v1/crm/contacts/dedup-candidates/${pairId}/dismiss`, {
+  const res = await browserFetch(`v1/crm/contacts/dedup-candidates/${pairId}/dismiss`, {
     method: "PATCH",
     ...(reason && reason.trim() ? { body: JSON.stringify({ reason: reason.trim() }) } : {}),
   });

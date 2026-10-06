@@ -1,19 +1,29 @@
+import { PageHeader, SkeletonBar } from "../../../_components/ds";
+import { useTranslations } from "next-intl";
+
+// GAP-CRM-LEAD-SCORING-07 (LOADING): the loaded page is a header + a single
+// card (no stat tiles), so the skeleton mirrors that instead of 4 stat tiles
+// plus a 280px slab the page never renders.
 export default function Loading() {
+  const t = useTranslations("crm.loading");
   return (
-    <div className="page-main" aria-labelledby="page-heading">
-      <div className="ph">
-        <div>
-          <h1 id="page-heading">Lead Scoring</h1>
+    <>
+      <PageHeader
+        title={t("leadScoringTitle")}
+        subtitle={t("leadScoringSubtitle")}
+        back="/crm"
+        backLabel={t("backCrm")}
+      />
+      <div className="card" aria-busy="true" aria-label={t("scoringRules")}>
+        <div className="card-h">
+          <SkeletonBar w={160} h={16} />
         </div>
-      </div>
-      <div className="animate-pulse" style={{ display: "grid", gap: 16 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} style={{ height: 80, borderRadius: 12, background: "#f1f5f9" }} />
+        <div style={{ padding: 12, display: "grid", gap: 10 }}>
+          {[0, 1, 2, 3].map((i) => (
+            <SkeletonBar key={i} w="100%" h={40} />
           ))}
         </div>
-        <div style={{ height: 280, borderRadius: 12, background: "#f1f5f9" }} />
       </div>
-    </div>
+    </>
   );
 }

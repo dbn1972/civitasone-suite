@@ -159,9 +159,12 @@ describe("TaxProofQueue (GAP-PAYROLL-TAX-DECLARATION-02)", () => {
   });
 
   it("opens a proof through the audited short-lived link", async () => {
-    browserFetch
-      .mockResolvedValueOnce(page([row()]))
-      .mockResolvedValueOnce(json({ url: "https://s3.test/get?e=300" }));
+    // Route by URL, not by call order: the queue may legitimately re-fetch its list (the load
+    // effect re-runs), and an ordered mockResolvedValueOnce chain then hands the list response
+    // to the audited-link call, so window.open is never reached (intermittent; also on main).
+    browserFetch.mockImplementation(async (url: string) =>
+      String(url).endsWith("/url") ? json({ url: "https://s3.test/get?e=300" }) : page([row()]),
+    );
     const open = vi.fn();
     vi.stubGlobal("open", open);
     ui();

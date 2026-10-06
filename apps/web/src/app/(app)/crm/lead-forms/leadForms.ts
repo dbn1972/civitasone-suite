@@ -63,3 +63,38 @@ export function originSummary(
   if (origins.length === 1) return origins[0]!;
   return `${origins[0]} ${labels.more(origins.length - 1)}`;
 }
+
+/**
+ * GAP-CRM-LEAD-FORMS-05: a full, line-per-origin list for the title tooltip so
+ * the collapsed "first +N more" summary is never the only way to see the
+ * allow-list. "Any origin" when unrestricted.
+ */
+export function originTitle(origins: string[]): string {
+  if (origins.length === 0) return "Any origin";
+  return origins.join("\n");
+}
+
+/**
+ * GAP-CRM-LEAD-FORMS-05: build the absolute public submit URL from the browser
+ * origin (so operators copy a working URL, not the gateway-relative path), and
+ * an HTML embed snippet landing pages can paste. `origin` is injected rather
+ * than read from `window` here so this stays a pure, testable helper.
+ */
+export function absoluteSubmitUrl(origin: string, formKey: string): string {
+  const base = origin.replace(/\/+$/, "");
+  return `${base}${publicSubmitPath(formKey)}`;
+}
+
+export function embedSnippet(origin: string, formKey: string): string {
+  const action = absoluteSubmitUrl(origin, formKey);
+  return [
+    `<form method="POST" action="${action}">`,
+    `  <input name="name" placeholder="Your name" required />`,
+    `  <input name="email" type="email" placeholder="Email" />`,
+    `  <input name="phone" type="tel" placeholder="Phone" />`,
+    `  <textarea name="message" placeholder="How can we help?"></textarea>`,
+    `  <label><input type="checkbox" name="consent" value="true" /> I agree to be contacted.</label>`,
+    `  <button type="submit">Submit</button>`,
+    `</form>`,
+  ].join("\n");
+}

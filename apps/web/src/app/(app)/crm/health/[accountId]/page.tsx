@@ -7,6 +7,7 @@ import { FollowUpModal } from "./FollowUpModal";
 
 interface PageProps {
   params: { accountId: string };
+  searchParams?: { followUp?: string };
 }
 
 function formatDateTime(iso: string): string {
@@ -34,7 +35,10 @@ function shortId(id: string): string {
   return id.length > 8 ? `${id.slice(0, 8)}…` : id;
 }
 
-export default async function AccountHealthDetailPage({ params }: PageProps) {
+export default async function AccountHealthDetailPage({ params, searchParams }: PageProps) {
+  // GAP-CRM-HEALTH-05: ?followUp=1 (from the watchlist row link) opens the
+  // follow-up form immediately.
+  const openFollowUp = searchParams?.followUp === "1";
   const [breakdownResult, { data: accounts }] = await Promise.all([
     getAccountHealthBreakdown(params.accountId),
     getCrmAccounts(),
@@ -66,7 +70,7 @@ export default async function AccountHealthDetailPage({ params }: PageProps) {
         <PageHeader
           title={accountName ?? t("titleWithId", { id: shortId(params.accountId) })}
           back="/crm/health"
-          actions={<FollowUpModal accountId={params.accountId} accountName={accountName} />}
+          actions={<FollowUpModal accountId={params.accountId} accountName={accountName} defaultOpen={openFollowUp} />}
         />
         {source === "error" && <DataSourceBadge source={source} />}
         <Card>
@@ -95,15 +99,17 @@ export default async function AccountHealthDetailPage({ params }: PageProps) {
         }
       />
       <StatGrid>
-        <StatCard icon="❤️" iconBg="#fee2e2" label={t("healthScore")} value={`${breakdown.score}/100`} />
-        <StatCard icon="🏷️" iconBg="#e0f2fe" label={t("band")} value={t(`band_${breakdown.band}`)} />
+        {/* GAP-CRM-HEALTH-ACCOUNTID-07: theme-token tones instead of hard-coded
+            light-pastel hex iconBg values, which stayed pale in dark mode. */}
+        <StatCard icon="❤️" tone="bad" label={t("healthScore")} value={`${breakdown.score}/100`} />
+        <StatCard icon="🏷️" tone="info" label={t("band")} value={t(`band_${breakdown.band}`)} />
         <StatCard
           icon="🧮"
-          iconBg="#fef3c7"
+          tone="warn"
           label={t("signalsUsed")}
           value={breakdown.contributingFactors.length.toLocaleString("en-IN")}
         />
-        <StatCard icon="🔁" iconBg="#dcfce7" label={t("version")} value={String(breakdown.version)} />
+        <StatCard icon="🔁" tone="good" label={t("version")} value={String(breakdown.version)} />
       </StatGrid>
 
       <Card title={t("contributingSignals")}>
@@ -167,8 +173,19 @@ export default async function AccountHealthDetailPage({ params }: PageProps) {
 
       {breakdown.storedScore !== breakdown.score && (
         <Card title={t("recomputedTitle")}>
-          <p style={{ padding: "12px 16px", margin: 0, color: "#475569", fontSize: 13 }}>
+          <p style={{ padding: "12px 16px 0", margin: 0, color: "var(--ink2)", fontSize: 13 }}>
             {t("recomputedBody", { stored: breakdown.storedScore, score: breakdown.score })}
+          </p>
+          {/* GAP-CRM-HEALTH-ACCOUNTID-07: show when the score was last computed
+              inside the card, and say who brings the stored value back in line.
+              Decision: no inline "Recompute" button is added — the recommendation-
+              service recompute endpoint (POST /v1/recommendations/health/:id/
+              recompute) requires an explicit factors payload (recency/frequency/
+              monetary/support/engagement), so it is not a one-click "recompute
+              from the signals already shown" action and is run by the scoring
+              pipeline, not from this read-only screen. */}
+          <p style={{ padding: "6px 16px 12px", margin: 0, color: "var(--ink2)", fontSize: 12 }}>
+            {t("recomputedAt", { when: formatDateTime(breakdown.computedAt) })}
           </p>
         </Card>
       )}

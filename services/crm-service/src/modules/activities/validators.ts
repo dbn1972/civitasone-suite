@@ -47,11 +47,51 @@ export const listActivitiesQuery = z.object({
 export type ListActivitiesQuery = z.infer<typeof listActivitiesQuery>;
 
 // P1-3 activity completion: status (and optional explicit completedAt).
+// GAP-CRM-TASK-ESCALATION-06: also allow snoozing an overdue task by pushing
+// its due date out (dueDate), so a manager can defer a task from the overdue
+// alerts list without recreating it.
+/** Today's calendar date in IST (the tenant's overdue boundary; mirrors listOverdueTasks). */
+export function todayIst(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+}
+
 export const updateActivityBody = z.object({
   status: z.enum(["open", "completed", "cancelled"]).optional(),
   completedAt: z.string().datetime().nullable().optional(),
-}).refine((b) => b.status !== undefined || b.completedAt !== undefined, {
+  // Snooze pushes a due date OUT: a date before today (IST) is rejected server-side, not just by the
+  // client's min=, so the API cannot "snooze" a task into the past.
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+    .refine((d) => d >= todayIst(), { message: "dueDate cannot be in the past" })
+    .optional(),
+  // GAP-CRM-TASK-ESCALATION-06: reassign a task to another identity user.
+  ownerId: z.string().uuid().optional(),
+  // Why a task was snoozed or reassigned; recorded on the audit event.
+  reason: z.string().trim().min(10).max(500).optional(),
+}).refine((b) => b.status !== undefined || b.completedAt !== undefined || b.dueDate !== undefined || b.ownerId !== undefined, {
   message: "at least one field required",
+}).refine((b) => (b.dueDate === undefined && b.ownerId === undefined) || b.reason !== undefined, {
+  message: "a reason (10+ characters) is required to snooze or reassign a task",
+  path: ["reason"],
+});
+
+/** GAP-CRM-TASK-ESCALATION-06: the tenant's overdue open tasks, worst-aged first. */
+export const overdueTasksQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+export const overdueTaskViewSchema = z.object({
+  id: z.string().uuid(),
+  subject: z.string().nullable(),
+  text: z.string(),
+  dueDate: z.string(),
+  ownerId: z.string().uuid(),
+  subjectType: z.enum(["contact", "deal", "account"]).nullable(),
+  subjectId: z.string().uuid().nullable(),
+});
+export const overdueTasksListSchema = z.object({
+  data: z.array(overdueTaskViewSchema),
+  meta: z.object({ total: z.number().int(), limit: z.number().int(), offset: z.number().int() }),
 });
 export type UpdateActivityBody = z.infer<typeof updateActivityBody>;
 

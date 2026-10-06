@@ -50,9 +50,13 @@ export function GrievanceActions({ id, status, version, canClose = false }: { id
   const t = useTranslations("crmGrievanceActions");
   const router = useRouter();
 
-  // DISPOSED is the only terminal state in CPGRAMS (covers both resolved + closed)
+  // DISPOSED is the only terminal state in CPGRAMS (covers both resolved + closed).
+  // GAP-CRM-GRIEVANCES-DETAIL-08: there used to be a second `disposed` const
+  // identical to `terminal` guarding the Resolve button (`{!disposed && …}`).
+  // That guard was dead code — the component already returns the "no further
+  // action" message above when `terminal` is true, so Resolve was only ever
+  // reached when NOT disposed. Collapsed to the single `terminal` flag.
   const terminal = status === "DISPOSED";
-  const disposed = status === "DISPOSED";
 
   async function patch(action: string, payload?: Record<string, unknown>) {
     const res = await fetch(`/api/proxy/v1/crm/grievances/${id}/${action}`, {
@@ -115,17 +119,17 @@ export function GrievanceActions({ id, status, version, canClose = false }: { id
         onConfirm={(reason) => patch("first-appeal", { ...(reason ? { appealReason: reason } : {}) })}
       />
 
-      {!disposed && (
-        <ActionButton
-          label={t("resolve")}
-          className="primary"
-          confirmTitle={t("resolveTitle")}
-          confirmDescription={t("resolveDescription")}
-          requireReason
-          reasonLabel={t("resolveReasonLabel")}
-          onConfirm={(reason) => patch("resolve", { resolution: reason })}
-        />
-      )}
+      {/* Resolve — only reachable while not terminal (the terminal branch
+          returns above), so no further guard is needed here. */}
+      <ActionButton
+        label={t("resolve")}
+        className="primary"
+        confirmTitle={t("resolveTitle")}
+        confirmDescription={t("resolveDescription")}
+        requireReason
+        reasonLabel={t("resolveReasonLabel")}
+        onConfirm={(reason) => patch("resolve", { resolution: reason })}
+      />
 
       {/* GAP-CRM-GRIEVANCES-DETAIL-02: Close is an administrator-only action
           (crm-service 403s a plain crm_user). Only offer it when the server

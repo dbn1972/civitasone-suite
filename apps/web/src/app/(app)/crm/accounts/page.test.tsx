@@ -30,6 +30,16 @@ describe("Accounts list page", () => {
     expect(screen.getByRole("heading", { name: "Accounts" })).toBeInTheDocument();
   });
 
+  // GAP-CRM-ACCOUNTS-07: the subtitle comes from the crm.accounts.subtitle
+  // next-intl key; the English string carries no hard-coded Devanagari suffix.
+  it("renders the subtitle from i18n with no Devanagari characters (en)", async () => {
+    mocked.mockResolvedValue({ data: [], source: "api" });
+    render(await Page());
+    const subtitle = screen.getByText(/Organisation master/);
+    expect(subtitle).toBeInTheDocument();
+    expect(/[\u0900-\u097F]/.test(subtitle.textContent ?? "")).toBe(false);
+  });
+
   it("renders 'Sectors / Ministries' label (not 'Industries Covered')", async () => {
     mocked.mockResolvedValue({ data: [], source: "api" });
     render(await Page());

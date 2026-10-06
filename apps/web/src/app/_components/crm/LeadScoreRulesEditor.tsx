@@ -108,6 +108,9 @@ export function LeadScoreRulesEditor() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [confirmSave, setConfirmSave] = useState(false);
+  // GAP-CRM-LEAD-SCORING-07: rules present at load, used to surface how many
+  // rules a Save would drop (same diff pattern as REASON-CODES-02).
+  const [originalRows, setOriginalRows] = useState<RuleRow[]>([]);
   // GAP-CRM-LEAD-SCORING-05: list-level optimistic-concurrency token +
   // "Last changed by/at" from the GET metadata.
   const [version, setVersion] = useState<string | undefined>(undefined);
@@ -126,6 +129,7 @@ export function LeadScoreRulesEditor() {
     if (!isLive()) return;
     const nextRows = data.map(toRow);
     setRows(nextRows);
+    setOriginalRows(nextRows);
     setRuleRowIds(nextRows.map(() => nextRuleRowId.current++));
     setVersion(meta?.version);
     setLastChangedBy(meta?.updatedBy);
@@ -144,7 +148,11 @@ export function LeadScoreRulesEditor() {
   }
 
   function addRule() {
-    setRows((prev) => [...prev, { attribute: "", weight: 1, scoreFnType: "presence", enabled: true, paramsText: "" }]);
+    // GAP-CRM-LEAD-SCORING-06: a new rule starts with a blank weight (NaN), not
+    // an inert weight of 1 that looks saveable but barely scores. The weight
+    // input is aria-invalid and rowValid() blocks Save until a 0-100 integer is
+    // entered.
+    setRows((prev) => [...prev, { attribute: "", weight: Number.NaN, scoreFnType: "presence", enabled: true, paramsText: "" }]);
     setRuleRowIds((ids) => [...ids, nextRuleRowId.current++]);
   }
 
@@ -156,6 +164,14 @@ export function LeadScoreRulesEditor() {
   // Running total of enabled weights, used for the total + per-rule share %.
   const enabledWeightTotal = rows.reduce((sum, r) => sum + (r.enabled && Number.isFinite(r.weight) ? r.weight : 0), 0);
 
+  // GAP-CRM-LEAD-SCORING-07: rules present at load that are no longer in the
+  // list (by attribute + score function). Removing a rule stops it scoring.
+  function removedRuleCount(): number {
+    const present = new Set(rows.map((r) => `${r.attribute.trim()}::${r.scoreFnType}`));
+    return originalRows.filter((o) => !present.has(`${o.attribute.trim()}::${o.scoreFnType}`)).length;
+  }
+  const removedCount = removedRuleCount();
+
   async function persist() {
     setBusy(true);
     try {
@@ -166,6 +182,7 @@ export function LeadScoreRulesEditor() {
       const newVersion = await saveScoreRules(rules, version);
       if (newVersion) setVersion(newVersion);
       setMessage("Scoring rules saved.");
+      setOriginalRows(rows);
     } catch (e) {
       if (e instanceof ConfigConflictError) {
         setError(t("conflictChanged"));
@@ -348,7 +365,18 @@ export function LeadScoreRulesEditor() {
       <ConfirmDialog
         open={confirmSave}
         title={t("confirmTitle")}
-        description={t("confirmDescription")}
+        description={
+          <>
+            <p style={{ margin: "0 0 8px" }}>
+              {t("confirmDescription")}
+            </p>
+            {removedCount > 0 ? (
+              <p style={{ margin: 0, fontWeight: 600 }}>
+                {t("removedRules", { count: removedCount })}
+              </p>
+            ) : null}
+          </>
+        }
         confirmLabel={t("confirmLabel")}
         busy={busy}
         onCancel={() => setConfirmSave(false)}

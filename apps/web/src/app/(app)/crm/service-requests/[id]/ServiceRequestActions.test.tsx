@@ -198,4 +198,29 @@ describe("ServiceRequestActions", () => {
     expect(screen.getByText(/This request is cancelled — no further action available/)).toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
+
+  // GAP-CRM-SERVICE-REQUESTS-DETAIL-06: Close is not offered while the request
+  // is still 'open' (never worked) — it must be started/resolved first, or
+  // cancelled if withdrawn.
+  it("does not offer Close while the request is still open", () => {
+    render(<ServiceRequestActions id={SR_ID} status="open" />);
+    expect(screen.queryByRole("button", { name: "Close" })).not.toBeInTheDocument();
+    // Start work and Cancel request remain available.
+    expect(screen.getByRole("button", { name: "Start work" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel request" })).toBeInTheDocument();
+  });
+
+  // GAP-CRM-SERVICE-REQUESTS-DETAIL-06: a reason-bearing transition now needs a
+  // meaningful note — Confirm stays disabled at a 2-char "ok" and enables at 10+.
+  it("requires a ≥10-char closing remark before Close can be confirmed", async () => {
+    render(<ServiceRequestActions id={SR_ID} status="in_progress" />);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.getByText("Close this request?")).toBeInTheDocument());
+    const confirm = screen.getByRole("button", { name: "Confirm" });
+    const reason = screen.getByLabelText("Closing remarks");
+    fireEvent.change(reason, { target: { value: "ok" } });
+    expect(confirm).toBeDisabled();
+    fireEvent.change(reason, { target: { value: "Duplicate request" } });
+    expect(confirm).not.toBeDisabled();
+  });
 });

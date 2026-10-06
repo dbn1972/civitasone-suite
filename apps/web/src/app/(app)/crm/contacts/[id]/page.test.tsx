@@ -132,3 +132,27 @@ describe("Contact detail failure vs not-found (GAP-CRM-CONTACTS-DETAIL-05)", () 
     expect(screen.getByText(/does not exist or has been removed/)).toBeInTheDocument();
   });
 });
+
+describe("Contact detail status/classification labels (GAP-CRM-CONTACTS-DETAIL-07)", () => {
+  it("renders the canonical lead-status label, not the raw enum", async () => {
+    mockRoles.mockReturnValue(["crm_admin"]);
+    mContact.mockResolvedValue({
+      data: { ...(contact as object), leadStatus: "disqualified", temperature: "hot", priority: "high" } as never,
+      source: "api",
+    });
+    render(await Page({ params: { id: "c-1" } }));
+    expect(screen.getByText("Disqualified")).toBeInTheDocument();
+    expect(screen.queryByText("disqualified")).not.toBeInTheDocument();
+  });
+
+  it("humanizes temperature/priority classification pills (Hot/High, not hot/high)", async () => {
+    mockRoles.mockReturnValue(["crm_admin"]);
+    mContact.mockResolvedValue({
+      data: { ...(contact as object), temperature: "hot", priority: "high" } as never,
+      source: "api",
+    });
+    render(await Page({ params: { id: "c-1" } }));
+    expect(screen.getByText(/Temperature: Hot/)).toBeInTheDocument();
+    expect(screen.getByText(/Priority: High/)).toBeInTheDocument();
+  });
+});

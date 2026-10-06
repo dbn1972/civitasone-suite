@@ -67,4 +67,29 @@ describe("CRM Dashboard page (GoI redesign)", () => {
     expect(note).not.toHaveTextContent("not a commercial sales pipeline");
     expect(note).toHaveTextContent(/Engagement Pipeline/);
   });
+
+  it("GAP-CRM-DASHBOARD-03/06: the h1 is the translated 'CRM Dashboard' with no hard-coded Devanagari suffix", async () => {
+    mocked.mockResolvedValue({ data: mockDash, source: "api" });
+    render(await Page());
+    expect(screen.getByRole("heading", { name: "CRM Dashboard" })).toBeInTheDocument();
+    // the old hard-coded subtitle suffix is gone
+    expect(screen.queryByText(/सरकारी हितधारक पंजी/)).not.toBeInTheDocument();
+  });
+
+  it("GAP-CRM-DASHBOARD-04: stat cards link into their lists, incl. Interactions Today -> activities Today segment", async () => {
+    mocked.mockResolvedValue({ data: mockDash, source: "api" });
+    const { container } = render(await Page());
+    const hrefs = Array.from(container.querySelectorAll("a")).map((a) => a.getAttribute("href"));
+    expect(hrefs).toContain("/crm/contacts");
+    expect(hrefs).toContain("/crm/deals");
+    expect(hrefs).toContain("/crm/activities?segment=Today");
+  });
+
+  it("GAP-CRM-DASHBOARD-05: the engagements quick link uses 'Engagements' (not 'Deals')", async () => {
+    mocked.mockResolvedValue({ data: mockDash, source: "api" });
+    render(await Page());
+    // the quick-links card uses the same noun as the hub tile
+    expect(screen.getAllByText("Engagements").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("link", { name: "Deals" })).not.toBeInTheDocument();
+  });
 });

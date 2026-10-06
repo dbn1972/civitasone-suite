@@ -7,7 +7,7 @@
  * for existing). Deletion is governed by a ConfirmDialog. A failed load shows
  * the saved-info badge and never fabricates an empty pipeline list as fact.
  */
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState, Button } from "../ds";
@@ -28,8 +28,29 @@ import {
 const inputStyle = { padding: 6, minHeight: 36, borderRadius: 8, border: "1px solid var(--line)", width: "100%" } as const;
 
 let SEQ = 0;
+// GAP-CRM-PIPELINES-06: a new stage carries a TRANSIENT key marker (prefixed
+// `__new_`) only so React has a stable list key while editing. The real,
+// persisted key is derived from the stage NAME on save (slugified, uniqueness-
+// suffixed) — never the opaque `stage_N` the editor used to persist, which left
+// keys like "stage_2" drifting from a name like "Proposal". A key WITHOUT this
+// prefix is one already persisted by the server and is left immutable, so a
+// rename never re-keys a saved stage (which would orphan its stage limits).
+const NEW_STAGE_PREFIX = "__new_";
 function blankStage(): PipelineStage {
-  return { key: `stage_${SEQ++}`, name: "", mandatoryFields: [], gate: false };
+  return { key: `${NEW_STAGE_PREFIX}${SEQ++}`, name: "", mandatoryFields: [], gate: false };
+}
+function isNewStageKey(key: string): boolean {
+  return key.startsWith(NEW_STAGE_PREFIX);
+}
+/** Slugify a stage name to a key, falling back to a stable id when it is blank. */
+function slugifyStageName(name: string): string {
+  return (
+    name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "") || "stage"
+  );
 }
 function blankPipeline(): Pipeline {
   return { name: "", stages: [blankStage()], enabled: true };
@@ -46,6 +67,14 @@ export function PipelineEditor() {
   const [confirmDelete, setConfirmDelete] = useState<Pipeline | null>(null);
   // GAP-CRM-PIPELINES-02: an aria-live message announcing stage reorders.
   const [stageAnnouncement, setStageAnnouncement] = useState("");
+  // GAP-CRM-PIPELINES-05: the pristine JSON of the draft when it was opened, used
+  // to detect unsaved edits; a pending editor-switch action held while the
+  // "discard unsaved changes?" confirm is shown; and a ref to the draft fieldset
+  // + name input so opening an editor scrolls it into view and moves focus.
+  const [pristine, setPristine] = useState<string | null>(null);
+  const [pendingOpen, setPendingOpen] = useState<(() => void) | null>(null);
+  const fieldsetRef = useRef<HTMLFieldSetElement | null>(null);
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
   const headingId = useId();
 
   async function load(isLive: () => boolean = () => true) {
@@ -64,16 +93,46 @@ export function PipelineEditor() {
     };
   }, []);
 
-  function startNew() {
-    setDraft(blankPipeline());
+  // GAP-CRM-PIPELINES-05: an open draft is "dirty" when it differs from the
+  // snapshot captured when it was opened.
+  const dirty = draft !== null && pristine !== null && JSON.stringify(draft) !== pristine;
+
+  function openDraft(next: Pipeline) {
+    setDraft(next);
+    setPristine(JSON.stringify(next));
     setMessage("");
     setError("");
   }
+
+  // Guard switching between drafts: if the current draft has unsaved edits, hold
+  // the requested open behind a confirm; otherwise open immediately.
+  function guardedOpen(open: () => void) {
+    if (dirty) {
+      setPendingOpen(() => open);
+      return;
+    }
+    open();
+  }
+
+  // GAP-CRM-PIPELINES-05: when a draft opens, scroll the editor into view and
+  // move focus to the name input so the editor below the list is not missed.
+  useEffect(() => {
+    if (draft && fieldsetRef.current) {
+      if (typeof fieldsetRef.current.scrollIntoView === "function") {
+        fieldsetRef.current.scrollIntoView({ block: "nearest" });
+      }
+      nameInputRef.current?.focus();
+    }
+  }, [draft]);
+
+  function startNew() {
+    guardedOpen(() => openDraft(blankPipeline()));
+  }
   function edit(p: Pipeline) {
-    // Deep copy so edits don't mutate the loaded list until saved.
-    setDraft({ ...p, stages: p.stages.map((s) => ({ ...s, mandatoryFields: [...s.mandatoryFields] })) });
-    setMessage("");
-    setError("");
+    guardedOpen(() =>
+      // Deep copy so edits don't mutate the loaded list until saved.
+      openDraft({ ...p, stages: p.stages.map((s) => ({ ...s, mandatoryFields: [...s.mandatoryFields] })) }),
+    );
   }
 
   function patchStage(idx: number, patch: Partial<PipelineStage>) {
@@ -136,14 +195,32 @@ export function PipelineEditor() {
       setError("A pipeline needs a name and at least one named stage.");
       return;
     }
+    // GAP-CRM-PIPELINES-06: compute each stage's persisted key.
+    //  - A stage already persisted (key without the __new_ marker) keeps its
+    //    key verbatim, even after a rename — re-keying it would orphan the
+    //    stage limits typed against the old key.
+    //  - A new stage's key is derived from its (trimmed) name, slugified, with a
+    //    numeric suffix when that slug collides with another stage in this
+    //    pipeline, so two stages named "Review" become "review" and "review_2".
+    const usedKeys = new Set<string>();
+    for (const s of draft.stages) {
+      if (!isNewStageKey(s.key)) usedKeys.add(s.key);
+    }
     const payload: Pipeline = {
       ...draft,
       name: draft.name.trim(),
-      stages: draft.stages.map((s) => ({
-        ...s,
-        name: s.name.trim(),
-        key: s.key || s.name.trim().toLowerCase().replace(/\s+/g, "_"),
-      })),
+      stages: draft.stages.map((s) => {
+        const name = s.name.trim();
+        let key = s.key;
+        if (isNewStageKey(s.key)) {
+          const base = slugifyStageName(name);
+          key = base;
+          let n = 2;
+          while (usedKeys.has(key)) key = `${base}_${n++}`;
+          usedKeys.add(key);
+        }
+        return { ...s, name, key };
+      }),
     };
     setBusy(true);
     try {
@@ -151,6 +228,7 @@ export function PipelineEditor() {
       else await createPipeline(payload);
       setMessage(`Pipeline “${payload.name}” saved.`);
       setDraft(null);
+      setPristine(null);
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save the pipeline.");
@@ -170,7 +248,7 @@ export function PipelineEditor() {
       await deletePipeline(p.id);
       setMessage(`Pipeline “${p.name}” deleted.`);
       setConfirmDelete(null);
-      if (draft?.id === p.id) setDraft(null);
+      if (draft?.id === p.id) { setDraft(null); setPristine(null); }
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not delete the pipeline.");
@@ -270,13 +348,14 @@ export function PipelineEditor() {
             + New pipeline
           </Button>
         ) : (
-          <fieldset style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 12 }}>
+          <fieldset ref={fieldsetRef} style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 12 }}>
             <legend style={{ fontSize: 13, fontWeight: 600 }}>{draft.id ? "Edit pipeline" : "New pipeline"}</legend>
 
             <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
               <label style={{ fontSize: 13 }}>
                 Pipeline name
                 <input
+                  ref={nameInputRef}
                   aria-label="Pipeline name"
                   value={draft.name}
                   aria-invalid={draft.name.trim() ? undefined : true}
@@ -358,6 +437,19 @@ export function PipelineEditor() {
                     </Button>
                   </div>
 
+                  {/* GAP-CRM-PIPELINES-06: surface the stage KEY so the admin can
+                      see what the stage limits are keyed against. A persisted
+                      stage shows its immutable key read-only; a new stage shows
+                      the slug its name will be saved as (so there is no surprise
+                      "stage_2" drift). */}
+                  <p style={{ fontSize: 11, color: "var(--muted)", margin: "0 0 8px" }}>
+                    {isNewStageKey(stage.key) ? (
+                      <>Key (on save): <code>{slugifyStageName(stage.name)}</code></>
+                    ) : (
+                      <>Key: <code>{stage.key}</code></>
+                    )}
+                  </p>
+
                   <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
                     <legend style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>Mandatory fields to enter this stage</legend>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
@@ -436,7 +528,7 @@ export function PipelineEditor() {
                 + Add stage
               </Button>
               <span style={{ flex: 1 }} />
-              <Button type="button" variant="ghost" onClick={() => setDraft(null)} disabled={busy}>
+              <Button type="button" variant="ghost" onClick={() => { setDraft(null); setPristine(null); }} disabled={busy}>
                 Cancel
               </Button>
               <Button type="button" onClick={() => void save()} disabled={busy}>
@@ -456,6 +548,24 @@ export function PipelineEditor() {
         busy={busy}
         onCancel={() => setConfirmDelete(null)}
         onConfirm={() => confirmDelete && void doDelete(confirmDelete)}
+      />
+
+      {/* GAP-CRM-PIPELINES-05: switching to Edit/New with unsaved edits used to
+          silently discard the current draft. Hold the switch behind an explicit
+          confirm; cancelling keeps the current draft intact. */}
+      <ConfirmDialog
+        open={pendingOpen !== null}
+        danger
+        title="Discard unsaved changes?"
+        description="You have unsaved changes to this pipeline. Opening another will discard them. This cannot be undone."
+        confirmLabel="Discard changes"
+        cancelLabel="Keep editing"
+        onCancel={() => setPendingOpen(null)}
+        onConfirm={() => {
+          const open = pendingOpen;
+          setPendingOpen(null);
+          open?.();
+        }}
       />
     </div>
   );

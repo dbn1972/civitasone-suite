@@ -34,21 +34,47 @@ const createContactObject = z.object({
   gstin: z.string().max(15).optional(),
   pan: z.string().max(10).optional(),
   pincode: z.string().max(6).optional(),
-  leadStatus: z.enum(["new", "contacted", "qualified", "unqualified", "customer"]).default("new"),
+  leadStatus: z.enum(["new", "contacted", "qualified", "unqualified", "disqualified", "customer"]).default("new"),
   leadSource: z.string().max(64).optional(),
   ownerId: z.string().uuid().optional(),
   accountId: z.string().uuid().optional(),
   tags: z.array(z.string()).max(20).optional(),
   marketingConsent: z.boolean().optional(),
+  // GAP-CRM-CONTACTS-DETAIL-EDIT-07: DPDP consent record. When marketingConsent
+  // is true the application requires both; enforced below via superRefine so a
+  // bare "consent = true" with no purpose/channel is rejected at the boundary.
+  consentPurpose: z.enum(["marketing", "transactional", "service_updates", "research"]).nullable().optional(),
+  consentChannel: z.enum(["web_form", "email", "phone", "in_person", "import"]).nullable().optional(),
 });
 
-export const createContactBody = createContactObject.superRefine(formatRefiner(CONTACT_FORMAT_SPECS));
+/**
+ * GAP-CRM-CONTACTS-DETAIL-EDIT-07: a defensible DPDP consent artefact needs the
+ * purpose + the channel it was captured through. Enforce that GRANTING marketing
+ * consent (marketingConsent === true) also carries both. Withdrawing (false) or
+ * leaving it unspecified needs neither. Surfaces as a field-level issue so the
+ * form can highlight the missing input.
+ */
+function consentRefiner(val: Record<string, unknown>, ctx: z.RefinementCtx): void {
+  if (val.marketingConsent === true) {
+    if (!val.consentPurpose) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "CONSENT_PURPOSE_REQUIRED", path: ["consentPurpose"] });
+    }
+    if (!val.consentChannel) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "CONSENT_CHANNEL_REQUIRED", path: ["consentChannel"] });
+    }
+  }
+}
+
+export const createContactBody = createContactObject
+  .superRefine(formatRefiner(CONTACT_FORMAT_SPECS))
+  .superRefine(consentRefiner);
 export type CreateContactBody = z.infer<typeof createContactBody>;
 
 export const updateContactBody = createContactObject
   .partial()
   .extend({ status: z.enum(["active", "inactive"]).optional() })
-  .superRefine(formatRefiner(CONTACT_FORMAT_SPECS));
+  .superRefine(formatRefiner(CONTACT_FORMAT_SPECS))
+  .superRefine(consentRefiner);
 export type UpdateContactBody = z.infer<typeof updateContactBody>;
 
 export const mergeContactsBody = z.object({
@@ -57,8 +83,22 @@ export const mergeContactsBody = z.object({
 });
 export type MergeContactsBody = z.infer<typeof mergeContactsBody>;
 
+/**
+ * GAP-CRM-CONTACTS-DETAIL-EDIT-07 follow-up: a bulk-imported row's consent
+ * comes from the CSV "marketingConsent" column, so its purpose is marketing and
+ * its channel is the import itself. Default those (only when the row grants
+ * consent and does not say otherwise), so imports keep working under the
+ * purpose+channel rule instead of every consenting row being rejected.
+ */
+const importedContactBody = z.preprocess((v) => {
+  if (v && typeof v === "object" && (v as Record<string, unknown>).marketingConsent === true) {
+    return { consentPurpose: "marketing", consentChannel: "import", ...(v as Record<string, unknown>) };
+  }
+  return v;
+}, createContactBody);
+
 export const bulkImportBody = z.object({
-  contacts: z.array(createContactBody).min(1).max(500),
+  contacts: z.array(importedContactBody).min(1).max(500),
 });
 export type BulkImportBody = z.infer<typeof bulkImportBody>;
 
@@ -69,7 +109,7 @@ export type BulkImportBody = z.infer<typeof bulkImportBody>;
 export const internalBulkImportBody = z.object({
   tenantId: z.string().uuid(),
   source: z.string().min(1).max(64),
-  contacts: z.array(createContactBody).min(1).max(500),
+  contacts: z.array(importedContactBody).min(1).max(500),
 });
 export type InternalBulkImportBody = z.infer<typeof internalBulkImportBody>;
 
@@ -208,6 +248,9 @@ export const contactViewSchema = z.object({
   tags: z.array(z.string()),
   marketingConsent: z.boolean(),
   consentDate: z.string().nullable(),
+  consentPurpose: z.string().nullable(),
+  consentChannel: z.string().nullable(),
+  consentUpdatedAt: z.string().nullable(),
   lastActivityAt: z.string().nullable(),
   status: z.string(),
   version: z.number().int(),

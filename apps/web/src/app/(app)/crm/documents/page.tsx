@@ -1,5 +1,6 @@
 import { useTranslations } from "next-intl";
 import { PageHeader } from "../../../_components/ds";
+import Link from "next/link";
 import { getSessionRoles, hasAnyRole, CRM_ADMIN_ROLES } from "@/lib/auth/roleGuard";
 import { DocumentRegister } from "./DocumentRegister";
 
@@ -46,12 +47,18 @@ export default function Page() {
             ) : (
               <li>{t("askAdminCatalogue")}</li>
             )}
-            <li>Each record&rsquo;s Documents panel flags any mandatory type that is missing, and any document that has expired or expires within 30 days.</li>
-            <li>Infected files are quarantined automatically and can never be downloaded.</li>
+            <li>Each record&rsquo;s Documents panel flags any mandatory type that is missing, and any document that has expired or expires within 30 days (configurable).</li>
+            {/* GAP-CRM-DOCUMENTS-05: verified against crm-service — the download
+                route is scan-gated secure-by-default: only scan_status='clean'
+                is downloadable; an infected file returns 403 and a file still
+                being scanned is withheld (409). There is no separate "quarantine"
+                store, so the copy says "blocked from download" (what actually
+                happens) rather than "quarantined". */}
+            <li>A file that fails the malware scan is blocked from download automatically; a file is downloadable only once its scan comes back clean.</li>
           </ul>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <a className="btn ghost" href="/crm/accounts">Go to Accounts</a>
-            <a className="btn ghost" href="/crm/contacts">Go to Contacts</a>
+            <Link className="btn ghost" href="/crm/accounts">Go to Accounts</Link>
+            <Link className="btn ghost" href="/crm/contacts">Go to Contacts</Link>
             {canManage ? (
               <a className="btn primary" href="/crm/document-types">{t("manageTypes")}</a>
             ) : (

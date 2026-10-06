@@ -1,4 +1,5 @@
 import { NextIntlClientProvider } from "next-intl";
+import { renderWithIntl } from "@/lib/testUtils/intl";
 import enMessages from "@/messages/en.json";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
@@ -83,6 +84,32 @@ describe("DataQualityView", () => {
 
     // the summary stays (not reset to 0 or "—") because only records failed
     await waitFor(() => expect(screen.getByText("125")).toBeInTheDocument());
+  });
+
+  it("GAP-CRM-DATA-QUALITY-06: shows definitions of the quality score and each filter", async () => {
+    mocked.mockResolvedValue({ data: report(), source: "api" });
+    renderWithIntl(<DataQualityView />);
+    await waitFor(() => expect(screen.getByText(/Quality score is the share/)).toBeInTheDocument());
+    expect(screen.getByText(/not updated within the office/)).toBeInTheDocument();
+  });
+
+  it("GAP-CRM-DATA-QUALITY-04: a flagged lead links to its contact record (no /crm/leads/:id)", async () => {
+    mocked.mockResolvedValue({
+      data: report({ records: [{ id: "lead-1", score: 0.5, issues: ["email"], name: "Asha" }] }),
+      source: "api",
+    });
+    renderWithIntl(<DataQualityView />);
+
+    // default scope is contacts; switch to Leads
+    await waitFor(() => expect(screen.getByText("Asha")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("tab", { name: "Leads" }));
+
+    await waitFor(() => {
+      const link = screen.getByRole("link", { name: "Asha" });
+      expect(link).toHaveAttribute("href", "/crm/contacts/lead-1");
+      // the title spells out it opens the contact record, not a phantom leads screen
+      expect(link).toHaveAttribute("title", "Open contact record lead-1");
+    });
   });
 });
 

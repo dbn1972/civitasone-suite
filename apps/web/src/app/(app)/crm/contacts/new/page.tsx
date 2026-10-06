@@ -1,9 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useEffect, useId, useRef, useState } from "react";
 import { DuplicateCheckPanel } from "../../../../_components/crm/DuplicateCheckPanel";
-import { useTranslations } from "next-intl";
+import { ConsentField, type ConsentValue } from "../../../../_components/crm/ConsentField";
 import { useToast } from "@/app/_components/ds/Toast";
 import { Button, PageHeader, EntityPicker, type EntityOption } from "@/app/_components/ds";
 import { browserFetch } from "@/lib/api/browserClient";
@@ -69,8 +70,14 @@ export default function NewContactPage() {
   const [form, setForm] = useState({
     name: "", email: "", phone: "", company: "", designation: "", city: "",
     gstin: "", pan: "", pincode: "",
-    leadStatus: "new", leadSource: "", marketingConsent: false,
+    leadStatus: "new", leadSource: "",
   });
+  // GAP-CRM-CONTACTS-DETAIL-EDIT-07: consent is a DPDP record (purpose +
+  // channel), the same control as the edit form; crm-service rejects a grant
+  // without both.
+  const [consent, setConsent] = useState<ConsentValue>({ granted: false, purpose: "", channel: "" });
+  const tConsent = useTranslations("crm.consent");
+  const [consentError, setConsentError] = useState("");
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState(false);
   // GAP-CRM-CONTACTS-NEW-02: the linked account id + label. When set, the
@@ -180,6 +187,11 @@ export default function NewContactPage() {
   }
 
   async function create() {
+    setConsentError("");
+    if (consent.granted && (!consent.purpose || !consent.channel)) {
+      setConsentError(tConsent("incompleteNew"));
+      return;
+    }
     setBusy(true);
     setMessage("");
     setError("");
@@ -203,7 +215,8 @@ export default function NewContactPage() {
           pincode: form.pincode || undefined,
           leadStatus: form.leadStatus,
           leadSource: form.leadSource || undefined,
-          marketingConsent: form.marketingConsent,
+          marketingConsent: consent.granted,
+          ...(consent.granted ? { consentPurpose: consent.purpose, consentChannel: consent.channel } : {}),
         }),
       });
       // Read the body exactly ONCE. A DQ-003 format error is surfaced against its
@@ -273,7 +286,7 @@ export default function NewContactPage() {
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
             <div>
               <label htmlFor="new-name" style={labelStyle}>{labelFor("name", "Full name")}</label>
-              <input id="new-name" {...requiredProps("name")} value={form.name} onChange={(e) => setDedupField({ name: e.target.value })} placeholder="e.g. Asha Rao" style={inputStyle} />
+              <input id="new-name" {...requiredProps("name")} value={form.name} onChange={(e) => setDedupField({ name: e.target.value })} placeholder="e.g. full name" style={inputStyle} />
             </div>
             <div>
               <label htmlFor="new-email" style={labelStyle}>{labelFor("email", "Email")}</label>
@@ -330,7 +343,7 @@ export default function NewContactPage() {
                 value={form.gstin}
                 onChange={(e) => setDedupField({ gstin: e.target.value.toUpperCase() })}
                 onBlur={() => void runDuplicateCheck()}
-                placeholder="29ABCDE1234F1Z5"
+                placeholder="21ABCDE1234F1Z5"
                 style={inputStyle}
                 aria-invalid={fieldErrors.gstin ? true : undefined}
                 aria-describedby={[describedBy("gstin"), "new-gstin-note"].filter(Boolean).join(" ") || undefined}
@@ -360,7 +373,7 @@ export default function NewContactPage() {
             </div>
             <div>
               <label htmlFor="new-city" style={labelStyle}>{labelFor("city", "City")}</label>
-              <input id="new-city" {...requiredProps("city")} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="Bengaluru" style={inputStyle} />
+              <input id="new-city" {...requiredProps("city")} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="Bhubaneswar" style={inputStyle} />
             </div>
             <div>
               <label htmlFor="new-pincode" style={labelStyle}>PIN code</label>
@@ -368,7 +381,7 @@ export default function NewContactPage() {
                 id="new-pincode"
                 value={form.pincode}
                 onChange={(e) => setForm({ ...form, pincode: e.target.value })}
-                placeholder="560001"
+                placeholder="751001"
                 inputMode="numeric"
                 style={inputStyle}
                 aria-invalid={fieldErrors.pincode ? true : undefined}
@@ -391,6 +404,11 @@ export default function NewContactPage() {
                 <option value="contacted">{LEAD_STATUS_LABELS.contacted}</option>
                 <option value="qualified">{LEAD_STATUS_LABELS.qualified}</option>
                 <option value="unqualified">{LEAD_STATUS_LABELS.unqualified}</option>
+                {/* GAP-CRM-CONTACTS-NEW-05: `disqualified` is a real lead status
+                    (LeadTransitionControl allows it and the list/detail show it),
+                    so it must be selectable here too — using the SAME shared
+                    LEAD_STATUS_LABELS so all four screens name it identically. */}
+                <option value="disqualified">{LEAD_STATUS_LABELS.disqualified}</option>
                 <option value="customer">{LEAD_STATUS_LABELS.customer}</option>
               </select>
             </div>
@@ -412,13 +430,16 @@ export default function NewContactPage() {
             }}
           />
 
-          <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: 13 }}>
-            <input type="checkbox" checked={form.marketingConsent} onChange={(e) => setForm({ ...form, marketingConsent: e.target.checked })} />
-            {/* GAP-CRM-CONTACTS-NEW-03: DPDP is the governing law here, not GDPR.
-                Decision (M03): drop the GDPR reference; final legal wording is
-                flagged for DPO sign-off (see report). */}
-            {t("marketingConsent")}
-          </label>
+          {/* GAP-CRM-CONTACTS-NEW-03 / DETAIL-EDIT-07: DPDP is the governing law
+              (no GDPR reference); consent records purpose + channel. Final legal
+              wording is flagged for DPO sign-off. */}
+          <div style={{ marginTop: 12 }}>
+            <ConsentField
+              value={consent}
+              onChange={(next) => { setConsent(next); setConsentError(""); }}
+              error={consentError || undefined}
+            />
+          </div>
           <Button type="submit" disabled={busy || checking || created} loading={busy} style={{ marginTop: 16, minHeight: 44 }}>
             {busy ? "Creating…" : checking ? "Checking…" : created ? t("created") : ackDuplicates ? "Create anyway" : "Create contact"}
           </Button>

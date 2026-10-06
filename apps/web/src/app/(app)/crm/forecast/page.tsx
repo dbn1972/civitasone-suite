@@ -1,6 +1,7 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { Card, PageHeader, StatCard, StatGrid } from "../../../_components/ds";
 import { getTranslations } from "next-intl/server";
+import Link from "next/link";
 import { LoadErrorState } from "../../../_components/ds/LoadErrorState";
 import { getCrmForecast, getPipelines } from "../../../_data/loaders";
 import { formatMoney } from "@/lib/formatters";
@@ -59,31 +60,33 @@ export default async function ForecastPage({ searchParams }: PageProps) {
         title="Procurement Pipeline Forecast"
         subtitle={t("subtitle", { periodSuffix })}
         back="/crm"
-        actions={<a className="btn" href="/crm/pipeline">Engagement Board</a>}
+        actions={<Link className="btn" href="/crm/pipeline">Engagement Board</Link>}
       />
       {pipelineSource === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
+        {/* GAP-CRM-FORECAST-06: tone tokens (dark-mode aware) instead of fixed
+            pastel hex iconBg values that stayed pale in dark mode. */}
         <StatCard
           icon="▣"
-          iconBg="#dcfce7"
+          tone="good"
           label="Weighted Forecast"
           value={formatMoney(forecast.totalForecastMinor)}
         />
         <StatCard
           icon="◉"
-          iconBg="#e0f2fe"
+          tone="info"
           label="Engagements in Forecast"
           value={forecast.dealCount.toLocaleString("en-IN")}
         />
         <StatCard
           icon="◈"
-          iconBg="#fef3c7"
+          tone="warn"
           label="Avg Weighted Engagement"
           value={formatMoney(averageWeightedDealMinor(forecast))}
         />
         <StatCard
           icon="△"
-          iconBg="#fce7f3"
+          tone="neutral"
           label="Top Stage"
           value={topStage ? topStage.stageName : "—"}
         />

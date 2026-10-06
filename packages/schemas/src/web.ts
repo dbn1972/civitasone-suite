@@ -1322,6 +1322,17 @@ export const ContactDetailSchema = z.object({
   lastActivityDate: z.string().optional(),
   leadStatus: z.string().optional(),
   marketingConsent: z.boolean().optional(),
+  // GAP-CRM-CONTACTS-DETAIL-EDIT-07: DPDP consent record + editable identifiers
+  // seeded into the edit form so they can be reviewed/changed, not just captured
+  // once at creation.
+  consentPurpose: z.string().nullish(),
+  consentChannel: z.string().nullish(),
+  consentDate: z.string().nullish(),
+  consentUpdatedAt: z.string().nullish(),
+  gstin: z.string().nullish(),
+  pan: z.string().nullish(),
+  pincode: z.string().nullish(),
+  leadSource: z.string().nullish(),
   temperature: z.string().nullish(),
   priority: z.string().nullish(),
   segment: z.string().nullish(),

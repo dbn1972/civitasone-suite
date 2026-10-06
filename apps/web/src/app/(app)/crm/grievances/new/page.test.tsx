@@ -31,8 +31,8 @@ describe("NewGrievancePage", () => {
   // never actually file a grievance, the request 404'd against the Next.js
   // app itself every time.
   it("submits the new grievance to the correct proxied endpoint and navigates to it", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ data: { id: "new-grievance-1" } }), { status: 201 }),
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(() =>
+      Promise.resolve(new Response(JSON.stringify({ data: { id: "new-grievance-1" } }), { status: 201 })),
     );
 
     render(<NewGrievancePage />);
@@ -152,5 +152,50 @@ describe("NewGrievancePage", () => {
     render(<NewGrievancePage />);
     expect(await screen.findByText(/standard category list/i)).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Water Supply" })).toBeInTheDocument();
+  });
+
+  // GAP-CRM-GRIEVANCES-NEW-07 — a "Fields marked * are required" legend is
+  // shown and the description field has a live character counter.
+  it("shows the required-fields legend and a description character counter", () => {
+    render(<NewGrievancePage />);
+    expect(screen.getByText(/Fields marked/i)).toBeInTheDocument();
+    expect(screen.getByText("0/5,000")).toBeInTheDocument();
+  });
+
+  it("updates the description counter as the clerk types", () => {
+    render(<NewGrievancePage />);
+    fireEvent.input(screen.getByLabelText(/description/i), { target: { value: "No water for days" } });
+    expect(screen.getByText("17/5,000")).toBeInTheDocument();
+  });
+
+  // GAP-CRM-GRIEVANCES-NEW-04 — a hint explains when Urgent applies.
+  it("shows guidance on when to use the Urgent priority", () => {
+    render(<NewGrievancePage />);
+    expect(screen.getByText(/only for risk to life or safety/i)).toBeInTheDocument();
+  });
+
+  // GAP-CRM-GRIEVANCES-NEW-05 — the POST carries the device id (browserFetch),
+  // and the Cancel control is a client-side link, not a full-reload anchor.
+  it("sends the device header on submit and renders Cancel as a client link", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(() =>
+      Promise.resolve(new Response(JSON.stringify({ data: { id: "g-1" } }), { status: 201 })),
+    );
+
+    render(<NewGrievancePage />);
+    const cancel = screen.getByRole("link", { name: /cancel/i });
+    expect(cancel).toHaveAttribute("href", "/crm/grievances");
+
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Ravi Kumar" } });
+    fireEvent.change(screen.getByLabelText(/category/i), { target: { value: "Water Supply" } });
+    fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: "No water for 3 days" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit Grievance" }));
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/crm/grievances/g-1"));
+    const postCall = fetchSpy.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "POST");
+    expect(postCall).toBeDefined();
+    const [url, init] = postCall!;
+    expect(url).toBe("/api/proxy/v1/crm/grievances");
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers["x-device-id"]).toBeTruthy();
   });
 });

@@ -60,6 +60,26 @@ function toRow(d: CustomFieldDraft): Row {
   return { ...d, key: d.id ?? `new-${SEQ++}`, origFieldType: d.id ? d.fieldType : undefined };
 }
 
+/**
+ * GAP-CRM-CUSTOM-FIELDS-06: a stable serialization of the editable content of
+ * the rows (ignoring the transient `key`/`origFieldType`), used to detect
+ * unsaved edits/new rows before an entity switch discards them.
+ */
+function snapshotRows(rows: Row[]): string {
+  return JSON.stringify(
+    rows.map((r) => ({
+      id: r.id ?? null,
+      fieldName: r.fieldName,
+      fieldType: r.fieldType,
+      required: r.required,
+      options: r.options,
+      ordinal: r.ordinal,
+      sensitive: r.sensitive,
+      visibleToRoles: r.visibleToRoles,
+    })),
+  );
+}
+
 export function CustomFieldsManager() {
   const t = useTranslations("crmCustomFieldsManager");
   const [entity, setEntity] = useState<CfEntityType>("leads");
@@ -75,6 +95,11 @@ export function CustomFieldsManager() {
   const [typeChangeKey, setTypeChangeKey] = useState<string | null>(null);
   /** Typed field-name confirmation for a destructive delete (GAP-CRM-CUSTOM-FIELDS-04). */
   const [deleteNameInput, setDeleteNameInput] = useState("");
+  // GAP-CRM-CUSTOM-FIELDS-06: a serialized snapshot of the rows as last loaded,
+  // so switching entity can detect unsaved edits/new rows and confirm before
+  // discarding them. Updated in lockstep with every setRows(server data).
+  const loadedSnapshotRef = useRef<string>("[]");
+  const [pendingEntity, setPendingEntity] = useState<CfEntityType | null>(null);
   const headingId = useId();
   const errBaseId = useId();
 
@@ -111,6 +136,7 @@ export function CustomFieldsManager() {
     if (!mountedRef.current || gen !== genRef.current) return;
     const nextRows = data.map((f) => toRow(toDraft(f)));
     setRows(nextRows);
+    loadedSnapshotRef.current = snapshotRows(nextRows);
     setOptionRowIds(
       Object.fromEntries(nextRows.map((r) => [r.key, r.options.map(() => nextOptionRowId.current++)])),
     );
@@ -156,7 +182,9 @@ export function CustomFieldsManager() {
     setMessage("");
     setError("");
     setAttempted((a) => ({ ...a, [row.key]: true }));
-    const errors = validateDraft(row);
+    // GAP-CRM-CUSTOM-FIELDS-05: pass the other rows so a duplicate field name
+    // within this entity is caught client-side (server stays authoritative).
+    const errors = validateDraft(row, rows);
     if (Object.keys(errors).length > 0) {
       setError(errors.fieldName ?? errors.options ?? "Fix the highlighted fields.");
       return;
@@ -189,6 +217,7 @@ export function CustomFieldsManager() {
       if (present) {
         const nextRows = data.map((f) => toRow(toDraft(f)));
         setRows(nextRows);
+        loadedSnapshotRef.current = snapshotRows(nextRows);
         setOptionRowIds(
           Object.fromEntries(nextRows.map((r) => [r.key, r.options.map(() => nextOptionRowId.current++)])),
         );
@@ -247,6 +276,17 @@ export function CustomFieldsManager() {
   const confirmRow = rows.find((r) => r.key === confirmKey) ?? null;
   const typeChangeRow = rows.find((r) => r.key === typeChangeKey) ?? null;
 
+  // GAP-CRM-CUSTOM-FIELDS-06: unsaved edits/new rows exist when the current
+  // rows no longer match the snapshot taken at the last successful load.
+  const dirty = source !== "loading" && snapshotRows(rows) !== loadedSnapshotRef.current;
+
+  /** Switch entity, confirming first when there are unsaved changes. */
+  function requestEntitySwitch(next: CfEntityType) {
+    if (next === entity) return;
+    if (dirty) setPendingEntity(next);
+    else setEntity(next);
+  }
+
   return (
     <div className="card">
       <div className="card-h" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -260,7 +300,7 @@ export function CustomFieldsManager() {
             value={ENTITY_TYPE_LABELS[entity]}
             onChange={(label) => {
               const next = ENTITY_TYPES.find((e) => ENTITY_TYPE_LABELS[e] === label);
-              if (next) setEntity(next);
+              if (next) requestEntitySwitch(next);
             }}
           />
         </div>
@@ -283,7 +323,7 @@ export function CustomFieldsManager() {
         ) : (
           <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 12 }} aria-label="Custom fields">
             {rows.map((row) => {
-              const errors = attempted[row.key] ? validateDraft(row) : {};
+              const errors = attempted[row.key] ? validateDraft(row, rows) : {};
               const nameErrId = `${errBaseId}-name-${row.key}`;
               const optErrId = `${errBaseId}-opt-${row.key}`;
               const showOptions = fieldTypeHasOptions(row.fieldType);
@@ -508,6 +548,26 @@ export function CustomFieldsManager() {
           void doSave(typeChangeRow);
         }}
         onCancel={() => setTypeChangeKey(null)}
+      />
+
+      {/* GAP-CRM-CUSTOM-FIELDS-06: switching entity type reloads the list and
+          would discard any unsaved new row/edits — confirm first. */}
+      <ConfirmDialog
+        open={pendingEntity !== null}
+        title="Discard unsaved changes?"
+        description={
+          pendingEntity
+            ? `You have unsaved custom-field changes. Switching to ${ENTITY_TYPE_LABELS[pendingEntity]} will discard them.`
+            : ""
+        }
+        confirmLabel="Discard and switch"
+        cancelLabel="Keep editing"
+        danger
+        onConfirm={() => {
+          if (pendingEntity) setEntity(pendingEntity);
+          setPendingEntity(null);
+        }}
+        onCancel={() => setPendingEntity(null)}
       />
     </div>
   );

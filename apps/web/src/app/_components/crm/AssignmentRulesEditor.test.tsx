@@ -1,4 +1,5 @@
 import { NextIntlClientProvider } from "next-intl";
+import { renderWithIntl } from "@/lib/testUtils/intl";
 import enMessages from "@/messages/en.json";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
@@ -125,7 +126,7 @@ describe("AssignmentRulesEditor (AS-001 admin)", () => {
     fireEvent.change(screen.getByLabelText(/name for rule 1/i), { target: { value: "West team" } });
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
     expect(await screen.findByText(/conflict/i)).toBeInTheDocument();
-    expect(screen.queryByText(/saved/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/” saved\./i)).not.toBeInTheDocument();
   });
 
   it("renders the fallback owner's name, not a raw id, and keeps the id on save (GAP-CRM-ASSIGNMENT-RULES-02)", async () => {
@@ -134,6 +135,8 @@ describe("AssignmentRulesEditor (AS-001 admin)", () => {
     render(<NextIntlClientProvider locale="en" messages={enMessages}><AssignmentRulesEditor /></NextIntlClientProvider>);
     // The fallback owner id "u1" must resolve to "Asha Rao" via the directory.
     await waitFor(() => expect(screen.getByDisplayValue("Asha Rao")).toBeInTheDocument());
+    // GAP-CRM-ASSIGNMENT-RULES-06: Save is dirty-gated, so make an edit first.
+    fireEvent.change(screen.getByLabelText(/name for rule 1/i), { target: { value: "West reps 2" } });
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
     await waitFor(() => expect(as.updateAssignmentRule).toHaveBeenCalled());
     // The persisted payload still carries the real id, never the display name.
@@ -189,5 +192,55 @@ describe("AssignmentRulesEditor (AS-001 admin)", () => {
     render(<NextIntlClientProvider locale="en" messages={enMessages}><AssignmentRulesEditor /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByDisplayValue("West reps")).toBeInTheDocument());
     expect(screen.getByText(/by Meera/i)).toBeInTheDocument();
+  });
+});
+
+// GAP-CRM-ASSIGNMENT-RULES-06: per-row dirty marker + merge-after-save.
+describe("AssignmentRulesEditor dirty markers (RULES-06)", () => {
+  const r1: as.AssignmentRule = { id: "r1", name: "First", ruleType: "territory", criteria: { territory: "w", ownerId: "u1" }, ordinal: 0, enabled: true, fallbackOwnerId: "" };
+  const r2: as.AssignmentRule = { id: "r2", name: "Second", ruleType: "territory", criteria: { territory: "e", ownerId: "u1" }, ordinal: 1, enabled: true, fallbackOwnerId: "" };
+
+  it("disables Save on an unchanged row and shows no 'Unsaved' marker", async () => {
+    vi.mocked(as.getAssignmentRules).mockResolvedValue({ data: [r1], source: "api" });
+    renderWithIntl(<AssignmentRulesEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("First")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
+    expect(screen.queryByText("Unsaved")).not.toBeInTheDocument();
+  });
+
+  it("marks an edited row 'Unsaved' and enables its Save", async () => {
+    vi.mocked(as.getAssignmentRules).mockResolvedValue({ data: [r1], source: "api" });
+    renderWithIntl(<AssignmentRulesEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("First")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/name for rule 1/i), { target: { value: "First edited" } });
+    expect(screen.getByText("Unsaved")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^save$/i })).toBeEnabled();
+  });
+
+  it("saving row A keeps row B's unsaved edit and does not reload the whole chain", async () => {
+    vi.mocked(as.getAssignmentRules).mockResolvedValue({ data: [r1, r2], source: "api" });
+    vi.mocked(as.updateAssignmentRule).mockResolvedValue(undefined);
+    renderWithIntl(<AssignmentRulesEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("First")).toBeInTheDocument());
+    // Edit B (ordinal 1 -> row 2 by sort) without saving.
+    fireEvent.change(screen.getByLabelText(/name for rule 2/i), { target: { value: "Second edited" } });
+    // Edit + save A (row 1).
+    fireEvent.change(screen.getByLabelText(/name for rule 1/i), { target: { value: "First edited" } });
+    const saveButtons = screen.getAllByRole("button", { name: /^save$/i });
+    fireEvent.click(saveButtons[0]);
+    await waitFor(() => expect(as.updateAssignmentRule).toHaveBeenCalledWith("r1", expect.objectContaining({ name: "First edited" })));
+    // B's unsaved edit survives; getAssignmentRules not re-called for a reload.
+    expect(screen.getByDisplayValue("Second edited")).toBeInTheDocument();
+    expect(as.getAssignmentRules).toHaveBeenCalledTimes(1);
+  });
+
+  it("Discard restores a row to its loaded values", async () => {
+    vi.mocked(as.getAssignmentRules).mockResolvedValue({ data: [r1], source: "api" });
+    renderWithIntl(<AssignmentRulesEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("First")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/name for rule 1/i), { target: { value: "Changed" } });
+    fireEvent.click(screen.getByRole("button", { name: /discard changes to rule 1/i }));
+    expect(screen.getByDisplayValue("First")).toBeInTheDocument();
+    expect(screen.queryByText("Unsaved")).not.toBeInTheDocument();
   });
 });

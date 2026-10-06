@@ -1,16 +1,17 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { rupeesToMinorString } from "@/lib/money";
-import { saveClassification, type ClassificationPatch, type Temperature, type Priority } from "@/lib/crm/leadQualification";
+import { saveClassification, type ClassificationPatch, type Temperature, type Priority, LEAD_STATUS_LABELS, type LeadStatus } from "@/lib/crm/leadQualification";
 import { buildContactPatch, isEmptyPatch } from "@/lib/crm/contactPatch";
 import { ClassificationFields, type ClassificationFormValue } from "../../../../../_components/crm/ClassificationFields";
+import { ConsentField, type ConsentValue } from "../../../../../_components/crm/ConsentField";
 import { DuplicateCheckPanel } from "../../../../../_components/crm/DuplicateCheckPanel";
 import { duplicateCheck, parseFieldError, type DuplicateCandidate, type ValidatedField } from "@/lib/crm/dataQuality";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
-import { Button, EntityPicker, type EntityOption } from "@/app/_components/ds";
+import { Button, ConfirmDialog, EntityPicker, type EntityOption } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { ArrowLeft } from "lucide-react";
 
@@ -25,6 +26,14 @@ type Initial = {
   city?: string;
   leadStatus?: string;
   marketingConsent?: boolean;
+  /** GAP-CRM-CONTACTS-DETAIL-EDIT-07: DPDP consent record + editable identifiers. */
+  consentPurpose?: string;
+  consentChannel?: string;
+  consentUpdatedAt?: string;
+  gstin?: string;
+  pan?: string;
+  pincode?: string;
+  leadSource?: string;
   temperature?: string;
   priority?: string;
   segment?: string;
@@ -102,8 +111,21 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
     company: initial.organization ?? "",
     designation: initial.designation ?? "",
     city: initial.city ?? "",
-    marketingConsent: initial.marketingConsent ?? false,
+    gstin: initial.gstin ?? "",
+    pan: initial.pan ?? "",
+    pincode: initial.pincode ?? "",
+    leadSource: initial.leadSource ?? "",
   });
+  // GAP-CRM-CONTACTS-DETAIL-EDIT-07: DPDP consent is a record (purpose/channel),
+  // not a bare boolean. Seeded from the saved consent so the operator sees what
+  // was previously recorded.
+  const [consent, setConsent] = useState<ConsentValue>({
+    granted: initial.marketingConsent ?? false,
+    purpose: initial.consentPurpose ?? "",
+    channel: initial.consentChannel ?? "",
+  });
+  const tConsent = useTranslations("crm.consent");
+  const [consentError, setConsentError] = useState("");
   // GAP-CRM-CONTACTS-NEW-02: the linked account. Seeded from the saved
   // accountId; the label is resolved by the picker's resolve() on first render.
   const [accountId, setAccountId] = useState<string | null>(initial.accountId ?? null);
@@ -134,6 +156,59 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
   const [checkError, setCheckError] = useState(false);
   const checkSeq = useRef(0);
   const phoneErrId = useId();
+  const gstinErrId = useId();
+  const panErrId = useId();
+  const pincodeErrId = useId();
+
+  // GAP-CRM-CONTACTS-DETAIL-EDIT-06: dirty detection drives the Cancel confirm
+  // and the beforeunload guard. Compare the live form/consent/classification
+  // against the initial values the page loaded with.
+  const dirty =
+    form.name !== initial.name ||
+    form.email !== (initial.email ?? "") ||
+    form.phone !== (initial.phone ?? "") ||
+    form.company !== (initial.organization ?? "") ||
+    form.designation !== (initial.designation ?? "") ||
+    form.city !== (initial.city ?? "") ||
+    form.gstin !== (initial.gstin ?? "") ||
+    form.pan !== (initial.pan ?? "") ||
+    form.pincode !== (initial.pincode ?? "") ||
+    form.leadSource !== (initial.leadSource ?? "") ||
+    (accountId ?? null) !== (initial.accountId ?? null) ||
+    consent.granted !== (initial.marketingConsent ?? false) ||
+    consent.purpose !== (initial.consentPurpose ?? "") ||
+    consent.channel !== (initial.consentChannel ?? "") ||
+    classification.temperature !== (initial.temperature && isTemperature(initial.temperature) ? initial.temperature : "") ||
+    classification.priority !== (initial.priority && isPriority(initial.priority) ? initial.priority : "") ||
+    classification.segment !== (initial.segment ?? "") ||
+    classification.product !== (initial.product ?? "") ||
+    classification.region !== (initial.region ?? "") ||
+    classification.expectedValueRupees !== minorToRupees(initial.expectedValueMinor);
+
+  const [cancelOpen, setCancelOpen] = useState(false);
+  // Hold the success-redirect timer so it can be cleared on unmount (the old
+  // code's setTimeout could fire router.push after the component unmounted).
+  const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Warn on tab-close/reload while there are unsaved edits.
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirty]);
+
+  // Clear any pending redirect timer on unmount.
+  useEffect(() => () => { if (redirectTimer.current) clearTimeout(redirectTimer.current); }, []);
+
+  /** Cancel: confirm first only when there are unsaved edits. */
+  function handleCancel() {
+    if (dirty) setCancelOpen(true);
+    else router.push(`/crm/contacts/${params.id}`);
+  }
 
   function updateClassification(patch: Partial<ClassificationFormValue>) {
     setClassification((c) => ({ ...c, ...patch }));
@@ -205,11 +280,26 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
     setMessage("");
     setError("");
     setEvError("");
+    setConsentError("");
     setFieldErrors({});
 
     const classificationPatch = buildClassificationPatch();
     if (classificationPatch === "INVALID") {
       setEvError("Enter expected value as a positive amount in rupees (up to 2 decimals).");
+      return;
+    }
+
+    // GAP-CRM-CONTACTS-DETAIL-EDIT-07: marketing consent is a record — granting
+    // (or changing) it requires a purpose and a channel. Only gate when the
+    // consent is actually being changed in this session, so saving an unrelated
+    // field on a legacy contact whose stored consent predates these fields is
+    // not blocked. The backend enforces the same rule on the wire.
+    const consentChanged =
+      consent.granted !== (initial.marketingConsent ?? false) ||
+      consent.purpose !== (initial.consentPurpose ?? "") ||
+      consent.channel !== (initial.consentChannel ?? "");
+    if (consentChanged && consent.granted && (!consent.purpose || !consent.channel)) {
+      setConsentError(tConsent("incompleteEdit"));
       return;
     }
 
@@ -237,10 +327,31 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
           city: form.city,
         },
       );
-      // Marketing consent only when it actually changed.
-      const consentChanged = form.marketingConsent !== (initial.marketingConsent ?? false);
+      // GAP-CRM-CONTACTS-DETAIL-EDIT-07: send the consent record (plus
+      // purpose/channel on grant) only when any part changed (computed above).
       const body: Record<string, unknown> = { ...corePatch };
-      if (consentChanged) body.marketingConsent = form.marketingConsent;
+      if (consentChanged) {
+        body.marketingConsent = consent.granted;
+        if (consent.granted) {
+          body.consentPurpose = consent.purpose;
+          body.consentChannel = consent.channel;
+        }
+      }
+      // GAP-CRM-CONTACTS-DETAIL-EDIT-07: editable identifiers + lead source —
+      // send only changed fields; a cleared field becomes null (DPDP correction).
+      const idChanges: Array<[keyof typeof form, string, "gstin" | "pan" | "pincode" | "leadSource"]> = [
+        ["gstin", initial.gstin ?? "", "gstin"],
+        ["pan", initial.pan ?? "", "pan"],
+        ["pincode", initial.pincode ?? "", "pincode"],
+        ["leadSource", initial.leadSource ?? "", "leadSource"],
+      ];
+      let identifiersChanged = false;
+      for (const [key, before, outKey] of idChanges) {
+        const after = form[key].trim();
+        if (after === before.trim()) continue;
+        identifiersChanged = true;
+        body[outKey] = after === "" ? null : after;
+      }
       // GAP-CRM-CONTACTS-NEW-02: when the linked account changed, send accountId
       // (null to unlink) so the Accounts "Linked contacts" / "View contacts"
       // stay driven by the link, not a fragile name match. company is already
@@ -251,7 +362,7 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
       // GAP-CRM-CONTACTS-DETAIL-EDIT-03: run the core PATCH only when something
       // core/consent changed AND it is not already saved from a prior attempt,
       // so a retry after a classification failure never re-persists the core.
-      if ((!isEmptyPatch(corePatch) || consentChanged || accountChanged) && !coreSaved) {
+      if ((!isEmptyPatch(corePatch) || consentChanged || accountChanged || identifiersChanged) && !coreSaved) {
         const res = await browserFetch(`v1/crm/contacts/${params.id}`, {
           method: "PATCH",
           body: JSON.stringify(body),
@@ -283,7 +394,9 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
         return;
       }
       setMessage("Contact updated.");
-      setTimeout(() => router.push(`/crm/contacts/${params.id}`), 500);
+      // GAP-CRM-CONTACTS-DETAIL-EDIT-06: keep a short confirmation beat, but hold
+      // the timer so it is cleared on unmount (no router.push after unmount).
+      redirectTimer.current = setTimeout(() => router.push(`/crm/contacts/${params.id}`), 500);
     } catch (e) {
       setError(formError.fromException("save", e).message);
     } finally {
@@ -365,6 +478,53 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
             <label htmlFor="edit-city" style={labelStyle}>City</label>
             <input id="edit-city" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} style={inputStyle} />
           </div>
+          {/* GAP-CRM-CONTACTS-DETAIL-EDIT-07: GSTIN/PAN/PIN/Lead source captured
+              at creation are now editable here, with the same server-side format
+              validation (INVALID_GSTIN/INVALID_PAN/INVALID_PINCODE surfaced inline). */}
+          <div>
+            <label htmlFor="edit-gstin" style={labelStyle}>GSTIN</label>
+            <input
+              id="edit-gstin"
+              value={form.gstin}
+              onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })}
+              placeholder="29ABCDE1234F1Z5"
+              style={inputStyle}
+              aria-invalid={fieldErrors.gstin ? true : undefined}
+              aria-describedby={fieldErrors.gstin ? gstinErrId : undefined}
+            />
+            {fieldErrors.gstin ? <p id={gstinErrId} role="alert" style={{ fontSize: 12, color: "#b42318", marginTop: 4 }}>{fieldErrors.gstin}</p> : null}
+          </div>
+          <div>
+            <label htmlFor="edit-pan" style={labelStyle}>PAN</label>
+            <input
+              id="edit-pan"
+              value={form.pan}
+              onChange={(e) => setForm({ ...form, pan: e.target.value.toUpperCase() })}
+              placeholder="ABCDE1234F"
+              style={inputStyle}
+              aria-invalid={fieldErrors.pan ? true : undefined}
+              aria-describedby={fieldErrors.pan ? panErrId : undefined}
+            />
+            {fieldErrors.pan ? <p id={panErrId} role="alert" style={{ fontSize: 12, color: "#b42318", marginTop: 4 }}>{fieldErrors.pan}</p> : null}
+          </div>
+          <div>
+            <label htmlFor="edit-pincode" style={labelStyle}>PIN code</label>
+            <input
+              id="edit-pincode"
+              value={form.pincode}
+              onChange={(e) => setForm({ ...form, pincode: e.target.value })}
+              inputMode="numeric"
+              placeholder="751001"
+              style={inputStyle}
+              aria-invalid={fieldErrors.pincode ? true : undefined}
+              aria-describedby={fieldErrors.pincode ? pincodeErrId : undefined}
+            />
+            {fieldErrors.pincode ? <p id={pincodeErrId} role="alert" style={{ fontSize: 12, color: "#b42318", marginTop: 4 }}>{fieldErrors.pincode}</p> : null}
+          </div>
+          <div>
+            <label htmlFor="edit-leadSource" style={labelStyle}>Lead source</label>
+            <input id="edit-leadSource" value={form.leadSource} onChange={(e) => setForm({ ...form, leadSource: e.target.value })} placeholder="Website, referral…" style={inputStyle} />
+          </div>
           <div>
             <span style={labelStyle}>{t("leadStatus")}</span>
             {/* GAP-CRM-CONTACTS-DETAIL-EDIT-02: status changes are governed
@@ -373,7 +533,7 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
                 generic edit form. Shown read-only here. */}
             <p style={{ margin: 0, display: "flex", alignItems: "baseline", gap: 10 }}>
               <span style={{ fontWeight: 600 }}>
-                {(initial.leadStatus ?? "new").charAt(0).toUpperCase() + (initial.leadStatus ?? "new").slice(1)}
+                {LEAD_STATUS_LABELS[(initial.leadStatus ?? "new") as LeadStatus] ?? (initial.leadStatus ?? "new")}
               </span>
               <a className="link" href={`/crm/contacts/${params.id}`}>{t("changeStatus")}</a>
             </p>
@@ -391,15 +551,34 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
             onMerge={(c) => router.push(`/crm/contacts/${c.id}`)}
           />
 
-          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-            <input type="checkbox" checked={form.marketingConsent} onChange={(e) => setForm({ ...form, marketingConsent: e.target.checked })} />
-            Marketing consent (DPDP)
-          </label>
-          <div>
+          {/* GAP-CRM-CONTACTS-DETAIL-EDIT-07: a real DPDP consent record — the
+              checkbox plus purpose + capture channel, with the last-recorded
+              time shown read-only. Granting requires purpose + channel. */}
+          <ConsentField
+            value={consent}
+            onChange={(next) => { setConsent(next); setConsentError(""); }}
+            lastRecordedAt={initial.consentUpdatedAt ?? null}
+            error={consentError || undefined}
+          />
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <Button type="submit" disabled={busy} loading={busy} style={{ minHeight: 44 }}>{busy ? "Saving…" : "Save changes"}</Button>
+            {/* GAP-CRM-CONTACTS-DETAIL-EDIT-06: an explicit Cancel that confirms
+                when there are unsaved edits, instead of only the top back link. */}
+            <Button type="button" variant="ghost" onClick={handleCancel} style={{ minHeight: 44 }}>Cancel</Button>
           </div>
         </form>
       </div>
+
+      {/* GAP-CRM-CONTACTS-DETAIL-EDIT-06: discard-changes guard for Cancel. */}
+      <ConfirmDialog
+        open={cancelOpen}
+        title="Discard unsaved changes?"
+        description="Your edits to this contact have not been saved. Leaving now will discard them."
+        confirmLabel="Discard changes"
+        cancelLabel="Keep editing"
+        onConfirm={() => { setCancelOpen(false); router.push(`/crm/contacts/${params.id}`); }}
+        onCancel={() => setCancelOpen(false)}
+      />
     </>
   );
 }

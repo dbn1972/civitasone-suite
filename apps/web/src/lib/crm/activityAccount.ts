@@ -13,6 +13,7 @@
  */
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { minutesSince, formatAgeing } from "@/lib/crm/assignment";
+import { UserFacingError } from "@/lib/userFacingError";
 
 export type AaSource = "api" | "error";
 export interface LoaderResult<T> {
@@ -183,7 +184,7 @@ export async function createActivity(input: ActivityInput): Promise<AcceptResult
       ...legacy,
     }),
   });
-  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  if (!res.ok) throw new UserFacingError(await errorMessageFromResponse(res));
   return { accepted: res.status === 202 };
 }
 
@@ -297,7 +298,7 @@ export async function createTaskEscalationRule(rule: TaskEscalationRule): Promis
     method: "POST",
     body: JSON.stringify(rule),
   });
-  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  if (!res.ok) throw new UserFacingError(await errorMessageFromResponse(res));
 }
 
 export async function updateTaskEscalationRule(id: string, rule: TaskEscalationRule): Promise<void> {
@@ -305,12 +306,12 @@ export async function updateTaskEscalationRule(id: string, rule: TaskEscalationR
     method: "PUT",
     body: JSON.stringify(rule),
   });
-  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  if (!res.ok) throw new UserFacingError(await errorMessageFromResponse(res));
 }
 
 export async function deleteTaskEscalationRule(id: string): Promise<void> {
   const res = await browserFetch(`v1/crm/task-escalation-rules/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  if (!res.ok) throw new UserFacingError(await errorMessageFromResponse(res));
 }
 
 export interface OverdueTask {
@@ -369,12 +370,44 @@ export async function getOverdueTasks(): Promise<LoaderResult<OverdueTask[]>> {
     // GAP-CRM-TASK-ESCALATION-02: cap the request so the alert table can't grow
     // unbounded. The worst-aged sort is applied server-side (overdue=true) and
     // re-applied here; 50 is the display cap the UI pages against.
-    const res = await browserFetch("v1/crm/activities?type=task&status=open&overdue=true&limit=50&page=1");
+    // GAP-CRM-TASK-ESCALATION-06: the dedicated overdue-tasks route. The old
+    // query (/v1/crm/activities?type=task&overdue=true) 400'd because that
+    // route requires subjectType+subjectId, so the alerts list never loaded.
+    const res = await browserFetch("v1/crm/activities/overdue-tasks?limit=50");
     if (!res.ok) return { data: [], source: "error" };
     return { data: normaliseOverdueTasks(await res.json()), source: "api" };
   } catch {
     return { data: [], source: "error" };
   }
+}
+
+/**
+ * GAP-CRM-TASK-ESCALATION-06: snooze an overdue task by pushing its due date
+ * out to `dueDate` ("YYYY-MM-DD"). PATCH /v1/crm/activities/:id is the existing
+ * CQRS update route (returns 202); the crm-service applies the new due date and
+ * emits the activityUpdated audit event inside the transaction. The server
+ * enforces role + tenant scope. Throws a clerk-safe error on failure.
+ */
+export async function snoozeTask(id: string, dueDate: string, reason: string): Promise<AcceptResult> {
+  const res = await browserFetch(`v1/crm/activities/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ dueDate, reason }),
+  });
+  if (!res.ok) throw new UserFacingError(await errorMessageFromResponse(res));
+  return { accepted: res.status === 202 };
+}
+
+/**
+ * GAP-CRM-TASK-ESCALATION-06: reassign an overdue task to another user. The
+ * reason (10+ chars) is required and is recorded on the audit event.
+ */
+export async function reassignTask(id: string, ownerId: string, reason: string): Promise<AcceptResult> {
+  const res = await browserFetch(`v1/crm/activities/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ ownerId, reason }),
+  });
+  if (!res.ok) throw new UserFacingError(await errorMessageFromResponse(res));
+  return { accepted: res.status === 202 };
 }
 
 /* ============================================================ AC-003 ===== */
@@ -463,7 +496,7 @@ export async function createCommunication(input: CommunicationInput): Promise<Ac
     method: "POST",
     body: JSON.stringify(input),
   });
-  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  if (!res.ok) throw new UserFacingError(await errorMessageFromResponse(res));
   return { accepted: res.status === 202 };
 }
 
@@ -535,17 +568,17 @@ export async function getAddresses(ownerType: OwnerType, ownerId: string): Promi
 
 export async function createAddress(body: Address): Promise<void> {
   const res = await browserFetch("v1/crm/addresses", { method: "POST", body: JSON.stringify(body) });
-  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  if (!res.ok) throw new UserFacingError(await errorMessageFromResponse(res));
 }
 
 export async function updateAddress(id: string, body: Address): Promise<void> {
   const res = await browserFetch(`v1/crm/addresses/${id}`, { method: "PUT", body: JSON.stringify(body) });
-  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  if (!res.ok) throw new UserFacingError(await errorMessageFromResponse(res));
 }
 
 export async function deleteAddress(id: string): Promise<void> {
   const res = await browserFetch(`v1/crm/addresses/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  if (!res.ok) throw new UserFacingError(await errorMessageFromResponse(res));
 }
 
 /* ============================================================ CM-003 ===== */
@@ -623,13 +656,13 @@ export async function createContactRole(
     method: "POST",
     body: JSON.stringify({ dealId, role }),
   });
-  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  if (!res.ok) throw new UserFacingError(await errorMessageFromResponse(res));
   return { accepted: res.status === 202 };
 }
 
 export async function deleteContactRole(contactId: string, roleId: string): Promise<void> {
   const res = await browserFetch(`v1/crm/contacts/${contactId}/roles/${roleId}`, { method: "DELETE" });
-  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  if (!res.ok) throw new UserFacingError(await errorMessageFromResponse(res));
 }
 
 /* ============================================================ CM-002 ===== */
@@ -691,12 +724,12 @@ export async function createAccountRelationship(
     method: "POST",
     body: JSON.stringify({ toAccountId, relType }),
   });
-  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  if (!res.ok) throw new UserFacingError(await errorMessageFromResponse(res));
 }
 
 export async function deleteAccountRelationship(accountId: string, relId: string): Promise<void> {
   const res = await browserFetch(`v1/crm/accounts/${accountId}/relationships/${relId}`, { method: "DELETE" });
-  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  if (!res.ok) throw new UserFacingError(await errorMessageFromResponse(res));
 }
 
 /* ============================================================ CM-004 ===== */
@@ -999,10 +1032,10 @@ export async function connectLinkedAccount(provider: LinkedProvider, externalEma
     method: "POST",
     body: JSON.stringify({ provider, externalEmail, status: "pending" }),
   });
-  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  if (!res.ok) throw new UserFacingError(await errorMessageFromResponse(res));
 }
 
 export async function deleteLinkedAccount(id: string): Promise<void> {
   const res = await browserFetch(`v1/crm/linked-accounts/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  if (!res.ok) throw new UserFacingError(await errorMessageFromResponse(res));
 }

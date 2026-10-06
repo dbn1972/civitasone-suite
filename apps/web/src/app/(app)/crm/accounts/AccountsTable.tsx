@@ -13,7 +13,8 @@ type AccountRow = {
   name: string;
   industry: string;
   website: string;
-  hierarchy: string;
+  parentId: string | null;
+  parentName: string | null;
   contacts: number;
 };
 
@@ -39,7 +40,8 @@ export function AccountsTable({
     name: a.name,
     industry: a.industry ?? "—",
     website: a.website ?? "—",
-    hierarchy: a.parentId ? `Reports to ${nameById.get(a.parentId) ?? "another account"}` : "Top level",
+    parentId: a.parentId ?? null,
+    parentName: a.parentId ? nameById.get(a.parentId) ?? null : null,
     contacts: a.contactCount,
   }));
 
@@ -82,7 +84,27 @@ export function AccountsTable({
             { key: "name", label: "Account" },
             { key: "industry", label: "Sector / Ministry" },
             { key: "website", label: "Website" },
-            { key: "hierarchy", label: "Hierarchy" },
+            {
+              key: "parentId",
+              label: "Hierarchy",
+              // GAP-CRM-ACCOUNTS-08: when the parent is not among the loaded
+              // rows (a capped/cached page), say so explicitly and link to the
+              // parent's own route instead of the opaque "another account".
+              // stopPropagation so the nested link does not also trigger the
+              // row's rowHref navigation.
+              render: (row) => {
+                if (!row.parentId) return "Top level";
+                if (row.parentName) return `Reports to ${row.parentName}`;
+                return (
+                  <a
+                    href={`/crm/accounts/${row.parentId}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Reports to a parent not shown here
+                  </a>
+                );
+              },
+            },
             { key: "contacts", label: "Contacts", align: "right" },
           ]}
           rows={tableRows}

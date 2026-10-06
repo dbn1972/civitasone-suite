@@ -99,6 +99,35 @@ export function QualificationFrameworksEditor() {
   const [questionRowIds, setQuestionRowIds] = useState<number[][]>([]);
   const questionKeyFor = (fi: number, qi: number) => questionRowIds[fi]?.[qi] ?? qi;
 
+  // GAP-CRM-QUALIFICATION-FRAMEWORKS-06: after + Add framework the new card is
+  // appended at the end of a potentially long list; scroll it into view and
+  // focus its Name input so the user gets clear feedback. Keyed on the stable
+  // framework row id (not the array index, which other mutations shift).
+  const nameInputRefs = useRef<Map<number, HTMLInputElement>>(new Map());
+  const [pendingFocusRowId, setPendingFocusRowId] = useState<number | null>(null);
+  const [addAnnouncement, setAddAnnouncement] = useState("");
+
+  useEffect(() => {
+    if (pendingFocusRowId === null) return;
+    const el = nameInputRefs.current.get(pendingFocusRowId);
+    if (el) {
+      if (typeof el.scrollIntoView === "function") el.scrollIntoView({ block: "nearest" });
+      el.focus();
+    }
+    setPendingFocusRowId(null);
+  }, [pendingFocusRowId, frameworkRowIds]);
+
+  function addFramework() {
+    const newRowId = nextFrameworkRowId.current++;
+    setFrameworks((prev) => [...prev, blankFramework()]);
+    setFrameworkRowIds((ids) => [...ids, newRowId]);
+    setQuestionRowIds((ids) => [...ids, []]);
+    setMessage("");
+    setError("");
+    setAddAnnouncement(t("added"));
+    setPendingFocusRowId(newRowId);
+  }
+
   async function load(isLive: () => boolean = () => true) {
     setSource("loading");
     const { data, source: s } = await getFrameworks();
@@ -255,14 +284,13 @@ export function QualificationFrameworksEditor() {
           <Button
             type="button"
             variant="ghost"
-            onClick={() => {
-              setFrameworks((prev) => [...prev, blankFramework()]);
-              setFrameworkRowIds((ids) => [...ids, nextFrameworkRowId.current++]);
-              setQuestionRowIds((ids) => [...ids, []]);
-            }}
+            onClick={addFramework}
           >
             + Add framework
           </Button>
+          {addAnnouncement ? (
+            <span role="status" aria-live="polite" className="sr-only">{addAnnouncement}</span>
+          ) : null}
         </div>
       </div>
 
@@ -279,7 +307,18 @@ export function QualificationFrameworksEditor() {
               <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
                 <div>
                   <label htmlFor={`${headingId}-name-${fi}`} style={labelStyle}>Name</label>
-                  <input id={`${headingId}-name-${fi}`} value={fw.name} onChange={(e) => update(fi, { name: e.target.value })} placeholder="e.g. BANT — Government sales" style={inputStyle} />
+                  <input
+                    id={`${headingId}-name-${fi}`}
+                    ref={(el) => {
+                      const rowId = frameworkKeyFor(fi);
+                      if (el) nameInputRefs.current.set(rowId, el);
+                      else nameInputRefs.current.delete(rowId);
+                    }}
+                    value={fw.name}
+                    onChange={(e) => update(fi, { name: e.target.value })}
+                    placeholder={t("namePlaceholder")}
+                    style={inputStyle}
+                  />
                 </div>
                 <div>
                   <label htmlFor={`${headingId}-bl-${fi}`} style={labelStyle}>Business line</label>

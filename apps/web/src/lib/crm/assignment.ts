@@ -361,7 +361,16 @@ export function normaliseAgents(raw: unknown): AgentWorkload[] {
     if (!agentId) continue;
     out.push({
       agentId,
-      name: str(r.name) || agentId,
+      // GAP-CRM-AGENT-WORKLOAD-05: never surface the raw agentId (a UUID) as the
+      // agent's display identity. Fall back through the other name-bearing
+      // fields the roster/directory may send, then to a non-ID placeholder.
+      // The agentId stays the row key only.
+      name:
+        str(r.name) ||
+        str(r.displayName) ||
+        str(r.fullName) ||
+        str(r.email) ||
+        "Unnamed agent",
       activeLeads: num(r.activeLeads ?? r.currentLoad ?? r.currentLeads ?? r.openLeads),
       // GAP-CRM-AGENT-WORKLOAD-03: a MISSING maxLeads must stay NaN, not become
       // 0. The assignment engine treats maxLeads=0 as "receives no new leads"

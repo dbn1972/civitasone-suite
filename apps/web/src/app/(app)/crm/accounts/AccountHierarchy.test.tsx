@@ -46,3 +46,42 @@ describe("AccountHierarchy outage vs empty (GAP-CRM-ACCOUNTS-01)", () => {
     expect(screen.queryByText("No hierarchy yet")).not.toBeInTheDocument();
   });
 });
+
+describe("AccountHierarchy accessible nesting (GAP-CRM-ACCOUNTS-06)", () => {
+  const parent: CRMAccountSummary = {
+    id: "p1",
+    name: "Ministry",
+    industry: undefined,
+    website: undefined,
+    contactCount: 0,
+    parentId: undefined,
+  } as unknown as CRMAccountSummary;
+  const child: CRMAccountSummary = {
+    id: "c1",
+    name: "Directorate",
+    industry: undefined,
+    website: undefined,
+    contactCount: 1,
+    parentId: "p1",
+  } as unknown as CRMAccountSummary;
+
+  it("renders no role='tree' / role='treeitem' / aria-selected markup", () => {
+    const { container } = render(<AccountHierarchy accounts={[parent, child]} source="api" />);
+    expect(container.querySelector('[role="tree"]')).toBeNull();
+    expect(container.querySelector('[role="treeitem"]')).toBeNull();
+    expect(container.querySelector('[aria-selected]')).toBeNull();
+    // Announced as navigation named "Account hierarchy".
+    expect(screen.getByRole("navigation", { name: "Account hierarchy" })).toBeInTheDocument();
+  });
+
+  it("places a child account inside a nested <ul> under its parent <li>", () => {
+    render(<AccountHierarchy accounts={[parent, child]} source="api" />);
+    const childLink = screen.getByRole("link", { name: "Directorate" });
+    const parentLi = screen.getByRole("link", { name: "Ministry" }).closest("li");
+    expect(parentLi).not.toBeNull();
+    // The child link lives inside the parent's <li> (true nesting).
+    expect(parentLi?.contains(childLink)).toBe(true);
+    // And specifically inside a nested <ul> within that <li>.
+    expect(parentLi?.querySelector("ul")?.contains(childLink)).toBe(true);
+  });
+});

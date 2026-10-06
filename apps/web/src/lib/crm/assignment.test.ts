@@ -96,7 +96,10 @@ describe("assignment normalisers", () => {
     ]);
     expect(a).toHaveLength(2);
     expect(a[0]).toMatchObject({ agentId: "a1", activeLeads: 5, available: true });
-    expect(a[1]).toMatchObject({ agentId: "a2", activeLeads: 3, name: "a2" });
+    // GAP-CRM-AGENT-WORKLOAD-05: a missing name resolves to a non-ID placeholder,
+    // never the raw agentId/UUID.
+    expect(a[1]).toMatchObject({ agentId: "a2", activeLeads: 3, name: "Unnamed agent" });
+    expect(a[1].name).not.toBe("a2");
   });
 
   it("normaliseEscalationRules coerces trigger", () => {

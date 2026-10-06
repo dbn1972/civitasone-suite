@@ -19,19 +19,21 @@
  * empty list as fact. Status is shown as icon+label (not colour-only).
  */
 import { useEffect, useId, useMemo, useState, useCallback } from "react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { DataTable } from "../../../_components/ds";
+import { DataTable, StatusPill } from "../../../_components/ds";
+import { formatIndianDateTime } from "@/lib/formatters";
 import {
   getOnboardingCases,
   getOnboardingLookups,
   resolveCaseNames,
   ONBOARDING_STAGES,
   KYC_STATUSES,
-  STAGE_META,
-  KYC_META,
   isOnboardingStage,
   isKycStatus,
+  stagePillVariant,
+  kycPillVariant,
   type OnboardingCase,
   type OnboardingStage,
   type KycStatus,
@@ -42,9 +44,9 @@ import {
 export const ONBOARDING_STAGE_SLA_DAYS = 7;
 
 function fmtDate(iso: string): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString("en-IN");
+  // GAP-CRM-ONBOARDING-05: shared IST date-time formatter ("dd Mon yyyy,
+  // hh:mm") instead of toLocaleString('en-IN') (browser timezone, with seconds).
+  return formatIndianDateTime(iso);
 }
 
 function shortId(id: string): string {
@@ -81,6 +83,8 @@ export function OnboardingList() {
   const [kyc, setKyc] = useState<KycStatus | "">("");
   const [cases, setCases] = useState<OnboardingCase[]>([]);
   const [source, setSource] = useState<OnbSource | "loading">("loading");
+  // GAP-CRM-ONBOARDING-04: bump to re-run the fetch from the error-state Retry.
+  const [reload, setReload] = useState(0);
   const stageFilterId = useId();
   const kycFilterId = useId();
 
@@ -102,7 +106,7 @@ export function OnboardingList() {
     return () => {
       alive = false;
     };
-  }, [stage]);
+  }, [stage, reload]);
 
   const isError = source === "error";
   const isLoading = source === "loading";
@@ -181,8 +185,14 @@ export function OnboardingList() {
             {t("loadingCases")}
           </p>
         ) : isError ? (
-          <p role="alert" style={{ fontSize: 13, color: "var(--muted)", padding: 12 }}>
-            {t("loadError")} <DataSourceBadge source="error" />
+          // GAP-CRM-ONBOARDING-04: a single data-source badge (the filter-row
+          // one above), plus a working Retry — not a second badge and no way to
+          // re-try.
+          <p role="alert" style={{ fontSize: 13, color: "var(--muted)", padding: 12, display: "flex", alignItems: "center", gap: 10 }}>
+            {t("loadError")}
+            <button type="button" className="btn" style={{ fontSize: 13 }} onClick={() => setReload((n) => n + 1)}>
+              {t("retry")}
+            </button>
           </p>
         ) : (
           <DataTable<Row>
@@ -192,7 +202,9 @@ export function OnboardingList() {
                 label: t("colCustomerDeal"),
                 render: (r) => (
                   <>
-                    <a href={`/crm/onboarding/${r.id}`}>{r.customer}</a>
+                    {/* GAP-CRM-ONBOARDING-05: next/link for client-side nav
+                        instead of a full-page-reload <a>. */}
+                    <Link href={`/crm/onboarding/${r.id}`}>{r.customer}</Link>
                     <div style={{ fontSize: 11, color: "var(--muted)" }}>{t("ref", { id: r.ref })}</div>
                   </>
                 ),
@@ -200,26 +212,18 @@ export function OnboardingList() {
               {
                 key: "stageSort",
                 label: t("stage"),
-                render: (r) => {
-                  const sm = STAGE_META[r.stage as OnboardingStage];
-                  return (
-                    <>
-                      <span aria-hidden="true">{sm ? sm.icon : "•"}</span> {stageText(r.stage)}
-                    </>
-                  );
-                },
+                render: (r) => (
+                  // GAP-CRM-ONBOARDING-06: theme-safe tone pill instead of a
+                  // cross-platform-inconsistent emoji glyph.
+                  <StatusPill status={r.stage} label={stageText(r.stage)} variant={stagePillVariant(r.stage)} />
+                ),
               },
               {
                 key: "kycSort",
                 label: t("colKyc"),
-                render: (r) => {
-                  const km = KYC_META[r.kyc as KycStatus];
-                  return (
-                    <>
-                      <span aria-hidden="true">{km ? km.icon : "•"}</span> {kycText(r.kyc)}
-                    </>
-                  );
-                },
+                render: (r) => (
+                  <StatusPill status={r.kyc} label={kycText(r.kyc)} variant={kycPillVariant(r.kyc)} />
+                ),
               },
               { key: "account", label: t("colAccount") },
               {

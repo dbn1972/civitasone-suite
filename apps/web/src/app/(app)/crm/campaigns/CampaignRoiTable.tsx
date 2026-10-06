@@ -78,6 +78,7 @@ export function CampaignRoiTable({ rows }: { rows: CRMCampaignRoiSummaryRow[] })
       filterPlaceholder={t("filterPlaceholder")}
       exportable
       exportFilename="crm-campaign-roi"
+      exportNotice="Exports leave the system; handle spend and revenue figures per policy."
       emptyIcon="📣"
       emptyTitle="No campaign spend recorded"
       emptyMessage="Campaign ROI appears once a marketing period's cost, revenue and responses have been posted against a campaign."

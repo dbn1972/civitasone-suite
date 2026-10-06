@@ -3,7 +3,8 @@ import { PageHeader, EmptyState, maskPhone, maskEmail } from "../../../../_compo
 import { LoadErrorState } from "../../../../_components/ds/LoadErrorState";
 import { getContactById } from "../../../../_data/loaders";
 import { getSessionRoles, hasAnyRole, CRM_PII_READ_ROLES, CRM_VERIFY_ROLES, CRM_ADMIN_ROLES } from "@/lib/auth/roleGuard";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, humanizeStatus } from "@/lib/formatters";
+import { LEAD_STATUS_LABELS, type LeadStatus } from "@/lib/crm/leadQualification";
 import { ContactDetailActions } from "./ContactDetailActions";
 import { QualifyPanel } from "../../../../_components/crm/QualifyPanel";
 import { ScoreHistoryView } from "../../../../_components/crm/ScoreHistoryView";
@@ -56,9 +57,11 @@ export default async function Page({ params }: { params: { id: string } }) {
   const phoneDisplay = contact.phone ? (canViewPii ? contact.phone : maskPhone(contact.phone)) : null;
   const emailDisplay = contact.email ? (canViewPii ? contact.email : maskEmail(contact.email)) : null;
 
+  // GAP-CRM-CONTACTS-DETAIL-07: humanize the raw enum values (hot/high/…) so the
+  // detail page reads like the forms ("Hot", "High") rather than lower-case enums.
   const classificationTags: Array<{ label: string; value: string }> = [
-    ...(contact.temperature ? [{ label: "Temperature", value: contact.temperature }] : []),
-    ...(contact.priority ? [{ label: "Priority", value: contact.priority }] : []),
+    ...(contact.temperature ? [{ label: "Temperature", value: humanizeStatus(contact.temperature) }] : []),
+    ...(contact.priority ? [{ label: "Priority", value: humanizeStatus(contact.priority) }] : []),
     ...(contact.segment ? [{ label: "Segment", value: contact.segment }] : []),
     ...(contact.product ? [{ label: "Product", value: contact.product }] : []),
     ...(contact.region ? [{ label: "Region", value: contact.region }] : []),
@@ -84,7 +87,9 @@ export default async function Page({ params }: { params: { id: string } }) {
               {phoneDisplay && <div className="fld"><div className="l">Phone</div><div className="v">{phoneDisplay}</div></div>}
               {emailDisplay && <div className="fld"><div className="l">Email</div><div className="v">{emailDisplay}</div></div>}
               {contact.city && <div className="fld"><div className="l">City</div><div className="v">{contact.city}</div></div>}
-              {contact.leadStatus && <div className="fld"><div className="l">Lead Status</div><div className="v">{contact.leadStatus}</div></div>}
+              {/* GAP-CRM-CONTACTS-DETAIL-07: show the canonical label ("Disqualified"),
+                  not the raw enum ("disqualified"), matching the list and forms. */}
+              {contact.leadStatus && <div className="fld"><div className="l">Lead Status</div><div className="v">{LEAD_STATUS_LABELS[contact.leadStatus as LeadStatus] ?? humanizeStatus(contact.leadStatus)}</div></div>}
               {contact.expectedValueDisplay && <div className="fld"><div className="l">Expected Value</div><div className="v">{contact.expectedValueDisplay}</div></div>}
               {contact.lastActivityDate && <div className="fld"><div className="l">Last Activity</div><div className="v">{formatIndianDate(contact.lastActivityDate)}</div></div>}
               {/* GAP-CRM-CONTACTS-DETAIL-02: the bare Yes/No marketing-consent

@@ -21,6 +21,7 @@ import { useTranslations } from "next-intl";
 import { useEffect, useId, useRef, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { EmptyState, Button, HelpTip, ConfirmDialog } from "../ds";
+import { SkeletonTable } from "../ds/Skeleton";
 import {
   getAgents,
   updateAgentCapacity,
@@ -136,10 +137,19 @@ export function AgentWorkloadEditor() {
   }
 
   if (source === "loading" && firstLoad.current) {
+    // GAP-CRM-AGENT-WORKLOAD-07: a proper table skeleton (role=status via
+    // aria-busy) on first load instead of a bare "Loading…" line. No offline
+    // cache is used here on purpose: this is live admin configuration data and
+    // a stale capacity table would mislead (see decision in the gap report).
     return (
-      <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)" }}>
-        Loading agent workload…
-      </p>
+      <div className="card">
+        <div className="card-h">
+          <h3 id={headingId}>Agent workload &amp; capacity</h3>
+        </div>
+        <div className="pad">
+          <SkeletonTable rows={5} />
+        </div>
+      </div>
     );
   }
 
@@ -157,6 +167,13 @@ export function AgentWorkloadEditor() {
           icon="👥"
           title={isError ? "Workload unavailable" : "No agents yet"}
           message={isError ? "We couldn't load the agent roster just now." : "No agents are configured for lead assignment."}
+          action={
+            isError ? (
+              <Button type="button" onClick={() => void initialLoad()}>
+                Try again
+              </Button>
+            ) : undefined
+          }
         />
       ) : (
         <table className="tbl" aria-labelledby={headingId}>
@@ -178,15 +195,14 @@ export function AgentWorkloadEditor() {
             </tr>
           </thead>
           <tbody>
-            {agents.map((a, i) => {
-              const n = i + 1;
+            {agents.map((a) => {
               const busy = busyId === a.agentId;
               const maxMissing = !Number.isInteger(a.maxLeads);
               const over = !isError && Number.isFinite(a.maxLeads) && a.maxLeads > 0 && a.activeLeads > a.maxLeads;
               const blocked = Number.isInteger(a.maxLeads) && a.maxLeads === 0;
               return (
                 <tr key={a.agentId}>
-                  <td>{a.name}</td>
+                  <th scope="row" style={{ textAlign: "start", fontWeight: 500 }}>{a.name}</th>
                   <td className="num">
                     {isError ? "—" : (
                       <span className={over ? "pill warn" : undefined}>
@@ -195,7 +211,10 @@ export function AgentWorkloadEditor() {
                     )}
                   </td>
                   <td className="num">
-                    <label className="sr-only" htmlFor={`${headingId}-max-${a.agentId}`}>Max leads for agent {n}</label>
+                    {/* GAP-CRM-AGENT-WORKLOAD-06: label by agent NAME, not row
+                        position, so a screen-reader user knows whose capacity
+                        they are editing after a sort/reload. */}
+                    <label className="sr-only" htmlFor={`${headingId}-max-${a.agentId}`}>Max leads for {a.name}</label>
                     <input
                       id={`${headingId}-max-${a.agentId}`}
                       type="number" min={0} step={1}
@@ -213,18 +232,18 @@ export function AgentWorkloadEditor() {
                   </td>
                   <td>
                     <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-                      <input type="checkbox" checked={a.available} onChange={(e) => update(a.agentId, { available: e.target.checked })} aria-label={`Available for agent ${n}`} />
+                      <input type="checkbox" checked={a.available} onChange={(e) => update(a.agentId, { available: e.target.checked })} aria-label={`Available: ${a.name}`} />
                       {a.available ? "Yes" : "No"}
                     </label>
                   </td>
                   <td>
                     <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-                      <input type="checkbox" checked={a.onLeave} onChange={(e) => update(a.agentId, { onLeave: e.target.checked })} aria-label={`On leave for agent ${n}`} />
+                      <input type="checkbox" checked={a.onLeave} onChange={(e) => update(a.agentId, { onLeave: e.target.checked })} aria-label={`On leave: ${a.name}`} />
                       {a.onLeave ? "Yes" : "No"}
                     </label>
                   </td>
                   <td>
-                    <Button type="button" size="sm" onClick={() => requestSave(a)} disabled={busy || maxMissing}>
+                    <Button type="button" size="sm" onClick={() => requestSave(a)} disabled={busy || maxMissing} aria-label={`Save capacity for ${a.name}`}>
                       {busy ? "Saving…" : "Save"}
                     </Button>
                   </td>

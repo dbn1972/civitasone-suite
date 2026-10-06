@@ -2,7 +2,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import { Button, PageHeader } from "../../../../_components/ds";
+import { browserFetch } from "@/lib/api/browserClient";
 import { useFormError } from "@/lib/useFormError";
 import {
   getGrievanceCategories,
@@ -55,6 +57,35 @@ export default function NewGrievancePage() {
   // by field name, shown beside the field just like the server ones.
   const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
 
+  // GAP-CRM-GRIEVANCES-NEW-05: track whether the form has unsaved input so
+  // Cancel / browser-back / tab-close can warn before discarding it. A single
+  // onChange on the <form> flips this; a successful submit clears it so the
+  // navigation away from a saved grievance is never blocked.
+  const [dirty, setDirty] = useState(false);
+  // GAP-CRM-GRIEVANCES-NEW-07: live character counter for the (maxLength 5000)
+  // description, announced politely to assistive tech.
+  const [descriptionLength, setDescriptionLength] = useState(0);
+  const DESCRIPTION_MAX = 5000;
+
+  // GAP-CRM-GRIEVANCES-NEW-05: a native beforeunload prompt while the form is
+  // dirty, so a tab-close / reload also warns. Removed once the form is clean.
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
+
+  // GAP-CRM-GRIEVANCES-NEW-05: intercept Cancel when there is unsaved input.
+  function handleCancel(e: React.MouseEvent<HTMLAnchorElement>) {
+    if (dirty && !window.confirm("Discard this grievance? Your unsaved changes will be lost.")) {
+      e.preventDefault();
+    }
+  }
+
   function validateContact(phone: string, email: string): Record<string, string> {
     const errs: Record<string, string> = {};
     if (phone.trim() && !PHONE_RE.test(phone.trim())) {
@@ -93,9 +124,12 @@ export default function NewGrievancePage() {
     };
 
     try {
-      const res = await fetch("/api/proxy/v1/crm/grievances", {
+      // GAP-CRM-GRIEVANCES-NEW-05: use browserFetch so the device/trust headers
+      // (x-device-id, x-device-trust-token) travel with the create, matching the
+      // browserClient contract used by the other CRM forms. browserFetch sets
+      // content-type itself and prefixes /api/proxy/, so pass the bare path.
+      const res = await browserFetch("v1/crm/grievances", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       if (!res.ok) {
@@ -104,6 +138,8 @@ export default function NewGrievancePage() {
         return;
       }
       const { data } = (await res.json()) as { data: { id: string } };
+      // The grievance is saved; drop the unsaved-changes guard before navigating.
+      setDirty(false);
       router.push(`/crm/grievances/${data.id}`);
     } catch (caught) {
       formError.fromException("save", caught);
@@ -144,7 +180,17 @@ export default function NewGrievancePage() {
             {formError.message}
           </div>
         )}
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <form
+          onSubmit={handleSubmit}
+          onChange={() => setDirty(true)}
+          style={{ display: "flex", flexDirection: "column", gap: 16 }}
+        >
+          {/* GAP-CRM-GRIEVANCES-NEW-07: explain the asterisk convention in text,
+              so the visual star is never the only signal a field is required
+              (WCAG 2.2 AA, 1.3.1). */}
+          <p style={{ fontSize: 12, color: "var(--ink2)", margin: 0 }}>
+            Fields marked <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span> are required.
+          </p>
           <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
             <legend style={{ fontWeight: 600, marginBottom: 12, color: "var(--ink)" }}>
               {t("citizenDetails")}
@@ -282,6 +328,15 @@ export default function NewGrievancePage() {
                     <option value="high">{t("priorityHigh")}</option>
                     <option value="urgent">{t("priorityUrgent")}</option>
                   </select>
+                  {/* GAP-CRM-GRIEVANCES-NEW-04: guidance on when Urgent applies.
+                      Decision (safest default): keep Urgent selectable by any
+                      clerk — the backend remains the authority and the first-
+                      appeal flow already bumps priority to Urgent — but add a
+                      hint so it is reserved for genuine risk-to-life/safety or
+                      statutory-deadline cases rather than used routinely. */}
+                  <span role="note" style={{ fontSize: 12, color: "var(--ink2)" }}>
+                    Use <strong>Urgent</strong> only for risk to life or safety, or a statutory deadline. First appeals are escalated to Urgent automatically.
+                  </span>
                   {fieldErr("priority") && (
                     <span style={{ fontSize: 12, color: "var(--bad)" }}>{fieldErr("priority")}</span>
                   )}
@@ -314,7 +369,9 @@ export default function NewGrievancePage() {
                 <textarea
                   name="description"
                   rows={4}
-                  maxLength={5000}
+                  maxLength={DESCRIPTION_MAX}
+                  onInput={(e) => setDescriptionLength((e.target as HTMLTextAreaElement).value.length)}
+                  aria-describedby="description-counter"
                   placeholder={t("descriptionPlaceholder")}
                   style={{
                     padding: "8px 12px",
@@ -326,6 +383,20 @@ export default function NewGrievancePage() {
                     resize: "vertical",
                   }}
                 />
+                {/* GAP-CRM-GRIEVANCES-NEW-07: live character counter so a clerk
+                    sees why the browser stops accepting input at the limit.
+                    Turns to the warning colour within 100 characters of the max. */}
+                <span
+                  id="description-counter"
+                  aria-live="polite"
+                  style={{
+                    fontSize: 12,
+                    alignSelf: "flex-end",
+                    color: descriptionLength >= DESCRIPTION_MAX - 100 ? "var(--warn)" : "var(--ink2)",
+                  }}
+                >
+                  {descriptionLength.toLocaleString("en-IN")}/{DESCRIPTION_MAX.toLocaleString("en-IN")}
+                </span>
                 {formError.fieldError("description") && (
                   <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("description")}</span>
                 )}
@@ -334,7 +405,10 @@ export default function NewGrievancePage() {
           </fieldset>
 
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
-            <a href="/crm/grievances" className="btn">{t("cancel")}</a>
+            {/* GAP-CRM-GRIEVANCES-NEW-05: client-side navigation (no full page
+                reload) + an unsaved-changes confirmation when the form is
+                dirty. */}
+            <Link href="/crm/grievances" className="btn" onClick={handleCancel}>{t("cancel")}</Link>
             <Button type="submit" disabled={saving} loading={saving}>
               {saving ? t("saving") : t("submit")}
             </Button>

@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
 import { Cache, MemoryCache } from "@civitasone/cache";
-import { createContactBody } from "../src/modules/contacts/validators.js";
+import { createContactBody, updateContactBody } from "../src/modules/contacts/validators.js";
 
 describe("contact validators", () => {
   it("accepts minimal create body", () => {
@@ -15,6 +15,48 @@ describe("contact validators", () => {
 
   it("rejects empty name", () => {
     expect(() => createContactBody.parse({ name: "" })).toThrow();
+  });
+});
+
+describe("DPDP consent validators (GAP-CRM-CONTACTS-DETAIL-EDIT-07)", () => {
+  it("rejects granting marketing consent with no purpose or channel", () => {
+    const parsed = createContactBody.safeParse({ name: "A", marketingConsent: true });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      const codes = parsed.error.issues.map((i) => i.message);
+      expect(codes).toContain("CONSENT_PURPOSE_REQUIRED");
+      expect(codes).toContain("CONSENT_CHANNEL_REQUIRED");
+    }
+  });
+
+  it("accepts granting marketing consent with purpose + channel", () => {
+    const parsed = createContactBody.safeParse({
+      name: "A",
+      marketingConsent: true,
+      consentPurpose: "marketing",
+      consentChannel: "web_form",
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("does not require purpose/channel when consent is withdrawn (false)", () => {
+    const parsed = updateContactBody.safeParse({ marketingConsent: false });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("rejects an unknown consent purpose/channel value", () => {
+    const bad = createContactBody.safeParse({
+      name: "A",
+      marketingConsent: true,
+      consentPurpose: "spam",
+      consentChannel: "pigeon",
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it("update body enforces purpose+channel when granting consent", () => {
+    const parsed = updateContactBody.safeParse({ marketingConsent: true });
+    expect(parsed.success).toBe(false);
   });
 });
 

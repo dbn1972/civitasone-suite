@@ -1,4 +1,5 @@
 import { NextIntlClientProvider } from "next-intl";
+import { renderWithIntl } from "@/lib/testUtils/intl";
 import enMessages from "@/messages/en.json";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
@@ -184,5 +185,38 @@ describe("OpportunityViews (OP-004)", () => {
     expect(op.getCalendar).not.toHaveBeenCalled();
     expect(vi.mocked(op.getKanban).mock.calls.length).toBe(kanbanCallsBefore);
     expect(screen.getByText(/1 deal has no close date/i)).toBeInTheDocument();
+  });
+
+  // GAP-CRM-OPPORTUNITIES-06: the board card name links to the edit record.
+  it("links the board card name to the opportunity edit route", async () => {
+    renderWithIntl(<OpportunityViews />);
+    await waitFor(() => expect(screen.getByText("Datacentre")).toBeInTheDocument());
+    const link = screen.getByRole("link", { name: "Datacentre" });
+    expect(link).toHaveAttribute("href", "/crm/opportunities/d1/edit");
+  });
+
+  // GAP-CRM-OPPORTUNITIES-06: the list row name also links to the edit record.
+  it("links the list row name to the opportunity edit route", async () => {
+    renderWithIntl(<OpportunityViews />);
+    await waitFor(() => expect(screen.getByText("Datacentre")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("tab", { name: "List" }));
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    const link = screen.getByRole("link", { name: "Datacentre" });
+    expect(link).toHaveAttribute("href", "/crm/opportunities/d1/edit");
+  });
+
+  // GAP-CRM-OPPORTUNITIES-07: the board column header shows the per-stage total
+  // value summed in bigint paise (never float), via formatMoney.
+  it("shows a per-column total value summed with bigint paise", async () => {
+    const d1 = { ...deal, id: "d1", name: "Deal one", valueMinor: "100000" }; // ₹1,000.00
+    const d2 = { ...deal, id: "d2", name: "Deal two", valueMinor: "50000" };  // ₹500.00
+    vi.mocked(op.getKanban).mockResolvedValue({
+      data: [{ stage: "qual", stageName: "Qualify", deals: [d1, d2] }],
+      source: "api",
+    });
+    renderWithIntl(<OpportunityViews />);
+    await waitFor(() => expect(screen.getByText("Deal one")).toBeInTheDocument());
+    // 100000 + 50000 = 150000 paise = ₹1,500.00 (Indian grouping).
+    expect(screen.getByText("₹1,500.00")).toBeInTheDocument();
   });
 });

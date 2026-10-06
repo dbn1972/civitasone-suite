@@ -80,8 +80,8 @@ describe("Deal detail page (getDealById regression)", () => {
     const ui = await DealDetailPage({ params: { id: RAW_DEAL.id } });
     render(ui);
 
-    expect(screen.queryByText("Deal not found")).not.toBeInTheDocument();
-    expect(screen.getByText(`Deal ${RAW_DEAL.dealName}`)).toBeInTheDocument();
+    expect(screen.queryByText("Engagement not found")).not.toBeInTheDocument();
+    expect(screen.getByText(`Engagement ${RAW_DEAL.dealName}`)).toBeInTheDocument();
     // The Workflow timeline's "current step" must resolve against the
     // normalized stage — Capitalized "Proposal" in, canonical "proposal" out.
     const current = document.querySelector('li[aria-current="step"]');
@@ -116,7 +116,7 @@ describe("Deal detail page (getDealById regression)", () => {
     const ui = await DealDetailPage({ params: { id: "00000000-0000-0000-0000-000000000000" } });
     render(ui);
 
-    expect(screen.getByText("Deal not found")).toBeInTheDocument();
+    expect(screen.getByText("Engagement not found")).toBeInTheDocument();
   });
 
   // GAP-CRM-DEALS-DETAIL-02: a 200 that carried no such deal (mapped to null)
@@ -128,7 +128,7 @@ describe("Deal detail page (getDealById regression)", () => {
     const ui = await DealDetailPage({ params: { id: "00000000-0000-0000-0000-000000000000" } });
     render(ui);
 
-    expect(screen.getByText("Deal not found")).toBeInTheDocument();
+    expect(screen.getByText("Engagement not found")).toBeInTheDocument();
   });
 
   // GAP-CRM-DEALS-DETAIL-02: a 5xx must NOT read as a deletion — it is a
@@ -141,8 +141,8 @@ describe("Deal detail page (getDealById regression)", () => {
     const ui = await DealDetailPage({ params: { id: RAW_DEAL.id } });
     render(ui);
 
-    expect(screen.queryByText("Deal not found")).not.toBeInTheDocument();
-    expect(screen.queryByText("This deal does not exist or has been removed.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Engagement not found")).not.toBeInTheDocument();
+    expect(screen.queryByText("This engagement does not exist or has been removed.")).not.toBeInTheDocument();
     // RefreshErrorState offers a "Try again" retry affordance.
     expect(screen.getByRole("button", { name: /Try again/i })).toBeInTheDocument();
   });
@@ -156,7 +156,7 @@ describe("Deal detail page (getDealById regression)", () => {
     const ui = await DealDetailPage({ params: { id: RAW_DEAL.id } });
     render(ui);
 
-    expect(screen.queryByText("Deal not found")).not.toBeInTheDocument();
+    expect(screen.queryByText("Engagement not found")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Try again/i })).toBeInTheDocument();
   });
 
@@ -211,5 +211,42 @@ describe("Deal detail page (getDealById regression)", () => {
     expect(screen.getByText("Closed")).toBeInTheDocument();
     const current = document.querySelector('li[aria-current="step"]');
     expect(current).toHaveTextContent("Negotiation");
+  });
+
+  // GAP-CRM-DEALS-DETAIL-05: the contact/organisation name links to its record
+  // when a contactId is present, and Owner appears exactly once (the duplicate
+  // "Parties" card was removed).
+  it("links the contact/organisation to its record and shows Owner once", async () => {
+    rawPayload.mockReturnValue(RAW_DEAL);
+
+    const ui = await DealDetailPage({ params: { id: RAW_DEAL.id } });
+    render(ui);
+
+    const link = screen.getByRole("link", { name: RAW_DEAL.contactName });
+    expect(link).toHaveAttribute("href", `/crm/contacts/${RAW_DEAL.contactId}`);
+    // The old "Parties" card duplicated the Owner value; it must now appear once.
+    expect(screen.getAllByText(RAW_DEAL.owner)).toHaveLength(1);
+    // And the duplicate "Account" label must be gone — the single field is now
+    // "Contact / Organisation".
+    expect(screen.queryByText("Account")).not.toBeInTheDocument();
+    expect(screen.getByText("Contact / Organisation")).toBeInTheDocument();
+  });
+
+  // GAP-CRM-DEALS-DETAIL-07: a deal whose raw stage is "qualification" (which the
+  // mapper normalizes to "proposal") must NOT render every workflow step as todo
+  // with no current marker — exactly one step is current.
+  it("a qualification-stage deal shows a current step, never all-todo", async () => {
+    rawPayload.mockReturnValue({ ...RAW_DEAL, stage: "qualification", status: "active" });
+
+    const ui = await DealDetailPage({ params: { id: RAW_DEAL.id } });
+    render(ui);
+
+    const current = document.querySelector('li[aria-current="step"]');
+    expect(current).not.toBeNull();
+    // qualification is a first-class open step now.
+    expect(current).toHaveTextContent("Qualification");
+    const steps = Array.from(document.querySelectorAll("ul.tl li"));
+    const todoCount = steps.filter((li) => li.classList.contains("todo")).length;
+    expect(todoCount).toBeLessThan(steps.length);
   });
 });

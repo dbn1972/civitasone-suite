@@ -6,6 +6,15 @@
  * (DELETE) individually per the contract; deletion is governed via a
  * ConfirmDialog. On a failed load we show a retry (not a false empty directory
  * with an enabled "+ Add", which could duplicate routing entries).
+ *
+ * - GAP-CRM-ASSIGNMENT-DIRECTORY-06: each row keeps a `saved` snapshot so the
+ *   UI can mark unsaved rows ("Unsaved"), disable Save when a row is unchanged,
+ *   and — after a save — update ONLY that row from server data instead of
+ *   calling load() for the whole table (which discarded unsaved edits on other
+ *   rows).
+ * - GAP-CRM-ASSIGNMENT-DIRECTORY-05: switching tabs with unsaved edits opens a
+ *   ConfirmDialog before discarding them (ResourceTable reports dirty state up
+ *   via onDirtyChange), and a beforeunload guard warns on a full navigation.
  */
 import { useTranslations } from "next-intl";
 import { useEffect, useId, useState } from "react";
@@ -27,10 +36,22 @@ import {
 
 interface Row extends NamedResource {
   key: string;
+  /** Last loaded/saved server values; absent for an unsaved new row. */
+  saved?: NamedResource;
 }
 let SEQ = 0;
 function toRow(r: NamedResource): Row {
-  return { ...r, key: r.id ?? `new-${SEQ++}` };
+  return { ...r, key: r.id ?? `new-${SEQ++}`, saved: r };
+}
+
+/** A row differs from its last-saved snapshot (new rows are always dirty). */
+function isRowDirty(row: Row): boolean {
+  if (!row.saved) return true;
+  return (
+    row.name !== row.saved.name ||
+    row.description !== row.saved.description ||
+    row.enabled !== row.saved.enabled
+  );
 }
 
 const inputStyle = { padding: 6, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)", width: "100%" } as const;
@@ -38,7 +59,13 @@ const TAB_LABELS = OWNERSHIP_RESOURCES.map((r) => OWNERSHIP_RESOURCE_LABELS[r]);
 const labelToResource = (label: string): OwnershipResource =>
   OWNERSHIP_RESOURCES.find((r) => OWNERSHIP_RESOURCE_LABELS[r] === label) ?? OWNERSHIP_RESOURCES[0];
 
-function ResourceTable({ resource }: { resource: OwnershipResource }) {
+function ResourceTable({
+  resource,
+  onDirtyChange,
+}: {
+  resource: OwnershipResource;
+  onDirtyChange?: (dirty: boolean) => void;
+}) {
   const t = useTranslations("crmOwnershipDirectoryEditor");
   const [rows, setRows] = useState<Row[]>([]);
   const [source, setSource] = useState<AsSource | "loading">("loading");
@@ -47,6 +74,12 @@ function ResourceTable({ resource }: { resource: OwnershipResource }) {
   const [error, setError] = useState("");
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
   const headingId = useId();
+
+  // Report the table's dirty state to the parent (for the tab-switch guard).
+  const anyDirty = rows.some(isRowDirty);
+  useEffect(() => {
+    onDirtyChange?.(anyDirty);
+  }, [anyDirty, onDirtyChange]);
 
   async function load(isLive: () => boolean = () => true) {
     setSource("loading");
@@ -68,7 +101,7 @@ function ResourceTable({ resource }: { resource: OwnershipResource }) {
   }
 
   function addRow() {
-    setRows((prev) => [...prev, toRow({ name: "", description: "", enabled: true })]);
+    setRows((prev) => [...prev, { name: "", description: "", enabled: true, key: `new-${SEQ++}` }]);
   }
 
   async function saveRow(row: Row) {
@@ -92,12 +125,40 @@ function ResourceTable({ resource }: { resource: OwnershipResource }) {
       if (row.id) await updateResource(resource, row.id, body);
       else await createResource(resource, body);
       setMessage(`“${body.name}” saved.`);
-      await load();
+      // GAP-CRM-ASSIGNMENT-DIRECTORY-06: update ONLY this row's snapshot (and
+      // mark it clean) instead of load()-ing the whole table and discarding
+      // other rows' unsaved edits. For a brand-new row we re-fetch to pick up
+      // the server-assigned id but merge it onto this row alone.
+      if (row.id) {
+        setRows((prev) =>
+          prev.map((r) => (r.key === row.key ? { ...r, ...body, saved: { ...body } } : r)),
+        );
+      } else {
+        const { data, source: s } = await getResources(resource);
+        if (s === "api") {
+          const created = data.find((d) => d.name === body.name && !rows.some((r) => r.id === d.id));
+          if (created) {
+            setRows((prev) =>
+              prev.map((r) => (r.key === row.key ? { ...toRow(created) } : r)),
+            );
+          }
+        }
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save the entry.");
     } finally {
       setBusyKey(null);
     }
+  }
+
+  /** GAP-CRM-ASSIGNMENT-DIRECTORY-06: revert a row to its saved snapshot. */
+  function discardRow(row: Row) {
+    if (!row.saved) {
+      // Unsaved new row — drop it entirely.
+      setRows((prev) => prev.filter((r) => r.key !== row.key));
+      return;
+    }
+    setRows((prev) => prev.map((r) => (r.key === row.key ? { ...r, ...row.saved!, saved: row.saved } : r)));
   }
 
   async function confirmDelete(row: Row) {
@@ -112,7 +173,7 @@ function ResourceTable({ resource }: { resource: OwnershipResource }) {
       await deleteResource(resource, row.id);
       setMessage(`“${row.name}” deleted.`);
       setConfirmKey(null);
-      await load();
+      setRows((prev) => prev.filter((r) => r.key !== row.key));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not delete the entry.");
     } finally {
@@ -169,13 +230,17 @@ function ResourceTable({ resource }: { resource: OwnershipResource }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, i) => {
-              const n = i + 1;
+            {rows.map((row) => {
               const busy = busyKey === row.key;
+              const dirty = isRowDirty(row);
+              // GAP-CRM-AGENT-WORKLOAD-06 (sibling fix): label by the row's own
+              // name when it has one, so a screen-reader user is not told a bare
+              // position. Fall back to the singular noun for a blank new row.
+              const rowName = row.name.trim() || `new ${singular.toLowerCase()}`;
               return (
-                <tr key={row.key}>
+                <tr key={row.key} data-dirty={dirty ? "true" : undefined}>
                   <td>
-                    <label className="sr-only" htmlFor={`${headingId}-name-${row.key}`}>Name for entry {n}</label>
+                    <label className="sr-only" htmlFor={`${headingId}-name-${row.key}`}>Name for {rowName}</label>
                     <input
                       id={`${headingId}-name-${row.key}`}
                       value={row.name}
@@ -184,23 +249,31 @@ function ResourceTable({ resource }: { resource: OwnershipResource }) {
                       placeholder={t("namePlaceholder", { singular })}
                       style={inputStyle}
                     />
+                    {dirty ? (
+                      <span className="pill warn" style={{ display: "inline-block", marginTop: 4, fontSize: 11 }}>Unsaved</span>
+                    ) : null}
                   </td>
                   <td>
-                    <label className="sr-only" htmlFor={`${headingId}-desc-${row.key}`}>Description for entry {n}</label>
+                    <label className="sr-only" htmlFor={`${headingId}-desc-${row.key}`}>Description for {rowName}</label>
                     <input id={`${headingId}-desc-${row.key}`} value={row.description} onChange={(e) => update(row.key, { description: e.target.value })} placeholder="Optional description" style={inputStyle} />
                   </td>
                   <td>
                     <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-                      <input type="checkbox" checked={row.enabled} onChange={(e) => update(row.key, { enabled: e.target.checked })} aria-label={`Enable entry ${n}`} />
+                      <input type="checkbox" checked={row.enabled} onChange={(e) => update(row.key, { enabled: e.target.checked })} aria-label={`Enable ${rowName}`} />
                       {row.enabled ? "On" : "Off"}
                     </label>
                   </td>
                   <td>
                     <div style={{ display: "flex", gap: 6 }}>
-                      <Button type="button" size="sm" onClick={() => void saveRow(row)} disabled={busy}>
+                      <Button type="button" size="sm" onClick={() => void saveRow(row)} disabled={busy || !dirty} aria-label={row.id ? `Save ${rowName}` : `Create ${rowName}`}>
                         {busy ? "…" : row.id ? "Save" : "Create"}
                       </Button>
-                      <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmKey(row.key)} disabled={busy} aria-label={`Delete entry ${n}`}>
+                      {dirty ? (
+                        <Button type="button" variant="ghost" size="sm" onClick={() => discardRow(row)} disabled={busy} aria-label={`Discard changes to ${rowName}`}>
+                          Discard
+                        </Button>
+                      ) : null}
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmKey(row.key)} disabled={busy} aria-label={`Delete ${rowName}`}>
                         Delete
                       </Button>
                     </div>
@@ -232,12 +305,54 @@ function ResourceTable({ resource }: { resource: OwnershipResource }) {
 
 export function OwnershipDirectoryEditor() {
   const [active, setActive] = useState(TAB_LABELS[0]);
+  const [dirty, setDirty] = useState(false);
+  // The tab the admin is trying to switch to while the current one is dirty.
+  const [pendingTab, setPendingTab] = useState<string | null>(null);
   const resource = labelToResource(active);
+
+  // GAP-CRM-ASSIGNMENT-DIRECTORY-05: warn before a full-page navigation while
+  // there are unsaved edits.
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
+
+  function requestTab(tab: string) {
+    if (tab === active) return;
+    if (dirty) {
+      // Intercept: keep the current tab until the admin confirms discarding.
+      setPendingTab(tab);
+      return;
+    }
+    setActive(tab);
+  }
+
   return (
     <div className="card">
-      <Tabs tabs={TAB_LABELS} active={active} onChange={setActive} />
+      <Tabs tabs={TAB_LABELS} active={active} onChange={requestTab} />
       {/* Remount per resource so each tab loads its own directory cleanly. */}
-      <ResourceTable key={resource} resource={resource} />
+      <ResourceTable key={resource} resource={resource} onDirtyChange={setDirty} />
+
+      <ConfirmDialog
+        open={pendingTab !== null}
+        danger
+        title="Discard unsaved changes?"
+        description="You have unsaved edits on this tab. Switching tabs will discard them."
+        confirmLabel="Discard and switch"
+        cancelLabel="Stay on this tab"
+        onCancel={() => setPendingTab(null)}
+        onConfirm={() => {
+          const next = pendingTab;
+          setPendingTab(null);
+          setDirty(false);
+          if (next) setActive(next);
+        }}
+      />
     </div>
   );
 }

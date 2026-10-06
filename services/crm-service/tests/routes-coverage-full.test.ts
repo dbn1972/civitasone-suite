@@ -57,6 +57,8 @@ describe("POST /v1/crm/contacts", () => {
         country: "IN", leadStatus: "qualified", leadSource: "website",
         ownerId: VALID_UUID, accountId: VALID_UUID2,
         tags: ["vip", "enterprise"], marketingConsent: true,
+        // GAP-CRM-CONTACTS-DETAIL-EDIT-07: a consent grant carries its purpose + channel.
+        consentPurpose: "marketing", consentChannel: "web_form",
       },
     });
     expect(res.statusCode).toBe(202);

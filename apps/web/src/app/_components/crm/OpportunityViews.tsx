@@ -9,6 +9,7 @@
  */
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState, Tabs, Button } from "../ds";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
@@ -282,11 +283,21 @@ export function OpportunityViews({ canClose = true }: { canClose?: boolean } = {
                 <div style={{ fontSize: 13, fontWeight: 600, padding: "4px 6px" }}>
                   {col.stageName}{" "}
                   <span style={{ color: "var(--muted)", fontWeight: 400 }}>({col.deals.length})</span>
+                  {/* GAP-CRM-OPPORTUNITIES-07: per-stage total value, summed in
+                      bigint paise (never float) and shown with formatMoney, to
+                      match /crm/pipeline's per-stage value. */}
+                  <div style={{ fontSize: 12, fontWeight: 500, color: "var(--muted)" }}>
+                    {formatMoney(col.deals.reduce((sum, d) => sum + BigInt(d.valueMinor || "0"), 0n))}
+                  </div>
                 </div>
                 <div style={{ display: "grid", gap: 6 }}>
                   {col.deals.map((d) => (
                     <div key={d.id} style={{ background: "#fff", border: "1px solid var(--line)", borderRadius: 8, padding: 8 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>{d.name}</div>
+                      {/* GAP-CRM-OPPORTUNITIES-06: the card name links to the
+                          opportunity's edit record (previously plain text). */}
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>
+                        {d.id ? <Link href={`/crm/opportunities/${d.id}/edit`}>{d.name}</Link> : d.name}
+                      </div>
                       <div style={{ fontSize: 12, color: "var(--muted)" }}>{formatMoney(d.valueMinor)} · {d.probability}%</div>
                       {selectedPipeline && selectedPipeline.stages.length > 1 ? (
                         <label style={{ fontSize: 12, display: "grid", gap: 2, marginTop: 6 }}>
@@ -358,7 +369,7 @@ export function OpportunityViews({ canClose = true }: { canClose?: boolean } = {
             <tbody>
               {list.map((d) => (
                 <tr key={d.id}>
-                  <td>{d.name}</td>
+                  <td>{d.id ? <Link href={`/crm/opportunities/${d.id}/edit`}>{d.name}</Link> : d.name}</td>
                   <td>{d.stage}</td>
                   <td className="num">{formatMoney(d.valueMinor)}</td>
                   <td className="num">{d.probability}%</td>

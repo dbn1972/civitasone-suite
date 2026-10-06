@@ -7,11 +7,11 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { CrmGrievanceRow } from "../../../_data/loaders";
 
-const PRIORITY_TONE: Record<string, string> = {
-  urgent: "var(--bad)",
-  high: "var(--warn)",
-  normal: "var(--ink2)",
-  low: "var(--ink2)",
+const PRIORITY_PILL: Record<string, string> = {
+  urgent: "bad",
+  high: "warn",
+  normal: "mut",
+  low: "mut",
 };
 
 const PRIORITY_KEYS = new Set(["urgent", "high", "normal", "low"]);
@@ -120,17 +120,11 @@ export function GrievancesTable({
             key: "priority",
             label: t("colPriority"),
             render: (r) => (
-              <span
-                style={{
-                  display: "inline-block",
-                  padding: "2px 8px",
-                  borderRadius: 4,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: "var(--bg)",
-                  background: PRIORITY_TONE[r.priority] ?? "var(--ink2)",
-                }}
-              >
+              // GAP-CRM-GRIEVANCES-06: use the shared theme-safe `.pill`
+              // classes (foreground/background token pairs that meet WCAG AA in
+              // both themes) instead of the previous var(--bg)-on-var(--ink2)
+              // inline span, whose contrast was unverified in dark mode.
+              <span className={`pill ${PRIORITY_PILL[r.priority] ?? "mut"}`}>
                 {PRIORITY_KEYS.has(r.priority) ? t(`priority.${r.priority}`) : titleCase(r.priority)}
               </span>
             ),

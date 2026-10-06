@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { CRMAccountSummary } from "@civitasone/types";
-import { buildAccountTree, countSubsidiaries, collectDescendantIds } from "./hierarchy";
+import { buildAccountTree, buildNestedAccountTree, countSubsidiaries, collectDescendantIds } from "./hierarchy";
 
 function account(id: string, name: string, parentId: string | null = null): CRMAccountSummary {
   return { id, name, industry: null, website: null, parentId, contactCount: 0 };
@@ -47,6 +47,32 @@ describe("buildAccountTree", () => {
 
   it("returns an empty list for no accounts", () => {
     expect(buildAccountTree([])).toEqual([]);
+  });
+});
+
+describe("buildNestedAccountTree (GAP-CRM-ACCOUNTS-06)", () => {
+  it("nests children arrays under their parent node", () => {
+    const roots = buildNestedAccountTree([
+      account("a", "Head Office"),
+      account("b", "Regional Office", "a"),
+      account("c", "Branch", "b"),
+    ]);
+    expect(roots).toHaveLength(1);
+    expect(roots[0]!.id).toBe("a");
+    expect(roots[0]!.children.map((n) => n.id)).toEqual(["b"]);
+    expect(roots[0]!.children[0]!.children.map((n) => n.id)).toEqual(["c"]);
+  });
+
+  it("treats an account whose parent is absent as a root", () => {
+    const roots = buildNestedAccountTree([account("orphan", "Orphan", "missing")]);
+    expect(roots.map((n) => n.id)).toEqual(["orphan"]);
+    expect(roots[0]!.children).toEqual([]);
+  });
+
+  it("is cycle-safe and drops nothing", () => {
+    const roots = buildNestedAccountTree([account("p", "P", "q"), account("q", "Q", "p")]);
+    const ids = roots.map((n) => n.id).sort();
+    expect(ids).toEqual(["p", "q"]);
   });
 });
 

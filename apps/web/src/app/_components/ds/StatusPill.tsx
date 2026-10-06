@@ -101,6 +101,18 @@ const STATUS_MAP: Record<string, PillVariant> = {
   "under inquiry": "warn",
   inquiry: "warn",
   disposed: "mut",
+  // GAP-CRM-GRIEVANCES-06: CPGRAMS grievance lifecycle (crm-service
+  // grievances-domain.ts STATUS: REGISTERED/FORWARDED/ATTENDED/DISPOSED/APPEAL).
+  // "registered" (warn), "attended" (info, below) and "disposed" (mut) already
+  // mapped from prior gap work and are deliberately left as-is so other modules
+  // sharing those words are not recoloured. The two CPGRAMS states with no key
+  // at all were "forwarded" (in-progress, routed to a department -> warn) and
+  // "appeal" (a citizen first appeal is the escalated, attention-needing
+  // terminal-adjacent state the register exists to surface -> bad); both fell
+  // through to the neutral "info" pill, giving the grievance register's colour
+  // no meaning for those rows. Keyed explicitly so they are a decision.
+  forwarded: "warn",
+  appeal: "bad",
 
   // RTI
   filed: "warn",

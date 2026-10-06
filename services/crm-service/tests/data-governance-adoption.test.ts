@@ -26,7 +26,28 @@ describe("crm data-governance adoption", () => {
     expect(maskContactRecord(contact).email).toBe("a***@techcorp.in");
   });
 
-  it("policy declares email + phone rules", () => {
-    expect(Object.keys(CONTACT_MASKING_POLICY).sort()).toEqual(["email", "phone"]);
+  it("policy declares email, phone, PAN and GSTIN rules", () => {
+    expect(Object.keys(CONTACT_MASKING_POLICY).sort()).toEqual(["email", "gstin", "pan", "phone"]);
+  });
+
+  describe("PAN / GSTIN", () => {
+    const tax = { id: "c1", pan: "ABCDE1234F", gstin: "27ABCDE1234F1Z5" };
+
+    it("masks both identifiers for non-privileged roles, keeping the last 4", () => {
+      const masked = maskContactRecord(tax, ["crm_user"]);
+      expect(masked.pan).toBe("******234F");
+      expect(masked.gstin).toBe("***********F1Z5");
+      expect(masked.pan).not.toContain("ABCDE");
+    });
+
+    it("reveals both identifiers to admin roles", () => {
+      expect(maskContactRecord(tax, ["crm_admin"])).toMatchObject({ pan: "ABCDE1234F", gstin: "27ABCDE1234F1Z5" });
+      expect(maskContactRecord(tax, ["super_admin"])).toMatchObject({ pan: "ABCDE1234F" });
+    });
+
+    it("masks with no roles and leaves absent fields alone", () => {
+      expect(maskContactRecord(tax).pan).toBe("******234F");
+      expect("pan" in maskContactRecord({ id: "c2" }, ["crm_user"])).toBe(false);
+    });
   });
 });

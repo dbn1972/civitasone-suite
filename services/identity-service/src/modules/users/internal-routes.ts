@@ -96,6 +96,21 @@ export async function userInternalRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ id: user.id, email: user.email });
   });
 
+  /**
+   * crm-service task reassign (GAP-CRM-TASK-ESCALATION-06 review fix): confirms an owner id is a
+   * real, ACTIVE user of the verified tenant before a task is handed to them. Returns only
+   * {id, status} (no PII), 404 when the id is not in this tenant. Same strict internal-elevation
+   * gate as the email lookup above, scoped to ctx.tenantId.
+   */
+  app.get("/identity/internal/users/:id/status", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, INTERNAL_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const user = await repo.findById(ctx.tenantId, id);
+    if (!user) return reply.code(404).send({ code: "NOT_FOUND" });
+    return reply.send({ id: user.id, status: user.status });
+  });
+
   app.setErrorHandler((err, req, reply) => {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError) {

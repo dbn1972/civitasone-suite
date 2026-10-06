@@ -215,4 +215,32 @@ describe("PriceBookEditor (QP-002)", () => {
     const pr1Excluded = !Array.from(secondSelect.querySelectorAll("option")).some((o) => (o as HTMLOptionElement).value === "pr1");
     expect(pr1Excluded).toBe(true);
   });
+
+  // GAP-CRM-PRICE-BOOKS-06: a disabled Save button must say why (inline reason),
+  // and draftValid is aligned with save() so a blank price is INVALID (not
+  // defaulted to 0.01 and errored later).
+  it("explains why Save is disabled and keeps it disabled with no name", async () => {
+    render(<PriceBookEditor />);
+    await waitFor(() => expect(screen.getByText(/no price books yet/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /new price book/i }));
+    const create = screen.getByRole("button", { name: /create book/i });
+    expect(create).toBeDisabled();
+    expect(screen.getByText("A price book needs a name.")).toBeInTheDocument();
+    expect(create).toHaveAttribute("aria-describedby");
+  });
+
+  it("flags a blank price row aria-invalid and keeps Save disabled", async () => {
+    vi.mocked(qp.getProducts).mockResolvedValue({ data: [{ id: "pr1", category: "", code: "P1", name: "Widget", unit: "each", taxRateBps: 0, priceMinor: "0", currency: "INR", activeFrom: "", activeTo: "", enabled: true }], source: "api" });
+    render(<PriceBookEditor />);
+    await waitFor(() => expect(screen.getByText(/no price books yet/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /new price book/i }));
+    fireEvent.change(screen.getByLabelText(/price book name/i), { target: { value: "Gov" } });
+    fireEvent.click(screen.getByRole("button", { name: /add price/i }));
+    fireEvent.change(screen.getByLabelText(/product for entry 1/i), { target: { value: "pr1" } });
+    // Price left blank → the price input is aria-invalid and Save stays disabled.
+    const price = screen.getByLabelText(/price for entry 1/i);
+    expect(price).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByRole("button", { name: /create book/i })).toBeDisabled();
+    expect(screen.getByText(/entry 1 needs a price/i)).toBeInTheDocument();
+  });
 });

@@ -67,7 +67,7 @@ describe("GrievancesPage stat cards", () => {
 
     // 3 open (REGISTERED/FORWARDED/ATTENDED), 1 escalated (APPEAL), 2 resolved (DISPOSED).
     expect(screen.getByText("Open (this page)").nextElementSibling).toHaveTextContent("3");
-    expect(screen.getByText(/Escalated/).nextElementSibling).toHaveTextContent("1");
+    expect(screen.getByText(/First appeal/).nextElementSibling).toHaveTextContent("1");
     expect(screen.getByText(/Resolved/).nextElementSibling).toHaveTextContent("2");
   });
 
