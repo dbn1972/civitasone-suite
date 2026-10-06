@@ -5,6 +5,7 @@ import {
   contributingSources,
   displayValue,
   lineageNewestFirst,
+  maskAttribute,
   resolveAttributeSources,
 } from "./c360";
 
@@ -162,5 +163,43 @@ describe("lineageNewestFirst", () => {
     const trail = [CRM, HELPDESK];
     expect(lineageNewestFirst(trail).map((e) => e.source)).toEqual(["helpdesk", "crm"]);
     expect(trail.map((e) => e.source)).toEqual(["crm", "helpdesk"]);
+  });
+});
+
+describe("maskAttribute (GAP-CDP-PROFILES-DETAIL-01)", () => {
+  it("masks an email attribute and never returns the full address", () => {
+    const { value, sensitive } = maskAttribute("email", "asha@example.gov.in");
+    expect(sensitive).toBe(true);
+    expect(value).not.toContain("asha@example.gov.in");
+    expect(value).toMatch(/^a\*+@/);
+  });
+
+  it("masks phone / mobile / contact keys", () => {
+    expect(maskAttribute("phone", "9876543210").value).toBe("98XXXXX210");
+    expect(maskAttribute("mobile", "9876543210").sensitive).toBe(true);
+    expect(maskAttribute("contact", "9876543210").sensitive).toBe(true);
+  });
+
+  it("masks a PAN keeping only the issuer prefix and the check letter", () => {
+    expect(maskAttribute("pan", "ABCDE1234F").value).toBe("ABCDE****F");
+  });
+
+  it("masks an Aadhaar to the last four digits only", () => {
+    expect(maskAttribute("aadhaar", "1234 5678 9012").value).toBe("XXXX XXXX 9012");
+    expect(maskAttribute("uid", "123456789012").value).toBe("XXXX XXXX 9012");
+  });
+
+  it("masks dob / address generically", () => {
+    expect(maskAttribute("dob", "1990-01-15").sensitive).toBe(true);
+    expect(maskAttribute("address", "12 MG Road").sensitive).toBe(true);
+    expect(maskAttribute("address", "12 MG Road").value).not.toBe("12 MG Road");
+  });
+
+  it("leaves a non-sensitive attribute (tier) untouched", () => {
+    expect(maskAttribute("tier", "gold")).toEqual({ value: "gold", sensitive: false });
+  });
+
+  it("returns an em dash for an absent value without flagging it sensitive", () => {
+    expect(maskAttribute("email", null)).toEqual({ value: "—", sensitive: false });
   });
 });
