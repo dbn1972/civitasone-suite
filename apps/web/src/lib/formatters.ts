@@ -818,6 +818,60 @@ export function formatPayPeriod(payPeriod: string | null | undefined): string {
 }
 
 /**
+ * GAP-NOTIFICATIONS-LIST-01: mask a notification recipient (an email address,
+ * a phone number, or an opaque user handle) for display in the inbox table.
+ * DPDP personal data must not be printed verbatim.
+ *
+ * The notification-service inbox endpoint is already recipient-scoped (it only
+ * returns rows addressed to the calling actor — see inbox/routes.ts
+ * listInbox(tenantId, actorId, ...)), so this is defence-in-depth rather than
+ * the sole control; it also protects shoulder-surfing and screenshots.
+ *
+ * Detection:
+ *  - contains "@"  -> email mask  (a***@d***.c**)
+ *  - mostly digits -> phone mask  (98XXXXX210)
+ *  - otherwise      -> handle mask, first char + bullets, so a plain user id
+ *                      is not shown in full either.
+ * Missing/empty renders "—" (UX-006 convention). No reveal control is offered:
+ * notification-service exposes no audited PII-reveal endpoint, and a reveal
+ * with no real audit behind it is worse than none (see ds/Masked.tsx).
+ *
+ *   maskRecipient("asha@example.gov.in") -> "a***@e***.g**.i*"
+ *   maskRecipient("9876543210")          -> "98XXXXX210"
+ *   maskRecipient("user-7f3a")           -> "u•••••••"
+ *   maskRecipient(null)                   -> "—"
+ */
+export function maskRecipient(recipient: string | null | undefined): string {
+  if (recipient === null || recipient === undefined) return "—";
+  const v = recipient.trim();
+  if (v === "") return "—";
+  if (v.includes("@")) {
+    // email: first char of local part + first char of each domain label.
+    const at = v.indexOf("@");
+    if (at <= 0 || at === v.length - 1) return "*".repeat(Math.min(Math.max(v.length, 4), 10));
+    const local = v.slice(0, at);
+    const domain = v.slice(at + 1);
+    const maskedDomain = domain
+      .split(".")
+      .map((label) => (label ? `${label[0]}${"*".repeat(Math.max(label.length - 1, 1))}` : ""))
+      .join(".");
+    return `${local[0]}***@${maskedDomain}`;
+  }
+  const digits = v.replace(/\D/g, "");
+  // Treat as a phone number only when it's essentially all digits (allowing
+  // "+", spaces, dashes) and long enough to mask meaningfully.
+  if (digits.length >= 7 && digits.length / v.replace(/\s/g, "").length >= 0.7) {
+    const head = digits.slice(0, 2);
+    const tail = digits.slice(-3);
+    const middle = "X".repeat(digits.length - 5);
+    return `${head}${middle}${tail}`;
+  }
+  // Opaque handle / user id: keep only the first character.
+  if (v.length <= 1) return "•";
+  return `${v[0]}${"•".repeat(Math.min(Math.max(v.length - 1, 3), 8))}`;
+}
+
+/**
  * GAP-FINANCE-PFMS-04: sum a list of minor-unit (paise) values defensively.
  * `BigInt("12.50")` / `BigInt("abc")` throw, and one bad row used to take the
  * whole server page into its error boundary. Valid entries are summed with

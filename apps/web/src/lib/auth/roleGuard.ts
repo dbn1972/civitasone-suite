@@ -307,3 +307,17 @@ export const BILLING_MODULE_ROLES = Array.from(new Set([...BILLING_INVOICE_READE
  * defence-in-depth / convenience; the server is the authoritative gate.
  */
 export const BILLING_PLAN_ADMIN_ROLES = ["super_admin"];
+
+/**
+ * GAP-NOTIFICATIONS-TEMPLATES-05 / TEMPLATES-01: roles permitted to send a
+ * notification and to create/edit notification templates. Mirrors
+ * notification-service's NOTIFY_SEND_ROLES (modules/deliveries/routes.ts) and
+ * the templates ADMIN set (modules/templates/routes.ts). The service stays the
+ * authority (POST /notifications/send and the template write routes 403
+ * others); gating on this constant only avoids offering a control that is
+ * guaranteed to 403.
+ */
+export const NOTIFICATION_SEND_ROLES = ["notification_admin", "super_admin", "platform_admin", "tenant_admin"];
+/** Mirrors notification-service NOTIFY_READ_ROLES: send roles + audit_officer. */
+export const NOTIFICATION_READ_ROLES = [...NOTIFICATION_SEND_ROLES, "audit_officer"];
+export const NOTIFICATION_TEMPLATE_ADMIN_ROLES = ["platform_admin", "super_admin", "tenant_admin"];

@@ -28,6 +28,10 @@ const STATES: Record<string, StateDef> = {
   // templates
   active:    { icon: "✓", variant: "good", label: "Active" },
   superseded:{ icon: "↪", variant: "mut", label: "Superseded" },
+  // experiments (GAP-NOTIFICATIONS-EXPERIMENTS-03)
+  pending_approval: { icon: "🛂", variant: "warn", label: "Awaiting winner approval" },
+  running:          { icon: "•", variant: "info", label: "Running" },
+  concluded:        { icon: "✓", variant: "mut", label: "Concluded" },
 };
 
 export function StatusBadge({ status, label }: { status: string; label?: string }) {

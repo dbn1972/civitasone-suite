@@ -125,6 +125,76 @@ export function phone(): Validator {
   };
 }
 
+/**
+ * GAP-NOTIFICATIONS-CAMPAIGNS-02: recipient-token validation for the campaign
+ * create form. A campaign is sent to a hand-entered list of raw addresses, so
+ * each token must be a recognisable email OR an Indian mobile number OR a
+ * non-empty opaque handle (for in-app/push recipients) — never silently
+ * accepting typos that only fail asynchronously in Deliveries. These are pure
+ * predicates (no React) so they are unit-testable in isolation.
+ */
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** A valid email address (same RFC-5322 subset as the `email()` validator). */
+export function isEmailAddress(value: string): boolean {
+  return EMAIL_RE.test(value.trim());
+}
+
+/**
+ * A valid Indian mobile number: optional +91 / leading 0, 10 digits starting
+ * 6–9 (same rule as the `phone()` validator). Spaces/dashes/parens tolerated.
+ */
+export function isIndianMobile(value: string): boolean {
+  const digits = value.replace(/[\s\-()]/g, "");
+  const normalized = digits.startsWith("+91")
+    ? digits.slice(3)
+    : digits.startsWith("0")
+      ? digits.slice(1)
+      : digits;
+  return /^[6-9]\d{9}$/.test(normalized);
+}
+
+/**
+ * True when `token` is an acceptable campaign recipient: an email, an Indian
+ * mobile, or an opaque handle (a user id / device handle for in-app or push).
+ * A plausible handle must look like an identifier rather than a stray English
+ * word: it carries a digit or a separator (. _ -) or is reasonably long
+ * (≥ 8 chars). So "user-7f3a" / "device_01" pass, but "abc" / "nope" — which
+ * are far more likely to be a typo'd email/phone than a real handle — are
+ * rejected so the clerk is told rather than silently queuing junk.
+ */
+export function isValidRecipientToken(token: string): boolean {
+  const t = token.trim();
+  if (t.length === 0) return false;
+  if (t.includes("@")) return isEmailAddress(t);
+  if (/[0-9]/.test(t) && /^[+\d\s\-()]+$/.test(t)) return isIndianMobile(t);
+  // Opaque handle: must start alphanumeric, use only id-safe chars, and look
+  // like an identifier (has a digit/separator, or is long enough).
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(t)) return false;
+  return /[0-9._-]/.test(t) || t.length >= 8;
+}
+
+/** Max recipients a single campaign may be created with from the form. */
+export const CAMPAIGN_RECIPIENT_LIMIT = 1000;
+
+export interface RecipientValidation {
+  /** Tokens that failed isValidRecipientToken, in input order. */
+  invalid: string[];
+  /** True when the count exceeds CAMPAIGN_RECIPIENT_LIMIT. */
+  overLimit: boolean;
+}
+
+/** Validate a parsed recipient list: collect invalid tokens and the over-limit flag. */
+export function validateRecipientTokens(
+  tokens: readonly string[],
+  limit = CAMPAIGN_RECIPIENT_LIMIT,
+): RecipientValidation {
+  return {
+    invalid: tokens.filter((t) => !isValidRecipientToken(t)),
+    overLimit: tokens.length > limit,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Internal helper
 // ---------------------------------------------------------------------------

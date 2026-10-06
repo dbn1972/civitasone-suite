@@ -5,8 +5,9 @@ import type { NotificationDelivery } from "@civitasone/types";
 import { PageHeader, StatCard, StatGrid, DataTable, Segmented, EmptyState, ErrorState } from "../../../_components/ds";
 import { useOfflineResource } from "@/lib/sync/resource";
 import { toHumanError } from "@/lib/messages";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, maskRecipient } from "@/lib/formatters";
 import { StatusBadge } from "../_components/StatusBadge";
+import { isInDeliveryGroup } from "../_components/deliveryStatus";
 
 type DeliveryRow = {
   id: string;
@@ -30,6 +31,12 @@ function toArray(payload: unknown): NotificationDelivery[] {
 
 const TABS = ["All", "Failed", "Pending"] as const;
 
+/** Tiles show "—" (not a fabricated 0) while the first load is in flight or errored. */
+function tileValue(count: number, loading: boolean, error: boolean): string {
+  if (loading || error) return "—";
+  return count.toLocaleString("en-IN");
+}
+
 export default function NotificationDeliveriesPage() {
   const { data: deliveries, source, offline, cachedAt, loading, error, refresh } = useOfflineResource<unknown, NotificationDelivery[]>(
     "notifications.deliveries",
@@ -39,9 +46,12 @@ export default function NotificationDeliveriesPage() {
 
   const [tab, setTab] = useState<string>("All");
 
-  const delivered = deliveries.filter((d) => d.status === "delivered").length;
-  const failed = deliveries.filter((d) => d.status === "failed").length;
-  const pending = deliveries.filter((d) => d.status === "pending").length;
+  // DELIVERIES-02: count by status GROUP (delivered=delivered|sent,
+  // pending=pending|queued, failed=failed|bounced) so bounced/queued/sent rows
+  // land in a tile instead of only Total.
+  const delivered = deliveries.filter((d) => isInDeliveryGroup(d.status, "delivered")).length;
+  const failed = deliveries.filter((d) => isInDeliveryGroup(d.status, "failed")).length;
+  const pending = deliveries.filter((d) => isInDeliveryGroup(d.status, "pending")).length;
 
   const cacheNote =
     offline || source === "cache"
@@ -51,18 +61,22 @@ export default function NotificationDeliveriesPage() {
   const tableRows: DeliveryRow[] = deliveries.map((d) => ({
     id: d.id,
     notificationTitle: d.notificationTitle,
-    recipient: d.recipient,
+    // DELIVERIES-01 (DPDP): recipient email/phone is personal data — mask by
+    // default in the log. No reveal control: notification-service exposes no
+    // audited PII-reveal endpoint (see lib/formatters.maskRecipient / ds Masked).
+    recipient: maskRecipient(d.recipient),
     channel: d.channel.replace(/_/g, " "),
     attemptCount: d.attemptCount,
     deliveredAt: d.deliveredAt ? formatIndianDate(d.deliveredAt) : "—",
     status: d.status,
   }));
 
+  // DELIVERIES-02: tab filters use the same status groups as the tiles.
   const filtered =
     tab === "Failed"
-      ? tableRows.filter((r) => r.status === "failed")
+      ? tableRows.filter((r) => isInDeliveryGroup(r.status, "failed"))
       : tab === "Pending"
-        ? tableRows.filter((r) => r.status === "pending")
+        ? tableRows.filter((r) => isInDeliveryGroup(r.status, "pending"))
         : tableRows;
 
   return (
@@ -70,7 +84,14 @@ export default function NotificationDeliveriesPage() {
       <PageHeader
         title="Notification Deliveries"
         subtitle="Delivery log for all outgoing notifications. Select a row to view delivery status and resend failures."
-        back="/notifications/list"
+        back="/notifications"
+        backLabel="Notifications"
+        actions={
+          <>
+            <a className="btn primary" href="/notifications/compose">Send notification</a>
+            <a className="btn ghost" href="/notifications/templates">Templates</a>
+          </>
+        }
       />
       {cacheNote ? (
         <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>
@@ -78,10 +99,10 @@ export default function NotificationDeliveriesPage() {
         </p>
       ) : null}
       <StatGrid>
-        <StatCard icon="📤" iconBg="#eef2ff" label="Total" value={deliveries.length.toLocaleString("en-IN")} />
-        <StatCard icon="✅" iconBg="#ecfdf5" label="Delivered" value={delivered.toLocaleString("en-IN")} />
-        <StatCard icon="❌" iconBg="#fef2f2" label="Failed" value={failed.toLocaleString("en-IN")} />
-        <StatCard icon="⏳" iconBg="#fffbeb" label="Pending" value={pending.toLocaleString("en-IN")} />
+        <StatCard icon="📤" iconBg="#eef2ff" label="Total" value={tileValue(deliveries.length, loading, !!error)} />
+        <StatCard icon="✅" iconBg="#ecfdf5" label="Delivered" value={tileValue(delivered, loading, !!error)} />
+        <StatCard icon="❌" iconBg="#fef2f2" label="Failed" value={tileValue(failed, loading, !!error)} />
+        <StatCard icon="⏳" iconBg="#fffbeb" label="Pending" value={tileValue(pending, loading, !!error)} />
       </StatGrid>
       <div className="card">
         <div className="card-h">
@@ -105,7 +126,7 @@ export default function NotificationDeliveriesPage() {
               { key: "recipient", label: "Recipient" },
               { key: "channel", label: "Channel" },
               { key: "attemptCount", label: "Attempts", align: "right" },
-              { key: "deliveredAt", label: "Delivered At" },
+              { key: "deliveredAt", label: "Delivered" },
               { key: "status", label: "Status", render: (r) => <StatusBadge status={r.status} /> },
             ]}
             rows={filtered}

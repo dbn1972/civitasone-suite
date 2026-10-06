@@ -4,6 +4,7 @@ import { NotificationDeliveryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { maskRecipient } from "../../adapters/mask.js";
 import { sendNotificationBody, deliveryIdParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -32,7 +33,13 @@ export async function deliveryRoutes(app: FastifyInstance): Promise<void> {
       id: d.id,
       notificationId: d.id,
       notificationTitle: d.templateId,
-      recipient: d.recipient,
+      // GAP-NOTIFICATIONS-DELIVERIES-01 (DPDP): the deliveries LIST is a
+      // tenant-wide "who was contacted and where" log and is cached offline by
+      // the web client (useOfflineResource -> IndexedDB), so the clear
+      // recipient must never leave the service here. Masked at the source; the
+      // per-delivery detail route (GET /deliveries/:id) still returns the clear
+      // value because Resend needs it. The web list also masks defensively.
+      recipient: maskRecipient(d.recipient),
       channel: (d.channel === "email" ? "email" : d.channel === "sms" ? "sms" : d.channel === "webhook" ? "webhook" : "in_app") as "email" | "sms" | "in_app" | "webhook",
       attemptCount: d.retryCount ?? 1,
       deliveredAt: d.sentAt instanceof Date ? d.sentAt.toISOString() : d.sentAt ?? undefined,

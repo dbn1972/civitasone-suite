@@ -1,28 +1,43 @@
 "use client";
 /**
  * CampaignList — MK-001. Lists marketing campaigns (name, objective, status,
- * budget, ROI) and hosts an inline "New campaign" dialog. Every ROI/count is
- * gated on source === "error": a failed list fetch renders "—" + the saved-info
- * badge, never a fabricated "0 campaigns" / "ROI 0%" as fact. A campaign whose
- * ROI is not yet computed (roiBps null) shows "—", never "0%".
+ * budget, metrics link) with status filtering and pagination, and hosts an
+ * inline "New campaign" dialog.
+ *
+ * A failed list fetch renders a real ds ErrorState with Retry — never a
+ * fabricated "0 campaigns" / "ROI 0%" and never the contradictory "showing
+ * saved information" copy (nothing is cached; GAP-NOTIFICATIONS-CAMPAIGNS-01).
+ *
+ * The create dialog uses the shared ds <Modal> (focus trap + restore + inert +
+ * ESC), warns before discarding a dirty form, and validates each recipient
+ * token (email / Indian mobile / handle) with a visible cap and a consent
+ * notice — personal data typed by hand must not go out unchecked
+ * (GAP-NOTIFICATIONS-CAMPAIGNS-02 / -04).
  *
  * Budget is entered as a rupee decimal and converted to a paise integer STRING
  * with rupeesToMinorString (no float); it is displayed with formatMoney.
  */
 import { useEffect, useId, useMemo, useState } from "react";
 import Link from "next/link";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
-import { Button, EmptyState } from "@/app/_components/ds";
+import { Button, ConfirmDialog, ErrorState, Modal, Segmented } from "@/app/_components/ds";
 import { StatusBadge } from "../../_components/StatusBadge";
 import { formatMoney } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
+import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
+import {
+  CAMPAIGN_RECIPIENT_LIMIT,
+  validateRecipientTokens,
+} from "@/lib/form-validation";
 import {
   getCampaigns,
   getCampaignTemplates,
   getCampaignSegments,
   createCampaign,
   campaignStatusLabel,
+  CAMPAIGN_STATUSES,
   type Campaign,
+  type CampaignStatus,
   type CampaignTemplate,
   type CampaignSegment,
   type Source,
@@ -31,98 +46,146 @@ import {
 const inputStyle = { padding: 8, minHeight: 38, borderRadius: 8, border: "1px solid var(--line)", width: "100%" } as const;
 
 type ListSource = Source | "loading";
+type StatusFilter = "all" | CampaignStatus;
 
-/** Campaigns carry a per-row ROI only after a metrics load; the list contract
- * does not include ROI, so the list shows a link to the detail metrics. */
+const PAGE_SIZE = 50;
+
 export function CampaignList() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [total, setTotal] = useState<number | undefined>(undefined);
   const [listSource, setListSource] = useState<ListSource>("loading");
+  const [offset, setOffset] = useState(0);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
   const [open, setOpen] = useState(false);
 
-  async function load(isLive: () => boolean = () => true) {
+  async function load(nextOffset = offset, isLive: () => boolean = () => true) {
     setListSource("loading");
-    const { data, source } = await getCampaigns();
+    const { data, total: t, source } = await getCampaigns(PAGE_SIZE, nextOffset);
     if (!isLive()) return;
     setCampaigns(data);
+    setTotal(t);
     setListSource(source);
   }
 
   useEffect(() => {
     let live = true;
-    void load(() => live);
+    void load(offset, () => live);
     return () => {
       live = false;
     };
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- load only closes over offset, listed here.
+  }, [offset]);
+
+  // GAP-NOTIFICATIONS-CAMPAIGNS-05: the list endpoint has no status filter, so
+  // filter the current page client-side. Default newest-first by createdAt when
+  // present (the API order is not guaranteed).
+  const visible = useMemo(() => {
+    const sorted = [...campaigns].sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+    if (statusFilter === "all") return sorted;
+    return sorted.filter((c) => c.status === statusFilter);
+  }, [campaigns, statusFilter]);
+
+  const page = Math.floor(offset / PAGE_SIZE) + 1;
+  const hasNext = total !== undefined ? offset + PAGE_SIZE < total : campaigns.length === PAGE_SIZE;
+  const hasPrev = offset > 0;
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
       <div className="card">
         <div className="card-h">
           <h3>Campaigns</h3>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {listSource === "error" ? <DataSourceBadge source="error" /> : null}
-            <Button size="sm" onClick={() => setOpen(true)}>
-              New campaign
-            </Button>
-          </div>
+          <Button size="sm" onClick={() => setOpen(true)}>
+            New campaign
+          </Button>
         </div>
+
+        {listSource !== "loading" && listSource !== "error" ? (
+          <div style={{ padding: "0 12px 8px" }}>
+            <Segmented
+              value={statusFilter === "all" ? "All" : campaignStatusLabel(statusFilter)}
+              onChange={(label) => {
+                if (label === "All") setStatusFilter("all");
+                else {
+                  const match = CAMPAIGN_STATUSES.find((s) => campaignStatusLabel(s) === label);
+                  if (match) setStatusFilter(match);
+                }
+              }}
+              options={["All", ...CAMPAIGN_STATUSES.map((s) => campaignStatusLabel(s))]}
+            />
+          </div>
+        ) : null}
 
         {listSource === "loading" ? (
           <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)", padding: "0 12px" }}>
             Loading campaigns…
           </p>
         ) : listSource === "error" ? (
-          <EmptyState icon="📣" title="—" message="Campaigns could not be loaded. Showing saved information." />
+          // GAP-NOTIFICATIONS-CAMPAIGNS-01: one honest error + Retry; never
+          // "showing saved information" (there is no cache).
+          <ErrorState error={toHumanError("load", { area: "campaigns" })} onRetry={() => void load()} />
         ) : campaigns.length === 0 ? (
-          <EmptyState
-            icon="📣"
-            title="No campaigns yet"
-            message="Create a campaign to reach an audience segment and track its ROI."
-          />
+          // Only ever "No campaigns yet" for a successful, genuinely empty load.
+          <EmptyNoCampaigns />
+        ) : visible.length === 0 ? (
+          <p style={{ fontSize: 13, color: "var(--muted)", padding: 12, margin: 0 }}>
+            No {statusFilter === "all" ? "" : `${campaignStatusLabel(statusFilter).toLowerCase()} `}campaigns on this page.
+          </p>
         ) : (
           <div style={{ overflowX: "auto" }}>
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th scope="col">Name</th>
-                <th scope="col">Objective</th>
-                <th scope="col">Status</th>
-                <th scope="col" className="num">Budget</th>
-                <th scope="col">ROI</th>
-                <th scope="col">
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {campaigns.map((c) => (
-                <tr key={c.id}>
-                  <td>
-                    <Link href={`/notifications/campaigns/${c.id}`}>{c.name || "(untitled)"}</Link>
-                  </td>
-                  <td>{c.objective ?? "—"}</td>
-                  <td>
-                    <StatusBadge status={c.status} label={campaignStatusLabel(c.status)} />
-                  </td>
-                  <td className="num">{c.budgetMinor !== undefined ? formatMoney(c.budgetMinor) : "—"}</td>
-                  <td>
-                    <Link href={`/notifications/campaigns/${c.id}`} className="mut">
-                      View metrics
-                    </Link>
-                  </td>
-                  <td>
-                    <Link className="btn ghost sm" href={`/notifications/campaigns/${c.id}`}>
-                      Open
-                    </Link>
-                  </td>
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col">Objective</th>
+                  <th scope="col">Status</th>
+                  <th scope="col" className="num">Budget</th>
+                  <th scope="col">
+                    <span className="sr-only">Open</span>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {visible.map((c) => (
+                  <tr key={c.id}>
+                    <td>
+                      <Link href={`/notifications/campaigns/${c.id}`}>{c.name || "(untitled)"}</Link>
+                    </td>
+                    <td>{c.objective ?? "—"}</td>
+                    <td>
+                      <StatusBadge status={c.status} label={campaignStatusLabel(c.status)} />
+                    </td>
+                    <td className="num">{c.budgetMinor !== undefined ? formatMoney(c.budgetMinor) : "—"}</td>
+                    <td>
+                      <Link className="btn ghost sm" href={`/notifications/campaigns/${c.id}`}>
+                        Open
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
+
+        {/* GAP-NOTIFICATIONS-CAMPAIGNS-05: pager driven by the API's total. */}
+        {listSource === "api" && campaigns.length > 0 && (total === undefined || total > PAGE_SIZE) ? (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: 12 }}>
+            <span style={{ fontSize: 13, color: "var(--muted)" }}>
+              {total !== undefined
+                ? `Showing ${offset + 1}–${offset + campaigns.length} of ${total}`
+                : `Page ${page}`}
+            </span>
+            <div style={{ display: "flex", gap: 8 }}>
+              <Button size="sm" variant="ghost" disabled={!hasPrev} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>
+                Previous
+              </Button>
+              <Button size="sm" variant="ghost" disabled={!hasNext} onClick={() => setOffset(offset + PAGE_SIZE)}>
+                Next
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <CreateCampaignDialog
@@ -130,9 +193,20 @@ export function CampaignList() {
         onClose={() => setOpen(false)}
         onCreated={() => {
           setOpen(false);
-          void load();
+          setOffset(0);
+          void load(0);
         }}
       />
+    </div>
+  );
+}
+
+function EmptyNoCampaigns() {
+  return (
+    <div className="empty-state" style={{ textAlign: "center" }}>
+      <div className="ic" aria-hidden="true">📣</div>
+      <h4>No campaigns yet</h4>
+      <p>Create a campaign to reach an audience segment and track its ROI.</p>
     </div>
   );
 }
@@ -159,6 +233,8 @@ function CreateCampaignDialog({
   const nameErrId = useId();
   const templateErrId = useId();
   const recipientsHintId = useId();
+  const recipientsErrId = useId();
+  const consentNoteId = useId();
 
   const [name, setName] = useState("");
   const [template, setTemplate] = useState("");
@@ -169,7 +245,9 @@ function CreateCampaignDialog({
   const [scheduledAt, setScheduledAt] = useState("");
   const [attempted, setAttempted] = useState(false);
   const [busy, setBusy] = useState(false);
+  const formError = useFormError("campaign");
   const [error, setError] = useState("");
+  const [discardOpen, setDiscardOpen] = useState(false);
 
   const [templates, setTemplates] = useState<CampaignTemplate[]>([]);
   const [templateSource, setTemplateSource] = useState<Source | "loading">("loading");
@@ -188,6 +266,7 @@ function CreateCampaignDialog({
     setScheduledAt("");
     setAttempted(false);
     setError("");
+    setDiscardOpen(false);
     let live = true;
     void (async () => {
       setTemplateSource("loading");
@@ -208,24 +287,12 @@ function CreateCampaignDialog({
     };
   }, [open]);
 
-  // Escape closes the dialog — a document-level listener (not a JSX onKeyDown
-  // prop on the role="dialog" panel) so it works regardless of which control
-  // inside the panel currently has focus, and doesn't trip jsx-a11y's
-  // non-interactive-element-interactions check.
-  useEffect(() => {
-    if (!open) return;
-    function onKeyDown(e: globalThis.KeyboardEvent) {
-      if (e.key === "Escape" && !busy) onClose();
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, busy, onClose]);
-
   // Budget is optional. When present it must convert cleanly to paise.
   const budgetMinor = useMemo(() => (budget.trim() ? rupeesToMinorString(budget) : null), [budget]);
   const budgetInvalid = budget.trim().length > 0 && budgetMinor === null;
 
-  // Recipients are split on commas / newlines; the backend requires at least one.
+  // Recipients are split on commas / newlines; the backend requires at least one
+  // AND expands no segment for you, so each token must be a real address.
   const recipientList = useMemo(
     () =>
       recipients
@@ -234,11 +301,29 @@ function CreateCampaignDialog({
         .filter((r) => r.length > 0),
     [recipients],
   );
+  const recipientCheck = useMemo(() => validateRecipientTokens(recipientList), [recipientList]);
 
   const nameMissing = name.trim().length === 0;
   const templateMissing = template.trim().length === 0;
   const recipientsMissing = recipientList.length === 0;
-  const canSubmit = !nameMissing && !templateMissing && !recipientsMissing && !budgetInvalid;
+  const recipientsInvalid = recipientCheck.invalid.length > 0 || recipientCheck.overLimit;
+  const canSubmit = !nameMissing && !templateMissing && !recipientsMissing && !recipientsInvalid && !budgetInvalid;
+
+  // GAP-NOTIFICATIONS-CAMPAIGNS-04: a dirty form must not be discarded silently.
+  const dirty =
+    name.trim().length > 0 ||
+    template.length > 0 ||
+    recipients.trim().length > 0 ||
+    objective.trim().length > 0 ||
+    budget.trim().length > 0 ||
+    segment.length > 0 ||
+    scheduledAt.length > 0;
+
+  function requestClose() {
+    if (busy) return;
+    if (dirty) setDiscardOpen(true);
+    else onClose();
+  }
 
   async function submit() {
     setAttempted(true);
@@ -258,32 +343,31 @@ function CreateCampaignDialog({
       });
       onCreated();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not create the campaign.");
+      setError(formError.fromException("save", e).message);
     } finally {
       setBusy(false);
     }
   }
 
-  if (!open) return null;
+  const recipientHelp =
+    recipientsMissing
+      ? "At least one recipient is required."
+      : recipientCheck.overLimit
+        ? `Too many recipients — the limit is ${CAMPAIGN_RECIPIENT_LIMIT.toLocaleString("en-IN")}.`
+        : recipientCheck.invalid.length > 0
+          ? `${recipientCheck.invalid.length} invalid: ${recipientCheck.invalid.slice(0, 3).join(", ")}${recipientCheck.invalid.length > 3 ? "…" : ""}`
+          : `${recipientList.length} recipient${recipientList.length === 1 ? "" : "s"}`;
 
   return (
-    <div
-      className="cd-overlay"
-      role="presentation"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget && !busy) onClose();
-      }}
-    >
-      <div
-        className="cd-panel"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={`${nameId}-title`}
+    <>
+      <Modal
+        open={open}
+        onClose={requestClose}
+        title="New campaign"
+        size="lg"
+        closeOnOverlayClick={!busy}
+        describedById={consentNoteId}
       >
-        <h2 className="cd-title" id={`${nameId}-title`}>
-          New campaign
-        </h2>
-
         <div style={{ display: "grid", gap: 12 }}>
           <div>
             <label htmlFor={nameId} style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
@@ -329,7 +413,7 @@ function CreateCampaignDialog({
             </select>
             {templateSource === "error" ? (
               <p style={{ fontSize: 12, color: "#92400e", margin: "4px 0 0" }}>
-                Templates could not be loaded — showing saved information.
+                Templates could not be loaded. Try again.
               </p>
             ) : null}
             {attempted && templateMissing ? (
@@ -350,14 +434,28 @@ function CreateCampaignDialog({
               style={{ ...inputStyle, minHeight: 64, resize: "vertical" }}
               rows={3}
               aria-required="true"
-              aria-invalid={attempted && recipientsMissing ? true : undefined}
-              aria-describedby={recipientsHintId}
+              aria-invalid={attempted && (recipientsMissing || recipientsInvalid) ? true : undefined}
+              aria-describedby={`${recipientsHintId} ${attempted && recipientsInvalid ? recipientsErrId : ""} ${consentNoteId}`.trim()}
               placeholder="One recipient per line, or comma-separated"
             />
-            <p id={recipientsHintId} style={{ fontSize: 12, color: attempted && recipientsMissing ? "#b42318" : "var(--muted)", margin: "4px 0 0" }}>
-              {recipientList.length > 0
-                ? `${recipientList.length} recipient${recipientList.length === 1 ? "" : "s"}`
-                : "At least one recipient is required."}
+            <p
+              id={recipientsHintId}
+              style={{ fontSize: 12, color: attempted && (recipientsMissing || recipientsInvalid) ? "#b42318" : "var(--muted)", margin: "4px 0 0" }}
+            >
+              {recipientHelp}
+            </p>
+            {attempted && recipientsInvalid ? (
+              <p id={recipientsErrId} role="alert" style={{ fontSize: 12, color: "#b42318", margin: "4px 0 0" }}>
+                {recipientCheck.overLimit
+                  ? "Reduce the number of recipients before sending."
+                  : "Each recipient must be a valid email, Indian mobile number, or user handle."}
+              </p>
+            ) : null}
+            {/* GAP-NOTIFICATIONS-CAMPAIGNS-02: DPDP consent notice beside the raw
+                personal-data field. */}
+            <p id={consentNoteId} style={{ fontSize: 12, color: "var(--muted)", margin: "6px 0 0" }}>
+              Only contact people who have consented to marketing. Recipients who have opted out or set
+              Do-Not-Disturb are skipped automatically when the campaign is sent.
             </p>
           </div>
 
@@ -443,14 +541,29 @@ function CreateCampaignDialog({
         </div>
 
         <div className="cd-actions">
-          <Button variant="ghost" onClick={onClose} disabled={busy}>
+          <Button variant="ghost" onClick={requestClose} disabled={busy}>
             Cancel
           </Button>
           <Button onClick={() => void submit()} disabled={busy} aria-busy={busy}>
             {busy ? "Working…" : "Create campaign"}
           </Button>
         </div>
-      </div>
-    </div>
+      </Modal>
+
+      {/* GAP-NOTIFICATIONS-CAMPAIGNS-04: confirm before throwing away typed data. */}
+      <ConfirmDialog
+        open={discardOpen}
+        danger
+        title="Discard this campaign?"
+        description="Anything you have typed will be lost."
+        confirmLabel="Discard"
+        cancelLabel="Keep editing"
+        onCancel={() => setDiscardOpen(false)}
+        onConfirm={() => {
+          setDiscardOpen(false);
+          onClose();
+        }}
+      />
+    </>
   );
 }

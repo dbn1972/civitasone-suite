@@ -1,15 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import Link from "next/link";
 import { PageHeader, StatCard, StatGrid, DataTable, Segmented, EmptyState, ErrorState } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import type { DataProvenance } from "@/lib/sync/resource";
 import { useOfflineResource } from "@/lib/sync/resource";
 import { toHumanError } from "@/lib/messages";
 import { StatusBadge } from "../_components/StatusBadge";
+import { channelLabel } from "../_components/channelLabel";
 
 /**
  * Notification templates — list backed by GET /notification/templates
- * (TemplateView[]). Rows link to the template detail route. Channel is shown as
- * plain text; template status (active / superseded) uses the text+icon
+ * (TemplateView[]). Rows link to the template detail route. Channel is shown
+ * via channelLabel(); template status (active / superseded) uses the text+icon
  * StatusBadge so state is never colour-only.
  */
 type TemplateView = {
@@ -44,6 +48,22 @@ function toArray(payload: unknown): TemplateView[] {
 
 const TABS = ["All", "Active", "Superseded"] as const;
 
+/**
+ * GAP-NOTIFICATIONS-TEMPLATES-02: collapse to the latest version per logical
+ * template (group by name+channel, keep the highest version) by default, so a
+ * superseded v2 and its active v3 are not two rows that double-count the
+ * "Templates" total. A "Show all versions" toggle reveals every row.
+ */
+function latestPerName(views: TemplateView[]): TemplateView[] {
+  const byKey = new Map<string, TemplateView>();
+  for (const t of views) {
+    const key = `${t.name}\u0000${t.channel}`;
+    const existing = byKey.get(key);
+    if (!existing || t.version > existing.version) byKey.set(key, t);
+  }
+  return [...byKey.values()];
+}
+
 export default function NotificationTemplatesPage() {
   const { data: templates, source, offline, cachedAt, loading, error, refresh } = useOfflineResource<unknown, TemplateView[]>(
     "notifications.templates",
@@ -52,19 +72,34 @@ export default function NotificationTemplatesPage() {
   );
 
   const [tab, setTab] = useState<string>("All");
+  const [showAllVersions, setShowAllVersions] = useState(false);
 
-  const active = templates.filter((t) => t.status === "active").length;
+  // TEMPLATES-02: default to latest-per-name; the toggle shows every version.
+  const visibleTemplates = useMemo(
+    () => (showAllVersions ? templates : latestPerName(templates)),
+    [templates, showAllVersions],
+  );
+
+  const grouped = latestPerName(templates);
+  const templateCount = grouped.length;
+  const active = grouped.filter((t) => !t.supersededBy && t.status === "active").length;
   const superseded = templates.filter((t) => t.supersededBy || t.status === "superseded").length;
 
-  const cacheNote =
-    offline || source === "cache"
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
-      : null;
+  // TEMPLATES-04: show '—' not a fabricated 0 while loading / on error.
+  const unknown = loading || Boolean(error);
+  const stat = (n: number) => (unknown ? "—" : n.toLocaleString("en-IN"));
 
-  const rows: TemplateRow[] = templates.map((t) => ({
+  // TEMPLATES-04 / LIST-04: single provenance value from the same hook call.
+  const provenance: DataProvenance = error && templates.length === 0 // ux-001-ok: this IS the error branch (error is checked first); length only distinguishes error-no-data from error-with-stale-rows, never renders an empty state
+    ? "error-no-data"
+    : offline || source === "cache"
+      ? "cached"
+      : "live";
+
+  const rows: TemplateRow[] = visibleTemplates.map((t) => ({
     id: t.id,
     name: t.name,
-    channel: t.channel.replace(/_/g, " "),
+    channel: channelLabel(t.channel),
     subject: t.subject ?? "—",
     version: t.version,
     status: t.supersededBy ? "superseded" : t.status,
@@ -83,23 +118,34 @@ export default function NotificationTemplatesPage() {
         title="Notification Templates"
         subtitle="Message templates used to send notifications. Select a template to view its content and version history."
         back="/notifications/list"
-        actions={<a className="btn primary" href="/notifications/compose">Send notification</a>}
+        actions={
+          <>
+            <Link className="btn ghost" href="/notifications/templates/new">New template</Link>
+            <Link className="btn primary" href="/notifications/compose">Send notification</Link>
+          </>
+        }
       />
-      {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>
-          {cacheNote}
-        </p>
-      ) : null}
+      {!error ? <DataSourceBadge provenance={provenance} cachedAt={cachedAt} offline={offline} /> : null}
       <StatGrid>
-        <StatCard icon="📝" iconBg="#eef2ff" label="Total" value={templates.length.toLocaleString("en-IN")} />
-        <StatCard icon="✅" iconBg="#ecfdf5" label="Active" value={active.toLocaleString("en-IN")} />
-        <StatCard icon="🗂" iconBg="#f8fafc" label="Superseded" value={superseded.toLocaleString("en-IN")} />
+        <StatCard icon="📝" iconBg="#eef2ff" label="Templates" value={stat(templateCount)} />
+        <StatCard icon="✅" iconBg="#ecfdf5" label="Active" value={stat(active)} />
+        <StatCard icon="🗂" iconBg="#f8fafc" label="Superseded" value={stat(superseded)} />
       </StatGrid>
       <div className="card">
         <div className="card-h">
           <h3>Templates</h3>
-          <div role="group" aria-label="Filter templates by status">
-            <Segmented options={[...TABS]} value={tab} onChange={setTab} />
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <label style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 12 }}>
+              <input
+                type="checkbox"
+                checked={showAllVersions}
+                onChange={(e) => setShowAllVersions(e.target.checked)}
+              />
+              Show all versions
+            </label>
+            <div role="group" aria-label="Filter templates by status">
+              <Segmented options={[...TABS]} value={tab} onChange={setTab} />
+            </div>
           </div>
         </div>
         {error ? (

@@ -8,6 +8,10 @@ export type TemplateView = {
   status: string;
   version: number;
   supersededBy: string | null;
+  // GAP-NOTIFICATIONS-TEMPLATES-DETAIL-04: who created this version and when,
+  // so the version-history table can show date + author per version.
+  createdAt?: string | null;
+  createdBy?: string | null;
   // Approval workflow fields (optional — null when not in approval flow)
   contentType?: string | null;
   submittedBy?: string | null;

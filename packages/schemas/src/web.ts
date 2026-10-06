@@ -522,6 +522,7 @@ export const notificationExperimentListSchema = z.object({
     name: z.string(),
     status: z.string(),
     winnerVariantId: z.string().nullable(),
+    winnerVariantKey: z.string().nullable().optional(),
     winnerMarginPct: z.number().nullable(),
     concludedAt: z.string().nullable(),
   })),

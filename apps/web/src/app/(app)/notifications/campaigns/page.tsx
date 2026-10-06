@@ -7,7 +7,7 @@ export default function Page() {
     <>
       <PageHeader
         title="Campaigns"
-        subtitle="Plan marketing campaigns against an audience segment, send them, and track delivery and ROI."
+        subtitle="Plan a marketing campaign to a list of consenting recipients (optionally tagged to an audience segment), send it, and track delivery and ROI."
         back="/notifications"
         backLabel="Notifications"
       />

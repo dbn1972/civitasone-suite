@@ -10,36 +10,54 @@
  * is null (actual cost 0), never "0%". Money displays with formatMoney (paise
  * strings end-to-end).
  */
-import { useEffect, useRef, useState } from "react";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
-import { Button, ConfirmDialog, EmptyState } from "@/app/_components/ds";
+import { useEffect, useId, useRef, useState } from "react";
+import { Button, ConfirmDialog, ErrorState } from "@/app/_components/ds";
 import { StatusBadge } from "../../_components/StatusBadge";
-import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { formatMoney, formatIndianDateTime } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
+import { useFormError } from "@/lib/useFormError";
 import {
   getCampaign,
   getCampaignMetrics,
+  getCampaignSegments,
   sendCampaign,
   cancelCampaign,
   campaignStatusLabel,
   formatRoiBps,
   type Campaign,
   type CampaignMetrics,
+  type CampaignSegment,
   type Source,
 } from "@/lib/notifications/campaigns";
 
 type LoadSource = Source | "loading";
 type Action = "send" | "cancel";
 
-export function CampaignDetail({ campaignId }: { campaignId: string }) {
+/**
+ * CampaignDetail. `canManage` reflects whether the signed-in user holds a
+ * notification campaign-admin role (NOTIFICATION_SEND_ROLES, resolved server-
+ * side in the page wrapper). It mirrors the service's own gate — campaign
+ * send/cancel is restricted to platform_admin/super_admin/tenant_admin
+ * (bulk/routes.ts requireRole(ADMIN)); the server stays the authority and
+ * 403s others, so this only decides whether the UI offers the controls at
+ * all (GAP-NOTIFICATIONS-CAMPAIGNS-DETAIL-01). Defaults false (fail closed).
+ */
+export function CampaignDetail({ campaignId, canManage = false }: { campaignId: string; canManage?: boolean }) {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [campaignSource, setCampaignSource] = useState<LoadSource>("loading");
+  const [campaignNotFound, setCampaignNotFound] = useState(false);
   const [metrics, setMetrics] = useState<CampaignMetrics | null>(null);
   const [metricsSource, setMetricsSource] = useState<LoadSource>("loading");
+  const [segments, setSegments] = useState<CampaignSegment[]>([]);
 
   const [confirm, setConfirm] = useState<Action | null>(null);
   const [busy, setBusy] = useState(false);
+  const formError = useFormError("campaign");
   const [actionError, setActionError] = useState("");
   const [message, setMessage] = useState("");
+
+  const sendHintId = useId();
+  const cancelHintId = useId();
 
   // Guards setState in post-mutation reloads: if the user navigates away while a
   // send/cancel is in flight, don't set state on an unmounted component.
@@ -53,9 +71,10 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
 
   async function loadCampaign(isLive: () => boolean = () => true) {
     setCampaignSource("loading");
-    const { data, source } = await getCampaign(campaignId);
+    const { data, source, notFound } = await getCampaign(campaignId);
     if (!isLive()) return;
     setCampaign(data);
+    setCampaignNotFound(Boolean(notFound));
     setCampaignSource(source);
   }
   async function loadMetrics(isLive: () => boolean = () => true) {
@@ -70,6 +89,12 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
     let live = true;
     void loadCampaign(() => live);
     void loadMetrics(() => live);
+    // Segment names for the Audience segment row (GAP-NOTIFICATIONS-CAMPAIGNS-DETAIL-05):
+    // a failed lookup falls back to the raw id, so this load is best-effort.
+    void (async () => {
+      const { data } = await getCampaignSegments();
+      if (live) setSegments(data);
+    })();
     return () => {
       live = false;
     };
@@ -88,15 +113,51 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
       await loadCampaign(() => mountedRef.current);
       await loadMetrics(() => mountedRef.current);
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : "The action could not be completed.");
+      setActionError(formError.fromException("save", e).message);
     } finally {
       setBusy(false);
     }
   }
 
   const status = campaign?.status ?? "";
-  const canSend = campaignSource === "api" && (status === "draft" || status === "scheduled");
-  const canCancel = campaignSource === "api" && status !== "cancelled" && status !== "sent";
+  // GAP-NOTIFICATIONS-CAMPAIGNS-DETAIL-04: only draft/scheduled campaigns can be
+  // sent or cancelled from here. The backend cancel command sets status
+  // "cancelled" from ANY state (bulk/consumer.ts) with no "stop a mid-send"
+  // semantics, so cancelling a "sending" campaign would NOT recall messages
+  // already handed to the provider — it would only mislabel the row. Until the
+  // service exposes a real stop/abort, we do not offer Cancel while sending
+  // (safest default: fail closed; recorded for HUMAN REVIEW).
+  const manageable = status === "draft" || status === "scheduled";
+  const canSend = campaignSource === "api" && canManage && manageable;
+  const canCancel = campaignSource === "api" && canManage && manageable;
+  // Why a rendered-but-disabled Send is disabled, surfaced via aria-describedby.
+  const sendDisabledReason = !canManage
+    ? "Only a notification administrator can send campaigns."
+    : !manageable
+      ? "Only draft or scheduled campaigns can be sent."
+      : "";
+  const cancelDisabledReason = !canManage
+    ? "Only a notification administrator can cancel campaigns."
+    : !manageable
+      ? status === "sending"
+        ? "Messages already being sent cannot be recalled."
+        : "Only draft or scheduled campaigns can be cancelled."
+      : "";
+
+  // GAP-NOTIFICATIONS-CAMPAIGNS-DETAIL-05: show the segment NAME, not the raw id,
+  // falling back to the id when the lookup didn't resolve it.
+  const segmentDisplay = campaign?.audienceSegmentId
+    ? (segments.find((s) => s.id === campaign.audienceSegmentId)?.name ?? campaign.audienceSegmentId)
+    : "—";
+
+  // GAP-NOTIFICATIONS-CAMPAIGNS-DETAIL-05: before a first send a draft/scheduled
+  // campaign has no real metrics — zeros here read as failure, not "not started".
+  const metricsNotStarted =
+    metricsSource === "api" && (status === "draft" || status === "scheduled") && (metrics?.recipients ?? 0) === 0;
+
+  // GAP-NOTIFICATIONS-CAMPAIGNS-DETAIL-01: show the audience size in the Send
+  // confirm so the admin sees the blast radius before an irreversible mass send.
+  const audienceCount = metrics?.recipients;
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
@@ -104,7 +165,6 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
       <div className="card">
         <div className="card-h">
           <h3>Campaign</h3>
-          {campaignSource === "error" ? <DataSourceBadge source="error" /> : null}
         </div>
 
         {message ? (
@@ -122,8 +182,25 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
           <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)", padding: "0 12px" }}>
             Loading campaign…
           </p>
+        ) : campaignNotFound ? (
+          // 404: an unknown id is a dead end, not a transient failure — no Retry,
+          // just an honest "not found" with a way back to the list.
+          <ErrorState
+            error={{
+              what: "Campaign not found.",
+              next: "It may have been removed, or the link may be wrong.",
+              actions: ["back"],
+            }}
+            backHref="/notifications/campaigns"
+          />
         ) : campaignSource === "error" || !campaign ? (
-          <EmptyState icon="📣" title="—" message="Campaign could not be loaded. Showing saved information." />
+          // Transient load failure: honest copy + Retry, never "showing saved
+          // information" (nothing is cached). GAP-NOTIFICATIONS-CAMPAIGNS-DETAIL-02.
+          <ErrorState
+            error={toHumanError("load", { area: "the campaign" })}
+            onRetry={() => void loadCampaign(() => mountedRef.current)}
+            backHref="/notifications/campaigns"
+          />
         ) : (
           <>
             <dl style={{ display: "grid", gridTemplateColumns: "1fr", gap: 8, padding: "0 12px", margin: 0 }}>
@@ -147,32 +224,42 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
               </div>
               <div style={{ display: "flex", gap: 12 }}>
                 <dt style={{ minWidth: 160, color: "var(--muted)", fontSize: 13, margin: 0 }}>Audience segment</dt>
-                <dd style={{ margin: 0, fontSize: 14 }}>{campaign.audienceSegmentId ?? "—"}</dd>
+                <dd style={{ margin: 0, fontSize: 14 }}>{segmentDisplay}</dd>
               </div>
               <div style={{ display: "flex", gap: 12 }}>
                 <dt style={{ minWidth: 160, color: "var(--muted)", fontSize: 13, margin: 0 }}>Scheduled at</dt>
-                <dd style={{ margin: 0, fontSize: 14 }}>{campaign.scheduledAt ? formatIndianDate(campaign.scheduledAt) : "—"}</dd>
+                <dd style={{ margin: 0, fontSize: 14 }}>{campaign.scheduledAt ? formatIndianDateTime(campaign.scheduledAt) : "—"}</dd>
               </div>
               <div style={{ display: "flex", gap: 12 }}>
                 <dt style={{ minWidth: 160, color: "var(--muted)", fontSize: 13, margin: 0 }}>Created</dt>
-                <dd style={{ margin: 0, fontSize: 14 }}>{campaign.createdAt ? formatIndianDate(campaign.createdAt) : "—"}</dd>
+                <dd style={{ margin: 0, fontSize: 14 }}>{campaign.createdAt ? formatIndianDateTime(campaign.createdAt) : "—"}</dd>
               </div>
             </dl>
-            <div style={{ display: "flex", gap: 8, padding: 12 }}>
-              <Button
-                onClick={() => setConfirm("send")}
-                disabled={!canSend || busy}
-              >
-                Send
-              </Button>
-              <Button
-                variant="danger"
-                onClick={() => setConfirm("cancel")}
-                disabled={!canCancel || busy}
-              >
-                Cancel campaign
-              </Button>
-            </div>
+            {/* Only render the action bar for a user who can manage; a plain
+                viewer sees no disabled controls at all. When managing, buttons
+                stay rendered-but-disabled with an explanation (DETAIL-04). */}
+            {canManage ? (
+              <div style={{ display: "grid", gap: 6, padding: 12 }}>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <Button onClick={() => setConfirm("send")} disabled={!canSend || busy} aria-describedby={sendDisabledReason ? sendHintId : undefined}>
+                    Send
+                  </Button>
+                  <Button variant="danger" onClick={() => setConfirm("cancel")} disabled={!canCancel || busy} aria-describedby={cancelDisabledReason ? cancelHintId : undefined}>
+                    Cancel campaign
+                  </Button>
+                </div>
+                {sendDisabledReason || cancelDisabledReason ? (
+                  <div style={{ fontSize: 12, color: "var(--muted)", margin: 0 }}>
+                    {sendDisabledReason ? <p id={sendHintId} style={{ margin: 0 }}>{sendDisabledReason}</p> : null}
+                    {cancelDisabledReason && (cancelDisabledReason as string) !== (sendDisabledReason as string) ? (
+                      <p id={cancelHintId} style={{ margin: 0 }}>{cancelDisabledReason}</p>
+                    ) : (
+                      <span id={cancelHintId} className="sr-only">{cancelDisabledReason}</span>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </>
         )}
       </div>
@@ -180,8 +267,7 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
       {/* ---------------------------------------------------------- metrics -- */}
       <div className="card">
         <div className="card-h">
-          <h3>Performance & ROI</h3>
-          {metricsSource === "error" ? <DataSourceBadge source="error" /> : null}
+          <h3>Performance &amp; ROI</h3>
         </div>
 
         {metricsSource === "loading" ? (
@@ -189,7 +275,14 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
             Loading metrics…
           </p>
         ) : metricsSource === "error" || !metrics ? (
-          <EmptyState icon="📊" title="—" message="Metrics could not be loaded. Showing saved information." />
+          <ErrorState
+            error={toHumanError("load", { area: "campaign metrics" })}
+            onRetry={() => void loadMetrics(() => mountedRef.current)}
+          />
+        ) : metricsNotStarted ? (
+          <p style={{ fontSize: 13, color: "var(--muted)", padding: 12, margin: 0 }}>
+            Metrics appear after the first send. This campaign has not been sent yet.
+          </p>
         ) : (
           <div
             style={{
@@ -206,7 +299,12 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
             <Metric label="Conversions" value={metrics.conversions.toLocaleString("en-IN")} />
             <Metric label="Actual cost" value={formatMoney(metrics.actualCostMinor)} />
             <Metric label="Attributed revenue" value={formatMoney(metrics.attributedRevenueMinor)} />
-            <Metric label="ROI" value={formatRoiBps(metrics.roiBps)} emphasis />
+            <Metric
+              label="ROI"
+              value={formatRoiBps(metrics.roiBps)}
+              emphasis
+              hint={metrics.roiBps === null ? "Not available until a cost is recorded" : undefined}
+            />
           </div>
         )}
       </div>
@@ -217,11 +315,13 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
         title={confirm === "send" ? "Send this campaign?" : "Cancel this campaign?"}
         description={
           confirm === "send"
-            ? "The campaign will be queued and messages will be sent to the audience. This cannot be undone."
+            ? `Messages will be queued and sent to the audience${
+                typeof audienceCount === "number" ? ` (${audienceCount.toLocaleString("en-IN")} recipient${audienceCount === 1 ? "" : "s"})` : ""
+              }. Recipients who have opted out or set Do-Not-Disturb are skipped automatically. This cannot be undone.`
             : "The campaign will be cancelled and will not be sent. This cannot be undone."
         }
         confirmLabel={confirm === "send" ? "Send campaign" : "Cancel campaign"}
-        cancelLabel="Keep editing"
+        cancelLabel="Go back"
         busy={busy}
         errorMessage={actionError || undefined}
         onCancel={() => {
@@ -233,9 +333,9 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
   );
 }
 
-function Metric({ label, value, emphasis }: { label: string; value: string; emphasis?: boolean }) {
+function Metric({ label, value, emphasis, hint }: { label: string; value: string; emphasis?: boolean; hint?: string }) {
   return (
-    <div className="card" style={{ padding: 12 }}>
+    <div className="card" style={{ padding: 12 }} title={hint}>
       <div style={{ fontSize: 12, color: "var(--muted)" }}>{label}</div>
       <div style={{ fontSize: emphasis ? 22 : 18, fontWeight: 700, marginTop: 4 }}>{value}</div>
     </div>
