@@ -61,3 +61,5 @@ export type { MaskedProps, MaskedKind } from "./Masked";
 export { RagPill } from "./RagPill";
 export { RevealableValue } from "./RevealableValue";
 export type { RevealableValueProps } from "./RevealableValue";
+export { UserRef } from "./UserRef";
+export type { UserRefProps } from "./UserRef";
