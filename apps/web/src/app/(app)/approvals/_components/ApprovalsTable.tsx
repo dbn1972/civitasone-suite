@@ -3,13 +3,21 @@
 import Link from "next/link";
 import { useSeededResource } from "@/lib/sync/resource";
 import { DataTable } from "@/app/_components/ds";
+import { formatIndianDate, humanizeStatus } from "@/lib/formatters";
 import type { MyApprovalItem } from "@/app/_data/loaders";
+import { isTaskOverdue } from "./overdue";
 
 interface ApprovalsTableProps {
   initialData: MyApprovalItem[];
   source: "api" | "error";
 }
 
+// GAP-APPROVALS-HOME-05: module is derived from refType.split("_")[0]
+// (loaders.ts), so the keys here are those prefixes. Extended to cover the
+// prefixes that actually occur (works, crm, helpdesk, legal, grants, hr) and
+// the dead "hrms" key removed — the known HR refType (leave_app) yields the
+// prefix "leave", never "hrms". Anything not listed falls back to a humanised
+// label (humanizeStatus) rather than the raw css-capitalised prefix.
 const MODULE_LABELS: Record<string, string> = {
   leave: "Leave",
   payroll: "Payroll",
@@ -18,19 +26,22 @@ const MODULE_LABELS: Record<string, string> = {
   estab: "Establishment",
   workflow: "Workflow",
   billing: "Billing",
-  hrms: "HR",
+  hr: "HR",
   asset: "Assets",
   project: "Projects",
+  works: "Works",
+  crm: "CRM",
+  helpdesk: "Helpdesk",
+  legal: "Legal",
+  grants: "Grants",
 };
 
+function moduleLabel(module: string): string {
+  return MODULE_LABELS[module] ?? humanizeStatus(module);
+}
+
 function formatDate(iso: string | null): string {
-  if (!iso) return "—";
-  try {
-    const d = new Date(iso);
-    return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-  } catch {
-    return iso;
-  }
+  return formatIndianDate(iso);
 }
 
 function formatRelativeDate(iso: string): string {
@@ -55,10 +66,16 @@ export function ApprovalsTable({ initialData, source }: ApprovalsTableProps) {
 
   const rows: ApprovalRow[] = data.map((item) => ({
     ...item,
-    moduleLabel: MODULE_LABELS[item.module] ?? item.module,
+    moduleLabel: moduleLabel(item.module),
     assignedDisplay: formatRelativeDate(item.assignedAt),
     dueDateDisplay: item.dueDate ? formatDate(item.dueDate) : "—",
-    isOverdue: item.dueDate ? new Date(item.dueDate).getTime() < Date.now() : false,
+    isOverdue: isTaskOverdue(item.dueDate),
+    // GAP-APPROVALS-HOME-07: raw sort keys so Assigned/Due sort by real time,
+    // not by the display strings ("Today" / "3d ago" / "12 Sep 2026"), which
+    // the generic comparator ordered alphabetically. null (missing) sorts
+    // first, exactly as compareValues treats a null cell.
+    assignedSort: item.assignedAt ? new Date(item.assignedAt).getTime() : null,
+    dueSort: item.dueDate ? new Date(item.dueDate).getTime() : null,
   }));
 
   return (
@@ -76,7 +93,6 @@ export function ApprovalsTable({ initialData, source }: ApprovalsTableProps) {
         pageSize={15}
         exportable
         exportFilename="my-approvals"
-        rowLinkKey="link"
         columns={[
           {
             key: "instanceName",
@@ -101,7 +117,6 @@ export function ApprovalsTable({ initialData, source }: ApprovalsTableProps) {
                   color: "var(--badge-text, #475569)",
                   borderRadius: 4,
                   padding: "2px 6px",
-                  textTransform: "capitalize",
                 }}
               >
                 {row.moduleLabel as string}
@@ -109,18 +124,26 @@ export function ApprovalsTable({ initialData, source }: ApprovalsTableProps) {
             ),
           },
           {
-            key: "assignedDisplay",
+            key: "assignedSort",
             label: "Assigned",
             sortable: true,
+            csv: (row: ApprovalRow) => row.assignedDisplay as string,
+            render: (row: ApprovalRow) => <>{row.assignedDisplay as string}</>,
           },
           {
-            key: "dueDateDisplay",
+            key: "dueSort",
             label: "Due",
             sortable: true,
+            csv: (row: ApprovalRow) => row.dueDateDisplay as string,
             render: (row: ApprovalRow) => (
               <span style={{ color: row.isOverdue ? "#ef4444" : "inherit", fontWeight: row.isOverdue ? 600 : 400 }}>
                 {row.dueDateDisplay as string}
-                {Boolean(row.isOverdue) && " ⚠️"}
+                {Boolean(row.isOverdue) && (
+                  <>
+                    {" "}
+                    <span style={{ fontSize: 11, fontWeight: 600 }}>⚠️ Overdue</span>
+                  </>
+                )}
               </span>
             ),
           },

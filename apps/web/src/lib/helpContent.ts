@@ -385,6 +385,41 @@ export const HELP_MODULES: HelpModule[] = [
     ],
     terms: ["GST", "GSTIN", "IRN", "e-invoice", "GSTN"],
   },
+  {
+    // GAP-APPROVALS-HOME-04: the /approvals inbox and its error page link to
+    // /help/approvals, which 404'd via notFound() because no 'approvals' guide
+    // existed. The unified inbox is a cross-module landing page (it links out
+    // to each module's own screen to actually decide), so its guide explains
+    // what the list is and that approving happens in the module, not here.
+    slug: "approvals",
+    icon: "✅",
+    title: "My Approvals",
+    summary:
+      "One list of everything across the system that is waiting for your decision, so nothing is missed.",
+    href: "/approvals",
+    moduleKey: null,
+    major: false,
+    tasks: [
+      {
+        title: "Act on an item waiting for you",
+        steps: [
+          "Open My Approvals to see everything waiting for your decision in one list.",
+          "Each row shows what it is, which module it came from, when it arrived, and when it is due.",
+          "Click a row to open that item in its own module screen.",
+          "Approve or send it back there — the decision is always made in the module, not on this list.",
+        ],
+      },
+      {
+        title: "Find the most urgent items first",
+        steps: [
+          "Overdue items are marked and shown in red.",
+          "Click the Due or Assigned column heading to sort by date.",
+          "Use the filter box to narrow the list by name, module, or status.",
+        ],
+      },
+    ],
+    terms: ["Maker-checker", "Note sheet"],
+  },
 ];
 
 /** Find a single module guide by its slug. */

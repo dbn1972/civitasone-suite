@@ -1,4 +1,4 @@
-import { eq, desc, and, or, isNull, isNotNull, lte, inArray } from "drizzle-orm";
+import { eq, desc, and, or, isNull, isNotNull, lte, inArray, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { tasks, type TaskRow, type TaskInsert, type TaskView } from "./schema.js";
 import { instances } from "../instances/schema.js";
@@ -42,6 +42,18 @@ export async function listByTenant(tenantId: string, limit: number, offset: numb
 }
 
 /**
+ * GAP-APPROVALS-HOME-01 — exact total of a tenant's tasks (the whole, unpaged
+ * set), so the unified approvals inbox can show "N of M" / a real Pending count
+ * instead of only the length of the first page. Tenant-scoped via scopedRead
+ * (RLS), mirrors listByTenant's WHERE.
+ */
+export async function countByTenant(tenantId: string): Promise<number> {
+  const rows = await scopedRead((tx) => tx.select({ n: sql<number>`count(*)::int` }).from(tasks)
+    .where(eq(tasks.tenantId, tenantId)));
+  return rows[0]?.n ?? 0;
+}
+
+/**
  * D1 (FE↔BE high ROI) — tasks scoped to one instance. Previously the frontend
  * had no server-side filter and fetched the ENTIRE tenant task list to filter
  * by instanceId client-side (see apps/web workflowData.ts getTasksForInstance).
@@ -58,6 +70,13 @@ export async function listByInstance(
     .limit(limit)
     .offset(offset));
   return rows.map(toView);
+}
+
+/** GAP-APPROVALS-HOME-01 — exact total of one instance's tasks (mirrors listByInstance's WHERE). */
+export async function countByInstance(tenantId: string, instanceId: string): Promise<number> {
+  const rows = await scopedRead((tx) => tx.select({ n: sql<number>`count(*)::int` }).from(tasks)
+    .where(and(eq(tasks.tenantId, tenantId), eq(tasks.instanceId, instanceId))));
+  return rows[0]?.n ?? 0;
 }
 
 /**
@@ -125,6 +144,30 @@ export async function listPendingForRoles(
     .offset(offset));
 
   return rows.map(toView);
+}
+
+/**
+ * GAP-APPROVALS-HOME-01 — exact total of a role-holder's pending inbox (the
+ * same filter as listPendingForRoles, without the limit/offset window), so the
+ * unified approvals page's Pending stat reflects every item an approver has,
+ * not just the first page. Tenant-scoped via scopedRead (RLS).
+ */
+export async function countPendingForRoles(tenantId: string, roles: string[]): Promise<number> {
+  const isSuperAdmin = roles.includes("super_admin");
+  const rolePredicate = isSuperAdmin
+    ? undefined
+    : roles.length > 0
+      ? or(isNull(tasks.roleRef), inArray(tasks.roleRef, roles))
+      : isNull(tasks.roleRef);
+
+  const rows = await scopedRead((tx) => tx.select({ n: sql<number>`count(*)::int` }).from(tasks)
+    .where(and(
+      eq(tasks.tenantId, tenantId),
+      eq(tasks.status, "pending"),
+      eq(tasks.isCall, false),
+      ...(rolePredicate ? [rolePredicate] : []),
+    )));
+  return rows[0]?.n ?? 0;
 }
 
 export async function findByIdTx(tx: Writer, id: string, tenantId: string): Promise<TaskRow | null> {
