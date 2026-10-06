@@ -67,6 +67,7 @@ const NAV: NavGroup[] = [
       { icon: BarChart2, label: "Projects", href: "/projects", moduleKey: "projects" },
       { icon: Gift, label: "Grants", href: "/grants", moduleKey: "grants" },
       { icon: Building2, label: "Establishment", href: "/estab", moduleKey: "establishment" },
+      { icon: FileText, label: "Documents", href: "/documents", moduleKey: "documents" },
       { icon: HardHat, label: "Assets", href: "/assets", moduleKey: "assets" },
       { icon: Package, label: "Stock", href: "/stock", moduleKey: "stock" },
     ],

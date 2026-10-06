@@ -35,6 +35,7 @@ export function registerWorkflowConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.forwardDak(tx, msg.tenantId, msg.payload.dakId, msg.payload.assignedTo, msg.actorId);
       await enqueue(tx as TxParam, { topic: EVENTS.dakForwarded, eventType: EVENTS.dakForwarded, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { dakId: msg.payload.dakId } });
+      await enqueue(tx as TxParam, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "document", action: "forward", resourceType: "dak", resourceId: msg.payload.dakId, outcome: "success" } });
     });
   });
 
@@ -43,6 +44,7 @@ export function registerWorkflowConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.acknowledgeDak(tx, msg.tenantId, msg.payload.dakId, msg.actorId);
       await enqueue(tx as TxParam, { topic: EVENTS.dakAcknowledged, eventType: EVENTS.dakAcknowledged, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { dakId: msg.payload.dakId } });
+      await enqueue(tx as TxParam, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "document", action: "acknowledge", resourceType: "dak", resourceId: msg.payload.dakId, outcome: "success" } });
     });
   });
 
