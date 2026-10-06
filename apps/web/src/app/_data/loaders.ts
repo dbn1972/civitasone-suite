@@ -6689,6 +6689,7 @@ export type MyApprovalItem = {
   instanceName: string;
   refType: string;
   refId: string;
+  instanceId: string;
   module: string;
   status: string;
   assignedAt: string;
@@ -6696,45 +6697,87 @@ export type MyApprovalItem = {
   link: string;
 };
 
-export async function getMyApprovals(page = 1, pageSize = 15, sortBy = "date", sortDir: "asc" | "desc" = "desc"): Promise<LoaderResult<MyApprovalItem[]>> {
+/**
+ * GAP-APPROVALS-HOME-01: the unified inbox page needs the WHOLE pending count,
+ * not just the length of the page it was handed, plus whether a next page
+ * exists, so it can show a real "Pending" stat and offer server-side paging
+ * instead of silently capping an approver at the first `pageSize` items. The
+ * workflow task-list endpoint now returns `pagination.total` (and `hasMore`);
+ * when a service predating that is in front of us, `total` is absent and the
+ * page falls back to the loaded count (documented at the call site).
+ */
+export type MyApprovalsPage = {
+  items: MyApprovalItem[];
+  /** Exact count of the whole pending set, or null when the API omits it. */
+  total: number | null;
+  /** True when there are more items beyond this page. */
+  hasMore: boolean;
+};
+
+const MY_APPROVALS_EMPTY: MyApprovalsPage = { items: [], total: null, hasMore: false };
+
+export async function getMyApprovals(page = 1, pageSize = 15): Promise<LoaderResult<MyApprovalsPage>> {
+  const safePage = Number.isFinite(page) && page >= 1 ? Math.floor(page) : 1;
+  const safePageSize = Math.min(Number.isFinite(pageSize) && pageSize >= 1 ? Math.floor(pageSize) : 15, 200);
   const params = new URLSearchParams({
     status: "pending",
-    limit: String(Math.min(pageSize, 200)),
-    offset: String((page - 1) * pageSize),
+    limit: String(safePageSize),
+    offset: String((safePage - 1) * safePageSize),
   });
-  return fetchJson<unknown, MyApprovalItem[]>(
+  return fetchJson<unknown, MyApprovalsPage>(
     `/api/v1/workflow/tasks?${params.toString()}`,
-    [] as MyApprovalItem[],
+    MY_APPROVALS_EMPTY,
     {
       revalidateSeconds: 30,
       telemetryKey: "approvals.my",
       mapResponse: (payload) => {
         const rows = getArrayPayload(payload);
-        if (!rows) return [];
-        return rows.filter(isRecord).map((row) => {
+        if (!rows) return null;
+        const items = rows.filter(isRecord).map((row) => {
           const refType = String(row.refType ?? row.ref_type ?? "");
           const module = refType.split("_")[0] || "workflow";
           const refId = String(row.refId ?? row.ref_id ?? "");
           const taskId = String(row.id ?? "");
+          const instanceId = String(row.instanceId ?? row.instance_id ?? "");
           return {
             id: taskId,
             taskId,
             instanceName: String(row.name ?? row.instanceName ?? "Approval Task"),
             refType,
             refId,
+            instanceId,
             module,
             status: String(row.status ?? "pending"),
             assignedAt: String(row.createdAt ?? row.created_at ?? ""),
             dueDate: row.dueAt ? String(row.dueAt) : row.due_at ? String(row.due_at) : null,
-            link: buildApprovalLink(module, refType, refId, taskId),
+            link: buildApprovalLink(module, refType, refId, instanceId),
           };
         });
+        const pagination = isRecord(payload) && isRecord(payload.pagination) ? payload.pagination : null;
+        const totalRaw = pagination?.total;
+        const total = typeof totalRaw === "number" && Number.isFinite(totalRaw) ? totalRaw : null;
+        const hasMore =
+          typeof pagination?.hasMore === "boolean"
+            ? pagination.hasMore
+            : total !== null
+              ? (safePage - 1) * safePageSize + items.length < total
+              : false;
+        return { items, total, hasMore };
       },
     },
   );
 }
 
-function buildApprovalLink(module: string, refType: string, refId: string, taskId: string): string {
+/**
+ * GAP-APPROVALS-HOME-02: map a workflow task's polymorphic refType to the real
+ * detail route for that record. Extracted as a pure, exported function with a
+ * closed route table so every branch can be unit-tested against the actual app
+ * routes — the previous inline switch had emitted paths that 404'd
+ * (/finance/bills/<id>, /workflow/tasks). Every returned path corresponds to a
+ * page that exists under apps/web/src/app/(app); an unmapped refType falls back
+ * to the generic workflow inbox (/workflow/my-tasks), never a dead route.
+ */
+export function buildApprovalLink(module: string, refType: string, refId: string, instanceId: string): string {
   switch (refType) {
     case "leave_app":
       return `/hr/leave/approvals`;
@@ -6749,7 +6792,10 @@ function buildApprovalLink(module: string, refType: string, refId: string, taskI
     case "estab_file":
       return `/estab/files/${refId}`;
     default:
-      return `/workflow/my-tasks`;
+      // No confirmed detail route for this refType: send the approver to the
+      // workflow instance when we know it, else the generic tasks inbox. Both
+      // routes exist; never emit an unmapped (404) path.
+      return instanceId ? `/workflow/instances/${instanceId}` : `/workflow/my-tasks`;
   }
 }
 
