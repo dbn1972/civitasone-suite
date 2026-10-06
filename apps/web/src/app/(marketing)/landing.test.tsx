@@ -149,13 +149,47 @@ describe("Sandbox Page", () => {
     ).toBeInTheDocument();
   });
 
-  it("role cards link to dashboard", () => {
+  // GAP-SANDBOX-HOME-04: the reset schedule is stated exactly once, with a time
+  // and timezone, instead of the old duplicate "Resets daily" / "Refreshed
+  // every 24 hours" pair.
+  it("states the reset schedule once with a time and IST", () => {
+    render(<SandboxPage />);
+    expect(screen.getByText(/resets every day at 02:00 IST/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Refreshed every 24 hours/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Resets daily/i)).not.toBeInTheDocument();
+  });
+
+  // GAP-SANDBOX-HOME-02: cards now start a demo session via the enter route
+  // instead of linking straight to /dashboard.
+  it("role cards link to the sandbox enter route", () => {
     render(<SandboxPage />);
     const roles = document.querySelector('[data-testid="sandbox-roles"]');
     const links = roles!.querySelectorAll("a");
     links.forEach((link) => {
-      expect(link.getAttribute("href")).toBe("/dashboard");
+      expect(link.getAttribute("href")).toMatch(/^\/api\/sandbox\/enter\?role=/);
     });
+  });
+
+  // GAP-SANDBOX-HOME-03: emoji icons are decorative (aria-hidden) and the cards
+  // use h2 under a section heading, so headings no longer jump h1 -> h3.
+  it("marks role emoji as decorative and uses h2 card titles", () => {
+    render(<SandboxPage />);
+    const roles = document.querySelector('[data-testid="sandbox-roles"]');
+    expect(roles!.querySelectorAll("h3")).toHaveLength(0);
+    expect(roles!.querySelectorAll("h2").length).toBeGreaterThanOrEqual(7);
+    const iconDivs = roles!.querySelectorAll("div[aria-hidden='true']");
+    expect(iconDivs.length).toBeGreaterThanOrEqual(7);
+  });
+
+  // GAP-SANDBOX-HOME-05 (decision: keep consistent with sibling marketing
+  // pages, which all use the same Tailwind gray/white utilities rather than the
+  // in-app DS CSS variables). This pins that consistency: the sandbox page uses
+  // the shared marketing palette and introduces no `var(--...)` DS tokens.
+  it("uses the shared marketing Tailwind palette, consistent with Pricing", () => {
+    const { container: sandbox } = render(<SandboxPage />);
+    expect(sandbox.innerHTML).not.toMatch(/var\(--/);
+    expect(sandbox.querySelector(".bg-white")).toBeTruthy();
+    expect(sandbox.querySelector('[class*="text-gray-"]')).toBeTruthy();
   });
 });
 
