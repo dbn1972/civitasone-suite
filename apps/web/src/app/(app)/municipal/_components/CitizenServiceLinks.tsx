@@ -8,8 +8,31 @@ type Props = {
 
 /** Citizen portal entry points — apply + service landing (track via service page). */
 export function CitizenServiceLinks({ config, counterMode = false }: Props) {
-  // No citizen-service manifest wired up yet for this service — nothing to link to.
-  if (!config.citizenServiceKey) return null;
+  // GAP-MUNICIPAL-SERVICEKEY-04: no citizen-service manifest wired up yet for
+  // this service. Rather than silently rendering nothing (which left officers
+  // with no explanation of how citizens apply), show a muted note that intake
+  // is counter-only for now. Decision: counter-only intake is the SAFE,
+  // honest default to surface; product should confirm the exact process.
+  if (!config.citizenServiceKey) {
+    return (
+      <div
+        className="pad"
+        style={{
+          display: "flex",
+          gap: 10,
+          alignItems: "center",
+          background: "var(--surface-2, var(--bg))",
+          border: "1px solid var(--line)",
+          borderRadius: "var(--r-sm)",
+        }}
+      >
+        <span style={{ fontSize: 13, color: "var(--ink2)" }}>
+          Applications for this service are recorded by officers at the counter; no online citizen
+          form is published yet.
+        </span>
+      </div>
+    );
+  }
 
   const applyHref = citizenApplyHref(config.citizenServiceKey);
   const serviceHref = citizenServiceHref(config.citizenServiceKey);

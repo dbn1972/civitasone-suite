@@ -42,6 +42,15 @@ export const MUNICIPAL_SERVICE_CATALOG: MunicipalServiceConfig[] = [
 
 export const SEC5_SERVICE_COUNT = MUNICIPAL_SERVICE_CATALOG.filter((s) => s.sec5).length;
 
+/**
+ * GAP-MUNICIPAL-HOME-01: number of services that actually expose a citizen
+ * apply link (those with a citizen-service manifest key). This is NOT the same
+ * as the catalog length — 6 services (building, animal, drainage, parks,
+ * refund, swm) have no citizenServiceKey, so the "Citizen apply links" stat
+ * must count only the services that have one, not every console.
+ */
+export const CITIZEN_LINK_COUNT = MUNICIPAL_SERVICE_CATALOG.filter((s) => s.citizenServiceKey).length;
+
 const byKey = new Map(MUNICIPAL_SERVICE_CATALOG.map((s) => [s.serviceKey, s]));
 
 export function getMunicipalService(serviceKey: string): MunicipalServiceConfig | undefined {

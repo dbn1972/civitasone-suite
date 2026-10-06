@@ -14292,5 +14292,17 @@
     "rtiPiiMasked": "Personal data of the RTI applicant. Masked — you do not have permission to view the full applicant details.",
     "srResolveDescription": "Record how the request was fulfilled. If the citizen left a phone or email, they are notified automatically.",
     "srCloseDescription": "Closing is final — the request can no longer be actioned. If the citizen left a phone or email, they are notified automatically."
+  },
+  "municipal": {
+    "service": {
+      "totalRecords": "Total records",
+      "inProgress": "In progress",
+      "inProgressThisPage": "In progress (this page)",
+      "viewResource": "View {resource}",
+      "openResourceList": "Open {resource} list →",
+      "officerWorkspace": "Officer workspace",
+      "workspaceBody": "Scrutiny queues, approvals and permits for {label} are available in the {resource} list.",
+      "loadError": "this service"
+    }
   }
 }
