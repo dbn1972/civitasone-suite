@@ -13,6 +13,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, ConfirmDialog } from "@/app/_components/ds";
+import { toHumanError } from "@/lib/messages";
 import {
   assignReviewer,
   scoreApplication,
@@ -27,19 +28,55 @@ import { ApproveApplicationDialog } from "./ApproveApplicationDialog";
 
 type ActionKey = "assign-reviewer" | "score" | "approve" | "reject" | "withdraw";
 
-export function ApplicationActions({ applicationId, actions }: { applicationId: string; actions: string[] }) {
+export function ApplicationActions({
+  applicationId,
+  actions,
+  canApprove = true,
+  canReview = true,
+  isOwnApplication = false,
+  requestedMinor,
+  minMinor,
+  maxMinor,
+}: {
+  applicationId: string;
+  actions: string[];
+  /** GAP-GRANTS-APPLICATIONS-DETAIL-01: session holds a grants approver role. */
+  canApprove?: boolean;
+  /** session holds a reviewer role (score/assign). */
+  canReview?: boolean;
+  /** GAP-GRANTS-APPLICATIONS-DETAIL-02: viewer is the submitter → maker-checker
+   *  blocks them from scoring/approving/rejecting their own application. */
+  isOwnApplication?: boolean;
+  /** GAP-GRANTS-APPLICATIONS-DETAIL-04: approve-dialog context (paise). */
+  requestedMinor?: number | null;
+  minMinor?: number | null;
+  maxMinor?: number | null;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState<ActionKey | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const canAssign = actions.includes("assign-reviewer");
-  const canScore = actions.includes("score");
-  const canApprove = actions.includes("approve");
-  const canReject = actions.includes("reject");
+  // A maker action on your OWN application is blocked (server also 403s with
+  // SOD_VIOLATION); withdraw stays available to the submitter.
+  const makerAllowed = !isOwnApplication;
+  const canAssign = actions.includes("assign-reviewer") && canReview && makerAllowed;
+  const canScore = actions.includes("score") && canReview && makerAllowed;
+  const canApproveAction = actions.includes("approve") && canApprove && makerAllowed;
+  const canReject = actions.includes("reject") && canApprove && makerAllowed;
   const canWithdraw = actions.includes("withdraw");
 
-  if (!canAssign && !canScore && !canApprove && !canReject && !canWithdraw) return null;
+  if (!canAssign && !canScore && !canApproveAction && !canReject && !canWithdraw) {
+    // GAP-GRANTS-APPLICATIONS-DETAIL-02: explain why no maker control is shown.
+    if (isOwnApplication && (actions.includes("approve") || actions.includes("score"))) {
+      return (
+        <p style={{ fontSize: 13, color: "var(--ink2)" }}>
+          You submitted this application, so you cannot score, approve or reject it (separation of duties).
+        </p>
+      );
+    }
+    return null;
+  }
 
   function close() {
     if (busy) return;
@@ -54,8 +91,10 @@ export function ApplicationActions({ applicationId, actions }: { applicationId: 
       await fn();
       setOpen(null);
       router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not complete this action.");
+    } catch {
+      // Never surface the raw backend `code: message` on a money-critical action.
+      const human = toHumanError("save", { area: "application action" });
+      setError(`${human.what} ${human.next}`);
     } finally {
       setBusy(false);
     }
@@ -74,7 +113,7 @@ export function ApplicationActions({ applicationId, actions }: { applicationId: 
             Submit Evaluation
           </Button>
         )}
-        {canApprove && (
+        {canApproveAction && (
           <Button type="button" variant="primary" onClick={() => setOpen("approve")}>
             Approve Application
           </Button>
@@ -153,6 +192,9 @@ export function ApplicationActions({ applicationId, actions }: { applicationId: 
         open={open === "approve"}
         busy={busy}
         errorMessage={error}
+        requestedMinor={requestedMinor}
+        minMinor={minMinor}
+        maxMinor={maxMinor}
         onCancel={close}
         onSubmit={(req: ApproveApplicationRequest) => void run(() => approveApplication(applicationId, req))}
       />

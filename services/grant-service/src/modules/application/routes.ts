@@ -8,6 +8,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { submitApplicationBody, scoreApplicationBody, approveApplicationBody, rejectApplicationBody, withdrawApplicationBody, assignReviewerBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as applicationRepo from "./repo.js";
 
 const GRANT_ROLES   = ["grant_officer", "grant_admin", "super_admin"];
 const REVIEW_ROLES  = ["grant_reviewer", ...GRANT_ROLES];
@@ -70,7 +71,17 @@ export async function applicationRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const application = await queries.getApplication(ctx.tenantId, id);
     if (!application) throw new HttpError(404, "NOT_FOUND", "application not found");
-    return reply.send(application);
+    // GAP-GRANTS-APPLICATIONS-DETAIL-05: attach the latest evaluation so the
+    // detail page can show technical/financial scores + recommendation.
+    const latestScore = await applicationRepo.findLatestScoreByApplication(id, ctx.tenantId);
+    return reply.send({
+      ...application,
+      technicalScore: latestScore ? Number(latestScore.technicalScore) : null,
+      financialScore: latestScore ? Number(latestScore.financialScore) : null,
+      totalScore: latestScore ? Number(latestScore.totalScore) : null,
+      recommendation: latestScore?.recommendation ?? null,
+      scoredReviewerRef: latestScore?.reviewerRef ?? null,
+    });
   });
 
   /** List all grant applications for the tenant (paginated). */
@@ -78,7 +89,9 @@ export async function applicationRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
-    const rows = await queries.listGrantSummaries(ctx.tenantId, q.limit);
+    // GAP-GRANTS-APPLICATIONS-01: application-stage statuses (submitted/
+    // under_review/...), NOT the collapsed sanctioned-grant view.
+    const rows = await queries.listApplicationSummaries(ctx.tenantId, q.limit);
     return reply.send({ data: rows, meta: { page: 1, pageSize: q.limit, total: rows.length } });
   });
 

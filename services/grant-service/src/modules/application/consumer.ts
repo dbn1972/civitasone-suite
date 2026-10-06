@@ -94,7 +94,6 @@ export function registerApplicationConsumers(queue: Queue): void {
       await repo.updateApplication(tx, p.id, { status: "under_review", updatedBy: msg.actorId });
       const totalScore = (p.technicalScore + p.financialScore) / 2;
       await repo.insertScore(tx, {
-        id: undefined as any,
         tenantId: p.tenantId,
         applicationId: p.id,
         reviewerRef: p.reviewerRef,
@@ -110,7 +109,7 @@ export function registerApplicationConsumers(queue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.applicationApprove, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; amountApprovedMinor: number; approvedBy?: string };
+    const p = msg.payload as { id: string; tenantId: string; amountApprovedMinor: number; approvedBy?: string; reason?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const app = await repo.findApplicationByIdTx(tx, p.id, p.tenantId);
@@ -153,7 +152,7 @@ export function registerApplicationConsumers(queue: Queue): void {
           },
         }),
       });
-      await audit(tx, msg, "approve", "grant_application", p.id);
+      await audit(tx, msg, "approve", "grant_application", p.id, "success", p.reason ? { reason: p.reason } : undefined);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "application", p.id));
   });
@@ -229,10 +228,8 @@ export function registerApplicationConsumers(queue: Queue): void {
   });
 }
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string, outcome: "success" | "failure" = "success"): Promise<void> {
-  await enqueue(tx, {
-    topic: "audit.event.record", eventType: "audit.event.record",
-    tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "grant", action, resourceType, resourceId, outcome },
-  });
-}
+async function audit(tx: Parameters<typeof enqueue>[0], msg: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceType: string, resourceId: string, outcome: "success" | "failure" = "success", detail?: Record<string, unknown>): Promise<void> { await enqueue(tx, {
+  topic: "audit.event.record", eventType: "audit.event.record",
+  tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+  payload: { service: "grant", action, resourceType, resourceId, outcome, ...(detail ? { detail } : {}) },
+}); }

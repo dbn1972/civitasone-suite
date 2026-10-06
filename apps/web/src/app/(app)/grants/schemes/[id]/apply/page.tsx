@@ -1,316 +1,103 @@
-"use client";
-
+import { notFound } from "next/navigation";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState, use } from "react";
-import { Button, PageHeader } from "@/app/_components/ds";
-import { useFormError } from "@/lib/useFormError";
-import { ArrowLeft } from "lucide-react";
+import { PageHeader, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
+import { formatIndianDate, formatMoney } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
+import { getSchemeById } from "../../../_data";
+import { getGrantees } from "@/app/_data/loaders";
+import type { GranteeSummary } from "@civitasone/types";
+import { schemeWindowState } from "../../../schemeWindow";
+import { ApplyForm } from "./ApplyForm";
 
-type FormStatus = "idle" | "submitting" | "success" | "error";
-
-interface ApplyPageProps {
-  params: { id: string };
-}
-
-export default function ApplyPage({ params }: ApplyPageProps) {
+export default async function ApplyPage({ params }: { params: { id: string } }) {
   const schemeId = params.id;
-  const router = useRouter();
+  const { data: scheme, source, status } = await getSchemeById(schemeId);
 
-  const [beneficiaryId, setBeneficiaryId] = useState("");
-  const [purpose, setPurpose] = useState("");
-  const [amountRupees, setAmountRupees] = useState("");
-  const [currency, setCurrency] = useState("INR");
-  const [formStatus, setFormStatus] = useState<FormStatus>("idle");
-  const [message, setMessage] = useState("");
-  const formError = useFormError("grant application");
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-
-    if (!beneficiaryId.trim()) {
-      setFormStatus("error");
-      setMessage(
-        "Beneficiary ID is required. Enter the registered beneficiary UUID.",
-      );
-      return;
-    }
-    if (!purpose.trim() || purpose.trim().length < 10) {
-      setFormStatus("error");
-      setMessage("Project purpose must be at least 10 characters.");
-      return;
-    }
-    const rupees = parseFloat(amountRupees);
-    if (!amountRupees || isNaN(rupees) || rupees <= 0) {
-      setFormStatus("error");
-      setMessage("Requested amount must be a positive number.");
-      return;
-    }
-
-    setFormStatus("submitting");
-    setMessage("");
-    formError.clear();
-
-    const amountMinor = Math.round(rupees * 100);
-
-    try {
-      const res = await fetch(
-        `/api/proxy/v1/grants/schemes/${schemeId}/applications`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            beneficiaryId: beneficiaryId.trim(),
-            purpose: purpose.trim(),
-            amountRequestedMinor: amountMinor,
-            currency,
-          }),
-        },
-      );
-      if (!res.ok) {
-        setFormStatus("error");
-        await formError.fromResponse(res, "save");
-        return;
-      }
-      setFormStatus("success");
-      setMessage("Application submitted successfully. It is now under review.");
-      setTimeout(() => router.push("/grants/applications"), 2000);
-    } catch (caught) {
-      setFormStatus("error");
-      formError.fromException("save", caught);
-    }
+  // GAP-GRANTS-SCHEMES-DETAIL-APPLY-03 / DETAIL-03: a server error shows retry,
+  // a genuine 404 shows not-found.
+  if (source === "error" && status !== 404) {
+    return (
+      <>
+        <PageHeader back={`/grants/schemes/${schemeId}`} backLabel="Scheme" title="Apply" />
+        <RefreshErrorState
+          error={toHumanError("load", { area: "scheme" })}
+          backHref={`/grants/schemes/${schemeId}`}
+          source={{ status, area: "scheme" }}
+        />
+      </>
+    );
+  }
+  if (!scheme) {
+    notFound();
   }
 
-  return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
-      <nav aria-label="Breadcrumb" className="back">
-        <ArrowLeft aria-hidden="true" size={14} /> <a href="/grants">Grants</a> <span aria-hidden="true">/</span>{" "}
-        <a href="/grants/schemes">Schemes</a> <span aria-hidden="true">/</span>{" "}
-        <a href={`/grants/schemes/${schemeId}`}>{schemeId.slice(0, 8)}…</a>{" "}
-        <span aria-hidden="true">/</span> <span aria-current="page">Apply</span>
-      </nav>
+  const window = schemeWindowState(scheme);
 
-      <PageHeader
-        title="Submit Grant Application"
-        subtitle="Fill out the form below to apply for this grant scheme."
-        help="grants"
-      />
+  const header = (
+    <PageHeader
+      back={`/grants/schemes/${schemeId}`}
+      backLabel={scheme.name}
+      title="Submit Grant Application"
+      subtitle={scheme.code}
+      help="grants"
+    />
+  );
 
-      <form
-        onSubmit={(e) => void handleSubmit(e)}
-        className="card pad"
-        style={{ maxWidth: 820 }}
-        noValidate
-        aria-label="Grant application form"
-      >
-        <div className="fields">
-          <div
-            className="field"
-            style={{
-              gridColumn: "1 / -1",
-              background: "var(--panel)",
-              padding: "13px 16px",
-            }}
-          >
-            <label className="label" htmlFor="beneficiaryId">
-              Beneficiary ID{" "}
-              <span aria-hidden="true" style={{ color: "var(--bad)" }}>
-                *
-              </span>
-            </label>
-            <input
-              id="beneficiaryId"
-              className="inp"
-              value={beneficiaryId}
-              onChange={(e) => setBeneficiaryId(e.target.value)}
-              required
-              aria-required="true"
-              style={{ minHeight: 44, fontFamily: "monospace" }}
-              placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-              aria-describedby="beneficiary-hint"
-            />
-            <span
-              id="beneficiary-hint"
-              style={{
-                fontSize: 12,
-                color: "var(--ink2)",
-                marginTop: 4,
-                display: "block",
-              }}
-            >
-              UUID of the registered beneficiary from the Grantees registry.{" "}
-              <Link href="/grants/grantees" style={{ color: "var(--ink)" }}>
-                Browse grantees →
+  // GAP-GRANTS-SCHEMES-DETAIL-APPLY-03: a closed/draft or out-of-window scheme
+  // must not accept the form by URL — block with an honest state.
+  if (!window.accepting) {
+    const message =
+      window.reason === "before-open" && window.at
+        ? `This scheme opens on ${formatIndianDate(window.at)}. Applications cannot be filed yet.`
+        : window.reason === "after-close" && window.at
+          ? `This scheme closed on ${formatIndianDate(window.at)}. It is no longer accepting applications.`
+          : "This scheme is not currently accepting applications.";
+    return (
+      <>
+        {header}
+        <Card title="Not accepting applications" padding>
+          <EmptyState
+            icon="🔒"
+            title="Applications are closed"
+            message={message}
+            action={
+              <Link href={`/grants/schemes/${schemeId}`} className="btn">
+                Back to scheme
               </Link>
-            </span>
-            {formError.fieldError("beneficiaryId") && (
-              <span style={{ fontSize: 12, color: "var(--bad)", marginTop: 4, display: "block" }}>
-                {formError.fieldError("beneficiaryId")}
-              </span>
-            )}
-          </div>
+            }
+          />
+        </Card>
+      </>
+    );
+  }
 
-          <div
-            className="field"
-            style={{
-              gridColumn: "1 / -1",
-              background: "var(--panel)",
-              padding: "13px 16px",
-            }}
-          >
-            <label className="label" htmlFor="purpose">
-              Project Purpose / Description{" "}
-              <span aria-hidden="true" style={{ color: "var(--bad)" }}>
-                *
-              </span>
-            </label>
-            <textarea
-              id="purpose"
-              className="inp"
-              rows={5}
-              value={purpose}
-              onChange={(e) => setPurpose(e.target.value)}
-              required
-              aria-required="true"
-              placeholder="Describe the project objectives, expected outcomes, and how funds will be utilised. Minimum 10 characters."
-              aria-describedby="purpose-hint"
-            />
-            <span
-              id="purpose-hint"
-              style={{
-                fontSize: 12,
-                color: "var(--ink2)",
-                marginTop: 4,
-                display: "block",
-              }}
-            >
-              {purpose.length} / 2000 characters
-            </span>
-            {formError.fieldError("purpose") && (
-              <span style={{ fontSize: 12, color: "var(--bad)", marginTop: 4, display: "block" }}>
-                {formError.fieldError("purpose")}
-              </span>
-            )}
-          </div>
+  // Grantees for the picker (GAP-GRANTS-SCHEMES-DETAIL-APPLY-01). Loaded
+  // server-side; a load failure is non-fatal — the clerk can still proceed but
+  // the picker will be empty, so surface a hint.
+  const { data: grantees } = await getGrantees();
 
-          <div
-            className="field"
-            style={{ background: "var(--panel)", padding: "13px 16px" }}
-          >
-            <label className="label" htmlFor="amountRupees">
-              Requested Amount (₹){" "}
-              <span aria-hidden="true" style={{ color: "var(--bad)" }}>
-                *
-              </span>
-            </label>
-            <input
-              id="amountRupees"
-              className="inp"
-              type="number"
-              min="1"
-              step="0.01"
-              value={amountRupees}
-              onChange={(e) => setAmountRupees(e.target.value)}
-              required
-              aria-required="true"
-              style={{ minHeight: 44 }}
-              placeholder="e.g. 500000"
-              aria-describedby="amount-hint"
-            />
-            <span
-              id="amount-hint"
-              style={{
-                fontSize: 12,
-                color: "var(--ink2)",
-                marginTop: 4,
-                display: "block",
-              }}
-            >
-              Enter in rupees (₹). Stored as paise internally.
-            </span>
-            {formError.fieldError("amountRequestedMinor") && (
-              <span style={{ fontSize: 12, color: "var(--bad)", marginTop: 4, display: "block" }}>
-                {formError.fieldError("amountRequestedMinor")}
-              </span>
-            )}
-          </div>
-
-          <div
-            className="field"
-            style={{ background: "var(--panel)", padding: "13px 16px" }}
-          >
-            <label className="label" htmlFor="currency">
-              Currency
-            </label>
-            <select
-              id="currency"
-              className="inp"
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-              style={{ minHeight: 44 }}
-            >
-              <option value="INR">INR — Indian Rupee</option>
-            </select>
-          </div>
-        </div>
-
-        <div role="status" aria-live="polite" style={{ marginTop: 12 }}>
-          {message && (
-            <p
-              role={formStatus === "error" ? "alert" : undefined}
-              style={{
-                color:
-                  formStatus === "error"
-                    ? "var(--bad)"
-                    : formStatus === "success"
-                      ? "var(--good)"
-                      : "var(--ink)",
-                fontSize: "0.875rem",
-                margin: 0,
-              }}
-            >
-              {message}
-            </p>
-          )}
-          {formError.message ? (
-            <p role="alert" style={{ color: "var(--bad)", fontSize: "0.875rem", margin: 0 }}>
-              {formError.message}
-            </p>
-          ) : null}
-        </div>
-
-        <div style={{ marginTop: 20, display: "flex", gap: 8 }}>
-          <Button
-            type="submit"
-            variant="primary"
-            style={{ minHeight: 44 }}
-            disabled={formStatus === "submitting" || formStatus === "success"}
-            aria-busy={formStatus === "submitting"}
-          >
-            {formStatus === "submitting"
-              ? "Submitting…"
-              : formStatus === "success"
-                ? "Submitted ✓"
-                : "Submit Application"}
-          </Button>
-          <Link
-            href={`/grants/schemes/${schemeId}`}
-            className="btn"
-            style={{ minHeight: 44 }}
-          >
-            Cancel
-          </Link>
-        </div>
-
-        <p style={{ fontSize: 12, color: "var(--ink2)", marginTop: 12 }}>
-          Applications are processed asynchronously. You will be able to track
-          the status from the{" "}
-          <Link href="/grants/applications" style={{ color: "var(--ink)" }}>
-            Applications list
-          </Link>
-          .
-        </p>
-      </form>
-    </div>
+  return (
+    <>
+      {header}
+      <ApplyForm
+        schemeId={schemeId}
+        schemeName={scheme.name}
+        minAmountMinor={scheme.minAmountMinor}
+        maxAmountMinor={scheme.maxAmountMinor}
+        budgetMinor={scheme.budgetMinor}
+        windowHint={
+          scheme.minAmountMinor > 0 || scheme.maxAmountMinor > 0
+            ? `This scheme accepts ${scheme.minAmountMinor > 0 ? `at least ${formatMoney(scheme.minAmountMinor)}` : "any amount"}${
+                scheme.maxAmountMinor > 0 ? ` and at most ${formatMoney(scheme.maxAmountMinor)}` : ""
+              } per application.`
+            : null
+        }
+        grantees={grantees.map((g: GranteeSummary) => ({
+          id: g.id,
+          label: g.name,
+          sublabel: g.granteeCode,
+        }))}
+      />
+    </>
   );
 }

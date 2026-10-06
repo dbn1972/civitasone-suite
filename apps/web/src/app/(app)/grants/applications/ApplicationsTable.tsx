@@ -1,9 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { DataTable, StatusPill, EmptyState } from "@/app/_components/ds";
+import { DataTable, StatusPill, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { GrantApplicationSummary } from "../_data";
 
@@ -16,7 +17,9 @@ type Col = {
 
 const columns: Col[] = [
   { key: "grantNo", label: "Grant No" },
-  { key: "title", label: "Purpose / Title" },
+  // GAP-GRANTS-APPLICATIONS-05: the cell shows the title only, so the heading
+  // is "Title", not "Purpose / Title".
+  { key: "title", label: "Title" },
   {
     key: "granteeName",
     label: "Grantee",
@@ -60,13 +63,21 @@ export function ApplicationsTable({
     (d) => d.length === 0,
   );
 
+  // GAP-GRANTS-APPLICATIONS-03: a failed fetch with no cached rows must show a
+  // retry state, NOT the first-run "No applications yet" empty state (which
+  // falsely implies the list is genuinely empty). Only show the first-run
+  // message for a healthy, truly-empty list.
+  if (source === "error" && rows.length === 0) {
+    return (
+      <>
+        <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
+        <RefreshErrorState error={toHumanError("load", { area: "grant applications" })} />
+      </>
+    );
+  }
+
   return (
     <>
-      {/* UX-012: this badge is the ONLY place that reports data provenance for
-          the rows shown below — it reads the same useSeededResource call as
-          `rows`, so it can never disagree with what the table shows
-          (UX-002's pattern; the page used to render a second, independent
-          badge from the raw `source` prop — removed). */}
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       {rows.length === 0 ? (
         <EmptyState

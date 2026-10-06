@@ -39,3 +39,9 @@ export const createCriterionBody = z.object({
 export type CreateCriterionBody = z.infer<typeof createCriterionBody>;
 
 export const idParam = z.object({ id: z.string().uuid() });
+
+export const closeSchemeBody = z.object({
+  // GAP-GRANTS-SCHEMES-DETAIL-02: optional close reason, recorded in the audit trail.
+  reason: z.string().trim().min(1).max(1000).optional(),
+});
+export type CloseSchemeBody = z.infer<typeof closeSchemeBody>;

@@ -10,7 +10,7 @@ import * as repo from "./repo.js";
 import * as appRepo from "../application/repo.js";
 import * as schemeRepo from "../scheme/repo.js";
 import * as ucRepo from "../utilisation/repo.js";
-import { assertDisbursementWithinApproved, canRetryDisbursement, MAX_DISBURSEMENT_RETRIES } from "./domain.js";
+import { assertDisbursementWithinApproved, canRetryDisbursement, MAX_DISBURSEMENT_RETRIES, isSchemeReleasable } from "./domain.js";
 
 async function notifyDisbursementOutcome(
   tx: Parameters<typeof enqueue>[0],
@@ -61,7 +61,7 @@ export function registerDisbursementConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.disbursementInitiate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; installmentId: string;
-      mode: string; beneficiaryBankRef?: string; requireApproval?: boolean;
+      mode: string; beneficiaryBankRef?: string; reason?: string; requireApproval?: boolean;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -82,6 +82,31 @@ export function registerDisbursementConsumers(queue: Queue): void {
       // M1 FIX: use FOR UPDATE lock to prevent concurrent over-disbursement.
       const app = await appRepo.findApplicationByIdForUpdate(tx, installment.applicationId, installment.tenantId);
       if (app) {
+        // GAP-GRANTS-INSTALLMENTS-03: never release while the funding scheme is
+        // suspended or closed (a "suspended grant"). The UI blocks the control,
+        // but the server is the authority — fail closed here with an auditable
+        // rejection event (no EFT, no budget reservation).
+        // Defensive: only look up the scheme when a schemeId is present — a
+        // bare undefined id reaches the pg driver as an UNDEFINED_VALUE and
+        // aborts the whole disburse transaction. An absent/unknown scheme
+        // falls through to the other gates (isSchemeReleasable(null) === true).
+        const schemeForStatus = app.schemeId
+          ? await schemeRepo.findSchemeByIdTx(tx, app.schemeId, installment.tenantId)
+          : null;
+        if (schemeForStatus && !isSchemeReleasable(schemeForStatus.status)) {
+          await enqueue(tx, {
+            topic: "grant.disbursement.rejected", eventType: "grant.disbursement.rejected",
+            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: {
+              installmentId: p.installmentId,
+              applicationId: installment.applicationId,
+              schemeId: app.schemeId,
+              schemeStatus: schemeForStatus.status,
+              reason: `GRANT_NOT_ACTIVE: cannot release an installment while the scheme is ${schemeForStatus.status}`,
+            },
+          });
+          return;
+        }
         const alreadyDisbursed = await repo.sumDisbursedForApplication(tx, installment.applicationId, installment.tenantId);
         try {
           assertDisbursementWithinApproved(app.amountApprovedMinor, alreadyDisbursed, installment.amountMinor);
@@ -213,7 +238,7 @@ export function registerDisbursementConsumers(queue: Queue): void {
       });
       if (gated) {
         // Held for administrative approval — no payment, installment not yet disbursed.
-        await audit(tx, msg, "disbursement_pending_approval", "grant_disbursement", p.id);
+        await audit(tx, msg, "disbursement_pending_approval", "grant_disbursement", p.id, "success", p.reason ? { reason: p.reason } : undefined);
       } else {
         // Emit to finance-service for EFT payment — cannot call inside transaction (deadlock risk per CLAUDE.md §4)
         await enqueue(tx, {
@@ -223,11 +248,16 @@ export function registerDisbursementConsumers(queue: Queue): void {
             disbursementId: p.id, installmentId: p.installmentId,
             amountMinor: installment.amountMinor.toString(), currency: installment.currency,
             pfmsTxnId, mode: p.mode,
-            beneficiaryBankRef: p.beneficiaryBankRef,
+            // GAP-GRANTS-INSTALLMENTS-02: beneficiaryBankRef is now optional on
+            // the disburse command (the UI sends `reason` instead), so it is
+            // frequently undefined. The outbox payload is jsonb and the pg
+            // driver rejects a literal `undefined` value — only include this
+            // key when it is actually present.
+            ...(p.beneficiaryBankRef != null ? { beneficiaryBankRef: p.beneficiaryBankRef } : {}),
           },
         });
         await repo.updateInstallment(tx, p.installmentId, { status: "disbursed", updatedBy: msg.actorId });
-        await audit(tx, msg, "initiate_disbursement", "grant_disbursement", p.id);
+        await audit(tx, msg, "initiate_disbursement", "grant_disbursement", p.id, "success", p.reason ? { reason: p.reason } : undefined);
       }
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "installments", p.installmentId));
@@ -329,7 +359,7 @@ export function registerDisbursementConsumers(queue: Queue): void {
           payload: { disbursementId: disbursement.id, pfmsTxnId: rec.pfmsTxnId },
         });
       }
-      await audit(tx, msg, "pfms_reconcile", "grant_pfms_records", (msg.payload as any).id ?? "batch");
+      await audit(tx, msg, "pfms_reconcile", "grant_pfms_records", (msg.payload as { id?: string }).id ?? "batch");
     });
   });
 
@@ -348,10 +378,10 @@ export function registerDisbursementConsumers(queue: Queue): void {
   });
 }
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string, outcome: "success" | "failure" = "success"): Promise<void> {
+async function audit(tx: Parameters<typeof enqueue>[0], msg: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceType: string, resourceId: string, outcome: "success" | "failure" = "success", detail?: Record<string, unknown>): Promise<void> {
   await enqueue(tx, {
     topic: "audit.event.record", eventType: "audit.event.record",
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "grant", action, resourceType, resourceId, outcome },
+    payload: { service: "grant", action, resourceType, resourceId, outcome, ...(detail ? { detail } : {}) },
   });
 }

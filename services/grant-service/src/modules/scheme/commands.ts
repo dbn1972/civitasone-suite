@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import type { CreateSchemeBody, CreateCriterionBody, UpdateSchemeBody } from "./validators.js";
+import type { CreateSchemeBody, CreateCriterionBody, UpdateSchemeBody, CloseSchemeBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -25,11 +25,11 @@ export async function updateScheme(ctx: RequestContext, id: string, body: Update
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function closeScheme(ctx: RequestContext, id: string): Promise<Accepted> {
+export async function closeScheme(ctx: RequestContext, id: string, body: CloseSchemeBody = {}): Promise<Accepted> {
   await queue.publish(COMMANDS.schemeClose, {
     type: COMMANDS.schemeClose,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, closedBy: ctx.actorId },
+    payload: { id, tenantId: ctx.tenantId, closedBy: ctx.actorId, ...(body.reason ? { reason: body.reason } : {}) },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

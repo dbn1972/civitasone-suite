@@ -116,7 +116,7 @@ describe("ApplicationActions (COMP-012)", () => {
     );
   });
 
-  it("surfaces an API error inline instead of silently failing", async () => {
+  it("surfaces a clerk-safe API error inline instead of silently failing or leaking raw text", async () => {
     vi.mocked(api.approveApplication).mockRejectedValue(new Error("VALIDATION_FAILED: amountApprovedMinor must be positive"));
     render(<ApplicationActions applicationId="app-1" actions={ALL_ACTIONS} />);
     fireEvent.click(screen.getByRole("button", { name: "Approve Application" }));
@@ -124,7 +124,49 @@ describe("ApplicationActions (COMP-012)", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Approve application" }));
     });
-    expect(await screen.findByText(/VALIDATION_FAILED/)).toBeInTheDocument();
+    // Clerk-safe catalogued copy, never the raw backend `code: message`.
+    expect(await screen.findByText(/couldn.t save/i)).toBeInTheDocument();
+    expect(screen.queryByText(/VALIDATION_FAILED/)).not.toBeInTheDocument();
     expect(refreshMock).not.toHaveBeenCalled();
+  });
+
+  // GAP-GRANTS-APPLICATIONS-DETAIL-02: the submitter cannot score/approve/reject
+  // their own application (maker-checker); an explanatory note is shown instead.
+  it("hides maker controls and explains why for the submitter's own application", () => {
+    render(<ApplicationActions applicationId="app-1" actions={["score", "approve", "reject"]} isOwnApplication />);
+    expect(screen.queryByRole("button", { name: "Approve Application" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Submit Evaluation" })).not.toBeInTheDocument();
+    expect(screen.getByText(/separation of duties/i)).toBeInTheDocument();
+  });
+
+  // GAP-GRANTS-APPLICATIONS-DETAIL-01: a non-approver role sees no Approve/Reject.
+  it("hides Approve/Reject when the viewer lacks an approver role", () => {
+    render(<ApplicationActions applicationId="app-1" actions={["score", "approve", "reject"]} canApprove={false} canReview />);
+    expect(screen.queryByRole("button", { name: "Approve Application" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
+    // reviewer can still score
+    expect(screen.getByRole("button", { name: "Submit Evaluation" })).toBeInTheDocument();
+  });
+
+  // GAP-GRANTS-APPLICATIONS-DETAIL-04: the approve dialog shows requested + range
+  // and blocks an amount above the scheme maximum.
+  it("blocks an approve amount above the scheme maximum", async () => {
+    render(
+      <ApplicationActions
+        applicationId="app-1"
+        actions={["approve"]}
+        requestedMinor={4500000}
+        minMinor={1000000}
+        maxMinor={5000000}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Approve Application" }));
+    // requested is prefilled (₹45,000.00); push above the ₹50,000 max.
+    fireEvent.change(screen.getByLabelText(/Sanctioned amount/i), { target: { value: "60000" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Approve application" }));
+    });
+    expect(await screen.findByText(/exceeds the scheme maximum/i)).toBeInTheDocument();
+    expect(api.approveApplication).not.toHaveBeenCalled();
   });
 });

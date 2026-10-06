@@ -32,6 +32,8 @@ export interface ScoreApplicationRequest {
 export interface ApproveApplicationRequest {
   /** Sanctioned amount, in minor units (paise). */
   amountApprovedMinor: number;
+  /** Optional sanction reason / remarks (GAP-GRANTS-APPLICATIONS-DETAIL-04). */
+  reason?: string;
 }
 
 export interface RejectApplicationRequest {

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { DataTable, StatusPill, ActionButton } from "@/app/_components/ds";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+import { isUcVerified } from "@/lib/grants/ucStatus";
 import type { GrantDetail } from "@civitasone/types";
 
 type Installment = GrantDetail["installments"][number];
@@ -41,8 +42,47 @@ async function postAction(url: string, body: unknown): Promise<void> {
   }
 }
 
-export function GrantInstallmentsTable({ installments }: { installments: Installment[] }) {
+/**
+ * GAP-GRANTS-DETAIL-06: an empty Action cell must still carry an accessible
+ * label — an `aria-hidden` dash leaves the cell silent for a screen reader.
+ * Render a visually-hidden explanation plus the visible dash.
+ */
+function NoAction() {
+  return (
+    <>
+      <span className="sr-only">No action available</span>
+      <span aria-hidden="true">—</span>
+    </>
+  );
+}
+
+/**
+ * GAP-GRANTS-DETAIL-01 / DETAIL-04: `canRelease` comes from the server
+ * (session roles) — the Release control is only rendered for a grants maker.
+ * `grantStatus` and `granteeName` come from the parent grant so the client can
+ * (a) block release on a non-active grant and (b) name the payee in the
+ * confirm dialog. The grant-service remains the authority on both the role and
+ * the sequencing/budget/UC gates (see disbursement/consumer.ts).
+ */
+export function GrantInstallmentsTable({
+  installments,
+  grantStatus,
+  granteeName,
+  canRelease = false,
+}: {
+  installments: Installment[];
+  grantStatus: GrantDetail["status"];
+  granteeName?: string;
+  canRelease?: boolean;
+}) {
   const router = useRouter();
+
+  // GAP-GRANTS-DETAIL-04: Release is only valid on an active grant, and only
+  // for the lowest-numbered pending installment (tranches release in order).
+  const grantActive = grantStatus === "active";
+  const lowestPendingNo = installments
+    .filter((i) => i.status === "pending")
+    .reduce<number | null>((min, i) => (min === null || i.installmentNo < min ? i.installmentNo : min), null);
 
   const columns: Col<Installment>[] = [
     { key: "installmentNo", label: "Installment #", align: "right" },
@@ -58,8 +98,24 @@ export function GrantInstallmentsTable({ installments }: { installments: Install
       key: "id",
       label: "Action",
       align: "right",
-      render: (row) =>
-        row.status === "pending" ? (
+      render: (row) => {
+        if (!canRelease || row.status !== "pending") return <NoAction />;
+
+        const blockedReason = !grantActive
+          ? `Grant is ${grantStatus}; releases are only allowed while active`
+          : row.installmentNo !== lowestPendingNo
+            ? `Release installment #${lowestPendingNo} first — tranches release in order`
+            : null;
+
+        if (blockedReason) {
+          return (
+            <button type="button" className="btn primary sm" disabled title={blockedReason} aria-label={`Release unavailable: ${blockedReason}`}>
+              Release
+            </button>
+          );
+        }
+
+        return (
           <ActionButton
             label="Release"
             className="btn primary sm"
@@ -67,30 +123,37 @@ export function GrantInstallmentsTable({ installments }: { installments: Install
             confirmDescription={
               <>
                 This initiates disbursement of <strong>{formatMoney(row.amount)}</strong> (mode:
-                PFMS) and cannot be undone. A reason is recorded in the audit trail.
+                PFMS) to <strong>{granteeName ?? "the grantee"}</strong> and cannot be undone. A
+                reason is recorded in the audit trail.
               </>
             }
             confirmLabel="Release funds"
             requireReason
             reasonLabel="Reason / approval reference (required)"
             onConfirm={async (reason) => {
+              // GAP-GRANTS-DETAIL-03: the reason is the audit/approval reference,
+              // NOT the payee bank ref. Send it as `reason`; the grantee's bank
+              // account is resolved server-side from the grantee master.
               await postAction(`/api/proxy/v1/grants/installments/${row.id}/disburse`, {
                 mode: "PFMS",
-                beneficiaryBankRef: reason,
+                reason,
               });
               router.refresh();
             }}
           />
-        ) : (
-          <span aria-hidden="true">—</span>
-        ),
+        );
+      },
     },
   ];
 
   return <DataTable<Installment> columns={columns} rows={installments} />;
 }
 
-export function GrantUCsTable({ ucs }: { ucs: UC[] }) {
+/**
+ * GAP-GRANTS-DETAIL-01: Verify/Reject are only rendered for a grants UC
+ * verifier (server-provided `canVerify`). The server still enforces the role.
+ */
+export function GrantUCsTable({ ucs, canVerify = false }: { ucs: UC[]; canVerify?: boolean }) {
   const router = useRouter();
 
   const columns: Col<UC>[] = [
@@ -103,7 +166,8 @@ export function GrantUCsTable({ ucs }: { ucs: UC[] }) {
       label: "Action",
       align: "right",
       render: (row) => {
-        const verifiable = row.status !== "verified" && row.status !== "validated";
+        // GAP-GRANTS-DETAIL-05: "validated" and "verified" both mean accepted.
+        const verifiable = canVerify && !isUcVerified(row.status) && row.status !== "rejected";
         return verifiable ? (
           <span style={{ display: "inline-flex", gap: 6, justifyContent: "flex-end" }}>
             <ActionButton
@@ -151,7 +215,7 @@ export function GrantUCsTable({ ucs }: { ucs: UC[] }) {
             />
           </span>
         ) : (
-          <span aria-hidden="true">—</span>
+          <NoAction />
         );
       },
     },

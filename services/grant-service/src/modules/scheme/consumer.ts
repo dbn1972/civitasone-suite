@@ -90,7 +90,7 @@ export function registerSchemeConsumers(rawQueue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.schemeClose, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; closedBy: string };
+    const p = msg.payload as { id: string; tenantId: string; closedBy: string; reason?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.updateScheme(tx, p.id, {
@@ -103,16 +103,16 @@ export function registerSchemeConsumers(rawQueue: Queue): void {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { schemeId: p.id },
       });
-      await audit(tx, msg, "close", "grant_scheme", p.id);
+      await audit(tx, msg, "close", "grant_scheme", p.id, p.reason ? { reason: p.reason } : undefined);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "scheme", p.id));
   });
 }
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
+async function audit(tx: Parameters<typeof enqueue>[0], msg: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceType: string, resourceId: string, detail?: Record<string, unknown>): Promise<void> {
   await enqueue(tx, {
     topic: "audit.event.record", eventType: "audit.event.record",
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "grant", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "grant", action, resourceType, resourceId, outcome: "success", ...(detail ? { detail } : {}) },
   });
 }

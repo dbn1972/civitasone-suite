@@ -1622,6 +1622,19 @@ export const GranteeSummarySchema = z.object({
 });
 export const GranteeSummaryListSchema = z.array(GranteeSummarySchema);
 
+// GAP-GRANTS-GRANTEES-04: single-grantee read for the grantee detail route.
+export const GranteeDetailSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.enum(["individual", "institution", "society", "mission"]),
+  category: z.string().nullish(),
+  geography: z.string().nullish(),
+  status: z.string(),
+  incomeAnnualMinor: z.string().nullish(),
+  registrationNo: z.string().nullish(),
+  panNo: z.string().nullish(),
+});
+
 export const GrantInstallmentSummarySchema = z.object({
   id: z.string(),
   grantId: z.string(),
@@ -1640,7 +1653,7 @@ export const GrantReleaseSchema = z.object({
   releaseNo: z.string(),
   grantId: z.string(),
   grantNo: z.string(),
-  granteeName: z.string(),
+  granteeName: z.string().nullable(),
   amount: z.number(),
   releaseDate: z.string(),
   bankRef: z.string().optional(),

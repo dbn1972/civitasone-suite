@@ -22,13 +22,31 @@ export type GrantSchemeSummary = {
   budgetMinor: number;
   disbursedMinor: number;
   currency: string;
-  status: "draft" | "open" | "closed" | "completed" | "cancelled";
+  /**
+   * GAP-GRANTS-SCHEMES-05: an unknown/unexpected backend status is surfaced as
+   * "unknown" (StatusPill renders it, humanized, as a neutral pill) rather than
+   * being silently rewritten to "draft" — a malformed scheme must not be
+   * mislabelled as a real draft.
+   */
+  status: "draft" | "open" | "closed" | "completed" | "cancelled" | "unknown";
   /** ISO timestamps, may be absent */
   openAt?: string | null;
   closeAt?: string | null;
-  /** Applications in this scheme — API may or may not return this. Default 0. */
-  applicationCount: number;
+  /**
+   * GAP-GRANTS-SCHEMES-04: applications in this scheme. `null` when the API
+   * returned no application count at all — rendered as "—", never a fabricated
+   * 0 and never silently substituted from projectCount (whose meaning the
+   * grant-service contract does not define as "applications").
+   */
+  applicationCount: number | null;
 };
+
+/**
+ * GAP-GRANTS-SCHEMES-05: result of loading the scheme list, carrying how many
+ * rows the mapper had to drop (missing id/code/name) so the page can show an
+ * honest "N hidden" warning instead of silently shrinking the list.
+ */
+export type GrantSchemesLoad = LoaderResult<GrantSchemeSummary[]> & { droppedCount: number };
 
 export type GrantApplicationSummary = {
   /** uuid */
@@ -45,7 +63,23 @@ export type GrantApplicationSummary = {
   pendingAmount: number;
   sanctionDate: string;
   purpose?: string;
-  status: "active" | "completed" | "suspended" | "cancelled";
+  /**
+   * GAP-GRANTS-APPLICATIONS-01: application-stage status from the real
+   * /v1/grants/applications projection (draft→withdrawn), not the collapsed
+   * sanctioned-grant status. "active"/"completed"/"suspended"/"cancelled" are
+   * retained for backward compatibility with any sanctioned-grant row.
+   */
+  status:
+    | "draft"
+    | "submitted"
+    | "under_review"
+    | "approved"
+    | "rejected"
+    | "withdrawn"
+    | "active"
+    | "completed"
+    | "suspended"
+    | "cancelled";
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -74,27 +108,60 @@ function toNumber(v: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+/**
+ * GAP-GRANTS-SCHEMES-04: like toNumber, but returns null (not a fabricated 0)
+ * when the value is absent or not a finite number — so a scheme with no
+ * application count renders "—" rather than "0".
+ */
+function toNumberOrNull(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "bigint") return Number(v);
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Mappers
 // ──────────────────────────────────────────────────────────────────────────────
 
-function mapGrantSchemeSummaries(payload: unknown): GrantSchemeSummary[] | null {
+const SCHEME_STATUSES = ["draft", "open", "closed", "completed", "cancelled"] as const;
+
+/**
+ * Parse the raw schemes payload into typed rows, counting how many rows had to
+ * be dropped (missing id/code/name). Separated from the fetchJson mapper so
+ * getGrantSchemes can surface the dropped count to the page (GAP-GRANTS-SCHEMES-05).
+ * Returns null when the payload is not list-shaped at all.
+ */
+function parseSchemeSummaries(payload: unknown): { rows: GrantSchemeSummary[]; dropped: number } | null {
   const rows = getArrayPayload(payload);
   if (!rows) return null;
 
   const out: GrantSchemeSummary[] = [];
+  let dropped = 0;
   for (const row of rows) {
-    if (!isRecord(row)) continue;
+    if (!isRecord(row)) {
+      dropped += 1;
+      continue;
+    }
     const id = toText(row.id);
     const code = toText(row.code);
     const name = toText(row.name);
-    const status = toText(row.status) ?? "draft";
-    if (!id || !code || !name) continue;
+    if (!id || !code || !name) {
+      dropped += 1;
+      continue;
+    }
 
-    const validStatuses = ["draft", "open", "closed", "completed", "cancelled"] as const;
-    const safeStatus = validStatuses.includes(status as typeof validStatuses[number])
-      ? (status as GrantSchemeSummary["status"])
-      : "draft";
+    const rawStatus = toText(row.status) ?? "draft";
+    // GAP-GRANTS-SCHEMES-05: keep an unexpected status visible as "unknown"
+    // instead of silently relabelling it "draft".
+    const safeStatus: GrantSchemeSummary["status"] = SCHEME_STATUSES.includes(
+      rawStatus as (typeof SCHEME_STATUSES)[number],
+    )
+      ? (rawStatus as GrantSchemeSummary["status"])
+      : "unknown";
 
     out.push({
       id,
@@ -106,10 +173,30 @@ function mapGrantSchemeSummaries(payload: unknown): GrantSchemeSummary[] | null 
       status: safeStatus,
       openAt: toText(row.openAt ?? row.open_at),
       closeAt: toText(row.closeAt ?? row.close_at),
-      applicationCount: toNumber(row.applicationCount ?? row.application_count ?? row.projectCount),
+      // GAP-GRANTS-SCHEMES-04: null when the API returned no count; no
+      // projectCount fallback (its meaning is not defined as "applications").
+      applicationCount: toNumberOrNull(row.applicationCount ?? row.application_count),
     });
   }
-  return out.length > 0 ? out : [];
+  return { rows: out, dropped };
+}
+
+const DROPPED_COUNT = Symbol("grantSchemesDropped");
+
+function mapGrantSchemeSummaries(payload: unknown): GrantSchemeSummary[] | null {
+  const parsed = parseSchemeSummaries(payload);
+  if (!parsed) return null;
+  // GAP-GRANTS-SCHEMES-05: if rows were received but EVERY one was invalid,
+  // treat it as an error (source "error") rather than an empty list, so the UI
+  // shows the error state, not the first-run "No schemes yet" empty state.
+  if (parsed.rows.length === 0 && parsed.dropped > 0) return null;
+  // Carry the dropped count on the array (non-enumerable) so getGrantSchemes
+  // can surface it without changing fetchJson's generic shape.
+  Object.defineProperty(parsed.rows, DROPPED_COUNT, {
+    value: parsed.dropped,
+    enumerable: false,
+  });
+  return parsed.rows;
 }
 
 function mapGrantApplicationSummaries(payload: unknown): GrantApplicationSummary[] | null {
@@ -124,11 +211,14 @@ function mapGrantApplicationSummaries(payload: unknown): GrantApplicationSummary
     const title = toText(row.title ?? row.purpose);
     if (!id || !grantNo || !title) continue;
 
-    const rawStatus = toText(row.status) ?? "active";
-    const validStatuses = ["active", "completed", "suspended", "cancelled"] as const;
+    const rawStatus = toText(row.status) ?? "submitted";
+    const validStatuses = [
+      "draft", "submitted", "under_review", "approved", "rejected", "withdrawn",
+      "active", "completed", "suspended", "cancelled",
+    ] as const;
     const safeStatus = validStatuses.includes(rawStatus as typeof validStatuses[number])
       ? (rawStatus as GrantApplicationSummary["status"])
-      : "active";
+      : "submitted";
 
     out.push({
       id,
@@ -150,16 +240,27 @@ function mapGrantApplicationSummaries(payload: unknown): GrantApplicationSummary
 // Loaders
 // ──────────────────────────────────────────────────────────────────────────────
 
-export async function getGrantSchemes(): Promise<LoaderResult<GrantSchemeSummary[]>> {
-  return fetchJson<unknown, GrantSchemeSummary[]>("/api/v1/grants/schemes", [], {
+export async function getGrantSchemes(): Promise<GrantSchemesLoad> {
+  const result = await fetchJson<unknown, GrantSchemeSummary[]>("/api/v1/grants/schemes", [], {
     revalidateSeconds: 120,
     telemetryKey: "grants.schemes",
     mapResponse: mapGrantSchemeSummaries,
   });
+  // GAP-GRANTS-SCHEMES-05: recompute the dropped count from the same source so
+  // the page can warn when rows were hidden. On the error path there is no
+  // payload to parse, so dropped is 0.
+  const droppedCount =
+    (result.data as unknown as Record<symbol, number>)[DROPPED_COUNT] ?? 0;
+  return { ...result, droppedCount };
 }
 
 export async function getGrantApplications(): Promise<LoaderResult<GrantApplicationSummary[]>> {
-  return fetchJson<unknown, GrantApplicationSummary[]>("/api/v1/grants/grants", [], {
+  // GAP-GRANTS-APPLICATIONS-01 / HOME-02: the real applications surface — this
+  // endpoint returns application-stage statuses (submitted/under_review/...),
+  // keyed by the SAME id the /grants/applications/[id] detail route reads, so
+  // a row never 404s. (Previously this pointed at /grants/grants, the
+  // sanctioned-grants list, which only ever showed approved+ records.)
+  return fetchJson<unknown, GrantApplicationSummary[]>("/api/v1/grants/applications", [], {
     revalidateSeconds: 120,
     telemetryKey: "grants.applications",
     mapResponse: mapGrantApplicationSummaries,
@@ -184,6 +285,12 @@ export type GrantApplicationDetail = {
   submittedAt: string | null;
   approvedAt: string | null;
   createdAt: string;
+  // GAP-GRANTS-APPLICATIONS-DETAIL-05: evaluation (latest score), when present.
+  reviewerRef?: string | null;
+  technicalScore?: number | null;
+  financialScore?: number | null;
+  totalScore?: number | null;
+  recommendation?: string | null;
 };
 
 export type GrantSchemeDetail = {
@@ -191,6 +298,7 @@ export type GrantSchemeDetail = {
   code: string;
   name: string;
   budgetMinor: number;
+  disbursedMinor: number;
   minAmountMinor: number;
   maxAmountMinor: number;
   currency: string;
@@ -224,6 +332,11 @@ function mapApplicationDetail(payload: unknown): GrantApplicationDetail | null {
     submittedAt: toText(payload.submittedAt ?? payload.submitted_at),
     approvedAt: toText(payload.approvedAt ?? payload.approved_at),
     createdAt: toText(payload.createdAt ?? payload.created_at) ?? new Date().toISOString(),
+    reviewerRef: toText(payload.scoredReviewerRef ?? payload.reviewerRef ?? payload.reviewer_ref),
+    technicalScore: payload.technicalScore != null ? toNumber(payload.technicalScore) : null,
+    financialScore: payload.financialScore != null ? toNumber(payload.financialScore) : null,
+    totalScore: payload.totalScore != null ? toNumber(payload.totalScore) : null,
+    recommendation: toText(payload.recommendation),
   };
 }
 
@@ -236,6 +349,7 @@ function mapSchemeDetail(payload: unknown): GrantSchemeDetail | null {
   return {
     id, code, name,
     budgetMinor: toNumber(payload.budgetMinor ?? payload.budget_minor),
+    disbursedMinor: toNumber(payload.disbursedMinor ?? payload.disbursed_minor),
     minAmountMinor: toNumber(payload.minAmountMinor ?? payload.min_amount_minor),
     maxAmountMinor: toNumber(payload.maxAmountMinor ?? payload.max_amount_minor),
     currency: toText(payload.currency) ?? "INR",

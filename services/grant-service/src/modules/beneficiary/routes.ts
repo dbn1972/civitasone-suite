@@ -1,6 +1,6 @@
 import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
-import { GranteeSummaryListSchema } from "@civitasone/schemas/web";
+import { GranteeSummaryListSchema, GranteeDetailSchema } from "@civitasone/schemas/web";
 import { listQuerySchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
@@ -60,6 +60,17 @@ export async function beneficiaryRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
     sendValidated(reply, GranteeSummaryListSchema, await queries.listGranteeSummaries(ctx.tenantId, q.limit));
+  });
+
+  // GAP-GRANTS-GRANTEES-04: single-grantee read backing the grantee detail
+  // route. Reader-gated and tenant-scoped like the list.
+  app.get("/v1/grants/grantees/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const detail = await queries.getGranteeDetail(ctx.tenantId, id);
+    if (!detail) throw new HttpError(404, "NOT_FOUND", "grantee not found");
+    sendValidated(reply, GranteeDetailSchema, detail);
   });
 
   app.setErrorHandler((err, req, reply) => {

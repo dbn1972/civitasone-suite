@@ -95,7 +95,7 @@ export function registerBeneficiaryConsumers(queue: Queue): void {
   });
 }
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
+async function audit(tx: Parameters<typeof enqueue>[0], msg: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceType: string, resourceId: string): Promise<void> {
   await enqueue(tx, {
     topic: "audit.event.record", eventType: "audit.event.record",
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
