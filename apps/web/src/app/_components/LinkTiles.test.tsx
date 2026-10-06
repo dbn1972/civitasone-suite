@@ -98,3 +98,38 @@ describe("LinkTiles", () => {
     });
   });
 });
+
+// GAP-AI-HOME-01: the AI hub's five tiles (Chat/Copilot/Agents/Guardrails/
+// Governance) previously all fell through to the 📁 FolderOpen default,
+// giving the hub no visual cue between them. They must now each resolve to a
+// distinct vector icon (never the shared folder default).
+describe("LinkTiles — AI hub icons (GAP-AI-HOME-01)", () => {
+  const aiTiles = [
+    { title: "Chat", href: "/ai/chat" },
+    { title: "Copilot", href: "/ai/copilot" },
+    { title: "Agents", href: "/ai/agents" },
+    { title: "Guardrails", href: "/ai/guardrails" },
+    { title: "Governance", href: "/ai/governance" },
+  ];
+
+  it("renders a distinct vector icon for each AI tile (not the 📁 fallback)", () => {
+    const { container } = render(<LinkTiles tiles={aiTiles} />);
+    const iconBoxes = Array.from(container.querySelectorAll<HTMLElement>(".ic"));
+    expect(iconBoxes).toHaveLength(5);
+    // Each AI tile resolves to a lucide <svg>, never the raw-emoji text or the
+    // folder fallback.
+    const classes = new Set<string>();
+    for (const box of iconBoxes) {
+      const svg = box.querySelector("svg");
+      expect(svg).toBeInTheDocument();
+      // No raw emoji text leaked through (would mean a missing StatIcon map).
+      expect(box.textContent).toBe("");
+      const cls = svg?.getAttribute("class") ?? "";
+      classes.add(cls);
+    }
+    // All five icon classes are distinct — no two tiles share a glyph, and
+    // none is the FolderOpen default.
+    expect(classes.size).toBe(5);
+    expect([...classes].some((c) => /folder/i.test(c))).toBe(false);
+  });
+});

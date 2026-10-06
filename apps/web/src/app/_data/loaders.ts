@@ -236,6 +236,8 @@ import {
   copilotTurnsListSchema,
   copilotTurnDetailSchema,
   chatConversationsListSchema,
+  chatConversationItemSchema,
+  chatConversationsCountSchema,
   chatTranscriptSchema,
   FinanceDashboardSchema,
   BudgetSummaryListSchema,
@@ -3571,20 +3573,74 @@ export async function getChatConversations(
   return fetchJson("/api/v1/ai/chat?limit=100", [] as ChatConversation[], CHAT_LIST_OPTIONS);
 }
 
+export interface ChatConversationCounts {
+  total: number;
+  active: number;
+  handedOff: number;
+  ended: number;
+}
+
+/**
+ * GAP-AI-CHAT-03: accurate conversation counts for the stat cards, read from
+ * the list endpoint's server-side `meta.total` (a COUNT, not the fetched page
+ * length) for all conversations and for each status. With more than 100
+ * conversations the "Conversations" card previously reported at most 100 and
+ * "With agent" could under-count; these counts are exact regardless of how many
+ * rows a single page holds. A limit of 1 keeps each count cheap. Returns null
+ * on any failure so the page can fall back to "—" rather than a fabricated 0.
+ */
+export async function getChatConversationCounts(): Promise<LoaderResult<ChatConversationCounts | null>> {
+  const countOpts = () => ({
+    revalidateSeconds: 0,
+    telemetryKey: "ai.chat.conversation_counts",
+    responseSchema: chatConversationsCountSchema,
+    mapResponse: (payload: { meta: { total: number } }) => payload.meta.total,
+  });
+  const base = "/api/v1/ai/chat?limit=1";
+  const [all, active, handed, ended] = await Promise.all([
+    fetchJson(base, null as number | null, countOpts()),
+    fetchJson(`${base}&status=active`, null as number | null, countOpts()),
+    fetchJson(`${base}&status=handed_off`, null as number | null, countOpts()),
+    fetchJson(`${base}&status=ended`, null as number | null, countOpts()),
+  ]);
+  if (
+    all.source === "error" || active.source === "error" ||
+    handed.source === "error" || ended.source === "error" ||
+    all.data === null || active.data === null || handed.data === null || ended.data === null
+  ) {
+    return { data: null, source: "error" };
+  }
+  return {
+    data: { total: all.data, active: active.data, handedOff: handed.data, ended: ended.data },
+    source: "api",
+  };
+}
+
 /**
  * A single conversation.
  *
- * ai-agent-service has no single-conversation read — only the list and the
- * transcript — so this selects from the list. Worth replacing with a dedicated
- * endpoint if the conversation count per tenant grows past a page.
+ * GAP-AI-CHAT-DETAIL-03: ai-agent-service now exposes GET /v1/ai/chat/:id, so
+ * this reads one conversation by id rather than downloading the newest 200 and
+ * picking by id (which rendered "not found" for any conversation older than the
+ * newest page). A tenant-scoped 404 is mapped to a clean not-found
+ * (source "api", data null) so the detail page can tell "this id does not
+ * exist / is another tenant's" apart from a service outage (source "error"),
+ * which GAP-AI-CHAT-DETAIL-05 relies on.
  */
 export async function getChatConversation(id: string): Promise<LoaderResult<ChatConversation | null>> {
-  return fetchJson("/api/v1/ai/chat?limit=200", null as ChatConversation | null, {
+  const result = await fetchJson(`/api/v1/ai/chat/${id}`, null as ChatConversation | null, {
     revalidateSeconds: 0,
     telemetryKey: "ai.chat.conversation",
-    responseSchema: chatConversationsListSchema,
-    mapResponse: (payload) => payload.data.find((c) => c.id === id) ?? null,
+    responseSchema: chatConversationItemSchema,
+    mapResponse: (payload) => payload.data,
   });
+  // A 404 is a definitive "not found", not an outage: present it as a
+  // successful read of an absent conversation so the page shows its
+  // not-found state rather than a retry state.
+  if (result.source === "error" && result.status === 404) {
+    return { data: null, source: "api" };
+  }
+  return result;
 }
 
 /** Full transcript for one conversation, as returned by the service. */
@@ -3597,20 +3653,35 @@ export async function getChatTranscript(id: string): Promise<LoaderResult<ChatMe
   });
 }
 
-/** Recent copilot turns for the tenant, newest first. */
-export async function getCopilotTurns(): Promise<LoaderResult<CopilotTurn[]>> {
-  return fetchJson("/api/v1/ai/copilot/turns?limit=50", [] as CopilotTurn[], {
-    revalidateSeconds: 0,
-    telemetryKey: "ai.copilot.turns",
-    responseSchema: copilotTurnsListSchema,
-    mapResponse: (payload) => payload.data.map((turn) => ({
-      ...turn,
-      sourceCitations: (turn.sourceCitations ?? []).map((citation) => ({
-        ...citation,
-        id: citation.id ?? "",
-      })),
-    })),
-  });
+/** The page size requested for the copilot turn history (GAP-AI-COPILOT-04). */
+export const COPILOT_TURNS_LIMIT = 50;
+
+/**
+ * Recent copilot turns for the tenant, newest first, plus the server's total
+ * count (GAP-AI-COPILOT-04) so the stat cards can show the real total rather
+ * than a figure that silently tops out at the page size. `total` is null when
+ * the service did not send `meta.total`.
+ */
+export async function getCopilotTurns(): Promise<LoaderResult<{ turns: CopilotTurn[]; total: number | null }>> {
+  return fetchJson(
+    `/api/v1/ai/copilot/turns?limit=${COPILOT_TURNS_LIMIT}`,
+    { turns: [] as CopilotTurn[], total: null },
+    {
+      revalidateSeconds: 0,
+      telemetryKey: "ai.copilot.turns",
+      responseSchema: copilotTurnsListSchema,
+      mapResponse: (payload) => ({
+        turns: payload.data.map((turn) => ({
+          ...turn,
+          sourceCitations: (turn.sourceCitations ?? []).map((citation) => ({
+            ...citation,
+            id: citation.id ?? "",
+          })),
+        })),
+        total: typeof payload.meta?.total === "number" ? payload.meta.total : null,
+      }),
+    },
+  );
 }
 
 /** A single copilot turn, including the service-classified latency bucket. */

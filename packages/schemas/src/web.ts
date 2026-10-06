@@ -261,6 +261,19 @@ export const chatConversationsListSchema = z.object({
   data: z.array(chatConversationApiSchema),
 });
 
+// GAP-AI-CHAT-DETAIL-03: the single-conversation read (GET /v1/ai/chat/:id)
+// returns one conversation under `data`, not an array.
+export const chatConversationItemSchema = z.object({
+  data: chatConversationApiSchema,
+});
+
+// GAP-AI-CHAT-03: the list endpoint reports an accurate `meta.total` (a server
+// COUNT), so stat cards can show the true number of conversations rather than
+// min(100, n) from one fetched page. Only `meta.total` is needed here.
+export const chatConversationsCountSchema = z.object({
+  meta: z.object({ total: z.number().int().nonnegative() }),
+});
+
 export const chatTranscriptSchema = z.object({
   data: z.array(z.object({
     id: z.string().uuid(),
@@ -299,6 +312,12 @@ const copilotTurnApiSchema = z.object({
 
 export const copilotTurnsListSchema = z.object({
   data: z.array(copilotTurnApiSchema),
+  /** GAP-AI-COPILOT-04: the service sends meta; optional so older snapshots don't break. */
+  meta: z.object({
+    page: z.number().int().optional(),
+    pageSize: z.number().int().optional(),
+    total: z.number().int().optional(),
+  }).optional(),
 });
 
 export const copilotTurnDetailSchema = z.object({

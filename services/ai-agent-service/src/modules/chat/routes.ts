@@ -227,6 +227,24 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
+  // GAP-AI-CHAT-DETAIL-03: single-conversation read. The web detail page used
+  // to download the newest 200 conversations and pick by id, so a conversation
+  // older than the newest 200 rendered "not found" although it existed and was
+  // in-tenant. findById is already tenant-scoped, so a conversation in another
+  // tenant correctly 404s (no cross-tenant leak).
+  app.get("/v1/ai/chat/:conversationId", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const { conversationId } = conversationIdParam.parse(req.params);
+
+    const conversation = await repo.findById(conversationId, ctx.tenantId);
+    if (!conversation) {
+      throw new HttpError(404, "NOT_FOUND", "conversation not found");
+    }
+
+    return reply.send({ data: repo.toView(conversation) });
+  });
+
   app.get("/v1/ai/chat/:conversationId/history", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);

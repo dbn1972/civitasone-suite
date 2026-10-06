@@ -65,6 +65,9 @@ import {
   Smartphone,
   UserRound,
   Fingerprint,
+  MessageSquare,
+  Compass,
+  Bot,
 } from "lucide-react";
 
 /**
@@ -166,6 +169,12 @@ const STAT_ICON_MAP: Record<string, LucideIcon> = {
   "🚨": Siren,         // Break-glass
   "🔐": Fingerprint,   // WebAuthn / passkeys
   "📱": Smartphone,    // MFA policy
+  // AI hub tiles (GAP-AI-HOME-01): previously fell back to the raw emoji
+  // (".notdef" box on headless Linux), leaving all five tiles visually
+  // identical. 🛡️ and ⚖️ already map (ShieldCheck/Scale); add the rest.
+  "💬": MessageSquare, // Chat
+  "🧭": Compass,       // Copilot
+  "🤖": Bot,           // Agents
 };
 
 // Variation Selector-16 (U+FE0F) makes an otherwise-identical emoji string

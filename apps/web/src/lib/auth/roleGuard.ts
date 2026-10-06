@@ -393,3 +393,24 @@ export const NOTIFICATION_SEND_ROLES = ["notification_admin", "super_admin", "pl
 /** Mirrors notification-service NOTIFY_READ_ROLES: send roles + audit_officer. */
 export const NOTIFICATION_READ_ROLES = [...NOTIFICATION_SEND_ROLES, "audit_officer"];
 export const NOTIFICATION_TEMPLATE_ADMIN_ROLES = ["platform_admin", "super_admin", "tenant_admin"];
+
+/**
+ * GAP-AI-CHAT-DETAIL-02 / GAP-AI-CHAT-DETAIL-04: roles permitted to read a
+ * citizen chat transcript and to operate a conversation (hand off / end).
+ * Mirrors ai-agent-service's READ_ROLES in src/shared/roles.ts
+ * (ai_user, ai_admin, super_admin) — every /v1/ai/chat read and the
+ * handoff/end routes gate on this set, so a role outside it gets a 403 from
+ * the service regardless of what the page renders. The server remains the
+ * authority; this gate is DPDP defence-in-depth (unauthorised viewers are
+ * redirected rather than shown unmasked citizen messages) plus UX (operators
+ * are not offered controls that are guaranteed to 403).
+ */
+export const AI_CHAT_READ_ROLES = ["ai_user", "ai_admin", "super_admin"];
+
+/**
+ * GAP-AI-HOME-02 / GAP-AGENTS-04: roles permitted to pause/resume (kill-switch)
+ * an agent. Mirrors ai-agent-service's ADMIN_ROLES (ai_admin, super_admin); the
+ * governance read surface stays visible to auditors, but the Pause/Resume
+ * controls are admin-only. The service stays the authority.
+ */
+export const AI_AGENT_ADMIN_ROLES = ["ai_admin", "super_admin"];

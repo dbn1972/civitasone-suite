@@ -12,6 +12,8 @@ import {
   type AuditEntry,
   type GovernanceCounters,
 } from "./governance/governance";
+// GAP-AI-GUARDRAILS-02/03: typed guardrail rule mapper.
+import { mapGuardrailRules, type GuardrailRule } from "./guardrails/guardrails";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -95,6 +97,56 @@ function moduleLoader(path: string, key: string) {
 
 export const getAiAgents = moduleLoader("/api/v1/ai/agents", "ai.agents");
 export const getAiGuardrails = moduleLoader("/api/v1/ai/guardrails/rules", "ai.guardrails");
+
+/**
+ * GAP-AI-AGENTS-02 / -03: a typed agents row for the dedicated /ai/agents table
+ * (fixed columns: name, status, description, updated), rather than the generic
+ * ModuleListTable whose Detail/Meta columns are guessed per-row and whose Meta
+ * printed a raw ISO timestamp. Mapped defensively from the ai-agent-service
+ * agents endpoint (id/name/status/updatedAt/createdAt), so a missing field
+ * degrades to a dash rather than throwing.
+ */
+export interface AiAgentRow {
+  id: string;
+  name: string;
+  status: string;
+  updatedAt: string | null;
+}
+
+function mapAgentRows(payload: unknown): AiAgentRow[] {
+  const out: AiAgentRow[] = [];
+  for (const [index, row] of extractRows(payload).entries()) {
+    if (!isRecord(row)) continue;
+    const id = toText(row.id) ?? toText(row.agentId) ?? `row-${index + 1}`;
+    const name = toText(row.name) ?? toText(row.title) ?? id;
+    const status = toText(row.status) ?? toText(row.state) ?? "unknown";
+    const updatedAt = toText(row.updatedAt) ?? toText(row.createdAt) ?? null;
+    out.push({ id, name, status, updatedAt });
+  }
+  return out;
+}
+
+/** Agent definitions as typed rows for the dedicated agents table. */
+export function getAiAgentRows(): Promise<LoaderResult<AiAgentRow[]>> {
+  return fetchJson<unknown, AiAgentRow[]>("/api/v1/ai/agents?limit=100", [] as AiAgentRow[], {
+    revalidateSeconds: 30,
+    telemetryKey: "ai.agents.rows",
+    mapResponse: mapAgentRows,
+  });
+}
+
+/**
+ * GAP-AI-GUARDRAILS-02/03: typed guardrail rules for the Guardrails page's
+ * domain-specific table (code/type/severity/status), instead of the generic
+ * ModuleListPage mapper that guesses columns per row.
+ */
+export function getAiGuardrailRules(): Promise<LoaderResult<GuardrailRule[]>> {
+  return fetchJson<unknown, GuardrailRule[]>("/api/v1/ai/guardrails/rules", [] as GuardrailRule[], {
+    revalidateSeconds: 30,
+    telemetryKey: "ai.guardrails_rules",
+    mapResponse: mapGuardrailRules,
+  });
+}
 
 /** Headline governance counters for the AI governance dashboard (P2-10). */
 export function getAiGovernanceCounters(): Promise<LoaderResult<GovernanceCounters | null>> {

@@ -68,6 +68,15 @@ const TILE_ICONS: Record<string, string> = {
   Subscriptions: "🔁",
   Invoices: "🧾",
   "GSTN Console": "🏛️",
+  // GAP-AI-HOME-01: the AI hub's five tiles previously all fell through to the
+  // 📁 default (no title matched, and no ai href matched the href heuristics
+  // below), giving the hub no visual cue between Chat, Copilot, Agents,
+  // Guardrails and Governance. Distinct icons per tile title:
+  Chat: "💬",
+  Copilot: "🧭",
+  Agents: "🤖",
+  Guardrails: "🛡️",
+  Governance: "⚖️",
 };
 
 const TILE_BG = ["#eef2ff", "#ecfdf3", "#fffaeb", "#fce7ee", "#e7edfd", "#f1f5f9"];
