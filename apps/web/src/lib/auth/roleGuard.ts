@@ -339,6 +339,31 @@ export const AUDIT_OBSERVATION_REFER_ROLES = ["audit_officer", "audit_admin", "s
  */
 export const AUDIT_OBSERVATION_REVIEW_ROLES = ["audit_admin", "super_admin"];
 
+/**
+ * GAP-INSTALL-HOME-03 / GAP-INSTALL-DOMAIN-PACKS-01 / GAP-INSTALL-SILOS-04:
+ * roles permitted to reach the /install segment (installer wizard, stages,
+ * steps, modules, silo provisions, Domain Pack activation). Mirrors
+ * install-service's own ROLES in modules/orchestrator/routes.ts and
+ * modules/stages/routes.ts (`install_user`, `install_admin`, `super_admin`,
+ * `tenant_admin`) — the server stays the authority (every route calls
+ * requireRole(ctx, ROLES)); this segment gate is defence-in-depth + UX so a
+ * viewer with none of these roles sees PermissionDenied instead of a wall of
+ * failed fetches. A plain employee/crm_user/etc. is excluded.
+ */
+export const INSTALL_VIEW_ROLES = ["install_user", "install_admin", "super_admin", "tenant_admin"];
+
+/**
+ * GAP-INSTALL-HOME-03 / GAP-INSTALL-DOMAIN-PACKS-01: roles permitted to RUN
+ * install mutations — run/skip/retry a step and activate a Domain Pack (Stage
+ * 3 tenant provisioning). The install-service accepts the same set for reads
+ * and writes today, so this currently equals INSTALL_VIEW_ROLES; it is kept as
+ * a separate constant so the write surface can be narrowed (e.g. drop
+ * install_user) without touching the read gate, and so the UI can hide
+ * mutation controls from a hypothetical read-only install role. The server
+ * remains the authority.
+ */
+export const INSTALL_OPERATE_ROLES = ["install_user", "install_admin", "super_admin", "tenant_admin"];
+
 /** True when any of the session roles is in `allowed`. Pure; for UI gating. */
 export function hasAnyRole(sessionRoles: string[], allowed: string[]): boolean {
   return allowed.some((r) => sessionRoles.includes(r));

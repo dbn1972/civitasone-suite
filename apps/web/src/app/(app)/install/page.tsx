@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { PageShell } from "../../_components/PageShell";
-import { DataSourceBadge } from "../../_components/DataSourceBadge";
 import { getInstallSteps } from "../../_data/loaders";
-import { StatGrid, StatCard, ProgressBar, StatusPill, EmptyState, Card } from "@/app/_components/ds";
+import { StatGrid, StatCard, ProgressBar, StatusPill, EmptyState, Card, RefreshErrorState } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
+import { getSessionRoles, hasAnyRole, INSTALL_OPERATE_ROLES } from "@/lib/auth/roleGuard";
 import { InstallStepActions } from "./InstallStepActions";
 import { DomainPackActivatePanel } from "./DomainPackActivatePanel";
 import { isDomainPackStageStep } from "./domainPackCatalog";
@@ -26,13 +28,19 @@ const STATUS_LABEL: Record<string, string> = {
 export default async function Page() {
   const { data: steps, source } = await getInstallSteps();
 
+  const canOperate = hasAnyRole(getSessionRoles(), INSTALL_OPERATE_ROLES);
+
   const total = steps.length;
   const requiredSteps = steps.filter((s) => s.isRequired);
   const completedRequired = requiredSteps.filter((s) => s.status === "completed").length;
   const totalRequired = requiredSteps.length;
   const completedAll = steps.filter((s) => s.status === "completed").length;
   const failed = steps.filter((s) => s.status === "failed").length;
-  const allRequiredComplete = totalRequired > 0 && completedRequired === totalRequired;
+  // GAP-INSTALL-HOME-06: one honest completion rule. "Complete" means no step
+  // is still pending/in_progress/failed (so an optional pending or a failed
+  // optional step is NOT reported as Complete), aligning the headline Status
+  // with the overall progress percent rather than counting required steps only.
+  const allComplete = total > 0 && steps.every((s) => s.status === "completed" || s.status === "skipped");
   const progressPct = total > 0 ? Math.round((completedAll / total) * 100) : 0;
 
   // First non-terminal step is the "current" wizard step.
@@ -45,25 +53,32 @@ export default async function Page() {
       title="Installer Wizard"
       description="Guided setup flow for provisioning a new tenant workspace."
     >
-      {source === "error" ? <DataSourceBadge source={source} /> : null}
-
-      {total === 0 ? (
+      {source === "error" ? (
+        // GAP-INSTALL-HOME-02: a failed fetch must not masquerade as a fresh,
+        // empty tenant. Show a real error with a working Retry and skip the
+        // empty state / activation panel entirely.
+        <RefreshErrorState
+          error={toHumanError("load", { area: "installation steps" })}
+          source={{ area: "installation steps" }}
+          backHref="/dashboard"
+        />
+      ) : total === 0 ? (
         <div className="space-y-6">
           <EmptyState
             icon="🧩"
             title="No installation steps found"
             message="There are no setup steps to display for this tenant yet. You can still run Stage 3 Domain Pack activation below."
           />
-          <DomainPackActivatePanel variant="embedded" />
+          <DomainPackActivatePanel variant="embedded" canOperate={canOperate} />
         </div>
       ) : (
         <div className="space-y-6">
           <StatGrid>
             <StatCard
-              icon={allRequiredComplete ? "✅" : "⏳"}
-              iconBg={allRequiredComplete ? "#dcfce7" : "#fef3c7"}
+              icon={allComplete ? "✅" : "⏳"}
+              iconBg={allComplete ? "#dcfce7" : "#fef3c7"}
               label="Status"
-              value={allRequiredComplete ? "Complete" : "In progress"}
+              value={allComplete ? "Complete" : "In progress"}
             />
             <StatCard icon="📋" label="Total steps" value={total} />
             <StatCard
@@ -138,7 +153,7 @@ export default async function Page() {
                           Error: {step.errorMessage}
                         </p>
                       ) : null}
-                      {step.status !== "completed" ? (
+                      {step.status !== "completed" && canOperate ? (
                         <InstallStepActions
                           id={step.id}
                           status={step.status}
@@ -148,7 +163,7 @@ export default async function Page() {
                       ) : null}
                       {isDomainPackStageStep(step) && step.status !== "completed" ? (
                         <div className="mt-4">
-                          <DomainPackActivatePanel variant="embedded" />
+                          <DomainPackActivatePanel variant="embedded" canOperate={canOperate} />
                         </div>
                       ) : null}
                     </div>
@@ -161,15 +176,17 @@ export default async function Page() {
           {/* FN-17 Stage 3 — always discoverable even when step list predates Domain Pack keys */}
           {!steps.some((s) => isDomainPackStageStep(s)) ? (
             <div className="mt-6">
-              <DomainPackActivatePanel variant="embedded" />
+              <DomainPackActivatePanel variant="embedded" canOperate={canOperate} />
             </div>
           ) : null}
         </div>
       )}
     <p className="back" style={{ marginTop: 16 }}>
-        <a href="/install/console">Open install console →</a>
+        <Link href="/install/console">Open install console →</Link>
         {" · "}
-        <a href="/install/domain-packs">Domain Packs (Stage 3) →</a>
+        <Link href="/install/domain-packs" title="Import ready-made service templates">
+          Domain Packs →
+        </Link>
       </p>
     </PageShell>
   );

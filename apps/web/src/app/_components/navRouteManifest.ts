@@ -85,6 +85,7 @@ export const LINKABLE_INTERMEDIATE_PATHS: ReadonlySet<string> = new Set([
   "/identity",
   "/inspection",
   "/install",
+  "/install/console",
   "/inventory",
   "/journeys",
   "/knowledge",
