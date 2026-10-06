@@ -1,7 +1,7 @@
 import { Button, PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, formatMoney } from "@/lib/formatters";
 import { CreateInstalmentPlanForm } from "./CreateInstalmentPlanForm";
 
 export type AssesseeOption = {
@@ -9,6 +9,12 @@ export type AssesseeOption = {
   ownerName: string;
   identifierNo: string;
   assesseeType: string;
+};
+
+export type DemandLite = {
+  id: string;
+  netMinor: string;
+  status: string | null;
 };
 
 export type InstalmentPlanRow = {
@@ -84,6 +90,31 @@ async function getInstalmentPlans(assesseeId: string): Promise<LoaderResult<Inst
   );
 }
 
+function mapDemands(payload: unknown): DemandLite[] | null {
+  const rows = arrayFromPayload(payload);
+  if (!rows) return null;
+  const mapped: DemandLite[] = [];
+  for (const raw of rows) {
+    if (!isRecord(raw)) continue;
+    const id = raw.id;
+    if (typeof id !== "string") continue;
+    mapped.push({
+      id,
+      netMinor: String(raw.netMinor ?? 0),
+      status: typeof raw.status === "string" ? raw.status : null,
+    });
+  }
+  return mapped;
+}
+
+async function getDemands(assesseeId: string): Promise<LoaderResult<DemandLite[]>> {
+  return fetchJson<unknown, DemandLite[]>(
+    `/api/v1/revenue/assessees/${encodeURIComponent(assesseeId)}/demands`,
+    [],
+    { telemetryKey: "revenue.instalments.demands", mapResponse: mapDemands },
+  );
+}
+
 export default async function InstalmentsPage({
   searchParams,
 }: {
@@ -96,6 +127,9 @@ export default async function InstalmentsPage({
   const plansResult = assesseeId
     ? await getInstalmentPlans(assesseeId)
     : ({ data: [] as InstalmentPlanRow[], source: "api" as const });
+  const demandsResult = assesseeId
+    ? await getDemands(assesseeId)
+    : ({ data: [] as DemandLite[], source: "api" as const });
 
   const plans = plansResult.data;
 
@@ -103,7 +137,39 @@ export default async function InstalmentsPage({
 
   const activePlans = plans.filter((p) => p.status === "active").length;
 
-  const planRows = plans.map((p) => ({ ...p, startDateDisplay: formatIndianDate(p.startDate) }));
+  // GAP-REVENUE-INSTALMENTS-01: outstanding arrears = sum of non-paid demand
+  // net amounts, BigInt only (never float).
+  let outstandingMinor = 0n;
+  for (const d of demandsResult.data) {
+    if (d.status === "paid") continue;
+    try {
+      outstandingMinor += BigInt(d.netMinor);
+    } catch {
+      /* skip unparseable */
+    }
+  }
+  const selectedAssessee = assessees.find((a) => a.id === assesseeId) ?? null;
+  const assesseeLabel = selectedAssessee
+    ? `${selectedAssessee.ownerName} (${selectedAssessee.identifierNo})`
+    : assesseeId;
+
+  const planRows = plans.map((p) => {
+    // GAP-REVENUE-INSTALMENTS-02: derived per-instalment amount (BigInt
+    // division; remainder noted on the first instalment server-side).
+    let perInstalment = "—";
+    try {
+      const total = BigInt(p.totalMinor);
+      if (p.instalmentCount > 0) perInstalment = formatMoney((total / BigInt(p.instalmentCount)).toString());
+    } catch {
+      /* leave as — */
+    }
+    return {
+      ...p,
+      startDateDisplay: formatIndianDate(p.startDate),
+      perInstalmentDisplay: perInstalment,
+      detailPath: `/revenue/instalments/${p.id}`,
+    };
+  });
 
   const planColumns: {
     key: keyof (typeof planRows)[number] & string;
@@ -112,7 +178,8 @@ export default async function InstalmentsPage({
     cellType?: "status" | "amount";
   }[] = [
     { key: "totalMinor", label: "Total Due", align: "right", cellType: "amount" },
-    { key: "instalmentCount", label: "Instalments" },
+    { key: "instalmentCount", label: "Instalments", align: "right" },
+    { key: "perInstalmentDisplay", label: "Per Instalment", align: "right" },
     { key: "startDateDisplay", label: "Start Date" },
     { key: "status", label: "Status", cellType: "status" },
   ];
@@ -173,7 +240,12 @@ export default async function InstalmentsPage({
             <StatCard icon="✅" iconBg="#e6f7f0" label="Active Plans" value={activePlans} />
           </StatGrid>
 
-          <CreateInstalmentPlanForm assesseeId={assesseeId} />
+          <CreateInstalmentPlanForm
+            assesseeId={assesseeId}
+            assesseeLabel={assesseeLabel}
+            outstandingMinor={outstandingMinor.toString()}
+            demandsFailed={demandsResult.source === "error"}
+          />
 
           <Card title="Instalment Plans">
             {plansResult.source === "error" && plans.length === 0 ? (
@@ -182,6 +254,8 @@ export default async function InstalmentsPage({
               <DataTable<(typeof planRows)[number]>
                 columns={planColumns}
                 rows={planRows}
+                rowLinkKey="detailPath"
+                rowLinkPrefix=""
                 sortable
                 filterable
                 filterPlaceholder="Filter by status…"

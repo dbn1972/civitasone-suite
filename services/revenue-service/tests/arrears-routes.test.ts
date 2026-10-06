@@ -16,6 +16,7 @@ const TENANT_B_ID = "t9999999-9999-9999-9999-999999999999";
 const USER_ID = "u1111111-1111-1111-1111-111111111111";
 const ASSESSEE_ID = "a2222222-2222-2222-2222-222222222222";
 const WRITEOFF_ID = "33333333-3333-3333-3333-333333333333";
+const WAIVER_ID = "44444444-4444-4444-4444-444444444444";
 
 function makeToken(roles: string[], tenantId: string = TENANT_ID) {
   return signToken({ sub: USER_ID, tid: tenantId, roles, sid: "s1" }, SECRET, 3600);
@@ -42,12 +43,43 @@ const WRITEOFF_STORE: Record<string, { tenantId: string; [k: string]: unknown }>
   },
 };
 
+// GAP-REVENUE-WAIVERS-03: seeded waiver store for the findWaiverById mock.
+const WAIVER_STORE: Record<string, { tenantId: string; [k: string]: unknown }> = {
+  [WAIVER_ID]: {
+    id: WAIVER_ID,
+    tenantId: TENANT_ID,
+    demandId: "d1111111-1111-1111-1111-111111111111",
+    amountMinor: "25000",
+    reason: "Hardship — penalty remission",
+    status: "pending",
+    requestedBy: "maker-11111111-1111-1111-1111-111111111111",
+    decidedBy: null,
+  },
+};
+
 vi.mock("../src/modules/arrears/repo.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../src/modules/arrears/repo.js")>();
   return {
     ...original,
+    // List repos return { rows, total } (limit/offset are applied in SQL).
+    listInstalmentPlans: vi.fn(async () => ({ rows: [], total: 0 })),
     findWriteOffById: vi.fn(async (tenantId: string, id: string) => {
       const row = WRITEOFF_STORE[id];
+      if (!row || row.tenantId !== tenantId) return null;
+      return row;
+    }),
+    // GAP-REVENUE-WRITE-OFFS-02: list endpoint for the checker queue.
+    listWriteOffs: vi.fn(
+      async (tenantId: string, opts: { status?: string; limit: number; offset: number }) => {
+        const all = Object.values(WRITEOFF_STORE).filter(
+          (r) => r.tenantId === tenantId && (!opts.status || r.status === opts.status),
+        );
+        return { rows: all.slice(opts.offset, opts.offset + opts.limit), total: all.length };
+      },
+    ),
+    // GAP-REVENUE-WAIVERS-03: single-record fetch for the waiver decide screen.
+    findWaiverById: vi.fn(async (tenantId: string, id: string) => {
+      const row = WAIVER_STORE[id];
       if (!row || row.tenantId !== tenantId) return null;
       return row;
     }),
@@ -173,6 +205,26 @@ describe("POST /v1/revenue/write-offs", () => {
     expect(res.json().data).toHaveProperty("messageId");
   });
 
+  it("accepts an optional demandId + financialYear (GAP-REVENUE-WRITE-OFFS-03)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/revenue/write-offs",
+      headers: AUTH,
+      payload: { ...VALID_BODY, demandId: "d1111111-1111-1111-1111-111111111111", financialYear: "2024-25" },
+    });
+    expect(res.statusCode).toBe(202);
+  });
+
+  it("rejects a non-UUID demandId with 400 (GAP-REVENUE-WRITE-OFFS-03)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/revenue/write-offs",
+      headers: AUTH,
+      payload: { ...VALID_BODY, demandId: "not-a-uuid" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
   it("returns 400 with missing required fields", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/revenue/write-offs", headers: AUTH, payload: { reason: "X" } });
     expect(res.statusCode).toBe(400);
@@ -185,6 +237,46 @@ describe("POST /v1/revenue/write-offs", () => {
 
   it("returns 403 with wrong role", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/revenue/write-offs", headers: BAD_ROLE, payload: VALID_BODY });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+// ── GET /v1/revenue/write-offs (list / checker queue) ──────────────────────────
+
+describe("GET /v1/revenue/write-offs (GAP-REVENUE-WRITE-OFFS-02)", () => {
+  it("returns 200 with a paginated list the checker can discover (no UUID needed)", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/revenue/write-offs", headers: AUTH });
+    expect(res.statusCode).toBe(200);
+    const json = res.json();
+    expect(Array.isArray(json.data)).toBe(true);
+    expect(json.data.some((w: { id: string }) => w.id === WRITEOFF_ID)).toBe(true);
+    expect(json.meta).toHaveProperty("total");
+  });
+
+  it("filters by status=pending for the approval queue", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/revenue/write-offs?status=pending", headers: AUTH });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.every((w: { status: string }) => w.status === "pending")).toBe(true);
+  });
+
+  it("is tenant-scoped — another tenant does not see this write-off", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/revenue/write-offs", headers: AUTH_TENANT_B });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.some((w: { id: string }) => w.id === WRITEOFF_ID)).toBe(false);
+  });
+
+  it("rejects an invalid status with 400", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/revenue/write-offs?status=bogus", headers: AUTH });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("returns 401 without auth", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/revenue/write-offs" });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("returns 403 with wrong role", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/revenue/write-offs", headers: BAD_ROLE });
     expect(res.statusCode).toBe(403);
   });
 });
@@ -323,6 +415,65 @@ describe("GET /v1/revenue/assessees/:id/instalments", () => {
 
   it("returns 403 with wrong role", async () => {
     const res = await app.inject({ method: "GET", url: `/v1/revenue/assessees/${ASSESSEE_ID}/instalments`, headers: BAD_ROLE });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+// ── GET /v1/revenue/waivers/:id + decide (GAP-REVENUE-WAIVERS-03) ───────────────
+
+describe("GET /v1/revenue/waivers/:id", () => {
+  it("returns 200 with the waiver (amount, reason, status, requester) so the checker never decides blind", async () => {
+    const res = await app.inject({ method: "GET", url: `/v1/revenue/waivers/${WAIVER_ID}`, headers: AUTH });
+    expect(res.statusCode).toBe(200);
+    const json = res.json();
+    expect(json.data.id).toBe(WAIVER_ID);
+    expect(json.data.amountMinor).toBe("25000");
+    expect(json.data.status).toBe("pending");
+    expect(json.data.requestedBy).toBe("maker-11111111-1111-1111-1111-111111111111");
+  });
+
+  it("returns 404 for an unknown waiver id", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/revenue/waivers/99999999-9999-9999-9999-999999999999", headers: AUTH });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error.code).toBe("NOT_FOUND");
+  });
+
+  it("returns 404 for another tenant — cross-tenant isolation", async () => {
+    const res = await app.inject({ method: "GET", url: `/v1/revenue/waivers/${WAIVER_ID}`, headers: AUTH_TENANT_B });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("returns 401 without auth", async () => {
+    const res = await app.inject({ method: "GET", url: `/v1/revenue/waivers/${WAIVER_ID}` });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("returns 403 with wrong role", async () => {
+    const res = await app.inject({ method: "GET", url: `/v1/revenue/waivers/${WAIVER_ID}`, headers: BAD_ROLE });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+describe("decide a waiver (POST and PATCH both accepted)", () => {
+  const BODY = { approve: true, reason: "Approved by second officer" };
+
+  it("returns 202 for PATCH /v1/revenue/waivers/:id/decide (consistent with refunds/write-offs)", async () => {
+    const res = await app.inject({ method: "PATCH", url: `/v1/revenue/waivers/${WAIVER_ID}/decide`, headers: AUTH, payload: BODY });
+    expect(res.statusCode).toBe(202);
+  });
+
+  it("still returns 202 for the original POST decide", async () => {
+    const res = await app.inject({ method: "POST", url: `/v1/revenue/waivers/${WAIVER_ID}/decide`, headers: AUTH, payload: BODY });
+    expect(res.statusCode).toBe(202);
+  });
+
+  it("returns 400 with missing approve field", async () => {
+    const res = await app.inject({ method: "PATCH", url: `/v1/revenue/waivers/${WAIVER_ID}/decide`, headers: AUTH, payload: { reason: "x" } });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("returns 403 with wrong role", async () => {
+    const res = await app.inject({ method: "PATCH", url: `/v1/revenue/waivers/${WAIVER_ID}/decide`, headers: BAD_ROLE, payload: BODY });
     expect(res.statusCode).toBe(403);
   });
 });

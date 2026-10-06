@@ -9,7 +9,15 @@ import type { ReceiptRow } from "./page";
 
 type AcceptedResponse = { id?: string; status?: string; correlationId?: string };
 
-export function RefundCreateForm({ assesseeId, receipts }: { assesseeId: string; receipts: ReceiptRow[] }) {
+export function RefundCreateForm({
+  assesseeId,
+  receipts,
+  pendingRefundReceiptIds = [],
+}: {
+  assesseeId: string;
+  receipts: ReceiptRow[];
+  pendingRefundReceiptIds?: string[];
+}) {
   const router = useRouter();
   const [receiptId, setReceiptId] = useState("");
   const [reason, setReason] = useState("");
@@ -31,6 +39,7 @@ export function RefundCreateForm({ assesseeId, receipts }: { assesseeId: string;
   const reasonRef = useRef<HTMLTextAreaElement>(null);
 
   const selectedReceipt = receipts.find((r) => r.id === receiptId);
+  const pendingSet = new Set(pendingRefundReceiptIds);
 
   if (receipts.length === 0) {
     return (
@@ -68,10 +77,13 @@ export function RefundCreateForm({ assesseeId, receipts }: { assesseeId: string;
 
   async function submitRefund() {
     if (!selectedReceipt) return;
+    // Capture the receipt number before we reset the selection, so the success
+    // copy can name the receipt instead of printing a raw UUID (REFUNDS-04).
+    const receiptNo = selectedReceipt.receiptNo;
     setBusy(true);
     setDialogError(undefined);
     try {
-      const res = await browserJson<AcceptedResponse>("v1/revenue/refunds", {
+      await browserJson<AcceptedResponse>("v1/revenue/refunds", {
         method: "POST",
         body: JSON.stringify({
           receiptId: selectedReceipt.id,
@@ -81,9 +93,7 @@ export function RefundCreateForm({ assesseeId, receipts }: { assesseeId: string;
       setConfirmOpen(false);
       setTone("good");
       setMessage(
-        res.id
-          ? `Refund raised (id ${res.id}), pending checker approval. Use the refund register lookup below to decide on it.`
-          : "Refund raised, pending checker approval.",
+        `Refund raised for receipt ${receiptNo} and sent for checker approval. A different officer must approve it.`,
       );
       setReceiptId("");
       setReason("");
@@ -119,11 +129,15 @@ export function RefundCreateForm({ assesseeId, receipts }: { assesseeId: string;
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               >
                 <option value="">Select a receipt…</option>
-                {receipts.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.receiptNo} — {formatMoney(r.amountMinor)} ({r.channel}, {r.status})
-                  </option>
-                ))}
+                {receipts.map((r) => {
+                  const hasPending = pendingSet.has(r.id);
+                  return (
+                    <option key={r.id} value={r.id} disabled={hasPending}>
+                      {r.receiptNo} — {formatMoney(r.amountMinor)} ({r.channel}, {r.status})
+                      {hasPending ? " (refund pending)" : ""}
+                    </option>
+                  );
+                })}
               </select>
               {fieldErrors.receipt && (
                 <p id={receiptErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>

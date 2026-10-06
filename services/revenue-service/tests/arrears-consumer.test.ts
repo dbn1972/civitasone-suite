@@ -84,6 +84,13 @@ vi.mock("../src/modules/arrears/domain.js", () => ({
     return entries;
   }),
   validateWriteOff: vi.fn(),
+  validateRecoveryReferral: (outstanding: bigint) => {
+    if (outstanding <= 0n) {
+      const err = new Error("Recovery referral requires outstanding arrears; this assessee has none");
+      (err as any).code = "NO_OVERDUE_ARREARS";
+      throw err;
+    }
+  },
   assertMakerChecker: (maker: string, checker: string) => {
     if (maker === checker) {
       const err = new Error("MAKER_CHECKER_VIOLATION");
@@ -176,6 +183,37 @@ describe("Arrears Consumer", () => {
     });
   });
 
+  describe("writeOffCreate (GAP-REVENUE-WRITE-OFFS-03)", () => {
+    it("stores the optional demandId + financialYear on the write-off row", async () => {
+      const msg = buildMsg({
+        payload: {
+          assesseeId: "assessee-1",
+          amountMinor: "100000",
+          reason: "Irrecoverable",
+          demandId: "demand-9",
+          financialYear: "2024-25",
+        },
+      });
+      await handlers["revenue.write_off.create"]!(msg);
+      // The last insert is the write-off; its values carry the demand reference.
+      const insertedValues = mockValues.mock.calls.map((c) => c[0]);
+      const woRow = insertedValues.find((v) => v && v.reason === "Irrecoverable");
+      expect(woRow).toBeTruthy();
+      expect(woRow.demandId).toBe("demand-9");
+      expect(woRow.financialYear).toBe("2024-25");
+    });
+
+    it("stores null demand reference when none is given (backward compatible)", async () => {
+      const msg = buildMsg({
+        payload: { assesseeId: "assessee-1", amountMinor: "100000", reason: "No demand ref" },
+      });
+      await handlers["revenue.write_off.create"]!(msg);
+      const woRow = mockValues.mock.calls.map((c) => c[0]).find((v) => v && v.reason === "No demand ref");
+      expect(woRow.demandId).toBeNull();
+      expect(woRow.financialYear).toBeNull();
+    });
+  });
+
   describe("writeOffDecide", () => {
     it("throws on maker-checker violation (same user as maker)", async () => {
       // Return a write-off with makerUserId = actor-1
@@ -211,6 +249,9 @@ describe("Arrears Consumer", () => {
 
   describe("recoveryRefer", () => {
     it("inserts referral and enqueues events", async () => {
+      // GAP-REVENUE-RECOVERY-01: the consumer now checks outstanding arrears
+      // first — seed a positive DCB balance so a legitimate referral proceeds.
+      mockSelectWhere.mockReturnValueOnce([{ total: 400000n }]);
       const msg = buildMsg({
         payload: { assesseeId: "assessee-1", reason: "Chronic defaulter" },
       });
@@ -222,6 +263,51 @@ describe("Arrears Consumer", () => {
       expect(mockEnqueue.mock.calls[0]![1].topic).toBe("revenue.recovery.referred");
       expect(mockEnqueue.mock.calls[1]![1].topic).toBe("audit.event.record");
       expect(mockCacheInvalidate).toHaveBeenCalledWith("revenue:tenant-1:instalments:assessee-1");
+    });
+
+    it("rejects a referral when the assessee has no outstanding arrears (GAP-REVENUE-RECOVERY-01)", async () => {
+      mockSelectWhere.mockReturnValueOnce([{ total: 0n }]);
+      const msg = buildMsg({ payload: { assesseeId: "assessee-1", reason: "No dues" } });
+
+      await expect(handlers["revenue.recovery.refer"]!(msg)).rejects.toThrow(/outstanding arrears/i);
+      expect(mockInsert).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("waiverDecide (GAP-REVENUE-WAIVERS-03: server-side maker != checker)", () => {
+    it("does NOT update when the deciding officer raised the waiver, and audits a maker_checker_violation", async () => {
+      mockSelectLimit.mockResolvedValueOnce([{ requestedBy: "actor-1", status: "pending" }]);
+      const msg = buildMsg({
+        payload: { waiverId: "w-1", approve: true },
+        actorId: "actor-1", // same as requester
+      });
+      await handlers["revenue.waiver.decide"]!(msg);
+      expect(mockUpdate).not.toHaveBeenCalled();
+      const audit = mockEnqueue.mock.calls.find((c) => c[1].topic === "audit.event.record");
+      expect(audit).toBeTruthy();
+      expect(audit![1].payload.outcome).toBe("maker_checker_violation");
+    });
+
+    it("updates the waiver when a DIFFERENT officer decides a pending waiver", async () => {
+      mockSelectLimit.mockResolvedValueOnce([{ requestedBy: "maker-x", status: "pending" }]);
+      const msg = buildMsg({
+        payload: { waiverId: "w-1", approve: true },
+        actorId: "checker-y",
+      });
+      await handlers["revenue.waiver.decide"]!(msg);
+      expect(mockUpdate).toHaveBeenCalledTimes(1);
+      const audit = mockEnqueue.mock.calls.find((c) => c[1].topic === "audit.event.record");
+      expect(audit![1].payload.outcome).toBe("approved");
+    });
+
+    it("does NOT update an already-decided waiver", async () => {
+      mockSelectLimit.mockResolvedValueOnce([{ requestedBy: "maker-x", status: "approved" }]);
+      const msg = buildMsg({
+        payload: { waiverId: "w-1", approve: false },
+        actorId: "checker-y",
+      });
+      await handlers["revenue.waiver.decide"]!(msg);
+      expect(mockUpdate).not.toHaveBeenCalled();
     });
   });
 });

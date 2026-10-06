@@ -9,7 +9,15 @@ import type { DemandRow } from "./page";
 
 type AcceptedResponse = { id?: string; status?: string; correlationId?: string };
 
-export function GenerateBillForm({ assesseeId, demands }: { assesseeId: string; demands: DemandRow[] }) {
+export function GenerateBillForm({
+  assesseeId,
+  demands,
+  billedAssessmentIds = [],
+}: {
+  assesseeId: string;
+  demands: DemandRow[];
+  billedAssessmentIds?: string[];
+}) {
   const router = useRouter();
   const [demandId, setDemandId] = useState("");
   const [busy, setBusy] = useState(false);
@@ -25,7 +33,11 @@ export function GenerateBillForm({ assesseeId, demands }: { assesseeId: string; 
   const demandErrorId = `${selectId}-error`;
   const selectRef = useRef<HTMLSelectElement>(null);
 
-  const eligibleDemands = demands.filter((d) => d.status !== "paid");
+  const billedSet = new Set(billedAssessmentIds);
+  // GAP-REVENUE-BILLS-01: a demand whose assessment already has an issued bill
+  // is not selectable — generating again would be a duplicate (the server also
+  // rejects it idempotently).
+  const eligibleDemands = demands.filter((d) => d.status !== "paid" && !billedSet.has(d.assessmentId));
   const selected = eligibleDemands.find((d) => d.id === demandId);
   const noEligibleDemands = eligibleDemands.length === 0;
 
@@ -148,7 +160,8 @@ export function GenerateBillForm({ assesseeId, demands }: { assesseeId: string; 
           selected ? (
             <>
               Generate a bill for demand FY <strong>{selected.financialYear}</strong>, net amount{" "}
-              <strong>{formatMoney(selected.netMinor)}</strong>.
+              <strong>{formatMoney(selected.netMinor)}</strong>. One bill is issued per assessment — if a bill
+              already exists for this demand the server will not create a duplicate.
             </>
           ) : (
             "Generate this bill?"

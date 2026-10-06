@@ -48,6 +48,9 @@ vi.mock("../src/modules/collection/repo.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../src/modules/collection/repo.js")>();
   return {
     ...original,
+    // List repos return { rows, total } (limit/offset are applied in SQL).
+    listReceipts: vi.fn(async () => ({ rows: [], total: 0 })),
+    listAdjustments: vi.fn(async () => ({ rows: [], total: 0 })),
     findRefundById: vi.fn(async (tenantId: string, id: string) => {
       const row = REFUND_STORE[id];
       if (!row || row.tenantId !== tenantId) return null;
@@ -323,6 +326,32 @@ describe("GET /v1/revenue/assessees/:id/receipts", () => {
 
   it("returns 403 with wrong role", async () => {
     const res = await app.inject({ method: "GET", url: `/v1/revenue/assessees/${ASSESSEE_ID}/receipts`, headers: BAD_ROLE });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+// ── GET /v1/revenue/assessees/:id/adjustments (GAP-REVENUE-ADJUSTMENTS-02) ─────
+describe("GET /v1/revenue/assessees/:id/adjustments", () => {
+  it("returns 200 with a paginated register response", async () => {
+    const res = await app.inject({ method: "GET", url: `/v1/revenue/assessees/${ASSESSEE_ID}/adjustments`, headers: AUTH });
+    expect(res.statusCode).toBe(200);
+    const json = res.json();
+    expect(json).toHaveProperty("data");
+    expect(json.meta).toHaveProperty("total");
+  });
+
+  it("returns 400 with invalid UUID param", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/revenue/assessees/not-a-uuid/adjustments", headers: AUTH });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("returns 401 without auth", async () => {
+    const res = await app.inject({ method: "GET", url: `/v1/revenue/assessees/${ASSESSEE_ID}/adjustments` });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("returns 403 with wrong role", async () => {
+    const res = await app.inject({ method: "GET", url: `/v1/revenue/assessees/${ASSESSEE_ID}/adjustments`, headers: BAD_ROLE });
     expect(res.statusCode).toBe(403);
   });
 });

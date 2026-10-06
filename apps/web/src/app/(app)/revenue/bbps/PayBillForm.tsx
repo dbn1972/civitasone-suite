@@ -5,10 +5,11 @@ import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 import { rupeesToMinorString } from "@/lib/money";
+import { BBPS_CHANNELS, channelLabel } from "@/lib/revenue/channels";
 
 type AcceptedResponse = { data?: { messageId?: string } };
 
-const CHANNELS = ["online", "counter", "upi", "netbanking", "card"] as const;
+const CHANNELS = BBPS_CHANNELS;
 
 export function PayBillForm() {
   const [assesseeIdentifier, setAssesseeIdentifier] = useState("");
@@ -99,8 +100,8 @@ export function PayBillForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ marginBottom: 16 }} aria-label="Pay BBPS bill">
-      <Card title="Pay Bill" padding>
+    <form onSubmit={handleSubmit} style={{ marginBottom: 16 }} aria-label="Record BBPS payment">
+      <Card title="Record BBPS Payment" padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
@@ -196,7 +197,7 @@ export function PayBillForm() {
               >
                 {CHANNELS.map((c) => (
                   <option key={c} value={c}>
-                    {c}
+                    {channelLabel(c)}
                   </option>
                 ))}
               </select>
@@ -205,7 +206,7 @@ export function PayBillForm() {
 
           <div>
             <Button type="submit" style={{ minHeight: 44 }} disabled={busy} loading={busy}>
-              Pay Bill
+              Record BBPS payment
             </Button>
           </div>
 
@@ -224,20 +225,22 @@ export function PayBillForm() {
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Submit this BBPS payment?"
-        confirmLabel="Pay bill"
+        title="Record this BBPS payment?"
+        confirmLabel="Record payment"
         danger
         busy={busy}
         errorMessage={dialogError}
         description={
           minorAmount ? (
             <>
-              Submit a BBPS payment of <strong>{formatMoney(minorAmount)}</strong> via <strong>{channel}</strong> for
-              assessee <strong>{assesseeIdentifier.trim()}</strong>. This dispatches money movement through the BBPS
-              biller adapter and cannot be recalled from this screen.
+              Record a BBPS payment of <strong>{formatMoney(minorAmount)}</strong> via{" "}
+              <strong>{channelLabel(channel)}</strong> for assessee{" "}
+              <strong>{assesseeIdentifier.trim()}</strong>, using BBPS transaction ID{" "}
+              <strong>{bbpsTxnId.trim()}</strong>. This records a payment already made at the biller and
+              credits the assessee — it cannot be undone from this screen.
             </>
           ) : (
-            "Submit this BBPS payment?"
+            "Record this BBPS payment?"
           )
         }
         onConfirm={() => void payBill()}

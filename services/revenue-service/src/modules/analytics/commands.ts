@@ -8,6 +8,8 @@
  */
 import { tenantTransaction } from "@civitasone/db";
 import { db } from "../../shared/db.js";
+import { enqueue } from "../../shared/outbox.js";
+import { SERVICE } from "../../topics.js";
 import { forecastRuns } from "./schema.js";
 import type { RequestContext } from "../../shared/context.js";
 import type { ForecastResult } from "./domain.js";
@@ -49,6 +51,23 @@ export async function persistForecastRun(ctx: RequestContext, input: PersistFore
   const inserted = await tenantTransaction(db, ctx.tenantId, async (tx) => {
     const t = tx as typeof db;
     const res = await t.insert(forecastRuns).values(row).returning({ id: forecastRuns.id });
+    // GAP-REVENUE-ANALYTICS-04: persisting a forecast run is a mutation and must
+    // emit an audit event in the SAME transaction (CLAUDE.md §3.8). It was
+    // previously written with no audit trail.
+    await enqueue(t, {
+      topic: "audit.event.record",
+      eventType: "audit.event.record",
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      correlationId: ctx.correlationId,
+      payload: {
+        service: SERVICE,
+        action: "create",
+        resourceType: "analytics_forecast_run",
+        resourceId: (res as Array<{ id: string }>)[0]?.id,
+        outcome: "success",
+      },
+    });
     return res;
   });
 

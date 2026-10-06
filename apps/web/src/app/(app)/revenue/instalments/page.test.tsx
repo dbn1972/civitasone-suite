@@ -30,28 +30,35 @@ describe("InstalmentsPage", () => {
     expect(screen.getByText("Choose an assessee")).toBeInTheDocument();
   });
 
-  it("renders instalment plans for the selected assessee", async () => {
-    fetchJsonMock.mockResolvedValueOnce(assesseesPage).mockResolvedValueOnce({
-      data: [
-        {
-          id: "p1",
-          totalMinor: "1200000",
-          instalmentCount: 6,
-          startDate: "2026-04-01",
-          status: "active",
-        },
-      ],
-      source: "api",
+  it("renders instalment plans with per-instalment amount and a detail link (GAP-REVENUE-INSTALMENTS-02/04)", async () => {
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("/instalments")) {
+        return Promise.resolve({
+          data: [{ id: "p1", totalMinor: "1200000", instalmentCount: 6, startDate: "2026-04-01", status: "active" }],
+          source: "api",
+        });
+      }
+      if (path.includes("/demands")) return Promise.resolve({ data: [], source: "api" });
+      return Promise.resolve(assesseesPage);
     });
 
     const ui = await InstalmentsPage({ searchParams: { assesseeId: "a1" } });
     render(ui);
 
     expect(screen.getByText("6")).toBeInTheDocument();
+    // Per-instalment: ₹12,000.00 / 6 = ₹2,000.00
+    expect(screen.getByText("₹2,000.00")).toBeInTheDocument();
+    // Row links to the plan detail.
+    const links = screen.getAllByRole("link");
+    expect(links.some((l) => l.getAttribute("href") === "/revenue/instalments/p1")).toBe(true);
   });
 
   it("renders an empty state when there are no instalment plans", async () => {
-    fetchJsonMock.mockResolvedValueOnce(assesseesPage).mockResolvedValueOnce({ data: [], source: "api" });
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("/instalments")) return Promise.resolve({ data: [], source: "api" });
+      if (path.includes("/demands")) return Promise.resolve({ data: [], source: "api" });
+      return Promise.resolve(assesseesPage);
+    });
 
     const ui = await InstalmentsPage({ searchParams: { assesseeId: "a1" } });
     render(ui);
@@ -60,7 +67,11 @@ describe("InstalmentsPage", () => {
   });
 
   it("shows the data-source badge when a loader falls back on error", async () => {
-    fetchJsonMock.mockResolvedValueOnce(assesseesPage).mockResolvedValueOnce({ data: [], source: "error" });
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("/instalments")) return Promise.resolve({ data: [], source: "error" });
+      if (path.includes("/demands")) return Promise.resolve({ data: [], source: "api" });
+      return Promise.resolve(assesseesPage);
+    });
 
     const ui = await InstalmentsPage({ searchParams: { assesseeId: "a1" } });
     render(ui);

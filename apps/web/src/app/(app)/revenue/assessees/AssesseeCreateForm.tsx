@@ -7,13 +7,7 @@ import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
-
-const ASSESSEE_TYPES = [
-  { value: "property", label: "Property" },
-  { value: "water_connection", label: "Water Connection" },
-  { value: "trade", label: "Trade" },
-  { value: "other", label: "Other" },
-] as const;
+import { ASSESSEE_TYPES } from "./assesseeTypes";
 
 type FieldErrors = {
   assesseeType?: string;
@@ -235,6 +229,14 @@ export function AssesseeCreateForm() {
               {errors.contactEmail && <p id={emailErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.contactEmail}</p>}
             </div>
           </div>
+
+          {/* GAP-REVENUE-ASSESSEES-03: DPDP purpose/consent note for optional
+              contact PII, shown wherever phone/email are collected. */}
+          <p style={{ margin: "0", fontSize: 12.5, color: "var(--ink2)" }}>
+            Phone and email are optional and used only to send this assessee their bills, demand notices
+            and payment receipts. By entering them you confirm the assessee has consented to being
+            contacted for revenue purposes (DPDP Act, 2023).
+          </p>
 
           <div>
             <Button type="submit" style={{ minHeight: 44 }} disabled={busy} loading={busy}>

@@ -28,6 +28,24 @@ export function registerCollectionConsumers(queue: Queue): void {
 
       const amount = BigInt(amountMinor);
 
+      // GAP-REVENUE-RECEIPTS-01: idempotency on the UTR / reference. A retry
+      // after a network timeout arrives as a fresh messageId (so markProcessed
+      // does not catch it), but it carries the same reference. If a receipt
+      // with this (tenant, reference) already exists, this is a duplicate
+      // submission: no-op (no second DCB entry, no second GL event) rather
+      // than double-crediting the payment. The DB also enforces this via the
+      // partial unique index uq_receipts_tenant_reference (migration 0012).
+      if (reference && reference.trim() !== "") {
+        const existing = await tx
+          .select({ id: receipts.id })
+          .from(receipts)
+          .where(and(eq(receipts.tenantId, msg.tenantId), eq(receipts.reference, reference)))
+          .limit(1);
+        if (existing[0]) {
+          return; // already recorded this UTR for this tenant
+        }
+      }
+
       // Load demand balance
       const balance = await getDemandBalanceTx(tx, msg.tenantId, demandId);
 
@@ -105,6 +123,22 @@ export function registerCollectionConsumers(queue: Queue): void {
         .limit(1);
       const receipt = receiptRows[0];
       if (!receipt) return;
+
+      // GAP-REVENUE-REFUNDS-02: a receipt may have at most one live refund.
+      // If a non-rejected refund (pending / approved / processed) already
+      // exists for this receipt, a second raise is a duplicate money-out
+      // attempt: no-op rather than creating another. (A previously REJECTED
+      // refund does not block re-raising.) Server is the real guard; the UI
+      // marking is advisory. Race backstop: migration 0014 partial unique index
+      // (tenant_id, receipt_id) WHERE status <> 'rejected' — a concurrent loser
+      // raises 23505, is retried, and then no-ops here.
+      const existingRefunds = await tx
+        .select({ status: refunds.status })
+        .from(refunds)
+        .where(and(eq(refunds.tenantId, msg.tenantId), eq(refunds.receiptId, receiptId)));
+      if (existingRefunds.some((r) => r.status !== "rejected")) {
+        return; // a live refund already exists for this receipt
+      }
 
       // Domain validation
       validateRefund(receipt.amountMinor, receipt.amountMinor);
@@ -294,5 +328,6 @@ export function registerCollectionConsumers(queue: Queue): void {
 
     await cache.invalidate(`${SERVICE}:${msg.tenantId}:receipts:${assesseeId}`);
     await cache.invalidate(`${SERVICE}:${msg.tenantId}:dcb:${assesseeId}`);
+    await cache.invalidate(`${SERVICE}:${msg.tenantId}:adjustments:${assesseeId}`);
   });
 }

@@ -1,5 +1,7 @@
 import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
-import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { RefreshErrorState } from "@/app/_components/ds/RefreshErrorState";
+import { fetchJson, type LoaderResult, type LoaderSource } from "@/app/_data/apiClient";
 import { RateConfigConsole } from "./RateConfigConsole";
 import type { RateHeadRow, RateSlabRow, PenaltyRuleRow, RebateRuleRow } from "./types";
 
@@ -79,6 +81,10 @@ export default async function RateConfigPage({
       ];
 
   const activeHeads = rateHeads.filter((rh) => rh.isActive).length;
+  const slabsError = (slabsResult.source as LoaderSource) === "error";
+  const penaltyError = (penaltyResult.source as LoaderSource) === "error";
+  const rebateError = (rebateResult.source as LoaderSource) === "error";
+  const anyError = rateHeadsSource === "error" || slabsError || penaltyError || rebateError;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -86,28 +92,52 @@ export default async function RateConfigPage({
         title="Rate Configuration"
         subtitle="Configure rate heads, rate slabs, penalty (interest) rules, and rebate rules for the municipal rate engine."
         back="/revenue"
+        actions={anyError ? <DataSourceBadge source="error" /> : null}
       />
 
-      <StatGrid>
-        <StatCard icon="🏷️" iconBg="#eff6ff" label="Rate Heads" value={rateHeads.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Active Rate Heads" value={activeHeads} />
-        <StatCard icon="📶" iconBg="#fffbe6" label="Rate Slabs (selected head)" value={slabsResult.data.length} />
-        <StatCard icon="⚖️" iconBg="#fef3f2" label="Penalty Rules (selected head)" value={penaltyResult.data.length} />
-      </StatGrid>
-
-      <Card title="Rate Engine Configuration">
-        <RateConfigConsole
-          rateHeads={rateHeads}
-          rateHeadsSource={rateHeadsSource}
-          selectedRateHeadId={selectedRateHeadId}
-          slabs={slabsResult.data}
-          slabsSource={slabsResult.source}
-          penaltyRules={penaltyResult.data}
-          penaltyRulesSource={penaltyResult.source}
-          rebateRules={rebateResult.data}
-          rebateRulesSource={rebateResult.source}
+      {rateHeadsSource === "error" ? (
+        <RefreshErrorState
+          error={{
+            what: "We couldn't load the rate configuration.",
+            next: "Retry in a moment. If it keeps failing, the revenue service may be unavailable.",
+            actions: ["retry", "back"],
+          }}
+          backHref="/revenue"
         />
-      </Card>
+      ) : (
+        <>
+          <StatGrid>
+            <StatCard icon="🏷️" iconBg="#eff6ff" label="Rate Heads" value={rateHeads.length} />
+            <StatCard icon="✅" iconBg="#e6f7f0" label="Active Rate Heads" value={activeHeads} />
+            <StatCard
+              icon="📶"
+              iconBg="#fffbe6"
+              label="Rate Slabs (selected head)"
+              value={slabsError ? null : slabsResult.data.length}
+            />
+            <StatCard
+              icon="⚖️"
+              iconBg="#fef3f2"
+              label="Penalty Rules (selected head)"
+              value={penaltyError ? null : penaltyResult.data.length}
+            />
+          </StatGrid>
+
+          <Card title="Rate Engine Configuration">
+            <RateConfigConsole
+              rateHeads={rateHeads}
+              rateHeadsSource={rateHeadsSource}
+              selectedRateHeadId={selectedRateHeadId}
+              slabs={slabsResult.data}
+              slabsSource={slabsResult.source}
+              penaltyRules={penaltyResult.data}
+              penaltyRulesSource={penaltyResult.source}
+              rebateRules={rebateResult.data}
+              rebateRulesSource={rebateResult.source}
+            />
+          </Card>
+        </>
+      )}
     </div>
   );
 }

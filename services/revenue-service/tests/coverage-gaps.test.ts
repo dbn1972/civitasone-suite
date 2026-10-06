@@ -298,6 +298,20 @@ describe("Billing Repo", () => {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Collection Repo Tests
+
+// List repos push limit/offset into SQL and return { rows, total } with a real
+// COUNT(*) — the where() chain therefore serves both the paged select
+// (.orderBy().limit().offset()) and the awaited count select.
+function pagedWhere(rows: unknown[], total: number) {
+  const offset = vi.fn(async () => rows);
+  const limit = vi.fn(() => ({ offset }));
+  const orderBy = vi.fn(() => ({ limit }));
+  return {
+    orderBy, limit, offset,
+    then: (resolve: (v: unknown) => unknown) => Promise.resolve([{ n: total }]).then(resolve),
+  };
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("Collection Repo", () => {
@@ -310,19 +324,22 @@ describe("Collection Repo", () => {
     mockDbLimit.mockResolvedValue([]);
   });
 
-  it("listReceipts executes DB query via cache loader", async () => {
-    mockDbOrderBy.mockResolvedValue([{ id: "r-1" }, { id: "r-2" }]);
-    mockDbWhere.mockReturnValue({ orderBy: mockDbOrderBy, limit: mockDbLimit });
+  it("listReceipts pushes limit/offset into SQL and returns a real total", async () => {
+    const w = pagedWhere([{ id: "r-1" }, { id: "r-2" }], 57);
+    mockDbWhere.mockReturnValue(w);
     const { listReceipts } = await import("../src/modules/collection/repo.js");
-    const result = await listReceipts("11111111-1111-4111-8111-111111111111", "assessee-1", { limit: 10, offset: 0 });
-    expect(result).toHaveLength(2);
+    const result = await listReceipts("11111111-1111-4111-8111-111111111111", "assessee-1", { limit: 2, offset: 4 });
+    expect(result.rows).toHaveLength(2);
+    expect(result.total).toBe(57);
+    expect(w.limit).toHaveBeenCalledWith(2);
+    expect(w.offset).toHaveBeenCalledWith(4);
   });
 
-  it("listReceipts handles null from cache.getOrLoad", async () => {
-    mockGetOrLoad.mockResolvedValue(null);
+  it("listReceipts returns an empty page with total 0 when there are none", async () => {
+    mockDbWhere.mockReturnValue(pagedWhere([], 0));
     const { listReceipts } = await import("../src/modules/collection/repo.js");
     const result = await listReceipts("11111111-1111-4111-8111-111111111111", "assessee-1", { limit: 10, offset: 0 });
-    expect(result).toEqual([]);
+    expect(result).toEqual({ rows: [], total: 0 });
   });
 
   it("findReceipt returns first matching row", async () => {
@@ -367,18 +384,22 @@ describe("Arrears Repo", () => {
     mockDbOrderBy.mockResolvedValue([{ id: "ip-1" }]);
   });
 
-  it("listInstalmentPlans executes DB query via cache loader", async () => {
+  it("listInstalmentPlans pushes limit/offset into SQL and returns a real total", async () => {
+    const w = pagedWhere([{ id: "ip-1" }], 31);
+    mockDbWhere.mockReturnValue(w);
     const { listInstalmentPlans } = await import("../src/modules/arrears/repo.js");
-    const result = await listInstalmentPlans("11111111-1111-4111-8111-111111111111", "assessee-1", { limit: 10, offset: 0 });
-    expect(result).toHaveLength(1);
-    expect(mockGetOrLoad).toHaveBeenCalledWith("revenue:11111111-1111-4111-8111-111111111111:instalments:assessee-1", expect.any(Function));
+    const result = await listInstalmentPlans("11111111-1111-4111-8111-111111111111", "assessee-1", { limit: 1, offset: 20 });
+    expect(result.rows).toHaveLength(1);
+    expect(result.total).toBe(31);
+    expect(w.limit).toHaveBeenCalledWith(1);
+    expect(w.offset).toHaveBeenCalledWith(20);
   });
 
-  it("listInstalmentPlans handles null from cache.getOrLoad", async () => {
-    mockGetOrLoad.mockResolvedValue(null);
+  it("listInstalmentPlans returns an empty page with total 0 when there are none", async () => {
+    mockDbWhere.mockReturnValue(pagedWhere([], 0));
     const { listInstalmentPlans } = await import("../src/modules/arrears/repo.js");
     const result = await listInstalmentPlans("11111111-1111-4111-8111-111111111111", "assessee-1", { limit: 10, offset: 0 });
-    expect(result).toEqual([]);
+    expect(result).toEqual({ rows: [], total: 0 });
   });
 });
 

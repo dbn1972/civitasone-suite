@@ -1,8 +1,10 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card, StatusPill } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, StatusPill, RefreshErrorState } from "@/app/_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 import type { AssesseeRow } from "../AssesseesTable";
 import {
   AssesseeDetailTabs,
@@ -84,23 +86,41 @@ export default async function AssesseeDetailPage({ params }: { params: { id: str
     notFound();
   }
 
-  const anyError = [
-    assesseeResult.source,
-    dcbResult.source,
-    demandsResult.source,
-    billsResult.source,
-    receiptsResult.source,
-    instalmentsResult.source,
-  ].includes("error");
+  // GAP-REVENUE-ASSESSEES-DETAIL-03: per-section flags so a failed read of one
+  // section shows an error+Retry in that tab, not a reassuring "No … recorded".
+  const assesseeErrored = assesseeResult.source === "error";
+  const dcbErrored = dcbResult.source === "error";
+  const demandsErrored = demandsResult.source === "error";
+  const billsErrored = billsResult.source === "error";
+  const receiptsErrored = receiptsResult.source === "error";
+  const instalmentsErrored = instalmentsResult.source === "error";
+
+  const anyError =
+    assesseeErrored || dcbErrored || demandsErrored || billsErrored || receiptsErrored || instalmentsErrored;
+
+  // GAP-REVENUE-ASSESSEES-DETAIL-01: deep-link actions so an officer can act on
+  // this assessee without re-picking them from a capped select on another lane.
+  const q = `?assesseeId=${encodeURIComponent(params.id)}`;
+  const ledgerActions = (
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <Link href={`/revenue/bills${q}`} className="btn ghost sm">Generate bill</Link>
+      <Link href={`/revenue/receipts${q}`} className="btn ghost sm">Record receipt</Link>
+      <Link href={`/revenue/refunds${q}`} className="btn ghost sm">Raise refund</Link>
+      <Link href={`/revenue/instalments${q}`} className="btn ghost sm">Instalment plan</Link>
+      <Link href={`/revenue/adjustments${q}`} className="btn ghost sm">Adjustment</Link>
+      <Link href={`/revenue/write-offs${q}`} className="btn ghost sm">Write-off</Link>
+      <Link href={`/revenue/recovery${q}`} className="btn ghost sm">Recovery</Link>
+    </div>
+  );
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title={assessee ? assessee.ownerName : "Assessee"}
+        title={assessee ? assessee.ownerName : "Assessee unavailable"}
         subtitle={assessee ? `${assessee.identifierNo} · ${assessee.assesseeType} · Ward ${assessee.wardNo ?? "—"}` : undefined}
         back="/revenue/assessees"
         backLabel="Assessee Register"
-        actions={anyError ? <DataSourceBadge source="error" /> : null}
+        actions={assessee ? ledgerActions : anyError ? <DataSourceBadge source="error" /> : null}
       />
 
       {assessee ? (
@@ -112,9 +132,9 @@ export default async function AssesseeDetailPage({ params }: { params: { id: str
               label="Status"
               value={assessee.isActive ? "Active" : "Inactive"}
             />
-            <StatCard icon="📄" iconBg="#eff6ff" label="Demands" value={demandsResult.data.length} />
-            <StatCard icon="🧾" iconBg="#fffaeb" label="Bills" value={billsResult.data.length} />
-            <StatCard icon="🧮" iconBg="#eef2ff" label="Receipts" value={receiptsResult.data.length} />
+            <StatCard icon="📄" iconBg="#eff6ff" label="Demands" value={demandsErrored ? null : demandsResult.data.length} />
+            <StatCard icon="🧾" iconBg="#fffaeb" label="Bills" value={billsErrored ? null : billsResult.data.length} />
+            <StatCard icon="🧮" iconBg="#eef2ff" label="Receipts" value={receiptsErrored ? null : receiptsResult.data.length} />
           </StatGrid>
 
           {dcbResult.data && (
@@ -134,16 +154,21 @@ export default async function AssesseeDetailPage({ params }: { params: { id: str
           <Card title="Assessee Ledger">
             <AssesseeDetailTabs
               dcb={dcbResult.data}
+              dcbErrored={dcbErrored}
               demands={demandsResult.data}
+              demandsErrored={demandsErrored}
               bills={billsResult.data}
+              billsErrored={billsErrored}
               receipts={receiptsResult.data}
+              receiptsErrored={receiptsErrored}
               instalmentPlans={instalmentsResult.data}
+              instalmentsErrored={instalmentsErrored}
             />
           </Card>
         </>
       ) : (
-        <Card title="Assessee">
-          <DataSourceBadge source="error" />
+        <Card title="Assessee unavailable">
+          <RefreshErrorState error={toHumanError("load", { area: "this assessee" })} backHref="/revenue/assessees" />
         </Card>
       )}
     </div>

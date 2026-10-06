@@ -1,6 +1,7 @@
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "@/app/_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { toHumanError } from "@/lib/messages";
 import { AssessmentsTable, type AssessmentRow } from "./AssessmentsTable";
 import { AssessmentCreateForm } from "./AssessmentCreateForm";
 
@@ -16,6 +17,9 @@ async function getAssessments(): Promise<LoaderResult<AssessmentRow[]>> {
 
 export default async function AssessmentsPage() {
   const { data: assessments, source } = await getAssessments();
+  // GAP-REVENUE-ASSESSMENTS-04: a failed fetch defaults to [], which would show
+  // a false "0" on every stat and an "empty" table. Treat error as unknown.
+  const isError = source === "error";
 
   const activeCount = assessments.filter((a) => a.status === "active").length;
   const revisedCount = assessments.filter((a) => a.status === "revised").length;
@@ -27,21 +31,21 @@ export default async function AssessmentsPage() {
         title="Assessments"
         subtitle="Raise, revise, and remit municipal tax assessments against registered assessees."
         back="/revenue"
-        actions={source === "error" ? <DataSourceBadge source="error" /> : null}
+        actions={isError ? <DataSourceBadge source="error" /> : null}
       />
 
       <StatGrid>
-        <StatCard icon="📊" iconBg="#eff6ff" label="Total Assessments" value={assessments.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={activeCount} />
-        <StatCard icon="✏️" iconBg="#fffaeb" label="Revised" value={revisedCount} />
-        <StatCard icon="🔒" iconBg="#eef2ff" label="Closed" value={closedCount} />
+        <StatCard icon="📊" iconBg="#eff6ff" label="Total Assessments" value={isError ? null : assessments.length} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={isError ? null : activeCount} />
+        <StatCard icon="✏️" iconBg="#fffaeb" label="Revised" value={isError ? null : revisedCount} />
+        <StatCard icon="🔒" iconBg="#eef2ff" label="Closed" value={isError ? null : closedCount} />
       </StatGrid>
 
       <AssessmentCreateForm />
 
       <Card title="Assessments">
-        {source === "error" && assessments.length === 0 ? (
-          <DataSourceBadge source="error" />
+        {isError ? (
+          <RefreshErrorState error={toHumanError("load", { area: "assessments" })} backHref="/revenue" />
         ) : (
           <AssessmentsTable assessments={assessments} />
         )}

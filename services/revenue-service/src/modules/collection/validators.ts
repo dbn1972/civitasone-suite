@@ -21,6 +21,17 @@ export const refundDecideBody = z.object({
   reason: z.string().optional(),
 });
 
+/**
+ * GAP-REVENUE-REFUNDS-01: query for the refund register list — pagination plus
+ * an optional status filter (e.g. ?status=pending). Status is constrained to
+ * the real collection.refunds enum so a typo can't silently return nothing.
+ */
+export const refundListQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+  status: z.enum(["pending", "approved", "rejected", "processed"]).optional(),
+});
+
 export const createBatchReceiptBody = z.object({
   assesseeId: z.string().uuid(),
   demandIds: z.array(z.string().uuid()).min(1).max(20),

@@ -37,6 +37,31 @@ describe("AssesseesPage", () => {
     expect(screen.getByText("Ramesh Kumar")).toBeInTheDocument();
   });
 
+  it("renders the human type label, not the raw enum (ASSESSEES-02)", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: [{ ...ASSESSEE, assesseeType: "water_connection", identifierNo: "WAT-1" }],
+      source: "api",
+    });
+    const ui = await AssesseesPage();
+    render(ui);
+    expect(screen.getAllByText("Water Connection").length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText("water_connection")).not.toBeInTheDocument();
+  });
+
+  it("counts a trade/other assessee under a reconciling tile (ASSESSEES-02)", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: [
+        { ...ASSESSEE, id: "a", assesseeType: "property", identifierNo: "P1" },
+        { ...ASSESSEE, id: "b", assesseeType: "trade", identifierNo: "T1" },
+      ],
+      source: "api",
+    });
+    const ui = await AssesseesPage();
+    render(ui);
+    // Trade & Other tile exists and the trade assessee is counted there.
+    expect(screen.getByText("Trade & Other")).toBeInTheDocument();
+  });
+
   it("renders an empty state when there are no assessees", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
     const ui = await AssesseesPage();
@@ -45,12 +70,17 @@ describe("AssesseesPage", () => {
     expect(screen.getByText("No assessees registered")).toBeInTheDocument();
   });
 
-  it("shows the data-source badge instead of a friendly empty state on error", async () => {
+  it("shows a retry error state and '—' tiles instead of a false 0 on error", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
     const ui = await AssesseesPage();
     render(ui);
 
-    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
+    // GAP-REVENUE-ASSESSEES-01: no false "No assessees registered" all-clear and
+    // no "0" stat on a failed load.
     expect(screen.queryByText("No assessees registered")).not.toBeInTheDocument();
+    expect(screen.getByText("We couldn't load assessees.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    // All four stat tiles show the unknown marker, not 0.
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(4);
   });
 });

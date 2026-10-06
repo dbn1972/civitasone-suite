@@ -61,6 +61,11 @@ describe("RefundCreateForm", () => {
     await waitFor(() => {
       expect(screen.getByText(/Refund raised/)).toBeInTheDocument();
     });
+    // GAP-REVENUE-REFUNDS-04: success copy names the receipt, not a raw UUID,
+    // and does not tell the maker to decide it themselves.
+    expect(screen.getByText(/Refund raised for receipt RCPT-001/)).toBeInTheDocument();
+    expect(screen.queryByText(/id refund-1/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/lookup/i)).not.toBeInTheDocument();
     expect(refreshMock).toHaveBeenCalled();
   });
 
@@ -78,5 +83,12 @@ describe("RefundCreateForm", () => {
       expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
     expect(screen.queryByText(/API_ERROR: 500/)).not.toBeInTheDocument();
+  });
+
+  it("marks a receipt that already has a pending refund as not selectable (GAP-REVENUE-REFUNDS-02)", () => {
+    render(<RefundCreateForm assesseeId="a1" receipts={receipts} pendingRefundReceiptIds={["r1"]} />);
+    const option = screen.getByRole("option", { name: /RCPT-001/ }) as HTMLOptionElement;
+    expect(option).toBeDisabled();
+    expect(option.textContent).toMatch(/refund pending/i);
   });
 });

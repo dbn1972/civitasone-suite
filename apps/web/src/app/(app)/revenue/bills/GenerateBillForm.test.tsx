@@ -69,4 +69,13 @@ describe("GenerateBillForm", () => {
     });
     expect(screen.queryByText(/API_ERROR: 500/)).not.toBeInTheDocument();
   });
+
+  it("excludes a demand whose assessment already has an issued bill (GAP-REVENUE-BILLS-01)", () => {
+    render(<GenerateBillForm assesseeId="a1" demands={demands} billedAssessmentIds={["asmt-1"]} />);
+    // The only demand's assessment is already billed → no selectable options,
+    // and the "no outstanding demands" hint is shown instead.
+    expect(screen.queryByRole("option", { name: /FY 2025-2026/ })).not.toBeInTheDocument();
+    expect(screen.getByText("No outstanding demands for this assessee.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate Bill" })).toBeDisabled();
+  });
 });

@@ -44,6 +44,24 @@ describe("RefundDecideForm", () => {
     expect(screen.queryByText("Approve this refund?")).not.toBeInTheDocument();
   });
 
+  it("disables decide and explains when the current user is the maker (GAP-REVENUE-REFUNDS-DETAIL-DECIDE-01)", () => {
+    render(<RefundDecideForm refundId={REFUND_ID} refund={REFUND} currentUserId="maker-1" />);
+    expect(screen.getByRole("button", { name: `Approve refund ${REFUND_ID.slice(0, 8)}` })).toBeDisabled();
+    expect(screen.getByRole("button", { name: `Reject refund ${REFUND_ID.slice(0, 8)}` })).toBeDisabled();
+    expect(screen.getByText(/You raised this refund/)).toBeInTheDocument();
+  });
+
+  it("keeps decide enabled for a different checker (GAP-REVENUE-REFUNDS-DETAIL-DECIDE-01)", () => {
+    render(<RefundDecideForm refundId={REFUND_ID} refund={REFUND} currentUserId="checker-9" />);
+    expect(screen.getByRole("button", { name: `Approve refund ${REFUND_ID.slice(0, 8)}` })).toBeEnabled();
+  });
+
+  it("disables decide and shows the outcome for an already-decided refund (GAP-REVENUE-REFUNDS-DETAIL-DECIDE-02)", () => {
+    render(<RefundDecideForm refundId={REFUND_ID} refund={{ ...REFUND, status: "approved" }} currentUserId="checker-9" />);
+    expect(screen.getByRole("button", { name: `Approve refund ${REFUND_ID.slice(0, 8)}` })).toBeDisabled();
+    expect(screen.getByText(/Already decided/)).toBeInTheDocument();
+  });
+
   it("shows the amount and reason in the confirm dialog so the checker never decides blind", async () => {
     render(<RefundDecideForm refundId={REFUND_ID} refund={REFUND} />);
     fireEvent.click(screen.getByRole("button", { name: `Approve refund ${REFUND_ID.slice(0, 8)}` }));

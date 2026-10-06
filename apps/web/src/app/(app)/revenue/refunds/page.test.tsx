@@ -66,23 +66,68 @@ describe("RefundsPage", () => {
     // Receipts fetch fails (e.g. 403) — the stat must show "—", never a fabricated "0".
     fetchJsonMock.mockImplementation((path: string) => {
       if (path.includes("/receipts")) return Promise.resolve({ data: [], source: "error" });
+      if (path.includes("/refunds?status=pending")) return Promise.resolve({ data: [], source: "api" });
       return Promise.resolve({ data: [ASSESSEE], source: "api" });
     });
     const ui = await RefundsPage({ searchParams: { assesseeId: ASSESSEE.id } });
     render(ui);
 
     expect(screen.getByText("Receipts on record")).toBeInTheDocument();
-    expect(screen.getByText("—")).toBeInTheDocument();
-    expect(screen.queryByText("0")).not.toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(1);
     // The create form must not render either — never let a checker/clerk act on an unknown receipt set.
     expect(screen.queryByRole("heading", { name: "Raise Refund" })).not.toBeInTheDocument();
   });
 
-  it("documents the missing list endpoint instead of fabricating a refund register", async () => {
-    fetchJsonMock.mockResolvedValue({ data: [ASSESSEE], source: "api" });
+  it("lists refunds pending approval with a decide link (GAP-REVENUE-REFUNDS-01)", async () => {
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("/refunds?status=pending")) {
+        return Promise.resolve({
+          data: [
+            {
+              id: "rf-1",
+              receiptId: RECEIPT.id,
+              assesseeId: ASSESSEE.id,
+              amountMinor: "500050",
+              reason: "Duplicate payment",
+              status: "pending",
+              createdAt: "2026-07-02T00:00:00.000Z",
+            },
+          ],
+          source: "api",
+        });
+      }
+      return Promise.resolve({ data: [ASSESSEE], source: "api" });
+    });
+
     const ui = await RefundsPage({ searchParams: {} });
     render(ui);
 
-    expect(screen.getByText(/does not yet expose a list endpoint for refunds/)).toBeInTheDocument();
+    expect(screen.getByText("Pending approval")).toBeInTheDocument();
+    expect(screen.getByText("Duplicate payment")).toBeInTheDocument();
+    // A row link to the decide page must exist (checker can act without a UUID).
+    const links = screen.getAllByRole("link");
+    expect(links.some((l) => l.getAttribute("href") === "/revenue/refunds/rf-1/decide")).toBe(true);
+  });
+
+  it("shows a retry state when the pending-refunds list fails (GAP-REVENUE-REFUNDS-01)", async () => {
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("/refunds?status=pending")) return Promise.resolve({ data: [], source: "error" });
+      return Promise.resolve({ data: [ASSESSEE], source: "api" });
+    });
+
+    const ui = await RefundsPage({ searchParams: {} });
+    render(ui);
+
+    expect(screen.getByRole("button", { name: /try again|retry/i })).toBeInTheDocument();
+  });
+
+  it("no longer leaks developer BACKEND FOLLOW-UPS text to end users (GAP-REVENUE-REFUNDS-03)", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
+    const ui = await RefundsPage({ searchParams: {} });
+    render(ui);
+
+    expect(screen.queryByText(/BACKEND FOLLOW-UPS/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/in this PR/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/does not yet expose a list endpoint/)).not.toBeInTheDocument();
   });
 });

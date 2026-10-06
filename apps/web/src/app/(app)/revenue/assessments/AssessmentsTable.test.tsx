@@ -63,7 +63,12 @@ describe("AssessmentsTable", () => {
 
     fireEvent.click(screen.getByText("Continue"));
 
-    expect(await screen.findByText("Enter a valid non-negative base value (₹).")).toBeInTheDocument();
+    // GAP-REVENUE-ASSESSMENTS-05 deliberately changed continueRevise to validate the
+    // rupees input with rupeesToMinorString (bigint paise, no float), replacing the old
+    // parseFloat check; the message is now the rupees-with-2-decimals guidance.
+    expect(
+      await screen.findByText("Enter an amount in rupees with up to 2 decimals, e.g. 850000 or 8500.50."),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText(/New Base Value/)).toHaveFocus();
   });
 

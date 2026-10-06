@@ -1,28 +1,55 @@
 import { tenantTransaction } from "@civitasone/db";
-import { cache } from "../../shared/infra.js";
 import { db } from "../../shared/db.js";
-import { receipts, refunds } from "./schema.js";
+import { receipts, refunds, adjustments } from "./schema.js";
 import { dcbEntries } from "../assessment/schema.js";
-import { eq, and, desc } from "drizzle-orm";
-import { SERVICE } from "../../topics.js";
+import { eq, and, desc, sql } from "drizzle-orm";
 
 /** Minimal read handle a caller-supplied transaction must satisfy for the
  * `Tx` siblings below (TX-001) — reused across collection repo functions
  * that need to route through an already-open outer transaction. */
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
-export async function listReceipts(tenantId: string, assesseeId: string, pagination: { limit: number; offset: number }) {
-  const rows = await cache.getOrLoad(`${SERVICE}:${tenantId}:receipts:${assesseeId}`, async () => {
-    return tenantTransaction(db, tenantId, async (tx) => {
-      const t = tx as typeof db;
-      return t
-        .select()
-        .from(receipts)
-        .where(and(eq(receipts.tenantId, tenantId), eq(receipts.assesseeId, assesseeId)))
-        .orderBy(desc(receipts.createdAt));
-    });
+/**
+ * GAP-REVENUE-ADJUSTMENTS-02: list adjustments for an assessee (newest first)
+ * so the officer can see what was moved — previously there was no list
+ * endpoint, only POST. Tenant-scoped via tenantTransaction/RLS.
+ */
+export async function listAdjustments(
+  tenantId: string,
+  assesseeId: string,
+  pagination: { limit: number; offset: number },
+) {
+  // limit/offset are pushed into SQL and `total` is a real COUNT(*) — a tenant
+  // register can be large, so never load every row to slice in memory.
+  return tenantTransaction(db, tenantId, async (tx) => {
+    const t = tx as typeof db;
+    const where = and(eq(adjustments.tenantId, tenantId), eq(adjustments.assesseeId, assesseeId));
+    const rows = await t
+      .select()
+      .from(adjustments)
+      .where(where)
+      .orderBy(desc(adjustments.createdAt))
+      .limit(pagination.limit)
+      .offset(pagination.offset);
+    const counted = await t.select({ n: sql<number>`count(*)::int` }).from(adjustments).where(where);
+    return { rows: rows ?? [], total: Number(counted[0]?.n ?? 0) };
   });
-  return rows ?? [];
+}
+
+export async function listReceipts(tenantId: string, assesseeId: string, pagination: { limit: number; offset: number }) {
+  return tenantTransaction(db, tenantId, async (tx) => {
+    const t = tx as typeof db;
+    const where = and(eq(receipts.tenantId, tenantId), eq(receipts.assesseeId, assesseeId));
+    const rows = await t
+      .select()
+      .from(receipts)
+      .where(where)
+      .orderBy(desc(receipts.createdAt))
+      .limit(pagination.limit)
+      .offset(pagination.offset);
+    const counted = await t.select({ n: sql<number>`count(*)::int` }).from(receipts).where(where);
+    return { rows: rows ?? [], total: Number(counted[0]?.n ?? 0) };
+  });
 }
 
 export async function findReceipt(tenantId: string, id: string) {
@@ -52,6 +79,35 @@ export async function findRefundById(tenantId: string, id: string) {
       .limit(1);
   });
   return rows[0] ?? null;
+}
+
+/**
+ * GAP-REVENUE-REFUNDS-01: list refunds for the tenant, newest first,
+ * optionally filtered by status (e.g. ?status=pending so a checker can find
+ * refunds awaiting approval without being handed a UUID). Tenant-scoped via
+ * tenantTransaction/RLS — a refund amount is sensitive financial data and
+ * must never cross tenants.
+ */
+export async function listRefunds(
+  tenantId: string,
+  pagination: { limit: number; offset: number },
+  status?: string,
+) {
+  return tenantTransaction(db, tenantId, async (tx) => {
+    const t = tx as typeof db;
+    const where = status
+      ? and(eq(refunds.tenantId, tenantId), eq(refunds.status, status))
+      : eq(refunds.tenantId, tenantId);
+    const rows = await t
+      .select()
+      .from(refunds)
+      .where(where)
+      .orderBy(desc(refunds.createdAt))
+      .limit(pagination.limit)
+      .offset(pagination.offset);
+    const counted = await t.select({ n: sql<number>`count(*)::int` }).from(refunds).where(where);
+    return { rows: rows ?? [], total: Number(counted[0]?.n ?? 0) };
+  });
 }
 
 /**

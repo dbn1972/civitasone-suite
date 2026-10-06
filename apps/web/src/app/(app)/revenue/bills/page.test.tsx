@@ -84,7 +84,7 @@ describe("BillsPage", () => {
     expect(screen.getByText("No bills issued")).toBeInTheDocument();
   });
 
-  it("shows the data-source badge when a loader falls back on error", async () => {
+  it("renders a retry state and hides Generate Bill when a loader fails (GAP-REVENUE-BILLS-02)", async () => {
     fetchJsonMock
       .mockResolvedValueOnce(assesseesPage)
       .mockResolvedValueOnce({ data: [], source: "error" })
@@ -93,6 +93,56 @@ describe("BillsPage", () => {
     const ui = await BillsPage({ searchParams: { assesseeId: "a1" } });
     render(ui);
 
-    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
+    // A real retry affordance replaces the stats/tables, not a silent "0".
+    expect(screen.getByRole("button", { name: /try again|retry/i })).toBeInTheDocument();
+    // Generate Bill must not render against an unknown demand list.
+    expect(screen.queryByText("Generate Bill")).not.toBeInTheDocument();
+    // The misleading all-zero stats must not appear.
+    expect(screen.queryByText("Outstanding Demands")).not.toBeInTheDocument();
+  });
+
+  it("renders '—' for a demand with a missing status (GAP-REVENUE-BILLS-03)", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce(assesseesPage)
+      .mockResolvedValueOnce({
+        data: [
+          {
+            id: "d1",
+            assessmentId: "asmt-1",
+            financialYear: "2030-2031",
+            dueDate: "2031-03-31",
+            principalMinor: "500000",
+            rebateMinor: "0",
+            penaltyMinor: "0",
+            interestMinor: "0",
+            netMinor: "500000",
+            // no status field
+          },
+        ],
+        source: "api",
+      })
+      .mockResolvedValueOnce({ data: [], source: "api" });
+
+    const ui = await BillsPage({ searchParams: { assesseeId: "a1" } });
+    render(ui);
+
+    // The raw lowercase "unknown" string must never be shown.
+    expect(screen.queryByText("unknown")).not.toBeInTheDocument();
+    expect(screen.getByText("2030-2031")).toBeInTheDocument();
+  });
+
+  it("humanizes the assessee type in the picker option (GAP-REVENUE-BILLS-04)", async () => {
+    fetchJsonMock.mockResolvedValueOnce({
+      data: [{ id: "a1", ownerName: "Sharma", identifierNo: "PT-1023", assesseeType: "residential" }],
+      source: "api" as const,
+    });
+
+    const ui = await BillsPage({ searchParams: {} });
+    render(ui);
+
+    const option = screen.getByRole("option", { name: /Sharma — PT-1023 \(Residential\)/ });
+    expect(option).toBeInTheDocument();
+    // The raw lowercase enum must not be shown.
+    expect(screen.queryByRole("option", { name: /\(residential\)/ })).not.toBeInTheDocument();
   });
 });

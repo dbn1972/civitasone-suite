@@ -18,9 +18,15 @@ const mockMarkProcessed = vi.fn().mockResolvedValue(true);
 const mockEnqueue = vi.fn().mockResolvedValue(undefined);
 const mockCacheInvalidate = vi.fn().mockResolvedValue(undefined);
 
+// select().from().where() → resolves to the existing-slabs list for the
+// overlap check (GAP-REVENUE-CONFIG-01). Default empty: no overlap.
+const mockSlabSelectWhere = vi.fn().mockResolvedValue([]);
+const mockSlabSelectFrom = vi.fn().mockReturnValue({ where: mockSlabSelectWhere });
+const mockTxSelect = vi.fn().mockReturnValue({ from: mockSlabSelectFrom });
+
 vi.mock("../src/shared/db.js", () => ({
   db: {
-    transaction: vi.fn(async (fn: any) => fn({ insert: mockInsert, select: vi.fn(), update: vi.fn() })),
+    transaction: vi.fn(async (fn: any) => fn({ insert: mockInsert, select: mockTxSelect, update: vi.fn() })),
   },
 }));
 
@@ -148,6 +154,26 @@ describe("Rate Engine Consumer", () => {
 
       expect(mockInsert).not.toHaveBeenCalled();
       expect(mockEnqueue).not.toHaveBeenCalled();
+    });
+
+    it("rejects a slab that overlaps an existing active slab for the head (GAP-REVENUE-CONFIG-01)", async () => {
+      // An existing active flat slab for rh-1 effective 2024-04-01 (open-ended).
+      mockSlabSelectWhere.mockResolvedValueOnce([
+        {
+          slabType: "flat",
+          bandFrom: null,
+          bandTo: null,
+          effectiveFrom: "2024-04-01",
+          effectiveTo: null,
+          isActive: true,
+        },
+      ]);
+      const msg = buildMsg({
+        payload: { rateHeadId: "rh-1", slabType: "flat", rateValue: 120000n, effectiveFrom: "2024-06-01" },
+      });
+
+      await expect(handlers["revenue.rate_slab.create"]!(msg)).rejects.toThrow(/overlap/i);
+      expect(mockInsert).not.toHaveBeenCalled();
     });
   });
 

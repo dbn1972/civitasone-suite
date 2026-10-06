@@ -28,6 +28,11 @@ export type DefaulterRow = {
   rank: number;
   assesseeId: string;
   outstandingMinor: string;
+  // GAP-REVENUE-ANALYTICS-01: a collections officer must see who to act on, not
+  // a raw UUID. Enriched by the revenue-service defaulters endpoint; fall back
+  // to a short id when absent.
+  ownerName: string;
+  identifierNo: string;
 } & Record<string, unknown>;
 
 export type ForecastProjection = {

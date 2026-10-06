@@ -42,6 +42,11 @@ export const writeOffs = arrearsSchema.table("write_offs", {
   id:             uuid("id").primaryKey().defaultRandom(),
   tenantId:       uuid("tenant_id").notNull(),
   assesseeId:     uuid("assessee_id").notNull(),
+  // GAP-REVENUE-WRITE-OFFS-03: optional reference to the specific demand (and
+  // its financial year) the write-off reduces, so the audit/decide trail can
+  // say which year was written off. Nullable — pre-existing rows have none.
+  demandId:       uuid("demand_id"),
+  financialYear:  varchar("financial_year", { length: 16 }),
   amountMinor:    bigint("amount_minor", { mode: "bigint" }).notNull(),
   reason:         text("reason").notNull(),
   status:         varchar("status", { length: 16 }).notNull().default("pending"), // pending, approved, rejected

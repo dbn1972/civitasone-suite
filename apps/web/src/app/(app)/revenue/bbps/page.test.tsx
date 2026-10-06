@@ -7,6 +7,6 @@ describe("BbpsPage", () => {
     render(<BbpsPage />);
     expect(screen.getByText("BBPS Bill Fetch & Pay")).toBeInTheDocument();
     expect(screen.getByRole("form", { name: "Fetch BBPS bill" })).toBeInTheDocument();
-    expect(screen.getByRole("form", { name: "Pay BBPS bill" })).toBeInTheDocument();
+    expect(screen.getByRole("form", { name: "Record BBPS payment" })).toBeInTheDocument();
   });
 });

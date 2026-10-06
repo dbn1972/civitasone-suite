@@ -1,7 +1,8 @@
 import { Button, PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { RefreshErrorState } from "@/app/_components/ds/RefreshErrorState";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, humanizeStatus } from "@/lib/formatters";
 import { GenerateBillForm } from "./GenerateBillForm";
 
 export type AssesseeOption = {
@@ -21,7 +22,7 @@ export type DemandRow = {
   penaltyMinor: string;
   interestMinor: string;
   netMinor: string;
-  status: string;
+  status: string | null;
 } & Record<string, unknown>;
 
 export type BillRow = {
@@ -30,7 +31,9 @@ export type BillRow = {
   billDate: string;
   dueDate: string;
   totalMinor: string;
-  status: string;
+  status: string | null;
+  assessmentId?: string | null;
+  demandId?: string | null;
 } & Record<string, unknown>;
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -85,7 +88,10 @@ function mapDemands(payload: unknown): DemandRow[] | null {
       penaltyMinor: String(raw.penaltyMinor ?? 0),
       interestMinor: String(raw.interestMinor ?? 0),
       netMinor: String(raw.netMinor ?? 0),
-      status: typeof raw.status === "string" ? raw.status : "unknown",
+      // A missing status is MISSING data, not the literal string "unknown":
+      // the table's status cell renders null as "—" rather than a raw
+      // lowercase "unknown" pill (GAP-REVENUE-BILLS-03).
+      status: typeof raw.status === "string" ? raw.status : null,
     });
   }
   return mapped;
@@ -106,7 +112,9 @@ function mapBills(payload: unknown): BillRow[] | null {
       billDate: typeof raw.billDate === "string" ? raw.billDate : "",
       dueDate: typeof raw.dueDate === "string" ? raw.dueDate : "",
       totalMinor: String(raw.totalMinor ?? 0),
-      status: typeof raw.status === "string" ? raw.status : "unknown",
+      status: typeof raw.status === "string" ? raw.status : null,
+      assessmentId: typeof raw.assessmentId === "string" ? raw.assessmentId : null,
+      demandId: typeof raw.demandId === "string" ? raw.demandId : null,
     });
   }
   return mapped;
@@ -227,7 +235,7 @@ export default async function BillsPage({
               <option value="">Select an assessee…</option>
               {assessees.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.ownerName} — {a.identifierNo} ({a.assesseeType})
+                  {a.ownerName} — {a.identifierNo} ({humanizeStatus(a.assesseeType)})
                 </option>
               ))}
             </select>
@@ -246,15 +254,45 @@ export default async function BillsPage({
             message="Select an assessee above to view raised demands and issued bills."
           />
         </Card>
+      ) : overallSource === "error" ? (
+        <RefreshErrorState
+          error={{
+            what: "We couldn't load this assessee's demands and bills.",
+            next: "Retry in a moment. If it keeps failing, the revenue service may be unavailable.",
+            actions: ["retry", "back"],
+          }}
+          backHref="/revenue"
+        />
       ) : (
         <>
           <StatGrid>
-            <StatCard icon="📋" iconBg="#e6f0ff" label="Demands" value={demands.length} />
-            <StatCard icon="⏳" iconBg="#fff2e6" label="Outstanding Demands" value={outstandingDemands} />
-            <StatCard icon="🧾" iconBg="#e6f7f0" label="Bills Issued" value={bills.length} />
+            <StatCard
+              icon="📋"
+              iconBg="#e6f0ff"
+              label="Demands"
+              value={demandsResult.source === "error" ? null : demands.length}
+            />
+            <StatCard
+              icon="⏳"
+              iconBg="#fff2e6"
+              label="Outstanding Demands"
+              value={demandsResult.source === "error" ? null : outstandingDemands}
+            />
+            <StatCard
+              icon="🧾"
+              iconBg="#e6f7f0"
+              label="Bills Issued"
+              value={billsResult.source === "error" ? null : bills.length}
+            />
           </StatGrid>
 
-          <GenerateBillForm assesseeId={assesseeId} demands={demands} />
+          <GenerateBillForm
+            assesseeId={assesseeId}
+            demands={demands}
+            billedAssessmentIds={bills
+              .map((b) => b.assessmentId)
+              .filter((x): x is string => typeof x === "string" && x.length > 0)}
+          />
 
           <Card title="Demands">
             {demandsResult.source === "error" && demands.length === 0 ? (

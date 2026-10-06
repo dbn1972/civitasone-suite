@@ -61,7 +61,7 @@ export function RateConfigConsole({
 
       {active === "Rate Heads" && (
         <div>
-          <CreateRateHeadForm />
+          <CreateRateHeadForm categories={rateHeads.map((rh) => rh.category)} />
           {rateHeads.length === 0 ? (
             rateHeadsSource === "error" ? (
               <DataSourceBadge source="error" />
@@ -77,7 +77,7 @@ export function RateConfigConsole({
               columns={[
                 { key: "code", label: "Code" },
                 { key: "name", label: "Name" },
-                { key: "category", label: "Category" },
+                { key: "category", label: "Category", render: (r) => prettifyEnum(r.category) },
                 { key: "unitOfMeasure", label: "Unit of Measure", render: (r) => r.unitOfMeasure ?? "—" },
                 { key: "statusLabel", label: "Status", cellType: "status" },
               ]}
@@ -131,7 +131,7 @@ export function RateConfigConsole({
                     },
                     {
                       key: "rateValue",
-                      label: "Rate Value",
+                      label: "Rate Value (₹ / %)",
                       align: "right",
                       render: (r) => (r.slabType === "ad_valorem" ? formatBps(r.rateValue) : formatMoney(r.rateValue)),
                     },

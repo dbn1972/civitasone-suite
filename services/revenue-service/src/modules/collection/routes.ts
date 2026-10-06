@@ -9,6 +9,7 @@ import {
   createBatchReceiptBody,
   createRefundBody,
   refundDecideBody,
+  refundListQuery,
   createAdjustmentBody,
 } from "./validators.js";
 
@@ -55,6 +56,22 @@ export async function collectionRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(202).send({ data: result });
   });
 
+  // ── GET /v1/revenue/refunds ────────────────────────────────────────────────
+  // The refund register (GAP-REVENUE-REFUNDS-01): a checker must be able to
+  // find refunds awaiting approval without being handed a UUID out of band.
+  // Tenant-scoped; optional ?status=pending filter.
+
+  app.get("/v1/revenue/refunds", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, REVENUE_ROLES);
+    const q = refundListQuery.parse(req.query);
+    const { rows, total } = await repo.listRefunds(ctx.tenantId, { limit: q.limit, offset: q.offset }, q.status);
+    return reply.send({
+      data: rows,
+      meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, total },
+    });
+  });
+
   // ── GET /v1/revenue/refunds/:id ────────────────────────────────────────────
   // Tenant-scoped single-record fetch so the maker-checker decide screen can
   // show the checker the amount/receipt/reason before they approve or reject
@@ -99,10 +116,25 @@ export async function collectionRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, REVENUE_ROLES);
     const { id: assesseeId } = uuidParam.parse(req.params);
     const q = paginationQuery.parse(req.query);
-    const rows = await repo.listReceipts(ctx.tenantId, assesseeId, q);
+    const { rows, total } = await repo.listReceipts(ctx.tenantId, assesseeId, q);
     return reply.send({
-      data: rows.slice(q.offset, q.offset + q.limit),
-      meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, total: rows.length },
+      data: rows,
+      meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, total },
+    });
+  });
+
+  // ── GET /v1/revenue/assessees/:id/adjustments ─────────────────────────────
+  // GAP-REVENUE-ADJUSTMENTS-02: an adjustment register so the officer can see
+  // what balance was moved between demands (there was no list endpoint before).
+  app.get("/v1/revenue/assessees/:id/adjustments", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, REVENUE_ROLES);
+    const { id: assesseeId } = uuidParam.parse(req.params);
+    const q = paginationQuery.parse(req.query);
+    const { rows, total } = await repo.listAdjustments(ctx.tenantId, assesseeId, q);
+    return reply.send({
+      data: rows,
+      meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, total },
     });
   });
 }

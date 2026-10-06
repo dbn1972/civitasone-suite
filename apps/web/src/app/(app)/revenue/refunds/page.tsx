@@ -1,6 +1,8 @@
-import { Button, PageHeader, StatGrid, StatCard, Card, EmptyState } from "@/app/_components/ds";
+import { Button, PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { RefreshErrorState } from "@/app/_components/ds/RefreshErrorState";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { formatIndianDateTime, formatMoney } from "@/lib/formatters";
 import { RefundCreateForm } from "./RefundCreateForm";
 import { RefundLookupForm } from "./RefundLookupForm";
 
@@ -10,6 +12,16 @@ export type AssesseeOption = {
   identifierNo: string;
   assesseeType: string;
 };
+
+export type PendingRefundRow = {
+  id: string;
+  receiptId: string;
+  assesseeId: string;
+  amountMinor: string;
+  reason: string;
+  status: string | null;
+  createdAt: string;
+} & Record<string, unknown>;
 
 export type ReceiptRow = {
   id: string;
@@ -90,6 +102,34 @@ async function getReceipts(assesseeId: string): Promise<LoaderResult<ReceiptRow[
   );
 }
 
+function mapPendingRefunds(payload: unknown): PendingRefundRow[] | null {
+  const rows = arrayFromPayload(payload);
+  if (!rows) return null;
+  const mapped: PendingRefundRow[] = [];
+  for (const raw of rows) {
+    if (!isRecord(raw)) continue;
+    const id = raw.id;
+    if (typeof id !== "string") continue;
+    mapped.push({
+      id,
+      receiptId: typeof raw.receiptId === "string" ? raw.receiptId : "",
+      assesseeId: typeof raw.assesseeId === "string" ? raw.assesseeId : "",
+      amountMinor: String(raw.amountMinor ?? 0),
+      reason: typeof raw.reason === "string" ? raw.reason : "—",
+      status: typeof raw.status === "string" ? raw.status : null,
+      createdAt: typeof raw.createdAt === "string" ? raw.createdAt : "",
+    });
+  }
+  return mapped;
+}
+
+async function getPendingRefunds(): Promise<LoaderResult<PendingRefundRow[]>> {
+  return fetchJson<unknown, PendingRefundRow[]>("/api/v1/revenue/refunds?status=pending&limit=200", [], {
+    telemetryKey: "revenue.refunds.pending",
+    mapResponse: mapPendingRefunds,
+  });
+}
+
 export default async function RefundsPage({
   searchParams,
 }: {
@@ -104,6 +144,15 @@ export default async function RefundsPage({
     : ({ data: [] as ReceiptRow[], source: "api" as const });
 
   const receipts = receiptsResult.data;
+
+  const pendingResult = await getPendingRefunds();
+  const pendingRefunds = pendingResult.data;
+  const pendingRows = pendingRefunds.map((r) => ({
+    ...r,
+    createdAtDisplay: formatIndianDateTime(r.createdAt),
+    amountDisplay: formatMoney(r.amountMinor),
+    decidePath: `/revenue/refunds/${r.id}/decide`,
+  }));
 
   const overallSource = assesseesSource === "error" || receiptsResult.source === "error" ? "error" : "api";
 
@@ -172,17 +221,52 @@ export default async function RefundsPage({
               <DataSourceBadge source="error" />
             </Card>
           ) : (
-            <RefundCreateForm assesseeId={assesseeId} receipts={receipts} />
+            <RefundCreateForm
+              assesseeId={assesseeId}
+              receipts={receipts}
+              pendingRefundReceiptIds={pendingRefunds
+                .map((r) => r.receiptId)
+                .filter((x): x is string => typeof x === "string" && x.length > 0)}
+            />
           )}
         </>
       )}
 
-      <Card title="Refund register" padding>
+      <Card title="Pending approval" padding>
+        {pendingResult.source === "error" ? (
+          <RefreshErrorState
+            error={{
+              what: "We couldn't load refunds awaiting approval.",
+              next: "Retry in a moment. If it keeps failing, the revenue service may be unavailable.",
+              actions: ["retry", "back"],
+            }}
+            backHref="/revenue"
+          />
+        ) : (
+          <DataTable<(typeof pendingRows)[number]>
+            columns={[
+              { key: "amountDisplay", label: "Amount", align: "right" },
+              { key: "status", label: "Status", cellType: "status" },
+              { key: "reason", label: "Reason" },
+              { key: "createdAtDisplay", label: "Raised On" },
+            ]}
+            rows={pendingRows}
+            rowLinkKey="decidePath"
+            rowLinkPrefix=""
+            sortable
+            filterable
+            filterPlaceholder="Filter by reason…"
+            pageSize={15}
+            emptyIcon="↩️"
+            emptyTitle="No refunds awaiting approval"
+            emptyMessage="Refunds raised by makers appear here for a checker to approve or reject."
+          />
+        )}
+      </Card>
+
+      <Card title="Find a refund by reference" padding>
         <p style={{ margin: "0 0 12px", fontSize: 13.5, color: "var(--ink2)" }}>
-          revenue-service does not yet expose a list endpoint for refunds (only <code>POST /v1/revenue/refunds</code>{" "}
-          and <code>PATCH /v1/revenue/refunds/:id/decide</code> exist — see{" "}
-          <strong>## BACKEND FOLLOW-UPS</strong> in this PR). If you already have a refund ID from a submission
-          confirmation, decide on it below.
+          If you already have a refund reference, open it directly to decide on it.
         </p>
         <RefundLookupForm />
       </Card>

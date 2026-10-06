@@ -63,4 +63,18 @@ describe("RateConfigPage", () => {
     // Default active tab is "Rate Heads"; switch is exercised in RateConfigConsole.test.tsx.
     expect(screen.getByText("Rate Configuration")).toBeInTheDocument();
   });
+
+  it("renders a retry state (not an empty 'create first rate head') when rate heads fail to load (GAP-REVENUE-CONFIG-03)", async () => {
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("/rate-heads")) return Promise.resolve({ data: [], source: "error" });
+      return Promise.resolve({ data: [], source: "api" });
+    });
+
+    const ui = await RateConfigPage({ searchParams: {} });
+    render(ui);
+
+    expect(screen.getByRole("button", { name: /try again|retry/i })).toBeInTheDocument();
+    // The misleading "create the first rate head" prompt must not show on failure.
+    expect(screen.queryByText("No rate heads configured")).not.toBeInTheDocument();
+  });
 });

@@ -44,12 +44,15 @@ describe("AssessmentsPage", () => {
     expect(screen.getByText("No assessments yet")).toBeInTheDocument();
   });
 
-  it("shows the data-source badge instead of a friendly empty state on error", async () => {
+  it("shows a retry error state and '—' tiles instead of a false 0 on error", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
     const ui = await AssessmentsPage();
     render(ui);
 
-    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
+    // GAP-REVENUE-ASSESSMENTS-04
     expect(screen.queryByText("No assessments yet")).not.toBeInTheDocument();
+    expect(screen.getByText("We couldn't load assessments.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(4);
   });
 });

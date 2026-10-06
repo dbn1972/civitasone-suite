@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Button, DataTable, ConfirmDialog } from "@/app/_components/ds";
 import { formatMoney } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+import { rupeesToMinorString } from "@/lib/money";
 
 export type AssessmentRow = {
   id: string;
@@ -17,12 +18,6 @@ export type AssessmentRow = {
   version: number;
   createdAt: string;
 } & Record<string, unknown>;
-
-function rupeesToPaiseString(val: string): string {
-  const n = parseFloat(val);
-  if (!Number.isFinite(n) || n < 0) return "0";
-  return Math.round(n * 100).toString();
-}
 
 /**
  * Plain-language failure message for a failed assessment action (revise,
@@ -228,8 +223,8 @@ export function AssessmentsTable({ assessments }: { assessments: AssessmentRow[]
   }
 
   function continueRevise() {
-    if (!newBaseValue.trim() || Number.isNaN(parseFloat(newBaseValue)) || parseFloat(newBaseValue) < 0) {
-      setReviseFieldError("Enter a valid non-negative base value (₹).");
+    if (rupeesToMinorString(newBaseValue) === null) {
+      setReviseFieldError("Enter an amount in rupees with up to 2 decimals, e.g. 850000 or 8500.50.");
       return;
     }
     setReviseFieldError(undefined);
@@ -239,13 +234,19 @@ export function AssessmentsTable({ assessments }: { assessments: AssessmentRow[]
 
   async function submitRevise(reason?: string) {
     if (!revisingRow) return;
+    const newBaseValueMinor = rupeesToMinorString(newBaseValue);
+    if (newBaseValueMinor === null) {
+      setReviseConfirmOpen(false);
+      setReviseFieldError("Enter an amount in rupees with up to 2 decimals, e.g. 850000 or 8500.50.");
+      return;
+    }
     setBusy(true);
     setDialogError(undefined);
     try {
       await patchJson(`v1/revenue/assessments/${revisingRow.id}/revise`, {
         version: revisingRow.version,
         reason: (reason ?? "").trim(),
-        newBaseValue: rupeesToPaiseString(newBaseValue),
+        newBaseValue: newBaseValueMinor,
       });
       setReviseConfirmOpen(false);
       setRevisingRow(null);

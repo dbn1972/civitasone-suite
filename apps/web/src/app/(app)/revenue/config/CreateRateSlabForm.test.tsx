@@ -61,4 +61,17 @@ describe("CreateRateSlabForm", () => {
     });
     expect(screen.queryByText(/API_ERROR: 400/)).not.toBeInTheDocument();
   });
+
+  it("rejects a band whose Band To is not greater than Band From (GAP-REVENUE-CONFIG-04)", () => {
+    render(<CreateRateSlabForm rateHeadId="rh1" rateHeadLabel="PT — Property Tax" />);
+    fireEvent.change(screen.getByLabelText(/^Slab Type/), { target: { value: "band" } });
+    fireEvent.change(screen.getByLabelText(/^Band From/), { target: { value: "200" } });
+    fireEvent.change(screen.getByLabelText(/^Band To/), { target: { value: "100" } });
+    fireEvent.change(screen.getByLabelText(/^Rate \(₹\)/), { target: { value: "50" } });
+    fireEvent.change(screen.getByLabelText(/^Effective From/), { target: { value: "2026-04-01" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create Rate Slab" }));
+
+    expect(screen.getByText(/Band To \(₹\) must be greater than Band From/)).toBeInTheDocument();
+    expect(screen.queryByText("Create this rate slab?")).not.toBeInTheDocument();
+  });
 });

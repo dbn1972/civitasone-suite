@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { DataTable, Tabs, EmptyState } from "@/app/_components/ds";
-import { DataSourceBadge, type DataSource } from "@/app/_components/DataSourceBadge";
-import { formatBps } from "@/lib/formatters";
+import { DataTable, Tabs, EmptyState, RefreshErrorState } from "@/app/_components/ds";
+import type { DataSource } from "@/app/_components/DataSourceBadge";
+import { formatBps, formatRevenuePeriod } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 import { ForecastPanel } from "./ForecastPanel";
 import type { TrendRow, AgingBuckets, AgingBucketRow, DefaulterRow } from "./types";
 
@@ -49,8 +50,9 @@ export function AnalyticsConsole({
 
       {active === "Trends & Efficiency" && (
         <>
-          {trendsSource === "error" && <DataSourceBadge source="error" />}
-          {trendRows.length === 0 ? (
+          {trendsSource === "error" ? (
+            <RefreshErrorState error={toHumanError("load", { area: "trend data" })} backHref="/revenue" />
+          ) : trendRows.length === 0 ? (
             <EmptyState
               icon="📈"
               title="No trend data"
@@ -59,7 +61,7 @@ export function AnalyticsConsole({
           ) : (
             <DataTable<(typeof trendRows)[number]>
               columns={[
-                { key: "period", label: "Period" },
+                { key: "period", label: "Period", render: (r) => formatRevenuePeriod(r.period, granularity) },
                 { key: "demandMinor", label: "Demand", align: "right", cellType: "amount" },
                 { key: "collectionMinor", label: "Collection", align: "right", cellType: "amount" },
                 { key: "efficiencyDisplay", label: "Efficiency", align: "right" },
@@ -74,8 +76,9 @@ export function AnalyticsConsole({
 
       {active === "Arrears Aging" && (
         <>
-          {agingSource === "error" && <DataSourceBadge source="error" />}
-          {buckets.length === 0 ? (
+          {agingSource === "error" ? (
+            <RefreshErrorState error={toHumanError("load", { area: "arrears aging data" })} backHref="/revenue" />
+          ) : buckets.length === 0 ? (
             <EmptyState icon="⏳" title="No arrears aging data" message="No outstanding demand balances were found." />
           ) : (
             <DataTable<AgingBucketRow>
@@ -91,20 +94,25 @@ export function AnalyticsConsole({
 
       {active === "Top Defaulters" && (
         <>
-          {defaultersSource === "error" && <DataSourceBadge source="error" />}
-          {defaulters.length === 0 ? (
+          {defaultersSource === "error" ? (
+            <RefreshErrorState error={toHumanError("load", { area: "top defaulters" })} backHref="/revenue" />
+          ) : defaulters.length === 0 ? (
             <EmptyState icon="🚩" title="No defaulters" message="No assessees have an outstanding balance." />
           ) : (
             <DataTable<DefaulterRow>
               columns={[
+                { key: "ownerName", label: "Owner" },
                 { key: "rank", label: "Rank", align: "right" },
-                { key: "assesseeId", label: "Assessee ID" },
+                { key: "identifierNo", label: "Identifier No" },
                 { key: "outstandingMinor", label: "Outstanding", align: "right", cellType: "amount" },
               ]}
               rows={defaulters}
               sortable
               filterable
-              filterPlaceholder="Filter by assessee ID…"
+              filterPlaceholder="Filter by owner or identifier…"
+              rowLinkKey="assesseeId"
+              rowLinkPrefix="/revenue/assessees/"
+              identifyingColumnKey="ownerName"
               pageSize={15}
             />
           )}

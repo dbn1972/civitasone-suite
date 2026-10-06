@@ -76,10 +76,15 @@ function mapDefaulters(payload: unknown): DefaulterRow[] | null {
     if (!isRecord(raw)) continue;
     const assesseeId = raw.assesseeId;
     if (typeof assesseeId !== "string") continue;
+    const shortId = `${assesseeId.slice(0, 8)}…`;
+    const ownerName = typeof raw.ownerName === "string" && raw.ownerName.trim() ? raw.ownerName : shortId;
+    const identifierNo = typeof raw.identifierNo === "string" && raw.identifierNo.trim() ? raw.identifierNo : "—";
     mapped.push({
       rank: typeof raw.rank === "number" ? raw.rank : Number(raw.rank ?? 0),
       assesseeId,
       outstandingMinor: String(raw.outstandingMinor ?? 0),
+      ownerName,
+      identifierNo,
     });
   }
   return mapped;
@@ -115,6 +120,38 @@ async function getDefaulters(): Promise<LoaderResult<DefaulterRow[]>> {
   });
 }
 
+type AssesseeLite = { id: string; ownerName: string; identifierNo: string };
+
+// GAP-REVENUE-ANALYTICS-01: the defaulters endpoint returns opaque assessee ids
+// only; a collections officer needs the owner + identifier to act. We resolve
+// those web-side from the assessees list rather than joining across the
+// analytics and assessee module schemas server-side (CLAUDE.md §4 forbids
+// cross-module joins). This is best-effort enrichment: if the lookup fails the
+// defaulter rows keep their short-id fallback and the error does not mask the
+// defaulters tab.
+async function getAssesseeMap(): Promise<Map<string, AssesseeLite>> {
+  const { data } = await fetchJson<unknown, AssesseeLite[]>("/api/v1/revenue/assessees?limit=200", [], {
+    telemetryKey: "revenue.analytics.defaulters.assessees",
+    mapResponse: (p) => {
+      const arr = Array.isArray(p) ? p : (p as { data?: unknown[] })?.data;
+      if (!Array.isArray(arr)) return null;
+      const out: AssesseeLite[] = [];
+      for (const raw of arr) {
+        if (typeof raw !== "object" || raw === null) continue;
+        const r = raw as Record<string, unknown>;
+        if (typeof r.id !== "string") continue;
+        out.push({
+          id: r.id,
+          ownerName: typeof r.ownerName === "string" ? r.ownerName : "",
+          identifierNo: typeof r.identifierNo === "string" ? r.identifierNo : "",
+        });
+      }
+      return out;
+    },
+  });
+  return new Map(data.map((a) => [a.id, a]));
+}
+
 export default async function RevenueAnalyticsPage({
   searchParams,
 }: {
@@ -126,8 +163,27 @@ export default async function RevenueAnalyticsPage({
     { data: trends, source: trendsSource },
     { data: efficiency, source: efficiencySource },
     { data: aging, source: agingSource },
-    { data: defaulters, source: defaultersSource },
-  ] = await Promise.all([getTrends(granularity), getEfficiency(granularity), getAging(), getDefaulters()]);
+    { data: defaultersRaw, source: defaultersSource },
+    assesseeMap,
+  ] = await Promise.all([
+    getTrends(granularity),
+    getEfficiency(granularity),
+    getAging(),
+    getDefaulters(),
+    getAssesseeMap(),
+  ]);
+
+  // Enrich each defaulter with owner/identifier when we could resolve them;
+  // otherwise keep the short-id fallback already set by mapDefaulters.
+  const defaulters: DefaulterRow[] = defaultersRaw.map((d) => {
+    const a = assesseeMap.get(d.assesseeId);
+    if (!a) return d;
+    return {
+      ...d,
+      ownerName: a.ownerName.trim() ? a.ownerName : d.ownerName,
+      identifierNo: a.identifierNo.trim() ? a.identifierNo : d.identifierNo,
+    };
+  });
 
   const source =
     trendsSource === "error" || efficiencySource === "error" || agingSource === "error" || defaultersSource === "error"
@@ -142,7 +198,16 @@ export default async function RevenueAnalyticsPage({
   const totalCollection =
     efficiencySource === "error" ? null : (efficiency?.totalCollectionMinor ?? "0");
   const overallEfficiencyBps = efficiencySource === "error" ? null : (efficiency?.efficiencyBps ?? 0);
-  const topDefaulterOutstanding = defaulters[0]?.outstandingMinor;
+  // GAP-REVENUE-ANALYTICS-03: pick the largest outstanding rather than trusting
+  // index 0 (the API order is not a guaranteed sort), and tell a failed read
+  // apart from a genuinely empty list — the old code showed "—" for both.
+  const topDefaulterOutstanding =
+    defaultersSource === "error"
+      ? null
+      : defaulters.reduce<bigint | null>((max, d) => {
+          const v = BigInt(d.outstandingMinor);
+          return max === null || v > max ? v : max;
+        }, null);
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -166,7 +231,11 @@ export default async function RevenueAnalyticsPage({
           icon="⚠️"
           iconBg="#fef3f2"
           label="Top Defaulter Outstanding"
-          value={topDefaulterOutstanding ? formatMoney(topDefaulterOutstanding) : "—"}
+          value={
+            defaultersSource === "error"
+              ? "—"
+              : formatMoney(String(topDefaulterOutstanding ?? 0n))
+          }
         />
       </StatGrid>
       {efficiencySource === "error" && <DataSourceBadge source="error" />}

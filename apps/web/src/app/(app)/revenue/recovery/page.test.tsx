@@ -39,19 +39,51 @@ describe("RecoveryPage", () => {
     expect(screen.getByRole("heading", { name: "Refer for Recovery" })).toBeInTheDocument();
   });
 
-  it("shows the data-source badge instead of fabricating data on error", async () => {
-    fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
+  it("renders the recovery register from the list endpoint (GAP-REVENUE-RECOVERY-02)", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce({ data: [ASSESSEE], source: "api" }) // assessees
+      .mockResolvedValueOnce({
+        data: [
+          {
+            id: "ref-1",
+            assesseeId: ASSESSEE.id,
+            reason: "Persistent non-payment",
+            status: "referred",
+            referredAt: "2026-01-02T10:00:00.000Z",
+          },
+        ],
+        source: "api",
+      }); // referrals
+
     const ui = await RecoveryPage({ searchParams: {} });
     render(ui);
 
-    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
+    // Assessee name (not the UUID) and the reason are shown in the register.
+    expect(screen.getByText("Ravi Kumar")).toBeInTheDocument();
+    expect(screen.getByText("Persistent non-payment")).toBeInTheDocument();
   });
 
-  it("documents the missing list endpoint instead of fabricating a recovery register", async () => {
-    fetchJsonMock.mockResolvedValue({ data: [ASSESSEE], source: "api" });
+  it("shows a retry state when the register fails to load (GAP-REVENUE-RECOVERY-02)", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce({ data: [ASSESSEE], source: "api" }) // assessees ok
+      .mockResolvedValueOnce({ data: [], source: "error" }); // referrals error
+
     const ui = await RecoveryPage({ searchParams: {} });
     render(ui);
 
-    expect(screen.getByText(/does not yet expose a list endpoint for recovery referrals/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /try again|retry/i })).toBeInTheDocument();
+  });
+
+  it("no longer leaks developer BACKEND FOLLOW-UPS text to end users (GAP-REVENUE-RECOVERY-04)", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce({ data: [ASSESSEE], source: "api" })
+      .mockResolvedValueOnce({ data: [], source: "api" });
+
+    const ui = await RecoveryPage({ searchParams: {} });
+    render(ui);
+
+    expect(screen.queryByText(/BACKEND FOLLOW-UPS/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/in this PR/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/does not yet expose a list endpoint/)).not.toBeInTheDocument();
   });
 });

@@ -10,8 +10,8 @@ import { AdjustmentCreateForm } from "./AdjustmentCreateForm";
 import type { DemandOption } from "./page";
 
 const demands: DemandOption[] = [
-  { id: "d1", financialYear: "2025-2026", netMinor: "500000", status: "raised" },
-  { id: "d2", financialYear: "2026-2027", netMinor: "600000", status: "raised" },
+  { id: "d1", financialYear: "2025-2026", netMinor: "500000", principalMinor: "480000", rebateMinor: "0", penaltyMinor: "15000", interestMinor: "5000", status: "raised" },
+  { id: "d2", financialYear: "2026-2027", netMinor: "600000", principalMinor: "600000", rebateMinor: "0", penaltyMinor: "0", interestMinor: "0", status: "raised" },
 ];
 
 function fillValidForm() {
@@ -49,16 +49,29 @@ describe("AdjustmentCreateForm", () => {
     expect(screen.getByText("Destination demand must differ from the source demand.")).toBeInTheDocument();
   });
 
-  it("rejects an amount greater than the source demand's outstanding balance", () => {
+  it("rejects an amount greater than the source demand's net demand and names the real basis", () => {
     render(<AdjustmentCreateForm assesseeId="a1" demands={demands} />);
     fireEvent.change(screen.getByLabelText(/^From Demand/), { target: { value: "d1" } }); // netMinor 500000 = ₹5,000.00
     fireEvent.change(screen.getByLabelText(/^To Demand/), { target: { value: "d2" } });
     fireEvent.change(screen.getByLabelText(/^Amount/), { target: { value: "6000.00" } }); // ₹6,000.00 > ₹5,000.00
     fireEvent.change(screen.getByLabelText(/^Reason/), { target: { value: "test" } });
     fireEvent.click(screen.getByRole("button", { name: "Raise Adjustment" }));
+    // GAP-REVENUE-ADJUSTMENTS-03: wording names "net demand", not the misleading
+    // "outstanding balance".
     expect(
-      screen.getByText("Amount cannot exceed the source demand's outstanding balance of ₹5,000.00."),
+      screen.getByText("Amount cannot exceed the source demand's net demand of ₹5,000.00."),
     ).toBeInTheDocument();
+  });
+
+  it("shows the source demand component breakdown when a from-demand is picked (ADJUSTMENTS-03)", () => {
+    render(<AdjustmentCreateForm assesseeId="a1" demands={demands} />);
+    fireEvent.change(screen.getByLabelText(/^From Demand/), { target: { value: "d1" } });
+    const breakdown = screen.getByLabelText("Source demand breakdown");
+    expect(breakdown).toBeInTheDocument();
+    expect(breakdown).toHaveTextContent("Principal");
+    expect(breakdown).toHaveTextContent("Penalty");
+    expect(breakdown).toHaveTextContent("Interest");
+    expect(breakdown).toHaveTextContent("₹4,800.00"); // principal
   });
 
   it("applies an adjustment on confirm (happy path)", async () => {
@@ -74,8 +87,10 @@ describe("AdjustmentCreateForm", () => {
     fireEvent.click(screen.getByText("Apply adjustment"));
 
     await waitFor(() => {
-      expect(screen.getByText(/Adjustment applied/)).toBeInTheDocument();
+      // GAP-REVENUE-ADJUSTMENTS-02: message names amount + both FYs, no raw UUID.
+      expect(screen.getByText("Moved ₹250.00 from FY 2025-2026 to FY 2026-2027.")).toBeInTheDocument();
     });
+    expect(screen.queryByText(/adj-1/)).not.toBeInTheDocument();
     expect(refreshMock).toHaveBeenCalled();
   });
 
