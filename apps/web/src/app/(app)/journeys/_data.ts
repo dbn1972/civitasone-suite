@@ -1,9 +1,18 @@
 /**
- * journey route-group server loaders — SCORE_LOCK F1 child pages.
- * Calls journey-service through the gateway via cookie-aware fetchJson.
+ * journey route-group server loaders.
+ *
+ * GAP-JOURNEYS-ACTIVE-01/02, ANALYTICS-01/02, BUILDER-02, TEMPLATES-02:
+ * the generic key-guessing `mapRows` is replaced with typed mappers, one per
+ * journey-service endpoint, so each list page shows columns that actually mean
+ * the same thing for every row (journey name vs raw id, a styled status, a
+ * formatted date) instead of whichever of ~10 candidate keys happened to exist.
+ *
+ * The journey-service response shape is `{ data: Row[], meta: { page, pageSize,
+ * total } }` for every list endpoint (see each module's routes.ts in
+ * services/journey-service), so the mappers read `payload.data` and the typed
+ * row views each endpoint's repo.toView() produces.
  */
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import type { ModuleRowSummary } from "@civitasone/types";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -15,77 +24,228 @@ function toText(value: unknown): string | undefined {
   return undefined;
 }
 
-function extractRows(payload: unknown): unknown[] {
+function toInt(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+/** Pull the `data` array out of the `{ data, meta }` envelope, tolerating a
+ * bare array or a service that has not been rolled out yet. */
+function extractData(payload: unknown): unknown[] {
   if (Array.isArray(payload)) return payload;
-  if (!isRecord(payload)) return [];
-  for (const key of ["data", "items", "resources", "rows", "results", "nodes", "changes", "breakers"]) {
-    if (Array.isArray(payload[key])) return payload[key] as unknown[];
-  }
-  if (isRecord(payload.data)) return [payload.data];
-  return [payload];
+  if (isRecord(payload) && Array.isArray(payload.data)) return payload.data as unknown[];
+  return [];
 }
 
-function mapRows(payload: unknown): ModuleRowSummary[] {
-  const mapped: ModuleRowSummary[] = [];
-  for (const [index, row] of extractRows(payload).entries()) {
+function extractTotal(payload: unknown, fallbackLength: number): number {
+  if (isRecord(payload) && isRecord(payload.meta)) {
+    const total = toInt(payload.meta.total);
+    if (total !== undefined) return total;
+  }
+  return fallbackLength;
+}
+
+// ── Journey definitions (GET /api/v1/journeys) ──────────────────────────────
+
+export type JourneyDefinitionRow = {
+  id: string;
+  name: string;
+  status: string;
+  stepCount: number;
+  updatedAt: string | null;
+}
+
+function mapJourneys(payload: unknown): JourneyDefinitionRow[] {
+  const out: JourneyDefinitionRow[] = [];
+  for (const row of extractData(payload)) {
     if (!isRecord(row)) continue;
-    const id =
-      toText(row.id) ??
-      toText(row.key) ??
-      toText(row.code) ??
-      toText(row.name) ??
-      toText(row.agentId) ??
-      toText(row.profileId) ??
-      toText(row.accountId) ??
-      toText(row.conversationId) ??
-      `row-${index + 1}`;
-    const label =
-      toText(row.name) ??
-      toText(row.title) ??
-      toText(row.label) ??
-      toText(row.code) ??
-      toText(row.type) ??
-      toText(row.entityType) ??
-      toText(row.direction) ??
-      id;
-    const sublabel =
-      toText(row.description) ??
-      toText(row.status) ??
-      toText(row.state) ??
-      toText(row.category) ??
-      toText(row.tier) ??
-      toText(row.programName) ??
-      toText(row.agentId) ??
-      toText(row.profileId);
-    const status = toText(row.status) ?? toText(row.state) ?? toText(row.lifecycle);
-    const meta =
-      toText(row.code) ??
-      toText(row.currency) ??
-      toText(row.updatedAt) ??
-      toText(row.createdAt) ??
-      (typeof row.points === "number" ? `${row.points} pts` : undefined) ??
-      (typeof row.balance === "number" ? `bal ${row.balance}` : undefined);
-    mapped.push({
+    const id = toText(row.id);
+    if (!id) continue;
+    out.push({
       id,
-      label,
-      ...(sublabel ? { sublabel } : {}),
-      ...(status ? { status } : {}),
-      ...(meta ? { meta } : {}),
+      name: toText(row.name) ?? id,
+      status: toText(row.status) ?? "unknown",
+      stepCount: Array.isArray(row.steps) ? row.steps.length : 0,
+      updatedAt: toText(row.updatedAt) ?? null,
     });
   }
-  return mapped;
+  return out;
 }
 
-function moduleLoader(path: string, key: string) {
-  return (): Promise<LoaderResult<ModuleRowSummary[]>> =>
-    fetchJson<unknown, ModuleRowSummary[]>(path, [] as ModuleRowSummary[], {
-      revalidateSeconds: 30,
-      telemetryKey: key,
-      mapResponse: mapRows,
+// ── Executions (GET /api/v1/journeys/executions) ────────────────────────────
+
+export type JourneyExecutionRow = {
+  id: string;
+  journeyId: string | null;
+  profileId: string | null;
+  status: string;
+  currentStepIndex: number | null;
+  enrolledAt: string | null;
+  completedAt: string | null;
+}
+
+function mapExecutions(payload: unknown): JourneyExecutionRow[] {
+  const out: JourneyExecutionRow[] = [];
+  for (const row of extractData(payload)) {
+    if (!isRecord(row)) continue;
+    const id = toText(row.id);
+    if (!id) continue;
+    out.push({
+      id,
+      journeyId: toText(row.journeyId) ?? null,
+      profileId: toText(row.profileId) ?? null,
+      status: toText(row.status) ?? "unknown",
+      currentStepIndex: toInt(row.currentStepIndex) ?? null,
+      enrolledAt: toText(row.enrolledAt) ?? null,
+      completedAt: toText(row.completedAt) ?? null,
     });
+  }
+  return out;
 }
 
-export const getJourneyBuilder = moduleLoader("/api/v1/journeys", "journeys.builder");
-export const getJourneyActive = moduleLoader("/api/v1/journeys/executions", "journeys.active");
-export const getJourneyTemplates = moduleLoader("/api/v1/journeys/triggers", "journeys.templates");
-export const getJourneyAnalytics = moduleLoader("/api/v1/journeys/executions", "journeys.analytics");
+// ── Triggers / templates (GET /api/v1/journeys/triggers) ────────────────────
+
+export type JourneyTriggerRow = {
+  id: string;
+  journeyId: string | null;
+  triggerType: string;
+  status: string;
+  updatedAt: string | null;
+}
+
+function mapTriggers(payload: unknown): JourneyTriggerRow[] {
+  const out: JourneyTriggerRow[] = [];
+  for (const row of extractData(payload)) {
+    if (!isRecord(row)) continue;
+    const id = toText(row.id);
+    if (!id) continue;
+    out.push({
+      id,
+      journeyId: toText(row.journeyId) ?? null,
+      triggerType: toText(row.triggerType) ?? "unknown",
+      status: toText(row.status) ?? "unknown",
+      updatedAt: toText(row.updatedAt) ?? null,
+    });
+  }
+  return out;
+}
+
+// ── Analytics (derived from executions) ─────────────────────────────────────
+
+export interface JourneyAnalytics {
+  total: number;
+  running: number;
+  completed: number;
+  failed: number;
+  byStatus: Array<{ status: string; count: number }>;
+}
+
+const RUNNING_STATUSES = new Set(["enrolled", "in_progress", "active", "running"]);
+const COMPLETED_STATUSES = new Set(["completed", "converted"]);
+const FAILED_STATUSES = new Set(["failed", "exited", "errored", "cancelled"]);
+
+/**
+ * GAP-JOURNEYS-ANALYTICS-01: compute funnel counts client-side from the
+ * executions list (decision: no dedicated analytics endpoint exists in
+ * journey-service, so derive honest counts from the one list we have). `total`
+ * is the server-reported total so the headline count is not understated by the
+ * default page size; the per-status breakdown is over the rows actually
+ * returned and is labelled as such in the UI.
+ */
+function mapAnalytics(payload: unknown): JourneyAnalytics {
+  const rows = mapExecutions(payload);
+  const counts = new Map<string, number>();
+  let running = 0;
+  let completed = 0;
+  let failed = 0;
+  for (const r of rows) {
+    counts.set(r.status, (counts.get(r.status) ?? 0) + 1);
+    if (RUNNING_STATUSES.has(r.status)) running += 1;
+    else if (COMPLETED_STATUSES.has(r.status)) completed += 1;
+    else if (FAILED_STATUSES.has(r.status)) failed += 1;
+  }
+  return {
+    total: extractTotal(payload, rows.length),
+    running,
+    completed,
+    failed,
+    byStatus: [...counts.entries()]
+      .map(([status, count]) => ({ status, count }))
+      .sort((a, b) => b.count - a.count),
+  };
+}
+
+// ── Count-aware loaders for the hub (GAP-JOURNEYS-HOME-02) ───────────────────
+
+export interface JourneyCounts {
+  defined: number | null;
+  running: number | null;
+}
+
+function mapJourneyCount(payload: unknown): number {
+  return extractTotal(payload, mapJourneys(payload).length);
+}
+
+function mapRunningCount(payload: unknown): number {
+  const rows = mapExecutions(payload);
+  return rows.filter((r) => RUNNING_STATUSES.has(r.status)).length;
+}
+
+// ── Loaders ──────────────────────────────────────────────────────────────────
+
+export function getJourneyBuilder(): Promise<LoaderResult<JourneyDefinitionRow[]>> {
+  return fetchJson<unknown, JourneyDefinitionRow[]>("/api/v1/journeys", [], {
+    revalidateSeconds: 30,
+    telemetryKey: "journeys.builder",
+    mapResponse: mapJourneys,
+  });
+}
+
+export function getJourneyActive(): Promise<LoaderResult<JourneyExecutionRow[]>> {
+  return fetchJson<unknown, JourneyExecutionRow[]>("/api/v1/journeys/executions", [], {
+    revalidateSeconds: 30,
+    telemetryKey: "journeys.active",
+    mapResponse: mapExecutions,
+  });
+}
+
+export function getJourneyTemplates(): Promise<LoaderResult<JourneyTriggerRow[]>> {
+  return fetchJson<unknown, JourneyTriggerRow[]>("/api/v1/journeys/triggers", [], {
+    revalidateSeconds: 30,
+    telemetryKey: "journeys.templates",
+    mapResponse: mapTriggers,
+  });
+}
+
+export function getJourneyAnalytics(): Promise<LoaderResult<JourneyAnalytics>> {
+  return fetchJson<unknown, JourneyAnalytics>(
+    "/api/v1/journeys/executions",
+    { total: 0, running: 0, completed: 0, failed: 0, byStatus: [] },
+    {
+      revalidateSeconds: 30,
+      telemetryKey: "journeys.analytics",
+      mapResponse: mapAnalytics,
+    },
+  );
+}
+
+export async function getJourneyCounts(): Promise<JourneyCounts> {
+  const [defined, running] = await Promise.all([
+    fetchJson<unknown, number>("/api/v1/journeys", 0, {
+      revalidateSeconds: 30,
+      telemetryKey: "journeys.count.defined",
+      mapResponse: mapJourneyCount,
+    }),
+    fetchJson<unknown, number>("/api/v1/journeys/executions", 0, {
+      revalidateSeconds: 30,
+      telemetryKey: "journeys.count.running",
+      mapResponse: mapRunningCount,
+    }),
+  ]);
+  return {
+    defined: defined.source === "error" ? null : defined.data,
+    running: running.source === "error" ? null : running.data,
+  };
+}
+
+// Internal mappers exported for unit tests only.
+export const __test = { mapJourneys, mapExecutions, mapTriggers, mapAnalytics, mapRunningCount };
