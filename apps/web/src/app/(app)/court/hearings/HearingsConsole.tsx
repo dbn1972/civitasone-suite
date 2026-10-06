@@ -18,7 +18,7 @@ import Link from "next/link";
 import { Button, Card, ConfirmDialog, EmptyState, StatusPill } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { Hearing } from "../_data/types";
-import { fmtDate, fmtDateTime, hearingPillStatus, humanize, todayIso } from "../_data/format";
+import { fmtDate, fmtDateTime, hearingPillStatus, hearingStatusLabel, humanize, todayIso } from "../_data/format";
 import { adjournHearing, fetchCaseHearings, recordHearingOutcome, scheduleHearing } from "../_data/client";
 
 const fieldStyle: React.CSSProperties = {
@@ -112,6 +112,7 @@ export function HearingsConsole({
               <HearingRow
                 key={h.id}
                 hearing={h}
+                caseId={caseId}
                 caseLabel={caseLabel(caseSummary)}
                 onDone={async (msg) => {
                   flash(msg);
@@ -249,10 +250,12 @@ function ScheduleHearingForm({
 
 function HearingRow({
   hearing,
+  caseId,
   caseLabel,
   onDone,
 }: {
   hearing: Hearing;
+  caseId: string;
   caseLabel: string;
   onDone: (msg: string) => Promise<void> | void;
 }) {
@@ -288,7 +291,7 @@ function HearingRow({
           )}
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-          <StatusPill status={hearingPillStatus(hearing.status)} label={humanize(hearing.status)} />
+          <StatusPill status={hearingPillStatus(hearing.status)} label={hearingStatusLabel(hearing.status)} />
           {canAct && (
             <>
               <Button
@@ -315,6 +318,7 @@ function HearingRow({
       {showAdjourn && (
         <AdjournDialog
           hearing={hearing}
+          caseId={caseId}
           rowLabel={rowLabel}
           onClose={() => setShowAdjourn(false)}
           onDone={onDone}
@@ -336,21 +340,27 @@ function HearingRow({
 
 function AdjournDialog({
   hearing,
+  caseId,
   rowLabel,
   onClose,
   onDone,
 }: {
   hearing: Hearing;
+  caseId: string;
   rowLabel: string;
   onClose: () => void;
   onDone: (msg: string) => Promise<void> | void;
 }) {
   const [reason, setReason] = useState("");
   const [nextDate, setNextDate] = useState(todayIso());
+  const [alsoSchedule, setAlsoSchedule] = useState(true);
   const [reasonError, setReasonError] = useState<string | undefined>();
   const [dateError, setDateError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
   const [serverError, setServerError] = useState<string | undefined>();
+  // When the adjourn committed but the follow-up schedule failed, we must NOT
+  // re-adjourn on retry (that hearing is already adjourned) — only re-schedule.
+  const [adjournDone, setAdjournDone] = useState(false);
 
   const reasonId = useId();
   const reasonErrId = useId();
@@ -394,17 +404,44 @@ function AdjournDialog({
   async function confirm() {
     setBusy(true);
     setServerError(undefined);
+    let alreadyAdjourned = adjournDone;
     try {
-      await adjournHearing(hearing.id, {
-        reason: reason.trim(),
-        nextDate,
-        expectedVersion: hearing.version,
-      });
+      // Step 1: adjourn (guarded so a retry after a failed step 2 never
+      // double-adjourns).
+      if (!alreadyAdjourned) {
+        await adjournHearing(hearing.id, {
+          reason: reason.trim(),
+          nextDate,
+          expectedVersion: hearing.version,
+        });
+        alreadyAdjourned = true;
+        setAdjournDone(true);
+      }
+      // Step 2 (opt-in, default on): create the successor hearing on nextDate.
+      // Two non-atomic commands — if this fails we keep the dialog open with a
+      // "Schedule next hearing" retry rather than silently leaving the case
+      // with no future hearing (GAP-COURT-HEARINGS-01).
+      if (alsoSchedule) {
+        const scheduledAt = new Date(`${nextDate}T10:30:00`).toISOString();
+        await scheduleHearing(caseId, {
+          scheduledAt,
+          ...(hearing.purpose ? { purpose: hearing.purpose } : {}),
+        });
+      }
       setConfirmOpen(false);
-      await onDone("Adjournment submitted.");
+      await onDone(
+        alsoSchedule
+          ? "Adjournment submitted and the next hearing was scheduled."
+          : "Adjournment submitted.",
+      );
       onClose();
     } catch (err) {
-      setServerError(err instanceof Error ? err.message : "Could not adjourn the hearing.");
+      const msg = err instanceof Error ? err.message : "Could not adjourn the hearing.";
+      setServerError(
+        alreadyAdjourned && alsoSchedule
+          ? `Adjourned, but scheduling the next hearing failed: ${msg}`
+          : msg,
+      );
     } finally {
       setBusy(false);
     }
@@ -453,6 +490,14 @@ function AdjournDialog({
           </p>
         )}
       </div>
+      <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+        <input
+          type="checkbox"
+          checked={alsoSchedule}
+          onChange={(e) => setAlsoSchedule(e.target.checked)}
+        />
+        Also schedule the next hearing on this date
+      </label>
       <div style={{ display: "flex", gap: 8 }}>
         <Button variant="primary" size="sm" onClick={proceed}>
           Adjourn hearing
@@ -465,15 +510,22 @@ function AdjournDialog({
       <ConfirmDialog
         open={confirmOpen}
         title="Adjourn this hearing?"
-        confirmLabel="Adjourn hearing"
+        confirmLabel={adjournDone ? "Schedule next hearing" : "Adjourn hearing"}
         danger
         busy={busy}
         errorMessage={serverError}
         description={
           <>
             Adjourn the {rowLabel} to <strong>{fmtDate(nextDate)}</strong>. This is final for this
-            hearing and cannot be undone — the case will need a NEW hearing scheduled
-            separately for {fmtDate(nextDate)}; adjourning does not do that automatically.
+            hearing and cannot be undone.{" "}
+            {alsoSchedule ? (
+              <>A new hearing will be scheduled on {fmtDate(nextDate)} automatically.</>
+            ) : (
+              <>
+                No new hearing will be created — the case will need one scheduled separately for{" "}
+                {fmtDate(nextDate)}.
+              </>
+            )}
           </>
         }
         onConfirm={() => void confirm()}

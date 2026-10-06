@@ -93,7 +93,8 @@ describe("CertifiedCopiesPanel", () => {
     render(<CertifiedCopiesPanel caseId="case-1" initialCopies={[makeCopy()]} source="api" />);
     fireEvent.click(screen.getByRole("button", { name: "Record fee paid" }));
     fireEvent.change(screen.getByLabelText(/Payment reference/), { target: { value: "CHALLAN-1" } });
-    fireEvent.change(screen.getByLabelText(/Receipted amount/), { target: { value: "1500" } });
+    // CASEID-02: the field is now RUPEES; "15.00" for a 1500-paise (₹15) fee.
+    fireEvent.change(screen.getByLabelText(/Receipted amount/), { target: { value: "15.00" } });
     fireEvent.click(screen.getByRole("button", { name: "Confirm fee paid" }));
     await waitFor(() => expect(transitionCertifiedCopyMock).toHaveBeenCalledTimes(1));
     expect(transitionCertifiedCopyMock).toHaveBeenCalledWith("copy-1", expect.objectContaining({
@@ -109,7 +110,7 @@ describe("CertifiedCopiesPanel", () => {
     render(<CertifiedCopiesPanel caseId="case-1" initialCopies={[makeCopy()]} source="api" />);
     fireEvent.click(screen.getByRole("button", { name: "Record fee paid" }));
     fireEvent.change(screen.getByLabelText(/Payment reference/), { target: { value: "CHALLAN-1" } });
-    fireEvent.change(screen.getByLabelText(/Receipted amount/), { target: { value: "1000" } });
+    fireEvent.change(screen.getByLabelText(/Receipted amount/), { target: { value: "10.00" } });
     fireEvent.click(screen.getByRole("button", { name: "Confirm fee paid" }));
     await waitFor(() => expect(screen.getByText(/RECEIPT_AMOUNT_MISMATCH/)).toBeInTheDocument());
   });
@@ -159,5 +160,31 @@ describe("CertifiedCopiesPanel", () => {
   it("renders no further actions for a terminal (issued) copy", () => {
     render(<CertifiedCopiesPanel caseId="case-1" initialCopies={[makeCopy({ status: "issued" })]} source="api" />);
     expect(screen.queryByRole("button", { name: /Confirm|Record fee paid|Reject|Mark/ })).not.toBeInTheDocument();
+  });
+
+  it("CASEID-02: converts a rupees receipt to paise (150.00 for a ₹150 fee → 15000)", async () => {
+    transitionCertifiedCopyMock.mockResolvedValue(undefined);
+    render(<CertifiedCopiesPanel caseId="case-1" initialCopies={[makeCopy({ feeMinor: "15000" })]} source="api" />);
+    fireEvent.click(screen.getByRole("button", { name: "Record fee paid" }));
+    fireEvent.change(screen.getByLabelText(/Payment reference/), { target: { value: "CH-9" } });
+    fireEvent.change(screen.getByLabelText(/Receipted amount/), { target: { value: "150.00" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm fee paid" }));
+    await waitFor(() => expect(transitionCertifiedCopyMock).toHaveBeenCalledTimes(1));
+    expect(transitionCertifiedCopyMock).toHaveBeenCalledWith("copy-1", expect.objectContaining({ receiptMinor: "15000" }));
+  });
+
+  it("CASEID-02: a non-numeric receipt shows an inline error and sends nothing", async () => {
+    render(<CertifiedCopiesPanel caseId="case-1" initialCopies={[makeCopy()]} source="api" />);
+    fireEvent.click(screen.getByRole("button", { name: "Record fee paid" }));
+    fireEvent.change(screen.getByLabelText(/Payment reference/), { target: { value: "CH-9" } });
+    fireEvent.change(screen.getByLabelText(/Receipted amount/), { target: { value: "abc" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm fee paid" }));
+    expect(screen.getByRole("alert")).toHaveTextContent(/in rupees/i);
+    expect(transitionCertifiedCopyMock).not.toHaveBeenCalled();
+  });
+
+  it("CASEID-03: fee renders with Indian lakh grouping", () => {
+    render(<CertifiedCopiesPanel caseId="case-1" initialCopies={[makeCopy({ feeMinor: "15000000" })]} source="api" />);
+    expect(screen.getByText(/₹1,50,000\.00/)).toBeInTheDocument();
   });
 });

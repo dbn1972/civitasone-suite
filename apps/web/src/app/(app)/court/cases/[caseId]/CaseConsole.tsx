@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Card, EmptyState, StatusPill } from "@/app/_components/ds";
+import { Button, Card, ConfirmDialog, EmptyState, Masked, StatusPill, Tabs, TabPanel } from "@/app/_components/ds";
 import type { CaseStatus, CertifiedCopy, CourtCaseDetail, CourtOrder, Hearing } from "../../_data/types";
 import { CASE_TRANSITIONS } from "../../_data/types";
 import { CertifiedCopiesPanel } from "./CertifiedCopiesPanel";
@@ -97,6 +97,37 @@ export function CaseConsole({
     }
   }, [caseDetail.id]);
 
+  // GAP-COURT-CASES-CASEID-06: tabs instead of six stacked cards, synced to ?tab=.
+  const TABS = ["Overview", "Hearings", "Orders", "Certified copies"] as const;
+  type TabName = (typeof TABS)[number];
+  const tabFromParam = (v: string | null): TabName => {
+    const match = TABS.find((t) => t.toLowerCase().replace(/[^a-z]+/g, "-") === v);
+    return match ?? "Overview";
+  };
+  const [tab, setTab] = useState<TabName>(() =>
+    typeof window === "undefined"
+      ? "Overview"
+      : tabFromParam(new URLSearchParams(window.location.search).get("tab")),
+  );
+  const onTabChange = useCallback(
+    (next: string) => {
+      const t = next as TabName;
+      setTab(t);
+      const slug = t.toLowerCase().replace(/[^a-z]+/g, "-");
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", slug);
+      window.history.replaceState(null, "", url.toString());
+    },
+    [],
+  );
+
+  const tabLabels: Record<TabName, string> = {
+    Overview: "Overview",
+    Hearings: `Hearings (${hearings.length})`,
+    Orders: `Orders (${orders.length})`,
+    "Certified copies": `Certified copies (${initialCertifiedCopies.length})`,
+  };
+
   return (
     <>
       {toast && (
@@ -110,41 +141,64 @@ export function CaseConsole({
         </div>
       )}
 
-      <CaseSummary caseDetail={caseDetail} />
-      <LifecyclePanel
-        caseDetail={caseDetail}
-        onDone={(msg) => {
-          flash(msg);
-          router.refresh();
+      <Tabs
+        tabs={TABS.map((t) => tabLabels[t])}
+        active={tabLabels[tab]}
+        onChange={(labelled) => {
+          const name = (TABS.find((t) => tabLabels[t] === labelled) ?? "Overview") as TabName;
+          onTabChange(name);
         }}
-        onError={fail}
+        ariaLabel="Case sections"
+        idPrefix="court-case"
       />
-      <PartiesPanel caseDetail={caseDetail} />
-      <HearingsPanel
-        caseId={caseDetail.id}
-        hearings={hearings}
-        source={hearingsSource}
-        onDone={async (msg) => {
-          flash(msg);
-          await reloadHearings();
-        }}
-        onError={fail}
-      />
-      <OrdersPanel
-        caseId={caseDetail.id}
-        orders={orders}
-        source={ordersSource}
-        onDone={async (msg) => {
-          flash(msg);
-          await reloadOrders();
-        }}
-        onError={fail}
-      />
-      <CertifiedCopiesPanel
-        caseId={caseDetail.id}
-        initialCopies={initialCertifiedCopies}
-        source={certifiedCopiesSource}
-      />
+
+      <TabPanel idPrefix="court-case" active={tabLabels[tab]}>
+        {tab === "Overview" && (
+          <>
+            <CaseSummary caseDetail={caseDetail} />
+            <LifecyclePanel
+              caseDetail={caseDetail}
+              onDone={(msg) => {
+                flash(msg);
+                router.refresh();
+              }}
+              onError={fail}
+            />
+            <PartiesPanel caseDetail={caseDetail} />
+          </>
+        )}
+        {tab === "Hearings" && (
+          <HearingsPanel
+            caseId={caseDetail.id}
+            hearings={hearings}
+            source={hearingsSource}
+            onDone={async (msg) => {
+              flash(msg);
+              await reloadHearings();
+            }}
+            onError={fail}
+          />
+        )}
+        {tab === "Orders" && (
+          <OrdersPanel
+            caseId={caseDetail.id}
+            orders={orders}
+            source={ordersSource}
+            onDone={async (msg) => {
+              flash(msg);
+              await reloadOrders();
+            }}
+            onError={fail}
+          />
+        )}
+        {tab === "Certified copies" && (
+          <CertifiedCopiesPanel
+            caseId={caseDetail.id}
+            initialCopies={initialCertifiedCopies}
+            source={certifiedCopiesSource}
+          />
+        )}
+      </TabPanel>
     </>
   );
 }
@@ -209,24 +263,42 @@ function LifecyclePanel({
   const [toStatus, setToStatus] = useState<CaseStatus | "">("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
-  async function move() {
+  // GAP-COURT-CASES-CASEID-05: disposal/reserved are legally significant,
+  // reversible only via appeal — confirm them; disposed/appealed require a
+  // recorded reason. Routine moves stay single-click.
+  const needsConfirm = toStatus === "disposed" || toStatus === "reserved";
+  const needsReason = toStatus === "disposed" || toStatus === "appealed";
+
+  async function doMove(confirmReason?: string) {
     if (!toStatus) return;
     setBusy(true);
     try {
+      const effectiveReason = (confirmReason ?? reason).trim();
       await transitionCase(caseDetail.id, {
         toStatus,
         expectedVersion: caseDetail.version,
-        ...(reason.trim() ? { reason: reason.trim() } : {}),
+        ...(effectiveReason ? { reason: effectiveReason } : {}),
       });
       setReason("");
       setToStatus("");
+      setConfirming(false);
       onDone(`Case moved to “${humanize(toStatus)}”.`);
     } catch (err) {
       onError(err, "Could not move the case.");
     } finally {
       setBusy(false);
     }
+  }
+
+  function onApply() {
+    if (!toStatus) return;
+    if (needsConfirm) {
+      setConfirming(true);
+      return;
+    }
+    void doMove();
   }
 
   return (
@@ -267,12 +339,33 @@ function LifecyclePanel({
           <Button
             variant="primary"
             disabled={busy || !toStatus}
-            onClick={() => void move()}
+            onClick={onApply}
           >
             {busy ? "Moving…" : "Apply transition"}
           </Button>
         </div>
       )}
+      <ConfirmDialog
+        open={confirming}
+        danger={toStatus === "disposed"}
+        title={toStatus === "disposed" ? "Dispose this case?" : "Reserve this case?"}
+        confirmLabel={toStatus === "disposed" ? "Dispose case" : "Reserve case"}
+        requireReason={needsReason}
+        reasonLabel="Reason"
+        description={
+          <p>
+            Move <strong>{caseDetail.title || "this matter"}</strong>{" "}
+            (<span style={mono}>{caseDetail.cnrNumber || "—"}</span>) to{" "}
+            <strong>{humanize(toStatus || "")}</strong>.{" "}
+            {toStatus === "disposed"
+              ? "Disposal is a legal-record event — it can be reversed only through an appeal."
+              : "You can still move a reserved matter back to part-heard or on to disposed."}
+          </p>
+        }
+        busy={busy}
+        onConfirm={(r) => void doMove(r)}
+        onCancel={() => setConfirming(false)}
+      />
     </Card>
   );
 }
@@ -301,7 +394,17 @@ function PartiesPanel({ caseDetail }: { caseDetail: CourtCaseDetail }) {
                   <td>{humanize(p.partyRole)}</td>
                   <td>{p.name ?? "—"}</td>
                   <td>{p.advocateName ?? "—"}</td>
-                  <td style={mono}>{p.advocateBarId ?? "—"}</td>
+                  <td style={mono}>
+                    {p.advocateBarId ? (
+                      <Masked
+                        value={p.advocateBarId}
+                        kind="last4"
+                        ariaLabel={`Advocate Bar ID ending ${p.advocateBarId.slice(-4)}`}
+                      />
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -421,12 +524,13 @@ function HearingRow({
   const [busy, setBusy] = useState(false);
   const canAct = hearing.status === "scheduled";
 
-  async function doAdjourn() {
-    if (!reason.trim() || !nextDate) return;
+  async function doAdjourn(confirmReason?: string) {
+    const effectiveReason = (confirmReason ?? reason).trim();
+    if (!effectiveReason || !nextDate) return;
     setBusy(true);
     try {
       await adjournHearing(hearing.id, {
-        reason: reason.trim(),
+        reason: effectiveReason,
         nextDate,
         expectedVersion: hearing.version,
       });
@@ -494,62 +598,80 @@ function HearingRow({
         </div>
       </div>
 
-      {mode === "adjourn" && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10, alignItems: "center" }}>
-          <input
-            aria-label="Adjournment reason"
-            placeholder="Adjournment reason"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            style={{ ...fieldStyle, width: "auto", flex: "1 1 220px" }}
-          />
-          <input
-            type="date"
-            aria-label="Next date"
-            value={nextDate}
-            onChange={(e) => setNextDate(e.target.value)}
-            style={{ ...fieldStyle, width: "auto" }}
-          />
-          <Button
-            variant="primary"
-            size="sm"
-            disabled={busy || !reason.trim()}
-            onClick={() => void doAdjourn()}
-          >
-            {busy ? "…" : "Confirm adjourn"}
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setMode("none")}>
-            Cancel
-          </Button>
-        </div>
-      )}
+      {/* GAP-COURT-CASES-CASEID-01: adjourn via a danger ConfirmDialog (alertdialog,
+          focus-trapped, Esc cancels), reason mandatory — matching OrdersConsole/
+          HearingsConsole's ds ConfirmDialog UX contract instead of a bespoke inline panel. */}
+      <ConfirmDialog
+        open={mode === "adjourn"}
+        danger
+        title="Adjourn this hearing?"
+        confirmLabel="Confirm adjourn"
+        requireReason
+        reasonLabel="Adjournment reason"
+        description={
+          <>
+            <p>
+              Adjourning records a reason and a next date on{" "}
+              <strong>{fmtDateTime(hearing.scheduledDate)}</strong>. It does not itself schedule the
+              next hearing.
+            </p>
+            <div style={{ display: "grid", gap: 4, marginTop: 8 }}>
+              <label htmlFor={`${hearing.id}-nextdate`} style={{ fontSize: 12.5, fontWeight: 600 }}>
+                Next date
+              </label>
+              <input
+                id={`${hearing.id}-nextdate`}
+                type="date"
+                value={nextDate}
+                onChange={(e) => setNextDate(e.target.value)}
+                style={{ ...fieldStyle, width: "auto" }}
+              />
+            </div>
+          </>
+        }
+        busy={busy}
+        confirmDisabled={!nextDate}
+        onConfirm={(r) => {
+          setReason(r ?? "");
+          void doAdjourn(r);
+        }}
+        onCancel={() => setMode("none")}
+      />
 
-      {mode === "outcome" && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10, alignItems: "center" }}>
-          <select
-            aria-label="Outcome"
-            value={outcome}
-            onChange={(e) => setOutcome(e.target.value as "held" | "cancelled")}
-            style={{ ...fieldStyle, width: "auto" }}
-          >
-            <option value="held">Held</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-          <input
-            aria-label="Notes (optional)"
-            placeholder="Notes (optional)"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            style={{ ...fieldStyle, width: "auto", flex: "1 1 220px" }}
-          />
-          <Button variant="primary" size="sm" disabled={busy} onClick={() => void doOutcome()}>
-            {busy ? "…" : "Save outcome"}
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setMode("none")}>
-            Cancel
-          </Button>
-        </div>
-      )}
+      <ConfirmDialog
+        open={mode === "outcome"}
+        title="Record hearing outcome?"
+        confirmLabel="Confirm outcome"
+        description={
+          <>
+            <p>
+              Record the outcome of the hearing on{" "}
+              <strong>{fmtDateTime(hearing.scheduledDate)}</strong>.
+            </p>
+            <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+              <select
+                aria-label="Outcome"
+                value={outcome}
+                onChange={(e) => setOutcome(e.target.value as "held" | "cancelled")}
+                style={{ ...fieldStyle, width: "auto" }}
+              >
+                <option value="held">Held</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+              <input
+                aria-label="Notes (optional)"
+                placeholder="Notes (optional)"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                style={fieldStyle}
+              />
+            </div>
+          </>
+        }
+        busy={busy}
+        onConfirm={() => void doOutcome()}
+        onCancel={() => setMode("none")}
+      />
     </div>
   );
 }
@@ -668,8 +790,6 @@ function OrderRow({
 }) {
   const [mode, setMode] = useState<"none" | "issue" | "sendback" | "recall">("none");
   const [dsc, setDsc] = useState("");
-  const [remarks, setRemarks] = useState("");
-  const [recallReason, setRecallReason] = useState("");
   const [busy, setBusy] = useState(false);
 
   const run = useCallback(
@@ -679,8 +799,6 @@ function OrderRow({
         await fn();
         setMode("none");
         setDsc("");
-        setRemarks("");
-        setRecallReason("");
         await onDone(ok);
       } catch (err) {
         onError(err, bad);
@@ -750,109 +868,97 @@ function OrderRow({
       </div>
 
       {mode === "issue" && (
-        <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
-          <p style={{ fontSize: 12.5, color: "var(--ink2)" }}>
-            Digital Signature Certificate (DSC) — paste the detached signature blob. Issuance is a
-            human, DSC-signed act by an officer other than the drafter.
-          </p>
-          <textarea
-            aria-label="DSC signature"
-            placeholder="-----BEGIN PKCS7----- …"
-            value={dsc}
-            onChange={(e) => setDsc(e.target.value)}
-            rows={2}
-            style={{ ...fieldStyle, resize: "vertical", ...mono }}
-          />
-          <div style={{ display: "flex", gap: 8 }}>
-            <Button
-              variant="primary"
-              size="sm"
-              disabled={busy || dsc.trim().length === 0}
-              onClick={() =>
-                void run(
-                  () =>
-                    approveAndIssueOrder(order.id, {
-                      dscSignature: dsc.trim(),
-                      expectedVersion: order.version,
-                    }),
-                  "Order approved & issued.",
-                  "Could not issue the order (a self-approval is rejected — the approver must differ from the maker).",
-                )
-              }
-            >
-              {busy ? "Issuing…" : "Confirm approve & issue"}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => setMode("none")}>
-              Cancel
-            </Button>
-          </div>
-        </div>
+        <ConfirmDialog
+          open
+          danger
+          title="Approve & issue this order?"
+          confirmLabel="Confirm approve & issue"
+          description={
+            <>
+              <p style={{ fontSize: 12.5, color: "var(--ink2)" }}>
+                Issuing <strong>{humanize(order.orderType)}</strong> is a human, DSC-signed act by an
+                officer other than the drafter (the service rejects self-approval). Paste the
+                detached Digital Signature Certificate (DSC) blob below.
+              </p>
+              <textarea
+                aria-label="DSC signature"
+                placeholder="-----BEGIN PKCS7----- …"
+                value={dsc}
+                onChange={(e) => setDsc(e.target.value)}
+                rows={3}
+                style={{ ...fieldStyle, resize: "vertical", ...mono, marginTop: 8 }}
+              />
+            </>
+          }
+          busy={busy}
+          confirmDisabled={dsc.trim().length === 0}
+          onConfirm={() =>
+            void run(
+              () =>
+                approveAndIssueOrder(order.id, {
+                  dscSignature: dsc.trim(),
+                  expectedVersion: order.version,
+                }),
+              "Order approved & issued.",
+              "Could not issue the order (a self-approval is rejected — the approver must differ from the maker).",
+            )
+          }
+          onCancel={() => setMode("none")}
+        />
       )}
 
       {mode === "sendback" && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10, alignItems: "center" }}>
-          <input
-            aria-label="Send-back remarks (optional)"
-            placeholder="Remarks for the maker (optional)"
-            value={remarks}
-            onChange={(e) => setRemarks(e.target.value)}
-            style={{ ...fieldStyle, width: "auto", flex: "1 1 240px" }}
-          />
-          <Button
-            variant="primary"
-            size="sm"
-            disabled={busy}
-            onClick={() =>
-              void run(
-                () =>
-                  sendBackOrder(order.id, {
-                    expectedVersion: order.version,
-                    ...(remarks.trim() ? { remarks: remarks.trim() } : {}),
-                  }),
-                "Order sent back to the maker.",
-                "Could not send the order back.",
-              )
-            }
-          >
-            {busy ? "…" : "Confirm send back"}
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setMode("none")}>
-            Cancel
-          </Button>
-        </div>
+        <ConfirmDialog
+          open
+          title="Send this order back?"
+          confirmLabel="Confirm send back"
+          optionalReason
+          reasonLabel="Remarks for the maker (optional)"
+          description={<p>Return this pending order to its maker for revision.</p>}
+          busy={busy}
+          onConfirm={(r) =>
+            void run(
+              () =>
+                sendBackOrder(order.id, {
+                  expectedVersion: order.version,
+                  ...(r ? { remarks: r } : {}),
+                }),
+              "Order sent back to the maker.",
+              "Could not send the order back.",
+            )
+          }
+          onCancel={() => setMode("none")}
+        />
       )}
 
       {mode === "recall" && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10, alignItems: "center" }}>
-          <input
-            aria-label="Recall reason"
-            placeholder="Reason for recall (required)"
-            value={recallReason}
-            onChange={(e) => setRecallReason(e.target.value)}
-            style={{ ...fieldStyle, width: "auto", flex: "1 1 240px" }}
-          />
-          <Button
-            variant="primary"
-            size="sm"
-            disabled={busy || recallReason.trim().length === 0}
-            onClick={() =>
-              void run(
-                () =>
-                  recallOrder(order.id, {
-                    recallReason: recallReason.trim(),
-                    expectedVersion: order.version,
-                  }),
-                "Order recalled.",
-                "Could not recall the order.",
-              )
-            }
-          >
-            {busy ? "…" : "Confirm recall"}
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setMode("none")}>
-            Cancel
-          </Button>
-        </div>
+        <ConfirmDialog
+          open
+          danger
+          title="Recall this issued order?"
+          confirmLabel="Confirm recall"
+          requireReason
+          reasonLabel="Reason for recall"
+          description={
+            <p>
+              Recalling withdraws an already-issued order. This is a significant judicial act and is
+              recorded with your reason.
+            </p>
+          }
+          busy={busy}
+          onConfirm={(r) =>
+            void run(
+              () =>
+                recallOrder(order.id, {
+                  recallReason: (r ?? "").trim(),
+                  expectedVersion: order.version,
+                }),
+              "Order recalled.",
+              "Could not recall the order.",
+            )
+          }
+          onCancel={() => setMode("none")}
+        />
       )}
     </div>
   );

@@ -2,6 +2,13 @@ import { z } from "zod";
 
 export const causeListIdParam = z.object({ id: z.string().uuid() });
 
+/** Look up the (deterministic) cause-list for a court on a date (§17, GAP-COURT-CAUSE-LIST-02). */
+export const lookupCauseListQuery = z.object({
+  courtId:  z.string().uuid(),
+  listDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "listDate must be YYYY-MM-DD"),
+});
+export type LookupCauseListQuery = z.infer<typeof lookupCauseListQuery>;
+
 /** Generate (materialize) a cause-list for a court/day (§17). `listDate` is a calendar date. */
 export const createCauseListBody = z.object({
   courtId:  z.string().uuid(),

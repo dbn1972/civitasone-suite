@@ -1,12 +1,12 @@
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader } from "@/app/_components/ds";
-import { getCases } from "../_data/loaders";
+import { getCases, getCourts } from "../_data/loaders";
 import { CauseListConsole } from "./CauseListConsole";
 
 export const dynamic = "force-dynamic";
 
 export default async function CauseListPage() {
-  const cases = await getCases();
+  const [cases, courts] = await Promise.all([getCases(), getCourts()]);
 
   return (
     <>
@@ -17,7 +17,12 @@ export default async function CauseListPage() {
         backLabel="Court"
       />
       {cases.source === "error" && <DataSourceBadge source="error" />}
-      <CauseListConsole cases={cases.data} casesSource={cases.source} />
+      <CauseListConsole
+        cases={cases.data}
+        casesSource={cases.source}
+        courts={courts.data}
+        courtsSource={courts.source}
+      />
     </>
   );
 }

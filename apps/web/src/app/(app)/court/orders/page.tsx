@@ -1,6 +1,7 @@
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { Card, EmptyState, PageHeader } from "@/app/_components/ds";
-import { getCase, getCaseOrders, getCases } from "../_data/loaders";
+import { getSessionUserId } from "@/lib/auth/roleGuard";
+import { getCase, getCaseHearings, getCaseOrders, getCases } from "../_data/loaders";
 import { CaseSelector } from "../_components/CaseSelector";
 import { OrdersConsole } from "./OrdersConsole";
 
@@ -13,10 +14,18 @@ export default async function OrdersListPage({
 }) {
   const caseId = (searchParams.caseId ?? "").trim();
   const casesResult = await getCases();
+  // GAP-COURT-ORDERS-01: the signed-in officer's id (JWT sub) lets the console
+  // disable "Approve & issue" on an order the viewer drafted themselves — a
+  // maker-checker UX hint. The court-service remains the authority: its
+  // order-issuance consumer rejects a self-approval (approver ≠ maker) before
+  // any write regardless of what the UI offers.
+  const currentUserId = getSessionUserId();
 
-  const [detailResult, ordersResult] = caseId
-    ? await Promise.all([getCase(caseId), getCaseOrders(caseId)])
-    : [null, null];
+  // GAP-COURT-ORDERS-05: hearings for the selected case, so the draft form can
+  // offer an optional "Linked hearing" and rows can show the linked date.
+  const [detailResult, ordersResult, hearingsResult] = caseId
+    ? await Promise.all([getCase(caseId), getCaseOrders(caseId), getCaseHearings(caseId)])
+    : [null, null, null];
 
   return (
     <>
@@ -59,6 +68,8 @@ export default async function OrdersListPage({
           caseSummary={{ title: detailResult.data.title, cnrNumber: detailResult.data.cnrNumber }}
           initialOrders={ordersResult ? ordersResult.data : []}
           ordersSource={ordersResult ? ordersResult.source : "error"}
+          currentUserId={currentUserId}
+          hearings={hearingsResult ? hearingsResult.data : []}
         />
       )}
     </>
