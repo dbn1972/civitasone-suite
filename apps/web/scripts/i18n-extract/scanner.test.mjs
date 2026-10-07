@@ -65,4 +65,23 @@ describe("scanSource (UX-004 extraction tool)", () => {
     expect(findings).toHaveLength(1);
     expect(findings[0]).toMatchObject({ kind: "prop", prop: "description" });
   });
+  it("does not flag TypeScript generics, ternary chains or comment blocks as JSX text", () => {
+    const source = `
+      const a = useRef<HTMLInputElement>(null);
+      const b = useState<string | null>(null);
+      async function f(): Promise<Row[]> { return []; }
+      const x = ok ? (<div>{t("a")}</div>) : empty ? (<p>{t("b")}</p>) : null;
+      // see <Foo> for details
+      /** returns Array<string> when ready */
+    `;
+    expect(scanSource("x.tsx", source)).toEqual([]);
+  });
+
+  it("still flags real wrapped JSX text next to generics", () => {
+    const source = `
+      const a = useRef<HTMLInputElement>(null);
+      return <p>Payment submitted successfully</p>;
+    `;
+    expect(scanSource("x.tsx", source).map((f) => f.text)).toEqual(["Payment submitted successfully"]);
+  });
 });

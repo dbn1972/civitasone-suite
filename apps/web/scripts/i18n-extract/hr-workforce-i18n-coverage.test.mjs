@@ -47,7 +47,8 @@ function walk(dir, out = []) {
   return out;
 }
 
-const HR_WORKFORCE_HARDCODED_STRING_CEILING = 13;
+// 2026-10-07: set to the exact count after scanner.mjs stopped flagging TS generics/ternaries/comments as JSX text (a stale, looser ceiling would mask real regressions). Any remaining hits are genuine hardcoded "Loading…" text in loading.tsx files, tracked here rather than hidden.
+const HR_WORKFORCE_HARDCODED_STRING_CEILING = 12;
 
 describe("hr/workforce i18n coverage (UX-017 tranche 6)", () => {
   it("does not exceed the known false-positive baseline for hardcoded strings", () => {
@@ -86,7 +87,6 @@ describe("hr/workforce i18n coverage (UX-017 tranche 6)", () => {
       "workforceAnalytics",
       // "workforceContractual" was deliberately dropped as unreferenced in #1763 (asserted
       // by src/app/(app)/hr/outsourced/messages.test.ts), so it is no longer a live namespace.
-      "workforceInterns",
       "workforceOutsourced",
       "workforceWfh",
       "workforceWorkSummary",

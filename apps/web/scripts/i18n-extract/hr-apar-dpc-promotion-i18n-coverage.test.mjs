@@ -65,7 +65,8 @@ function walk(dir, out = []) {
 // Re-baselined 20 -> 37 (test-triage batch 2): every added hit was reviewed and is a scanner false positive --
 // generic-bracket `useState<T>(...)`/`Promise<void>` declarations and `x.length > 0 && ...` comparisons in AparStageActions, AparNewForm, apar/page and PromoteWithApproval (17 hits).
 // No new user-visible English was added.
-const HR_APAR_DPC_PROMOTION_HARDCODED_STRING_CEILING = 37;
+// 2026-10-07: set to the exact count after scanner.mjs stopped flagging TS generics/ternaries/comments as JSX text (a stale, looser ceiling would mask real regressions). Any remaining hits are genuine hardcoded "Loading…" text in loading.tsx files, tracked here rather than hidden.
+const HR_APAR_DPC_PROMOTION_HARDCODED_STRING_CEILING = 11;
 
 describe("hr/apar + hr/dpc + hr/promotion i18n coverage (UX-017 tranche 8)", () => {
   it("does not exceed the known false-positive baseline for hardcoded strings", () => {

@@ -70,6 +70,25 @@ function looksUserFacing(text) {
   return !NON_USER_FACING.some((re) => re.test(trimmed));
 }
 
+// A `>`...`<` span that is really TypeScript, not a JSX text node: a generic
+// closing bracket (`useState<T>(null);` ... `useRef<`), a ternary/conditional
+// chain (`) : x ? (`), or a comment block sitting between two angle brackets.
+// Real JSX text never contains statement terminators, arrow/strict-equality/
+// logical operators or comment markers, and never starts with call/array
+// punctuation. Treating these as code removes the scanner's false positives
+// at the source instead of re-baselining them.
+const CODE_LIKE = [
+  /;/, // statement terminator
+  /=>|===|!==|&&|\|\|/, // arrow / comparison / logical operators
+  /^\s*[()\[\]|=.,:?]/, // starts like code, e.g. "(null)" or ") : x ? ("
+  /\)\s*:|\?\s*\(|\(\)/, // ternary / empty call
+  /(^|\n)\s*(\/\/|\*|\/\*)|\*\//, // comment lines
+];
+
+function isCodeLike(text) {
+  return CODE_LIKE.some((re) => re.test(text));
+}
+
 function lineAt(source, index) {
   let line = 1;
   for (let i = 0; i < index; i++) {
@@ -93,7 +112,7 @@ export function scanSource(filePath, source) {
   let m;
   while ((m = textNodeRe.exec(source))) {
     const text = m[1];
-    if (looksUserFacing(text)) {
+    if (looksUserFacing(text) && !isCodeLike(text)) {
       // The captured text starts right after the `>`.
       const textStart = m.index + 1;
       findings.push({ file: filePath, line: lineAt(source, textStart), kind: "jsx-text", text: text.trim() });
