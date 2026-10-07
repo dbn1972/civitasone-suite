@@ -14,7 +14,7 @@ export default async function MeteringPage() {
   const [{ data: meters, source, status, errorMessage }, quotas] = await Promise.all([getSAMetering(), getUsageQuotas()]);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {/* GAP-ADMIN-METERING-03/-04: stat cards, badge and failure state live inside
           MeteringTable, driven by the same useSeededResource call as its rows. */}
       <PageHeader title="Usage Metering" subtitle="Resource consumption and billing by period for your signed-in organisation (billing data is tenant-scoped; it does not list other tenants)." back="/admin" />

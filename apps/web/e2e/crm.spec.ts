@@ -68,9 +68,10 @@ test.describe('CRM', () => {
   // ── Activities ────────────────────────────────────────────────────────────
 
   test('activities page loads without error', async ({ page }) => {
-    // Page heading renamed from something matching "Activities" to
-    // "Stakeholder Interactions" as part of the same CRM relabeling.
+    // The page h1 is "Activities" (crm.activities.title); "Interactions" is only the card title.
     await page.goto('/crm/activities');
-    await expect(page.getByRole('heading', { level: 1, name: /interactions/i })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: /activities/i })).toBeVisible();
+    // ...and the list must have loaded (the "couldn't load" alert is the failure state).
+    await expect(page.getByText(/couldn't load/i)).toHaveCount(0);
   });
 });

@@ -19,7 +19,7 @@ export default async function DemandGrantDetailPage({ params }: { params: { id: 
 
   if (source === "error" && status !== 404) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="Demand Detail" back="/finance/budget/demand-grants" />
         <LoadErrorState result={result} area="demand for grants" backHref="/finance/budget/demand-grants" />
       </div>
@@ -27,7 +27,7 @@ export default async function DemandGrantDetailPage({ params }: { params: { id: 
   }
   if (!demand) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="Demand Detail" back="/finance/budget/demand-grants" />
         <EmptyState icon="🏛️" title="Demand not found" message="This demand may have been removed or the ID is invalid." />
       </div>
@@ -38,7 +38,7 @@ export default async function DemandGrantDetailPage({ params }: { params: { id: 
   const heads = editable ? await getMajorHeadOptions() : null;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={`Demand ${demand.demandNo}`} subtitle={demand.service || undefined} back="/finance/budget/demand-grants" />
       <StatGrid>
         <StatCard icon="₹" iconBg="#ecfdf3" label="Demand amount" value={formatMoney(demand.amountMinor)} />

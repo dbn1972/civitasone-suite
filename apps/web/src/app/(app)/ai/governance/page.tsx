@@ -16,6 +16,7 @@ const BAND_LABEL = {
 
 // GAP-AI-GOVERNANCE-07: colour + icon by meaning, via DS status tokens that
 // adapt in dark mode, with a non-colour (icon) cue alongside the text.
+// static reference: UI presentation map (pill class + icon) keyed by the server's already-known band enum; not backend data.
 const BAND_PRESENTATION = {
   normal: { className: "pill good", icon: "✓" },
   elevated: { className: "pill warn", icon: "!" },
@@ -46,7 +47,7 @@ export default async function Page({ searchParams }: { searchParams?: { blocked?
   const reasons = topBlockReasons(audit.data);
 
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <PageHeader
         title="AI Governance"
         subtitle="Model monitoring, the audit trail of every AI action, and the agent kill-switch."

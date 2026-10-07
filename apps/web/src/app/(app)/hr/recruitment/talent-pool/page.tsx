@@ -75,7 +75,7 @@ export default async function TalentPoolPage({
   // zero access) and say plainly what's actually true.
   if (status === 403) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader
           title={t("title")}
           subtitle={t("subtitle")}
@@ -117,7 +117,7 @@ export default async function TalentPoolPage({
   const pager = pageWindow(total, page, rows.length);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

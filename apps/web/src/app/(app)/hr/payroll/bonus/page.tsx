@@ -64,7 +64,7 @@ export default async function BonusPage() {
   const pendingBonus = items.filter((r) => r.status === "pending").length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

@@ -75,7 +75,7 @@ export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: Ad
   // GAP-ADMIN-FEATURE-FLAGS-03: a failed load must not read as an empty registry.
   if (source === "error" && initialFlags.length === 0) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="Feature Flags" subtitle="Platform feature toggles with gradual rollout controls and kill switch." back="/admin" />
         <RefreshErrorState error={toHumanError("load", { area: "feature flags" })} backHref="/admin" />
       </div>
@@ -210,7 +210,7 @@ export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: Ad
   const formKey = editing ? editing.id : "create";
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title="Feature Flags" subtitle="Platform feature toggles with gradual rollout controls and kill switch." back="/admin" />
       <DataSourceBadge source={source} />
       {error && (

@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   const { data, source } = await getTenantPositions();
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <ModuleListPage
         // GAP-TENANT-POSITIONS-06: no banned clerk term ("Tenant"); use the
         // standardised "Office" label (LABELS.tenantTitle) instead.

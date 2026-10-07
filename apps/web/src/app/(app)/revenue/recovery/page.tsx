@@ -104,7 +104,7 @@ export default async function RecoveryPage({
   }));
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Recovery Referrals"
         subtitle="Refer an assessee's arrears for coercive recovery action."

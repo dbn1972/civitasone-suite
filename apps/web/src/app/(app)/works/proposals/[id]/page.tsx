@@ -187,7 +187,7 @@ export default async function WorkProposalDetailPage({
   }
   if (source === "error" || !proposal || !proposal.id) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="Work proposal" back="/works/proposals" backLabel="Proposals" />
         <RefreshErrorState
           error={toHumanError("load", { area: "work proposal" })}
@@ -214,7 +214,7 @@ export default async function WorkProposalDetailPage({
   ];
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={proposal.workNumber}
         subtitle={truncate(proposal.description, 80)}

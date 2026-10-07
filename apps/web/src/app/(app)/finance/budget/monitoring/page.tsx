@@ -44,7 +44,7 @@ export default async function BudgetMonitoringPage({
   const money = (v: unknown) => (summaryErr ? "—" : formatMoneyCompact(v as string | number | null | undefined));
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Budget Monitoring"
         subtitle="Real-time head-wise allocation, commitment, expenditure and forecast."

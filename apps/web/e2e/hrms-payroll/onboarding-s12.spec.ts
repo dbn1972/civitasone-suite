@@ -172,6 +172,17 @@ test.describe('S12 — Mark task complete (interactive)', () => {
         body: JSON.stringify(body),
       });
     });
+    // "Mark done" is a browser-side PATCH through the BFF proxy
+    // (ChecklistWithActions -> /api/proxy/v1/hrms/onboarding-tasks/:id/complete), not the
+    // server-side list endpoint above.
+    await page.route('**/api/proxy/v1/hrms/onboarding-tasks/*/complete', (route) => {
+      if (route.request().method() === 'PATCH') patchCalled = true;
+      return route.fulfill({
+        status: 202,
+        contentType: 'application/json',
+        body: JSON.stringify({ commandId: 'cmd-s12-mark-done', accepted: true }),
+      });
+    });
 
     await page.goto('/hr/onboarding/ob-001');
 
@@ -290,7 +301,7 @@ test.describe('S12 — Document upload card render', () => {
     // doc-appt is "verified" in the fixture
     const apptCard = page.locator('[data-testid="doc-card-doc-appt"]');
     await expect(apptCard).toBeVisible();
-    await expect(apptCard).toContainText('VERIFIED');
+    await expect(apptCard).toContainText(/verified/i);
   });
 
   test('pending document shows drag-and-drop upload zone without triggering upload', async ({
@@ -302,7 +313,7 @@ test.describe('S12 — Document upload card render', () => {
     // doc-address is "pending" — must show the drop zone role=button
     const pendingCard = page.locator('[data-testid="doc-card-doc-address"]');
     await expect(pendingCard).toBeVisible();
-    await expect(pendingCard).toContainText('PENDING');
+    await expect(pendingCard).toContainText(/pending/i);
 
     // Upload zone is a role=button (drag-and-drop area)
     const uploadZone = pendingCard.getByRole('button', { name: /upload|browse|drag/i });

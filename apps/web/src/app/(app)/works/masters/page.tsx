@@ -63,7 +63,7 @@ export default async function MastersPage({
   }
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Masters Registry"
         subtitle="Configure lookup values used across the works lifecycle."

@@ -18,7 +18,7 @@ export default async function Loading() {
   const t = await getTranslations("certifications");
   const tMsg = await getTranslations("msg");
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <span role="status" aria-busy="true" className="sr-only">{tMsg("loading")}</span>
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel={t("backToHr")} actions={<span />} />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>

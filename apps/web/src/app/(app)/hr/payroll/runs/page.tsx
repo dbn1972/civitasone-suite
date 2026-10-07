@@ -20,7 +20,7 @@ export default async function PayrollRunsPage() {
   const canView = roles.some((r) => PAYROLL_READER_ROLES.includes(r));
   if (!canView) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/payroll" backLabel="Payroll" />
         <PermissionDenied module="payroll runs" requiredRoles={PAYROLL_READER_ROLES} />
       </div>
@@ -43,7 +43,7 @@ export default async function PayrollRunsPage() {
   const errored = resource.status === "error";
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

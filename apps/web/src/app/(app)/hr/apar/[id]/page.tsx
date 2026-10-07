@@ -139,7 +139,7 @@ export default async function AparDetailPage({
 
   if (errored && !isNotFound) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("detailPageTitle")} subtitle={t("loadErrorSubtitle")} back="/hr/apar" backLabel="Back to APAR" />
         <DataSourceBadge source={result.source} />
         <Card title="">
@@ -151,7 +151,7 @@ export default async function AparDetailPage({
 
   if (!detail) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("detailPageTitle")} subtitle={t("notFoundSubtitle")} back="/hr/apar" backLabel="Back to APAR" />
         <DataSourceBadge source={result.source} />
         <Card title="">
@@ -208,7 +208,7 @@ export default async function AparDetailPage({
   ];
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {/* GAP-HR-APAR-DETAIL-07 (DPDP): this print-only block is invisible on
           screen and only rendered by the browser's print stylesheet, so a
           printed/PDF'd copy of a statutory confidential report always

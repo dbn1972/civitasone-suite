@@ -12,7 +12,7 @@ export default async function WorkflowDesignerPage({
   const initialDefinitionId = searchParams?.definitionId;
 
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <PageHeader
         title="BPMN Designer"
         subtitle="Visual drag-and-drop workflow designer — model business processes with BPMN 2.0 elements."

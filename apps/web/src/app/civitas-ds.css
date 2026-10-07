@@ -435,7 +435,7 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 .tbl th.sortable .sort-ind{margin-inline-start:5px;opacity:.55;font-size:10px}
 .tbl th[aria-sort="ascending"] .sort-ind,
 .tbl th[aria-sort="descending"] .sort-ind{opacity:1;color:var(--primary-d)}
-.tbl tbody tr.row-link:focus-visible{
+.tbl tbody tr.row-link:focus-within{
   outline:2px solid var(--focus-ring);outline-offset:-2px;background:var(--primary-soft);
 }
 .dt-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap}

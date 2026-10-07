@@ -18,6 +18,15 @@ export default {
   testRunner: "vitest",
   vitest: {
     configFile: "vitest.mutation.config.ts",
+    // @stryker-mutator/vitest-runner defaults to vitest "related" mode: it only runs test
+    // files that STATICALLY import a mutated file. Every tests/quality-program/L10-*
+    // suite loads its domain module through a dynamic `import(\`${REPO_ROOT}/...\`)`, so
+    // related mode silently dropped them (and every other suite that does not import a
+    // mutated file directly): the dry run executed 191 of 474 tests and ~446 mutants
+    // reported NoCoverage (score 46% vs the 70% ratchet) even though the killing tests
+    // exist and pass. vitest.mutation.config.ts already scopes `include` to exactly the
+    // suites we want, so run them all.
+    related: false,
   },
   // Plugins must be listed explicitly because pnpm's strict hoisting prevents
   // Stryker from auto-discovering them via the @stryker-mutator/* glob.

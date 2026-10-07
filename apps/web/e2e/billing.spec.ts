@@ -28,11 +28,13 @@ test.describe('Billing', () => {
 
   test('billing plans list shows ModuleListPage column headers', async ({ page }) => {
     await page.goto('/billing/list');
-    await expect(page.getByRole('columnheader', { name: 'ID' })).toBeVisible();
+    // The plans list is a purpose-built table (Code / Name / Price / Govt exempt / Status),
+    // no longer the generic ModuleListPage ID/Name/Detail/Status/Meta columns.
+    await expect(page.getByRole('columnheader', { name: 'Code' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Detail' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Price' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Govt exempt' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Status' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Meta' })).toBeVisible();
   });
 
   test('billing hub navigates to the plans page on link click', async ({ page }) => {

@@ -58,7 +58,7 @@ export default async function WorkflowDefinitionsPage() {
   const active = errored ? null : definitions.filter((d) => d.status === "active" || d.status === "deployed").length;
 
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <PageHeader
         title="Approval Workflows"
         subtitle="Configure who approves what — set up approval chains for bills, leave, procurement, and other actions."

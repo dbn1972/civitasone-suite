@@ -29,7 +29,7 @@ export default async function ContractsListPage() {
   }));
 
   return (
-    <div className="wrap" aria-labelledby="page-heading">
+    <div className="wrap">
       <PageHeader
         title="Contracts"
         subtitle="All registered contracts across departments."

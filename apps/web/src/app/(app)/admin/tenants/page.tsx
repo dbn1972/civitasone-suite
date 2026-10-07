@@ -14,7 +14,7 @@ export default async function TenantsPage() {
   const { data: tenants, source } = await getSATenants();
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {/* UX-012 / GAP-ADMIN-TENANTS-03: the data-source badge AND the summary tiles live inside
           TenantsTable, driven by the same useSeededResource call that produces its rows -- not a
           second, independent read of the server data here that could disagree with the table's

@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { chapters, chapterNumber } from "../_content/chapters";
-import { MarkdownContent, extractToc } from "../_content/markdown";
+import { MarkdownContent } from "../_content/markdown";
+import { extractToc } from "../_content/toc";
 
 interface Props {
   params: { slug: string };

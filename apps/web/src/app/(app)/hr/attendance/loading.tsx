@@ -16,7 +16,7 @@ import { getTranslations } from "next-intl/server";
 export default async function AttendanceLoading() {
   const t = await getTranslations("attendance");
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading" aria-busy="true">
+    <div className="page-main wrap" aria-busy="true">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

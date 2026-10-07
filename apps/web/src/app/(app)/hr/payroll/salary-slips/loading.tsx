@@ -10,7 +10,7 @@ import { SkeletonTable } from "../../../../_components/ds";
 export default async function HRSalarySlipsLoading() {
   const t = await getTranslations("salarySlips");
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <div className="ph">
         <div>
           <h1 id="page-heading">{t("title")}</h1>

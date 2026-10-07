@@ -328,8 +328,12 @@ test.describe("WCAG 2.2 AA — public routes", () => {
       expect(status, `${spec.path} returned ${status}`).toBeLessThan(400);
       assertLandedOnRequestedRoute(page, spec.path, "anonymous");
 
-      // Public auth pages have no <main>/<h1> contract, so wait for the form.
-      await page.waitForSelector("form, main", { timeout: 20_000 });
+      // Public auth pages have no <main> contract and not all render a <form>:
+      // /auth/forgot (GAP-AUTH-FORGOT) is a recovery link + guidance wrapped in
+      // PageShell, which renders an <h1> but neither <form> nor <main>. Waiting for
+      // only "form, main" timed out there and left the route unaudited, failing the
+      // gate's "never reached the axe audit" check. Wait for the first of the three.
+      await page.waitForSelector("form, main, h1", { timeout: 20_000 });
 
       const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
       writeFragment(`anonymous__${spec.path}`, {

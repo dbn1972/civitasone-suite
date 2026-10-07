@@ -162,7 +162,7 @@ export default function NewGuesthouseBookingPage() {
   };
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="New Guest House Booking"
         subtitle="Reserve a room for a guest. The booking enters the register pending approval."

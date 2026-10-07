@@ -26,7 +26,7 @@ export default async function TaxProofsPage() {
 
   if (!canView && !canSetRetention) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("queue.title")} subtitle={t("queue.subtitle")} back="/hr/payroll/tax-declaration" backLabel={t("backLabel")} />
         <PermissionDenied module="investment proof verification" requiredRoles={TAX_PROOF_VIEWER_ROLES} backHref="/hr/payroll" backLabel={t("backLabel")} />
       </div>
@@ -34,7 +34,7 @@ export default async function TaxProofsPage() {
   }
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={t("queue.title")} subtitle={t("queue.subtitle")} back="/hr/payroll/tax-declaration" backLabel={t("backLabel")} />
       {canView && (
         <TaxProofQueue

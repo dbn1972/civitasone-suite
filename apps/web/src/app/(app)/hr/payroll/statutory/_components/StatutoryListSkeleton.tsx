@@ -12,7 +12,7 @@ export async function StatutoryListSkeleton({ namespace }: { namespace: string }
   const t = await getTranslations(namespace);
   const backLabel = t.has("errorBackLabel") ? t("errorBackLabel") : t.has("backToStatutoryLabel") ? t("backToStatutoryLabel") : "";
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading" aria-busy="true">
+    <div className="page-main wrap" aria-busy="true">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/payroll/statutory" backLabel={backLabel} />
       <div role="status" aria-label={t("loadingAriaLabel")}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 16 }}>

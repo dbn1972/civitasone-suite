@@ -30,7 +30,7 @@ export default async function AllocationPage() {
   const committed = allocations.filter((a) => BigInt(a.committedMinor || "0") > 0n).length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Budget Allocation"
         subtitle="Allocation, commitment and expenditure by budget head and financial year."

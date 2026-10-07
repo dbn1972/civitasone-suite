@@ -60,7 +60,7 @@ export default async function BillingSubscriptionsPage() {
   // as "no subscription". A real 200+null is the empty state below.
   if (source === "error") {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         {header}
         <LoadErrorState result={{ status, errorMessage }} area="subscription" backHref="/billing" />
       </div>
@@ -69,7 +69,7 @@ export default async function BillingSubscriptionsPage() {
 
   if (!sub) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         {header}
         <EmptyState icon="📦" title="No subscription" message="This tenant does not have a billing subscription yet." />
       </div>
@@ -77,7 +77,7 @@ export default async function BillingSubscriptionsPage() {
   }
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {header}
 
       <StatGrid>

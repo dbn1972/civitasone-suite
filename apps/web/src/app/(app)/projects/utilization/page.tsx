@@ -30,7 +30,7 @@ export default function UtilizationPage() {
   const hasData = rows.length > 0;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title="Fund Utilization" subtitle="Track allocation, releases and utilization across all projects." back="/projects" />
       <StatGrid>
         <StatCard icon="💰" iconBg="#eff6ff" label="Total Allocated" value={hasData ? formatCrore(totals.allocatedMinor) : "—"} />

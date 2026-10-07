@@ -115,7 +115,7 @@ export default async function WaiversPage({
   const overallSource = assesseesSource === "error" || demandsResult.source === "error" ? "error" : "api";
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Waivers"
         subtitle="Raise penalty and interest waivers for assessee demands (maker-checker workflow)."

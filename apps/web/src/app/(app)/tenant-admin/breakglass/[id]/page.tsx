@@ -25,7 +25,7 @@ export default async function BreakglassDetailPage({ params }: { params: { id: s
   }
   if (result.source === "error" || result.data === null) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Break-Glass", href: "/tenant-admin/breakglass" }, { label: `Event ${params.id}` }]} />
         <PageHeader back="/tenant-admin/breakglass" title="Break-Glass Event Detail" />
         <Card title="Event Information" padding>
@@ -38,7 +38,7 @@ export default async function BreakglassDetailPage({ params }: { params: { id: s
   const event = result.data;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Break-Glass", href: "/tenant-admin/breakglass" }, { label: `Event ${params.id}` }]} />
       <PageHeader
         back="/tenant-admin/breakglass"

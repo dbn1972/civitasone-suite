@@ -30,7 +30,7 @@ export default async function OffCyclePage() {
   const roles = getSessionRoles();
   if (!roles.some((r) => PAYROLL_READER_ROLES.includes(r))) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/payroll" backLabel={t("backLabel")} />
         <PermissionDenied module="off-cycle payroll" requiredRoles={PAYROLL_READER_ROLES} backHref="/hr/payroll" backLabel={t("backLabel")} />
       </div>
@@ -46,7 +46,7 @@ export default async function OffCyclePage() {
   const totalNetMinor = items.reduce((sum, r) => sum + BigInt(String(r.total_net_minor ?? 0)), 0n);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

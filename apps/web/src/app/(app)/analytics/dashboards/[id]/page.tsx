@@ -20,7 +20,7 @@ export default async function AnalyticsDashboardDetailPage({ params }: { params:
 
   if (source === "error" || !dashboard) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <nav aria-label="Breadcrumb" className="back">
           <ArrowLeft aria-hidden="true" size={14} /> <a href="/analytics/dashboards">Dashboards</a>
         </nav>
@@ -35,7 +35,7 @@ export default async function AnalyticsDashboardDetailPage({ params }: { params:
   }
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <nav aria-label="Breadcrumb" className="back">
         <ArrowLeft aria-hidden="true" size={14} /> <a href="/analytics/dashboards">Dashboards</a>
       </nav>

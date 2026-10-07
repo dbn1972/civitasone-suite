@@ -11,7 +11,7 @@ export default async function NewContractPage() {
   const vendors = vendorsRes.source === "api" ? vendorsRes.data : [];
 
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <PageHeader
         title="New Contract"
         subtitle="Register a new service, supply, or maintenance contract."

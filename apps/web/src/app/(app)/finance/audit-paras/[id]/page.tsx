@@ -16,7 +16,7 @@ export default async function AuditParaDetailPage({ params }: { params: { id: st
   // and a 403 is a permission decision -- never "may have been removed".
   if (source === "error" && status !== 404) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="Audit Para Detail" back="/finance/audit-paras" />
         <LoadErrorState result={result} area="audit para" backHref="/finance/audit-paras" />
       </div>
@@ -25,7 +25,7 @@ export default async function AuditParaDetailPage({ params }: { params: { id: st
 
   if (!para) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="Audit Para Detail" back="/finance/audit-paras" />
         <EmptyState icon="📝" title="Audit para not found" message="This audit para may have been removed or the ID is invalid." />
       </div>
@@ -44,7 +44,7 @@ export default async function AuditParaDetailPage({ params }: { params: { id: st
   // rename now fails the loader's zod schema (source "error") instead of
   // silently rendering "No ... on file". Amount is moneyValueMinor (paise).
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={`Audit Para ${para.paraNo}`}
         subtitle={para.dept || undefined}

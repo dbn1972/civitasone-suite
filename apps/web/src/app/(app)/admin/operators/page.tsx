@@ -13,7 +13,7 @@ export default async function OperatorsPage() {
   const t = await getTranslations("adminOperators");
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {/* GAP-ADMIN-OPERATORS-03/-04: stat cards, badge and failure state live inside
           OperatorsTable, driven by the same useSeededResource call as its rows.
           GAP-ADMIN-OPERATORS-05: changes to privileged accounts are requests a second super

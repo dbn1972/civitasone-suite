@@ -95,7 +95,7 @@ export default async function ServiceBookPage({
   const subtitle = isHr ? (empId ? t("subtitleForEmployee") : t("subtitleAll")) : t("subtitleMine");
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={title}
         subtitle={subtitle}

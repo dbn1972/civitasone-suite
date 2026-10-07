@@ -51,7 +51,7 @@ export default async function QuartersPage() {
   const canCreate = hasAnyRole(getSessionRoles(), QUARTER_WRITE_ROLES);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Residential Quarters"
         subtitle="Quarters inventory and the allotment lifecycle — apply, allot, occupy and vacate."

@@ -8,7 +8,7 @@ export default async function PlansPage() {
   const currentPlan = plansData.plans.find((p) => p.id === plansData.currentPlanId);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title="Plans & Subscription" subtitle="Compare plans, upgrade, or manage your subscription." back="/tenant-admin" />
 
       <StatGrid>

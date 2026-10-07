@@ -108,8 +108,8 @@ test.describe('Assets', () => {
   test('asset maintenance shows heading and seeded maintenance record', async ({ page }) => {
     await page.goto('/assets/maintenance');
     await expect(page.getByRole('heading', { name: 'Asset Maintenance' })).toBeVisible();
-    // Columns relabeled: "Asset Code" -> "Job", "Maintenance Type" -> "Type".
-    await expect(page.getByRole('columnheader', { name: 'Job' })).toBeVisible();
+    // Columns: Asset code / Asset / Type / Scheduled / Technician / Status / Journal.
+    await expect(page.getByRole('columnheader', { name: 'Asset code' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Type' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Status' })).toBeVisible();
   });

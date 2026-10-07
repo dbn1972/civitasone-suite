@@ -16,7 +16,7 @@ export default async function TenantSettingsPage() {
   const disabled = modules.filter((m) => !m.enabled).length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Settings & Modules" }]} />
       <PageHeader
         back="/tenant-admin"

@@ -96,7 +96,7 @@ export default async function FleetMaintenancePage() {
   });
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Fleet Maintenance"
         subtitle="Preventive maintenance scheduling for government vehicles."

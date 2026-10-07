@@ -354,7 +354,12 @@ export function HRHubNavigation({ categories }: { categories: Category[] }) {
                   <span aria-hidden="true">{cat.icon}</span>
                   <span style={{ flex: 1 }}>{cat.title}</span>
                   <span style={{ fontSize: 11, color: "var(--mut)", fontWeight: 400 }}>{t("hubItemsCount", { count: cat.tiles.length })}</span>
-                  <span aria-hidden="true" style={{ fontSize: 12, color: "var(--mut)", transition: "transform 0.2s", transform: isOpen ? "rotate(180deg)" : "rotate(0)" }}>▼</span>
+                  {/* Decorative chevron as an SVG, not a "▼" text glyph: axe cannot decide the contrast of a
+                      rotated text glyph over the button background (undecidable "incomplete" at serious), and
+                      a purely decorative arrow has no text to measure. */}
+                  <svg aria-hidden="true" focusable="false" width="12" height="12" viewBox="0 0 12 12" style={{ color: "var(--mut)", transition: "transform 0.2s", transform: isOpen ? "rotate(180deg)" : "rotate(0)" }}>
+                    <path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
                 </button>
                 {isOpen && (
                   <div

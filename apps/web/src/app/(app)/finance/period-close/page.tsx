@@ -26,7 +26,7 @@ export default async function PeriodCloseCockpitPage() {
   // stats, the form and the table.
   if (source === "error") {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader
           title="Period-Close Cockpit"
           subtitle="Track accounting-period status and drive the soft-close, hard-close, and reopen workflow."
@@ -38,7 +38,7 @@ export default async function PeriodCloseCockpitPage() {
   }
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Period-Close Cockpit"
         subtitle="Track accounting-period status and drive the soft-close, hard-close, and reopen workflow."

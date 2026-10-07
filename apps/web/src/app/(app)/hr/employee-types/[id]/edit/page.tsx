@@ -40,7 +40,7 @@ export default async function EditEmployeeTypePage({ params }: { params: { id: s
   if (!type) notFound();
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={t("formTitleEdit", { name: type.name })} subtitle={t("formSubtitleEdit")} back="/hr/employee-types" backLabel={t("title")} />
       <Card padding>
         <EmployeeTypeForm mode="edit" id={type.id} initial={type} />

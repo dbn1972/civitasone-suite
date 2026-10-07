@@ -15,7 +15,7 @@ export default async function TechAdminPage() {
   const fetchedAt = new Date().toISOString();
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title="Tech Admin" subtitle="Service health, database connections, and infrastructure status." back="/admin" />
       <TechAdminTable key={fetchedAt} services={services} source={source === "error" ? "error" : "api"} fetchedAt={fetchedAt} />
     </div>

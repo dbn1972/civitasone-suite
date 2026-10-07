@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   const { data, source } = await getInstallModules();
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       {/* GAP-INSTALL-MODULES-05: the global AutoBreadcrumb (AppShell TopBar)
           already provides the Home / Install / Modules trail, so the local
           <nav aria-label="Breadcrumb"> was a second landmark with the same

@@ -43,7 +43,7 @@ export default async function ProjectsAucPage() {
   const accumulatedTotal = underConstruction.reduce((sum, r) => sum + BigInt(r.accumulatedMinor), 0n);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Projects & AUC"
         subtitle="Assets under construction — accumulate WIP, then capitalize to the fixed-asset register with dual-book depreciation."

@@ -55,12 +55,15 @@ describe("FilesTable — keyboard row navigation", () => {
   it("exposes each row as a keyboard-focusable link to its file", () => {
     render(<FilesTable rows={ROWS} />);
 
-    // The accessible "Open <fileNo>" link is provided by DataTable; the row it
-    // sits in is the keyboard-focusable element (tabIndex 0) — Enter/Space
-    // navigation is covered by the tests above.
+    // The accessible "Open <fileNo>" link provided by DataTable is the single keyboard-focusable
+    // control for the row (Enter/Space navigation is covered above). The <tr> itself is NOT a tab
+    // stop / role=button: a focusable link nested in an interactive row is an axe
+    // "nested-interactive" violation (WCAG 4.1.2).
     const link = screen.getByRole("link", { name: "Open F/2026/001" });
+    expect(link).not.toHaveAttribute("tabindex", "-1");
     const row = link.closest("tr");
     expect(row).not.toBeNull();
-    expect(row).toHaveAttribute("tabindex", "0");
+    expect(row).not.toHaveAttribute("tabindex");
+    expect(row).not.toHaveAttribute("role", "button");
   });
 });

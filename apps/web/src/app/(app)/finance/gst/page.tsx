@@ -70,7 +70,7 @@ export default async function GstConsolePage({ searchParams }: { searchParams?: 
   const payableLabel = totals === null ? null : totals.payable === 0n ? "Nil" : formatMoney(totals.payable);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="GST / ITC Console"
         subtitle="Output and input GST, the GST ledger, and input tax credit reconciliation for a filing period."

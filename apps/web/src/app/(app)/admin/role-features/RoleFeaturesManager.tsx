@@ -219,7 +219,7 @@ export function RoleFeaturesManager({
   const adminKey = (f: string) => f.startsWith("admin.");
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/admin" />
       {/* GAP-ADMIN-ROLE-FEATURES-06: name the part that failed, not just "something". */}
       <DataSourceBadge source={rolesSource} message={t("rolesLoadFailed")} />

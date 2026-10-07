@@ -24,7 +24,7 @@ export default async function AiInsightsPage() {
   const avgConf = errored ? null : averageConfidence(rows.map((r) => r.confidence));
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title="AI Insights" subtitle="Machine learning generated insights and recommended actions across modules." back="/analytics" />
       <StatGrid>
         <StatCard icon="🤖" tone="info" label="Total Insights" value={total ?? "—"} />

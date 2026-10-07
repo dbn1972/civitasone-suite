@@ -38,7 +38,7 @@ export default async function EditLocationPage({ params }: { params: { id: strin
   const loc = one.data;
   if (!loc) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("editNotFoundTitle")} back="/hr/locations" backLabel={t("pageBackLabel")} />
         <LoadErrorState result={one} area="location" backHref="/hr/locations" requiredRoles={LOCATION_ADMIN_ROLES} />
       </div>

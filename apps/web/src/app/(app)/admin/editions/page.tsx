@@ -13,7 +13,7 @@ export default async function EditionsPage() {
   const res = await getSAEditions();
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {/* GAP-ADMIN-EDITIONS-02: cards, data-source badge and failure state all live in
           EditionsTable, driven by the same useSeededResource call as its rows. */}
       <PageHeader title="Edition Catalog" subtitle="Platform editions with module bundles, pricing and tenant allocation." back="/admin" />

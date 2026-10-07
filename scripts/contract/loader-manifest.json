@@ -3,7 +3,15 @@
   "entries": [
     {
       "module": "admin",
-      "screen": "/admin"
+      "screen": "/admin/bulk-scan/[batchId]"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/bulk-scan/links"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/bulk-scan/new"
     },
     {
       "module": "admin",
@@ -11,15 +19,27 @@
     },
     {
       "module": "admin",
-      "screen": "/admin/config"
+      "screen": "/admin/bulk-scan/profiles"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/bulk-scan/review/[batchId]/[fileId]"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/bulk-scan/review"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/bulk-scan/search"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/bulk-scan/settings"
     },
     {
       "module": "admin",
       "screen": "/admin/devices"
-    },
-    {
-      "module": "admin",
-      "screen": "/admin/discovery"
     },
     {
       "module": "admin",
@@ -35,7 +55,15 @@
     },
     {
       "module": "admin",
-      "screen": "/admin/settings"
+      "screen": "/admin/integrations/platform"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/platform/integrations"
     },
     {
       "module": "admin",
@@ -43,23 +71,15 @@
     },
     {
       "module": "ai",
-      "screen": "/ai"
-    },
-    {
-      "module": "ai",
       "screen": "/ai/agents"
-    },
-    {
-      "module": "ai",
-      "screen": "/ai/governance"
     },
     {
       "module": "ai",
       "screen": "/ai/guardrails"
     },
     {
-      "module": "analytics",
-      "screen": "/analytics"
+      "module": "ai",
+      "screen": "/ai"
     },
     {
       "module": "analytics",
@@ -67,15 +87,39 @@
     },
     {
       "module": "analytics",
+      "screen": "/analytics/ml-insights/anomalies"
+    },
+    {
+      "module": "analytics",
+      "screen": "/analytics/ml-insights/inventory"
+    },
+    {
+      "module": "analytics",
+      "screen": "/analytics/ml-insights/leads"
+    },
+    {
+      "module": "analytics",
       "screen": "/analytics/ml-insights"
     },
     {
       "module": "analytics",
-      "screen": "/analytics/queries"
+      "screen": "/analytics/ml-insights/projects"
     },
     {
-      "module": "assets",
-      "screen": "/assets"
+      "module": "analytics",
+      "screen": "/analytics/ml-insights/subscriptions"
+    },
+    {
+      "module": "analytics",
+      "screen": "/analytics/ml-insights/tickets"
+    },
+    {
+      "module": "analytics",
+      "screen": "/analytics"
+    },
+    {
+      "module": "analytics",
+      "screen": "/analytics/queries"
     },
     {
       "module": "assets",
@@ -91,10 +135,6 @@
     },
     {
       "module": "assets",
-      "screen": "/assets/fleet"
-    },
-    {
-      "module": "assets",
       "screen": "/assets/fleet/devices"
     },
     {
@@ -107,11 +147,11 @@
     },
     {
       "module": "assets",
-      "screen": "/assets/insurance"
+      "screen": "/assets/insurance/claims"
     },
     {
       "module": "assets",
-      "screen": "/assets/insurance/claims"
+      "screen": "/assets/insurance"
     },
     {
       "module": "assets",
@@ -127,11 +167,11 @@
     },
     {
       "module": "assets",
-      "screen": "/assets/projects"
+      "screen": "/assets"
     },
     {
       "module": "assets",
-      "screen": "/assets/register"
+      "screen": "/assets/projects"
     },
     {
       "module": "assets",
@@ -139,11 +179,15 @@
     },
     {
       "module": "assets",
-      "screen": "/assets/verification"
+      "screen": "/assets/settings"
     },
     {
-      "module": "billing",
-      "screen": "/billing"
+      "module": "assets",
+      "screen": "/assets/verification/[id]"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/verification"
     },
     {
       "module": "billing",
@@ -155,11 +199,19 @@
     },
     {
       "module": "billing",
+      "screen": "/billing"
+    },
+    {
+      "module": "billing",
+      "screen": "/billing/payments"
+    },
+    {
+      "module": "billing",
       "screen": "/billing/plans/new"
     },
     {
-      "module": "catalogue",
-      "screen": "/catalogue"
+      "module": "billing",
+      "screen": "/billing/plans"
     },
     {
       "module": "catalogue",
@@ -168,6 +220,10 @@
     {
       "module": "catalogue",
       "screen": "/catalogue/categories"
+    },
+    {
+      "module": "catalogue",
+      "screen": "/catalogue"
     },
     {
       "module": "catalogue",
@@ -183,27 +239,7 @@
     },
     {
       "module": "cdp",
-      "screen": "/cdp/events"
-    },
-    {
-      "module": "cdp",
-      "screen": "/cdp/identity"
-    },
-    {
-      "module": "cdp",
-      "screen": "/cdp/profiles"
-    },
-    {
-      "module": "cdp",
-      "screen": "/cdp/segments"
-    },
-    {
-      "module": "cdp",
       "screen": "/cdp/steward"
-    },
-    {
-      "module": "change",
-      "screen": "/change"
     },
     {
       "module": "change",
@@ -214,8 +250,8 @@
       "screen": "/change/comms"
     },
     {
-      "module": "citizen",
-      "screen": "/citizen"
+      "module": "change",
+      "screen": "/change"
     },
     {
       "module": "citizen",
@@ -247,15 +283,19 @@
     },
     {
       "module": "citizen",
-      "screen": "/citizen/grievances"
-    },
-    {
-      "module": "citizen",
       "screen": "/citizen/grievances/new"
     },
     {
       "module": "citizen",
+      "screen": "/citizen/grievances"
+    },
+    {
+      "module": "citizen",
       "screen": "/citizen/intake"
+    },
+    {
+      "module": "citizen",
+      "screen": "/citizen"
     },
     {
       "module": "citizen",
@@ -266,20 +306,8 @@
       "screen": "/citizen/services/[serviceKey]/track/[trackingNo]"
     },
     {
-      "module": "contracts",
-      "screen": "/contracts"
-    },
-    {
-      "module": "contracts",
-      "screen": "/contracts/new"
-    },
-    {
       "module": "court",
       "screen": "/court/admin"
-    },
-    {
-      "module": "court",
-      "screen": "/court/cases"
     },
     {
       "module": "court",
@@ -295,10 +323,6 @@
     },
     {
       "module": "crm",
-      "screen": "/crm"
-    },
-    {
-      "module": "crm",
       "screen": "/crm/agent-workload"
     },
     {
@@ -308,10 +332,6 @@
     {
       "module": "crm",
       "screen": "/crm/assignment-rules"
-    },
-    {
-      "module": "crm",
-      "screen": "/crm/contacts"
     },
     {
       "module": "crm",
@@ -347,11 +367,11 @@
     },
     {
       "module": "crm",
-      "screen": "/crm/documents"
+      "screen": "/crm/escalation-rules"
     },
     {
       "module": "crm",
-      "screen": "/crm/escalation-rules"
+      "screen": "/crm/grievance-categories"
     },
     {
       "module": "crm",
@@ -371,15 +391,15 @@
     },
     {
       "module": "crm",
-      "screen": "/crm/onboarding"
-    },
-    {
-      "module": "crm",
       "screen": "/crm/onboarding/[id]"
     },
     {
       "module": "crm",
-      "screen": "/crm/opportunities"
+      "screen": "/crm/onboarding"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/opportunities/[id]/edit"
     },
     {
       "module": "crm",
@@ -387,7 +407,19 @@
     },
     {
       "module": "crm",
+      "screen": "/crm/opportunities"
+    },
+    {
+      "module": "crm",
       "screen": "/crm/opportunity-ageing"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/overdue-tasks"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm"
     },
     {
       "module": "crm",
@@ -423,6 +455,10 @@
     },
     {
       "module": "crm",
+      "screen": "/crm/service-types"
+    },
+    {
+      "module": "crm",
       "screen": "/crm/task-escalation"
     },
     {
@@ -432,10 +468,6 @@
     {
       "module": "dashboard",
       "screen": "/dashboard"
-    },
-    {
-      "module": "designer",
-      "screen": "/designer"
     },
     {
       "module": "designer",
@@ -450,8 +482,8 @@
       "screen": "/designer/new"
     },
     {
-      "module": "documents",
-      "screen": "/documents/inbox"
+      "module": "designer",
+      "screen": "/designer"
     },
     {
       "module": "documents",
@@ -462,8 +494,8 @@
       "screen": "/domains/new"
     },
     {
-      "module": "estab",
-      "screen": "/estab"
+      "module": "domains",
+      "screen": "/domains"
     },
     {
       "module": "estab",
@@ -511,15 +543,7 @@
     },
     {
       "module": "estab",
-      "screen": "/estab/quarters"
-    },
-    {
-      "module": "estab",
-      "screen": "/estab/quarters/allotments"
-    },
-    {
-      "module": "estab",
-      "screen": "/estab/quarters/allotments/[id]"
+      "screen": "/estab"
     },
     {
       "module": "estab",
@@ -531,11 +555,11 @@
     },
     {
       "module": "field",
-      "screen": "/field"
+      "screen": "/field/agents"
     },
     {
       "module": "field",
-      "screen": "/field/agents"
+      "screen": "/field"
     },
     {
       "module": "field",
@@ -550,32 +574,12 @@
       "screen": "/field/tasks"
     },
     {
-      "module": "field",
-      "screen": "/field/visits"
-    },
-    {
-      "module": "finance",
-      "screen": "/finance"
-    },
-    {
-      "module": "finance",
-      "screen": "/finance/budget/formulation/new"
-    },
-    {
-      "module": "finance",
-      "screen": "/finance/budget/fund-releases"
-    },
-    {
-      "module": "finance",
-      "screen": "/finance/budget/monitoring"
-    },
-    {
       "module": "finance",
       "screen": "/finance/chart-of-accounts/new"
     },
     {
       "module": "finance",
-      "screen": "/finance/config"
+      "screen": "/finance/debt/new"
     },
     {
       "module": "finance",
@@ -583,19 +587,11 @@
     },
     {
       "module": "finance",
-      "screen": "/finance/expenditure/utilization-certificates/new"
-    },
-    {
-      "module": "finance",
-      "screen": "/finance/fiscal-years"
-    },
-    {
-      "module": "finance",
       "screen": "/finance/gst"
     },
     {
       "module": "finance",
-      "screen": "/finance/opening-balances"
+      "screen": "/finance"
     },
     {
       "module": "finance",
@@ -607,10 +603,6 @@
     },
     {
       "module": "finance",
-      "screen": "/finance/reconciliation"
-    },
-    {
-      "module": "finance",
       "screen": "/finance/reconciliation/[id]"
     },
     {
@@ -618,8 +610,12 @@
       "screen": "/finance/recurring-entries"
     },
     {
-      "module": "fleet",
-      "screen": "/fleet"
+      "module": "finance",
+      "screen": "/finance/treasury/cheques/new"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/vendors/new"
     },
     {
       "module": "fleet",
@@ -627,31 +623,19 @@
     },
     {
       "module": "grants",
-      "screen": "/grants"
-    },
-    {
-      "module": "grants",
       "screen": "/grants/applications"
     },
     {
       "module": "grants",
-      "screen": "/grants/disbursements/[id]"
-    },
-    {
-      "module": "grants",
-      "screen": "/grants/schemes"
-    },
-    {
-      "module": "grants",
-      "screen": "/grants/schemes/[id]/apply"
+      "screen": "/grants"
     },
     {
       "module": "grants",
       "screen": "/grants/schemes/new"
     },
     {
-      "module": "help",
-      "screen": "/help"
+      "module": "grants",
+      "screen": "/grants/schemes"
     },
     {
       "module": "helpdesk",
@@ -663,19 +647,15 @@
     },
     {
       "module": "hr",
-      "screen": "/hr"
-    },
-    {
-      "module": "hr",
       "screen": "/hr/advances"
     },
     {
       "module": "hr",
-      "screen": "/hr/apar"
+      "screen": "/hr/apar/new"
     },
     {
       "module": "hr",
-      "screen": "/hr/apar/new"
+      "screen": "/hr/apar"
     },
     {
       "module": "hr",
@@ -695,19 +675,7 @@
     },
     {
       "module": "hr",
-      "screen": "/hr/competency"
-    },
-    {
-      "module": "hr",
-      "screen": "/hr/confirmation"
-    },
-    {
-      "module": "hr",
       "screen": "/hr/contractual"
-    },
-    {
-      "module": "hr",
-      "screen": "/hr/departments"
     },
     {
       "module": "hr",
@@ -715,11 +683,11 @@
     },
     {
       "module": "hr",
-      "screen": "/hr/deputation"
+      "screen": "/hr/departments"
     },
     {
       "module": "hr",
-      "screen": "/hr/designations"
+      "screen": "/hr/deputation"
     },
     {
       "module": "hr",
@@ -727,11 +695,19 @@
     },
     {
       "module": "hr",
-      "screen": "/hr/directory"
+      "screen": "/hr/designations"
     },
     {
       "module": "hr",
       "screen": "/hr/disciplinary"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/employee-types/[id]/edit"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/employee-types/new"
     },
     {
       "module": "hr",
@@ -755,6 +731,14 @@
     },
     {
       "module": "hr",
+      "screen": "/hr/grievance/[id]"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/grievance/new"
+    },
+    {
+      "module": "hr",
       "screen": "/hr/grievance"
     },
     {
@@ -763,7 +747,15 @@
     },
     {
       "module": "hr",
+      "screen": "/hr/icc/[id]"
+    },
+    {
+      "module": "hr",
       "screen": "/hr/icc"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/id-cards/new"
     },
     {
       "module": "hr",
@@ -775,7 +767,7 @@
     },
     {
       "module": "hr",
-      "screen": "/hr/jd-templates"
+      "screen": "/hr/jd-templates/[id]"
     },
     {
       "module": "hr",
@@ -783,7 +775,7 @@
     },
     {
       "module": "hr",
-      "screen": "/hr/leave-policies"
+      "screen": "/hr/jd-templates"
     },
     {
       "module": "hr",
@@ -795,11 +787,7 @@
     },
     {
       "module": "hr",
-      "screen": "/hr/leave/balance"
-    },
-    {
-      "module": "hr",
-      "screen": "/hr/leave/history"
+      "screen": "/hr/leave-policies"
     },
     {
       "module": "hr",
@@ -807,7 +795,7 @@
     },
     {
       "module": "hr",
-      "screen": "/hr/locations"
+      "screen": "/hr/locations/[id]/edit"
     },
     {
       "module": "hr",
@@ -815,11 +803,15 @@
     },
     {
       "module": "hr",
+      "screen": "/hr/locations"
+    },
+    {
+      "module": "hr",
       "screen": "/hr/medical"
     },
     {
       "module": "hr",
-      "screen": "/hr/onboarding"
+      "screen": "/hr/office-locations"
     },
     {
       "module": "hr",
@@ -827,11 +819,11 @@
     },
     {
       "module": "hr",
-      "screen": "/hr/overtime"
+      "screen": "/hr/overtime/new"
     },
     {
       "module": "hr",
-      "screen": "/hr/overtime/new"
+      "screen": "/hr"
     },
     {
       "module": "hr",
@@ -863,6 +855,10 @@
     },
     {
       "module": "hr",
+      "screen": "/hr/payroll/disbursement"
+    },
+    {
+      "module": "hr",
       "screen": "/hr/payroll/flex-benefits"
     },
     {
@@ -887,19 +883,23 @@
     },
     {
       "module": "hr",
+      "screen": "/hr/payroll/pay-groups/[id]"
+    },
+    {
+      "module": "hr",
       "screen": "/hr/payroll/pay-groups"
     },
     {
       "module": "hr",
+      "screen": "/hr/payroll/pay-groups/unassigned"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/pensioners/[id]"
+    },
+    {
+      "module": "hr",
       "screen": "/hr/payroll/pensioners/new"
-    },
-    {
-      "module": "hr",
-      "screen": "/hr/payroll/register"
-    },
-    {
-      "module": "hr",
-      "screen": "/hr/payroll/reimbursements"
     },
     {
       "module": "hr",
@@ -911,7 +911,7 @@
     },
     {
       "module": "hr",
-      "screen": "/hr/payroll/statutory"
+      "screen": "/hr/payroll/statutory/challans"
     },
     {
       "module": "hr",
@@ -927,7 +927,7 @@
     },
     {
       "module": "hr",
-      "screen": "/hr/payroll/statutory/nps"
+      "screen": "/hr/payroll/statutory"
     },
     {
       "module": "hr",
@@ -951,7 +951,7 @@
     },
     {
       "module": "hr",
-      "screen": "/hr/payroll/tax-declaration"
+      "screen": "/hr/payroll/tax-proofs"
     },
     {
       "module": "hr",
@@ -959,7 +959,7 @@
     },
     {
       "module": "hr",
-      "screen": "/hr/recruitment"
+      "screen": "/hr/recruitment/[id]/applications/[appId]"
     },
     {
       "module": "hr",
@@ -967,7 +967,11 @@
     },
     {
       "module": "hr",
-      "screen": "/hr/recruitment/[id]/applications/[appId]"
+      "screen": "/hr/recruitment/[id]/results"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/recruitment/[id]/selection"
     },
     {
       "module": "hr",
@@ -975,11 +979,19 @@
     },
     {
       "module": "hr",
-      "screen": "/hr/recruitment/talent-pool"
+      "screen": "/hr/recruitment"
     },
     {
       "module": "hr",
-      "screen": "/hr/retirement"
+      "screen": "/hr/recruitment/requisitions"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/recruitment/settings"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/rti/[id]"
     },
     {
       "module": "hr",
@@ -987,23 +999,7 @@
     },
     {
       "module": "hr",
-      "screen": "/hr/service-book"
-    },
-    {
-      "module": "hr",
-      "screen": "/hr/shift-requests"
-    },
-    {
-      "module": "hr",
       "screen": "/hr/shifts"
-    },
-    {
-      "module": "hr",
-      "screen": "/hr/skills"
-    },
-    {
-      "module": "hr",
-      "screen": "/hr/social-feed"
     },
     {
       "module": "hr",
@@ -1027,10 +1023,6 @@
     },
     {
       "module": "hr",
-      "screen": "/hr/transfer"
-    },
-    {
-      "module": "hr",
       "screen": "/hr/travel"
     },
     {
@@ -1039,47 +1031,15 @@
     },
     {
       "module": "hr",
-      "screen": "/hr/wfh"
-    },
-    {
-      "module": "hr",
       "screen": "/hr/work-summary"
     },
     {
       "module": "hr",
+      "screen": "/hr/workforce/analytics"
+    },
+    {
+      "module": "hr",
       "screen": "/hr/workforce"
-    },
-    {
-      "module": "hr",
-      "screen": "/hr/workforce/contractual"
-    },
-    {
-      "module": "hr",
-      "screen": "/hr/workforce/interns"
-    },
-    {
-      "module": "hr",
-      "screen": "/hr/workforce/outsourced"
-    },
-    {
-      "module": "hr",
-      "screen": "/hr/workforce/overtime"
-    },
-    {
-      "module": "hr",
-      "screen": "/hr/workforce/overtime/new"
-    },
-    {
-      "module": "hr",
-      "screen": "/hr/workforce/staffing-plan"
-    },
-    {
-      "module": "hr",
-      "screen": "/hr/workforce/wfh"
-    },
-    {
-      "module": "hr",
-      "screen": "/hr/workforce/work-summary"
     },
     {
       "module": "identity",
@@ -1087,27 +1047,7 @@
     },
     {
       "module": "identity",
-      "screen": "/identity/api-keys"
-    },
-    {
-      "module": "identity",
-      "screen": "/identity/breakglass"
-    },
-    {
-      "module": "identity",
-      "screen": "/identity/sessions"
-    },
-    {
-      "module": "identity",
-      "screen": "/identity/users"
-    },
-    {
-      "module": "identity",
       "screen": "/identity/webauthn"
-    },
-    {
-      "module": "inspection",
-      "screen": "/inspection"
     },
     {
       "module": "inspection",
@@ -1122,8 +1062,8 @@
       "screen": "/inspection/inspections"
     },
     {
-      "module": "install",
-      "screen": "/install/console"
+      "module": "inspection",
+      "screen": "/inspection"
     },
     {
       "module": "install",
@@ -1142,12 +1082,8 @@
       "screen": "/install/stages"
     },
     {
-      "module": "install",
-      "screen": "/install/steps"
-    },
-    {
       "module": "inventory",
-      "screen": "/inventory"
+      "screen": "/inventory/bins/new"
     },
     {
       "module": "inventory",
@@ -1163,11 +1099,23 @@
     },
     {
       "module": "inventory",
-      "screen": "/inventory/items"
+      "screen": "/inventory/items/new"
+    },
+    {
+      "module": "inventory",
+      "screen": "/inventory/items/unlinked"
+    },
+    {
+      "module": "inventory",
+      "screen": "/inventory/ledger/new"
     },
     {
       "module": "inventory",
       "screen": "/inventory/low-stock"
+    },
+    {
+      "module": "inventory",
+      "screen": "/inventory"
     },
     {
       "module": "inventory",
@@ -1179,11 +1127,11 @@
     },
     {
       "module": "inventory",
-      "screen": "/inventory/substitutes"
+      "screen": "/inventory/settings"
     },
     {
-      "module": "journeys",
-      "screen": "/journeys"
+      "module": "inventory",
+      "screen": "/inventory/substitutes"
     },
     {
       "module": "journeys",
@@ -1191,19 +1139,15 @@
     },
     {
       "module": "journeys",
-      "screen": "/journeys/analytics"
-    },
-    {
-      "module": "journeys",
       "screen": "/journeys/builder"
     },
     {
       "module": "journeys",
-      "screen": "/journeys/templates"
+      "screen": "/journeys"
     },
     {
-      "module": "knowledge",
-      "screen": "/knowledge"
+      "module": "journeys",
+      "screen": "/journeys/templates"
     },
     {
       "module": "knowledge",
@@ -1215,43 +1159,15 @@
     },
     {
       "module": "knowledge",
+      "screen": "/knowledge"
+    },
+    {
+      "module": "knowledge",
+      "screen": "/knowledge/policies/new"
+    },
+    {
+      "module": "knowledge",
       "screen": "/knowledge/policies"
-    },
-    {
-      "module": "learning",
-      "screen": "/learning"
-    },
-    {
-      "module": "learning",
-      "screen": "/learning/assessments"
-    },
-    {
-      "module": "learning",
-      "screen": "/learning/assessments/verify"
-    },
-    {
-      "module": "learning",
-      "screen": "/learning/calendar"
-    },
-    {
-      "module": "learning",
-      "screen": "/learning/competency"
-    },
-    {
-      "module": "learning",
-      "screen": "/learning/courses"
-    },
-    {
-      "module": "learning",
-      "screen": "/learning/my-learning"
-    },
-    {
-      "module": "learning",
-      "screen": "/learning/training-plans"
-    },
-    {
-      "module": "legal",
-      "screen": "/legal"
     },
     {
       "module": "legal",
@@ -1262,12 +1178,12 @@
       "screen": "/legal/opinions/new"
     },
     {
-      "module": "library",
-      "screen": "/library"
+      "module": "legal",
+      "screen": "/legal"
     },
     {
-      "module": "locations",
-      "screen": "/locations"
+      "module": "library",
+      "screen": "/library"
     },
     {
       "module": "locations",
@@ -1283,15 +1199,15 @@
     },
     {
       "module": "locations",
+      "screen": "/locations/maps/monitoring"
+    },
+    {
+      "module": "locations",
       "screen": "/locations/maps"
     },
     {
       "module": "locations",
-      "screen": "/locations/maps/monitoring"
-    },
-    {
-      "module": "loyalty",
-      "screen": "/loyalty"
+      "screen": "/locations"
     },
     {
       "module": "loyalty",
@@ -1323,10 +1239,6 @@
     },
     {
       "module": "metadata",
-      "screen": "/metadata"
-    },
-    {
-      "module": "metadata",
       "screen": "/metadata/entities"
     },
     {
@@ -1339,6 +1251,10 @@
     },
     {
       "module": "metadata",
+      "screen": "/metadata"
+    },
+    {
+      "module": "metadata",
       "screen": "/metadata/records"
     },
     {
@@ -1346,20 +1262,12 @@
       "screen": "/metadata/rules"
     },
     {
-      "module": "municipal",
-      "screen": "/municipal"
-    },
-    {
       "module": "notifications",
-      "screen": "/notifications"
+      "screen": "/notifications/campaigns/[id]"
     },
     {
       "module": "notifications",
       "screen": "/notifications/campaigns"
-    },
-    {
-      "module": "notifications",
-      "screen": "/notifications/campaigns/[id]"
     },
     {
       "module": "notifications",
@@ -1375,27 +1283,15 @@
     },
     {
       "module": "notifications",
-      "screen": "/notifications/templates"
-    },
-    {
-      "module": "notifications",
       "screen": "/notifications/templates/[id]"
     },
     {
-      "module": "platform-admin",
-      "screen": "/platform-admin"
+      "module": "notifications",
+      "screen": "/notifications/templates/new"
     },
     {
-      "module": "platform-admin",
-      "screen": "/platform-admin/system-settings"
-    },
-    {
-      "module": "platform-admin",
-      "screen": "/platform-admin/tenant-config"
-    },
-    {
-      "module": "plugins",
-      "screen": "/plugins"
+      "module": "notifications",
+      "screen": "/notifications/templates"
     },
     {
       "module": "plugins",
@@ -1407,19 +1303,11 @@
     },
     {
       "module": "plugins",
+      "screen": "/plugins"
+    },
+    {
+      "module": "plugins",
       "screen": "/plugins/registry"
-    },
-    {
-      "module": "policy",
-      "screen": "/policy"
-    },
-    {
-      "module": "policy",
-      "screen": "/policy/abac"
-    },
-    {
-      "module": "policy",
-      "screen": "/policy/bindings"
     },
     {
       "module": "policy",
@@ -1427,11 +1315,11 @@
     },
     {
       "module": "policy",
-      "screen": "/policy/role-features"
+      "screen": "/policy"
     },
     {
-      "module": "procurement",
-      "screen": "/procurement"
+      "module": "policy",
+      "screen": "/policy/role-features"
     },
     {
       "module": "procurement",
@@ -1443,19 +1331,7 @@
     },
     {
       "module": "procurement",
-      "screen": "/procurement/grn"
-    },
-    {
-      "module": "procurement",
-      "screen": "/procurement/grn/[id]/srn/new"
-    },
-    {
-      "module": "procurement",
       "screen": "/procurement/grn/new"
-    },
-    {
-      "module": "procurement",
-      "screen": "/procurement/indents"
     },
     {
       "module": "procurement",
@@ -1463,15 +1339,11 @@
     },
     {
       "module": "procurement",
-      "screen": "/procurement/orders"
-    },
-    {
-      "module": "procurement",
-      "screen": "/procurement/orders/[id]/amend"
-    },
-    {
-      "module": "procurement",
       "screen": "/procurement/orders/new"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement"
     },
     {
       "module": "procurement",
@@ -1483,15 +1355,7 @@
     },
     {
       "module": "procurement",
-      "screen": "/procurement/tenders/[id]/documents"
-    },
-    {
-      "module": "procurement",
       "screen": "/procurement/tenders/new"
-    },
-    {
-      "module": "procurement",
-      "screen": "/procurement/vendors"
     },
     {
       "module": "procurement",
@@ -1503,19 +1367,7 @@
     },
     {
       "module": "projects",
-      "screen": "/projects/new"
-    },
-    {
-      "module": "projects",
       "screen": "/projects/utilization"
-    },
-    {
-      "module": "recommendations",
-      "screen": "/recommendations"
-    },
-    {
-      "module": "recommendations",
-      "screen": "/recommendations/feedback"
     },
     {
       "module": "recommendations",
@@ -1530,8 +1382,8 @@
       "screen": "/recommendations/nba"
     },
     {
-      "module": "reports",
-      "screen": "/reports"
+      "module": "recommendations",
+      "screen": "/recommendations"
     },
     {
       "module": "reports",
@@ -1539,11 +1391,7 @@
     },
     {
       "module": "reports",
-      "screen": "/reports/scheduled"
-    },
-    {
-      "module": "revenue",
-      "screen": "/revenue"
+      "screen": "/reports"
     },
     {
       "module": "revenue",
@@ -1555,11 +1403,11 @@
     },
     {
       "module": "revenue",
-      "screen": "/revenue/assessees"
+      "screen": "/revenue/assessees/[id]"
     },
     {
       "module": "revenue",
-      "screen": "/revenue/assessees/[id]"
+      "screen": "/revenue/assessees"
     },
     {
       "module": "revenue",
@@ -1580,6 +1428,10 @@
     {
       "module": "revenue",
       "screen": "/revenue/instalments"
+    },
+    {
+      "module": "revenue",
+      "screen": "/revenue"
     },
     {
       "module": "revenue",
@@ -1606,24 +1458,12 @@
       "screen": "/revenue/write-offs"
     },
     {
-      "module": "setup",
-      "screen": "/setup"
-    },
-    {
-      "module": "stock",
-      "screen": "/stock"
-    },
-    {
       "module": "stock",
       "screen": "/stock/items/new"
     },
     {
       "module": "stock",
-      "screen": "/stock/ledger/new"
-    },
-    {
-      "module": "telephony",
-      "screen": "/telephony"
+      "screen": "/stock"
     },
     {
       "module": "telephony",
@@ -1638,8 +1478,8 @@
       "screen": "/telephony/dispositions"
     },
     {
-      "module": "tenant",
-      "screen": "/tenant"
+      "module": "telephony",
+      "screen": "/telephony"
     },
     {
       "module": "tenant",
@@ -1660,6 +1500,10 @@
     {
       "module": "tenant",
       "screen": "/tenant/overview"
+    },
+    {
+      "module": "tenant",
+      "screen": "/tenant"
     },
     {
       "module": "tenant",
@@ -1695,23 +1539,7 @@
     },
     {
       "module": "tenant-admin",
-      "screen": "/tenant-admin/breakglass/[id]"
-    },
-    {
-      "module": "tenant-admin",
       "screen": "/tenant-admin/notifications/channels"
-    },
-    {
-      "module": "tenant-admin",
-      "screen": "/tenant-admin/org-type"
-    },
-    {
-      "module": "tenant-admin",
-      "screen": "/tenant-admin/sessions/[id]"
-    },
-    {
-      "module": "themes",
-      "screen": "/themes"
     },
     {
       "module": "themes",
@@ -1723,11 +1551,11 @@
     },
     {
       "module": "themes",
-      "screen": "/themes/templates"
+      "screen": "/themes"
     },
     {
-      "module": "visitor",
-      "screen": "/visitor"
+      "module": "themes",
+      "screen": "/themes/templates"
     },
     {
       "module": "visitor",
@@ -1742,8 +1570,12 @@
       "screen": "/visitor/host"
     },
     {
+      "module": "visitor",
+      "screen": "/visitor"
+    },
+    {
       "module": "workflow",
-      "screen": "/workflow"
+      "screen": "/workflow/definitions/[id]"
     },
     {
       "module": "workflow",
@@ -1751,7 +1583,7 @@
     },
     {
       "module": "workflow",
-      "screen": "/workflow/definitions/[id]"
+      "screen": "/workflow/designer"
     },
     {
       "module": "workflow",
@@ -1766,8 +1598,12 @@
       "screen": "/workflow/my-tasks"
     },
     {
+      "module": "workflow",
+      "screen": "/workflow"
+    },
+    {
       "module": "works",
-      "screen": "/works/approvals"
+      "screen": "/works/approvals/aa/[id]"
     },
     {
       "module": "works",
@@ -1775,11 +1611,15 @@
     },
     {
       "module": "works",
-      "screen": "/works/approvals/ts-new"
+      "screen": "/works/approvals"
     },
     {
       "module": "works",
-      "screen": "/works/billing"
+      "screen": "/works/approvals/ts/[id]"
+    },
+    {
+      "module": "works",
+      "screen": "/works/approvals/ts-new"
     },
     {
       "module": "works",
@@ -1803,11 +1643,7 @@
     },
     {
       "module": "works",
-      "screen": "/works/boq"
-    },
-    {
-      "module": "works",
-      "screen": "/works/boq/[workId]"
+      "screen": "/works/billing"
     },
     {
       "module": "works",
@@ -1815,11 +1651,15 @@
     },
     {
       "module": "works",
-      "screen": "/works/closure"
+      "screen": "/works/boq"
     },
     {
       "module": "works",
-      "screen": "/works/contractors"
+      "screen": "/works/closure/new"
+    },
+    {
+      "module": "works",
+      "screen": "/works/closure"
     },
     {
       "module": "works",
@@ -1827,7 +1667,7 @@
     },
     {
       "module": "works",
-      "screen": "/works/execution"
+      "screen": "/works/contractors"
     },
     {
       "module": "works",
@@ -1835,11 +1675,11 @@
     },
     {
       "module": "works",
-      "screen": "/works/execution/issues"
+      "screen": "/works/execution/issues/new"
     },
     {
       "module": "works",
-      "screen": "/works/execution/issues/new"
+      "screen": "/works/execution"
     },
     {
       "module": "works",
@@ -1859,7 +1699,7 @@
     },
     {
       "module": "works",
-      "screen": "/works/proposals"
+      "screen": "/works/proposals/[id]"
     },
     {
       "module": "works",
@@ -1867,11 +1707,11 @@
     },
     {
       "module": "works",
-      "screen": "/works/reports"
+      "screen": "/works/proposals"
     },
     {
       "module": "works",
-      "screen": "/works/tenders"
+      "screen": "/works/reports"
     },
     {
       "module": "works",
@@ -1880,6 +1720,10 @@
     {
       "module": "works",
       "screen": "/works/tenders/new"
+    },
+    {
+      "module": "works",
+      "screen": "/works/tenders"
     }
   ]
 }

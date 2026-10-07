@@ -92,6 +92,9 @@ interface Props {
   params: { id: string };
 }
 
+// WCAG 2.4.2 (Page Titled): without this the tab title fell back to the generic app name.
+export const metadata = { title: "Joinee Onboarding — CivitasOne HRMS" };
+
 export default async function OnboardingDetailPage({ params }: Props) {
   const t = await getTranslations("onboardingDetail");
   const { id } = params;
@@ -188,7 +191,7 @@ export default async function OnboardingDetailPage({ params }: Props) {
     }));
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={`Onboarding — ${emp.name}`}
         subtitle={`${emp.department} · Joining ${formatIndianDate(emp.joiningDate)}`}

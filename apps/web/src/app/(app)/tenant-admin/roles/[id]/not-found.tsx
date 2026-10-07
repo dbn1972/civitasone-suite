@@ -7,7 +7,7 @@ import { Breadcrumb } from "../../Breadcrumb";
 // page.tsx instead, so an outage never masquerades as a deleted role.
 export default function RoleNotFound() {
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Manage Roles", href: "/tenant-admin/roles" }, { label: "Not found" }]} />
       <EmptyState
         icon="🔑"

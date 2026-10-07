@@ -16,7 +16,7 @@ import { EmptyState, PageHeader } from "@/app/_components/ds";
  */
 export default function DomainsPage() {
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Domains"
         subtitle="Government domains registered for GovUX audit and WCAG compliance tracking."

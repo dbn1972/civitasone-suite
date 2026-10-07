@@ -13,7 +13,7 @@ export default async function EntitlementsPage() {
   const { data: entitlements, source, status } = await getSAEntitlements();
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {/* GAP-ADMIN-ENTITLEMENTS-02/03: stats, provenance badge, error state and table
           all live in EntitlementsTable, fed by ONE useSeededResource call. */}
       <PageHeader title="Entitlements" subtitle="Module and feature entitlements per edition and tenant override." back="/admin" />

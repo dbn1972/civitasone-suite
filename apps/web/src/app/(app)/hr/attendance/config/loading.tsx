@@ -24,7 +24,7 @@ import { getTranslations } from "next-intl/server";
 export default async function Loading() {
   const t = await getTranslations("attendanceConfig");
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading" aria-busy="true">
+    <div className="page-main wrap" aria-busy="true">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/attendance" backLabel={t("backLabel")} />
       <div className="animate-pulse" style={{ display: "grid", gap: 16 }}>
         <div style={{ height: 60, borderRadius: 12, background: "var(--bg, #f1f5f9)" }} />

@@ -71,7 +71,7 @@ export default async function PensionersPage() {
   // own honest empty copy (EmptyState below); DataTable's emptyMessage is now
   // only the filtered-no-match case.
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

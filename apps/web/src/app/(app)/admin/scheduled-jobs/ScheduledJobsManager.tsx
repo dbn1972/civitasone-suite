@@ -280,7 +280,7 @@ export function ScheduledJobsManager({ initialJobs, source, targets = null }: { 
   }
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title="Scheduled Jobs" subtitle="Manage recurring background tasks and monitor execution history." back="/admin" />
       <DataSourceBadge source={source} />
       {notice && <div role="status" style={{ marginBottom: 14, fontSize: 13, color: "var(--mut)" }}>{notice}</div>}

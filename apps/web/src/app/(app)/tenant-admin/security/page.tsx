@@ -11,7 +11,7 @@ export default async function SecurityCenterPage() {
   const errored = toResourceState(result).status === "error";
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Security Center" }]} />
       <PageHeader
         back="/tenant-admin"

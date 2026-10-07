@@ -9,7 +9,7 @@ import { TileHubSkeleton } from "../../_components/ds/Skeleton";
  */
 export default function CatalogueLoading() {
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <TileHubSkeleton sections={1} tilesPerSection={4} />
     </div>
   );

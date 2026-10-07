@@ -283,7 +283,7 @@ export default async function ReturnsPage({
     `/api/proxy/v1/payroll/statutory/${form}?fy=${encodeURIComponent(fy)}&quarter=${quarter}&format=file`;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

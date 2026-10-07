@@ -75,7 +75,7 @@ export default async function AdvancesPage() {
   const rejected = items.filter((i) => i.rawStatus === "rejected").length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel="Back to HR" />
       {/* GAP-HR-ADVANCES-08: the banner used to claim "showing nothing" even
           though RequestAdvanceForm below stays fully usable on a list-load

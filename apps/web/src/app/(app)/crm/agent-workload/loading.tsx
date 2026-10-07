@@ -2,7 +2,7 @@ import { useTranslations } from "next-intl";
 export default function Loading() {
   const t = useTranslations("crm.loading");
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <div className="ph">
         <div>
           <h1 id="page-heading">{t("agentWorkloadTitle")}</h1>

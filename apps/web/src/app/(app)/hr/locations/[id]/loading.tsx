@@ -5,7 +5,7 @@ import { getTranslations } from "next-intl/server";
 export default async function Loading() {
   const t = await getTranslations("locationDetail");
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={t("fallbackTitle")} back="/hr/locations" backLabel={t("backLabel")} help="hr" />
       <Card title={t("employeesTitle")}>
         <SkeletonTable rows={8} />

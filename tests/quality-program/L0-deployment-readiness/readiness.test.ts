@@ -111,6 +111,12 @@ const PORTS: Record<string, number> = {
   recommendation: 3040, "ai-agent": 3041, catalogue: 3044, journey: 3045,
   field: 3046, cdp: 3047, loyalty: 3048,
   location: 4012, gateway: 8080,
+  // Municipal / back-office services (ecosystem.config.js svc() ports; same defaults as each
+  // service's own `PORT ?? <n>`). They had no entry, so the "every service has a documented
+  // port" discovery guard failed on all 18.
+  document: 3049, shop: 3060, trade: 3070, building: 3071, fire: 3072, advertisement: 3073,
+  vendor: 3074, roadcut: 3075, event: 3076, refund: 3077, sewerage: 3078, swm: 3079,
+  drainage: 3080, parks: 3081, animal: 3082, crematorium: 3083, parking: 3084, market: 3085,
 };
 
 let discoveredServices: string[] = [];

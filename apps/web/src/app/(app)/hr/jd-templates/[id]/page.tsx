@@ -29,7 +29,7 @@ export default async function EditTemplatePage({ params }: { params: Promise<{ i
   }
 
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <PageHeader
         title={t("editTitle")}
         subtitle={t("editSubtitle")}

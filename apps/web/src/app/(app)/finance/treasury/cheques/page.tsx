@@ -18,7 +18,7 @@ export default async function ChequesPage() {
   const n = (v: number) => (loaded ? v : "—");
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Cheque / DD Register"
         subtitle="Cheque and demand draft register with clearance and bounce tracking."

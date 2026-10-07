@@ -121,7 +121,7 @@ export default async function LoansPage() {
   ];
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel={t("backToHr")} />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>

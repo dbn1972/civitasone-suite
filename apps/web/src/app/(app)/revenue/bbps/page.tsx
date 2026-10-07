@@ -4,7 +4,7 @@ import { PayBillForm } from "./PayBillForm";
 
 export default function BbpsPage() {
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="BBPS Bill Fetch & Pay"
         subtitle="Fetch an assessee's outstanding bill via Bharat Bill Payment System and record a BBPS payment against it."

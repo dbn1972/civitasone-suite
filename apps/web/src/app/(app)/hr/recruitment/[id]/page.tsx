@@ -947,7 +947,7 @@ export default function JobOpeningDetailPage() {
     : null;
 
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       {/* ── Header ── */}
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>

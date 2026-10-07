@@ -13,7 +13,7 @@ export default async function OrgTypePage() {
   const errored = toResourceState(result).status === "error";
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Organisation Type"
         subtitle="Choose what kind of organisation you are — this adjusts terminology, default policies, and which features are shown."

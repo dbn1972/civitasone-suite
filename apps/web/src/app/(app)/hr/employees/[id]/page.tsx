@@ -143,7 +143,7 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
   // special-cases it with the backend's own reason (see page.test.tsx).
   if (errored && status === 404) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("notFoundTitle")} back="/hr/employees" backLabel="Back to Employees" />
         <Card padding>
           <p className="text-center text-slate-600">{t("notFoundMessage")}</p>
@@ -154,7 +154,7 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
 
   if (errored) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         {/* Distinct title from the not-found branch below (was the same
             "Employee Profile" in both, per GAP-HR-EMPLOYEES-DETAIL-07) and
             a consistent back label. */}
@@ -168,7 +168,7 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
 
   if (!employee) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("notFoundTitle")} back="/hr/employees" backLabel="Back to Employees" />
         <DataSourceBadge source={source} />
         <Card padding>
@@ -231,7 +231,7 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
   const allEvents = [...baseEvents, ...lifecycleEvents];
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={employee.name}
         back="/hr/employees" backLabel="Back to Employees"

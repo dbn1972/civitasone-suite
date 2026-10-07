@@ -16,6 +16,7 @@ import { useSeededResource } from "@/lib/sync/resource";
 // row; "Other" only appears when an unknown value exists so a stray value is
 // never silently dropped from the register. Each tab carries a per-type date
 // column label (CLOSURE-04) so "Status Date" no longer hides what date it is.
+// static reference: tab label / date-column-label copy keyed by the normalised closureType enum; not backend data.
 const TAB_META: Record<string, { label: string; dateLabel: string; empty: string }> = {
   all: { label: "All", dateLabel: "Date", empty: "No works in the closure register." },
   closed: { label: "Closed", dateLabel: "Closed on", empty: "No works in the closed list." },

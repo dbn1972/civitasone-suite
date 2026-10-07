@@ -48,7 +48,7 @@ export default async function OutsourcedPage({ searchParams }: { searchParams?: 
   const showingTo = page.offset + items.length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel={tc("backToHr")} />
       <DataSourceBadge source={source} />
       <StatGrid>

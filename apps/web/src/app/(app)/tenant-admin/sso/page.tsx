@@ -33,7 +33,7 @@ export default async function SSOPage() {
   const latest = errored ? null : latestSyncIso(providers);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "SSO & Identity Providers" }]} />
       {/* GAP-TENANT-ADMIN-SSO-01 (DECISION, recorded): there is no SSO/IdP
           provider store yet — admin-service GET /v1/admin/sso/providers returns

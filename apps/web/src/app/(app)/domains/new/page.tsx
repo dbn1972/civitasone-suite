@@ -79,7 +79,7 @@ export default function NewDomainPage() {
   }
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Register New Domain"
         subtitle="Add a government domain for GovUX audit and WCAG compliance tracking."

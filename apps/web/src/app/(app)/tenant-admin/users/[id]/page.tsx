@@ -17,7 +17,7 @@ export default async function AdminUserDetailPage({ params }: { params: { id: st
   // looking like the user was deleted.
   if (source === "error") {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Users", href: "/tenant-admin/users" }, { label: "Error" }]} />
         <RefreshErrorState error={toHumanError("load", { area: "user" })} backHref="/tenant-admin/users" />
       </div>
@@ -26,7 +26,7 @@ export default async function AdminUserDetailPage({ params }: { params: { id: st
 
   if (!user) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Users", href: "/tenant-admin/users" }, { label: "Not found" }]} />
         <EmptyState icon="👤" title="User not found" message="This user may have been removed or the ID is invalid." />
       </div>
@@ -36,7 +36,7 @@ export default async function AdminUserDetailPage({ params }: { params: { id: st
   const activeSessionCount = user.sessions.filter((s) => s.status === "active").length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Users", href: "/tenant-admin/users" }, { label: user.name ?? user.email }]} />
       <PageHeader
         back="/tenant-admin/users"

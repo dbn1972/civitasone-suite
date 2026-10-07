@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   const { data, source } = await getTenantSettings();
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <ModuleListPage
         // GAP-TENANT-SETTINGS-06: no banned clerk term ("Tenant").
         title={`${LABELS.tenantTitle} — Settings`}

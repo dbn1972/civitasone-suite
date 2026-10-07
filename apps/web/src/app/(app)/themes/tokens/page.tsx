@@ -18,7 +18,7 @@ export default async function Page() {
   // user to publish a tenant-wide theme on top of data it could not read.
   if (source === "error") {
     return (
-      <div className="page-main" aria-labelledby="page-heading">
+      <div className="page-main">
         <PageHeader
           title="Themes — Tokens"
           subtitle="Tenant branding and token preview workspace."
@@ -47,7 +47,7 @@ export default async function Page() {
   const scalarTokens = total - colourTokens;
 
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <PageHeader
         title="Themes — Tokens"
         subtitle="Tenant branding and token preview workspace."

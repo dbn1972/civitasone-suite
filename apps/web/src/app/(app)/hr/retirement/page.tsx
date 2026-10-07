@@ -44,7 +44,7 @@ export default async function RetirementPage({
   const roles = getSessionRoles();
   if (!RETIREMENT_ROLES.some((r) => roles.includes(r))) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PermissionDenied module={t("title")} requiredRoles={RETIREMENT_ROLES} backHref="/hr" />
       </div>
     );
@@ -100,7 +100,7 @@ export default async function RetirementPage({
   const vrs = items.filter((i) => (i.separationType ?? "").toLowerCase() === "vrs").length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

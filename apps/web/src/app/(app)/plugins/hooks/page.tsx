@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   const { data, source } = await getPluginHooksTyped();
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <PageHeader
         title="Plugins — Hooks"
         subtitle="Business events that installed plugins subscribe to."

@@ -17,7 +17,7 @@ export default async function WbsPage() {
   const counts = errored ? null : countWbsNodes(nodes);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title="Work Breakdown Structure" subtitle="Hierarchical view of project phases, stages and activities." back="/projects" />
       <StatGrid>
         <StatCard icon="📋" iconBg="#eff6ff" label="Total Activities" value={counts?.total ?? "—"} />

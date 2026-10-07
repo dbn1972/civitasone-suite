@@ -30,7 +30,7 @@ export default async function LibraryIssuesPage({
   const issuableBooks = books.filter((b) => b.copiesAvailable > 0);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Library Issues &amp; Loans"
         subtitle="Issue books to staff and record returns."

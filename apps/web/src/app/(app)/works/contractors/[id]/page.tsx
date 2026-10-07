@@ -145,7 +145,7 @@ export default async function ContractorDetailPage({
   if (source === "error") {
     if (status === 404) return notFound();
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="Contractor" back="/works/contractors" backLabel="Contractors" />
         <LoadErrorState
           result={{ status, errorMessage }}
@@ -193,7 +193,7 @@ export default async function ContractorDetailPage({
   }));
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={contractor.name}
         subtitle={`Reg. No. ${String(contractor.registrationNo ?? "—")}`}

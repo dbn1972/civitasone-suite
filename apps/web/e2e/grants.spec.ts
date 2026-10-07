@@ -31,8 +31,8 @@ test.describe('Grants', () => {
     await expect(page.getByRole('columnheader', { name: 'Grant No' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Title' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Grantee' })).toBeVisible();
-    // GrantsTable.tsx's real column label is "Total (₹)", not "Total Amount (₹)".
-    await expect(page.getByRole('columnheader', { name: 'Total (₹)' })).toBeVisible();
+    // GrantsTable.tsx's column label is "Total" (amounts carry the ₹ symbol in the cells).
+    await expect(page.getByRole('columnheader', { name: 'Total', exact: true })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Status' })).toBeVisible();
   });
 

@@ -172,7 +172,7 @@ export default function AccountCompilePage() {
   const selectedMonthName = MONTHS_FY.find((m) => m.value === monthNum)?.name ?? month;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Account Compile"
         subtitle="Compile and submit the monthly account statement to treasury."

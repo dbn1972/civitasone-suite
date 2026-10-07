@@ -36,7 +36,7 @@ export default async function TenantAuditPage({ searchParams }: { searchParams?:
   const failures = scoped.filter((e) => e.outcome === "failure").length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Audit Log" }]} />
       <PageHeader
         back="/tenant-admin"

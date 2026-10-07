@@ -11,7 +11,7 @@ import { getTranslations } from "next-intl/server";
 export default async function HRLeavePoliciesLoading() {
   const t = await getTranslations("leavePolicies");
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel="Back to HR" />
       <SkeletonTable rows={6} />
     </div>

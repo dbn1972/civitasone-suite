@@ -23,7 +23,7 @@ export default async function Page() {
 	const stats = await getLoyaltyStats();
 
 	return (
-		<div className="page-main" aria-labelledby="page-heading">
+		<div className="page-main">
 			<PageHeader title="Loyalty Programs" subtitle="Points, tiers, and member rewards management." help="loyalty" />
 			<StatGrid>
 				<StatCard icon="👤" tone="info" label="Active members" value={stats.activeMembers} />

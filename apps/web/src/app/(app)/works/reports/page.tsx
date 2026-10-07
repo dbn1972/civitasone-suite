@@ -130,7 +130,7 @@ export default async function WorksReportsPage({ searchParams }: PageProps) {
   const stat = (n: number): string | number => (summaryError ? "—" : n);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Works Reports"
         subtitle="Summary and status of all engineering works"

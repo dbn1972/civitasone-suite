@@ -37,7 +37,7 @@ export default async function AttendanceRegularisationPage() {
   const stats = computeRegularisationStats(regs, errored);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitlePage")}

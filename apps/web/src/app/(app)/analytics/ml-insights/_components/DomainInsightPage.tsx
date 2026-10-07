@@ -77,7 +77,7 @@ export function DomainInsightPage({
   // ML model is active" copy. GAP-*-ML-INSIGHTS-*-01 (FAILMASK).
   if (source === "error") {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         {header}
         <RefreshErrorState
           error={toHumanError("load", { area: "ML insights" })}
@@ -93,7 +93,7 @@ export function DomainInsightPage({
   const hasData = evaluation.totalPredictions > 0;
   if (!hasData) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         {header}
         <DataSourceBadge source="api" />
         <EmptyState
@@ -107,7 +107,7 @@ export function DomainInsightPage({
   }
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {header}
       <StatGrid>
         <StatCard

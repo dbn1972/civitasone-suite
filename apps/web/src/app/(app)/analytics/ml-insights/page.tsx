@@ -41,7 +41,7 @@ export default async function MLInsightsHubPage() {
   // an honest, retryable error state. GAP-ANALYTICS-ML-INSIGHTS-01 (FAILMASK).
   if (source === "error") {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader
           title="ML Insights"
           subtitle="Model performance, prediction accuracy, and explainability metrics across all ML-powered domains."
@@ -56,7 +56,7 @@ export default async function MLInsightsHubPage() {
   const activeDomains = domains.filter(isActive).length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="ML Insights"
         subtitle="Model performance, prediction accuracy, and explainability metrics across all ML-powered domains."

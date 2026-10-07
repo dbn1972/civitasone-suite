@@ -9,6 +9,7 @@ import { budgetHeadLabel } from "../_lib/headLabel";
 type Row = Record<string, unknown>;
 
 /** The server's exception classification -> the label and pill tone shown for it. */
+// static reference: label/pill-tone lookup for the server's exception classification enum; not backend data.
 const EXCEPTION: Record<string, { label: string; variant: PillVariant }> = {
   over_committed: { label: "Over-committed", variant: "bad" },
   projected_overspend: { label: "Proj. Overspend", variant: "warn" },

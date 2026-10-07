@@ -42,7 +42,7 @@ export default async function StockItemDetailPage({
   // real 404 is "not found"; every other failure is a retryable/permission state.
   if (result.source === "error" && result.status !== 404) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="Stock item" back="/inventory/list" />
         <LoadErrorState result={result} area="stock item" backHref="/inventory/list" />
       </div>
@@ -51,7 +51,7 @@ export default async function StockItemDetailPage({
 
   if (!item) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="Item not found" back="/inventory/list" />
         <p className="sub">
           This stock item could not be found. It may have been removed, or you may not have access to it.{" "}
@@ -70,7 +70,7 @@ export default async function StockItemDetailPage({
   }));
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={
           <>

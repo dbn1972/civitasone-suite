@@ -59,7 +59,7 @@ export default async function AllotmentDetailPage({ params }: { params: { id: st
     // GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-02: distinguish 404 from outage.
     if (allotmentSource === "error") {
       return (
-        <div className="page-main wrap" aria-labelledby="page-heading">
+        <div className="page-main wrap">
           <PageHeader title="Allotment" back="/estab/quarters/allotments" />
           <RefreshErrorState error={toHumanError("load", { area: "allotment" })} backHref="/estab/quarters/allotments" />
         </div>
@@ -92,7 +92,7 @@ export default async function AllotmentDetailPage({ params }: { params: { id: st
   const isApplicant = !!sessionUserId && sessionUserId === allotment.employeeRef;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={`Allotment · ${quarterLabel}`}
         subtitle={`Employee ${employeeDisplay} · Applied ${formatIndianDate(allotment.appliedAt)}`}

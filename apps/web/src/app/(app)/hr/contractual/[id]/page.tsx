@@ -62,7 +62,7 @@ export default async function ContractDetailPage({ params }: { params: { id: str
   const employee = employees[0];
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("titleWithNo", { no: contract.contractNo })}
         subtitle={employee?.label ?? "—"}

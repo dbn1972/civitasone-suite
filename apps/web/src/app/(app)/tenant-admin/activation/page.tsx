@@ -63,7 +63,7 @@ export default async function ActivationPage() {
   const agg = aggregateFunnel(events);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Activation"
         subtitle={

@@ -17,7 +17,7 @@ export default async function SiemPage() {
   const activeAlerts = alerts.filter((a) => isOpenSiemStatus(a.status)).length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "SIEM & Threat Monitoring" }]} />
       <PageHeader
         back="/tenant-admin"

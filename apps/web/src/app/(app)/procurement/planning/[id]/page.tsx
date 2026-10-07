@@ -166,7 +166,7 @@ export default async function AnnualPlanDetailPage({ params }: { params: { id: s
           <DataTable<LineRow>
             columns={LINE_COLUMNS}
             rows={lineRows}
-            rowHref={(row) => (row.tenderId ? `/procurement/tenders/${row.tenderId}` : undefined)}
+            rowLinkKey="tenderId" rowLinkPrefix="/procurement/tenders/"
             pageSize={50}
           />
         </Card>

@@ -15,7 +15,7 @@ export default async function POAmendPage({ params }: { params: { id: string } }
 
   if (!po) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="Request PO Amendment" back={`/procurement/orders/${params.id}`} backLabel="Purchase Order" />
         {source === "error" ? (
           <ErrorState error={toHumanError("load", { area: "purchase order" })} backHref={`/procurement/orders/${params.id}`} />
@@ -29,7 +29,7 @@ export default async function POAmendPage({ params }: { params: { id: string } }
   const amendable = AMENDABLE_STATUSES.has(po.status);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <div style={{ maxWidth: 720 }}>
         <PageHeader
           title={`Request amendment — ${po.poNo}`}

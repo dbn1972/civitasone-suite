@@ -48,7 +48,7 @@ export default async function VigilancePage() {
     : cases.filter((c) => c.outcome === "major_penalty" || c.outcome === "minor_penalty").length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Vigilance Cases"
         subtitle="Departmental vigilance proceedings and inquiry outcomes."

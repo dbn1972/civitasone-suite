@@ -206,7 +206,7 @@ export default async function BillsPage({
   ];
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Bills & Demands"
         subtitle="Generate municipal tax bills from raised demands and review issued bills for an assessee."

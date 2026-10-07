@@ -356,7 +356,7 @@ export default function TradeLicensesPage() {
   const kpi = (value: number): string | number => (fetchError ? "—" : loading ? "…" : value);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Trade Licenses"
         subtitle="Issue and track municipal trade and business licenses."

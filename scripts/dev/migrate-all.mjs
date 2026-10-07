@@ -9,6 +9,7 @@ import { execSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { psqlInvocation } from "./psql-exec.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -150,10 +151,8 @@ for (const svc of SERVICES) {
     const filePath = join(migrationsDir, file);
     const sql = readFileSync(filePath);
     try {
-      execSync(
-        `docker exec -i civitasone-postgres psql -U civitas_admin -d ${svc.db} -v ON_ERROR_STOP=1`,
-        { input: sql, stdio: ["pipe", "pipe", "pipe"] }
-      );
+      const inv = psqlInvocation(svc.db);
+      execSync(inv.cmd, { input: sql, stdio: ["pipe", "pipe", "pipe"], env: inv.env });
       console.log(`[ok]   ${svc.name}/${file} → ${svc.db}`);
       applied++;
     } catch (err) {

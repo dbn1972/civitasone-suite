@@ -490,9 +490,12 @@ export function DataTable<T extends Record<string, unknown>>({
     return sortDir === "asc" ? "ascending" : "descending";
   };
 
-  const onRowKeyDown = (e: KeyboardEvent<HTMLTableRowElement>, href: string) => {
+  // Enter / Space on the row's link activate it. A plain <a> only handles Enter natively; Space is
+  // kept because the row used to be a role="button" (which activates on both) and callers rely on it.
+  const onRowLinkKeyDown = (e: KeyboardEvent<HTMLElement>, href: string) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
+      e.stopPropagation();
       router.push(href);
     }
   };
@@ -681,15 +684,13 @@ export function DataTable<T extends Record<string, unknown>>({
                 <tr
                   key={resolveRowKey(row, i, rowKey)}
                   className={href ? "clickable row-link" : undefined}
-                  // A <tr> keeps its native, non-interactive "row" role even
-                  // with a click handler bolted on -- assistive tech never
-                  // learns it's actionable, and it's skipped by AT quick-nav
-                  // (e.g. NVDA/JAWS "next button"). role="button" exposes the
-                  // affordance; Enter/Space activation already existed below.
-                  role={href ? "button" : undefined}
+                  // The row is a mouse-click convenience only. Its keyboard / assistive-tech
+                  // affordance is the first-column <a> below, a real, focusable link. The row
+                  // used to be role="button" tabIndex=0 AND contain that (tabIndex=-1) link --
+                  // a focusable control nested inside an interactive role, which axe reports as
+                  // "nested-interactive" (serious, WCAG 4.1.2): screen readers can still reach
+                  // the inner link, so the two controls fought over focus and announcement.
                   onClick={href ? () => router.push(href) : undefined}
-                  onKeyDown={href ? (e) => onRowKeyDown(e, href) : undefined}
-                  tabIndex={href ? 0 : undefined}
                 >
                   {columns.map((col, colIndex) => {
                     const cellContent = cellValue(col, row);
@@ -707,7 +708,7 @@ export function DataTable<T extends Record<string, unknown>>({
                         {colIndex === 0 && href ? (
                           <a
                             href={href}
-                            tabIndex={-1}
+                            onKeyDown={(e) => onRowLinkKeyDown(e, href)}
                             aria-label={`Open ${String(row[identifyingColumnKey ?? columns[0].key] ?? "row")}`}
                             onClick={(e) => {
                               e.preventDefault();

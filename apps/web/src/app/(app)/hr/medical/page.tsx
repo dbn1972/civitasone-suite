@@ -6,7 +6,8 @@ import { getTranslations } from "next-intl/server";
 import { toHumanError } from "@/lib/messages";
 import { formatIndianDate } from "@/lib/formatters";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
-import { resolveEmployees } from "@/lib/entityAdapters/employee";
+import { mapEmployeeOptions } from "@/lib/entityAdapters/employee";
+import type { EntityOption } from "@/app/_components/ds";
 import { MedicalClaimsTable, type MedicalClaimRow } from "./MedicalClaimsTable";
 
 // Mirrors medical/routes.ts's HR_ROLES for the approve/reject PATCH route.
@@ -57,7 +58,19 @@ export default async function MedicalPage() {
   // page, not N+1 — since medical/routes.ts cannot itself JOIN
   // employee.hrms_employees (module isolation, CLAUDE.md rule 4).
   const employeeIds = [...new Set(apiRows.map((r) => r.employee_id).filter(Boolean))];
-  const employees = employeeIds.length > 0 ? await resolveEmployees(employeeIds) : [];
+  // This is a Server Component: resolveEmployees() (the browser adapter) fetches the relative
+  // URL `/api/proxy/...`, which throws "Failed to parse URL" on the server and crashed the whole
+  // page whenever at least one claim existed. Use the server fetch client instead.
+  const employees: EntityOption[] =
+    employeeIds.length > 0
+      ? (
+          await fetchJson<unknown, EntityOption[]>(
+            `/api/v1/hrms/employees?ids=${employeeIds.map(encodeURIComponent).join(",")}`,
+            [],
+            { telemetryKey: "hr.medical.employees", mapResponse: mapEmployeeOptions },
+          )
+        ).data
+      : [];
   const employeeById = new Map(employees.map((e) => [e.id, e]));
 
   const items: MedicalClaimRow[] = apiRows.map((r) => {
@@ -92,7 +105,7 @@ export default async function MedicalPage() {
   const rejected = items.filter((i) => i.status === "rejected").length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

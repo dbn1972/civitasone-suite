@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   const { data, source } = await getTenantCodeLists();
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <nav aria-label="Breadcrumb" className="back">
         <ArrowLeft aria-hidden="true" size={14} /> <a href="/tenant">{LABELS.tenantTitle}</a>
       </nav>

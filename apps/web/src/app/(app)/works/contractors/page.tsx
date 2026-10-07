@@ -106,7 +106,7 @@ export default async function ContractorsPage() {
   // empty, healthy register (zeroed stat cards + "No contractors registered").
   if (source === "error") {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader
           title="Contractors"
           subtitle="Registered contractors available for tender quotations."
@@ -130,7 +130,7 @@ export default async function ContractorsPage() {
   const atPageLimit  = total >= PAGE_SIZE;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Contractors"
         subtitle="Registered contractors available for tender quotations."

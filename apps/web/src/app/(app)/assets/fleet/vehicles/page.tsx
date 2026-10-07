@@ -12,7 +12,7 @@ export default async function FleetVehiclesPage({ searchParams }: { searchParams
   const { data: vehicles, source } = await getVehicles();
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Fleet Vehicles"
         subtitle="Government vehicles registered to the fleet."

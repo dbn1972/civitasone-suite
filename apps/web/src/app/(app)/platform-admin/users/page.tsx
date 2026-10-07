@@ -37,7 +37,7 @@ export default async function PlatformUsersPage() {
   const mfaOn = users.filter((u) => u.mfaEnabled).length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <Breadcrumb items={[{ label: "Platform Admin", href: "/platform-admin" }, { label: "User Management" }]} />
       <PageHeader
         back="/platform-admin"

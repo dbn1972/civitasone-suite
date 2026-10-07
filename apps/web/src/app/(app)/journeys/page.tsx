@@ -22,7 +22,7 @@ export default async function Page() {
 	// null convention), never a misleading 0.
 	const counts = await getJourneyCounts();
 	return (
-		<div className="page-main" aria-labelledby="page-heading">
+		<div className="page-main">
 			<PageHeader title="Customer Journeys" subtitle="Multi-step campaign orchestration and automation." help="journeys" />
 			<StatGrid>
 				<StatCard icon="🧭" tone="neutral" label="Journeys defined" value={counts.defined} />

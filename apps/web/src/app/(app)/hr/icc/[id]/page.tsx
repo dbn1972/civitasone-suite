@@ -99,7 +99,7 @@ export default async function IccDetailPage({ params }: { params: { id: string }
   if (httpStatus === 404) notFound();
   if (!detail) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="ICC complaint" back="/hr/icc" backLabel="Back to ICC register" />
         <Card title="Complaint details">
           <div className="pad">
@@ -125,7 +125,7 @@ export default async function IccDetailPage({ params }: { params: { id: string }
   ];
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={detail.caseNo} subtitle="Confidential — POSH Act 2013, §16" back="/hr/icc" backLabel="Back to ICC register" />
 
       {isOpen && (

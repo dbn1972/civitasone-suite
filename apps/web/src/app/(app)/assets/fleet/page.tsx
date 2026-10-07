@@ -14,7 +14,7 @@ export default async function FleetOverviewPage() {
   const fmt = (n: number) => (ok ? n.toLocaleString("en-IN") : "—");
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Fleet & Telematics"
         subtitle="Government vehicles, GPS position, and IoT telematics devices."

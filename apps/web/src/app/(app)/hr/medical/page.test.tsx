@@ -13,11 +13,21 @@ vi.mock("@/app/_data/apiClient", () => ({
   fetchJson: (...args: unknown[]) => fetchJsonMock(...args),
 }));
 
-const resolveEmployeesMock = vi.fn();
 vi.mock("@/lib/entityAdapters/employee", () => ({
-  resolveEmployees: (...args: unknown[]) => resolveEmployeesMock(...args),
+  // Only consulted by fetchJson's mapResponse, which this suite's fetchJson mock never calls.
+  mapEmployeeOptions: vi.fn(),
+  resolveEmployees: vi.fn(async () => []),
   searchEmployees: vi.fn(async () => []),
 }));
+
+// The page makes two server reads: the claims list and the employee-name lookup.
+function apiMock(claims: unknown[], source: "api" | "error" = "api") {
+  fetchJsonMock.mockImplementation(async (path: string) =>
+    path.startsWith("/api/v1/hrms/employees")
+      ? { data: [{ id: "emp-1", label: "A. Kumar (E-100)" }], source: "api" }
+      : { data: claims, source },
+  );
+}
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
@@ -54,21 +64,20 @@ const BASE_CLAIM = {
 describe("MedicalPage", () => {
   beforeEach(() => {
     fetchJsonMock.mockReset();
-    resolveEmployeesMock.mockReset();
-    resolveEmployeesMock.mockResolvedValue([{ id: "emp-1", label: "A. Kumar (E-100)" }]);
     mockRoles = ["hr_admin"];
   });
 
   it("shows the employee's real name (GAP-HR-MEDICAL-02), not just claim fields", async () => {
-    fetchJsonMock.mockResolvedValue({ data: [BASE_CLAIM], source: "api" });
+    apiMock([BASE_CLAIM]);
     const ui = await MedicalPage();
     renderWithIntl(ui);
     expect(screen.getByText("A. Kumar (E-100)")).toBeInTheDocument();
-    expect(resolveEmployeesMock).toHaveBeenCalledWith(["emp-1"]);
+    // Resolved through the server fetch client (not the browser-only resolveEmployees adapter).
+    expect(fetchJsonMock).toHaveBeenCalledWith("/api/v1/hrms/employees?ids=emp-1", [], expect.anything());
   });
 
   it("shows the real claim_no in the Claim Ref column, not a fabricated reference (GAP-HR-MEDICAL-04)", async () => {
-    fetchJsonMock.mockResolvedValue({ data: [BASE_CLAIM], source: "api" });
+    apiMock([BASE_CLAIM]);
     const ui = await MedicalPage();
     renderWithIntl(ui);
     expect(screen.getByText("MED-000007")).toBeInTheDocument();
@@ -76,15 +85,12 @@ describe("MedicalPage", () => {
   });
 
   it("counts a 'settled' claim as Approved / Settled, not silently uncounted (GAP-HR-MEDICAL-03)", async () => {
-    fetchJsonMock.mockResolvedValue({
-      data: [
-        { ...BASE_CLAIM, id: "c1", status: "approved" },
-        { ...BASE_CLAIM, id: "c2", status: "settled" },
-        { ...BASE_CLAIM, id: "c3", status: "pending" },
-        { ...BASE_CLAIM, id: "c4", status: "rejected" },
-      ],
-      source: "api",
-    });
+    apiMock([
+      { ...BASE_CLAIM, id: "c1", status: "approved" },
+      { ...BASE_CLAIM, id: "c2", status: "settled" },
+      { ...BASE_CLAIM, id: "c3", status: "pending" },
+      { ...BASE_CLAIM, id: "c4", status: "rejected" },
+    ]);
     const ui = await MedicalPage();
     renderWithIntl(ui);
     const approvedCard = screen.getByText("Approved / Settled").closest(".stat");
@@ -97,7 +103,7 @@ describe("MedicalPage", () => {
   });
 
   it("translates the claim type instead of printing the raw enum (GAP-HR-MEDICAL-06)", async () => {
-    fetchJsonMock.mockResolvedValue({ data: [BASE_CLAIM], source: "api" });
+    apiMock([BASE_CLAIM]);
     const ui = await MedicalPage();
     renderWithIntl(ui);
     expect(screen.queryByText("outdoor", { exact: true })).not.toBeInTheDocument();
@@ -105,7 +111,7 @@ describe("MedicalPage", () => {
   });
 
   it("renders a File Claim link instead of the old empty actions span (GAP-HR-MEDICAL-05/06)", async () => {
-    fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
+    apiMock([]);
     const ui = await MedicalPage();
     renderWithIntl(ui);
     const link = screen.getByRole("link", { name: "File Claim" });
@@ -113,7 +119,7 @@ describe("MedicalPage", () => {
   });
 
   it("shows approve/reject actions for an HR role but not for a bare employee viewing their own claims", async () => {
-    fetchJsonMock.mockResolvedValue({ data: [BASE_CLAIM], source: "api" });
+    apiMock([BASE_CLAIM]);
 
     mockRoles = ["hr_admin"];
     const hrUi = await MedicalPage();

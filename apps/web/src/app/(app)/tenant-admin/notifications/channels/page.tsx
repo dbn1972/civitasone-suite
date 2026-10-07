@@ -40,7 +40,7 @@ export default async function NotificationChannelsPage() {
   const errored = toResourceState(result).status === "error";
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Notification Channels"
         subtitle="Add the email, SMS or push channels your approvals and alerts are delivered through."

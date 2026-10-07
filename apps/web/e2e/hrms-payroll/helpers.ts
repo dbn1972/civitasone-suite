@@ -214,3 +214,19 @@ export async function setupAsRole(page: Page, role: 'hr_admin' | 'employee' | 'm
     );
   }
 }
+
+/**
+ * /hr/leave/apply loads its leave types from the BFF proxy (GET /api/proxy/v1/hrms/leave-context).
+ * authenticate() stubs every /api/proxy/** call with `{}`, which has no `allocations`, so the
+ * form's client component throws and the route error boundary renders instead of the form.
+ * Specs that open the apply form without their own leave-context mock should call this first.
+ */
+export async function mockLeaveContext(page: Page): Promise<void> {
+  await page.route('**/api/proxy/v1/hrms/leave-context*', (route) =>
+    json(route, {
+      employee: { id: 'emp-001', employeeNo: 'EMP-001', name: 'Ravi Kumar' },
+      leaveTypes: [{ id: 'lt-el', code: 'EL', name: 'Earned Leave', maxDays: 30 }],
+      allocations: [{ id: 'alloc-el', leaveTypeId: 'lt-el', leaveTypeCode: 'EL', leaveTypeName: 'Earned Leave', balanceDays: 12 }],
+    }),
+  );
+}

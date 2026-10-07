@@ -92,7 +92,7 @@ export default async function OrgHierarchyPage() {
   const canSeeLevels = hasAnyRole(roles, ["platform_admin", "super_admin"]);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Organization Hierarchy" }]} />
       <PageHeader
         back="/tenant-admin"

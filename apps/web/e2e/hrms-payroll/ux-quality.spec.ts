@@ -15,7 +15,7 @@
  * to complete their first leave application in under 60 seconds without help.
  */
 import { test, expect } from '@playwright/test';
-import { setupHrmsPage } from './helpers';
+import { setupHrmsPage, mockLeaveContext } from './helpers';
 import * as fixtures from './fixtures';
 
 test.describe('UX Quality — Leave Application (Critical Journey)', () => {
@@ -49,6 +49,23 @@ test.describe('UX Quality — Leave Application (Critical Journey)', () => {
     });
   });
 
+  /**
+   * The apply form now requires a leave type (picked from the employee's allocations), both
+   * dates and a reason of at least 20 characters before it will submit, and it asks the server
+   * to preview the debit first -- so a bare "fill the two dates" no longer submits.
+   */
+  async function fillValidRequest(page: import('@playwright/test').Page, from: string, to: string) {
+    await page.route('**/api/proxy/v1/hrms/leave-requests/preview', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ computedDays: 1, engineApplied: true }) }),
+    );
+    const leaveType = page.getByLabel(/leave type/i);
+    await expect(leaveType).toBeEnabled();
+    await leaveType.selectOption({ index: 1 });
+    await page.getByLabel(/from date/i).fill(from);
+    await page.getByLabel(/to date/i).fill(to);
+    await page.getByLabel(/reason/i).fill('Family function out of town, applying in advance.');
+  }
+
   test('form shows balance alongside leave type (prevents over-application)', async ({ page }) => {
     await page.goto('/hr/leave/apply');
     // Wait for leave context to load
@@ -58,7 +75,8 @@ test.describe('UX Quality — Leave Application (Critical Journey)', () => {
     await expect(leaveTypeSelect).toBeVisible();
     // Options should include balance information to prevent errors
     const options = leaveTypeSelect.locator('option');
-    const optionText = await options.nth(0).textContent();
+    // Option 0 is the "Select a leave type…" placeholder; the allocations follow it.
+    const optionText = await options.nth(1).textContent();
     // World-class UX: balance visible at selection time, not after error
     expect(optionText).toMatch(/\d+ days/i);
   });
@@ -78,10 +96,7 @@ test.describe('UX Quality — Leave Application (Critical Journey)', () => {
     await page.goto('/hr/leave/apply');
     await page.waitForLoadState('networkidle');
     // Fill form
-    const fromDate = page.getByLabel(/from date/i);
-    const toDate = page.getByLabel(/to date/i);
-    await fromDate.fill('2024-08-12');
-    await toDate.fill('2024-08-12');
+    await fillValidRequest(page, '2024-08-12', '2024-08-12');
     // Add a delay to the API to catch the disabled state
     await page.route('**/api/proxy/v1/hrms/leave-requests', async (route) => {
       await new Promise((r) => setTimeout(r, 1000));
@@ -110,13 +125,13 @@ test.describe('UX Quality — Leave Application (Critical Journey)', () => {
     await page.waitForLoadState('networkidle');
     const fromDate = page.getByLabel(/from date/i);
     const toDate = page.getByLabel(/to date/i);
-    await fromDate.fill('2024-08-12');
-    await toDate.fill('2024-08-12');
+    await fillValidRequest(page, '2024-08-12', '2024-08-12');
     await page.getByRole('button', { name: /submit/i }).click();
     await expect(page.getByText(/submitted|success/i).first()).toBeVisible();
-    // Dates should be cleared for next application
+    // Dates and reason should be cleared for next application
     await expect(fromDate).toHaveValue('');
     await expect(toDate).toHaveValue('');
+    await expect(page.getByLabel(/reason/i)).toHaveValue('');
   });
 
   test('inline validation on invalid date range (to < from)', async ({ page }) => {
@@ -331,18 +346,13 @@ test.describe('UX Quality — Feedback & Error Recovery', () => {
   });
 
   test('error state offers retry (not just "something went wrong")', async ({ page }) => {
-    await page.route('**/api/v1/hrms/dashboard*', (route) =>
-      route.fulfill({ status: 500, contentType: 'application/json', body: '{"code":"INTERNAL"}' }),
-    );
-    await page.route('**/api/v1/hrms/employees*', (route) =>
-      route.fulfill({ status: 500, contentType: 'application/json', body: '{"code":"INTERNAL"}' }),
-    );
-    await page.goto('/hr/dashboard');
-    // Error boundary should show retry option
-    const retryBtn = page.getByRole('button', { name: /retry|try again/i });
-    const backLink = page.getByRole('link', { name: /back|hr/i });
-    // At minimum, user should have an escape route
-    await expect(retryBtn.or(backLink)).toBeVisible();
+    // The employee detail page loads on the SERVER, so page.route() cannot make it fail; the
+    // mock gateway answers 500 for this one id (see SERVER_ERROR_PATHS in e2e/global-setup.ts).
+    await page.goto('/hr/employees/error-500');
+    const main = page.getByRole('main');
+    // The error state must offer a way to retry AND a way out -- not just a dead-end message.
+    await expect(main.getByRole('button', { name: /retry|try again/i })).toBeVisible();
+    await expect(main.getByRole('link', { name: /back|go back/i }).first()).toBeVisible();
   });
 
   test('offline indicator shows when using cached data', async ({ page }) => {
@@ -417,7 +427,12 @@ test.describe('UX Quality — Responsive & Touch', () => {
   });
 
   test('form inputs have adequate size on mobile', async ({ page }) => {
+    await mockLeaveContext(page);
     await page.goto('/hr/leave/apply');
+    // Let the form hydrate and its selects populate first, or the handles below go stale
+    // when React re-renders them mid-measurement.
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByLabel(/leave type/i)).toBeVisible();
     // Exclude date/radio/checkbox — they render differently in headless Chromium
     const inputs = page.locator('input[type="text"], input[type="email"], input[type="number"], select, textarea');
     const count = await inputs.count();

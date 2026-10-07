@@ -27,7 +27,7 @@ export default async function CashBankPage({
   const balances = query.type ? openingClosing(entries, entries.length < CASH_BOOK_PAGE) : null;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Cash & Bank Book"
         subtitle="Day book with receipts, payments, and running balance."

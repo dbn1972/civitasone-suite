@@ -35,7 +35,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams?: 
   ]);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="User Management"
         subtitle="All platform users — roles, status, and access controls."

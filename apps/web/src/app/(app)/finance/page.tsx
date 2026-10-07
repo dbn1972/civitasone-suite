@@ -62,7 +62,7 @@ const financeSections: NavTile[] = [
 export default async function Page() {
 	const t = await getTranslations("finance");
 	return (
-		<div className="page-main" aria-labelledby="page-heading">
+		<div className="page-main">
 			<PageHeader title={t("title")} subtitle={t("subtitle")} help="finance" />
 			<LinkTiles tiles={financeSections} columns="four" />
 		</div>

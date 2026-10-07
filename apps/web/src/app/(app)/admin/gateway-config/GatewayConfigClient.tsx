@@ -215,7 +215,7 @@ export function GatewayConfigClient() {
   // fabricated "15s" timeout next to the error banner.
   if (!config) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="API Gateway Configuration" subtitle="Runtime-configurable gateway parameters." back="/admin" />
         <ErrorState
           error={toHumanError("load", { area: "gateway configuration" })}
@@ -226,7 +226,7 @@ export function GatewayConfigClient() {
   }
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="API Gateway Configuration"
         subtitle="Runtime-configurable gateway parameters. Saved changes take effect immediately and are recorded in the audit log."

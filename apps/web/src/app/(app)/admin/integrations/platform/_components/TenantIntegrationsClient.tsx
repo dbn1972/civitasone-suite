@@ -142,7 +142,7 @@ export function TenantIntegrationsClient({ actorId, canEditPolicy }: { actorId: 
   }, [data]);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={t("tenant.title")} subtitle={t("tenant.subtitle")} back="/admin" />
 
       {loading && !data ? (

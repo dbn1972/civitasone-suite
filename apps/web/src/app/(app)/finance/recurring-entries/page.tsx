@@ -96,7 +96,7 @@ export default async function RecurringEntriesPage() {
   const active = entries.filter((e) => e.statusLabel === "active").length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Recurring Entries"
         subtitle="Standing journal instructions for recurring transactions."

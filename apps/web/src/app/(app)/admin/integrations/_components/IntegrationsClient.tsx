@@ -83,7 +83,7 @@ export function IntegrationsClient() {
   const configured = countConfigured(forEnv);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Integrations"
         subtitle="External endpoints for AI, messaging, email, payments and files. Secrets are encrypted at rest and never displayed."

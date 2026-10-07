@@ -150,7 +150,7 @@ export function MapViewer({ canManage = false }: { canManage?: boolean }) {
   );
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Map viewer"
         subtitle="Explore your geospatial layers on an interactive map. Toggle layers on or off; administrators can add or remove sources."

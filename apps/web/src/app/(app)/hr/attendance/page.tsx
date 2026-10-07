@@ -38,7 +38,7 @@ export default async function AttendancePage() {
   const stats = computeAttendanceStats(attendance, errored);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

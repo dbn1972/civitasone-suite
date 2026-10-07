@@ -15,7 +15,7 @@ export default async function Page({ searchParams }: { searchParams?: { page?: s
     ...(searchParams?.programId ? { programId: searchParams.programId } : {}),
   });
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <PageHeader
         title="Loyalty — Tiers"
         subtitle="Tier definitions — name, points threshold, and benefits — per programme."

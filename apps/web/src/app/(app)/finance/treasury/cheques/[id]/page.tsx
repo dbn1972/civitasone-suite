@@ -36,7 +36,7 @@ export default async function ChequeDetailPage({ params }: { params: { id: strin
 
   if (source === "error" && status !== 404) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="Cheque Detail" back="/finance/treasury/cheques" />
         <LoadErrorState result={result} area="cheque" backHref="/finance/treasury/cheques" />
       </div>
@@ -45,7 +45,7 @@ export default async function ChequeDetailPage({ params }: { params: { id: strin
 
   if (!cheque) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="Cheque Detail" back="/finance/treasury/cheques" />
         <EmptyState icon="🏦" title="Cheque not found" message="This cheque may have been removed or the ID is invalid." />
       </div>
@@ -64,7 +64,7 @@ export default async function ChequeDetailPage({ params }: { params: { id: strin
   const canStale = writer && canMarkStale(cheque.status, cheque.validUntil, today);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={`Cheque #${cheque.instrumentNo}`}
         subtitle={cheque.payee || undefined}

@@ -72,7 +72,7 @@ export default async function LocationDetailPage({
   if (hier.status === 404) notFound();
   if (hier.source === "error" || !hier.data) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("fallbackTitle")} back="/hr/locations" backLabel={t("backLabel")} help="hr" />
         <LoadErrorState result={{ status: hier.status, errorMessage: hier.errorMessage }} area="location" backHref="/hr/locations" backLabel={t("backLabel")} />
       </div>
@@ -87,7 +87,7 @@ export default async function LocationDetailPage({
   const statusLabel = location.status === "active" ? t("statusActive") : humanizeStatus(location.status);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={location.name} subtitle={t("subtitle")} back="/hr/locations" backLabel={t("backLabel")} help="hr" />
 
       <nav aria-label={t("breadcrumbLabel")} style={{ marginBottom: 12, fontSize: 13 }}>

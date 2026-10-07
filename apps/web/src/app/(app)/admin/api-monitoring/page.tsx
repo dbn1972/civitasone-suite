@@ -10,7 +10,7 @@ export default async function ApiMonitoringPage() {
   const res = await getSAApiMonitoring();
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {/* GAP-ADMIN-API-MONITORING-02: the summary cards, the data-source badge and
           the failure state all live in ApiMonitoringTable, driven by the same
           useSeededResource call that produces its rows, so they cannot disagree. */}

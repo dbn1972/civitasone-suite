@@ -23,7 +23,7 @@ export default async function KpiPage() {
   const total = errored ? null : rows.length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title="KPI Library" subtitle="Organisation-wide Key Performance Indicators with targets and trends." back="/analytics" />
       <StatGrid>
         <StatCard icon="🎯" tone="info" label="Total KPIs" value={total ?? "—"} />

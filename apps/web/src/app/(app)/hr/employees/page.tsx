@@ -146,7 +146,7 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
   const filteredTotal = q || statusFilter ? undefined : (typeFilter === "all" ? total : (countByType[typeFilter] ?? 0));
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

@@ -15,6 +15,7 @@ import { ErrorState, SkeletonCard } from "../../../_components/ds";
  * (bg/border/accent) defined in civitas-ds.css (--badbg/--badbd/--bad, …), so
  * contrast is correct in both themes.
  */
+// static reference: severity -> design-system colour-token map; not backend data.
 const SEV_TOKENS: Record<string, { bg: string; border: string; accent: string }> = {
   critical: { bg: "var(--badbg)", border: "var(--badbd)", accent: "var(--bad)" },
   warning: { bg: "var(--warnbg)", border: "var(--warnbd)", accent: "var(--warn)" },

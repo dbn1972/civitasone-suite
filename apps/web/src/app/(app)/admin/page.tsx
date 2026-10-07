@@ -12,7 +12,7 @@ export default async function AdminPage() {
   const t = await getTranslations("admin");
   const tiles = visibleAdminTiles(getSessionRoles(), (key) => t(key));
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
       <LinkTiles tiles={tiles} columns="four" />
     </div>

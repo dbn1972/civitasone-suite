@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { PageHeader, StatCard } from "../../../_components/ds";
 import { getLegalCases } from "../../../_data/loaders";
-import { LegalCasesTable, isWritOrCriminal, ACTIVE_CASE_STATUSES } from "./LegalCasesTable";
+import { LegalCasesTable } from "./LegalCasesTable";
+import { isWritOrCriminal, ACTIVE_CASE_STATUSES } from "./caseHelpers";
 
 export default async function LegalCasesListPage() {
   const { data: items, source } = await getLegalCases();

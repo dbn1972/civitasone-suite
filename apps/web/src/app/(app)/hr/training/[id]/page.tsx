@@ -81,7 +81,7 @@ export default async function TrainingDetailPage({ params }: { params: { id: str
 
   if (programsSource === "error") {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("title")} back="/hr/training" backLabel={t("backLabel")} />
         <RefreshErrorState error={toHumanError("load", { area: "training programme" })} />
       </div>
@@ -91,7 +91,7 @@ export default async function TrainingDetailPage({ params }: { params: { id: str
   const program = programs.find((p) => p.id === params.id);
   if (!program) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("title")} back="/hr/training" backLabel={t("backLabel")} />
         <EmptyState
           icon="🔍"
@@ -117,7 +117,7 @@ export default async function TrainingDetailPage({ params }: { params: { id: str
   ];
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={program.title} subtitle={t("subtitle")} back="/hr/training" backLabel={t("backLabel")} />
       <DataSourceBadge source={programsSource} />
 

@@ -16,7 +16,7 @@ export default async function Page({ searchParams }: { searchParams?: { offset?:
   const { data, source } = await getCdpIdentityPage(offset);
 
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <PageHeader
         title="CDP — Identity Graph"
         // GAP-CDP-IDENTITY-02 (decision): this list is view-only — there is no

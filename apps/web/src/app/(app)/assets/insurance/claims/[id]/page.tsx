@@ -49,7 +49,7 @@ export default async function ClaimDetailPage({ params }: { params: { id: string
   if (!claim) {
     const notFound = claimRes.source !== "error" || claimRes.status === 404;
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={notFound ? "Claim not found" : "Claim"} {...back} />
         {notFound ? (
           <EmptyState icon="🔍" title="Claim not found" message="This claim does not exist or the link is incorrect." />
@@ -68,7 +68,7 @@ export default async function ClaimDetailPage({ params }: { params: { id: string
   const canDecide = canDecideClaims(getSessionRoles());
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={`Claim of ${formatMoney(claim.claimAmountMinor)}`}
         subtitle={`Filed ${formatIndianDate(claim.claimDate)}`}

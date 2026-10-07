@@ -30,7 +30,7 @@ export default async function DataWarehousePage() {
       : recordTotal.total.toLocaleString("en-IN");
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {/* GAP-ANALYTICS-DATA-WAREHOUSE-02: subtitle no longer promises "refresh
           schedules" — the table shows only Last Refresh, not a schedule or
           next-run. */}

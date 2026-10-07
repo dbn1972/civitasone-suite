@@ -139,7 +139,7 @@ export default async function WorkSummaryPage({
   const showingTo = offset + items.length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={isHr ? t("subtitle") : t("subtitleSelf")}

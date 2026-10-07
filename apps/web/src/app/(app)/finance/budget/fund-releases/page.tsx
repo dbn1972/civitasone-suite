@@ -16,7 +16,7 @@ export default async function FundReleasesPage() {
   const pending      = releases.filter((r) => r.status === "pending").length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Fund Releases"
         subtitle="Allocation distributions issued to subordinate offices and departments."

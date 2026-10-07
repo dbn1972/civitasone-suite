@@ -77,7 +77,7 @@ export default async function FlexBenefitsPage() {
 
   if (!canElect && !canManagePlans) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/payroll" backLabel={t("backLabel")} />
         <PermissionDenied module="flex benefits" requiredRoles={FLEX_ELECT_ROLES} backHref="/hr/payroll" backLabel={t("backLabel")} />
       </div>
@@ -119,7 +119,7 @@ export default async function FlexBenefitsPage() {
   const uniqueFYs = new Set(elections.map((e) => e.fy).filter(Boolean)).size;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

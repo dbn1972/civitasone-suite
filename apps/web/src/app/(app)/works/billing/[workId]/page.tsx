@@ -71,7 +71,7 @@ export default async function BillingDetailPage({
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Bills & MBs"
         subtitle={`Work ${params.workId.slice(0, 8)}…`}

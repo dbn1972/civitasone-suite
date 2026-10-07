@@ -131,7 +131,7 @@ export default async function InsuranceClaimsPage({
   });
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Insurance Claims"
         subtitle="Claims filed against asset insurance policies."

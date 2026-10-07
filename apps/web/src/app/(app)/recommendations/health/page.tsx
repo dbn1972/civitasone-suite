@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   const { data, source } = await getRecHealth();
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <PageHeader
         title="Recommendations — At-risk accounts"
         subtitle="Accounts in the critical and at-risk health bands, highest risk first."

@@ -47,7 +47,7 @@ export default async function CorrectionsPage() {
   const roles = getSessionRoles();
   if (!roles.some((r) => PAYROLL_READER_ROLES.includes(r))) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/payroll" backLabel={t("backLabel")} />
         <PermissionDenied module="salary corrections" requiredRoles={PAYROLL_READER_ROLES} backHref="/hr/payroll" backLabel={t("backLabel")} />
       </div>
@@ -93,7 +93,7 @@ export default async function CorrectionsPage() {
   const canDecide = canRecord;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

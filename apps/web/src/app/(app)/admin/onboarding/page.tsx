@@ -13,7 +13,7 @@ export default async function OnboardingPage() {
   const { data: queue, source, status, errorMessage } = await getSAOnboarding();
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {/* GAP-ADMIN-ONBOARDING-02/-03: stat cards, badge and failure state live inside
           OnboardingTable, driven by the same useSeededResource call as its rows. */}
       <PageHeader title="Tenant Onboarding Queue" subtitle="New tenant requests and onboarding pipeline status." back="/admin" />

@@ -175,7 +175,7 @@ export default async function BoqDetailPage({
   }));
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Bill of Quantities"
         // GAP-WORKS-BOQ-WORKID-04: no human work number is on the BoQ item type,

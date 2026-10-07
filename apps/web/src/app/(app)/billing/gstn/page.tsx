@@ -29,7 +29,7 @@ export default async function GstnConsolePage() {
   const breakerOpen = status?.breaker === "open";
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="GSTN Console"
         subtitle="Submit GST returns, check filing status, and verify GSTINs against the Goods and Services Tax Network. Actions call an external government system."

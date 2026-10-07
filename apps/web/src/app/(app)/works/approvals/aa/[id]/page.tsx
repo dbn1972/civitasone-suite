@@ -106,7 +106,7 @@ export default async function AaDetailPage({
   if (result.source === "error") {
     if (result.status === 404) notFound();
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader
           title="Administrative Approval"
           subtitle="Could not load this record."
@@ -157,7 +157,7 @@ export default async function AaDetailPage({
   ];
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={aa.aaNumber ?? `AA ${params.id.slice(0, 8)}…`}
         subtitle="Administrative Approval"

@@ -68,7 +68,7 @@ function visibleLinks(links: ModuleHubLink[]): ModuleHubLink[] {
 export function ModuleHub({ title, description, links = [], groups, children, help, columns }: ModuleHubProps) {
 
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <PageHeader title={title} subtitle={description} help={help} />
       {children}
       {groups && groups.length > 0 ? (

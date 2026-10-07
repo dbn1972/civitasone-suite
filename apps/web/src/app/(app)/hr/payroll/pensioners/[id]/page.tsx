@@ -49,7 +49,7 @@ export default async function PensionerDetailPage({ params }: { params: { id: st
   const p = result.data;
   if (result.source === "error" || !p) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("titleFallback")} back="/hr/payroll/pensioners" backLabel={t("backLabel")} />
         <LoadErrorState result={result} area={t("area")} backHref="/hr/payroll/pensioners" backLabel={t("backLabel")} />
       </div>
@@ -100,7 +100,7 @@ export default async function PensionerDetailPage({ params }: { params: { id: st
   ];
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={p.fullName} subtitle={t("subtitle")} back="/hr/payroll/pensioners" backLabel={t("backLabel")} />
       <p role="note" className="sub" style={{ margin: "0 0 12px", fontSize: 12, color: "var(--mut)" }}>{t("maskedNote")}</p>
 

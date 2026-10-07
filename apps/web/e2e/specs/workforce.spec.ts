@@ -154,7 +154,8 @@ test.describe('Workforce Operations — S16', () => {
       // with an accessible "form" role -- assert the labelled fields directly,
       // using this page's real copy ("Date of Overtime" / "Hours Requested",
       // not the orphan's "Hours Worked OT").
-      await expect(page.getByLabel(/Employee ID/i)).toBeVisible();
+      // The employee is picked from a labelled "Employee" select (not a free-text "Employee ID" input).
+      await expect(page.getByLabel('Employee', { exact: true })).toBeVisible();
       await expect(page.getByLabel(/Date of Overtime/i)).toBeVisible();
       await expect(page.getByLabel(/Hours Requested/i)).toBeVisible();
     });

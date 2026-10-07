@@ -107,7 +107,7 @@ export function ConfigForm({ initial }: { initial: PlatformControllable }) {
   const changedSummary = preview.ok ? Object.entries(flatten(preview.patch)) : [];
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Platform Configuration"
         subtitle="Tunable platform parameters — log level, rate limits, cache lifetimes and notification senders."

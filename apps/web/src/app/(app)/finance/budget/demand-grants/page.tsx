@@ -18,7 +18,7 @@ export default async function DemandGrantsPage() {
   const other = grants.length - voted - charged;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Demand for Grants"
         subtitle="Demands for grants with voted/charged breakup."

@@ -88,7 +88,7 @@ export default async function PerquisitePage({ searchParams }: { searchParams?: 
   const isLoadError = canLookup && source === "error" && status !== 404;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

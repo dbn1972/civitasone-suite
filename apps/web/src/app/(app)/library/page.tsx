@@ -49,6 +49,7 @@ const SEVERITY_BG: Record<Severity, string> = {
 // no longer land on engineering findings. Codes and strings are next-intl keys
 // (see the `library` namespace in messages/en.json + hi.json) and a legend
 // explains the W/I code prefixes.
+// static reference: developer-authored audit-finding-type catalogue (i18n keys), identical for every tenant; not backend data.
 const ISSUE_LIBRARY: AuditIssue[] = [
   { id: "1", code: "W1", severity: "critical", titleKey: "issue_W1_title", remediationKey: "issue_W1_remediation", categoryKey: "catAccessibility" },
   { id: "2", code: "W2", severity: "high", titleKey: "issue_W2_title", remediationKey: "issue_W2_remediation", categoryKey: "catAccessibility" },
@@ -102,7 +103,7 @@ export default function LibraryPage() {
   };
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={t("pageTitle")} subtitle={t("pageSubtitle")} back="/admin" />
 
       <p style={{ margin: "0 0 16px", fontSize: 12.5, color: "var(--ink3)" }}>{t("staticNotice")}</p>

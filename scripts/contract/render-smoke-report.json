@@ -1,13 +1,31 @@
 {
-  "generatedAt": "2026-09-18T09:37:01.405Z",
+  "generatedAt": "2026-10-07T13:31:19.880Z",
   "counts": {
-    "totalNoLoader": 544,
-    "renderPassed": 473,
-    "renderFailed": 71,
-    "manifestConfirmed": 472
+    "totalNoLoader": 579,
+    "renderPassed": 430,
+    "renderFailed": 149,
+    "manifestConfirmed": 431
   },
-  "coveragePct": 91.1,
+  "coveragePct": 83.2,
   "results": [
+    {
+      "module": "admin",
+      "screen": "/admin/bulk-scan/[batchId]",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/bulk-scan/links",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/bulk-scan/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
     {
       "module": "admin",
       "screen": "/admin/bulk-scan",
@@ -16,19 +34,43 @@
     },
     {
       "module": "admin",
-      "screen": "/admin/config",
+      "screen": "/admin/bulk-scan/profiles",
       "verdict": "PASS",
       "reason": "ok"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/bulk-scan/review/[batchId]/[fileId]",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/bulk-scan/review",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/bulk-scan/search",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/bulk-scan/settings",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/config",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'logLevel')"
     },
     {
       "module": "admin",
       "screen": "/admin/devices",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "admin",
-      "screen": "/admin/discovery",
       "verdict": "PASS",
       "reason": "ok"
     },
@@ -52,13 +94,19 @@
     },
     {
       "module": "admin",
+      "screen": "/admin/integrations/platform",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "admin",
       "screen": "/admin",
       "verdict": "PASS",
       "reason": "ok"
     },
     {
       "module": "admin",
-      "screen": "/admin/settings",
+      "screen": "/admin/platform/integrations",
       "verdict": "PASS",
       "reason": "ok"
     },
@@ -77,8 +125,8 @@
     {
       "module": "ai",
       "screen": "/ai/governance",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'toLocaleString')"
     },
     {
       "module": "ai",
@@ -94,27 +142,39 @@
     },
     {
       "module": "analytics",
+      "screen": "/analytics/dashboards/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'length')"
+    },
+    {
+      "module": "analytics",
       "screen": "/analytics/dashboards",
       "verdict": "PASS",
       "reason": "ok"
     },
     {
       "module": "analytics",
-      "screen": "/analytics/ml-insights/anomalies",
+      "screen": "/analytics/list",
       "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading 'toLocaleString')"
+      "reason": "rendered no visible text content"
+    },
+    {
+      "module": "analytics",
+      "screen": "/analytics/ml-insights/anomalies",
+      "verdict": "PASS",
+      "reason": "ok"
     },
     {
       "module": "analytics",
       "screen": "/analytics/ml-insights/inventory",
-      "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading 'toLocaleString')"
+      "verdict": "PASS",
+      "reason": "ok"
     },
     {
       "module": "analytics",
       "screen": "/analytics/ml-insights/leads",
-      "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading 'toLocaleString')"
+      "verdict": "PASS",
+      "reason": "ok"
     },
     {
       "module": "analytics",
@@ -125,20 +185,20 @@
     {
       "module": "analytics",
       "screen": "/analytics/ml-insights/projects",
-      "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading 'toLocaleString')"
+      "verdict": "PASS",
+      "reason": "ok"
     },
     {
       "module": "analytics",
       "screen": "/analytics/ml-insights/subscriptions",
-      "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading 'toLocaleString')"
+      "verdict": "PASS",
+      "reason": "ok"
     },
     {
       "module": "analytics",
       "screen": "/analytics/ml-insights/tickets",
-      "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading 'toLocaleString')"
+      "verdict": "PASS",
+      "reason": "ok"
     },
     {
       "module": "analytics",
@@ -172,6 +232,12 @@
     },
     {
       "module": "assets",
+      "screen": "/assets/fixed-assets",
+      "verdict": "FAIL",
+      "reason": "[object Object]"
+    },
+    {
+      "module": "assets",
       "screen": "/assets/fleet/devices",
       "verdict": "PASS",
       "reason": "ok"
@@ -185,8 +251,8 @@
     {
       "module": "assets",
       "screen": "/assets/fleet",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'toLocaleString')"
     },
     {
       "module": "assets",
@@ -197,6 +263,12 @@
     {
       "module": "assets",
       "screen": "/assets/insurance/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'replace')"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/insurance/claims/[id]",
       "verdict": "FAIL",
       "reason": "Cannot read properties of undefined (reading 'toLowerCase')"
     },
@@ -217,6 +289,12 @@
       "screen": "/assets/leases",
       "verdict": "PASS",
       "reason": "ok"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/list",
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "assets",
@@ -244,13 +322,19 @@
     },
     {
       "module": "assets",
-      "screen": "/assets/register",
+      "screen": "/assets/scan",
       "verdict": "PASS",
       "reason": "ok"
     },
     {
       "module": "assets",
-      "screen": "/assets/scan",
+      "screen": "/assets/settings",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/verification/[id]",
       "verdict": "PASS",
       "reason": "ok"
     },
@@ -270,7 +354,7 @@
       "module": "billing",
       "screen": "/billing/invoices/[id]",
       "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading 'length')"
+      "reason": "Cannot read properties of undefined (reading 'replace')"
     },
     {
       "module": "billing",
@@ -286,9 +370,27 @@
     },
     {
       "module": "billing",
+      "screen": "/billing/payments",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "billing",
       "screen": "/billing/plans/new",
       "verdict": "PASS",
       "reason": "ok"
+    },
+    {
+      "module": "billing",
+      "screen": "/billing/plans",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "billing",
+      "screen": "/billing/subscriptions",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'replace')"
     },
     {
       "module": "catalogue",
@@ -323,14 +425,14 @@
     {
       "module": "cdp",
       "screen": "/cdp/events",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "cdp",
       "screen": "/cdp/identity",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "cdp",
@@ -342,19 +444,19 @@
       "module": "cdp",
       "screen": "/cdp/profiles/[id]",
       "verdict": "FAIL",
-      "reason": "lineage is not iterable"
+      "reason": "[object Object]"
     },
     {
       "module": "cdp",
       "screen": "/cdp/profiles",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "cdp",
       "screen": "/cdp/segments",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "cdp",
@@ -490,15 +592,9 @@
     },
     {
       "module": "contracts",
-      "screen": "/contracts/new",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "contracts",
       "screen": "/contracts",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "court",
@@ -515,8 +611,8 @@
     {
       "module": "court",
       "screen": "/court/cases",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'toLocaleString')"
     },
     {
       "module": "court",
@@ -575,8 +671,8 @@
     {
       "module": "crm",
       "screen": "/crm/contacts",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "crm",
@@ -617,8 +713,8 @@
     {
       "module": "crm",
       "screen": "/crm/documents",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "Failed to call `useTranslations` because the context from `NextIntlClientProvider` was not found."
     },
     {
       "module": "crm",
@@ -628,9 +724,15 @@
     },
     {
       "module": "crm",
+      "screen": "/crm/grievance-categories",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
       "screen": "/crm/grievances/[id]",
       "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading 'toLowerCase')"
+      "reason": "Cannot read properties of undefined (reading 'charAt')"
     },
     {
       "module": "crm",
@@ -670,6 +772,18 @@
     },
     {
       "module": "crm",
+      "screen": "/crm/opportunities/[id]/edit",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/opportunities/[id]",
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
+    },
+    {
+      "module": "crm",
       "screen": "/crm/opportunities/new",
       "verdict": "PASS",
       "reason": "ok"
@@ -683,6 +797,12 @@
     {
       "module": "crm",
       "screen": "/crm/opportunity-ageing",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/overdue-tasks",
       "verdict": "PASS",
       "reason": "ok"
     },
@@ -726,7 +846,7 @@
       "module": "crm",
       "screen": "/crm/rti/[id]",
       "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading 'toLowerCase')"
+      "reason": "Cannot read properties of undefined (reading 'replace')"
     },
     {
       "module": "crm",
@@ -748,6 +868,12 @@
     },
     {
       "module": "crm",
+      "screen": "/crm/service-types",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
       "screen": "/crm/task-escalation",
       "verdict": "PASS",
       "reason": "ok"
@@ -757,12 +883,6 @@
       "screen": "/crm/voice-of-customer/feedback",
       "verdict": "PASS",
       "reason": "ok"
-    },
-    {
-      "module": "crm",
-      "screen": "/crm/voice-of-customer",
-      "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading 'map')"
     },
     {
       "module": "dashboard",
@@ -862,9 +982,15 @@
     },
     {
       "module": "documents",
+      "screen": "/documents/inbox/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'trim')"
+    },
+    {
+      "module": "documents",
       "screen": "/documents/inbox",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'toLocaleString')"
     },
     {
       "module": "documents",
@@ -882,11 +1008,17 @@
       "module": "documents",
       "screen": "/documents",
       "verdict": "FAIL",
-      "reason": "rendered no visible text content"
+      "reason": "Cannot read properties of undefined (reading 'toLocaleString')"
     },
     {
       "module": "domains",
       "screen": "/domains/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "domains",
+      "screen": "/domains",
       "verdict": "PASS",
       "reason": "ok"
     },
@@ -928,6 +1060,12 @@
     },
     {
       "module": "estab",
+      "screen": "/estab/files",
+      "verdict": "FAIL",
+      "reason": "[vitest] No \"permanentRedirect\" export is defined on the \"next/navigation\" mock. Did you forget to return it from \"vi.mock\"?"
+    },
+    {
+      "module": "estab",
       "screen": "/estab/guesthouse/new",
       "verdict": "PASS",
       "reason": "ok"
@@ -966,25 +1104,25 @@
       "module": "estab",
       "screen": "/estab/quarters/[id]",
       "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading 'replace')"
+      "reason": "Cannot read properties of undefined (reading 'map')"
     },
     {
       "module": "estab",
       "screen": "/estab/quarters/allotments/[id]",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'slice')"
     },
     {
       "module": "estab",
       "screen": "/estab/quarters/allotments",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'filter')"
     },
     {
       "module": "estab",
       "screen": "/estab/quarters",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'vacant')"
     },
     {
       "module": "estab",
@@ -997,18 +1135,6 @@
       "screen": "/estab/workspace",
       "verdict": "PASS",
       "reason": "ok"
-    },
-    {
-      "module": "establishment",
-      "screen": "/establishment/files",
-      "verdict": "FAIL",
-      "reason": "rendered no visible text content"
-    },
-    {
-      "module": "establishment",
-      "screen": "/establishment",
-      "verdict": "FAIL",
-      "reason": "rendered no visible text content"
     },
     {
       "module": "field",
@@ -1043,38 +1169,44 @@
     {
       "module": "field",
       "screen": "/field/visits",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "visits is not iterable"
     },
     {
       "module": "finance",
-      "screen": "/finance/advances",
+      "screen": "/finance/accounting/vouchers/new",
       "verdict": "FAIL",
-      "reason": "rendered no visible text content"
+      "reason": "[object Object]"
     },
     {
       "module": "finance",
-      "screen": "/finance/benefits",
+      "screen": "/finance/budget/demand-grants/[id]",
       "verdict": "FAIL",
-      "reason": "rendered no visible text content"
+      "reason": "Cannot read properties of undefined (reading 'trim')"
     },
     {
       "module": "finance",
       "screen": "/finance/budget/formulation/new",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "finance",
       "screen": "/finance/budget/fund-releases",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "finance",
       "screen": "/finance/budget/monitoring",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/budget/sanctions/new",
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "finance",
@@ -1084,7 +1216,13 @@
     },
     {
       "module": "finance",
-      "screen": "/finance/config",
+      "screen": "/finance/chart-of-accounts",
+      "verdict": "FAIL",
+      "reason": "[object Object]"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/debt/new",
       "verdict": "PASS",
       "reason": "ok"
     },
@@ -1096,45 +1234,21 @@
     },
     {
       "module": "finance",
-      "screen": "/finance/expenditure/utilization-certificates/new",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "finance",
-      "screen": "/finance/expenses",
-      "verdict": "FAIL",
-      "reason": "rendered no visible text content"
-    },
-    {
-      "module": "finance",
-      "screen": "/finance/fiscal-years",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "finance",
       "screen": "/finance/gst",
       "verdict": "PASS",
       "reason": "ok"
     },
     {
       "module": "finance",
-      "screen": "/finance/loans",
+      "screen": "/finance/journal-entry",
       "verdict": "FAIL",
-      "reason": "rendered no visible text content"
+      "reason": "[object Object]"
     },
     {
       "module": "finance",
       "screen": "/finance/medical",
       "verdict": "FAIL",
       "reason": "rendered no visible text content"
-    },
-    {
-      "module": "finance",
-      "screen": "/finance/opening-balances",
-      "verdict": "PASS",
-      "reason": "ok"
     },
     {
       "module": "finance",
@@ -1163,8 +1277,8 @@
     {
       "module": "finance",
       "screen": "/finance/reconciliation",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "Objects are not valid as a React child (found: [object Promise]). If you meant to render a collection of children, use an array instead."
     },
     {
       "module": "finance",
@@ -1179,22 +1293,40 @@
       "reason": "rendered no visible text content"
     },
     {
-      "module": "fleet",
-      "screen": "/fleet",
+      "module": "finance",
+      "screen": "/finance/treasury/cheques/new",
       "verdict": "PASS",
       "reason": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/treasury/deposits/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'length')"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/treasury/pfms",
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/vendors/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "fleet",
+      "screen": "/fleet",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'toLocaleString')"
     },
     {
       "module": "fleet",
       "screen": "/fleet/vehicles",
       "verdict": "PASS",
       "reason": "ok"
-    },
-    {
-      "module": "grants",
-      "screen": "/grants/applications/[id]",
-      "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading 'slice')"
     },
     {
       "module": "grants",
@@ -1205,8 +1337,8 @@
     {
       "module": "grants",
       "screen": "/grants/disbursements/[id]",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "grants",
@@ -1216,15 +1348,9 @@
     },
     {
       "module": "grants",
-      "screen": "/grants/schemes/[id]/apply",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "grants",
       "screen": "/grants/schemes/[id]",
       "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading 'toLowerCase')"
+      "reason": "Cannot read properties of undefined (reading 'replace')"
     },
     {
       "module": "grants",
@@ -1242,25 +1368,25 @@
       "module": "help",
       "screen": "/help/[module]",
       "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading 'terms')"
+      "reason": "[object Object]"
     },
     {
       "module": "help",
       "screen": "/help",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "helpdesk",
-      "screen": "/helpdesk/internal/[id]",
       "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading 'slice')"
+      "reason": "[object Object]"
     },
     {
       "module": "helpdesk",
       "screen": "/helpdesk/internal/new",
       "verdict": "PASS",
       "reason": "ok"
+    },
+    {
+      "module": "helpdesk",
+      "screen": "/helpdesk/slas",
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "helpdesk",
@@ -1294,6 +1420,18 @@
     },
     {
       "module": "hr",
+      "screen": "/hr/appraisals/new",
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/appraisals",
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
+    },
+    {
+      "module": "hr",
       "screen": "/hr/attendance/config",
       "verdict": "PASS",
       "reason": "ok"
@@ -1318,15 +1456,15 @@
     },
     {
       "module": "hr",
-      "screen": "/hr/competency",
-      "verdict": "PASS",
-      "reason": "ok"
+      "screen": "/hr/confirmation",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'map')"
     },
     {
       "module": "hr",
-      "screen": "/hr/confirmation",
-      "verdict": "PASS",
-      "reason": "ok"
+      "screen": "/hr/contractual/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'replace')"
     },
     {
       "module": "hr",
@@ -1367,8 +1505,8 @@
     {
       "module": "hr",
       "screen": "/hr/directory",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'map')"
     },
     {
       "module": "hr",
@@ -1380,7 +1518,19 @@
       "module": "hr",
       "screen": "/hr/dpc",
       "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading 'length')"
+      "reason": "Cannot read properties of undefined (reading 'map')"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/employee-types/[id]/edit",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/employee-types/new",
+      "verdict": "PASS",
+      "reason": "ok"
     },
     {
       "module": "hr",
@@ -1414,6 +1564,18 @@
     },
     {
       "module": "hr",
+      "screen": "/hr/grievance/[id]",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/grievance/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
       "screen": "/hr/grievance",
       "verdict": "PASS",
       "reason": "ok"
@@ -1426,7 +1588,19 @@
     },
     {
       "module": "hr",
+      "screen": "/hr/icc/[id]",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
       "screen": "/hr/icc",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/id-cards/new",
       "verdict": "PASS",
       "reason": "ok"
     },
@@ -1439,6 +1613,12 @@
     {
       "module": "hr",
       "screen": "/hr/interns",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/jd-templates/[id]",
       "verdict": "PASS",
       "reason": "ok"
     },
@@ -1468,18 +1648,6 @@
     },
     {
       "module": "hr",
-      "screen": "/hr/leave/balance",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "hr",
-      "screen": "/hr/leave/history",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "hr",
       "screen": "/hr/leave-policies",
       "verdict": "PASS",
       "reason": "ok"
@@ -1489,6 +1657,18 @@
       "screen": "/hr/loans",
       "verdict": "PASS",
       "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/locations/[id]/edit",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/locations/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'length')"
     },
     {
       "module": "hr",
@@ -1510,15 +1690,15 @@
     },
     {
       "module": "hr",
-      "screen": "/hr/onboarding/[id]",
-      "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading 'progress')"
+      "screen": "/hr/office-locations",
+      "verdict": "PASS",
+      "reason": "ok"
     },
     {
       "module": "hr",
       "screen": "/hr/onboarding",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'map')"
     },
     {
       "module": "hr",
@@ -1535,8 +1715,8 @@
     {
       "module": "hr",
       "screen": "/hr/overtime",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'filter')"
     },
     {
       "module": "hr",
@@ -1589,8 +1769,8 @@
     {
       "module": "hr",
       "screen": "/hr/payroll/disbursement",
-      "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading 'slice')"
+      "verdict": "PASS",
+      "reason": "ok"
     },
     {
       "module": "hr",
@@ -1630,25 +1810,31 @@
     },
     {
       "module": "hr",
+      "screen": "/hr/payroll/pay-groups/[id]",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
       "screen": "/hr/payroll/pay-groups",
       "verdict": "PASS",
       "reason": "ok"
     },
     {
       "module": "hr",
+      "screen": "/hr/payroll/pay-groups/unassigned",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/pensioners/[id]",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
       "screen": "/hr/payroll/pensioners/new",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "hr",
-      "screen": "/hr/payroll/register",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "hr",
-      "screen": "/hr/payroll/reimbursements",
       "verdict": "PASS",
       "reason": "ok"
     },
@@ -1666,15 +1852,9 @@
     },
     {
       "module": "hr",
-      "screen": "/hr/payroll/salary-slips/[id]",
-      "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading 'filter')"
-    },
-    {
-      "module": "hr",
       "screen": "/hr/payroll/statutory/challans",
-      "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading '0')"
+      "verdict": "PASS",
+      "reason": "ok"
     },
     {
       "module": "hr",
@@ -1685,8 +1865,8 @@
     {
       "module": "hr",
       "screen": "/hr/payroll/statutory/gpf",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
     },
     {
       "module": "hr",
@@ -1703,8 +1883,8 @@
     {
       "module": "hr",
       "screen": "/hr/payroll/statutory/nps",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
     },
     {
       "module": "hr",
@@ -1745,6 +1925,12 @@
     {
       "module": "hr",
       "screen": "/hr/payroll/tax-declaration",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'filter')"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/tax-proofs",
       "verdict": "PASS",
       "reason": "ok"
     },
@@ -1768,6 +1954,24 @@
     },
     {
       "module": "hr",
+      "screen": "/hr/recruitment/[id]/results/admit-card/[attemptId]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'map')"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/recruitment/[id]/results",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/recruitment/[id]/selection",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
       "screen": "/hr/recruitment/new",
       "verdict": "PASS",
       "reason": "ok"
@@ -1780,13 +1984,25 @@
     },
     {
       "module": "hr",
-      "screen": "/hr/recruitment/talent-pool",
+      "screen": "/hr/recruitment/requisitions",
       "verdict": "PASS",
       "reason": "ok"
     },
     {
       "module": "hr",
-      "screen": "/hr/retirement",
+      "screen": "/hr/recruitment/settings",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/recruitment/talent-pool",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'filter')"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/rti/[id]",
       "verdict": "PASS",
       "reason": "ok"
     },
@@ -1799,20 +2015,14 @@
     {
       "module": "hr",
       "screen": "/hr/salary-structure",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
     },
     {
       "module": "hr",
       "screen": "/hr/service-book",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "hr",
-      "screen": "/hr/shift-requests",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'map')"
     },
     {
       "module": "hr",
@@ -1823,14 +2033,14 @@
     {
       "module": "hr",
       "screen": "/hr/skills",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'filter')"
     },
     {
       "module": "hr",
       "screen": "/hr/social-feed",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'kudos7d')"
     },
     {
       "module": "hr",
@@ -1864,12 +2074,6 @@
     },
     {
       "module": "hr",
-      "screen": "/hr/transfer",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "hr",
       "screen": "/hr/travel",
       "verdict": "PASS",
       "reason": "ok"
@@ -1882,12 +2086,6 @@
     },
     {
       "module": "hr",
-      "screen": "/hr/wfh",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "hr",
       "screen": "/hr/work-summary",
       "verdict": "PASS",
       "reason": "ok"
@@ -1895,38 +2093,38 @@
     {
       "module": "hr",
       "screen": "/hr/workforce/analytics",
-      "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading 'toFixed')"
+      "verdict": "PASS",
+      "reason": "ok"
     },
     {
       "module": "hr",
       "screen": "/hr/workforce/contractual",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
     },
     {
       "module": "hr",
       "screen": "/hr/workforce/interns",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
     },
     {
       "module": "hr",
       "screen": "/hr/workforce/outsourced",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
     },
     {
       "module": "hr",
       "screen": "/hr/workforce/overtime/new",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
     },
     {
       "module": "hr",
       "screen": "/hr/workforce/overtime",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
     },
     {
       "module": "hr",
@@ -1937,8 +2135,8 @@
     {
       "module": "hr",
       "screen": "/hr/workforce/staffing-plan",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
     },
     {
       "module": "hr",
@@ -1949,26 +2147,26 @@
     {
       "module": "hr",
       "screen": "/hr/workforce/wfh",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
     },
     {
       "module": "hr",
       "screen": "/hr/workforce/work-summary",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
     },
     {
       "module": "identity",
       "screen": "/identity/api-keys",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
     },
     {
       "module": "identity",
       "screen": "/identity/breakglass",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
     },
     {
       "module": "identity",
@@ -1979,14 +2177,14 @@
     {
       "module": "identity",
       "screen": "/identity/sessions",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
     },
     {
       "module": "identity",
       "screen": "/identity/users",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
     },
     {
       "module": "identity",
@@ -2020,12 +2218,6 @@
     },
     {
       "module": "install",
-      "screen": "/install/console",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "install",
       "screen": "/install/domain-packs",
       "verdict": "PASS",
       "reason": "ok"
@@ -2049,8 +2241,8 @@
       "reason": "ok"
     },
     {
-      "module": "install",
-      "screen": "/install/steps",
+      "module": "inventory",
+      "screen": "/inventory/bins/new",
       "verdict": "PASS",
       "reason": "ok"
     },
@@ -2074,7 +2266,31 @@
     },
     {
       "module": "inventory",
+      "screen": "/inventory/items/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'toLocaleString')"
+    },
+    {
+      "module": "inventory",
+      "screen": "/inventory/items/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "inventory",
       "screen": "/inventory/items",
+      "verdict": "FAIL",
+      "reason": "res.data.rows is not iterable (cannot read property undefined)"
+    },
+    {
+      "module": "inventory",
+      "screen": "/inventory/items/unlinked",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "inventory",
+      "screen": "/inventory/ledger/new",
       "verdict": "PASS",
       "reason": "ok"
     },
@@ -2083,6 +2299,12 @@
       "screen": "/inventory/low-stock",
       "verdict": "PASS",
       "reason": "ok"
+    },
+    {
+      "module": "inventory",
+      "screen": "/inventory/movements/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'length')"
     },
     {
       "module": "inventory",
@@ -2104,6 +2326,12 @@
     },
     {
       "module": "inventory",
+      "screen": "/inventory/settings",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "inventory",
       "screen": "/inventory/substitutes",
       "verdict": "PASS",
       "reason": "ok"
@@ -2117,8 +2345,8 @@
     {
       "module": "journeys",
       "screen": "/journeys/analytics",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'length')"
     },
     {
       "module": "journeys",
@@ -2146,6 +2374,12 @@
     },
     {
       "module": "knowledge",
+      "screen": "/knowledge/documents/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'replace')"
+    },
+    {
+      "module": "knowledge",
       "screen": "/knowledge/documents/new",
       "verdict": "PASS",
       "reason": "ok"
@@ -2155,6 +2389,12 @@
       "screen": "/knowledge/faqs",
       "verdict": "PASS",
       "reason": "ok"
+    },
+    {
+      "module": "knowledge",
+      "screen": "/knowledge/list",
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
     },
     {
       "module": "knowledge",
@@ -2170,63 +2410,81 @@
     },
     {
       "module": "knowledge",
+      "screen": "/knowledge/policies/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "knowledge",
       "screen": "/knowledge/policies",
       "verdict": "PASS",
       "reason": "ok"
     },
     {
       "module": "learning",
+      "screen": "/learning/assessments/[id]",
+      "verdict": "FAIL",
+      "reason": "[object Object]"
+    },
+    {
+      "module": "learning",
       "screen": "/learning/assessments",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "learning",
       "screen": "/learning/assessments/verify",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "learning",
       "screen": "/learning/calendar",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "learning",
       "screen": "/learning/competency",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "learning",
-      "screen": "/learning/courses/[id]",
       "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading 'map')"
+      "reason": "[object Object]"
     },
     {
       "module": "learning",
       "screen": "/learning/courses",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "learning",
       "screen": "/learning/my-learning",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "learning",
       "screen": "/learning",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
+    },
+    {
+      "module": "learning",
+      "screen": "/learning/training-plans/[id]",
+      "verdict": "FAIL",
+      "reason": "[object Object]"
+    },
+    {
+      "module": "learning",
+      "screen": "/learning/training-plans/new",
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "learning",
       "screen": "/learning/training-plans",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "legal",
@@ -2303,8 +2561,8 @@
     {
       "module": "loyalty",
       "screen": "/loyalty",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'toString')"
     },
     {
       "module": "loyalty",
@@ -2334,7 +2592,7 @@
       "module": "meeting",
       "screen": "/meeting/meetings/[meetingId]/minutes",
       "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading 'toLowerCase')"
+      "reason": "Cannot read properties of undefined (reading 'replace')"
     },
     {
       "module": "meeting",
@@ -2347,6 +2605,12 @@
       "screen": "/meeting/meetings/new",
       "verdict": "PASS",
       "reason": "ok"
+    },
+    {
+      "module": "meeting",
+      "screen": "/meeting/meetings",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'length')"
     },
     {
       "module": "metadata",
@@ -2405,8 +2669,8 @@
     {
       "module": "municipal",
       "screen": "/municipal",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "notifications",
@@ -2446,37 +2710,19 @@
     },
     {
       "module": "notifications",
-      "screen": "/notifications",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "notifications",
       "screen": "/notifications/templates/[id]",
       "verdict": "PASS",
       "reason": "ok"
     },
     {
       "module": "notifications",
+      "screen": "/notifications/templates/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "notifications",
       "screen": "/notifications/templates",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "platform-admin",
-      "screen": "/platform-admin",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "platform-admin",
-      "screen": "/platform-admin/system-settings",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "platform-admin",
-      "screen": "/platform-admin/tenant-config",
       "verdict": "PASS",
       "reason": "ok"
     },
@@ -2501,18 +2747,6 @@
     {
       "module": "plugins",
       "screen": "/plugins/registry",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "policy",
-      "screen": "/policy/abac",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "policy",
-      "screen": "/policy/bindings",
       "verdict": "PASS",
       "reason": "ok"
     },
@@ -2548,12 +2782,6 @@
     },
     {
       "module": "procurement",
-      "screen": "/procurement/grn/[id]/srn/new",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "procurement",
       "screen": "/procurement/grn/new",
       "verdict": "PASS",
       "reason": "ok"
@@ -2561,8 +2789,8 @@
     {
       "module": "procurement",
       "screen": "/procurement/grn",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "procurement",
@@ -2573,14 +2801,8 @@
     {
       "module": "procurement",
       "screen": "/procurement/indents",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "procurement",
-      "screen": "/procurement/orders/[id]/amend",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "procurement",
@@ -2591,8 +2813,8 @@
     {
       "module": "procurement",
       "screen": "/procurement/orders",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "procurement",
@@ -2608,13 +2830,13 @@
     },
     {
       "module": "procurement",
-      "screen": "/procurement/rfq/new",
-      "verdict": "PASS",
-      "reason": "ok"
+      "screen": "/procurement/reverse-auction/[id]",
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "procurement",
-      "screen": "/procurement/tenders/[id]/documents",
+      "screen": "/procurement/rfq/new",
       "verdict": "PASS",
       "reason": "ok"
     },
@@ -2633,14 +2855,8 @@
     {
       "module": "procurement",
       "screen": "/procurement/vendors",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "projects",
-      "screen": "/projects/new",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "projects",
@@ -2657,8 +2873,8 @@
     {
       "module": "recommendations",
       "screen": "/recommendations/feedback",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'filter')"
     },
     {
       "module": "recommendations",
@@ -2693,12 +2909,6 @@
     {
       "module": "reports",
       "screen": "/reports",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "reports",
-      "screen": "/reports/scheduled",
       "verdict": "PASS",
       "reason": "ok"
     },
@@ -2752,6 +2962,12 @@
     },
     {
       "module": "revenue",
+      "screen": "/revenue/instalments/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'map')"
+    },
+    {
+      "module": "revenue",
       "screen": "/revenue/instalments",
       "verdict": "PASS",
       "reason": "ok"
@@ -2794,6 +3010,12 @@
     },
     {
       "module": "revenue",
+      "screen": "/revenue/waivers/[id]/decide",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'trim')"
+    },
+    {
+      "module": "revenue",
       "screen": "/revenue/waivers",
       "verdict": "PASS",
       "reason": "ok"
@@ -2802,7 +3024,7 @@
       "module": "revenue",
       "screen": "/revenue/write-offs/[id]/decide",
       "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading 'slice')"
+      "reason": "Cannot convert undefined to a BigInt"
     },
     {
       "module": "revenue",
@@ -2819,18 +3041,12 @@
     {
       "module": "setup",
       "screen": "/setup",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "stock",
       "screen": "/stock/items/new",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "stock",
-      "screen": "/stock/ledger/new",
       "verdict": "PASS",
       "reason": "ok"
     },
@@ -2857,6 +3073,12 @@
       "screen": "/telephony/dispositions",
       "verdict": "PASS",
       "reason": "ok"
+    },
+    {
+      "module": "telephony",
+      "screen": "/telephony/list",
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
     },
     {
       "module": "telephony",
@@ -2950,19 +3172,7 @@
     },
     {
       "module": "tenant-admin",
-      "screen": "/tenant-admin/breakglass/[id]",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "tenant-admin",
       "screen": "/tenant-admin/notifications/channels",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "tenant-admin",
-      "screen": "/tenant-admin/org-type",
       "verdict": "PASS",
       "reason": "ok"
     },
@@ -2970,13 +3180,7 @@
       "module": "tenant-admin",
       "screen": "/tenant-admin/platform-config",
       "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading 'debugModeUntil')"
-    },
-    {
-      "module": "tenant-admin",
-      "screen": "/tenant-admin/sessions/[id]",
-      "verdict": "PASS",
-      "reason": "ok"
+      "reason": "Cannot read properties of undefined (reading 'cacheTtl')"
     },
     {
       "module": "themes",
@@ -3041,8 +3245,8 @@
     {
       "module": "workflow",
       "screen": "/workflow/designer",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "ResizeObserver is not defined"
     },
     {
       "module": "workflow",
@@ -3071,8 +3275,8 @@
     {
       "module": "works",
       "screen": "/works/approvals/aa/[id]",
-      "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading 'aaNumber')"
+      "verdict": "PASS",
+      "reason": "ok"
     },
     {
       "module": "works",
@@ -3089,8 +3293,8 @@
     {
       "module": "works",
       "screen": "/works/approvals/ts/[id]",
-      "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading 'tsNumber')"
+      "verdict": "PASS",
+      "reason": "ok"
     },
     {
       "module": "works",
@@ -3137,8 +3341,8 @@
     {
       "module": "works",
       "screen": "/works/boq/[workId]",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'map')"
     },
     {
       "module": "works",
@@ -3149,6 +3353,12 @@
     {
       "module": "works",
       "screen": "/works/boq",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/closure/new",
       "verdict": "PASS",
       "reason": "ok"
     },
@@ -3191,8 +3401,8 @@
     {
       "module": "works",
       "screen": "/works/execution/issues",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'filter')"
     },
     {
       "module": "works",
@@ -3233,8 +3443,8 @@
     {
       "module": "works",
       "screen": "/works/proposals/[id]",
-      "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading 'length')"
+      "verdict": "PASS",
+      "reason": "ok"
     },
     {
       "module": "works",

@@ -88,7 +88,7 @@ export default async function InternsPage() {
   ];
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -119,7 +119,7 @@ export default async function InternsPage() {
             // GAP-HR-INTERNS-06: rows now link to the existing employee
             // profile -- previously there was no way to open a record from
             // this register at all.
-            rowHref={(r) => `/hr/employees/${r.id}`}
+            rowLinkKey="id" rowLinkPrefix="/hr/employees/"
             sortable filterable filterPlaceholder={t("filterPlaceholder")}
             pageSize={15}
             emptyIcon="🎓"

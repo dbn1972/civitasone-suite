@@ -26,7 +26,7 @@ export default async function AssessmentsPage() {
   const closedCount = assessments.filter((a) => a.status === "closed").length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Assessments"
         subtitle="Raise, revise, and remit municipal tax assessments against registered assessees."

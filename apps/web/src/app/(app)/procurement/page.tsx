@@ -20,7 +20,7 @@ export default async function Page() {
 		(tile) => !tile.roles || isSuperAdmin || tile.roles.some((r) => roles.includes(r)),
 	);
 	return (
-		<div className="page-main" aria-labelledby="page-heading">
+		<div className="page-main">
 			<PageHeader title={t("title")} subtitle={tHub("subtitle")} help="procurement" />
 			<LinkTiles tiles={tiles} columns="four" />
 		</div>

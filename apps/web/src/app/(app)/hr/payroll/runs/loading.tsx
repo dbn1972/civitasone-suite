@@ -4,7 +4,7 @@ import { getTranslations } from "next-intl/server";
 export default async function PayrollRunsLoading() {
   const t = await getTranslations("payrollRuns");
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

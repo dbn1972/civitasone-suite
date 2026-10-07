@@ -15,7 +15,7 @@ export default async function DepositDetailPage({ params }: { params: { id: stri
 
   if (source === "error" && status !== 404) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="Deposit Detail" back="/finance/treasury/deposits" />
         <LoadErrorState result={result} area="deposit" backHref="/finance/treasury/deposits" />
       </div>
@@ -23,7 +23,7 @@ export default async function DepositDetailPage({ params }: { params: { id: stri
   }
   if (!deposit) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="Deposit Detail" back="/finance/treasury/deposits" />
         <EmptyState icon="🏧" title="Deposit not found" message="This deposit may have been removed or the ID is invalid." />
       </div>
@@ -31,7 +31,7 @@ export default async function DepositDetailPage({ params }: { params: { id: stri
   }
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={`Deposit ${deposit.pdNo}`} subtitle={deposit.administrator || undefined} back="/finance/treasury/deposits" />
       <StatGrid>
         <StatCard icon="₹" iconBg="#ecfdf3" label="Balance" value={formatMoney(deposit.balanceMinor)} />

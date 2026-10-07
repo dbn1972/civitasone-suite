@@ -43,7 +43,7 @@ export default async function SessionDetailPage({ params }: { params: { id: stri
 
   if (source === "error") {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Sessions", href: "/tenant-admin/sessions" }, { label: "Session" }]} />
         <PageHeader back="/tenant-admin/sessions" title="Session Detail" subtitle="Could not load this session." />
         <Card title="Session">
@@ -60,7 +60,7 @@ export default async function SessionDetailPage({ params }: { params: { id: stri
   const who = session.userName ?? session.userEmail;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Sessions", href: "/tenant-admin/sessions" }, { label: `Session ${params.id}` }]} />
       <PageHeader
         back="/tenant-admin/sessions"

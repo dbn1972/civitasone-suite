@@ -9,7 +9,7 @@ import { getTranslations } from "next-intl/server";
 export default async function PayMatrixLoading() {
   const t = await getTranslations("payMatrix");
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={t("title")} subtitle={t("loadingSubtitle")} back="/hr" backLabel={t("backToHr")} />
       <Card title={t("loadingCardTitle")}>
         <SkeletonTable rows={10} />

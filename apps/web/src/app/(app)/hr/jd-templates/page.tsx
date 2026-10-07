@@ -96,7 +96,7 @@ export default async function JdTemplatesPage({ searchParams }: { searchParams: 
   ];
 
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <PageHeader
         title={t("title")}
         back="/hr" backLabel="Back to HR"

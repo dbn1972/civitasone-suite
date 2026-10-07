@@ -22,7 +22,7 @@ export default async function NewTemplatePage() {
   }
 
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

@@ -10,7 +10,7 @@ export default async function Page() {
   const { data, source } = await getPluginMarketplaceCatalog();
   const canManage = hasAnyRole(getSessionRoles(), PLUGIN_MARKETPLACE_ROLES);
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <PageHeader
         title="Plugins — Marketplace"
         subtitle="Browse plugins available to install for your organisation."

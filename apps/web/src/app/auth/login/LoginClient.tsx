@@ -48,7 +48,7 @@ export default function LoginClient({ next }: { next?: string } = {}) {
           </h1>
           <p className="text-sm text-slate-500 mb-2">{message}</p>
           {error ? (
-            <p className="text-xs text-slate-400 mb-6">Reference: {error}</p>
+            <p className="text-xs text-slate-600 mb-6">Reference: {error}</p>
           ) : (
             <div className="mb-6" />
           )}

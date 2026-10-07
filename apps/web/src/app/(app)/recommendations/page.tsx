@@ -51,7 +51,7 @@ export default async function Page() {
   ];
 
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <PageHeader title="Recommendations" subtitle="Next-best-action and cross-sell signals." help="recommendations" />
       <LinkTiles tiles={sections} columns="four" />
     </div>

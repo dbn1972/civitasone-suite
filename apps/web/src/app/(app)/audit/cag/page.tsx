@@ -21,7 +21,7 @@ export default async function CagPage() {
   const departments = errored ? null : new Set(paras.map((p) => p.department).filter((d): d is string => !!d)).size;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="CAG Audit Interaction"
         subtitle="Comptroller and Auditor General audit paragraphs and settlement tracking."

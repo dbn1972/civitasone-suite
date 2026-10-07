@@ -16,14 +16,14 @@ export default async function LibraryBookDetailPage({ params }: { params: { id: 
     // and every other error (5xx / network) gets a retryable error state.
     if (source === "error" && status !== 404) {
       return (
-        <div className="page-main wrap" aria-labelledby="page-heading">
+        <div className="page-main wrap">
           <PageHeader title="Book" back="/estab/library" />
           <RefreshErrorState error={toHumanError("load", { area: "book" })} backHref="/estab/library" />
         </div>
       );
     }
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="Book not found" back="/estab/library" />
         <EmptyState
           icon="📚"
@@ -42,7 +42,7 @@ export default async function LibraryBookDetailPage({ params }: { params: { id: 
   const canManage = hasAnyRole(getSessionRoles(), ESTAB_LIBRARY_WRITE_ROLES);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={book.title}
         subtitle={book.author ? `by ${book.author}` : undefined}

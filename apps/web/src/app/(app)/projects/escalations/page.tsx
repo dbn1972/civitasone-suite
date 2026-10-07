@@ -23,7 +23,7 @@ export default async function EscalationsPage() {
   const resolved = errored ? null : rows.filter((r) => r.status === "cleared").length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title="Escalations" subtitle="Project risk alerts, escalation queue and resolution tracking." back="/projects" />
       <StatGrid>
         <StatCard icon="🚨" iconBg="#fef3f2" label="Active Escalations" value={active ?? "—"} />

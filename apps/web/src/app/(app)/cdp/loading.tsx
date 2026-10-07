@@ -6,7 +6,7 @@ import { TileHubSkeleton } from "../../_components/ds/Skeleton";
 // the real layout with the shared, theme-tokenised TileHubSkeleton instead.
 export default function CdpLoading() {
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <TileHubSkeleton sections={1} tilesPerSection={5} />
     </div>
   );

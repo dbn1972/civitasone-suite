@@ -35,7 +35,7 @@ export default async function UnassignedPayGroupReportPage({
   const { data: rows, total } = result.data;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/payroll/pay-groups" backLabel={t("backLabel")} />
 
       <form method="get" style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 16 }}>

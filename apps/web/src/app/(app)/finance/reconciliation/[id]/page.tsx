@@ -33,7 +33,7 @@ export default async function ReconciliationRunDetailPage({ params }: { params: 
     // (GAP-FINANCE-RECONCILIATION-DETAIL-03).
     const failed = source === "error" && result.status !== 404;
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader
           title="Reconciliation Run"
           back="/finance/reconciliation"
@@ -58,7 +58,7 @@ export default async function ReconciliationRunDetailPage({ params }: { params: 
   const targetUnmatched = unmatchedCount(run.targetCount, run.matchedCount);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={`Recon Run — ${run.provider}`}
         subtitle={`${run.sourceSystem} ↔ ${run.targetSystem} · started ${formatIndianDate(run.startedAt)}${

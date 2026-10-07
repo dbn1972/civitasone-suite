@@ -23,7 +23,7 @@ export default async function APIKeysPage() {
   const neverUsed = keys.filter((k) => !k.lastUsedAt).length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "API Keys" }]} />
       <PageHeader
         back="/tenant-admin"

@@ -69,7 +69,7 @@ export function PlatformIntegrationsClient() {
   }
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={t("platform.title")} subtitle={t("platform.subtitle")} back="/admin" />
 
       {loading && !rows ? (

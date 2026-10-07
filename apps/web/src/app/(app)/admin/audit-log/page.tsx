@@ -28,7 +28,7 @@ export default async function AuditLogPage({ searchParams }: { searchParams?: { 
   // so forbidden / failed / empty were indistinguishable.
   if (res.source === "error") {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader
           title="Audit Log"
           subtitle="Platform-wide audit trail — real events from audit-service's append-only log."
@@ -54,7 +54,7 @@ export default async function AuditLogPage({ searchParams }: { searchParams?: { 
   const newerOffset = Math.max(0, offset - ADMIN_AUDIT_LOG_PAGE_SIZE);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Audit Log"
         subtitle="Platform-wide audit trail — real events from audit-service's append-only log."

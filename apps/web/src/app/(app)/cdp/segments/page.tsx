@@ -16,7 +16,7 @@ export default async function Page({ searchParams }: { searchParams?: { offset?:
   const { data, source } = await getCdpSegmentList(offset);
 
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <PageHeader
         title="CDP — Segments"
         // GAP-CDP-SEGMENTS-01 (decision): this route is read-only — no authoring

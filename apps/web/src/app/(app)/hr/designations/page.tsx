@@ -57,7 +57,7 @@ export default async function DesignationsPage() {
   const uniqueLevels    = errored ? null : new Set(items.filter((d) => d.level > 0).map((d) => String(d.level))).size;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

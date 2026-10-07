@@ -1,6 +1,6 @@
 export default function Loading() {
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <div className="ph">
         <div>
           <h1 id="page-heading">Disciplinary Cases</h1>

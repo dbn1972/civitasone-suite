@@ -10,7 +10,7 @@ export default async function IssueChequePage() {
   const t = await getTranslations("financeChequesNew");
   const allowed = canWrite(getSessionRoles(), INSTRUMENT_WRITE_ROLES);
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/finance/treasury/cheques" backLabel={t("backLabel")} />
       {allowed ? (
         <IssueChequeForm />

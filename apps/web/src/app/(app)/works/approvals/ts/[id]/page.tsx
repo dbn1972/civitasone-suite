@@ -101,7 +101,7 @@ export default async function TsDetailPage({
   if (result.source === "error") {
     if (result.status === 404) notFound();
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader
           title="Technical Sanction"
           subtitle="Could not load this record."
@@ -152,7 +152,7 @@ export default async function TsDetailPage({
   ];
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={ts.tsNumber ?? `TS ${params.id.slice(0, 8)}…`}
         subtitle="Technical Sanction"

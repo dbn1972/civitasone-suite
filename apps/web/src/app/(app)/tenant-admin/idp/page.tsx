@@ -28,7 +28,7 @@ export default async function IdpListPage() {
   const syncStale = oldestSyncMs !== null && Date.now() - oldestSyncMs > STALE_SYNC_MS;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Identity Providers" }]} />
       <PageHeader
         back="/tenant-admin"

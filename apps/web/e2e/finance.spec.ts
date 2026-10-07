@@ -34,7 +34,8 @@ test.describe('Finance', () => {
 
   test('payments list shows table column headers', async ({ page }) => {
     await page.goto('/finance/payments');
-    await expect(page.getByRole('heading', { name: 'Payments' })).toBeVisible();
+    // exact: the page also renders a longer "Payments ..." heading (strict-mode violation otherwise).
+    await expect(page.getByRole('heading', { name: 'Payments', exact: true })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Reference' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Beneficiary' })).toBeVisible();
   });

@@ -26,7 +26,7 @@ export default async function FiscalYearsPage() {
   const failed = source === "error";
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Fiscal Years"
         subtitle="Define financial years and set the one currently open for posting."

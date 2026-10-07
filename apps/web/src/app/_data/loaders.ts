@@ -293,7 +293,6 @@ import {
   CRMDashboardSchema,
   DealSummaryListSchema,
   ContactDetailSchema,
-  CRMActivityEntryListSchema,
   TicketDetailSchema,
   TicketAnalyticsSchema,
   CitizenRequestSummaryListSchema,
@@ -3804,12 +3803,15 @@ export async function getChatConversationCounts(): Promise<LoaderResult<ChatConv
     responseSchema: chatConversationsCountSchema,
     mapResponse: (payload: { meta: { total: number } }) => payload.meta.total,
   });
-  const base = "/api/v1/ai/chat?limit=1";
+  // Full literal paths (no `${base}` interpolation): scripts/contract/screen-map.mjs
+  // resolves each fetchJson path statically against the gateway registry and
+  // cannot follow a variable, so an interpolated prefix was read as an
+  // unresolvable ":param&status=..." route and failed the Screen Verification Gate.
   const [all, active, handed, ended] = await Promise.all([
-    fetchJson(base, null as number | null, countOpts()),
-    fetchJson(`${base}&status=active`, null as number | null, countOpts()),
-    fetchJson(`${base}&status=handed_off`, null as number | null, countOpts()),
-    fetchJson(`${base}&status=ended`, null as number | null, countOpts()),
+    fetchJson("/api/v1/ai/chat?limit=1", null as number | null, countOpts()),
+    fetchJson("/api/v1/ai/chat?limit=1&status=active", null as number | null, countOpts()),
+    fetchJson("/api/v1/ai/chat?limit=1&status=handed_off", null as number | null, countOpts()),
+    fetchJson("/api/v1/ai/chat?limit=1&status=ended", null as number | null, countOpts()),
   ]);
   if (
     all.source === "error" || active.source === "error" ||
@@ -4189,11 +4191,24 @@ export function mapCRMActivityEntries(payload: unknown): CRMActivityEntry[] | nu
   return mapped;
 }
 
+// Wire-level guard for GET /v1/crm/activities. The previous schema here
+// (CRMActivityEntryListSchema) described the MAPPED CRMActivityEntry shape
+// (owner, non-null subject) as a bare array, but crm-service returns the
+// `{ data, pagination }` envelope of activityViewSchema rows (actorName / text,
+// nullable subject, no owner). Every real response therefore failed validation and
+// /crm/activities always rendered "We couldn't load interactions". Validate only
+// the envelope here; mapCRMActivityEntries() does the per-row field validation and
+// the enum fallbacks.
+const crmActivitiesWireSchema = z.union([
+  z.array(z.record(z.string(), z.unknown())),
+  z.object({ data: z.array(z.record(z.string(), z.unknown())) }).passthrough(),
+]);
+
 export async function getCRMActivities(): Promise<LoaderResult<CRMActivityEntry[]>> {
   return fetchJson<unknown, CRMActivityEntry[]>("/api/v1/crm/activities", [], {
     revalidateSeconds: 60,
     telemetryKey: "crm.activities.full",
-    responseSchema: CRMActivityEntryListSchema,
+    responseSchema: crmActivitiesWireSchema,
     mapResponse: mapCRMActivityEntries,
   });
 }

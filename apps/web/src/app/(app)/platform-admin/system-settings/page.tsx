@@ -17,7 +17,7 @@ export default async function SystemSettingsRoute() {
 
   if (source === "error" || !settings) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <Breadcrumb items={[{ label: "Platform Admin", href: "/platform-admin" }, { label: "System Settings" }]} />
         <PageHeader back="/platform-admin" title="System Settings" subtitle="General, Email, Security, and Integration configuration for the platform." />
         <RefreshErrorState error={toHumanError("load", { area: "system settings" })} backHref="/platform-admin" />
@@ -45,7 +45,7 @@ export default async function SystemSettingsRoute() {
   ].reduce((a, b) => a + b, 0);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <Breadcrumb items={[{ label: "Platform Admin", href: "/platform-admin" }, { label: "System Settings" }]} />
       <PageHeader
         back="/platform-admin"

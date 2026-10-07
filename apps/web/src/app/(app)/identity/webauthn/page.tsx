@@ -10,7 +10,7 @@ export default async function Page() {
   const { data, source } = await getIdentityWebauthnCredentials();
 
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       {/* GAP-IDENTITY-WEBAUTHN-06: PageHeader back link (next/link, client-side
           navigation) instead of a hand-built <a href> breadcrumb that forced a
           full page reload; title "My passkeys" (the endpoint is self-scoped) and

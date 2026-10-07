@@ -20,7 +20,7 @@ export default async function PlanDetailPage({ params }: { params: { id: string 
   // is "not found"; a 5xx is retryable, a 403 is access-restricted.
   if (source === "error" && status !== 404) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="Plan Detail" back="/billing/plans" />
         <LoadErrorState result={{ status, errorMessage }} area="plan" backHref="/billing/plans" />
       </div>
@@ -29,7 +29,7 @@ export default async function PlanDetailPage({ params }: { params: { id: string 
 
   if (!plan) {
     return (
-      <div className="page-main" aria-labelledby="page-heading">
+      <div className="page-main">
         <PageHeader title="Plan Detail" back="/billing/plans" />
         <EmptyState icon="📦" title="Plan not found" message="This plan may have been removed or the ID is invalid." />
       </div>
@@ -49,7 +49,7 @@ export default async function PlanDetailPage({ params }: { params: { id: string 
   const govtExempt = typeof plan.govtExempt === "boolean" ? plan.govtExempt : null;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {/* GAP-BILLING-PLANS-DETAIL-05: PageHeader `back` is the single back
           affordance; the hand-rolled plain-<a> breadcrumb that duplicated it is
           removed. Any remaining in-page links use next/link for client nav. */}

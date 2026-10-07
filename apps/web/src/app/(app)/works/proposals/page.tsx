@@ -28,7 +28,7 @@ export default async function ProposalsPage({
   });
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Work Proposals"
         subtitle="Work registration, categorization, and proposal lifecycle."

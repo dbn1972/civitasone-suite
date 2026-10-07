@@ -136,7 +136,8 @@ test.describe('Workforce Operations — S16', () => {
       await page.goto('/hr/workforce/overtime/new');
       // The canonical page's <form> has no aria-label, so it isn't exposed
       // with an accessible "form" role -- assert the labelled fields directly.
-      await expect(page.getByLabel(/Employee ID/i)).toBeVisible();
+      // The employee is picked from a labelled "Employee" select (not a free-text "Employee ID" input).
+      await expect(page.getByLabel('Employee', { exact: true })).toBeVisible();
       await expect(page.getByLabel(/Date/i).first()).toBeVisible();
       await expect(page.getByLabel(/Hours/i)).toBeVisible();
     });

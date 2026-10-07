@@ -11,7 +11,7 @@ export default async function Loading() {
   const t = await getTranslations("contractual");
   const tm = await getTranslations("msg");
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading" aria-busy="true" aria-label={tm("loading")}>
+    <div className="page-main wrap" aria-busy="true" aria-label={tm("loading")}>
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel="Back to HR" />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 16, marginBottom: 24 }}>
         {Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)}

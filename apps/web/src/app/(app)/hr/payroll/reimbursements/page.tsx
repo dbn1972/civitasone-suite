@@ -65,7 +65,7 @@ export default async function ReimbursementsPage() {
 
   if (!isStaff && !isSelfService) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         {header}
         <PermissionDenied module="reimbursements" requiredRoles={[...REIMBURSEMENT_STAFF_ROLES, "employee"]} backHref="/hr/payroll" backLabel={t("backLabel")} />
       </div>
@@ -113,7 +113,7 @@ export default async function ReimbursementsPage() {
   const approvedReimb = items.filter((r) => r.status === "approved").length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {header}
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>

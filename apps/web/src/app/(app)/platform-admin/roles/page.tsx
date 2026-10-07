@@ -24,7 +24,7 @@ export default async function PlatformAdminRolesPage() {
   const source = rolesSource === "error" || permsSource === "error" ? "error" : "api";
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <Breadcrumb items={[{ label: "Platform Admin", href: "/platform-admin" }, { label: "Roles & Permissions" }]} />
       <PageHeader
         back="/platform-admin"

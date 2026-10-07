@@ -17,7 +17,7 @@ export default async function Page({ searchParams }: { searchParams?: { productI
   const products = await getCatalogueProducts();
   const rates = productId ? await getCatalogueRatesForProduct(productId) : null;
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <nav aria-label="Breadcrumb" className="back">
         <ArrowLeft aria-hidden="true" size={14} /> <a href="/catalogue">Service Catalogue</a>
       </nav>
