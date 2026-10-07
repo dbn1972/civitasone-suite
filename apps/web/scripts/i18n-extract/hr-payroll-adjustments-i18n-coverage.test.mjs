@@ -73,7 +73,7 @@ function walk(dir, out = []) {
 // Re-baselined 42 -> 44 (test-triage batch 2): every added hit was reviewed and is a scanner false positive --
 // `useState<T>`/`useRef<T>` generics in CreateSalaryRevisionForm (salary-revisions gap closure, #1756).
 // No new user-visible English was added.
-// 2026-10-07: set to the exact count after scanner.mjs stopped flagging TS generics/ternaries/comments as JSX text (a stale, looser ceiling would mask real regressions). Any remaining hits are genuine hardcoded "Loading…" text in loading.tsx files, tracked here rather than hidden.
+// 2026-10-07: ceiling = exact count (0) re-measured with the entity-aware scanner.mjs: no hardcoded-string findings remain, so any new one fails this test.
 const HR_PAYROLL_ADJUSTMENTS_HARDCODED_STRING_CEILING = 0;
 
 describe("hr/payroll/{arrears,corrections,off-cycle,salary-revisions} i18n coverage (UX-017 tranche 11)", () => {

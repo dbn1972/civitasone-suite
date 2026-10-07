@@ -88,7 +88,7 @@ const SLICE_FILES = [...directFilesOnly(STATUTORY_ROOT), ...STATUTORY_SUBDIRS.fl
 // preceding one) -- none are real UI text. See this tranche's PR description
 // for the per-file breakdown.
 // Lowered 23 -> 22 (test-triage batch 2): re-measured after rebasing onto main; one finding went away.
-// 2026-10-07: set to the exact count after scanner.mjs stopped flagging TS generics/ternaries/comments as JSX text (a stale, looser ceiling would mask real regressions). Any remaining hits are genuine hardcoded "Loading…" text in loading.tsx files, tracked here rather than hidden.
+// 2026-10-07: ceiling = exact count (0) re-measured with the entity-aware scanner.mjs: no hardcoded-string findings remain, so any new one fails this test.
 const HR_PAYROLL_STATUTORY_HARDCODED_STRING_CEILING = 0;
 
 describe("hr/payroll/statutory (pf/gpf/nps/esi/gratuity/lwf/pt + hub root) i18n coverage (UX-017 tranche 12)", () => {

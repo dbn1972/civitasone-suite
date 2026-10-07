@@ -47,8 +47,8 @@ function walk(dir, out = []) {
   return out;
 }
 
-// 2026-10-07: set to the exact count after scanner.mjs stopped flagging TS generics/ternaries/comments as JSX text (a stale, looser ceiling would mask real regressions). Any remaining hits are genuine hardcoded "Loading…" text in loading.tsx files, tracked here rather than hidden.
-const HR_WORKFORCE_HARDCODED_STRING_CEILING = 12;
+// 2026-10-07: ceiling = exact count re-measured with the entity-aware scanner.mjs (HTML entities such as &apos; are no longer read as `;` code): all 10 are genuine `aria-label="Loading…"` literals in hr/workforce/**/loading.tsx, tracked here rather than hidden.
+const HR_WORKFORCE_HARDCODED_STRING_CEILING = 10;
 
 describe("hr/workforce i18n coverage (UX-017 tranche 6)", () => {
   it("does not exceed the known false-positive baseline for hardcoded strings", () => {

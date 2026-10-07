@@ -42,7 +42,7 @@ function walk(dir, out = []) {
   return out;
 }
 
-// 2026-10-07: set to the exact count after scanner.mjs stopped flagging TS generics/ternaries/comments as JSX text (a stale, looser ceiling would mask real regressions). Any remaining hits are genuine hardcoded "Loading…" text in loading.tsx files, tracked here rather than hidden.
+// 2026-10-07: ceiling = exact count (0) re-measured with the entity-aware scanner.mjs: no hardcoded-string findings remain, so any new one fails this test.
 const FINANCE_PFMS_HARDCODED_STRING_CEILING = 0;
 
 describe("finance/pfms i18n coverage (UX-017 tranche 5)", () => {

@@ -99,7 +99,7 @@ const SLICE_FILES = [...directFilesOnly(PAYROLL_ROOT), ...SLICE_SUBDIRS.flatMap(
 // Re-baselined 111 -> 117 (test-triage batch 2): every added hit was reviewed and is a scanner false positive --
 // `useState<T>`/`useRef<T>`/`new Map<..>` generics and ternary chains in FnfSettlementActions (#1772), CreateCostingRuleForm, CreateDdoForm, CreatePayGroupForm, comparison/costing/pay-groups pages, TaxReturnsSummary.
 // No new user-visible English was added.
-// 2026-10-07: set to the exact count after scanner.mjs stopped flagging TS generics/ternaries/comments as JSX text (a stale, looser ceiling would mask real regressions). Any remaining hits are genuine hardcoded "Loading…" text in loading.tsx files, tracked here rather than hidden.
+// 2026-10-07: ceiling = exact count (0) re-measured with the entity-aware scanner.mjs: no hardcoded-string findings remain, so any new one fails this test.
 const HR_PAYROLL_REMAINING_HARDCODED_STRING_CEILING = 0;
 
 describe("hr/payroll remaining pages (root/[id]/bonus/comparison/costing/ctc/ddos/flex-benefits/fnf/pay-groups/reimbursements/returns/salary-slips/slips/structures) i18n coverage (Wave 4 cluster G)", () => {

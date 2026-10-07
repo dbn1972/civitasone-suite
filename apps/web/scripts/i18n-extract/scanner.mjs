@@ -78,15 +78,23 @@ function looksUserFacing(text) {
 // punctuation. Treating these as code removes the scanner's false positives
 // at the source instead of re-baselining them.
 const CODE_LIKE = [
-  /;/, // statement terminator
+  /;\s*($|\n|\}|\/[/*]|[A-Za-z_$][\w$]*\s*[=(.<:])/, // statement terminator followed by EOL / next statement (prose ";" is followed by a word)
   /=>|===|!==|&&|\|\|/, // arrow / comparison / logical operators
-  /^\s*[()\[\]|=.,:?]/, // starts like code, e.g. "(null)" or ") : x ? ("
-  /\)\s*:|\?\s*\(|\(\)/, // ternary / empty call
-  /(^|\n)\s*(\/\/|\*|\/\*)|\*\//, // comment lines
+  /^\s*\)\s*[:?]/, // ") : x ? (" ternary continuation
+  /^\s*\(\s*($|\n|\/[/*])/, // bare "(" then newline / comment
+  /^\s*(Promise|Array|Record|Map|Set|Partial|Omit|Pick)\s*$/, // bare generic type name between "<" ... "<"
+  /^\s*((const|let|var)\s+[\w$[{][^\n]*[=:]|return\s*[([{<]|function\s+\w+\s*\()/, // declaration / return / function at the start ("return for ..." is prose)
+  /\s\?\s[^\n]*\s:\s/, // inline ternary "a ? b : c"
+  /^[^\n]*[\w\]]\)\s*:\s*[A-Z]\w*\s*$/, // "...(x: T): Promise" return-type tail before a generic "<"
+  /^\s*[(\[][^\n]*[)\]]\s*[,:)]/, // "(path: string): Promise" signatures, "[f, x])," tuples ("(top level)" alone is prose)
+  /\)\s*:\s*[\w$.!]+\s*\?\s*\(|\?\s*\(\s*(\n|$)|\(\)/, // ternary / empty call
+  /(^|\n)\s*(\/\/|\/\*)|\/\*|\*\/|\n\s*\*(\s|\/)/, // comment lines (a leading "* " alone is prose, e.g. "* required")
 ];
 
 function isCodeLike(text) {
-  return CODE_LIKE.some((re) => re.test(text));
+  // &apos; &amp; &quot; &#39; ... carry a semicolon but are ordinary JSX prose.
+  const stripped = text.replace(/&(#\d+|#x[0-9a-f]+|[a-z]+);/gi, "");
+  return CODE_LIKE.some((re) => re.test(stripped));
 }
 
 function lineAt(source, index) {
