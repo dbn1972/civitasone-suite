@@ -5,6 +5,7 @@ import { DataTable, Segmented, EmptyState, HelpTip, StatCard, StatGrid } from ".
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PredictionBadge } from "../../../_components/ds/PredictionBadge";
 import { useSeededResource } from "@/lib/sync/resource";
+import { HELPDESK_PRIORITY_VARIANTS } from "@/lib/helpdesk/priorityVariants";
 
 type Ticket = {
   id: string;
@@ -116,7 +117,7 @@ export function TicketsTable({ tickets, source = "api" }: { tickets: Ticket[]; s
             { key: "ticketNo", label: "Ticket No" },
             { key: "subject", label: "Subject" },
             { key: "requesterName", label: "Requester" },
-            { key: "priority", label: "Priority", cellType: "status" },
+            { key: "priority", label: "Priority", cellType: "status", statusVariants: HELPDESK_PRIORITY_VARIANTS },
             { key: "slaStatus", label: "SLA", cellType: "status" },
             { key: "status", label: "Status", cellType: "status" },
             {

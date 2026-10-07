@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { InternalHelpdeskTicketSummary } from "@civitasone/types";
 import { DataTable, Segmented, EmptyState } from "../../../_components/ds";
+import { HELPDESK_PRIORITY_VARIANTS } from "@/lib/helpdesk/priorityVariants";
 
 type TicketRow = {
   id: string;
@@ -58,7 +59,7 @@ export function InternalTicketsTable({
           columns={[
             { key: "ticketId", label: "Ticket" },
             { key: "subject", label: "Subject" },
-            { key: "priority", label: "Priority", cellType: "status" },
+            { key: "priority", label: "Priority", cellType: "status", statusVariants: HELPDESK_PRIORITY_VARIANTS },
             { key: "status", label: "Status", cellType: "status" },
           ]}
           rows={filtered}

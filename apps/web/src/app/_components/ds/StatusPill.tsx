@@ -391,11 +391,8 @@ const STATUS_MAP: Record<string, PillVariant> = {
   fulfilled: "good",
   // "cancelled" already exists above (bad)
 
-  // Priority words (catalogue list/detail, internal tickets) — Low/Medium/High
-  // were missing so the Priority column rendered neutral info pills for all of them.
-  low: "info",
-  medium: "warn",
-  high: "warn",
+  // Helpdesk priority tones (low/medium/high) live in lib/helpdesk/priorityVariants.ts
+  // and are passed per column; they must NOT be in this shared map (see DataTable statusVariants).
 
   // CRM lead/contact lifecycle (crm-service lead status enum; see
   // lib/crm/leadQualification.ts LEAD_STATUSES). GAP-CRM-CONTACTS-06: the

@@ -4,6 +4,7 @@ import { formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { SlaQueueTabs, type SlaBucket } from "./SlaQueueTabs";
 import { getSessionRoles, hasAnyRole, HELPDESK_MANAGER_ROLES } from "@/lib/auth/roleGuard";
+import { HELPDESK_PRIORITY_VARIANTS } from "@/lib/helpdesk/priorityVariants";
 
 // GAP-HELPDESK-SLAS-03: priority sort weight — Critical outranks older Low.
 const PRIORITY_WEIGHT: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
@@ -126,7 +127,7 @@ export default async function Page({ searchParams }: { searchParams: { bucket?: 
               { key: "ticketNo", label: "Ticket No" },
               { key: "subject", label: "Subject" },
               { key: "requesterName", label: "Requester" },
-              { key: "priority", label: "Priority", cellType: "status" },
+              { key: "priority", label: "Priority", cellType: "status", statusVariants: HELPDESK_PRIORITY_VARIANTS },
               { key: "status", label: "Status", cellType: "status" },
               { key: "createdAt", label: "Created" },
               { key: "assignedTo", label: "Assigned To" },

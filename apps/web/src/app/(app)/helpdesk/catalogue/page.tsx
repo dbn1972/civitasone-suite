@@ -4,6 +4,7 @@ import { PageHeader, StatCard, StatGrid, DataTable, EmptyState, RefreshErrorStat
 import { getCatalogueOfferings, getMyServiceRequests } from "../../../_data/loaders";
 import { formatMinutesDuration } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+import { HELPDESK_PRIORITY_VARIANTS } from "@/lib/helpdesk/priorityVariants";
 
 /**
  * GAP-HELPDESK-CATALOGUE-MY-REQUESTS-05: statuses that represent a closed /
@@ -94,7 +95,7 @@ export default async function Page() {
               // GAP-HELPDESK-CATALOGUE-03: Category is plain text, not a status pill
               { key: "category", label: "Category" },
               // Priority keeps cellType "status" — the map now has low/medium/high/critical
-              { key: "priority", label: "Priority", cellType: "status" },
+              { key: "priority", label: "Priority", cellType: "status", statusVariants: HELPDESK_PRIORITY_VARIANTS },
               { key: "approval", label: "Approval" },
               { key: "fulfilment", label: "Fulfilment" },
               { key: "turnaround", label: "Expected turnaround" },

@@ -5,6 +5,7 @@ import { toHumanError } from "@/lib/messages";
 import { SlaBadge } from "../../SlaBadge";
 import { getSessionRoles, hasAnyRole, HELPDESK_ROLES } from "@/lib/auth/roleGuard";
 import { InternalTicketActions } from "./InternalTicketActions";
+import { helpdeskPriorityVariant } from "@/lib/helpdesk/priorityVariants";
 
 export default async function Page({ params }: { params: { id: string } }) {
   const { data: ticket, source, status } = await getInternalHelpdeskTicketById(params.id);
@@ -49,7 +50,7 @@ export default async function Page({ params }: { params: { id: string } }) {
       />
       <div className="card">
         <div className="pad fields">
-          <div className="fld"><div className="l">Priority</div><div className="v"><StatusPill status={ticket.priority.toLowerCase()} label={ticket.priority} /></div></div>
+          <div className="fld"><div className="l">Priority</div><div className="v"><StatusPill status={ticket.priority.toLowerCase()} label={ticket.priority} variant={helpdeskPriorityVariant(ticket.priority)} /></div></div>
           <div className="fld"><div className="l">Status</div><div className="v"><StatusPill status={ticket.status.toLowerCase().replace(/ /g, "_")} label={ticket.status} /></div></div>
           <div className="fld"><div className="l">SLA</div><div className="v">{ticket.slaStatus ? <SlaBadge status={ticket.slaStatus} /> : "—"}</div></div>
           <div className="fld"><div className="l">Due</div><div className="v">{ticket.dueDate ? formatIndianDate(ticket.dueDate) : "—"}</div></div>

@@ -8,6 +8,7 @@ import { getSessionRoles, hasAnyRole } from "@/lib/auth/roleGuard";
 import { SlaBadge } from "../../SlaBadge";
 import { TicketActions } from "./TicketActions";
 import { TicketConversation } from "./TicketConversation";
+import { helpdeskPriorityVariant } from "@/lib/helpdesk/priorityVariants";
 
 type CommentRow = {
   id: string;
@@ -82,7 +83,7 @@ export default async function Page({ params }: { params: { id: string } }) {
             <div className="fields">
               <div className="fld"><div className="l">Subject</div><div className="v">{ticket.subject}</div></div>
               <div className="fld"><div className="l">Requester</div><div className="v">{ticket.requesterName}</div></div>
-              <div className="fld"><div className="l">Priority</div><div className="v"><StatusPill status={ticket.priority} /></div></div>
+              <div className="fld"><div className="l">Priority</div><div className="v"><StatusPill status={ticket.priority} variant={helpdeskPriorityVariant(ticket.priority)} /></div></div>
               <div className="fld"><div className="l">Status</div><div className="v"><StatusPill status={ticket.status} label={ticket.status.replace(/_/g, " ")} /></div></div>
               <div className="fld"><div className="l">Channel</div><div className="v">{ticket.channel ? humanizeStatus(ticket.channel) : "—"}</div></div>
               <div className="fld"><div className="l">SLA</div><div className="v"><SlaBadge status={ticket.slaStatus} /></div></div>
