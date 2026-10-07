@@ -1,36 +1,61 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { SMALL_OFFICE_PRICE, PSU_PRICE } from "../_data/pricing";
 
 export const metadata: Metadata = {
   title: "Pricing — CivitasOne",
   description: "Free for small offices. Transparent pricing for PSU and Government departments.",
 };
 
-const plans = [
+// A plan feature row. `sla` is intentionally nullable: not every edition
+// carries an SLA, and we must not print a bare "—" as if it were a value
+// (GAP-PRICING-HOME-06).
+type Plan = {
+  name: string;
+  price: string;
+  priceSub: string;
+  users: string;
+  // GAP-PRICING-HOME-04: module entitlement is a plain count. The support
+  // tier is a separate feature row, so these are no longer conflated into a
+  // single "All 33 + dedicated support" string.
+  modules: string;
+  storage: string;
+  support: string;
+  sla: string | null;
+  cta: string;
+  ctaHref: string;
+  highlight: boolean;
+};
+
+const plans: readonly Plan[] = [
   {
     name: "Small Office",
-    price: "₹0/month",
+    price: SMALL_OFFICE_PRICE,
     priceSub: "self-host",
     users: "Up to 25",
-    modules: "5 core",
+    modules: "5 core modules",
     storage: "10 GB",
     support: "Community",
-    sla: "—",
+    sla: null,
     cta: "Download",
     ctaHref: "https://github.com/civitasone",
     highlight: false,
   },
   {
     name: "PSU",
-    price: "₹15,000/month",
+    price: PSU_PRICE,
     priceSub: "per instance",
     users: "Up to 500",
-    modules: "All 33",
+    modules: "All 33 modules",
     storage: "100 GB",
     support: "Email + Phone",
     sla: "99.5%",
-    cta: "Start Free Trial",
-    ctaHref: "/auth/register?plan=psu",
+    // GAP-PRICING-HOME-01: there is no /auth/register route and no trial
+    // provisioning backend, so "Start Free Trial" -> /auth/register 404'd.
+    // Point the primary conversion to the existing /contact route with the
+    // plan prefilled, and label it honestly as a demo request.
+    cta: "Request a demo",
+    ctaHref: "/contact?plan=psu",
     highlight: true,
   },
   {
@@ -38,12 +63,12 @@ const plans = [
     price: "Custom pricing",
     priceSub: "contact sales",
     users: "Unlimited",
-    modules: "All 33 + dedicated support",
+    modules: "All 33 modules",
     storage: "Unlimited",
-    support: "Dedicated CSM",
+    support: "Dedicated CSM + dedicated support",
     sla: "99.9%",
     cta: "Contact Sales",
-    ctaHref: "/contact",
+    ctaHref: "/contact?plan=government",
     highlight: false,
   },
 ] as const;
@@ -71,7 +96,7 @@ const faqs = [
   },
   {
     q: "Do you offer discounts for multi-year contracts?",
-    a: "Yes. Annual billing saves 15%. Multi-year agreements for Government departments come with additional SLA guarantees.",
+    a: "Annual billing is discounted 15% versus paying monthly — for the PSU edition that is ₹1,53,000/year instead of ₹1,80,000. Multi-year agreements for Government departments come with additional SLA guarantees. Ask us for a quote.",
   },
   {
     q: "What happens to my data if I cancel?",
@@ -79,7 +104,7 @@ const faqs = [
   },
   {
     q: "Is CivitasOne compliant with government procurement rules?",
-    a: "Yes. CivitasOne is built to meet GFR 2017 procurement norms, DPDP Act data protection requirements, and CERT-In security guidelines.",
+    a: "CivitasOne is designed to support GFR 2017 procurement workflows, DPDP Act data-protection practices (audit trails, encryption, data export and deletion), and CERT-In security guidance. These are design goals, not a claim of formal certification or empanelment; our current certification and empanelment status is available on request.",
   },
 ] as const;
 
@@ -110,7 +135,10 @@ export default function PricingPage() {
                 }`}
               >
                 {plan.highlight && (
-                  <span className="absolute -top-3 start-6 rounded-full bg-gray-900 px-3 py-1 text-xs font-semibold text-white">
+                  <span
+                    data-testid="popular-badge"
+                    className="absolute -top-3 start-6 max-w-[calc(100%-3rem)] truncate rounded-full bg-gray-900 px-3 py-1 text-xs font-semibold text-white"
+                  >
                     Most Popular
                   </span>
                 )}
@@ -121,20 +149,26 @@ export default function PricingPage() {
                 </div>
                 <ul className="mt-8 space-y-4 text-sm text-gray-600">
                   <li className="flex items-start gap-2">
-                    <span className="mt-0.5 text-green-600">✓</span> {plan.users} users
+                    <span className="mt-0.5 text-green-600" aria-hidden="true">✓</span> {plan.users} users
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="mt-0.5 text-green-600">✓</span> {plan.modules}
+                    <span className="mt-0.5 text-green-600" aria-hidden="true">✓</span> {plan.modules}
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="mt-0.5 text-green-600">✓</span> {plan.storage} storage
+                    <span className="mt-0.5 text-green-600" aria-hidden="true">✓</span> {plan.storage} storage
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="mt-0.5 text-green-600">✓</span> {plan.support} support
+                    <span className="mt-0.5 text-green-600" aria-hidden="true">✓</span> {plan.support} support
                   </li>
-                  <li className="flex items-start gap-2">
-                    <span className="mt-0.5 text-green-600">✓</span> SLA: {plan.sla}
-                  </li>
+                  {plan.sla ? (
+                    <li className="flex items-start gap-2">
+                      <span className="mt-0.5 text-green-600" aria-hidden="true">✓</span> SLA: {plan.sla}
+                    </li>
+                  ) : (
+                    <li className="flex items-start gap-2 text-gray-500">
+                      <span className="mt-0.5 text-gray-400" aria-hidden="true">○</span> SLA: none (community)
+                    </li>
+                  )}
                 </ul>
                 <Link
                   href={plan.ctaHref}

@@ -64,11 +64,12 @@ export default function SandboxPage() {
             Try CivitasOne — No Sign-Up Required
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-lg text-gray-500">
-            Pick a role below to see the system pre-loaded with realistic data. Resets daily.
+            Pick a role below to see the system pre-loaded with realistic data.
           </p>
         </div>
 
         {/* Role Cards */}
+        <h2 className="sr-only">Choose a role to enter the sandbox</h2>
         <div
           className="mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-4"
           data-testid="sandbox-roles"
@@ -76,13 +77,13 @@ export default function SandboxPage() {
           {roles.map((role) => (
             <Link
               key={role.id}
-              href={`/dashboard`}
+              href={`/api/sandbox/enter?role=${role.id}`}
               className="group rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:border-gray-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
             >
-              <div className="text-4xl">{role.icon}</div>
-              <h3 className="mt-4 text-lg font-semibold text-gray-900 group-hover:text-gray-700">
+              <div className="text-4xl" aria-hidden="true">{role.icon}</div>
+              <h2 className="mt-4 text-lg font-semibold text-gray-900 group-hover:text-gray-700">
                 {role.name}
-              </h3>
+              </h2>
               <p className="mt-2 text-sm text-gray-500">{role.desc}</p>
               <span className="mt-4 inline-block text-sm font-medium text-gray-900 group-hover:text-gray-600">
                 Enter as {role.name} →
@@ -93,7 +94,7 @@ export default function SandboxPage() {
 
         {/* Disclaimer */}
         <p className="mt-12 text-center text-sm text-gray-400">
-          Data is fictional. Refreshed every 24 hours. No real emails or payments are sent.
+          Data is fictional and resets every day at 02:00 IST. No real emails or payments are sent.
         </p>
       </div>
     </section>

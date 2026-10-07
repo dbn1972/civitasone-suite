@@ -2,6 +2,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 import BrandingPage from "./page";
+import { resetSessionIdentityCache } from "@/lib/auth/useSessionIdentity";
+
+// The branding editor now gates its Save control on the signed-in user's
+// roles via useSessionIdentity() (GAP-SETTINGS-BRANDING-03 — the UI companion
+// to theme-service's PUT requireRole(theme_admin/super_admin)). That hook
+// fetches /api/auth/session, so the fetch mock must answer it with an admin
+// role or Save stays (correctly) disabled.
+const ADMIN_SESSION = { authenticated: true, userId: "u1", roles: ["theme_admin"] };
 
 // The real GET /v1/themes/brand handler always returns a COMPLETE row —
 // either the stored config or `{ tenantId, ...DEFAULTS }` — never a partial
@@ -43,6 +51,9 @@ function mockFetchOk(brandOverrides: Record<string, unknown> = {}, presets: unkn
   const brand = { ...FULL_BRAND_CONFIG, ...brandOverrides };
   return vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
     const url = String(input);
+    if (url.endsWith("/api/auth/session")) {
+      return Promise.resolve(new Response(JSON.stringify(ADMIN_SESSION), { status: 200 }));
+    }
     if (url.endsWith("/themes/brand/presets")) {
       return Promise.resolve(new Response(JSON.stringify(presets), { status: 200 }));
     }
@@ -56,6 +67,7 @@ function mockFetchOk(brandOverrides: Record<string, unknown> = {}, presets: unkn
 describe("BrandingPage", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    resetSessionIdentityCache();
   });
 
   it("loads brand config and presets through the authenticated proxy, not the un-proxied /api/v1 path", async () => {
@@ -116,12 +128,15 @@ describe("BrandingPage", () => {
     // (no res.ok check), so the button claimed "✓ Saved!" regardless.
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ code: "INTERNAL" }), { status: 500 }));
 
+    // GAP-SETTINGS-BRANDING-03: Save now opens a tenant-wide confirmation
+    // dialog before the PUT; confirm it to trigger the request.
     fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    fireEvent.click(screen.getByRole("button", { name: /save branding/i }));
 
     await waitFor(() => {
       expect(screen.getByRole("alert")).toHaveTextContent(/couldn.t save/i);
     });
-    expect(screen.queryByRole("button", { name: /saved/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /✓ saved/i })).not.toBeInTheDocument();
   });
 
   it("saves through the authenticated proxy and confirms success only on a real 2xx", async () => {
@@ -136,12 +151,105 @@ describe("BrandingPage", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    fireEvent.click(screen.getByRole("button", { name: /save branding/i }));
 
-    await waitFor(() => expect(screen.getByRole("button", { name: /saved/i })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("button", { name: /✓ saved/i })).toBeInTheDocument());
 
     expect(putSpy).toHaveBeenCalledWith(
       "/api/proxy/v1/themes/brand",
       expect.objectContaining({ method: "PUT" }),
     );
+  });
+
+  it("recomputes a readable colorPrimaryFg and PUTs it (GAP-SETTINGS-BRANDING-01)", async () => {
+    mockFetchOk({ appName: "Test Gov Portal" }, []);
+    render(<BrandingPage />);
+    await waitFor(() => expect(screen.getByDisplayValue("Test Gov Portal")).toBeInTheDocument());
+
+    // Choose a light primary (#fde68a amber). colorPrimaryFg must become
+    // near-black #111827, and that pair is what gets persisted.
+    fireEvent.input(screen.getByLabelText("Primary"), { target: { value: "#fde68a" } });
+
+    const putSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "b1", status: "accepted" }), { status: 202 }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    fireEvent.click(screen.getByRole("button", { name: /save branding/i }));
+
+    await waitFor(() => expect(putSpy).toHaveBeenCalled());
+    const body = JSON.parse((putSpy.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.colorPrimary).toBe("#fde68a");
+    expect(body.colorPrimaryFg).toBe("#111827");
+  });
+
+  it("blocks Save when a critical colour pair fails WCAG AA (GAP-SETTINGS-BRANDING-06)", async () => {
+    // Text #cccccc on white background is ~1.6:1 — well below 4.5:1.
+    mockFetchOk({ appName: "Test Gov Portal", colorText: "#cccccc", colorBackground: "#ffffff" }, []);
+    render(<BrandingPage />);
+    await waitFor(() => expect(screen.getByDisplayValue("Test Gov Portal")).toBeInTheDocument());
+
+    // Dirty the form.
+    fireEvent.change(screen.getByDisplayValue("Test Gov Portal"), { target: { value: "Changed" } });
+
+    const saveBtn = screen.getByRole("button", { name: /fix contrast to save/i });
+    expect(saveBtn).toBeDisabled();
+    expect(screen.getByText(/hard to read/i)).toBeInTheDocument();
+  });
+
+  it("hides Save for a user without a branding-admin role (GAP-SETTINGS-BRANDING-03)", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/auth/session")) {
+        return Promise.resolve(new Response(JSON.stringify({ authenticated: true, userId: "u2", roles: ["employee"] }), { status: 200 }));
+      }
+      if (url.endsWith("/themes/brand/presets")) {
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ ...FULL_BRAND_CONFIG, appName: "Readonly Portal" }), { status: 200 }));
+    });
+
+    render(<BrandingPage />);
+    await waitFor(() => expect(screen.getByDisplayValue("Readonly Portal")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/only a tenant or theme administrator/i));
+
+    const appNameInput = screen.getByLabelText("App Name") as HTMLInputElement;
+    expect(appNameInput).toBeDisabled();
+    expect(screen.getByRole("button", { name: /no changes|save/i })).toBeDisabled();
+  });
+
+  it("rejects an oversized logo file with a clear message (GAP-SETTINGS-BRANDING-04)", async () => {
+    mockFetchOk({ appName: "Test Gov Portal" }, []);
+    render(<BrandingPage />);
+    await waitFor(() => expect(screen.getByDisplayValue("Test Gov Portal")).toBeInTheDocument());
+
+    const bigPng = new File([new Uint8Array(300 * 1024)], "logo.png", { type: "image/png" });
+    const fileInput = document.getElementById("branding-logo-file") as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: [bigPng] } });
+
+    await waitFor(() => expect(screen.getByText(/200KB or smaller/i)).toBeInTheDocument());
+  });
+
+  it("rejects a non-image file type for the logo (GAP-SETTINGS-BRANDING-04)", async () => {
+    mockFetchOk({ appName: "Test Gov Portal" }, []);
+    render(<BrandingPage />);
+    await waitFor(() => expect(screen.getByDisplayValue("Test Gov Portal")).toBeInTheDocument());
+
+    const exe = new File([new Uint8Array(10)], "evil.exe", { type: "application/octet-stream" });
+    const fileInput = document.getElementById("branding-logo-file") as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: [exe] } });
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/must be a PNG or SVG/i));
+  });
+
+  it("rejects a non-https logo URL (GAP-SETTINGS-BRANDING-04)", async () => {
+    mockFetchOk({ appName: "Test Gov Portal" }, []);
+    render(<BrandingPage />);
+    await waitFor(() => expect(screen.getByDisplayValue("Test Gov Portal")).toBeInTheDocument());
+
+    const urlInput = screen.getByLabelText("Logo image URL");
+    fireEvent.blur(urlInput, { target: { value: "http://example.com/logo.png" } });
+
+    await waitFor(() => expect(screen.getByText(/https:\/\/ image URL/i)).toBeInTheDocument());
   });
 });

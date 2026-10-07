@@ -2,13 +2,42 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
+import {
+  Building2,
+  MapPin,
+  Layers,
+  Users,
+  Puzzle,
+  BookOpen,
+  Palmtree,
+  Wallet,
+  PartyPopper,
+  type LucideIcon,
+} from "lucide-react";
 import { Card, StatusPill, ProgressBar } from "../../_components/ds";
 import { SampleDataControls } from "./SampleDataControls";
 import { trackActivation, type FunnelStep } from "@/lib/activation";
-import type { WizardStep, StepStatus } from "@/lib/setupSteps";
+import type { WizardStep, StepStatus, WizardStepKey } from "@/lib/setupSteps";
 import { scrollBehavior } from "@/lib/motion";
 
 type StepView = WizardStep & { status: StepStatus };
+
+/**
+ * GAP-SETUP-HOME-06: step icons come from the DS lucide set (like Sidebar and
+ * StatIcon), not OS colour-emoji, which render as a ".notdef" box on headless
+ * Linux and are inconsistent with the design system. Keyed by step so the
+ * mapping is explicit and independent of the emoji in the data model.
+ */
+const STEP_ICON: Record<WizardStepKey, LucideIcon> = {
+  "org-profile": Building2,
+  branches: MapPin,
+  departments: Layers,
+  people: Users,
+  modules: Puzzle,
+  "finance-year-coa": BookOpen,
+  "leave-policies": Palmtree,
+  "pay-structure": Wallet,
+};
 
 /**
  * SetupWizard — the clerk-facing first-run organisation setup.
@@ -71,7 +100,7 @@ export function SetupWizard({
 
   let encouragement: string;
   if (doneCount === 0) encouragement = "Let's get your office ready — one small step at a time.";
-  else if (ready) encouragement = "All set — your office is ready to go. 🎉";
+  else if (ready) encouragement = "All set — your office is ready to go.";
   else if (doneCount >= totalCount - 2) encouragement = "Nice — you're almost there!";
   else encouragement = "Great start. Keep going whenever you have a moment.";
 
@@ -90,7 +119,7 @@ export function SetupWizard({
         </div>
         <ProgressBar value={progress} />
         {progressUnknown && (
-          <p role="status" style={{ margin: "8px 0 0", fontSize: 12.5, color: "#92400e" }}>
+          <p role="status" style={{ margin: "8px 0 0", fontSize: 12.5, color: "var(--warn)" }}>
             We couldn&apos;t check one or two steps just now. Refresh in a moment to update your progress.
           </p>
         )}
@@ -99,7 +128,9 @@ export function SetupWizard({
       {ready && (
         <Card padding>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span aria-hidden="true" style={{ fontSize: 26 }}>🎉</span>
+            <span aria-hidden="true" style={{ display: "inline-flex", color: "var(--good)" }}>
+              <PartyPopper size={26} aria-hidden="true" />
+            </span>
             <div style={{ flex: 1 }}>
               <h3 style={{ margin: "0 0 4px", fontSize: 16 }}>Your office is ready</h3>
               <p style={{ margin: 0, color: "var(--mut)", fontSize: 13.5 }}>
@@ -114,17 +145,23 @@ export function SetupWizard({
       <div className="grid g-2" style={{ marginTop: 16 }}>
         {steps.map((step, idx) => {
           const isResume = idx === resumeIndex && step.status !== "complete";
-          const href = `${step.entryHref}?return=/setup`;
+          // GAP-SETUP-HOME-04: no target page reads a `return` param, so the
+          // old ?return=/setup was a misleading no-op — link straight to the
+          // step's screen instead.
+          const href = step.entryHref;
+          const StepIcon = STEP_ICON[step.key];
           return (
             <div key={step.key} ref={isResume ? resumeRef : undefined}>
               <Card>
                 <div
                   className="pad"
-                  style={isResume ? { outline: "2px solid var(--primary, #4f46e5)", outlineOffset: -2, borderRadius: 12 } : undefined}
+                  style={isResume ? { outline: "2px solid var(--primary)", outlineOffset: -2, borderRadius: 12 } : undefined}
                 >
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span aria-hidden="true" style={{ fontSize: 22 }}>{step.icon}</span>
+                      <span aria-hidden="true" style={{ display: "inline-flex", color: "var(--primary)" }}>
+                        <StepIcon size={22} aria-hidden="true" />
+                      </span>
                       <div>
                         <div style={{ fontSize: 12, color: "var(--mut)", fontWeight: 600 }}>Step {step.num}</div>
                         <h3 style={{ margin: 0, fontSize: 16, letterSpacing: "-0.2px" }}>{step.title}</h3>
@@ -141,12 +178,17 @@ export function SetupWizard({
                       {step.status === "complete" ? "Review" : step.cta}
                     </Link>
                     {!step.required && step.status !== "complete" && (
-                      <Link href="/dashboard" className="btn ghost" aria-label={`Skip "${step.title}" and do it later`}>
-                        Do it later
+                      // GAP-SETUP-HOME-02: this link only navigates to the
+                      // dashboard; it does NOT persist a deferral, so the label
+                      // must say exactly that rather than implying "do it later"
+                      // was saved. (No per-tenant skip store exists yet — see
+                      // HUMAN REVIEW.)
+                      <Link href="/dashboard" className="btn ghost" aria-label={`Skip "${step.title}" and go to the dashboard`}>
+                        Skip to dashboard
                       </Link>
                     )}
                     {step.status === "unknown" && (
-                      <span style={{ fontSize: 12.5, color: "#92400e" }}>
+                      <span style={{ fontSize: 12.5, color: "var(--warn)" }}>
                         We couldn&apos;t check this step right now.
                       </span>
                     )}

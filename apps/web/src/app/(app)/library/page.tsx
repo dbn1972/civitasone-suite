@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { PageHeader } from "../../_components/ds";
 
 type Severity = "critical" | "high" | "medium" | "low" | "info";
@@ -8,121 +9,72 @@ type Severity = "critical" | "high" | "medium" | "low" | "info";
 type AuditIssue = {
   id: string;
   code: string;
-  title: string;
   severity: Severity;
-  category: string;
-  remediationSummary: string;
+  // i18n message keys (resolved at render via useTranslations) so titles,
+  // remediation text and category labels switch with the active locale.
+  titleKey: string;
+  remediationKey: string;
+  categoryKey: string;
 };
 
-// UX-005 tranche 5: critical/high/low's original literal hex pairings measured
-// 4.41:1 / 3.07:1 / 3.58:1 against their own badge background (WCAG 2.2 AA
-// needs 4.5:1) -- axe's full sweep caught this on the rendered page even
-// though each color looks fine in isolation on white. Swapped to this
-// codebase's existing --bad/--warn/--good semantic pairs (already verified
-// compliant: 6.05 / 5.20 / 5.40) instead of inventing new colors. medium
-// (4.75:1) and info (4.63:1) already passed and are unchanged.
+// GAP-LIBRARY-HOME-04: severity swatches now use this codebase's existing
+// semantic design tokens from civitas-ds.css only — no raw hex. The former
+// literal pairs #2563eb/#eff6ff (medium) and #6b7280/#f9fafb (info) are gone.
+// critical/high/low already used --bad/--warn/--good (verified >=4.5:1 in the
+// prior UX-005 tranche); medium now uses --info (#175cd3 on #eff8ff = 6.37:1)
+// and info uses --mut (#667085, 4.97:1 on white) on --line2 (#f2f4f7, 4.63:1),
+// both clearing WCAG 2.2 AA for the chip text.
 const SEVERITY_COLOR: Record<Severity, string> = {
   critical: "var(--bad)",
   high: "var(--warn)",
-  medium: "#2563eb",
+  medium: "var(--info)",
   low: "var(--good)",
-  info: "#6b7280",
+  info: "var(--mut)",
 };
 
 const SEVERITY_BG: Record<Severity, string> = {
   critical: "var(--badbg)",
   high: "var(--warnbg)",
-  medium: "#eff6ff",
+  medium: "var(--infobg)",
   low: "var(--goodbg)",
-  info: "#f9fafb",
+  info: "var(--line2)",
 };
 
-// COMP-004: this page used to fetch GET /v1/audit/library/issues (which
-// doesn't exist anywhere in the platform — grepped every service) and
-// silently fall back to this exact list on failure, so a real network
-// error was indistinguishable from "here is the live issue catalogue."
-//
-// Unlike admin/discovery and admin/bulk-scan (which needed a per-tenant
-// backend that doesn't exist), this content is a genuinely static
-// reference: a fixed catalogue of common UX/accessibility/security/
-// performance finding TYPES with generic remediation guidance — the kind
-// of thing that's the same for every tenant and edited by developers, not
-// admin-entered data. Renamed from MOCK_ISSUES to ISSUE_LIBRARY and the
-// fake fetch/loading-skeleton machinery removed: it is now honestly
-// presented as what it is — a static reference list, not live/tenant data
-// pretending to have loaded from a backend.
+// GAP-LIBRARY-HOME-01 / HOME-03 / HOME-05: this is a genuinely static,
+// developer-maintained reference list of finding TYPES (the same for every
+// tenant, no fetch/loader/source). It is NOT the document/book library — that
+// lives at /estab/library. The route is now titled "Audit finding types"
+// (library.pageTitle) and gated to platform admins by library/layout.tsx, so
+// the generic "Library" name is left to /estab/library and tenant-role users
+// no longer land on engineering findings. Codes and strings are next-intl keys
+// (see the `library` namespace in messages/en.json + hi.json) and a legend
+// explains the W/I code prefixes.
 const ISSUE_LIBRARY: AuditIssue[] = [
-  {
-    id: "1",
-    code: "W1",
-    title: "Missing alt text on images",
-    severity: "critical",
-    category: "Accessibility",
-    remediationSummary: "Add descriptive alt attributes to all non-decorative <img> elements.",
-  },
-  {
-    id: "2",
-    code: "W2",
-    title: "Insufficient colour contrast",
-    severity: "high",
-    category: "Accessibility",
-    remediationSummary: "Ensure text/background contrast ratio meets WCAG 2.2 AA minimum of 4.5:1.",
-  },
-  {
-    id: "3",
-    code: "W3",
-    title: "Form inputs missing associated labels",
-    severity: "high",
-    category: "Accessibility",
-    remediationSummary: "Link every input to a <label> via htmlFor/id or aria-label.",
-  },
-  {
-    id: "4",
-    code: "W4",
-    title: "Missing CSRF protection on state-changing APIs",
-    severity: "critical",
-    category: "Security",
-    remediationSummary: "Implement SameSite=Strict cookies and double-submit token pattern for POST/PUT/DELETE routes.",
-  },
-  {
-    id: "5",
-    code: "W5",
-    title: "Loading skeleton missing on async pages",
-    severity: "medium",
-    category: "UX",
-    remediationSummary: "Add Next.js loading.tsx siblings or isLoading guard with skeleton placeholders to prevent content flash.",
-  },
-  {
-    id: "6",
-    code: "W6",
-    title: "Index-based React list keys",
-    severity: "medium",
-    category: "Performance",
-    remediationSummary: "Replace key={index} with stable unique identifiers (id, slug, or composite) to prevent reconciliation bugs.",
-  },
-  {
-    id: "7",
-    code: "W7",
-    title: "Unthrottled search inputs triggering excessive API calls",
-    severity: "low",
-    category: "Performance",
-    remediationSummary: "Debounce search onChange handlers with a 250–350 ms delay before issuing fetch requests.",
-  },
-  {
-    id: "8",
-    code: "I1",
-    title: "No focus-visible ring on interactive elements",
-    severity: "medium",
-    category: "Accessibility",
-    remediationSummary: "Apply :focus-visible outline styles conforming to WCAG 2.4.11 (min 2px offset, non-colour-only).",
-  },
+  { id: "1", code: "W1", severity: "critical", titleKey: "issue_W1_title", remediationKey: "issue_W1_remediation", categoryKey: "catAccessibility" },
+  { id: "2", code: "W2", severity: "high", titleKey: "issue_W2_title", remediationKey: "issue_W2_remediation", categoryKey: "catAccessibility" },
+  { id: "3", code: "W3", severity: "high", titleKey: "issue_W3_title", remediationKey: "issue_W3_remediation", categoryKey: "catAccessibility" },
+  { id: "4", code: "W4", severity: "critical", titleKey: "issue_W4_title", remediationKey: "issue_W4_remediation", categoryKey: "catSecurity" },
+  { id: "5", code: "W5", severity: "medium", titleKey: "issue_W5_title", remediationKey: "issue_W5_remediation", categoryKey: "catUx" },
+  { id: "6", code: "W6", severity: "medium", titleKey: "issue_W6_title", remediationKey: "issue_W6_remediation", categoryKey: "catPerformance" },
+  { id: "7", code: "W7", severity: "low", titleKey: "issue_W7_title", remediationKey: "issue_W7_remediation", categoryKey: "catPerformance" },
+  { id: "8", code: "I1", severity: "medium", titleKey: "issue_I1_title", remediationKey: "issue_I1_remediation", categoryKey: "catAccessibility" },
 ];
 
 export default function LibraryPage() {
+  const t = useTranslations("library");
   const [severityFilter, setSeverityFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
 
-  const filtered = ISSUE_LIBRARY.filter((iss) => {
+  // Resolve each issue's localised strings once, so search matches what the
+  // user actually sees in the current locale.
+  const localised = ISSUE_LIBRARY.map((iss) => ({
+    ...iss,
+    title: t(iss.titleKey),
+    remediation: t(iss.remediationKey),
+    category: t(iss.categoryKey),
+  }));
+
+  const filtered = localised.filter((iss) => {
     const matchSev = severityFilter === "all" || iss.severity === severityFilter;
     const q = search.toLowerCase();
     const matchSearch =
@@ -151,16 +103,9 @@ export default function LibraryPage() {
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader
-        title="Issue Library"
-        subtitle="Reference catalogue of common UX, accessibility, security, and performance findings with remediation guidance."
-        back="/admin"
-      />
+      <PageHeader title={t("pageTitle")} subtitle={t("pageSubtitle")} back="/admin" />
 
-      <p style={{ margin: "0 0 16px", fontSize: 12.5, color: "var(--ink3)" }}>
-        This is a static reference catalogue — the same for every tenant, maintained by the development
-        team — not a live scan result or per-tenant data.
-      </p>
+      <p style={{ margin: "0 0 16px", fontSize: 12.5, color: "var(--ink3)" }}>{t("staticNotice")}</p>
 
       <div
         style={{
@@ -172,20 +117,20 @@ export default function LibraryPage() {
       >
         <div>
           <label htmlFor="library-search" style={labelStyle}>
-            Search issues
+            {t("searchLabel")}
           </label>
           <input
             id="library-search"
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Code, title or category…"
+            placeholder={t("searchPlaceholder")}
             style={{ ...inputStyle, width: "100%" }}
           />
         </div>
         <div>
           <label htmlFor="library-severity" style={labelStyle}>
-            Severity
+            {t("severityLabel")}
           </label>
           <select
             id="library-severity"
@@ -193,15 +138,18 @@ export default function LibraryPage() {
             onChange={(e) => setSeverityFilter(e.target.value)}
             style={{ ...inputStyle, width: "100%" }}
           >
-            <option value="all">All severities</option>
-            <option value="critical">Critical</option>
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
-            <option value="info">Info</option>
+            <option value="all">{t("severityAll")}</option>
+            <option value="critical">{t("sevCritical")}</option>
+            <option value="high">{t("sevHigh")}</option>
+            <option value="medium">{t("sevMedium")}</option>
+            <option value="low">{t("sevLow")}</option>
+            <option value="info">{t("sevInfo")}</option>
           </select>
         </div>
       </div>
+
+      {/* GAP-LIBRARY-HOME-05: legend explaining the W/I code prefixes. */}
+      <p style={{ margin: "0 0 14px", fontSize: 12.5, color: "var(--ink2)" }}>{t("legend")}</p>
 
       {filtered.length === 0 ? ( // ux-001-ok: `filtered` is a client-side filter of the hardcoded, static ISSUE_LIBRARY reference catalogue (see comment above) by the operator's own search/severity selections -- there is no fetch/loader/source in this path
         <div
@@ -212,12 +160,12 @@ export default function LibraryPage() {
             fontSize: 15,
           }}
         >
-          No issues match your filters.
+          {t("emptyState")}
         </div>
       ) : (
         <ul
           style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 12 }}
-          aria-label="Audit issues"
+          aria-label={t("issuesAriaLabel")}
         >
           {filtered.map((iss) => (
             <li
@@ -262,11 +210,11 @@ export default function LibraryPage() {
                     textTransform: "capitalize",
                   }}
                 >
-                  {iss.severity}
+                  {t(`sev${iss.severity.charAt(0).toUpperCase()}${iss.severity.slice(1)}`)}
                 </span>
               </div>
               <p style={{ margin: "0 0 6px", fontSize: 13, color: "var(--ink2)", lineHeight: 1.5 }}>
-                <span style={{ fontWeight: 600 }}>Remediation:</span> {iss.remediationSummary}
+                <span style={{ fontWeight: 600 }}>{t("remediationLabel")}</span> {iss.remediation}
               </p>
               <div style={{ display: "flex", gap: 12, fontSize: 12, color: "var(--ink2)" }}>
                 <span>{iss.category}</span>

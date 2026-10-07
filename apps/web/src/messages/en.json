@@ -4396,6 +4396,44 @@
     "selfDisburseError": "You created this loan, so another payroll officer must disburse it.",
     "notDisbursableError": "This loan can no longer be disbursed — it is not in 'applied' status. Refresh to see its current status."
   },
+  "library": {
+    "pageTitle": "Audit finding types",
+    "pageSubtitle": "Reference catalogue of common UX, accessibility, security, and performance findings with remediation guidance.",
+    "staticNotice": "This is a static reference catalogue — the same for every tenant, maintained by the development team — not a live scan result or per-tenant data.",
+    "searchLabel": "Search issues",
+    "searchPlaceholder": "Code, title or category…",
+    "severityLabel": "Severity",
+    "severityAll": "All severities",
+    "sevCritical": "Critical",
+    "sevHigh": "High",
+    "sevMedium": "Medium",
+    "sevLow": "Low",
+    "sevInfo": "Info",
+    "legend": "Code key: W = web finding, I = interaction finding",
+    "emptyState": "No issues match your filters.",
+    "remediationLabel": "Remediation:",
+    "issuesAriaLabel": "Audit finding types",
+    "catAccessibility": "Accessibility",
+    "catSecurity": "Security",
+    "catUx": "UX",
+    "catPerformance": "Performance",
+    "issue_W1_title": "Missing alt text on images",
+    "issue_W1_remediation": "Add descriptive alt attributes to all non-decorative image elements.",
+    "issue_W2_title": "Insufficient colour contrast",
+    "issue_W2_remediation": "Ensure text/background contrast ratio meets WCAG 2.2 AA minimum of 4.5:1.",
+    "issue_W3_title": "Form inputs missing associated labels",
+    "issue_W3_remediation": "Link every input to a label element via htmlFor/id or aria-label.",
+    "issue_W4_title": "Missing CSRF protection on state-changing APIs",
+    "issue_W4_remediation": "Implement SameSite=Strict cookies and double-submit token pattern for POST/PUT/DELETE routes.",
+    "issue_W5_title": "Loading skeleton missing on async pages",
+    "issue_W5_remediation": "Add Next.js loading.tsx siblings or isLoading guard with skeleton placeholders to prevent content flash.",
+    "issue_W6_title": "Index-based React list keys",
+    "issue_W6_remediation": "Replace index-based React keys with stable unique identifiers (id, slug, or composite) to prevent reconciliation bugs.",
+    "issue_W7_title": "Unthrottled search inputs triggering excessive API calls",
+    "issue_W7_remediation": "Debounce search onChange handlers with a 250–350 ms delay before issuing fetch requests.",
+    "issue_I1_title": "No focus-visible ring on interactive elements",
+    "issue_I1_remediation": "Apply :focus-visible outline styles conforming to WCAG 2.4.11 (min 2px offset, non-colour-only)."
+  },
   "locations": {
     "title": "Locations",
     "subtitle": "Offices, branches, and facilities registered in the system.",
@@ -14456,5 +14494,17 @@
       "workspaceBody": "Scrutiny queues, approvals and permits for {label} are available in the {resource} list.",
       "loadError": "this service"
     }
+  },
+  "offlinePage": {
+    "title": "You're offline",
+    "intro": "This page isn't available offline yet. Previously visited screens are saved on this device, and any changes you made are kept safely until you reconnect.",
+    "queuedNone": "No changes are waiting to sync.",
+    "queuedOne": "1 change is saved on this device and will sync automatically when you reconnect.",
+    "queuedMany": "{count} changes are saved on this device and will sync automatically when you reconnect.",
+    "queuedChecking": "Checking for changes waiting to sync…",
+    "tryAgain": "Try again",
+    "goToDashboard": "Go to dashboard",
+    "backOnline": "Back online — reconnecting…",
+    "statusOffline": "You are currently offline."
   }
 }

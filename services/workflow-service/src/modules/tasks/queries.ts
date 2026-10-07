@@ -21,11 +21,22 @@ export async function listTasks(
       : opts?.status === "pending" && opts.roles?.length
         ? await repo.listPendingForRoles(tenantId, opts.roles, limit, offset)
         : await repo.listByTenant(tenantId, limit, offset);
+    // GAP-APPROVALS-HOME-01 — the exact total of the WHOLE (unpaged) matching
+    // set, computed with the same filter the page just used, so the unified
+    // approvals inbox can show a real Pending count / "N of M" instead of only
+    // the length of the first page (which silently capped an approver's inbox
+    // at `limit`). Cheap COUNT(*) on the already-tenant-scoped, indexed filter.
+    const total = opts?.instanceId
+      ? await repo.countByInstance(tenantId, opts.instanceId)
+      : opts?.status === "pending" && opts.roles?.length
+        ? await repo.countPendingForRoles(tenantId, opts.roles)
+        : await repo.countByTenant(tenantId);
     return {
       data: rows,
       pagination: {
-        hasMore: rows.length === limit,
+        hasMore: offset + rows.length < total,
         pageSize: limit,
+        total,
         ...(rows.length ? { cursor: String(offset + rows.length) } : {}),
       },
     };

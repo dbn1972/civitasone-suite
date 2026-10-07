@@ -15,7 +15,6 @@ import { fetchJson } from "@/app/_data/apiClient";
 import {
   getLocations,
   getTenantUsers,
-  getTenantSettings,
   getChartOfAccounts,
   getPayrollStructures,
 } from "@/app/_data/loaders";
@@ -75,9 +74,10 @@ async function evalBranches(): Promise<StepStatus> {
 }
 
 async function evalDepartments(): Promise<StepStatus> {
-  // No dedicated departments endpoint exists; the org chart is the real signal
-  // that teams/structure have been set up. (/v1/hrms/org-chart)
-  const { source, count } = await countFrom("/api/v1/hrms/org-chart", "setup.departments");
+  // GAP-SETUP-HOME-01: the real signal is the departments list, not the org
+  // chart (which is a people hierarchy). This is the same endpoint the
+  // /hr/departments management screen reads (/v1/hrms/departments).
+  const { source, count } = await countFrom("/api/v1/hrms/departments", "setup.departments");
   return listStatus(source, count);
 }
 
@@ -89,8 +89,25 @@ async function evalPeople(): Promise<StepStatus> {
 }
 
 async function evalModules(): Promise<StepStatus> {
-  const r = await getTenantSettings();
-  return listStatus(r.source === "error" ? "error" : "api", r.data.length);
+  // GAP-SETUP-HOME-03: a row existing in the module table is NOT proof the
+  // admin made a choice — tenants are seeded with a default module set. Treat
+  // the step complete only when the admin has explicitly confirmed their module
+  // selection, recorded as `modulesConfirmedAt` (or `modulesConfirmed`) in the
+  // tenant settings. Absent/empty confirmation is honest "todo", not "unknown".
+  const res = await fetchJson<unknown, { confirmed: boolean }>("/api/v1/tenants/current", { confirmed: false }, {
+    revalidateSeconds: 60,
+    telemetryKey: "setup.modules",
+    mapResponse: (p) => {
+      const rec = isRecord(p) && isRecord(p.data) ? p.data : isRecord(p) ? p : null;
+      if (!rec) return null;
+      const settings = isRecord(rec.settings) ? rec.settings : {};
+      const confirmedAt = typeof settings.modulesConfirmedAt === "string" && settings.modulesConfirmedAt.trim().length > 0;
+      const confirmedFlag = settings.modulesConfirmed === true;
+      return { confirmed: confirmedAt || confirmedFlag };
+    },
+  });
+  if (res.source === "error") return "unknown";
+  return res.data.confirmed ? "complete" : "todo";
 }
 
 async function evalFinanceYearCoa(): Promise<StepStatus> {
