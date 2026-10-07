@@ -135,5 +135,10 @@ describe("contract baseline", () => {
       console.log(`Wrote ${out}`);
     }
     console.log(JSON.stringify(baseline.counts, null, 2));
-  });
+    // The inventory walks and AST-parses every source file of every service
+    // (~10s on a CI runner even after the per-service parse cache in
+    // topic-registry.ts removed the 3x re-parse). That is inherent to a whole-repo
+    // scan, not a hang, so this single test gets an explicit 60s budget instead of
+    // vitest's 5s default. The test is NOT skipped.
+  }, 60_000);
 });
