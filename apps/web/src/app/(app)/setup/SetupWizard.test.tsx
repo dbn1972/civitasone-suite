@@ -1,11 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 // Instrumentation is a fire-and-forget beacon — stub it so tests don't touch it.
 vi.mock("@/lib/activation", async () => {
   const actual = await vi.importActual<typeof import("@/lib/activation")>("@/lib/activation");
   return { ...actual, trackActivation: vi.fn() };
 });
+
+// SkipStepButton (client) uses next/navigation's useRouter and the skip API.
+const pushMock = vi.fn();
+const refreshMock = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pushMock, refresh: refreshMock }) }));
+const persistSkippedStep = vi.fn(async (_stepKey: string) => true);
+const unskipStep = vi.fn(async (_stepKey: string) => true);
+vi.mock("./setupSkipApi", () => ({
+  persistSkippedStep: (stepKey: string) => persistSkippedStep(stepKey),
+  unskipStep: (stepKey: string) => unskipStep(stepKey),
+}));
 
 import { SetupWizard } from "./SetupWizard";
 import { WIZARD_STEPS, type StepStatus } from "@/lib/setupSteps";
@@ -39,12 +50,33 @@ beforeEach(() => {
 });
 
 describe("SetupWizard links (GAP-SETUP-HOME-02, -04)", () => {
-  it("optional steps offer an honest 'Skip to dashboard', not 'Do it later' (GAP-02)", () => {
+  it("optional, not-complete steps offer a 'Skip for now' control that persists a deferral (GAP-02)", async () => {
     renderWizard();
+    // Honest copy: no "Do it later", and the old plain 'Skip to dashboard' link
+    // (which saved nothing) is gone.
     expect(screen.queryByText(/Do it later/i)).toBeNull();
-    const skip = screen.getAllByText(/Skip to dashboard/i)[0];
+    expect(screen.queryByText(/Skip to dashboard/i)).toBeNull();
+
+    const skip = screen.getAllByRole("button", { name: /Skip ".*" for now/i })[0]!;
     expect(skip).toBeInTheDocument();
-    expect(skip.closest("a")).toHaveAttribute("href", "/dashboard");
+    fireEvent.click(skip);
+    // Persists BEFORE navigating, then routes to the dashboard.
+    await waitFor(() => expect(persistSkippedStep).toHaveBeenCalled());
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/dashboard"));
+  });
+
+  it("a skipped step reads 'Skipped', stays openable, and offers Un-skip (GAP-02)", () => {
+    // Mark the first OPTIONAL step as skipped.
+    const steps = WIZARD_STEPS.map((s) => ({
+      ...s,
+      status: (!s.required ? "skipped" : "todo") as StepStatus,
+    }));
+    renderWizard({ steps });
+    expect(screen.getAllByText("Skipped").length).toBeGreaterThan(0);
+    // Still openable.
+    expect(screen.getAllByRole("link", { name: /Open anyway/i }).length).toBeGreaterThan(0);
+    // The deferral is reversible.
+    expect(screen.getAllByRole("button", { name: /back into the setup steps/i }).length).toBeGreaterThan(0);
   });
 
   it("step CTAs link straight to the step screen with no misleading ?return param (GAP-04)", () => {

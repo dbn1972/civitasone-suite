@@ -11,11 +11,19 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
+import { signDetachedPkcs7, generateTestDscKeypair } from "@civitasone/render";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { subscribeConsumers } from "../src/worker.js";
 import { queue } from "../src/shared/infra.js";
 import { sqlClient } from "../src/shared/db.js";
+import { canonicalOrderContent } from "../src/modules/order-issuance/dsc-verify.js";
+
+// GAP-COURT-ORDERS-02: approve+issue now cryptographically verifies the DSC
+// server-side, so a legitimate checker approval needs a REAL signature over the
+// order's canonical content (a maker self-approval is still rejected earlier, at
+// maker-checker, so it may keep a dummy blob).
+const DSC_KP = generateTestDscKeypair({ cn: "Precheck Checker DSC" });
 
 const RUN = process.env.COURT_E2E === "1";
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -73,6 +81,23 @@ async function registerCase(courtId: string, title: string): Promise<string> {
   const caseId = reg.body.caseId as string;
   await waitFor(async () => (await jget(`/v1/court/cases/${caseId}`, MAKER)).code === 200);
   return caseId;
+}
+
+// Build a REAL detached DSC signature over the order's server-canonical content.
+async function signOrderDsc(orderId: string): Promise<string> {
+  const row = await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    const rows = await sql`select id, case_id, order_type, order_text, order_date from court.orders where id = ${orderId} and tenant_id = ${TENANT}`;
+    return rows[0] as { id: string; case_id: string; order_type: string | null; order_text: string | null; order_date: string | Date | null };
+  });
+  const content = canonicalOrderContent({
+    id: row.id,
+    caseId: row.case_id,
+    orderType: row.order_type,
+    orderText: row.order_text,
+    orderDate: row.order_date == null ? null : typeof row.order_date === "string" ? row.order_date : new Date(row.order_date).toISOString().slice(0, 10),
+  });
+  return signDetachedPkcs7({ content, privateKeyPem: DSC_KP.privateKeyPem, certificatePem: DSC_KP.certificatePem });
 }
 
 // FLAKY-SKIP: Requires COURT_E2E=1 plus a live court-service stack (real Postgres + HTTP); unset in standard CI so this e2e suite never executes there. (expires: 2026-12-13)
@@ -200,8 +225,10 @@ describe.skipIf(!RUN)("synchronous pre-checks for illegal state transitions", ()
     const badRecall = await jpatch(`/v1/court/orders/${orderId}/recall`, { recallReason: "test", expectedVersion: 2 }, MAKER);
     expect(badRecall.code).toBe(422);
 
-    // A DIFFERENT actor (the checker) can legitimately approve + issue.
-    const realApprove = await jpatch(`/v1/court/orders/${orderId}/approve-issue`, { dscSignature: "fake-dsc-for-test", expectedVersion: 2 }, CHECKER);
+    // A DIFFERENT actor (the checker) can legitimately approve + issue — with a
+    // REAL DSC signature over the order content (server-side verification now).
+    const realDsc = await signOrderDsc(orderId);
+    const realApprove = await jpatch(`/v1/court/orders/${orderId}/approve-issue`, { dscSignature: realDsc, expectedVersion: 2 }, CHECKER);
     expect(realApprove.code).toBe(202);
     expect(await waitFor(async () =>
       (await jget(`/v1/court/cases/${caseId}/orders`, MAKER)).body.items.find((o: any) => o.id === orderId)?.status === "issued",

@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { rupeesToMinorString } from "@/lib/money";
+import { AssesseeSelect, type AssesseeOption } from "../_components/AssesseeSelect";
+import { RateHeadSelect, type RateHeadOption } from "../_components/RateHeadSelect";
 
 const FY_PATTERN = /^\d{4}-\d{2}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -16,7 +18,13 @@ type FieldErrors = {
   baseValue?: string;
 };
 
-export function AssessmentCreateForm() {
+export function AssessmentCreateForm({
+  assessees = [],
+  rateHeads = [],
+}: {
+  assessees?: AssesseeOption[];
+  rateHeads?: RateHeadOption[];
+}) {
   const router = useRouter();
 
   const [assesseeId, setAssesseeId] = useState("");
@@ -39,15 +47,22 @@ export function AssessmentCreateForm() {
   const fyErrId = useId();
   const baseValueErrId = useId();
 
-  const assesseeRef = useRef<HTMLInputElement>(null);
-  const rateHeadRef = useRef<HTMLInputElement>(null);
+  const assesseeRef = useRef<HTMLSelectElement>(null);
+  const rateHeadRef = useRef<HTMLSelectElement>(null);
   const fyRef = useRef<HTMLInputElement>(null);
   const baseValueRef = useRef<HTMLInputElement>(null);
 
+  const selectedAssessee = assessees.find((a) => a.id === assesseeId);
+  const selectedAssesseeLabel = selectedAssessee
+    ? `${selectedAssessee.ownerName} — ${selectedAssessee.identifierNo}`
+    : assesseeId
+      ? `${assesseeId.slice(0, 8)}…`
+      : "—";
+
   function validate(): boolean {
     const next: FieldErrors = {};
-    if (!UUID_PATTERN.test(assesseeId.trim())) next.assesseeId = "Enter a valid assessee ID (UUID).";
-    if (!UUID_PATTERN.test(rateHeadId.trim())) next.rateHeadId = "Enter a valid rate head ID (UUID).";
+    if (!UUID_PATTERN.test(assesseeId.trim())) next.assesseeId = "Select an assessee.";
+    if (!UUID_PATTERN.test(rateHeadId.trim())) next.rateHeadId = "Select a rate head.";
     if (!FY_PATTERN.test(financialYear.trim())) next.financialYear = "Financial year must be in YYYY-YY format, e.g. 2026-27.";
     if (rupeesToMinorString(baseValue) === null) {
       next.baseValue = "Enter an amount in rupees with up to 2 decimals, e.g. 850000 or 8500.50.";
@@ -110,36 +125,34 @@ export function AssessmentCreateForm() {
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={assesseeIdField} style={{ fontSize: 13, fontWeight: 600 }}>
-                Assessee ID <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Assessee <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
-              <input
+              <AssesseeSelect
                 id={assesseeIdField}
                 ref={assesseeRef}
                 value={assesseeId}
-                onChange={(e) => setAssesseeId(e.target.value)}
-                placeholder="UUID from the Assessee Register"
-                aria-required="true"
-                aria-invalid={!!errors.assesseeId || undefined}
-                aria-describedby={errors.assesseeId ? assesseeErrId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                onChange={setAssesseeId}
+                options={assessees}
+                required
+                invalid={!!errors.assesseeId}
+                describedBy={errors.assesseeId ? assesseeErrId : undefined}
               />
               {errors.assesseeId && <p id={assesseeErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.assesseeId}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={rateHeadIdField} style={{ fontSize: 13, fontWeight: 600 }}>
-                Rate Head ID <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Rate Head <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
-              <input
+              <RateHeadSelect
                 id={rateHeadIdField}
                 ref={rateHeadRef}
                 value={rateHeadId}
-                onChange={(e) => setRateHeadId(e.target.value)}
-                placeholder="UUID for the applicable rate head"
-                aria-required="true"
-                aria-invalid={!!errors.rateHeadId || undefined}
-                aria-describedby={errors.rateHeadId ? rateHeadErrId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                onChange={setRateHeadId}
+                options={rateHeads}
+                required
+                invalid={!!errors.rateHeadId}
+                describedBy={errors.rateHeadId ? rateHeadErrId : undefined}
               />
               {errors.rateHeadId && <p id={rateHeadErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.rateHeadId}</p>}
             </div>
@@ -206,7 +219,7 @@ export function AssessmentCreateForm() {
         description={
           <>
             Create a FY <strong>{financialYear}</strong> assessment with base value <strong>₹{baseValue || "0"}</strong>{" "}
-            for assessee <strong className="mono">{assesseeId.slice(0, 8)}…</strong>. This immediately raises a demand
+            for assessee <strong>{selectedAssesseeLabel}</strong>. This immediately raises a demand
             computed from the rate engine.
           </>
         }

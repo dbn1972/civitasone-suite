@@ -739,10 +739,21 @@ export function mapLegalCaseSummaries(payload: unknown): LegalCaseSummary[] | nu
     const court = toText(row.court) ?? "—";
     if (!id || !caseNo || !title) continue;
     const caseNoUpper = caseNo.toUpperCase();
+    // GAP-LEGAL-CASES-NEW-01: prefer the server-resolved case-type CODE (from
+    // the case-type master, joined onto the list row as `type`) when present;
+    // fall back to the caseNo-prefix heuristic only for legacy cases that have
+    // no caseTypeId. Unknown/extra server codes (e.g. "service") collapse to
+    // "other" so the summary stays within the typed union.
+    const KNOWN_TYPES = ["civil", "criminal", "arbitration", "tribunal", "writ", "appeal", "other"] as const;
+    const serverType = toText(row.type)?.toLowerCase();
     const type: LegalCaseSummary["type"] =
-      caseNoUpper.startsWith("WP") || caseNoUpper.includes("WRIT") ? "writ"
-        : caseNoUpper.includes("ARB") ? "arbitration"
-          : "other";
+      serverType && (KNOWN_TYPES as readonly string[]).includes(serverType)
+        ? (serverType as LegalCaseSummary["type"])
+        : serverType
+          ? "other"
+          : caseNoUpper.startsWith("WP") || caseNoUpper.includes("WRIT") ? "writ"
+            : caseNoUpper.includes("ARB") ? "arbitration"
+              : "other";
     const rawStatus = (toText(row.status) ?? "pending").toLowerCase();
     const status: LegalCaseSummary["status"] =
       rawStatus === "pending" || rawStatus === "active" ? "pending"

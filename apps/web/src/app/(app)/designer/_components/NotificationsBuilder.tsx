@@ -6,6 +6,7 @@ import {
   NotificationMatrix,
   type NotificationsDesignState,
 } from "@/app/_components/ds/designer";
+import { localeLabel } from "@/app/_components/ds/designer";
 import type { FormFieldDefinition } from "@/app/_components/ds/designer/formTypes";
 import { persistNotificationTemplates } from "../_data/notificationBuilderApi";
 import {
@@ -20,6 +21,14 @@ interface Props {
   serviceKey: string;
   serviceName?: string;
   pattern: string;
+  /**
+   * GAP-DESIGNER-DETAIL-B8-01: the locales this service publishes in (B1
+   * governance config). Drives the locale tabs and the completeness warning so
+   * an Odia-only (['or']) or ['en','or'] service is authored and checked
+   * correctly, not forced to en/hi. Defaults to en/hi when a service has not
+   * set any locale yet.
+   */
+  locales?: readonly string[];
   formFields?: FormFieldDefinition[];
   initial: NotificationsDesignState;
   onSaveState?: (state: "saving" | "saved" | "offline") => void;
@@ -30,6 +39,7 @@ export function NotificationsBuilder({
   serviceKey,
   serviceName = "Service",
   pattern,
+  locales,
   formFields = [],
   initial,
   onSaveState,
@@ -64,15 +74,22 @@ export function NotificationsBuilder({
   useEffect(() => { schedulePersist(); }, [design, schedulePersist]);
 
   const mergeFields = useMemo(() => mergeFieldsForNotifications(formFields), [formFields]);
+  // GAP-DESIGNER-DETAIL-B8-01: a service with no locale set yet still gets a
+  // sensible en/hi default; otherwise author in exactly the tenant's locales.
+  const localeList = useMemo(
+    () => (locales && locales.length > 0 ? [...locales] : ["en", "hi"]),
+    [locales],
+  );
   const sampleFormDesign = useMemo(
     () => sampleFormDesignFromFields(formFields, serviceName),
     [formFields, serviceName],
   );
   const completeness = useMemo(
-    () => matrixCompleteness(design.matrix, pattern),
-    [design.matrix, pattern],
+    () => matrixCompleteness(design.matrix, pattern, localeList),
+    [design.matrix, pattern, localeList],
   );
-  const summary = useMemo(() => summarizeDesign(design, pattern), [design, pattern]);
+  const summary = useMemo(() => summarizeDesign(design, pattern, localeList), [design, pattern, localeList]);
+  const missingLocaleNames = completeness.missingLocales.map(localeLabel).join(", ");
 
   return (
     <Card title="Notifications">
@@ -96,7 +113,7 @@ export function NotificationsBuilder({
         {summary}
         {!completeness.localesComplete && completeness.enabledCount > 0 ? (
           <span style={{ display: "block", marginTop: 4, color: "var(--warn-fg)" }}>
-            Some enabled messages are missing Hindi or English — fill both locale tabs before submit.
+            Some enabled messages are missing {missingLocaleNames} — fill every locale tab before submit.
           </span>
         ) : null}
       </p>
@@ -104,6 +121,7 @@ export function NotificationsBuilder({
         matrix={design.matrix}
         onChange={(matrix) => setDesign({ matrix })}
         pattern={pattern}
+        locales={localeList}
         mergeFields={mergeFields}
         sampleFormDesign={sampleFormDesign}
         sampleValues={sampleValues}

@@ -41,4 +41,25 @@ export const tradeApplications = tradeSchema.table("trade_applications", {
 export type TradeApplicationRow = typeof tradeApplications.$inferSelect;
 export type TradeApplicationInsert = typeof tradeApplications.$inferInsert;
 
-export const schema = { tradeApplications };
+/**
+ * GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-DETAIL-02 — append-only application
+ * timeline. One row per status transition (create/submit/withdraw/approve/
+ * reject/inspect/issue/fee_payment), written in the SAME tx as the transition
+ * so the history can never drift from the application's current status.
+ */
+export const tradeApplicationEvents = tradeSchema.table("trade_application_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull(),
+  applicationId: uuid("application_id").notNull(),
+  action: varchar("action", { length: 32 }).notNull(),
+  fromStatus: varchar("from_status", { length: 32 }),
+  toStatus: varchar("to_status", { length: 32 }).notNull(),
+  note: text("note"),
+  actorId: uuid("actor_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type TradeApplicationEventRow = typeof tradeApplicationEvents.$inferSelect;
+export type TradeApplicationEventInsert = typeof tradeApplicationEvents.$inferInsert;
+
+export const schema = { tradeApplications, tradeApplicationEvents };

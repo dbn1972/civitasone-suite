@@ -21,6 +21,8 @@ import { NO_CONSUMER_BY_DESIGN, NO_CONSUMER_CATEGORY, NO_CONSUMER_DECISION_REF }
  */
 export const PRODUCER_ONLY_ALLOWLIST: Record<string, string> = {
   ...NO_CONSUMER_BY_DESIGN,
+  "project.dpr.transitioned": `${NO_CONSUMER_CATEGORY} — 2026-10-07 — dpr transitioned audit/status fact in the project lifecycle history; no business consumer expected — ${NO_CONSUMER_DECISION_REF}`,
+  "project.escalation.actioned": `${NO_CONSUMER_CATEGORY} — 2026-10-07 — escalation actioned audit/status fact in the project lifecycle history; no business consumer expected — ${NO_CONSUMER_DECISION_REF}`,
   // NOTE: `audit.event.record` was previously listed here on the stated grounds
   // that audit-service had "no per-topic CONSUMED_EVENTS declaration". That was
   // factually wrong — audit-service declared it in a map named CONSUME_TOPICS,

@@ -41,3 +41,32 @@ describe("EscalationsTable (GAP-PROJECTS-ESCALATIONS-02/03)", () => {
     expect(link).toHaveAttribute("href", "/projects/p-7");
   });
 });
+
+describe("EscalationsTable actions (GAP-PROJECTS-ESCALATIONS-02)", () => {
+  it("shows NO action controls to a non-authorised user (canAct=false)", () => {
+    render(<EscalationsTable rows={[row]} />);
+    expect(screen.queryAllByRole("button", { name: "Acknowledge" })).toHaveLength(0);
+    expect(screen.queryAllByRole("button", { name: "Clear" })).toHaveLength(0);
+  });
+
+  it("offers Acknowledge / Reassign / Clear on an open escalation to an authorised user", () => {
+    render(<EscalationsTable rows={[row]} canAct />);
+    expect(screen.getAllByRole("button", { name: "Acknowledge" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "Reassign" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "Clear" }).length).toBeGreaterThan(0);
+  });
+
+  it("offers no actions on a cleared escalation even to an authorised user", () => {
+    render(<EscalationsTable rows={[{ ...row, status: "cleared" }]} canAct />);
+    expect(screen.queryAllByRole("button", { name: "Acknowledge" })).toHaveLength(0);
+    expect(screen.queryAllByRole("button", { name: "Clear" })).toHaveLength(0);
+    expect(screen.queryAllByRole("button", { name: "Reassign" })).toHaveLength(0);
+  });
+
+  it("drops Acknowledge once acknowledged, keeping Reassign and Clear", () => {
+    render(<EscalationsTable rows={[{ ...row, status: "acknowledged" }]} canAct />);
+    expect(screen.queryAllByRole("button", { name: "Acknowledge" })).toHaveLength(0);
+    expect(screen.getAllByRole("button", { name: "Reassign" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "Clear" }).length).toBeGreaterThan(0);
+  });
+});

@@ -50,6 +50,60 @@ export async function insertDpr(tx: Writer, row: DprInsert): Promise<void> {
   await tx.insert(projectDprs).values(row);
 }
 
+/**
+ * GAP-PROJECTS-DPR-TRACKING-01 — tenant-scoped read of a single DPR through a
+ * caller-supplied transaction handle (same TX-001 reasoning as board-intake's
+ * findByIdTx: a bare db.transaction() nested inside an already-open consumer
+ * transaction can deadlock the pool). Used by the transition consumer.
+ */
+export async function findDprByIdTx(
+  tx: Writer, dprId: string, projectId: string, tenantId: string,
+): Promise<(typeof projectDprs.$inferSelect) | null> {
+  const rows = await tx.select().from(projectDprs)
+    .where(and(
+      eq(projectDprs.id, dprId),
+      eq(projectDprs.projectId, projectId),
+      eq(projectDprs.tenantId, tenantId),
+    ))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/**
+ * GAP-PROJECTS-DPR-TRACKING-01 — move a DPR to a new status, guarded by BOTH
+ * the required source status and an optimistic version check, so a concurrent
+ * review cannot double-transition. Returns the number of rows updated (0 means
+ * the DPR was no longer in `fromStatus` or the version moved).
+ */
+export async function transitionDprTx(
+  tx: Writer,
+  dprId: string,
+  tenantId: string,
+  fromStatus: string,
+  toStatus: string,
+  reviewedBy: string,
+  reviewReason: string | null,
+  expectedVersion: number,
+): Promise<number> {
+  const res = await tx.update(projectDprs)
+    .set({
+      status: toStatus,
+      reviewedBy,
+      reviewedAt: new Date(),
+      reviewReason,
+      updatedBy: reviewedBy,
+      version: sql`${projectDprs.version} + 1`,
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(projectDprs.id, dprId),
+      eq(projectDprs.tenantId, tenantId),
+      eq(projectDprs.status, fromStatus),
+      eq(projectDprs.version, expectedVersion),
+    ));
+  return (res as { rowCount?: number }).rowCount ?? 0;
+}
+
 export async function listDprsByProject(projectId: string, tenantId: string, limit = 500): Promise<(typeof projectDprs.$inferSelect)[]> {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.

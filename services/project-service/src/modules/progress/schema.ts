@@ -46,6 +46,11 @@ export const projectDprs = progressSchema.table("project_dprs", {
   content:      jsonb("content").$type<Record<string, unknown>>().notNull().default({}),
   submittedBy:  uuid("submitted_by").notNull(),
   submittedAt:  timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
+  // GAP-PROJECTS-DPR-TRACKING-01: review trail for the submit→review→approve|
+  // return workflow (migration 0024). NULL until the DPR is first acted on.
+  reviewedBy:   uuid("reviewed_by"),
+  reviewedAt:   timestamp("reviewed_at", { withTimezone: true }),
+  reviewReason: text("review_reason"),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:    uuid("created_by").notNull(),

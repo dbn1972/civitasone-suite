@@ -17,6 +17,13 @@ export type AssessmentRow = {
   status: string;
   version: number;
   createdAt: string;
+  // GAP-REVENUE-ASSESSMENTS-01: latest remission state, surfaced by the server
+  // (GET /v1/revenue/assessments) so the UI can gate Approve/Reject/Remit.
+  remissionStatus?: "none" | "pending" | "approved" | "rejected";
+  remissionRequestedBy?: string | null;
+  // GAP-REVENUE-ASSESSMENTS-02: resolved owner label (page builds the map).
+  assesseeName?: string;
+  rateHeadName?: string;
 } & Record<string, unknown>;
 
 /**
@@ -193,7 +200,13 @@ function FieldPanel({
   );
 }
 
-export function AssessmentsTable({ assessments }: { assessments: AssessmentRow[] }) {
+export function AssessmentsTable({
+  assessments,
+  currentUserId,
+}: {
+  assessments: AssessmentRow[];
+  currentUserId?: string | null;
+}) {
   const router = useRouter();
 
   const [revisingRow, setRevisingRow] = useState<AssessmentRow | null>(null);
@@ -326,7 +339,22 @@ export function AssessmentsTable({ assessments }: { assessments: AssessmentRow[]
 
   const columns = [
     { key: "financialYear" as const, label: "FY" },
-    { key: "assesseeId" as const, label: "Assessee", render: (r: AssessmentRow) => <span className="mono">{r.assesseeId.slice(0, 8)}…</span> },
+    {
+      key: "assesseeId" as const,
+      label: "Assessee",
+      render: (r: AssessmentRow) =>
+        r.assesseeName ? (
+          <span>{r.assesseeName}</span>
+        ) : (
+          <span className="mono">{r.assesseeId.slice(0, 8)}…</span>
+        ),
+    },
+    {
+      key: "rateHeadId" as const,
+      label: "Rate Head",
+      render: (r: AssessmentRow) =>
+        r.rateHeadName ? <span>{r.rateHeadName}</span> : <span className="mono">{r.rateHeadId.slice(0, 8)}…</span>,
+    },
     { key: "baseValue" as const, label: "Base Value", align: "right" as const, cellType: "amount" as const },
     { key: "status" as const, label: "Status", cellType: "status" as const },
     { key: "version" as const, label: "Version", align: "right" as const },
@@ -335,11 +363,26 @@ export function AssessmentsTable({ assessments }: { assessments: AssessmentRow[]
       label: "Actions",
       sortable: false,
       render: (row: AssessmentRow) => {
-        // NOTE: Approve/Reject are always enabled regardless of assessment/remission
-        // status — see PR "## FUNCTIONAL FOLLOW-UPS" (flagged for functional review;
-        // the server rejects the action if there's no pending remission, but the UI
-        // does not yet pre-disable the buttons in that case).
         const shortId = row.id.slice(0, 8);
+        // GAP-REVENUE-ASSESSMENTS-01: a remission decision is only valid on a
+        // row that HAS a pending remission, and the deciding officer must differ
+        // from the officer who requested it (separation of duties). Pre-disable
+        // Approve/Reject accordingly. Fail OPEN when remissionStatus is absent
+        // (older server / field missing) so a legitimate checker is never locked
+        // out — the server remains the authority and rejects an invalid decision.
+        const remissionStatus = row.remissionStatus;
+        const hasPending = remissionStatus === "pending";
+        const isMaker =
+          !!currentUserId && !!row.remissionRequestedBy && currentUserId === row.remissionRequestedBy;
+        // Only gate when we actually know the status; absent => fail open.
+        const decideDisabled = remissionStatus !== undefined && (!hasPending || isMaker);
+        const decideTitle = isMaker
+          ? "You requested this remission; a different officer must decide."
+          : !hasPending && remissionStatus !== undefined
+            ? "No pending remission to decide on this assessment."
+            : undefined;
+        // Prevent raising a duplicate remission while one is already pending.
+        const remitDisabled = row.status !== "active" || hasPending;
         return (
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             <Button
@@ -357,7 +400,8 @@ export function AssessmentsTable({ assessments }: { assessments: AssessmentRow[]
               variant="ghost"
               size="sm"
               aria-label={`Request remission for assessment ${shortId}, FY ${row.financialYear}`}
-              disabled={row.status !== "active"}
+              title={hasPending ? "A remission is already pending for this assessment." : undefined}
+              disabled={remitDisabled}
               onClick={() => startRemit(row)}
             >
               Remit
@@ -367,6 +411,8 @@ export function AssessmentsTable({ assessments }: { assessments: AssessmentRow[]
               variant="ghost"
               size="sm"
               aria-label={`Approve remission for assessment ${shortId}, FY ${row.financialYear}`}
+              title={decideTitle}
+              disabled={decideDisabled}
               onClick={() => startDecide(row, true)}
             >
               Approve
@@ -376,6 +422,8 @@ export function AssessmentsTable({ assessments }: { assessments: AssessmentRow[]
               variant="ghost"
               size="sm"
               aria-label={`Reject remission for assessment ${shortId}, FY ${row.financialYear}`}
+              title={decideTitle}
+              disabled={decideDisabled}
               onClick={() => startDecide(row, false)}
             >
               Reject

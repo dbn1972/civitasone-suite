@@ -7,7 +7,7 @@ import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
 import { bbpsTransactions } from "./schema.js";
 import { receipts } from "../collection/schema.js";
 import { dcbEntries } from "../assessment/schema.js";
-import { buildFetchBillResponse, validateBbpsPayment } from "./domain.js";
+import { buildFetchBillResponse, validateBbpsPayment, DomainError } from "./domain.js";
 import { getDcbOutstandingTx } from "./repo.js";
 
 export function registerBbpsConsumers(queue: Queue): void {
@@ -34,6 +34,8 @@ export function registerBbpsConsumers(queue: Queue): void {
         amountMinor: dcb.totalOutstandingMinor,
         channel: "bbps",
         status: "pending",
+        messageId: msg.messageId,
+        requestType: "fetch",
       });
 
       // Audit
@@ -60,12 +62,18 @@ export function registerBbpsConsumers(queue: Queue): void {
     const paymentAmount = BigInt(amountMinor);
     let assesseeId: string | undefined;
 
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
+    try {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
 
       // Get DCB outstanding
       const dcb = await getDcbOutstandingTx(tx, msg.tenantId, assesseeIdentifier);
-      if (!dcb) return;
+      if (!dcb) {
+        // GAP-REVENUE-BBPS-02: an unknown assessee identifier is a real failure
+        // the officer must see, not a silent no-op. Surface it as a DomainError
+        // so the outer catch records a `failed` status row for this messageId.
+        throw new DomainError("ASSESSEE_NOT_FOUND", "No assessee matches this identifier");
+      }
 
       assesseeId = dcb.assesseeId;
 
@@ -103,6 +111,8 @@ export function registerBbpsConsumers(queue: Queue): void {
         amountMinor: paymentAmount,
         channel,
         status: "success",
+        messageId: msg.messageId,
+        requestType: "pay",
       }).onConflictDoNothing({
         target: [bbpsTransactions.tenantId, bbpsTransactions.bbpsTxnId],
       }).returning({ id: bbpsTransactions.id });
@@ -187,6 +197,46 @@ export function registerBbpsConsumers(queue: Queue): void {
         payload: { service: SERVICE, action: "pay_bill", resourceType: "bbps_transaction", outcome: "success" },
       });
     });
+    } catch (err) {
+      // GAP-REVENUE-BBPS-02: a validation/lookup failure must leave a visible
+      // `failed` status row (keyed by this messageId) so the officer polling
+      // GET /v1/revenue/bbps/requests/:messageId sees the real outcome and
+      // reason — never a silent roll-back. Recorded in a SEPARATE transaction
+      // (the business transaction rolled back). onConflictDoNothing guards the
+      // bbpsTxnId unique index: if a success row already claimed it, we do not
+      // overwrite it. A DomainError carries a safe, human-ish reason; anything
+      // else is recorded generically (never leak internals/PII).
+      const reason = err instanceof DomainError ? err.message : "BBPS payment could not be processed";
+      try {
+        await db.transaction(async (tx) => {
+          await tx
+            .insert(bbpsTransactions)
+            .values({
+              tenantId: msg.tenantId,
+              bbpsTxnId,
+              assesseeId: assesseeId ?? null,
+              amountMinor: paymentAmount,
+              channel,
+              status: "failed",
+              messageId: msg.messageId,
+              requestType: "pay",
+              failureReason: reason,
+            })
+            .onConflictDoNothing({ target: [bbpsTransactions.tenantId, bbpsTransactions.bbpsTxnId] });
+          await enqueue(tx, {
+            topic: "audit.event.record",
+            eventType: "audit.event.record",
+            tenantId: msg.tenantId,
+            actorId: msg.actorId,
+            correlationId: msg.correlationId,
+            payload: { service: SERVICE, action: "pay_bill", resourceType: "bbps_transaction", outcome: "failed", reason },
+          });
+        });
+      } catch {
+        // Never let the status-recording path mask the original failure path;
+        // the command simply remains unprocessed and is retried by the queue.
+      }
+    }
 
     // Cache invalidation
     if (assesseeId) {

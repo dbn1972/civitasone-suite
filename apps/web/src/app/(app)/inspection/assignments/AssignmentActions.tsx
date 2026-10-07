@@ -6,16 +6,28 @@ import { useState } from "react";
 import { z } from "zod";
 import { useFormError } from "@/lib/useFormError";
 import { todayIST } from "@/lib/formatters";
+import { EntityPicker } from "@/app/_components/ds";
+import { searchDirectoryUsers, resolveDirectoryUsers } from "@/lib/directory/searchUsers";
+import {
+  searchInspections,
+  resolveInspections,
+  searchInspectionTypes,
+  resolveInspectionTypes,
+  searchInspectionEntities,
+  resolveInspectionEntities,
+} from "@/lib/entityAdapters/inspectionAssign";
 
 /**
- * GAP-INSPECTION-ASSIGNMENTS-01/02: the four ids are still typed (there is no
- * backend search/lookup endpoint for inspections, inspection types, inspectors
- * or entities in inspection-service, and resolving inspector/entity names is a
- * cross-service concern — see the batch file + HUMAN REVIEW note), but the form
- * now validates them client-side with the SAME zod UUID rules the route
- * enforces (assignment/routes.ts assignInspectorSchema), blocks submit until
- * every field is a valid UUID, shows per-field errors, and surfaces the
- * server's own message on failure instead of discarding it.
+ * GAP-INSPECTION-ASSIGNMENTS-01: the four ids were raw "UUID" text boxes,
+ * practically unusable for a field officer and trivially mis-typed. They are
+ * now EntityPickers over EXISTING inspection-service read endpoints
+ * (GET /v1/inspection/inspections, /types, /entities — the inspection-service
+ * is present in this worktree) plus the shared user directory for inspectors
+ * (lib/directory/searchUsers.ts, agent A's capability — reused, not rebuilt).
+ * Each picker shows a human label and yields a REAL uuid; the SAME zod UUID
+ * schema the route enforces (assignment/routes.ts assignInspectorSchema) still
+ * gates submit as defence in depth, and the server's clerk-safe message is
+ * surfaced on failure.
  */
 const uuid = z.string().uuid();
 const assignmentSchema = z.object({
@@ -28,12 +40,11 @@ const assignmentSchema = z.object({
 
 type FieldName = keyof z.infer<typeof assignmentSchema>;
 
-const FIELD_LABELS: Record<FieldName, string> = {
-  inspectionId: "Inspection ID",
-  inspectorId: "Inspector ID",
-  inspectionTypeId: "Type ID",
-  entityId: "Entity ID",
-  scheduledDate: "Scheduled",
+const FIELD_LABELS: Record<Exclude<FieldName, "scheduledDate">, string> = {
+  inspectionId: "Inspection",
+  inspectorId: "Inspector",
+  inspectionTypeId: "Inspection type",
+  entityId: "Entity",
 };
 
 export function AssignmentActions() {
@@ -42,20 +53,20 @@ export function AssignmentActions() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | undefined>();
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldName, string>>>({});
-  const [inspectionId, setInspectionId] = useState("");
-  const [inspectorId, setInspectorId] = useState("");
-  const [inspectionTypeId, setInspectionTypeId] = useState("");
-  const [entityId, setEntityId] = useState("");
+  const [inspectionId, setInspectionId] = useState<string | null>(null);
+  const [inspectorId, setInspectorId] = useState<string | null>(null);
+  const [inspectionTypeId, setInspectionTypeId] = useState<string | null>(null);
+  const [entityId, setEntityId] = useState<string | null>(null);
   // GAP-INSPECTION-ASSIGNMENTS-03: default to the IST calendar date, not the
   // UTC date (new Date().toISOString() is yesterday between 00:00–05:30 IST).
   const [scheduledDate, setScheduledDate] = useState(() => todayIST());
   const formError = useFormError("assignment");
 
   const values: Record<FieldName, string> = {
-    inspectionId: inspectionId.trim(),
-    inspectorId: inspectorId.trim(),
-    inspectionTypeId: inspectionTypeId.trim(),
-    entityId: entityId.trim(),
+    inspectionId: inspectionId ?? "",
+    inspectorId: inspectorId ?? "",
+    inspectionTypeId: inspectionTypeId ?? "",
+    entityId: entityId ?? "",
     scheduledDate,
   };
 
@@ -64,12 +75,12 @@ export function AssignmentActions() {
     setMessage("");
     const parsed = assignmentSchema.safeParse(values);
     if (!parsed.success) {
-      // GAP-INSPECTION-ASSIGNMENTS-02: block the request and show per-field
-      // errors; no fetch is made for a blank/invalid form.
+      // GAP-INSPECTION-ASSIGNMENTS-01/02: block the request and show per-field
+      // errors; no fetch is made until every picker has a selection.
       const next: Partial<Record<FieldName, string>> = {};
       for (const issue of parsed.error.issues) {
         const key = issue.path[0] as FieldName | undefined;
-        if (key && !next[key]) next[key] = "Enter a valid value.";
+        if (key && !next[key]) next[key] = "Select a value.";
       }
       setFieldErrors(next);
       return;
@@ -90,29 +101,34 @@ export function AssignmentActions() {
       setMessage("Assignment request accepted. It will appear in the list shortly — use Refresh in a few seconds.");
       router.refresh();
     } catch (caught) {
-      // GAP-INSPECTION-ASSIGNMENTS-02: surface the server's own clerk-safe
-      // message (built by fromResponse) rather than discarding it.
       setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }
   }
 
-  function field(name: FieldName, state: string, set: (v: string) => void, type = "text") {
+  function pickerField(
+    name: Exclude<FieldName, "scheduledDate">,
+    value: string | null,
+    onChange: (v: string | null) => void,
+    search: (q: string, signal: AbortSignal) => Promise<{ id: string; label: string; sublabel?: string }[]>,
+    resolve: (ids: string[]) => Promise<{ id: string; label: string; sublabel?: string }[]>,
+    placeholder: string,
+  ) {
     const err = fieldErrors[name];
     const errId = `assignment-${name}-error`;
     return (
-      <label style={{ fontSize: 12, display: "flex", flexDirection: "column", gap: 2 }}>
+      <label style={{ fontSize: 12, display: "flex", flexDirection: "column", gap: 2, minWidth: 220 }}>
         {FIELD_LABELS[name]}
-        <input
-          className="inp"
-          type={type}
-          value={state}
-          onChange={(e) => set(e.target.value)}
-          placeholder={type === "date" ? undefined : "UUID"}
-          aria-invalid={err ? true : undefined}
-          aria-describedby={err ? errId : undefined}
-          {...(type === "date" ? { min: todayIST() } : {})}
+        <EntityPicker
+          value={value}
+          onChange={(v) => onChange(Array.isArray(v) ? (v[0] ?? null) : v)}
+          search={search}
+          resolve={resolve}
+          disabled={busy}
+          minQueryLength={1}
+          aria-label={FIELD_LABELS[name]}
+          placeholder={placeholder}
         />
         {err ? (
           <span id={errId} role="alert" style={{ color: "var(--bad)", fontSize: 11 }}>
@@ -123,6 +139,8 @@ export function AssignmentActions() {
     );
   }
 
+  const dateErr = fieldErrors.scheduledDate;
+
   return (
     <form
       onSubmit={(e) => {
@@ -132,11 +150,27 @@ export function AssignmentActions() {
       style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}
     >
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "start" }}>
-        {field("inspectionId", inspectionId, setInspectionId)}
-        {field("inspectorId", inspectorId, setInspectorId)}
-        {field("inspectionTypeId", inspectionTypeId, setInspectionTypeId)}
-        {field("entityId", entityId, setEntityId)}
-        {field("scheduledDate", scheduledDate, setScheduledDate, "date")}
+        {pickerField("inspectionId", inspectionId, setInspectionId, searchInspections, resolveInspections, "Search inspection…")}
+        {pickerField("inspectorId", inspectorId, setInspectorId, searchDirectoryUsers, resolveDirectoryUsers, "Search inspector by name…")}
+        {pickerField("inspectionTypeId", inspectionTypeId, setInspectionTypeId, searchInspectionTypes, resolveInspectionTypes, "Search type…")}
+        {pickerField("entityId", entityId, setEntityId, searchInspectionEntities, resolveInspectionEntities, "Search entity…")}
+        <label style={{ fontSize: 12, display: "flex", flexDirection: "column", gap: 2 }}>
+          Scheduled
+          <input
+            className="inp"
+            type="date"
+            value={scheduledDate}
+            min={todayIST()}
+            onChange={(e) => setScheduledDate(e.target.value)}
+            aria-invalid={dateErr ? true : undefined}
+            aria-describedby={dateErr ? "assignment-scheduledDate-error" : undefined}
+          />
+          {dateErr ? (
+            <span id="assignment-scheduledDate-error" role="alert" style={{ color: "var(--bad)", fontSize: 11 }}>
+              {dateErr}
+            </span>
+          ) : null}
+        </label>
         <button type="submit" className="btn" disabled={busy}>
           Create assignment
         </button>

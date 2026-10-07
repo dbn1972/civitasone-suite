@@ -103,4 +103,48 @@ describe("AssessmentsTable", () => {
     });
     expect(screen.queryByText(/MAKER_CHECKER_VIOLATION/)).not.toBeInTheDocument();
   });
+
+  // ── GAP-REVENUE-ASSESSMENTS-01: remission gating ────────────────────────────
+  it("disables Approve/Reject on a row with no pending remission", () => {
+    render(<AssessmentsTable assessments={[{ ...ROW, remissionStatus: "none" }]} currentUserId="checker-1" />);
+    expect(screen.getByLabelText("Approve remission for assessment aaaaaaaa, FY 2026-27")).toBeDisabled();
+    expect(screen.getByLabelText("Reject remission for assessment aaaaaaaa, FY 2026-27")).toBeDisabled();
+  });
+
+  it("disables Approve/Reject when the current officer requested the pending remission (maker-checker)", () => {
+    render(
+      <AssessmentsTable
+        assessments={[{ ...ROW, remissionStatus: "pending", remissionRequestedBy: "checker-1" }]}
+        currentUserId="checker-1"
+      />,
+    );
+    expect(screen.getByLabelText("Approve remission for assessment aaaaaaaa, FY 2026-27")).toBeDisabled();
+    expect(screen.getByLabelText("Reject remission for assessment aaaaaaaa, FY 2026-27")).toBeDisabled();
+  });
+
+  it("enables Approve/Reject on a pending remission requested by a DIFFERENT officer", () => {
+    render(
+      <AssessmentsTable
+        assessments={[{ ...ROW, remissionStatus: "pending", remissionRequestedBy: "maker-9" }]}
+        currentUserId="checker-1"
+      />,
+    );
+    expect(screen.getByLabelText("Approve remission for assessment aaaaaaaa, FY 2026-27")).toBeEnabled();
+    expect(screen.getByLabelText("Reject remission for assessment aaaaaaaa, FY 2026-27")).toBeEnabled();
+  });
+
+  it("disables Remit while a remission is already pending (no duplicate request)", () => {
+    render(
+      <AssessmentsTable
+        assessments={[{ ...ROW, remissionStatus: "pending", remissionRequestedBy: "maker-9" }]}
+        currentUserId="checker-1"
+      />,
+    );
+    expect(screen.getByLabelText("Request remission for assessment aaaaaaaa, FY 2026-27")).toBeDisabled();
+  });
+
+  it("shows the assessee's name (not a raw UUID) when the page provides it (ASSESSMENTS-02)", () => {
+    render(<AssessmentsTable assessments={[{ ...ROW, assesseeName: "Ravi Kumar — PMC-0001" }]} currentUserId="checker-1" />);
+    expect(screen.getByText("Ravi Kumar — PMC-0001")).toBeInTheDocument();
+  });
 });

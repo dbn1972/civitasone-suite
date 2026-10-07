@@ -3,15 +3,44 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createCaseBody, disposeCaseBody, idParam, listCasesQuery } from "./validators.js";
+import { createCaseBody, disposeCaseBody, idParam, listCasesQuery, createCaseTypeBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 
 const LEGAL_ROLES  = ["legal_officer", "legal_admin", "super_admin"];
 const READER_ROLES = [...LEGAL_ROLES, "audit_officer"];
+// Case-type master is reference data: only admins may create/seed it.
+const CASE_TYPE_ADMIN_ROLES = ["legal_admin", "super_admin"];
 
 export async function caseRoutes(app: FastifyInstance): Promise<void> {
+  // ── GAP-LEGAL-CASES-NEW-01: case-type master ───────────────────────────────
+  // List the tenant's case types (reader roles) — feeds the create-case select.
+  app.get("/v1/legal/case-types", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    return reply.send({ items: await queries.listCaseTypes(ctx.tenantId) });
+  });
+
+  // Create a single case type (admin only).
+  app.post("/v1/legal/case-types", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CASE_TYPE_ADMIN_ROLES);
+    const body = createCaseTypeBody.parse(req.body);
+    const existing = await repo.findCaseTypeByCode(ctx.tenantId, body.code);
+    if (existing) {
+      throw new HttpError(409, "DUPLICATE_CASE_TYPE_CODE", "a case type with this code already exists");
+    }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createCaseType(ctx, body));
+  });
+
+  // Idempotently seed the default case-type baseline (admin only).
+  app.post("/v1/legal/case-types/seed-defaults", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CASE_TYPE_ADMIN_ROLES);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.seedDefaultCaseTypes(ctx));
+  });
+
   app.post("/v1/legal/cases", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, LEGAL_ROLES);
@@ -23,6 +52,15 @@ export async function caseRoutes(app: FastifyInstance): Promise<void> {
     const existing = await repo.findCaseByTenantAndNo(ctx.tenantId, body.caseNo);
     if (existing) {
       throw new HttpError(409, "DUPLICATE_CASE_NO", "a case with this case number already exists");
+    }
+    // GAP-LEGAL-CASES-NEW-01: a supplied caseTypeId must reference a real
+    // tenant-scoped case type — reject a dangling id synchronously rather than
+    // persisting a case pointing at a non-existent type.
+    if (body.caseTypeId) {
+      const caseType = await repo.findCaseTypeById(ctx.tenantId, body.caseTypeId);
+      if (!caseType) {
+        throw new HttpError(400, "UNKNOWN_CASE_TYPE", "caseTypeId does not reference a known case type");
+      }
     }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createCase(ctx, body));
   });

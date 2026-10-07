@@ -7,11 +7,44 @@ import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { assertCanDispose } from "./domain.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { DEFAULT_CASE_TYPES } from "./commands.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
 export function registerCaseConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
+
+  // GAP-LEGAL-CASES-NEW-01: create a single case-type master entry (idempotent
+  // on (tenant, code)), with an audit event in the SAME tx.
+  queue.subscribe(COMMANDS.caseTypeCreate, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; code: string; name: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await repo.insertCaseType(tx, {
+        id: p.id, tenantId: p.tenantId, code: p.code, name: p.name,
+        createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "create", "case_type", p.id, { code: p.code, name: p.name });
+    });
+    await invalidateItemAndLists(msg.tenantId, null, ["case_types"]);
+  });
+
+  // GAP-LEGAL-CASES-NEW-01: idempotently seed the DEFAULT_CASE_TYPES baseline.
+  queue.subscribe(COMMANDS.caseTypeSeedDefaults, async (msg) => {
+    const p = msg.payload as { tenantId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      for (const t of DEFAULT_CASE_TYPES) {
+        await repo.insertCaseType(tx, {
+          id: randomUUID(), tenantId: p.tenantId, code: t.code, name: t.name,
+          createdBy: msg.actorId, updatedBy: msg.actorId,
+        });
+      }
+      await audit(tx, msg, "seed_defaults", "case_type", p.tenantId);
+    });
+    await invalidateItemAndLists(msg.tenantId, null, ["case_types"]);
+  });
+
   queue.subscribe(COMMANDS.caseCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; caseNo: string; title: string; court: string;

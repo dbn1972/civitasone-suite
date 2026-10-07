@@ -6,7 +6,6 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { verificationTransition } from "./domain.js";
-
 const AUDIT = "audit.event.record";
 
 async function audit(
@@ -72,6 +71,68 @@ export function registerDocumentsConsumers(rawQueue: Queue): void {
       }
       await audit(tx, msg, "digilocker_fetch", p.id, {
         digilockerConsent: { given: p.consent === true, recordedAt: new Date().toISOString() },
+      });
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "document", p.id));
+  });
+
+  // GAP-CITIZEN-DOCUMENTS-02 — OAuth callback: consume the state (single-use),
+  // persist the DPDP consent record ONLY on a successful code exchange, and record the pulled document. The
+  // submission is only source_verified when the artefact passed local
+  // verification (PKCS#7 structure + signer cert + trust-store chain); otherwise
+  // it is received/pending with an honest provider status. Audit in the same txn.
+  queue.subscribe(COMMANDS.documentDigilockerCallback, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; state: string; consentId: string;
+      citizenId: string | null; applicationId: string | null; serviceId: string | null;
+      docType: string; purpose: string; scope: string; consentExpiresAt: string;
+      docUri: string | null; providerStatus: string; exchangeOk: boolean;
+      verified: boolean; verifyReason: string;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      // Single-use is atomic: only the caller that flips consumed_at wins. A replayed
+      // or unknown state records an audit row and mints nothing (no consent, no document).
+      if ((await repo.consumeOauthStateTx(tx, p.state, msg.tenantId)) === 0) {
+        await audit(tx, msg, "digilocker_callback_rejected", p.id, { reason: "state_already_consumed_or_unknown" });
+        return;
+      }
+      // No consent and no document unless the code exchange actually succeeded.
+      if (!p.exchangeOk) {
+        await audit(tx, msg, "digilocker_callback_rejected", p.id, {
+          reason: "code_exchange_failed", providerStatus: p.providerStatus,
+        });
+        return;
+      }
+      // Persist the consent record (who, citizen, purpose, docType, scope, grantedAt, expiresAt).
+      await repo.insertConsentTx(tx, {
+        id: p.consentId, tenantId: p.tenantId, actorId: msg.actorId,
+        citizenId: p.citizenId, purpose: p.purpose, docType: p.docType, scope: p.scope,
+        stateRef: p.state, expiresAt: new Date(p.consentExpiresAt),
+        createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await repo.insertSubmission(tx, {
+        id: p.id, tenantId: p.tenantId, applicationId: p.applicationId,
+        citizenId: p.citizenId, serviceId: p.serviceId, docType: p.docType,
+        source: "digilocker", digilockerRef: p.docUri,
+        providerStatus: p.verified ? "verified" : (p.exchangeOk ? "unverified" : p.providerStatus),
+        status: p.verified ? "verified" : "received",
+        verificationStatus: p.verified ? "verified" : "pending",
+        authenticity: p.verified ? "source_verified" : "unverified",
+        ...(p.verified ? { verifiedBy: msg.actorId, verifiedAt: new Date() } : {}),
+        createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      if (p.verified) {
+        await enqueue(tx, {
+          topic: EVENTS.documentVerified, eventType: EVENTS.documentVerified,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { id: p.id, docType: p.docType, source: "digilocker", authenticity: "source_verified" },
+        });
+      }
+      await audit(tx, msg, "digilocker_callback", p.id, {
+        consentId: p.consentId,
+        digilockerConsent: { purpose: p.purpose, docType: p.docType, scope: p.scope, grantedAt: new Date().toISOString(), expiresAt: p.consentExpiresAt },
+        verification: { verified: p.verified, reason: p.verifyReason, providerStatus: p.providerStatus },
       });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "document", p.id));

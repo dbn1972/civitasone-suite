@@ -123,7 +123,7 @@ export function AdjustmentCreateForm({ assesseeId, demands }: { assesseeId: stri
       });
       setConfirmOpen(false);
       setTone("good");
-      setMessage(`Moved ${movedAmount} from FY ${fromFy} to FY ${toFy}.`);
+      setMessage(`Requested transfer of ${movedAmount} from FY ${fromFy} to FY ${toFy} — pending a distinct checker's approval.`);
       setFromDemandId("");
       setToDemandId("");
       setAmount("");
@@ -297,19 +297,20 @@ export function AdjustmentCreateForm({ assesseeId, demands }: { assesseeId: stri
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Apply this adjustment?"
-        confirmLabel="Apply adjustment"
+        title="Request this adjustment?"
+        confirmLabel="Request adjustment"
         busy={busy}
         errorMessage={dialogError}
         description={
           fromDemand && toDemand && minorAmount ? (
             <>
-              Move <strong>{formatMoney(minorAmount)}</strong> from FY <strong>{fromDemand.financialYear}</strong> to
-              FY <strong>{toDemand.financialYear}</strong>. This applies immediately and updates both demand
-              balances — there is no separate checker approval step for adjustments.
+              Request moving <strong>{formatMoney(minorAmount)}</strong> from FY <strong>{fromDemand.financialYear}</strong> to
+              FY <strong>{toDemand.financialYear}</strong>. This does NOT move the balance immediately — a distinct
+              checker must approve it in the approval queue before the demands are updated. The server rejects a
+              same-officer approval.
             </>
           ) : (
-            "Apply this adjustment?"
+            "Request this adjustment?"
           )
         }
         onConfirm={() => void submitAdjustment()}

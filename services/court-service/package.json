@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@civitasone/auth": "workspace:*",
+    "@civitasone/rate-limit": "workspace:*",
     "@civitasone/cache": "workspace:*",
     "@civitasone/circuit-breaker": "workspace:*",
     "@civitasone/db": "workspace:*",

@@ -118,4 +118,17 @@ export async function applicationRoutes(app: FastifyInstance): Promise<void> {
     if (existing.feePaid) throw new HttpError(409, "FEE_ALREADY_PAID", "Fee has already been paid");
     return reply.code(202).send(await commands.recordFeePayment(ctx, id, body.transactionId));
   });
+
+  // GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-DETAIL-02: application timeline/history
+  // for the officer detail panel (who did what, when, and the status transition).
+  // Read-only; tenant-scoped by RLS.
+  app.get("/v1/trade/applications/:id/history", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, TRADE_ROLES);
+    const { id } = idParam.parse(req.params);
+    const existing = await repo.findById(id, ctx.tenantId);
+    if (!existing) throw new HttpError(404, "APPLICATION_NOT_FOUND", "Application not found");
+    const events = await repo.listHistory(id, ctx.tenantId);
+    return reply.send({ data: events, meta: { page: 1, pageSize: events.length, total: events.length } });
+  });
 }

@@ -246,7 +246,16 @@ export function registerCollectionConsumers(queue: Queue): void {
     }
   });
 
-  // ── adjustmentCreate ────────────────────────────────────────────────────────
+  // ── adjustmentCreate (maker step) ────────────────────────────────────────────
+  // GAP-REVENUE-ADJUSTMENTS-01: a balance transfer used to debit the source
+  // demand and credit the target IMMEDIATELY here, with no pending state and no
+  // checker!=maker rule — a single officer could silently move arrears off a
+  // defaulter's demand. It now mirrors refundCreate: record a PENDING
+  // adjustment with no DCB movement; the transfer is only applied once a
+  // DISTINCT checker approves it in adjustmentDecide. Domain validation
+  // (positive amount, distinct demands, within source balance) still runs up
+  // front so an impossible transfer is rejected before it ever enters the
+  // approval queue.
   queue.subscribe(COMMANDS.adjustmentCreate, async (msg) => {
     const { assesseeId, fromDemandId, toDemandId, amountMinor, reason } = msg.payload as {
       assesseeId: string;
@@ -261,13 +270,12 @@ export function registerCollectionConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
-      // Load from-demand balance
+      // Load from-demand balance and validate up front (positive, distinct
+      // demands, within balance) — no row and no DCB entry is written if invalid.
       const fromBalance = await getDemandBalanceTx(tx, msg.tenantId, fromDemandId);
-
-      // Domain validation
       validateAdjustment({ assesseeId, fromDemandId, toDemandId, amountMinor: amount, reason }, fromBalance);
 
-      // Insert adjustment
+      // Insert the adjustment in PENDING status — NO DCB movement yet.
       await tx.insert(adjustments).values({
         tenantId: msg.tenantId,
         assesseeId,
@@ -275,59 +283,154 @@ export function registerCollectionConsumers(queue: Queue): void {
         toDemandId,
         amountMinor: amount,
         reason,
+        status: "pending",
+        makerUserId: msg.actorId,
         createdBy: msg.actorId,
       });
 
-      // Insert DCB entry: debit source (reduce balance)
-      const newFromBalance = fromBalance - amount;
-      await tx.insert(dcbEntries).values({
-        tenantId: msg.tenantId,
-        assesseeId,
-        demandId: fromDemandId,
-        entryType: "adjustment",
-        amountMinor: amount,
-        balanceMinor: newFromBalance,
-        referenceType: "adjustment",
-        narration: `Adjustment debit: ${reason}`,
-        createdBy: msg.actorId,
-      });
-
-      // Insert DCB entry: credit target (increase balance)
-      const toBalance = await getDemandBalanceTx(tx, msg.tenantId, toDemandId);
-      const newToBalance = toBalance + amount;
-      await tx.insert(dcbEntries).values({
-        tenantId: msg.tenantId,
-        assesseeId,
-        demandId: toDemandId,
-        entryType: "adjustment",
-        amountMinor: amount,
-        balanceMinor: newToBalance,
-        referenceType: "adjustment",
-        narration: `Adjustment credit: ${reason}`,
-        createdBy: msg.actorId,
-      });
-
-      // Enqueue outbox events
-      await enqueue(tx, {
-        topic: EVENTS.adjustmentApplied,
-        eventType: EVENTS.adjustmentApplied,
-        tenantId: msg.tenantId,
-        actorId: msg.actorId,
-        correlationId: msg.correlationId,
-        payload: { assesseeId, fromDemandId, toDemandId, amountMinor, reason },
-      });
+      // Audit the request (not an application — the balance has not moved).
       await enqueue(tx, {
         topic: "audit.event.record",
         eventType: "audit.event.record",
         tenantId: msg.tenantId,
         actorId: msg.actorId,
         correlationId: msg.correlationId,
-        payload: { service: SERVICE, action: "create", resourceType: "adjustment", outcome: "success" },
+        payload: { service: SERVICE, action: "create", resourceType: "adjustment", outcome: "pending" },
       });
     });
 
-    await cache.invalidate(`${SERVICE}:${msg.tenantId}:receipts:${assesseeId}`);
-    await cache.invalidate(`${SERVICE}:${msg.tenantId}:dcb:${assesseeId}`);
     await cache.invalidate(`${SERVICE}:${msg.tenantId}:adjustments:${assesseeId}`);
+  });
+
+  // ── adjustmentDecide (checker step) ──────────────────────────────────────────
+  // GAP-REVENUE-ADJUSTMENTS-01: a DISTINCT checker approves or rejects a pending
+  // transfer. Only on approve is the balance actually moved (debit source,
+  // credit target) and the adjustmentApplied event emitted — the same point the
+  // old code applied it, now gated behind assertMakerChecker. The from-balance
+  // is RE-READ fresh inside this transaction so an approval reflects the live
+  // DCB, not the balance at request time; the domain re-validation blocks an
+  // approval that would overdraw the source demand in the meantime.
+  queue.subscribe(COMMANDS.adjustmentDecide, async (msg) => {
+    const { adjustmentId, approve, reason } = msg.payload as {
+      adjustmentId: string;
+      approve: boolean;
+      reason?: string;
+    };
+
+    let assesseeId: string | undefined;
+
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+
+      const adjRows = await tx
+        .select()
+        .from(adjustments)
+        .where(and(eq(adjustments.tenantId, msg.tenantId), eq(adjustments.id, adjustmentId)))
+        .limit(1);
+      const adjustment = adjRows[0];
+      if (!adjustment) return;
+
+      // Only a pending adjustment can be decided — a second decide on an
+      // already-approved/rejected row is a no-op (defends against replay and
+      // double-apply of the balance transfer).
+      if (adjustment.status !== "pending") return;
+
+      // Maker-checker enforcement: the decider must differ from the maker.
+      assertMakerChecker(adjustment.makerUserId, msg.actorId);
+
+      assesseeId = adjustment.assesseeId;
+      const newStatus = approve ? "approved" : "rejected";
+
+      await tx
+        .update(adjustments)
+        .set({
+          status: newStatus,
+          checkerUserId: msg.actorId,
+          decidedAt: new Date(),
+          decisionReason: reason ?? null,
+          updatedAt: new Date(),
+        })
+        .where(eq(adjustments.id, adjustmentId));
+
+      if (approve) {
+        // Re-read the live source balance and re-validate before moving money.
+        const fromBalance = await getDemandBalanceTx(tx, msg.tenantId, adjustment.fromDemandId);
+        validateAdjustment(
+          {
+            assesseeId: adjustment.assesseeId,
+            fromDemandId: adjustment.fromDemandId,
+            toDemandId: adjustment.toDemandId,
+            amountMinor: adjustment.amountMinor,
+            reason: adjustment.reason,
+          },
+          fromBalance,
+        );
+
+        // Debit source (reduce balance).
+        const newFromBalance = fromBalance - adjustment.amountMinor;
+        await tx.insert(dcbEntries).values({
+          tenantId: msg.tenantId,
+          assesseeId: adjustment.assesseeId,
+          demandId: adjustment.fromDemandId,
+          entryType: "adjustment",
+          amountMinor: adjustment.amountMinor,
+          balanceMinor: newFromBalance,
+          referenceId: adjustmentId,
+          referenceType: "adjustment",
+          narration: `Adjustment debit: ${adjustment.reason}`,
+          createdBy: msg.actorId,
+        });
+
+        // Credit target (increase balance).
+        const toBalance = await getDemandBalanceTx(tx, msg.tenantId, adjustment.toDemandId);
+        const newToBalance = toBalance + adjustment.amountMinor;
+        await tx.insert(dcbEntries).values({
+          tenantId: msg.tenantId,
+          assesseeId: adjustment.assesseeId,
+          demandId: adjustment.toDemandId,
+          entryType: "adjustment",
+          amountMinor: adjustment.amountMinor,
+          balanceMinor: newToBalance,
+          referenceId: adjustmentId,
+          referenceType: "adjustment",
+          narration: `Adjustment credit: ${adjustment.reason}`,
+          createdBy: msg.actorId,
+        });
+
+        await enqueue(tx, {
+          topic: EVENTS.adjustmentApplied,
+          eventType: EVENTS.adjustmentApplied,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: {
+            adjustmentId,
+            assesseeId: adjustment.assesseeId,
+            fromDemandId: adjustment.fromDemandId,
+            toDemandId: adjustment.toDemandId,
+            amountMinor: adjustment.amountMinor.toString(),
+            reason: reason ?? adjustment.reason,
+          },
+        });
+      }
+
+      await enqueue(tx, {
+        topic: "audit.event.record",
+        eventType: "audit.event.record",
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          service: SERVICE, action: "decide", resourceType: "adjustment", resourceId: adjustmentId,
+          outcome: newStatus, reason: reason ?? null,
+        },
+      });
+    });
+
+    if (assesseeId) {
+      await cache.invalidate(`${SERVICE}:${msg.tenantId}:receipts:${assesseeId}`);
+      await cache.invalidate(`${SERVICE}:${msg.tenantId}:dcb:${assesseeId}`);
+      await cache.invalidate(`${SERVICE}:${msg.tenantId}:adjustments:${assesseeId}`);
+    }
   });
 }

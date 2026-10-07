@@ -4,14 +4,60 @@ import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
-import { digiLockerFetch } from "./domain.js";
-import type { UploadBody, DigilockerFetchBody, VerifyBody, ResubmitBody } from "./validators.js";
+import {
+  digiLockerFetch, isDigiLockerConfigured,
+  defaultDigiLockerProvider, type DigiLockerProvider,
+} from "./domain.js";
+import { newPkceMaterial } from "./oauth.js";
+import { configuredTrustStore, verifyPkcs7Document } from "./verify.js";
+import {
+  buildStorageKey, keyBelongsToCaller, objectExists, validateUpload,
+  presignedPutUrl, PUT_URL_TTL_SECONDS, DOCUMENT_UPLOAD_LIMITS,
+} from "./storage.js";
+import type {
+  UploadBody, PresignBody, DigilockerFetchBody, VerifyBody, ResubmitBody,
+  AuthorizeBody, CallbackBody,
+} from "./validators.js";
+
+/** OAuth state TTL (10 min): the consent redirect must complete promptly. */
+const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
-/** Pre-signed object ref — binary never stored in the DB. */
-function storageRef(tenantId: string, docId: string, docType: string): string {
-  return `https://s3.example.com/${tenantId}/documents/${docId}/${docType}?expires=${Date.now() + 60 * 60 * 1000}`;
+export interface PresignResult {
+  uploadUrl: string;
+  method: "PUT";
+  key: string;
+  expiresIn: number;
+  maxSizeMb: number;
+  headers: Record<string, string>;
+}
+
+/**
+ * GAP-CITIZEN-DOCUMENTS-01: mint a short-lived SigV4 presigned PUT URL for a
+ * direct browser→storage upload. Size + content-type are validated here and the
+ * byte length is signed into the URL, so the object store rejects any body of a
+ * different size. Throws a 400 HttpError on a disallowed type/size.
+ */
+export async function presignUpload(ctx: RequestContext, body: PresignBody): Promise<PresignResult> {
+  const invalid = validateUpload({ filename: body.filename, contentType: body.contentType, sizeBytes: body.sizeBytes });
+  if (invalid) throw new HttpError(400, invalid.code, invalid.message);
+  const key = buildStorageKey(ctx.tenantId, ctx.actorId, body.filename);
+  const uploadUrl = await presignedPutUrl({
+    key,
+    contentType: body.contentType,
+    contentLength: body.sizeBytes,
+    expiresIn: PUT_URL_TTL_SECONDS,
+    serverSideEncryption: "AES256",
+  });
+  return {
+    uploadUrl,
+    method: "PUT",
+    key,
+    expiresIn: PUT_URL_TTL_SECONDS,
+    maxSizeMb: DOCUMENT_UPLOAD_LIMITS.maxSizeMb,
+    headers: { "Content-Type": body.contentType, "x-amz-server-side-encryption": "AES256" },
+  };
 }
 
 async function publish(
@@ -31,6 +77,16 @@ async function publish(
 
 /** Upload-intake: record a self-attested document submission (pending verification). */
 export async function upload(ctx: RequestContext, body: UploadBody): Promise<Accepted> {
+  // GAP-CITIZEN-DOCUMENTS-01: the storageKey MUST be a key this caller presigned
+  // (tenant+actor namespaced). Reject a forged/foreign key so a document can only
+  // reference an object the uploader actually PUT. The bytes are never in the DB.
+  if (!keyBelongsToCaller(body.storageKey, ctx.tenantId, ctx.actorId)) {
+    throw new HttpError(400, "INVALID_STORAGE_KEY", "storageKey was not presigned by this caller");
+  }
+  // The key must also reference an object that was actually PUT to the store.
+  if (!(await objectExists(body.storageKey))) {
+    throw new HttpError(400, "OBJECT_NOT_UPLOADED", "no uploaded object exists for storageKey");
+  }
   const id = randomUUID();
   return publish(ctx, COMMANDS.documentUpload, id, {
     id,
@@ -38,13 +94,28 @@ export async function upload(ctx: RequestContext, body: UploadBody): Promise<Acc
     citizenId: body.citizenId ?? null,
     serviceId: body.serviceId ?? null,
     docType: body.docType,
-    storageRef: storageRef(ctx.tenantId, id, body.docType),
+    storageRef: body.storageKey,
   });
 }
 
 /** DigiLocker-style fetch intake. */
 export async function digilockerFetchIntake(ctx: RequestContext, body: DigilockerFetchBody): Promise<Accepted> {
   const id = randomUUID();
+  // GAP-CITIZEN-DOCUMENTS-02 (DPDP): a real provider fetch pulls the citizen's
+  // document, so it MUST be backed by a LIVE, persisted consent record — not
+  // merely a client-sent boolean. Fail closed: reject a configured-provider
+  // fetch unless a non-expired, non-revoked consent row exists for this
+  // (tenant, citizen, docType). (Unconfigured stays honest below.)
+  if (isDigiLockerConfigured()) {
+    const citizenId = body.citizenId ?? ctx.actorId;
+    const consent = await repo.findLiveConsent(ctx.tenantId, citizenId, body.docType);
+    if (!consent) {
+      throw new HttpError(
+        422, "CONSENT_REQUIRED",
+        "a live DigiLocker consent record is required before a document can be fetched",
+      );
+    }
+  }
   const result = digiLockerFetch(body.docUri);
   return publish(ctx, COMMANDS.documentDigilockerFetch, id, {
     id,
@@ -61,6 +132,95 @@ export async function digilockerFetchIntake(ctx: RequestContext, body: Digilocke
     status: result.configured ? "verified" : "received",
     authenticity: result.authenticity,
   });
+}
+
+/**
+ * GAP-CITIZEN-DOCUMENTS-02 — begin the DigiLocker OAuth consent redirect.
+ * Mints PKCE + an opaque state bound server-side to {tenant, actor, citizen,
+ * docType, purpose} with a TTL, stores it, and returns the provider authorize
+ * URL. Fail-closed: when the provider is unconfigured there is no authorize URL
+ * (honest 409), never a fabricated redirect.
+ */
+export async function beginDigiLockerAuthorize(
+  ctx: RequestContext, body: AuthorizeBody,
+  provider: DigiLockerProvider = defaultDigiLockerProvider,
+): Promise<{ authorizeUrl: string; state: string; expiresAt: string }> {
+  if (!provider.isConfigured()) {
+    throw new HttpError(409, "PROVIDER_UNCONFIGURED", "DigiLocker provider is not configured");
+  }
+  const { state, codeVerifier, codeChallenge } = newPkceMaterial();
+  const url = provider.authorizeUrl({ docType: body.docType, redirectUri: body.redirectUri, state, codeChallenge });
+  if (!url) throw new HttpError(409, "PROVIDER_UNCONFIGURED", "DigiLocker provider is not configured");
+  const citizenId = body.citizenId ?? ctx.actorId;
+  const expiresAt = new Date(Date.now() + OAUTH_STATE_TTL_MS);
+  await repo.insertOauthState({
+    state, tenantId: ctx.tenantId, actorId: ctx.actorId, citizenId,
+    docType: body.docType, purpose: body.purpose, scope: "avs_parent_file",
+    codeVerifier, codeChallenge, redirectUri: body.redirectUri,
+    applicationId: body.applicationId ?? null, serviceId: body.serviceId ?? null,
+    expiresAt,
+  });
+  return { authorizeUrl: url, state, expiresAt: expiresAt.toISOString() };
+}
+
+/**
+ * GAP-CITIZEN-DOCUMENTS-02 — handle the OAuth callback. Re-binds the exchange
+ * to the ORIGINAL state row (anti-CSRF/fixation: the state must belong to this
+ * tenant, be unexpired, unconsumed, and begun by this actor), exchanges the
+ * code via the provider (with the server-held PKCE verifier), verifies the
+ * issued-document artefact (PKCS#7 structure + signer cert validity + chain to
+ * the configured trust store) and ONLY THEN records a consent + a source-verified
+ * submission. Any failure fails closed: no consent, no verified document.
+ */
+export async function digilockerCallback(
+  ctx: RequestContext, body: CallbackBody,
+  provider: DigiLockerProvider = defaultDigiLockerProvider,
+): Promise<Accepted & { data: { id: string; verified: boolean; providerStatus: string } }> {
+  const st = await repo.findOauthState(body.state, ctx.tenantId);
+  if (!st) throw new HttpError(400, "INVALID_STATE", "unknown or foreign OAuth state");
+  if (st.consumedAt) throw new HttpError(409, "STATE_CONSUMED", "this OAuth state was already used");
+  if (st.expiresAt.getTime() < Date.now()) throw new HttpError(410, "STATE_EXPIRED", "OAuth state has expired");
+  if (st.actorId !== ctx.actorId) throw new HttpError(403, "FORBIDDEN", "OAuth state belongs to a different actor");
+
+  const exchange = await provider.exchangeCode({
+    code: body.code, codeVerifier: st.codeVerifier, redirectUri: st.redirectUri,
+  });
+
+  // Verify the issued-document artefact locally before trusting it. Fail-closed:
+  // no artefact, no trust store, or a failed check ⇒ NOT source-verified.
+  let verified = false;
+  let verifyReason = exchange.ok ? "artefact_absent" : exchange.providerStatus;
+  if (exchange.ok && exchange.artefact) {
+    const store = configuredTrustStore();
+    const res = verifyPkcs7Document(exchange.artefact.content, exchange.artefact.signatureDer, store);
+    verified = res.verified;
+    verifyReason = res.reason;
+  }
+
+  const id = randomUUID();
+  const consentId = randomUUID();
+  const consentTtlMs = body.consentTtlDays * 24 * 60 * 60 * 1000;
+  await publish(ctx, COMMANDS.documentDigilockerCallback, id, {
+    id,
+    state: st.state,
+    consentId,
+    citizenId: st.citizenId,
+    applicationId: st.applicationId,
+    serviceId: st.serviceId,
+    docType: st.docType,
+    purpose: st.purpose,
+    scope: st.scope,
+    consentExpiresAt: new Date(Date.now() + consentTtlMs).toISOString(),
+    docUri: exchange.docUri,
+    providerStatus: exchange.providerStatus,
+    exchangeOk: exchange.ok,
+    verified,
+    verifyReason,
+  });
+  return {
+    id, status: "accepted", correlationId: ctx.correlationId,
+    data: { id, verified, providerStatus: exchange.providerStatus },
+  };
 }
 
 /** Officer verification decision (verify / reject / deficiency memo). */
@@ -87,13 +247,26 @@ export async function resubmit(
   }
   const newId = randomUUID();
   const isDigi = body.source === "digilocker";
+  // GAP-CITIZEN-DOCUMENTS-01: an upload-source resubmission must reference a
+  // real object this caller presigned — no fabricated storage ref.
+  if (!isDigi) {
+    if (!body.storageKey) {
+      throw new HttpError(400, "FILE_REQUIRED", "an upload resubmission requires a presigned storageKey");
+    }
+    if (!keyBelongsToCaller(body.storageKey, ctx.tenantId, ctx.actorId)) {
+      throw new HttpError(400, "INVALID_STORAGE_KEY", "storageKey was not presigned by this caller");
+    }
+    if (!(await objectExists(body.storageKey))) {
+      throw new HttpError(400, "OBJECT_NOT_UPLOADED", "no uploaded object exists for storageKey");
+    }
+  }
   const result = isDigi ? digiLockerFetch(body.docUri ?? prior.digilockerRef ?? "") : null;
   const accepted = await publish(ctx, COMMANDS.documentResubmit, newId, {
     id: newId,
     supersedesId: id,
     source: body.source,
     docUri: body.docUri ?? null,
-    storageRef: isDigi ? null : storageRef(ctx.tenantId, newId, prior.docType),
+    storageRef: isDigi ? null : (body.storageKey ?? null),
     digilockerRef: result?.digilockerRef ?? null,
     providerStatus: result?.providerStatus ?? null,
     configured: result?.configured ?? false,

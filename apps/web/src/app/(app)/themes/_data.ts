@@ -90,3 +90,91 @@ function moduleLoader(path: string, key: string) {
 export const getThemeTemplates = moduleLoader("/api/v1/themes/templates", "themes.templates");
 export const getThemeBranding = moduleLoader("/api/v1/themes/branding", "themes.branding");
 export const getThemeBrand = moduleLoader("/api/v1/themes/brand", "themes.brand");
+
+/* ── GAP-THEMES-BRAND-01: brand preview + activation ──────────────────────
+ * The /themes/brand page previously rendered presets as plain text rows with
+ * no colour/logo preview and no activate control. These typed loaders feed a
+ * real BrandPreview (colour swatches + logo + an active StatusPill) and the
+ * preset gallery whose Activate control POSTs the audited
+ * /v1/themes/brand/apply-preset endpoint (theme-service, admin-gated + audit).
+ */
+export interface BrandConfigView {
+  appName: string;
+  logoUrl: string | null;
+  colorPrimary: string;
+  colorSecondary: string;
+  colorAccent: string;
+  colorBackground: string;
+  colorSurface: string;
+  colorText: string;
+  colorPrimaryFg: string;
+}
+
+export interface BrandPresetView {
+  code: string;
+  name: string;
+  description: string | null;
+  colorPrimary: string;
+  colorSecondary: string;
+  colorAccent: string;
+  colorBackground: string;
+  colorSurface: string;
+}
+
+const HEX_RE = /^#[0-9a-fA-F]{3,8}$/;
+function hex(value: unknown, fallback: string): string {
+  return typeof value === "string" && HEX_RE.test(value.trim()) ? value.trim() : fallback;
+}
+
+function mapBrandConfig(payload: unknown): BrandConfigView | null {
+  if (!isRecord(payload)) return null;
+  // GET /v1/themes/brand returns the config object directly (or defaults).
+  const src = isRecord(payload.data) ? payload.data : payload;
+  return {
+    appName: toText(src.appName) ?? "CivitasOne",
+    logoUrl: toText(src.logoUrl) ?? null,
+    colorPrimary: hex(src.colorPrimary, "#1e40af"),
+    colorSecondary: hex(src.colorSecondary, "#64748b"),
+    colorAccent: hex(src.colorAccent, "#f59e0b"),
+    colorBackground: hex(src.colorBackground, "#ffffff"),
+    colorSurface: hex(src.colorSurface, "#f8fafc"),
+    colorText: hex(src.colorText, "#1e293b"),
+    colorPrimaryFg: hex(src.colorPrimaryFg, "#ffffff"),
+  };
+}
+
+function mapBrandPresets(payload: unknown): BrandPresetView[] {
+  const out: BrandPresetView[] = [];
+  for (const row of extractRows(payload)) {
+    if (!isRecord(row)) continue;
+    const code = toText(row.code);
+    if (!code) continue;
+    out.push({
+      code,
+      name: toText(row.name) ?? code,
+      description: toText(row.description) ?? null,
+      colorPrimary: hex(row.colorPrimary, "#1e40af"),
+      colorSecondary: hex(row.colorSecondary, "#64748b"),
+      colorAccent: hex(row.colorAccent, "#f59e0b"),
+      colorBackground: hex(row.colorBackground, "#ffffff"),
+      colorSurface: hex(row.colorSurface, "#f8fafc"),
+    });
+  }
+  return out;
+}
+
+export function getThemeBrandConfig(): Promise<LoaderResult<BrandConfigView | null>> {
+  return fetchJson<unknown, BrandConfigView | null>("/api/v1/themes/brand", null, {
+    revalidateSeconds: 30,
+    telemetryKey: "themes.brand-config",
+    mapResponse: mapBrandConfig,
+  });
+}
+
+export function getThemeBrandPresets(): Promise<LoaderResult<BrandPresetView[]>> {
+  return fetchJson<unknown, BrandPresetView[]>("/api/v1/themes/brand/presets", [], {
+    revalidateSeconds: 30,
+    telemetryKey: "themes.brand-presets",
+    mapResponse: mapBrandPresets,
+  });
+}

@@ -3,13 +3,16 @@ import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
 import { assertTransition, assertDifferentApprover } from "./domain.js";
-import { getOrderForPrecheck } from "./repo.js";
+import { getOrderForPrecheck, getOrderForDscVerify } from "./repo.js";
+import { defaultDscTrustStoreProvider } from "./dsc-provider.js";
+import { verifyOrderDsc } from "./dsc-verify.js";
 import { httpError, assertVersionAndTransition } from "../../shared/context.js";
 import {
   submitForApprovalBody, type SubmitForApprovalBody,
   approveAndIssueBody, type ApproveAndIssueBody,
   sendBackBody, type SendBackBody,
   recallBody, type RecallBody,
+  verifyDscBody, type VerifyDscBody,
 } from "./validators.js";
 
 export type IssuanceResult = { accepted: true; orderId: string };
@@ -39,6 +42,22 @@ async function loadOrderForPrecheck(tenantId: string, orderId: string) {
   const current = await getOrderForPrecheck(tenantId, orderId);
   if (!current) throw httpError("ORDER_NOT_FOUND", `Order not found: ${orderId}`);
   return current;
+}
+
+/**
+ * Pre-flight DSC verification (GAP-COURT-ORDERS-02) — a READ-only check that
+ * returns the server-side verification verdict for a pasted/uploaded detached
+ * PKCS#7 signature against the order's canonical content. No state change, no
+ * publish; the checker uses it to see signer CN / validity / issues BEFORE the
+ * irreversible approve+issue.
+ */
+export async function verifyDsc(
+  ctx: RequestContext, orderId: string, input: VerifyDscBody,
+): Promise<ReturnType<typeof verifyOrderDsc>> {
+  const body = verifyDscBody.parse(input);
+  const signable = await getOrderForDscVerify(ctx.tenantId, orderId);
+  if (!signable) throw httpError("ORDER_NOT_FOUND", `Order not found: ${orderId}`);
+  return verifyOrderDsc(signable, body.dscSignature, { requireChainTrust: defaultDscTrustStoreProvider.isConfigured() });
 }
 
 /** Submit a drafted order for approval (draft → pending_approval). */
@@ -95,6 +114,38 @@ export async function approveAndIssue(
   } catch (e) {
     throw httpError("MAKER_CHECKER_VIOLATION", (e as Error).message);
   }
+
+  // ── GAP-COURT-ORDERS-02: server-side DSC verification ───────────────────────
+  // Issuance is a human, DSC-signed act. BEFORE publishing the issue command we
+  // cryptographically verify the pasted/uploaded detached PKCS#7 signature over
+  // this order's canonical content: structure, signer-cert validity window, key
+  // usage, and the RSA signature. An invalid/expired/tampered signature is
+  // rejected here (422 DSC_VERIFICATION_FAILED) and the order stays in
+  // pending_approval — it is never issued. Chain-of-trust is additionally
+  // reported; it is enforced when a trust store is configured. Run only when the
+  // transition would actually fire (skip the already-issued idempotent no-op, so
+  // a redelivery of the exact same intent doesn't re-reject on an unrelated
+  // signature re-check).
+  if (current.status !== "issued") {
+    const signable = await getOrderForDscVerify(ctx.tenantId, orderId);
+    if (!signable) throw httpError("ORDER_NOT_FOUND", `Order not found: ${orderId}`);
+    const v = verifyOrderDsc(signable, body.dscSignature, { requireChainTrust: defaultDscTrustStoreProvider.isConfigured() });
+    if (!v.acceptedForIssue) {
+      throw httpError(
+        "DSC_VERIFICATION_FAILED",
+        "The Digital Signature Certificate could not be verified for this order; the order was not issued.",
+        {
+          issues: v.issues,
+          signerCN: v.signerCN ?? null,
+          signatureChecked: v.signatureChecked,
+          signatureValid: v.signatureValid,
+          chainTrusted: v.chainTrusted,
+          trustStoreConfigured: v.trustStoreConfigured,
+        },
+      );
+    }
+  }
+
   assertVersionAndTransition(current, body.expectedVersion, "issued", assertTransition, {
     versionConflict: "ORDER_VERSION_CONFLICT",
     invalidTransition: "ORDER_INVALID_TRANSITION",

@@ -21,16 +21,26 @@ export function registerGrievanceConsumers(rawQueue: Queue): void {
       id: string; tenantId: string; citizenId: string;
       category: string; subject: string; description: string;
       complainantName?: string;
+      complainantContact?: Array<{ kind: "mobile" | "email"; value: string }>;
+      filedOnBehalf?: boolean;
       dpdpConsent?: { given: boolean; noticeVersion: string; purpose: string };
     };
     const priority = inferPriority(p.category);
     const departmentRef = inferDepartmentRef(p.category);
+    // GAP-CITIZEN-GRIEVANCES-NEW-02: an officer filing for a different citizen is
+    // "on behalf". Derive the flag server-side: trust the actor identity, not a
+    // client claim alone — on-behalf is true when the client asked for it OR the
+    // filing actor differs from the complainant citizen.
+    const filedOnBehalf = p.filedOnBehalf === true || msg.actorId !== p.citizenId;
+    const complainantContact = Array.isArray(p.complainantContact) ? p.complainantContact : [];
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.insertGrievance(tx, {
         id: p.id, tenantId: p.tenantId, citizenId: p.citizenId,
         category: p.category, subject: p.subject, description: p.description,
         priority, departmentRef, assignedTo: msg.actorId, status: "assigned",
+        filedByActor: msg.actorId, filedOnBehalf,
+        complainantName: p.complainantName ?? null, complainantContact,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await repo.insertAction(tx, {
@@ -39,10 +49,13 @@ export function registerGrievanceConsumers(rawQueue: Queue): void {
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       // DPDP: persist the consent record in the tamper-evident audit chain; the
-      // server (not the client) stamps the authoritative time.
+      // server (not the client) stamps the authoritative time. Contact + filing
+      // attribution are recorded on the audit payload too (never logged as PII).
       await audit(tx, msg, "register", "citizen_grievance", p.id, {
         ...(p.dpdpConsent ? { dpdpConsent: { ...p.dpdpConsent, recordedAt: new Date().toISOString() } } : {}),
         ...(p.complainantName ? { complainantName: p.complainantName } : {}),
+        filedOnBehalf, filedByActor: msg.actorId,
+        ...(complainantContact.length > 0 ? { complainantContactKinds: complainantContact.map((c) => c.kind) } : {}),
       });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "grievance", p.id));

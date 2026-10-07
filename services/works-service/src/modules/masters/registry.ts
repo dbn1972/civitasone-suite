@@ -8,7 +8,7 @@ export type MasterTable =
   | typeof s.repairTypes | typeof s.schemes | typeof s.scopes
   | typeof s.tenderTypes | typeof s.userDepartments | typeof s.contractorClasses
   | typeof s.issueTypes | typeof s.issueDescriptionTypes | typeof s.assets
-  | typeof s.workDescriptionTypes | typeof s.srItems;
+  | typeof s.workDescriptionTypes | typeof s.srItems | typeof s.divisions;
 
 export interface MasterConfig {
   table: MasterTable;
@@ -42,6 +42,7 @@ export const masters: MasterConfig[] = [
   { table: s.assets, prefix: "assets", createSchema: v.createAssetSchema, moneyFields: ["cost"] },
   { table: s.workDescriptionTypes, prefix: "work-description-types", createSchema: v.createMasterSchema },
   { table: s.srItems, prefix: "sr-items", createSchema: v.createSrItemSchema, moneyFields: ["rate"] },
+  { table: s.divisions, prefix: "divisions", createSchema: v.createDivisionSchema },
 ];
 
 export const masterTableByPrefix: Record<string, MasterTable> = Object.fromEntries(

@@ -8,6 +8,7 @@ import { HttpError } from "./shared/context.js";
 import { assertPiiKeyConfigured } from "./shared/pii-crypto.js";
 import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
+import { registerRateLimit } from "@civitasone/rate-limit";
 import { randomUUID } from "node:crypto";
 import { portalRoutes }      from "./modules/portal/routes.js";
 import { applicationRoutes } from "./modules/application/routes.js";
@@ -32,6 +33,7 @@ import { documentsRoutes } from "./modules/documents/routes.js";
 import { appealRoutes } from "./modules/appeal/routes.js";
 import { applicantIdentityRoutes } from "./modules/applicant-identity/routes.js";
 import { serviceRequestRoutes } from "./modules/requests/routes.js";
+import { cpioRoutes } from "./modules/cpio/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   // P0-6: fail-fast if CITIZEN_PII_KEY is absent/too short so we never boot fail-open.
@@ -45,6 +47,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
 
   await app.register(authPlugin);
+
+  // Plugin must be registered for the per-route rate limits (crypto/OAuth routes).
+  await registerRateLimit(app, { max: 200, timeWindow: "1 minute" });
 
   // G2: RLS enforcement — set app.tenant_id GUC per request so RLS policies
   // enforce tenant isolation even if app-layer WHERE is accidentally omitted.
@@ -70,6 +75,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(applicationRoutes);
   await app.register(grievanceRoutes);
   await app.register(rtiRoutes);
+  await app.register(cpioRoutes);
   await app.register(helpdeskRoutes);
   await app.register(analyticsRoutes);
   await app.register(escalationRoutes);

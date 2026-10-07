@@ -74,6 +74,7 @@ vi.mock("../src/shared/outbox.js", () => ({
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn((...args: any[]) => args),
   and: vi.fn((...args: any[]) => args),
+  inArray: vi.fn((...args: any[]) => args),
   desc: vi.fn((col: any) => col),
   sql: vi.fn().mockReturnValue({ mapWith: vi.fn().mockReturnValue("sql-expr") }),
 }));

@@ -71,6 +71,19 @@ export function resolveAssistedBy(channel: IntakeChannel, operatorId: string | u
 }
 
 /**
+ * GAP-CITIZEN-INTAKE-01 — a draft must carry at least one form answer before it
+ * can be submitted into an acknowledged application. Guards against the empty
+ * draft→ack path (a hand-created draft with no data being handed a tracking
+ * number). Fail closed: unknown/empty formData is NOT submittable.
+ */
+export function hasFormAnswers(formData: unknown): boolean {
+  if (formData === null || typeof formData !== "object") return false;
+  return Object.values(formData as Record<string, unknown>).some(
+    (v) => v !== null && v !== undefined && !(typeof v === "string" && v.trim() === ""),
+  );
+}
+
+/**
  * Resolve + gate applicant type against the service definition (FN-23).
  * Defaults to `citizen` when the client omits a type (legacy clients).
  */

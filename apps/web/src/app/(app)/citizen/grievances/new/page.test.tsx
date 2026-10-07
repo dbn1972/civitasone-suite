@@ -63,7 +63,7 @@ describe("RegisterGrievancePage — DPDP 2023 consent gate", () => {
     // The notice panel and the label both mention "DPDP Act 2023"; confirm at least one instance.
     expect(screen.getAllByText(/DPDP Act 2023/i).length).toBeGreaterThanOrEqual(1);
 
-    const checkbox = screen.getByRole("checkbox");
+    const checkbox = (document.getElementById("dpdp-consent") as HTMLInputElement);
     expect(checkbox).toHaveAttribute("aria-required", "true");
     expect(checkbox).not.toBeChecked();
   });
@@ -79,7 +79,7 @@ describe("RegisterGrievancePage — DPDP 2023 consent gate", () => {
     const submitBtn = screen.getByRole("button", { name: /register grievance/i });
     expect(submitBtn).toBeDisabled();
 
-    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click((document.getElementById("dpdp-consent") as HTMLInputElement));
     expect(submitBtn).not.toBeDisabled();
   });
 
@@ -124,7 +124,7 @@ describe("RegisterGrievancePage — DPDP 2023 consent gate", () => {
 
     render(<RegisterGrievancePage />);
     fillRequiredFields();
-    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click((document.getElementById("dpdp-consent") as HTMLInputElement));
 
     fireEvent.click(screen.getByRole("button", { name: /register grievance/i }));
 
@@ -145,7 +145,7 @@ describe("RegisterGrievancePage — DPDP 2023 consent gate", () => {
     render(<RegisterGrievancePage />);
     fillRequiredFields();
     fireEvent.change(screen.getByLabelText(/contact mobile/i), { target: { value: "9876543210" } });
-    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click((document.getElementById("dpdp-consent") as HTMLInputElement));
     fireEvent.click(screen.getByRole("button", { name: /register grievance/i }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const [, init] = fetchMock.mock.calls[0];
@@ -159,6 +159,30 @@ describe("RegisterGrievancePage — DPDP 2023 consent gate", () => {
     expect(screen.getByText(/180 days/i)).toBeInTheDocument();
     expect(screen.getByText(/Section 4\(a\)/i)).toBeInTheDocument();
     expect(screen.getByText(/withdraw consent/i)).toBeInTheDocument();
+  });
+
+  // GAP-CITIZEN-GRIEVANCES-NEW-02 — filing on behalf of a citizen
+  it("sends filedOnBehalf=true and requires a contact when filing on behalf of a citizen", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ id: "ob1", grievanceNo: "GRV-OB1" }), { status: 200, headers: { "content-type": "application/json" } }));
+    render(<RegisterGrievancePage />);
+    fillRequiredFields();
+    // Enter on-behalf mode and consent.
+    fireEvent.click(screen.getByLabelText(/on behalf of a citizen/i));
+    fireEvent.click((document.getElementById("dpdp-consent") as HTMLInputElement));
+
+    // Submitting with no contact is blocked with a clear message.
+    fireEvent.click(screen.getByRole("button", { name: /register grievance/i }));
+    expect(await screen.findByText(/so the complainant can be contacted/i)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    // Add a contact and submit — now filedOnBehalf travels in the body.
+    fireEvent.change(screen.getByLabelText(/contact mobile/i), { target: { value: "9876543210" } });
+    fireEvent.click(screen.getByRole("button", { name: /register grievance/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [, init] = fetchMock.mock.calls[0];
+    const sent = JSON.parse((init as RequestInit).body as string);
+    expect(sent.filedOnBehalf).toBe(true);
+    expect(sent.complainantContact).toEqual([{ kind: "mobile", value: "9876543210" }]);
   });
 });
 
@@ -177,7 +201,7 @@ describe("RegisterGrievancePage — server error handling (UX-003)", () => {
 
     render(<RegisterGrievancePage />);
     fillRequiredFields();
-    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click((document.getElementById("dpdp-consent") as HTMLInputElement));
     fireEvent.click(screen.getByRole("button", { name: /register grievance/i }));
 
     expect(await screen.findByText("Subject must be under 200 characters.")).toBeInTheDocument();
@@ -194,7 +218,7 @@ describe("RegisterGrievancePage — server error handling (UX-003)", () => {
 
     render(<RegisterGrievancePage />);
     fillRequiredFields();
-    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click((document.getElementById("dpdp-consent") as HTMLInputElement));
     fireEvent.click(screen.getByRole("button", { name: /register grievance/i }));
 
     const alert = await screen.findByRole("alert");

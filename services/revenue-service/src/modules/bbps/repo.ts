@@ -2,7 +2,8 @@ import { tenantTransaction } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { dcbEntries } from "../assessment/schema.js";
 import { assessees } from "../assessee/schema.js";
-import { eq, and, sql } from "drizzle-orm";
+import { bbpsTransactions } from "./schema.js";
+import { eq, and, sql, desc } from "drizzle-orm";
 import type { DcbOutstanding } from "./domain.js";
 
 /** Minimal read handle a caller-supplied transaction must satisfy for the
@@ -18,6 +19,44 @@ export async function getDcbOutstanding(tenantId: string, assesseeIdentifier: st
   return tenantTransaction(db, tenantId, async (tx) => {
     const t = tx as typeof db;
     return getDcbOutstandingTx(t, tenantId, assesseeIdentifier);
+  });
+}
+
+/**
+ * GAP-REVENUE-BBPS-02: fetch a single BBPS request's status by the queue
+ * messageId the route returned to the client. Tenant-scoped — a payment outcome
+ * is sensitive financial data and must never cross tenants.
+ */
+export async function findRequestByMessageId(tenantId: string, messageId: string) {
+  const rows = await tenantTransaction(db, tenantId, async (tx) => {
+    const t = tx as typeof db;
+    return t
+      .select()
+      .from(bbpsTransactions)
+      .where(and(eq(bbpsTransactions.tenantId, tenantId), eq(bbpsTransactions.messageId, messageId)))
+      .orderBy(desc(bbpsTransactions.createdAt))
+      .limit(1);
+  });
+  return rows[0] ?? null;
+}
+
+/**
+ * GAP-REVENUE-BBPS-02: list recent BBPS requests (newest first) for the
+ * "Recent BBPS requests" card. Tenant-scoped.
+ */
+export async function listRequests(tenantId: string, pagination: { limit: number; offset: number }) {
+  return tenantTransaction(db, tenantId, async (tx) => {
+    const t = tx as typeof db;
+    const where = eq(bbpsTransactions.tenantId, tenantId);
+    const rows = await t
+      .select()
+      .from(bbpsTransactions)
+      .where(where)
+      .orderBy(desc(bbpsTransactions.createdAt))
+      .limit(pagination.limit)
+      .offset(pagination.offset);
+    const counted = await t.select({ n: sql<number>`count(*)::int` }).from(bbpsTransactions).where(where);
+    return { rows: rows ?? [], total: Number(counted[0]?.n ?? 0) };
   });
 }
 

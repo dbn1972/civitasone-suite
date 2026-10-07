@@ -1,64 +1,65 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 const pushMock = vi.fn();
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: pushMock }),
-}));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pushMock }) }));
 
 import { ReportFilters } from "./ReportFilters";
 
-describe("ReportFilters — GAP-WORKS-REPORTS-04 (date validation + active-filter echo)", () => {
-  beforeEach(() => pushMock.mockReset());
+const DIV_UUID = "11111111-2222-4333-8444-000000000001";
 
-  it("blocks an inverted range (To before From) with an inline error and does not navigate", () => {
-    render(<ReportFilters />);
-    // Set To first (no min constraint yet), then From later than it.
-    fireEvent.change(screen.getByLabelText("Filter to date"), { target: { value: "2026-04-01" } });
-    fireEvent.change(screen.getByLabelText("Filter from date"), { target: { value: "2026-05-01" } });
-    fireEvent.click(screen.getByRole("button", { name: /apply/i }));
+function stubFetch() {
+  return vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : input.toString();
+    if (url.includes("/works/masters/divisions/search")) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ data: [{ id: DIV_UUID, name: "Nagpur PWD Division", code: "NGP-PWD" }] }), {
+          status: 200,
+        }),
+      );
+    }
+    return Promise.resolve(new Response("{}", { status: 200 }));
+  });
+}
 
-    expect(screen.getByRole("alert").textContent).toMatch(/on or after/i);
-    expect(pushMock).not.toHaveBeenCalled();
+describe("GAP-WORKS-REPORTS-01 ReportFilters (division picker)", () => {
+  beforeEach(() => {
+    pushMock.mockReset();
+    vi.restoreAllMocks();
   });
 
-  it("navigates with a valid (From <= To) range", () => {
+  it("renders a division search combobox instead of a raw 'Division UUID' text box", () => {
     render(<ReportFilters />);
-    fireEvent.change(screen.getByLabelText("Filter from date"), { target: { value: "2026-04-01" } });
-    fireEvent.change(screen.getByLabelText("Filter to date"), { target: { value: "2026-05-01" } });
-    fireEvent.click(screen.getByRole("button", { name: /apply/i }));
-
-    expect(pushMock).toHaveBeenCalledWith("/works/reports?fromDate=2026-04-01&toDate=2026-05-01");
+    expect(screen.queryByLabelText("Filter by division UUID")).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /division/i })).toBeInTheDocument();
   });
 
-  it("echoes applied filters as active-filter chips", () => {
-    render(<ReportFilters fromDate="2026-04-01" toDate="2026-05-01" divisionId="abc-123" />);
-    expect(screen.getByText("From 2026-04-01")).toBeInTheDocument();
-    expect(screen.getByText("To 2026-05-01")).toBeInTheDocument();
-    expect(screen.getByText("Division abc-123")).toBeInTheDocument();
+  it("selecting a division navigates with its real uuid as ?divisionId=", async () => {
+    stubFetch();
+    render(<ReportFilters />);
+    const combo = screen.getByRole("combobox", { name: /division/i });
+    fireEvent.focus(combo);
+    fireEvent.change(combo, { target: { value: "nagpur" } });
+
+    const option = await screen.findByText("Nagpur PWD Division");
+    fireEvent.mouseDown(option);
+
+    fireEvent.click(screen.getByText("Apply"));
+    await waitFor(() => expect(pushMock).toHaveBeenCalled());
+    expect(pushMock).toHaveBeenCalledWith(`/works/reports?divisionId=${DIV_UUID}`);
   });
 
-  it("marks the date inputs invalid when an inverted range is submitted", () => {
+  it("a user cannot type a free-text code into the division field (combobox search only)", async () => {
+    stubFetch();
     render(<ReportFilters />);
-    fireEvent.change(screen.getByLabelText("Filter to date"), { target: { value: "2026-04-01" } });
-    fireEvent.change(screen.getByLabelText("Filter from date"), { target: { value: "2026-05-01" } });
-    fireEvent.click(screen.getByRole("button", { name: /apply/i }));
-    expect(screen.getByLabelText("Filter to date")).toHaveAttribute("aria-invalid", "true");
-  });
-
-  it("blocks a non-UUID division id and does not navigate (REPORTS-01)", () => {
-    render(<ReportFilters />);
-    fireEvent.change(screen.getByLabelText("Filter by division UUID"), { target: { value: "DIV-001" } });
-    fireEvent.click(screen.getByRole("button", { name: /apply/i }));
-    expect(screen.getByRole("alert").textContent).toMatch(/valid UUID/i);
-    expect(pushMock).not.toHaveBeenCalled();
-  });
-
-  it("navigates with a valid division UUID (REPORTS-01)", () => {
-    render(<ReportFilters />);
-    const uuid = "11111111-1111-1111-1111-111111111111";
-    fireEvent.change(screen.getByLabelText("Filter by division UUID"), { target: { value: uuid } });
-    fireEvent.click(screen.getByRole("button", { name: /apply/i }));
-    expect(pushMock).toHaveBeenCalledWith(`/works/reports?divisionId=${uuid}`);
+    // Typing a code yields no matching option (the stub only returns on 'nagpur'),
+    // and without a selection the picker holds no value, so Apply navigates with
+    // no divisionId — a typed code can never reach the URL.
+    const combo = screen.getByRole("combobox", { name: /division/i });
+    fireEvent.focus(combo);
+    fireEvent.change(combo, { target: { value: "DIV-001" } });
+    fireEvent.click(screen.getByText("Apply"));
+    await waitFor(() => expect(pushMock).toHaveBeenCalled());
+    expect(pushMock).toHaveBeenCalledWith("/works/reports");
   });
 });

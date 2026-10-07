@@ -169,9 +169,9 @@ export function buildCitizenUploadPreview(
   doc: RequiredDocumentUi,
   locale: LocaleKey,
 ): CitizenUploadPreviewModel {
-  const primary = doc.labels[locale].trim();
+  const primary = (doc.labels[locale] ?? "").trim();
   const other: LocaleKey = locale === "en" ? "hi" : "en";
-  const fallback = doc.labels[other].trim();
+  const fallback = (doc.labels[other] ?? "").trim();
   const label = primary || fallback || "Untitled document";
   const secondaryLabel = primary && fallback && primary !== fallback ? fallback : null;
   const formatsArray = doc.formats.map((f) => f.toUpperCase());

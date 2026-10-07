@@ -3,12 +3,18 @@ import { getProjectEscalations } from "@/app/_data/loaders";
 import { EscalationsTable } from "./EscalationsTable";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
+import { getSessionRoles, hasAnyRole, PROJECT_ESCALATION_ACTION_ROLES } from "@/lib/auth/roleGuard";
 
 export default async function EscalationsPage() {
   const result = await getProjectEscalations();
   const { data: rows, source } = result;
   const resource = toResourceState(result);
   const errored = resource.status === "error";
+
+  // GAP-PROJECTS-ESCALATIONS-02: only offer the acknowledge/reassign/clear
+  // controls to roles the server's escalation action routes would accept
+  // (defence-in-depth; the server stays the authority and 403s others).
+  const canAct = hasAnyRole(getSessionRoles(), PROJECT_ESCALATION_ACTION_ROLES);
 
   // GAP-PROJECTS-ESCALATIONS-01: Critical/High must describe OPEN escalations
   // only — a cleared row that still carried a 'blocked'/'overdue' severity was
@@ -39,7 +45,7 @@ export default async function EscalationsPage() {
         ) : rows.length === 0 ? (
           <EmptyState icon="🚨" title="No escalations" message="No project escalations have been raised." action={<a href="/projects/list" className="btn primary">View Projects</a>} />
         ) : (
-          <EscalationsTable rows={rows} source={source === "error" ? "error" : "api"} />
+          <EscalationsTable rows={rows} source={source === "error" ? "error" : "api"} canAct={canAct} />
         )}
       </Card>
     </div>

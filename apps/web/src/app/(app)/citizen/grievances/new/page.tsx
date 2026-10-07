@@ -16,6 +16,10 @@ export default function RegisterGrievancePage() {
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<string>("service_delivery");
+  // GAP-CITIZEN-GRIEVANCES-NEW-02: "filing on behalf of a citizen" mode. When on,
+  // the officer records a complainant contact and the server marks the grievance
+  // filed-on-behalf (attributing the officer as the filing actor).
+  const [onBehalf, setOnBehalf] = useState(false);
   const [applicantName, setApplicantName] = useState("");
   const [contactMobile, setContactMobile] = useState("");
   const [contactEmail, setContactEmail] = useState("");
@@ -39,6 +43,7 @@ export default function RegisterGrievancePage() {
 
   function resetForAnother() {
     setSubject(""); setDescription(""); setCategory("service_delivery");
+    setOnBehalf(false);
     setApplicantName(""); setContactMobile(""); setContactEmail("");
     setDpdpConsent(false); setStatus("idle"); setMessage(""); setAck(null); setCopied(false);
     formError.clear();
@@ -56,6 +61,13 @@ export default function RegisterGrievancePage() {
       setMessage(t("validationConsentRequired"));
       return;
     }
+    // GAP-CITIZEN-GRIEVANCES-NEW-02: on-behalf filing must carry a contact so the
+    // complainant is reachable.
+    if (onBehalf && !contactMobile.trim() && !contactEmail.trim()) {
+      setStatus("error");
+      setMessage(t("validationOnBehalfContactRequired"));
+      return;
+    }
     setStatus("submitting");
     setMessage("");
     formError.clear();
@@ -68,8 +80,10 @@ export default function RegisterGrievancePage() {
       description: description.trim(),
       category,
       complainantName: applicantName.trim(),
-      // GAP-CITIZEN-GRIEVANCES-NEW-02/04: optional complainant contact.
+      // GAP-CITIZEN-GRIEVANCES-NEW-02: optional complainant contact.
       complainantContact: contact.length > 0 ? contact : undefined,
+      // GAP-CITIZEN-GRIEVANCES-NEW-02: officer filing-on-behalf flag.
+      filedOnBehalf: onBehalf,
       // GAP-CITIZEN-GRIEVANCES-NEW-01: structured DPDP consent record (server timestamps it).
       dpdpConsent: { given: true, noticeVersion: DPDP_NOTICE_VERSION, purpose: "grievance_redressal" },
     };
@@ -144,6 +158,21 @@ export default function RegisterGrievancePage() {
       />
       <form onSubmit={(e) => void handleSubmit(e)} className="card pad" style={{ maxWidth: 820 }} noValidate>
         <div className="fields">
+          {/* GAP-CITIZEN-GRIEVANCES-NEW-02: filing-on-behalf mode selector. */}
+          <div className="field" style={{ gridColumn: "1 / -1", background: "#fff", padding: "13px 16px" }}>
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer", fontSize: "0.875rem" }}>
+              <input
+                id="file-on-behalf"
+                type="checkbox"
+                checked={onBehalf}
+                onChange={(e) => setOnBehalf(e.target.checked)}
+                style={{ marginTop: 3, width: 18, height: 18, flexShrink: 0 }}
+              />
+              <span>{t("onBehalfLabel")}</span>
+            </label>
+            {onBehalf ? <p style={{ margin: "6px 0 0 28px", fontSize: 12, color: "var(--muted)" }}>{t("onBehalfHint")}</p> : null}
+          </div>
+
           <div className="field" style={{ gridColumn: "1 / -1", background: "#fff", padding: "13px 16px" }}>
             <label className="label" htmlFor="applicantName">
               {t("applicantNameLabel")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>

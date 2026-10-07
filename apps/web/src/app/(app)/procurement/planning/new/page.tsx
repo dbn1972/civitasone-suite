@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
 import { estimatedValueRupees } from "./estimatedValueRupees";
-import { PageHeader, Button } from "@/app/_components/ds";
+import { PageHeader, Button, EntityPicker, type EntityOption } from "@/app/_components/ds";
+import { searchDepartments, resolveDepartments } from "@/lib/entityAdapters/department";
 import { formatMoney } from "@/lib/formatters";
 import { currentFinancialYearStart, fyLabel } from "@/lib/financialYear";
 import { METHOD_LABELS } from "@/lib/procurementLabels";
@@ -60,7 +61,15 @@ export default function NewAnnualPlanPage() {
   // Default to the next financial year (see DECISION above).
   const [planYear, setPlanYear] = useState<string>(String(currentFy + 1));
   const [title, setTitle] = useState("");
-  const [department, setDepartment] = useState("");
+  // GAP-PROCUREMENT-PLANNING-NEW-02: department is now chosen from the canonical
+  // org department master (hrms GET /v1/hrms/departments) via EntityPicker, so
+  // every plan for the same department carries an identical department NAME
+  // string (the aggregation the plan exists for). We keep the selected id for
+  // the picker and the resolved canonical name (sent in the POST body); a
+  // label-cache ref records id -> name as options stream in from search/resolve.
+  const [departmentId, setDepartmentId] = useState<string | null>(null);
+  const departmentNames = useRef<Map<string, string>>(new Map());
+  const selectedDepartmentName = departmentId ? (departmentNames.current.get(departmentId) ?? "") : "";
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<PlanLine[]>([emptyLine()]);
   const [status, setStatus] = useState<
@@ -70,8 +79,20 @@ export default function NewAnnualPlanPage() {
   const [clientMessage, setClientMessage] = useState("");
   const formError = useFormError("annual procurement plan");
 
-  function updateLine(i: number, patch: Partial<PlanLine>) {
-    setLines((prev) =>
+  // EntityPicker adapters that also record id -> canonical name as options
+  // arrive, so the submit can send the SELECTED department's canonical name.
+  function rememberNames(opts: EntityOption[]): EntityOption[] {
+    for (const o of opts) departmentNames.current.set(o.id, o.label);
+    return opts;
+  }
+  async function searchDepartmentOptions(q: string, signal: AbortSignal): Promise<EntityOption[]> {
+    return rememberNames(await searchDepartments(q, signal));
+  }
+  async function resolveDepartmentOptions(ids: string[]): Promise<EntityOption[]> {
+    return rememberNames(await resolveDepartments(ids));
+  }
+
+  function updateLine(i: number, patch: Partial<PlanLine>) {    setLines((prev) =>
       prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)),
     );
   }
@@ -86,7 +107,7 @@ export default function NewAnnualPlanPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!title.trim() || !department.trim() || !planYear) {
+    if (!title.trim() || !selectedDepartmentName.trim() || !planYear) {
       setStatus("error");
       setClientMessage("Year, title, and department are required.");
       return;
@@ -108,7 +129,7 @@ export default function NewAnnualPlanPage() {
         body: JSON.stringify({
           planYear: parseInt(planYear, 10),
           title: title.trim(),
-          department: department.trim(),
+          department: selectedDepartmentName.trim(),
           notes: notes.trim() || undefined,
           // GAP-PROCUREMENT-PLANNING-NEW-03: build each line explicitly — no
           // object spread (which leaked a stray `quantity` key) and no
@@ -197,22 +218,27 @@ export default function NewAnnualPlanPage() {
                 <label className="label" htmlFor="dept">
                   Department *
                 </label>
-                <input
+                <EntityPicker
                   id="dept"
-                  className="inp"
-                  value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
-                  style={{ minHeight: 44 }}
-                  required
+                  value={departmentId}
+                  onChange={(v) => setDepartmentId(Array.isArray(v) ? (v[0] ?? null) : v)}
+                  search={searchDepartmentOptions}
+                  resolve={resolveDepartmentOptions}
+                  aria-label="Department"
+                  placeholder="Search department by name…"
+                  minQueryLength={1}
                 />
-                {/* GAP-PROCUREMENT-PLANNING-NEW-02: there is no org/department
-                    master endpoint in this service, and the session identity does
-                    not expose the user's department, so a canonical picker cannot
-                    be wired without inventing a master (out of proportion).
-                    DECISION: keep a free-text field with server-side zod
-                    validation; a department master + picker (and defaulting from
-                    the user's own department) is a separate, larger piece of work
-                    recorded for HUMAN REVIEW. */}
+                {/* GAP-PROCUREMENT-PLANNING-NEW-02: the free-text box (which let
+                    "PWD" / "P.W.D" / "Public Works Dept" file as different
+                    departments and broke ministry-level aggregation) is replaced
+                    by a picker over the canonical hrms department master
+                    (GET /v1/hrms/departments). The plan API takes `department`
+                    as a NAME string, so we send the selected option's canonical
+                    name — two plans for the same department now carry an
+                    identical string. Storing a departmentId end-to-end would
+                    need a procurement schema change (recorded for HUMAN REVIEW).
+                    Server-side zod validation (createPlanBody.department min 1)
+                    is kept as defence in depth. */}
                 {formError.fieldError("department") && (
                   <span style={{ fontSize: 12, color: "var(--bad)" }}>
                     {formError.fieldError("department")}

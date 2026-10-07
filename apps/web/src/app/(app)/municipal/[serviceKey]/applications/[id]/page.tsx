@@ -4,8 +4,11 @@ import { PageHeader, StatusPill, RefreshErrorState } from "@/app/_components/ds"
 import { toHumanError } from "@/lib/messages";
 import { CitizenServiceLinks } from "../../../_components/CitizenServiceLinks";
 import { RecordDetailPanel } from "../../../_components/RecordDetailPanel";
+import { RecordActions } from "../../../_components/RecordActions";
+import { RecordHistory } from "../../../_components/RecordHistory";
 import { getMunicipalService, officerApplicationsHref, citizenServiceHref } from "../../../_data/services";
-import { fetchMunicipalDetail } from "../../../_data/municipalApi";
+import { fetchMunicipalDetail, fetchMunicipalHistory } from "../../../_data/municipalApi";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +81,33 @@ export default async function MunicipalApplicationDetailPage({ params }: Props) 
         reference={summary.reference}
         status={summary.status}
       />
+
+      {/* GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-DETAIL-02: officer workflow
+          actions + a history timeline — only for services whose backend exposes
+          the per-service action/history endpoints (config.workflow). Actions are
+          gated to officer roles here (UI) AND re-enforced by the service on every
+          route. Services without workflow endpoints keep the honest read-only
+          panel with no action buttons. */}
+      {config.workflow ? await renderWorkflow(config, params.id, summary.status) : null}
     </>
+  );
+}
+
+async function renderWorkflow(
+  config: NonNullable<ReturnType<typeof getMunicipalService>>,
+  id: string,
+  status: string,
+) {
+  if (!config.workflow) return null;
+  const roles = getSessionRoles();
+  const canAct = roles.some((r) => config.workflow!.officerRoles.includes(r));
+  const { events } = await fetchMunicipalHistory(config, id);
+  return (
+    <div style={{ display: "grid", gap: 16, marginTop: 16 }}>
+      {canAct ? (
+        <RecordActions applicationId={id} status={status} workflow={config.workflow} />
+      ) : null}
+      <RecordHistory events={events} />
+    </div>
   );
 }

@@ -22,4 +22,29 @@ export const dprBody = z.object({
 });
 export type DprBody = z.infer<typeof dprBody>;
 
+/**
+ * GAP-PROJECTS-DPR-TRACKING-01: a DPR review transition.
+ *
+ * The allowed status machine (matches progress.project_dprs's status CHECK:
+ * submitted → under_review → approved | revision):
+ *   - review:  submitted      → under_review   (reviewer picks it up)
+ *   - approve: under_review    → approved       (terminal, favourable)
+ *   - return:  under_review    → revision       (terminal: back to submitter)
+ *
+ * `reason` is REQUIRED for a return (it is the revision instruction the
+ * submitter sees and is recorded on the audit event) and optional otherwise;
+ * the route enforces the required-on-return rule after parsing so the message
+ * is specific.
+ */
+export const dprTransitionBody = z.object({
+  action: z.enum(["review", "approve", "return"]),
+  reason: z.string().trim().min(1).max(500).optional(),
+});
+export type DprTransitionBody = z.infer<typeof dprTransitionBody>;
+
+export const dprIdParam = z.object({
+  id:    z.string().uuid(),
+  dprId: z.string().uuid(),
+});
+
 export const idParam = z.object({ id: z.string().uuid() });

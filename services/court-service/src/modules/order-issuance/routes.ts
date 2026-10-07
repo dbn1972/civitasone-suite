@@ -7,6 +7,7 @@ import {
   approveAndIssueBody,
   sendBackBody,
   recallBody,
+  verifyDscBody,
 } from "./validators.js";
 import * as commands from "./commands.js";
 
@@ -25,6 +26,20 @@ export async function orderIssuanceRoutes(app: FastifyInstance): Promise<void> {
     const body = submitForApprovalBody.parse(req.body);
     const result = await commands.submitForApproval(ctx, id, body);
     return reply.code(202).send(result);
+  });
+
+  // Pre-flight verify a DSC signature against an order WITHOUT issuing it
+  // (GAP-COURT-ORDERS-02). Read-only: no state change, no audit mutation — it
+  // only reports the server-side verification verdict (structure, signer CN,
+  // validity, signature, chain-trust) so the checker sees it before the
+  // irreversible approve+issue. Restricted to the checker/bench roles.
+  app.post("/v1/court/orders/:id/verify-dsc", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ISSUANCE_CHECK_ROLES);
+    const { id } = orderIdParam.parse(req.params);
+    const body = verifyDscBody.parse(req.body);
+    const result = await commands.verifyDsc(ctx, id, body);
+    return reply.code(200).send(result);
   });
 
   // Approve + issue (pronounce) an order (pending_approval → issued).

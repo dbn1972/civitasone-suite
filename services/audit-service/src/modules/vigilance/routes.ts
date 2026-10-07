@@ -8,7 +8,7 @@ import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import {
   idParam, actionIdParam, intakeBody, screenBody, assignIoBody,
-  evidenceBody, findingsBody, proposeActionBody, decideActionBody,
+  evidenceBody, findingsBody, proposeActionBody, decideActionBody, revealBody,
 } from "./validators.js";
 
 // Summary list stays visible to audit leadership (unchanged behaviour).
@@ -17,6 +17,10 @@ const READER_ROLES = ["audit_officer", "audit_admin", "super_admin", "vigilance_
 const VIGILANCE_ROLES = ["vigilance_officer", "vigilance_admin", "super_admin"];
 // Maker-checker authority: only a disciplinary authority decides an action.
 const AUTHORITY_ROLES = ["vigilance_admin", "super_admin"];
+// GAP-AUDIT-VIGILANCE-02 (DPDP): roles permitted to reveal the confidential
+// officer identity / charge text. Mirrors the web PII reader set
+// (apps/web .../vigilance/page.tsx PII_ROLES) plus vigilance_admin.
+const PII_REVEAL_ROLES = ["audit_officer", "audit_admin", "super_admin", "vigilance_officer", "vigilance_admin"];
 
 /**
  * Asserts that the vigilance case with the given id belongs to the requesting
@@ -44,6 +48,21 @@ export async function vigilanceRoutes(app: FastifyInstance): Promise<void> {
     const file = await queries.getCaseFile(ctx.tenantId, id);
     if (!file) throw new HttpError(404, "NOT_FOUND", "vigilance case not found");
     return reply.send(file);
+  });
+
+  // GAP-AUDIT-VIGILANCE-02 (DPDP): audited reveal of ONE confidential field
+  // (officer identity or charge text). PII reader roles only; a substantive
+  // reason is mandatory; the clear value is read and a `vigilance_reveal`
+  // audit event is written in the SAME transaction (queries.revealCaseField).
+  // The audit payload records field + reason only — never the value.
+  app.post("/v1/audit/vigilance/:id/reveal", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, PII_REVEAL_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = revealBody.parse(req.body);
+    const result = await queries.revealCaseField(ctx, id, body.field, body.reason);
+    if (!result) throw new HttpError(404, "NOT_FOUND", "vigilance case not found");
+    return reply.send({ data: { caseId: result.caseId, field: result.field, value: result.value } });
   });
 
   app.post("/v1/audit/vigilance", async (req, reply) => {

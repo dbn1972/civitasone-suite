@@ -6,6 +6,8 @@ import { orders } from "../order/schema.js";
 import * as repo from "./repo.js";
 import { cache } from "../../shared/infra.js";
 import { assertTransition, assertDifferentApprover } from "./domain.js";
+import { defaultDscTrustStoreProvider } from "./dsc-provider.js";
+import { verifyOrderDsc } from "./dsc-verify.js";
 
 type SubmitForApprovalPayload = {
   orderId: string;
@@ -138,6 +140,21 @@ export function registerOrderIssuanceConsumers(
         throw new NonRetryableError((e as Error).message);
       }
 
+      // GAP-COURT-ORDERS-02 — re-verify the DSC inside the issuing tx against the
+      // authoritative committed order content. The command path already rejected
+      // an invalid signature synchronously; this is the consumer backstop (the
+      // race window between the pre-check read and the write) AND the source of
+      // the persisted signer metadata. An invalid signature here is NonRetryable
+      // (a bad blob never becomes valid on retry) so the order is never issued.
+      const signable = await repo.getOrderSignableInTx(tx, p.tenantId, p.orderId);
+      if (!signable) throw new NonRetryableError(`ORDER_NOT_FOUND: ${p.orderId}`);
+      const dsc = verifyOrderDsc(signable, p.dscSignature, { requireChainTrust: defaultDscTrustStoreProvider.isConfigured() });
+      if (!dsc.acceptedForIssue) {
+        throw new NonRetryableError(
+          `DSC_VERIFICATION_FAILED: order ${p.orderId} signature rejected (${dsc.issues.join(",")})`,
+        );
+      }
+
       await versionedUpdate(tx, orders, {
         id: p.orderId,
         tenantId: p.tenantId,
@@ -147,6 +164,10 @@ export function registerOrderIssuanceConsumers(
           approvedBy: msg.actorId,
           issuedAt: new Date(),
           dscSignature: p.dscSignature,
+          dscSignerCn: dsc.signerCN ?? null,
+          dscSignerSerial: dsc.signerSerial ?? null,
+          dscVerifiedAt: new Date(),
+          dscChainTrusted: dsc.chainTrusted,
           // Only override the pronouncement date when explicitly supplied; otherwise
           // leave the existing order_date untouched (p.issuedDate ?? existing).
           ...(p.issuedDate ? { orderDate: p.issuedDate } : {}),

@@ -6,8 +6,8 @@ import { describe, it, expect } from "vitest";
 import { masters, masterTableByPrefix, masterMoneyFieldsByPrefix } from "../src/modules/masters/registry.js";
 
 describe("masters registry", () => {
-  it("registers exactly 17 master types (matches all-routes masterPrefixes)", () => {
-    expect(masters).toHaveLength(17);
+  it("registers exactly 18 master types (matches all-routes masterPrefixes)", () => {
+    expect(masters).toHaveLength(18);
   });
 
   it("every master has a unique prefix", () => {
@@ -52,6 +52,8 @@ describe("masters registry", () => {
       "sr-items": {
         zone: "N", srYear: "2026", itemCode: "IT-1", description: "Excavation", unit: "cum", rate: "4500000",
       },
+      // GAP-WORKS-REPORTS-01: works division master (name/code + optional office type).
+      divisions: { name: "Nagpur PWD Division", code: "NGP-PWD" },
     };
 
     for (const m of masters) {

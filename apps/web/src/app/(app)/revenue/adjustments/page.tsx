@@ -1,9 +1,11 @@
 import { Button, PageHeader, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { getSessionUserId } from "@/lib/auth/roleGuard";
 import { toHumanError } from "@/lib/messages";
 import { AdjustmentCreateForm } from "./AdjustmentCreateForm";
 import { AdjustmentRegister } from "./AdjustmentRegister";
+import { AdjustmentApprovalQueue, type PendingAdjustment } from "./AdjustmentApprovalQueue";
 
 export type AssesseeOption = {
   id: string;
@@ -32,6 +34,8 @@ export type AdjustmentRegisterRow = {
   toDemandId: string;
   amountMinor: string;
   reason: string;
+  status: string;
+  makerUserId: string;
 } & Record<string, unknown>;
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -117,6 +121,8 @@ function mapAdjustments(payload: unknown): AdjustmentRegisterRow[] | null {
       toDemandId: typeof raw.toDemandId === "string" ? raw.toDemandId : "",
       amountMinor: String(raw.amountMinor ?? 0),
       reason: typeof raw.reason === "string" ? raw.reason : "",
+      status: typeof raw.status === "string" ? raw.status : "pending",
+      makerUserId: typeof raw.makerUserId === "string" ? raw.makerUserId : "",
     });
   }
   return mapped;
@@ -127,6 +133,16 @@ async function getAdjustments(assesseeId: string): Promise<LoaderResult<Adjustme
     `/api/v1/revenue/assessees/${encodeURIComponent(assesseeId)}/adjustments?limit=200`,
     [],
     { telemetryKey: "revenue.adjustments.register", mapResponse: mapAdjustments },
+  );
+}
+
+// GAP-REVENUE-ADJUSTMENTS-01: the tenant-wide approval queue — pending balance
+// transfers awaiting a distinct checker's decision.
+async function getPendingAdjustments(): Promise<LoaderResult<AdjustmentRegisterRow[]>> {
+  return fetchJson<unknown, AdjustmentRegisterRow[]>(
+    "/api/v1/revenue/adjustments?status=pending&limit=200",
+    [],
+    { telemetryKey: "revenue.adjustments.pending", mapResponse: mapAdjustments },
   );
 }
 
@@ -148,6 +164,12 @@ export default async function AdjustmentsPage({
   const adjustmentsResult = assesseeId
     ? await getAdjustments(assesseeId)
     : ({ data: [] as AdjustmentRegisterRow[], source: "api" as const });
+
+  // GAP-REVENUE-ADJUSTMENTS-01: the tenant-wide approval queue + the signed-in
+  // user id so the queue can hide Approve/Reject on transfers this officer
+  // raised (the server still enforces maker!=checker).
+  const pendingResult = await getPendingAdjustments();
+  const currentUserId = getSessionUserId();
 
   // id -> FY label so the register shows "FY 2025-2026", not a raw demand UUID.
   const demandFyById: Record<string, string> = {};
@@ -217,6 +239,18 @@ export default async function AdjustmentsPage({
       ) : (
         <AdjustmentCreateForm assesseeId={assesseeId} demands={demands} />
       )}
+
+      <Card title="Pending approvals" padding>
+        {pendingResult.source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "pending adjustments" })} backHref="/revenue" />
+        ) : (
+          <AdjustmentApprovalQueue
+            pending={pendingResult.data as PendingAdjustment[]}
+            demandFyById={demandFyById}
+            currentUserId={currentUserId}
+          />
+        )}
+      </Card>
 
       <Card title="Adjustment register" padding>
         {!assesseeId ? (

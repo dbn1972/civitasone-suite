@@ -58,7 +58,7 @@ export {
 } from "./engineBindingTypes";
 export { SplitPreview } from "./SplitPreview";
 export type { SplitPreviewProps } from "./SplitPreview";
-export { LocaleTabs } from "./LocaleTabs";
+export { LocaleTabs, localeLabel, LOCALE_LABELS } from "./LocaleTabs";
 export type { LocaleKey } from "./LocaleTabs";
 export { MergeFieldPicker, renderMergePills } from "./MergeFieldPicker";
 export type { MergeField, MergeFieldPickerProps } from "./MergeFieldPicker";
@@ -122,6 +122,8 @@ export {
   smsCharCount,
   smsStats,
   cellChipLabel,
+  emptyLocaleBody,
+  cellLocalesComplete,
   enableCell,
   disableCell,
   patchCell,

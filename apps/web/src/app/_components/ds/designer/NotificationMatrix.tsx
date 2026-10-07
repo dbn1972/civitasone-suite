@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Button } from "../Button";
 import { FormRenderer } from "./FormRenderer";
-import { LocaleTabs, type LocaleKey } from "./LocaleTabs";
+import { LocaleTabs, localeLabel, type LocaleKey } from "./LocaleTabs";
 import { MergeFieldPicker, type MergeField } from "./MergeFieldPicker";
 import { SplitPreview } from "./SplitPreview";
 import type { FormDesignState } from "./formTypes";
@@ -31,6 +31,13 @@ export interface NotificationMatrixProps {
   onChange: (matrix: NotificationMatrixState) => void;
   /** Service pattern — dims events that are not typical defaults. */
   pattern?: string;
+  /**
+   * GAP-DESIGNER-DETAIL-B8-01: locale codes this service publishes in (B1
+   * governance locales). Defaults to en/hi so pre-existing callers are
+   * unchanged; the notification builder passes the tenant's real locale list,
+   * which drives the locale tabs and the per-locale completeness dots.
+   */
+  locales?: readonly string[];
   mergeFields?: MergeField[];
   /** When set, SplitPreview hosts FormRenderer for sample answers (P3 / FN-13). */
   sampleFormDesign?: FormDesignState;
@@ -156,13 +163,15 @@ export function NotificationMatrix({
   matrix,
   onChange,
   pattern = "certificate",
+  locales = ["en", "hi"],
   mergeFields,
   sampleFormDesign,
   sampleValues = {},
   onSampleValuesChange,
 }: NotificationMatrixProps) {
+  const localeList = locales.length > 0 ? locales : ["en", "hi"];
   const [editing, setEditing] = useState<{ event: NotificationEvent; channel: NotificationChannel } | null>(null);
-  const [locale, setLocale] = useState<LocaleKey>("en");
+  const [locale, setLocale] = useState<LocaleKey>(localeList[0] ?? "en");
   const [previewOpen, setPreviewOpen] = useState(true);
   const [previewRevision, setPreviewRevision] = useState(0);
 
@@ -201,7 +210,7 @@ export function NotificationMatrix({
     : undefined;
 
   const sms =
-    editing && editing.channel === "sms" && editingCell ? smsStats(editingCell.body[locale]) : null;
+    editing && editing.channel === "sms" && editingCell ? smsStats(editingCell.body[locale] ?? "") : null;
 
   const previewBody = editingCell
     ? applyMergeSample(editingCell.body[locale] ?? "", sampleValues)
@@ -335,16 +344,16 @@ export function NotificationMatrix({
             <LocaleTabs
               active={locale}
               onChange={setLocale}
-              completeness={{
-                en: Boolean(editingCell.body.en.trim()),
-                hi: Boolean(editingCell.body.hi.trim()),
-              }}
+              locales={localeList}
+              completeness={Object.fromEntries(
+                localeList.map((code) => [code, Boolean((editingCell.body[code] ?? "").trim())]),
+              )}
             />
 
             {editing.channel === "email" ? (
               <label style={{ display: "block", marginBottom: 8 }}>
                 <span style={{ fontSize: 12, color: "var(--mut)" }}>
-                  Subject ({locale === "hi" ? "हिंदी" : "English"})
+                  Subject ({localeLabel(locale)})
                 </span>
                 <input
                   aria-label="Email subject"
@@ -355,6 +364,7 @@ export function NotificationMatrix({
                       subject: {
                         en: editingCell.subject?.en ?? "",
                         hi: editingCell.subject?.hi ?? "",
+                        ...editingCell.subject,
                         [locale]: e.target.value,
                       },
                     })
@@ -366,14 +376,14 @@ export function NotificationMatrix({
 
             <label style={{ display: "block", marginBottom: 8 }}>
               <span style={{ fontSize: 12, color: "var(--mut)" }}>
-                Message ({locale === "hi" ? "हिंदी" : "English"})
+                Message ({localeLabel(locale)})
               </span>
               <textarea
                 rows={4}
                 aria-label="Message body"
                 data-testid="template-body"
                 lang={locale}
-                value={editingCell.body[locale]}
+                value={editingCell.body[locale] ?? ""}
                 onChange={(e) =>
                   updateEditing({
                     body: { ...editingCell.body, [locale]: e.target.value },
@@ -387,7 +397,7 @@ export function NotificationMatrix({
               fields={mergeFields}
               onInsert={(token) =>
                 updateEditing({
-                  body: { ...editingCell.body, [locale]: `${editingCell.body[locale]}${token}` },
+                  body: { ...editingCell.body, [locale]: `${editingCell.body[locale] ?? ""}${token}` },
                 })
               }
             />

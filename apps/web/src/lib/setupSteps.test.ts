@@ -3,9 +3,12 @@ import {
   WIZARD_STEPS,
   REQUIRED_STEP_KEYS,
   countComplete,
+  countableKeys,
   progressPct,
   allRequiredComplete,
   firstIncompleteIndex,
+  applySkippedSteps,
+  SETUP_SKIPPED_STEPS_KEY,
   type StepStatus,
   type WizardStepKey,
 } from "./setupSteps";
@@ -114,5 +117,62 @@ describe("honest progress (R8.2, R8.5, R7.7, R9.2)", () => {
   it("includes org-profile and departments as measurable steps", () => {
     expect(REQUIRED_STEP_KEYS).toContain("org-profile");
     expect(REQUIRED_STEP_KEYS).toContain("departments");
+  });
+});
+
+describe("GAP-SETUP-HOME-02 persisted skip (deferral)", () => {
+  const make = (overrides: Partial<Record<WizardStepKey, StepStatus>>): Record<string, StepStatus> => {
+    const base: Record<string, StepStatus> = {};
+    for (const k of ALL_KEYS) base[k] = "todo";
+    return { ...base, ...overrides };
+  };
+
+  it("exposes a stable settings key for the skip store", () => {
+    expect(SETUP_SKIPPED_STEPS_KEY).toBe("setup.skipped_steps");
+  });
+
+  it("marks only optional, not-complete steps as skipped", () => {
+    const statuses = make({ "finance-year-coa": "complete" });
+    // Try to skip: an optional todo step (leave-policies), an already-complete
+    // optional step (finance-year-coa), and a REQUIRED step (people).
+    const next = applySkippedSteps(statuses, WIZARD_STEPS, ["leave-policies", "finance-year-coa", "people"]);
+    expect(next["leave-policies"]).toBe("skipped"); // optional + todo → skipped
+    expect(next["finance-year-coa"]).toBe("complete"); // completed → stays complete
+    expect(next["people"]).toBe("todo"); // required → never skipped
+  });
+
+  it("excludes skipped steps from the progress denominator so progress can reach 100%", () => {
+    // Required steps are branches/org-profile/departments/people/modules (5),
+    // optional are finance-year-coa/leave-policies/pay-structure (3).
+    const statuses = applySkippedSteps(
+      make(Object.fromEntries(REQUIRED_STEP_KEYS.map((k) => [k, "complete"])) as Record<WizardStepKey, StepStatus>),
+      WIZARD_STEPS,
+      ["finance-year-coa", "leave-policies", "pay-structure"],
+    );
+    // All three optional steps skipped → denominator is just the 5 required.
+    const denom = countableKeys(statuses, ALL_KEYS);
+    expect(denom).toHaveLength(5);
+    expect(countComplete(statuses, denom)).toBe(5);
+    expect(progressPct(statuses, ALL_KEYS)).toBe(100);
+  });
+
+  it("resumes past a skipped step (GAP-02 acceptance: skip step 6 → resume at next)", () => {
+    // Complete the first five, skip step 6 (finance-year-coa).
+    const base = make(
+      Object.fromEntries(
+        ["org-profile", "branches", "departments", "people", "modules"].map((k) => [k, "complete"]),
+      ) as Record<WizardStepKey, StepStatus>,
+    );
+    const statuses = applySkippedSteps(base, WIZARD_STEPS, ["finance-year-coa"]);
+    // Index 5 is finance-year-coa (skipped) → resume moves to index 6 (leave-policies).
+    expect(WIZARD_STEPS[5]!.key).toBe("finance-year-coa");
+    expect(firstIncompleteIndex(WIZARD_STEPS, statuses)).toBe(6);
+  });
+
+  it("a skipped step can still be opened (status is 'skipped', not removed)", () => {
+    const statuses = applySkippedSteps(make({}), WIZARD_STEPS, ["pay-structure"]);
+    expect(statuses["pay-structure"]).toBe("skipped");
+    // It remains in the step list for rendering.
+    expect(WIZARD_STEPS.some((s) => s.key === "pay-structure")).toBe(true);
   });
 });

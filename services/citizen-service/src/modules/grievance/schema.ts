@@ -1,8 +1,10 @@
 import {
-  pgSchema, uuid, text, varchar, integer, timestamp,
+  pgSchema, uuid, text, varchar, integer, timestamp, boolean, jsonb,
 } from "drizzle-orm/pg-core";
 
 export const grievanceSchema = pgSchema("grievance");
+
+export interface ComplainantContact { kind: "mobile" | "email"; value: string }
 
 export const citizenGrievances = grievanceSchema.table("citizen_grievances", {
   id:            uuid("id").primaryKey().defaultRandom(),
@@ -15,6 +17,11 @@ export const citizenGrievances = grievanceSchema.table("citizen_grievances", {
   departmentRef: text("department_ref"),
   assignedTo:    uuid("assigned_to"),
   status:        varchar("status", { length: 24 }).notNull().default("registered"),
+  // GAP-CITIZEN-GRIEVANCES-NEW-02: attribution + complainant contact.
+  filedByActor:       uuid("filed_by_actor"),
+  filedOnBehalf:      boolean("filed_on_behalf").notNull().default(false),
+  complainantName:    text("complainant_name"),
+  complainantContact: jsonb("complainant_contact").$type<ComplainantContact[]>().notNull().default([]),
   createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:     timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:     uuid("created_by").notNull(),

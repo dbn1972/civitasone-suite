@@ -140,8 +140,22 @@ export async function persistNotificationTemplates(
       const ch = channel as NotificationChannel;
       const name = templateName(serviceKey, event as NotificationEvent, ch);
       const existing = templates.find((t) => t.name === name);
-      const body = cell.body.en || cell.body.hi;
+      // GAP-DESIGNER-DETAIL-B8-01: fall back across ALL locale bodies, not just
+      // en/hi, so an Odia-only (or any non-en/hi) template still has a body to
+      // persist to the notification-service template.
+      const body =
+        cell.body.en ||
+        cell.body.hi ||
+        Object.values(cell.body).find((v) => (v ?? "").trim().length > 0) ||
+        "";
       if (!body) continue;
+
+      // Pick the matching locale subject for an email: prefer en, then hi, then
+      // whatever locale actually carries subject text.
+      const subject =
+        cell.subject?.en ||
+        cell.subject?.hi ||
+        (cell.subject ? Object.values(cell.subject).find((v) => (v ?? "").trim().length > 0) : undefined);
 
       try {
         if (existing) {
@@ -150,7 +164,7 @@ export async function persistNotificationTemplates(
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
               body,
-              subject: cell.subject?.en,
+              subject,
             }),
           }));
           nextMatrix[event as NotificationEvent] = {
@@ -165,7 +179,7 @@ export async function persistNotificationTemplates(
               channel: apiChannel(ch),
               name,
               body,
-              subject: cell.subject?.en,
+              subject,
             }),
           }))) as { id: string };
           nextMatrix[event as NotificationEvent] = {

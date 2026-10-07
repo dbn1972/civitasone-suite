@@ -58,4 +58,42 @@ describe("notificationBuilderModel", () => {
   it("defaults sample values with service name", () => {
     expect(defaultSampleValues("Hall Booking").service_name).toBe("Hall Booking");
   });
+
+  // GAP-DESIGNER-DETAIL-B8-01: completeness is measured against the SERVICE's
+  // own locales, not a hard-coded en/hi.
+  it("measures completeness against an ['en','or'] service (Odia, not Hindi)", () => {
+    const matrix = seedMatrixForPattern("certificate");
+    // Seeds fill en + hi; an en/or service has no 'or' bodies yet, so it is
+    // incomplete and 'or' is the missing locale — NOT hi.
+    const c = matrixCompleteness(matrix, "certificate", ["en", "or"]);
+    expect(c.localesComplete).toBe(false);
+    expect(c.missingLocales).toContain("or");
+    expect(c.missingLocales).not.toContain("hi");
+    expect(c.meterLabel).toMatch(/^EN \d+\/\d+ · OR \d+\/\d+$/);
+
+    // Fill 'or' on every enabled cell → now complete for en/or.
+    for (const channels of Object.values(matrix)) {
+      for (const cell of Object.values(channels ?? {})) {
+        if (cell?.enabled) cell.body.or = cell.body.en || "ଓଡ଼ିଆ";
+      }
+    }
+    const done = matrixCompleteness(matrix, "certificate", ["en", "or"]);
+    expect(done.localesComplete).toBe(true);
+    expect(done.missingLocales).toHaveLength(0);
+  });
+
+  it("an Odia-only (['or']) service is complete once every enabled cell has an 'or' body", () => {
+    const matrix = seedMatrixForPattern("collection");
+    // Nothing in 'or' yet → incomplete.
+    expect(matrixCompleteness(matrix, "collection", ["or"]).localesComplete).toBe(false);
+    for (const channels of Object.values(matrix)) {
+      for (const cell of Object.values(channels ?? {})) {
+        if (cell?.enabled) cell.body.or = "ଓଡ଼ିଆ ବାର୍ତ୍ତା";
+      }
+    }
+    const c = matrixCompleteness(matrix, "collection", ["or"]);
+    expect(c.localesComplete).toBe(true);
+    // No Hindi tab is required for an Odia-only service.
+    expect(c.missingLocales).not.toContain("hi");
+  });
 });

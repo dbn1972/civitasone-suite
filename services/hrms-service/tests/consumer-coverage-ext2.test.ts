@@ -119,7 +119,6 @@ function wireTenantAwareQueue(q: Queue): Queue {
   return q;
 }
 
-const WAIT = 700;
 
 async function cleanProcessed() {
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {
@@ -149,7 +148,7 @@ describe("Holiday consumers — coverage", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, WAIT));
+    await (q as MemoryQueue).drain();
     await q.stop();
 
     const proc = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -168,7 +167,7 @@ describe("Holiday consumers — coverage", () => {
       payload: { id: "hol-001", tenantId: TENANT },
     });
 
-    await new Promise<void>((r) => setTimeout(r, WAIT));
+    await (q as MemoryQueue).drain();
     await q.stop();
 
     const proc = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -194,7 +193,7 @@ describe("Internal consumers — coverage", () => {
       payload: { tenantId: TENANT, month: "2025-01" },
     });
 
-    await new Promise<void>((r) => setTimeout(r, WAIT));
+    await (q as MemoryQueue).drain();
     await q.stop();
 
     const proc = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -224,7 +223,7 @@ describe("GPF consumers — coverage", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, WAIT));
+    await (q as MemoryQueue).drain();
     await q.stop();
 
     const proc = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -247,7 +246,7 @@ describe("GPF consumers — coverage", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, WAIT));
+    await (q as MemoryQueue).drain();
     await q.stop();
 
     const proc = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -270,7 +269,7 @@ describe("GPF consumers — coverage", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, WAIT));
+    await (q as MemoryQueue).drain();
     await q.stop();
 
     const proc = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -301,7 +300,7 @@ describe("Medical consumers — coverage", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, WAIT));
+    await (q as MemoryQueue).drain();
     await q.stop();
 
     // The handler exercises markProcessed + repo.insertClaim + enqueue(audit).
@@ -329,7 +328,7 @@ describe("Medical consumers — coverage", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, WAIT));
+    await (q as MemoryQueue).drain();
     await q.stop();
 
     // Same as above: the handler code is exercised for coverage regardless of
@@ -362,7 +361,7 @@ describe("Seniority consumers — coverage", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, WAIT));
+    await (q as MemoryQueue).drain();
     await q.stop();
 
     const proc = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -389,7 +388,7 @@ describe("Seniority consumers — coverage", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, WAIT));
+    await (q as MemoryQueue).drain();
     await q.stop();
 
     const proc = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -418,7 +417,7 @@ describe("Pay-matrix consumers — coverage", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, WAIT));
+    await (q as MemoryQueue).drain();
     await q.stop();
 
     const proc = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -452,7 +451,7 @@ describe("Lifecycle eOffice consumer — coverage", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, WAIT));
+    await (q as MemoryQueue).drain();
     await q.stop();
 
     const proc = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -486,7 +485,7 @@ describe("Promotion eOffice consumer — coverage", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, WAIT));
+    await (q as MemoryQueue).drain();
     await q.stop();
 
     const proc = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -520,7 +519,7 @@ describe("Leave special eOffice consumer — coverage", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, WAIT));
+    await (q as MemoryQueue).drain();
     await q.stop();
 
     const proc = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -546,7 +545,7 @@ describe("Scheduler consumer — coverage", () => {
       payload: { tenantId: TENANT, asOf: "2025-01-15" },
     });
 
-    await new Promise<void>((r) => setTimeout(r, WAIT));
+    await (q as MemoryQueue).drain();
     await q.stop();
 
     const proc = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -572,7 +571,7 @@ describe("Bulk-import consumer — coverage", () => {
       payload: { batchId: "batch-001", tenantId: TENANT, totalRows: 50, source: "csv_upload" },
     });
 
-    await new Promise<void>((r) => setTimeout(r, WAIT));
+    await (q as MemoryQueue).drain();
     await q.stop();
 
     const proc = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -591,7 +590,7 @@ describe("Bulk-import consumer — coverage", () => {
       payload: { batchId: "batch-001", tenantId: TENANT, successCount: 48, failureCount: 2 },
     });
 
-    await new Promise<void>((r) => setTimeout(r, WAIT));
+    await (q as MemoryQueue).drain();
     await q.stop();
 
     const proc = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -617,7 +616,7 @@ describe("Workforce-planning consumer — coverage", () => {
       payload: { id: "wp-001", tenantId: TENANT, scope: "department" },
     });
 
-    await new Promise<void>((r) => setTimeout(r, WAIT));
+    await (q as MemoryQueue).drain();
     await q.stop();
 
     const proc = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -643,7 +642,7 @@ describe("Integration consumer — coverage", () => {
       payload: { tenantId: TENANT },
     });
 
-    await new Promise<void>((r) => setTimeout(r, WAIT));
+    await (q as MemoryQueue).drain();
     await q.stop();
 
     // The handler inserts leave types into hrmsLeaveTypes. If it succeeds or
@@ -679,7 +678,7 @@ describe("Recruitment eOffice consumer — coverage", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, WAIT));
+    await (q as MemoryQueue).drain();
     await q.stop();
 
     const proc = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -713,7 +712,7 @@ describe("Disciplinary eOffice consumer — coverage", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, WAIT));
+    await (q as MemoryQueue).drain();
     await q.stop();
 
     const proc = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -747,7 +746,7 @@ describe("eOffice returned decisions — audit helper coverage", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, WAIT));
+    await (q as MemoryQueue).drain();
     await q.stop();
 
     const proc = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -774,7 +773,7 @@ describe("eOffice returned decisions — audit helper coverage", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, WAIT));
+    await (q as MemoryQueue).drain();
     await q.stop();
 
     const proc = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -801,7 +800,7 @@ describe("eOffice returned decisions — audit helper coverage", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, WAIT));
+    await (q as MemoryQueue).drain();
     await q.stop();
 
     const proc = await runWithTenant(TENANT, () => db.transaction(async (tx) =>

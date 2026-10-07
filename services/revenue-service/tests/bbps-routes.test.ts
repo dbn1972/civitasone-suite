@@ -33,6 +33,33 @@ function makeToken(roles: string[]) {
 const AUTH = { authorization: `Bearer ${makeToken(["revenue_admin"])}` };
 const UNPRIVILEGED_AUTH = { authorization: `Bearer ${makeToken(["hrms_employee"])}` };
 
+const MESSAGE_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+
+// GAP-REVENUE-BBPS-02: the status read-model repo is mocked so the GET status
+// routes can be exercised without a live DB. findRequestByMessageId returns a
+// known success row for MESSAGE_ID and null (=> pending) otherwise.
+vi.mock("../src/modules/bbps/repo.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../src/modules/bbps/repo.js")>();
+  return {
+    ...original,
+    findRequestByMessageId: vi.fn(async (tenantId: string, messageId: string) => {
+      if (messageId !== MESSAGE_ID) return null;
+      return {
+        id: "11111111-1111-1111-1111-111111111111",
+        tenantId,
+        messageId: MESSAGE_ID,
+        bbpsTxnId: "TXN-1",
+        status: "success",
+        receiptId: "22222222-2222-2222-2222-222222222222",
+        requestType: "pay",
+        failureReason: null,
+        amountMinor: 100000n,
+      };
+    }),
+    listRequests: vi.fn(async () => ({ rows: [], total: 0 })),
+  };
+});
+
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
 vi.mock("../src/shared/db.js", () => ({
@@ -207,5 +234,54 @@ describe("SEC-001: POST /v1/revenue/bbps/pay-bill authorization gate (BBPS_ENABL
     });
     expect(res.statusCode).toBe(202);
     expect(publishSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── GAP-REVENUE-BBPS-02: request status read endpoints ────────────────────────
+describe("GET /v1/revenue/bbps/requests/:id (status)", () => {
+  it("returns the full status row for a known messageId", async () => {
+    const res = await app.inject({ method: "GET", url: `/v1/revenue/bbps/requests/${MESSAGE_ID}`, headers: AUTH });
+    expect(res.statusCode).toBe(200);
+    const json = res.json();
+    expect(json.data.status).toBe("success");
+    expect(json.data.receiptId).toBe("22222222-2222-2222-2222-222222222222");
+  });
+
+  it("reports pending (not 404) for an unknown/not-yet-consumed messageId", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/revenue/bbps/requests/99999999-9999-9999-9999-999999999999",
+      headers: AUTH,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.status).toBe("pending");
+  });
+
+  it("returns 400 for an invalid UUID", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/revenue/bbps/requests/not-a-uuid", headers: AUTH });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("returns 401 without auth", async () => {
+    const res = await app.inject({ method: "GET", url: `/v1/revenue/bbps/requests/${MESSAGE_ID}` });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("returns 403 with wrong role", async () => {
+    const res = await app.inject({ method: "GET", url: `/v1/revenue/bbps/requests/${MESSAGE_ID}`, headers: UNPRIVILEGED_AUTH });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+describe("GET /v1/revenue/bbps/requests (recent list)", () => {
+  it("returns 200 with a paginated response", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/revenue/bbps/requests", headers: AUTH });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toHaveProperty("meta");
+  });
+
+  it("returns 403 with wrong role", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/revenue/bbps/requests", headers: UNPRIVILEGED_AUTH });
+    expect(res.statusCode).toBe(403);
   });
 });

@@ -44,6 +44,25 @@ const REFUND_STORE: Record<string, { tenantId: string; [k: string]: unknown }> =
   },
 };
 
+// GAP-REVENUE-ADJUSTMENTS-01: a pending adjustment store so the decide-screen
+// GET /v1/revenue/adjustments/:id tests can assert on real field values and on
+// cross-tenant isolation without a live database.
+const ADJUSTMENT_ID = "33333333-3333-3333-3333-333333333333";
+const ADJUSTMENT_STORE: Record<string, { tenantId: string; [k: string]: unknown }> = {
+  [ADJUSTMENT_ID]: {
+    id: ADJUSTMENT_ID,
+    tenantId: TENANT_ID,
+    assesseeId: ASSESSEE_ID,
+    fromDemandId: DEMAND_ID,
+    toDemandId: "d2222222-2222-2222-2222-222222222222",
+    amountMinor: 100000n,
+    reason: "Transfer excess to next period",
+    status: "pending",
+    makerUserId: "maker-11111111-1111-1111-1111-111111111111",
+    checkerUserId: null,
+  },
+};
+
 vi.mock("../src/modules/collection/repo.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../src/modules/collection/repo.js")>();
   return {
@@ -51,8 +70,14 @@ vi.mock("../src/modules/collection/repo.js", async (importOriginal) => {
     // List repos return { rows, total } (limit/offset are applied in SQL).
     listReceipts: vi.fn(async () => ({ rows: [], total: 0 })),
     listAdjustments: vi.fn(async () => ({ rows: [], total: 0 })),
+    listAdjustmentsByStatus: vi.fn(async () => ({ rows: [], total: 0 })),
     findRefundById: vi.fn(async (tenantId: string, id: string) => {
       const row = REFUND_STORE[id];
+      if (!row || row.tenantId !== tenantId) return null;
+      return row;
+    }),
+    findAdjustmentById: vi.fn(async (tenantId: string, id: string) => {
+      const row = ADJUSTMENT_STORE[id];
       if (!row || row.tenantId !== tenantId) return null;
       return row;
     }),
@@ -326,6 +351,127 @@ describe("GET /v1/revenue/assessees/:id/receipts", () => {
 
   it("returns 403 with wrong role", async () => {
     const res = await app.inject({ method: "GET", url: `/v1/revenue/assessees/${ASSESSEE_ID}/receipts`, headers: BAD_ROLE });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+// ── GET /v1/revenue/adjustments (approval queue, GAP-REVENUE-ADJUSTMENTS-01) ──
+describe("GET /v1/revenue/adjustments", () => {
+  it("returns 200 with a paginated approval-queue response", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/revenue/adjustments?status=pending", headers: AUTH });
+    expect(res.statusCode).toBe(200);
+    const json = res.json();
+    expect(json).toHaveProperty("data");
+    expect(json.meta).toHaveProperty("total");
+  });
+
+  it("returns 400 on an invalid status filter", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/revenue/adjustments?status=bogus", headers: AUTH });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("returns 401 without auth", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/revenue/adjustments" });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("returns 403 with wrong role", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/revenue/adjustments", headers: BAD_ROLE });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+// ── GET /v1/revenue/adjustments/:id (decide screen, GAP-REVENUE-ADJUSTMENTS-01)
+describe("GET /v1/revenue/adjustments/:id", () => {
+  it("returns 200 with the full pending adjustment (amount, demands, maker)", async () => {
+    const res = await app.inject({ method: "GET", url: `/v1/revenue/adjustments/${ADJUSTMENT_ID}`, headers: AUTH });
+    expect(res.statusCode).toBe(200);
+    const json = res.json();
+    expect(json.data.id).toBe(ADJUSTMENT_ID);
+    expect(json.data.amountMinor).toBe("100000");
+    expect(json.data.status).toBe("pending");
+    expect(json.data.makerUserId).toBe("maker-11111111-1111-1111-1111-111111111111");
+  });
+
+  it("returns 404 for an unknown adjustment id", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/revenue/adjustments/99999999-9999-9999-9999-999999999999",
+      headers: AUTH,
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error.code).toBe("NOT_FOUND");
+  });
+
+  it("returns 404 (not the other tenant's data) under cross-tenant isolation", async () => {
+    const res = await app.inject({ method: "GET", url: `/v1/revenue/adjustments/${ADJUSTMENT_ID}`, headers: AUTH_TENANT_B });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("returns 401 without auth", async () => {
+    const res = await app.inject({ method: "GET", url: `/v1/revenue/adjustments/${ADJUSTMENT_ID}` });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("returns 403 with wrong role", async () => {
+    const res = await app.inject({ method: "GET", url: `/v1/revenue/adjustments/${ADJUSTMENT_ID}`, headers: BAD_ROLE });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+// ── PATCH /v1/revenue/adjustments/:id/decide (GAP-REVENUE-ADJUSTMENTS-01) ──────
+describe("PATCH /v1/revenue/adjustments/:id/decide", () => {
+  const VALID_BODY = { approve: true, reason: "Verified" };
+
+  it("returns 202 with valid body", async () => {
+    const res = await app.inject({ method: "PATCH", url: `/v1/revenue/adjustments/${ADJUSTMENT_ID}/decide`, headers: AUTH, payload: VALID_BODY });
+    expect(res.statusCode).toBe(202);
+    expect(res.json().data).toHaveProperty("messageId");
+  });
+
+  it("returns 403 MAKER_CHECKER_VIOLATION when the caller is the maker (no command published)", async () => {
+    const id = "44444444-4444-4444-4444-444444444444";
+    ADJUSTMENT_STORE[id] = { tenantId: TENANT_ID, id, status: "pending", makerUserId: USER_ID };
+    const res = await app.inject({ method: "PATCH", url: `/v1/revenue/adjustments/${id}/decide`, headers: AUTH, payload: VALID_BODY });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error?.code ?? res.json().code).toBe("MAKER_CHECKER_VIOLATION");
+    delete ADJUSTMENT_STORE[id];
+  });
+
+  it("returns 409 ADJUSTMENT_NOT_PENDING when the adjustment was already decided", async () => {
+    const id = "55555555-5555-4555-8555-555555555555";
+    ADJUSTMENT_STORE[id] = { tenantId: TENANT_ID, id, status: "approved", makerUserId: "someone-else" };
+    const res = await app.inject({ method: "PATCH", url: `/v1/revenue/adjustments/${id}/decide`, headers: AUTH, payload: VALID_BODY });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error?.code ?? res.json().code).toBe("ADJUSTMENT_NOT_PENDING");
+    delete ADJUSTMENT_STORE[id];
+  });
+
+  it("returns 404 for an unknown adjustment", async () => {
+    const res = await app.inject({
+      method: "PATCH", url: "/v1/revenue/adjustments/99999999-9999-4999-8999-999999999999/decide",
+      headers: AUTH, payload: VALID_BODY,
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("returns 400 with missing approve field", async () => {
+    const res = await app.inject({ method: "PATCH", url: `/v1/revenue/adjustments/${ADJUSTMENT_ID}/decide`, headers: AUTH, payload: { reason: "X" } });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("returns 400 with invalid UUID param", async () => {
+    const res = await app.inject({ method: "PATCH", url: "/v1/revenue/adjustments/not-a-uuid/decide", headers: AUTH, payload: VALID_BODY });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("returns 401 without auth", async () => {
+    const res = await app.inject({ method: "PATCH", url: `/v1/revenue/adjustments/${ADJUSTMENT_ID}/decide`, payload: VALID_BODY });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("returns 403 with wrong role", async () => {
+    const res = await app.inject({ method: "PATCH", url: `/v1/revenue/adjustments/${ADJUSTMENT_ID}/decide`, headers: BAD_ROLE, payload: VALID_BODY });
     expect(res.statusCode).toBe(403);
   });
 });

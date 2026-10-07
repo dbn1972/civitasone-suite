@@ -51,6 +51,11 @@ export const refunds = collectionSchema.table("refunds", {
 });
 
 // ── collection.adjustments ────────────────────────────────────────────────────
+// GAP-REVENUE-ADJUSTMENTS-01: a transfer now carries the same maker-checker
+// lifecycle as collection.refunds. The create step records a `pending` row
+// (no DCB movement); a distinct checker must approve it before the balance is
+// moved (see consumer.ts adjustmentCreate/adjustmentDecide). Columns added by
+// migration 0015_adjustment_maker_checker.sql.
 export const adjustments = collectionSchema.table("adjustments", {
   id:             uuid("id").primaryKey().defaultRandom(),
   tenantId:       uuid("tenant_id").notNull(),
@@ -59,7 +64,13 @@ export const adjustments = collectionSchema.table("adjustments", {
   toDemandId:     uuid("to_demand_id").notNull(),
   amountMinor:    bigint("amount_minor", { mode: "bigint" }).notNull(),
   reason:         text("reason").notNull(),
+  status:         varchar("status", { length: 16 }).notNull().default("pending"), // pending, approved, rejected
+  makerUserId:    uuid("maker_user_id").notNull(),
+  checkerUserId:  uuid("checker_user_id"),
+  decidedAt:      timestamp("decided_at", { withTimezone: true }),
+  decisionReason: text("decision_reason"),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:      uuid("created_by").notNull(),
   version:        integer("version").notNull().default(1),
 });

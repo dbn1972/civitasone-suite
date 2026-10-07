@@ -81,6 +81,11 @@ export interface WorkflowTransition {
   action: string;
   decision: string | null;
   actorId: string;
+  // GAP-WORKFLOW-INSTANCES-DETAIL-01 — optional, server-resolved display name
+  // for actorId (via the shared tenant-scoped user directory). Optional so
+  // callers that have only the id still typecheck; the timeline shows the name
+  // when present and an honest short id otherwise, never a guess.
+  actorName?: string | null;
   createdAt: string;
   detail?: Record<string, unknown>;
 }
@@ -96,6 +101,10 @@ export interface WorkflowTask {
   refId: string | null;
   decision: string | null;
   assigneeId: string | null;
+  // GAP-WORKFLOW-INSTANCES-DETAIL-01 — optional, server-resolved display name
+  // for assigneeId (via the shared tenant-scoped user directory). Optional so
+  // callers that have only the id still typecheck.
+  assigneeName?: string | null;
   // GAP-WORKFLOW-MY-TASKS-05 — age (createdAt) + SLA (dueAt) so the inbox can
   // show Age/Due columns and sort oldest/most-overdue first. Optional/null.
   createdAt?: string | null;

@@ -23,14 +23,40 @@ function normalizeGrievanceDates<T extends GrievanceRow>(g: T): T {
   };
 }
 
-export async function getGrievance(tenantId: string, id: string): Promise<(GrievanceRow & { actions: Awaited<ReturnType<typeof repo.listActions>> }) | null> {
+export async function getGrievance(tenantId: string, id: string): Promise<(Omit<GrievanceRow, "complainantContact"> & { actions: Awaited<ReturnType<typeof repo.listActions>>; filedBy: string | null; filedOnBehalf: boolean; complainantContactMasked: Array<{ kind: string; masked: string }> }) | null> {
   const grievance = await cache.getOrLoad<GrievanceRow | null>(
     cache.makeKey(tenantId, "grievance", id),
     () => repo.findGrievanceById(id),
   );
   if (!grievance || grievance.tenantId !== tenantId) return null;
   const actions = await repo.listActions(id);
-  return { ...normalizeGrievanceDates(grievance), actions };
+  // GAP-CITIZEN-GRIEVANCES-NEW-02: surface the filing attribution + a MASKED
+  // view of the complainant contact (DPDP — never return the raw value).
+  const complainantContactMasked = (grievance.complainantContact ?? []).map((c) => ({
+    kind: c.kind, masked: maskContact(c.kind, c.value),
+  }));
+  // Strip the raw contact column from the read model (DPDP — only the masked
+  // projection is returned to any caller).
+  const { complainantContact: _raw, ...safe } = normalizeGrievanceDates(grievance);
+  void _raw;
+  return {
+    ...safe, actions,
+    filedBy: grievance.filedByActor ?? null,
+    filedOnBehalf: Boolean(grievance.filedOnBehalf),
+    complainantContactMasked,
+  };
+}
+
+/** Mask a contact value for display: keep only the last 4 (phone) / domain (email). */
+function maskContact(kind: string, value: string): string {
+  if (kind === "email") {
+    const [local, domain] = value.split("@");
+    if (!domain) return "•••";
+    const head = local && local.length > 0 ? local[0] : "";
+    return `${head}•••@${domain}`;
+  }
+  const digits = value.replace(/\D/gu, "");
+  return digits.length >= 4 ? `••••••${digits.slice(-4)}` : "••••";
 }
 
 export async function listGrievances(tenantId: string, citizenId: string): Promise<GrievanceRow[]> {

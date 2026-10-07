@@ -2,7 +2,9 @@
 
 import { useId, useRef, useState } from "react";
 import { Button, Card } from "@/app/_components/ds";
+import { StatusPill } from "@/app/_components/ds/StatusPill";
 import { browserJson } from "@/lib/api/browserClient";
+import { useBbpsRequestStatus } from "./useBbpsRequestStatus";
 
 type AcceptedResponse = { data?: { messageId?: string } };
 
@@ -12,6 +14,8 @@ export function FetchBillForm() {
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"good" | "bad">("good");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [messageId, setMessageId] = useState<string | null>(null);
+  const { status, reset: resetStatus } = useBbpsRequestStatus(messageId);
 
   const inputId = useId();
   const summaryId = useId();
@@ -35,14 +39,18 @@ export function FetchBillForm() {
 
     setBusy(true);
     try {
+      resetStatus();
+      setMessageId(null);
       const res = await browserJson<AcceptedResponse>("v1/revenue/bbps/fetch-bill", {
         method: "POST",
         body: JSON.stringify({ assesseeIdentifier: trimmed }),
       });
       setTone("good");
+      const id = res.data?.messageId ?? null;
+      setMessageId(id);
       setMessage(
-        res.data?.messageId
-          ? `Bill fetch request submitted (message ID ${res.data.messageId}). It is processed asynchronously — this screen does not show the fetched bill.`
+        id
+          ? "Bill fetch request submitted — tracking its outcome below."
           : "Bill fetch request submitted.",
       );
     } catch (err) {
@@ -97,6 +105,22 @@ export function FetchBillForm() {
             >
               {message}
             </p>
+          )}
+
+          {messageId && status && (
+            <div aria-live="polite" style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontSize: 13.5 }}>
+              <span style={{ fontWeight: 600 }}>Fetch status:</span>
+              <StatusPill status={status.status} />
+              {status.status === "pending" && <span style={{ color: "var(--ink2)" }}>Fetching the bill…</span>}
+              {status.status === "success" && (
+                <span style={{ color: "var(--ink2)" }}>Bill fetched — see the assessee&apos;s Bills &amp; Demands.</span>
+              )}
+              {status.status === "failed" && (
+                <span role="alert" style={{ color: "var(--bad, #c0392b)" }}>
+                  {status.failureReason || "The bill could not be fetched."} You can try again.
+                </span>
+              )}
+            </div>
           )}
         </div>
       </Card>

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Card, StatusPill, ProgressBar } from "../../_components/ds";
 import { SampleDataControls } from "./SampleDataControls";
+import { SkipStepButton, UnskipStepButton } from "./SkipStepButton";
 import { trackActivation, type FunnelStep } from "@/lib/activation";
 import type { WizardStep, StepStatus, WizardStepKey } from "@/lib/setupSteps";
 import { scrollBehavior } from "@/lib/motion";
@@ -107,6 +108,10 @@ export function SetupWizard({
   function pillFor(status: StepStatus) {
     if (status === "complete") return <StatusPill status="completed" label="Done" />;
     if (status === "unknown") return <StatusPill status="pending" label="Couldn't check" />;
+    // GAP-SETUP-HOME-02: an explicit, persisted deferral reads "Skipped" — not
+    // "To do" (which would imply it still counts against progress) and not
+    // "Done" (it was never completed).
+    if (status === "skipped") return <StatusPill status="pending" label="Skipped" />;
     return <StatusPill status="draft" label="To do" />;
   }
 
@@ -144,7 +149,7 @@ export function SetupWizard({
 
       <div className="grid g-2" style={{ marginTop: 16 }}>
         {steps.map((step, idx) => {
-          const isResume = idx === resumeIndex && step.status !== "complete";
+          const isResume = idx === resumeIndex && step.status !== "complete" && step.status !== "skipped";
           // GAP-SETUP-HOME-04: no target page reads a `return` param, so the
           // old ?return=/setup was a misleading no-op — link straight to the
           // step's screen instead.
@@ -175,17 +180,21 @@ export function SetupWizard({
 
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
                     <Link href={href} className="btn primary">
-                      {step.status === "complete" ? "Review" : step.cta}
+                      {step.status === "complete" ? "Review" : step.status === "skipped" ? "Open anyway" : step.cta}
                     </Link>
-                    {!step.required && step.status !== "complete" && (
-                      // GAP-SETUP-HOME-02: this link only navigates to the
-                      // dashboard; it does NOT persist a deferral, so the label
-                      // must say exactly that rather than implying "do it later"
-                      // was saved. (No per-tenant skip store exists yet — see
-                      // HUMAN REVIEW.)
-                      <Link href="/dashboard" className="btn ghost" aria-label={`Skip "${step.title}" and go to the dashboard`}>
-                        Skip to dashboard
-                      </Link>
+                    {/* GAP-SETUP-HOME-02: an optional, not-yet-complete step can
+                        be DEFERRED. "Skip for now" persists the deferral to the
+                        tenant settings store BEFORE navigating (SkipStepButton),
+                        so the step is excluded from resume + the denominator on
+                        the next visit — unlike the old link, which only
+                        navigated and saved nothing. */}
+                    {!step.required && step.status !== "complete" && step.status !== "skipped" && (
+                      <SkipStepButton stepKey={step.key} stepTitle={step.title} />
+                    )}
+                    {/* A skipped step stays openable (above) and the deferral is
+                        reversible. */}
+                    {step.status === "skipped" && (
+                      <UnskipStepButton stepKey={step.key} stepTitle={step.title} />
                     )}
                     {step.status === "unknown" && (
                       <span style={{ fontSize: 12.5, color: "var(--warn)" }}>

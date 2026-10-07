@@ -1,7 +1,9 @@
 "use client";
 
+import type React from "react";
 import { DataTable, StatusPill } from "@/app/_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
+import { EscalationActions } from "./EscalationActions";
 
 export type EscalationRow = {
   escalationId: string;
@@ -58,7 +60,7 @@ const COLUMNS: {
   { key: "escalationId", label: "Ref" },
 ];
 
-export function EscalationsTable({ rows, source = "api" }: { rows: EscalationRow[]; source?: "api" | "error" }) {
+export function EscalationsTable({ rows, source = "api", canAct = false }: { rows: EscalationRow[]; source?: "api" | "error"; canAct?: boolean }) {
   const { data, fromCache, offline, cachedAt } = useSeededResource<EscalationRow[]>(
     "projects.escalations",
     rows,
@@ -71,11 +73,38 @@ export function EscalationsTable({ rows, source = "api" }: { rows: EscalationRow
       ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
       : null;
 
+  // GAP-PROJECTS-ESCALATIONS-02: the Actions column (Acknowledge / Reassign /
+  // Clear) only exists for a user whose role the server would accept, and only
+  // while the escalation is not already cleared and carries a projectId (the
+  // action route's path segment). Non-authorised users see no controls
+  // (defence-in-depth; the server still 403s).
+  const columns = canAct
+    ? [
+        ...COLUMNS,
+        {
+          key: "escalationId" as keyof EscalationRow & string,
+          label: "Actions",
+          render: (r: EscalationRow) => {
+            if (!r.projectId) return null;
+            return (
+              <EscalationActions
+                projectId={r.projectId}
+                escalationId={r.escalationId}
+                status={r.status}
+                severity={r.severity}
+                issue={r.issue}
+              />
+            );
+          },
+        },
+      ]
+    : COLUMNS;
+
   return (
     <>
       {cacheNote && <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>{cacheNote}</p>}
       <DataTable<EscalationRow>
-        columns={COLUMNS}
+        columns={columns}
         rows={data}
         rowLinkPrefix="/projects/"
         rowLinkKey="projectId"

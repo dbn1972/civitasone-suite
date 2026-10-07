@@ -7,8 +7,14 @@ vi.mock("@/app/_data/apiClient", async () => {
   return { ...actual, fetchJson: (...args: unknown[]) => fetchJsonMock(...args) };
 });
 vi.mock("./EscalationsTable", () => ({
-  EscalationsTable: ({ rows }: { rows: unknown[] }) => <div>esc-table:{rows.length}</div>,
+  EscalationsTable: ({ rows, canAct }: { rows: unknown[]; canAct?: boolean }) => <div>esc-table:{rows.length}:{canAct ? "act" : "readonly"}</div>,
 }));
+// getSessionRoles reads cookies() (next/headers); stub the role gate so the
+// server page renders under vitest without a request context.
+vi.mock("@/lib/auth/roleGuard", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/auth/roleGuard")>("@/lib/auth/roleGuard");
+  return { ...actual, getSessionRoles: () => ["project_manager"] };
+});
 
 import EscalationsPage from "./page";
 

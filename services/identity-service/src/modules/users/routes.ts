@@ -5,6 +5,7 @@ import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createUserBody, updateUserBody, statusBody, userIdParam, tenantIdQuery, userSearchQuery, reasonBody } from "./validators.js";
+import { directoryQuery } from "./directory-validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as sessionCommands from "../sessions/commands.js";
@@ -54,6 +55,24 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(403, "FORBIDDEN", "cross-tenant access denied");
     }
     return reply.send(await queries.searchUsers(q.tenantId, { q: q.q, status: q.status, limit: q.limit, offset: q.offset }));
+  });
+
+  // Shared user directory (GAP-WORKFLOW-INSTANCES-DETAIL-01 /
+  // GAP-PROJECTS-DETAIL-MEMBERS-01). Unlike GET /identity/users (admin-gated,
+  // exposes email + status), this is available to ANY authenticated member of
+  // the caller's OWN tenant and returns ONLY {id, displayName} — the minimum a
+  // UI needs to show a human name instead of a raw UUID. Strictly tenant-scoped
+  // (RLS GUC from the token + explicit tenantId filter): there is NO tenantId
+  // query param, so a caller can only ever read names within their own tenant.
+  // Static path, registered before the parametric /identity/users/:id so it is
+  // never shadowed by it.
+  app.get("/identity/users/directory", async (req, reply) => {
+    const ctx = resolveContext(req); // 401 for an unauthenticated caller; no role gate.
+    const q = directoryQuery.parse(req.query);
+    const rows = q.ids
+      ? await queries.directoryByIds(ctx.tenantId, q.ids)
+      : await queries.directoryByQuery(ctx.tenantId, q.q as string, q.limit);
+    return reply.send({ data: rows });
   });
 
   app.patch("/identity/users/:id", async (req, reply) => {

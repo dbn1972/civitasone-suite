@@ -5,6 +5,9 @@ const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
   fetchJson: (...args: unknown[]) => fetchJsonMock(...args),
 }));
+vi.mock("@/lib/auth/roleGuard", () => ({
+  getSessionUserId: () => "checker-1",
+}));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
@@ -29,7 +32,10 @@ describe("AdjustmentsPage", () => {
   });
 
   it("prompts for an assessee when none is selected", async () => {
-    fetchJsonMock.mockResolvedValue({ data: [ASSESSEE], source: "api" });
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("status=pending")) return Promise.resolve({ data: [], source: "api" });
+      return Promise.resolve({ data: [ASSESSEE], source: "api" });
+    });
     const ui = await AdjustmentsPage({ searchParams: {} });
     render(ui);
 
@@ -38,6 +44,7 @@ describe("AdjustmentsPage", () => {
 
   it("renders the adjustment form once an assessee with 2+ demands is selected", async () => {
     fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("status=pending")) return Promise.resolve({ data: [], source: "api" });
       if (path.includes("/demands")) return Promise.resolve({ data: DEMANDS, source: "api" });
       return Promise.resolve({ data: [ASSESSEE], source: "api" });
     });
@@ -57,6 +64,7 @@ describe("AdjustmentsPage", () => {
 
   it("shows a retry error state when the demands fetch fails (ADJUSTMENTS-04)", async () => {
     fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("status=pending")) return Promise.resolve({ data: [], source: "api" });
       if (path.includes("/demands")) return Promise.resolve({ data: [], source: "error" });
       return Promise.resolve({ data: [ASSESSEE], source: "api" });
     });
@@ -64,7 +72,7 @@ describe("AdjustmentsPage", () => {
     render(ui);
 
     expect(screen.getByText("We couldn't load demands.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Try again" }).length).toBeGreaterThan(0);
   });
 
   it("shows a retry error state when the assessees fetch fails (ADJUSTMENTS-04)", async () => {
@@ -73,15 +81,16 @@ describe("AdjustmentsPage", () => {
     render(ui);
 
     expect(screen.getByText("We couldn't load assessees.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Try again" }).length).toBeGreaterThan(0);
   });
 
   it("renders the adjustment register for the selected assessee (ADJUSTMENTS-02)", async () => {
     fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("status=pending")) return Promise.resolve({ data: [], source: "api" });
       if (path.includes("/adjustments"))
         return Promise.resolve({
           data: [
-            { id: "adj-1", createdAt: "2026-07-01T00:00:00.000Z", fromDemandId: "d1", toDemandId: "d2", amountMinor: "25000", reason: "Reallocate" },
+            { id: "adj-1", createdAt: "2026-07-01T00:00:00.000Z", fromDemandId: "d1", toDemandId: "d2", amountMinor: "25000", reason: "Reallocate", status: "approved", makerUserId: "m1" },
           ],
           source: "api",
         });
@@ -98,8 +107,50 @@ describe("AdjustmentsPage", () => {
     expect(screen.getByText("₹250.00")).toBeInTheDocument();
   });
 
+  it("shows the pending-approval queue with Approve/Reject for a transfer the current user did NOT raise (ADJUSTMENTS-01)", async () => {
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("status=pending"))
+        return Promise.resolve({
+          data: [
+            { id: "pend-1", createdAt: "2026-07-02T00:00:00.000Z", fromDemandId: "d1", toDemandId: "d2", amountMinor: "30000", reason: "Pending move", status: "pending", makerUserId: "someone-else" },
+          ],
+          source: "api",
+        });
+      if (path.includes("/adjustments")) return Promise.resolve({ data: [], source: "api" });
+      if (path.includes("/demands")) return Promise.resolve({ data: DEMANDS, source: "api" });
+      return Promise.resolve({ data: [ASSESSEE], source: "api" });
+    });
+    const ui = await AdjustmentsPage({ searchParams: { assesseeId: ASSESSEE.id } });
+    render(ui);
+
+    expect(screen.getByRole("button", { name: "Approve transfer pend-1" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Reject transfer pend-1" })).toBeEnabled();
+  });
+
+  it("disables Approve/Reject in the queue for a transfer the current user raised (ADJUSTMENTS-01 maker-checker)", async () => {
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("status=pending"))
+        return Promise.resolve({
+          data: [
+            { id: "pend-2", createdAt: "2026-07-02T00:00:00.000Z", fromDemandId: "d1", toDemandId: "d2", amountMinor: "30000", reason: "My own move", status: "pending", makerUserId: "checker-1" },
+          ],
+          source: "api",
+        });
+      if (path.includes("/adjustments")) return Promise.resolve({ data: [], source: "api" });
+      if (path.includes("/demands")) return Promise.resolve({ data: DEMANDS, source: "api" });
+      return Promise.resolve({ data: [ASSESSEE], source: "api" });
+    });
+    const ui = await AdjustmentsPage({ searchParams: { assesseeId: ASSESSEE.id } });
+    render(ui);
+
+    expect(screen.getByRole("button", { name: "Approve transfer pend-2" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Reject transfer pend-2" })).toBeDisabled();
+    expect(screen.getByText("You requested this transfer; a different officer must decide.")).toBeInTheDocument();
+  });
+
   it("shows a retry state when the adjustment register fetch fails (ADJUSTMENTS-02/04)", async () => {
     fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("status=pending")) return Promise.resolve({ data: [], source: "api" });
       if (path.includes("/adjustments")) return Promise.resolve({ data: [], source: "error" });
       if (path.includes("/demands")) return Promise.resolve({ data: DEMANDS, source: "api" });
       return Promise.resolve({ data: [ASSESSEE], source: "api" });

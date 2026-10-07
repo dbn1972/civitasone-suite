@@ -12,11 +12,17 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
+import { signDetachedPkcs7, generateTestDscKeypair } from "@civitasone/render";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { subscribeConsumers } from "../src/worker.js";
 import { queue } from "../src/shared/infra.js";
 import { sqlClient } from "../src/shared/db.js";
+import { canonicalOrderContent } from "../src/modules/order-issuance/dsc-verify.js";
+
+// GAP-COURT-ORDERS-02: a legitimate checker approval needs a REAL DSC signature
+// over the order's canonical content (server-side crypto verification).
+const DSC_KP = generateTestDscKeypair({ cn: "Lifecycle Checker DSC" });
 
 const RUN = process.env.COURT_E2E === "1";
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -49,6 +55,23 @@ async function GET(url: string, actor = MAKER): Promise<{ code: number; json: an
 async function waitFor(pred: () => Promise<boolean>, tries = 60, gap = 25): Promise<boolean> {
   for (let i = 0; i < tries; i++) { if (await pred()) return true; await new Promise((r) => setTimeout(r, gap)); }
   return false;
+}
+
+// REAL detached DSC signature over an order's server-canonical content.
+async function signOrderDsc(id: string): Promise<string> {
+  const row = await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    const rows = await sql`select id, case_id, order_type, order_text, order_date from court.orders where id = ${id} and tenant_id = ${TENANT}`;
+    return rows[0] as { id: string; case_id: string; order_type: string | null; order_text: string | null; order_date: string | Date | null };
+  });
+  const content = canonicalOrderContent({
+    id: row.id,
+    caseId: row.case_id,
+    orderType: row.order_type,
+    orderText: row.order_text,
+    orderDate: row.order_date == null ? null : typeof row.order_date === "string" ? row.order_date : new Date(row.order_date).toISOString().slice(0, 10),
+  });
+  return signDetachedPkcs7({ content, privateKeyPem: DSC_KP.privateKeyPem, certificatePem: DSC_KP.certificatePem });
 }
 
 // FLAKY-SKIP: Requires COURT_E2E=1 plus a live court-service stack (real Postgres + HTTP); unset in standard CI so this e2e suite never executes there. (expires: 2026-12-13)
@@ -118,7 +141,8 @@ describe.skipIf(!RUN)("court-service FULL-LIFECYCLE walkthrough (e2e, real stack
 
   it("7. a DIFFERENT officer approves + issues (maker-checker satisfied) → issued", async () => {
     const cur = (await GET(`/v1/court/orders/${orderId}`)).json;
-    expect(await PATCH(`/v1/court/orders/${orderId}/approve-issue`, CHECKER, { dscSignature: "DSC:checker-signed", issuedDate: "2026-08-16", expectedVersion: cur.version })).toBe(202);
+    const dsc = await signOrderDsc(orderId);
+    expect(await PATCH(`/v1/court/orders/${orderId}/approve-issue`, CHECKER, { dscSignature: dsc, issuedDate: "2026-08-16", expectedVersion: cur.version })).toBe(202);
     expect(await waitFor(async () => (await GET(`/v1/court/orders/${orderId}`)).json?.status === "issued")).toBe(true);
   });
 
