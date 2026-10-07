@@ -1,14 +1,13 @@
+import { SkeletonBar, SkeletonCard } from "../../../../_components/ds";
+
 export default function InternalTicketDetailLoading() {
   return (
-    <div className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <div className="mx-auto max-w-7xl animate-pulse space-y-5">
-        <div className="h-4 w-40 rounded bg-slate-200" />
-        <div className="h-9 w-52 rounded bg-slate-200" />
-        <div className="grid grid-cols-2 gap-4">
-          <div className="h-72 rounded-xl bg-slate-200" />
-          <div className="h-72 rounded-xl bg-slate-200" />
-        </div>
+    <div aria-busy="true" aria-label="Loading ticket details…" style={{ padding: "4px 0" }}>
+      <div style={{ marginBottom: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+        <SkeletonBar w={220} h={28} />
+        <SkeletonBar w={200} h={14} />
       </div>
+      <SkeletonCard />
     </div>
   );
 }

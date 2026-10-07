@@ -102,3 +102,66 @@ export function narrateWorkflow(lanes: WorkflowLane[]): string {
   });
   return `An application will be ${parts.join(", then ")}.`;
 }
+
+/**
+ * GAP-DESIGNER-DETAIL-B4-01 & B4-02: validate the guided approval chain for
+ * design-time warnings. These are WARNINGS by default (not hard blocks) unless
+ * product explicitly says otherwise.
+ */
+export interface ChainWarning {
+  laneId: string;
+  kind: "empty_designation" | "duplicate_designation" | "missing_escalation" | "zero_sla";
+  message: string;
+}
+
+export function validateChain(lanes: WorkflowLane[]): ChainWarning[] {
+  const warnings: ChainWarning[] = [];
+  const enabled = lanes.filter((l) => l.enabled);
+  const designationSeen = new Map<string, string>(); // designationId -> first lane name
+
+  for (const lane of enabled) {
+    // skip terminal lanes that don't need designation
+    if (lane.key === "submitted" || lane.key === "issued") continue;
+
+    // B4-01: empty designation on an enabled action lane
+    if (!lane.designationId) {
+      warnings.push({
+        laneId: lane.id,
+        kind: "empty_designation",
+        message: `${lane.name}: no officer designation assigned.`,
+      });
+    } else {
+      // B4-01: same designation in two different enabled action lanes
+      const prevLane = designationSeen.get(lane.designationId);
+      if (prevLane) {
+        warnings.push({
+          laneId: lane.id,
+          kind: "duplicate_designation",
+          message: `${lane.name} and ${prevLane} use the same designation — the same person may inspect and decide.`,
+        });
+      } else {
+        designationSeen.set(lane.designationId, lane.name);
+      }
+    }
+
+    // B4-02: SLA set but no escalation target
+    if (lane.slaDays > 0 && !lane.escalationDesignationId) {
+      warnings.push({
+        laneId: lane.id,
+        kind: "missing_escalation",
+        message: `${lane.name}: SLA is ${lane.slaDays} day(s) but no escalation designation is set.`,
+      });
+    }
+
+    // B4-02: enabled lane with 0 SLA (may be intentional but worth flagging)
+    if (lane.slaDays <= 0 && lane.key !== "payment") {
+      warnings.push({
+        laneId: lane.id,
+        kind: "zero_sla",
+        message: `${lane.name}: SLA is 0 — no time limit for this step.`,
+      });
+    }
+  }
+
+  return warnings;
+}

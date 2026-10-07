@@ -33,7 +33,50 @@ export function FileAttachments({ fileId, attachments }: Props) {
   const [pending, setPending] = useState<PendingUpload | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState("");
   const formError = useFormError("attachment");
+
+  // GAP-ESTAB-FILES-DETAIL-02: open an attachment. The estab endpoint enforces
+  // classification access + audits the download, then returns the storage key;
+  // we exchange it for a short-lived presigned GET at the shared uploads
+  // endpoint and open that. A 403/404 shows an honest message, never a dead
+  // link.
+  async function openAttachment(attId: string) {
+    setDownloadingId(attId);
+    setDownloadError("");
+    try {
+      const res = await fetch(`/api/proxy/v1/estab/files/${fileId}/attachments/${attId}/download`);
+      if (!res.ok) {
+        setDownloadError(
+          res.status === 403
+            ? "You are not cleared to open this attachment."
+            : "This attachment is unavailable.",
+        );
+        return;
+      }
+      const { key } = (await res.json()) as { key?: string };
+      if (!key) {
+        setDownloadError("This attachment is unavailable.");
+        return;
+      }
+      const urlRes = await fetch(`/api/proxy/v1/admin/uploads/${encodeURIComponent(key)}`);
+      if (!urlRes.ok) {
+        setDownloadError("This attachment is unavailable.");
+        return;
+      }
+      const { downloadUrl } = (await urlRes.json()) as { downloadUrl?: string };
+      if (!downloadUrl) {
+        setDownloadError("This attachment is unavailable.");
+        return;
+      }
+      window.open(downloadUrl, "_blank", "noopener,noreferrer");
+    } catch {
+      setDownloadError("This attachment is unavailable.");
+    } finally {
+      setDownloadingId(null);
+    }
+  }
 
   async function upload(e: React.FormEvent) {
     e.preventDefault();
@@ -79,12 +122,28 @@ export function FileAttachments({ fileId, attachments }: Props) {
           <ul style={{ margin: "0 0 12px", paddingLeft: 18, fontSize: 13 }}>
             {attachments.map((a) => (
               <li key={a.id}>
-                {a.fileName}
-                <span style={{ color: "var(--mut)", marginLeft: 8 }}>{a.uploadedAt.slice(0, 10)}</span>
+                <button
+                  type="button"
+                  className="btn-link"
+                  onClick={() => void openAttachment(a.id)}
+                  disabled={downloadingId === a.id}
+                  style={{
+                    background: "none", border: "none", padding: 0, cursor: "pointer",
+                    color: "var(--brand, #2563eb)", textDecoration: "underline", font: "inherit",
+                  }}
+                >
+                  {downloadingId === a.id ? "Opening…" : a.fileName}
+                </button>
+                <span style={{ color: "var(--mut)", marginInlineStart: 8 }}>
+                  {Math.max(1, Math.ceil((a.size || 0) / 1024))} KB · {a.uploadedAt.slice(0, 10)}
+                </span>
               </li>
             ))}
           </ul>
         )}
+        {downloadError ? (
+          <p role="alert" style={{ fontSize: 13, color: "var(--bad)", margin: "0 0 12px" }}>{downloadError}</p>
+        ) : null}
         <form onSubmit={upload} style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
           <FileUpload
             category="attachment"

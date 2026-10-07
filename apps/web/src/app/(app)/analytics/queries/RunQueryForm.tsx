@@ -18,6 +18,7 @@
  */
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
 
 // ─── Catalog types ────────────────────────────────────────────────────────────
@@ -56,6 +57,7 @@ function newFilterRow(operators: string[], filters: FilterDef[]): FilterRow {
 
 export function RunQueryForm() {
   const formId = useId();
+  const router = useRouter();
   const catalogFormError = useFormError("analytics catalog");
   const queryFormError = useFormError("query");
 
@@ -68,6 +70,9 @@ export function RunQueryForm() {
   const [metric, setMetric] = useState("");
   const [dimensions, setDimensions] = useState<string[]>([]);
   const [filterRows, setFilterRows] = useState<FilterRow[]>([]);
+  // GAP-ANALYTICS-QUERIES-06: ids of filter rows flagged as missing a value on
+  // the last submit, so each offending row shows a field-level error.
+  const [filterErrorIds, setFilterErrorIds] = useState<string[]>([]);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [limit, setLimit] = useState(100);
@@ -130,6 +135,7 @@ export function RunQueryForm() {
 
   const removeFilter = useCallback((id: string) => {
     setFilterRows((prev) => prev.filter((r) => r.id !== id));
+    setFilterErrorIds((ids) => ids.filter((x) => x !== id));
   }, []);
 
   const updateFilter = useCallback(
@@ -169,6 +175,22 @@ export function RunQueryForm() {
         return;
       }
 
+      // GAP-ANALYTICS-QUERIES-06: a filter row with a chosen field but an empty
+      // value used to be silently dropped on submit, so the user got results
+      // that quietly ignored a filter they thought they'd set. Flag it instead
+      // of dropping it.
+      const incompleteFilters = filterRows.filter((r) => r.field && r.value.trim() === "");
+      if (incompleteFilters.length > 0) {
+        setFilterErrorIds(incompleteFilters.map((r) => r.id));
+        setSubmitError(
+          incompleteFilters.length === 1
+            ? "One filter has no value. Enter a value or remove the filter."
+            : `${incompleteFilters.length} filters have no value. Enter a value or remove each one.`,
+        );
+        return;
+      }
+      setFilterErrorIds([]);
+
       const body = {
         queryName: trimmedName,
         spec: {
@@ -199,6 +221,10 @@ export function RunQueryForm() {
 
         setSuccessMsg("Query queued — results appear in Query Results once processed.");
         resetForm();
+        // GAP-ANALYTICS-QUERIES-03: re-run the server component's data fetch so
+        // the newly-queued run shows up in Query Results without a manual
+        // reload. QueryResultsView then polls while it is still pending.
+        router.refresh();
       } catch (caught) {
         setSubmitError(queryFormError.fromException("save", caught).message);
       } finally {
@@ -206,7 +232,7 @@ export function RunQueryForm() {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- queryFormError.fromResponse/fromException/clear are stable (useCallback'd on a fixed area string in useFormError); the wrapping object is recreated every render but isn't read here.
-    [queryName, metric, dimensions, filterRows, dateFrom, dateTo, limit, resetForm],
+    [queryName, metric, dimensions, filterRows, dateFrom, dateTo, limit, resetForm, router],
   );
 
   // ── Render: catalog loading / error states ─────────────────────────────────
@@ -379,7 +405,13 @@ export function RunQueryForm() {
                 <select
                   id={`${formId}-filter-field-${row.id}`}
                   value={row.field}
-                  onChange={(e) => updateFilter(row.id, { field: e.target.value })}
+                  onChange={(e) => {
+                    // GAP-06: changing the field resets the value (a number is
+                    // meaningless for a newly-chosen date field, etc.) and
+                    // clears any stale "missing value" error on this row.
+                    updateFilter(row.id, { field: e.target.value, value: "" });
+                    setFilterErrorIds((ids) => ids.filter((x) => x !== row.id));
+                  }}
                   style={selectStyle}
                 >
                   {catalog.filters.map((f) => (
@@ -414,24 +446,52 @@ export function RunQueryForm() {
                 <label htmlFor={`${formId}-filter-val-${row.id}`} style={smallLabelStyle}>
                   Value
                 </label>
-                <input
-                  id={`${formId}-filter-val-${row.id}`}
-                  type="text"
-                  value={row.value}
-                  onChange={(e) => updateFilter(row.id, { value: e.target.value })}
-                  placeholder="e.g. Finance"
-                  style={inputStyle}
-                />
+                {(() => {
+                  // GAP-06: the value input matches the selected field's
+                  // catalog type (number → numeric, date → date picker, else
+                  // text) instead of always being free text.
+                  const fieldType = catalog.filters.find((f) => f.key === row.field)?.type;
+                  const inputType = fieldType === "number" ? "number" : fieldType === "date" ? "date" : "text";
+                  const hasError = filterErrorIds.includes(row.id);
+                  return (
+                    <>
+                      <input
+                        id={`${formId}-filter-val-${row.id}`}
+                        type={inputType}
+                        value={row.value}
+                        onChange={(e) => {
+                          updateFilter(row.id, { value: e.target.value });
+                          if (e.target.value.trim() !== "") {
+                            setFilterErrorIds((ids) => ids.filter((x) => x !== row.id));
+                          }
+                        }}
+                        placeholder={inputType === "text" ? "e.g. Finance" : undefined}
+                        aria-invalid={hasError || undefined}
+                        aria-describedby={hasError ? `${formId}-filter-val-err-${row.id}` : undefined}
+                        style={hasError ? { ...inputStyle, borderColor: "#ef4444" } : inputStyle}
+                      />
+                      {hasError && (
+                        <span
+                          id={`${formId}-filter-val-err-${row.id}`}
+                          role="alert"
+                          style={{ fontSize: 12, color: "#b91c1c" }}
+                        >
+                          Enter a value or remove this filter.
+                        </span>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
 
-              {/* Clear */}
+              {/* Remove */}
               <button
                 type="button"
                 onClick={() => removeFilter(row.id)}
                 aria-label={`Remove filter ${idx + 1}`}
                 style={clearBtnStyle}
               >
-                Clear
+                Remove
               </button>
             </div>
           ))}

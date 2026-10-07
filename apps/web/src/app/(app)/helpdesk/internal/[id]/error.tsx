@@ -9,7 +9,7 @@ export default function ErrorBoundary({ error, reset }: { error: Error & { diges
       reset={reset}
       backHref="/helpdesk/internal"
       backLabel="Back to Helpdesk"
-      area="Helpdesk [Id]"
+      area="internal ticket"
     />
   );
 }

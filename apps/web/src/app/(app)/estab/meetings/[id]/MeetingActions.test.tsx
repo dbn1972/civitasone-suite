@@ -9,9 +9,10 @@ describe("MeetingActions (fix 3)", () => {
     expect(btn).toBeDisabled();
   });
 
-  it("keeps Agenda as a working link with the tab query param", () => {
+  it("GAP-ESTAB-MEETINGS-DETAIL-05: no header Agenda link (it duplicated the Agenda tab)", () => {
     render(<MeetingActions meetingId="m1" />);
-    const link = screen.getByRole("link", { name: "Agenda" });
-    expect(link).toHaveAttribute("href", "/estab/meetings/m1?tab=agenda");
+    // The header Agenda link was removed; the Agenda tab below is the single
+    // route to the agenda now.
+    expect(screen.queryByRole("link", { name: "Agenda" })).not.toBeInTheDocument();
   });
 });

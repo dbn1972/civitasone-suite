@@ -2,13 +2,16 @@ import { PageHeader, StatCard } from "../../../_components/ds";
 import { getLegalHearings } from "../../../_data/loaders";
 import { HearingsTable } from "./HearingsTable";
 import { HearingsActions } from "./HearingsActions";
+import { todayIST, addDaysIST } from "@/lib/formatters";
 
 export default async function LegalHearingsPage() {
   const { data: items, source } = await getLegalHearings();
 
-  const today = new Date().toISOString().slice(0, 10);
-  const tomorrow = new Date(Date.now() + 86400_000).toISOString().slice(0, 10);
-  const weekEnd = new Date(Date.now() + 7 * 86400_000).toISOString().slice(0, 10);
+  // GAP-LEGAL-HEARINGS-04: IST calendar date (not UTC) so the "Today"/"This
+  // week" window and the countdown are correct between 00:00-05:30 IST.
+  const today = todayIST();
+  const tomorrow = addDaysIST(today, 1);
+  const weekEnd = addDaysIST(today, 7);
 
   const thisWeek = items.filter((i) => i.date >= today && i.date <= weekEnd).length;
   const tmrw = items.filter((i) => i.date === tomorrow).length;
@@ -28,11 +31,10 @@ export default async function LegalHearingsPage() {
         <StatCard icon="✍️" iconBg="#fef3f2" label="Prep Pending" value={prepPending} />
         <StatCard icon="👨‍⚖️" iconBg="#eff6ff" label="Courts" value={counsels} />
       </div>
-      {/* UX-012: the data-source badge now lives inside HearingsTable, driven
-          by the same useSeededResource call that produces its rows — not a
-          second, independent read of `source` here that could disagree with
-          the table's own cache state (UX-002's pattern). */}
-      <HearingsTable items={items} source={source} />
+      {/* GAP-LEGAL-HEARINGS-04: pass IST today to the client component so
+          the filter/countdown match the server-rendered stats without a
+          hydration mismatch. */}
+      <HearingsTable items={items} source={source} today={today} />
     </div>
   );
 }

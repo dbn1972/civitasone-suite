@@ -72,7 +72,10 @@ export const exportViewSchema = z.object({
 export const exportsListSchema = paginatedSchema(exportViewSchema);
 
 export const catalogSchema = z.object({
-  metrics: z.array(z.object({ key: z.string(), label: z.string(), agg: z.string() })),
+  // GAP-ANALYTICS-QUERIES-04: `unit` lets the UI format money metrics (paise)
+  // as ₹ and counts as plain tallies, instead of rendering every value as a
+  // bare number with ambiguous units.
+  metrics: z.array(z.object({ key: z.string(), label: z.string(), agg: z.string(), unit: z.enum(["paise", "count"]) })),
   dimensions: z.array(z.object({ key: z.string(), label: z.string() })),
   filters: z.array(z.object({ key: z.string(), label: z.string(), type: z.string() })),
   operators: z.array(z.string()),

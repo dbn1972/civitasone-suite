@@ -3,6 +3,7 @@
  */
 
 import type { ServiceDefinitionDto } from "./designerApi";
+import { formatMoney } from "@/lib/formatters";
 
 export type DiffViewMode = "side-by-side" | "unified";
 
@@ -21,11 +22,10 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 
 export function formatPaiseInr(amountMinor: number | null | undefined): string {
   if (amountMinor == null || Number.isNaN(amountMinor)) return "—";
-  const rupees = (amountMinor / 100).toLocaleString("en-IN", {
-    minimumFractionDigits: amountMinor % 100 === 0 ? 0 : 2,
-    maximumFractionDigits: 2,
-  });
-  return `₹${rupees}`;
+  // GAP-DESIGNER-DETAIL-ENGINES-04: unified with lib/formatters.formatMoney so
+  // the same fee reads identically on B5, test, and review (always 2dp, Indian
+  // grouping, bigint-safe). Previously dropped decimals for whole rupees.
+  return formatMoney(amountMinor);
 }
 
 /** Prefer forms[0].runtimeMeta.feeFromMinor, then top-level feeFromMinor on published blobs. */
@@ -209,4 +209,21 @@ export function feeSummaryForPublish(def: ServiceDefinitionDto): string {
   if (amount != null) parts.push(`from ${formatPaiseInr(amount)}`);
   if (def.hoaCode) parts.push(`HOA ${def.hoaCode}`);
   return parts.length > 0 ? parts.join(" · ") : "No fee configured";
+}
+
+/**
+ * GAP-DESIGNER-DETAIL-REVIEW-04: a fuller publish summary the confirm dialog can
+ * list — fee, SLA, channels and whether an approval chain is configured — so the
+ * checker sees what goes live, not just the fee.
+ */
+export function publishSummary(def: ServiceDefinitionDto): string[] {
+  const lines: string[] = [feeSummaryForPublish(def)];
+  lines.push(`SLA: ${def.slaDays != null ? `${def.slaDays} day(s)` : "not set"}`);
+  if (Array.isArray(def.channels) && def.channels.length > 0) {
+    lines.push(`Channels: ${def.channels.join(", ")}`);
+  }
+  lines.push(
+    def.workflowDefinitionId ? "Approval chain: configured" : "Approval chain: none",
+  );
+  return lines;
 }

@@ -6,6 +6,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { createCaseBody, disposeCaseBody, idParam, listCasesQuery } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as repo from "./repo.js";
 
 const LEGAL_ROLES  = ["legal_officer", "legal_admin", "super_admin"];
 const READER_ROLES = [...LEGAL_ROLES, "audit_officer"];
@@ -15,6 +16,14 @@ export async function caseRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, LEGAL_ROLES);
     const body = createCaseBody.parse(req.body);
+    // GAP-LEGAL-CASES-NEW-03: reject a duplicate (tenant, caseNo) synchronously
+    // with 409 — otherwise the async create consumer would hit the
+    // UNIQUE (tenant_id, case_no) constraint only after the API returned 202,
+    // a silent background failure with no feedback to the registrar.
+    const existing = await repo.findCaseByTenantAndNo(ctx.tenantId, body.caseNo);
+    if (existing) {
+      throw new HttpError(409, "DUPLICATE_CASE_NO", "a case with this case number already exists");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createCase(ctx, body));
   });
 

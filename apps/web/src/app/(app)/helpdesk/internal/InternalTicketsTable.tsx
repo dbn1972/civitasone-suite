@@ -12,7 +12,12 @@ type TicketRow = {
   status: string;
 } & Record<string, unknown>;
 
+// GAP-HELPDESK-INTERNAL-04: include Closed in the Resolved tab; an "All" tab
+// catches every status (including unknown ones like Pending / On Hold).
 const TABS = ["All", "Open", "Resolved"] as const;
+
+const OPEN_STATUSES = new Set(["Open", "In Progress"]);
+const RESOLVED_STATUSES = new Set(["Resolved", "Closed"]);
 
 export function InternalTicketsTable({
   tickets,
@@ -23,7 +28,9 @@ export function InternalTicketsTable({
 
   const tableRows: TicketRow[] = tickets.map((t) => ({
     id: t.id,
-    ticketId: t.id.slice(0, 8).toUpperCase(),
+    // GAP-HELPDESK-INTERNAL-02 / DETAIL-05: show a short reference instead of
+    // a truncated UUID — formatted the same way on list and detail for consistency.
+    ticketId: `INT-${t.id.slice(0, 8).toUpperCase()}`,
     subject: t.subject,
     priority: t.priority,
     status: t.status,
@@ -31,9 +38,9 @@ export function InternalTicketsTable({
 
   const filtered =
     tab === "Open"
-      ? tableRows.filter((r) => r.status === "Open" || r.status === "In Progress")
+      ? tableRows.filter((r) => OPEN_STATUSES.has(r.status))
       : tab === "Resolved"
-        ? tableRows.filter((r) => r.status === "Resolved")
+        ? tableRows.filter((r) => RESOLVED_STATUSES.has(r.status))
         : tableRows;
 
   return (

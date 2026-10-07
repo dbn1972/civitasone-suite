@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getMeetingById } from "../../../../_data/loaders";
 import { PageHeader, RefreshErrorState, StatusPill } from "../../../../_components/ds";
+import { formatIndianDate } from "@/lib/formatters";
 import { ActionPointsTable, AttendeesTable } from "./MeetingDetailTables";
 import { MeetingActions } from "./MeetingActions";
 import { ArrowLeft } from "lucide-react";
@@ -116,14 +117,25 @@ export default async function MeetingDetailPage({
           <div className="card">
             <div className="card-h"><h3>Details</h3></div>
             <div className="fields">
-              <div className="fld"><div className="l">Date</div><div className="v">{meeting.scheduledDate}{meeting.scheduledTime ? ` · ${meeting.scheduledTime}` : ""}</div></div>
+              <div className="fld"><div className="l">Date</div><div className="v">{formatIndianDate(meeting.scheduledDate)}{meeting.scheduledTime ? ` · ${meeting.scheduledTime}` : ""}</div></div>
               <div className="fld"><div className="l">Venue</div><div className="v">{meeting.venue ?? "—"}</div></div>
               <div className="fld"><div className="l">Chair</div><div className="v">{meeting.chairperson ?? "—"}</div></div>
               <div className="fld"><div className="l">Attendees</div><div className="v">{meeting.attendeesCount}</div></div>
               <div className="fld"><div className="l">Agenda items</div><div className="v">{meeting.agenda.length}</div></div>
-              <div className="fld"><div className="l">MOM</div><div className="v">{meeting.minutes ? "Captured" : "Draft"}</div></div>
+              <div className="fld"><div className="l">MOM</div><div className="v">{
+                meeting.minutes ? "Captured"
+                  : meeting.status === "scheduled" ? "Not yet held"
+                    : meeting.status === "cancelled" ? "—"
+                      : "Pending"
+              }</div></div>
             </div>
           </div>
+          {meeting.minutes ? (
+            <div className="card">
+              <div className="card-h"><h3>Minutes</h3></div>
+              <div className="pad"><p style={{ whiteSpace: "pre-wrap", margin: 0 }}>{meeting.minutes}</p></div>
+            </div>
+          ) : null}
           {meeting.actionPoints.length > 0 ? (
             <div className="card">
               <div className="card-h"><h3>Action items (MOM)</h3></div>
@@ -136,11 +148,15 @@ export default async function MeetingDetailPage({
             <div className="card-h"><h3>Workflow / movement</h3></div>
             <div className="pad">
               <ul className="tl">
-                <li className="done"><div className="t">Scheduled</div><div className="d"></div></li>
-                <li className={meeting.status === "scheduled" ? "cur" : "done"}><div className="t">Agenda circulated</div><div className="d"></div></li>
+                <li className="done"><div className="t">Scheduled</div><div className="d">{formatIndianDate(meeting.scheduledDate)}</div></li>
+                {/* GAP-ESTAB-MEETINGS-DETAIL-02: cancelled does NOT imply agenda was circulated */}
+                <li className={meeting.status === "scheduled" || meeting.status === "cancelled" ? "todo" : "done"}><div className="t">Agenda circulated</div><div className="d"></div></li>
                 <li className={meeting.status === "in_progress" ? "cur" : meeting.status === "completed" ? "done" : "todo"}><div className="t">Meeting held</div><div className="d"></div></li>
                 <li className={meeting.status === "completed" && meeting.minutes ? "done" : "todo"}><div className="t">MOM issued</div><div className="d"></div></li>
-                <li className={meeting.actionPoints.every((a) => a.status === "completed") ? "done" : "todo"}><div className="t">Actions closed</div><div className="d"></div></li>
+                {/* GAP-ESTAB-MEETINGS-DETAIL-01: empty actionPoints.every() is
+                    vacuously true — require status===completed AND at least
+                    one action point that is all completed. */}
+                <li className={meeting.status === "completed" && meeting.actionPoints.length > 0 && meeting.actionPoints.every((a) => a.status === "completed") ? "done" : "todo"}><div className="t">Actions closed</div><div className="d"></div></li>
               </ul>
             </div>
           </div>

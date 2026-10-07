@@ -15,12 +15,15 @@
 
 import { useState } from "react";
 import { Button } from "@/app/_components/ds";
+import { parseRupeesToPaise } from "../_data/feeBuilderApi";
 
 export interface OfficeOverrideRow {
   officeId: string;
   feeFromMinor?: number;
   slaDays?: number;
   note?: string;
+  /** GAP-DESIGNER-DETAIL-B5-03: required reason when fee is 0 (waiver). */
+  feeWaiverReason?: string;
 }
 
 export function OfficeOverridesBuilder({
@@ -77,21 +80,54 @@ export function OfficeOverridesBuilder({
             <label style={field}>
               <span style={labelText}>Fee (₹)</span>
               <input
-                type="number"
-                min={0}
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={row.feeFromMinor === undefined ? "" : row.feeFromMinor / 100}
                 placeholder="Leave blank to use the published fee"
-                onChange={(e) =>
-                  update(i, {
-                    feeFromMinor:
-                      e.target.value === "" ? undefined : Math.round(Number(e.target.value) * 100),
-                  })
-                }
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  if (raw === "") {
+                    update(i, { feeFromMinor: undefined, feeWaiverReason: undefined });
+                    return;
+                  }
+                  // GAP-DESIGNER-DETAIL-B5-03: string-based paise parsing (no float math).
+                  const parsed = parseRupeesToPaise(raw);
+                  if (parsed.ok) update(i, { feeFromMinor: parsed.paise });
+                }}
+                aria-invalid={row.feeFromMinor === 0 && !(row.feeWaiverReason ?? "").trim() ? true : undefined}
                 style={input}
               />
               <span style={hint}>A free zone is legitimate — enter 0 to charge nothing here.</span>
             </label>
+
+            {/* GAP-DESIGNER-DETAIL-B5-03: a ₹0 fee is a waiver — a revenue decision. Warn and
+                require a reason so the checker sees it on the review diff. */}
+            {row.feeFromMinor === 0 ? (
+              <div
+                role="note"
+                style={{
+                  marginTop: 8,
+                  padding: "8px 10px",
+                  fontSize: 12,
+                  color: "var(--warn, #a15c00)",
+                  background: "var(--warnbg, #fffbe6)",
+                  border: "1px solid var(--line)",
+                  borderRadius: 6,
+                }}
+              >
+                This office will charge nothing. The checker will see this waiver at review.
+                <label style={{ ...field, marginTop: 8 }}>
+                  <span style={labelText}>Reason for waiver (required)</span>
+                  <input
+                    value={row.feeWaiverReason ?? ""}
+                    placeholder="e.g. statutory exemption for this zone"
+                    onChange={(e) => update(i, { feeWaiverReason: e.target.value })}
+                    aria-label="Fee waiver reason"
+                    style={input}
+                  />
+                </label>
+              </div>
+            ) : null}
 
             <label style={field}>
               <span style={labelText}>Service promise (days)</span>

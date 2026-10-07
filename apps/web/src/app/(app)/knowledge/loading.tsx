@@ -1,15 +1,22 @@
+/**
+ * GAP-KNOWLEDGE-HOME-05: replaced hard-coded slate colours with CSS variable-
+ * backed classes and removed min-h-screen to prevent double scrolling inside
+ * the app shell. The Skeleton* DS helpers exist but a matching PageSkeleton is
+ * not yet shared across modules, so this is a local fix using the panel/line
+ * tokens via inline styles.
+ */
 export default function KnowledgeLoading() {
   return (
-    <div className="min-h-screen bg-slate-50 p-6 md:p-8">
+    <div style={{ background: "var(--bg, #f8fafc)", padding: "24px 32px" }}>
       <div className="mx-auto max-w-7xl animate-pulse space-y-5">
-        <div className="h-4 w-44 rounded bg-slate-200" />
-        <div className="h-9 w-80 rounded bg-slate-200" />
+        <div className="h-4 w-44 rounded" style={{ background: "var(--line, #e2e8f0)" }} />
+        <div className="h-9 w-80 rounded" style={{ background: "var(--line, #e2e8f0)" }} />
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-24 rounded-xl bg-slate-200" />
+            <div key={i} className="h-24 rounded-xl" style={{ background: "var(--line, #e2e8f0)" }} />
           ))}
         </div>
-        <div className="h-72 rounded-xl bg-slate-200" />
+        <div className="h-72 rounded-xl" style={{ background: "var(--line, #e2e8f0)" }} />
       </div>
     </div>
   );

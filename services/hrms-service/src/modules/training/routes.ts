@@ -158,7 +158,16 @@ export async function trainingRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, TrainingProgramSummaryListSchema, await queries.listTrainingPrograms(ctx.tenantId, q.limit));
+    // GAP-LEARNING-CALENDAR-06: optional date-range filter so the calendar can
+    // request a bounded window (e.g. the current FY) rather than always
+    // pulling the full tenant list. Parsed with a local schema to avoid
+    // changing the shared @civitasone/schemas listQuerySchema.
+    const win = z.object({
+      from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      to:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    }).parse(req.query);
+    const window = (win.from || win.to) ? win : undefined;
+    sendValidated(reply, TrainingProgramSummaryListSchema, await queries.listTrainingPrograms(ctx.tenantId, q.limit, window));
   });
 
   app.post("/v1/hrms/trainings", async (req, reply) => {

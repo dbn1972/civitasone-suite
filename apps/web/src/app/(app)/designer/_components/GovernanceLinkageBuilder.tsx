@@ -2,17 +2,10 @@
 
 /**
  * FN-27 (appeal path), FN-28 (RTI publication) and FN-18/FN-32 (locales) — B1.
- *
- * These are service-level governance metadata, which is why they sit in
- * Catalogue & Identity rather than in a block of their own: the BRD fixes the
- * 8-block model, and inventing a B9 would break a core concept of the Designer.
- *
- * Both toggles reveal a REQUIRED designation when switched on, and say why. The
- * publish gate refuses an appealable service with no appellate authority, and an
- * RTI-published service with no PIO; surfacing that at the point of the toggle
- * means the designer meets the rule while authoring instead of discovering it as
- * an error code at publish.
  */
+
+import { useEffect, useState } from "react";
+import { fetchTenantPositions } from "../_data/workflowBuilderApi";
 
 export interface AppealLinkageValue {
   appealable: boolean;
@@ -46,6 +39,20 @@ export function GovernanceLinkageBuilder({
   const appealOn = appeal?.appealable ?? false;
   const rtiOn = rti?.published ?? false;
 
+  // GAP-DESIGNER-DETAIL-B1-04: use the tenant positions registry (same source as
+  // the approval chain builder) so appellate/PIO designations are picked from
+  // real positions rather than typed as free-text snake_case tokens that may
+  // match no position.
+  const [positions, setPositions] = useState<{ id: string; label: string }[]>([]);
+  const [positionsFailed, setPositionsFailed] = useState(false);
+  useEffect(() => {
+    let live = true;
+    fetchTenantPositions()
+      .then((rows) => { if (live) { setPositions(rows); setPositionsFailed(false); } })
+      .catch(() => { if (live) setPositionsFailed(true); });
+    return () => { live = false; };
+  }, []);
+
   return (
     <section style={{ display: "grid", gap: 24 }}>
       {/* ── FN-27 ── */}
@@ -66,12 +73,32 @@ export function GovernanceLinkageBuilder({
           <>
             <label style={field}>
               <span style={labelText}>Appellate authority (designation)</span>
-              <input
-                value={appeal?.appellateDesignationId ?? ""}
-                placeholder="e.g. additional_commissioner"
-                onChange={(e) => onAppealChange({ ...(appeal ?? { appealable: true }), appealable: true, appellateDesignationId: e.target.value })}
-                style={input}
-              />
+              {positionsFailed ? (
+                <p style={{ ...hint, color: "var(--bad)" }}>
+                  Could not load positions.{" "}
+                  <button type="button" onClick={() => { fetchTenantPositions().then(setPositions).catch(() => {}); }} style={{ fontSize: 12 }}>Retry</button>
+                </p>
+              ) : (
+                <select
+                  value={appeal?.appellateDesignationId ?? ""}
+                  onChange={(e) => {
+                    const opt = positions.find((p) => p.id === e.target.value);
+                    onAppealChange({
+                      ...(appeal ?? { appealable: true }),
+                      appealable: true,
+                      appellateDesignationId: e.target.value || undefined,
+                      appellateDesignationLabel: opt?.label,
+                    });
+                  }}
+                  style={input}
+                  aria-label="Appellate authority designation"
+                >
+                  <option value="">Select a designation</option>
+                  {positions.map((p) => (
+                    <option key={p.id} value={p.id}>{p.label}</option>
+                  ))}
+                </select>
+              )}
               <span style={hint}>
                 Required. A designation, not a named officer — an appeal right with nobody to
                 hear it is a dead end for the citizen, so publish is blocked without one.
@@ -130,12 +157,32 @@ export function GovernanceLinkageBuilder({
         {rtiOn ? (
           <label style={field}>
             <span style={labelText}>Public Information Officer (designation)</span>
-            <input
-              value={rti?.pioDesignationId ?? ""}
-              placeholder="e.g. deputy_commissioner"
-              onChange={(e) => onRtiChange({ ...(rti ?? { published: true }), published: true, pioDesignationId: e.target.value })}
-              style={input}
-            />
+            {positionsFailed ? (
+              <p style={{ ...hint, color: "var(--bad)" }}>
+                Could not load positions.{" "}
+                <button type="button" onClick={() => { fetchTenantPositions().then(setPositions).catch(() => {}); }} style={{ fontSize: 12 }}>Retry</button>
+              </p>
+            ) : (
+              <select
+                value={rti?.pioDesignationId ?? ""}
+                onChange={(e) => {
+                  const opt = positions.find((p) => p.id === e.target.value);
+                  onRtiChange({
+                    ...(rti ?? { published: true }),
+                    published: true,
+                    pioDesignationId: e.target.value || undefined,
+                    pioDesignationLabel: opt?.label,
+                  });
+                }}
+                style={input}
+                aria-label="Public Information Officer designation"
+              >
+                <option value="">Select a designation</option>
+                {positions.map((p) => (
+                  <option key={p.id} value={p.id}>{p.label}</option>
+                ))}
+              </select>
+            )}
             <span style={hint}>
               Required. The RTI Act expects an officer to receive requests, so publish is blocked
               without one.

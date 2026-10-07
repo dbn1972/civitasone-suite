@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button, ActionButton, Card, ConfirmDialog } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { browserJson } from "@/lib/api/browserClient";
-import { formatMoney } from "@/lib/formatters";
+import { formatMoney, formatIndianDate, todayIST } from "@/lib/formatters";
 
 type Props = {
   allotmentId: string;
@@ -13,12 +13,13 @@ type Props = {
   version: number;
   quarterNo: string;
   employeeRef: string;
+  employeeName: string | null;
   monthlyLicenceFeeMinor: string | null;
-  /** Source of the licence-fee-rate lookup — "error" means the rate could NOT be
-   * verified (distinct from a genuine "no rate configured" which is `source: "api"`
-   * with `monthlyLicenceFeeMinor: null`). An officer confirming Allot/Occupy (which
-   * starts a payroll deduction) must be able to tell these apart. */
   licenceFeeSource: "api" | "error";
+  /** GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-04: only estab admins may act. */
+  canAct: boolean;
+  /** GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-01: session user is the applicant. */
+  isApplicant: boolean;
 };
 
 export function AllotmentDetailActions({
@@ -27,11 +28,16 @@ export function AllotmentDetailActions({
   version,
   quarterNo,
   employeeRef,
+  employeeName,
   monthlyLicenceFeeMinor,
   licenceFeeSource,
+  canAct,
+  isApplicant,
 }: Props) {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
+  // GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-01: polling after a command.
+  const [polling, setPolling] = useState(false);
 
   async function patch(action: string, body: Record<string, unknown>): Promise<void> {
     await browserJson<{ status: string }>(`v1/estab/quarter-allotments/${allotmentId}/${action}`, {
@@ -40,7 +46,9 @@ export function AllotmentDetailActions({
     });
   }
 
+  // GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-03: use the employee name.
   const employeeShort = `${employeeRef.slice(0, 8)}…`;
+  const employeeLabel = employeeName ?? employeeShort;
 
   const licenceFeeErrored = licenceFeeSource === "error";
 
@@ -63,7 +71,24 @@ export function AllotmentDetailActions({
     return <> No licence-fee rate is configured for this quarter type / pay level.</>;
   }
 
-  // ── Vacation-notice date field (own validation, own ids) ────────────────
+  // GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-01: poll router.refresh() after a
+  // command to detect whether the status changed (CQRS async). Shows a message
+  // then polls 3 times at 3s intervals.
+  function pollRefresh(successMsg: string) {
+    setMessage(successMsg);
+    setPolling(true);
+    let tries = 0;
+    const iv = setInterval(() => {
+      tries++;
+      router.refresh();
+      if (tries >= 3) {
+        clearInterval(iv);
+        setPolling(false);
+      }
+    }, 3000);
+  }
+
+  // ── Vacation-notice date field ─────────────────────────────────────
   const [vacationDueDate, setVacationDueDate] = useState("");
   const [vacationDateError, setVacationDateError] = useState<string | undefined>();
   const [vacationConfirmOpen, setVacationConfirmOpen] = useState(false);
@@ -80,6 +105,12 @@ export function AllotmentDetailActions({
       vacationDateRef.current?.focus();
       return;
     }
+    // GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-06: reject past dates.
+    if (vacationDueDate.trim() < todayIST()) {
+      setVacationDateError("Vacation due date cannot be in the past.");
+      vacationDateRef.current?.focus();
+      return;
+    }
     setVacationDateError(undefined);
     setVacationDialogError(undefined);
     setVacationConfirmOpen(true);
@@ -91,8 +122,7 @@ export function AllotmentDetailActions({
     try {
       await patch("vacation-notice", { vacationDueDate: vacationDueDate.trim() });
       setVacationConfirmOpen(false);
-      setMessage("Vacation notice issued — accepted for processing.");
-      router.refresh();
+      pollRefresh("Vacation notice issued — accepted for processing.");
     } catch (err) {
       setVacationDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
@@ -100,27 +130,9 @@ export function AllotmentDetailActions({
     }
   }
 
-  // ── Vacate (optional handover notes) ─────────────────────────────────
+  // ── Vacate (handover notes + reason required for skip-notice) ─────
   const [handoverNotes, setHandoverNotes] = useState("");
-  const [vacateConfirmOpen, setVacateConfirmOpen] = useState(false);
-  const [vacateBusy, setVacateBusy] = useState(false);
-  const [vacateDialogError, setVacateDialogError] = useState<string | undefined>();
   const handoverField = useId();
-
-  async function submitVacate() {
-    setVacateBusy(true);
-    setVacateDialogError(undefined);
-    try {
-      await patch("vacate", handoverNotes.trim() ? { handoverNotes: handoverNotes.trim() } : {});
-      setVacateConfirmOpen(false);
-      setMessage("Vacation recorded — accepted for processing.");
-      router.refresh();
-    } catch (err) {
-      setVacateDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
-    } finally {
-      setVacateBusy(false);
-    }
-  }
 
   if (status === "vacated" || status === "cancelled") {
     return (
@@ -133,33 +145,72 @@ export function AllotmentDetailActions({
     );
   }
 
+  // GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-04: non-admin viewers see status only.
+  if (!canAct) {
+    return (
+      <Card title="Allotment lifecycle" padding>
+        <p style={{ margin: 0, fontSize: 13, color: "var(--ink2)" }}>
+          Only estate officers and admins can act on allotment lifecycle transitions.
+          Current status: <strong>{status.replace(/_/g, " ")}</strong>.
+        </p>
+      </Card>
+    );
+  }
+
   return (
     <Card title="Allotment lifecycle" padding>
       <div style={{ display: "grid", gap: 12 }}>
         <p style={{ margin: 0, fontSize: 13, color: "var(--ink2)" }}>
           Allotment commands are processed asynchronously. This request is <strong>accepted</strong> immediately;
           the server applies it (including the maker-checker check that the allotting officer cannot be the
-          applicant) in the background. Refresh after a moment to confirm the new status.
+          applicant) in the background. {polling ? "Refreshing to check the new status…" : "Refresh after a moment to confirm the new status."}
         </p>
 
         {(status === "applied" || status === "waitlisted") && (
           <div>
+            {/* GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-01: pre-check maker-checker */}
+            {isApplicant && (
+              <p style={{ margin: "0 0 8px", fontSize: 13, color: "var(--bad)" }}>
+                You cannot allot a quarter you applied for (maker-checker policy).
+              </p>
+            )}
             <ActionButton
               label="Allot quarter"
+              disabled={isApplicant}
               confirmTitle="Allot this quarter?"
               confirmDescription={
                 <>
-                  Allot quarter <strong>{quarterNo}</strong> to employee <strong className="mono">{employeeShort}</strong>.
+                  Allot quarter <strong>{quarterNo}</strong> to employee <strong>{employeeLabel}</strong>.
                   {licenceFeeNote("Monthly licence fee on occupation:")}{" "}
                   The server rejects this if the allotting officer is the same person as the applicant.
                 </>
               }
               confirmLabel="Allot quarter"
               onConfirm={() => patch("allot", {})}
-              onSuccess={() => {
-                setMessage("Allotment accepted for processing.");
-                router.refresh();
-              }}
+              onSuccess={() => pollRefresh("Allotment accepted for processing.")}
+            />
+          </div>
+        )}
+
+        {/* GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-05: cancel/reject applied/waitlisted */}
+        {(status === "applied" || status === "waitlisted" || status === "allotted") && (
+          <div>
+            <ActionButton
+              label={status === "allotted" ? "Cancel allotment" : "Reject application"}
+              danger
+              confirmTitle={status === "allotted" ? "Cancel this allotment?" : "Reject this application?"}
+              confirmDescription={
+                <>
+                  {status === "allotted"
+                    ? <>Cancel the allotment of quarter <strong>{quarterNo}</strong> for <strong>{employeeLabel}</strong>. This returns the quarter to the vacant pool.</>
+                    : <>Reject the application of <strong>{employeeLabel}</strong> for quarter <strong>{quarterNo}</strong>.</>
+                  }
+                </>
+              }
+              confirmLabel={status === "allotted" ? "Cancel allotment" : "Reject application"}
+              requireReason
+              onConfirm={(reason) => patch("cancel", { cancelReason: reason })}
+              onSuccess={() => pollRefresh(`${status === "allotted" ? "Cancellation" : "Rejection"} accepted for processing.`)}
             />
           </div>
         )}
@@ -171,17 +222,14 @@ export function AllotmentDetailActions({
               confirmTitle="Mark this quarter as occupied?"
               confirmDescription={
                 <>
-                  Mark quarter <strong>{quarterNo}</strong> as occupied by <strong className="mono">{employeeShort}</strong>.
+                  Mark quarter <strong>{quarterNo}</strong> as occupied by <strong>{employeeLabel}</strong>.
                   {licenceFeeNote("This starts a monthly licence-fee deduction of")}
                   {!licenceFeeErrored && monthlyLicenceFeeMinor ? " via payroll." : ""}
                 </>
               }
               confirmLabel="Mark occupied"
               onConfirm={() => patch("occupy", {})}
-              onSuccess={() => {
-                setMessage("Occupation accepted for processing.");
-                router.refresh();
-              }}
+              onSuccess={() => pollRefresh("Occupation accepted for processing.")}
             />
           </div>
         )}
@@ -198,6 +246,8 @@ export function AllotmentDetailActions({
                 type="date"
                 value={vacationDueDate}
                 onChange={(e) => setVacationDueDate(e.target.value)}
+                // GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-06: min = today IST
+                min={todayIST()}
                 aria-required="true"
                 aria-invalid={!!vacationDateError || undefined}
                 aria-describedby={vacationDateError ? vacationDateErrId : undefined}
@@ -208,15 +258,26 @@ export function AllotmentDetailActions({
                 Issue vacation notice
               </Button>
             </div>
-            <div>
-              <Button
-                type="button"
-                variant="danger"
-                style={{ minHeight: 44 }}
-                onClick={() => setVacateConfirmOpen(true)}
-              >
-                Vacate now (skip notice)
-              </Button>
+            {/* GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-04: vacate-now (skip notice)
+                separated visually and requires a reason. */}
+            <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12, marginTop: 4 }}>
+              <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--ink2)", fontWeight: 600 }}>Danger zone</p>
+              <ActionButton
+                label="Vacate now (skip notice)"
+                danger
+                confirmTitle="Vacate immediately?"
+                requireReason
+                confirmDescription={
+                  <>
+                    Vacate quarter <strong>{quarterNo}</strong> for <strong>{employeeLabel}</strong> immediately,
+                    skipping the standard notice period. This returns the quarter to the vacant pool and stops
+                    licence-fee deductions. <strong>This cannot be undone.</strong>
+                  </>
+                }
+                confirmLabel="Vacate now"
+                onConfirm={(reason) => patch("vacate", { handoverNotes: reason })}
+                onSuccess={() => pollRefresh("Vacation recorded — accepted for processing.")}
+              />
             </div>
           </>
         )}
@@ -231,9 +292,21 @@ export function AllotmentDetailActions({
               rows={3}
               style={{ width: "100%", padding: 10, border: "1px solid var(--line)", borderRadius: 8, fontSize: 13, marginTop: 6, marginBottom: 8 }}
             />
-            <Button type="button" variant="danger" style={{ minHeight: 44 }} onClick={() => setVacateConfirmOpen(true)}>
-              Record vacation
-            </Button>
+            <ActionButton
+              label="Record vacation"
+              danger
+              confirmTitle="Record vacation?"
+              requireReason
+              confirmDescription={
+                <>
+                  Record quarter <strong>{quarterNo}</strong> as vacated by <strong>{employeeLabel}</strong>. This
+                  returns the quarter to the vacant pool and cannot be undone from this screen.
+                </>
+              }
+              confirmLabel="Record vacation"
+              onConfirm={(reason) => patch("vacate", { handoverNotes: handoverNotes.trim() || reason || undefined })}
+              onSuccess={() => pollRefresh("Vacation recorded — accepted for processing.")}
+            />
           </div>
         )}
 
@@ -250,29 +323,13 @@ export function AllotmentDetailActions({
         errorMessage={vacationDialogError}
         description={
           <>
-            Issue a vacation notice on quarter <strong>{quarterNo}</strong> for <strong className="mono">{employeeShort}</strong> with
-            due date <strong>{vacationDueDate}</strong>.
+            Issue a vacation notice on quarter <strong>{quarterNo}</strong> for <strong>{employeeLabel}</strong> with
+            {/* GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-06: format the date for display */}
+            due date <strong>{formatIndianDate(vacationDueDate)}</strong>.
           </>
         }
         onConfirm={() => void submitVacationNotice()}
         onCancel={() => !vacationBusy && setVacationConfirmOpen(false)}
-      />
-
-      <ConfirmDialog
-        open={vacateConfirmOpen}
-        title="Record vacation?"
-        danger
-        confirmLabel="Record vacation"
-        busy={vacateBusy}
-        errorMessage={vacateDialogError}
-        description={
-          <>
-            Record quarter <strong>{quarterNo}</strong> as vacated by <strong className="mono">{employeeShort}</strong>. This
-            returns the quarter to the vacant pool and cannot be undone from this screen.
-          </>
-        }
-        onConfirm={() => void submitVacate()}
-        onCancel={() => !vacateBusy && setVacateConfirmOpen(false)}
       />
     </Card>
   );

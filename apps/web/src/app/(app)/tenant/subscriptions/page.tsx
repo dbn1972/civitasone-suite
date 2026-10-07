@@ -1,6 +1,6 @@
 import { ModuleListPage } from "../../../_components/ModuleListPage";
 import { getTenantSubscriptions } from "../_data";
-import { ArrowLeft } from "lucide-react";
+import { LABELS } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -8,14 +8,16 @@ export default async function Page() {
   const { data, source } = await getTenantSubscriptions();
   return (
     <div className="page-main" aria-labelledby="page-heading">
-      <nav aria-label="Breadcrumb" className="back">
-        <ArrowLeft aria-hidden="true" size={14} /> <a href="/tenant">Tenant</a>
-      </nav>
       <ModuleListPage
-        title="Tenant — Subscriptions"
-        description="Current subscription details and lifecycle state."
+        // GAP-TENANT-SUBSCRIPTIONS-07: no banned clerk term ("Tenant").
+        title={`${LABELS.tenantTitle} — Subscriptions`}
+        // GAP-TENANT-SUBSCRIPTIONS-01/05: lead with the plan (not a raw id),
+        // show the renewal date and, when present, the amount (paise-correct).
+        description="Current subscription plan, renewal date and lifecycle state."
         rows={data}
         source={source}
+        back="/tenant"
+        backLabel={LABELS.tenantTitle}
       />
     </div>
   );

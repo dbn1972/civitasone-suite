@@ -12,6 +12,12 @@ const PATTERN_ICONS: Record<string, string> = {
 
 export interface PackCardProps {
   pack: ServicePackDto;
+  /**
+   * GAP-DESIGNER-LIBRARY-03 — the domain pack's display name (e.g. "Municipal
+   * India v1"). When present it is shown in the meta line instead of the raw
+   * `domainPackKey` token.
+   */
+  domainName?: string;
   source?: string;
   sector?: string;
   jurisdiction?: string;
@@ -19,8 +25,26 @@ export interface PackCardProps {
   onImport: (pack: ServicePackDto) => void;
 }
 
+/**
+ * GAP-DESIGNER-LIBRARY-03 — turn an enum-style token ("property_tax",
+ * "urban-local-body") into a Title Case label ("Property Tax", "Urban Local
+ * Body"). A value that is already a human label (contains a space or an
+ * uppercase letter) is returned unchanged.
+ */
+function humanizeToken(value: string): string {
+  const v = value.trim();
+  if (!v || v === "—") return v;
+  if (/\s/.test(v) || /[A-Z]/.test(v)) return v;
+  return v
+    .split(/[_-]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
 export function PackCard({
   pack,
+  domainName,
   source = "Domain pack",
   sector,
   jurisdiction,
@@ -29,12 +53,14 @@ export function PackCard({
 }: PackCardProps) {
   const icon = PATTERN_ICONS[pack.servicePattern ?? "certificate"] ?? "📦";
   const hasStatutory = pack.statutoryReferences.length > 0;
+  const sectorLabel = sector && sector !== "—" ? humanizeToken(sector) : null;
+  const jurisdictionLabel = jurisdiction && jurisdiction !== "—" ? humanizeToken(jurisdiction) : null;
   const metaBits = [
-    pack.domainPackKey ?? "tenant",
+    domainName ?? (pack.domainPackKey ? humanizeToken(pack.domainPackKey) : "Tenant library"),
     `v${pack.version}`,
     source,
-    sector && sector !== "—" ? sector : null,
-    jurisdiction && jurisdiction !== "—" ? jurisdiction : null,
+    sectorLabel,
+    jurisdictionLabel,
   ].filter(Boolean);
 
   return (

@@ -40,6 +40,20 @@ const EVENTS = [
   "application.issued",
 ] as const;
 
+/** GAP-DESIGNER-DETAIL-B8-02: human-readable labels instead of raw tokens. */
+const EVENT_LABELS: Record<string, string> = {
+  "application.submitted": "Application submitted",
+  "application.under_review": "Under review",
+  "application.pending_docs": "Pending documents",
+  "application.approved": "Approved",
+  "application.rejected": "Rejected",
+  "application.issued": "Certificate issued",
+};
+
+function webhookEventLabel(event: string): string {
+  return EVENT_LABELS[event] ?? event.replace("application.", "");
+}
+
 export function WebhookSubscriptionsBuilder({
   value,
   onChange,
@@ -120,7 +134,7 @@ export function WebhookSubscriptionsBuilder({
                       checked={row.events.includes(event)}
                       onChange={() => toggleEvent(i, event)}
                     />
-                    {event.replace("application.", "")}
+                    {webhookEventLabel(event)}
                   </label>
                 ))}
               </div>

@@ -19,13 +19,14 @@ export async function getCourse(tenantId: string, id: string): Promise<CourseRow
     .where(and(eq(courses.id, id), eq(courses.tenantId, tenantId))).limit(1));
   return rows[0];
 }
-export async function listCourses(tenantId: string, search: string | undefined, limit = 100): Promise<CourseRow[]> {
+export async function listCourses(tenantId: string, search: string | undefined, limit = 100, status?: string): Promise<CourseRow[]> {
   return scopedRead((t) => {
     const filters = [eq(courses.tenantId, tenantId)];
     if (search && search.length > 0) {
       const pat = `%${search}%`;
       filters.push(or(ilike(courses.title, pat), ilike(courses.code, pat), ilike(courses.category, pat))!);
     }
+    if (status) filters.push(eq(courses.status, status));
     return t.select().from(courses).where(and(...filters)).limit(limit);
   });
 }
@@ -255,13 +256,24 @@ export async function insertTrainingPlan(
   return rows[0]!;
 }
 
-export async function listTrainingPlans(tenantId: string, limit = 100): Promise<TrainingPlanRow[]> {
-  return scopedRead((t) =>
-    t.select().from(trainingPlans)
-    .where(eq(trainingPlans.tenantId, tenantId))
-    .orderBy(trainingPlans.planYear)
-    .limit(limit),
-  );
+export async function listTrainingPlans(
+  tenantId: string,
+  opts: { year?: number | undefined; limit?: number | undefined; offset?: number | undefined } = {},
+): Promise<{ data: TrainingPlanRow[]; total: number }> {
+  const limit = opts.limit ?? 100;
+  const offset = opts.offset ?? 0;
+  const filters = [eq(trainingPlans.tenantId, tenantId)];
+  if (opts.year !== undefined) filters.push(eq(trainingPlans.planYear, opts.year));
+  const where = and(...filters);
+  const [data, countRows] = await Promise.all([
+    scopedRead((t) =>
+      t.select().from(trainingPlans).where(where).orderBy(trainingPlans.planYear).limit(limit).offset(offset),
+    ),
+    scopedRead((t) =>
+      t.select({ count: sql<number>`count(*)::int` }).from(trainingPlans).where(where),
+    ),
+  ]);
+  return { data, total: countRows[0]?.count ?? 0 };
 }
 
 export async function getTrainingPlan(tenantId: string, id: string): Promise<TrainingPlanRow | undefined> {

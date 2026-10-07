@@ -3,8 +3,9 @@ import { deflectionMetrics, type DeflectionMetrics } from "./domain.js";
 
 export async function listFaqs(
   tenantId: string, category: string | undefined, limit: number, offset: number,
+  statusFilter?: string,
 ): Promise<Record<string, unknown>[]> {
-  const rows = await repo.listFaqs(tenantId, category, limit, offset);
+  const rows = await repo.listFaqs(tenantId, category, limit, offset, statusFilter);
   return rows.map(repo.faqView);
 }
 
@@ -13,8 +14,8 @@ export async function getFaq(tenantId: string, id: string): Promise<Record<strin
   return row ? repo.faqView(row) : null;
 }
 
-export async function listFlows(tenantId: string): Promise<Record<string, unknown>[]> {
-  const rows = await repo.listFlows(tenantId);
+export async function listFlows(tenantId: string, statusFilter?: string): Promise<Record<string, unknown>[]> {
+  const rows = await repo.listFlows(tenantId, statusFilter);
   return rows.map(repo.flowView);
 }
 

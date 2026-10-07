@@ -15,6 +15,13 @@ export interface SortableListProps<T extends SortableListItem> {
   onMoveDown: (id: string) => void;
   renderItem: (item: T, index: number) => ReactNode;
   ariaLabel?: string;
+  /**
+   * GAP-DESIGNER-DETAIL-B2-02 — an accessible name for a given row, used to
+   * disambiguate the "Move up"/"Move down" buttons for screen-reader users
+   * (e.g. "Move Applicant name up" instead of a bare "Move up"). Optional and
+   * additive: when omitted the buttons keep their original generic labels.
+   */
+  itemAccessibleName?: (item: T, index: number) => string;
   /** When item count ≥ this, window the list (UX: beyond 50 fields). Default 50; set 0 to disable. */
   virtualizeThreshold?: number;
   rowHeightPx?: number;
@@ -50,6 +57,7 @@ export function SortableList<T extends SortableListItem>({
   onMoveDown,
   renderItem,
   ariaLabel = "Sortable list",
+  itemAccessibleName,
   virtualizeThreshold = 50,
   rowHeightPx = 56,
   maxViewportPx = 420,
@@ -98,6 +106,7 @@ export function SortableList<T extends SortableListItem>({
       {slice.map((item, localIdx) => {
         const index = windowed.start + localIdx;
         const selected = item.id === selectedId;
+        const rowName = itemAccessibleName?.(item, index);
         return (
           <li
             key={item.id}
@@ -134,7 +143,7 @@ export function SortableList<T extends SortableListItem>({
               <Button
                 type="button"
                 variant="ghost"
-                aria-label="Move up"
+                aria-label={rowName ? `Move ${rowName} up` : "Move up"}
                 disabled={index === 0}
                 onClick={() => onMoveUp(item.id)}
                 style={{ padding: "2px 8px", minWidth: 32 }}
@@ -144,7 +153,7 @@ export function SortableList<T extends SortableListItem>({
               <Button
                 type="button"
                 variant="ghost"
-                aria-label="Move down"
+                aria-label={rowName ? `Move ${rowName} down` : "Move down"}
                 disabled={index === items.length - 1}
                 onClick={() => onMoveDown(item.id)}
                 style={{ padding: "2px 8px", minWidth: 32 }}

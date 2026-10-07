@@ -105,3 +105,60 @@ describe("FileAttachments — real presigned-URL upload, not a fake placeholder 
     expect(document.body.textContent).not.toMatch(/\b422\b/);
   });
 });
+
+describe("FileAttachments — download link (DETAIL-02)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("renders each attachment as a clickable download button, not plain text", () => {
+    const atts = [
+      { id: "a1", fileName: "Annexure-I.pdf", fileType: "application/pdf", size: 45000, uploadedAt: "2026-09-20T00:00:00Z" },
+      { id: "a2", fileName: "Photo.jpg", fileType: "image/jpeg", size: 120000, uploadedAt: "2026-09-21T00:00:00Z" },
+    ];
+    render(<FileAttachments fileId="file-1" attachments={atts} />);
+
+    // Each attachment is a button (interactive), not a span/text.
+    const a1Btn = screen.getByRole("button", { name: "Annexure-I.pdf" });
+    expect(a1Btn).toBeInTheDocument();
+    const a2Btn = screen.getByRole("button", { name: "Photo.jpg" });
+    expect(a2Btn).toBeInTheDocument();
+    // Size info is rendered.
+    expect(screen.getByText(/44 KB/)).toBeInTheDocument();
+    expect(screen.getByText(/118 KB/)).toBeInTheDocument();
+  });
+
+  it("opens a presigned URL in a new tab on click, never exposes a dead text link", async () => {
+    const windowOpenSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+    vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("/download")) {
+        return Promise.resolve(jsonResponse({ key: "uploads/t1/attachment/abc.pdf", fileName: "Annexure-I.pdf" }));
+      }
+      if (url.includes("/admin/uploads/")) {
+        return Promise.resolve(jsonResponse({ downloadUrl: "https://s3.example.com/presigned-get" }));
+      }
+      return Promise.resolve(jsonResponse({}));
+    });
+
+    const atts = [{ id: "a1", fileName: "Annexure-I.pdf", fileType: "application/pdf", size: 45000, uploadedAt: "2026-09-20T00:00:00Z" }];
+    render(<FileAttachments fileId="file-1" attachments={atts} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Annexure-I.pdf" }));
+    await waitFor(() =>
+      expect(windowOpenSpy).toHaveBeenCalledWith("https://s3.example.com/presigned-get", "_blank", "noopener,noreferrer"),
+    );
+  });
+
+  it("shows 'Unavailable' on 404, never a dead link", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ message: "not found" }, 404));
+
+    const atts = [{ id: "a1", fileName: "Old-file.pdf", fileType: "application/pdf", size: 1000, uploadedAt: "2025-01-01T00:00:00Z" }];
+    render(<FileAttachments fileId="file-1" attachments={atts} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Old-file.pdf" }));
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent("This attachment is unavailable."),
+    );
+  });
+});

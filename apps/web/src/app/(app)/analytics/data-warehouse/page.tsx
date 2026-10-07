@@ -1,8 +1,15 @@
 import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { getAnalyticsDataWarehouse } from "@/app/_data/loaders";
 import { DataWarehouseTable } from "./DataWarehouseTable";
+import { sumRecordCounts } from "./records";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
+
+function isHealthy(status: string): boolean {
+  // GAP-ANALYTICS-DATA-WAREHOUSE-03: compare case-insensitively so "healthy"
+  // is not miscounted as needing attention.
+  return status.trim().toLowerCase() === "healthy";
+}
 
 export default async function DataWarehousePage() {
   const result = await getAnalyticsDataWarehouse();
@@ -11,20 +18,34 @@ export default async function DataWarehousePage() {
   const errored = resource.status === "error";
 
   const total = errored ? null : rows.length;
-  const totalRecords = errored
-    ? null
-    : rows.reduce((sum, r) => sum + (parseInt(r.records.replace(/[^0-9]/g, ""), 10) || 0), 0);
-  const healthy = errored ? null : rows.filter((r) => r.status === "Healthy").length;
-  const attention = errored ? null : rows.length - rows.filter((r) => r.status === "Healthy").length;
+  // GAP-ANALYTICS-DATA-WAREHOUSE-01: parse strictly; show "—" if any row's
+  // count is unreadable rather than a misleadingly-low fabricated total.
+  const recordTotal = errored ? null : sumRecordCounts(rows.map((r) => r.records));
+  const healthy = errored ? null : rows.filter((r) => isHealthy(r.status)).length;
+  const attention = errored ? null : rows.length - (healthy ?? 0);
+
+  const totalRecordsDisplay =
+    recordTotal === null || recordTotal.partial
+      ? "—"
+      : recordTotal.total.toLocaleString("en-IN");
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Data Warehouse" subtitle="Consolidated datasets, refresh schedules and data quality metrics." back="/analytics" />
+      {/* GAP-ANALYTICS-DATA-WAREHOUSE-02: subtitle no longer promises "refresh
+          schedules" — the table shows only Last Refresh, not a schedule or
+          next-run. */}
+      <PageHeader title="Data Warehouse" subtitle="Consolidated datasets and data quality metrics." back="/analytics" />
       <StatGrid>
-        <StatCard icon="🗄️" iconBg="#eef2ff" label="Total Datasets" value={total ?? "—"} />
-        <StatCard icon="📊" iconBg="#ecfdf3" label="Total Records" value={totalRecords === null ? "—" : totalRecords > 0 ? totalRecords.toLocaleString("en-IN") : "0"} />
-        <StatCard icon="✅" iconBg="#fffaeb" label="Healthy" value={healthy ?? "—"} />
-        <StatCard icon="⚠️" iconBg="#fce7ee" label="Attention" value={attention ?? "—"} />
+        <StatCard icon="🗄" tone="info" label="Total Datasets" value={total ?? "—"} />
+        <StatCard
+          icon="📊"
+          tone="good"
+          label="Total Records"
+          hint={recordTotal?.partial ? "Some datasets report a non-numeric record count, so a total can't be computed." : undefined}
+          value={totalRecordsDisplay}
+        />
+        <StatCard icon="✅" tone="good" label="Healthy" value={healthy ?? "—"} />
+        <StatCard icon="⚠" tone="warn" label="Attention" value={attention ?? "—"} />
       </StatGrid>
       <Card title="Dataset Inventory">
         {errored ? (
@@ -32,7 +53,11 @@ export default async function DataWarehousePage() {
             <RefreshErrorState error={toHumanError("load", { area: "data warehouse datasets" })} backHref="/analytics" />
           </div>
         ) : rows.length === 0 ? (
-          <EmptyState icon="🗄️" title="No datasets" message="No data warehouse datasets available. Events will appear here as the analytics service processes domain events." action={<a href="/analytics/queries" className="btn primary">Run Query</a>} />
+          <EmptyState
+            icon="🗄"
+            title="No datasets"
+            message="No data warehouse datasets available yet. Datasets appear here as the analytics service processes domain events."
+          />
         ) : (
           <DataWarehouseTable rows={rows} source={source === "error" ? "error" : "api"} />
         )}

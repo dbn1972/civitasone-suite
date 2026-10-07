@@ -43,7 +43,7 @@ describe("VersionDiff", () => {
         }}
       />,
     );
-    expect(screen.getByText(/Fee changed ₹500 → ₹750/i)).toBeInTheDocument();
+    expect(screen.getByText(/Fee changed ₹500\.00 → ₹750\.00/i)).toBeInTheDocument();
     expect(screen.getByText(/Head of Account changed/i)).toBeInTheDocument();
   });
 

@@ -21,6 +21,13 @@ export interface DesignerServiceRow {
   version: number;
   status: string;
   updatedAt: string;
+  /**
+   * GAP-DESIGNER-HOME-04: outcome of the most recent sandbox test, when the
+   * catalogue list response carries it. Optional + additive: absent for
+   * backends that don't yet project it, so existing callers are unaffected.
+   * Used to flag stale/failed drafts in "Needs Attention".
+   */
+  latestTestStatus?: "pass" | "fail" | "pending" | null;
 }
 
 export interface DomainPackRow {
@@ -47,6 +54,9 @@ export async function getDesignerServices(): Promise<LoaderResult<DesignerServic
         version: typeof r.version === "number" ? r.version : 1,
         status: str(r.status) || "draft",
         updatedAt: str(r.updatedAt),
+        latestTestStatus: typeof r.latestTestStatus === "string" && ["pass", "fail", "pending"].includes(r.latestTestStatus)
+          ? (r.latestTestStatus as "pass" | "fail" | "pending")
+          : null,
       })),
   });
 }
@@ -73,3 +83,33 @@ export {
   DEFAULT_BLOCKS,
   hiddenBlocksForPattern,
 } from "./designerConstants";
+
+/** GAP-DESIGNER-HOME-02: server-side single-service fetch for the redirect page. */
+export interface DesignerServiceDetail {
+  id: string;
+  serviceKey: string;
+  name: string;
+  status: string;
+  servicePattern: string;
+}
+
+export async function getDesignerServiceById(id: string): Promise<LoaderResult<DesignerServiceDetail | null>> {
+  return fetchJson<unknown, DesignerServiceDetail | null>(
+    `/api/v1/citizen/catalogue/services/${encodeURIComponent(id)}`,
+    null,
+    {
+      revalidateSeconds: 0,
+      telemetryKey: "designer.catalogue.service.detail",
+      mapResponse: (p) => {
+        if (!isRecord(p)) return null;
+        return {
+          id: str(p.id),
+          serviceKey: str(p.serviceKey),
+          name: str(p.name),
+          status: str(p.status) || "draft",
+          servicePattern: str(p.servicePattern) || "certificate",
+        };
+      },
+    },
+  );
+}

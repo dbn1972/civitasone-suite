@@ -6,7 +6,7 @@ export default function MigrationPage() {
     <>
       <PageHeader
         title="Paper → Electronic Migration"
-        subtitle="Register legacy physical files, attach scans, and link them to their new eFile."
+        subtitle="Register legacy physical files and record their scan reference."
         back="/estab/list"
       />
       <MigrationPanel />

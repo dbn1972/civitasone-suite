@@ -26,6 +26,7 @@ vi.mock("./repo.js", () => ({
 }));
 
 const { listTrainingPrograms } = await import("./queries.js");
+const { overlapsWindow } = await import("./queries.js");
 
 describe("listTrainingPrograms", () => {
   beforeEach(() => {
@@ -80,5 +81,48 @@ describe("listTrainingPrograms", () => {
     expect(rows[0]!.status).toBe("ongoing");
 
     vi.useRealTimers();
+  });
+});
+
+describe("overlapsWindow — GAP-LEARNING-CALENDAR-06", () => {
+  it("includes a programme overlapping the window", () => {
+    expect(overlapsWindow("2026-04-01", "2026-04-10", "2026-04-05", "2026-04-20")).toBe(true);
+  });
+  it("excludes a programme entirely before the window", () => {
+    expect(overlapsWindow("2026-01-01", "2026-01-05", "2026-04-01", "2026-04-30")).toBe(false);
+  });
+  it("excludes a programme entirely after the window", () => {
+    expect(overlapsWindow("2026-12-01", "2026-12-05", "2026-04-01", "2026-04-30")).toBe(false);
+  });
+  it("open-ended 'from' only keeps everything ending on/after it", () => {
+    expect(overlapsWindow("2026-04-01", "2026-04-10", "2026-04-10", undefined)).toBe(true);
+    expect(overlapsWindow("2026-03-01", "2026-03-31", "2026-04-01", undefined)).toBe(false);
+  });
+  it("no bounds keeps everything", () => {
+    expect(overlapsWindow("2020-01-01", "2020-01-02", undefined, undefined)).toBe(true);
+  });
+});
+
+describe("listTrainingPrograms date-range filter — GAP-LEARNING-CALENDAR-06", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    countNominationsByTrainingMock.mockResolvedValue(new Map());
+  });
+
+  it("returns only programmes overlapping the requested window", async () => {
+    listTrainingsByTenantMock.mockResolvedValue([
+      { id: "in", title: "In window", facilitator: null, venue: null, fromDate: "2026-04-05", toDate: "2026-04-08", maxParticipants: 30, status: "planned", category: null, mode: null, enrollmentDeadline: null },
+      { id: "before", title: "Before window", facilitator: null, venue: null, fromDate: "2026-01-01", toDate: "2026-01-02", maxParticipants: 30, status: "planned", category: null, mode: null, enrollmentDeadline: null },
+    ]);
+    const rows = await listTrainingPrograms("tenant-1", 100, { from: "2026-04-01", to: "2026-04-30" });
+    expect(rows.map((r) => r.id)).toEqual(["in"]);
+  });
+
+  it("includes the window params in the cache key so a bounded request is cached separately", async () => {
+    listTrainingsByTenantMock.mockResolvedValue([]);
+    await listTrainingPrograms("tenant-1", 100, { from: "2026-04-01", to: "2026-04-30" });
+    const keyArg = listOrLoadMock.mock.calls.at(-1)?.[2] as string;
+    expect(keyArg).toContain("2026-04-01");
+    expect(keyArg).toContain("2026-04-30");
   });
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import { DataTable } from "@/app/_components/ds";
+import { formatEnumLabel } from "@/lib/formatters";
 
 export type QuarterRow = {
   id: string;
@@ -23,7 +24,8 @@ export function QuartersTable({ quarters }: { quarters: QuarterRow[] }) {
     { key: "category" as const, label: "Category" },
     { key: "locality" as const, label: "Locality", render: (r: QuarterRow) => r.locality ?? "—" },
     { key: "status" as const, label: "Status", cellType: "status" as const },
-    { key: "condition" as const, label: "Condition" },
+    // GAP-ESTAB-QUARTERS-DETAIL-04: humanise the raw stored condition code.
+    { key: "condition" as const, label: "Condition", render: (r: QuarterRow) => formatEnumLabel(r.condition) },
   ];
 
   return (

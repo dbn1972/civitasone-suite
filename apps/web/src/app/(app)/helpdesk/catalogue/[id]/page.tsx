@@ -1,12 +1,35 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { PageHeader, EmptyState } from "../../../../_components/ds";
+import { PageHeader, EmptyState, RefreshErrorState } from "../../../../_components/ds";
 import { getCatalogueOffering } from "../../../../_data/loaders";
+import { getSessionRoles, hasAnyRole, HELPDESK_ROLES } from "@/lib/auth/roleGuard";
+import { formatMinutesDuration } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 import { RaiseRequestForm } from "./RaiseRequestForm";
 
 export default async function Page({ params }: { params: { id: string } }) {
-  const { data: offering } = await getCatalogueOffering(params.id);
+  const { data: offering, source, status } = await getCatalogueOffering(params.id);
+
+  // GAP-HELPDESK-CATALOGUE-DETAIL-01: a transient fetch failure must not read as
+  // a 404 "page not found". Only a real 404 (or an ok response with no body)
+  // calls notFound(); any other error shows a retryable error state.
+  if (source === "error" && status !== 404) {
+    return (
+      <div className="wrap">
+        <PageHeader title="Service details" back="/helpdesk/catalogue" backLabel="Catalogue" />
+        <RefreshErrorState
+          error={toHumanError("load", { area: "service details" })}
+          backHref="/helpdesk/catalogue"
+        />
+      </div>
+    );
+  }
   if (!offering) notFound();
+
+  // GAP-HELPDESK-CATALOGUE-DETAIL-04: the raw OLA / underpinning-contract table
+  // is internal ITIL detail — role-gate it to helpdesk staff rather than show
+  // it to every requester on a self-service page.
+  const isHelpdeskStaff = hasAnyRole(getSessionRoles(), HELPDESK_ROLES);
 
   return (
     <div className="wrap">
@@ -23,17 +46,21 @@ export default async function Page({ params }: { params: { id: string } }) {
           <div className="fields">
             <div className="fld"><div className="fl">Category</div><div className="fv">{offering.category}</div></div>
             <div className="fld"><div className="fl">Default priority</div><div className="fv">{offering.defaultPriority}</div></div>
-            <div className="fld"><div className="fl">Approval</div><div className="fv">{offering.approvalRequired ? "Maker-checker required" : "Auto-approved"}</div></div>
+            {/* GAP-HELPDESK-CATALOGUE-DETAIL-04: plain-language approval wording */}
+            <div className="fld"><div className="fl">Approval</div><div className="fv">{offering.approvalRequired ? "Needs approval before work starts" : "No approval needed"}</div></div>
             <div className="fld"><div className="fl">Fulfilment stages</div><div className="fv">{offering.fulfilmentStages.map((s) => s.name).join(" → ") || "None"}</div></div>
           </div>
 
           {offering.olas && offering.olas.length > 0 ? (
             <>
-              <div className="card-h" style={{ marginTop: 16 }}><h3>OLA / underpinning contracts</h3></div>
-              <ul style={{ margin: 0, paddingLeft: 18 }}>
+              {/* GAP-HELPDESK-CATALOGUE-DETAIL-04: "Expected turnaround" for everyone,
+                  as plain minutes->days text; the raw OLA table is staff-only. */}
+              <div className="card-h" style={{ marginTop: 16 }}><h3>Expected turnaround</h3></div>
+              <ul style={{ margin: 0, paddingInlineStart: 18 }}>
                 {offering.olas.map((o) => (
                   <li key={o.id} style={{ fontSize: "0.875rem", marginBottom: 4 }}>
-                    <strong>{o.name}</strong> — {o.kind.toUpperCase()} via {o.provider}, target {o.targetMinutes} min
+                    <strong>{o.name}</strong> — about {formatMinutesDuration(o.targetMinutes)}
+                    {isHelpdeskStaff ? ` (${o.kind.toUpperCase()} via ${o.provider})` : ""}
                   </li>
                 ))}
               </ul>

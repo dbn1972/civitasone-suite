@@ -1,8 +1,28 @@
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq, desc, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { legalOpinions, type OpinionRow, type OpinionInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
+
+/**
+ * GAP-LEGAL-OPINIONS-NEW-02: allocate the next opinion number in the
+ * OPN/<year>/NNNN series for a tenant, inside the caller's transaction. The
+ * sequence base is the count of this tenant's opinions whose number already
+ * matches the current year's prefix; the UNIQUE (tenant_id, opinion_no)
+ * constraint is the real guarantee of distinctness — if two commands race and
+ * compute the same N, the second INSERT fails and the queue redelivers it,
+ * which recomputes against the now-higher count. This replaces a client-side
+ * `Math.random()` number that could collide and did not follow the series.
+ */
+export async function nextOpinionNo(tx: Writer, tenantId: string, year: number): Promise<string> {
+  const prefix = `OPN/${year}/`;
+  const rows = await (tx as typeof db)
+    .select({ count: sql<number>`count(*)::int` })
+    .from(legalOpinions)
+    .where(and(eq(legalOpinions.tenantId, tenantId), sql`${legalOpinions.opinionNo} LIKE ${prefix + "%"}`));
+  const seq = (rows[0]?.count ?? 0) + 1;
+  return `${prefix}${String(seq).padStart(4, "0")}`;
+}
 
 export async function findOpinionById(id: string): Promise<OpinionRow | null> {
   const rows = await db.transaction(async (tx) =>

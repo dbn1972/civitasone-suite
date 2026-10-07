@@ -36,6 +36,9 @@ export async function settingRoutes(app: FastifyInstance): Promise<void> {
   // LIST all settings for current tenant
   app.get("/v1/settings", async (req, reply) => {
     const ctx = resolveContext(req);
+    // GAP-TENANT-HOME-01: tenant-scoped configuration is governance data; a
+    // bare signed-in session is not enough to read the settings registry.
+    requireRole(ctx, ADMIN_ROLES);
     if (!ctx.tenantId) throw new HttpError(401, "UNAUTHENTICATED", "no tenant in context");
     const settings = await repo.findAllByTenant(ctx.tenantId);
     return reply.send(settings);
@@ -44,6 +47,11 @@ export async function settingRoutes(app: FastifyInstance): Promise<void> {
   // GET specific setting by key (cache-first)
   app.get("/v1/settings/:key", async (req, reply) => {
     const ctx = resolveContext(req);
+    // GAP-TENANT-SETTINGS-01: a single configuration key can hold a
+    // credential/secret value. The list route (/v1/settings) is already
+    // admin-gated; gate the per-key read with the same role set so a bare
+    // signed-in employee cannot read an individual secret-typed key either.
+    requireRole(ctx, ADMIN_ROLES);
     if (!ctx.tenantId) throw new HttpError(401, "UNAUTHENTICATED", "no tenant in context");
     const { key } = settingKeyParam.parse(req.params);
     const view = await cache.getOrLoad(

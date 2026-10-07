@@ -16,7 +16,10 @@ import { randomUUID } from "node:crypto";
 import { noteSheetPrintRoutes } from "./note-sheet-print/routes.js";
 import { isTopSecret } from "./domain.js";
 import { queue } from "../../shared/infra.js";
-import { isMoveAllowed, isAccessAllowed } from "../operators/eligibility.js";
+import {
+  isMoveAllowed, isAccessAllowed,
+  clearanceRankFor, tenantHasOperators, CLASSIFICATION_RANK,
+} from "../operators/eligibility.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -44,6 +47,20 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ESTAB_ROLES);
     const body = createFileBody.parse(req.body);
+    // GAP-ESTAB-WORKSPACE-03: a file may only be CREATED at a classification
+    // the creating actor is cleared for — client-side option hiding is not a
+    // control. Mirrors the GET/move clearance gate (isAccessAllowed): public is
+    // always allowed, and the check is a no-op until the tenant adopts the
+    // operator/clearance model (greenfield), so existing flows aren't broken.
+    if (!(await isAccessAllowed(ctx.tenantId, ctx.actorId, body.classification))) {
+      await publishFileAccessAudit(ctx, {
+        action: "create_denied_clearance",
+        resourceType: "file",
+        outcome: "denied",
+        classification: body.classification,
+      });
+      throw new HttpError(403, "FORBIDDEN", "insufficient security clearance to open a file at this classification");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createFile(ctx, body));
   });
 
@@ -203,7 +220,54 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const body = openFileFromInwardBody.parse(req.body);
+    // GAP-ESTAB-WORKSPACE-03: same clearance gate as direct file creation —
+    // opening a file from a receipt must not escalate classification beyond the
+    // actor's clearance. Public is always allowed; no-op until operators adopted.
+    if (!(await isAccessAllowed(ctx.tenantId, ctx.actorId, body.classification))) {
+      await publishFileAccessAudit(ctx, {
+        action: "open_file_denied_clearance",
+        resourceType: "file",
+        outcome: "denied",
+        classification: body.classification,
+      });
+      throw new HttpError(403, "FORBIDDEN", "insufficient security clearance to open a file at this classification");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.openFileFromInward(ctx, id, body));
+  });
+
+  // GAP-ESTAB-HANDOVER-03: count of files CURRENTLY on an officer's desk, so a
+  // charge-handover confirm dialog can preview how many files will move. Reader
+  // roles only; a count is not classified content.
+  // GAP-ESTAB-INBOX-01: "My Desk" — files currently on the authenticated
+  // officer's desk. Uses ctx.actorId (the Keycloak sub) as the holder identity,
+  // which matches the default currentWith on file creation. Files explicitly
+  // moved to the operator's HRMS employeeId will also match when the operator
+  // directory uses the same id as the Keycloak sub. This gap is documented in
+  // the hrms-client; for now this is the best we can do without an identity
+  // bridge.
+  app.get("/v1/estab/files/mine", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    // actorId is the Keycloak sub — may not be a UUID in test/dev. If it isn't
+    // a valid UUID, the officer has no files on any desk, so return empty.
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRe.test(ctx.actorId)) {
+      return reply.send({ data: [], actorId: ctx.actorId });
+    }
+    const { limit, offset } = z.object({
+      limit: z.coerce.number().int().min(1).max(200).default(100),
+      offset: z.coerce.number().int().min(0).default(0),
+    }).parse(req.query);
+    const files = await queries.listFilesByHolder(ctx.tenantId, ctx.actorId, limit, offset);
+    return reply.send({ data: files, actorId: ctx.actorId });
+  });
+
+  app.get("/v1/estab/files/held-count", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { officerId } = z.object({ officerId: z.string().uuid() }).parse(req.query);
+    const count = await queries.countFilesByHolder(ctx.tenantId, officerId);
+    return reply.send({ officerId, count });
   });
 
   app.get("/v1/estab/files", async (req, reply) => {
@@ -212,6 +276,22 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const q = listQuerySchema.parse(req.query);
     const files = await queries.listFiles(ctx.tenantId, q.limit);
     return reply.send({ data: files, pagination: { hasMore: files.length === q.limit, pageSize: q.limit } });
+  });
+
+  // GAP-ESTAB-WORKSPACE-03: expose which classifications the authenticated
+  // actor may open a file at, so the UI can offer only those (defence in depth
+  // on top of the server-side gate on create/open-file). When the tenant has
+  // not adopted the operator/clearance model yet, all levels are allowed
+  // (greenfield), matching isAccessAllowed's behaviour.
+  app.get("/v1/estab/files/classifications", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ESTAB_ROLES);
+    const adopted = await tenantHasOperators(ctx.tenantId);
+    const rank = adopted ? await clearanceRankFor(ctx.tenantId, ctx.actorId) : 4;
+    const allowed = Object.entries(CLASSIFICATION_RANK)
+      .filter(([, need]) => need <= Math.max(rank, 1))
+      .map(([name]) => name);
+    return reply.send({ allowed, clearanceRank: rank, adopted });
   });
 
   // CSMOP full-text search — by subject / file number / department / note-sheet content.
@@ -270,6 +350,49 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const movements = await queries.listFileMovements(ctx.tenantId, id);
     return reply.send({ data: movements });
+  });
+
+  // GAP-ESTAB-FILES-DETAIL-02: resolve a presigned-download handle for a file
+  // attachment. Enforces the SAME classification access control as reading the
+  // file itself (isAccessAllowed), audits the access (attachment.downloaded),
+  // and returns the storage key the client exchanges for a short-lived
+  // presigned GET at the shared uploads endpoint. We do NOT embed the raw key
+  // in the file-detail payload (data minimisation) — it is only released here,
+  // behind this per-attachment access + audit gate.
+  app.get("/v1/estab/files/:id/attachments/:attId/download", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const { attId } = z.object({ attId: z.string().uuid() }).parse(req.params);
+
+    const file = await queries.getFileDetail(ctx.tenantId, id);
+    if (!file) throw new HttpError(404, "NOT_FOUND", "file not found");
+    if (!(await isAccessAllowed(ctx.tenantId, ctx.actorId, file.classification))) {
+      await publishFileAccessAudit(ctx, {
+        action: "attachment_download_denied_clearance",
+        resourceType: "file_attachment",
+        resourceId: attId,
+        outcome: "denied",
+        classification: file.classification,
+      });
+      throw new HttpError(403, "FORBIDDEN", "insufficient security clearance for this file's classification");
+    }
+
+    const att = await queries.getAttachmentForDownload(ctx.tenantId, id, attId);
+    if (!att) throw new HttpError(404, "NOT_FOUND", "attachment not found");
+    if (!att.storageRef) throw new HttpError(409, "NO_CONTENT_REF", "this attachment has no downloadable content");
+
+    await publishFileAccessAudit(ctx, {
+      action: "attachment_downloaded",
+      resourceType: "file_attachment",
+      resourceId: attId,
+      outcome: "success",
+      classification: file.classification,
+    });
+
+    // The client exchanges this key for a short-lived presigned GET at the
+    // shared uploads endpoint (tenant-prefix-scoped there).
+    return reply.send({ key: att.storageRef, fileName: att.fileName, fileType: att.fileType });
   });
 
   app.post("/v1/estab/files/:id/attachments", async (req, reply) => {

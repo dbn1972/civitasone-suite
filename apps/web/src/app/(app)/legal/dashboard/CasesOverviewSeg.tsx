@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { Segmented } from "../../../_components/ds";
-
-const FILTERS = ["All", "High Court", "Tribunals"] as const;
-
+/**
+ * Cases overview card — previously had a decorative scope selector (All /
+ * High Court / Tribunals) that only changed a bold label while the numbers
+ * stayed the same (GAP-LEGAL-DASHBOARD-05). Removed until a scoped-count
+ * backend exists. The numbers now render as a simple stats sentence with
+ * token colours (GAP-LEGAL-DASHBOARD-06).
+ */
 export function CasesOverviewSeg({
   activeCases,
   hearingsThisWeek,
@@ -14,16 +16,15 @@ export function CasesOverviewSeg({
   hearingsThisWeek: number;
   ordersPending: number;
 }) {
-  const [scope, setScope] = useState<string>("All");
-
   return (
     <div className="card">
       <div className="card-h">
         <h3>Cases overview</h3>
-        <Segmented options={[...FILTERS]} value={scope} onChange={setScope} />
       </div>
-      <div className="pad" style={{ color: "#667085", fontSize: 13 }}>
-        <span style={{ fontWeight: 600 }}>{scope}</span> &nbsp;·&nbsp; Active cases: {activeCases} &nbsp;·&nbsp; Hearings this week: {hearingsThisWeek} &nbsp;·&nbsp; Orders pending: {ordersPending}
+      <div className="pad" style={{ color: "var(--ink2)", fontSize: 13, display: "flex", gap: 18 }}>
+        <span><strong>{activeCases}</strong> active cases</span>
+        <span><strong>{hearingsThisWeek}</strong> hearings this week</span>
+        <span><strong>{ordersPending}</strong> orders pending</span>
       </div>
     </div>
   );

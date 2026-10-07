@@ -236,6 +236,8 @@ import {
   copilotTurnsListSchema,
   copilotTurnDetailSchema,
   chatConversationsListSchema,
+  chatConversationItemSchema,
+  chatConversationsCountSchema,
   chatTranscriptSchema,
   FinanceDashboardSchema,
   BudgetSummaryListSchema,
@@ -345,7 +347,6 @@ import {
   LegalCaseDetailSchema,
   HearingSummaryListSchema,
   CourtOrderSummaryListSchema,
-  LegalOpinionSummaryListSchema,
   SessionSummaryListSchema,
   SessionDetailSchema,
   BreakglassSummaryListSchema,
@@ -390,6 +391,7 @@ import {
   mapHelpdeskTicketList,
   mapHelpdeskTicketDetail,
   mapLegalCaseSummaries,
+  mapLegalOpinionSummaries,
   mapMaintenanceSummaries,
   mapProcurementIndentSummaries,
   mapProcurementIndentDetail,
@@ -516,7 +518,9 @@ function mapSlaRules(payload: unknown): SLAQueueSummary[] | null {
   return mapped.length > 0 ? mapped : null;
 }
 
-function mapTickets(payload: unknown): HelpdeskTicketSummary[] | null {
+// Exported for unit tests. GAP-HELPDESK-INTERNAL-04: verifies unknown statuses
+// are kept rather than dropped.
+export function mapTickets(payload: unknown): HelpdeskTicketSummary[] | null {
   const rows = getArrayPayload(payload);
   if (!rows) return null;
 
@@ -525,11 +529,14 @@ function mapTickets(payload: unknown): HelpdeskTicketSummary[] | null {
     if (!isRecord(row)) continue;
     const id = toText(row.id) ?? toText(row.ticketNo);
     const subject = toText(row.subject) ?? toText(row.title);
-    const priority = row.priority;
-    const status = row.status;
     if (!id || !subject) continue;
-    if (priority !== "Low" && priority !== "Medium" && priority !== "High" && priority !== "Critical") continue;
-    if (status !== "Open" && status !== "In Progress" && status !== "Resolved" && status !== "Closed") continue;
+    // GAP-HELPDESK-INTERNAL-04: do NOT drop a row whose status/priority is
+    // outside the known enum (e.g. "Pending", "On Hold", "Closed"). Dropping
+    // them silently hid real tickets from the queue entirely. Keep the raw
+    // value so the table and tabs can surface it; the display layer humanises
+    // and colours unknown values conservatively.
+    const priority = (toText(row.priority) ?? "Medium") as HelpdeskTicketSummary["priority"];
+    const status = (toText(row.status) ?? "Open") as HelpdeskTicketSummary["status"];
     mapped.push({ id, subject, priority, status });
   }
   // A tenant with zero matching tickets is a legitimate empty state, not a
@@ -890,6 +897,60 @@ export async function getInternalHelpdeskTickets(): Promise<LoaderResult<Interna
     responseSchema: ticketsListSchema,
     mapResponse: mapTickets,
   });
+}
+
+/**
+ * GAP-HELPDESK-INTERNAL-DETAIL-01/04: a single internal ticket's detail. The id
+ * is encoded with encodeURIComponent so a crafted id segment cannot alter the
+ * request path (DETAIL-04). `description`/`createdAt`/`requester` are mapped
+ * when present so the detail page can show what was asked (DETAIL-01).
+ */
+export type InternalHelpdeskTicketDetail = {
+  id: string;
+  subject: string;
+  priority: string;
+  status: string;
+  description?: string;
+  dueDate?: string;
+  slaStatus?: string;
+  assignee?: string;
+  createdAt?: string;
+  requester?: string;
+  ticketNo?: string;
+};
+
+export async function getInternalHelpdeskTicketById(id: string): Promise<LoaderResult<InternalHelpdeskTicketDetail | null>> {
+  return fetchJson<unknown, InternalHelpdeskTicketDetail | null>(
+    `/api/v1/helpdesk/tickets/${encodeURIComponent(id)}`,
+    null,
+    {
+      revalidateSeconds: 30,
+      telemetryKey: "helpdesk.internal.detail",
+      mapResponse: (payload) => {
+        const raw =
+          payload && typeof payload === "object" && "data" in payload
+            ? (payload as { data: unknown }).data
+            : payload;
+        if (!raw || typeof raw !== "object") return null;
+        const t = raw as Record<string, unknown>;
+        if (typeof t.id !== "string") return null;
+        const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
+        return {
+          id: t.id,
+          subject: str(t.subject) ?? "",
+          priority: str(t.priority) ?? "normal",
+          status: str(t.status) ?? "open",
+          description: str(t.description),
+          dueDate: str(t.dueDate),
+          slaStatus: str(t.slaStatus),
+          assignee: str(t.assignee),
+          createdAt: str(t.createdAt),
+          requester: str(t.requester) ?? str(t.requestedBy),
+          ticketNo: str(t.ticketNo),
+        } satisfies InternalHelpdeskTicketDetail;
+      },
+    },
+  );
 }
 
 export async function getInstallerStages(): Promise<LoaderResult<InstallerStageSummary[]>> {
@@ -2243,7 +2304,10 @@ export const getGrantInstallmentsLegacy = moduleLoader("/api/v1/grants/installme
 export const getEstabFilesLegacy = moduleLoader("/api/v1/estab/files", "estab.files");
 export const getKnowledgeDocuments = moduleLoader("/api/v1/knowledge/documents", "knowledge.documents");
 export const getWorkflowInstances = moduleLoader("/api/v1/workflow/instances", "workflow.instances");
-export const getAnalyticsDashboards = moduleLoader("/api/v1/analytics/dashboards", "analytics.dashboards");
+// GAP-ANALYTICS-LIST-01: the generic moduleLoader-based getAnalyticsDashboards
+// was only used by the duplicate /analytics/list route, which now redirects to
+// /analytics/dashboards (that page uses the richer typed loader in
+// analytics/_data.ts). Export removed to leave one canonical loader.
 
 // Finance loaders
 
@@ -3717,20 +3781,74 @@ export async function getChatConversations(
   return fetchJson("/api/v1/ai/chat?limit=100", [] as ChatConversation[], CHAT_LIST_OPTIONS);
 }
 
+export interface ChatConversationCounts {
+  total: number;
+  active: number;
+  handedOff: number;
+  ended: number;
+}
+
+/**
+ * GAP-AI-CHAT-03: accurate conversation counts for the stat cards, read from
+ * the list endpoint's server-side `meta.total` (a COUNT, not the fetched page
+ * length) for all conversations and for each status. With more than 100
+ * conversations the "Conversations" card previously reported at most 100 and
+ * "With agent" could under-count; these counts are exact regardless of how many
+ * rows a single page holds. A limit of 1 keeps each count cheap. Returns null
+ * on any failure so the page can fall back to "—" rather than a fabricated 0.
+ */
+export async function getChatConversationCounts(): Promise<LoaderResult<ChatConversationCounts | null>> {
+  const countOpts = () => ({
+    revalidateSeconds: 0,
+    telemetryKey: "ai.chat.conversation_counts",
+    responseSchema: chatConversationsCountSchema,
+    mapResponse: (payload: { meta: { total: number } }) => payload.meta.total,
+  });
+  const base = "/api/v1/ai/chat?limit=1";
+  const [all, active, handed, ended] = await Promise.all([
+    fetchJson(base, null as number | null, countOpts()),
+    fetchJson(`${base}&status=active`, null as number | null, countOpts()),
+    fetchJson(`${base}&status=handed_off`, null as number | null, countOpts()),
+    fetchJson(`${base}&status=ended`, null as number | null, countOpts()),
+  ]);
+  if (
+    all.source === "error" || active.source === "error" ||
+    handed.source === "error" || ended.source === "error" ||
+    all.data === null || active.data === null || handed.data === null || ended.data === null
+  ) {
+    return { data: null, source: "error" };
+  }
+  return {
+    data: { total: all.data, active: active.data, handedOff: handed.data, ended: ended.data },
+    source: "api",
+  };
+}
+
 /**
  * A single conversation.
  *
- * ai-agent-service has no single-conversation read — only the list and the
- * transcript — so this selects from the list. Worth replacing with a dedicated
- * endpoint if the conversation count per tenant grows past a page.
+ * GAP-AI-CHAT-DETAIL-03: ai-agent-service now exposes GET /v1/ai/chat/:id, so
+ * this reads one conversation by id rather than downloading the newest 200 and
+ * picking by id (which rendered "not found" for any conversation older than the
+ * newest page). A tenant-scoped 404 is mapped to a clean not-found
+ * (source "api", data null) so the detail page can tell "this id does not
+ * exist / is another tenant's" apart from a service outage (source "error"),
+ * which GAP-AI-CHAT-DETAIL-05 relies on.
  */
 export async function getChatConversation(id: string): Promise<LoaderResult<ChatConversation | null>> {
-  return fetchJson("/api/v1/ai/chat?limit=200", null as ChatConversation | null, {
+  const result = await fetchJson(`/api/v1/ai/chat/${id}`, null as ChatConversation | null, {
     revalidateSeconds: 0,
     telemetryKey: "ai.chat.conversation",
-    responseSchema: chatConversationsListSchema,
-    mapResponse: (payload) => payload.data.find((c) => c.id === id) ?? null,
+    responseSchema: chatConversationItemSchema,
+    mapResponse: (payload) => payload.data,
   });
+  // A 404 is a definitive "not found", not an outage: present it as a
+  // successful read of an absent conversation so the page shows its
+  // not-found state rather than a retry state.
+  if (result.source === "error" && result.status === 404) {
+    return { data: null, source: "api" };
+  }
+  return result;
 }
 
 /** Full transcript for one conversation, as returned by the service. */
@@ -3743,20 +3861,35 @@ export async function getChatTranscript(id: string): Promise<LoaderResult<ChatMe
   });
 }
 
-/** Recent copilot turns for the tenant, newest first. */
-export async function getCopilotTurns(): Promise<LoaderResult<CopilotTurn[]>> {
-  return fetchJson("/api/v1/ai/copilot/turns?limit=50", [] as CopilotTurn[], {
-    revalidateSeconds: 0,
-    telemetryKey: "ai.copilot.turns",
-    responseSchema: copilotTurnsListSchema,
-    mapResponse: (payload) => payload.data.map((turn) => ({
-      ...turn,
-      sourceCitations: (turn.sourceCitations ?? []).map((citation) => ({
-        ...citation,
-        id: citation.id ?? "",
-      })),
-    })),
-  });
+/** The page size requested for the copilot turn history (GAP-AI-COPILOT-04). */
+export const COPILOT_TURNS_LIMIT = 50;
+
+/**
+ * Recent copilot turns for the tenant, newest first, plus the server's total
+ * count (GAP-AI-COPILOT-04) so the stat cards can show the real total rather
+ * than a figure that silently tops out at the page size. `total` is null when
+ * the service did not send `meta.total`.
+ */
+export async function getCopilotTurns(): Promise<LoaderResult<{ turns: CopilotTurn[]; total: number | null }>> {
+  return fetchJson(
+    `/api/v1/ai/copilot/turns?limit=${COPILOT_TURNS_LIMIT}`,
+    { turns: [] as CopilotTurn[], total: null },
+    {
+      revalidateSeconds: 0,
+      telemetryKey: "ai.copilot.turns",
+      responseSchema: copilotTurnsListSchema,
+      mapResponse: (payload) => ({
+        turns: payload.data.map((turn) => ({
+          ...turn,
+          sourceCitations: (turn.sourceCitations ?? []).map((citation) => ({
+            ...citation,
+            id: citation.id ?? "",
+          })),
+        })),
+        total: typeof payload.meta?.total === "number" ? payload.meta.total : null,
+      }),
+    },
+  );
 }
 
 /** A single copilot turn, including the service-classified latency bucket. */
@@ -4121,12 +4254,20 @@ export async function getHelpdeskTicketList(): Promise<LoaderResult<TicketDetail
 }
 
 export async function getHelpdeskTicketById(id: string): Promise<LoaderResult<TicketDetail | null>> {
-  return fetchJson<unknown, TicketDetail | null>(`/api/v1/citizen/tickets/${id}`, null, {
+  return fetchJson<unknown, TicketDetail | null>(`/api/v1/citizen/tickets/${encodeURIComponent(id)}`, null, {
     revalidateSeconds: 30,
     telemetryKey: "helpdesk.ticket.detail",
     mapResponse: mapHelpdeskTicketDetail,
   });
 }
+
+/**
+ * GAP-HELPDESK-SLAS-02: extends `LoaderResult` with per-bucket error sources
+ * so the page can show which SLA bucket failed instead of blanking everything.
+ */
+export type SlaTicketsResult = LoaderResult<TicketDetail[]> & {
+  bucketSources: Record<"breached" | "due_soon" | "within_sla", LoaderSource>;
+};
 
 /**
  * Powers /helpdesk/slas (SLA Queue). That page computes its own
@@ -4147,7 +4288,7 @@ export async function getHelpdeskTicketById(id: string): Promise<LoaderResult<Ti
  * source:"error" on every call) — mapTicketDetails already unwraps the
  * envelope itself via getArrayPayload().
  */
-export async function getBreachedSLATickets(): Promise<LoaderResult<TicketDetail[]>> {
+export async function getBreachedSLATickets(): Promise<SlaTicketsResult> {
   const fetchBucket = (slaStatus: "breached" | "due_soon" | "within_sla") =>
     fetchJson<unknown, TicketDetail[]>(`/api/v1/citizen/tickets?slaStatus=${slaStatus}`, [], {
       revalidateSeconds: 30,
@@ -4166,8 +4307,20 @@ export async function getBreachedSLATickets(): Promise<LoaderResult<TicketDetail
     source: breached.source === "error" || dueSoon.source === "error" || withinSla.source === "error"
       ? "error"
       : "api",
+    // GAP-HELPDESK-SLAS-02: expose each bucket's own source so the page can
+    // keep rendering the buckets that loaded and surface an error only for the
+    // bucket that actually failed, instead of blanking the whole page when any
+    // one of the three fetches errors.
+    bucketSources: {
+      breached: breached.source,
+      due_soon: dueSoon.source,
+      within_sla: withinSla.source,
+    },
   };
 }
+
+/** GAP-HELPDESK-SLAS-05: name matches behaviour (returns all SLA buckets, not only breached). */
+export const getSlaTickets = getBreachedSLATickets;
 
 const TICKET_ANALYTICS_EMPTY: TicketAnalytics = {
   totalTickets: 0,
@@ -4179,8 +4332,12 @@ const TICKET_ANALYTICS_EMPTY: TicketAnalytics = {
   byChannel: [],
 };
 
-export async function getTicketAnalytics(): Promise<LoaderResult<TicketAnalytics>> {
-  return fetchJson<unknown, TicketAnalytics>("/api/v1/citizen/tickets/analytics", TICKET_ANALYTICS_EMPTY, {
+export async function getTicketAnalytics(period?: "mtd" | "qtd" | "fy"): Promise<LoaderResult<TicketAnalytics>> {
+  // GAP-HELPDESK-REPORTS-01: pass the selected reporting period to the backend
+  // so the request carries the range. (The citizen-service analytics endpoint
+  // accepts `period` as an optional query param; see helpdesk/routes.ts.)
+  const query = period ? `?period=${period}` : "";
+  return fetchJson<unknown, TicketAnalytics>(`/api/v1/citizen/tickets/analytics${query}`, TICKET_ANALYTICS_EMPTY, {
     revalidateSeconds: 300,
     telemetryKey: "helpdesk.analytics",
     responseSchema: TicketAnalyticsSchema,
@@ -4544,6 +4701,19 @@ export async function getEstabFiles(): Promise<LoaderResult<EstabFileSummary[]>>
   });
 }
 
+/**
+ * GAP-ESTAB-INBOX-01: files currently on the authenticated officer's desk
+ * ("My Desk"), filtered server-side by the backend (currentWith = actor) at
+ * /api/v1/estab/files/mine — never the whole register.
+ */
+export async function getEstabDeskFiles(): Promise<LoaderResult<EstabFileSummary[]>> {
+  return fetchJson<unknown, EstabFileSummary[]>("/api/v1/estab/files/mine", [], {
+    revalidateSeconds: 30,
+    telemetryKey: "estab.files.mine",
+    mapResponse: mapEstabFileSummaries,
+  });
+}
+
 export async function getEstabFileById(id: string): Promise<LoaderResult<EstabFileDetail | null>> {
   return fetchJson<unknown, EstabFileDetail | null>(`/api/v1/estab/files/${id}`, null, {
     revalidateSeconds: 30,
@@ -4619,9 +4789,10 @@ export async function getLibraryBookById(id: string): Promise<LoaderResult<Libra
   });
 }
 
-export async function getLibraryIssues(status?: "issued" | "returned" | "overdue"): Promise<LoaderResult<LibraryIssueSummary[]>> {
+export async function getLibraryIssues(status?: "issued" | "returned" | "overdue", bookId?: string): Promise<LoaderResult<LibraryIssueSummary[]>> {
   const params = new URLSearchParams();
   if (status) params.set("status", status);
+  if (bookId) params.set("bookId", bookId);
   return fetchJson<unknown, LibraryIssueSummary[]>(`/api/v1/estab/library/issues?${params.toString()}`, [], {
     revalidateSeconds: 30,
     telemetryKey: "estab.library.issues",
@@ -4858,18 +5029,28 @@ export async function getAssetMaintenance(): Promise<LoaderResult<MaintenanceSum
 const STOCK_DASHBOARD_EMPTY: StockDashboard = {
   totalSKUs: 0,
   lowStockAlerts: 0,
+  stockOuts: 0,
   grnsThisMonth: 0,
   inventoryValue: 0,
 };
 
-function mapStockDashboard(payload: unknown): StockDashboard | null {
+// GAP-STOCK-DASHBOARD-02: a dashboard field that is not a number is a broken
+// payload, not a real zero. Return null so fetchJson reports source:"error"
+// and the page shows an honest error/"—" state instead of fabricated zeros
+// (a hidden low-stock/stock-out count masks a stock-out).
+export function mapStockDashboard(payload: unknown): StockDashboard | null {
   if (!isRecord(payload)) return null;
-  return {
-    totalSKUs: typeof payload.totalSKUs === "number" ? payload.totalSKUs : 0,
-    lowStockAlerts: typeof payload.lowStockAlerts === "number" ? payload.lowStockAlerts : 0,
-    grnsThisMonth: typeof payload.grnsThisMonth === "number" ? payload.grnsThisMonth : 0,
-    inventoryValue: typeof payload.inventoryValue === "number" ? payload.inventoryValue : 0,
-  };
+  const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  const totalSKUs = num(payload.totalSKUs);
+  const lowStockAlerts = num(payload.lowStockAlerts);
+  const grnsThisMonth = num(payload.grnsThisMonth);
+  const inventoryValue = num(payload.inventoryValue);
+  if (totalSKUs === null || lowStockAlerts === null || grnsThisMonth === null || inventoryValue === null) {
+    return null;
+  }
+  // stockOuts may be absent on an older backend; default it rather than failing.
+  const stockOuts = num(payload.stockOuts) ?? 0;
+  return { totalSKUs, lowStockAlerts, stockOuts, grnsThisMonth, inventoryValue };
 }
 
 export async function getStockDashboard(): Promise<LoaderResult<StockDashboard>> {
@@ -5120,6 +5301,8 @@ const LEGAL_DASHBOARD_EMPTY: LegalDashboard = {
   hearingsThisWeek: 0,
   ordersPending: 0,
   opinionsDue: 0,
+  disposedCases: 0,
+  totalCases: 0,
 };
 
 export async function getLegalDashboard(): Promise<LoaderResult<LegalDashboard>> {
@@ -5170,8 +5353,12 @@ export async function getLegalOpinions(): Promise<LoaderResult<LegalOpinionSumma
   return fetchJson<unknown, LegalOpinionSummary[]>("/api/v1/legal/opinions", [], {
     revalidateSeconds: 120,
     telemetryKey: "legal.opinions",
-    responseSchema: LegalOpinionSummaryListSchema,
-    mapResponse: (p) => getArrayPayload(p) as LegalOpinionSummary[] | null,
+    // GAP-LEGAL-OPINIONS-04: the real legal-service returns `{ items: [...] }`
+    // of opinions.legal_opinions rows (soughtBy/counselName, status
+    // sought|drafted|issued|pending_approval) — not a bare array in the web
+    // vocabulary. The bare LegalOpinionSummaryListSchema rejected every real
+    // response, so the list silently fell back to empty. Map explicitly.
+    mapResponse: mapLegalOpinionSummaries,
   });
 }
 
@@ -5622,6 +5809,36 @@ export async function getMISSummary(): Promise<LoaderResult<MISSummary[]>> {
     telemetryKey: "reports.mis",
     responseSchema: MISSummaryListSchema,
     mapResponse: (p) => getArrayPayload(p) as MISSummary[] | null,
+  });
+}
+
+/**
+ * GAP-REPORTS-SCHEDULED-01: report templates for the scheduled-report picker.
+ * report-service GET /v1/reports/templates returns {data:[{id,name,status,...}]}
+ * (templates module routes.ts, verified in this worktree). Only id + name are
+ * surfaced here — enough to replace the free-typed Template UUID with a named
+ * dropdown and to resolve a schedule row's templateId back to a human name. An
+ * empty list is a legitimate "no templates yet" state (returns []), not an error.
+ */
+export type ReportTemplateOption = { id: string; name: string; status: string };
+
+export async function getReportTemplates(): Promise<LoaderResult<ReportTemplateOption[]>> {
+  return fetchJson<unknown, ReportTemplateOption[]>("/api/v1/reports/templates?limit=200", [], {
+    revalidateSeconds: 60,
+    telemetryKey: "reports.templates",
+    mapResponse: (p) => {
+      const rows = getArrayPayload(p);
+      if (!rows) return null;
+      const out: ReportTemplateOption[] = [];
+      for (const r of rows) {
+        if (!isRecord(r)) continue;
+        const id = toText(r.id);
+        const name = toText(r.name);
+        if (!id || !name) continue;
+        out.push({ id, name, status: toText(r.status) ?? "active" });
+      }
+      return out;
+    },
   });
 }
 
@@ -7011,6 +7228,67 @@ export async function getMyServiceRequests(): Promise<LoaderResult<ServiceReques
     telemetryKey: "helpdesk.catalogue.my_requests",
     mapResponse: (p) => ((p as { data?: ServiceRequestSummary[] } | null)?.data ?? []),
   });
+}
+
+/**
+ * GAP-HELPDESK-CATALOGUE-MY-REQUESTS-02: a single service request's detail,
+ * including (when the backend provides them) a rejection reason and stage
+ * history. Additive, optional fields so the loader stays tolerant of a
+ * service that has not yet rolled this shape out.
+ */
+export type ServiceRequestStageEvent = {
+  stage: string;
+  enteredAt: string;
+  note?: string | null;
+};
+export type ServiceRequestDetail = ServiceRequestSummary & {
+  rejectionReason?: string | null;
+  stageHistory?: ServiceRequestStageEvent[];
+};
+
+export async function getServiceRequest(id: string): Promise<LoaderResult<ServiceRequestDetail | null>> {
+  return fetchJson<unknown, ServiceRequestDetail | null>(
+    `/api/v1/helpdesk/catalogue/requests/${encodeURIComponent(id)}`,
+    null,
+    {
+      revalidateSeconds: 15,
+      telemetryKey: "helpdesk.catalogue.request.detail",
+      mapResponse: (payload) => {
+        const raw =
+          payload && typeof payload === "object" && "data" in payload
+            ? (payload as { data: unknown }).data
+            : payload;
+        if (!raw || typeof raw !== "object") return null;
+        const r = raw as Record<string, unknown>;
+        if (typeof r.id !== "string") return null;
+        const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
+        const history = Array.isArray(r.stageHistory)
+          ? r.stageHistory
+              .filter((e): e is Record<string, unknown> => !!e && typeof e === "object")
+              .map((e) => ({
+                stage: typeof e.stage === "string" ? e.stage : "",
+                enteredAt: typeof e.enteredAt === "string" ? e.enteredAt : "",
+                note: typeof e.note === "string" ? e.note : null,
+              }))
+              .filter((e) => e.stage !== "")
+          : undefined;
+        return {
+          id: r.id,
+          offeringId: str(r.offeringId) ?? "",
+          ticketId: str(r.ticketId),
+          requestedBy: str(r.requestedBy) ?? "",
+          status: str(r.status) ?? "unknown",
+          currentStage: str(r.currentStage),
+          slaStatus: str(r.slaStatus) ?? "within_sla",
+          resolutionDeadline: str(r.resolutionDeadline),
+          breachEscalatedAt: str(r.breachEscalatedAt),
+          createdAt: str(r.createdAt) ?? "",
+          rejectionReason: str(r.rejectionReason),
+          stageHistory: history,
+        } satisfies ServiceRequestDetail;
+      },
+    },
+  );
 }
 
 /** SLA-breach report over service requests. */

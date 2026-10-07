@@ -66,3 +66,93 @@ describe("NewTicketForm (citizen-facing)", () => {
     expect(pushMock).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * GAP-HELPDESK-TICKETS-NEW-01/02/03/04/05 tests (batch 2, agent 2).
+ * Appended to avoid conflict with existing tests above.
+ */
+describe("NewTicketForm (GAP-HELPDESK-TICKETS-NEW batch 2)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    pushMock.mockReset();
+    refreshMock.mockReset();
+    toastSuccess.mockReset();
+  });
+
+  it("NEW-01: sends channel field in POST body", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: "t1" } }), { status: 202 }),
+    );
+
+    render(<NewTicketForm />);
+    fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: "Phone complaint" } });
+    fireEvent.change(screen.getByLabelText(/description/i), { target: { value: "Citizen called about water." } });
+    fireEvent.change(screen.getByLabelText(/channel/i), { target: { value: "phone" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit ticket" }));
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalled());
+    const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.channel).toBe("phone");
+  });
+
+  it("NEW-02: 201 with ticketNo shows toast + navigates to detail", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: "t2", ticketNo: "TKT-102" } }), { status: 201 }),
+    );
+
+    render(<NewTicketForm />);
+    fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: "Test" } });
+    fireEvent.change(screen.getByLabelText(/description/i), { target: { value: "Test description" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit ticket" }));
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/helpdesk/tickets/t2"));
+    expect(toastSuccess).toHaveBeenCalledWith("Ticket TKT-102 submitted.");
+  });
+
+  it("NEW-02: empty body still succeeds without crash (fallback to list)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("", { status: 202 }),
+    );
+
+    render(<NewTicketForm />);
+    fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: "Test" } });
+    fireEvent.change(screen.getByLabelText(/description/i), { target: { value: "Body" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit ticket" }));
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/helpdesk/tickets"));
+    expect(toastSuccess).toHaveBeenCalledWith("Ticket submitted successfully.");
+  });
+
+  it("NEW-03: no #fff or #b91c1c or #047857 hex in rendered output (uses CSS tokens)", () => {
+    const { container } = render(<NewTicketForm />);
+    const html = container.innerHTML;
+    expect(html).not.toContain("#fff");
+    expect(html).not.toContain("#b91c1c");
+    expect(html).not.toContain("#047857");
+  });
+
+  it("NEW-04: empty submit sets aria-invalid on subject and shows per-field error", () => {
+    render(<NewTicketForm />);
+    fireEvent.click(screen.getByRole("button", { name: "Submit ticket" }));
+
+    const subjectInput = screen.getByLabelText(/subject/i);
+    expect(subjectInput).toHaveAttribute("aria-invalid", "true");
+    // Per-field error is present (may appear in both the field and the summary area).
+    const errors = screen.getAllByText("Subject is required.");
+    expect(errors.length).toBeGreaterThanOrEqual(1);
+    // Subject input is linked to its error via aria-describedby
+    expect(subjectInput).toHaveAttribute("aria-describedby", "subject-error");
+  });
+
+  it("NEW-04: DPDP hint present on description", () => {
+    render(<NewTicketForm />);
+    expect(screen.getByText(/do not enter aadhaar/i)).toBeInTheDocument();
+  });
+
+  it("NEW-05: priority select shows SLA note", () => {
+    render(<NewTicketForm />);
+    expect(screen.getByText(/SLA target: within 24 hours\./)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/priority/i), { target: { value: "Critical" } });
+    expect(screen.getByText(/use only for urgent/i)).toBeInTheDocument();
+  });
+});

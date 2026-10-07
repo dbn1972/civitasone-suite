@@ -1,6 +1,6 @@
 "use client";
 
-import { toHumanError } from "@/lib/messages";
+import { toHumanError, type HumanError } from "@/lib/messages";
 
 export interface ServicePackDto {
   id: string;
@@ -33,10 +33,34 @@ async function parseAccepted(res: Response): Promise<string> {
   return body.id ?? "";
 }
 
+/**
+ * GAP-DESIGNER-LIBRARY-01 — a failed pack listing used to be swallowed as an
+ * empty array, so an outage, a 403 or a 500 all rendered the innocuous
+ * "No packs match the current filters." empty state. This typed error carries
+ * the HTTP status so the client can tell a real failure apart from an empty
+ * list and render a retryable error (and a distinct forbidden message), while
+ * the human-facing copy still comes from the catalogued vocabulary — never the
+ * raw status or server body.
+ */
+export class ServicePackLoadError extends Error {
+  readonly status?: number;
+  /** The clerk-safe, catalogued message split into what/next/actions. */
+  readonly human: HumanError;
+  constructor(status?: number) {
+    const human = toHumanError(status === 401 || status === 403 ? "forbidden" : "load", {
+      area: "service packs",
+    });
+    super(`${human.what} ${human.next}`);
+    this.name = "ServicePackLoadError";
+    this.status = status;
+    this.human = human;
+  }
+}
+
 export async function fetchServicePacks(domainPackKey?: string): Promise<ServicePackDto[]> {
   const qs = domainPackKey ? `?domainPackKey=${encodeURIComponent(domainPackKey)}` : "";
   const res = await fetch(`/api/proxy/v1/citizen/packs/services${qs}`, { cache: "no-store" });
-  if (!res.ok) return [];
+  if (!res.ok) throw new ServicePackLoadError(res.status);
   const body = await res.json() as { data?: unknown[] };
   return (body.data ?? []).map(mapPack);
 }

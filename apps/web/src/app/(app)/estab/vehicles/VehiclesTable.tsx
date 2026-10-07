@@ -8,6 +8,7 @@ export type VehicleRow = {
   vehicleNo: string;
   model: string;
   allocatedTo: string;
+  fuel: string;
   odometer: string;
   status: string;
   pool: boolean;
@@ -31,6 +32,8 @@ export function VehiclesTable({ rows }: { rows: VehicleRow[] }) {
 
   return (
     <>
+      {/* GAP-ESTAB-VEHICLES-03: the single "Vehicle fleet" heading lives here
+          (the page no longer renders its own duplicate h3). */}
       <div className="card-h">
         <h3>Vehicle fleet</h3>
         <Segmented options={SEGMENTS} value={seg} onChange={setSeg} />
@@ -40,6 +43,7 @@ export function VehiclesTable({ rows }: { rows: VehicleRow[] }) {
           { key: "vehicleNo", label: "Reg no." },
           { key: "model", label: "Model" },
           { key: "allocatedTo", label: "Allocated to" },
+          { key: "fuel", label: "Fuel" },
           { key: "odometer", label: "Odometer", align: "right" },
           { key: "status", label: "Status", cellType: "status" },
         ]}

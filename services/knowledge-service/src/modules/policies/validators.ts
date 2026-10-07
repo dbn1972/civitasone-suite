@@ -43,3 +43,8 @@ export const listPolicyQuery = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 export type ListPolicyQuery = z.infer<typeof listPolicyQuery>;
+
+export const rejectPolicyBody = z.object({
+  reason: z.string().min(10, "reason must be at least 10 characters").max(1000),
+});
+export type RejectPolicyBody = z.infer<typeof rejectPolicyBody>;

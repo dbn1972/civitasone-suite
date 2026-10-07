@@ -12,6 +12,10 @@ import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 
 const PLATFORM_ADMIN = ["platform_admin", "super_admin"];
+// GAP-TENANT-PLANS-04: plan catalogue + entitlements are tenant governance
+// reads. A bare signed-in session should not expose which plans/features exist;
+// require a tenant-admin/config role (super_admin/platform_admin/tenant_admin).
+const PLAN_READ = ["platform_admin", "super_admin", "tenant_admin"];
 const RESOURCE = "plan";
 
 export async function planRoutes(app: FastifyInstance): Promise<void> {
@@ -26,7 +30,8 @@ export async function planRoutes(app: FastifyInstance): Promise<void> {
 
   // LIST all plans
   app.get("/v1/plans", async (req, reply) => {
-    resolveContext(req); // auth required
+    const ctx = resolveContext(req); // auth required
+    requireRole(ctx, PLAN_READ);
     const plans = await repo.findAll();
     return reply.send(plans);
   });
@@ -34,6 +39,7 @@ export async function planRoutes(app: FastifyInstance): Promise<void> {
   // GET single plan by id (cache-first)
   app.get("/v1/plans/:planId", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, PLAN_READ);
     const { planId } = planIdParam.parse(req.params);
     const view = await cache.getOrLoad(
       cache.makeKey(ctx.tenantId, RESOURCE, planId),

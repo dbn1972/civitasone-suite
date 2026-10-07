@@ -3,6 +3,8 @@
 import { useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
+import type { EntityOption } from "@/app/_components/ds";
+import { EmployeePicker } from "@/app/_components/EmployeePicker";
 import { browserJson } from "@/lib/api/browserClient";
 import type { LibraryBookSummary } from "@civitasone/types";
 
@@ -10,10 +12,24 @@ type AcceptedResponse = { id?: string; status?: string; correlationId?: string }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// GAP-ESTAB-LIBRARY-ISSUES-03: derive the local calendar date (YYYY-MM-DD)
+// from local date parts rather than toISOString(), which rolls to the
+// previous day before 05:30 IST (UTC boundary).
+function localDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function todayLocal(): string {
+  return localDateStr(new Date());
+}
+
 function defaultDueDate(): string {
   const d = new Date();
   d.setDate(d.getDate() + 14);
-  return d.toISOString().slice(0, 10);
+  return localDateStr(d);
 }
 
 export function IssueBookForm({
@@ -27,6 +43,7 @@ export function IssueBookForm({
   const preselect = defaultBookId && books.some((b) => b.id === defaultBookId) ? defaultBookId : "";
   const [bookId, setBookId] = useState(preselect);
   const [employeeRef, setEmployeeRef] = useState("");
+  const [employeeOption, setEmployeeOption] = useState<EntityOption | null>(null);
   const [dueAt, setDueAt] = useState(defaultDueDate());
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -46,7 +63,7 @@ export function IssueBookForm({
   const dueAtErrorId = `${dueAtId}-error`;
 
   const bookRef = useRef<HTMLSelectElement>(null);
-  const employeeRefInputRef = useRef<HTMLInputElement>(null);
+  const employeePickerWrapRef = useRef<HTMLDivElement>(null);
   const dueAtRef = useRef<HTMLInputElement>(null);
 
   const selected = useMemo(() => books.find((b) => b.id === bookId), [books, bookId]);
@@ -59,9 +76,10 @@ export function IssueBookForm({
     const errors: { book?: string; employeeRef?: string; dueAt?: string } = {};
     if (!bookId) errors.book = "Select a book to issue.";
     else if (!selected || selected.copiesAvailable <= 0) errors.book = "This book has no copies available.";
-    if (!employeeRef.trim()) errors.employeeRef = "Enter the borrowing employee's ID.";
-    else if (!UUID_RE.test(employeeRef.trim())) errors.employeeRef = "Enter a valid employee ID (UUID).";
+    if (!employeeRef.trim()) errors.employeeRef = "Select the borrowing employee.";
+    else if (!UUID_RE.test(employeeRef.trim())) errors.employeeRef = "Select a valid employee from the list.";
     if (!dueAt) errors.dueAt = "Choose a due date.";
+    else if (dueAt < todayLocal()) errors.dueAt = "Due date cannot be in the past.";
     setFieldErrors(errors);
 
     if (errors.book) {
@@ -73,7 +91,7 @@ export function IssueBookForm({
     if (errors.employeeRef) {
       setTone("bad");
       setMessage("Please correct the highlighted field(s).");
-      employeeRefInputRef.current?.focus();
+      employeePickerWrapRef.current?.querySelector("input")?.focus();
       return;
     }
     if (errors.dueAt) {
@@ -92,6 +110,7 @@ export function IssueBookForm({
     setBusy(true);
     setDialogError(undefined);
     try {
+      const issuedTitle = selected.title;
       const res = await browserJson<AcceptedResponse>("v1/estab/library/issues", {
         method: "POST",
         body: JSON.stringify({
@@ -102,13 +121,15 @@ export function IssueBookForm({
       });
       setConfirmOpen(false);
       setTone("good");
+      // GAP-ESTAB-LIBRARY-ISSUES-06: never surface the raw record id.
       setMessage(
         res.id
-          ? `Issue submitted (id ${res.id}). It will appear in the loan list shortly.`
+          ? `Issued “${issuedTitle}”. It will appear in the loan list shortly.`
           : "Issue submitted.",
       );
       setBookId("");
       setEmployeeRef("");
+      setEmployeeOption(null);
       setDueAt(defaultDueDate());
       setFieldErrors({});
       router.refresh();
@@ -120,7 +141,7 @@ export function IssueBookForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ marginBottom: 16 }} aria-label="Issue a book to a staff member">
+    <form onSubmit={handleSubmit} noValidate style={{ marginBottom: 16 }} aria-label="Issue a book to a staff member">
       <Card title="Issue a Book" padding>
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
           <div style={{ display: "grid", gap: 6 }}>
@@ -157,20 +178,20 @@ export function IssueBookForm({
             )}
           </div>
 
-          <div style={{ display: "grid", gap: 6 }}>
+          <div ref={employeePickerWrapRef} style={{ display: "grid", gap: 6 }}>
             <label htmlFor={employeeId} style={{ fontSize: 13, fontWeight: 600 }}>
-              Employee ID (UUID) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              Employee <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
-            <input
+            <EmployeePicker
+              value={employeeRef || null}
+              onChange={(id, option) => {
+                setEmployeeRef(id ?? "");
+                setEmployeeOption(option ?? null);
+              }}
               id={employeeId}
-              ref={employeeRefInputRef}
-              value={employeeRef}
-              onChange={(e) => setEmployeeRef(e.target.value)}
-              placeholder="00000000-0000-0000-0000-000000000000"
-              aria-required="true"
-              aria-invalid={!!fieldErrors.employeeRef || undefined}
-              aria-describedby={fieldErrors.employeeRef ? employeeErrorId : undefined}
-              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+              aria-label="Borrowing employee"
+              disabled={noBooksAvailable}
+              clearable
             />
             {fieldErrors.employeeRef && (
               <p id={employeeErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
@@ -187,6 +208,7 @@ export function IssueBookForm({
               id={dueAtId}
               ref={dueAtRef}
               type="date"
+              min={todayLocal()}
               value={dueAt}
               onChange={(e) => setDueAt(e.target.value)}
               aria-required="true"
@@ -229,7 +251,8 @@ export function IssueBookForm({
         description={
           selected ? (
             <>
-              Issue <strong>{selected.title}</strong> to employee <strong>{employeeRef}</strong>, due back{" "}
+              Issue <strong>{selected.title}</strong> to{" "}
+              <strong>{employeeOption?.label ?? "the selected employee"}</strong>, due back{" "}
               <strong>{dueAt}</strong>.
             </>
           ) : (

@@ -3,7 +3,7 @@ export default function Loading() {
     <div className="page-main" aria-labelledby="page-heading">
       <div className="ph">
         <div>
-          <h1 id="page-heading">Catalogue</h1>
+          <h1 id="page-heading">Service Catalogue</h1>
         </div>
       </div>
       <div className="animate-pulse" style={{ display: "grid", gap: 16 }}>

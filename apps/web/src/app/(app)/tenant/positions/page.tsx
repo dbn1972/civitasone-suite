@@ -1,6 +1,6 @@
 import { ModuleListPage } from "../../../_components/ModuleListPage";
 import { getTenantPositions } from "../_data";
-import { ArrowLeft } from "lucide-react";
+import { LABELS } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -8,14 +8,18 @@ export default async function Page() {
   const { data, source } = await getTenantPositions();
   return (
     <div className="page-main" aria-labelledby="page-heading">
-      <nav aria-label="Breadcrumb" className="back">
-        <ArrowLeft aria-hidden="true" size={14} /> <a href="/tenant">Tenant</a>
-      </nav>
       <ModuleListPage
-        title="Tenant — Positions"
-        description="Position master records and role bindings."
+        // GAP-TENANT-POSITIONS-06: no banned clerk term ("Tenant"); use the
+        // standardised "Office" label (LABELS.tenantTitle) instead.
+        title={`${LABELS.tenantTitle} — Positions`}
+        // GAP-TENANT-POSITIONS-01: the list payload carries no role bindings,
+        // so the old "and role bindings" promise is dropped; sanctioned/filled
+        // strength and a Vacant indicator are shown via mapPositionRows.
+        description="Position master records with sanctioned strength and vacancies."
         rows={data}
         source={source}
+        back="/tenant"
+        backLabel={LABELS.tenantTitle}
       />
     </div>
   );

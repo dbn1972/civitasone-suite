@@ -26,6 +26,28 @@ describe("eligibilityBuilderApi", () => {
     expect(back[1]?.effect).toBe("flag");
   });
 
+  // GAP-DESIGNER-DETAIL-B3-03: 'warn' must survive a save+reload instead of
+  // silently collapsing to 'flag' (both previously mapped to 'refer').
+  it("round-trips warn and flag effects distinctly", () => {
+    const rules: EligibilityRuleUi[] = [
+      { id: "r1", attribute: "age", op: "gte", value: "18", effect: "warn", message: "Please verify age" },
+      { id: "r2", attribute: "ward", op: "exists", effect: "flag", message: "Verify ward" },
+    ];
+    const api = rulesUiToApi(rules);
+    expect(api[0]?.effect).toBe("warn");
+    expect(api[1]?.effect).toBe("refer");
+    const back = rulesApiToUi(api);
+    expect(back[0]?.effect).toBe("warn");
+    expect(back[1]?.effect).toBe("flag");
+  });
+
+  it("loads legacy 'refer' rules as 'flag' for backward compatibility", () => {
+    const back = rulesApiToUi([
+      { id: "r1", attribute: "ward", op: "exists", effect: "refer", label: "legacy" },
+    ]);
+    expect(back[0]?.effect).toBe("flag");
+  });
+
   it("evaluates sample applicant locally", () => {
     const rules: EligibilityRuleUi[] = [
       { id: "age", attribute: "age", op: "gte", value: "60", effect: "block", message: "Senior only" },
@@ -116,5 +138,24 @@ describe("eligibilityBuilderApi — persistEligibilityDesign never leaks raw sta
 
     expect(err).toBeInstanceOf(Error);
     expect((err as Error).message).not.toMatch(/\b500\b/);
+  });
+});
+
+/**
+ * GAP-DESIGNER-DETAIL-B3-01: sensitive socio-economic attributes carry sensitivity metadata.
+ */
+import { PROFILE_ATTRIBUTES } from "@/app/_components/ds/designer/eligibilityTypes";
+
+describe("PROFILE_ATTRIBUTES sensitivity (GAP-DESIGNER-DETAIL-B3-01)", () => {
+  it("bpl and income_band carry sensitivity='sensitive'", () => {
+    const bpl = PROFILE_ATTRIBUTES.find((a) => a.id === "bpl");
+    expect(bpl?.sensitivity).toBe("sensitive");
+    const income = PROFILE_ATTRIBUTES.find((a) => a.id === "income_band");
+    expect(income?.sensitivity).toBe("sensitive");
+  });
+
+  it("non-sensitive attributes do not carry the flag", () => {
+    const age = PROFILE_ATTRIBUTES.find((a) => a.id === "age");
+    expect(age?.sensitivity).toBeUndefined();
   });
 });

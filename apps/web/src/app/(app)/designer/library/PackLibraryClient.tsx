@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { Button, PageHeader } from "@/app/_components/ds";
+import { Button, PageHeader, ErrorState, Modal } from "@/app/_components/ds";
 import { Segmented } from "@/app/_components/ds/Segmented";
 import { PackCard, StatutoryWarningDialog } from "@/app/_components/ds/designer";
+import { toHumanError, type HumanError } from "@/lib/messages";
 import {
   fetchServicePacks,
   importServicePack,
+  ServicePackLoadError,
   type ServicePackDto,
 } from "../_data/packLibraryApi";
 import type { DomainPackRow } from "../_data/designerLoader";
@@ -25,12 +27,21 @@ import {
 
 interface PackLibraryClientProps {
   domainPacks: DomainPackRow[];
+  /**
+   * GAP-DESIGNER-LIBRARY-01/05 — did the server loader for domain packs fail?
+   * The server loader returns an empty list on failure (LoaderResult.error),
+   * which would silently drop the sector/jurisdiction/domain filter options;
+   * surfacing it as a notice keeps the two load paths honest.
+   */
+  domainPacksFailed?: boolean;
 }
 
-export function PackLibraryClient({ domainPacks }: PackLibraryClientProps) {
+export function PackLibraryClient({ domainPacks, domainPacksFailed = false }: PackLibraryClientProps) {
   const router = useRouter();
   const [packs, setPacks] = useState<ServicePackDto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<HumanError | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
   const [sector, setSector] = useState("all");
   const [pattern, setPattern] = useState("all");
@@ -45,14 +56,25 @@ export function PackLibraryClient({ domainPacks }: PackLibraryClientProps) {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const data = await fetchServicePacks();
-      if (!cancelled) {
-        setPacks(data);
-        setLoading(false);
+      setLoadError(null);
+      try {
+        const data = await fetchServicePacks();
+        if (!cancelled) setPacks(data);
+      } catch (e) {
+        if (!cancelled) {
+          setPacks([]);
+          setLoadError(
+            e instanceof ServicePackLoadError
+              ? e.human
+              : toHumanError("load", { area: "service packs" }),
+          );
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [reloadToken]);
 
   const domainByKey = useMemo(
     () => new Map(domainPacks.map((d) => [d.domainPackKey, d])),
@@ -73,6 +95,22 @@ export function PackLibraryClient({ domainPacks }: PackLibraryClientProps) {
     }),
     [packs, domainPacks, sector, pattern, domainFilter, jurisdiction, source],
   );
+
+  // GAP-DESIGNER-LIBRARY-04 — a Clear control + result count for the five filters.
+  const anyFilterActive =
+    sector !== "all" ||
+    pattern !== "all" ||
+    domainFilter !== "all" ||
+    jurisdiction !== "all" ||
+    source !== "all";
+
+  const clearFilters = () => {
+    setSector("all");
+    setPattern("all");
+    setDomainFilter("all");
+    setJurisdiction("all");
+    setSource("all");
+  };
 
   const needsStatutoryAck = (pack: ServicePackDto) => {
     if (pack.statutoryReferences.some((r) => r.act.trim().length > 0)) return true;
@@ -117,6 +155,13 @@ export function PackLibraryClient({ domainPacks }: PackLibraryClientProps) {
 
       {notice ? (
         <p role="status" style={{ marginBottom: 12, color: "var(--ink2)", fontSize: 14 }}>{notice}</p>
+      ) : null}
+
+      {domainPacksFailed ? (
+        <p role="status" style={{ marginBottom: 12, color: "var(--warn)", fontSize: 14 }}>
+          Domain pack details couldn&apos;t be loaded, so the sector, jurisdiction and domain-pack
+          filters may be incomplete. Service packs below are still shown.
+        </p>
       ) : null}
 
       <div
@@ -168,10 +213,31 @@ export function PackLibraryClient({ domainPacks }: PackLibraryClientProps) {
           onChange={(v) => setPattern(v === "All patterns" ? "all" : v)}
           options={patterns.map((p) => (p === "all" ? "All patterns" : p))}
         />
+        {anyFilterActive ? (
+          <button
+            type="button"
+            className="btn ghost"
+            onClick={clearFilters}
+            style={{ fontSize: 13 }}
+          >
+            Clear filters
+          </button>
+        ) : null}
       </div>
+
+      {!loading && !loadError && (
+        <p style={{ fontSize: 13, color: "var(--mut)", marginBottom: 12 }} role="status">
+          {filtered.length} of {packs.length} pack{packs.length === 1 ? "" : "s"}
+        </p>
+      )}
 
       {loading ? (
         <p style={{ color: "var(--mut)" }}>Loading packs…</p>
+      ) : loadError ? (
+        <ErrorState
+          error={loadError}
+          onRetry={() => setReloadToken((n) => n + 1)}
+        />
       ) : filtered.length === 0 ? (
         <p style={{ color: "var(--mut)" }}>No packs match the current filters.</p>
       ) : (
@@ -188,6 +254,7 @@ export function PackLibraryClient({ domainPacks }: PackLibraryClientProps) {
               <PackCard
                 key={pack.id}
                 pack={pack}
+                domainName={domain?.name}
                 source={packSourceLabel(pack, domain)}
                 sector={packSector(pack, domain)}
                 jurisdiction={packJurisdiction(pack, domain)}
@@ -199,36 +266,14 @@ export function PackLibraryClient({ domainPacks }: PackLibraryClientProps) {
         </div>
       )}
 
-      {previewPack ? (
-        <div
-          role="presentation"
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(16,24,40,0.45)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-            padding: 16,
-          }}
-          onClick={(e) => { if (e.target === e.currentTarget) setPreviewPack(null); }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="pack-preview-title"
-            style={{
-              width: "min(640px, 100%)",
-              maxHeight: "90vh",
-              overflow: "auto",
-              background: "var(--panel)",
-              borderRadius: "var(--r-sm)",
-              border: "1px solid var(--line)",
-              padding: 20,
-            }}
-          >
-            <h2 id="pack-preview-title" style={{ margin: "0 0 8px" }}>{previewPack.name}</h2>
+      <Modal
+        open={Boolean(previewPack)}
+        onClose={() => setPreviewPack(null)}
+        title={previewPack?.name ?? "Pack preview"}
+        size="lg"
+      >
+        {previewPack ? (
+          <>
             <p style={{ margin: "0 0 12px", color: "var(--mut)", fontSize: 14 }}>
               Read-only wizard walkthrough — {previewPack.servicePattern} · v{previewPack.version}
             </p>
@@ -263,9 +308,9 @@ export function PackLibraryClient({ domainPacks }: PackLibraryClientProps) {
                 Import as draft
               </Button>
             </div>
-          </div>
-        </div>
-      ) : null}
+          </>
+        ) : null}
+      </Modal>
 
       <StatutoryWarningDialog
         open={Boolean(importPack)}

@@ -76,6 +76,14 @@ const STATUS_MAP: Record<string, PillVariant> = {
   unconfigured: "mut",
   "low stock": "bad",
   archived: "mut",
+  // GAP-ANALYTICS-DASHBOARDS-04: dashboard visibility pills. "shared" is a
+  // normal, positive-ish state (others can see it); "private" is the neutral
+  // default (owner-only). Neither existed before, so both fell through to the
+  // generic blue "info" pill, giving the Visibility column's colour no
+  // meaning. Added additively; no existing caller passes these expecting the
+  // info fallback.
+  shared: "info",
+  private: "mut",
 
   // --- GAP SF-04 (additive): every key below was verified against a real call
   // site under apps/web/src/app/(app)/hr/** (incl. payroll/** and
@@ -182,6 +190,14 @@ const STATUS_MAP: Record<string, PillVariant> = {
   "hard close": "bad",
   computed: "warn",
   processing: "warn",
+  // GAP-REPORTS-LIST-05: report-service job lifecycle is
+  // queued | running | completed | failed (services/report-service jobs
+  // routes coerce to exactly that set). "queued"/"completed"/"failed" already
+  // map; "running" had no entry and fell through to the neutral "info"
+  // default, so an in-progress report job looked the same as an unknown
+  // status. A running job is an active in-progress state → "warn" (matching
+  // the sibling "processing").
+  running: "warn",
   // payroll.disbursement_transfers (GAP-PAYROLL-DISBURSEMENT-TRANSFERS):
   // "sent" = in a generated bank file, outcome not yet known; "returned" =
   // the bank bounced the credit (NACH return), money did not land.
@@ -361,6 +377,25 @@ const STATUS_MAP: Record<string, PillVariant> = {
   // through to the neutral "info" pill, giving the status column no meaning.
   locked: "bad",
   deactivated: "mut",
+
+  // --- GAP-HELPDESK additive: SLA and service-request statuses used by the
+  // helpdesk catalogue/my-requests/breach pages. Previously fell through to
+  // the neutral "info" pill, making the SLA column and status column colours
+  // meaningless. Keys are written in normalizeStatusKey()'s canonical
+  // space-separated lowercase form.
+  "within sla": "good",
+  "due soon": "warn",
+  // "pending approval" already mapped above (disciplinary section) as "warn"
+  "pending fulfilment": "warn",
+  "in fulfilment": "info",
+  fulfilled: "good",
+  // "cancelled" already exists above (bad)
+
+  // Priority words (catalogue list/detail, internal tickets) — Low/Medium/High
+  // were missing so the Priority column rendered neutral info pills for all of them.
+  low: "info",
+  medium: "warn",
+  high: "warn",
 
   // CRM lead/contact lifecycle (crm-service lead status enum; see
   // lib/crm/leadQualification.ts LEAD_STATUSES). GAP-CRM-CONTACTS-06: the

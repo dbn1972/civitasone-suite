@@ -10,8 +10,10 @@
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { eq, and, sql, gte } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
+import { enqueue } from "../../shared/outbox.js";
 import { mlPredictions } from "../predictions/schema.js";
 
 const EVALUATION_ROLES = ["ml_admin", "analytics_admin", "super_admin"];
@@ -19,6 +21,12 @@ const EVALUATION_ROLES = ["ml_admin", "analytics_admin", "super_admin"];
 const evaluationsQuery = z.object({
   window: z.enum(["7d", "30d", "90d"]).default("30d"),
   domain: z.enum(["leads", "tickets", "inventory", "subscriptions", "tasks", "transactions"]).optional(),
+});
+
+const exportAuditBody = z.object({
+  domain: z.enum(["leads", "tickets", "inventory", "subscriptions", "tasks", "transactions"]),
+  rowCount: z.number().int().min(0),
+  filtered: z.boolean().default(false),
 });
 
 function windowToDays(window: string): number {
@@ -100,6 +108,43 @@ export async function evaluationRoutes(app: FastifyInstance): Promise<void> {
         })),
       },
     });
+  });
+
+  /**
+   * POST /v1/ml/predictions/export-audit — record that a user exported the
+   * ML predictions CSV from the ML Insights UI. The CSV carries scored entity
+   * ids and model scores, so each export is recorded in the audit trail. The
+   * raw search text is never sent (only whether a filter was active), and the
+   * same role gate as the evaluations read applies. The audit write is in a
+   * transaction with the outbox enqueue (exactly-once via the transactional
+   * outbox). GAP-ANALYTICS-ML-INSIGHTS-*-07/08.
+   */
+  app.post("/v1/ml/predictions/export-audit", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, EVALUATION_ROLES);
+
+    const body = exportAuditBody.parse(req.body);
+
+    await db.transaction(async (tx) => {
+      await enqueue(tx, {
+        topic: "audit.event.record",
+        eventType: "ml.predictions.export",
+        tenantId: ctx.tenantId,
+        actorId: ctx.actorId,
+        correlationId: randomUUID(),
+        payload: {
+          tenantId: ctx.tenantId,
+          actorId: ctx.actorId,
+          action: "ml.predictions.export",
+          domain: body.domain,
+          rowCount: body.rowCount,
+          filtered: body.filtered,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    });
+
+    return reply.code(202).send({ data: { recorded: true } });
   });
 
   app.setErrorHandler((err, req, reply) => {

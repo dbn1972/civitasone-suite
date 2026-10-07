@@ -66,6 +66,18 @@ function resolveBlockLink(definitionId: string, link?: string): string | undefin
   return link.replace("__ID__", definitionId);
 }
 
+/**
+ * GAP-DESIGNER-DETAIL-TEST-05 — `createdAt` can arrive empty or malformed
+ * (sandboxTestApi maps `String(row.createdAt ?? "")`). `new Date("").toLocaleString()`
+ * prints "Invalid Date" to the clerk; show an em-dash instead.
+ */
+function formatRunAt(createdAt: string): string {
+  if (!createdAt.trim()) return "—";
+  const d = new Date(createdAt);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("en-IN");
+}
+
 function StepArtifacts({ artifacts }: { artifacts?: Record<string, unknown> }) {
   if (!artifacts) return null;
   const lines = parseDemandLines(artifacts);
@@ -96,7 +108,7 @@ function StepArtifacts({ artifacts }: { artifacts?: Record<string, unknown> }) {
         </p>
       ) : null}
       {consumer ? (
-        <p style={{ margin: 0 }}>Sandbox payment: {consumer} ({String(artifacts.status ?? "captured")})</p>
+        <p style={{ margin: 0 }}>Test payment: {consumer} ({String(artifacts.status ?? "captured")})</p>
       ) : null}
       {previewUrl ? (
         <p style={{ margin: 0 }}>
@@ -227,7 +239,7 @@ export function TestRunPanel({ definitionId, steps, history, onRun, running }: T
       <h3 style={{ margin: "24px 0 8px", fontSize: 15, color: "var(--ink)" }}>Recent runs</h3>
       <DataTable<TestRunHistoryRow>
         columns={[
-          { key: "createdAt", label: "Run at", render: (row) => new Date(row.createdAt).toLocaleString("en-IN") },
+          { key: "createdAt", label: "Run at", render: (row) => formatRunAt(row.createdAt) },
           { key: "status", label: "Result", cellType: "status" },
           {
             key: "durationMs",

@@ -32,7 +32,7 @@ export function StatusFilter() {
 
   return (
     <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-      <span style={{ fontSize: 13, color: "#475569" }}>Status</span>
+      <span style={{ fontSize: 13, color: "var(--muted)" }}>Status</span>
       <select
         value={selected}
         disabled={pending}
@@ -43,7 +43,13 @@ export function StatusFilter() {
           <option key={option.value} value={option.value}>{option.label}</option>
         ))}
       </select>
-      {pending && <span style={{ fontSize: 12, color: "#64748b" }}>Loading…</span>}
+      {/* GAP-AI-CHAT-05: announce the pending transition to assistive tech and
+          use a theme token so it is readable in dark mode. */}
+      {pending && (
+        <span role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--muted)" }}>
+          Loading…
+        </span>
+      )}
     </label>
   );
 }

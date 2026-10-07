@@ -46,6 +46,12 @@ export const vacateBody = z.object({
 });
 export type VacateBody = z.infer<typeof vacateBody>;
 
+export const cancelBody = z.object({
+  version:      z.number().int().positive(),
+  cancelReason: z.string().min(1).max(1000),
+});
+export type CancelBody = z.infer<typeof cancelBody>;
+
 export const createLicenceFeeRateBody = z.object({
   quarterType:   quarterType,
   payLevel:      z.string().min(1).max(16),
@@ -57,8 +63,9 @@ export const createLicenceFeeRateBody = z.object({
 export type CreateLicenceFeeRateBody = z.infer<typeof createLicenceFeeRateBody>;
 
 export const quarterQueryParams = z.object({
-  status: z.string().max(24).optional(),
-  type:   z.string().max(16).optional(),
-  limit:  z.coerce.number().int().positive().max(200).default(50),
-  offset: z.coerce.number().int().nonnegative().default(0),
+  status:    z.string().max(24).optional(),
+  type:      z.string().max(16).optional(),
+  quarterId: z.string().uuid().optional(),
+  limit:     z.coerce.number().int().positive().max(200).default(50),
+  offset:    z.coerce.number().int().nonnegative().default(0),
 });

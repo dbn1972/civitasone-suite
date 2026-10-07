@@ -9,13 +9,9 @@ export default function SeekOpinionPage() {
         subtitle="Raise a request for a legal opinion or precedent reference."
         back="/legal/opinions"
       />
-      <div
-        className="banner"
-        style={{ background: "#fffaeb", border: "1px solid #fde68a", color: "#92400e", borderRadius: 12, padding: "11px 14px", margin: "0 0 16px", fontSize: 13, maxWidth: 820 }}
-      >
-        <span aria-hidden="true">ℹ️</span> The legal service does not yet expose a dedicated opinions endpoint. This request is
-        recorded as a legal notice (the closest available command) and routed to the addressee.
-      </div>
+      {/* GAP-LEGAL-OPINIONS-NEW-04: the implementation-detail banner ("legal
+          notice … closest available command") was removed now that the form
+          posts to the real opinions endpoint (GAP-LEGAL-OPINIONS-NEW-01). */}
       <SeekOpinionForm />
     </div>
   );

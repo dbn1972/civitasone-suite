@@ -162,6 +162,8 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 .alert.bad p{color:#7a271a}
 .alert.warn{background:var(--warnbg);border-color:var(--warnbd);color:var(--warn)}
 .alert.warn p{color:#7a2e0e}
+.alert.good{background:var(--goodbg);border-color:var(--goodbd);color:var(--good)}
+.alert.good p{color:#14532d}
 
 /* avatar */
 .av{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:12.5px;font-weight:700;flex:0 0 auto}

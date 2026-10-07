@@ -67,8 +67,13 @@ export async function listCourtOrderSummaries(tenantId: string, limit: number) {
       caseNo: legalCase?.caseNo ?? row.caseId,
       court: legalCase?.court ?? "Court",
       orderDate: row.orderDate.toString(),
+      orderType: row.orderType,
       summary: row.summary,
-      complianceRequired: Boolean(row.direction),
+      // GAP-LEGAL-COURT-ORDERS-NEW-01: use the recorded compliance fields;
+      // legacy rows are backfilled by migration 0027 and the consumer applies
+      // the Boolean(direction) fallback at write time.
+      complianceRequired: row.complianceRequired,
+      complianceDeadline: row.complianceDeadline ? row.complianceDeadline.toString() : undefined,
       department: row.deptRef ?? undefined,
       status: "pending" as const,
     };

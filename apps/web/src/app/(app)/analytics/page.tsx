@@ -1,19 +1,33 @@
+import { getTranslations } from "next-intl/server";
 import { ModuleHub } from "../../_components/ModuleHub";
 
-export default function Page() {
+// Stable tile keys map to analytics.hub.tiles.* i18n keys. Hrefs stay static;
+// only the user-facing label/note is translated (GAP-ANALYTICS-HOME-04).
+// Order (GAP-ANALYTICS-HOME-03): dashboards, queries, kpi, data-warehouse,
+// then the two insight surfaces last. The "/analytics/list" legacy tile was
+// removed (GAP-ANALYTICS-HOME-01 / LIST-01): that route now redirects to
+// /analytics/dashboards, so advertising it as a second, differently-behaved
+// view of the same endpoint only confused reviewers.
+const TILES: { key: string; href: string }[] = [
+  { key: "dashboards", href: "/analytics/dashboards" },
+  { key: "queries", href: "/analytics/queries" },
+  { key: "kpi", href: "/analytics/kpi" },
+  { key: "dataWarehouse", href: "/analytics/data-warehouse" },
+  { key: "aiInsights", href: "/analytics/ai-insights" },
+  { key: "mlInsights", href: "/analytics/ml-insights" },
+];
+
+export default async function Page() {
+  const t = await getTranslations("analytics.hub");
   return (
     <ModuleHub
-      title="Data & Analytics"
-      description="Saved dashboards and safe, whitelisted query runs over the analytics service's own data."
-      links={[
-        { href: "/analytics/dashboards", label: "Dashboards", note: "Saved dashboards with widgets, sharing and access control" },
-        { href: "/analytics/queries", label: "Query Results", note: "Recent query runs with accessible charts and tables" },
-        { href: "/analytics/list", label: "Dashboards (legacy list)", note: "Simple read-only list view" },
-        { href: "/analytics/kpi", label: "KPI Library", note: "Organisation-wide Key Performance Indicators" },
-        { href: "/analytics/data-warehouse", label: "Data Warehouse", note: "Consolidated datasets and data quality metrics" },
-        { href: "/analytics/ai-insights", label: "AI Insights", note: "ML-powered insights and recommendations" },
-        { href: "/analytics/ml-insights", label: "ML Insights", note: "Model performance, accuracy trends, and prediction explainability per domain" },
-      ]}
+      title={t("title")}
+      description={t("subtitle")}
+      links={TILES.map((tile) => ({
+        href: tile.href,
+        label: t(`tiles.${tile.key}.label`),
+        note: t(`tiles.${tile.key}.note`),
+      }))}
     />
   );
 }

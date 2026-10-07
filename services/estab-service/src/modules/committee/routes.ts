@@ -8,7 +8,7 @@ import {
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { idParam, createCommitteeBody, createMeetingBody, createResolutionBody, minutesBody, recordAttendanceBody } from "./validators.js";
+import { idParam, createCommitteeBody, createMeetingBody, createResolutionBody, minutesBody, recordAttendanceBody, markComplianceBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -84,6 +84,17 @@ export async function committeeRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
     sendValidated(reply, ComplianceSummaryListSchema, await queries.listComplianceSummaries(ctx.tenantId, q.limit));
+  });
+
+  // GAP-ESTAB-COMPLIANCE-03: mark a compliance register item complied. A write
+  // that closes an audited obligation — restricted to establishment officers
+  // (not audit_officer, who is read-only) and requires a mandatory remark.
+  app.post("/v1/estab/compliance/:id/comply", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ESTAB_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = markComplianceBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.markComplianceComplied(ctx, id, body));
   });
 
   app.setErrorHandler((err, req, reply) => {

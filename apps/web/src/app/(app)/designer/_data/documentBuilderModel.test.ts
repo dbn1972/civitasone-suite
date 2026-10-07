@@ -101,5 +101,45 @@ describe("documentBuilderModel", () => {
     expect(preview.requiredBadge).toBe("Required");
     expect(preview.maxSizeLabel).toBe("Max 2 MB");
     expect(preview.formatsLabel).toContain("JPG");
+    // GAP-DESIGNER-DETAIL-B6-05: multi-format label reads naturally.
+    expect(preview.formatsLabel).toBe("JPG or PNG");
+  });
+});
+
+import {
+  hasBlockingDocumentIssues,
+  unverifiedMandatoryDocuments,
+} from "./documentBuilderModel";
+
+/**
+ * GAP-DESIGNER-DETAIL-B6-01: hasBlockingDocumentIssues is true for a
+ * mandatory doc with empty verifiedAtLane and false once linked.
+ */
+describe("hasBlockingDocumentIssues (GAP-DESIGNER-DETAIL-B6-01)", () => {
+  it("returns true when a mandatory document has no verifying lane", () => {
+    const assessments = assessDocumentWarnings(
+      [doc({ id: "1", verifiedAtLane: "" })],
+      ["inspection"],
+    );
+    expect(hasBlockingDocumentIssues(assessments)).toBe(true);
+  });
+
+  it("returns false when all mandatory documents are linked", () => {
+    const assessments = assessDocumentWarnings(
+      [doc({ id: "1", verifiedAtLane: "inspection" })],
+      ["inspection"],
+    );
+    expect(hasBlockingDocumentIssues(assessments)).toBe(false);
+  });
+
+  it("lists unverified mandatory documents for the review page", () => {
+    const assessments = assessDocumentWarnings(
+      [
+        doc({ id: "1", labels: { en: "Rent agreement", hi: "" }, verifiedAtLane: "" }),
+        doc({ id: "2", labels: { en: "ID proof", hi: "" }, verifiedAtLane: "inspection" }),
+      ],
+      ["inspection"],
+    );
+    expect(unverifiedMandatoryDocuments(assessments)).toEqual(["Rent agreement"]);
   });
 });

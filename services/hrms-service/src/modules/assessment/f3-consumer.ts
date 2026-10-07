@@ -179,4 +179,24 @@ export function registerF3_assessment_Consumers(queue: Queue): void {
       throw err;
     }
   });
+
+  // GAP-LEARNING-ASSESSMENTS-VERIFY-01: DPDP audit-on-read — record every
+  // certificate verification lookup. Same async CQRS shape as
+  // medicalClaimsListRead in medical/consumer.ts (routes must not write to
+  // Postgres directly; see f3-leftover-hrms-cqrs.test.ts).
+  const AUDIT = "audit.event.record";
+  queue.subscribe(COMMANDS.assessmentCertificateVerified, async (msg) => {
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await enqueue(tx, {
+        topic: AUDIT,
+        eventType: AUDIT,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: msg.payload as Record<string, unknown>,
+      });
+    });
+    log.info({ messageId: msg.messageId }, "certificate verification audit recorded");
+  });
 }

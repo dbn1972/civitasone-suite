@@ -708,3 +708,55 @@ describe("GET /v1/ai/chat — handed_off filter", () => {
     expect(r.statusCode).toBe(400);
     await app.close();});
 });
+
+// ── GAP-AI-CHAT-DETAIL-03: single-conversation read ───────────────────────────
+describe("GET /v1/ai/chat/:conversationId", () => {
+  it("200 — returns a single conversation by id (not via the list)", async () => {
+    H.chatFindByIdMock.mockResolvedValue(makeSession());
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET", url: `/v1/ai/chat/${SESSION}`, headers: auth(USER, ["ai_user"]),
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().data.id).toBe(SESSION);
+    // Resolved by id directly, never by downloading the list.
+    expect(H.chatFindByIdMock).toHaveBeenCalledWith(SESSION, TENANT);
+    await app.close();
+  });
+
+  it("404 — unknown or other-tenant conversation", async () => {
+    H.chatFindByIdMock.mockResolvedValue(null);
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET", url: `/v1/ai/chat/${SESSION}`, headers: auth(),
+    });
+    expect(r.statusCode).toBe(404);
+    expect(r.json().code).toBe("NOT_FOUND");
+    await app.close();
+  });
+
+  it("400 — a non-uuid id is rejected at the boundary (zod)", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET", url: "/v1/ai/chat/not-a-uuid", headers: auth(),
+    });
+    expect(r.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("401 — no auth header", async () => {
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/ai/chat/${SESSION}` });
+    expect(r.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("403 — insufficient role", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET", url: `/v1/ai/chat/${SESSION}`, headers: auth(USER, ["viewer"]),
+    });
+    expect(r.statusCode).toBe(403);
+    await app.close();
+  });
+});

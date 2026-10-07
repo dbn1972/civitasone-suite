@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { PageHeader, StatusPill, DataTable, EmptyState } from "../../../../_components/ds";
+import { PageHeader, StatusPill, DataTable, EmptyState, RefreshErrorState } from "../../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 import { getLegalCaseById } from "../../../../_data/loaders";
 import { CaseActions } from "./CaseActions";
 
@@ -44,9 +45,21 @@ function tliClass(itemIndex: number, currentIndex: number): "done" | "cur" | "to
 }
 
 export default async function LegalCaseDetailPage({ params }: { params: { id: string } }) {
-  const { data: caseData, source } = await getLegalCaseById(params.id);
+  const { data: caseData, source, status } = await getLegalCaseById(params.id);
 
+  // GAP-LEGAL-CASES-DETAIL-02: distinguish genuine 404 from a service outage.
   if (!caseData) {
+    if (source === "error" && status !== 404) {
+      return (
+        <div className="wrap">
+          <PageHeader back="/legal/list" title="Case" subtitle="Unable to load case details." />
+          <RefreshErrorState
+            error={toHumanError("load", { area: "case" })}
+            backHref="/legal/list"
+          />
+        </div>
+      );
+    }
     notFound();
   }
 
@@ -78,8 +91,22 @@ export default async function LegalCaseDetailPage({ params }: { params: { id: st
     summary: o.summary,
   }));
 
-  const STAGES = ["Registered", "Filed", "Arguments", "Judgment"] as const;
+  const STAGES = ["Filed", "Pleadings", "Arguments", "Judgment"] as const;
   const curStage = stageIndex(caseData.status);
+
+  // GAP-LEGAL-CASES-DETAIL-04: derive step dates from recorded data where
+  // possible rather than labelling only the first step. The earliest hearing
+  // marks the Arguments stage; the latest order (or disposal) marks Judgment.
+  const sortedHearings = [...(caseData.hearings ?? [])].sort((a, b) => a.date.localeCompare(b.date));
+  const sortedOrders = [...(caseData.orders ?? [])].sort((a, b) => a.date.localeCompare(b.date));
+  const firstHearingDate = sortedHearings[0]?.date;
+  const latestOrderDate = sortedOrders[sortedOrders.length - 1]?.date;
+  const stageDates: Array<string | undefined> = [
+    caseData.filedDate, // Filed
+    undefined, // Pleadings — not tracked as a discrete event yet
+    firstHearingDate, // Arguments — earliest hearing
+    latestOrderDate, // Judgment — latest order / disposal
+  ];
 
   return (
     <div className="wrap">
@@ -127,7 +154,7 @@ export default async function LegalCaseDetailPage({ params }: { params: { id: st
                 <div className="l">Status</div>
                 <div className="v"><StatusPill status={caseData.status} label={statusLabel} /></div>
               </div>
-              <div className="fld"><div className="l">Raised date</div><div className="v">{formatIndianDate(caseData.filedDate)}</div></div>
+              <div className="fld"><div className="l">Filed date</div><div className="v">{formatIndianDate(caseData.filedDate)}</div></div>
               {caseData.nextHearingDate && (
                 <div className="fld"><div className="l">Next hearing</div><div className="v">{formatIndianDate(caseData.nextHearingDate)}</div></div>
               )}
@@ -193,11 +220,14 @@ export default async function LegalCaseDetailPage({ params }: { params: { id: st
                 <li key={label} className={tliClass(i, curStage)}>
                   <div className="t">{label}</div>
                   <div className="d">
-                    {i === 0 ? formatIndianDate(caseData.filedDate) : ""}
+                    {stageDates[i] ? formatIndianDate(stageDates[i] as string) : "—"}
                   </div>
                 </li>
               ))}
             </ul>
+            <p style={{ fontSize: 12, color: "var(--mut)", margin: "10px 0 0" }}>
+              Stage inferred from case status; dates shown where recorded.
+            </p>
           </div>
         </div>
       </div>

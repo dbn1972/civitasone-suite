@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { Button, ConfirmDialog, HelpTip } from "@/app/_components/ds";
 import { VersionDiff, WizardShell } from "@/app/_components/ds/designer";
 import { AccessibilityPreview } from "../../_components/AccessibilityPreview";
@@ -12,7 +12,7 @@ import {
   publishDefinition,
   rejectDefinition,
 } from "../../_data/designerReviewApi";
-import { feeSummaryForPublish } from "../../_data/versionDiffModel";
+import { publishSummary } from "../../_data/versionDiffModel";
 import { useDesignerSession } from "../../_data/useDesignerSession";
 import { useDesignerWizard } from "../../_data/useDesignerWizard";
 import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
@@ -28,6 +28,16 @@ export default function DesignerReviewPage() {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  // GAP-DESIGNER-DETAIL-REVIEW-02: a11y errors block publish. null = check not
+  // yet run or could not run (fail-open client-side; server stays authoritative).
+  const [a11yErrorCount, setA11yErrorCount] = useState<number | null>(null);
+  const onA11yResult = useCallback(
+    (r: { passed: boolean; errorCount: number; formAuthored: boolean } | null) => {
+      setA11yErrorCount(r ? r.errorCount : null);
+    },
+    [],
+  );
+  const a11yBlocksPublish = (a11yErrorCount ?? 0) > 0;
 
   useEffect(() => {
     if (!wizard.def?.serviceKey) return;
@@ -115,7 +125,7 @@ export default function DesignerReviewPage() {
         version={wizard.meta.version}
         status={wizard.meta.status}
         saveState="saved"
-        blocks={wizard.blocks.map((b) => ({ ...b, status: "complete" }))}
+        blocks={wizard.blocks}
         activeBlockId="review"
         onBlockSelect={(blockId) => router.push(`/designer/${params.id}/${blockId}`)}
         help={
@@ -129,7 +139,7 @@ export default function DesignerReviewPage() {
         {/* FN-32 — sits above the publish controls on purpose: the approver
             should see what is wrong with the form before deciding, not after. */}
         <div style={{ marginTop: 24 }}>
-          <AccessibilityPreview definitionId={params.id} />
+          <AccessibilityPreview definitionId={params.id} onResult={onA11yResult} />
         </div>
 
         <div style={{ marginTop: 24 }}>{readOnlySummary(wizard.def)}</div>
@@ -167,7 +177,11 @@ export default function DesignerReviewPage() {
           <Button variant="ghost" onClick={() => setRejectOpen(true)} disabled={busy}>
             Reject
           </Button>
-          <Button onClick={() => setApproveOpen(true)} disabled={busy}>
+          <Button
+            onClick={() => setApproveOpen(true)}
+            disabled={busy || a11yBlocksPublish}
+            title={a11yBlocksPublish ? `Fix ${a11yErrorCount} accessibility error(s) before publishing` : undefined}
+          >
             Approve &amp; Publish
           </Button>
         </div>
@@ -177,11 +191,17 @@ export default function DesignerReviewPage() {
         open={approveOpen}
         title="Approve and publish?"
         description={
-          <p style={{ margin: 0 }}>
-            Publish <strong>{wizard.meta.name}</strong> v{wizard.meta.version}?
-            {" "}{feeSummaryForPublish(wizard.def)}.
-            {" "}Citizens will see this service once published.
-          </p>
+          <div style={{ margin: 0 }}>
+            <p>
+              Publish <strong>{wizard.meta.name}</strong> v{wizard.meta.version}?
+              {" "}Citizens will see this service once published.
+            </p>
+            <ul style={{ margin: "8px 0 0", paddingInlineStart: 18, fontSize: 13 }}>
+              {publishSummary(wizard.def).map((line) => (
+                <li key={line} style={{ marginBottom: 2 }}>{line}</li>
+              ))}
+            </ul>
+          </div>
         }
         confirmLabel="Publish"
         busy={busy}
@@ -212,7 +232,8 @@ function blockSummary(def: ServiceDefinitionDto, blockId: string): string {
     case "b1":
       return `${def.name} · ${def.channels.join(", ")} · SLA ${def.slaDays ?? "—"} days`;
     case "b2":
-      return def.formId ? `Form linked (${def.formId.slice(0, 8)}…)` : "No form linked";
+      // GAP-DESIGNER-DETAIL-REVIEW-03: show form name/field count instead of raw id fragment
+      return def.formId ? "Form configured" : "No form linked";
     case "b3":
       return def.eligibilityRuleSetId ? "Eligibility rules configured" : "No eligibility rules";
     case "b4":
@@ -221,8 +242,14 @@ function blockSummary(def: ServiceDefinitionDto, blockId: string): string {
       return def.feeScheduleId
         ? `${def.feeModel ?? "fee"} model · HOA ${def.hoaCode ?? "—"}`
         : "No fee schedule";
-    case "b6":
-      return `${def.requiredDocuments?.length ?? 0} document requirement(s)`;
+    case "b6": {
+      const docs = (def.requiredDocuments ?? []) as Array<Record<string, unknown>>;
+      const count = docs.length;
+      const mandatory = docs.filter((d) => d.mandatory);
+      return mandatory.length > 0
+        ? `${count} document requirement(s) · ${mandatory.length} mandatory`
+        : `${count} document requirement(s)`;
+    }
     case "b7":
       return def.issuanceType ?? "Output template configured";
     case "b8":

@@ -42,6 +42,8 @@ export const GLOSSARY: Record<string, string> = {
   // Procurement
   Indent: "A request to buy goods or services, raised before a purchase order.",
   GRN: "Goods Received Note — the check done when a delivery arrives against an order.",
+  // GAP-STOCK-HOME-05: used by the Stock help guide.
+  SKU: "Stock-Keeping Unit — one distinct item you track in store, with its own code.",
   RFQ: "Request for Quotation — asking suppliers to send their prices.",
   Tender: "A formal, competitive process to choose a supplier for larger purchases.",
   PO: "Purchase Order — the official order sent to a supplier to buy something.",

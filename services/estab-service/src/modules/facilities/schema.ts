@@ -62,6 +62,7 @@ export const estabLibraryBooks = facilitiesSchema.table("estab_library_books", {
   category:         text("category"),
   copiesTotal:      integer("copies_total").notNull().default(1),
   copiesAvailable:  integer("copies_available").notNull().default(1),
+  status:           varchar("status", { length: 24 }).notNull().default("active"),
   createdAt:        timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:        timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:        uuid("created_by").notNull(),

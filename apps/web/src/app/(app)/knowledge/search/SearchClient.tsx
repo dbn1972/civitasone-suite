@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useCallback, type ReactNode } from "react";
+import Link from "next/link";
 import { Button, DataTable, EmptyState, PageHeader, Segmented, StatusPill } from "../../../_components/ds";
+import { knowledgeDocStatusLabel, knowledgeDocStatusPill } from "../_data/statusLabels";
 
 type Doc = {
   id: string;
@@ -18,11 +20,13 @@ type Doc = {
 
 type ResultRow = {
   id: string;
+  fullId: string;
   titleNode: ReactNode;
   category: string;
-  sourceModule: ReactNode;
+  statusNode: ReactNode;
   relevancePct: number;
   relevanceBar: ReactNode;
+  isFile: boolean;
 };
 
 function relevanceScore(doc: Doc, query: string): number {
@@ -33,28 +37,22 @@ function relevanceScore(doc: Doc, query: string): number {
   if (doc.author?.toLowerCase().includes(q)) score += 3;
   if (doc.fileType?.toLowerCase().includes(q)) score += 2;
   if (doc.tags.some((t) => t.toLowerCase().includes(q))) score += 4;
+  // GAP-KNOWLEDGE-SEARCH-05: down-weight archived documents
+  if (doc.status === "archived") score = Math.round(score * 0.3);
   return score;
-}
-
-function statusPillStatus(s: string) {
-  if (s === "approved") return "approved";
-  if (s === "under_review") return "pending";
-  if (s === "archived") return "archived";
-  return "mut";
-}
-
-function statusLabel(s: string) {
-  if (s === "approved") return "Published";
-  if (s === "under_review") return "Under review";
-  if (s === "draft") return "Draft";
-  return s;
 }
 
 const RESULT_SEG_OPTIONS = ["All", "Documents", "Files"];
 
-export function KnowledgeSearchClient({ initialDocs }: { initialDocs: Doc[] }) {
-  const [query, setQuery] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+export function KnowledgeSearchClient({
+  initialDocs,
+  initialQuery = "",
+}: {
+  initialDocs: Doc[];
+  initialQuery?: string;
+}) {
+  const [query, setQuery] = useState(initialQuery);
+  const [submitted, setSubmitted] = useState(initialQuery.length > 0);
   const [showFilters, setShowFilters] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -79,16 +77,20 @@ export function KnowledgeSearchClient({ initialDocs }: { initialDocs: Doc[] }) {
     const score = relevanceScore(doc, query.trim());
     const pct = Math.min(100, Math.round((score / maxScore) * 100));
     return {
-      id: doc.id,
+      id: doc.id.slice(0, 8).toUpperCase(),
+      fullId: doc.id,
       titleNode: (
         <div>
-          <div style={{ fontWeight: 600 }}>{doc.title}</div>
+          <Link href={`/knowledge/policies/${doc.id}`} style={{ fontWeight: 600, textDecoration: "underline" }}>
+            {doc.title}
+          </Link>
           <div style={{ fontSize: "12px", color: "var(--mut)" }}>{doc.author ?? ""}</div>
         </div>
       ),
       category: doc.category,
-      sourceModule: (
-        <StatusPill status={statusPillStatus(doc.status)} label={statusLabel(doc.status)} />
+      // GAP-KNOWLEDGE-SEARCH-03: column renamed to Status, renders real status
+      statusNode: (
+        <StatusPill status={knowledgeDocStatusPill(doc.status)} label={knowledgeDocStatusLabel(doc.status)} />
       ),
       relevancePct: pct,
       relevanceBar: (
@@ -99,8 +101,16 @@ export function KnowledgeSearchClient({ initialDocs }: { initialDocs: Doc[] }) {
           <span style={{ fontSize: "12px", fontWeight: 600 }}>{pct}%</span>
         </div>
       ),
+      isFile: !!doc.fileType,
     };
   });
+
+  // GAP-KNOWLEDGE-SEARCH-03: segment filter actually filters rows
+  const segmentedRows = resultSeg === "All"
+    ? resultRows
+    : resultSeg === "Files"
+      ? resultRows.filter((r) => r.isFile)
+      : resultRows.filter((r) => !r.isFile);
 
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
@@ -119,9 +129,10 @@ export function KnowledgeSearchClient({ initialDocs }: { initialDocs: Doc[] }) {
 
   return (
     <div className="wrap">
+      {/* GAP-KNOWLEDGE-SEARCH-01: honest subtitle */}
       <PageHeader
         title="Enterprise Search"
-        subtitle={`Full-text + metadata search across all documents & modules.`}
+        subtitle="Search document titles, categories, authors and tags."
         actions={
           <Button
             variant="primary"
@@ -152,7 +163,7 @@ export function KnowledgeSearchClient({ initialDocs }: { initialDocs: Doc[] }) {
               <select id="filter-status" className="inp" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ minHeight: 40 }}>
                 <option value="">Any status</option>
                 {statuses.map((s) => (
-                  <option key={s} value={s}>{statusLabel(s)}</option>
+                  <option key={s} value={s}>{knowledgeDocStatusLabel(s)}</option>
                 ))}
               </select>
             </div>
@@ -175,7 +186,7 @@ export function KnowledgeSearchClient({ initialDocs }: { initialDocs: Doc[] }) {
                 value={query}
                 onChange={handleChange}
                 onKeyDown={handleKeyDown}
-                placeholder="Search circulars, policies, files, records across CivitasOne…"
+                placeholder="Search document titles, categories, authors and tags…"
                 autoComplete="off"
                 aria-label="Search query"
               />
@@ -183,7 +194,7 @@ export function KnowledgeSearchClient({ initialDocs }: { initialDocs: Doc[] }) {
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "12px" }}>
               {submitted && query && (
                 <span className="chip" style={{ background: "var(--primary-soft)", color: "var(--primary-d)" }}>
-                  Documents {resultRows.length}
+                  Documents {segmentedRows.length}
                 </span>
               )}
               {["travel policy", "GFR 2017", "recruitment", "procurement"].map((term) => (
@@ -210,7 +221,7 @@ export function KnowledgeSearchClient({ initialDocs }: { initialDocs: Doc[] }) {
         />
       )}
 
-      {submitted && query.trim() && resultRows.length === 0 && (
+      {submitted && query.trim() && segmentedRows.length === 0 && (
         <EmptyState
           icon="🔎"
           title="No documents found"
@@ -218,7 +229,7 @@ export function KnowledgeSearchClient({ initialDocs }: { initialDocs: Doc[] }) {
         />
       )}
 
-      {resultRows.length > 0 && (
+      {segmentedRows.length > 0 && (
         <div className="card">
           <div className="card-h">
             <h3>Results · &ldquo;{query}&rdquo;</h3>
@@ -230,12 +241,12 @@ export function KnowledgeSearchClient({ initialDocs }: { initialDocs: Doc[] }) {
           </div>
           <DataTable<ResultRow>
             columns={[
-              { key: "titleNode", label: "Result", sortable: false },
+              { key: "titleNode", label: "Result", sortable: false, render: (row) => row.titleNode as ReactNode },
               { key: "category", label: "Type" },
-              { key: "sourceModule", label: "Source module", sortable: false },
+              { key: "statusNode", label: "Status", sortable: false, render: (row) => row.statusNode as ReactNode },
               { key: "relevancePct", label: "Relevance", align: "right", render: (row) => row.relevanceBar as ReactNode },
             ]}
-            rows={resultRows}
+            rows={segmentedRows}
             sortable
             filterable
             pageSize={15}

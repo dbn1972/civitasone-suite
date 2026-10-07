@@ -5,7 +5,7 @@ import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { checkNoRoomOverlap } from "./domain.js";
 import { HttpError } from "../../shared/context.js";
-import type { CreateGuesthouseBody, BookRoomBody, CheckoutBody, AddBookBody, IssueBookBody, RenewIssueBody } from "./validators.js";
+import type { CreateGuesthouseBody, BookRoomBody, CheckoutBody, AddBookBody, IssueBookBody, RenewIssueBody, EditBookBody, WithdrawBookBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -72,6 +72,51 @@ export async function addBook(ctx: RequestContext, body: AddBookBody): Promise<A
     payload: { id, tenantId: ctx.tenantId, ...body },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+// GAP-ESTAB-LIBRARY-DETAIL-01: edit catalogue metadata + adjust total copies.
+export async function editBook(ctx: RequestContext, bookId: string, body: EditBookBody): Promise<Accepted> {
+  const book = await repo.getLibraryBookById(ctx.tenantId, bookId);
+  if (!book) throw new HttpError(404, "NOT_FOUND", "book not found");
+  if (book.status === "withdrawn") {
+    throw new HttpError(409, "BOOK_WITHDRAWN", "a withdrawn book cannot be edited");
+  }
+  if (body.copiesTotal !== undefined) {
+    const copiesOut = book.copiesTotal - book.copiesAvailable;
+    if (body.copiesTotal < copiesOut) {
+      throw new HttpError(409, "COPIES_BELOW_OUT",
+        `cannot set total copies below the ${copiesOut} currently issued`);
+    }
+  }
+  const messageId = randomUUID();
+  await queue.publish(COMMANDS.libraryEdit, {
+    messageId, type: COMMANDS.libraryEdit,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { bookId, tenantId: ctx.tenantId, ...body },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "library_books", `list:50`));
+  return { id: bookId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function withdrawBook(ctx: RequestContext, bookId: string, body: { reason: string }): Promise<Accepted> {
+  const book = await repo.getLibraryBookById(ctx.tenantId, bookId);
+  if (!book) throw new HttpError(404, "NOT_FOUND", "book not found");
+  if (book.status === "withdrawn") {
+    throw new HttpError(409, "ALREADY_WITHDRAWN", "this book is already withdrawn");
+  }
+  const copiesOut = book.copiesTotal - book.copiesAvailable;
+  if (copiesOut > 0) {
+    throw new HttpError(409, "COPIES_STILL_OUT",
+      `cannot withdraw a book with ${copiesOut} copies still on loan`);
+  }
+  const messageId = randomUUID();
+  await queue.publish(COMMANDS.libraryWithdraw, {
+    messageId, type: COMMANDS.libraryWithdraw,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { bookId, tenantId: ctx.tenantId, reason: body.reason },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "library_books", `list:50`));
+  return { id: bookId, status: "accepted", correlationId: ctx.correlationId };
 }
 
 export async function issueBook(ctx: RequestContext, body: IssueBookBody): Promise<Accepted> {

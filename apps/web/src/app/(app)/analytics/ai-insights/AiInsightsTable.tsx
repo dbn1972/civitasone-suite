@@ -38,6 +38,7 @@ export function AiInsightsTable({ rows, source = "api" }: { rows: AnalyticsAiIns
         pageSize={15}
         exportable
         exportFilename="analytics-ai-insights"
+        exportNotice="Exports leave the system. These rows may name a module and a recommended action; share the file only for a legitimate purpose."
         emptyIcon="🤖"
         emptyTitle="No insights"
         emptyMessage="No insights match the current filter."

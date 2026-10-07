@@ -264,6 +264,19 @@ export const chatConversationsListSchema = z.object({
   data: z.array(chatConversationApiSchema),
 });
 
+// GAP-AI-CHAT-DETAIL-03: the single-conversation read (GET /v1/ai/chat/:id)
+// returns one conversation under `data`, not an array.
+export const chatConversationItemSchema = z.object({
+  data: chatConversationApiSchema,
+});
+
+// GAP-AI-CHAT-03: the list endpoint reports an accurate `meta.total` (a server
+// COUNT), so stat cards can show the true number of conversations rather than
+// min(100, n) from one fetched page. Only `meta.total` is needed here.
+export const chatConversationsCountSchema = z.object({
+  meta: z.object({ total: z.number().int().nonnegative() }),
+});
+
 export const chatTranscriptSchema = z.object({
   data: z.array(z.object({
     id: z.string().uuid(),
@@ -302,6 +315,12 @@ const copilotTurnApiSchema = z.object({
 
 export const copilotTurnsListSchema = z.object({
   data: z.array(copilotTurnApiSchema),
+  /** GAP-AI-COPILOT-04: the service sends meta; optional so older snapshots don't break. */
+  meta: z.object({
+    page: z.number().int().optional(),
+    pageSize: z.number().int().optional(),
+    total: z.number().int().optional(),
+  }).optional(),
 });
 
 export const copilotTurnDetailSchema = z.object({
@@ -1842,6 +1861,12 @@ export const VehicleSummarySchema = z.object({
   model: z.string(),
   type: z.enum(["sedan", "suv", "bus", "van", "truck", "ambulance", "other"]),
   assignedTo: z.string().optional(),
+  // GAP-ESTAB-VEHICLES-02: best-effort display name for `assignedTo` (an hrms
+  // employee id), resolved server-side via the estab→hrms employee-summaries
+  // enrichment (same pattern as quarter-allotments' employeeName). Optional:
+  // absent when the directory lookup fails, so the UI falls back to "—"
+  // (never the raw UUID).
+  assignedToName: z.string().optional(),
   driverName: z.string().optional(),
   fuelType: z.enum(["petrol", "diesel", "cng", "electric"]),
   status: z.enum(["available", "in_use", "maintenance", "reserved", "disposed"]),
@@ -1875,7 +1900,7 @@ export const LibraryBookSummarySchema = z.object({
   category: z.string().optional(),
   copiesTotal: z.number(),
   copiesAvailable: z.number(),
-  status: z.enum(["available", "unavailable"]),
+  status: z.enum(["available", "unavailable", "withdrawn"]),
 });
 export const LibraryBookSummaryListSchema = z.array(LibraryBookSummarySchema);
 
@@ -1984,6 +2009,8 @@ export const MaintenanceSummaryListSchema = z.array(MaintenanceSummarySchema);
 export const StockDashboardSchema = z.object({
   totalSKUs: z.number().default(0),
   lowStockAlerts: z.number().default(0),
+  // GAP-STOCK-DASHBOARD-04: real stock-out count from the dashboard query.
+  stockOuts: z.number().default(0),
   grnsThisMonth: z.number().default(0),
   inventoryValue: z.number().default(0),
 });
@@ -2190,6 +2217,8 @@ export const LegalDashboardSchema = z.object({
   hearingsThisWeek: z.number().default(0),
   ordersPending: z.number().default(0),
   opinionsDue: z.number().default(0),
+  disposedCases: z.number().default(0),
+  totalCases: z.number().default(0),
 });
 
 export const LegalCaseSummarySchema = z.object({
@@ -2251,6 +2280,7 @@ export const CourtOrderSummarySchema = z.object({
   court: z.string(),
   orderDate: z.string(),
   orderNo: z.string().optional(),
+  orderType: z.string().optional(),
   summary: z.string(),
   complianceRequired: z.boolean().default(false),
   complianceDeadline: z.string().optional(),

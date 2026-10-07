@@ -16,9 +16,20 @@ type Col = {
 const columns: Col[] = [
   { key: "name", label: "Name" },
   { key: "description", label: "Description", render: (r) => r.description ?? "—" },
-  { key: "visibility", label: "Visibility", render: (r) => <StatusPill status={r.visibility} label={r.visibility.toUpperCase()} /> },
-  { key: "status", label: "Status", render: (r) => <StatusPill status={r.status} label={r.status.toUpperCase()} /> },
-  { key: "version", label: "Version", align: "right" },
+  // GAP-ANALYTICS-DASHBOARDS-03: show the owner (opaque id, shortened) so a
+  // viewer can tell whose dashboard this is; "—" when unknown.
+  {
+    key: "ownerId",
+    label: "Owner",
+    render: (r) => (r.ownerId ? <span className="mono" title={r.ownerId}>{r.ownerId.slice(0, 8)}</span> : "—"),
+  },
+  // GAP-ANALYTICS-DASHBOARDS-04: let StatusPill humanize the value itself
+  // ("Shared"/"Private"/"Unknown") instead of forcing SHOUTING uppercase; the
+  // visibility/status words now have tones in STATUS_MAP.
+  { key: "visibility", label: "Visibility", render: (r) => <StatusPill status={r.visibility} /> },
+  { key: "status", label: "Status", render: (r) => <StatusPill status={r.status} /> },
+  // GAP-ANALYTICS-DASHBOARDS-04: show a version like "v3", not a bare number.
+  { key: "version", label: "Version", align: "right", render: (r) => `v${r.version}` },
 ];
 
 export function DashboardsTable({
@@ -39,9 +50,7 @@ export function DashboardsTable({
     <>
       {/* UX-012: this badge is the ONLY place that reports data provenance
           for the rows shown below — it reads the same useSeededResource
-          call as `rows`, so it can never disagree with what the table shows
-          (UX-002's pattern; the page used to render a second, independent
-          badge from the raw `source` prop — removed). */}
+          call as `rows`, so it can never disagree with what the table shows. */}
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <DataTable<AnalyticsDashboardRow>
         columns={columns}
@@ -50,6 +59,8 @@ export function DashboardsTable({
         filterable
         filterPlaceholder="Filter dashboards…"
         pageSize={15}
+        identifyingColumnKey="name"
+        rowHref={(r) => (r.id ? `/analytics/dashboards/${r.id}` : undefined)}
       />
     </>
   );

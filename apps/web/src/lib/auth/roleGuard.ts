@@ -412,6 +412,43 @@ export const INSTALL_OPERATE_ROLES = ["install_user", "install_admin", "super_ad
  */
 export const CDP_STEWARD_ROLES = ["cdp_steward", "cdp_admin", "super_admin"];
 
+/**
+ * GAP-ESTAB-HOME-04 / GAP-ESTAB-APPROVAL-MATRIX-02: roles permitted to reach
+ * the Establishment administration tools — the Approval Matrix (who signs
+ * sanctions/payments/disciplinary actions) and Data Migration. Mirrors
+ * estab-service's ADMIN_ROLES in modules/approval-rules/routes.ts
+ * (["estab_admin", "super_admin", "tenant_admin"]) which already 403s a plain
+ * clerk from POST/PATCH /v1/estab/approval-rules. The server stays the
+ * authority; this only decides whether the hub advertises the tile and
+ * whether the page offers the create/toggle controls.
+ */
+export const ESTAB_ADMIN_ROLES = ["estab_admin", "super_admin", "tenant_admin"];
+
+/**
+ * GAP-ESTAB-HOME-04: roles permitted to enrol/manage eOffice file operators.
+ * Mirrors estab-service's ADMIN_ROLES in modules/operators/routes.ts
+ * (["estab_division_admin", "estab_admin", "super_admin"]). Division admins
+ * manage their own desks, so this is a slightly different set from
+ * ESTAB_ADMIN_ROLES. The server stays the authority.
+ */
+export const ESTAB_OPERATOR_ADMIN_ROLES = ["estab_division_admin", "estab_admin", "super_admin"];
+
+/**
+ * GAP-ESTAB-APPROVALS-04: roles permitted to act on an establishment approval
+ * (approve/reject a yellow→green noting). The page is labelled "Deputy
+ * Secretary and above"; the workflow task's own roleRef is the finest gate,
+ * but these roles bound who may even see the Approve/Reject controls. The
+ * server (workflow-service task-complete) remains the authority on the
+ * specific task role; this is defence-in-depth + UX.
+ */
+export const ESTAB_APPROVER_ROLES = [
+  "estab_deputy_secretary",
+  "estab_secretary",
+  "estab_admin",
+  "super_admin",
+  "tenant_admin",
+];
+
 /** True when any of the session roles is in `allowed`. Pure; for UI gating. */
 export function hasAnyRole(sessionRoles: string[], allowed: string[]): boolean {
   return allowed.some((r) => sessionRoles.includes(r));
@@ -713,3 +750,62 @@ export const PLUGIN_MARKETPLACE_ROLES = ["super_admin", "platform_admin"];
 export const PLUGIN_MODULE_ROLES = Array.from(
   new Set([...PLUGIN_MANAGE_ROLES, ...PLUGIN_MARKETPLACE_ROLES, "plugin_user"]),
 );
+
+/**
+ * GAP-ESTAB-LIBRARY-05 / GAP-ESTAB-LIBRARY-DETAIL-01: roles permitted to add a
+ * book to the staff-library catalogue and issue/return loans. Mirrors
+ * estab-service's ESTAB_ROLES in modules/facilities/routes.ts
+ * (["estab_officer", "estab_admin", "super_admin"]) which already 403s a plain
+ * reader from POST /v1/estab/library/books and the issue/return endpoints. The
+ * server stays the authority; this only decides whether the UI offers the
+ * Add-a-Book form so a non-librarian is not shown a control guaranteed to 403.
+ */
+export const ESTAB_LIBRARY_WRITE_ROLES = ["estab_officer", "estab_admin", "super_admin"];
+
+/**
+ * GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-04 / QUARTERS-03: roles permitted to
+ * act on quarter allotment lifecycle transitions and to create quarters.
+ * Mirrors estab-service's quarters module ESTAB_ROLES in
+ * modules/quarters/routes.ts (["estab_officer", "estab_admin",
+ * "quarter_officer", "super_admin"]) which already 403s others on the
+ * POST/PATCH endpoints. The server stays the authority; this only hides
+ * controls that would otherwise bounce a non-authorised user.
+ */
+export const ESTAB_QUARTER_ACTION_ROLES = ["estab_officer", "estab_admin", "quarter_officer", "super_admin"];
+
+/**
+ * GAP-HELPDESK-INTERNAL-NEW-01: roles permitted to create and manage internal
+ * helpdesk tickets. Mirrors helpdesk-service's HELPDESK_ROLES in
+ * tickets/routes.ts; the server remains the authority. A plain citizen role
+ * gets a 403 from that endpoint by design.
+ */
+export const HELPDESK_ROLES = ["helpdesk_user", "helpdesk_admin", "super_admin"];
+
+/**
+ * GAP-HELPDESK-CATALOGUE-BREACHES-03: roles permitted to view the tenant-wide
+ * SLA breach report (includes requestedBy and stage data). This UI gate is
+ * deliberately stricter than the server (GET /v1/helpdesk/catalogue/requests/breaches
+ * allows USER_ROLES); the server remains the authority.
+ */
+export const HELPDESK_MANAGER_ROLES = ["helpdesk_admin", "super_admin"];
+
+/**
+ * GAP-AI-CHAT-DETAIL-02 / GAP-AI-CHAT-DETAIL-04: roles permitted to read a
+ * citizen chat transcript and to operate a conversation (hand off / end).
+ * Mirrors ai-agent-service's READ_ROLES in src/shared/roles.ts
+ * (ai_user, ai_admin, super_admin) — every /v1/ai/chat read and the
+ * handoff/end routes gate on this set, so a role outside it gets a 403 from
+ * the service regardless of what the page renders. The server remains the
+ * authority; this gate is DPDP defence-in-depth (unauthorised viewers are
+ * redirected rather than shown unmasked citizen messages) plus UX (operators
+ * are not offered controls that are guaranteed to 403).
+ */
+export const AI_CHAT_READ_ROLES = ["ai_user", "ai_admin", "super_admin"];
+
+/**
+ * GAP-AI-HOME-02 / GAP-AGENTS-04: roles permitted to pause/resume (kill-switch)
+ * an agent. Mirrors ai-agent-service's ADMIN_ROLES (ai_admin, super_admin); the
+ * governance read surface stays visible to auditors, but the Pause/Resume
+ * controls are admin-only. The service stays the authority.
+ */
+export const AI_AGENT_ADMIN_ROLES = ["ai_admin", "super_admin"];

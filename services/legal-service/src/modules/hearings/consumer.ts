@@ -82,13 +82,20 @@ export function registerHearingConsumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; caseId: string; tenantId: string; orderType: string;
       direction?: string; deptRef?: string; summary: string; orderDate: string;
+      complianceRequired?: boolean; complianceDeadline?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // GAP-LEGAL-COURT-ORDERS-NEW-01: persist compliance fields. If the caller
+      // did not state complianceRequired, fall back to the legacy heuristic
+      // (a `direction` implies a compliance obligation) so behaviour is never
+      // weaker than before.
+      const complianceRequired = p.complianceRequired ?? Boolean(p.direction);
       await repo.insertOrder(tx, {
         id: p.id, tenantId: p.tenantId, caseId: p.caseId, orderType: p.orderType,
         direction: p.direction ?? null, deptRef: p.deptRef ?? null,
         summary: p.summary, orderDate: p.orderDate,
+        complianceRequired, complianceDeadline: p.complianceDeadline ?? null,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "record", "order", p.id);

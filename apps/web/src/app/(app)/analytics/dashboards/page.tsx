@@ -1,6 +1,7 @@
-import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "@/app/_components/ds";
 import { getAnalyticsDashboards } from "../_data";
 import { DashboardsTable } from "./DashboardsTable";
+import { toHumanError } from "@/lib/messages";
 import { ArrowLeft } from "lucide-react";
 
 export default async function AnalyticsDashboardsPage() {
@@ -33,7 +34,18 @@ export default async function AnalyticsDashboardsPage() {
           <StatCard icon="🔗" iconBg="#dbeafe" label="Shared" value={errored ? "—" : shared} />
         </StatGrid>
         <Card title="Dashboards">
-          <DashboardsTable dashboards={dashboards} source={source} />
+          {/* GAP-ANALYTICS-DASHBOARDS-02: on a failed load, show a retryable
+              error state in the card instead of an empty DashboardsTable that
+              reads as "no dashboards" (same convention as kpi/page.tsx). The
+              table keeps its own offline-cache fallback for the non-error
+              path, so a tenant with cached rows still sees them. */}
+          {errored ? (
+            <div className="pad">
+              <RefreshErrorState error={toHumanError("load", { area: "dashboards" })} backHref="/analytics" />
+            </div>
+          ) : (
+            <DashboardsTable dashboards={dashboards} source={source} />
+          )}
         </Card>
       </div>
     </>

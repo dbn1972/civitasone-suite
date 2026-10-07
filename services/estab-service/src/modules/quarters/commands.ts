@@ -4,7 +4,7 @@ import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import type {
   CreateQuarterBody, ApplyAllotmentBody, AllotBody,
-  OccupyBody, VacationNoticeBody, VacateBody, CreateLicenceFeeRateBody,
+  OccupyBody, VacationNoticeBody, VacateBody, CancelBody, CreateLicenceFeeRateBody,
 } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -46,6 +46,13 @@ export async function issueVacationNotice(ctx: RequestContext, allotmentId: stri
 
 export async function vacateQuarter(ctx: RequestContext, allotmentId: string, body: VacateBody): Promise<Accepted> {
   await publish(COMMANDS.quarterVacate, ctx, allotmentId, { id: allotmentId, tenantId: ctx.tenantId, ...body });
+  return { id: allotmentId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+// GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-05: cancel/reject an applied,
+// waitlisted or allotted application (reason required; audited server-side).
+export async function cancelAllotment(ctx: RequestContext, allotmentId: string, body: CancelBody): Promise<Accepted> {
+  await publish(COMMANDS.quarterCancel, ctx, allotmentId, { id: allotmentId, tenantId: ctx.tenantId, ...body });
   return { id: allotmentId, status: "accepted", correlationId: ctx.correlationId };
 }
 

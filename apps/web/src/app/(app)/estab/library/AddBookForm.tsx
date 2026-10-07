@@ -9,7 +9,7 @@ type AcceptedResponse = { id?: string; status?: string; correlationId?: string }
 
 type FieldKey = "accessionNo" | "title" | "copiesTotal";
 
-export function AddBookForm() {
+export function AddBookForm({ existingAccessions = [] }: { existingAccessions?: string[] }) {
   const router = useRouter();
   const [accessionNo, setAccessionNo] = useState("");
   const [title, setTitle] = useState("");
@@ -50,6 +50,15 @@ export function AddBookForm() {
 
     const errors: Partial<Record<FieldKey, string>> = {};
     if (!accessionNo.trim()) errors.accessionNo = "Enter an accession number.";
+    else if (
+      existingAccessions.some(
+        (a) => a.trim().toLowerCase() === accessionNo.trim().toLowerCase(),
+      )
+    ) {
+      // GAP-ESTAB-LIBRARY-05: client hint only — the server enforces a unique
+      // accession and returns 409; this blocks the obvious duplicate early.
+      errors.accessionNo = "This accession number is already in the catalogue.";
+    }
     if (!title.trim()) errors.title = "Enter the book title.";
     const copiesNum = Number(copiesTotal);
     if (!copiesTotal.trim() || !Number.isInteger(copiesNum) || copiesNum <= 0) {
@@ -67,11 +76,12 @@ export function AddBookForm() {
 
     setBusy(true);
     try {
+      const submittedTitle = title.trim();
       const res = await browserJson<AcceptedResponse>("v1/estab/library/books", {
         method: "POST",
         body: JSON.stringify({
           accessionNo: accessionNo.trim(),
-          title: title.trim(),
+          title: submittedTitle,
           author: author.trim() || undefined,
           isbn: isbn.trim() || undefined,
           category: category.trim() || undefined,
@@ -79,9 +89,10 @@ export function AddBookForm() {
         }),
       });
       setTone("good");
+      // GAP-ESTAB-LIBRARY-03: never surface the raw record id to the clerk.
       setMessage(
         res.id
-          ? `Book submitted (id ${res.id}). It will appear in the catalogue shortly.`
+          ? `Added “${submittedTitle}” to the catalogue. It will appear shortly.`
           : "Book submitted.",
       );
       setAccessionNo("");

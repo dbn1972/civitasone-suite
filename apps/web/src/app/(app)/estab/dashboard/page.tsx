@@ -2,8 +2,15 @@ import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getEstabDashboard, getEstabFiles } from "../../../_data/loaders";
 import { PageHeader, StatCard, StatGrid, DataTable, EmptyState, RefreshErrorState, Term } from "../../../_components/ds";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, formatDays } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+
+/** Sort rank for a date string: parseable → epoch ms, else -Infinity (sorts last). */
+function createdDateRank(d: string | undefined): number {
+  if (!d || d === "—") return -Infinity;
+  const t = Date.parse(d);
+  return Number.isFinite(t) ? t : -Infinity;
+}
 
 type RecentFileRow = {
   id: string;
@@ -21,7 +28,13 @@ export default async function EstabDashboardPage() {
   const errored = source === "error";
   const filesErrored = filesSource === "error";
 
-  const recent = (files ?? []).slice(0, 8);
+  // GAP-ESTAB-DASHBOARD-04: "Recent files" must actually be recent. The list
+  // endpoint has no guaranteed order, so sort a copy by createdDate desc before
+  // taking the first 8. createdDate can be "—" (apiMappers) / unparseable —
+  // those sort last so a dateless row never masquerades as the newest.
+  const recent = [...(files ?? [])]
+    .sort((a, b) => createdDateRank(b.createdDate) - createdDateRank(a.createdDate))
+    .slice(0, 8);
   const recentRows: RecentFileRow[] = recent.map((f) => ({
     id: f.id,
     fileNo: f.fileNo,
@@ -45,12 +58,12 @@ export default async function EstabDashboardPage() {
         }
       />
       <StatGrid>
-        <StatCard icon="📁" iconBg="#e6f7f5" label="Active Files" value={errored ? "—" : data.filesPending.toLocaleString("en-IN")} />
-        <StatCard icon="⏱" iconBg="#fef2f2" label="SLA Breached" value={errored ? "—" : data.slaBreached.toLocaleString("en-IN")} />
-        <StatCard icon="📬" iconBg="#eff6ff" label="DAK Pending" value={errored ? "—" : data.dakPending.toLocaleString("en-IN")} />
-        <StatCard icon="📊" iconBg="#fffaeb" label="Avg Pendency (days)" value={errored ? "—" : String(data.avgPendencyDays)} />
-        <StatCard icon="📅" iconBg="#f5f3ff" label="Meetings Today" value={errored ? "—" : data.meetingsToday.toLocaleString("en-IN")} />
-        <StatCard icon="✅" iconBg="#ecfdf5" label="Compliance Due" value={errored ? "—" : data.complianceItemsDue.toLocaleString("en-IN")} />
+        <StatCard icon="📁" tone="info" href="/estab/list" label="Files Pending" value={errored ? "—" : data.filesPending.toLocaleString("en-IN")} />
+        <StatCard icon="⏱" tone="bad" href="/estab/inbox" hint="Files past their due date (not archived or disposed), computed in IST." label="SLA Breached" value={errored ? "—" : data.slaBreached.toLocaleString("en-IN")} />
+        <StatCard icon="📬" tone="info" href="/estab/dak" label="DAK Pending" value={errored ? "—" : data.dakPending.toLocaleString("en-IN")} />
+        <StatCard icon="📊" tone="warn" hint="Average days a pending file has been open." label="Avg Pendency (days)" value={errored ? "—" : formatDays(data.avgPendencyDays)} />
+        <StatCard icon="📅" tone="neutral" href="/estab/meetings" label="Meetings Today" value={errored ? "—" : data.meetingsToday.toLocaleString("en-IN")} />
+        <StatCard icon="✅" tone="good" href="/estab/compliance" label="Compliance Due" value={errored ? "—" : data.complianceItemsDue.toLocaleString("en-IN")} />
       </StatGrid>
       <div className="grid g-main" style={{ marginTop: 18 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -96,10 +109,15 @@ export default async function EstabDashboardPage() {
               <h3>Pendency snapshot</h3>
             </div>
             <div className="fields pad">
-              <div className="fld"><div className="l">Active files</div><div className="v">{errored ? "—" : data.filesPending}</div></div>
+              <div className="fld"><div className="l">Files pending</div><div className="v">{errored ? "—" : data.filesPending}</div></div>
               <div className="fld"><div className="l">Unlinked DAK</div><div className="v">{errored ? "—" : data.dakPending}</div></div>
               <div className="fld"><div className="l">SLA breached</div><div className="v">{errored ? "—" : data.slaBreached}</div></div>
-              <div className="fld"><div className="l">Avg pendency</div><div className="v">{errored ? "—" : `${data.avgPendencyDays} days`}</div></div>
+              {/* GAP-ESTAB-DASHBOARD-05: this row previously repeated the
+                  "Avg pendency" stat tile verbatim. Replaced with the
+                  vehiclesInUse figure, which the dashboard already loads but
+                  was never displayed anywhere, so the snapshot no longer
+                  duplicates a tile and no loaded field is silently dropped. */}
+              <div className="fld"><div className="l">Vehicles in use</div><div className="v">{errored ? "—" : data.vehiclesInUse}</div></div>
             </div>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import { cache } from "../../shared/infra.js";
+import { getEmployeeDisplayMap } from "../../shared/hrms-client.js";
 import * as repo from "./repo.js";
 import type { VehicleRow } from "./schema.js";
 
@@ -24,23 +25,45 @@ export async function getVehicle(tenantId: string, id: string): Promise<VehicleR
   );
 }
 
+/**
+ * Pure row → VehicleSummary mapper. GAP-ESTAB-VEHICLES-02: resolves the
+ * allocatedTo officer id to a display name via `displayMap` (best-effort).
+ * When the id is absent, `assignedTo`/`assignedToName` are both left off so
+ * the UI shows "Pool"; when the id is present but unresolved,
+ * `assignedToName` is omitted so the UI falls back to "—" (never the raw
+ * UUID). Extracted and exported so the enrichment is unit-testable without
+ * DB/cache/hrms infra.
+ */
+export function toVehicleSummary(
+  row: Pick<VehicleRow, "id" | "regNo" | "makeModel" | "allocatedTo" | "fuelType" | "status" | "odometerKm">,
+  displayMap: Map<string, { fullName: string }>,
+) {
+  const [make = row.makeModel, model = ""] = row.makeModel.split(" ");
+  const assignedTo = row.allocatedTo ?? undefined;
+  const assignedToName = assignedTo ? displayMap.get(assignedTo)?.fullName : undefined;
+  return {
+    id: row.id,
+    vehicleNo: row.regNo,
+    make,
+    model: model || row.makeModel,
+    type: "other" as const,
+    assignedTo,
+    ...(assignedToName ? { assignedToName } : {}),
+    fuelType: mapFuelType(row.fuelType),
+    status: mapVehicleStatus(row.status),
+    odometerKm: row.odometerKm,
+  };
+}
+
 export async function listVehicleSummaries(tenantId: string, limit: number) {
   const rows = await cache.getOrLoad(
     cache.makeKey(tenantId, "vehicles", `list:${limit}`),
     () => repo.listVehiclesByTenant(tenantId, limit),
   );
-  return (rows ?? []).map((row) => {
-    const [make = row.makeModel, model = ""] = row.makeModel.split(" ");
-    return {
-      id: row.id,
-      vehicleNo: row.regNo,
-      make,
-      model: model || row.makeModel,
-      type: "other" as const,
-      assignedTo: row.allocatedTo ?? undefined,
-      fuelType: mapFuelType(row.fuelType),
-      status: mapVehicleStatus(row.status),
-      odometerKm: row.odometerKm,
-    };
-  });
+  // GAP-ESTAB-VEHICLES-02: resolve the allocatedTo officer id to a display
+  // name (best-effort; never throws, empty map on hrms failure), mirroring
+  // quarter-allotments' employeeName enrichment. The UI shows the name, or
+  // "Pool"/"—" — never the raw UUID.
+  const displayMap = await getEmployeeDisplayMap(tenantId);
+  return (rows ?? []).map((row) => toVehicleSummary(row, displayMap));
 }

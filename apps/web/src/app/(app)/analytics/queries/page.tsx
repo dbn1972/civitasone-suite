@@ -7,6 +7,13 @@ import { ArrowLeft } from "lucide-react";
 export default async function AnalyticsQueriesPage() {
   const { data: runs, source } = await getAnalyticsQueryRuns();
 
+  // GAP-ANALYTICS-QUERIES-01: `source` was fetched (and handed to
+  // QueryResultsView's badge, UX-012) but never gated the stat values. On a
+  // failed load `runs` defaults to `[]`, so "Runs 0 / Completed 0 / Failed 0"
+  // was indistinguishable from a tenant that genuinely has no runs yet. Gate
+  // every stat on it, same "—" convention as dashboards/page.tsx (UX-013).
+  const errored = source === "error";
+
   const completed = runs.filter((r) => r.status === "completed").length;
   const failed = runs.filter((r) => r.status === "failed").length;
 
@@ -38,9 +45,9 @@ export default async function AnalyticsQueriesPage() {
             Recent results
           </h2>
           <StatGrid>
-            <StatCard icon="🧮" iconBg="#f1f5f9" label="Runs" value={runs.length} />
-            <StatCard icon="✅" iconBg="#dcfce7" label="Completed" value={completed} />
-            <StatCard icon="⚠️" iconBg="#fee2e2" label="Failed" value={failed} />
+            <StatCard icon="🧮" iconBg="#f1f5f9" label="Runs" value={errored ? "—" : runs.length} />
+            <StatCard icon="✅" iconBg="#dcfce7" label="Completed" value={errored ? "—" : completed} />
+            <StatCard icon="⚠️" iconBg="#fee2e2" label="Failed" value={errored ? "—" : failed} />
           </StatGrid>
           <Card title="Query runs">
             <QueryResultsView runs={runs} source={source} />
