@@ -2,7 +2,7 @@ import { useTranslations } from "next-intl";
 export default function Loading() {
   const t = useTranslations("crm.loading");
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <div className="ph">
         <div>
           {/* GAP-CRM-OPPORTUNITY-AGEING-06: the heading must match the loaded

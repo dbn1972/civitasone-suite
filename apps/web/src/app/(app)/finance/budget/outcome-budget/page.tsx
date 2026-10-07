@@ -15,7 +15,7 @@ export default async function OutcomeBudgetPage() {
   const { achieved, inProgress, notStarted, notMeasured } = classifyOutcomes(outcomes);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Outcome Budget"
         subtitle="Scheme output indicators and achievement tracking."

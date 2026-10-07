@@ -8,7 +8,7 @@
  */
 export default function Loading() {
   return (
-    <div className="page-main" aria-labelledby="page-heading" aria-busy="true">
+    <div className="page-main" aria-busy="true">
       <div className="ph">
         <div style={{ display: "grid", gap: 8 }}>
           <h1 id="page-heading">Documents</h1>

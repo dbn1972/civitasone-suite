@@ -21,7 +21,7 @@ export default async function VendorsPage() {
   const canExport = canWrite(roles, VENDOR_EXPORT_ROLES);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {/* UX-002: the data-source badge now lives in VendorsTable, driven by
           the same useSeededResource call that produces its rows. */}
       <PageHeader

@@ -190,7 +190,7 @@ export function TenderDocumentsClient({
   }
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <div style={{ maxWidth: 900 }}>
         <PageHeader
           title={tenderNo}

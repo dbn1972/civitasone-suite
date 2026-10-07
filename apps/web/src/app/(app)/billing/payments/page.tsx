@@ -82,7 +82,7 @@ export default async function BillingPaymentsPage() {
   // shows the empty-ledger state.
   if (source === "error") {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader
           title="Billing — Payments"
           subtitle="Payment receipts from the Billing service."
@@ -94,7 +94,7 @@ export default async function BillingPaymentsPage() {
   }
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Billing — Payments"
         subtitle="Payment receipts from the Billing service."

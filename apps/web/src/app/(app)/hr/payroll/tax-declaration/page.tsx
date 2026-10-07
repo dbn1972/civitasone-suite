@@ -18,7 +18,7 @@ export default async function TaxDeclarationPage() {
   const tp = await getTranslations("taxProofs");
   const canVerify = hasAnyRole(getSessionRoles(), TAX_PROOF_VIEWER_ROLES);
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

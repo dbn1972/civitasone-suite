@@ -33,7 +33,7 @@ export default async function ExecutionPage() {
   const statOrNull = (failed: boolean, value: number) => (failed ? null : value);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Execution & Progress"
         subtitle="Scope progress monitoring, photos, and issue tracking."

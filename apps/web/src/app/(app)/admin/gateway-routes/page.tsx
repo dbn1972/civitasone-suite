@@ -14,7 +14,7 @@ export default async function Page() {
   }
   const { data, source } = await getGatewayCatalogue();
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       {/* GAP-ADMIN-GATEWAY-ROUTES-04: PageHeader back (client-side nav) replaces the bespoke breadcrumb. */}
       <PageHeader
         title="Gateway — Route catalogue"

@@ -7,7 +7,7 @@ export default async function BillingPage() {
   const { data: bills, source } = await getBills();
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {/* UX-012 + GAP-WORKS-BILLING-03: both the stat cards and the table are
           now driven by the SAME useSeededResource call inside
           <BillingRegister>, so the counts can never read 0 (raw fetch) next

@@ -19,7 +19,7 @@ export default async function AdminRoleDetailPage({ params }: { params: { id: st
     if (result.status === 404) notFound();
     if (source === "error") {
       return (
-        <div className="page-main wrap" aria-labelledby="page-heading">
+        <div className="page-main wrap">
           <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Manage Roles", href: "/tenant-admin/roles" }, { label: "Unavailable" }]} />
           <PageHeader back="/tenant-admin/roles" title="Role" subtitle="" />
           <Card title="Role" padding>
@@ -33,7 +33,7 @@ export default async function AdminRoleDetailPage({ params }: { params: { id: st
   }
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Manage Roles", href: "/tenant-admin/roles" }, { label: role.name }]} />
       <PageHeader
         back="/tenant-admin/roles"

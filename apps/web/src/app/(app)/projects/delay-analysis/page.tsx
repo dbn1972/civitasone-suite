@@ -24,7 +24,7 @@ export default async function DelayAnalysisPage() {
   const other = errored ? null : rows.filter((r) => normalizeRag(r.rag) === null).length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title="Delay Analysis" subtitle="RAG dashboard — identify at-risk and delayed projects with root causes." back="/projects" />
       <StatGrid>
         <StatCard icon="📋" iconBg="#eff6ff" label="Total Projects" value={total ?? "—"} />

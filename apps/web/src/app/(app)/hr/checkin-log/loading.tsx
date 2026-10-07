@@ -14,7 +14,7 @@ import { getTranslations } from "next-intl/server";
 export default async function CheckinLogLoading() {
   const t = await getTranslations("checkinLog");
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading" aria-busy="true">
+    <div className="page-main wrap" aria-busy="true">
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
         {[0, 1, 2, 3].map((i) => (

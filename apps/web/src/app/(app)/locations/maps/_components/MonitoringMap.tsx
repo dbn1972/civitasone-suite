@@ -150,7 +150,7 @@ export function MonitoringMap() {
   const active = markers.filter((m) => m.status === "active").length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Map monitoring"
         subtitle="Live geospatial monitoring across infrastructure, land parcels and geofences. Filter and select a marker to jump to its record."

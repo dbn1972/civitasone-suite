@@ -53,7 +53,7 @@ export default async function SaDashboardPage() {
     : `${Number(opsSummary.onlineProcesses ?? 0)}/${Number(opsSummary.totalProcesses ?? 0)}`;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Super Admin Dashboard"
         subtitle="Platform-wide tenants, users, uptime and service status."

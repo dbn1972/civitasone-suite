@@ -35,7 +35,7 @@ export default async function CondemnationPage() {
   };
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Condemnation, Auction & Disposal"
         subtitle="Survey a condemned asset, record the committee's recommendation, and run the disposal auction."

@@ -114,7 +114,7 @@ export default async function AssesseeDetailPage({ params }: { params: { id: str
   );
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={assessee ? assessee.ownerName : "Assessee unavailable"}
         subtitle={assessee ? `${assessee.identifierNo} · ${assessee.assesseeType} · Ward ${assessee.wardNo ?? "—"}` : undefined}

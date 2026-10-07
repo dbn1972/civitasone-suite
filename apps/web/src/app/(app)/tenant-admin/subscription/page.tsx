@@ -21,7 +21,7 @@ export default async function SubscriptionPage() {
     : null;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Subscription" }]} />
       <PageHeader
         back="/tenant-admin"

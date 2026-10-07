@@ -15,7 +15,7 @@ export function EditLocationPageClient({ editing, parents }: { editing: Editing;
   const t = useTranslations("addLocationForm");
   const router = useRouter();
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={t("editPageTitle")} subtitle={editing.name} back="/hr/locations" backLabel={t("pageBackLabel")} />
       <AddLocationForm
         editing={editing}

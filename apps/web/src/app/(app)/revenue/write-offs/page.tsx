@@ -163,7 +163,7 @@ export default async function WriteOffsPage({
   }
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Write-offs"
         subtitle="Write off irrecoverable arrears against an assessee, subject to checker approval."

@@ -22,7 +22,7 @@ export default async function ApprovalsPage() {
   const canCreateTs = hasAnyRole(roles, TS_CREATE_ROLES);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {/* UX-012: the data-source badge and the stat counts both live inside
           ApprovalsTable now, driven by the same useSeededResource calls that
           produce its rows — so a cache fallback can never make the counts

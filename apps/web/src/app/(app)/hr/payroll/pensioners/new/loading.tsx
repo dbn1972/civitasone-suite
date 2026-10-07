@@ -7,7 +7,7 @@ import { SkeletonBar } from "../../../../../_components/ds/Skeleton";
 export default async function Loading() {
   const t = await getTranslations("pensionersNew");
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <div className="ph">
         <div>
           <h1 id="page-heading">{t("loadingHeading")}</h1>

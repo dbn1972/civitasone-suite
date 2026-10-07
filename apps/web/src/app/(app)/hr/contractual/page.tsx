@@ -99,7 +99,7 @@ export default async function ContractualPage() {
   ];
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel="Back to HR" />
       {isTruncated && (
         <span
@@ -126,7 +126,7 @@ export default async function ContractualPage() {
             rows={items}
             // GAP-HR-CONTRACTUAL-05: rows open the contract detail page
             // (renew / terminate live there; employee profile is linked from it).
-            rowHref={(r) => `/hr/contractual/${r.id}`}
+            rowLinkKey="id" rowLinkPrefix="/hr/contractual/"
             sortable filterable filterPlaceholder={t("filterPlaceholder")}
             pageSize={15}
             emptyIcon="📑"

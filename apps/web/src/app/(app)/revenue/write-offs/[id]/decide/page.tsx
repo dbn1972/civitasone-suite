@@ -86,7 +86,7 @@ export default async function WriteOffDecidePage({ params }: { params: { id: str
   }
   if (source === "error" || !writeOff) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader
           title="Decide Write-off"
           subtitle="Approve or reject a pending write-off. The deciding officer must differ from the officer who raised it."
@@ -122,7 +122,7 @@ export default async function WriteOffDecidePage({ params }: { params: { id: str
   const assesseeName = assessee?.ownerName ?? null;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Decide Write-off"
         subtitle="Approve or reject a pending write-off. The deciding officer must differ from the officer who raised it."

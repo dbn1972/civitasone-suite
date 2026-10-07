@@ -133,7 +133,7 @@ export default function OvertimeNewPage() {
   const reasonFieldError = invalid.has("reason") ? t("reasonTooLong") : formError.fieldError("reason");
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/overtime" backLabel={t("backToOvertime")} />
       <div style={{ maxWidth: 520, marginTop: 20 }}>
       <Card title={t("cardTitle")}>

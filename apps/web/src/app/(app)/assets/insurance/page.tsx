@@ -126,7 +126,7 @@ export default async function InsurancePoliciesPage() {
   });
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Asset Insurance"
         subtitle="Insurance policies covering registered assets, and claims filed against them."

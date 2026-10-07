@@ -185,7 +185,7 @@ export default async function InstalmentsPage({
   ];
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Instalment Plans"
         subtitle="Set up instalment plans for assessees in arrears and review existing plans."

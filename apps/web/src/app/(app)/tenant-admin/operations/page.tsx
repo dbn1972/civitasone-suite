@@ -67,7 +67,7 @@ export default async function AdminOperationsPage() {
 
   if (source === "error") {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Operations" }]} />
         <PageHeader
           back="/tenant-admin"
@@ -91,7 +91,7 @@ export default async function AdminOperationsPage() {
   const incident = incidentSummary(ops);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Operations" }]} />
       <PageHeader
         back="/tenant-admin"

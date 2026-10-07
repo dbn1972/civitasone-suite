@@ -68,7 +68,7 @@ export default async function IncomeTaxPage() {
   const pendingCount = errored ? null : items.filter((i) => i.status === "pending" || i.status === "draft").length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {/* GAP-PAYROLL-INCOME-TAX-06: unified on /hr/payroll (where the page
           header's own "Back to Payroll" link and RefreshErrorState below
           already went) instead of the header's previous "Back to HR" --

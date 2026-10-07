@@ -62,7 +62,7 @@ export default async function ReconciliationWorkbenchPage() {
   const unbalancedRuns = runs.filter((r) => !r.balanced).length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Reconciliation Workbench"
         subtitle="Review reconciliation runs, triage breaks, and confirm subledger↔GL agreement."

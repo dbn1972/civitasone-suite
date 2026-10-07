@@ -48,7 +48,7 @@ export default async function ReadinessPage() {
   const hasReadiness = readiness !== null;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Readiness Score" }]} />
       <PageHeader
         back="/tenant-admin"

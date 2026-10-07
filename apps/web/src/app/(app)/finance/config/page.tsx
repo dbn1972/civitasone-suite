@@ -34,7 +34,7 @@ export default async function FinanceConfigPage() {
   const banks: FinanceBankAccount[] = bankResult.data;
 
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <PageHeader
         title="Finance Configuration"
         subtitle="Set up your financial year, bank accounts, and opening balances before you start recording transactions."

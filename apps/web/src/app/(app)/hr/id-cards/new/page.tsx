@@ -25,7 +25,7 @@ export default function IssueIdCardPage() {
   }
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title="Issue ID Card" subtitle="Issue a new digital identity card." back="/hr/id-cards" backLabel="Back to ID cards" />
       <Card title="New card details">
         <div className="pad">

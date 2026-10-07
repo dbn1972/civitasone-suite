@@ -8,7 +8,7 @@ export default async function DomainPage() {
   const pendingDomains = domains.filter((d) => d.status === "pending_verification").length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {/* UX-012: the data-source badge now lives inside DomainClient,
           driven by the same useSeededResource call that produces its rows —
           not a second, independent read of `source` here that could

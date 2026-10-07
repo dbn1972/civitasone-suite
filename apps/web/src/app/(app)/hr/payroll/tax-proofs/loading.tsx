@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 export default async function Loading() {
   const t = await getTranslations("taxProofs");
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <div className="ph">
         <div>
           <h1 id="page-heading">{t("queue.title")}</h1>

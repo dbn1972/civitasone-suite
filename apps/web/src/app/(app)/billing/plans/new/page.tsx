@@ -8,7 +8,7 @@ export default function NewPlanPage() {
   // they can fill the form (UI hiding on the list is convenience only).
   requireAnyRole(BILLING_PLAN_ADMIN_ROLES, "/billing/plans");
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <PageHeader
         title="New Plan"
         subtitle="Create a new billing plan."

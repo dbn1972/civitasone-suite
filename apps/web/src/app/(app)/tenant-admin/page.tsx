@@ -61,7 +61,7 @@ export default async function TenantAdminPage({ searchParams }: { searchParams?:
   const visibleNav = QUICK_NAV.filter((item) => !item.roles || item.roles.some((r) => roles.includes(r)));
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <Breadcrumb items={[{ label: "Tenant Admin" }]} />
       {deniedArea && (
         <div className="alert warn" role="status" aria-live="polite" style={{ marginBottom: 12 }}>

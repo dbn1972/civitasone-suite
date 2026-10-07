@@ -5,6 +5,10 @@ import { DataTable, Segmented, StatusPill } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import { humanizeStatus } from "@/lib/formatters";
+import { isWritOrCriminal, ACTIVE_CASE_STATUSES } from "./caseHelpers";
+
+// Re-exported for existing client/test consumers; server code imports ./caseHelpers directly.
+export { isWritOrCriminal, ACTIVE_CASE_STATUSES };
 
 type LegalCase = {
   id: string;
@@ -15,24 +19,6 @@ type LegalCase = {
   advocateName?: string | null;
   status: string;
 } & Record<string, unknown>;
-
-/**
- * GAP-LEGAL-LIST-02: the set of case statuses that count as a live/active
- * matter. "pending", "appealed" and "stayed" are all still-open; disposed /
- * settled are terminal. Exported so the list page's "Active Cases" card and
- * any table-side logic share one definition and cannot drift.
- */
-export const ACTIVE_CASE_STATUSES: readonly string[] = ["pending", "appealed", "stayed"];
-
-/**
- * GAP-LEGAL-LIST-01: a writ or criminal matter is a CASE CATEGORY, not a
- * computed risk assessment. This single predicate backs both the list page's
- * "Writ / Criminal" stat card and the table's "Writ & criminal" filter so the
- * two counts are guaranteed to agree.
- */
-export function isWritOrCriminal(c: { type: string }): boolean {
-  return c.type === "writ" || c.type === "criminal";
-}
 
 /**
  * GAP-LEGAL-LIST-03: human label for a raw case-type code (the summary payload

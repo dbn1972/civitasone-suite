@@ -10,7 +10,7 @@ export default async function Page({ searchParams }: { searchParams?: { page?: s
   const page = Math.max(1, Number(searchParams?.page ?? "1") || 1);
   const { data, source } = await getLoyaltyPrograms({ limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE });
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <PageHeader
         title="Loyalty — Programs"
         subtitle="Loyalty programmes from loyalty-service."

@@ -27,7 +27,7 @@ export default async function SchemeDetailPage({ params }: { params: Promise<{ i
 
   if (resource.status === "error") {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="Scheme" back="/projects/schemes" backLabel="Back to Schemes" />
         <RefreshErrorState error={toHumanError("load", { area: "scheme" })} backHref="/projects/schemes" />
       </div>
@@ -36,7 +36,7 @@ export default async function SchemeDetailPage({ params }: { params: Promise<{ i
 
   if (resource.status === "empty" || !resource.data) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="Scheme" back="/projects/schemes" backLabel="Back to Schemes" />
         <EmptyState
           icon="🏛️"
@@ -57,7 +57,7 @@ export default async function SchemeDetailPage({ params }: { params: Promise<{ i
   }));
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {/* GAP-PROJECTS-SCHEMES-DETAIL-03: a hand-built inline breadcrumb used to
           render here in addition to the PageHeader back link below, giving two
           wayfinding controls for the same step. Removed the inline breadcrumb;

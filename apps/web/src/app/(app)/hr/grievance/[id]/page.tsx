@@ -37,7 +37,7 @@ export default async function GrievanceDetailPage({ params }: { params: { id: st
 
   if (!g) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("notFoundTitle")} back="/hr/grievance" backLabel={t("backLabel")} />
         <LoadErrorState result={result} area="grievance" backHref="/hr/grievance" requiredRoles={GRIEVANCE_ROLES} />
       </div>
@@ -52,7 +52,7 @@ export default async function GrievanceDetailPage({ params }: { params: { id: st
   );
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
         <Link href="/hr">{t("crumbHr")}</Link> <span aria-hidden="true">›</span>{" "}
         <Link href="/hr/grievance">{t("crumbGrievance")}</Link> <span aria-hidden="true">›</span> {g.caseNo}

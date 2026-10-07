@@ -16,7 +16,7 @@ export function sessionHasAnyRole(allowed: readonly string[]): boolean {
  */
 export function AdminAccessDenied({ title, area, roles }: { title: string; area: string; roles: readonly string[] }) {
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={title} back="/admin" />
       <PermissionDenied module={area} requiredRoles={[...roles]} backHref="/admin" backLabel="Back to Admin" />
     </div>

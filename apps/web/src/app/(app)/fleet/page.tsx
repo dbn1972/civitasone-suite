@@ -37,7 +37,7 @@ export default async function FleetDashboardPage() {
   // renders 0 (handled by the success branch below).
   if (source === "error") {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader
           title="Fleet Management"
           subtitle="Government vehicles, trips, fuel, maintenance, and telematics."
@@ -60,7 +60,7 @@ export default async function FleetDashboardPage() {
   // fallbacks; format counts with en-IN grouping; link the maintenance KPIs
   // to the filtered-list screen so they are a drill-down, not dead numbers.
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Fleet Management"
         subtitle="Government vehicles, trips, fuel, maintenance, and telematics."

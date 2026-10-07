@@ -70,7 +70,7 @@ export default async function OfficeLocationsPage() {
   ];
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel="Back to HR" />
       <DataSourceBadge source={result.source} message={t("dataSourceErrorMessage")} />
       <Card title={t("listTitle")}>

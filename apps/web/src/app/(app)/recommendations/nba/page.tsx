@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   const { data, source } = await getRecNba();
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <PageHeader
         title="Recommendations — Next Best Action"
         subtitle="Predictive model scores for your customers and records, highest score first."

@@ -10,7 +10,7 @@ export default async function AuditParasPage() {
   const { data: paras, source } = result;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Audit Paras"
         subtitle="CAG audit observations and department responses."

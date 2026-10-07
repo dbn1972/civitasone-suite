@@ -18,7 +18,7 @@ export default async function ChallanDetailPage({ params }: { params: { id: stri
 
   if (source === "error" && status !== 404) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="Challan Detail" back="/finance/revenue/challans" />
         <LoadErrorState result={result} area="challan" backHref="/finance/revenue/challans" />
       </div>
@@ -27,7 +27,7 @@ export default async function ChallanDetailPage({ params }: { params: { id: stri
 
   if (!challan) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="Challan Detail" back="/finance/revenue/challans" />
         <EmptyState
           icon="🧾"
@@ -41,7 +41,7 @@ export default async function ChallanDetailPage({ params }: { params: { id: stri
   const receiptHead = formatReceiptHead(challan.receiptHeadCode, challan.receiptHeadName);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={`Challan ${challan.challanNo}`}
         subtitle={challan.depositor}

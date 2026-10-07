@@ -1,41 +1,15 @@
 "use client";
 
+import { lifecycleOf, type PluginLifecycle } from "./pluginLifecycle";
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
 import { ActionButton } from "../../_components/ds";
 
+// Re-exported for existing client/test consumers; server code imports ./pluginLifecycle directly.
+export { lifecycleOf };
+export type { PluginLifecycle };
+
 type Plugin = { id?: string; name: string; status: string };
-
-/**
- * GAP-PLUGINS-INSTALLED-01 (theme LOGIC): a plugin's lifecycle state decides
- * which single primary action is offered. "available"/"not_installed" offers
- * Install; "disabled" offers Enable; "enabled"/"active" offers Disable. No row
- * ever shows more than one primary action, and Install is never offered on an
- * already-enabled plugin (which would silently re-provision it with tenant-data
- * access).
- */
-function normalize(status: string): string {
-  return status.trim().toLowerCase().replace(/[\s-]+/g, "_");
-}
-
-export type PluginLifecycle = "available" | "enabled" | "disabled" | "other";
-
-export function lifecycleOf(status: string): PluginLifecycle {
-  switch (normalize(status)) {
-    case "available":
-    case "not_installed":
-    case "uninstalled":
-    case "uploaded":
-      return "available";
-    case "enabled":
-    case "active":
-      return "enabled";
-    case "disabled":
-      return "disabled";
-    default:
-      return "other";
-  }
-}
 
 async function postVerb(
   verb: "install" | "enable" | "disable",

@@ -19,14 +19,14 @@ export default async function SchemeDetailPage({ params }: { params: { id: strin
   if (!scheme) {
     if (result.source === "error" && result.status !== 404) {
       return (
-        <div className="page-main wrap" aria-labelledby="page-heading">
+        <div className="page-main wrap">
           <PageHeader title={t("titleNotFound")} back="/finance/expenditure/scheme-tracking" />
           <LoadErrorState result={result} area="scheme" backHref="/finance/expenditure/scheme-tracking" />
         </div>
       );
     }
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("titleNotFound")} back="/finance/expenditure/scheme-tracking" />
         <EmptyState
           icon="🎯"
@@ -43,7 +43,7 @@ export default async function SchemeDetailPage({ params }: { params: { id: strin
   const overUtilised = isOverUtilised(scheme.utilisedMinor, scheme.outlayMinor);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={scheme.name}
         subtitle={scheme.funding ?? scheme.code}

@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   const { data, source } = await getFieldSync();
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <ModuleListPage
         title="Offline Sync"
         description={`Device sync changes pulled from the last ${FIELD_SYNC_WINDOW_DAYS} days.`}

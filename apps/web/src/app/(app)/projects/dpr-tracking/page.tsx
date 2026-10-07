@@ -22,7 +22,7 @@ export default async function DprTrackingPage() {
   const rejected = errored ? null : rows.filter((r) => r.status === "rejected").length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title="DPR Tracking" subtitle="Detailed Project Report submission, review and approval status." back="/projects" />
       <StatGrid>
         <StatCard icon="📄" iconBg="#eff6ff" label="Total DPRs" value={total ?? "—"} />

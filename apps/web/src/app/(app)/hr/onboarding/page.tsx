@@ -77,6 +77,9 @@ function parseStepsCompleted(value: string | number): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+// WCAG 2.4.2 (Page Titled): without this the tab title fell back to the generic app name.
+export const metadata = { title: "Onboarding Tracker — CivitasOne HRMS" };
+
 export default async function OnboardingPage({
   searchParams,
 }: {
@@ -98,7 +101,7 @@ export default async function OnboardingPage({
   // what's actually true.
   if (status === 403) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader
           title={t("title")}
           subtitle={t("subtitle")}
@@ -145,7 +148,7 @@ export default async function OnboardingPage({
   ];
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

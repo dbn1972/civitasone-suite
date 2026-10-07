@@ -53,7 +53,7 @@ export default async function QuarterDetailPage({ params }: { params: { id: stri
     // GAP-ESTAB-QUARTERS-DETAIL-03: distinguish 404 from server error.
     if (quarterSource === "error") {
       return (
-        <div className="page-main wrap" aria-labelledby="page-heading">
+        <div className="page-main wrap">
           <PageHeader title="Quarter" back="/estab/quarters" />
           <RefreshErrorState error={toHumanError("load", { area: "quarter" })} backHref="/estab/quarters" />
         </div>
@@ -81,7 +81,7 @@ export default async function QuarterDetailPage({ params }: { params: { id: stri
   });
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={quarter.quarterNo}
         subtitle={`${quarter.quarterType.replace(/_/g, " ").toUpperCase()} · ${quarter.category}${quarter.locality ? ` · ${quarter.locality}` : ""}`}

@@ -7,7 +7,7 @@ import { getTranslations } from "next-intl/server";
 export default async function EmployeesLoading() {
   const t = await getTranslations("employees");
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {/* GAP-HR-EMPLOYEES-07: loadingTitle/loadingSubtitle used to say
           "Employee Directory" / "All staff, grades and posting locations"
           -- a different heading (and a promise this page doesn't keep)

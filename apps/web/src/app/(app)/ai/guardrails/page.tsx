@@ -10,7 +10,7 @@ export default async function Page() {
   const errored = source === "error";
 
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       {/* GAP-AI-GUARDRAILS-05: client-side back via PageHeader, not a plain <a>.
           GAP-AI-GUARDRAILS-04: a link to the blocked-prompt audit trail. */}
       <PageHeader

@@ -9,7 +9,7 @@ import { getTranslations } from "next-intl/server";
 export default async function NewEmployeeLoading() {
   const t = await getTranslations("employeeWizard");
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={t("pageTitle")} subtitle={t("pageSubtitle")} />
       <div className="skeleton" style={{ height: 32, borderRadius: 8, marginBottom: 20 }} aria-label={t("loadingLabel")} />
       <div style={{ border: "1px solid var(--line, #e2e8f0)", borderRadius: 8, padding: 24, display: "grid", gap: 16 }}>

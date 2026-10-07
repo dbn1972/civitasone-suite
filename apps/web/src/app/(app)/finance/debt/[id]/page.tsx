@@ -17,7 +17,7 @@ export default async function DebtDetailPage({ params }: { params: { id: string 
   // Only a real 404 is "not found"; a failed load is its own retry / permission state.
   if (!debt && source === "error" && status !== 404) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("title")} back="/finance/debt" />
         <LoadErrorState result={result} area={t("area")} backHref="/finance/debt" />
       </div>
@@ -25,7 +25,7 @@ export default async function DebtDetailPage({ params }: { params: { id: string 
   }
   if (!debt) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("title")} back="/finance/debt" />
         <EmptyState icon="🏦" title={t("notFoundTitle")} message={t("notFoundMessage")} />
       </div>
@@ -33,7 +33,7 @@ export default async function DebtDetailPage({ params }: { params: { id: string 
   }
   const inr = debt.currency === "INR";
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={debt.instrument} subtitle={debt.lender ?? undefined} back="/finance/debt" />
       <StatGrid>
         <StatCard icon="💰" iconBg="var(--line2)" label={t("principal")} value={inr ? formatMoney(debt.principalMinor) : `${debt.currency} ${debt.principalMinor}`} />

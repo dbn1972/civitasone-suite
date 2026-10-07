@@ -117,7 +117,7 @@ export default function NewTenderPage() {
   }
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {/* GAP-WORKS-TENDERS-NEW-04: back link + subtitle + DS layout like siblings. */}
       <PageHeader
         title="New Pre-Tender"

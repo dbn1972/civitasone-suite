@@ -13,7 +13,7 @@ export default async function InvoicesPage() {
   const { data: invoices, source, status, errorMessage } = await getSAInvoices();
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {/* GAP-ADMIN-INVOICES-03/-04: the stat cards, data-source badge and failure state
           live inside InvoicesTable, driven by the one useSeededResource call that
           produces its rows (UX-002's pattern). GAP-ADMIN-INVOICES-06: this is a

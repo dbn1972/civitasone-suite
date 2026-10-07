@@ -31,7 +31,7 @@ export default async function TDSReturnsPage({ searchParams }: { searchParams?: 
   const counts = tdsStatusCounts(deductions);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="TDS Deductions"
         subtitle="Vendor TDS deduction register, by section and quarter, with CSV export."

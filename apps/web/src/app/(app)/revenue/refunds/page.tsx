@@ -157,7 +157,7 @@ export default async function RefundsPage({
   const overallSource = assesseesSource === "error" || receiptsResult.source === "error" ? "error" : "api";
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Refunds"
         subtitle="Raise refunds against collection receipts and route them through checker approval."

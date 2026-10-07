@@ -11,7 +11,7 @@ export default async function DepositsPage() {
   const failed = source === "error";
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Deposits Register"
         subtitle="Personal deposits (PD), earnest money (EMD), security deposits (SD) and FDRs held by the treasury, with administrator and balance."

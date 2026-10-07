@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   const { data, source } = await getPluginRegistryCatalog();
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <PageHeader
         title="Plugins — Registry"
         subtitle="Catalogue of registered plugin definitions and versions."

@@ -25,7 +25,7 @@ export default async function AdminConfigPage() {
 
   if (res.source === "error" || !res.data) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="Platform Configuration" subtitle="Tunable platform parameters." back="/admin" />
         <LoadErrorState result={res} area="platform configuration" backHref="/admin" requiredRoles={ADMIN_PLATFORM_ROLES} />
       </div>

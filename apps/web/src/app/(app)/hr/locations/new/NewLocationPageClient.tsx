@@ -26,7 +26,7 @@ export function NewLocationPageClient({ locations }: { locations: MinimalLocatio
   const [justAdded, setJustAdded] = useState(false);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("pageTitle")}
         subtitle={t("pageSubtitle")}

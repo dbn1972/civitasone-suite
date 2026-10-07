@@ -48,7 +48,7 @@ export default async function RtiDetailPage({ params }: { params: { id: string }
   if (httpStatus === 404) notFound();
   if (!detail) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("title")} back="/hr/rti" backLabel="Back to RTI register" />
         <Card title="Request details">
           <div className="pad">
@@ -65,7 +65,7 @@ export default async function RtiDetailPage({ params }: { params: { id: string }
   const applicantDisplay = detail.applicantName ?? t("restricted");
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={detail.referenceNo}
         subtitle={detail.subject}

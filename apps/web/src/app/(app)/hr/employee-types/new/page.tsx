@@ -20,7 +20,7 @@ export default async function NewEmployeeTypePage() {
   }
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={t("formTitleNew")} subtitle={t("formSubtitleNew")} back="/hr/employee-types" backLabel={t("title")} />
       <Card padding>
         <EmployeeTypeForm mode="create" />

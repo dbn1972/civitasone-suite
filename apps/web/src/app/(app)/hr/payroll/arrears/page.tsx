@@ -176,7 +176,7 @@ export default async function ArrearsPage() {
   const { outstandingNetMinor } = summarizeArrears(items);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {/* GAP-PAYROLL-ARREARS-05: back to the payroll hub, like every sibling payroll page. */}
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/payroll" backLabel={t("backLabel")} />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />

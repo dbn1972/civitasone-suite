@@ -103,7 +103,7 @@ export default async function PayrollPeriodPage() {
   ];
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {/* GAP-PAYROLL-PERIOD-03: back now matches every sibling payroll
           route (was "/hr", alone among them). */}
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/payroll" backLabel="Payroll" />

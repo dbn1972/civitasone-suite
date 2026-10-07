@@ -12,7 +12,7 @@ export default function Page() {
   // visible to anyone the server lets list it.
   const canDecide = hasAnyRole(getSessionRoles(), CDP_STEWARD_ROLES);
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <PageHeader
         title="CDP — Data Steward"
         subtitle="Merge review queue — approve or reject profile-merge suggestions flagged by identity resolution."

@@ -87,7 +87,7 @@ export default async function RateConfigPage({
   const anyError = rateHeadsSource === "error" || slabsError || penaltyError || rebateError;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Rate Configuration"
         subtitle="Configure rate heads, rate slabs, penalty (interest) rules, and rebate rules for the municipal rate engine."

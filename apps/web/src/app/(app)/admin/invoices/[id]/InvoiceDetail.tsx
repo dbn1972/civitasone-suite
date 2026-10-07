@@ -19,7 +19,7 @@ export function InvoiceDetail({ state }: { state: InvoiceDetailState }) {
   const t = useTranslations("adminInvoiceDetail");
   if (state.kind === "not-found") {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("title")} back="/admin/invoices" />
         <Card>
           <EmptyState icon="🧾" title={t("notFoundTitle")} message={t("notFoundMessage")} />
@@ -29,7 +29,7 @@ export function InvoiceDetail({ state }: { state: InvoiceDetailState }) {
   }
   if (state.kind === "error") {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("title")} back="/admin/invoices" />
         <LoadErrorState result={{ status: state.status }} area={t("area")} backHref="/admin/invoices" />
       </div>
@@ -38,7 +38,7 @@ export function InvoiceDetail({ state }: { state: InvoiceDetailState }) {
   const inv = state.invoice;
   const money = (v: string) => formatMoney(v);
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={t("heading", { period: inv.periodMonth })} subtitle={t("subtitle")} back="/admin/invoices" />
       <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "0 0 14px" }} className="no-print">
         <StatusPill status={inv.status} variant={invoiceStatusTone(inv.status)} />

@@ -14,7 +14,7 @@ export default async function RequisitionsPage() {
   }
   const t = await getTranslations("recruitmentRequisitions");
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={t("pageTitle")} subtitle={t("pageSubtitle")} back="/hr/recruitment" backLabel="Back to Recruitment" />
       <RequisitionsClient />
     </div>

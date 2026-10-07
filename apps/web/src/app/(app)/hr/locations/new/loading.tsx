@@ -11,7 +11,7 @@ import { getTranslations } from "next-intl/server";
 export default async function NewLocationLoading() {
   const t = await getTranslations("addLocationForm");
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={t("pageTitle")} subtitle={t("pageSubtitle")} />
       <div className="card" aria-label={t("loadingLabel")} style={{ marginTop: 16 }}>
         <div className="pad" style={{ display: "grid", gap: 16 }}>

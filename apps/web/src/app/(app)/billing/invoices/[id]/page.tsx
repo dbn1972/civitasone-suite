@@ -94,7 +94,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
   // every other error gets a retryable, 403-aware LoadErrorState.
   if (invoiceSource === "error" && invoiceStatus !== 404) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
           <AutoBreadcrumb />
         </nav>
@@ -110,7 +110,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
 
   if (!invoice) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
           <AutoBreadcrumb />
         </nav>
@@ -129,7 +129,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
   const cur = invoice.currency;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
         <AutoBreadcrumb />
       </nav>

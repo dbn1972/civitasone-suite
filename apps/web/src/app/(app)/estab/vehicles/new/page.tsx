@@ -95,7 +95,7 @@ export default function NewVehiclePage() {
   };
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Add Vehicle"
         subtitle="Register a vehicle for fleet operations and allocation."

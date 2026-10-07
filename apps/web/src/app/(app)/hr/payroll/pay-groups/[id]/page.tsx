@@ -96,7 +96,7 @@ export default async function PayGroupDetailPage({
   const group = result.data;
   if (result.source === "error" || !group) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("errorTitle")} back="/hr/payroll/pay-groups" backLabel={t("backToList")} />
         <Card padding>
           {result.status === 404 ? (
@@ -127,7 +127,7 @@ export default async function PayGroupDetailPage({
       : null;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={group.name} subtitle={t("detailSubtitle")} back="/hr/payroll/pay-groups" backLabel={t("backToList")} />
       <PayGroupTabs payGroupId={group.id} active={tab} />
       {tab === "details" ? (

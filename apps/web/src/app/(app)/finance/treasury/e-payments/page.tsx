@@ -12,7 +12,7 @@ export default async function EPaymentsPage() {
   const pending = orders.filter((o) => String(o.status).toLowerCase() === "pending approval").length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="e-Payment Orders"
         subtitle="Electronic payment orders with status tracking."

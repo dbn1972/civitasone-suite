@@ -26,7 +26,7 @@ export default async function TenantConfigPage() {
   const licenseLabel = config?.licenseType ?? "—";
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <Breadcrumb items={[{ label: "Platform Admin", href: "/platform-admin" }, { label: "Tenant Config" }]} />
       <PageHeader
         back="/platform-admin"

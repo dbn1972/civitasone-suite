@@ -210,7 +210,7 @@ export default async function RevenueAnalyticsPage({
         }, null);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Revenue Analytics"
         subtitle="Arrears aging, top defaulters, collection efficiency, and demand-vs-collection trends and forecast."

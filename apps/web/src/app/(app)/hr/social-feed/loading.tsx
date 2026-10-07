@@ -8,7 +8,7 @@ import { getTranslations } from "next-intl/server";
 export default async function Loading() {
   const t = await getTranslations("socialFeed");
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={t("title")} subtitle={t("loadingSubtitle")} back="/hr" backLabel={t("backToHr")} />
       <div className="animate-pulse" style={{ display: "grid", gap: 16 }}>
         <div style={{ height: 120, borderRadius: 12, background: "var(--bg, #f1f5f9)" }} />

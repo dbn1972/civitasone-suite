@@ -92,7 +92,7 @@ export default async function PolicyDetailPage({ params }: { params: { id: strin
     // load-error state with the right retry / permission treatment.
     const notFound = policyRes.source !== "error" || policyRes.status === 404;
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={notFound ? "Policy not found" : "Policy"} back="/assets/insurance" backLabel="Asset Insurance" />
         {notFound ? (
           <EmptyState
@@ -111,7 +111,7 @@ export default async function PolicyDetailPage({ params }: { params: { id: strin
   const { data: assetLabel } = await getAssetLabel(policy.assetId);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={`${policy.policyNo} · ${policy.insurer}`}
         subtitle="Insurance policy details and claims filed against it."

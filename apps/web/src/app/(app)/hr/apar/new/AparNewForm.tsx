@@ -167,7 +167,7 @@ export default function AparNewForm() {
   const canSubmit = !!employeeId && !!appraisalPeriod && !!reportingOfficerId && !!reviewingOfficerId && !!acceptingAuthorityId;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/apar" backLabel="Back to APAR" />
 
       <div style={{ maxWidth: 600, marginTop: 20 }}>

@@ -24,7 +24,7 @@ export default async function PayrollPage() {
   const canView = roles.some((r) => PAYROLL_READER_ROLES.includes(r));
   if (!canView) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
         <PermissionDenied module="payroll runs" requiredRoles={PAYROLL_READER_ROLES} />
       </div>
@@ -78,7 +78,7 @@ export default async function PayrollPage() {
   const existingPeriods = runs.map((r) => r.payPeriod);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

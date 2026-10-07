@@ -100,7 +100,7 @@ export default async function Form16Page({
   const source: "api" | "error" = lookup?.state === "error" ? "error" : "api";
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

@@ -35,7 +35,7 @@ export default function TenantProvisionPage() {
   const optional = PROVISIONING_STEPS.filter((s) => s.required === "Optional").length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Tenant Provisioning"
         subtitle="Reference: the steps a new tenant goes through. The guided wizard is not available yet."

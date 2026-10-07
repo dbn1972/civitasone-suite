@@ -114,7 +114,7 @@ export default function LeaveBalanceClient({ roles, myEmployeeId, initialEmploye
   // fetch would even fire (empId stays '' in that case).
   if (!isAdminOrManager && noLinkedProfile) {
     return (
-      <div className="page-main wrap leave-balance-print" aria-labelledby="page-heading">
+      <div className="page-main wrap leave-balance-print">
         <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/leave" backLabel={tc("backToLeave")} />
         <Card title={t("entitlementCard")}>
           <EmptyState icon="🪪" title={t("noLinkedProfileTitle")} message={t("noLinkedProfileMessage")} />
@@ -124,7 +124,7 @@ export default function LeaveBalanceClient({ roles, myEmployeeId, initialEmploye
   }
   if (!isAdminOrManager && profileSource === "error") {
     return (
-      <div className="page-main wrap leave-balance-print" aria-labelledby="page-heading">
+      <div className="page-main wrap leave-balance-print">
         <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/leave" backLabel={tc("backToLeave")} />
         <Card title={t("entitlementCard")}>
           <ErrorState error={toHumanError("load", { area: "your profile" })} onRetry={() => setReloadTick((n) => n + 1)} />
@@ -134,7 +134,7 @@ export default function LeaveBalanceClient({ roles, myEmployeeId, initialEmploye
   }
 
   return (
-    <div className="page-main wrap leave-balance-print" aria-labelledby="page-heading">
+    <div className="page-main wrap leave-balance-print">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

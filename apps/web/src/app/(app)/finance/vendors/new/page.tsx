@@ -5,7 +5,7 @@ import { VendorForm } from "./VendorForm";
 export default async function NewVendorPage() {
   const t = await getTranslations("financeVendorForm");
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={t("pageTitle")} subtitle={t("pageSubtitle")} back="/finance/vendors" backLabel={t("backLabel")} />
       <VendorForm />
     </div>

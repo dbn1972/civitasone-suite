@@ -73,7 +73,7 @@ export default async function InstalmentPlanDetailPage({ params }: { params: { i
   }
   if (!plan || source === "error") {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="Instalment Plan" subtitle="Schedule and status for an instalment plan." back="/revenue/instalments" />
         <Card title="Plan" padding>
           <RefreshErrorState
@@ -93,7 +93,7 @@ export default async function InstalmentPlanDetailPage({ params }: { params: { i
   const scheduleRows = plan.schedule.map((s) => ({ ...s, dueDateDisplay: formatIndianDate(s.dueDate) }));
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Instalment Plan"
         subtitle="Schedule and status for an instalment plan."

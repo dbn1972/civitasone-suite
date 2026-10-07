@@ -32,7 +32,7 @@ export default async function AssesseesPage() {
   ).length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Assessee Register"
         subtitle="Property and water-connection taxpayers registered for municipal revenue collection."

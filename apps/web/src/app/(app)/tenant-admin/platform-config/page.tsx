@@ -73,7 +73,7 @@ export default async function PlatformConfigPage() {
 
   if (!config) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="Platform Configuration" subtitle="Tunable parameters and read-only infrastructure view for platform operators." back="/tenant-admin" backLabel="Tenant Admin" />
         <Card title="Platform Configuration" padding>
           <RefreshErrorState error={toHumanError("load", { area: "platform configuration" })} backHref="/tenant-admin" />
@@ -85,7 +85,7 @@ export default async function PlatformConfigPage() {
   const { controllable: ctrl, infrastructure: infra } = config;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Platform Configuration"
         subtitle="Tunable parameters and read-only infrastructure view for platform operators."

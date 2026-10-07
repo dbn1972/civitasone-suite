@@ -534,7 +534,7 @@ export function OrgHierarchyManager({
   const deactivatingChildren = deactivatingUnit ? activeChildCount(units, deactivatingUnit.id, nowMs || Date.now()) : 0;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Org Hierarchy"
         subtitle="Organisational structure — department, division, section, unit, branch."

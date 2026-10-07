@@ -27,7 +27,7 @@ export default async function InvestigationPage() {
   const total = errored ? null : investigations.length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Investigation Tracker"
         subtitle="Internal investigations with assignment, findings and resolution status."

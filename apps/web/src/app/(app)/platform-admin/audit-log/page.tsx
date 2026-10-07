@@ -21,7 +21,7 @@ export default async function PlatformAuditLogPage() {
   // that events could not be fetched. Surface a retry state instead.
   if (source === "error") {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <Breadcrumb items={[{ label: "Platform Admin", href: "/platform-admin" }, { label: "Audit Log" }]} />
         <PageHeader
           back="/platform-admin"
@@ -63,7 +63,7 @@ export default async function PlatformAuditLogPage() {
   const canExport = getSessionRoles().some((r) => AUDIT_EXPORT_ROLES.includes(r));
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <Breadcrumb items={[{ label: "Platform Admin", href: "/platform-admin" }, { label: "Audit Log" }]} />
       <PageHeader
         back="/platform-admin"

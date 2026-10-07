@@ -78,7 +78,7 @@ export default async function ShiftRequestsPage() {
   const rejected = items.filter((i) => i.status === "rejected").length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

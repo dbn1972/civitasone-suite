@@ -75,7 +75,7 @@ export default async function LoansPage({
   const roles = getSessionRoles();
   if (!roles.some((r) => LOANS_VIEW_ROLES.includes(r))) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/payroll" backLabel="Back to Payroll" />
         <PermissionDenied module="employee loans" requiredRoles={LOANS_VIEW_ROLES} />
       </div>
@@ -99,7 +99,7 @@ export default async function LoansPage({
   const stats = computeLoanStats(loans);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

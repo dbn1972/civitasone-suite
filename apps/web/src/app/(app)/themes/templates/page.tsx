@@ -8,7 +8,7 @@ export default async function Page() {
   const t = await getTranslations("themes");
   const { data, source } = await getThemeTemplates();
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <ModuleListPage
         title={t("templatesPageTitle")}
         description={t("templatesPageSubtitle")}

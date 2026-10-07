@@ -41,7 +41,7 @@ export default async function FleetVehiclesPage() {
   // count and the empty-state CTA only on a successful load.
   if (source === "error") {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader
           title="Fleet Vehicles"
           subtitle="Government vehicles registered to the fleet."
@@ -62,7 +62,7 @@ export default async function FleetVehiclesPage() {
   }
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Fleet Vehicles"
         subtitle="Government vehicles registered to the fleet."

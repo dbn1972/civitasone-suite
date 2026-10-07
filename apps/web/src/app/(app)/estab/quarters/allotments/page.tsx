@@ -27,7 +27,7 @@ export default async function QuarterAllotmentsPage() {
   const vacating = allotments.filter((a) => a.status === "vacation_notice").length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Quarter Allotments"
         subtitle="Applications, maker-checker allotment decisions, and the occupy / vacation-notice / vacate lifecycle."

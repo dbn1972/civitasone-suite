@@ -12,7 +12,7 @@ export default async function Page({ searchParams }: { searchParams?: { page?: s
   const { data, source } = await getLoyaltyRedemptions({ limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE });
   const canManage = hasAnyRole(getSessionRoles(), LOYALTY_ADMIN_ROLES);
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <PageHeader
         title="Loyalty — Redemptions"
         subtitle="Point redemption history and reward fulfilment."

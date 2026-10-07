@@ -40,7 +40,7 @@ export default async function MySlipsPage({ searchParams }: { searchParams?: { p
   ];
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel={t("backLabel")} />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <Card title={t("cardTitle")}>

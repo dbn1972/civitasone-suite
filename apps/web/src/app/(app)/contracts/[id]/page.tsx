@@ -82,7 +82,7 @@ export default async function ContractDetailPage({ params }: { params: { id: str
   const partyDisplay = vendorName ?? (parties !== "—" ? parties.slice(0, 8) : "—");
 
   return (
-    <div className="wrap" aria-labelledby="page-heading">
+    <div className="wrap">
       <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
         <Link href="/contracts" className="lnk">Contracts</Link>
         <span aria-hidden="true" style={{ margin: "0 7px", color: "var(--line)" }}>/</span>

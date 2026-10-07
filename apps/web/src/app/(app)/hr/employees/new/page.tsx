@@ -77,7 +77,7 @@ export default async function NewEmployeePage() {
     empTypesResult.source === "error";
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("pageTitle")}
         subtitle={t("pageSubtitle")}

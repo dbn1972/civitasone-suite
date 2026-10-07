@@ -54,7 +54,7 @@ export default async function WaiverDecidePage({ params }: { params: { id: strin
   }
   if (source === "error" || !waiver) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader
           title="Decide Waiver"
           subtitle="Approve or reject a pending waiver. The deciding officer must differ from the officer who raised it."
@@ -73,7 +73,7 @@ export default async function WaiverDecidePage({ params }: { params: { id: strin
   const currentUserId = getSessionUserId();
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Decide Waiver"
         subtitle="Approve or reject a pending waiver. The deciding officer must differ from the officer who raised it."

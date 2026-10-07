@@ -169,7 +169,7 @@ export function RolesPermissionsManager({
   const permName = (key: string) => permissions.find((p) => p.key === key)?.name ?? key;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Role Permissions"
         subtitle="Select a role to view and edit its granted permissions."

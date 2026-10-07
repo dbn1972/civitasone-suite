@@ -68,7 +68,7 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
   const canViewRegister = roles.some((r) => PAYROLL_REPORT_ROLES.includes(r));
   if (!canView) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("titleFallback")} back="/hr/payroll" backLabel="Payroll Runs" />
         <PermissionDenied module="this payroll run" requiredRoles={PAYROLL_READER_ROLES} />
       </div>
@@ -79,7 +79,7 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
 
   if (!run) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("titleFallback")} back="/hr/payroll" backLabel="Payroll Runs" />
         <DataSourceBadge source={source} message={t("loadErrorMessage")} />
         <Card padding>
@@ -112,7 +112,7 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
   const exceptions = deriveExceptions(slipRows, t);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title", { period: run.payPeriod })}
         subtitle={t("subtitle", { date: formatIndianDate(run.runDate) })}

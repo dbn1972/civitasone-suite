@@ -23,7 +23,7 @@ export function BulkScanShell({ title, subtitle, actions, active, back, children
 }) {
   const t = useTranslations("bulkScan");
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={title} {...(subtitle ? { subtitle } : {})} {...(actions ? { actions } : {})} back={back ?? "/admin"} backLabel={back ? t("nav.back") : t("nav.backAdmin")} />
       <nav aria-label={t("nav.label")} style={{ display: "flex", flexWrap: "wrap", gap: 8, margin: "0 0 16px" }}>
         {NAV.map((n) => (

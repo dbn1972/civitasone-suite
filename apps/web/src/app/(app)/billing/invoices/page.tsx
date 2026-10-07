@@ -47,7 +47,7 @@ export default async function BillingInvoicesPage() {
   // empty-ledger state is only ever shown for a real source==="api" + [] read.
   if (source === "error") {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader
           title="Billing — Invoices"
           subtitle="Tenant invoices from the Billing service."
@@ -59,7 +59,7 @@ export default async function BillingInvoicesPage() {
   }
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Billing — Invoices"
         subtitle="Tenant invoices from the Billing service. Open an invoice to generate or cancel its GST e-invoice (IRN)."

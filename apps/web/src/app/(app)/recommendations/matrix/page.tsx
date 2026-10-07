@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   const { data, source } = await getRecMatrix();
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <PageHeader
         title="Recommendations — Cross-Sell Matrix"
         subtitle="Product affinity rules (read-only)."

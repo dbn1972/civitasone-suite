@@ -152,7 +152,7 @@ export default async function ExecutionDetailPage({
   const loadError = toHumanError("load");
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Execution Progress"
         subtitle={subtitle}

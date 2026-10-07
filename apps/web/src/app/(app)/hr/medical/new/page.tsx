@@ -39,7 +39,7 @@ export default async function NewMedicalClaimPage() {
   }
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("newClaimTitle")}
         subtitle={t("newClaimSubtitle")}

@@ -711,7 +711,7 @@ export function SystemSettingsClient({ tenant, settings }: { tenant: TenantConfi
   const subtitle = t("subtitle", { list: names.slice(0, -1).join(", "), last: names[names.length - 1]! });
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title={t("title")} subtitle={subtitle} back="/admin" />
       <div className="tabs" role="tablist" aria-label={t("tabsLabel")} style={{ marginBottom: 20 }}>
         {TABS.map((tab, index) => {

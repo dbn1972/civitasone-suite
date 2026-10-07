@@ -3,7 +3,7 @@ import { PageHeader, StatGrid, StatCard, EmptyState, RefreshErrorState } from ".
 import { getPlugins } from "../../../_data/loaders";
 import { toHumanError } from "@/lib/messages";
 import { PluginsTable } from "../PluginsTable";
-import { lifecycleOf } from "../PluginActions";
+import { lifecycleOf } from "../pluginLifecycle";
 import { getSessionRoles, hasAnyRole, PLUGIN_MANAGE_ROLES } from "@/lib/auth/roleGuard";
 
 type PluginRow = {

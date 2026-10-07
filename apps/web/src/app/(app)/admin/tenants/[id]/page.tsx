@@ -45,7 +45,7 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ i
   // anything else the retryable load-error state (LoadErrorState does both).
   if (detailResult.source === "error" && detailResult.status !== 404) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="Tenant" back="/admin/tenants" />
         <LoadErrorState
           result={detailResult}
@@ -61,7 +61,7 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ i
 
   if (!tenant) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="Tenant Not Found" back="/admin/tenants" />
         <Card>
           <EmptyState
@@ -84,7 +84,7 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ i
   const requests = Array.isArray(requestsResult.data) ? requestsResult.data : [];
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={`Tenant: ${tenant.name}`}
         subtitle={`${tenant.domain ? `Domain: ${tenant.domain} · ` : ""}Edition: ${tenant.edition} · Status: ${statusLabel} · Region: ${tenant.region}`}

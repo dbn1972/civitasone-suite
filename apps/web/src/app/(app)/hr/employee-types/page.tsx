@@ -91,6 +91,9 @@ export default async function EmployeeTypesPage() {
       ].filter(Boolean).join(", ") || t("none");
       return {
         ...et,
+        // Server-safe row link (DataTable is a client component, so a rowHref function prop
+        // cannot cross the RSC boundary): the full path, or "" when the viewer cannot manage.
+        editHref: canManage ? `/hr/employee-types/${et.id}/edit` : "",
         payModeLabel: PAY_MODE_LABELS[et.payMode] ?? et.payMode,
         categoryLabel: CATEGORY_LABELS[et.category] ?? et.category,
         paymentRouteLabel: PAYMENT_ROUTE_LABELS[et.paymentRoute] ?? et.paymentRoute,
@@ -109,7 +112,7 @@ export default async function EmployeeTypesPage() {
     });
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -157,7 +160,7 @@ export default async function EmployeeTypesPage() {
               { key: "appraisal", label: t("colAppraisal") },
             ]}
             rows={rows}
-            rowHref={canManage ? (r) => `/hr/employee-types/${r.id}/edit` : undefined}
+            rowLinkKey="editHref" rowLinkPrefix=""
             sortable
             filterable
             filterPlaceholder={t("filterPlaceholder")}

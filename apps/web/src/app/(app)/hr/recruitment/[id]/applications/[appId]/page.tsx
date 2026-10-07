@@ -239,7 +239,7 @@ export default function ApplicationDetailPage() {
 
   if (loading) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <p style={{ textAlign: "center", color: "var(--mut)", padding: "48px 0" }}>{t("loading")}</p>
       </div>
     );
@@ -249,7 +249,7 @@ export default function ApplicationDetailPage() {
     // A real failure: shared error state with a Retry that re-runs load() (a 403 is permanent, so no Retry).
     const human = toHumanError("load", { area: "application" });
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("notFoundTitle")} subtitle={t("errorSubtitle")} back={`/hr/recruitment/${jobOpeningId}`} backLabel={t("backToApplications")} />
         <DataSourceBadge source="error" />
         <Card padding>
@@ -265,7 +265,7 @@ export default function ApplicationDetailPage() {
 
   if (notFound || !application) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("notFoundTitle")} subtitle={t("notFoundSubtitle")} back={`/hr/recruitment/${jobOpeningId}`} backLabel={t("backToApplications")} />
         <Card padding>
           <p style={{ color: "var(--mut)", textAlign: "center" }}>{t("notFoundMessage")}</p>
@@ -292,7 +292,7 @@ export default function ApplicationDetailPage() {
   const canHire = application.stage === "selected" || application.stage === "offered";
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={application.applicantName}
         subtitle={t("subtitle")}

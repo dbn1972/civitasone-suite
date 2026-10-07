@@ -18,7 +18,7 @@ export default async function TendersPage() {
   const resolved = resolveTenderNames(tenders, typeMapResult.data, authorityMapResult.data);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Tender Pipeline"
         subtitle="Pre-tender, quotation, and award management."

@@ -24,7 +24,7 @@ export default async function AdminUsersPage() {
   const tile = (n: number): string | number => (errored ? "—" : n);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {/* fix/tenant-admin-and-establishment-nav (Bug A): AutoBreadcrumb from
           AppShell is the single "go up" affordance; the page-local Breadcrumb
           and back link were deliberately removed (GAP-TENANT-ADMIN-USERS-06

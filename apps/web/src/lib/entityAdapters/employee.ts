@@ -64,6 +64,17 @@ export async function searchEmployees(
 }
 
 /**
+ * Pure payload -> options mapper (array or `{ data }` envelope). Server-safe: it does no I/O,
+ * so a Server Component can pair it with fetchJson() instead of calling resolveEmployees(),
+ * whose relative `/api/proxy/...` fetch only works in the browser.
+ */
+export function mapEmployeeOptions(payload: unknown): EntityOption[] | null {
+  const rows = Array.isArray(payload) ? payload : (payload as { data?: unknown } | null)?.data;
+  if (!Array.isArray(rows)) return null;
+  return (rows as EmployeeRow[]).map(toOption);
+}
+
+/**
  * EntityPicker resolve(ids) adapter for employees -- pre-populates a
  * picker's label for an id an edit form already has (e.g. an existing
  * manager assignment) instead of leaving it blank until the user retypes.

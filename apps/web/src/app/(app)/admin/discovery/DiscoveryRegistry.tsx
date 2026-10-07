@@ -37,7 +37,7 @@ export function DiscoveryRegistry({ initial, source, errorStatus }: { initial: R
   const header = <PageHeader title={t("title")} subtitle={t("subtitle")} back="/admin" />;
   if (loadFailed && registry.services.length === 0) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         {header}
         <LoadErrorState result={{ status: errorStatus }} area={t("area")} backHref="/admin" />
         <div style={{ marginTop: 12 }}>
@@ -51,7 +51,7 @@ export function DiscoveryRegistry({ initial, source, errorStatus }: { initial: R
   const rows = registry.services as Row[];
   const c = countServiceBuckets(rows);
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {header}
       <StatGrid>
         <StatCard icon="🧭" iconBg="#eef2ff" label={t("statTotal")} value={rows.length} />

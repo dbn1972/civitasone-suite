@@ -28,7 +28,7 @@ export default async function AdminRolesPage() {
   const totalAssigned = roles.reduce((sum, r) => sum + r.userCount, 0);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Manage Roles" }]} />
       <PageHeader
         back="/tenant-admin"

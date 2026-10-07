@@ -7,7 +7,7 @@ import { SkeletonBar, SkeletonTable } from "../../../_components/ds/Skeleton";
 // (4 stat cards + filter bar + table) is the faithful mirror here.
 export default function Loading() {
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <div className="ph">
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <SkeletonBar w={200} h={28} />

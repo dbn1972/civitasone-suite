@@ -79,7 +79,7 @@ export default async function BillingPlansPage() {
 
   if (source === "error") {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="Billing — Plans" subtitle="All billing plans." back="/billing" />
         <LoadErrorState result={{ status, errorMessage }} area="plans" backHref="/billing" />
       </div>
@@ -87,7 +87,7 @@ export default async function BillingPlansPage() {
   }
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader title="Billing — Plans" subtitle="All billing plans." back="/billing" />
       {newPlanLink}
 

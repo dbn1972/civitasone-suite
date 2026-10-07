@@ -20,7 +20,7 @@ export default async function NotificationPrefsPage() {
   const inAppOff = total - inAppEnabled;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Notification Preferences" }]} />
       <PageHeader
         back="/tenant-admin"

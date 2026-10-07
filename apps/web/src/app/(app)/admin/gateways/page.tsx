@@ -14,7 +14,7 @@ export default async function GatewaysPage() {
   const { data: gateways, source, status } = await getSAGateways();
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {/* GAP-ADMIN-GATEWAYS-02/03: stats, provenance badge, error state and table all live in
           GatewaysTable, fed by ONE useSeededResource call. */}
       {/* GAP-ADMIN-GATEWAYS-06: the two API-gateway links are page actions (client-side nav), and

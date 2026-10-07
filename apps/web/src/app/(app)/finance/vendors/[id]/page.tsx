@@ -56,14 +56,14 @@ export default async function VendorDetailPage({ params }: { params: { id: strin
     // (GAP-FINANCE-VENDORS-DETAIL-02).
     if (result.source === "error" && result.status !== 404) {
       return (
-        <div className="page-main wrap" aria-labelledby="page-heading">
+        <div className="page-main wrap">
           <PageHeader title="Vendor Detail" back="/finance/vendors" />
           <LoadErrorState result={result} area="vendor" backHref="/finance/vendors" />
         </div>
       );
     }
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title="Vendor Detail" back="/finance/vendors" />
         <EmptyState icon="🏢" title="Vendor not found" message="This vendor may have been removed or the ID is invalid." />
       </div>
@@ -138,7 +138,7 @@ export default async function VendorDetailPage({ params }: { params: { id: strin
   );
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={name}
         subtitle={category !== "—" ? category : undefined}

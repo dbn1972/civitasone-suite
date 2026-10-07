@@ -47,7 +47,7 @@ export default async function DisciplinaryCaseDetailPage({ params }: { params: {
   if (!dcase) {
     if (source === "error" && status !== 404) {
       return (
-        <div className="page-main wrap" aria-labelledby="page-heading">
+        <div className="page-main wrap">
           <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
             <Link href="/hr">{t("crumbHr")}</Link> <span aria-hidden="true">›</span>{" "}
             <Link href="/hr/disciplinary">{t("crumbDisciplinary")}</Link>
@@ -63,7 +63,7 @@ export default async function DisciplinaryCaseDetailPage({ params }: { params: {
       );
     }
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
           <Link href="/hr">{t("crumbHr")}</Link> <span aria-hidden="true">›</span>{" "}
           <Link href="/hr/disciplinary">{t("crumbDisciplinary")}</Link> <span aria-hidden="true">›</span> {t("crumbNotFound")}
@@ -136,7 +136,7 @@ export default async function DisciplinaryCaseDetailPage({ params }: { params: {
   }));
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
         <Link href="/hr">{t("crumbHr")}</Link> <span aria-hidden="true">›</span>{" "}
         <Link href="/hr/disciplinary">{t("crumbDisciplinary")}</Link> <span aria-hidden="true">›</span>{" "}

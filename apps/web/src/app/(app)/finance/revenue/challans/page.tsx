@@ -15,7 +15,7 @@ export default async function ChallansPage() {
   const counts = challanStatusCounts(challans);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {/* GAP-FINANCE-REVENUE-CHALLANS-05: the subtitle states only what the table shows. */}
       <PageHeader
         title="Challan Register"

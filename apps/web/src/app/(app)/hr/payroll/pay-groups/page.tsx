@@ -87,7 +87,7 @@ export default async function PayGroupsPage({ searchParams }: { searchParams?: {
   const editRow = editId ? groups.find((g) => g.id === editId && isActiveRow(g)) : undefined;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

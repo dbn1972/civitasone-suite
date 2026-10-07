@@ -12,7 +12,7 @@ import { SkeletonBar, SkeletonRow } from "../../_components/ds/Skeleton";
  */
 export function CdpListLoading() {
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <div className="ph">
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <SkeletonBar w={220} h={28} />

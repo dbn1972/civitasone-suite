@@ -40,7 +40,7 @@ export default async function SalarySlipsPage({ searchParams }: { searchParams?:
   const draftCount = errored ? null : slips.filter((s) => s.status === "draft").length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

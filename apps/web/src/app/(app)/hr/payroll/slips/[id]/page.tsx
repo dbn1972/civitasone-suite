@@ -48,7 +48,7 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
   // fetch itself succeeded) is a real not-found now.
   if (source === "error" && status !== 404) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("title")} back={backHref} backLabel={backLabel} />
         <div className="pad">
           <RefreshErrorState error={toHumanError("load", { area: "salary slip" })} backHref={backHref} />
@@ -59,7 +59,7 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
 
   if (!slip) {
     return (
-      <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap">
         <PageHeader title={t("title")} back={backHref} backLabel={backLabel} />
         <DataSourceBadge source={source} message={t("loadErrorMessage")} />
         <Card padding>
@@ -96,7 +96,7 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
   const hasEmployerContribution = statutoryLines.some((l) => l.key === "pfEmployer" || l.key === "npsEmployer");
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("titleWithPeriod", { period: formatPayPeriod(slip.payPeriod) })}
         subtitle={slip.employeeName ?? "—"}

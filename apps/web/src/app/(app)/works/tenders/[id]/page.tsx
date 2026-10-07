@@ -163,7 +163,7 @@ export default async function TenderDetailPage({
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={
           tender?.workNumber

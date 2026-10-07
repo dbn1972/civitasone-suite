@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   const { data, source } = await getInstallSilos();
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       {/* GAP-INSTALL-SILOS-05: removed the duplicate local Breadcrumb landmark;
           the global AutoBreadcrumb supplies Home / Install / Silo Provisions. */}
       <ModuleListPage

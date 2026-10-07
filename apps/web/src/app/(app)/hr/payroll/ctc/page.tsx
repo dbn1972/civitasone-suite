@@ -95,7 +95,7 @@ export default async function CtcConfigPage() {
   const pctComponents = config.filter((c) => c.calc_type.startsWith("pct_")).length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

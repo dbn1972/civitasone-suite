@@ -156,7 +156,7 @@ export default async function AdjustmentsPage({
   const overallSource = assesseesSource === "error" || demandsResult.source === "error" ? "error" : "api";
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Adjustments"
         subtitle="Move an outstanding balance from one demand to another for the same assessee."

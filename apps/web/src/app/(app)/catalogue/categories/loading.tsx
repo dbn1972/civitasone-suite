@@ -6,7 +6,7 @@ import { SkeletonTable } from "../../../_components/ds/Skeleton";
  */
 export default function Loading() {
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <SkeletonTable rows={8} />
     </div>
   );

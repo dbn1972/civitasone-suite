@@ -6,7 +6,7 @@ import { PageHeader, Card, SkeletonBar } from "../../../../_components/ds";
 export default async function Loading() {
   const t = await getTranslations("recruitmentNewJob");
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading" aria-busy="true">
+    <div className="page-main wrap" aria-busy="true">
       <PageHeader
         title={t("pageTitle")}
         subtitle={t("pageSubtitle")}

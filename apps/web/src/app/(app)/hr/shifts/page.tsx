@@ -101,7 +101,7 @@ export default async function ShiftsPage() {
   ];
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {/* GAP-HR-SHIFTS-01: HR roles get create/edit (ShiftManager ->
           POST/PATCH /v1/hrms/shifts, role-gated + audited server-side). */}
       <PageHeader

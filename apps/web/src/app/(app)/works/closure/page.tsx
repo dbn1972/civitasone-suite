@@ -12,7 +12,7 @@ export default async function ClosurePage() {
   const completion = closures.filter((c) => c.status === "completion").length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {/* UX-012: the data-source badge now lives inside ClosureTable, driven
           by the same useSeededResource call that produces its rows — not a
           second, independent read of `source` here that could disagree with

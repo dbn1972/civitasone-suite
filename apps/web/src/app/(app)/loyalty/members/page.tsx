@@ -14,7 +14,7 @@ export default async function Page({ searchParams }: { searchParams?: { page?: s
     ...(searchParams?.programId ? { programId: searchParams.programId } : {}),
   });
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       <PageHeader
         title="Loyalty — Members"
         subtitle="Member enrolments with tier status and point balances."

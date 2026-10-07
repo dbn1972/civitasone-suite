@@ -41,7 +41,7 @@ export default async function WorkOrdersPage() {
   const { data: orders, source } = await getOrders();
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Work Orders"
         subtitle="All civil/infrastructure work orders in the current lifecycle."
@@ -65,7 +65,7 @@ export default async function WorkOrdersPage() {
           filterable
           filterPlaceholder="Filter by work number, description…"
           pageSize={20}
-          rowHref={(r) => `/works/proposals/${r.id}`}
+          rowLinkKey="id" rowLinkPrefix="/works/proposals/"
           emptyIcon="📋"
           emptyTitle="No work orders yet"
           emptyMessage="Create a work proposal to begin the lifecycle."

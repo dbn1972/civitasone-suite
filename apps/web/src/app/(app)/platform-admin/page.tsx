@@ -53,7 +53,7 @@ export default async function PlatformAdminPage() {
       : "No events";
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <Breadcrumb items={[{ label: "Platform Admin" }]} />
       <PageHeader
         title="Platform Administration"

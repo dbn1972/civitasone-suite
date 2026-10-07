@@ -30,7 +30,7 @@ export default async function UsagePage() {
   const tileValue = (n: number): string | number => (errored ? "—" : n);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {/* GAP-TENANT-ADMIN-USAGE-05: sibling tenant-admin pages carry a
           Breadcrumb; this one had none. */}
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Usage & Quotas" }]} />

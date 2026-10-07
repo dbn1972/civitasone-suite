@@ -25,7 +25,7 @@ export default async function OrgConfigRoute() {
   const lowestLevel = errored ? null : levels[levels.length - 1]?.label ?? "—";
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <Breadcrumb items={[{ label: "Platform Admin", href: "/platform-admin" }, { label: "Org Configuration" }]} />
       <PageHeader
         back="/platform-admin"

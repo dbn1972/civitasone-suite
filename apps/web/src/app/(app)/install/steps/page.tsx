@@ -11,7 +11,7 @@ export default async function Page() {
   // a read-only log; run/retry/skip stays in the installer wizard (/install).
   const { data, source } = await getInstallSteps();
   return (
-    <div className="page-main" aria-labelledby="page-heading">
+    <div className="page-main">
       {/* GAP-INSTALL-STEPS-05: the global AutoBreadcrumb (AppShell TopBar)
           supplies the Home / Install / Steps trail, so there is no duplicate
           local <nav aria-label="Breadcrumb"> landmark; the back affordance is

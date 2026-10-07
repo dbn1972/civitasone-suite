@@ -133,7 +133,7 @@ export default async function DisciplinaryListPage({
   const filterKeys = columns.filter((c) => c.key !== "charges_summary").map((c) => c.key);
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}

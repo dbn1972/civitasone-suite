@@ -340,20 +340,34 @@ describe("DataTable", () => {
     });
   });
 
-  // A clickable <tr> (onClick + Enter/Space + tabIndex) still carried its
-  // native, non-interactive "row" role, so assistive tech never learned it
-  // was actionable and AT quick-nav (e.g. NVDA/JAWS "next button") skipped
-  // it entirely. Keyboard activation already worked; role="button" is the
-  // missing piece.
+  // A clickable <tr> must expose exactly ONE interactive control to assistive tech: the
+  // first-column link. The row used to be role="button" tabIndex=0 around a tabIndex=-1 link,
+  // which axe flags as "nested-interactive" (serious, WCAG 4.1.2) -- the inner link is still
+  // reachable by screen readers, so the two controls competed. The row click stays as a
+  // mouse convenience.
   describe("clickable row semantics", () => {
-    it("gives every link-row role=button", () => {
+    it("exposes each link-row as a single focusable link, with no nested role=button", () => {
       render(<DataTable columns={columns} rows={rows} rowLinkKey="id" rowLinkPrefix="/orders/" />);
-      expect(screen.getAllByRole("button")).toHaveLength(rows.length);
+      const links = screen.getAllByRole("link");
+      expect(links).toHaveLength(rows.length);
+      for (const link of links) expect(link).not.toHaveAttribute("tabindex", "-1");
+      expect(screen.queryAllByRole("button")).toHaveLength(0);
     });
 
-    it("does not add role=button to rows when the table has no row link", () => {
+    it("does not make the <tr> itself a tab stop", () => {
+      const { container } = render(<DataTable columns={columns} rows={rows} rowLinkKey="id" rowLinkPrefix="/orders/" />);
+      const bodyRows = container.querySelectorAll("tbody tr");
+      expect(bodyRows).toHaveLength(rows.length);
+      for (const tr of Array.from(bodyRows)) {
+        expect(tr).not.toHaveAttribute("tabindex");
+        expect(tr).not.toHaveAttribute("role", "button");
+      }
+    });
+
+    it("does not add any link or button when the table has no row link", () => {
       render(<DataTable columns={columns} rows={rows} />);
       expect(screen.queryAllByRole("button")).toHaveLength(0);
+      expect(screen.queryAllByRole("link")).toHaveLength(0);
     });
   });
 

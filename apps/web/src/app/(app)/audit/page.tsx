@@ -28,7 +28,7 @@ export default async function AuditPage() {
   const failures = errored ? null : auditItems.filter((i) => i.outcome === "failure").length;
 
   return (
-    <div className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       {/* GAP-AUDIT-HOME-05: Event Log is the module home — its breadcrumb must
           not link "Audit" back to itself. */}
       <AuditBreadcrumb current="Event Log" isHome />
