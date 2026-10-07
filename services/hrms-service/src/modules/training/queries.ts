@@ -22,11 +22,44 @@ function mapTrainingStatus(status: string, fromDate: string, toDate: string): "u
   return "ongoing";
 }
 
-export async function listTrainingPrograms(tenantId: string, limit: number) {
-  return cache.listOrLoad(tenantId, "training", `list:${limit}`, async () => {
+/**
+ * GAP-LEARNING-CALENDAR-06: pure predicate — does a programme's [start, end]
+ * window overlap the requested [from, to] filter? Either bound may be absent
+ * (open-ended). Dates are bare "YYYY-MM-DD" calendar strings, so a lexical
+ * compare is a correct date compare. Exported so the overlap rule is
+ * unit-tested directly rather than only via a route/DB integration test
+ * (see training/routes.test.ts's established rationale).
+ */
+export function overlapsWindow(
+  startDate: string,
+  endDate: string,
+  from?: string,
+  to?: string,
+): boolean {
+  // No overlap if the programme ends before the window starts, or starts
+  // after the window ends.
+  if (from && endDate < from) return false;
+  if (to && startDate > to) return false;
+  return true;
+}
+
+export async function listTrainingPrograms(
+  tenantId: string,
+  limit: number,
+  window?: { from?: string | undefined; to?: string | undefined },
+) {
+  const from = window?.from;
+  const to = window?.to;
+  // Cache key MUST include the date-range params so a bounded request does not
+  // read (or poison) the unbounded list's cache entry.
+  const key = `list:${limit}:${from ?? ""}:${to ?? ""}`;
+  return cache.listOrLoad(tenantId, "training", key, async () => {
     const rows = await repo.listTrainingsByTenant(tenantId, limit);
-    const enrolled = await repo.countNominationsByTraining(tenantId, rows.map((r) => r.id));
-    return rows.map((r) => ({
+    const windowed = (from || to)
+      ? rows.filter((r) => overlapsWindow(r.fromDate, r.toDate, from, to))
+      : rows;
+    const enrolled = await repo.countNominationsByTraining(tenantId, windowed.map((r) => r.id));
+    return windowed.map((r) => ({
       id: r.id,
       title: r.title,
       // GAP-HR-TRAINING-02/NEW-02: real value from the row (migration

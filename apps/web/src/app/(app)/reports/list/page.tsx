@@ -4,8 +4,27 @@ import { EmptyState, PageHeader, StatCard, StatGrid, RefreshErrorState } from ".
 import { toHumanError } from "@/lib/messages";
 import { ReportJobsTable, type JobRow } from "./ReportJobsTable";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * GAP-REPORTS-LIST-03: report-service returns `requestedBy` as a raw user UUID
+ * (or the tenant id as a fallback). Showing a bare UUID in the "Requested By"
+ * column is meaningless to a user and leaks an internal id. There is no
+ * web-side user-name resolver wired for the report list, so a UUID is rendered
+ * as "Unknown user" rather than the raw id; a human-readable value is shown
+ * as-is. HUMAN REVIEW: the real fix is for report-service to return
+ * `requestedByName` (or a resolver). Per-user row scoping (own vs all) is left
+ * as the existing tenant-wide behaviour pending a product decision — see
+ * report.
+ */
+function displayRequestedBy(value: string): string {
+  if (!value || UUID_RE.test(value)) return "Unknown user";
+  return value;
+}
+
 export default async function ReportsListPage() {
   const { data: jobs, source } = await getReportJobs();
+  const errored = source === "error";
 
   const total = jobs.length;
   const completed = jobs.filter((j) => j.status === "completed").length;
@@ -16,7 +35,7 @@ export default async function ReportsListPage() {
     id: j.id,
     reportName: j.reportName,
     module: j.module,
-    requestedBy: j.requestedBy,
+    requestedBy: displayRequestedBy(j.requestedBy),
     format: j.format,
     statusPill: j.status,
     download: j.status === "completed" && j.downloadUrl ? "Download" : "—",
@@ -33,11 +52,13 @@ export default async function ReportsListPage() {
         }
       />
 
+      {/* GAP-REPORTS-LIST-01: on a fetch error the four stats read "—" (StatCard
+          renders null as an em dash), not a fabricated 0 above the retry card. */}
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e7f3fb" label="Total Jobs" value={total} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Completed" value={completed} delta={total ? `${Math.round((completed / total) * 100)}%` : undefined} up={completed > 0} />
-        <StatCard icon="⚡" iconBg="#fffaeb" label="Running" value={running} />
-        <StatCard icon="❌" iconBg="#fef2f2" label="Failed" value={failed} />
+        <StatCard icon="📋" tone="info" label="Total Jobs" value={errored ? null : total} />
+        <StatCard icon="✅" tone="good" label="Completed" value={errored ? null : completed} delta={errored || !total ? undefined : `${Math.round((completed / total) * 100)}%`} up={completed > 0} />
+        <StatCard icon="⚡" tone="warn" label="Running" value={errored ? null : running} />
+        <StatCard icon="❌" tone="bad" label="Failed" value={errored ? null : failed} />
       </StatGrid>
 
       <div className="card" style={{ marginTop: "18px" }}>

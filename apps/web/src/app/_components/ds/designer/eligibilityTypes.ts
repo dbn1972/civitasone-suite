@@ -6,13 +6,17 @@ export type EligibilityOp = (typeof ELIGIBILITY_OPS)[number];
 export const ELIGIBILITY_EFFECTS = ["block", "warn", "flag"] as const;
 export type EligibilityEffectUi = (typeof ELIGIBILITY_EFFECTS)[number];
 
-export type EligibilityEffectApi = "disqualify" | "refer";
+export type EligibilityEffectApi = "disqualify" | "refer" | "warn";
 
 export interface EligibilityAttributeOption {
   id: string;
   label: string;
   group: "profile" | "form";
-  valueType?: "text" | "number" | "boolean";
+  // GAP-DESIGNER-DETAIL-B3-04: 'date' lets the value control render a date input
+  // and keeps ISO date strings from being coerced to numbers on round-trip.
+  valueType?: "text" | "number" | "boolean" | "date";
+  /** GAP-DESIGNER-DETAIL-B3-01: sensitive socio-economic attribute, needs lawful-basis notice. */
+  sensitivity?: "sensitive";
 }
 
 export interface EligibilityRuleUi {
@@ -42,19 +46,26 @@ export interface EligibilityEvalResult {
 }
 
 export function effectUiToApi(effect: EligibilityEffectUi): EligibilityEffectApi {
-  return effect === "block" ? "disqualify" : "refer";
+  // GAP-DESIGNER-DETAIL-B3-03: keep 'warn' distinct from 'flag' so a rule saved
+  // as 'Warn applicant' does not silently reload as 'Flag for review'.
+  if (effect === "block") return "disqualify";
+  if (effect === "warn") return "warn";
+  return "refer";
 }
 
 export function effectApiToUi(effect: EligibilityEffectApi): EligibilityEffectUi {
-  return effect === "disqualify" ? "block" : "flag";
+  if (effect === "disqualify") return "block";
+  if (effect === "warn") return "warn";
+  // Legacy 'refer' rules (pre-B3-03) load as 'flag' — unchanged for backward compat.
+  return "flag";
 }
 
 export const PROFILE_ATTRIBUTES: EligibilityAttributeOption[] = [
   { id: "age", label: "Age", group: "profile", valueType: "number" },
   { id: "ward", label: "Ward", group: "profile", valueType: "text" },
   { id: "resident", label: "Resident status", group: "profile", valueType: "boolean" },
-  { id: "bpl", label: "Below poverty line", group: "profile", valueType: "boolean" },
-  { id: "income_band", label: "Income band", group: "profile", valueType: "text" },
+  { id: "bpl", label: "Below poverty line", group: "profile", valueType: "boolean", sensitivity: "sensitive" },
+  { id: "income_band", label: "Income band", group: "profile", valueType: "text", sensitivity: "sensitive" },
   { id: "mobile_verified", label: "Mobile verified", group: "profile", valueType: "boolean" },
 ];
 

@@ -61,8 +61,21 @@ export function NewInternalTicketForm() {
         setMessage((await formError.fromResponse(res, "save")).message);
         return;
       }
-      toast.success("Ticket created.");
-      router.push("/helpdesk/internal");
+      // GAP-HELPDESK-INTERNAL-NEW-04: read the POST response for a ticket id/number
+      const payload = (await res.json().catch(() => null)) as { data?: { id?: unknown; ticketNo?: unknown } } | null;
+      const ticketRef =
+        payload?.data?.ticketNo && typeof payload.data.ticketNo === "string"
+          ? payload.data.ticketNo
+          : payload?.data?.id && typeof payload.data.id === "string"
+            ? `INT-${(payload.data.id as string).slice(0, 8).toUpperCase()}`
+            : null;
+
+      toast.success(ticketRef ? `Ticket ${ticketRef} created.` : "Ticket created.");
+      if (ticketRef && payload?.data?.id && typeof payload.data.id === "string") {
+        router.push(`/helpdesk/internal/${payload.data.id}`);
+      } else {
+        router.push("/helpdesk/internal");
+      }
       router.refresh();
     } catch (caught) {
       setStatus("error");
@@ -81,7 +94,10 @@ export function NewInternalTicketForm() {
       aria-busy={isSubmitting}
     >
       <div className="fields">
-        <div className="field" style={{ gridColumn: "1 / -1", background: "#fff", padding: "13px 16px" }}>
+        {/* GAP-HELPDESK-INTERNAL-NEW-03: removed background: "#fff" — let the DS
+            .field class handle theming; replaced #b91c1c / #047857 message
+            colours with CSS variables (var(--bad)/var(--good)). */}
+        <div className="field" style={{ gridColumn: "1 / -1", padding: "13px 16px" }}>
           <label className="label" htmlFor="subject">
             Subject <span aria-hidden="true">*</span>
           </label>
@@ -98,7 +114,7 @@ export function NewInternalTicketForm() {
           />
         </div>
 
-        <div className="field" style={{ gridColumn: "1 / -1", background: "#fff", padding: "13px 16px" }}>
+        <div className="field" style={{ gridColumn: "1 / -1", padding: "13px 16px" }}>
           <label className="label" htmlFor="description">
             Description <span aria-hidden="true">*</span>
           </label>
@@ -115,7 +131,7 @@ export function NewInternalTicketForm() {
           />
         </div>
 
-        <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+        <div className="field" style={{ padding: "13px 16px" }}>
           <label className="label" htmlFor="priority">
             Priority
           </label>
@@ -141,7 +157,7 @@ export function NewInternalTicketForm() {
             role={status === "error" ? "alert" : undefined}
             style={{
               marginTop: 12,
-              color: status === "error" ? "#b91c1c" : "#047857",
+              color: status === "error" ? "var(--bad)" : "var(--good)",
               fontSize: "0.875rem",
             }}
           >

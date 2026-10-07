@@ -94,7 +94,7 @@ export function HandoffButton({
           style={{
             display: "block",
             fontSize: 13,
-            color: "#475569",
+            color: "var(--muted)",
             marginBottom: 6,
           }}
         >
@@ -119,15 +119,20 @@ export function HandoffButton({
           style={{
             display: "block",
             fontSize: 13,
-            color: "#475569",
+            color: "var(--muted)",
             margin: "12px 0 6px",
           }}
         >
           Route to queue (optional)
         </label>
+        {/* GAP-AI-CHAT-DETAIL-06: ai-agent-service has no queue-registry
+            endpoint, so the queue stays free text (forcing a closed list with
+            no source of truth could strand a citizen chat); a datalist offers
+            the common desks as suggestions without blocking an unlisted one. */}
         <input
           id="handoff-queue"
           type="text"
+          list="handoff-queue-suggestions"
           value={queue}
           onChange={(e) => setQueue(e.target.value)}
           maxLength={64}
@@ -135,13 +140,20 @@ export function HandoffButton({
           placeholder="e.g. water-supply-tier2"
           style={{ width: "100%", padding: 10, fontSize: 14 }}
         />
+        <datalist id="handoff-queue-suggestions">
+          <option value="general-tier1" />
+          <option value="water-supply-tier2" />
+          <option value="grievances-tier2" />
+          <option value="billing-tier2" />
+          <option value="sanitation-tier2" />
+        </datalist>
 
         <label
           htmlFor="handoff-note"
           style={{
             display: "block",
             fontSize: 13,
-            color: "#475569",
+            color: "var(--muted)",
             margin: "12px 0 6px",
           }}
         >
@@ -174,7 +186,7 @@ export function HandoffButton({
             aria-live="polite"
             style={{
               fontSize: 13,
-              color: "#047857",
+              color: "var(--good)",
               marginTop: 12,
               marginBottom: 0,
             }}
@@ -188,7 +200,7 @@ export function HandoffButton({
             aria-live="assertive"
             style={{
               fontSize: 13,
-              color: "#b42318",
+              color: "var(--bad)",
               marginTop: 12,
               marginBottom: 0,
             }}

@@ -46,9 +46,27 @@ export async function getDashboard(tenantId: string) {
         )
       );
 
+    // GAP-STOCK-DASHBOARD-04: stock-outs are active items whose total on-hand qty
+    // (summed across warehouses) is zero or below. Previously the dashboard tile was a hard-coded "—".
+    const [stockOutRow] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(stockItems)
+      .where(
+        and(
+          eq(stockItems.tenantId, tenantId),
+          eq(stockItems.isActive, true),
+          sql`COALESCE((
+            SELECT SUM(sv.qty) FROM valuation.stock_valuation_rates sv
+            WHERE sv.tenant_id = ${stockItems.tenantId}
+              AND sv.item_id = ${stockItems.id}
+          ), 0) <= 0`,
+        )
+      );
+
     return {
       totalSKUs: total?.count ?? 0,
       lowStockAlerts: alertRow?.count ?? 0,
+      stockOuts: stockOutRow?.count ?? 0,
       grnsThisMonth: grnsRow?.count ?? 0,
       inventoryValue: Number(valueRow?.total ?? "0"),
     };

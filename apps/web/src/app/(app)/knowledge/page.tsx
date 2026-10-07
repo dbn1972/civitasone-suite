@@ -1,9 +1,15 @@
 import { ModuleHub } from "../../_components/ModuleHub";
 
+/**
+ * GAP-KNOWLEDGE-HOME-01: /knowledge/list is now merged into /knowledge/repository
+ *   (LIST-03). All pages reachable from the hub; no orphan links.
+ * GAP-KNOWLEDGE-HOME-02: unified module title as "Knowledge & Documents" across
+ *   hub, dashboard and page headers.
+ */
 export default function Page() {
   return (
     <ModuleHub
-      title="Knowledge & DMS"
+      title="Knowledge & Documents"
       description="Document repository, records management, governed SOP/policy lifecycle, FAQ and virtual assistant."
       links={[
         { href: "/knowledge/dashboard", label: "Dashboard", note: "Repository overview and stats" },
@@ -13,6 +19,7 @@ export default function Page() {
         { href: "/knowledge/assistant", label: "Virtual Assistant", note: "Grounded Q&A with citations, escalate to ticket" },
         { href: "/knowledge/records", label: "Records Management", note: "Retention and disposal" },
         { href: "/knowledge/search", label: "Search", note: "Enterprise full-text search" },
+        { href: "/knowledge/documents/new", label: "Add Document", note: "Upload a new document to the repository" },
       ]}
     />
   );

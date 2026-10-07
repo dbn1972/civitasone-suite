@@ -25,7 +25,10 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const q = listFaqQuery.parse(req.query);
-    return reply.send(await queries.listFaqs(ctx.tenantId, q.category, q.limit, q.offset));
+    // GAP-KNOWLEDGE-FAQS-02: non-editor roles only see published FAQs.
+    const isEditor = ADMIN_ROLES.some((r) => ctx.roles.includes(r));
+    const statusFilter = isEditor ? undefined : "published";
+    return reply.send(await queries.listFaqs(ctx.tenantId, q.category, q.limit, q.offset, statusFilter));
   });
 
   app.get("/v1/knowledge/faqs/:id", async (req, reply) => {
@@ -63,7 +66,10 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/knowledge/guided-flows", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    return reply.send(await queries.listFlows(ctx.tenantId));
+    // GAP-KNOWLEDGE-FAQS-02: non-editor roles only see published flows.
+    const isEditor = ADMIN_ROLES.some((r) => ctx.roles.includes(r));
+    const statusFilter = isEditor ? undefined : "published";
+    return reply.send(await queries.listFlows(ctx.tenantId, statusFilter));
   });
 
   app.get("/v1/knowledge/guided-flows/:id", async (req, reply) => {

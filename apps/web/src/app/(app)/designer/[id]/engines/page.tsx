@@ -110,7 +110,7 @@ export default function DesignerEnginesPage() {
       <div style={{ marginBottom: 12, fontSize: 13 }}>
         <Link href={`/designer/${params.id}/b5`} className="btn ghost">← Fee model builder</Link>
         <span style={{ margin: "0 8px", color: "var(--mut)" }}>·</span>
-        <span style={{ color: "var(--mut)" }}>Engine binding (FN-21)</span>
+        <span style={{ color: "var(--mut)" }}>Engine binding</span>
       </div>
       <EngineBindingBuilder
         definitionId={params.id}

@@ -303,7 +303,7 @@ export function DocumentsBuilder({
         </div>
       ) : null}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16, alignItems: "start" }}>
         <Card title="Required documents">
           {design.documents.length === 0 ? (
             <EmptyState

@@ -4,6 +4,7 @@ import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button, useConfirmAction, ConfirmDialog } from "../../../../_components/ds";
+import { loadMaps, resolveLabel, type OfficerMaps } from "./OfficerName";
 
 const ROLE_LABEL: Record<string, string> = {
   dealing_hand: "Dealing Hand",
@@ -30,6 +31,18 @@ type Props = {
   status: string;
 };
 
+/**
+ * A file in a terminal register state (archived or disposed) is read-only: no
+ * further noting, submission, signing or referral is permitted. The audit
+ * snapshot's `status === "closed"` guard was dead — the register vocabulary is
+ * active | pending | archived | disposed (see mapEstabFileSummaries), so
+ * "closed" never occurs and archived/disposed files wrongly kept their write
+ * controls. This helper is the single source of truth for that read-only test.
+ */
+export function isFileReadOnly(status: string): boolean {
+  return status === "archived" || status === "disposed";
+}
+
 export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
   const router = useRouter();
   const [noteBody, setNoteBody] = useState("");
@@ -41,6 +54,9 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
   // Operator picker — the valid "mark/forward to" candidates (X10).
   const [operators, setOperators] = useState<Operator[]>([]);
   const [toOfficer, setToOfficer] = useState("");
+  // GAP-ESTAB-FILES-DETAIL-07: resolved name maps so the refer dropdown reads
+  // "Name · Role" rather than a truncated id.
+  const [officerMaps, setOfficerMaps] = useState<OfficerMaps | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -56,14 +72,26 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
       } catch {
         /* picker is optional; manual UUID entry still works */
       }
+      // GAP-ESTAB-FILES-DETAIL-07: load the shared name maps (cached, shared
+      // with OfficerName instances on this page) so operatorLabel shows names.
+      try { if (active) setOfficerMaps(await loadMaps()); } catch { /* degrade */ }
     })();
     return () => {
       active = false;
     };
   }, []);
 
-  const operatorLabel = (o: Operator) =>
-    `${o.employeeId.slice(0, 8)} ·· ${o.division} ·· ${ROLE_LABEL[o.deskRole] ?? o.deskRole}`;
+  // GAP-ESTAB-FILES-DETAIL-07: prefer the resolved "Name · Role" label from the
+  // shared maps; fall back to the division + role when no name is known.
+  const operatorLabel = (o: Operator) => {
+    const resolved = resolveLabel(o.employeeId, officerMaps);
+    const roleName = ROLE_LABEL[o.deskRole] ?? o.deskRole;
+    // When resolveLabel already produced a real name (not the "Officer <id>"
+    // fallback), use it as-is (it already carries the desk role); otherwise
+    // show division + role so the option is still distinguishable.
+    if (!resolved.startsWith("Officer ")) return resolved;
+    return `${resolved} · ${o.division} · ${roleName}`;
+  };
 
   async function addYellowNote() {
     if (!noteBody.trim()) {
@@ -181,7 +209,18 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
     referConfirm.trigger();
   }
 
-  if (status === "closed") return null;
+  if (isFileReadOnly(status)) {
+    return (
+      <div className="card" style={{ marginBottom: 18 }}>
+        <div className="card-h"><h3>Noting &amp; approval (eOffice)</h3></div>
+        <div className="pad">
+          <p role="status" style={{ fontSize: 13, color: "#64748b", margin: 0 }}>
+            This file is {status}; no further noting, submission, signing or referral is possible.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="card" style={{ marginBottom: 18 }}>
@@ -212,6 +251,16 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
             Sign note (green)
           </Button>
         </div>
+        {!draftNotingId ? (
+          <p style={{ fontSize: 12, color: "#64748b", margin: 0 }}>
+            Save a yellow note first — Submit and Sign act on your draft note.
+          </p>
+        ) : (
+          <p style={{ fontSize: 12, color: "#64748b", margin: 0 }}>
+            <strong>Submit</strong> sends your draft to the next approver in the SO → US → DS chain.
+            {" "}<strong>Sign</strong> adds a green note at your level (for the current approver only).
+          </p>
+        )}
         <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
           <label htmlFor="estab-refer-officer" className="l" style={{ fontSize: 12 }}>Refer / forward to</label>
           {operators.length > 0 ? (

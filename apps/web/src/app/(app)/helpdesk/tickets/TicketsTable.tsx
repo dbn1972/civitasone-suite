@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { DataTable, Segmented, EmptyState } from "../../../_components/ds";
+import { DataTable, Segmented, EmptyState, HelpTip, StatCard, StatGrid } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PredictionBadge } from "../../../_components/ds/PredictionBadge";
 import { useSeededResource } from "@/lib/sync/resource";
+import { HELPDESK_PRIORITY_VARIANTS } from "@/lib/helpdesk/priorityVariants";
 
 type Ticket = {
   id: string;
@@ -65,12 +66,41 @@ export function TicketsTable({ tickets, source = "api" }: { tickets: Ticket[]; s
           ? tableRows.filter((r) => /resolved/i.test(r.status))
           : tableRows;
 
+  // GAP-HELPDESK-TICKETS-02: stat cards computed from the SAME rows the table
+  // shows (useSeededResource), so they never disagree with what the user sees.
+  // When provenance is "error-no-data" there are genuinely no rows anywhere, so
+  // show "—". When provenance is "cached", rows come from IndexedDB — label
+  // accordingly.
+  const noData = provenance === "error-no-data";
+  const breachedCount = noData ? null : rows.filter((t) => t.slaStatus === "breached").length;
+  const openCount = noData ? null : rows.filter((t) => t.status === "open" || t.status === "in_progress").length;
+  const slaMetPct = noData
+    ? null
+    : rows.length > 0
+      ? Math.round(((rows.length - (breachedCount ?? 0)) / rows.length) * 100)
+      : null;
+  const staleSuffix = provenance === "cached" ? " (cached)" : "";
+
   return (
-    <div className="card">
+    <>
+      {/* GAP-HELPDESK-TICKETS-02: stats derived from the same useSeededResource
+          rows, so they agree with the table and with cached data. */}
+      <StatGrid>
+        <StatCard icon="🎫" label={`Open Tickets${staleSuffix}`} value={openCount !== null ? openCount.toLocaleString("en-IN") : "—"} />
+        <StatCard icon="⏱" label="First Response" value="Not available" hint="Not yet measured — no analytics source available." />
+        <StatCard icon="✅" label={`SLA Met${staleSuffix}`} value={slaMetPct !== null ? `${slaMetPct}%` : "—"} />
+        <StatCard icon="⭐" label="CSAT" value="Not available" hint="Customer satisfaction score — not yet measured." />
+      </StatGrid>
+      <div className="card">
       <div className="card-h">
         <h3>Tickets</h3>
-        <div role="group" aria-label="Filter tickets by status">
-          <Segmented options={[...TABS]} value={tab} onChange={setTab} />
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div role="group" aria-label="Filter tickets by status">
+            <Segmented options={[...TABS]} value={tab} onChange={setTab} />
+          </div>
+          <HelpTip term="Breach Risk">
+            Predicted probability the SLA will be breached before resolution; badge shows model confidence level.
+          </HelpTip>
         </div>
       </div>
       {/* UX-012: this badge is the ONLY place that reports data provenance for
@@ -87,7 +117,7 @@ export function TicketsTable({ tickets, source = "api" }: { tickets: Ticket[]; s
             { key: "ticketNo", label: "Ticket No" },
             { key: "subject", label: "Subject" },
             { key: "requesterName", label: "Requester" },
-            { key: "priority", label: "Priority", cellType: "status" },
+            { key: "priority", label: "Priority", cellType: "status", statusVariants: HELPDESK_PRIORITY_VARIANTS },
             { key: "slaStatus", label: "SLA", cellType: "status" },
             { key: "status", label: "Status", cellType: "status" },
             {
@@ -101,7 +131,9 @@ export function TicketsTable({ tickets, source = "api" }: { tickets: Ticket[]; s
                     factors={row.breachRisk.factors}
                     isFallback={row.breachRisk.isFallback}
                   />
-                ) : null,
+                ) : (
+                  <span style={{ color: "var(--mut)", fontSize: 13 }}>No prediction</span>
+                ),
             },
           ]}
           rows={filtered}
@@ -114,5 +146,6 @@ export function TicketsTable({ tickets, source = "api" }: { tickets: Ticket[]; s
         />
       )}
     </div>
+    </>
   );
 }

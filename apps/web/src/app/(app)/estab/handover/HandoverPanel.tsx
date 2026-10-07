@@ -4,6 +4,7 @@ import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useCallback, useEffect, useState } from "react";
 import { Button, DataTable, StatusPill, ConfirmDialog, useConfirmAction, ErrorState } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
+import { loadMaps, resolveLabel, type OfficerMaps } from "../files/[id]/OfficerName";
 
 type Operator = { id: string; employeeId: string; division: string; deskRole: string; active: boolean };
 type Handover = {
@@ -18,6 +19,13 @@ type Handover = {
 };
 
 const REASONS = ["transfer", "leave", "retirement", "suspension"] as const;
+const REASON_LABEL: Record<string, string> = {
+  transfer: "Transfer",
+  leave: "Leave",
+  retirement: "Retirement",
+  suspension: "Suspension",
+};
+const reasonLabel = (r: string) => REASON_LABEL[r] ?? r;
 const EMPTY = { fromOfficerId: "", toOfficerId: "", reason: "transfer", remarks: "" };
 
 export function HandoverPanel() {
@@ -29,10 +37,19 @@ export function HandoverPanel() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
+  // GAP-ESTAB-HANDOVER-05: distinguish an operators-roster failure (which must
+  // block the form — you can't pick officers from an empty roster) from a
+  // history-only failure (form stays usable).
+  const [operatorsFailed, setOperatorsFailed] = useState(false);
+  // GAP-ESTAB-HANDOVER-01: resolved officer name maps for readable labels.
+  const [officerMaps, setOfficerMaps] = useState<OfficerMaps | null>(null);
+  // GAP-ESTAB-HANDOVER-03: file count preview for the selected from-officer.
+  const [fileCount, setFileCount] = useState<number | null>(null);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setLoadError("");
+    setOperatorsFailed(false);
     try {
       const [opRes, hoRes] = await Promise.all([
         fetch("/api/proxy/v1/estab/operators?activeOnly=false&limit=500", { signal }),
@@ -40,10 +57,15 @@ export function HandoverPanel() {
       ]);
       // A non-OK status is a real failure — never swallow it into an empty list,
       // which would falsely read as "no handovers recorded".
-      if (!opRes.ok) throw new Error("Couldn't load the operator list.");
+      if (!opRes.ok) {
+        setOperatorsFailed(true);
+        throw new Error("Couldn't load the operator list.");
+      }
       if (!hoRes.ok) throw new Error("Couldn't load the handover history.");
       setOperators(((await opRes.json()) as { data?: Operator[] }).data ?? []);
       setRows(((await hoRes.json()) as { data?: Handover[] }).data ?? []);
+      // GAP-ESTAB-HANDOVER-01: best-effort name resolution (shared with OfficerName).
+      try { setOfficerMaps(await loadMaps()); } catch { /* degrade to short id */ }
     } catch (err) {
       // An abort means the panel unmounted while the request was in flight.
       if (err instanceof Error && err.name === "AbortError") return;
@@ -59,10 +81,44 @@ export function HandoverPanel() {
     return () => controller.abort();
   }, [load]);
 
+  // GAP-ESTAB-HANDOVER-03: preview how many files sit on the outgoing officer's
+  // desk so the confirm dialog can state the blast radius. Server-side count
+  // (never a capped client list). Re-fetches whenever the from-officer changes.
+  useEffect(() => {
+    const from = form.fromOfficerId;
+    if (!from) { setFileCount(null); return; }
+    const controller = new AbortController();
+    setFileCount(null);
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/proxy/v1/estab/files/held-count?officerId=${encodeURIComponent(from)}`,
+          { signal: controller.signal },
+        );
+        if (!res.ok) { setFileCount(null); return; }
+        const body = (await res.json()) as { count?: number };
+        setFileCount(typeof body.count === "number" ? body.count : null);
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
+        setFileCount(null);
+      }
+    })();
+    return () => controller.abort();
+  }, [form.fromOfficerId]);
+
+  // GAP-ESTAB-HANDOVER-01: resolve to "Name · Desk Role (division)" when the
+  // HRMS/operator maps are available; degrade to the short id otherwise. The
+  // inactive marker (GAP-ESTAB-HANDOVER-04) is preserved in history/dialog text.
   const label = useCallback((empId: string) => {
+    if (!empId) return "—";
     const o = operators.find((x) => x.employeeId === empId);
-    return o ? `${empId.slice(0, 8)}… · ${o.division}` : empId.slice(0, 8) + "…";
-  }, [operators]);
+    const inactive = o && !o.active ? " (inactive)" : "";
+    const resolved = resolveLabel(empId, officerMaps);
+    // resolveLabel already appends the desk role when known; add the division
+    // and the inactive marker for the handover audit trail.
+    if (o) return `${resolved} · ${o.division}${inactive}`;
+    return `${resolved}${inactive}`;
+  }, [operators, officerMaps]);
 
   // The actual reassignment — moves every file on the outgoing officer's desk.
   // Irreversible, so it runs only after the ConfirmDialog (handoverConfirm).
@@ -79,7 +135,7 @@ export function HandoverPanel() {
       if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       setMessage("Charge handover queued — files are being reassigned.");
       setForm({ ...EMPTY });
-      setTimeout(() => void load(), 900);
+      await load();
     } catch (err) {
       // Re-throw so the ConfirmDialog surfaces the error and stays open.
       setSaving(false);
@@ -114,25 +170,38 @@ export function HandoverPanel() {
 
       <div className="card">
         <div className="card-h"><h3>New charge handover</h3></div>
-        <div className="pad" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+        {operatorsFailed ? (
+          <div className="pad">
+            <ErrorState
+              error={toHumanError("load", { area: "operator roster" })}
+              onRetry={() => void load()}
+            />
+          </div>
+        ) : (
+          <>
+            <div className="pad" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
           <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
             <span>From officer (outgoing)</span>
             <select value={form.fromOfficerId} onChange={(e) => setForm((f) => ({ ...f, fromOfficerId: e.target.value }))}>
               <option value="">Select…</option>
-              {operators.map((o) => <option key={o.id} value={o.employeeId}>{o.employeeId.slice(0, 8)}… · {o.division} · {o.deskRole}</option>)}
+              {[...operators].sort((a, b) => Number(b.active) - Number(a.active)).map((o) => (
+                <option key={o.id} value={o.employeeId}>
+                  {label(o.employeeId)}
+                </option>
+              ))}
             </select>
           </label>
           <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
             <span>To officer (must be active operator)</span>
             <select value={form.toOfficerId} onChange={(e) => setForm((f) => ({ ...f, toOfficerId: e.target.value }))}>
               <option value="">Select…</option>
-              {activeOps.map((o) => <option key={o.id} value={o.employeeId}>{o.employeeId.slice(0, 8)}… · {o.division} · {o.deskRole}</option>)}
+              {activeOps.map((o) => <option key={o.id} value={o.employeeId}>{label(o.employeeId)}</option>)}
             </select>
           </label>
           <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
             <span>Reason</span>
             <select value={form.reason} onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))}>
-              {REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+              {REASONS.map((r) => <option key={r} value={r}>{reasonLabel(r)}</option>)}
             </select>
           </label>
           <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
@@ -141,10 +210,21 @@ export function HandoverPanel() {
           </label>
         </div>
         <div className="pad" style={{ paddingTop: 0 }}>
+          {fileCount === 0 && form.fromOfficerId ? (
+            <p role="status" style={{ fontSize: 12, color: "var(--mut, #64748b)", margin: "0 0 8px" }}>
+              This officer has no active files on their desk.
+            </p>
+          ) : fileCount !== null && form.fromOfficerId ? (
+            <p role="status" style={{ fontSize: 12, color: "var(--mut, #64748b)", margin: "0 0 8px" }}>
+              {fileCount} file{fileCount === 1 ? "" : "s"} will be reassigned.
+            </p>
+          ) : null}
           <Button disabled={saving || handoverConfirm.busy || !form.fromOfficerId || !form.toOfficerId} onClick={onHandoverClick}>
             {saving ? "Handing over…" : "Hand over charge"}
           </Button>
         </div>
+          </>
+        )}
       </div>
 
       <div className="card">
@@ -162,7 +242,7 @@ export function HandoverPanel() {
             columns={[
               { key: "fromOfficerId", label: "From", render: (h) => <>{label(h.fromOfficerId)}</> },
               { key: "toOfficerId", label: "To", render: (h) => <>{label(h.toOfficerId)}</> },
-              { key: "reason", label: "Reason" },
+              { key: "reason", label: "Reason", render: (h) => <>{reasonLabel(h.reason)}</> },
               { key: "fileCount", label: "Files moved" },
               { key: "status", label: "Status", render: (h) => <StatusPill status={h.status} /> },
             ]}
@@ -174,7 +254,9 @@ export function HandoverPanel() {
       <ConfirmDialog
         open={handoverConfirm.open}
         title="Hand over this officer's entire file charge?"
-        description={`This reassigns every file currently on ${label(form.fromOfficerId)}'s desk to ${label(form.toOfficerId)} (reason: ${form.reason}). Charge transfer takes effect once processed and cannot be undone from here.`}
+        description={`This reassigns ${
+          fileCount === null ? "every file" : `all ${fileCount} file${fileCount === 1 ? "" : "s"}`
+        } currently on ${label(form.fromOfficerId)}'s desk to ${label(form.toOfficerId)} (reason: ${reasonLabel(form.reason)}). Charge transfer takes effect once processed and cannot be undone from here.`}
         confirmLabel="Hand over charge"
         danger
         busy={handoverConfirm.busy}

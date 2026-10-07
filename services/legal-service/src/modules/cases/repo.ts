@@ -28,6 +28,20 @@ export async function findCaseByIdTx(tx: Writer, id: string): Promise<CaseRow | 
   return rows[0] ?? null;
 }
 
+/**
+ * GAP-LEGAL-CASES-NEW-03: look up a case by its tenant-scoped case number so
+ * createCase can reject a duplicate with a synchronous 409 instead of letting
+ * the async consumer hit the UNIQUE (tenant_id, case_no) constraint after the
+ * API already returned 202 (a silent background failure).
+ */
+export async function findCaseByTenantAndNo(tenantId: string, caseNo: string): Promise<CaseRow | null> {
+  const rows = await db.transaction((tx) =>
+    tx.select().from(legalCases)
+      .where(and(eq(legalCases.tenantId, tenantId), eq(legalCases.caseNo, caseNo)))
+      .limit(1));
+  return rows[0] ?? null;
+}
+
 export async function insertCase(tx: Writer, row: CaseInsert): Promise<void> {
   await tx.insert(legalCases).values(row);
 }

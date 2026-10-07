@@ -11,7 +11,7 @@ import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import {
   idParam, createGuesthouseBody, bookRoomBody, checkoutBody, addBookBody, issueBookBody,
-  libraryBooksQuery, libraryIssuesQuery, renewIssueBody,
+  libraryBooksQuery, libraryIssuesQuery, renewIssueBody, editBookBody, withdrawBookBody,
 } from "./validators.js";
 import * as commands from "./commands.js";
 
@@ -62,6 +62,15 @@ export async function facilitiesRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.issueBook(ctx, body));
   });
 
+  // GAP-ESTAB-GUESTHOUSE-NEW-01: rooms directory for the booking-form picker.
+  app.get("/v1/estab/rooms", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const rooms = await queries.listRooms(ctx.tenantId, q.limit);
+    return reply.send({ data: rooms });
+  });
+
   app.get("/v1/estab/guesthouse-bookings", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
@@ -93,11 +102,29 @@ export async function facilitiesRoutes(app: FastifyInstance): Promise<void> {
     sendValidated(reply, LibraryBookSummarySchema, book);
   });
 
+  // GAP-ESTAB-LIBRARY-DETAIL-01: edit catalogue metadata / adjust copies.
+  app.patch("/v1/estab/library/books/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ESTAB_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = editBookBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.editBook(ctx, id, body));
+  });
+
+  // GAP-ESTAB-LIBRARY-DETAIL-01: withdraw a book (blocked while copies out).
+  app.patch("/v1/estab/library/books/:id/withdraw", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ESTAB_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = withdrawBookBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.withdrawBook(ctx, id, body));
+  });
+
   app.get("/v1/estab/library/issues", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = libraryIssuesQuery.parse(req.query);
-    sendValidated(reply, LibraryIssueSummaryListSchema, await queries.listLibraryIssueSummaries(ctx.tenantId, q.limit, q.status));
+    sendValidated(reply, LibraryIssueSummaryListSchema, await queries.listLibraryIssueSummaries(ctx.tenantId, q.limit, q.status, q.bookId));
   });
 
   app.patch("/v1/estab/library/issues/:id/return", async (req, reply) => {

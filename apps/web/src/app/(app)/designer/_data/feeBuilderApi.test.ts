@@ -127,3 +127,57 @@ describe("feeBuilderApi — persistFeeDesign never leaks raw status or server te
     expect(message).toMatch(/couldn't save/i);
   });
 });
+
+/**
+ * GAP-DESIGNER-DETAIL-B5-02: string-based rupees parser. Rejects invalid input
+ * with an error instead of silently coercing to 0 (which would create a ₹0 fee
+ * demand for citizens). Uses integer arithmetic only — no float rounding.
+ */
+import { parseRupeesToPaise } from "./feeBuilderApi";
+
+describe("parseRupeesToPaise (GAP-DESIGNER-DETAIL-B5-02)", () => {
+  it("parses whole rupees correctly", () => {
+    const r = parseRupeesToPaise("10");
+    expect(r).toEqual({ ok: true, paise: 1000 });
+  });
+
+  it("parses rupees with one decimal", () => {
+    const r = parseRupeesToPaise("10.5");
+    expect(r).toEqual({ ok: true, paise: 1050 });
+  });
+
+  it("parses rupees with two decimals", () => {
+    const r = parseRupeesToPaise("10.50");
+    expect(r).toEqual({ ok: true, paise: 1050 });
+  });
+
+  it("rejects more than 2 decimal places (1.005 would float-round wrong)", () => {
+    const r = parseRupeesToPaise("1.005");
+    expect(r.ok).toBe(false);
+  });
+
+  it("rejects negative values", () => {
+    const r = parseRupeesToPaise("-5");
+    expect(r.ok).toBe(false);
+  });
+
+  it("rejects non-numeric text", () => {
+    const r = parseRupeesToPaise("abc");
+    expect(r.ok).toBe(false);
+  });
+
+  it("rejects empty string", () => {
+    const r = parseRupeesToPaise("");
+    expect(r.ok).toBe(false);
+  });
+
+  it("handles large values without losing precision", () => {
+    const r = parseRupeesToPaise("99999999999.99");
+    expect(r).toEqual({ ok: true, paise: 9999999999999 });
+  });
+
+  it("rejects zero as valid (₹0 is a valid amount)", () => {
+    const r = parseRupeesToPaise("0");
+    expect(r).toEqual({ ok: true, paise: 0 });
+  });
+});

@@ -7,6 +7,7 @@ vi.mock("@/app/_data/apiClient", () => ({
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  notFound: () => { throw new Error("NOT_FOUND"); },
 }));
 vi.mock("@/lib/api/browserClient", () => ({
   browserJson: vi.fn(),
@@ -21,9 +22,9 @@ const QUARTER = {
   category: "general",
   address: "Sector 12",
   locality: "Sector 12",
-  carpetAreaSqft: 850,
+  carpetAreaSqft: 1250,
   status: "occupied",
-  condition: "good",
+  condition: "needs_repair",
   orgUnit: null,
   version: 1,
 };
@@ -32,6 +33,8 @@ const ALLOTMENT = {
   id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
   quarterId: QUARTER.id,
   employeeRef: "cccccccc-cccc-cccc-cccc-cccccccccccc",
+  employeeName: null,
+  quarterNo: "B-14",
   designation: "Section Officer",
   payLevel: "7",
   status: "occupied",
@@ -45,64 +48,108 @@ function mockFetchJsonByKey(map: Record<string, { data: unknown; source: "api" |
   });
 }
 
-describe("QuarterDetailPage — allotment history source masking", () => {
+describe("QuarterDetailPage", () => {
   beforeEach(() => {
     fetchJsonMock.mockReset();
   });
 
-  it("shows the data-source badge next to the card title when the allotment list errors, even with stale non-empty rows", async () => {
+  // GAP-ESTAB-QUARTERS-DETAIL-03: quarter fetch 500 renders a Retry button
+  it("renders RefreshErrorState with Retry when the quarter fetch errors", async () => {
     mockFetchJsonByKey({
-      "estab.quarters.detail": { data: QUARTER, source: "api" },
-      "estab.quarters.allotments.byQuarter": { data: [ALLOTMENT], source: "error" },
+      "estab.quarters.detail": { data: null, source: "error" },
     });
-
     const ui = await QuarterDetailPage({ params: { id: QUARTER.id } });
     render(ui);
 
-    // Stale row still renders...
-    expect(screen.getByText("Section Officer")).toBeInTheDocument();
-    // ...but the error must still be visibly flagged, not silently hidden because length > 0.
-    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.queryByText("could not be found")).not.toBeInTheDocument();
   });
 
-  it("shows no badge when the allotment list loads cleanly", async () => {
+  // GAP-ESTAB-QUARTERS-DETAIL-03: quarter fetch 404 renders not-found
+  it("calls notFound when the quarter is not found (api returned null)", async () => {
+    mockFetchJsonByKey({
+      "estab.quarters.detail": { data: null, source: "api" },
+    });
+    await expect(QuarterDetailPage({ params: { id: QUARTER.id } })).rejects.toThrow("NOT_FOUND");
+  });
+
+  // GAP-ESTAB-QUARTERS-DETAIL-04: no Version label, Condition humanised, carpet area formatted
+  it("does not show Version and humanises Condition (DETAIL-04)", async () => {
     mockFetchJsonByKey({
       "estab.quarters.detail": { data: QUARTER, source: "api" },
-      "estab.quarters.allotments.byQuarter": { data: [ALLOTMENT], source: "api" },
+      "estab.quarters.allotments.byQuarter": { data: { rows: [], total: 0 }, source: "api" },
     });
-
     const ui = await QuarterDetailPage({ params: { id: QUARTER.id } });
     render(ui);
 
-    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+    expect(screen.queryByText("Version")).not.toBeInTheDocument();
+    expect(screen.getByText("Needs repair")).toBeInTheDocument();
+    // GAP-ESTAB-QUARTERS-DETAIL-05: carpet area formatted with grouping
+    expect(screen.getByText("1,250 sq. ft.")).toBeInTheDocument();
   });
 
-  // UX-021: the Employee column used to show the raw truncated employeeRef;
-  // it now shows the real name estab-service resolves via hrms-client
-  // (best-effort), falling back to the truncated ref when unresolved.
-  it("shows the employee's real name in the Employee column when hrms-client resolved it (UX-021)", async () => {
+  // GAP-ESTAB-QUARTERS-DETAIL-05: non-vacant quarter shows explanation note
+  it("shows an explanatory note instead of the form for a non-vacant quarter", async () => {
     mockFetchJsonByKey({
       "estab.quarters.detail": { data: QUARTER, source: "api" },
-      "estab.quarters.allotments.byQuarter": { data: [{ ...ALLOTMENT, employeeName: "Kiran Bose" }], source: "api" },
+      "estab.quarters.allotments.byQuarter": { data: { rows: [], total: 0 }, source: "api" },
     });
+    const ui = await QuarterDetailPage({ params: { id: QUARTER.id } });
+    render(ui);
 
+    expect(screen.getByRole("note")).toHaveTextContent(/Applications are only accepted for vacant quarters/);
+    // The note contains the formatted status "Occupied"
+    expect(screen.getByRole("note")).toHaveTextContent("Occupied");
+  });
+
+  // GAP-ESTAB-QUARTERS-DETAIL-05: vacant quarter shows the form
+  it("shows the apply form for a vacant quarter", async () => {
+    const vacantQuarter = { ...QUARTER, status: "vacant" };
+    mockFetchJsonByKey({
+      "estab.quarters.detail": { data: vacantQuarter, source: "api" },
+      "estab.quarters.allotments.byQuarter": { data: { rows: [], total: 0 }, source: "api" },
+    });
+    const ui = await QuarterDetailPage({ params: { id: QUARTER.id } });
+    render(ui);
+
+    // Button text within the form
+    expect(screen.getByRole("button", { name: "Apply for allotment" })).toBeInTheDocument();
+  });
+
+  // GAP-ESTAB-QUARTERS-DETAIL-01: allotment history uses quarterId filter
+  it("shows allotment history for the quarter, employee name when resolved", async () => {
+    const withName = { ...ALLOTMENT, employeeName: "Kiran Bose" };
+    mockFetchJsonByKey({
+      "estab.quarters.detail": { data: QUARTER, source: "api" },
+      "estab.quarters.allotments.byQuarter": { data: { rows: [withName], total: 1 }, source: "api" },
+    });
     const ui = await QuarterDetailPage({ params: { id: QUARTER.id } });
     render(ui);
 
     expect(screen.getByText("Kiran Bose")).toBeInTheDocument();
   });
 
-  it("falls back to the truncated employee ref when employeeName is null (UX-021)", async () => {
+  // GAP-ESTAB-QUARTERS-DETAIL-01: truncation notice
+  it("shows truncation notice when total > returned rows", async () => {
     mockFetchJsonByKey({
       "estab.quarters.detail": { data: QUARTER, source: "api" },
-      "estab.quarters.allotments.byQuarter": { data: [{ ...ALLOTMENT, employeeName: null }], source: "api" },
+      "estab.quarters.allotments.byQuarter": { data: { rows: [ALLOTMENT], total: 120 }, source: "api" },
     });
-
     const ui = await QuarterDetailPage({ params: { id: QUARTER.id } });
     render(ui);
 
-    // Both the Employee and "Employee ref" columns fall back to the same
-    // truncated ref when there is no resolved name.
-    expect(screen.getAllByText(`${ALLOTMENT.employeeRef.slice(0, 8)}…`).length).toBe(2);
+    expect(screen.getByText(/Showing 1 of 120/)).toBeInTheDocument();
+  });
+
+  // Allotment list error: RefreshErrorState with Retry
+  it("shows RefreshErrorState when allotments error and list is empty", async () => {
+    mockFetchJsonByKey({
+      "estab.quarters.detail": { data: QUARTER, source: "api" },
+      "estab.quarters.allotments.byQuarter": { data: { rows: [], total: 0 }, source: "error" },
+    });
+    const ui = await QuarterDetailPage({ params: { id: QUARTER.id } });
+    render(ui);
+
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 });

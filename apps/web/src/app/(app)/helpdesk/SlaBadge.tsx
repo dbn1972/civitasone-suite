@@ -10,11 +10,16 @@
 
 type Tone = "good" | "warn" | "bad" | "mut";
 
+// GAP-HELPDESK-CATALOGUE-MY-REQUESTS-03: labels now come from the shared
+// SLA_LABELS vocabulary (lib/slaLabels.ts) so this badge, My Requests and the
+// breach report never disagree on wording; icon + tone stay badge-local.
+import { SLA_LABELS } from "@/lib/slaLabels";
+
 const SLA_MAP: Record<string, { label: string; icon: string; tone: Tone }> = {
-  within_sla: { label: "Within SLA", icon: "✓", tone: "good" },
-  due_soon: { label: "At risk", icon: "⏳", tone: "warn" },
-  at_risk: { label: "At risk", icon: "⏳", tone: "warn" },
-  breached: { label: "Breached", icon: "⚠", tone: "bad" },
+  within_sla: { label: SLA_LABELS.within_sla, icon: "✓", tone: "good" },
+  due_soon: { label: SLA_LABELS.due_soon, icon: "⏳", tone: "warn" },
+  at_risk: { label: SLA_LABELS.at_risk, icon: "⏳", tone: "warn" },
+  breached: { label: SLA_LABELS.breached, icon: "⚠", tone: "bad" },
 };
 
 export function SlaBadge({ status }: { status?: string | null }) {

@@ -1,6 +1,6 @@
 import { ModuleListPage } from "../../../_components/ModuleListPage";
 import { getTenantStewardship } from "../_data";
-import { ArrowLeft } from "lucide-react";
+import { LABELS } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -8,14 +8,16 @@ export default async function Page() {
   const { data, source } = await getTenantStewardship();
   return (
     <div className="page-main" aria-labelledby="page-heading">
-      <nav aria-label="Breadcrumb" className="back">
-        <ArrowLeft aria-hidden="true" size={14} /> <a href="/tenant">Tenant</a>
-      </nav>
       <ModuleListPage
-        title="Tenant — Stewardship"
-        description="Data governance domains and assigned stewards."
+        // GAP-TENANT-STEWARDSHIP-06: no banned clerk term ("Tenant").
+        title={`${LABELS.tenantTitle} — Stewardship`}
+        // GAP-TENANT-STEWARDSHIP-01: the owner (role · office) is mapped into
+        // the Meta column, showing "Unassigned" when a domain has no owner.
+        description="Data governance domains and their owners."
         rows={data}
         source={source}
+        back="/tenant"
+        backLabel={LABELS.tenantTitle}
       />
     </div>
   );

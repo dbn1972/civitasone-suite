@@ -406,6 +406,43 @@ export function rupeesInputToPaise(input: string): number {
   return Math.round(rupees * 100);
 }
 
+/**
+ * GAP-DESIGNER-DETAIL-B5-02: string-based rupees→paise parser. Money is paise
+ * end-to-end (CLAUDE.md rule 11). Unlike rupeesInputToPaise (kept for callers
+ * that still want a lenient number), this never silently coerces a typo to 0 —
+ * a ₹0 fee that slips past validation would create a wrong citizen demand.
+ *
+ * Accepts only `/^\d+(\.\d{1,2})?$/`. Paise are built from integer and fraction
+ * parts without float math, so 1.005 is rejected (would otherwise float-round
+ * to the wrong paise) and large values keep full precision.
+ *
+ *   parseRupeesToPaise("10")    -> { ok: true,  paise: 1000 }
+ *   parseRupeesToPaise("10.5")  -> { ok: true,  paise: 1050 }
+ *   parseRupeesToPaise("1.005") -> { ok: false, error: ... }
+ *   parseRupeesToPaise("-5")    -> { ok: false, error: ... }
+ *   parseRupeesToPaise("abc")   -> { ok: false, error: ... }
+ *   parseRupeesToPaise("")      -> { ok: false, error: ... }
+ */
+export type RupeesParseResult =
+  | { ok: true; paise: number }
+  | { ok: false; error: string };
+
+export function parseRupeesToPaise(input: string): RupeesParseResult {
+  const trimmed = (input ?? "").trim();
+  if (trimmed === "") return { ok: false, error: "Enter an amount in rupees." };
+  if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) {
+    return { ok: false, error: "Enter a valid amount in rupees (up to 2 decimal places)." };
+  }
+  const [whole, fraction = ""] = trimmed.split(".");
+  const paiseFraction = (fraction + "00").slice(0, 2);
+  // Integer arithmetic only — no float rounding.
+  const paise = Number(whole) * 100 + Number(paiseFraction);
+  if (!Number.isSafeInteger(paise)) {
+    return { ok: false, error: "Amount is too large." };
+  }
+  return { ok: true, paise };
+}
+
 export function paiseToRupeesInput(paise: number): string {
   if (paise <= 0) return "";
   return (paise / 100).toFixed(2).replace(/\.?0+$/, "");

@@ -20,6 +20,17 @@ describe("AddBookForm", () => {
     expect(screen.getByText("Enter an accession number.")).toBeInTheDocument();
   });
 
+  it("GAP-ESTAB-LIBRARY-05: blocks submit when the accession number already exists", () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    render(<AddBookForm existingAccessions={["ACC-001"]} />);
+    fireEvent.change(screen.getByLabelText(/Accession No\./), { target: { value: "acc-001" } });
+    fireEvent.change(screen.getByLabelText(/^Title/), { target: { value: "Dup" } });
+    fireEvent.change(screen.getByLabelText(/^Copies/), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add Book" }));
+    expect(screen.getByText("This accession number is already in the catalogue.")).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it("adds a book on submit (happy path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ id: "book-1", status: "accepted", correlationId: "c1" }), { status: 202 }),
@@ -32,8 +43,10 @@ describe("AddBookForm", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add Book" }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Book submitted/)).toBeInTheDocument();
+      expect(screen.getByText(/Added .*Fundamental Rules.* to the catalogue/)).toBeInTheDocument();
     });
+    // GAP-ESTAB-LIBRARY-03: the raw record id must never appear in the message.
+    expect(screen.queryByText(/book-1/)).not.toBeInTheDocument();
     expect(refreshMock).toHaveBeenCalled();
   });
 

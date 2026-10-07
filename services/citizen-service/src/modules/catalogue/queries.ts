@@ -1,6 +1,9 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import type { ServiceChannel } from "./domain.js";
+// GAP-DESIGNER-HOME-04: enrich the list with the latest sandbox-test outcome
+// via the sandbox-test module's read interface (no cross-module JOIN).
+import { latestTestStatusByDefinitionIds } from "../sandbox-test/queries.js";
 
 type Row = Awaited<ReturnType<typeof repo.findDefinitionById>>;
 
@@ -44,7 +47,15 @@ function forCitizen<T extends Row>(row: T): T {
 }
 
 export async function listDefinitions(tenantId: string) {
-  return (await repo.listDefinitions(tenantId)).map(redactSecrets);
+  const rows = (await repo.listDefinitions(tenantId)).map(redactSecrets);
+
+  // GAP-DESIGNER-HOME-04: attach the latest sandbox-test outcome to each row
+  // so the web can show "Needs Attention" for drafts whose last test failed.
+  const ids = rows.filter((r) => r != null).map((r) => r!.id);
+  const statuses = await latestTestStatusByDefinitionIds(tenantId, ids);
+  return rows.map((r) =>
+    r ? { ...r, latestTestStatus: statuses.get(r.id) ?? null } : r,
+  );
 }
 
 export async function getDefinition(tenantId: string, id: string) {

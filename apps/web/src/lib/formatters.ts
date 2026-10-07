@@ -237,6 +237,21 @@ export function todayIST(): string {
 }
 
 /**
+ * GAP-ESTAB-DASHBOARD-03: format a (possibly fractional) day count for display.
+ * The estab dashboard's avgPendencyDays arrives as a float (e.g. 6.428571);
+ * printing it raw via String() is ugly and locale-wrong. This clamps to at most
+ * one decimal in en-IN and returns "—" for a non-finite / missing value.
+ *
+ *   formatDays(6.428571) -> "6.4"
+ *   formatDays(7)        -> "7"
+ *   formatDays(NaN)      -> "—"
+ */
+export function formatDays(n: number | null | undefined): string {
+  if (n === null || n === undefined || !Number.isFinite(n)) return "—";
+  return n.toLocaleString("en-IN", { maximumFractionDigits: 1 });
+}
+
+/**
  * GAP-HR-DASHBOARD-08: pure, hour-in/greeting-out so it's unit-testable with
  * no Date/timezone mocking (see page.test.tsx). Replaces the previous
  * `dayName.startsWith("S") ? "Good day" : "Good morning"` weekday hack
@@ -494,6 +509,26 @@ export function humanizeStatus(status: string): string {
     .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
+}
+
+/**
+ * GAP-ESTAB-QUARTERS-DETAIL-04: humanize a raw stored enum/code
+ * (snake_case or free string) for display as SENTENCE case -- first word
+ * capitalised, the rest lower -- e.g. a quarter condition "needs_repair" ->
+ * "Needs repair". Distinct from humanizeStatus (which Title-Cases every
+ * word, right for a short status pill but wrong for a phrase like this).
+ * null/undefined/empty renders "—" (UX-006), never a fabricated blank.
+ *
+ *   formatEnumLabel("needs_repair") -> "Needs repair"
+ *   formatEnumLabel("GOOD")          -> "Good"
+ *   formatEnumLabel(null)            -> "—"
+ */
+export function formatEnumLabel(value: string | null | undefined): string {
+  if (value === null || value === undefined) return "—";
+  const words = value.trim().toLowerCase().split(/[\s_]+/).filter(Boolean);
+  if (words.length === 0) return "—";
+  const joined = words.join(" ");
+  return joined.charAt(0).toUpperCase() + joined.slice(1);
 }
 
 /**
@@ -962,6 +997,43 @@ export function formatPoints(points: bigint | number | string | null | undefined
   return `${negative ? "-" : ""}${grouped}`;
 }
 
+/**
+ * GAP-HELPDESK-CATALOGUE-DETAIL-04 / CATALOGUE-05: format a whole-minute SLA/OLA
+ * target as plain, requester-facing turnaround text rather than raw "4320 min"
+ * ITIL jargon. Picks the largest sensible unit and keeps at most two parts.
+ *
+ *   formatMinutesDuration(4320) -> "3 days"
+ *   formatDuration(90)   -> "1 h 30 min"
+ *   formatDuration(45)   -> "45 min"
+ *   formatDuration(0)    -> "0 min"
+ *   formatDuration(null) -> "—"
+ */
+export function formatMinutesDuration(minutes: number | string | null | undefined): string {
+  if (minutes === null || minutes === undefined || minutes === "") return "—";
+  const n = typeof minutes === "number" ? minutes : Number(minutes);
+  if (!Number.isFinite(n) || n < 0) return "—";
+  const total = Math.round(n);
+  if (total === 0) return "0 min";
+
+  const MIN_PER_HOUR = 60;
+  const MIN_PER_DAY = 60 * 24;
+
+  const days = Math.floor(total / MIN_PER_DAY);
+  const hours = Math.floor((total % MIN_PER_DAY) / MIN_PER_HOUR);
+  const mins = total % MIN_PER_HOUR;
+
+  if (days > 0) {
+    // Whole days read cleanest as "N days"; show trailing hours only when present.
+    if (hours === 0 && mins === 0) return `${days} day${days === 1 ? "" : "s"}`;
+    const dayPart = `${days} day${days === 1 ? "" : "s"}`;
+    return hours > 0 ? `${dayPart} ${hours} h` : `${dayPart} ${mins} min`;
+  }
+  if (hours > 0) {
+    return mins > 0 ? `${hours} h ${mins} min` : `${hours} h`;
+  }
+  return `${mins} min`;
+}
+
 const PERIOD_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /**
@@ -1135,4 +1207,41 @@ export function countLast24h(
     if (!Number.isNaN(t) && t >= cutoff && t <= now) count += 1;
   }
   return count;
+}
+
+/**
+ * GAP-HELPDESK-REPORTS-02: format an average-resolution duration given in
+ * HOURS for display, consistently across the helpdesk reports page and the
+ * helpdesk home tile (which previously disagreed: "31.2 hrs" vs "1.3d", and
+ * "0.0 hrs" vs "—" for no data).
+ *
+ * UX-006: 0 / null / undefined / non-finite is MISSING data (no resolution
+ * has happened yet), not a real zero -- it renders "—", never "0.0h", which
+ * would read as "everything resolves instantly". Under 24h shows hours to one
+ * decimal ("5.0h"); 24h or more shows days to one decimal ("1.3d").
+ *
+ *   formatDurationHours(0)     -> "—"
+ *   formatDurationHours(5)     -> "5.0h"
+ *   formatDurationHours(31.2)  -> "1.3d"
+ *   formatDurationHours(null)  -> "—"
+ */
+export function formatDurationHours(hours: number | null | undefined): string {
+  if (hours === null || hours === undefined || !Number.isFinite(hours) || hours <= 0) return "—";
+  if (hours < 24) return `${hours.toFixed(1)}h`;
+  return `${(hours / 24).toFixed(1)}d`;
+}
+
+/**
+ * GAP-LEARNING-COURSES-03: render a numeric-string credit-hours value as a
+ * clean label. A DB numeric arrives as a string like "12.0" or "1.50"; show
+ * "12 hrs" / "1.5 hrs" (strip trailing-zero decimals), singular "1 hr", and
+ * "—" for a missing / unparseable value. Never prints "12.0 hrs".
+ */
+export function formatCreditHours(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return "—";
+  // Drop trailing zeros: 12.0 -> "12", 1.50 -> "1.5", 1.25 -> "1.25".
+  const text = Number(n.toFixed(2)).toString();
+  return `${text} ${n === 1 ? "hr" : "hrs"}`;
 }

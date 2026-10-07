@@ -1,7 +1,10 @@
 import { z } from "zod";
 
 export const seekOpinionBody = z.object({
-  opinionNo: z.string().min(1).max(64),
+  // GAP-LEGAL-OPINIONS-NEW-02: opinionNo is OPTIONAL. When omitted the server
+  // allocates the next number in the OPN/<year>/NNNN series atomically (see
+  // the opinionSeek consumer); clients must NOT generate it themselves.
+  opinionNo: z.string().min(1).max(64).optional(),
   subject:   z.string().min(1).max(256),
   question:  z.string().min(1).max(4000),
   caseId:    z.string().uuid().optional(),

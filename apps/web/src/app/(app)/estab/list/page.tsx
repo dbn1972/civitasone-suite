@@ -1,38 +1,60 @@
 import { getEstabFiles } from "../../../_data/loaders";
 import { PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState, Term } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
+import { formatDays } from "@/lib/formatters";
+import { pendencyDays } from "@/lib/estab/sla";
 import { FilesTable, type FileRow } from "./FilesTable";
+import Link from "next/link";
+
+// GAP-ESTAB-LIST-01: classification label map — not raw lowercase/underscore.
+const CLASSIFICATION_LABEL: Record<string, string> = {
+  unclassified: "Unclassified",
+  restricted: "Restricted",
+  confidential: "Confidential",
+  secret: "Secret",
+  top_secret: "Top Secret",
+};
+
+// GAP-ESTAB-LIST-01: subjects above 'restricted' are masked for everyone
+// since clearance claims are not available in the web session today.
+// DECISION: mask subject for secret / top_secret; show a generic placeholder.
+// When the backend exposes clearance per-actor (GET /v1/estab/files/classifications),
+// this can be relaxed web-side. For now: safest default is mask.
+const MASKED_CLASSIFICATIONS = new Set(["secret", "top_secret"]);
 
 export default async function EstabFilesListPage() {
   const { data: files, source } = await getEstabFiles();
   const errored = source === "error";
   const active = files.filter((f) => f.status === "active").length;
   const pending = files.filter((f) => f.status === "pending").length;
+  // GAP-ESTAB-LIST-02: "Closed (MTD)" → "Closed" — we don't have closedAt,
+  // so the count is all-time closed, not month-to-date.
   const closed = files.filter((f) => f.status === "archived" || f.status === "disposed").length;
 
-  // Avg Pendency: compute from createdDate for pending files (days since creation).
-  const today = Date.now();
   const pendingFiles = files.filter((f) => f.status === "pending");
   let avgPendencyDisplay = "—";
   if (pendingFiles.length > 0) {
     const totalDays = pendingFiles.reduce((sum, f) => {
-      const d = new Date(f.createdDate);
-      if (isNaN(d.getTime())) return sum;
-      return sum + Math.round((today - d.getTime()) / (1000 * 60 * 60 * 24));
+      const d = pendencyDays(f);
+      return d !== null ? sum + d : sum;
     }, 0);
-    const avg = Math.round(totalDays / pendingFiles.length);
-    avgPendencyDisplay = `${avg} day${avg === 1 ? "" : "s"}`;
+    avgPendencyDisplay = `${formatDays(totalDays / pendingFiles.length)} days`;
   }
 
   const rows: FileRow[] = files.map((f) => ({
     id: f.id,
     fileNo: f.fileNo,
-    subject: f.subject,
-    classification: f.classification.replace(/_/g, " "),
+    // GAP-ESTAB-LIST-01: mask subject for high-classification files.
+    subject: MASKED_CLASSIFICATIONS.has(f.classification) ? "[Classified]" : f.subject,
+    // GAP-ESTAB-LIST-05: capitalised classification label, not raw lowercase.
+    classification: CLASSIFICATION_LABEL[f.classification] ?? f.classification.replace(/_/g, " "),
+    classificationRaw: f.classification,
     department: f.department ?? "—",
     createdBy: f.createdBy,
     status: f.status.replace(/_/g, " "),
     statusRaw: f.status,
+    // GAP-ESTAB-LIST-03: surface dueDate for overdue detection.
+    dueDate: f.dueDate ?? undefined,
   }));
 
   return (
@@ -43,34 +65,25 @@ export default async function EstabFilesListPage() {
         help="estab"
         actions={
           <>
-            <a className="btn primary" href="/estab/workspace">Guided File</a>
-            <a className="btn primary" href="/estab/files/new">+ Create File</a>
+            {/* GAP-ESTAB-LIST-04: "Guided File" is secondary; "Create File" is primary.
+                Use next/link (no full-page reload). */}
+            <Link className="btn ghost" href="/estab/workspace">Guided File</Link>
+            <Link className="btn primary" href="/estab/files/new">+ Create File</Link>
           </>
         }
       />
-      {/* Bug C (fix/tenant-admin-and-establishment-nav): these 10 cross-links
-          used to live inside PageHeader's own `actions` slot, wrapping onto
-          the same flex row as the 2 real page actions above (Guided File /
-          + Create File) with no visual boundary between "go to a related
-          section" and "do a thing on this page" -- the exact confusion the
-          reported bug described. ds/Tabs.tsx wasn't the right fit for this:
-          it's a role="tablist" client-side content-switcher for panels
-          within one page, not cross-page navigation -- reusing it here would
-          have been an ARIA misuse (a real <nav> of <a>s is the correct
-          semantics for links to different routes). Instead: pulled these
-          into their own clearly-bounded <nav>, styled via the new `.subnav`
-          rule (civitas-ds.css), visually distinct from the actions row. */}
+      {/* GAP-ESTAB-LIST-04: use next/link in the subnav to avoid full-page reloads. */}
       <nav aria-label="Establishment sections" className="subnav">
-        <a href="/estab/inbox">My Desk</a>
-        <a href="/estab/dak">Dak / Receipts</a>
-        <a href="/estab/dispatch">Dispatch</a>
-        <a href="/estab/dfa">DFA</a>
-        <a href="/estab/approvals">Approvals</a>
-        <a href="/estab/approval-matrix">Approval Matrix</a>
-        <a href="/estab/operators">Operators</a>
-        <a href="/estab/handover">Handover</a>
-        <a href="/estab/migration">Migration</a>
-        <a href="/estab/notifications">Notifications</a>
+        <Link href="/estab/inbox">My Desk</Link>
+        <Link href="/estab/dak">Dak / Receipts</Link>
+        <Link href="/estab/dispatch">Dispatch</Link>
+        <Link href="/estab/dfa">DFA</Link>
+        <Link href="/estab/approvals">Approvals</Link>
+        <Link href="/estab/approval-matrix">Approval Matrix</Link>
+        <Link href="/estab/operators">Operators</Link>
+        <Link href="/estab/handover">Handover</Link>
+        <Link href="/estab/migration">Migration</Link>
+        <Link href="/estab/notifications">Notifications</Link>
       </nav>
       <div
         className="banner"
@@ -84,19 +97,16 @@ export default async function EstabFilesListPage() {
           fontSize: 13,
         }}
       >
-        <span aria-hidden="true">📁</span> <b>eOffice integration.</b> Digital files with e-sign note sheets, full movement trail and SLA on pendency — no physical files.
+        {/* GAP-ESTAB-LIST-03: removed "and SLA on pendency" — dueDate is now
+            shown per-file in the table via a Due column with overdue highlight. */}
+        <span aria-hidden="true">📁</span> <b>eOffice integration.</b> Digital files with e-sign note sheets, full movement trail — no physical files.
       </div>
-      {/* "Pending" (not "SLA Breached"): there is no due-date/SLA field here, so
-          this is the count of pending files, not a breach count. Show "—" rather
-          than a fabricated 0 when the initial load errors. status-leak-ok (this
-          comment's prose was previously matched by the guard's line-based
-          literal check, which cannot see that a multi-line JSX comment is still
-          a comment past its first line — see UX-016/UX-020 in the gap report). */}
       <StatGrid>
         <StatCard icon="📁" iconBg="#e6f7f5" label="Active Files" value={errored ? "—" : active.toLocaleString("en-IN")} />
         <StatCard icon="⏱" iconBg="#fffaeb" label="Avg Pendency" value={errored ? "—" : avgPendencyDisplay} />
         <StatCard icon="🟡" iconBg="#fffaeb" label="Pending" value={errored ? "—" : pending.toLocaleString("en-IN")} />
-        <StatCard icon="✅" iconBg="#eff6ff" label="Closed (MTD)" value={errored ? "—" : closed.toLocaleString("en-IN")} />
+        {/* GAP-ESTAB-LIST-02: label "Closed", not "Closed (MTD)" */}
+        <StatCard icon="✅" iconBg="#eff6ff" label="Closed" value={errored ? "—" : closed.toLocaleString("en-IN")} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
         {errored ? (

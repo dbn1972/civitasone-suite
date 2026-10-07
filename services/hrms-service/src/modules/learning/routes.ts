@@ -4,6 +4,10 @@ import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import {
+  resolveOwnEmployeeIdIfBareEmployee,
+  resolveOwnEmployeeIdIfNonHr,
+} from "../../shared/self-scope.js";
+import {
   computeProgress, deriveEnrollmentStatus, nextResumeLesson, checkPrerequisites,
 } from "./domain.js";
 import {
@@ -34,8 +38,16 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/learning/courses", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
-    const { q } = z.object({ q: z.string().max(128).optional() }).parse(req.query);
-    return reply.send(await repo.listCourses(ctx.tenantId, q));
+    const { q, status } = z.object({
+      q: z.string().max(128).optional(),
+      status: z.enum(["draft", "published", "retired"]).optional(),
+    }).parse(req.query);
+    // GAP-LEARNING-COURSES-01: non-HR roles only ever see published courses,
+    // regardless of any ?status they pass. HR may filter by status (or omit
+    // for all).
+    const isHr = HR_ROLES.some((r) => ctx.roles.includes(r));
+    const effectiveStatus = isHr ? status : "published";
+    return reply.send(await repo.listCourses(ctx.tenantId, q, 100, effectiveStatus));
   });
 
   app.get("/v1/hrms/learning/courses/:id", async (req, reply) => {
@@ -44,6 +56,10 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const course = await repo.getCourse(ctx.tenantId, id);
     if (!course) throw new HttpError(404, "NOT_FOUND", "course not found");
+    // GAP-LEARNING-COURSES-01: a non-published course is invisible (404) to
+    // non-HR roles — drafts/retired must not be reachable by employees.
+    const isHr = HR_ROLES.some((r) => ctx.roles.includes(r));
+    if (!isHr && course.status !== "published") throw new HttpError(404, "NOT_FOUND", "course not found");
     const [mods, lessonRows, prereqIds] = await Promise.all([
       repo.listModules(ctx.tenantId, id),
       repo.listLessonsByCourse(ctx.tenantId, id),
@@ -124,6 +140,13 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ALL_ROLES);
     const { id } = idParam.parse(req.params);
     const body = enrollBody.parse(req.body);
+    // IDOR fix (GAP-LEARNING-COURSES-DETAIL-02): a non-HR caller may only
+    // enrol THEMSELVES, regardless of the employeeId they submit. HR passes
+    // through (enrol-on-behalf is intended). A non-HR caller with no linked
+    // employee record is rejected (fail closed) rather than silently enrolling
+    // the attacker-chosen id.
+    const effectiveEmployeeId = await resolveOwnEmployeeIdIfNonHr(ctx, req, body.employeeId);
+    if (!effectiveEmployeeId) throw new HttpError(403, "NO_EMPLOYEE_LINK", "no employee record linked to this account");
     const course = await repo.getCourse(ctx.tenantId, id);
     if (!course) throw new HttpError(404, "NOT_FOUND", "course not found");
     if (course.status !== "published") throw new HttpError(409, "NOT_PUBLISHED", "course is not published");
@@ -131,13 +154,13 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     // Prerequisite gate.
     const [prereqIds, doneCourses] = await Promise.all([
       repo.listPrerequisiteIds(ctx.tenantId, id),
-      repo.completedCourseIds(ctx.tenantId, body.employeeId),
+      repo.completedCourseIds(ctx.tenantId, effectiveEmployeeId),
     ]);
     const check = checkPrerequisites(prereqIds, doneCourses);
     if (!check.met) {
       return reply.code(409).send({ code: "PREREQUISITES_NOT_MET", message: "prerequisite courses not completed", missing: check.missing });
     }
-    const existing = await repo.getEnrollment(ctx.tenantId, id, body.employeeId);
+    const existing = await repo.getEnrollment(ctx.tenantId, id, effectiveEmployeeId);
     if (existing) return reply.code(200).send({ id: existing.id, status: existing.status, progressPct: existing.progressPct });
     // Same id-generation fix as modules/lessons: mint the enrollment's real id
     // here and thread it through, instead of echoing back the course id. The
@@ -148,7 +171,10 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     // than faked; the synchronous `existing` check above already covers the
     // normal (non-racing) idempotent-reenrollment path this suite exercises.
     const enrollmentId = randomUUID();
-    await publishF3Write(ctx, "learning_routes__5", enrollmentId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    // Persist the SELF-SCOPED employee id (effectiveEmployeeId), not the raw
+    // attacker-supplied body.employeeId, so the async consumer inserts the
+    // enrolment against the correct identity.
+    await publishF3Write(ctx, "learning_routes__5", enrollmentId, { body: { ...((req.body as Record<string, unknown>) ?? {}), employeeId: effectiveEmployeeId }, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     // Deterministic post-insert values — match the consumer's insertEnrollment literals.
     return reply.code(201).send({ id: enrollmentId, status: "enrolled", progressPct: 0 });
   });
@@ -158,9 +184,14 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ALL_ROLES);
     const { id } = idParam.parse(req.params);
     const body = lessonProgressBody.parse(req.body);
+    // IDOR fix (GAP-LEARNING-COURSES-DETAIL-02): a non-HR caller may only
+    // record progress for THEMSELVES. HR passes through. Fail closed when a
+    // non-HR caller has no linked employee record.
+    const effectiveEmployeeId = await resolveOwnEmployeeIdIfNonHr(ctx, req, body.employeeId);
+    if (!effectiveEmployeeId) throw new HttpError(403, "NO_EMPLOYEE_LINK", "no employee record linked to this account");
     const lesson = await repo.getLesson(ctx.tenantId, id);
     if (!lesson) throw new HttpError(404, "NOT_FOUND", "lesson not found");
-    const enrollment = await repo.getEnrollment(ctx.tenantId, lesson.courseId, body.employeeId);
+    const enrollment = await repo.getEnrollment(ctx.tenantId, lesson.courseId, effectiveEmployeeId);
     if (!enrollment) throw new HttpError(409, "NOT_ENROLLED", "employee is not enrolled in this course");
 
     // Compute the post-write progress/status/resume-point synchronously, via
@@ -181,15 +212,21 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     const status = deriveEnrollmentStatus(progressPct);
     const resumeLessonId = nextResumeLesson(allLessons.map((l) => l.id), doneSet);
 
-    await publishF3Write(ctx, "learning_routes__6", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "learning_routes__6", id, { body: { ...((req.body as Record<string, unknown>) ?? {}), employeeId: effectiveEmployeeId }, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ enrollmentId: enrollment.id, progressPct, status, resumeLessonId });
   });
 
   app.get("/v1/hrms/learning/my-learning", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
-    const { employeeId } = z.object({ employeeId: z.string().uuid() }).parse(req.query);
-    return reply.send(await repo.listMyEnrollments(ctx.tenantId, employeeId));
+    // GAP-LEARNING-MY-LEARNING-01 IDOR fix: a bare employee always reads their
+    // OWN enrolments regardless of the employeeId they submit; HR/manager pass
+    // through. `employeeId` is now optional — when absent the caller gets their
+    // own record (the normal self-service path).
+    const { employeeId } = z.object({ employeeId: z.string().uuid().optional() }).parse(req.query);
+    const effectiveEmployeeId = await resolveOwnEmployeeIdIfBareEmployee(ctx, req, employeeId ?? "");
+    if (!effectiveEmployeeId) return reply.send([]);
+    return reply.send(await repo.listMyEnrollments(ctx.tenantId, effectiveEmployeeId));
   });
 
 
@@ -200,9 +237,20 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const { employeeId } = z.object({ employeeId: z.string().uuid().optional() }).parse(req.query);
+    // GAP-LEARNING-MY-LEARNING-01: a bare employee only sees their OWN counts
+    // regardless of ?employeeId; HR/manager may omit it for tenant-wide totals
+    // or pass a specific id. A bare employee with no linked record gets zeros
+    // (fail closed), never tenant-wide figures.
+    const isPrivileged = ["hr_admin", "hr_officer", "super_admin", "manager"].some((r) => ctx.roles.includes(r));
+    let scopedEmployeeId = employeeId;
+    if (!isPrivileged) {
+      const own = await resolveOwnEmployeeIdIfBareEmployee(ctx, req, employeeId ?? "");
+      if (!own) return reply.send({ enrolled: 0, in_progress: 0, completed: 0, overdue: 0, total: 0 });
+      scopedEmployeeId = own;
+    }
     const [statusCounts, overdueCount] = await Promise.all([
-      repo.countEnrollmentsByStatus(ctx.tenantId, employeeId),
-      repo.countOverdueEnrollments(ctx.tenantId, employeeId),
+      repo.countEnrollmentsByStatus(ctx.tenantId, scopedEmployeeId),
+      repo.countOverdueEnrollments(ctx.tenantId, scopedEmployeeId),
     ]);
     const byStatus = Object.fromEntries(statusCounts.map((r) => [r.status, r.count]));
     return reply.send({
@@ -257,7 +305,12 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/learning/training-plans", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
-    return reply.send(await repo.listTrainingPlans(ctx.tenantId));
+    const { year, limit, offset } = z.object({
+      year:   z.coerce.number().int().min(2020).max(2100).optional(),
+      limit:  z.coerce.number().int().min(1).max(200).optional(),
+      offset: z.coerce.number().int().min(0).optional(),
+    }).parse(req.query);
+    return reply.send(await repo.listTrainingPlans(ctx.tenantId, { year, limit, offset }));
   });
 
   app.post("/v1/hrms/learning/training-plans", async (req, reply) => {

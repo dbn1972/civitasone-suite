@@ -1,6 +1,6 @@
 import { eq, and } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { estabGuesthouses, estabRoomBookings, estabLibraryBooks, estabIssues } from "./schema.js";
+import { estabGuesthouses, estabRoomBookings, estabRooms, estabLibraryBooks, estabIssues } from "./schema.js";
 import type {
   GuesthouseInsert, RoomBookingRow, RoomBookingInsert,
   LibraryBookInsert, LibraryBookRow, IssueInsert, IssueRow,
@@ -12,6 +12,16 @@ export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 // before this read — a bare db.select() runs with no RLS GUC set.
 export async function findBookingsByRoom(roomId: string, limit = 200): Promise<RoomBookingRow[]> {
   return db.transaction((tx) => tx.select().from(estabRoomBookings).where(eq(estabRoomBookings.roomId, roomId)).limit(limit));
+}
+
+/**
+ * GAP-ESTAB-GUESTHOUSE-NEW-01: list rooms (the booking-form directory) so a
+ * clerk picks "Room 101" instead of typing a UUID. Tenant-scoped, inside a
+ * transaction for the RLS GUC.
+ */
+export async function listRoomsByTenant(tenantId: string, limit: number) {
+  return db.transaction((tx) => tx.select().from(estabRooms)
+    .where(eq(estabRooms.tenantId, tenantId)).limit(limit));
 }
 
 export async function insertGuesthouse(tx: Writer, row: GuesthouseInsert): Promise<void> {
@@ -28,6 +38,21 @@ export async function updateRoomBooking(tx: Writer, id: string, patch: Partial<R
 
 export async function insertLibraryBook(tx: Writer, row: LibraryBookInsert): Promise<void> {
   await tx.insert(estabLibraryBooks).values(row);
+}
+
+export async function updateLibraryBook(
+  tx: Writer, bookId: string, patch: Partial<Pick<LibraryBookInsert, "title" | "author" | "isbn" | "category" | "copiesTotal" | "copiesAvailable">>,
+  actorId: string,
+): Promise<void> {
+  await tx.update(estabLibraryBooks)
+    .set({ ...patch, updatedBy: actorId, updatedAt: new Date() })
+    .where(eq(estabLibraryBooks.id, bookId));
+}
+
+export async function withdrawLibraryBook(tx: Writer, bookId: string, actorId: string): Promise<void> {
+  await tx.update(estabLibraryBooks)
+    .set({ status: "withdrawn", copiesAvailable: 0, updatedBy: actorId, updatedAt: new Date() })
+    .where(eq(estabLibraryBooks.id, bookId));
 }
 
 export async function decrementCopies(tx: Writer, bookId: string): Promise<void> {

@@ -12,17 +12,20 @@ const BAR_PAD = 10;
 const BAR_GAP = 6;
 const LABEL_H = 16;
 
+// GAP-KNOWLEDGE-DASHBOARD-06: use CSS variable for chart colour, add value labels,
+// add <title> for truncated labels, and make aria-label summarise top categories.
 function CategoryBarChart({ categories }: { categories: { name: string; count: number }[] }) {
   const items = categories.slice(0, 7);
-  if (items.length === 0) return null; // ux-001-ok: presentational chart helper with no fetch/source of its own -- the caller (KnowledgeDashboardPage) already gates its `errored` state before this ever renders, so an empty array here only means "fewer than 1 category," never a load failure
+  if (items.length === 0) return null; // ux-001-ok: pure chart renderer over an already-resolved category list; the parent page owns loading/error state
 
   const maxVal = Math.max(...items.map((c) => c.count), 1);
   const n = items.length;
   const barW = Math.floor((BAR_W - BAR_PAD * 2 - BAR_GAP * (n - 1)) / n);
   const chartH = BAR_H - LABEL_H;
+  const summaryParts = items.slice(0, 3).map((c) => `${c.name}: ${c.count}`).join(", ");
 
   return (
-    <svg width="100%" viewBox={`0 0 ${BAR_W} ${BAR_H}`} aria-label="Documents by category bar chart" role="img">
+    <svg width="100%" viewBox={`0 0 ${BAR_W} ${BAR_H}`} aria-label={`Documents by category: ${summaryParts}`} role="img">
       {items.map((cat, i) => {
         const ratio = cat.count / maxVal;
         const barH = Math.max(4, Math.round(ratio * (chartH - 6)));
@@ -32,35 +35,17 @@ function CategoryBarChart({ categories }: { categories: { name: string; count: n
         const label = cat.name.length > 10 ? cat.name.slice(0, 9) + "…" : cat.name;
         return (
           <g key={cat.name}>
-            <rect x={x} y={y} width={barW} height={barH} rx={4} fill="#ca8a04" opacity={opacity} />
-            <text x={x + barW / 2} y={BAR_H - 2} textAnchor="middle" fontSize={9} fill="#667085">
+            <title>{`${cat.name}: ${cat.count}`}</title>
+            <rect x={x} y={y} width={barW} height={barH} rx={4} fill="var(--brand, #4f46e5)" opacity={opacity} />
+            <text x={x + barW / 2} y={y - 4} textAnchor="middle" fontSize={10} fill="var(--ink, #0f172a)" fontWeight={600}>
+              {cat.count}
+            </text>
+            <text x={x + barW / 2} y={BAR_H - 2} textAnchor="middle" fontSize={9} fill="var(--mut, #667085)">
               {label}
             </text>
           </g>
         );
       })}
-    </svg>
-  );
-}
-
-function StorageDonut({ usedPct }: { usedPct: number }) {
-  const r = 53;
-  const cx = 66;
-  const cy = 66;
-  const circ = 2 * Math.PI * r;
-  const filled = (usedPct / 100) * circ;
-  const offset = circ - filled;
-
-  return (
-    <svg width={132} height={132} viewBox="0 0 132 132" aria-label={`Storage usage: ${usedPct.toFixed(0)}% of quota`} role="img">
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="#eef0f4" strokeWidth={13} />
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="#ca8a04" strokeWidth={13}
-        strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
-        transform={`rotate(-90 ${cx} ${cy})`} />
-      <text x="50%" y="46%" textAnchor="middle" dy=".1em" fontSize={22} fontWeight={780} fill="#101828">
-        {usedPct.toFixed(0)}%
-      </text>
-      <text x="50%" y="63%" textAnchor="middle" fontSize={9.5} fill="#667085">of quota</text>
     </svg>
   );
 }
@@ -73,14 +58,29 @@ function docStatusLabel(s: string) {
   return s;
 }
 
+// GAP-KNOWLEDGE-HOME-02: unified module title as "Knowledge & Documents".
+// GAP-KNOWLEDGE-DASHBOARD-01: removed fabricated "Storage" card. Replaced with document count.
+// GAP-KNOWLEDGE-DASHBOARD-02: "Under Retention" now counts approved+under_review (labelled "Active"),
+//   "Due for Archival" counts archived (labelled "Archived"); labels match computation.
+// GAP-KNOWLEDGE-DASHBOARD-03: search chips link to /knowledge/search?q= and SearchClient reads it;
+//   bulk upload button removed (no bulk flow exists — see DOCUMENTS-NEW-02).
 export default async function KnowledgeDashboardPage() {
   const { data: docs, source } = await getKnowledgeDocs();
   const errored = source === "error";
 
   const total = docs.length;
   const circulars = errored ? 0 : docs.filter((d) => d.category?.toLowerCase().includes("circular")).length;
-  const underRetention = errored ? 0 : docs.filter((d) => d.status === "approved" || d.status === "under_review").length;
-  const dueForArchival = errored ? 0 : docs.filter((d) => d.status === "archived").length;
+  // GAP-KNOWLEDGE-DASHBOARD-02: label matches computation
+  const active = errored ? 0 : docs.filter((d) => d.status === "approved" || d.status === "under_review").length;
+  const archived = errored ? 0 : docs.filter((d) => d.status === "archived").length;
+
+  // GAP-KNOWLEDGE-DASHBOARD-07: these aggregates are computed from the documents
+  // list, which the backend caps at its default page size (listQuerySchema
+  // default limit = 50). There is no server-side aggregate endpoint yet, so when
+  // the list is full we warn that the figures are based on the first N documents
+  // rather than silently presenting a partial count as the whole repository.
+  const DOCS_PAGE_LIMIT = 50;
+  const capped = !errored && total >= DOCS_PAGE_LIMIT;
 
   const categoryMap = docs.reduce<Record<string, number>>((acc, d) => {
     acc[d.category] = (acc[d.category] ?? 0) + 1;
@@ -89,8 +89,6 @@ export default async function KnowledgeDashboardPage() {
   const categoryList = Object.entries(categoryMap)
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count);
-
-  const storagePct = total > 0 ? Math.min(100, Math.round((total / 500) * 100)) : 0;
 
   const recentRows: RecentDocRow[] = [...docs]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -109,31 +107,28 @@ export default async function KnowledgeDashboardPage() {
     <div className="wrap">
       {source === "error" && <DataSourceBadge source={source} />}
       <PageHeader
-        title="Knowledge &amp; Document Management"
+        title="Knowledge &amp; Documents"
         subtitle="Digital repository, records retention &amp; enterprise search."
         actions={
-          <>
-            <Link href="/knowledge/documents/new?bulk=true" className="btn ghost" style={{ minHeight: 44 }}>Bulk upload</Link>
-            <Link href="/knowledge/documents/new" className="btn primary" style={{ minHeight: 44 }}>+ Publish Document</Link>
-          </>
+          <Link href="/knowledge/documents/new" className="btn primary" style={{ minHeight: 44 }}>+ Add Document</Link>
         }
       />
 
       <StatGrid>
         <StatCard icon="📂" iconBg="#fef9e7" label="Documents" value={errored ? "—" : total.toLocaleString("en-IN")} />
         <StatCard icon="📜" iconBg="#eff6ff" label="Circulars/Policies" value={errored ? "—" : circulars.toLocaleString("en-IN")} />
-        <StatCard icon="🗃️" iconBg="#ecfdf3" label="Under Retention" value={errored ? "—" : underRetention.toLocaleString("en-IN")} />
-        <StatCard icon="📦" iconBg="#fffaeb" label="Due for Archival" value={errored ? "—" : dueForArchival.toLocaleString("en-IN")} />
+        <StatCard icon="🗃️" iconBg="#ecfdf3" label="Active" value={errored ? "—" : active.toLocaleString("en-IN")} />
+        <StatCard icon="📦" iconBg="#fffaeb" label="Archived" value={errored ? "—" : archived.toLocaleString("en-IN")} />
       </StatGrid>
 
+      {/* GAP-KNOWLEDGE-DASHBOARD-07: honest note when the list is page-capped */}
+      {capped && (
+        <p role="note" style={{ margin: "8px 0 0", fontSize: 12, color: "var(--mut, #667085)" }}>
+          Figures are based on the most recent {DOCS_PAGE_LIMIT} documents. A repository-wide summary is not yet available.
+        </p>
+      )}
+
       {errored ? (
-        // UX-013: `total === 0` (total = docs.length, computed above) is the
-        // same "is there anything to show" check as `docs.length === 0`,
-        // just one variable-assignment away from the guard's literal
-        // `.length === 0` pattern -- a fetch failure used to collapse to
-        // this same "No documents yet" EmptyState below, silently hiding
-        // the entire dashboard (recent docs, category chart, storage,
-        // search) behind a cheerful first-run message.
         <RefreshErrorState error={toHumanError("load", { area: "knowledge dashboard" })} />
       ) : total === 0 ? (
         <EmptyState
@@ -159,20 +154,34 @@ export default async function KnowledgeDashboardPage() {
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+            {/* GAP-KNOWLEDGE-DASHBOARD-01: removed fabricated Storage card.
+                Replaced with a document count summary. */}
             <div className="card">
-              <div className="card-h"><h3>Storage</h3></div>
-              <div className="pad" style={{ display: "grid", placeItems: "center" }}>
-                <StorageDonut usedPct={storagePct} />
+              <div className="card-h"><h3>Document totals</h3></div>
+              <div className="pad" style={{ display: "grid", placeItems: "center", padding: "24px 16px" }}>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 36, fontWeight: 780, color: "var(--ink, #101828)" }}>
+                    {total.toLocaleString("en-IN")}
+                  </div>
+                  <div style={{ fontSize: 13, color: "var(--mut, #667085)", marginTop: 4 }}>
+                    documents in repository
+                  </div>
+                </div>
               </div>
             </div>
 
+            {/* GAP-KNOWLEDGE-DASHBOARD-03: quick search now links to /knowledge/search?q= */}
             <div className="card">
               <div className="card-h"><h3>Quick search</h3></div>
               <div className="pad">
-                <div className="tb-search" style={{ maxWidth: "none" }}>
+                <Link
+                  href="/knowledge/search"
+                  className="tb-search"
+                  style={{ maxWidth: "none", textDecoration: "none", display: "flex", alignItems: "center", gap: 8 }}
+                >
                   <span aria-hidden="true">🔎</span>
-                  <input aria-label="Quick search (open full search to type)" placeholder="Search circulars, policies…" readOnly />
-                </div>
+                  <span style={{ color: "var(--mut)", fontSize: 14 }}>Search circulars, policies…</span>
+                </Link>
                 <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "12px" }}>
                   {["travel policy", "reservation", "GFR 2017"].map((term) => (
                     <Link key={term} href={`/knowledge/search?q=${encodeURIComponent(term)}`} className="chip" style={{ textDecoration: "none" }}>

@@ -2,9 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type ReactNode } from "react";
-import { Button, ConfirmDialog, DataTable, Segmented } from "../../../_components/ds";
+import { Button, ConfirmDialog, DataTable, Segmented, StatusPill } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, todayIST, addDaysIST } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
 import { useFormError } from "@/lib/useFormError";
 
@@ -19,21 +19,24 @@ type Hearing = {
   purpose?: string | null;
   /** ISO date string for the next scheduled hearing, used for the SLA countdown. */
   nextDate?: string | null;
+  outcome?: string | null;
   status: string;
 } & Record<string, unknown>;
 
-const FILTERS = ["This week", "Today"] as const;
+const FILTERS = ["Upcoming", "This week", "Today", "Past", "All"] as const;
 
 function hearingStatusPill(status: string): ReactNode {
   switch (status) {
     case "completed":
-      return <span className="pill good">Listed</span>;
+      return <span className="pill good">Heard</span>;
+    case "scheduled":
+      return <span className="pill info">Listed</span>;
     case "adjourned":
       return <span className="pill warn">Adjourned</span>;
     case "cancelled":
       return <span className="pill bad">Cancelled</span>;
     default:
-      return <span className="pill info">Listed</span>;
+      return <StatusPill status={status} />;
   }
 }
 
@@ -82,6 +85,7 @@ type HearingRow = {
   /** Raw ISO date string (for formatIndianDate fallback in reminder dialog) */
   rawDate: string;
   purpose: string;
+  outcome: string;
   status: string;
   statusNode: ReactNode;
   daysToHearing: number | null;
@@ -89,7 +93,22 @@ type HearingRow = {
   nextDateIso: string | null;
 } & Record<string, unknown>;
 
-export function HearingsTable({ items, source = "api" }: { items: Hearing[]; source?: "api" | "error" }) {
+export function HearingsTable({
+  items,
+  source = "api",
+  today: todayProp,
+}: {
+  items: Hearing[];
+  source?: "api" | "error";
+  /**
+   * GAP-LEGAL-HEARINGS-04: today's IST calendar date ("YYYY-MM-DD"), computed
+   * on the server page and passed down so the "Today"/week window and the
+   * countdown agree between server render and client hydration (no UTC drift
+   * in the first 5.5h of each IST day, no hydration mismatch). Falls back to
+   * the client-side IST date if a caller omits it.
+   */
+  today?: string;
+}) {
   const router = useRouter();
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<Hearing[]>(
     "legal.hearings",
@@ -98,7 +117,7 @@ export function HearingsTable({ items, source = "api" }: { items: Hearing[]; sou
     (d) => d.length === 0,
   );
 
-  const [filter, setFilter] = useState<string>("This week");
+  const [filter, setFilter] = useState<string>("Upcoming");
 
   // Reminder dialog state
   const [reminderRow, setReminderRow] = useState<HearingRow | null>(null);
@@ -106,14 +125,17 @@ export function HearingsTable({ items, source = "api" }: { items: Hearing[]; sou
   const [reminderError, setReminderError] = useState<string | undefined>(undefined);
   const formError = useFormError("hearing reminder");
 
-  const today = new Date().toISOString().slice(0, 10);
+  // GAP-LEGAL-HEARINGS-04: IST calendar date, not UTC toISOString().slice(0,10).
+  const today = todayProp ?? todayIST();
 
   const visible = useMemo(() => {
     const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
-    const weekEnd = new Date(Date.now() + 7 * 86400_000).toISOString().slice(0, 10);
+    const weekEnd = addDaysIST(today, 7);
     if (filter === "Today") return sorted.filter((r) => r.date === today);
     if (filter === "This week") return sorted.filter((r) => r.date >= today && r.date <= weekEnd);
-    return sorted;
+    if (filter === "Upcoming") return sorted.filter((r) => r.date >= today);
+    if (filter === "Past") return sorted.filter((r) => r.date < today);
+    return sorted; // "All"
   }, [rows, filter, today]);
 
   const tableRows: HearingRow[] = useMemo(
@@ -130,6 +152,7 @@ export function HearingsTable({ items, source = "api" }: { items: Hearing[]; sou
           dateDisplay: `${formatIndianDate(r.date)}${r.time ? ` · ${r.time}` : ""}`,
           rawDate: r.date,
           purpose: r.purpose ?? "—",
+          outcome: (r.outcome as string | null | undefined) ?? "—",
           status: r.status,
           statusNode: hearingStatusPill(r.status),
           daysToHearing: daysRemaining(countdownDate, today),
@@ -196,6 +219,12 @@ export function HearingsTable({ items, source = "api" }: { items: Hearing[]; sou
       label: "Status",
       render: (r) => r.statusNode,
       sortable: false,
+    },
+    {
+      // GAP-LEGAL-HEARINGS-02: surface the outcome so past/heard hearings are
+      // not just reachable but readable (the hub promises "past court hearings").
+      key: "outcome",
+      label: "Outcome",
     },
     {
       key: "daysToHearing",

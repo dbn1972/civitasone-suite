@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render as rtlRender, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -10,6 +12,12 @@ vi.mock("next/navigation", () => ({
 }));
 
 import LibraryIssuesPage from "./page";
+
+function render(ui: React.ReactElement) {
+  return rtlRender(
+    <NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>,
+  );
+}
 
 const issuesPage = {
   data: [
@@ -71,5 +79,50 @@ describe("LibraryIssuesPage", () => {
 
     expect(screen.queryByText("No loans yet")).not.toBeInTheDocument();
     expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
+  });
+
+  it("GAP-ESTAB-LIBRARY-ISSUES-02: 'On Loan' counts issued + overdue; 'Overdue' is a subset", async () => {
+    const mixed = {
+      data: [
+        { ...issuesPage.data[0], id: "i1", status: "issued" as const },
+        { ...issuesPage.data[0], id: "i2", status: "overdue" as const },
+        { ...issuesPage.data[0], id: "i3", status: "returned" as const, returnedAt: "2026-07-10T00:00:00.000Z" },
+      ],
+      source: "api" as const,
+    };
+    fetchJsonMock.mockResolvedValueOnce(mixed).mockResolvedValueOnce(booksPage);
+
+    const ui = await LibraryIssuesPage({ searchParams: {} });
+    const { container } = render(ui);
+
+    // On Loan = 2 (issued + overdue). Read the stat value from the StatCard.
+    const labs = Array.from(container.querySelectorAll(".lab")).filter((n) => n.textContent === "On Loan");
+    expect(labs.length).toBe(1);
+    const val = labs[0].parentElement?.querySelector(".val");
+    expect(val?.textContent).toBe("2");
+  });
+
+  it("GAP-ESTAB-LIBRARY-ISSUES-04: a failed loans fetch shows a retry state (not a bare badge)", async () => {
+    fetchJsonMock.mockResolvedValueOnce({ data: [], source: "error" }).mockResolvedValueOnce(booksPage);
+
+    const ui = await LibraryIssuesPage({ searchParams: {} });
+    render(ui);
+
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.queryByText("No loans yet")).not.toBeInTheDocument();
+  });
+
+  it("GAP-ESTAB-LIBRARY-ISSUES-05: a catalogue failure does not blank loan stats when issues loaded ok", async () => {
+    fetchJsonMock.mockResolvedValueOnce(issuesPage).mockResolvedValueOnce({ data: [], source: "error" });
+
+    const ui = await LibraryIssuesPage({ searchParams: {} });
+    const { container } = render(ui);
+
+    // issues loaded fine → On Loan should show the real count (1), not "—".
+    const labs = Array.from(container.querySelectorAll(".lab")).filter((n) => n.textContent === "On Loan");
+    const val = labs[0]?.parentElement?.querySelector(".val");
+    expect(val?.textContent).toBe("1");
+    // The form card shows the catalogue error.
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 });

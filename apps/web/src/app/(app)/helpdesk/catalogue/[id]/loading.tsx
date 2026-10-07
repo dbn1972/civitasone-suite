@@ -1,18 +1,17 @@
+import { SkeletonBar, SkeletonCard } from "../../../../_components/ds";
+
 export default function Loading() {
   return (
-    <div className="page-main" aria-labelledby="page-heading">
-      <div className="ph">
-        <div>
-          <h1 id="page-heading">[Id]</h1>
+    <div className="page-main" aria-busy="true" aria-label="Loading service details…">
+      <div className="ph" style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <SkeletonBar w={220} h={28} />
+          <SkeletonBar w={320} h={14} />
         </div>
       </div>
-      <div className="animate-pulse" style={{ display: "grid", gap: 16 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} style={{ height: 80, borderRadius: 12, background: "#f1f5f9" }} />
-          ))}
-        </div>
-        <div style={{ height: 280, borderRadius: 12, background: "#f1f5f9" }} />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
+        <SkeletonCard />
+        <SkeletonCard />
       </div>
     </div>
   );

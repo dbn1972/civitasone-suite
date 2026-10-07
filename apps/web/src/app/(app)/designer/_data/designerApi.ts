@@ -124,6 +124,11 @@ function serviceDefinitionSaveError(): string {
 
 async function parseAccepted(res: Response): Promise<{ id: string }> {
   if (!(res.ok || res.status === 202)) {
+    // GAP-DESIGNER-NEW-03 — a 409 means the auto-generated serviceKey collided
+    // with an existing one; surface it distinctly so the user knows to rename.
+    if (res.status === 409) {
+      throw new Error("A service with this key already exists. Please choose a different name.");
+    }
     throw new Error(serviceDefinitionSaveError());
   }
   return res.json() as Promise<{ id: string }>;

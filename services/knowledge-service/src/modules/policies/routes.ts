@@ -13,6 +13,7 @@ import {
   acknowledgePolicyBody,
   ackReportBody,
   listPolicyQuery,
+  rejectPolicyBody,
 } from "./validators.js";
 
 const ROLES = ["knowledge_user", "knowledge_admin", "super_admin"];
@@ -107,6 +108,14 @@ export async function policyRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, APPROVER_ROLES);
     const { id } = req.params as { id: string };
     return sendAccepted(reply, acceptedResponseSchema, await run(() => commands.approvePolicy(ctx, id)));
+  });
+
+  app.post("/v1/knowledge/policies/:id/reject", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, APPROVER_ROLES);
+    const { id } = req.params as { id: string };
+    const body = rejectPolicyBody.parse(req.body ?? {});
+    return sendAccepted(reply, acceptedResponseSchema, await run(() => commands.rejectPolicy(ctx, id, body)));
   });
 
   app.post("/v1/knowledge/policies/:id/publish", async (req, reply) => {

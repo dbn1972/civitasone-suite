@@ -17,7 +17,19 @@
 import { useEffect, useState } from "react";
 import { fetchA11yPreview, type A11yPreviewDto } from "../_data/designerApi";
 
-export function AccessibilityPreview({ definitionId }: { definitionId: string }) {
+export function AccessibilityPreview({
+  definitionId,
+  onResult,
+}: {
+  definitionId: string;
+  /**
+   * GAP-DESIGNER-DETAIL-REVIEW-02: report the preview outcome to the parent so
+   * the review page can gate Approve & Publish on a11y errors. Called with
+   * errorCount for a loaded preview, and null when the check could not run
+   * (fail-open on transport error — the server remains the publish authority).
+   */
+  onResult?: (result: { passed: boolean; errorCount: number; formAuthored: boolean } | null) => void;
+}) {
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [preview, setPreview] = useState<A11yPreviewDto | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -30,16 +42,18 @@ export function AccessibilityPreview({ definitionId }: { definitionId: string })
         if (cancelled) return;
         setPreview(data);
         setState("ready");
+        onResult?.({ passed: data.passed, errorCount: data.errorCount, formAuthored: data.formAuthored });
       })
       .catch((e: unknown) => {
         if (cancelled) return;
         setError(e instanceof Error ? e.message : "Could not run the accessibility preview.");
         setState("error");
+        onResult?.(null);
       });
     return () => {
       cancelled = true;
     };
-  }, [definitionId]);
+  }, [definitionId, onResult]);
 
   if (state === "loading") {
     return (

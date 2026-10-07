@@ -1,12 +1,16 @@
+import { SkeletonBar, SkeletonTable } from "../../../_components/ds";
+
+// GAP-AI-HOME-04: replaced fixed Tailwind light colours + min-h-screen with DS
+// skeleton primitives that use theme tokens (readable in .dark mode) and carry
+// no page background/min-height of their own.
 export default function AiGovernanceLoading() {
   return (
-    <div className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <div className="mx-auto max-w-7xl animate-pulse space-y-5">
-        <div className="h-4 w-40 rounded bg-slate-200" />
-        <div className="h-9 w-64 rounded bg-slate-200" />
-        <div className="h-24 rounded-xl bg-slate-200" />
-        <div className="h-72 rounded-xl bg-slate-200" />
+    <div aria-busy="true" aria-label="Loading…" style={{ display: "grid", gap: 16 }}>
+      <div style={{ display: "grid", gap: 8 }}>
+        <SkeletonBar w={180} h={28} />
+        <SkeletonBar w={300} h={14} />
       </div>
+      <SkeletonTable rows={6} />
     </div>
   );
 }

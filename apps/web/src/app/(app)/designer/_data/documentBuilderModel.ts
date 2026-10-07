@@ -143,6 +143,28 @@ export function suggestFirstVerificationLane(lanes: WorkflowLane[]): WorkflowLan
   return verificationLanesFromWorkflow(lanes)[0] ?? null;
 }
 
+/**
+ * GAP-DESIGNER-DETAIL-B6-01: true when any mandatory document has no (or a
+ * stale) verifying lane. Decision (recorded): we treat this as an ADVISORY
+ * signal surfaced to the checker on the review page rather than a hard Next
+ * block, because a mandatory document may legitimately be verified outside the
+ * workflow (e.g. at the counter). Backend remains the publish authority.
+ */
+export function hasBlockingDocumentIssues(assessments: DocumentRowAssessment[]): boolean {
+  return assessments.some(
+    (a) => a.warning?.kind === "missing_lane" || a.warning?.kind === "stale_lane",
+  );
+}
+
+/** Human list of unverified mandatory documents for the review page. */
+export function unverifiedMandatoryDocuments(
+  assessments: DocumentRowAssessment[],
+): string[] {
+  return assessments
+    .filter((a) => a.warning?.kind === "missing_lane" || a.warning?.kind === "stale_lane")
+    .map((a) => a.doc.labels.en.trim() || a.doc.labels.hi.trim() || a.doc.docType || "Untitled document");
+}
+
 export function buildCitizenUploadPreview(
   doc: RequiredDocumentUi,
   locale: LocaleKey,
@@ -152,7 +174,11 @@ export function buildCitizenUploadPreview(
   const fallback = doc.labels[other].trim();
   const label = primary || fallback || "Untitled document";
   const secondaryLabel = primary && fallback && primary !== fallback ? fallback : null;
-  const formatsLabel = doc.formats.map((f) => f.toUpperCase()).join(", ") || "PDF";
+  const formatsArray = doc.formats.map((f) => f.toUpperCase());
+  // GAP-DESIGNER-DETAIL-B6-05: use natural-language format label for the citizen preview.
+  const formatsLabel = formatsArray.length <= 1
+    ? (formatsArray[0] || "PDF")
+    : `${formatsArray.slice(0, -1).join(", ")} or ${formatsArray[formatsArray.length - 1]}`;
   const showCameraHint = doc.formats.some((f) => f === "jpg" || f === "png");
 
   return {

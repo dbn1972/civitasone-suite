@@ -3,8 +3,8 @@
 import { UserFacingError } from "@/lib/userFacingError";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Button, ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
+import { useCallback, useState } from "react";
+import { Button, ConfirmDialog, Modal, useConfirmAction } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type Panel = "brief" | "affidavit" | null;
@@ -32,8 +32,6 @@ export function CaseActions({ caseId }: { caseId: string }) {
   const [panel, setPanel] = useState<Panel>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const firstFieldRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
   const formError = useFormError("case action");
 
   // brief counsel fields
@@ -58,16 +56,6 @@ export function CaseActions({ caseId }: { caseId: string }) {
     setAffidavitDate("");
     setAffidavitSummary("");
   }, []);
-
-  useEffect(() => {
-    if (!panel) return;
-    firstFieldRef.current?.focus();
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") close();
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [panel, close]);
 
   async function post(url: string, body: unknown) {
     setBusy(true);
@@ -153,102 +141,88 @@ export function CaseActions({ caseId }: { caseId: string }) {
     <>
       <Button variant="ghost" onClick={() => setPanel("brief")}>Brief counsel</Button>
       <Link href="/legal/opinions" className="btn ghost">Legal opinion →</Link>
-      <Button onClick={() => setPanel("affidavit")}>Upload Affidavit</Button>
+      {/* GAP-LEGAL-CASES-DETAIL-01: this records a filing, it does not upload a
+          file (legal-service has no case file-upload endpoint), so the control
+          is named for what it does. */}
+      <Button onClick={() => setPanel("affidavit")}>Record affidavit filing</Button>
 
-      {panel && (
-        <div
-          role="presentation"
-          onClick={(e) => { if (e.target === e.currentTarget) close(); }}
-          style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "grid", placeItems: "center", zIndex: 1000, padding: 16 }}
-        >
-          <div
-            ref={dialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="case-action-title"
-            className="card"
-            style={{ width: "min(560px, 100%)", maxHeight: "90vh", overflow: "auto" }}
-          >
-            <div className="card-h">
-              <h3 id="case-action-title">{panel === "brief" ? "Brief counsel" : "Upload affidavit"}</h3>
-              <Button variant="ghost" onClick={close} aria-label="Close dialog">✕</Button>
-            </div>
-
-            {panel === "brief" ? (
-              <form className="pad" onSubmit={submitBrief} noValidate>
-                <label className="label" htmlFor="counselName">Counsel name *</label>
-                <input
-                  id="counselName"
-                  ref={firstFieldRef as React.RefObject<HTMLInputElement>}
-                  type="text"
-                  className="inp"
-                  value={counselName}
-                  onChange={(e) => setCounselName(e.target.value)}
-                  required
-                  maxLength={256}
-                  style={{ width: "100%", minHeight: 44, marginBottom: 10 }}
-                />
-                <label className="label" htmlFor="counselType">Counsel type</label>
-                <select
-                  id="counselType"
-                  className="inp"
-                  value={counselType}
-                  onChange={(e) => setCounselType(e.target.value)}
-                  style={{ width: "100%", minHeight: 44, marginBottom: 10 }}
-                >
-                  <option value="advocate">Advocate</option>
-                  <option value="senior_advocate">Senior advocate</option>
-                  <option value="counsel">Counsel</option>
-                  <option value="law_officer">Law officer</option>
-                </select>
-                <label className="label" htmlFor="briefMessage">Briefing note *</label>
-                <textarea
-                  id="briefMessage"
-                  className="inp"
-                  rows={3}
-                  value={briefMessage}
-                  onChange={(e) => setBriefMessage(e.target.value)}
-                  required
-                  maxLength={7900}
-                  style={{ width: "100%", marginBottom: 10 }}
-                />
-                <label className="label" htmlFor="briefDate">Brief by date</label>
-                <input id="briefDate" type="date" className="inp" value={briefDate} onChange={(e) => setBriefDate(e.target.value)} style={{ width: "100%", minHeight: 44 }} />
-                <DialogFooter busy={busy} onCancel={close} submitLabel="Brief counsel" />
-                <Status message={message} />
-              </form>
-            ) : (
-              <form className="pad" onSubmit={submitAffidavit} noValidate>
-                <p style={{ fontSize: 12, color: "#92400e", margin: "0 0 12px" }}>
-                  Recorded as a case filing (no file-upload endpoint in legal-service).
-                </p>
-                <label className="label" htmlFor="affidavitSummary">Affidavit description *</label>
-                <textarea
-                  id="affidavitSummary"
-                  ref={firstFieldRef as React.RefObject<HTMLTextAreaElement>}
-                  className="inp"
-                  rows={3}
-                  value={affidavitSummary}
-                  onChange={(e) => setAffidavitSummary(e.target.value)}
-                  required
-                  maxLength={2000}
-                  style={{ width: "100%", marginBottom: 10 }}
-                />
-                <label className="label" htmlFor="affidavitDate">Filing date *</label>
-                <input id="affidavitDate" type="date" className="inp" value={affidavitDate} onChange={(e) => setAffidavitDate(e.target.value)} required style={{ width: "100%", minHeight: 44 }} />
-                <DialogFooter busy={affidavitConfirm.busy} onCancel={close} submitLabel="Record affidavit" />
-                <Status message={message} />
-              </form>
-            )}
-          </div>
-        </div>
-      )}
+      <Modal
+        open={panel !== null}
+        onClose={close}
+        title={panel === "brief" ? "Brief counsel" : "Record affidavit filing"}
+        size="md"
+      >
+        {panel === "brief" ? (
+          <form className="pad" onSubmit={submitBrief} noValidate>
+            <label className="label" htmlFor="counselName">Counsel name *</label>
+            <input
+              id="counselName"
+              type="text"
+              className="inp"
+              value={counselName}
+              onChange={(e) => setCounselName(e.target.value)}
+              required
+              maxLength={256}
+              style={{ width: "100%", minHeight: 44, marginBottom: 10 }}
+            />
+            <label className="label" htmlFor="counselType">Counsel type</label>
+            <select
+              id="counselType"
+              className="inp"
+              value={counselType}
+              onChange={(e) => setCounselType(e.target.value)}
+              style={{ width: "100%", minHeight: 44, marginBottom: 10 }}
+            >
+              <option value="advocate">Advocate</option>
+              <option value="senior_advocate">Senior advocate</option>
+              <option value="counsel">Counsel</option>
+              <option value="law_officer">Law officer</option>
+            </select>
+            <label className="label" htmlFor="briefMessage">Briefing note *</label>
+            <textarea
+              id="briefMessage"
+              className="inp"
+              rows={3}
+              value={briefMessage}
+              onChange={(e) => setBriefMessage(e.target.value)}
+              required
+              maxLength={7900}
+              style={{ width: "100%", marginBottom: 10 }}
+            />
+            <label className="label" htmlFor="briefDate">Brief by date</label>
+            <input id="briefDate" type="date" className="inp" value={briefDate} onChange={(e) => setBriefDate(e.target.value)} style={{ width: "100%", minHeight: 44 }} />
+            <DialogFooter busy={busy} onCancel={close} submitLabel="Brief counsel" />
+            <Status message={message} />
+          </form>
+        ) : (
+          <form className="pad" onSubmit={submitAffidavit} noValidate>
+            <p style={{ fontSize: 12, color: "var(--warn)", margin: "0 0 12px" }}>
+              Recorded as a case filing (no file-upload endpoint in legal-service).
+            </p>
+            <label className="label" htmlFor="affidavitSummary">Affidavit description *</label>
+            <textarea
+              id="affidavitSummary"
+              className="inp"
+              rows={3}
+              value={affidavitSummary}
+              onChange={(e) => setAffidavitSummary(e.target.value)}
+              required
+              maxLength={2000}
+              style={{ width: "100%", marginBottom: 10 }}
+            />
+            <label className="label" htmlFor="affidavitDate">Filing date *</label>
+            <input id="affidavitDate" type="date" className="inp" value={affidavitDate} onChange={(e) => setAffidavitDate(e.target.value)} required style={{ width: "100%", minHeight: 44 }} />
+            <DialogFooter busy={affidavitConfirm.busy} onCancel={close} submitLabel="Record affidavit filing" />
+            <Status message={message} />
+          </form>
+        )}
+      </Modal>
 
       <ConfirmDialog
         open={affidavitConfirm.open}
-        title="Record this affidavit?"
+        title="Record this affidavit filing?"
         description="This files the affidavit against the case record and cannot be undone. Confirm the description and filing date are correct."
-        confirmLabel="Record affidavit"
+        confirmLabel="Record affidavit filing"
         busy={affidavitConfirm.busy}
         errorMessage={affidavitConfirm.error}
         onConfirm={() => affidavitConfirm.confirm()}

@@ -9,8 +9,10 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 export type MLDomainSummary = {
   domain: string;
   totalPredictions: number;
-  accuracy: number;
-  fallbackRate: number;
+  /** Nullable: a genuine 0 is distinct from "no value reported" (shows "—"). */
+  accuracy: number | null;
+  /** Nullable: a genuine 0% fallback (the ideal) is distinct from missing. */
+  fallbackRate: number | null;
   topFactor: string;
   modelVersion: number | null;
   lastTrainedAt: string | null;
@@ -18,8 +20,10 @@ export type MLDomainSummary = {
 
 export type MLDomainEvaluation = {
   totalPredictions: number;
-  accuracy: number;
-  fallbackRate: number;
+  /** Nullable: a genuine 0 is distinct from "no value reported" (shows "—"). */
+  accuracy: number | null;
+  /** Nullable: a genuine 0% fallback rate is distinct from missing data. */
+  fallbackRate: number | null;
   topFactor: string;
   accuracyTrend: AccuracyTrendPoint[];
   factorBreakdown: FactorBreakdownEntry[];
@@ -41,6 +45,10 @@ export type FactorBreakdownEntry = {
 export type RecentPredictionRow = {
   id: string;
   entityId: string;
+  /** Optional human-readable name/code for the scored entity (BE-provided). */
+  entityLabel: string | null;
+  /** Optional parent id (e.g. a task's owning project) for drill-through. */
+  parentId: string | null;
   prediction: number;
   confidence: number;
   outcome: string | null;
@@ -55,6 +63,15 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 
 function toNumber(v: unknown): number {
   return typeof v === "number" && Number.isFinite(v) ? v : 0;
+}
+
+/**
+ * Like toNumber, but returns null (not 0) when the field is absent or
+ * non-finite, so a genuine 0 (e.g. a 0% fallback rate — the ideal) is
+ * distinguishable from "no value reported". GAP-*-ML-INSIGHTS-*-05/06.
+ */
+function toNullableNumber(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 
 function toText(v: unknown): string | null {
@@ -77,8 +94,11 @@ export async function getMLDomainOverview(): Promise<LoaderResult<MLDomainSummar
         return domains.filter(isRecord).map((d) => ({
           domain: String(d.domain ?? "unknown"),
           totalPredictions: toNumber(d.totalPredictions),
-          accuracy: toNumber(d.accuracy),
-          fallbackRate: toNumber(d.fallbackRate),
+          // The ms-service evaluations endpoint reports the headline quality
+          // as `avgConfidence`; accept an explicit `accuracy` first if a
+          // future payload sends one. Nullable so a missing value shows "—".
+          accuracy: toNullableNumber(d.accuracy ?? d.avgConfidence),
+          fallbackRate: toNullableNumber(d.fallbackRate),
           topFactor: String(d.topFactor ?? "—"),
           modelVersion: typeof d.modelVersion === "number" ? d.modelVersion : null,
           lastTrainedAt: toText(d.lastTrainedAt),
@@ -92,8 +112,8 @@ export async function getMLDomainOverview(): Promise<LoaderResult<MLDomainSummar
 
 const emptyEvaluation: MLDomainEvaluation = {
   totalPredictions: 0,
-  accuracy: 0,
-  fallbackRate: 0,
+  accuracy: null,
+  fallbackRate: null,
   topFactor: "—",
   accuracyTrend: [],
   factorBreakdown: [],
@@ -124,6 +144,8 @@ function mapEvaluation(payload: unknown): MLDomainEvaluation | null {
     ? data.recentPredictions.filter(isRecord).map((r) => ({
         id: String(r.id ?? ""),
         entityId: String(r.entityId ?? ""),
+        entityLabel: toText(r.entityLabel),
+        parentId: toText(r.parentId),
         prediction: toNumber(r.prediction),
         confidence: toNumber(r.confidence),
         outcome: toText(r.outcome),
@@ -133,8 +155,8 @@ function mapEvaluation(payload: unknown): MLDomainEvaluation | null {
 
   return {
     totalPredictions: toNumber(data.totalPredictions),
-    accuracy: toNumber(data.accuracy),
-    fallbackRate: toNumber(data.fallbackRate),
+    accuracy: toNullableNumber(data.accuracy ?? data.avgConfidence),
+    fallbackRate: toNullableNumber(data.fallbackRate),
     topFactor: String(data.topFactor ?? "—"),
     accuracyTrend,
     factorBreakdown,

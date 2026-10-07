@@ -69,6 +69,8 @@ import {
   Navigation,
   RefreshCw,
   PlayCircle,
+  MessageSquare,
+  Bot,
 } from "lucide-react";
 
 /**
@@ -161,6 +163,11 @@ const STAT_ICON_MAP: Record<string, LucideIcon> = {
   "📨": Mail,
   "🌐": Globe,
   "💼": Briefcase,
+  // Helpdesk stat cards (GAP-HELPDESK-HOME-05): coloured circle emoji that
+  // have no glyph on headless Linux; map to a neutral CircleDot instead.
+  "🟠": CircleDot,
+  "🔵": CircleDot,
+  "⚠️": AlertTriangle,
   // Identity hub tiles (GAP-IDENTITY-HOME-01): these previously fell back to
   // the raw emoji — which renders as the ".notdef" box on headless/server
   // Linux with no color-emoji font — so the seven tiles were visually
@@ -179,6 +186,11 @@ const STAT_ICON_MAP: Record<string, LucideIcon> = {
   "🔄": RefreshCw,     // Offline Sync
   // Works hub "Active" stat (GAP-WORKS-HOME-03): used to render raw ▶️ text.
   "▶️": PlayCircle,
+  // AI hub tiles (GAP-AI-HOME-01): previously fell back to the raw emoji
+  // (".notdef" box on headless Linux), leaving all five tiles visually
+  // identical. 🛡️ and ⚖️ already map (ShieldCheck/Scale); add the rest.
+  "💬": MessageSquare, // Chat
+  "🤖": Bot,           // Agents
 };
 
 // Variation Selector-16 (U+FE0F) makes an otherwise-identical emoji string

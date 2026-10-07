@@ -1,23 +1,18 @@
 "use client";
 
-import Link from "next/link";
 import { Button } from "@/app/_components/ds";
 
 interface MeetingActionsProps {
   meetingId: string;
 }
 
-export function MeetingActions({ meetingId }: MeetingActionsProps) {
+export function MeetingActions({ meetingId: _meetingId }: MeetingActionsProps) {
   return (
     <>
-      <Link
-        href={`/estab/meetings/${meetingId}?tab=agenda`}
-        className="btn ghost"
-        style={{ minHeight: 44 }}
-      >
-        Agenda
-      </Link>
       {/*
+        GAP-ESTAB-MEETINGS-DETAIL-05: removed the header "Agenda" link — it
+        duplicated the Agenda tab below. Only one route to the agenda now.
+
         There is no /generate-mom route (and no backend endpoint this page
         knows of) — the button used to silently no-op via a client-side
         redirect to a 404. Disabled honestly until MOM generation is built,

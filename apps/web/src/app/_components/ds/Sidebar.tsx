@@ -131,7 +131,7 @@ const NAV: NavGroup[] = [
       { icon: Headphones, label: "Helpdesk", href: "/helpdesk", moduleKey: "helpdesk" },
       { icon: FolderOpen, label: "Service Catalogue", href: "/helpdesk/catalogue", moduleKey: "helpdesk" },
       { icon: Landmark, label: "Citizen Portal", href: "/citizen", moduleKey: "citizen" },
-      { icon: Puzzle, label: "Service Designer", href: "/designer", moduleKey: "citizen" },
+      { icon: Puzzle, label: "Service Designer", href: "/designer", moduleKey: "designer" },
       // GAP-WORKFLOW-LIST-05 / GAP-WORKFLOW-MY-TASKS-07: Workflow had no sidebar
       // entry (reachable only from the dashboard, RoleCommandCenter and
       // GlobalSearch). Gated on the "workflow" module like every other item.

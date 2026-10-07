@@ -20,6 +20,7 @@ import type {
   SubmitPolicyBody,
   PublishPolicyBody,
   AcknowledgePolicyBody,
+  RejectPolicyBody,
 } from "./validators.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -132,6 +133,30 @@ export async function approvePolicy(ctx: RequestContext, id: string): Promise<Ac
       payload: { policyId: id, approverId: ctx.actorId },
     });
     await audit(t, ctx, "approve", id);
+  });
+  await cache.invalidateResource(ctx.tenantId, RESOURCE);
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function rejectPolicy(
+  ctx: RequestContext, id: string, body: RejectPolicyBody,
+): Promise<Accepted> {
+  await txScoped(ctx.tenantId, async (tx) => {
+    const t = tx as unknown as DrizzleTx;
+    const row = await loadForUpdate(t, ctx.tenantId, id);
+    assertTransition(row.status as PolicyStatus, "draft");
+    // Return to draft with reason — the reviewer (not the author) rejects.
+    await repo.update(tx as unknown as repo.Writer, id, {
+      status: "draft",
+      updatedBy: ctx.actorId,
+      updatedAt: new Date(),
+    });
+    await enqueue(t, {
+      topic: EVENTS.policyRejected, eventType: EVENTS.policyRejected,
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
+      payload: { policyId: id, reason: body.reason },
+    });
+    await audit(t, ctx, "reject", id);
   });
   await cache.invalidateResource(ctx.tenantId, RESOURCE);
   return { id, status: "accepted", correlationId: ctx.correlationId };

@@ -3,15 +3,15 @@
  */
 
 import type { TestRunStep, TestStepStatus } from "@/app/_components/ds/designer";
-import { minorToRupeesOrNull } from "@/lib/formatters";
+import { formatMoney, minorToRupeesOrNull } from "@/lib/formatters";
 
 export const DEFAULT_SANDBOX_STEPS: TestRunStep[] = [
   { id: "form", label: "Intake form validates", status: "pending" },
   { id: "eligibility", label: "Eligibility rules", status: "pending" },
   { id: "workflow", label: "Approval chain lanes", status: "pending" },
   { id: "demand", label: "Fee demand lines", status: "pending" },
-  { id: "payment", label: "Sandbox payment", status: "pending" },
-  { id: "gl", label: "GL journal entry", status: "pending" },
+  { id: "payment", label: "Test payment", status: "pending" },
+  { id: "gl", label: "Accounts posting (ledger entry)", status: "pending" },
   { id: "certificate", label: "Certificate issuance", status: "pending" },
 ];
 
@@ -74,13 +74,16 @@ export function formatPaise(amountMinor: number | null | undefined, currency = "
   // both default it to 0 in parseDemandLines/parseJournalPreview), but this helper is
   // exported and could be called directly with an unchecked API value — guard anyway
   // rather than let a future caller silently show "₹NaN" or a fabricated "₹0.00".
+  // GAP-DESIGNER-DETAIL-ENGINES-04: delegate the INR path to the shared formatMoney
+  // so B5, test, and review all render the same fee identically (always 2dp).
+  if (currency === "INR") return formatMoney(amountMinor);
   const rupees = minorToRupeesOrNull(amountMinor);
   if (rupees === null) return "—";
   const formatted = rupees.toLocaleString("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-  return currency === "INR" ? `₹${formatted}` : `${formatted} ${currency}`;
+  return `${formatted} ${currency}`;
 }
 
 export function parseDemandLines(artifacts?: Record<string, unknown> | null): DemandLineArtifact[] {
@@ -185,4 +188,54 @@ export function stepsAsTransportFail(message: string): TestRunStep[] {
     why: three.why,
     next: three.next,
   }));
+}
+
+/**
+ * GAP-DESIGNER-DETAIL-TEST-03: map sandbox test step ids to wizard block ids,
+ * so a failed step can mark the owning block with status 'error' + errorCount
+ * in the WizardShell block rail.
+ */
+export const STEP_TO_BLOCK: Record<string, string> = {
+  form: "b2",
+  eligibility: "b3",
+  workflow: "b4",
+  demand: "b5",
+  payment: "b5",
+  gl: "b5",
+  certificate: "b7",
+};
+
+/**
+ * Derive per-block error counts from sandbox test steps, suitable for passing
+ * to WizardShell as `blocks[].status = 'error'` + `errorCount`.
+ */
+/**
+ * GAP-DESIGNER-DETAIL-TEST-02: a passing test run is considered stale if the
+ * definition was updated after the test was created. This ensures canSubmit
+ * rejects results that no longer reflect the current design.
+ *
+ * Returns true when the test run is out-of-date, false when still current, and
+ * false when either date is missing (erring on the side of not blocking).
+ */
+export function isTestStale(
+  testCreatedAt: string | null | undefined,
+  defUpdatedAt: string | null | undefined,
+): boolean {
+  if (!testCreatedAt || !defUpdatedAt) return false;
+  const testMs = new Date(testCreatedAt).getTime();
+  const defMs = new Date(defUpdatedAt).getTime();
+  if (Number.isNaN(testMs) || Number.isNaN(defMs)) return false;
+  return defMs > testMs;
+}
+
+export function blockErrorsFromSteps(
+  steps: TestRunStep[],
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const step of steps) {
+    if (step.status !== "fail") continue;
+    const blockId = STEP_TO_BLOCK[step.id];
+    if (blockId) counts[blockId] = (counts[blockId] ?? 0) + 1;
+  }
+  return counts;
 }

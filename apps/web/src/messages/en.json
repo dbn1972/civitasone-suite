@@ -305,7 +305,19 @@
   },
   "analytics": {
     "title": "Data & Analytics",
-    "subtitle": "Saved dashboards and safe, whitelisted query runs over the analytics service's own data."
+    "subtitle": "Saved dashboards and safe, whitelisted query runs over the analytics service's own data.",
+    "hub": {
+      "title": "Data & Analytics",
+      "subtitle": "Saved dashboards and safe, whitelisted query runs over the analytics service's own data.",
+      "tiles": {
+        "dashboards": { "label": "Dashboards", "note": "Saved dashboards with widgets, sharing and access control" },
+        "queries": { "label": "Query Results", "note": "Recent query runs with accessible charts and tables" },
+        "kpi": { "label": "KPI Library", "note": "Organisation-wide Key Performance Indicators" },
+        "dataWarehouse": { "label": "Data Warehouse", "note": "Consolidated datasets and data quality metrics" },
+        "aiInsights": { "label": "AI Insights", "note": "Recommended actions generated for your modules" },
+        "mlInsights": { "label": "ML Insights", "note": "How well each prediction model performs" }
+      }
+    }
   },
   "apar": {
     "title": "APAR — Annual Performance Appraisal",

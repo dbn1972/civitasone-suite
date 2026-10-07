@@ -103,6 +103,19 @@ const TILE_ICONS: Record<string, string> = {
   Accruals: "➕",
   Redemptions: "🎁",
   Tiers: "🏅",
+  // GAP-STOCK-HOME-04: distinct icons for stock hub tiles
+  "Stock List": "📦",
+  "Stock Ledger": "📒",
+  "New Item": "➕",
+  "New Stock Entry": "📝",
+  // GAP-AI-HOME-01: the AI hub's five tiles previously all fell through to the
+  // 📁 default (no title matched, and no ai href matched the href heuristics
+  // below), giving the hub no visual cue between Chat, Copilot, Agents,
+  // Guardrails and Governance. Distinct icons per tile title:
+  Chat: "💬",
+  Copilot: "🧭",
+  Guardrails: "🛡️",
+  Governance: "⚖️",
 };
 
 const TILE_BG = ["#eef2ff", "#ecfdf3", "#fffaeb", "#fce7ee", "#e7edfd", "#f1f5f9"];

@@ -67,6 +67,9 @@ describe("ApprovalChainBuilder B4 round-trip UX", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /open visual editor \(advanced\)/i }));
+    // GAP-DESIGNER-DETAIL-B4-03: a confirm dialog now precedes entering advanced mode.
+    const confirmDialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(confirmDialog).getByRole("button", { name: /open visual editor/i }));
     expect(await screen.findByText(/custom-workflow mode/i)).toBeInTheDocument();
     expect(screen.getByTestId("mock-bpmn-canvas")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /revert to template/i })).toBeInTheDocument();
@@ -77,6 +80,9 @@ describe("ApprovalChainBuilder B4 round-trip UX", () => {
     render(<ApprovalChainBuilder serviceName="Trade Licence" initial={initial} />);
 
     fireEvent.click(screen.getByRole("button", { name: /open visual editor \(advanced\)/i }));
+    // Click through the B4-03 confirm dialog.
+    const advConfirm = await screen.findByRole("alertdialog");
+    fireEvent.click(within(advConfirm).getByRole("button", { name: /open visual editor/i }));
     fireEvent.click(screen.getByRole("button", { name: /back to guided chain/i }));
 
     expect(await screen.findByText(/uses a custom workflow/i)).toBeInTheDocument();

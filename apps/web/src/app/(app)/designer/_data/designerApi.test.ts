@@ -79,3 +79,28 @@ describe("designerApi — never leaks raw status or server text on failure", () 
     expect((err as Error).message).not.toMatch(/\b500\b/);
   });
 });
+
+/**
+ * GAP-DESIGNER-NEW-03: createServiceDefinition maps a 409 to a specific
+ * "key already exists" message instead of the generic save-failure text.
+ */
+describe("designerApi — 409 maps to a key-collision message", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("throws 'key already exists' on a 409 response", async () => {
+    fetchMock.mockResolvedValue(new Response("", { status: 409 }));
+    const err = await createServiceDefinition({
+      serviceKey: "trade-license",
+      name: "Trade License",
+      servicePattern: "certificate",
+    }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/already exists/i);
+    expect((err as Error).message).not.toMatch(/\b409\b/);
+  });
+});

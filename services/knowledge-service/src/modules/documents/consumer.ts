@@ -25,6 +25,8 @@ export function registerDocumentsConsumers(rawQueue: Queue): void {
         title: p.title,
         category: p.category,
         status: p.status,
+        // GAP-KNOWLEDGE-DOCUMENTS-NEW-01: persist the publisher-chosen access level.
+        accessLevel: p.accessLevel ?? "internal",
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
         version: 1,

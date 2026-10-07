@@ -126,6 +126,86 @@ export function issueCertificate(
   };
 }
 
+/**
+ * GAP-LEARNING-ASSESSMENTS-02: filter an assessment list to what the caller is
+ * allowed to see. A non-HR learner (employee/manager) may only see PUBLISHED
+ * assessments — draft / pending_approval / retired content must never surface
+ * on the learner-facing "available assessments" list. HR roles see every
+ * status (they author and manage the lifecycle). Pure + deterministic so it is
+ * unit-tested directly rather than only via a DB/route integration test.
+ */
+export function visibleAssessmentsForRoles<T extends { status: string }>(
+  rows: readonly T[],
+  isHr: boolean,
+): T[] {
+  if (isHr) return [...rows];
+  return rows.filter((r) => r.status === "published");
+}
+
+/**
+ * GAP-LEARNING-ASSESSMENTS-VERIFY-01: project a certificate into the response a
+ * given caller is allowed to receive (DPDP data-minimisation). A privileged
+ * caller (HR) or the certificate's own owner receives the full record,
+ * including the (opaque UUID) employeeId. Any other authenticated caller
+ * verifying someone else's token receives only the non-identifying
+ * attestation fields — certificateNo, assessmentId, issuedAt, validUntil and
+ * the computed status — never the employeeId that links the certificate to a
+ * specific person. Pure + deterministic.
+ */
+/**
+ * GAP-LEARNING-ASSESSMENTS-01: project a question row into the learner-safe
+ * shape delivered when TAKING an assessment — the `correct` answer key and
+ * per-question `marks` are stripped so a candidate cannot read the answers (or
+ * infer them from mark weightings) from the delivery payload. HR authoring
+ * views use the full row via the question-bank endpoints; this is only for the
+ * attempt-taking surface. Pure + deterministic.
+ */
+export interface DeliverableQuestionRow {
+  id: string;
+  qtype: string;
+  stem: string;
+  options: Array<{ id: string; text: string }>;
+}
+export interface LearnerSafeQuestion {
+  id: string;
+  qtype: string;
+  stem: string;
+  options: Array<{ id: string; text: string }>;
+}
+export function toLearnerSafeQuestion(q: DeliverableQuestionRow): LearnerSafeQuestion {
+  return { id: q.id, qtype: q.qtype, stem: q.stem, options: q.options };
+}
+
+export interface VerifiableCertificate {
+  certificateNo: string;
+  employeeId: string;
+  assessmentId: string;
+  issuedAt: Date;
+  validUntil: Date | null;
+}
+export interface CertificateVerificationView {
+  certificateNo: string;
+  employeeId?: string;
+  assessmentId: string;
+  issuedAt: Date;
+  validUntil: Date | null;
+  status: "active" | "expired" | "revoked";
+}
+export function projectCertificateVerification(
+  cert: VerifiableCertificate,
+  status: "active" | "expired" | "revoked",
+  canSeeEmployee: boolean,
+): CertificateVerificationView {
+  const base: CertificateVerificationView = {
+    certificateNo: cert.certificateNo,
+    assessmentId: cert.assessmentId,
+    issuedAt: cert.issuedAt,
+    validUntil: cert.validUntil,
+    status,
+  };
+  return canSeeEmployee ? { ...base, employeeId: cert.employeeId } : base;
+}
+
 export interface EvaluableCertificate {
   status: string;
   validUntil: Date | null;

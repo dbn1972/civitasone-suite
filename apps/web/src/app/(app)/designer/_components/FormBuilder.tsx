@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
-import { Button, Card } from "@/app/_components/ds";
+import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import {
   ConditionBuilder,
   FormRenderer,
@@ -22,9 +22,11 @@ import {
   PALETTE_DRAG_MIME,
   addFieldToSection,
   addSection,
+  fieldReferenceCount,
   moveFieldToSection,
   moveFieldWithinSection,
   moveSection,
+  removeDanglingVisibility,
   removeSection,
   renameSection,
   toggleSectionCollapsed,
@@ -53,9 +55,17 @@ export function FormBuilder({
   const [revision, setRevision] = useState(0);
   const [dropTargetSectionId, setDropTargetSectionId] = useState<string | null>(null);
   const [undoToast, setUndoToast] = useState<{ field: FormFieldDefinition; sectionId: string; index: number } | null>(null);
+  // GAP-DESIGNER-DETAIL-B2-05: store the undo-toast timeout so a second delete or
+  // an unmount clears it (the old code never cleared it).
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Field pending a confirm because other fields reference it in visibility rules.
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef(design);
   latest.current = design;
+  // GAP-DESIGNER-DETAIL-B2-01: track the last design we actually persisted, so a
+  // save's replace() does not re-trigger the autosave effect every ~2s with no edit.
+  const lastPersisted = useRef<FormDesignState | null>(null);
 
   const selectedField = selectedFieldId ? design.fields[selectedFieldId] : null;
   const allFieldsList = useMemo(() => Object.values(design.fields), [design.fields]);
@@ -75,10 +85,16 @@ export function FormBuilder({
 
   const schedulePersist = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
+    // GAP-DESIGNER-DETAIL-B2-01: skip if nothing changed since the last persist,
+    // so replace(saved) does not re-arm this effect in a loop.
+    if (lastPersisted.current && JSON.stringify(lastPersisted.current) === JSON.stringify(latest.current)) {
+      return;
+    }
     timer.current = setTimeout(async () => {
       onSaveState?.("saving");
       try {
         const saved = await persistFormDesign(latest.current, serviceKey, serviceName);
+        lastPersisted.current = saved;
         replace(saved);
         onDesignPersisted?.(saved);
         onSaveState?.("saved");
@@ -88,7 +104,16 @@ export function FormBuilder({
     }, 2000);
   }, [onSaveState, onDesignPersisted, replace, serviceKey, serviceName]);
 
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  // GAP-DESIGNER-DETAIL-B2-01: flush any pending save on unmount rather than dropping it.
+  useEffect(() => () => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+      void persistFormDesign(latest.current, serviceKey, serviceName).catch(() => {});
+    }
+    // GAP-DESIGNER-DETAIL-B2-05: clear the undo-toast timer on unmount.
+    if (undoTimer.current) { clearTimeout(undoTimer.current); undoTimer.current = null; }
+  }, [serviceKey, serviceName]);
   useEffect(() => { schedulePersist(); }, [design, schedulePersist]);
 
   const addField = (type: DesignerFieldType, sectionId?: string) => {
@@ -137,22 +162,42 @@ export function FormBuilder({
     setSelectedFieldId(dup.id);
   };
 
-  const deleteField = (fieldId: string) => {
+  const performDelete = (fieldId: string) => {
     const field = design.fields[fieldId];
     if (!field) return;
     const section = design.sections.find((s) => s.id === field.sectionId);
     const index = section?.fieldIds.indexOf(fieldId) ?? -1;
     const { [fieldId]: _, ...rest } = design.fields;
-    commit({
-      ...design,
-      fields: rest,
-      sections: design.sections.map((s) => ({ ...s, fieldIds: s.fieldIds.filter((id) => id !== fieldId) })),
-    });
+    // GAP-DESIGNER-DETAIL-B2-05: strip visibility conditions that pointed at the
+    // deleted field so the saved rule set is not left dangling.
+    const cleaned = removeDanglingVisibility(
+      {
+        ...design,
+        fields: rest,
+        sections: design.sections.map((s) => ({ ...s, fieldIds: s.fieldIds.filter((id) => id !== fieldId) })),
+      },
+      fieldId,
+    );
+    commit(cleaned);
     if (selectedFieldId === fieldId) setSelectedFieldId(null);
     if (section && index >= 0) {
       setUndoToast({ field, sectionId: section.id, index });
-      setTimeout(() => setUndoToast(null), 8000);
+      // Clear any previous toast timer before starting a new one.
+      if (undoTimer.current) clearTimeout(undoTimer.current);
+      undoTimer.current = setTimeout(() => setUndoToast(null), 8000);
     }
+  };
+
+  const deleteField = (fieldId: string) => {
+    const field = design.fields[fieldId];
+    if (!field) return;
+    // GAP-DESIGNER-DETAIL-B2-05: if other fields reference this one in their
+    // visibility rules, confirm before the fast delete. Otherwise delete + Undo.
+    if (fieldReferenceCount(design, fieldId) > 0) {
+      setConfirmDeleteId(fieldId);
+      return;
+    }
+    performDelete(fieldId);
   };
 
   const undoDelete = () => {
@@ -252,10 +297,30 @@ export function FormBuilder({
             fontSize: 14,
           }}
         >
-          <span>Field deleted — Undo</span>
+          <span>Field &quot;{undoToast.field.label}&quot; deleted</span>
           <Button variant="ghost" onClick={undoDelete}>Undo</Button>
         </div>
       ) : null}
+
+      {/* GAP-DESIGNER-DETAIL-B2-05: confirm when deleting a field referenced by other
+          fields' visibility rules — lists the affected fields so the designer knows
+          which conditions will also be removed. */}
+      <ConfirmDialog
+        open={confirmDeleteId !== null}
+        title="Delete field?"
+        description={
+          confirmDeleteId
+            ? `This field is used in visibility conditions by ${fieldReferenceCount(design, confirmDeleteId)} other field(s). Deleting it will remove those conditions too.`
+            : ""
+        }
+        confirmLabel="Delete"
+        danger
+        onCancel={() => setConfirmDeleteId(null)}
+        onConfirm={() => {
+          if (confirmDeleteId) performDelete(confirmDeleteId);
+          setConfirmDeleteId(null);
+        }}
+      />
 
       <div
         style={{
@@ -403,12 +468,13 @@ export function FormBuilder({
                     onMoveDown={(id) => commit(moveFieldWithinSection(design, section.id, id, 1))}
                     virtualizeThreshold={FIELD_VIRTUALIZE_THRESHOLD}
                     ariaLabel={`${section.label} fields`}
+                    itemAccessibleName={(field) => field.label}
                     renderItem={(field) => (
                       <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, flexWrap: "wrap" }}>
                         <span aria-hidden>{typeIcon(field.type)}</span>
                         <span>{field.label}</span>
                         {field.required ? <span aria-label="Required" style={{ color: "var(--bad)" }}>*</span> : null}
-                        {field.visibility?.length ? <span aria-label="Conditional" title="Has visibility rule">👁</span> : null}
+                        {field.visibility?.length ? <span aria-label="Conditional" title="Has visibility rule">◆</span> : null}
                         {(field.type === "address" || field.type === "ward") ? (
                           <span style={{ fontSize: 11, color: "var(--info)", padding: "2px 6px", background: "var(--infobg)", borderRadius: 999 }}>
                             bound to: {field.type === "ward" ? "ULB ward list" : "location hierarchy"}

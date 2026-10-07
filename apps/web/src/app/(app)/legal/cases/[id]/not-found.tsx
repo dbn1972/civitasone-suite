@@ -8,7 +8,7 @@ export default function LegalCaseNotFound() {
         aria-label="Breadcrumb"
         style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}
       >
-        <Link href="/audit/dashboard" className="lnk">Audit</Link>
+        <Link href="/legal" className="lnk">Legal</Link>
         <span aria-hidden="true" style={{ margin: "0 7px", color: "#cdd2dc" }}>/</span>
         <Link href="/legal/list" className="lnk">Cases</Link>
         <span aria-hidden="true" style={{ margin: "0 7px", color: "#cdd2dc" }}>/</span>
@@ -18,10 +18,8 @@ export default function LegalCaseNotFound() {
         icon="⚖️"
         title="Case not found"
         message="This case may have been removed, transferred, or the ID is invalid."
+        action={<Link href="/legal/list" className="btn primary">← Back to cases</Link>}
       />
-      <div style={{ marginTop: 16 }}>
-        <Link href="/legal/list" className="btn ghost">← Back to cases</Link>
-      </div>
     </div>
   );
 }

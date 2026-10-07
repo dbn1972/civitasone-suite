@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
+import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
+import type { ReportTemplateOption } from "@/app/_data/loaders";
 
 type FormState = { status: "idle" | "submitting" | "success" | "error"; message?: string };
 
@@ -24,13 +27,16 @@ const labelStyle: React.CSSProperties = {
   color: "var(--ink2)",
 };
 
-export function NewScheduledForm() {
+export function NewScheduledForm({ templates }: { templates: ReportTemplateOption[] }) {
+  const router = useRouter();
   const [state, setState] = useState<FormState>({ status: "idle" });
   const [templateId, setTemplateId] = useState("");
   const [cadence, setCadence] = useState("daily");
   const [recipients, setRecipients] = useState("");
   const [format, setFormat] = useState("pdf");
   const formError = useFormError("scheduled report");
+
+  const noTemplates = templates.length === 0;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -42,18 +48,23 @@ export function NewScheduledForm() {
         recipients: recipients.split(",").map((r) => r.trim()).filter(Boolean),
         format,
       };
-      const res = await fetch("/api/v1/reports/scheduled", {
+      // GAP-REPORTS-SCHEDULED-02: create via the same /api/proxy/v1 gateway
+      // prefix the list read uses (through fetchJson -> /api/v1), so both the
+      // read and the write hit one resource rather than two divergent prefixes.
+      const res = await browserFetch("v1/reports/scheduled", {
         method: "POST",
-        headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        setState({ status: "error", message: (await formError.fromResponse(res, "save")).message });
+        setState({ status: "error", message: await errorMessageFromResponse(res, "save") });
         return;
       }
       setState({ status: "success", message: "Scheduled report created." });
       setTemplateId("");
       setRecipients("");
+      // GAP-REPORTS-SCHEDULED-03: refresh the server component so the new row
+      // (and the Total/Enabled stat counts) appear without a manual reload.
+      router.refresh();
     } catch (caught) {
       setState({ status: "error", message: formError.fromException("save", caught).message });
     }
@@ -65,16 +76,29 @@ export function NewScheduledForm() {
       style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "14px", maxWidth: "480px" }}
     >
       <div>
-        <label htmlFor="scheduled-report-template-id" style={labelStyle}>Template ID</label>
-        <input
+        <label htmlFor="scheduled-report-template-id" style={labelStyle}>Report template</label>
+        {/* GAP-REPORTS-SCHEDULED-01: a named dropdown of real templates,
+            submitting the id — not a free-typed UUID nobody can recognise. */}
+        <select
           id="scheduled-report-template-id"
           required
           style={inputStyle}
-          placeholder="UUID of report template"
           value={templateId}
           onChange={(e) => setTemplateId(e.target.value)}
-          pattern="[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
-        />
+          disabled={noTemplates}
+        >
+          <option value="" disabled>
+            {noTemplates ? "No report templates available" : "Select a report template"}
+          </option>
+          {templates.map((t) => (
+            <option key={t.id} value={t.id}>{t.name}</option>
+          ))}
+        </select>
+        {noTemplates ? (
+          <p style={{ color: "var(--ink2)", fontSize: "0.8125rem", margin: "6px 0 0" }}>
+            Create a report template first, then schedule it here.
+          </p>
+        ) : null}
       </div>
       <div>
         <label htmlFor="scheduled-report-cadence" style={labelStyle}>Cadence</label>
@@ -108,14 +132,14 @@ export function NewScheduledForm() {
         </select>
       </div>
       {state.status === "error" && (
-        <p style={{ color: "var(--bad)", fontSize: "0.875rem", margin: 0 }}>{state.message}</p>
+        <p role="alert" style={{ color: "var(--bad)", fontSize: "0.875rem", margin: 0 }}>{state.message}</p>
       )}
       {state.status === "success" && (
-        <p style={{ color: "var(--good)", fontSize: "0.875rem", margin: 0 }}>{state.message}</p>
+        <p role="status" style={{ color: "var(--good)", fontSize: "0.875rem", margin: 0 }}>{state.message}</p>
       )}
       <button
         type="submit"
-        disabled={state.status === "submitting"}
+        disabled={state.status === "submitting" || noTemplates}
         className="btn primary"
         style={{ alignSelf: "flex-start" }}
       >

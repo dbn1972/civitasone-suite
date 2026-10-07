@@ -230,4 +230,45 @@ describe("ModuleListTable", () => {
     render(<ModuleListTable cacheKey="test" rows={fieldRows} source="api" />);
     expect(screen.getByText("3")).toBeInTheDocument();
   });
+
+  // GAP-TENANT-{CODE-LISTS-05, CONSENT-EXCHANGE-05, DATA-MIGRATION-05,
+  // ORG-HIERARCHY-05, OVERVIEW-06, PLANS-05}: Status renders through StatusPill.
+  it("renders status through StatusPill, not raw snake_case text", () => {
+    const pillRows = [
+      { id: "r-1", label: "Row A", status: "active" },
+      { id: "r-2", label: "Row B", status: "pending_approval" },
+    ];
+    mockedHook.mockReturnValue({ data: pillRows, fromCache: false, offline: false, cachedAt: null, provenance: "live" } as never);
+    render(<ModuleListTable cacheKey="test" rows={pillRows} source="api" />);
+    // StatusPill renders a <span class="pill ..."> with humanized text
+    const pills = document.querySelectorAll(".pill");
+    expect(pills.length).toBeGreaterThanOrEqual(2);
+    // Humanized by StatusPill: "active" -> "Active", "pending_approval" -> "Pending Approval"
+    expect(pills[0].textContent).toBe("Active");
+    expect(pills[1].textContent).toBe("Pending Approval");
+  });
+
+  // GAP-TENANT-*-05: client search/filter narrows rows.
+  it("client search box filters rows by label match", () => {
+    mockedHook.mockReturnValue({ data: rows, fromCache: false, offline: false, cachedAt: null, provenance: "live" } as never);
+    render(<ModuleListTable cacheKey="test" rows={rows} source="api" />);
+    const input = screen.getByRole("searchbox", { name: /search records/i });
+    fireEvent.change(input, { target: { value: "#001" } });
+    expect(screen.getByText("Bill #001")).toBeInTheDocument();
+    expect(screen.queryByText("Bill #002")).not.toBeInTheDocument();
+  });
+
+  // GAP-TENANT-*-05: sortable Name header.
+  it("clicking the Name header sorts rows alphabetically", () => {
+    const sortRows = [
+      { id: "r-z", label: "Zebra", status: "active" },
+      { id: "r-a", label: "Alpha", status: "pending" },
+    ];
+    mockedHook.mockReturnValue({ data: sortRows, fromCache: false, offline: false, cachedAt: null, provenance: "live" } as never);
+    render(<ModuleListTable cacheKey="test" rows={sortRows} source="api" />);
+    const nameHeader = screen.getByText("Name", { selector: "th" });
+    fireEvent.click(nameHeader);
+    const names = Array.from(document.querySelectorAll("tbody td:nth-child(2)")).map((el) => el.textContent);
+    expect(names).toEqual(["Alpha", "Zebra"]);
+  });
 });

@@ -37,3 +37,50 @@ describe("packLibraryApi — never leaks raw status or server text on failure", 
     expect((err as Error).message).not.toMatch(/\b500\b/);
   });
 });
+
+/**
+ * GAP-DESIGNER-LIBRARY-01: fetchServicePacks used to swallow every non-OK
+ * response as an empty list, so an outage or a 403 rendered the innocuous
+ * "No packs match the current filters." empty state. It now throws a typed
+ * ServicePackLoadError carrying the status, while the human copy stays
+ * catalogued (never the raw status or server body).
+ */
+import { fetchServicePacks, ServicePackLoadError } from "./packLibraryApi";
+
+describe("fetchServicePacks — surfaces failures instead of swallowing them", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("throws ServicePackLoadError on a 500 (not an empty array)", async () => {
+    fetchMock.mockResolvedValue(new Response("", { status: 500 }));
+    const err = await fetchServicePacks().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ServicePackLoadError);
+    expect((err as ServicePackLoadError).status).toBe(500);
+    expect((err as Error).message).not.toMatch(/\b500\b/);
+    expect((err as Error).message).toMatch(/couldn.t load/i);
+  });
+
+  it("uses the forbidden vocabulary on 403", async () => {
+    fetchMock.mockResolvedValue(new Response("", { status: 403 }));
+    const err = await fetchServicePacks().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ServicePackLoadError);
+    expect((err as ServicePackLoadError).status).toBe(403);
+    expect((err as Error).message).toMatch(/permission/i);
+  });
+
+  it("returns a mapped list on success", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ data: [{ id: "p1", packKey: "k", name: "N", status: "draft" }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const packs = await fetchServicePacks();
+    expect(packs).toHaveLength(1);
+    expect(packs[0]?.id).toBe("p1");
+  });
+});

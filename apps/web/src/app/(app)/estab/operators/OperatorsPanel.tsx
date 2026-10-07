@@ -1,14 +1,18 @@
 "use client";
 
 import { UserFacingError } from "@/lib/userFacingError";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, DataTable, StatusPill, ActionButton, ErrorState } from "../../../_components/ds";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Button, DataTable, StatusPill, ActionButton, ErrorState, EntityPicker, Field, Input, Select } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
+import { humanizeStatus } from "@/lib/formatters";
 import { useFormError } from "@/lib/useFormError";
+import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 
 type Operator = {
   id: string;
   employeeId: string;
+  employeeName?: string;
+  departmentName?: string;
   division: string;
   section: string | null;
   deskRole: string;
@@ -17,13 +21,14 @@ type Operator = {
   updatedAt: string;
 };
 
-type Employee = { id: string; name?: string; employeeId?: string; designation?: string };
-
 const DESK_ROLES = [
   "dealing_hand", "section_officer", "under_secretary",
   "deputy_secretary", "director", "hod",
 ] as const;
 
+// Hand-written labels where the generic Title Case would read oddly; anything
+// not here is humanized via humanizeStatus() (OPERATORS-06), so an unknown
+// server enum (e.g. "joint_secretary") shows "Joint Secretary", not raw.
 const ROLE_LABEL: Record<string, string> = {
   dealing_hand: "Dealing Hand",
   section_officer: "Section Officer",
@@ -32,65 +37,72 @@ const ROLE_LABEL: Record<string, string> = {
   director: "Director",
   hod: "Head of Department",
 };
+function deskRoleLabel(role: string): string {
+  return ROLE_LABEL[role] ?? humanizeStatus(role);
+}
 
 const EMPTY = { employeeId: "", division: "", section: "", deskRole: "dealing_hand", canInitiate: true };
+const MESSAGE_DISMISS_MS = 5000;
 
-export function OperatorsPanel() {
+export function OperatorsPanel({ canAdminister }: { canAdminister: boolean }) {
   const [operators, setOperators] = useState<Operator[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<{ employeeId?: string; division?: string }>({});
   const [loadError, setLoadError] = useState(false);
   const [form, setForm] = useState({ ...EMPTY });
   const [saving, setSaving] = useState(false);
   const { fromResponse, fromException, clear } = useFormError("operator");
+  const messageTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mounted = useRef(true);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setLoadError(false);
     try {
       const res = await fetch("/api/proxy/v1/estab/operators?activeOnly=false&limit=500", { signal });
-      // Never shown verbatim — a failed load only ever flips loadError below,
-      // which renders the catalogued ErrorState — but still routed through a
-      // safe, static message rather than the raw response body, for the same
-      // hygiene reason as every other fix in this tranche.
       if (!res.ok) throw new Error("Could not load operators.");
       const body = (await res.json()) as { data?: Operator[] };
       setOperators(body.data ?? []);
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") return;
-      // A failed load must not read as "No operators enrolled yet".
       setLoadError(true);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Federate the employee directory from HRMS — no local duplication.
-  const loadEmployees = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch("/api/proxy/v1/hrms/employees?limit=200", { signal });
-      if (!res.ok) return;
-      const body = (await res.json()) as { data?: Employee[] } | Employee[];
-      setEmployees(Array.isArray(body) ? body : (body.data ?? []));
-    } catch (err) {
-      if (err instanceof Error && err.name === "AbortError") return;
-      /* picker is optional; manual UUID entry still works */
-    }
-  }, []);
-
   useEffect(() => {
+    mounted.current = true;
     const controller = new AbortController();
     void load(controller.signal);
-    void loadEmployees(controller.signal);
-    return () => controller.abort();
-  }, [load, loadEmployees]);
+    return () => {
+      mounted.current = false;
+      controller.abort();
+      if (messageTimer.current) clearTimeout(messageTimer.current);
+    };
+  }, [load]);
 
-  const empLabel = useCallback((id: string) => {
-    const e = employees.find((x) => x.id === id);
-    return e?.name ? `${e.name}${e.designation ? ` · ${e.designation}` : ""}` : id.slice(0, 8) + "…";
-  }, [employees]);
+  // GAP-ESTAB-OPERATORS-05: show a transient success message that auto-clears,
+  // never one that lingers beside a later error. Timers are cleared on unmount.
+  const flash = useCallback((text: string) => {
+    setMessage(text);
+    if (messageTimer.current) clearTimeout(messageTimer.current);
+    messageTimer.current = setTimeout(() => {
+      if (mounted.current) setMessage("");
+    }, MESSAGE_DISMISS_MS);
+  }, []);
+
+  // GAP-ESTAB-OPERATORS-01: Officer column shows the resolved name (from the
+  // enriched operator row), falling back to a short-id hint only when the
+  // directory could not resolve it — never a bare UUID masquerading as a name.
+  const empLabel = useCallback((o: Operator) => {
+    if (o.employeeName) {
+      return o.departmentName ? `${o.employeeName} · ${o.departmentName}` : o.employeeName;
+    }
+    return `Unresolved (${o.employeeId.slice(0, 8)}…)`;
+  }, []);
 
   const grouped = useMemo(() => {
     const map = new Map<string, Operator[]>();
@@ -103,11 +115,19 @@ export function OperatorsPanel() {
   }, [operators]);
 
   const enrol = useCallback(async () => {
-    setSaving(true); setMessage(""); setError("");
+    setSaving(true); setMessage(""); setError(""); setFieldErrors({});
     clear();
+    // GAP-ESTAB-OPERATORS-04: validate per-field (shown beside the field via
+    // Field's aria wiring), not as a single banner far from the input.
+    const errs: { employeeId?: string; division?: string } = {};
+    if (!/^[0-9a-f-]{36}$/i.test(form.employeeId)) errs.employeeId = "Pick an employee from the directory.";
+    if (!form.division.trim()) errs.division = "Division is required.";
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors(errs);
+      setSaving(false);
+      return;
+    }
     try {
-      if (!/^[0-9a-f-]{36}$/i.test(form.employeeId)) throw new UserFacingError("Pick an employee or enter a valid employee ID");
-      if (!form.division.trim()) throw new UserFacingError("Division is required");
       const payload = {
         employeeId: form.employeeId,
         division: form.division.trim(),
@@ -119,20 +139,25 @@ export function OperatorsPanel() {
         method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload),
       });
       if (!res.ok) {
-        setError((await fromResponse(res, "save")).message);
+        const result = await fromResponse(res, "save");
+        setError(result.message);
+        setFieldErrors((prev) => ({
+          ...prev,
+          ...(result.fieldErrors.employeeId ? { employeeId: result.fieldErrors.employeeId } : {}),
+          ...(result.fieldErrors.division ? { division: result.fieldErrors.division } : {}),
+        }));
         return;
       }
-      setMessage("Operator enrolled. They can now be marked files in this division.");
       setForm({ ...EMPTY });
-      setTimeout(() => void load(), 800);
+      // GAP-ESTAB-OPERATORS-05: reload directly (await), not after a fixed delay.
+      await load();
+      flash("Operator enrolled. They can now be marked files in this division.");
     } catch (err) {
-      // "Pick an employee..." / "Division is required" above are already
-      // clerk-safe, client-side validation copy — preserved via err.message.
       setError(fromException("save", err).message);
     } finally {
       setSaving(false);
     }
-  }, [form, load, fromResponse, fromException, clear]);
+  }, [form, load, flash, fromResponse, fromException, clear]);
 
   const toggle = useCallback(async (op: Operator) => {
     const res = await fetch(`/api/proxy/v1/estab/operators/${op.id}`, {
@@ -142,58 +167,98 @@ export function OperatorsPanel() {
     if (!res.ok) {
       throw UserFacingError.from(await fromResponse(res, "save"));
     }
-    setMessage(`Operator ${op.active ? "deactivated" : "reactivated"}.`);
-    setTimeout(() => void load(), 800);
-  }, [load, fromResponse]);
+    await load();
+    flash(`Operator ${op.active ? "deactivated" : "reactivated"}.`);
+  }, [load, flash, fromResponse]);
+
+  const columns = useMemo(() => {
+    const base = [
+      { key: "employeeId" as const, label: "Officer", render: (o: Operator) => <>{empLabel(o)}</> },
+      { key: "deskRole" as const, label: "Desk", render: (o: Operator) => <>{deskRoleLabel(o.deskRole)}</> },
+      { key: "section" as const, label: "Section", render: (o: Operator) => <>{o.section ?? "—"}</> },
+      {
+        key: "canInitiate" as const, label: "Initiate",
+        render: (o: Operator) => <StatusPill status={o.canInitiate ? "active" : "inactive"} label={o.canInitiate ? "Yes" : "No"} />,
+      },
+      { key: "active" as const, label: "Status", render: (o: Operator) => <StatusPill status={o.active ? "active" : "inactive"} /> },
+    ];
+    if (!canAdminister) return base;
+    return [
+      ...base,
+      {
+        key: "id" as const, label: "Actions", sortable: false,
+        render: (o: Operator) => (
+          <ActionButton
+            label={o.active ? "Deactivate" : "Reactivate"}
+            className="btn ghost"
+            danger={o.active}
+            confirmTitle={`${o.active ? "Deactivate" : "Reactivate"} this desk?`}
+            confirmDescription={o.active
+              ? "The officer will no longer be markable a file. Hand over any files they currently hold before deactivating — this does not reassign them automatically."
+              : "The officer will again be eligible to hold and operate files."}
+            confirmLabel={o.active ? "Deactivate" : "Reactivate"}
+            onConfirm={() => toggle(o)}
+          />
+        ),
+      },
+    ];
+  }, [canAdminister, empLabel, toggle]);
 
   return (
     <div style={{ display: "grid", gap: 18, marginTop: 18 }}>
       <div role="status" aria-live="polite">
         {message ? <p style={{ color: "var(--good)", fontSize: "0.875rem" }}>{message}</p> : null}
+      </div>
+      <div role="alert" aria-live="assertive">
         {error ? <p style={{ color: "var(--bad)", fontSize: "0.875rem" }}>{error}</p> : null}
       </div>
 
-      <div className="card">
-        <div className="card-h"><h3>Enrol a file operator</h3></div>
-        <div className="pad" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 12 }}>
-          <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-            <span>Employee</span>
-            {employees.length > 0 ? (
-              <select value={form.employeeId} onChange={(e) => setForm((f) => ({ ...f, employeeId: e.target.value }))}>
-                <option value="">Select employee…</option>
-                {employees.map((e) => (
-                  <option key={e.id} value={e.id}>{e.name ?? e.employeeId ?? e.id}{e.designation ? ` · ${e.designation}` : ""}</option>
-                ))}
-              </select>
-            ) : (
-              <input value={form.employeeId} placeholder="employee UUID" onChange={(e) => setForm((f) => ({ ...f, employeeId: e.target.value }))} />
-            )}
-          </label>
-          <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-            <span>Division / Wing</span>
-            <input value={form.division} placeholder="e.g. Administration" onChange={(e) => setForm((f) => ({ ...f, division: e.target.value }))} />
-          </label>
-          <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-            <span>Section (optional)</span>
-            <input value={form.section} placeholder="e.g. Estt-I" onChange={(e) => setForm((f) => ({ ...f, section: e.target.value }))} />
-          </label>
-          <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-            <span>Desk role</span>
-            <select value={form.deskRole} onChange={(e) => setForm((f) => ({ ...f, deskRole: e.target.value }))}>
-              {DESK_ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
-            </select>
-          </label>
-          <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: "0.8125rem", marginTop: 22 }}>
-            <input type="checkbox" checked={form.canInitiate} onChange={(e) => setForm((f) => ({ ...f, canInitiate: e.target.checked }))} />
-            <span>May initiate files</span>
-          </label>
+      {canAdminister ? (
+        <div className="card">
+          <div className="card-h"><h3>Enrol a file operator</h3></div>
+          <div className="pad" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 12 }}>
+            <Field label="Employee" required error={fieldErrors.employeeId}>
+              {/* GAP-ESTAB-OPERATORS-01/04: searchable directory picker (server
+                  `q` search, name + designation), returns a real hrms id — no
+                  200-row cap, no raw-UUID fallback box. */}
+              <EntityPicker
+                value={form.employeeId || null}
+                onChange={(v) => setForm((f) => ({ ...f, employeeId: Array.isArray(v) ? (v[0] ?? "") : (v ?? "") }))}
+                search={searchEmployees}
+                resolve={resolveEmployees}
+                placeholder="Search an employee by name…"
+                aria-label="Employee"
+              />
+            </Field>
+            <Field label="Division / Wing" required error={fieldErrors.division}>
+              <Input value={form.division} placeholder="e.g. Administration" onChange={(e) => setForm((f) => ({ ...f, division: e.target.value }))} />
+            </Field>
+            <Field label="Section (optional)">
+              <Input value={form.section} placeholder="e.g. Estt-I" onChange={(e) => setForm((f) => ({ ...f, section: e.target.value }))} />
+            </Field>
+            <Field label="Desk role">
+              <Select value={form.deskRole} onChange={(e) => setForm((f) => ({ ...f, deskRole: e.target.value }))}>
+                {DESK_ROLES.map((r) => <option key={r} value={r}>{deskRoleLabel(r)}</option>)}
+              </Select>
+            </Field>
+            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: "0.8125rem", marginTop: 22 }}>
+              <input type="checkbox" checked={form.canInitiate} onChange={(e) => setForm((f) => ({ ...f, canInitiate: e.target.checked }))} />
+              <span>May initiate files</span>
+            </label>
+          </div>
+          <div className="pad" style={{ paddingTop: 0 }}>
+            <Button disabled={saving} onClick={() => void enrol()}>
+              {saving ? "Enrolling…" : "Enrol operator"}
+            </Button>
+          </div>
         </div>
-        <div className="pad" style={{ paddingTop: 0 }}>
-          <Button disabled={saving || !form.employeeId || !form.division} onClick={() => void enrol()}>
-            {saving ? "Enrolling…" : "Enrol operator"}
-          </Button>
+      ) : (
+        <div className="card">
+          <p className="pad" role="note" style={{ color: "var(--mut)", fontSize: "0.875rem" }}>
+            You can view the operator roster. Enrolling or deactivating operators is restricted to division administrators.
+          </p>
         </div>
-      </div>
+      )}
 
       {loading ? (
         <p className="pad" style={{ textAlign: "center", color: "var(--mut)" }}>Loading…</p>
@@ -205,32 +270,7 @@ export function OperatorsPanel() {
         grouped.map(([division, list]) => (
           <div className="card" key={division}>
             <div className="card-h"><h3>{division}</h3></div>
-            <DataTable<Operator>
-              columns={[
-                { key: "employeeId", label: "Officer", render: (o) => <>{empLabel(o.employeeId)}</> },
-                { key: "deskRole", label: "Desk", render: (o) => <>{ROLE_LABEL[o.deskRole] ?? o.deskRole}</> },
-                { key: "section", label: "Section", render: (o) => <>{o.section ?? "—"}</> },
-                { key: "canInitiate", label: "Initiate", render: (o) => <>{o.canInitiate ? "Yes" : "No"}</> },
-                { key: "active", label: "Status", render: (o) => <StatusPill status={o.active ? "active" : "inactive"} /> },
-                {
-                  key: "id", label: "Actions", sortable: false,
-                  render: (o) => (
-                    <ActionButton
-                      label={o.active ? "Deactivate" : "Reactivate"}
-                      className="btn ghost"
-                      danger={o.active}
-                      confirmTitle={`${o.active ? "Deactivate" : "Reactivate"} this desk?`}
-                      confirmDescription={o.active
-                        ? "The officer will no longer be markable a file. Files they currently hold should be handed over first."
-                        : "The officer will again be eligible to hold and operate files."}
-                      confirmLabel={o.active ? "Deactivate" : "Reactivate"}
-                      onConfirm={() => toggle(o)}
-                    />
-                  ),
-                },
-              ]}
-              rows={list}
-            />
+            <DataTable<Operator> columns={columns} rows={list} />
           </div>
         ))
       )}

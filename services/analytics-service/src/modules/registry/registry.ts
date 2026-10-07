@@ -33,12 +33,23 @@ import { factEvents } from "../facts/schema.js";
 
 export type AggFn = "count" | "sum" | "avg" | "min" | "max";
 
+/**
+ * GAP-ANALYTICS-QUERIES-04: the unit a metric's numeric value is expressed in,
+ * so the UI can format it unambiguously (money in `paise` must render as ₹ via
+ * the shared paise→rupee formatter, not as a bare integer). `count` is a plain
+ * tally. Averages/min/max over a money column are still paise (an average of
+ * paise is paise), so they inherit the column's unit.
+ */
+export type MetricUnit = "paise" | "count";
+
 export interface MetricDef {
   key: string;
   label: string;
   agg: AggFn;
   /** Physical column the aggregate runs over (ignored for count). */
   column: PgColumn;
+  /** Unit of the resulting value — drives UI formatting (money vs tally). */
+  unit: MetricUnit;
 }
 
 export interface DimensionDef {
@@ -58,11 +69,11 @@ export interface FilterFieldDef {
 
 /** Whitelisted metrics — the ONLY aggregations a user may request. */
 export const METRICS: Record<string, MetricDef> = {
-  event_count: { key: "event_count", label: "Event count", agg: "count", column: factEvents.id },
-  amount_sum: { key: "amount_sum", label: "Total amount", agg: "sum", column: factEvents.amount },
-  amount_avg: { key: "amount_avg", label: "Average amount", agg: "avg", column: factEvents.amount },
-  amount_max: { key: "amount_max", label: "Max amount", agg: "max", column: factEvents.amount },
-  amount_min: { key: "amount_min", label: "Min amount", agg: "min", column: factEvents.amount },
+  event_count: { key: "event_count", label: "Event count", agg: "count", column: factEvents.id, unit: "count" },
+  amount_sum: { key: "amount_sum", label: "Total amount", agg: "sum", column: factEvents.amount, unit: "paise" },
+  amount_avg: { key: "amount_avg", label: "Average amount", agg: "avg", column: factEvents.amount, unit: "paise" },
+  amount_max: { key: "amount_max", label: "Max amount", agg: "max", column: factEvents.amount, unit: "paise" },
+  amount_min: { key: "amount_min", label: "Min amount", agg: "min", column: factEvents.amount, unit: "paise" },
 };
 
 /** Whitelisted group-by dimensions. */
@@ -148,7 +159,7 @@ export function isWhitelistedIdentifier(key: string): boolean {
 /** Machine-readable catalog for the UI / API discovery endpoint. */
 export function catalog() {
   return {
-    metrics: Object.values(METRICS).map((m) => ({ key: m.key, label: m.label, agg: m.agg })),
+    metrics: Object.values(METRICS).map((m) => ({ key: m.key, label: m.label, agg: m.agg, unit: m.unit })),
     dimensions: Object.values(DIMENSIONS).map((d) => ({ key: d.key, label: d.label })),
     filters: Object.values(FILTERS).map((f) => ({ key: f.key, label: f.label, type: f.type })),
     operators: [...OPERATORS],

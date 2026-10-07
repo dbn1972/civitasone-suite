@@ -7,7 +7,7 @@ export default function ErrorBoundary({ error, reset }: { error: Error & { diges
     <RouteError
       error={error}
       reset={reset}
-      backHref="/estab/list"
+      backHref="/estab"
       backLabel="Back to Establishment"
       area="Establishment page"
     />

@@ -48,6 +48,23 @@ export type GuidedFlowSummary = {
   status: string;
 };
 
+// GAP-KNOWLEDGE-LIST-01: document detail type for the article endpoint.
+export type DocumentDetail = {
+  id: string;
+  tenantId: string;
+  title: string;
+  category: string | null;
+  status: string;
+  tags: string[];
+  accessLevel: string;
+  fileType: string | null;
+  fileSize: number | null;
+  author: string | null;
+  createdAt: string;
+  updatedAt: string;
+  version: number;
+};
+
 export type DeflectionMetrics = {
   total: number;
   answered: number;

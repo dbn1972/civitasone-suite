@@ -62,7 +62,15 @@ export function CatalogueB1Form({ definitionId, initial, onSaveState, onPatternC
     timer.current = setTimeout(() => { void persist(next); }, 2000);
   }, [persist]);
 
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  // GAP-DESIGNER-DETAIL-B1-03: flush pending save on unmount instead of dropping it.
+  // The old code cleared the timer, silently discarding anything typed in the last 2s.
+  useEffect(() => () => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+      void persist(latest.current);
+    }
+  }, [persist]);
 
   const setField = <K extends keyof CatalogueB1Values>(key: K, value: CatalogueB1Values[K]) => {
     setValues((prev) => {

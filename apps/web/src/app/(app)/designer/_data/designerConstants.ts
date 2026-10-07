@@ -68,3 +68,64 @@ export function patternChangeImpact(from: string, to: string): { hidden: string[
   }
   return { hidden, shown };
 }
+
+/**
+ * GAP-DESIGNER-DETAIL-B1-01: derive a consistent block-rail status for every
+ * block from the ServiceDefinition fields, so b1..b8 all show the same rail for
+ * the same definition instead of each page's inline, inconsistent ternaries.
+ *
+ * NOTE (per item risk): this is a *progress hint* for the maker, NOT a publish
+ * gate. 'complete' here means "has the data this block needs to look done", not
+ * "validated for publish" — backend validation remains the publish authority.
+ *
+ * `def` is intentionally a loose shape so this can be called from any wizard
+ * page with whatever subset of the definition it holds.
+ */
+export type DesignerBlockStatus = "empty" | "in-progress" | "complete";
+
+interface BlockStatusInput {
+  name?: string | null;
+  serviceKey?: string | null;
+  ownerDepartment?: string | null;
+  slaDays?: number | null;
+  channels?: string[] | null;
+  formId?: string | null;
+  forms?: unknown[] | null;
+  eligibilityRuleSetId?: string | null;
+  workflowDefinitionId?: string | null;
+  feeModel?: string | null;
+  hoaCode?: string | null;
+  requiredDocuments?: unknown[] | null;
+  issuanceType?: string | null;
+  outputs?: unknown[] | null;
+}
+
+export function blockStatuses(def: BlockStatusInput): Record<string, DesignerBlockStatus> {
+  const has = (v: unknown): boolean => {
+    if (v == null) return false;
+    if (typeof v === "string") return v.trim().length > 0;
+    if (Array.isArray(v)) return v.length > 0;
+    return true;
+  };
+
+  // B1 identity: name, serviceKey, ownerDepartment, slaDays, channels
+  const b1Fields = [def.name, def.serviceKey, def.ownerDepartment, def.slaDays, def.channels];
+  const b1Present = b1Fields.filter(has).length;
+  const b1: DesignerBlockStatus =
+    b1Present === 0 ? "empty" : b1Present === b1Fields.length ? "complete" : "in-progress";
+
+  const simple = (ok: boolean): DesignerBlockStatus => (ok ? "complete" : "empty");
+
+  return {
+    b1,
+    b2: simple(has(def.formId) || has(def.forms)),
+    b3: simple(has(def.eligibilityRuleSetId)),
+    b4: simple(has(def.workflowDefinitionId)),
+    b5: has(def.feeModel) && has(def.hoaCode)
+      ? "complete"
+      : has(def.feeModel) ? "in-progress" : "empty",
+    b6: simple(has(def.requiredDocuments)),
+    b7: simple(has(def.issuanceType) || has(def.outputs)),
+    b8: simple(has(def.outputs)),
+  };
+}

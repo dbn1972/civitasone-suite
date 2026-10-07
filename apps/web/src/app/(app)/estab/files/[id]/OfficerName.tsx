@@ -12,8 +12,7 @@ import { useEffect, useState } from "react";
  * when a name/desk cannot be resolved (e.g. greenfield tenants, missing maps).
  */
 
-type Operator = { employeeId: string; division: string; deskRole: string };
-type Employee = { id: string; name?: string; employeeId?: string; designation?: string };
+type Operator = { employeeId: string; division: string; deskRole: string; employeeName?: string };
 
 const ROLE_LABEL: Record<string, string> = {
   dealing_hand: "Dealing Hand",
@@ -34,51 +33,62 @@ export type OfficerMaps = {
 let cache: OfficerMaps | null = null;
 let inflight: Promise<OfficerMaps> | null = null;
 
-async function loadMaps(): Promise<OfficerMaps> {
+/**
+ * Test-only: reset the module-level officer-maps cache so a test can control
+ * exactly which HRMS/operator payload resolveLabel sees. Not used in app code.
+ */
+export function __resetOfficerMapsCacheForTest(): void {
+  cache = null;
+  inflight = null;
+}
+
+export async function loadMaps(): Promise<OfficerMaps> {
   if (cache) return cache;
   if (inflight) return inflight;
 
   inflight = (async () => {
     const operators = new Map<string, Operator>();
     const names = new Map<string, string>();
+    let anySuccess = false;
 
-    // Operator roster — the valid markable desks.
+    // GAP-ESTAB-FILES-DETAIL-04 (DPDP data minimisation): resolve officer names
+    // from the OPERATOR ROSTER, which already carries a server-side-resolved
+    // `employeeName` for each enrolled operator (estab-service resolves it via
+    // the internal hrms employee-summaries endpoint and returns only
+    // name/department — never full HR PII). We no longer pull the whole
+    // `/hrms/employees?limit=200` directory into every viewer's browser.
     try {
       const res = await fetch("/api/proxy/v1/estab/operators?activeOnly=false&limit=500");
       if (res.ok) {
         const body = (await res.json()) as { data?: Operator[] } | Operator[];
         const list = Array.isArray(body) ? body : (body.data ?? []);
         for (const o of list) {
-          if (o?.employeeId) operators.set(o.employeeId, o);
+          if (o?.employeeId) {
+            operators.set(o.employeeId, o);
+            if (o.employeeName) names.set(o.employeeId, o.employeeName);
+          }
         }
+        anySuccess = true;
       }
     } catch {
       /* degrade to short id */
     }
 
-    // HRMS directory — name resolution (optional).
-    try {
-      const res = await fetch("/api/proxy/v1/hrms/employees?limit=200");
-      if (res.ok) {
-        const body = (await res.json()) as { data?: Employee[] } | Employee[];
-        const list = Array.isArray(body) ? body : (body.data ?? []);
-        for (const e of list) {
-          if (e?.id && e.name) names.set(e.id, e.name);
-        }
-      }
-    } catch {
-      /* degrade to short id */
+    const maps: OfficerMaps = { operators, names };
+    // GAP-ESTAB-FILES-DETAIL-04: only cache on SUCCESS, so a first-load failure
+    // (empty maps) doesn't become permanent until a page reload — the next
+    // mount retries.
+    if (anySuccess) {
+      cache = maps;
     }
-
-    cache = { operators, names };
     inflight = null;
-    return cache;
+    return maps;
   })();
 
   return inflight;
 }
 
-function resolveLabel(id: string, maps: OfficerMaps | null): string {
+export function resolveLabel(id: string, maps: OfficerMaps | null): string {
   const shortId = `Officer ${id.slice(0, 8)}`;
   if (!maps) return shortId;
   const name = maps.names.get(id);

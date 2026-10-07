@@ -9,6 +9,23 @@ function mapBookingStatus(status: string): "pending" | "confirmed" | "checked_in
   return "pending";
 }
 
+/**
+ * GAP-ESTAB-GUESTHOUSE-NEW-01: room directory for the booking-form picker.
+ * Returns only { id, roomNo, type, capacity, status } — enough to pick a room
+ * by name and show availability, no internal columns.
+ */
+export async function listRooms(tenantId: string, limit: number) {
+  const rows = await repo.listRoomsByTenant(tenantId, limit);
+  return rows.map((r) => ({
+    id: r.id,
+    roomNo: r.roomNo,
+    type: r.type,
+    capacity: r.capacity,
+    status: r.status,
+    guesthouseId: r.guesthouseId,
+  }));
+}
+
 export async function listGuesthouseBookingSummaries(tenantId: string, limit: number) {
   const rows = await cache.getOrLoad(
     cache.makeKey(tenantId, "guesthouse_bookings", `list:${limit}`),
@@ -25,8 +42,9 @@ export async function listGuesthouseBookingSummaries(tenantId: string, limit: nu
   }));
 }
 
-function mapBookAvailability(copiesAvailable: number): "available" | "unavailable" {
-  return copiesAvailable > 0 ? "available" : "unavailable";
+function mapBookAvailability(row: { copiesAvailable: number; status: string }): "available" | "unavailable" | "withdrawn" {
+  if (row.status === "withdrawn") return "withdrawn";
+  return row.copiesAvailable > 0 ? "available" : "unavailable";
 }
 
 function mapBookSummary(row: Awaited<ReturnType<typeof repo.listLibraryBooksByTenant>>[number]) {
@@ -39,7 +57,7 @@ function mapBookSummary(row: Awaited<ReturnType<typeof repo.listLibraryBooksByTe
     category: row.category ?? undefined,
     copiesTotal: row.copiesTotal,
     copiesAvailable: row.copiesAvailable,
-    status: mapBookAvailability(row.copiesAvailable),
+    status: mapBookAvailability(row),
   };
 }
 
@@ -76,7 +94,7 @@ function mapIssueStatus(row: { status: string; dueAt: unknown }, now: Date): "is
 }
 
 export async function listLibraryIssueSummaries(
-  tenantId: string, limit: number, status?: "issued" | "returned" | "overdue",
+  tenantId: string, limit: number, status?: "issued" | "returned" | "overdue", bookId?: string,
 ) {
   const [issues, books] = await Promise.all([
     repo.listIssuesByTenant(tenantId, limit),
@@ -95,5 +113,6 @@ export async function listLibraryIssueSummaries(
     status: mapIssueStatus(row, now),
   }));
   if (status) list = list.filter((i) => i.status === status);
+  if (bookId) list = list.filter((i) => i.bookId === bookId);
   return list;
 }

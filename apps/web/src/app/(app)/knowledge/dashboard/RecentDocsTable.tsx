@@ -18,7 +18,7 @@ export function RecentDocsTable({ rows }: { rows: RecentDocRow[] }) {
       columns={[
         { key: "title", label: "Document" },
         { key: "category", label: "Type" },
-        { key: "author", label: "Dept" },
+        { key: "author", label: "Author" },
         { key: "createdAt", label: "Date" },
         {
           key: "statusLabel",

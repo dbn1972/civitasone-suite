@@ -81,6 +81,16 @@ export default function DesignerB8Page() {
   const hidden = hiddenBlocksForPattern(wizard.meta.pattern);
   const { prev, next } = adjacentBlocks(wizard.meta.pattern, "b8");
 
+  // GAP-DESIGNER-DETAIL-B8-05: webhook edits save through usePhase3Config, which
+  // has its own save state. Merge it with the notifications save state so the
+  // footer label reflects BOTH (previously webhook saves never drove the label).
+  const combinedSaveState: "saving" | "saved" | "offline" =
+    saveState === "saving" || phase3.saveState === "saving"
+      ? "saving"
+      : saveState === "offline" || phase3.saveState === "offline"
+        ? "offline"
+        : "saved";
+
   const blocks: DesignerBlock[] = useMemo(
     () =>
       DEFAULT_BLOCKS.map((b) => ({
@@ -122,7 +132,7 @@ export default function DesignerB8Page() {
       patternLabel={patternMeta?.title ?? wizard.meta.pattern}
       version={meta.version}
       status={meta.status}
-      saveState={saveState}
+      saveState={combinedSaveState}
       blocks={wizard.blocks.length ? wizard.blocks : blocks}
       activeBlockId="b8"
       onBlockSelect={(blockId) => router.push(`/designer/${params.id}/${blockId}`)}

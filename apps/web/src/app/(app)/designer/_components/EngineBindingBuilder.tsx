@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, EmptyState } from "@/app/_components/ds";
 import {
   bpsToPercentInput,
+  humanizeEngineKey,
   percentInputToBps,
   type EngineBindingUi,
   type EngineBlockUi,
@@ -265,7 +266,7 @@ export function EngineBindingBuilder({
           <EmptyState
             icon="🔗"
             title="No engines bound"
-            message="Choose an available engine above. For Property Tax, bind revenue.assessment — then edit exemptions and HOA."
+            message="Choose an available engine above to bind it. For Property Tax, bind the assessment engine — then edit exemptions and HOA."
           />
         ) : (
           <Card>
@@ -280,19 +281,28 @@ export function EngineBindingBuilder({
               </div>
 
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
-                {bindings.map((b) => (
-                  <Button
-                    key={b.id}
-                    variant="ghost"
-                    onClick={() => setSelectedId(b.id)}
-                    style={{
-                      borderColor: b.id === selectedId ? "var(--info)" : undefined,
-                      fontWeight: b.id === selectedId ? 700 : 400,
-                    }}
-                  >
-                    {b.block} · {b.engineKey}
-                  </Button>
-                ))}
+                {bindings.map((b) => {
+                  // GAP-DESIGNER-DETAIL-ENGINES-03: show the registry display name
+                  // (fallback to a humanized key) instead of the raw dotted key.
+                  const desc = registry.find((e) => e.engineKey === b.engineKey);
+                  const display = desc?.label ?? humanizeEngineKey(b.engineKey);
+                  return (
+                    <Button
+                      key={b.id}
+                      variant="ghost"
+                      onClick={() => setSelectedId(b.id)}
+                      style={{
+                        borderColor: b.id === selectedId ? "var(--info)" : undefined,
+                        fontWeight: b.id === selectedId ? 700 : 400,
+                      }}
+                    >
+                      <span>{b.block} · {display}</span>
+                      <span style={{ display: "block", fontFamily: "monospace", fontSize: 11, color: "var(--mut)" }}>
+                        {b.engineKey}
+                      </span>
+                    </Button>
+                  );
+                })}
               </div>
 
               {!selected ? (

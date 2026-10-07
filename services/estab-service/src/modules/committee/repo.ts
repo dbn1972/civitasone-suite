@@ -102,3 +102,22 @@ export async function listComplianceItems(tenantId: string, limit: number): Prom
     .where(eq(estabCompliance.tenantId, tenantId))
     .limit(limit));
 }
+
+/**
+ * GAP-ESTAB-COMPLIANCE-03: mark a compliance item complied. Returns the row id
+ * when a tenant-scoped row was updated, else null (not found / wrong tenant).
+ */
+export async function markComplianceComplied(
+  tx: Writer,
+  id: string,
+  tenantId: string,
+  compliedDate: string,
+  actorId: string,
+): Promise<string | null> {
+  const rows = await (tx as typeof db)
+    .update(estabCompliance)
+    .set({ status: "complied", lastCompliedDate: compliedDate, updatedBy: actorId, updatedAt: new Date() })
+    .where(and(eq(estabCompliance.id, id), eq(estabCompliance.tenantId, tenantId)))
+    .returning({ id: estabCompliance.id });
+  return rows[0]?.id ?? null;
+}

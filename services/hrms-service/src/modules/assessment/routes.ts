@@ -4,10 +4,13 @@ import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
+import { queue } from "../../shared/infra.js";
 import { enqueue } from "../../shared/outbox.js";
-import { EVENTS } from "../../topics.js";
+import { EVENTS, COMMANDS } from "../../topics.js";
+import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import {
   gradeAttempt, decidePass, canAttempt, issueCertificate, evaluateCertificateStatus,
+  visibleAssessmentsForRoles, projectCertificateVerification, toLearnerSafeQuestion,
   type GradableQuestion, type Qtype,
 } from "./domain.js";
 import {
@@ -66,7 +69,12 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/assessments", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
-    return reply.send(await repo.listAssessments(ctx.tenantId));
+    // GAP-LEARNING-ASSESSMENTS-02: a non-HR learner may only see PUBLISHED
+    // assessments — draft / pending_approval / retired must never surface on
+    // the learner "available assessments" list. HR roles see every status.
+    const isHr = HR_ROLES.some((r) => ctx.roles.includes(r));
+    const rows = await repo.listAssessments(ctx.tenantId);
+    return reply.send(visibleAssessmentsForRoles(rows, isHr));
   });
 
   app.post("/v1/hrms/assessments", async (req, reply) => {
@@ -177,6 +185,22 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ── Attempts ────────────────────────────────────────────────────
+  // GAP-LEARNING-ASSESSMENTS-01: learner-safe question delivery for taking an
+  // assessment. Returns the question stems + options with the `correct` answer
+  // key stripped (toLearnerSafeQuestion), so a candidate cannot read the
+  // answers from the delivery payload. Only PUBLISHED assessments can be
+  // attempted, so only their questions are deliverable here.
+  app.get("/v1/hrms/assessments/:id/questions", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ALL_ROLES);
+    const { id } = idParam.parse(req.params);
+    const a = await repo.getAssessment(ctx.tenantId, id);
+    if (!a) throw new HttpError(404, "NOT_FOUND", "assessment not found");
+    if (a.status !== "published") throw new HttpError(409, "NOT_PUBLISHED", "assessment is not published");
+    const qrows = await repo.listQuestions(ctx.tenantId, a.bankId);
+    return reply.send(qrows.map(toLearnerSafeQuestion));
+  });
+
   app.post("/v1/hrms/assessments/:id/attempts", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
@@ -278,17 +302,51 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const { token } = z.object({ token: z.string().min(8).max(64) }).parse(req.params);
+    // getCertificateByToken runs inside scopedRead, so RLS scopes the lookup to
+    // the caller's own tenant (app.tenant_id GUC) — a token minted in another
+    // tenant resolves to zero rows here and 404s, rather than leaking across
+    // tenants (GAP-LEARNING-ASSESSMENTS-VERIFY-01).
     const cert = await repo.getCertificateByToken(token);
     if (!cert) throw new HttpError(404, "NOT_FOUND", "certificate not found");
     const status = evaluateCertificateStatus(
       { status: cert.status, validUntil: cert.validUntil },
       new Date(),
     );
-    return reply.send({
-      certificateNo: cert.certificateNo, employeeId: cert.employeeId,
-      assessmentId: cert.assessmentId, issuedAt: cert.issuedAt, validUntil: cert.validUntil,
-      status,
+
+    // DPDP data-minimisation: the (opaque) employeeId that links a certificate
+    // to a specific person is disclosed ONLY to HR roles or to the
+    // certificate's own owner. Any other authenticated caller verifying
+    // someone else's token receives only the non-identifying attestation
+    // fields (certificateNo, assessmentId, issuedAt, validUntil, status).
+    const isHr = HR_ROLES.some((r) => ctx.roles.includes(r));
+    let isOwner = false;
+    if (!isHr) {
+      const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+      isOwner = !!actorEmp && actorEmp.id === cert.employeeId;
+    }
+    const canSeeEmployee = isHr || isOwner;
+
+    // DPDP audit-on-read: record every verification lookup (awaited so a
+    // publish failure is not silently lost; same async CQRS shape as medicalClaimsListRead — routes must not write
+    // to Postgres directly). The outbox insert happens in the consumer below.
+    await queue.publish(COMMANDS.assessmentCertificateVerified, {
+      messageId: randomUUID(),
+      type: COMMANDS.assessmentCertificateVerified,
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      correlationId: ctx.correlationId,
+      schemaVersion: "1.0",
+      payload: {
+        service: "hrms",
+        action: "verify",
+        resourceType: "assessment_certificate",
+        resourceId: cert.certificateNo,
+        outcome: "success",
+        disclosedEmployee: canSeeEmployee,
+      },
     });
+
+    return reply.send(projectCertificateVerification(cert, status, canSeeEmployee));
   });
 
   app.setErrorHandler(errorHandler);

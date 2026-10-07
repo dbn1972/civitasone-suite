@@ -2,26 +2,15 @@
 
 import { useState } from "react";
 import { DataTable, EmptyState, Segmented, StatusPill } from "../../../_components/ds";
-
-type DocRow = {
-  id: string;
-  title: string;
-  category: string;
-  author: string;
-  version: string;
-  statusLabel: string;
-  statusPill: string;
-  rawCategory: string;
-};
+import type { DocRow } from "./page";
 
 const SEG_OPTIONS = ["All", "Circulars", "Policies", "Notifications"];
 
 export function RepositoryClient({ rows }: { rows: DocRow[] }) {
   const [seg, setSeg] = useState("All");
 
-  const filtered = seg === "All"
-    ? rows
-    : rows.filter((r) => r.rawCategory.toLowerCase().includes(seg.toLowerCase()));
+  // GAP-KNOWLEDGE-REPOSITORY-07: match on canonical segment, not substring
+  const filtered = seg === "All" ? rows : rows.filter((r) => r.segment === seg);
 
   return (
     <>
@@ -37,10 +26,9 @@ export function RepositoryClient({ rows }: { rows: DocRow[] }) {
       ) : (
         <DataTable<DocRow>
           columns={[
-            { key: "id", label: "Doc ID" },
             { key: "title", label: "Title" },
             { key: "category", label: "Type" },
-            { key: "author", label: "Dept" },
+            { key: "author", label: "Author" },
             { key: "version", label: "Version" },
             {
               key: "statusLabel",
@@ -49,6 +37,8 @@ export function RepositoryClient({ rows }: { rows: DocRow[] }) {
             },
           ]}
           rows={filtered}
+          rowLinkKey="fullId"
+          rowLinkPrefix="/knowledge/policies/"
           sortable
           filterable
           pageSize={15}

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { formatMoney } from "@/lib/formatters";
 import type { ServiceDefinitionDto } from "./designerApi";
 import {
   buildVersionDiffRows,
@@ -34,7 +35,9 @@ const current: ServiceDefinitionDto = {
 describe("versionDiffModel", () => {
   it("extracts feeFromMinor from runtimeMeta", () => {
     expect(extractFeeFromMinor(current)).toBe(75000);
-    expect(formatPaiseInr(75000)).toBe("₹750");
+    // GAP-DESIGNER-DETAIL-ENGINES-04: unified with formatMoney — always 2dp.
+    expect(formatPaiseInr(75000)).toBe("₹750.00");
+    expect(formatPaiseInr(75000)).toBe(formatMoney(75000));
   });
 
   it("emits human-readable fee and form field summaries", () => {
@@ -55,7 +58,7 @@ describe("versionDiffModel", () => {
     });
 
     const fee = rows.find((r) => r.label === "Fee amount");
-    expect(fee?.summary).toMatch(/Fee changed ₹500 → ₹750/);
+    expect(fee?.summary).toMatch(/Fee changed ₹500\.00 → ₹750\.00/);
 
     const fields = rows.find((r) => r.label === "Form fields");
     expect(fields?.summary).toMatch(/Added 2 form field/);
@@ -72,7 +75,7 @@ describe("versionDiffModel", () => {
 
   it("builds publish fee summary", () => {
     expect(feeSummaryForPublish(current)).toMatch(/flat fee/);
-    expect(feeSummaryForPublish(current)).toMatch(/₹750/);
+    expect(feeSummaryForPublish(current)).toMatch(/₹750\.00/);
     expect(feeSummaryForPublish(current)).toMatch(/HOA 4201/);
   });
 });

@@ -59,6 +59,7 @@ export const EVENTS = {
   policyCreated: "knowledge.policy.created",
   policySubmitted: "knowledge.policy.submitted",
   policyApproved: "knowledge.policy.approved",
+  policyRejected: "knowledge.policy.rejected",
   policyPublished: "knowledge.policy.published",
   policySuperseded: "knowledge.policy.superseded",
   policyWithdrawn: "knowledge.policy.withdrawn",

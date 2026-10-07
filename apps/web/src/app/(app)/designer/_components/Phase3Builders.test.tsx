@@ -44,10 +44,17 @@ describe("FN-30 WebhookSubscriptionsBuilder", () => {
   it("toggles an event without dropping the others", () => {
     const onChange = vi.fn();
     render(<WebhookSubscriptionsBuilder value={[{ ...row, events: ["application.issued"] }]} onChange={onChange} />);
-    fireEvent.click(screen.getByLabelText("rejected"));
+    fireEvent.click(screen.getByLabelText("Rejected"));
     expect(onChange).toHaveBeenCalledWith([
       expect.objectContaining({ events: ["application.issued", "application.rejected"] }),
     ]);
+  });
+
+  // GAP-DESIGNER-DETAIL-B8-02: events shown with human labels, not raw tokens.
+  it("renders human-readable event labels, not raw tokens", () => {
+    render(<WebhookSubscriptionsBuilder value={[{ ...row, events: ["application.issued"] }]} onChange={() => {}} />);
+    expect(screen.getByLabelText("Certificate issued")).toBeTruthy();
+    expect(screen.queryByLabelText("issued")).toBeNull();
   });
 });
 

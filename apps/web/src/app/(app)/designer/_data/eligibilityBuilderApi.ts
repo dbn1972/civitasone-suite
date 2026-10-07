@@ -27,7 +27,7 @@ interface ApiRule {
   attribute: string;
   op: EligibilityOp;
   value?: unknown;
-  effect: "disqualify" | "refer";
+  effect: "disqualify" | "refer" | "warn";
   label?: string;
 }
 
@@ -215,7 +215,10 @@ export function buildSampleSubjectFields(
     const profile = PROFILE_ATTRIBUTES.find((a) => a.id === rule.attribute);
     const form = formFields.find((f) => f.apiName === rule.attribute);
     const valueType: SampleSubjectField["valueType"] =
-      profile?.valueType
+      // GAP-DESIGNER-DETAIL-B3-04: the eligibility rule builder gained a 'date'
+      // valueType, but the sample-applicant panel only renders text/number/boolean,
+      // so date is treated as text here (entered as an ISO string).
+      (profile?.valueType === "date" ? "text" : profile?.valueType)
       ?? (form?.type === "number" ? "number" : form?.type === "boolean" ? "boolean" : "text");
     fields.push({
       id: rule.attribute,

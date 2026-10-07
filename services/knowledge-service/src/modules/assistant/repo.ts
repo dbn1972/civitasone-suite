@@ -44,12 +44,14 @@ export async function listFaqs(
   category: string | undefined,
   limit: number,
   offset: number,
+  statusFilter?: string,
 ): Promise<FaqRow[]> {
   return readAs(tenantId, (tx) =>
     tx.select().from(faqs)
       .where(and(
         eq(faqs.tenantId, tenantId),
         ...(category ? [eq(faqs.category, category)] : []),
+        ...(statusFilter ? [eq(faqs.status, statusFilter)] : []),
       ))
       .orderBy(desc(faqs.updatedAt))
       .limit(limit)
@@ -100,10 +102,13 @@ export function flowView(r: FlowRow): Record<string, unknown> {
   };
 }
 
-export async function listFlows(tenantId: string): Promise<FlowRow[]> {
+export async function listFlows(tenantId: string, statusFilter?: string): Promise<FlowRow[]> {
   return readAs(tenantId, (tx) =>
     tx.select().from(guidedFlows)
-      .where(eq(guidedFlows.tenantId, tenantId))
+      .where(and(
+        eq(guidedFlows.tenantId, tenantId),
+        ...(statusFilter ? [eq(guidedFlows.status, statusFilter)] : []),
+      ))
       .orderBy(desc(guidedFlows.updatedAt)),
   );
 }

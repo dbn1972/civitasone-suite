@@ -2,7 +2,11 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { getKnowledgeFaqs, getKnowledgeGuidedFlows } from "../_data/loaders";
 import { toHumanError } from "@/lib/messages";
+import { FaqBrowser } from "./FaqBrowser";
 
+// GAP-KNOWLEDGE-FAQS-01: stat cards show "—" on error, not misleading 0.
+// GAP-KNOWLEDGE-FAQS-05: null category → "General" for display and counting.
+// GAP-KNOWLEDGE-FAQS-03: client-side FaqBrowser component with search + category filter.
 export default async function Page() {
   const [{ data: faqs, source: faqsSource }, { data: flows, source: flowsSource }] = await Promise.all([
     getKnowledgeFaqs(),
@@ -11,7 +15,9 @@ export default async function Page() {
   const source = faqsSource === "error" || flowsSource === "error" ? "error" : "api";
   const errored = source === "error";
 
-  const categories = new Set(faqs.map((f) => f.category ?? "general"));
+  // GAP-KNOWLEDGE-FAQS-05: normalise null category to "General"
+  const normalisedFaqs = faqs.map((f) => ({ ...f, category: f.category ?? "General" }));
+  const categories = new Set(normalisedFaqs.map((f) => f.category));
 
   return (
     <>
@@ -22,31 +28,22 @@ export default async function Page() {
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
-        <StatCard icon="❓" iconBg="#eef2ff" label="FAQs" value={faqs.length.toLocaleString("en-IN")} />
-        <StatCard icon="🗂️" iconBg="#ecfdf5" label="Categories" value={categories.size.toLocaleString("en-IN")} />
-        <StatCard icon="🧭" iconBg="#fffbeb" label="Guided flows" value={flows.length.toLocaleString("en-IN")} />
+        {/* GAP-KNOWLEDGE-FAQS-01: pass "—" when errored */}
+        <StatCard icon="❓" iconBg="#eef2ff" label="FAQs" value={errored ? "—" : faqs.length.toLocaleString("en-IN")} />
+        <StatCard icon="🗂️" iconBg="#ecfdf5" label="Categories" value={errored ? "—" : categories.size.toLocaleString("en-IN")} />
+        <StatCard icon="🧭" iconBg="#fffbeb" label="Guided flows" value={errored ? "—" : flows.length.toLocaleString("en-IN")} />
       </StatGrid>
 
       {errored ? (
-        <RefreshErrorState error={toHumanError("load", { area: "FAQs and guided flows" })} />
+        <RefreshErrorState error={toHumanError("load", { area: "FAQs and guided flows" })} backHref="/knowledge" />
       ) : (
         <>
           <div className="card">
             <div className="card-h"><h3>Frequently asked questions</h3></div>
-            {faqs.length === 0 ? (
+            {normalisedFaqs.length === 0 ? (
               <EmptyState icon="❓" title="No FAQs yet" message="Published FAQs will appear here for staff to browse." />
             ) : (
-              <div className="pad" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {faqs.map((f) => (
-                  <details key={f.id} style={{ border: "1px solid var(--line, #e2e8f0)", borderRadius: 10, padding: "12px 14px" }}>
-                    <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--ink, #0f172a)" }}>
-                      {f.question}
-                      {f.category && <span style={{ marginLeft: 8, fontSize: 12, color: "var(--mut)" }}>· {f.category}</span>}
-                    </summary>
-                    <p style={{ marginTop: 8, marginBottom: 0, lineHeight: 1.6, color: "var(--ink2, #475569)", whiteSpace: "pre-wrap" }}>{f.answer}</p>
-                  </details>
-                ))}
-              </div>
+              <FaqBrowser faqs={normalisedFaqs} />
             )}
           </div>
 
