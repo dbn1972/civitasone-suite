@@ -76,13 +76,20 @@ describe("SyncProvider (disabled while identity-worker is down in production)", 
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(registerServiceWorker).not.toHaveBeenCalled();
     expect(requestBackgroundSync).not.toHaveBeenCalled();
     expect(syncMailbox).not.toHaveBeenCalled();
     expect(resolveNamespace).not.toHaveBeenCalled();
     expect(flushRequestQueue).not.toHaveBeenCalled();
     expect(getOrCreateDeviceId).not.toHaveBeenCalled();
     expect(computeBrowserFingerprint).not.toHaveBeenCalled();
+  });
+
+  it("still registers the service worker (offline app shell does not depend on sync)", async () => {
+    render(<SyncProvider />);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(registerServiceWorker).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("renders nothing", () => {

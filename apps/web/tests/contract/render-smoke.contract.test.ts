@@ -317,7 +317,9 @@ describe('render-smoke (NO_LOADER screens, COMP-006 tranche 2)', () => {
         `(regression -- fix the page, or remove the entry and file a gap):\n${regressions.join('\n')}\n`,
       );
     }
-  }, 60_000);
+    // Renders every ledger entry (538 at last count, was 431). The first render pays the cold
+    // import cost of the whole component tree, so give a loaded runner ample headroom.
+  }, 180_000);
 
   it('render-smoke sweep across all current NO_LOADER screens (informational — generates render-smoke-report.json)', async () => {
     const results: Array<{ module: string; screen: string } & RenderVerdict> = [];
