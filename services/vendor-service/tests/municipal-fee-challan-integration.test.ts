@@ -30,7 +30,7 @@ import { eq, and } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
 import { runWithTenant, withTenantScope } from "@civitasone/db";
-import { relayOnce } from "@civitasone/outbox";
+import { acquireOutboxRelayLock, relayAll } from "./outbox-relay-support.js";
 import { MUNICIPAL_FEE_RECEIPT_HEAD_CODE } from "@civitasone/events";
 
 import { db as vendorDb, sqlClient as vendorSqlClient } from "../src/shared/db.js";
@@ -121,6 +121,8 @@ async function importFinance() {
   process.env.DATABASE_URL = originalUrl;
 }
 
+let releaseRelayLock: (() => Promise<void>) | undefined;
+
 afterAll(async () => {
   if (registeredLicenceIds.length) {
     await runWithTenant(TENANT, () =>
@@ -145,12 +147,16 @@ afterAll(async () => {
       tx.delete(vendorOutboxMessages).where(eq(vendorOutboxMessages.tenantId, TENANT)),
     ),
   );
+  if (releaseRelayLock) await releaseRelayLock();
   await vendorSqlClient.end();
   if (finance?.sqlClient) await finance.sqlClient.end();
 });
 
 describe("vendor-service cross-events wiring — fee challan, real DB, no mocks", () => {
   it("issueLicence raises a fee challan that lands as a real finance GL journal, back-linked to the licence", async () => {
+    // Serialise against the sibling status-notification test: relayOnce claims
+    // every unpublished vendor outbox row, so the two must not interleave.
+    releaseRelayLock = await acquireOutboxRelayLock();
     await importFinance();
 
     const q = tenantWrappedQueue();
@@ -212,13 +218,13 @@ describe("vendor-service cross-events wiring — fee challan, real DB, no mocks"
     // this queue and are simply relayed with nothing consuming them) onto the
     // shared queue, which finance-service's treasury consumer (already
     // subscribed above) picks up and processes against finance's own database.
-    const relayed1 = await relayOnce(vendorDb as never, q, 100, "vendor-service");
+    const relayed1 = await relayAll(vendorDb as never, q as never, "vendor-service");
     expect(relayed1, "vendor-service must have an unpublished finance.challan.create row to relay").toBeGreaterThan(0);
     await q.drain();
 
     // Hop 2: the treasury consumer enqueued finance.gl.post into finance's OWN
     // outbox (same tx) — relay that too, like the real outbox relay would.
-    await relayOnce(finance.db as never, q, 100, "finance-service");
+    await relayAll(finance.db as never, q as never, "finance-service");
     await q.drain();
 
     const [licenceRow] = await runWithTenant(TENANT, () =>

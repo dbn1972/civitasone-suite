@@ -5,7 +5,7 @@
  * create/update/delete of a sales pipeline returned 202 and changed nothing.
  * These tests go through the route and assert the projected rows.
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
@@ -13,7 +13,9 @@ import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerAllConsumers } from "../src/consumers.js";
-import { drainQueue } from "./consumer-harness.js";
+import { runWithTenant } from "@civitasone/db";
+import type { CommandEnvelope } from "@civitasone/queue";
+import { drainQueue, captureHandlers } from "./consumer-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000060";
@@ -171,6 +173,37 @@ describe("pipeline STAGE_IN_USE / PIPELINE_IN_USE race guard (consumer re-check)
       INSERT INTO crm.deals (id, tenant_id, pipeline_id, name, stage, value_minor, currency, status, stage_entered_at, created_by, updated_by, version)
       VALUES (${randomUUID()}, ${TENANT}, ${pipelineId}, 'Raced Deal', ${stage}, 100000, 'INR', 'active', now(), ${ACTOR}, ${ACTOR}, 1)`);
   }
+  /**
+   * Hold the command the route publishes instead of letting the memory queue deliver
+   * it. The memory queue delivers on `setTimeout(0)` after publish(), so with the real
+   * queue the consumer's re-check races the test's own INSERT of the "late" deal (a DB
+   * round trip): whichever wins decided whether the removal/delete was refused or
+   * applied, i.e. the test was nondeterministic. Holding the message and invoking the
+   * consumer handler explicitly AFTER the deal is committed makes the interleaving the
+   * test describes ("a deal lands between the route check and the consumer") exact.
+   */
+  async function withHeldPublishes(run: () => Promise<void>): Promise<CommandEnvelope[]> {
+    const held: CommandEnvelope[] = [];
+    const spy = vi.spyOn(queue, "publish").mockImplementation((async (topic: string, input: Record<string, unknown>) => {
+      const messageId = (input.messageId as string | undefined) ?? randomUUID();
+      held.push({ ...input, type: (input.type as string | undefined) ?? topic, messageId } as unknown as CommandEnvelope);
+      return messageId;
+    }) as never);
+    try {
+      await run();
+    } finally {
+      spy.mockRestore();
+    }
+    return held;
+  }
+
+  async function deliverHeld(held: CommandEnvelope[]): Promise<void> {
+    const { handlerFor } = captureHandlers();
+    for (const msg of held) {
+      await runWithTenant(msg.tenantId, () => handlerFor(msg.type)(msg));
+    }
+  }
+
   async function auditOutcomes(id: string): Promise<string[]> {
     const rows = await scoped((tx) => tx<Array<{ outcome: string }>>`
       SELECT payload->>'outcome' AS outcome FROM _outbox.messages
@@ -186,10 +219,14 @@ describe("pipeline STAGE_IN_USE / PIPELINE_IN_USE race guard (consumer re-check)
     const removedName = current[3]!.name;
 
     // Route pre-check passes (no deals yet) -> 202 and the command is queued ...
-    const res = await app.inject({ method: "PATCH", url: `/v1/crm/pipelines/${id}`, headers: auth(), payload: { version: 1, stages: kept } });
-    expect(res.statusCode).toBe(202);
+    const held = await withHeldPublishes(async () => {
+      const res = await app.inject({ method: "PATCH", url: `/v1/crm/pipelines/${id}`, headers: auth(), payload: { version: 1, stages: kept } });
+      expect(res.statusCode).toBe(202);
+    });
+    expect(held.length).toBeGreaterThan(0);
     // ... then a deal lands in the stage being removed BEFORE the consumer runs.
     await insertOpenDeal(id, removedName);
+    await deliverHeld(held);
     await drainQueue();
 
     const row = (await scoped((tx) => tx<Array<{ stages: unknown[]; version: number }>>`
@@ -201,9 +238,13 @@ describe("pipeline STAGE_IN_USE / PIPELINE_IN_USE race guard (consumer re-check)
 
   it("refuses a pipeline delete when a deal lands between the route check and the consumer (audited)", async () => {
     const id = await createPipeline("Race Delete Pipeline", 4);
-    const res = await app.inject({ method: "DELETE", url: `/v1/crm/pipelines/${id}`, headers: auth() });
-    expect(res.statusCode).toBe(202);
+    const held = await withHeldPublishes(async () => {
+      const res = await app.inject({ method: "DELETE", url: `/v1/crm/pipelines/${id}`, headers: auth() });
+      expect(res.statusCode).toBe(202);
+    });
+    expect(held.length).toBeGreaterThan(0);
     await insertOpenDeal(id, "Stage 1");
+    await deliverHeld(held);
     await drainQueue();
 
     const row = (await scoped((tx) => tx<Array<{ status: string }>>`

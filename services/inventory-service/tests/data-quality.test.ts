@@ -367,18 +367,38 @@ describe("DQ — payroll-service", () => {
   beforeAll(() => { sql = connect("civitas_payroll"); });
   afterAll(async () => { await sql.end(); });
 
-  it("DQ-PAY-01 no payroll slips with net_pay > gross (impossible deductions)", async () => {
-    const [{ cnt }] = await sql`
-      SELECT count(*)::int AS cnt FROM payroll.payroll_slips WHERE net_pay_minor > gross_minor
-    `;
-    expect(cnt, "slips where net > gross").toBe(0);
+  // DQ-PAY-01 / DQ-PAY-02 used to run DB-wide too (see the DQ-PAY-04/05 note
+  // below): in CI they audited whatever payroll-service's own suite had left in
+  // civitas_payroll (e.g. deliberately inconsistent F16 / bulk-test slips), so
+  // they failed or passed depending only on test-file ordering. They now
+  // seed their own rolled-back tenant with one good and one deliberately bad
+  // slip, and assert the authored query flags exactly the bad one.
+  it("DQ-PAY-01 query flags a slip with net_pay > gross (self-seeded fixture, not a real-data audit)", async () => {
+    await withPayrollFixtureTenant(async (tx, tenantId) => {
+      const runId = await seedRun(tx, tenantId, "2026-04", 10_000_000n);
+      await seedSlip(tx, tenantId, runId, "DQ-PAY01-OK", { gross: 5_000_000n, deductions: 500_000n, net: 4_500_000n });
+      await seedSlip(tx, tenantId, runId, "DQ-PAY01-BAD", { gross: 5_000_000n, deductions: 0n, net: 6_000_000n });
+
+      const bad = await tx`
+        SELECT employee_no FROM payroll.payroll_slips
+        WHERE tenant_id = ${tenantId} AND net_pay_minor > gross_minor
+      `;
+      expect(bad.map((r) => r.employee_no), "slips where net > gross").toEqual(["DQ-PAY01-BAD"]);
+    });
   });
 
-  it("DQ-PAY-02 no negative net_pay slips", async () => {
-    const [{ cnt }] = await sql`
-      SELECT count(*)::int AS cnt FROM payroll.payroll_slips WHERE net_pay_minor < 0
-    `;
-    expect(cnt, "slips with negative net pay").toBe(0);
+  it("DQ-PAY-02 query flags a negative net_pay slip (self-seeded fixture, not a real-data audit)", async () => {
+    await withPayrollFixtureTenant(async (tx, tenantId) => {
+      const runId = await seedRun(tx, tenantId, "2026-04", 10_000_000n);
+      await seedSlip(tx, tenantId, runId, "DQ-PAY02-OK", { gross: 5_000_000n, deductions: 500_000n, net: 4_500_000n });
+      await seedSlip(tx, tenantId, runId, "DQ-PAY02-BAD", { gross: 5_000_000n, deductions: 6_000_000n, net: -1_000_000n });
+
+      const bad = await tx`
+        SELECT employee_no FROM payroll.payroll_slips
+        WHERE tenant_id = ${tenantId} AND net_pay_minor < 0
+      `;
+      expect(bad.map((r) => r.employee_no), "slips with negative net pay").toEqual(["DQ-PAY02-BAD"]);
+    });
   });
 
   it("DQ-PAY-03 no duplicate slips (same run, same employee)", async () => {

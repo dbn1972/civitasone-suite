@@ -16,7 +16,7 @@
  * counters cannot bleed between cases, and every messageId is random — nothing here
  * poisons `_inbox.processed`.
  */
-import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { runWithTenant } from "@civitasone/db";
 import { signToken } from "@civitasone/auth";
@@ -763,6 +763,21 @@ describe("consent enforcement (DPDP Act 2023)", () => {
 // ── Rate limiting ──────────────────────────────────────────────────────────────
 
 describe("rate limiting", () => {
+  // The limiter is a fixed 60s window whose minute bucket is baked into the cache key
+  // (public-capture-rate-limit.ts windowKey). A case that sends several requests while
+  // the wall clock rolls over a minute boundary spreads them across two buckets, so the
+  // counter never reaches the limit and the expected 429 never comes -- an intermittent
+  // failure (~(case duration / 60s) of runs, worse on a loaded CI runner). Start every
+  // case early in a fresh window so all of its requests land in the same bucket.
+  beforeEach(async () => {
+    const WINDOW_MS = 60_000;
+    const SAFE_MS = 15_000;
+    const intoWindow = Date.now() % WINDOW_MS;
+    if (intoWindow > WINDOW_MS - SAFE_MS) {
+      await new Promise((resolve) => setTimeout(resolve, WINDOW_MS - intoWindow + 50));
+    }
+  }, 30_000);
+
   it("returns 429 once a form's per-IP budget is spent", async () => {
     // Earlier cases in this file have already charged the tenant counter for this
     // minute, so start from a clean window or the assertion measures the wrong budget.

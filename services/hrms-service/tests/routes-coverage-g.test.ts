@@ -88,6 +88,24 @@ async function seedEmployeeForMe(userRef: string = UUID): Promise<string> {
   return employeeId;
 }
 
+/**
+ * Seeds a hrms.trusted_devices row in the given trust_status, for the device
+ * block/unblock PATCH routes. Root cause of the old "expected 404 not to be
+ * 404": both routes now UPDATE ... WHERE id = $id AND tenant_id = $tenant
+ * (unblock additionally requires trust_status = 'blocked') and 404 with
+ * DEVICE_NOT_FOUND / DEVICE_NOT_BLOCKED when nothing matches, which is
+ * correct (see src/__tests__/device-block-unblock.test.ts). A bare
+ * randomUUID() therefore can never reach the success path.
+ */
+async function seedDevice(status: "trusted" | "blocked"): Promise<string> {
+  const id = randomUUID();
+  await withRawTenantGuc(sqlClient, TENANT, (tx) => tx`
+    INSERT INTO hrms.trusted_devices (id, tenant_id, user_id, device_id, trust_status)
+    VALUES (${id}, ${TENANT}, ${UUID}, ${`route-cov-${id}`}, ${status})
+  `);
+  return id;
+}
+
 async function seedMedicalClaim(): Promise<string> {
   const id = randomUUID();
   await runWithTenant(TENANT, () => db.transaction((tx) => tx.insert(hrmsMedicalClaims).values({
@@ -720,16 +738,18 @@ describe("HRMS routes — Device Trust", () => {
   });
 
   it("PATCH /v1/hrms/devices/:id/block", async () => {
+    const deviceId = await seedDevice("trusted");
     const app = await buildApp();
-    const r = await app.inject({ method: "PATCH", url: `/v1/hrms/devices/${FAKE}/block`, headers: { authorization: `Bearer ${token()}` },
+    const r = await app.inject({ method: "PATCH", url: `/v1/hrms/devices/${deviceId}/block`, headers: { authorization: `Bearer ${token()}` },
       payload: { reason: "Lost device" } });
     await app.close();
     expect(r.statusCode).not.toBe(404);
   });
 
   it("PATCH /v1/hrms/devices/:id/unblock", async () => {
+    const deviceId = await seedDevice("blocked");
     const app = await buildApp();
-    const r = await app.inject({ method: "PATCH", url: `/v1/hrms/devices/${FAKE}/unblock`, headers: { authorization: `Bearer ${token()}` },
+    const r = await app.inject({ method: "PATCH", url: `/v1/hrms/devices/${deviceId}/unblock`, headers: { authorization: `Bearer ${token()}` },
       payload: {} });
     await app.close();
     expect(r.statusCode).not.toBe(404);
