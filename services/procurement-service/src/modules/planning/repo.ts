@@ -1,4 +1,4 @@
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq, desc, inArray, sql, type SQL } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import {
   procurementPlans, procurementPlanLines,
@@ -30,10 +30,41 @@ export async function findPlanLineByIdTx(tx: Writer, lineId: string, tenantId: s
   return rows[0] ?? null;
 }
 
-export async function listPlansByTenant(tenantId: string, limit = 100, offset = 0): Promise<PlanRow[]> {
+export async function listPlansByTenant(
+  tenantId: string,
+  limit = 100,
+  offset = 0,
+  filter?: { department?: string | undefined; year?: number | undefined },
+): Promise<PlanRow[]> {
+  const conds: SQL[] = [eq(procurementPlans.tenantId, tenantId)];
+  // GAP-PROCUREMENT-PLANNING-01: optional server-side department/year filter so
+  // a department with several years of plans is not forced into one unpaginated
+  // list. Both are exact-match equality (FY start year, canonical department).
+  if (filter?.department) conds.push(eq(procurementPlans.department, filter.department));
+  if (typeof filter?.year === "number") conds.push(eq(procurementPlans.planYear, filter.year));
   return db.transaction((tx) => tx.select().from(procurementPlans)
-    .where(eq(procurementPlans.tenantId, tenantId))
+    .where(and(...conds))
     .orderBy(desc(procurementPlans.createdAt)).limit(limit).offset(offset));
+}
+
+/**
+ * GAP-PROCUREMENT-PLANNING-02/04: per-plan line count for the list page's
+ * "Items" column, as one grouped query over the plan ids (no N+1).
+ */
+export async function countLinesByPlanIds(tenantId: string, planIds: string[]): Promise<Map<string, number>> {
+  if (planIds.length === 0) return new Map();
+  const rows = await db.transaction((tx) => tx
+    .select({
+      planId: procurementPlanLines.planId,
+      count: sql<number>`COUNT(*)`,
+    })
+    .from(procurementPlanLines)
+    .where(and(
+      eq(procurementPlanLines.tenantId, tenantId),
+      inArray(procurementPlanLines.planId, planIds),
+    ))
+    .groupBy(procurementPlanLines.planId));
+  return new Map(rows.map((r) => [r.planId, Number(r.count)]));
 }
 
 export async function insertPlan(tx: Writer, row: PlanInsert): Promise<void> {

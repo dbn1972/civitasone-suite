@@ -1,40 +1,37 @@
-import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
+import { PageHeader } from "../../../_components/ds";
 import { getProcurementEMD, getProcurementPBG } from "../../../_data/loaders";
 import { EmdBgTable } from "./EmdBgTable";
 
 export default async function EmdBgPage() {
+  // GAP-PROCUREMENT-EMD-BG-01: fetch the two registers independently and keep
+  // their provenance SEPARATE. Previously both were merged into one list and a
+  // single `source` was set to "error" if EITHER failed, so one register's
+  // outage silently hid or stale-cached BOTH, and the headline stats were
+  // computed server-side from the merged (possibly half-missing) list.
   const [{ data: emdEntries, source: emdSource }, { data: pbgEntries, source: pbgSource }] = await Promise.all([
     getProcurementEMD(),
     getProcurementPBG(),
   ]);
-  const entries = [...emdEntries, ...pbgEntries];
-  const source = emdSource === "error" || pbgSource === "error" ? "error" : "api";
-
-  const active = entries.filter((e) => e.status === "Active").length;
-  const expired = entries.filter((e) => e.status === "Expired").length;
-  const forfeited = entries.filter((e) => e.status === "Forfeited").length;
-  const totalValuePaise = entries.filter((e) => e.status === "Active").reduce((sum, e) => sum + e.amount, 0);
-  const totalValueDisplay = totalValuePaise > 0 ? `₹${(totalValuePaise / 100).toLocaleString("en-IN")}` : "₹0";
 
   return (
     <>
-      {/* UX-012: the data-source badge now lives inside EmdBgTable, driven by
-          the same useSeededResource call that produces its rows — not a
-          second, independent read of `source` here that could disagree with
-          the table's own cache state (UX-002's pattern). */}
       <PageHeader
         title="EMD & Bank Guarantees"
-        subtitle="Earnest money deposits and bank guarantee register for procurement security."
+        // GAP-PROCUREMENT-EMD-BG-05: honest subtitle — this is a read-only
+        // register today (no release/extend/forfeit workflow exists yet).
+        subtitle="Read-only register of earnest money deposits (EMD) and bank guarantees (BG) held as procurement security."
       />
 
-      <StatGrid>
-        <StatCard icon="🏦" iconBg="#eef2ff" label="Active Guarantees" value={active} />
-        <StatCard icon="💵" iconBg="#ecfdf3" label="Total Active Value" value={totalValueDisplay} />
-        <StatCard icon="⚠️" iconBg="#fffaeb" label="Expired" value={expired} />
-        <StatCard icon="🚫" iconBg="#fce7ee" label="Forfeited" value={forfeited} />
-      </StatGrid>
-
-      <EmdBgTable entries={entries} source={source} />
+      {/* GAP-PROCUREMENT-EMD-BG-01/02/03/04/05: the stat cards, per-register
+          error banners and the table all live in the client component, derived
+          from the SAME useSeededResource reads, so figures and rows can never
+          disagree and a partial failure is reported honestly per register. */}
+      <EmdBgTable
+        emdEntries={emdEntries}
+        pbgEntries={pbgEntries}
+        emdSource={emdSource}
+        pbgSource={pbgSource}
+      />
     </>
   );
 }

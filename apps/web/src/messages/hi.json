@@ -6378,7 +6378,29 @@
     "bids": "बोलियां",
     "purchase": "खरीद आदेश",
     "vendors": "विक्रेता",
-    "contracts": "अनुबंध"
+    "contracts": "अनुबंध",
+    "hub": {
+      "subtitle": "अनुमोदन नियंत्रण के साथ मांगपत्र, विक्रेता, खरीद आदेश और निविदाएं।",
+      "allModules": "सभी मॉड्यूल देखें",
+      "tiles": {
+        "dashboard": { "title": "डैशबोर्ड", "description": "खरीद गतिविधि का सारांश" },
+        "planning": { "title": "वार्षिक योजनाएं", "description": "GFR वार्षिक खरीद योजना समेकन और अनुमोदन" },
+        "indents": { "title": "खरीद मांगपत्र", "description": "विभागों से सामग्री मांगपत्र" },
+        "vendors": { "title": "विक्रेता", "description": "सूचीबद्ध विक्रेता निर्देशिका" },
+        "rfq": { "title": "आरएफक्यू", "description": "कोटेशन अनुरोध प्रबंधन" },
+        "orders": { "title": "खरीद आदेश", "description": "परिचालन आदेश पुस्तिका" },
+        "grn": { "title": "माल प्राप्ति", "description": "GRN ट्रैकिंग और गुणवत्ता जांच" },
+        "contracts": { "title": "अनुबंध", "description": "दर और सेवा अनुबंध" },
+        "tenders": { "title": "निविदाएं", "description": "खुली और सीमित निविदाएं" },
+        "approvals": { "title": "अनुमोदन", "description": "लंबित अनुमोदन और हस्ताक्षर" },
+        "bidEvaluation": { "title": "बोली मूल्यांकन", "description": "तकनीकी और वित्तीय स्कोरिंग मैट्रिक्स" },
+        "reverseAuction": { "title": "रिवर्स नीलामी", "description": "लाइव और निर्धारित रिवर्स नीलामी" },
+        "gem": { "title": "GeM", "description": "सरकारी ई-मार्केटप्लेस एकीकरण" },
+        "emdBg": { "title": "EMD और BG", "description": "बयाना राशि जमा (EMD) और बैंक गारंटी (BG) रजिस्टर" },
+        "empanelment": { "title": "सूचीबद्धता", "description": "विक्रेता सूचीबद्धता प्रबंधन" },
+        "preBid": { "title": "पूर्व-बोली", "description": "पूर्व-बोली सम्मेलन लॉग" }
+      }
+    }
   },
   "promotion": {
     "title": "पदोन्नतियाँ",

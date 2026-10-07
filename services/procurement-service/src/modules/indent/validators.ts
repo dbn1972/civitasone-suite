@@ -9,7 +9,12 @@ const itemSchema = z.object({
 });
 
 export const createIndentBody = z.object({
-  indentNo:    z.string().min(1).max(64),
+  // GAP-PROCUREMENT-INDENTS-NEW-04: indentNo is OPTIONAL — the server always
+  // allocates a gapless per-tenant number (indent/consumer.ts allocateDocNo)
+  // and ignores any client-supplied value. The web form no longer invents a
+  // browser-side "IND-<timestamp>" number; accepting it as optional lets the
+  // form stop sending a fabricated one without a 400.
+  indentNo:    z.string().min(1).max(64).optional(),
   department:  z.string().min(1).max(128),
   purpose:     z.string().min(3).max(500),
   sanctionRef: z.string().optional(),

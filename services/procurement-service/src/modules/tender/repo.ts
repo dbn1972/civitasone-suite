@@ -104,9 +104,11 @@ export async function openFinancialBidVersioned(tx: Writer, bidId: string, expec
 export type BidEvaluationRow = {
   bidId: string;
   tenderNo: string;
+  tenderId: string;
   vendorName: string;
   technicalScore: number | null;
   financialScore: number | null;
+  financialOpened: boolean;
   rank: number | null;
   status: string;
 };
@@ -125,9 +127,11 @@ export async function listBidEvaluationsByTenant(tenantId: string, limit: number
     .select({
       bidId: procurementTenderBids.id,
       tenderNo: procurementTenders.tenderNo,
+      tenderId: procurementTenders.id,
       vendorName: procurementTenderBids.vendorName,
       technicalScore: procurementTenderBids.technicalScore,
       financialScore: procurementTenderBids.financialScore,
+      financialOpened: procurementTenderBids.financialOpened,
       rank: procurementTenderBids.rank,
       status: procurementTenderBids.status,
     })

@@ -2,13 +2,16 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { LineItemsEditor, emptyLineItem, type LineItem } from "../../_components/LineItemsEditor";
+import { useCallback, useEffect, useState } from "react";
+import { LineItemsEditor, emptyLineItem, lineItemsTotalMinor, type LineItem } from "../../_components/LineItemsEditor";
 import { trackActivation } from "@/lib/activation";
 import { useFormError } from "@/lib/useFormError";
+import { formatMoney } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 import { Button } from "@/app/_components/ds";
 
 type GfrBand = { id: string; name: string; notes: string; requiresTender: boolean };
+type ModeState = "idle" | "loading" | "ready" | "error";
 
 export function CreateIndentForm({
   initialItem = null,
@@ -16,49 +19,82 @@ export function CreateIndentForm({
 }: { initialItem?: LineItem | null; prefillTruncated?: boolean } = {}) {
   const router = useRouter();
 
-  const [indentNo] = useState("IND-" + Date.now().toString(36).toUpperCase());
-  const [department, setDepartment] = useState("Finance");
+  // GAP-PROCUREMENT-INDENTS-NEW-04: no browser-generated indent number. The
+  // server allocates a gapless per-tenant number on submit; the field is a
+  // read-only placeholder until then.
+  const [department, setDepartment] = useState(""); // NEW-01: must be chosen, not pre-filled "Finance"
   const [indentDate, setIndentDate] = useState(new Date().toISOString().slice(0, 10));
   const [requiredBy, setRequiredBy] = useState("");
-  const [estimatedValue, setEstimatedValue] = useState("");
   const [purpose, setPurpose] = useState("");
   const [items, setItems] = useState<LineItem[]>([initialItem ?? emptyLineItem()]);
   const [modeBand, setModeBand] = useState<GfrBand | null>(null);
+  const [modeState, setModeState] = useState<ModeState>("idle");
   const [status, setStatus] = useState<"idle" | "submitting" | "accepted" | "error">("idle");
   /** Client-authored copy for pre-submit validation and success — never server text. */
   const [message, setMessage] = useState("");
+  // NEW-05: per-field client errors (mirrors the server's own validation).
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const formError = useFormError("indent");
   // Lines with no unit price feed the estimated value and the procurement-mode band, so the
   // first submit asks for confirmation (never blocks); editing any line resets it.
   const [zeroPriceAck, setZeroPriceAck] = useState(false);
   useEffect(() => { setZeroPriceAck(false); }, [items]);
 
-  // Dynamic GFR mode-band lookup when estimatedValue changes
+  // GAP-PROCUREMENT-INDENTS-NEW-02: the estimated value that drives the GFR
+  // mode band is DERIVED from the line items, so the band can never disagree
+  // with the actual total a second, independently-typed header field used to
+  // allow.
+  const estimatedValueMinor = lineItemsTotalMinor(items);
+
+  // GAP-PROCUREMENT-INDENTS-NEW-03: a lookup state machine so a failed check is
+  // not shown as perpetual "Determining mode…". Reruns on retry via `nonce`.
+  const [lookupNonce, setLookupNonce] = useState(0);
+  const retryLookup = useCallback(() => setLookupNonce((n) => n + 1), []);
+
   useEffect(() => {
-    const parsed = parseFloat(estimatedValue);
-    if (!estimatedValue || isNaN(parsed) || parsed <= 0) { setModeBand(null); return; }
-    const estimatedValueMinor = Math.round(parsed * 100);
+    if (estimatedValueMinor <= 0) { setModeBand(null); setModeState("idle"); return; }
     let cancelled = false;
+    setModeState("loading");
     fetch("/api/proxy/v1/procurement/gfr/mode-bands?estimatedValueMinor=" + estimatedValueMinor)
-      .then((r) => r.json() as Promise<{ data: GfrBand[]; applicableMode?: string }>)
+      .then((r) => {
+        if (!r.ok) throw new Error(`mode-bands lookup failed: ${r.status}`);
+        return r.json() as Promise<{ data: GfrBand[]; applicableMode?: string }>;
+      })
       .then((json) => {
         if (cancelled) return;
         const id = json.applicableMode;
         const band = id ? (json.data.find((b) => b.id === id) ?? null) : null;
         setModeBand(band);
+        setModeState("ready");
       })
-      .catch(() => { if (!cancelled) setModeBand(null); });
+      .catch(() => {
+        if (cancelled) return;
+        setModeBand(null);
+        setModeState("error");
+      });
     return () => { cancelled = true; };
-  }, [estimatedValue]);
+  }, [estimatedValueMinor, lookupNonce]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const validItems = items.filter((it) => it.itemCode.trim() && it.description.trim());
-    if (!department.trim() || purpose.trim().length < 3 || validItems.length === 0) {
+
+    // NEW-05: per-field validation (mirrors server createIndentBody).
+    const fe: Record<string, string> = {};
+    if (!department.trim()) fe.department = "Choose the department raising this indent.";
+    if (purpose.trim().length < 3) fe.purpose = "Enter a purpose of at least 3 characters.";
+    if (validItems.length === 0) fe.items = "Add at least one line item with a code and description.";
+    if (requiredBy && indentDate && requiredBy < indentDate) {
+      fe.requiredBy = "Required-by date cannot be before the indent date.";
+    }
+    if (Object.keys(fe).length > 0) {
+      setFieldErrors(fe);
       setStatus("error");
-      setMessage("Department, a purpose of at least 3 characters, and at least one complete line item are required.");
+      setMessage("Please correct the highlighted fields.");
       return;
     }
+    setFieldErrors({});
+
     const unpriced = validItems.filter((it) => !(it.unitPrice > 0)).length;
     if (unpriced > 0 && !zeroPriceAck) {
       setZeroPriceAck(true);
@@ -71,17 +107,17 @@ export function CreateIndentForm({
     }
     setStatus("submitting"); setMessage(""); formError.clear();
     const body = {
-      indentNo,
+      // NEW-04: no client indentNo — the server allocates a gapless number.
       department: department.trim(),
       purpose: purpose.trim(),
       indentDate: indentDate || new Date().toISOString().slice(0, 10),
       requiredBy: requiredBy || undefined,
-      estimatedValueMinor: estimatedValue ? Math.round(parseFloat(estimatedValue) * 100) : undefined,
+      estimatedValueMinor: estimatedValueMinor > 0 ? estimatedValueMinor : undefined,
       items: validItems.map((it) => ({
         itemCode: it.itemCode.trim(),
         description: it.description.trim(),
         quantity: Math.max(1, it.quantity),
-        unit: "nos",
+        unit: it.unit, // NEW-04: the clerk-chosen unit, not a hard-coded "nos"
         unitPriceMinor: Math.max(0, Math.round(it.unitPrice * 100)),
       })),
     };
@@ -98,7 +134,7 @@ export function CreateIndentForm({
       }
       setStatus("accepted");
       trackActivation("first_transaction");
-      setMessage("Indent submitted for approval via workflow.");
+      setMessage("Indent submitted for approval via workflow. Its number is assigned on submit.");
       router.push("/procurement/indents");
       router.refresh();
     } catch (caught) {
@@ -106,13 +142,16 @@ export function CreateIndentForm({
     }
   }
 
+  const deptError = fieldErrors.department ?? formError.fieldError("department");
+  const purposeError = fieldErrors.purpose ?? formError.fieldError("purpose");
+
   return (
     <form onSubmit={(e) => void handleSubmit(e)} className="card pad" style={{ maxWidth: 860 }} noValidate>
       <div className="fields">
-        {/* Indent No — read-only, auto-generated */}
+        {/* Indent No — assigned by the server on submit (NEW-04) */}
         <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
-          <label className="label" htmlFor="indentNo">Indent No (auto)</label>
-          <input id="indentNo" className="inp mono" value={indentNo} readOnly style={{ minHeight: 44, cursor: "default", background: "var(--panel)" }} />
+          <label className="label" htmlFor="indentNo">Indent No</label>
+          <input id="indentNo" className="inp mono" value="Assigned on submit" readOnly style={{ minHeight: 44, cursor: "default", background: "var(--panel)", color: "var(--mut)" }} />
         </div>
 
         <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
@@ -122,40 +161,88 @@ export function CreateIndentForm({
 
         <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
           <label className="label" htmlFor="department">Department *</label>
-          <input id="department" className="inp" value={department} onChange={(e) => setDepartment(e.target.value)} required style={{ minHeight: 44 }} />
-          {formError.fieldError("department") && (
-            <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("department")}</span>
+          <input
+            id="department"
+            className="inp"
+            value={department}
+            onChange={(e) => setDepartment(e.target.value)}
+            required
+            placeholder="Enter the requesting department"
+            aria-invalid={deptError ? true : undefined}
+            aria-describedby={deptError ? "department-err" : undefined}
+            style={{ minHeight: 44 }}
+          />
+          {deptError && (
+            <span id="department-err" style={{ fontSize: 12, color: "var(--bad)" }}>{deptError}</span>
           )}
         </div>
 
         <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
           <label className="label" htmlFor="requiredBy">Required by date</label>
-          <input id="requiredBy" type="date" className="inp" value={requiredBy} onChange={(e) => setRequiredBy(e.target.value)} style={{ minHeight: 44 }} />
+          <input
+            id="requiredBy"
+            type="date"
+            className="inp"
+            value={requiredBy}
+            min={indentDate || undefined}
+            onChange={(e) => setRequiredBy(e.target.value)}
+            aria-invalid={fieldErrors.requiredBy ? true : undefined}
+            aria-describedby={fieldErrors.requiredBy ? "requiredBy-err" : undefined}
+            style={{ minHeight: 44 }}
+          />
+          {fieldErrors.requiredBy && (
+            <span id="requiredBy-err" style={{ fontSize: 12, color: "var(--bad)" }}>{fieldErrors.requiredBy}</span>
+          )}
         </div>
 
-        <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
-          <label className="label" htmlFor="estimatedValue">
-            Estimated total value (INR)
+        {/* GAP-PROCUREMENT-INDENTS-NEW-02: estimated value is DERIVED (read-only)
+            from the line items and drives the GFR mode band — no second,
+            independently-typed figure that could select the wrong band. */}
+        <div className="field" style={{ gridColumn: "1 / -1", background: "#fff", padding: "13px 16px" }}>
+          <span className="label">
+            Estimated total value (from line items)
             <span style={{ fontSize: 11, color: "var(--ink2)", marginInlineStart: 4 }}>— determines procurement mode</span>
-          </label>
-          <input id="estimatedValue" type="number" className="inp" value={estimatedValue} onChange={(e) => setEstimatedValue(e.target.value)} step="0.01" min="0" style={{ minHeight: 44 }} placeholder="e.g. 250000" />
-          {modeBand ? (
-            <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ background: modeBand.requiresTender ? "var(--warn)" : "var(--good)", color: "#fff", borderRadius: 3, padding: "2px 8px", fontSize: 12, fontWeight: 600 }}>
-                {modeBand.id}
+          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 44 }}>
+            <span className="mono" aria-live="polite" style={{ fontWeight: 600 }}>{formatMoney(estimatedValueMinor)}</span>
+            {modeState === "ready" && modeBand ? (
+              <>
+                <span style={{ background: modeBand.requiresTender ? "var(--warn)" : "var(--good)", color: "#fff", borderRadius: 3, padding: "2px 8px", fontSize: 12, fontWeight: 600 }}>
+                  {modeBand.id}
+                </span>
+                <span style={{ fontSize: 12, color: "var(--ink2)" }}>{modeBand.name} — {modeBand.notes}</span>
+              </>
+            ) : modeState === "loading" ? (
+              <span style={{ fontSize: 12, color: "var(--ink2)" }}>Determining mode…</span>
+            ) : modeState === "error" ? (
+              // GAP-PROCUREMENT-INDENTS-NEW-03: a failed check is explicit, not
+              // a perpetual "Determining mode…" that hides a missing tender
+              // requirement.
+              <span role="alert" style={{ fontSize: 12, color: "var(--bad)", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                {toHumanError("load", { area: "procurement mode" }).what} The tender-requirement check did not run.
+                <Button type="button" variant="ghost" size="sm" onClick={retryLookup}>Retry</Button>
               </span>
-              <span style={{ fontSize: 12, color: "var(--ink2)" }}>{modeBand.name} — {modeBand.notes}</span>
-            </div>
-          ) : estimatedValue && parseFloat(estimatedValue) > 0 ? (
-            <span style={{ fontSize: 12, color: "var(--ink2)", marginTop: 4, display: "block" }}>Determining mode…</span>
-          ) : null}
+            ) : null}
+          </div>
         </div>
 
         <div className="field" style={{ gridColumn: "1 / -1", background: "#fff", padding: "13px 16px" }}>
           <label className="label" htmlFor="purpose">Purpose / justification *</label>
-          <textarea id="purpose" className="inp" rows={2} value={purpose} onChange={(e) => setPurpose(e.target.value)} required minLength={3} maxLength={500} placeholder="Why this purchase is needed (minimum 3 characters)" />
-          {formError.fieldError("purpose") && (
-            <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("purpose")}</span>
+          <textarea
+            id="purpose"
+            className="inp"
+            rows={2}
+            value={purpose}
+            onChange={(e) => setPurpose(e.target.value)}
+            required
+            minLength={3}
+            maxLength={500}
+            placeholder="Why this purchase is needed (minimum 3 characters)"
+            aria-invalid={purposeError ? true : undefined}
+            aria-describedby={purposeError ? "purpose-err" : undefined}
+          />
+          {purposeError && (
+            <span id="purpose-err" style={{ fontSize: 12, color: "var(--bad)" }}>{purposeError}</span>
           )}
         </div>
       </div>
@@ -166,6 +253,9 @@ export function CreateIndentForm({
         </p>
       ) : null}
       <LineItemsEditor items={items} onChange={setItems} />
+      {fieldErrors.items && (
+        <p role="alert" style={{ fontSize: 12, color: "var(--bad)", marginTop: 6 }}>{fieldErrors.items}</p>
+      )}
 
       <div role="status" aria-live="polite">
         {message ? (

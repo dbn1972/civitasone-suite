@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { runWithTenant } from "@civitasone/db";
 import { buildApp } from "../src/app.js";
@@ -29,12 +29,12 @@ function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-async function seedGrn(id: string, receivedDate: string): Promise<void> {
+async function seedGrn(id: string, receivedDate: string, status = "accepted"): Promise<void> {
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {
     await tx.insert(procurementGrns).values({
       id, tenantId: TENANT, grnNo: `GRN-DASH-${id.slice(-4)}`,
       poRef: "procurement_po:seed", vendorId: VENDOR,
-      receivedDate, threeWayMatch: false, status: "accepted",
+      receivedDate, threeWayMatch: false, status,
       createdBy: ACTOR, updatedBy: ACTOR,
     });
   }));
@@ -58,6 +58,59 @@ describe("GET /v1/procurement/dashboard — grnsThisMonth", () => {
 
     await seedGrn(randomUUID(), isoDate(now));
     await seedGrn(randomUUID(), isoDate(twoMonthsAgo));
+
+    const res = await app.inject({
+      method: "GET", url: "/v1/procurement/dashboard",
+      headers: { authorization: `Bearer ${tok(["procurement_officer"])}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().grnsThisMonth).toBe(1);
+  });
+
+  // GAP-PROCUREMENT-DASHBOARD-05: "GRNs (MTD)" is a completed-receipt KPI, so
+  // only accepted GRNs count. A draft/under-inspection/rejected GRN received
+  // this month must NOT inflate the number.
+  it("counts only ACCEPTED GRNs, ignoring non-accepted statuses received this month", async () => {
+    await wipe();
+    const now = new Date();
+    const today = isoDate(now);
+    await seedGrn(randomUUID(), today, "accepted");
+    await seedGrn(randomUUID(), today, "draft");
+    await seedGrn(randomUUID(), today, "under_inspection");
+    await seedGrn(randomUUID(), today, "rejected");
+
+    const res = await app.inject({
+      method: "GET", url: "/v1/procurement/dashboard",
+      headers: { authorization: `Bearer ${tok(["procurement_officer"])}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().grnsThisMonth).toBe(1);
+  });
+
+  // GAP-PROCUREMENT-DASHBOARD-05: the month boundary is evaluated in the TENANT
+  // timezone (Asia/Kolkata), not the DB session clock (UTC). We assert that
+  // the SQL truncates "now" in IST: a GRN whose received_date is the IST
+  // calendar-month's first day is counted (it is in this IST month), while one
+  // dated the last day of the IST previous month is not. This fails on the old
+  // `date_trunc('month', now())` form whenever the DB and IST months differ.
+  it("uses the Asia/Kolkata calendar month for the boundary, not the DB session timezone", async () => {
+    await wipe();
+    // Resolve the IST calendar-month start/end straight from the DB so the test
+    // asserts against the same clock the fix uses.
+    const boundaryRows = (await db.execute(sql`
+      SELECT
+        date_trunc('month', (now() AT TIME ZONE 'Asia/Kolkata'))::date AS "monthStart",
+        (date_trunc('month', (now() AT TIME ZONE 'Asia/Kolkata'))::date - interval '1 day')::date AS "prevMonthLastDay"
+    `)) as unknown as Array<{ monthStart: string | Date; prevMonthLastDay: string | Date }>;
+    const { monthStart, prevMonthLastDay } = boundaryRows[0];
+
+    const monthStartStr = isoDate(new Date(monthStart));
+    const prevLastStr = isoDate(new Date(prevMonthLastDay));
+
+    await seedGrn(randomUUID(), monthStartStr, "accepted");   // in this IST month
+    await seedGrn(randomUUID(), prevLastStr, "accepted");     // last day of previous IST month
 
     const res = await app.inject({
       method: "GET", url: "/v1/procurement/dashboard",

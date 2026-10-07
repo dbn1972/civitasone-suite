@@ -30,7 +30,7 @@ export function parseIndentPrefill(params: Record<string, string | string[] | un
   const q = Number(first(params.quantity));
   const quantity = Number.isInteger(q) && q >= 1 && q <= MAX_QTY ? q : 1;
   return {
-    item: { itemCode, description, quantity, unitPrice: 0 },
+    item: { itemCode, description, quantity, unitPrice: 0, unit: "nos" },
     truncated: itemCode.length < rawCode.length || description.length < rawDescription.length,
   };
 }

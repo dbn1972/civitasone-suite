@@ -9,10 +9,17 @@ export type LineItem = {
   description: string;
   quantity: number;
   unitPrice: number; // rupees (UI), converted to paise on submit
+  // GAP-PROCUREMENT-INDENTS-NEW-04: unit of measure per line (was hard-coded
+  // "nos" for every line at submit). A short UoM code from UNIT_OPTIONS below.
+  unit: string;
 };
 
+// GAP-PROCUREMENT-INDENTS-NEW-04: a small, explicit UoM list so a clerk picks
+// the real unit instead of every line silently going out as "nos".
+export const UNIT_OPTIONS = ["nos", "kg", "litre", "metre", "set", "pair", "box", "pkt", "ream", "unit"] as const;
+
 export function emptyLineItem(): LineItem {
-  return { itemCode: "", description: "", quantity: 1, unitPrice: 0 };
+  return { itemCode: "", description: "", quantity: 1, unitPrice: 0, unit: "nos" };
 }
 
 export function lineItemsTotalMinor(items: LineItem[]): number {
@@ -25,11 +32,9 @@ export function lineItemsTotalMinor(items: LineItem[]): number {
 export function LineItemsEditor({
   items,
   onChange,
-  unitLabel = "nos",
 }: {
   items: LineItem[];
   onChange: (next: LineItem[]) => void;
-  unitLabel?: string;
 }) {
   // Stable per-row React key, independent of array position. `LineItem`
   // itself carries no id and stays that way (it's the exact shape this
@@ -77,6 +82,7 @@ export function LineItemsEditor({
               <th scope="col">Item code</th>
               <th scope="col">Description</th>
               <th scope="col" className="num">Qty</th>
+              <th scope="col">Unit</th>
               <th scope="col" className="num">Unit price (₹)</th>
               <th scope="col" className="num">Line total</th>
               <th scope="col"><span className="sr-only">Actions</span></th>
@@ -103,6 +109,14 @@ export function LineItemsEditor({
                       onChange={(e) => update(idx, { quantity: Number(e.target.value) })}
                       style={{ minHeight: 40, width: 80, textAlign: "right" }} />
                   </td>
+                  <td>
+                    <label className="sr-only" htmlFor={`li-unit-${idx}`}>Unit, row {idx + 1}</label>
+                    <select id={`li-unit-${idx}`} value={it.unit}
+                      onChange={(e) => update(idx, { unit: e.target.value })}
+                      style={{ minHeight: 40, width: "100%" }}>
+                      {UNIT_OPTIONS.map((u) => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </td>
                   <td className="num">
                     <label className="sr-only" htmlFor={`li-price-${idx}`}>Unit price, row {idx + 1}</label>
                     <input id={`li-price-${idx}`} type="number" min={0} step="0.01" value={it.unitPrice}
@@ -122,7 +136,7 @@ export function LineItemsEditor({
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={4} className="num" style={{ fontWeight: 700 }}>Total</td>
+              <td colSpan={5} className="num" style={{ fontWeight: 700 }}>Total</td>
               <td className="num" style={{ fontWeight: 700 }} aria-live="polite">{formatMoney(totalMinor)}</td>
               <td />
             </tr>
@@ -132,7 +146,6 @@ export function LineItemsEditor({
       <Button type="button" variant="ghost" size="sm" onClick={add} style={{ marginTop: 10, minHeight: 40 }}>
         + Add line item
       </Button>
-      <span className="sr-only" aria-hidden="true">Unit: {unitLabel}</span>
     </fieldset>
   );
 }

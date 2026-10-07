@@ -33,11 +33,37 @@ type WorkflowTask = {
 // is needed to make Approve/Reject actually work for these task types.
 const REF_TYPES = new Set(["procurement_indent", "procurement_po", "procurement_plan", "procurement_po_amendment"]);
 
-function toTasks(payload: unknown): WorkflowTask[] {
-  const rows: WorkflowTask[] = Array.isArray(payload)
+// GAP-PROCUREMENT-APPROVALS-01: the queue used to fetch
+// /v1/workflow/tasks?status=pending&limit=50 across ALL modules and filter to
+// procurement refTypes client-side. With >50 pending tasks tenant-wide, any
+// procurement task past the cut-off never rendered and "No pending tasks" read
+// as all-clear. We now (a) ask the workflow service to filter by the four
+// procurement refTypes server-side via repeated refType params (additive — a
+// service that ignores the param still returns the superset, which the
+// client-side filter below handles), (b) raise the page size, and (c) surface
+// an explicit "may be incomplete" notice when the raw response length hits the
+// limit so a silently-truncated list is never mistaken for the whole queue.
+// workflow-service is absent from this worktree, so true cursor pagination
+// cannot be built here; the notice is the honest fallback.
+const TASKS_LIMIT = 200;
+const TASKS_PATH = `/v1/workflow/tasks?status=pending&limit=${TASKS_LIMIT}${[...REF_TYPES]
+  .map((t) => `&refType=${encodeURIComponent(t)}`)
+  .join("")}`;
+
+type TasksResult = { tasks: WorkflowTask[]; maybeIncomplete: boolean };
+
+function rawTaskRows(payload: unknown): WorkflowTask[] {
+  return Array.isArray(payload)
     ? (payload as WorkflowTask[])
     : ((payload as { data?: WorkflowTask[] })?.data ?? []);
-  return rows.filter((t) => t.refType && REF_TYPES.has(t.refType) && t.status === "pending");
+}
+
+function toTasks(payload: unknown): TasksResult {
+  const rows = rawTaskRows(payload);
+  const tasks = rows.filter((t) => t.refType && REF_TYPES.has(t.refType) && t.status === "pending");
+  // If the raw (pre-filter) response filled the page, more pending tasks may
+  // exist beyond it that we never saw.
+  return { tasks, maybeIncomplete: rows.length >= TASKS_LIMIT };
 }
 
 type Pending = { task: WorkflowTask; decision: "approve" | "reject" };
@@ -55,11 +81,13 @@ export function ProcurementApprovalsPanel() {
   // same "lying empty state" bug class already fixed for DataSourceBadge
   // elsewhere in this cluster, here hiding real outstanding approvals from an
   // officer behind what looks like a clean inbox.
-  const { data: tasks, loading, offline, source, cachedAt, error, refresh } = useOfflineResource<unknown, WorkflowTask[]>(
+  const { data: result, loading, offline, source, cachedAt, error, refresh } = useOfflineResource<unknown, TasksResult>(
     "procurement.approvals.tasks",
-    "/v1/workflow/tasks?status=pending&limit=50",
-    { map: toTasks, initialData: [] },
+    TASKS_PATH,
+    { map: toTasks, initialData: { tasks: [], maybeIncomplete: false } },
   );
+  const tasks = result.tasks;
+  const maybeIncomplete = result.maybeIncomplete;
 
   const complete = useCallback(
     async (task: WorkflowTask, decision: "approve" | "reject", reason?: string) => {
@@ -80,18 +108,38 @@ export function ProcurementApprovalsPanel() {
         }
         const text = response ? await response.text() : "";
         if (!response || !response.ok) {
-          const msg = text || `${decision} failed (${response?.status ?? "network"})`;
-          setDialogError(msg);
-          throw new Error(msg);
+          // GAP-PROCUREMENT-APPROVALS-06: never surface the raw response body
+          // or HTTP status to the approver. Map the SoD code to specific copy;
+          // otherwise use the catalogued save-failure message. (useFormError's
+          // rule: no raw server text/status reaches the user.)
+          const fallback = toHumanError("save", { area: "approval" });
+          let human = `${fallback.what} ${fallback.next}`;
+          try {
+            const parsed = JSON.parse(text) as { code?: string };
+            if (parsed.code === "SOD_VIOLATION") {
+              human = "You raised this request, so a different approver must decide it.";
+            }
+          } catch {
+            /* keep the catalogued fallback above */
+          }
+          setDialogError(human);
+          throw new Error(human);
         }
         setPending(null);
         setMessage(decision === "approve" ? "Approved via workflow." : "Rejected via workflow.");
         refresh();
         router.refresh();
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Network error";
-        setDialogError(msg);
-        throw err instanceof Error ? err : new Error(msg);
+        // GAP-PROCUREMENT-APPROVALS-06: the !ok branch above already set a
+        // human message in dialogError before throwing. For any OTHER throw
+        // (a true network/exception path from fetchOrQueue), show the
+        // catalogued offline copy — never the raw exception's own text.
+        setDialogError((prev) => {
+          if (prev) return prev;
+          const net = toHumanError("offline", { area: "approval" });
+          return `${net.what} ${net.next}`;
+        });
+        throw err instanceof Error ? err : new Error("Network error");
       } finally {
         setBusyId(null);
       }
@@ -197,11 +245,22 @@ export function ProcurementApprovalsPanel() {
       ) : tasks.length === 0 ? (
         <EmptyState icon="✅" title="No pending tasks" message="No pending procurement workflow tasks at this time." />
       ) : (
-        <DataTable<TaskRow>
-          columns={columns}
-          rows={tableRows}
-          pageSize={25}
-        />
+        <>
+          {maybeIncomplete ? (
+            <p
+              className="pad"
+              role="status"
+              style={{ color: "#92400e", fontSize: "0.8125rem", paddingBottom: 0 }}
+            >
+              Showing the first {TASKS_LIMIT} pending tasks — more may exist and are not loaded here.
+            </p>
+          ) : null}
+          <DataTable<TaskRow>
+            columns={columns}
+            rows={tableRows}
+            pageSize={25}
+          />
+        </>
       )}
 
       <ConfirmDialog

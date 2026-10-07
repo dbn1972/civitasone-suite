@@ -268,7 +268,10 @@ describe("mapProcurementVendorDetails", () => {
     const result = mapProcurementVendorDetails(variants)!;
     expect(result[0].empanelmentStatus).toBe("blacklisted");
     expect(result[1].empanelmentStatus).toBe("provisional");
-    expect(result[2].empanelmentStatus).toBe("empanelled");
+    // GAP-PROCUREMENT-VENDORS-NEW-03: a freshly 'registered' vendor is NOT yet
+    // empanelled — it maps to not_empanelled so it never shows an Empanelled
+    // pill or is counted as empanelled before KYC/empanelment completes.
+    expect(result[2].empanelmentStatus).toBe("not_empanelled");
     expect(result[3].empanelmentStatus).toBe("not_empanelled");
   });
 

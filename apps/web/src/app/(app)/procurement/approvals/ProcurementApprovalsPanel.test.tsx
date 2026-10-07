@@ -140,3 +140,103 @@ describe("ProcurementApprovalsPanel — REF_TYPES coverage (regression)", () => 
     expect(mockRefresh).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("ProcurementApprovalsPanel — truncation notice (GAP-PROCUREMENT-APPROVALS-01)", () => {
+  beforeEach(() => {
+    mockUseOfflineResource.mockClear();
+    mockFetchOrQueue.mockReset();
+    mockRefresh.mockReset();
+    rawPayload = [];
+    mockError = null;
+  });
+
+  it("warns the list may be incomplete when the raw response fills the page limit", () => {
+    // 200 pending procurement tasks == the page limit, so more may exist.
+    rawPayload = Array.from({ length: 200 }, (_, i) => ({
+      id: `t${i}`, instanceId: `i${i}`, name: `Task ${i}`,
+      status: "pending", refType: "procurement_indent", refId: `ind-${i}`,
+    }));
+
+    render(<ProcurementApprovalsPanel />);
+
+    expect(
+      screen.getByText(/Showing the first 200 pending tasks — more may exist/i),
+    ).toBeInTheDocument();
+  });
+
+  it("shows no truncation notice for a short list", () => {
+    rawPayload = [
+      { id: "t1", instanceId: "i1", name: "Only task", status: "pending", refType: "procurement_po", refId: "po-1" },
+    ];
+
+    render(<ProcurementApprovalsPanel />);
+
+    expect(screen.queryByText(/more may exist/i)).not.toBeInTheDocument();
+  });
+
+  it("requests the four procurement refTypes server-side (additive filter)", () => {
+    rawPayload = [];
+    render(<ProcurementApprovalsPanel />);
+    const path = mockUseOfflineResource.mock.calls[0]![1];
+    expect(path).toContain("refType=procurement_indent");
+    expect(path).toContain("refType=procurement_po");
+    expect(path).toContain("refType=procurement_plan");
+    expect(path).toContain("refType=procurement_po_amendment");
+    expect(path).toContain("limit=200");
+  });
+});
+
+describe("ProcurementApprovalsPanel — approval error copy (GAP-PROCUREMENT-APPROVALS-06)", () => {
+  beforeEach(() => {
+    mockUseOfflineResource.mockClear();
+    mockFetchOrQueue.mockReset();
+    mockRefresh.mockReset();
+    rawPayload = [
+      { id: "t1", instanceId: "i1", name: "Approve indent", status: "pending", refType: "procurement_indent", refId: "ind-1" },
+    ];
+    mockError = null;
+  });
+
+  it("shows SoD-specific copy (not the raw body) on a 403 SOD_VIOLATION", async () => {
+    mockFetchOrQueue.mockResolvedValue({
+      queued: false,
+      response: {
+        ok: false,
+        status: 403,
+        text: async () => JSON.stringify({ code: "SOD_VIOLATION", message: "maker==checker raw backend text" }),
+      },
+    });
+
+    render(<ProcurementApprovalsPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    // Dialog opens with its own confirm "Approve"; click the last match.
+    const confirmButtons = screen.getAllByRole("button", { name: "Approve" });
+    fireEvent.click(confirmButtons[confirmButtons.length - 1]);
+
+    expect(
+      await screen.findByText("You raised this request, so a different approver must decide it."),
+    ).toBeInTheDocument();
+    // Raw backend text never surfaces.
+    expect(screen.queryByText(/maker==checker raw backend text/)).not.toBeInTheDocument();
+  });
+
+  it("shows catalogued copy (no status, no HTML) on a 500 with an HTML body", async () => {
+    mockFetchOrQueue.mockResolvedValue({
+      queued: false,
+      response: {
+        ok: false,
+        status: 500,
+        text: async () => "<html><body>Internal Server Error 500</body></html>",
+      },
+    });
+
+    render(<ProcurementApprovalsPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    const confirmButtons = screen.getAllByRole("button", { name: "Approve" });
+    fireEvent.click(confirmButtons[confirmButtons.length - 1]);
+
+    expect(await screen.findByText(/We couldn't save your approval\./)).toBeInTheDocument();
+    expect(screen.queryByText(/Internal Server Error/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/500/)).not.toBeInTheDocument();
+  });
+});

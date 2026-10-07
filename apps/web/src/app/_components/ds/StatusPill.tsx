@@ -26,6 +26,11 @@ const STATUS_MAP: Record<string, PillVariant> = {
   open: "good",
   signed: "good",
   pending: "warn",
+  // GAP-PROCUREMENT-GRN-01: a GRN awaiting the quality decision. Without this
+  // key "under_inspection" fell through to the neutral "info" blue, giving the
+  // GRN list/detail status pill no meaning for that (reachable) state.
+  "under inspection": "warn",
+  "quality check": "warn",
   "under review": "warn",
   "in progress": "warn",
   submitted: "warn",
@@ -402,6 +407,28 @@ const STATUS_MAP: Record<string, PillVariant> = {
   // turns the on-wire "in_maintenance" into "in maintenance" before lookup.
   "in maintenance": "warn",
   decommissioned: "mut",
+
+  // GAP-PROCUREMENT-TENDERS-02 / DETAIL-02: tender lifecycle statuses
+  // (procurement-service tender/domain.ts: draft -> published ->
+  // technical_evaluation -> financial_evaluation -> awarded, plus the legacy
+  // collapsed "evaluation"). "draft"/"published"/"cancelled" already map above.
+  // The two evaluation phases are mid-process waiting states (warn); "awarded"
+  // is the successful terminal state (good); "evaluation" (legacy collapsed
+  // value, still emitted by the summary list for older cached payloads) is a
+  // neutral in-progress state (info) keyed explicitly so it is a decision, not
+  // a fallthrough.
+  evaluation: "info",
+  "technical evaluation": "warn",
+  "financial evaluation": "warn",
+  awarded: "good",
+
+  // GAP-PROCUREMENT-TENDERS-01: single-source procurement is the audit-sensitive
+  // mode — it must read as a warning, not the neutral info fallback. (open maps
+  // to "good" above; limited/gem keep the neutral info fallback.)
+  "single source": "warn",
+  // GAP-PROCUREMENT-TENDERS-03: bid-window overdue cue. A published tender past
+  // its close with zero bids is the exception the register exists to surface.
+  "closed no bids": "bad",
 };
 // Deliberately NOT added: a generic "flagged" key. tenant-admin/security/SecurityTable.tsx
 // has its own inline outcome->variant mapping that fails closed to "bad" for any

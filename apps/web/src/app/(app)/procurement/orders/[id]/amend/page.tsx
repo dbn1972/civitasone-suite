@@ -1,196 +1,78 @@
-"use client";
-
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { PageHeader, Card, StatusPill, EmptyState, ErrorState } from "@/app/_components/ds";
+import { getProcurementPOById } from "../../../../../_data/loaders";
 import { toHumanError } from "@/lib/messages";
-import { PageHeader, Term, Button } from "@/app/_components/ds";
+import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { PO_STATUS_LABELS } from "@/lib/procurement-status";
+import { AmendForm } from "./AmendForm";
 
-const AMENDMENT_TYPES = [
-  "quantity",
-  "price",
-  "schedule",
-  "scope",
-  "change_order",
-] as const;
+// GAP-PROCUREMENT-ORDERS-DETAIL-AMEND-01: amendment is only meaningful on a
+// live order (not draft, not terminal). Mirrors the backend assertPoAmendable
+// (amendment-domain.ts): approved / dispatched / partial_grn / gem_placed.
+const AMENDABLE_STATUSES = new Set(["approved", "dispatched", "partial_grn", "gem_placed"]);
 
-export default function POAmendPage({ params }: { params: { id: string } }) {
-  const router = useRouter();
-  const [amendmentType, setAmendmentType] = useState<string>("scope");
-  const [reason, setReason] = useState("");
-  const [deltaMinor, setDeltaMinor] = useState<string>("0");
-  const [effectiveDate, setEffectiveDate] = useState("");
-  const [status, setStatus] = useState<
-    "idle" | "submitting" | "accepted" | "error"
-  >("idle");
-  const [message, setMessage] = useState("");
+export default async function POAmendPage({ params }: { params: { id: string } }) {
+  const { data: po, source } = await getProcurementPOById(params.id);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (reason.trim().length < 3) {
-      setStatus("error");
-      setMessage("Reason must be at least 3 characters.");
-      return;
-    }
-    setStatus("submitting");
-    setMessage("");
-    try {
-      const res = await fetch(
-        "/api/proxy/v1/procurement/pos/" + params.id + "/amendments",
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            amendmentType,
-            reason: reason.trim(),
-            deltaMinor: Math.round(parseFloat(deltaMinor || "0") * 100),
-            effectiveDate: effectiveDate || undefined,
-          }),
-        },
-      );
-      if (!res.ok) {
-        const human = toHumanError("save", { area: "PO amendment" });
-        setStatus("error");
-        setMessage(`${human.what} ${human.next}`);
-        return;
-      }
-      setStatus("accepted");
-      setMessage("Amendment submitted for approval.");
-      setTimeout(() => router.push("/procurement/orders/" + params.id), 1200);
-    } catch (err) {
-      setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Network error");
-    }
+  if (!po) {
+    return (
+      <div className="page-main wrap" aria-labelledby="page-heading">
+        <PageHeader title="Request PO Amendment" back={`/procurement/orders/${params.id}`} backLabel="Purchase Order" />
+        {source === "error" ? (
+          <ErrorState error={toHumanError("load", { area: "purchase order" })} backHref={`/procurement/orders/${params.id}`} />
+        ) : (
+          <EmptyState icon="📦" title="Purchase order not found" message="This PO may have been removed or the ID is invalid." />
+        )}
+      </div>
+    );
   }
+
+  const amendable = AMENDABLE_STATUSES.has(po.status);
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
-      <div style={{ maxWidth: 640 }}>
+      <div style={{ maxWidth: 720 }}>
         <PageHeader
-          title={
-            <>
-              Request <Term name="PO" /> Amendment
-            </>
-          }
-          subtitle={
-            <>
-              PO ID:{" "}
-              <span className="mono" style={{ fontSize: 11 }}>
-                {params.id}
-              </span>
-            </>
-          }
-          back={"/procurement/orders/" + params.id}
+          title={`Request amendment — ${po.poNo}`}
+          subtitle={po.vendor}
+          back={`/procurement/orders/${po.id}`}
           backLabel="Purchase Order"
           help="procurement"
         />
 
-        <form
-          onSubmit={(e) => void handleSubmit(e)}
-          className="card pad"
-          noValidate
-        >
+        <Card title="Purchase order" padding>
           <div className="fields">
             <div className="field">
-              <label className="label" htmlFor="amendmentType">
-                Amendment type *
-              </label>
-              <select
-                id="amendmentType"
-                className="inp"
-                value={amendmentType}
-                onChange={(e) => setAmendmentType(e.target.value)}
-                style={{ minHeight: 44 }}
-              >
-                {AMENDMENT_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t
-                      .replace(/_/g, " ")
-                      .replace(/\b\w/g, (c) => c.toUpperCase())}
-                  </option>
-                ))}
-              </select>
+              <span className="label">PO No</span>
+              <span className="mono">{po.poNo}</span>
             </div>
-
             <div className="field">
-              <label className="label" htmlFor="effectiveDate">
-                Effective date
-              </label>
-              <input
-                id="effectiveDate"
-                type="date"
-                className="inp"
-                value={effectiveDate}
-                onChange={(e) => setEffectiveDate(e.target.value)}
-                style={{ minHeight: 44 }}
-              />
+              <span className="label">Vendor</span>
+              <span>{po.vendor}</span>
             </div>
-
             <div className="field">
-              <label className="label" htmlFor="deltaMinor">
-                Value change (INR, negative to reduce)
-              </label>
-              <input
-                id="deltaMinor"
-                type="number"
-                className="inp"
-                value={deltaMinor}
-                onChange={(e) => setDeltaMinor(e.target.value)}
-                step="0.01"
-                style={{ minHeight: 44 }}
-              />
+              <span className="label">Status</span>
+              <StatusPill status={po.status} label={PO_STATUS_LABELS[po.status] ?? po.status} />
             </div>
-
-            <div className="field" style={{ gridColumn: "1 / -1" }}>
-              <label className="label" htmlFor="reason">
-                Reason for amendment *
-              </label>
-              <textarea
-                id="reason"
-                className="inp"
-                rows={4}
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                required
-                style={{ resize: "vertical" }}
-                placeholder="Describe the amendment and business justification (min 3 chars)"
-              />
+            <div className="field">
+              <span className="label">Current total</span>
+              <span>{formatMoney(po.totalAmount)}</span>
+            </div>
+            <div className="field">
+              <span className="label">Delivery date</span>
+              <span>{po.deliveryDate ? formatIndianDate(po.deliveryDate) : "—"}</span>
             </div>
           </div>
+        </Card>
 
-          <div role="status" aria-live="polite">
-            {message ? (
-              <p
-                role={status === "error" ? "alert" : undefined}
-                style={{
-                  marginTop: 12,
-                  color: status === "error" ? "var(--bad)" : "var(--good)",
-                  fontSize: "0.875rem",
-                }}
-              >
-                {message}
-              </p>
-            ) : null}
-          </div>
-
-          <div style={{ marginTop: 20, display: "flex", gap: 8 }}>
-            <Button
-              type="submit"
-              variant="primary"
-              style={{ minHeight: 44 }}
-              disabled={status === "submitting"}
-            >
-              {status === "submitting" ? "Submitting…" : "Submit amendment"}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              style={{ minHeight: 44 }}
-              onClick={() => router.back()}
-            >
-              Cancel
-            </Button>
-          </div>
-        </form>
+        {amendable ? (
+          <AmendForm poId={po.id} currentTotalMinor={po.totalAmount} lineItems={po.lineItems} />
+        ) : (
+          <EmptyState
+            icon="🔒"
+            title="This PO cannot be amended"
+            message={`A PO in status "${PO_STATUS_LABELS[po.status] ?? po.status}" is not amendable. Only approved, dispatched, partially-received or GeM-placed POs can be amended.`}
+          />
+        )}
       </div>
     </div>
   );

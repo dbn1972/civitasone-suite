@@ -4,12 +4,36 @@ import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
+import * as poRepo from "../po/repo.js";
 import { canAmendGrn, canInspectGrn, assertDistinctReceiverInspector, DomainError } from "./domain.js";
 import type { CreateGrnBody, AmendGrnBody, AcceptGrnBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
+// RFC-4122 shape check — a poRef must resolve to a UUID PO id; anything else
+// cannot be a real PO and is rejected as not-found before touching the DB.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function createGrn(ctx: RequestContext, body: CreateGrnBody): Promise<Accepted> {
+  // GAP-PROCUREMENT-GRN-NEW-04 — reject a GRN whose vendor does not match the
+  // referenced PO's vendor BEFORE queueing, so the caller gets an immediate
+  // 4xx (a GRN against the wrong vendor would corrupt the three-way match).
+  // The PO must also exist and belong to this tenant.
+  const poId = body.poRef.replace(/^procurement_po:/, "");
+  // A poRef that is not a well-formed UUID can never match a PO id (the id
+  // column is UUID-typed, so querying it with a free-form string would raise a
+  // Postgres "invalid input syntax for type uuid" error and surface as a 500).
+  // Treat it as a not-found reference and fail closed with a clean 404.
+  if (!UUID_RE.test(poId)) {
+    throw new HttpError(404, "PO_NOT_FOUND", "referenced purchase order not found");
+  }
+  const po = await poRepo.findPoById(poId, ctx.tenantId);
+  if (!po || po.tenantId !== ctx.tenantId) {
+    throw new HttpError(404, "PO_NOT_FOUND", "referenced purchase order not found");
+  }
+  if (po.vendorId && body.vendorId && po.vendorId !== body.vendorId) {
+    throw new HttpError(422, "VENDOR_PO_MISMATCH", "GRN vendor does not match the purchase order's vendor");
+  }
   const id = randomUUID();
   await queue.publish(COMMANDS.grnCreate, {
     messageId: id, type: COMMANDS.grnCreate,

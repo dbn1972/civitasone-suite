@@ -42,3 +42,15 @@ export function assertCanDispatch(status: string): void {
     throw new DomainError("PO_NOT_APPROVED", `PO must be approved before dispatch, got '${status}'`);
   }
 }
+
+/**
+ * GAP-PROCUREMENT-ORDERS-DETAIL-03: dispatch is an irreversible vendor-facing
+ * commitment, so it is a maker-checker action — the officer who dispatches must
+ * differ from the officer who created the PO (GFR separation of duties). A PO's
+ * own creator self-dispatching their order defeats the control.
+ */
+export function assertDispatcherDistinctFromCreator(creatorId: string, dispatcherId: string): void {
+  if (creatorId && dispatcherId && creatorId === dispatcherId) {
+    throw new DomainError("SOD_VIOLATION", "the officer dispatching a PO must differ from the officer who created it (self-dispatch rejected)");
+  }
+}

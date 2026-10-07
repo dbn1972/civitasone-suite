@@ -1,31 +1,21 @@
-import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
+import { PageHeader } from "../../../_components/ds";
 import { getProcurementReverseAuctions } from "../../../_data/loaders";
 import { ReverseAuctionTable } from "./ReverseAuctionTable";
 
+// GAP-PROCUREMENT-REVERSE-AUCTION-01/04/05: the stat tiles now live inside
+// ReverseAuctionTable, computed from the SAME useSeededResource rows the table
+// renders (and from a client-side periodic refresh while any auction is Live),
+// so they can never show a fabricated row of 0s above an error, the Total
+// Events tile is no longer styled as money, and a Total Savings tile is shown.
 export default async function ReverseAuctionPage() {
   const { data: auctions, source } = await getProcurementReverseAuctions();
 
-  const live = auctions.filter((a) => a.status === "Live").length;
-  const scheduled = auctions.filter((a) => a.status === "Scheduled").length;
-  const awarded = auctions.filter((a) => a.status === "Awarded").length;
-
   return (
     <>
-      {/* UX-012: the data-source badge now lives inside ReverseAuctionTable,
-          driven by the same useSeededResource call that produces its rows —
-          not a second, independent read of `source` here that could
-          disagree with the table's own cache state (UX-002's pattern). */}
       <PageHeader
         title="Reverse Auctions"
         subtitle="Live and scheduled reverse auction events for competitive procurement."
       />
-
-      <StatGrid>
-        <StatCard icon="🔨" iconBg="#eef2ff" label="Live Auctions" value={live} />
-        <StatCard icon="📅" iconBg="#ecfdf3" label="Scheduled" value={scheduled} />
-        <StatCard icon="💰" iconBg="#fffaeb" label="Total Events" value={auctions.length} />
-        <StatCard icon="🏆" iconBg="#fce7ee" label="Awarded" value={awarded} />
-      </StatGrid>
 
       <ReverseAuctionTable auctions={auctions} source={source} />
     </>

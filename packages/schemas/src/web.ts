@@ -114,6 +114,9 @@ export const approvalSummarySchema = z.object({
   referenceId: z.string(),
   owner: z.string(),
   dueDisplay: z.string(),
+  // GAP-PROCUREMENT-APPROVALS-04: optional ISO due timestamp for date-based
+  // overdue computation (the UI must not substring-match dueDisplay).
+  dueAt: z.string().optional(),
 });
 
 export const tenantUserSchema = z.object({
@@ -1148,6 +1151,8 @@ export const IndentSummarySchema = z.object({
 export const IndentSummaryListSchema = z.array(IndentSummarySchema);
 
 export const IndentDetailSchema = IndentSummarySchema.extend({
+  // GAP-PROCUREMENT-INDENTS-DETAIL-02: justification shown on the detail page.
+  purpose: z.string().optional(),
   lineItems: z.array(z.object({
     itemCode: z.string(),
     itemName: z.string(),
@@ -1198,7 +1203,13 @@ export const RFQSummaryListSchema = z.array(RFQSummarySchema);
 
 export const RFQDetailSchema = RFQSummarySchema.extend({
   description: z.string().optional(),
+  // GAP-PROCUREMENT-RFQ-DETAIL-01: surfaced so the detail page can gate the
+  // Award action on the real winner (and show which response won).
+  awardedResponseId: z.string().nullable().optional(),
   lineItems: z.array(z.object({
+    // GAP-PROCUREMENT-RFQ-DETAIL-02: itemId so the comparative statement can
+    // join each vendor's per-line rate back to the RFQ line it quoted against.
+    itemId: z.string().optional(),
     itemName: z.string(),
     quantity: z.number(),
     unit: z.string(),
@@ -1206,7 +1217,18 @@ export const RFQDetailSchema = RFQSummarySchema.extend({
   responses: z.array(z.object({
     vendorId: z.string(),
     vendorName: z.string(),
-    totalAmount: z.number(),
+    responseId: z.string(),
+    // GAP-PROCUREMENT-RFQ-DETAIL-03/-06: amount is WITHHELD (undefined) while
+    // the RFQ is still open for responses; `sealed` says which.
+    totalAmountMinor: z.string().regex(/^\d+$/).optional(),
+    sealed: z.boolean().default(false),
+    // GAP-PROCUREMENT-RFQ-DETAIL-02: per-line rates for the comparative
+    // statement; empty while sealed.
+    lineRates: z.array(z.object({
+      itemId: z.string().optional(),
+      itemName: z.string().optional(),
+      unitPriceMinor: z.string().regex(/^\d+$/),
+    })).default([]),
     submittedAt: z.string(),
     status: z.string(),
   })).default([]),
@@ -1226,6 +1248,13 @@ export const GRNSummarySchema = z.object({
 });
 export const GRNSummaryListSchema = z.array(GRNSummarySchema);
 
+// GAP-PROCUREMENT-TENDERS-02 / DETAIL-02: the two evaluation phases are now
+// surfaced distinctly ("technical_evaluation" / "financial_evaluation") so the
+// register and detail page can show which stage a tender is in and gate the
+// Open-financial / Award actions on the real phase. The legacy collapsed
+// "evaluation" value is KEPT in the union so any older cached payload (or a
+// consumer that still groups both) still parses — new payloads send the
+// specific phase. All five remain backward compatible.
 export const TenderSummarySchema = z.object({
   id: z.string(),
   tenderNo: z.string(),
@@ -1235,7 +1264,11 @@ export const TenderSummarySchema = z.object({
   publishDate: z.string().optional(),
   bidClosingDate: z.string(),
   openingDate: z.string().optional(),
-  status: z.enum(["draft", "published", "evaluation", "awarded", "cancelled"]),
+  status: z.enum([
+    "draft", "published", "evaluation",
+    "technical_evaluation", "financial_evaluation",
+    "awarded", "cancelled",
+  ]),
   bidsReceived: z.number().default(0),
 });
 export const TenderSummaryListSchema = z.array(TenderSummarySchema);
@@ -1243,6 +1276,26 @@ export const TenderSummaryListSchema = z.array(TenderSummarySchema);
 export const TenderDetailSchema = TenderSummarySchema.extend({
   scope: z.string().optional(),
   eligibilityCriteria: z.string().optional(),
+  // GAP-PROCUREMENT-TENDERS-DETAIL-05: EMD (earnest money deposit) captured on
+  // create but previously never surfaced on the detail page. Minor units
+  // (paise) as a number; optional so an older procurement-service still parses.
+  emdAmountMinor: z.number().optional(),
+  // GAP-PROCUREMENT-TENDERS-DETAIL-03: identities for the UI-side maker-checker
+  // gate (Award disabled for the creator / technical evaluator). The server
+  // remains the authority (award consumer re-checks SoD in-txn). Optional so
+  // older payloads parse.
+  createdBy: z.string().optional(),
+  techEvaluatedBy: z.string().nullable().optional(),
+  // GAP-PROCUREMENT-TENDERS-DETAIL-05: NIT presence so Publish can be gated and
+  // a NIT-missing cue shown. Optional for backward compatibility.
+  hasNit: z.boolean().optional(),
+  documentCount: z.number().optional(),
+  // GAP-PROCUREMENT-TENDERS-NEW-01/02: indent link + single-source justification
+  // surfaced on the detail page. All optional (only single_source carries them).
+  indentRef: z.string().optional(),
+  justificationCategory: z.string().optional(),
+  justification: z.string().optional(),
+  approvingAuthority: z.string().optional(),
   bids: z.array(z.object({
     // CRITICAL fix: bidAmount was required (no .optional()), but
     // procurement-service's queries.ts getTenderDetail deliberately sends
@@ -1267,6 +1320,11 @@ export const TenderDetailSchema = TenderSummarySchema.extend({
     vendorName: z.string(),
     technicalScore: z.number().optional(),
     financialScore: z.number().optional(),
+    // GAP-PROCUREMENT-TENDERS-DETAIL-02: whether this bid's sealed financial
+    // envelope has been opened. The lifecycle UI uses this (not a guess from
+    // whether bidAmount happens to be present) to decide when to reveal Award.
+    // Optional so older payloads parse.
+    financialOpened: z.boolean().optional(),
     status: z.string(),
   })).default([]),
 });

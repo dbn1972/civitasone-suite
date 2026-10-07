@@ -1,11 +1,11 @@
 import { sendAccepted } from "@civitasone/schemas/validate";
-import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import {
   createPlanBody, aggregateFromIndentsBody, submitPlanBody,
-  approvePlanBody, rejectPlanBody, linkTenderBody, idParam,
+  approvePlanBody, rejectPlanBody, linkTenderBody, idParam, listPlansQuery,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -64,8 +64,11 @@ export async function planningRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/procurement/plans", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const q = listQuerySchema.parse(req.query);
-    const list = await queries.listPlans(ctx.tenantId, q.limit, q.offset);
+    const q = listPlansQuery.parse(req.query);
+    const list = await queries.listPlans(ctx.tenantId, q.limit, q.offset, {
+      department: q.department,
+      year: q.year,
+    });
     return reply.send({ data: list });
   });
 

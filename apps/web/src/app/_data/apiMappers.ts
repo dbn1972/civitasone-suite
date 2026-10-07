@@ -37,6 +37,18 @@ function toText(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
+// GAP-PROCUREMENT-INDENTS-04: a bare UUID is machine plumbing, never a value a
+// clerk should read as a person/office name. When the backend hasn't resolved
+// an id to a display name yet, a leaked UUID is worse than "—": it looks like
+// data but names nothing. Treat a UUID-shaped string as missing so these
+// columns fall back to the honest "—" instead of printing the raw id.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function toDisplayText(value: unknown): string | null {
+  const text = toText(value);
+  if (text === null) return null;
+  return UUID_RE.test(text.trim()) ? null : text;
+}
+
 export function getArrayPayload(payload: unknown): unknown[] | null {
   if (Array.isArray(payload)) return payload;
   if (isRecord(payload) && Array.isArray(payload.data)) return payload.data;
@@ -149,10 +161,14 @@ export function mapProcurementVendorDetails(payload: unknown): VendorDetail[] | 
     const id = toText(row.id) ?? name;
     const category = toText(row.category) ?? toText(row.vendorType) ?? "General";
     const rawEmp = (toText(row.empanelmentStatus) ?? toText(row.vendorType) ?? "registered").toLowerCase();
+    // GAP-PROCUREMENT-VENDORS-NEW-03: a freshly 'registered' vendor is NOT yet
+    // empanelled — it must not show an Empanelled pill (and must not be counted
+    // as empanelled) until KYC/empanelment completes. Only an explicit
+    // "empanel…" status maps to empanelled.
     const empanelmentStatus: VendorDetail["empanelmentStatus"] =
       rawEmp.includes("black") ? "blacklisted"
         : rawEmp.includes("provis") ? "provisional"
-          : rawEmp.includes("empanel") || rawEmp === "registered" ? "empanelled"
+          : rawEmp.includes("empanel") ? "empanelled"
             : "not_empanelled";
     mapped.push({
       id,
@@ -229,8 +245,8 @@ export function mapProcurementIndentSummaries(payload: unknown): IndentSummary[]
       // a real display name via identity-service when it can; fall back
       // to an honest "—" (matching requiredByDate/requestDate's own
       // convention below) instead of a raw/sliced id when it can't.
-      requestedBy: toText(row.requestedBy) ?? "—",
-      department: toText(row.department) ?? "—",
+      requestedBy: toDisplayText(row.requestedBy) ?? "—",
+      department: toDisplayText(row.department) ?? "—",
       itemCount: typeof row.itemCount === "number" ? row.itemCount : 1,
       estimatedAmount: (parseMinor(row.totalMinor) ?? 0) || (parseMinor(row.estimatedAmount) ?? 0),
       requestDate: toText(row.indentDate) ?? toText(row.requestDate) ?? toText(row.createdAt)?.slice(0, 10) ?? "—",
@@ -279,7 +295,7 @@ export function mapProcurementIndentDetail(payload: unknown): IndentDetail | nul
     });
   }
 
-  return { ...base, lineItems, approvalTrail };
+  return { ...base, purpose: toText(payload.purpose) ?? undefined, lineItems, approvalTrail };
 }
 
 export function mapProcurementVendorDetail(payload: unknown): VendorDetail | null {
@@ -302,6 +318,10 @@ function normalizePoStatus(raw: string | null): PODetail["status"] {
   if (key === "pending") return "pending";
   if (key === "approved") return "approved";
   if (key === "dispatched") return "dispatched";
+  // GAP-PROCUREMENT-ORDERS-DETAIL-05: preserve gem_placed so the detail page
+  // renders "GeM Placed" (via PO_STATUS_LABELS) instead of silently collapsing
+  // a GeM order to "Draft".
+  if (key === "gem_placed" || key === "gem") return "gem_placed";
   if (key === "partial_grn" || key === "partial") return "partial_grn";
   if (key === "fully_received" || key === "received") return "fully_received";
   if (key === "cancelled" || key === "rejected") return "cancelled";
@@ -324,7 +344,10 @@ export function mapProcurementPODetail(payload: unknown): PODetail | null {
       itemCode: toText(item.itemCode) ?? "—",
       itemName: toText(item.itemName) ?? toText(item.description) ?? "—",
       quantity: qty,
-      unit: toText(item.unit) ?? "nos",
+      // GAP-PROCUREMENT-ORDERS-DETAIL-05: do NOT silently default a missing
+      // unit to "nos" (which looks like real data). Render "—" so a line with
+      // no unit on the source record reads as "unknown", not a fabricated unit.
+      unit: toText(item.unit) ?? "—",
       unitPrice,
       totalPrice: (parseMinor(item.totalPrice) ?? 0) || unitPrice * qty,
       grnQty: typeof item.grnQty === "number" ? item.grnQty : 0,
@@ -400,7 +423,15 @@ export function mapProcurementGRNDetail(payload: unknown): GRNDetail | null {
     ...base,
     vendorId: toText(payload.vendorId) ?? undefined,
     notes: toText(payload.notes) ?? undefined,
-    threeWayMatch: typeof payload.threeWayMatch === "boolean" ? payload.threeWayMatch : base.threeWayMatch ?? false,
+    // GAP-PROCUREMENT-GRN-DETAIL-02 — keep threeWayMatch as boolean | undefined.
+    // Coercing a "not computed yet" value to `false` made every uninspected GRN
+    // read as a red three-way mismatch on the detail page while the list showed
+    // the same state as neutral. `base.threeWayMatch` is already undefined when
+    // the payload omits the field (see mapProcurementGRNSummaries).
+    threeWayMatch: typeof payload.threeWayMatch === "boolean" ? payload.threeWayMatch : base.threeWayMatch,
+    // GAP-PROCUREMENT-GRN-DETAIL-03 — carry the creator id so the detail page can
+    // pre-empt a self-inspection (SoD) block; server stays authoritative.
+    createdBy: toText(payload.createdBy) ?? undefined,
     items,
     inspection: insp
       ? {
@@ -423,6 +454,9 @@ export function mapSrnDetail(payload: unknown): SrnDetail | null {
     id,
     grnId,
     storeOfficerId: toText(payload.storeOfficerId) ?? "—",
+    // GAP-PROCUREMENT-GRN-DETAIL-SRN-02 — prefer a display name/designation when
+    // the API supplies one; the raw UUID stays available via storeOfficerId.
+    storeOfficerName: toText(payload.storeOfficerName) ?? toText(payload.storeOfficer) ?? undefined,
     receivedAt: toText(payload.receivedAt) ?? null,
     remarks: toText(payload.remarks) ?? undefined,
     status,

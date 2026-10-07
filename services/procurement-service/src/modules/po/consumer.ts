@@ -5,7 +5,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { assertBudgetSufficient, assertCanDispatch, assertTransitionAllowed, assertDistinctMakerChecker, DomainError } from "./domain.js";
+import { assertBudgetSufficient, assertCanDispatch, assertTransitionAllowed, assertDistinctMakerChecker, assertDispatcherDistinctFromCreator, DomainError } from "./domain.js";
 import * as vendorRepo from "../vendor/repo.js";
 import * as blacklistRepo from "../vendor-blacklist/repo.js";
 import * as indentRepo from "../indent/repo.js";
@@ -282,14 +282,40 @@ export function registerPoConsumers(queue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.poDispatch, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string };
+    const p = msg.payload as { id: string; tenantId: string; mode?: string; expectedDelivery?: string; notes?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const po = await repo.findPoByIdTx(tx, p.id, p.tenantId);
       if (!po) throw new Error(`po ${p.id} not found`);
+      // SoD (GAP-PROCUREMENT-ORDERS-DETAIL-03): dispatch is an irreversible
+      // vendor-facing commitment, so the dispatcher must differ from the PO's
+      // creator. Self-dispatch is rejected — emit a rejection event and do NOT
+      // transition the PO.
+      try {
+        assertDispatcherDistinctFromCreator(po.createdBy, msg.actorId);
+      } catch (err) {
+        if (err instanceof DomainError && err.code === "SOD_VIOLATION") {
+          await enqueue(tx, {
+            topic: EVENTS.poDispatchRejected, eventType: EVENTS.poDispatchRejected,
+            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: { poId: p.id, poNo: po.poNo, reason: err.message, code: err.code },
+          });
+          await audit(tx, msg, "dispatch_rejected_sod", "po", p.id);
+          return;
+        }
+        throw err;
+      }
       assertCanDispatch(po.status ?? "draft");
-      await repo.updatePoVersioned(tx, p.id, po.version ?? 1, { status: "dispatched", updatedBy: msg.actorId });
-      await audit(tx, msg, "dispatch", "po", p.id);
+      // Record the expected delivery date on the PO when the officer supplied
+      // one; it is a bare YYYY-MM-DD calendar date (date column).
+      const patch: Record<string, unknown> = { status: "dispatched", updatedBy: msg.actorId };
+      if (p.expectedDelivery) patch.deliveryDate = p.expectedDelivery;
+      await repo.updatePoVersioned(tx, p.id, po.version ?? 1, patch);
+      // UI-collected dispatch metadata (how the PO was sent, the officer's note,
+      // the expected delivery) is part of the audit record.
+      await audit(tx, msg, "dispatch", "po", p.id, {
+        mode: p.mode ?? null, notes: p.notes ?? null, expectedDelivery: p.expectedDelivery ?? null,
+      });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "po", p.id));
   });
@@ -379,10 +405,13 @@ export function registerPoConsumers(queue: Queue): void {
   });
 }
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
+async function audit(
+  tx: any, msg: any, action: string, resourceType: string, resourceId: string,
+  extra?: Record<string, unknown>,
+): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "procurement", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "procurement", action, resourceType, resourceId, outcome: "success", ...(extra ? { details: extra } : {}) },
   });
 }

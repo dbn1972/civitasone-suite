@@ -229,16 +229,26 @@ export function useSeededResource<T>(
   useEffect(() => {
     let active = true;
     void (async () => {
-      const serverUsable = serverSource === "api" && !isEmpty(initialData);
+      // GAP-PROCUREMENT-EMD-BG-04 / GAP-PROCUREMENT-GEM-05: a successful server
+      // read ("api") is AUTHORITATIVE even when it's empty. Previously an empty
+      // api result was treated as "server gave nothing" and the hook fell back
+      // to a stale cached copy — so a register that had genuinely emptied out
+      // kept showing old rows (and the server-computed stats, which correctly
+      // read empty, silently disagreed with those rows). Now only an actual
+      // server failure ("error") falls back to cache; an empty "api" result
+      // renders live AND overwrites the cache so stale rows can't resurface.
+      const serverUsable = serverSource === "api";
       if (serverUsable) {
-        // Fresh server data — render it and refresh the offline copy.
+        // Fresh server data (possibly a legitimately empty list) — render it
+        // and refresh/clear the offline copy so the cache can never contradict
+        // an authoritative empty response.
         setData(initialData);
         setFromCache(false);
         setProvenance("live");
         await writeCache(cacheKey, initialData);
         return;
       }
-      // Server gave nothing (offline / error) — fall back to the cached copy.
+      // Server FAILED (error) — fall back to the cached copy if one exists.
       const cached = await readCache<T>(cacheKey);
       const cacheHit = Boolean(active && cached && !isEmpty(cached.value));
       if (cacheHit && cached) {

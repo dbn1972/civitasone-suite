@@ -8,10 +8,30 @@ export const createTenderBody = z.object({
   estimatedMinor: z.number().int().nonnegative().default(0),
   emdAmountMinor: z.number().int().nonnegative().default(0),
   bidClosingDate: z.string().min(1),
+  // GAP-PROCUREMENT-TENDERS-NEW-04: optional bid-opening date/time captured at
+  // create (openingDate column already exists). Must be >= closing date (checked
+  // in the command, where both are in hand).
+  openingDate:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD").refine(
+      (v) => { const d = new Date(v + "T00:00:00.000Z"); return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v; },
+      "must be a real calendar date",
+    ).optional(),
+  // GAP-PROCUREMENT-TENDERS-NEW-01: opaque link to the authorising indent.
+  indentRef:      z.string().min(1).max(200).optional(),
+  // GAP-PROCUREMENT-TENDERS-NEW-02: GFR Rule 166 single-source justification.
+  justificationCategory: z.enum(["proprietary", "emergency", "standardisation", "other"]).optional(),
+  justification:  z.string().max(2000).optional(),
+  approvingAuthority:    z.string().max(200).optional(),
   // C2: optional tender-level sanction reference. May also be supplied at award
   // time. A high-value tender (> Rs 1,000) MUST carry one before it can award.
   sanctionRef:    z.string().min(1).max(120).optional(),
-});
+}).refine(
+  // GAP-PROCUREMENT-TENDERS-NEW-02: a single_source tender MUST record a
+  // justification category, reason and approving authority (GFR Rule 166).
+  (b) => b.type !== "single_source" || (
+    !!b.justificationCategory && !!b.justification && b.justification.trim().length >= 10 && !!b.approvingAuthority
+  ),
+  { message: "single-source tenders require a justification category, a reason (min 10 chars) and an approving authority", path: ["justification"] },
+);
 export type CreateTenderBody = z.infer<typeof createTenderBody>;
 
 // C2: award may carry/override the tender-level sanction reference so a tender

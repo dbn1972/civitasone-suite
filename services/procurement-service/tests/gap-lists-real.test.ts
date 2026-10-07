@@ -59,7 +59,7 @@ async function seed(): Promise<{ vendorId: string; tenderId: string; auctionId: 
     });
     await tx.insert(procurementTenderBids).values({
       id: randomUUID(), tenderId, tenantId: TENANT, vendorId, vendorName: "Gap Test Traders",
-      technicalScore: 80, technicalQualified: true, financialScore: 70, rank: 1, status: "technically_qualified",
+      technicalScore: 80, technicalQualified: true, financialScore: 70, financialOpened: true, rank: 1, status: "technically_qualified",
       createdBy: ACTOR, updatedBy: ACTOR,
     });
     await tx.insert(procurementPrebidQueries).values([

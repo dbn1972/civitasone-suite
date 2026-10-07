@@ -17,6 +17,10 @@ export const createRfqBody = z.object({
   closingDate: z.string().min(1),
   vendorIds:   z.array(z.string().uuid()).min(1).max(500),
   items:       z.array(rfqItemSchema).optional().default([]),
+  // GAP-PROCUREMENT-RFQ-NEW-02: GFR limited tender expects >=3 vendors; when
+  // fewer are invited the officer must record why. Captured here so it lands
+  // in the create audit event rather than being silently stripped.
+  fewerVendorsJustification: z.string().max(2000).optional(),
 });
 export type CreateRfqBody = z.infer<typeof createRfqBody>;
 
@@ -41,5 +45,10 @@ export type RfqRespondBody = z.infer<typeof rfqRespondBody>;
 /** DOM-011: award a closed RFQ to one of its submitted responses. */
 export const awardRfqBody = z.object({
   responseId: z.string().uuid(),
+  // GAP-PROCUREMENT-RFQ-DETAIL-01: a limited-tender award must carry a written
+  // justification (recorded in the audit event). Optional in the schema so an
+  // API client that omits it still parses, but the web Award dialog makes it
+  // mandatory before the request is sent.
+  justification: z.string().max(2000).optional(),
 });
 export type AwardRfqBody = z.infer<typeof awardRfqBody>;

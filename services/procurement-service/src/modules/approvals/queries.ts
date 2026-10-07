@@ -11,21 +11,36 @@ function formatDueDisplay(value: string | Date | null | undefined): string {
   return date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
 
+// GAP-PROCUREMENT-APPROVALS-04: emit an ISO due timestamp alongside the
+// display string so the web can compute overdue/due-today by date rather than
+// substring-matching localised copy. Returns undefined when the row has no
+// usable due date (so the schema's optional field is simply omitted).
+function toDueAt(value: string | Date | null | undefined): string | undefined {
+  if (!value) return undefined;
+  const date = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return undefined;
+  return date.toISOString();
+}
+
 function mapIndentApproval(row: IndentRow): ApprovalSummary {
+  const dueAt = toDueAt(row.requiredBy);
   return {
     id: row.id,
     referenceId: row.indentNo,
     owner: row.department,
     dueDisplay: formatDueDisplay(row.requiredBy),
+    ...(dueAt ? { dueAt } : {}),
   };
 }
 
 function mapPoApproval(row: PoRow): ApprovalSummary {
+  const dueAt = toDueAt(row.deliveryDate);
   return {
     id: row.id,
     referenceId: row.poNo,
     owner: `Vendor ${row.vendorId.slice(0, 8)}`,
     dueDisplay: formatDueDisplay(row.deliveryDate),
+    ...(dueAt ? { dueAt } : {}),
   };
 }
 

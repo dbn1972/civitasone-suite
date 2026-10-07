@@ -8,6 +8,8 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { createRfqBody, rfqRespondBody, awardRfqBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as vendorRepo from "../vendor/repo.js";
+import * as blacklistRepo from "../vendor-blacklist/repo.js";
 
 const PROC_ROLES   = ["procurement_officer", "procurement_admin", "super_admin"];
 const READER_ROLES = [...PROC_ROLES, "audit_officer", "finance_officer"];
@@ -19,6 +21,21 @@ export async function rfqRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, PROC_ROLES);
     const body = createRfqBody.parse(req.body);
+    // GAP-PROCUREMENT-VENDORS-01: a blacklisted vendor must never be invited to
+    // an RFQ. The web form hides blacklisted vendors from the invite list, but
+    // the server is the real control — reject synchronously (4xx) before the
+    // RFQ is queued if any invited vendor is blacklisted (tenant blacklist,
+    // central debarment by PAN, or the vendor's own 'blacklisted' type).
+    for (const vendorId of body.vendorIds) {
+      const vendor = await vendorRepo.findVendorById(vendorId, ctx.tenantId);
+      const blacklisted =
+        Boolean(await blacklistRepo.findActive(ctx.tenantId, vendorId))
+        || (await blacklistRepo.findActiveCentralByPan(vendor?.pan ?? "")) != null
+        || vendor?.vendorType === "blacklisted";
+      if (blacklisted) {
+        throw new HttpError(422, "VENDOR_BLACKLISTED", `vendor ${vendorId} is blacklisted and cannot be invited to an RFQ`);
+      }
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createRfq(ctx, body));
   });
 

@@ -48,7 +48,20 @@ export async function indentRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
-    const list = await queries.listIndents(ctx.tenantId, q.limit, q.offset);
+    // GAP-PROCUREMENT-RFQ-NEW-01: optional status filter so a caller (the RFQ
+    // create form) can ask for only 'approved' indents — an RFQ must be raised
+    // against an approved indent, never a draft/rejected one. Validated against
+    // the known indent statuses; an unknown value yields an empty list rather
+    // than silently returning everything.
+    const statusRaw = typeof (req.query as Record<string, unknown>).status === "string"
+      ? ((req.query as Record<string, string>).status)
+      : undefined;
+    // Every role that passes requireRole(READER_ROLES) above (procurement
+    // officers/admins, audit, finance) is a tenant-wide reader, so the list is
+    // tenant-wide. (repo.findIndentsByTenantAndDepartment exists for a future
+    // narrower reader role; no current caller reaches it.) The status filter is
+    // applied in SQL so limit/offset page over matching rows only.
+    const list = await queries.listIndents(ctx.tenantId, q.limit, q.offset, undefined, statusRaw);
     return reply.send(list);
   });
 
