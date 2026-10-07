@@ -8,6 +8,7 @@
  * Usage: node scripts/dev/seed-all.mjs
  */
 import { execSync } from "node:child_process";
+import { psqlInvocation } from "./psql-exec.mjs";
 
 const T  = "00000000-0000-0000-0000-000000000001";  // tenant_id (demo-tenant)
 const T2 = "00000000-0000-0000-0000-000000000002";  // second tenant
@@ -18,10 +19,8 @@ let errors = 0;
 
 function psql(db, sql) {
   try {
-    execSync(
-      `docker exec -i civitasone-postgres psql -U civitas_admin -d ${db} -v ON_ERROR_STOP=1`,
-      { input: sql, stdio: ["pipe", "pipe", "pipe"] }
-    );
+    const inv = psqlInvocation(db);
+    execSync(inv.cmd, { input: sql, stdio: ["pipe", "pipe", "pipe"], env: inv.env });
   } catch (err) {
     const msg = ((err.stderr ?? "") + (err.stdout ?? "")).toString().trim();
     console.error(`  [ERR] ${db}: ${msg.slice(0, 400)}`);
@@ -40,7 +39,7 @@ console.log("=== tenant-service ===");
 seed("civitas_tenant", "tenants", `
 INSERT INTO tenant.tenants (id, tenant_id, name, domain, edition, status, region, residency, settings, created_at, updated_at, created_by, updated_by, version)
 VALUES
-  ('${T}',  '${T}',  'Demo Government Dept', 'demo-govt.civitasone.in', 'govt_dept', 'active', 'ap-south-1', 'in', '{}', now(), now(), '${A}', '${A}', 1),
+  ('${T}',  '${T}',  'Demo Government Dept', 'demo-govt.civitasone.in', 'govt', 'active', 'ap-south-1', 'in', '{}', now(), now(), '${A}', '${A}', 1),
   ('${T2}', '${T2}', 'Test PSU Office',       'test-psu.civitasone.in',  'psu',       'active', 'ap-south-1', 'in', '{}', now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
 `);
@@ -130,7 +129,7 @@ ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO payments.finance_bills (id, tenant_id, bill_no, vendor_id, head_id, gross_minor, net_minor, currency, status, created_at, updated_at, created_by, updated_by, version)
 VALUES
-  ('dddddddd-0001-0000-0000-000000000007', '${T}', 'BILL/2024/0001', 'eeeeeeee-0001-0000-0000-000000000001', 'dddddddd-0001-0000-0000-000000000001', 5000000, 4750000, 'INR', 'approved', now(), now(), '${A}', '${A}', 1),
+  ('dddddddd-0001-0000-0000-000000000007', '${T}', 'BILL/2024/0001', 'eeeeeeee-0001-0000-0000-000000000001', 'dddddddd-0001-0000-0000-000000000001', 5000000, 4750000, 'INR', 'passed', now(), now(), '${A}', '${A}', 1),
   ('dddddddd-0001-0000-0000-000000000008', '${T}', 'BILL/2024/0002', 'eeeeeeee-0001-0000-0000-000000000002', 'dddddddd-0001-0000-0000-000000000001', 3000000, 2850000, 'INR', 'pending',  now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
 
@@ -143,7 +142,7 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO gl.finance_journals (id, tenant_id, voucher_no, type, posting_date, lines, status, created_at, updated_at, created_by, updated_by, version)
 VALUES
   ('dddddddd-0001-0000-0000-000000000011', '${T}', 'JV/2024/001', 'payment', '2024-12-01', '[{"accountCode":"2055","debitMinor":5000000,"creditMinor":0}]', 'posted', now(), now(), '${A}', '${A}', 1),
-  ('dddddddd-0001-0000-0000-000000000012', '${T}', 'JV/2024/002', 'budget',  '2024-12-01', '[{"accountCode":"4059","debitMinor":20000000,"creditMinor":0}]', 'posted', now(), now(), '${A}', '${A}', 1)
+  ('dddddddd-0001-0000-0000-000000000012', '${T}', 'JV/2024/002', 'journal', '2024-12-01', '[{"accountCode":"4059","debitMinor":20000000,"creditMinor":0}]', 'posted', now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
 
 UPDATE gl.finance_journals SET lines = '[{"accountCode":"2055","debitMinor":5000000,"creditMinor":0}]'::jsonb
@@ -176,7 +175,8 @@ console.log("=== hrms-service ===");
 seed("civitas_hrms", "depts+desig+employees+leave_types+allocs+apps+shifts+attendance", `
 DELETE FROM employee.hrms_departments WHERE tenant_id = '${T}' AND code IN ('ADMIN', 'FIN');
 DELETE FROM employee.hrms_designations WHERE tenant_id = '${T}' AND code IN ('IAS', 'STO');
-DELETE FROM leave.hrms_leave_types WHERE tenant_id = '${T}' AND code IN ('EL', 'CL');
+DELETE FROM leave.hrms_leave_types WHERE tenant_id = '${T}' AND code IN ('EL', 'CL')
+  AND id NOT IN ('eeeeeeee-0001-0000-0000-000000000007', 'eeeeeeee-0001-0000-0000-000000000008');
 
 INSERT INTO employee.hrms_departments (id, tenant_id, code, name, parent_id, created_at, updated_at, created_by, updated_by, version)
 VALUES
@@ -637,23 +637,23 @@ INSERT INTO events.events (id, tenant_id, type, actor, target, payload, severity
 VALUES
   ('99999999-0001-0000-0000-000000000001', '${T}', 'budget.sanctioned', '{"id":"${A}","name":"Demo Admin"}', 'finance_sanction:dddddddd-0001-0000-0000-000000000005', '{"amount": 50000000}',      'info', now(), now(), '${A}'),
   ('99999999-0001-0000-0000-000000000002', '${T}', 'po.created',        '{"id":"${A}","name":"Demo Admin"}', 'procurement_po:11111111-0002-0000-0000-000000000003',   '{"vendor": "TechSupplies"}', 'info', now(), now(), '${A}')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 INSERT INTO plan.audit_plans (id, tenant_id, plan_no, title, area, period_from, period_to, risk_level, status, created_at, updated_at, created_by, updated_by, version)
 VALUES
-  ('99999999-0001-0000-0000-000000000003', '${T}', 'AP/2024/001', 'Annual Audit Plan 2024-25', 'Finance & Accounts',     '2024-04-01', '2025-03-31', 'high',   'approved',    now(), now(), '${A}', '${A}', 1),
+  ('99999999-0001-0000-0000-000000000003', '${T}', 'AP/2024/001', 'Annual Audit Plan 2024-25', 'Finance & Accounts',     '2024-04-01', '2025-03-31', 'high',   'in_progress',    now(), now(), '${A}', '${A}', 1),
   ('99999999-0001-0000-0000-000000000004', '${T}', 'AP/2024/002', 'Revenue Audit Q2 2024',     'Revenue Administration', '2024-07-01', '2024-09-30', 'medium', 'in_progress', now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO observation.audit_observations (id, tenant_id, obs_no, plan_id, auditee_ref, finding, category, risk_level, amount_involved_minor, status, created_at, updated_at, created_by, updated_by, version)
 VALUES
   ('99999999-0001-0000-0000-000000000005', '${T}', 'OBS/2024/001', '99999999-0001-0000-0000-000000000003', 'Finance Dept', 'Budget overrun in dept XYZ — excess spending of Rs 5L',         'compliance', 'high',   500000, 'open',          now(), now(), '${A}', '${A}', 1),
-  ('99999999-0001-0000-0000-000000000006', '${T}', 'OBS/2024/002', '99999999-0001-0000-0000-000000000003', 'Admin Dept',   'Missing procurement documentation for PO/2024/001',             'compliance', 'medium', 0,      'pending_reply',  now(), now(), '${A}', '${A}', 1)
+  ('99999999-0001-0000-0000-000000000006', '${T}', 'OBS/2024/002', '99999999-0001-0000-0000-000000000003', 'Admin Dept',   'Missing procurement documentation for PO/2024/001',             'compliance', 'medium', 0,      'open',  now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO plan.audit_plan_items (id, tenant_id, plan_id, dept_ref, unit_ref, scheduled_from, scheduled_to, status, created_at, updated_at, created_by, updated_by, version)
 VALUES
-  ('99999999-0001-0000-0000-000000000021', '${T}', '99999999-0001-0000-0000-000000000003', 'Finance Dept',     'Accounts Unit',  '2024-04-01', '2024-06-30', 'planned',     now(), now(), '${A}', '${A}', 1),
+  ('99999999-0001-0000-0000-000000000021', '${T}', '99999999-0001-0000-0000-000000000003', 'Finance Dept',     'Accounts Unit',  '2024-04-01', '2024-06-30', 'scheduled',     now(), now(), '${A}', '${A}', 1),
   ('99999999-0001-0000-0000-000000000022', '${T}', '99999999-0001-0000-0000-000000000004', 'Revenue Dept',     'Tax Assessment', '2024-07-01', '2024-09-30', 'in_progress', now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
 
@@ -827,7 +827,7 @@ INSERT INTO crm.contacts (id, tenant_id, name, email, phone, company, designatio
 VALUES
   ('eeeeeeee-0002-0000-0000-000000000001', '${T}', 'Rajesh Gupta', 'rajesh@techcorp.in', '9900001111', 'TechCorp Solutions', 'CTO', 'Mumbai', 'qualified', 'referral', '${A}', 'eeeeeeee-0002-0000-0000-000000000010', '["enterprise","priority"]'::jsonb, true, '2024-01-15', now() - interval '2 days', 'active', now(), now(), '${A}', '${A}', 1),
   ('eeeeeeee-0002-0000-0000-000000000002', '${T}', 'Kavita Singh', 'kavita@infraworks.in', '9900002222', 'InfraWorks Ltd', 'Director', 'Delhi', 'contacted', 'web', '${A}', 'eeeeeeee-0002-0000-0000-000000000011', '["infra"]'::jsonb, false, null, now() - interval '5 days', 'active', now(), now(), '${A}', '${A}', 1)
-ON CONFLICT (tenant_id, email) DO UPDATE SET name = EXCLUDED.name, phone = EXCLUDED.phone, company = EXCLUDED.company, designation = EXCLUDED.designation, city = EXCLUDED.city, lead_status = EXCLUDED.lead_status, tags = EXCLUDED.tags, updated_at = now();
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, phone = EXCLUDED.phone, company = EXCLUDED.company, designation = EXCLUDED.designation, city = EXCLUDED.city, lead_status = EXCLUDED.lead_status, tags = EXCLUDED.tags, updated_at = now();
 
 INSERT INTO crm.deals (id, tenant_id, name, stage, value_minor, currency, contact_id, owner_id, probability, status, created_at, updated_at, created_by, updated_by, version)
 VALUES
@@ -860,14 +860,14 @@ VALUES
   ('aaaaaaaa-0003-0000-0000-000000000001', '${T}', 'leave_approval', 'Leave Approval Workflow', 1, 'active', now(), now(), '${A}', '${A}'),
   ('bbbbbbbb-0003-0000-0000-000000000001', '${T}', 'procurement_indent_approval', 'Procurement Indent Approval', 1, 'active', now(), now(), '${A}', '${A}'),
   ('cccccccc-0003-0000-0000-000000000001', '${T}', 'procurement_po_approval', 'Procurement PO Approval', 1, 'active', now(), now(), '${A}', '${A}')
-ON CONFLICT (tenant_id, code) DO NOTHING;
+ON CONFLICT (tenant_id, code, version) DO NOTHING;
 
 INSERT INTO workflow.definition_nodes (id, definition_id, node_key, name, role_ref, sort_order, created_at)
 VALUES
-  ('aaaaaaaa-0003-0000-0000-000000000002', 'aaaaaaaa-0003-0000-0000-000000000001', 'manager_approval', 'Reporting Officer Approval', 'manager', 1, now()),
-  ('bbbbbbbb-0003-0000-0000-000000000002', 'bbbbbbbb-0003-0000-0000-000000000001', 'proc_officer', 'Procurement Officer Approval', 'procurement_officer', 1, now()),
-  ('cccccccc-0003-0000-0000-000000000002', 'cccccccc-0003-0000-0000-000000000001', 'proc_head', 'Procurement Head Approval', 'procurement_admin', 1, now())
-ON CONFLICT (id) DO NOTHING;
+  ('aaaaaaaa-0003-0000-0000-000000000002', (SELECT id FROM workflow.definitions WHERE tenant_id = '${T}' AND code = 'leave_approval' AND version = 1), 'manager_approval', 'Reporting Officer Approval', 'manager', 1, now()),
+  ('bbbbbbbb-0003-0000-0000-000000000002', (SELECT id FROM workflow.definitions WHERE tenant_id = '${T}' AND code = 'procurement_indent_approval' AND version = 1), 'proc_officer', 'Procurement Officer Approval', 'procurement_officer', 1, now()),
+  ('cccccccc-0003-0000-0000-000000000002', (SELECT id FROM workflow.definitions WHERE tenant_id = '${T}' AND code = 'procurement_po_approval' AND version = 1), 'proc_head', 'Procurement Head Approval', 'procurement_admin', 1, now())
+ON CONFLICT DO NOTHING;
 
 INSERT INTO workflow.instances (id, tenant_id, name, status, created_at, updated_at, created_by, updated_by, version)
 VALUES
@@ -970,10 +970,10 @@ ON CONFLICT (id) DO NOTHING;
 // ─────────────────────────────────────────────────────────────────────────────
 console.log("=== telephony-service ===");
 seed("civitas_telephony", "calls", `
-INSERT INTO telephony.calls (id, tenant_id, name, caller_number, status, created_at, updated_at, created_by, updated_by, version)
+INSERT INTO telephony.calls (id, tenant_id, caller_number, status, created_at, updated_at, created_by, updated_by, version)
 VALUES
-  ('99999999-0003-0000-0000-000000000001', '${T}', 'Citizen Helpline Call', '9876500001', 'completed', now(), now(), '${A}', '${A}', 1),
-  ('99999999-0003-0000-0000-000000000002', '${T}', 'Support Call',          '9876500002', 'active',    now(), now(), '${A}', '${A}', 1)
+  ('99999999-0003-0000-0000-000000000001', '${T}', '9876500001', 'completed', now(), now(), '${A}', '${A}', 1),
+  ('99999999-0003-0000-0000-000000000002', '${T}', '9876500002', 'answered',    now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
 `);
 

@@ -26,7 +26,7 @@
  *   pct(base, p)  = roundRupee(base * p / 100)
  *   PF 12% of (basic+DA) capped at wage ceiling 1_500_000 paise (Rs 15,000)
  *   ESI employee 0.75%, employer 3.25%, only while gross <= 2_100_000 (Rs 21,000)
- *   HRA slab % of basic by city class and DA tier (DA>=100% / >=50% / below):
+ *   HRA slab % of basic by city class and DA tier (DA>=50% / >=25% / below):
  *     X 30/27/24   Y 20/18/16   Z 10/9/8
  */
 import { describe, it, expect, beforeAll } from "vitest";

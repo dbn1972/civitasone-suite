@@ -1426,10 +1426,17 @@ jobs:
       - run: pnpm turbo build --filter='./packages/*' --filter='./services/*' --output-logs=errors-only
       - name: Bootstrap Postgres
         run: bash scripts/ci/bootstrap-postgres.sh
-      - name: Migrate and seed live stack
-        run: |
-          node scripts/dev/migrate-all.mjs
-          node scripts/dev/seed-all.mjs
+      # scripts/ci/bootstrap-postgres.sh (previous step) already applied every
+      # service's migrations. Re-running scripts/dev/migrate-all.mjs here is a
+      # SECOND run, which fails on the known non-idempotent migrations listed in
+      # scripts/ci/migration-second-run-allowlist.txt, so only seed.
+      # The Postgres is a service container with a generated name, so seed-all
+      # must use the host psql client (as the bootstrap superuser) instead of
+      # `docker exec civitasone-postgres`, which does not exist on a runner.
+      - name: Seed live stack
+        env:
+          CIVITAS_PSQL_MODE: host
+        run: node scripts/dev/seed-all.mjs
       - name: Start live stack
         run: SKIP_BUILD=1 bash scripts/dev/start-stack.sh
       - name: Verify all screens against live gateway

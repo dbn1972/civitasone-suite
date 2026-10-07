@@ -27,19 +27,20 @@
     ]
   },
   "hra_slab": {
-    "$correction": "This block previously recorded X=27% at DA<25% and class names A/B/C. Both were wrong: hraSlabPct() uses city classes X/Y/Z and tiers on DA>=100% / DA>=50% / below. No test asserted the old values, so it was dormant misinformation rather than a failure. Corrected 2026-07-27 and now asserted by L10 payroll-slip-mutants.test.ts.",
-    "note": "HRA % of Basic by city class and DA tier. Tier: DA>=10000bps (100%) -> high, DA>=5000bps (50%) -> mid, else base.",
+    "$correction": "Corrected 2026-10-07. The 2026-07-27 correction mis-stated the tier thresholds as DA>=100%/DA>=50%. hraSlabPct() implements 7th CPC (DoE OM No. 2/5/2017-E.II(B), 7 Jul 2017): base 24/16/8, 27/18/9 once DA>=25%, 30/20/10 once DA>=50%, inclusive at each boundary (see PR #1779).",
+    "note": "HRA % of Basic by city class and DA tier. Tier: DA>=5000bps (50%) -> high, DA>=2500bps (25%) -> mid, else base.",
     "cases": [
       { "cityClass": "X", "daRateBps": 0, "expectedPct": 24 },
-      { "cityClass": "X", "daRateBps": 4999, "expectedPct": 24, "note": "just below the 50% tier boundary" },
-      { "cityClass": "X", "daRateBps": 5000, "expectedPct": 27, "note": "boundary is inclusive" },
-      { "cityClass": "X", "daRateBps": 10000, "expectedPct": 30 },
+      { "cityClass": "X", "daRateBps": 2499, "expectedPct": 24, "note": "just below the 25% tier boundary" },
+      { "cityClass": "X", "daRateBps": 2500, "expectedPct": 27, "note": "boundary is inclusive" },
+      { "cityClass": "X", "daRateBps": 4999, "expectedPct": 27, "note": "just below the 50% tier boundary" },
+      { "cityClass": "X", "daRateBps": 5000, "expectedPct": 30, "note": "boundary is inclusive" },
       { "cityClass": "Y", "daRateBps": 0, "expectedPct": 16 },
-      { "cityClass": "Y", "daRateBps": 5000, "expectedPct": 18 },
-      { "cityClass": "Y", "daRateBps": 10000, "expectedPct": 20 },
+      { "cityClass": "Y", "daRateBps": 2500, "expectedPct": 18 },
+      { "cityClass": "Y", "daRateBps": 5000, "expectedPct": 20 },
       { "cityClass": "Z", "daRateBps": 0, "expectedPct": 8 },
-      { "cityClass": "Z", "daRateBps": 5000, "expectedPct": 9 },
-      { "cityClass": "Z", "daRateBps": 10000, "expectedPct": 10 }
+      { "cityClass": "Z", "daRateBps": 2500, "expectedPct": 9 },
+      { "cityClass": "Z", "daRateBps": 5000, "expectedPct": 10 }
     ]
   }
 }

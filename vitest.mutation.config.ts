@@ -88,7 +88,27 @@ export default defineConfig({
       // taxable/TDS zero clamps.
       "tests/quality-program/L10-domain-correctness/fnf-settlement-mutants.test.ts",
       "tests/quality-program/L10-domain-correctness/finance-domain.test.ts",
+      // Hermetic coverage of gl/payments guards whose only other tests import shared/db.ts:
+      // zero-amount journal, control-account guard, payer!=passer SoD, advance PII masking.
+      "tests/quality-program/L10-domain-correctness/finance-guards-mutants.test.ts",
       "tests/quality-program/L11-mutation-canary/canary-tests.test.ts",
+
+      // ── additional hermetic suites that exercise the mutated domain files ──
+      // Each was run in isolation against this config and passes with no DB. They
+      // were previously unlisted, so the code they cover (pension, age/PG-Act,
+      // HRA, engagement gate, head-hierarchy, sanction-status mapping, ...) read as
+      // NoCoverage and dragged the score under the ratchet.
+      "services/finance-service/tests/chart-head-hierarchy-hoa.test.ts",
+      "services/finance-service/tests/budget-sanction-status-map.test.ts",
+      "services/finance-service/tests/maker-checker-money.test.ts",
+      "services/payroll-service/src/modules/payroll/domain.test.ts",
+      "services/payroll-service/tests/payroll-domain.test.ts",
+      "services/payroll-service/tests/pension-computation-deep.test.ts",
+      "services/payroll-service/tests/engine-money.test.ts",
+      "services/payroll-service/tests/engagement-gate-domain.test.ts",
+      "services/payroll-service/tests/half-day-lop.test.ts",
+      "services/payroll-service/tests/erp-oracle-recon.test.ts",
+      "services/payroll-service/tests/pay-profiles-separation.test.ts",
     ],
     testTimeout: 20000,
     coverage: { enabled: false },

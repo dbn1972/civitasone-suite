@@ -10,7 +10,7 @@ import { runWithTenant } from "@civitasone/db";
 import type { FastifyInstance } from "fastify";
 import { db, sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
-import { outboxMessages } from "../src/shared/outbox.js";
+import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { scheduledJobs, jobExecutionHistory } from "../src/modules/scheduled-jobs/schema.js";
 import { checkTarget } from "../src/modules/scheduled-jobs/targets.js";
 import { registerAllF3Consumers } from "./helpers/register-all-f3-consumers.js";
@@ -21,6 +21,10 @@ const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TA = "5e780000-0000-4000-8000-0000000000a1";
 const TB = "5e780000-0000-4000-8000-0000000000b1";
 const ACTOR = "5e78acc0-0000-4000-8000-0000000000a1";
+// The run-now message id published by the "deleted job" test. It is recorded in _inbox.processed on
+// the first run, after which markProcessed() returns false forever and the consumer silently returns,
+// so wipe() must clear it (test-ledger-poison-guard). One constant so publish and cleanup cannot drift.
+const DEAD_RUN_NOW_MESSAGE_ID = "5e780000-0000-4000-8000-00000000dead";
 const auth = (tenant = TA, roles = ["platform_admin"]) => ({ authorization: `Bearer ${signToken({ sub: ACTOR, tid: tenant, roles, sid: "sess-sja" }, SECRET, 3600)}` });
 
 let app: FastifyInstance;
@@ -44,6 +48,7 @@ async function wipe() {
       await tx.delete(jobExecutionHistory).where(eq(jobExecutionHistory.tenantId, t));
       await tx.delete(scheduledJobs).where(eq(scheduledJobs.tenantId, t));
       await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, t));
+      await tx.delete(processed).where(eq(processed.messageId, DEAD_RUN_NOW_MESSAGE_ID));
     }));
   }
 }
@@ -164,7 +169,7 @@ describe("operator reasons + conditional transitions (SCHEDULED-JOBS-01)", () =>
     const gone = await createJob("gone", "admin-service", "admin.noop");
     await runWithTenant(TA, () => db.transaction((tx) => tx.delete(scheduledJobs).where(eq(scheduledJobs.id, gone.id))));
     await queue.publish("admin.scheduled_job.run_now", {
-      messageId: "5e780000-0000-4000-8000-00000000dead", type: "admin.scheduled_job.run_now", tenantId: TA, actorId: ACTOR,
+      messageId: DEAD_RUN_NOW_MESSAGE_ID, type: "admin.scheduled_job.run_now", tenantId: TA, actorId: ACTOR,
       correlationId: "c", schemaVersion: "1.0", payload: { jobId: gone.id, tenantId: TA },
     });
     await new Promise((r) => setTimeout(r, 400));
