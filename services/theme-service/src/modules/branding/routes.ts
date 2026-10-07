@@ -7,7 +7,13 @@ import { upsertBrandingBody, idParam, brandingListSchema, brandingViewSchema } f
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 
-const ROLES = ["theme_admin", "super_admin"];
+// HUMAN-REVIEW-BACKLOG #2: the web branding page (settings/branding/page.tsx
+// BRANDING_ADMIN_ROLES) admits tenant_admin alongside theme_admin/super_admin,
+// but this server list previously did not — a tenant_admin saw Save enabled
+// then got a 403. tenant_admin managing their own tenant's branding is the
+// intended product fit, so the server is widened to match the UI rather than
+// the other way round.
+const ROLES = ["theme_admin", "super_admin", "tenant_admin"];
 
 export async function brandingRoutes(app: FastifyInstance): Promise<void> {
   app.put("/v1/themes/branding", async (req, reply) => {

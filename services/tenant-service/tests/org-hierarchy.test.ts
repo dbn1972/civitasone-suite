@@ -16,7 +16,7 @@ import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { orgUnits } from "../src/modules/org-hierarchy/schema.js";
-import { processed } from "../src/shared/outbox.js";
+import { processed, outboxMessages } from "../src/shared/outbox.js";
 import { registerOrgHierarchyConsumers } from "../src/modules/org-hierarchy/consumer.js";
 import * as repo from "../src/modules/org-hierarchy/repo.js";
 
@@ -31,6 +31,14 @@ function uuid(suffix: string): string { return `dddddddd-4444-4000-8000-000000${
 async function wipe(tenantId: string): Promise<void> {
   await runWithTenant(tenantId, () => db.transaction(async (tx) => {
     await tx.delete(orgUnits).where(eq(orgUnits.tenantId, tenantId));
+    // HUMAN-REVIEW-BACKLOG #7: this previously only cleared org_units, never
+    // the outbox. Against the shared, persistent dev test DB that leaves every
+    // audit.event.record row from every prior run of this file sitting
+    // around forever under the same deterministic tenant/unit UUIDs, so a
+    // query like "SELECT ... WHERE resourceId = mid" accumulates one stale
+    // row per historical run on top of the 2 this run actually produces —
+    // the exact shape of the "expected 2, got 14" failure this fixes.
+    await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, tenantId));
   }));
 }
 
