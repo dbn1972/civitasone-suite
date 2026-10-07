@@ -23,7 +23,6 @@ export const COMMANDS = {
 
 export const EVENTS = {
   COMPLAINT_CREATED:      "parks.complaint.created",
-  COMPLAINT_ACKNOWLEDGED: "parks.complaint.acknowledged",
   COMPLAINT_ASSIGNED:     "parks.complaint.assigned",
   COMPLAINT_RESOLVED:     "parks.complaint.resolved",
   COMPLAINT_CLOSED:       "parks.complaint.closed",

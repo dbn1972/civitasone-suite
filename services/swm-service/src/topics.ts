@@ -22,7 +22,6 @@ export const EVENTS = {
   complaintResolved: "swm.complaint.resolved",
   complaintClosed: "swm.complaint.closed",
   bulkGeneratorRegistered: "swm.bulk_generator.registered",
-  bulkGeneratorUpdated: "swm.bulk_generator.updated",
   bulkGeneratorSuspended: "swm.bulk_generator.suspended",
   collectionRequested: "swm.collection.requested",
   collectionScheduled: "swm.collection.scheduled",

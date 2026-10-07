@@ -3,7 +3,7 @@ export const COMMANDS = {
   reportComplaint: "animal.complaint.report",
   assignComplaint: "animal.complaint.assign",
   dispatchTeam: "animal.complaint.dispatch",
-  markActionTaken: "animal.complaint.markActionTaken",
+  markActionTaken: "animal.complaint.mark_action_taken",
   closeComplaint: "animal.complaint.close",
 
   // operations
@@ -20,7 +20,7 @@ export const EVENTS = {
   complaintReported: "animal.complaint.reported",
   complaintAssigned: "animal.complaint.assigned",
   teamDispatched: "animal.complaint.dispatched",
-  actionTaken: "animal.complaint.actionTaken",
+  actionTaken: "animal.complaint.action_taken",
   complaintClosed: "animal.complaint.closed",
 
   // operations

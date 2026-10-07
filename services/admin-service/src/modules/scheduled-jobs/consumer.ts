@@ -7,7 +7,7 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { COMMANDS } from "../../topics.js";
+import { COMMANDS, EVENTS } from "../../topics.js";
 import { scheduledJobs, jobExecutionHistory } from "./schema.js";
 import { eq, and, ne, or, lt, isNull } from "drizzle-orm";
 
@@ -136,8 +136,8 @@ export function registerScheduledJobConsumers(queue: Queue): void {
   });
 
   for (const [command, enabled, event, action] of [
-    [COMMANDS.scheduledJobPause, false, "admin.scheduled_job.paused", "pause"],
-    [COMMANDS.scheduledJobResume, true, "admin.scheduled_job.resumed", "resume"],
+    [COMMANDS.scheduledJobPause, false, EVENTS.scheduledJobPaused, "pause"],
+    [COMMANDS.scheduledJobResume, true, EVENTS.scheduledJobResumed, "resume"],
   ] as const) {
     queue.subscribe<ActionPayload>(command, async (msg) => {
       try {

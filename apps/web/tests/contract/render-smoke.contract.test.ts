@@ -151,11 +151,16 @@ if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
 // empty-state branch to take over, same as a real empty tenant would hit.
 vi.mock('@/app/_data/apiClient', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
-  const empty = { data: [], source: 'api' as const };
+  // fetchJson(path, empty, options) / fetchJsonWithFallback(path, empty, ...) take the
+  // page's OWN declared empty value (an object, a Map-like record, a number, ...) as
+  // their 2nd argument -- that is exactly what a real empty tenant resolves to. A
+  // blanket `[]` crashed every page whose empty shape is not an array
+  // (`data.summary.total.toLocaleString()`), which is a harness artifact, not a page bug.
+  const emptyFor = (declared: unknown) => ({ data: declared === undefined ? [] : declared, source: 'api' as const });
   return {
     ...actual,
-    fetchJson: async () => empty,
-    fetchJsonWithFallback: async () => empty,
+    fetchJson: async (_path: string, declared?: unknown) => emptyFor(declared),
+    fetchJsonWithFallback: async (_path: string, declared?: unknown) => emptyFor(declared),
   };
 });
 

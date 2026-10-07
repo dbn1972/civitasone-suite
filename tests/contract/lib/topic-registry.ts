@@ -37,7 +37,7 @@ const CONSUMED_EXPORTS = new Set([
  * approval decisions to hrms/procurement/estab/asset command topics; a target
  * that does not handle the command silently drops the approval.
  */
-const DISPATCH_EXPORTS = new Set(["DISPATCH", "INTEGRATION", "OUTBOUND"]);
+const DISPATCH_EXPORTS = new Set(["DISPATCH", "INTEGRATION", "OUTBOUND", "FINANCE_HANDOFF"]);
 
 export type TopicRef = {
   /** Property key inside the object literal, e.g. `sanctionApproved`. */

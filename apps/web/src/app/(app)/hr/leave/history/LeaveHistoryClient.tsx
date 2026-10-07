@@ -200,6 +200,7 @@ export default function LeaveHistoryClient({ roles, myEmployeeId, initialEmploye
   const tilesReady = !loading && source === "api" && !!empId;
   const cancelledCount = statusCounts.cancelled ?? 0;
   const draftCount = statusCounts.draft ?? 0;
+  const routingFailedCount = statusCounts.routing_failed ?? 0;
   // GAP-HR-LEAVE-HISTORY-05: "Total" used to be apps.length, which included
   // cancelled/draft rows that no tile represents, so it never equalled the
   // sum of the visible tiles. Relabelled "Active applications" and computed
@@ -233,8 +234,8 @@ export default function LeaveHistoryClient({ roles, myEmployeeId, initialEmploye
             <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statApproved")} value={tilesReady ? (statusCounts.approved ?? 0) : "—"} />
             <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPending")} value={tilesReady ? (statusCounts.pending ?? 0) : "—"} />
             <StatCard icon="❌" iconBg="var(--badbg)" label={t("statRejected")} value={tilesReady ? (statusCounts.rejected ?? 0) : "—"} />
-            {tilesReady && (statusCounts.routing_failed ?? 0) > 0 && (
-              <StatCard icon="⚠️" iconBg="var(--badbg)" label={t("statRoutingFailed")} value={statusCounts.routing_failed ?? 0} />
+            {tilesReady && routingFailedCount > 0 && (
+              <StatCard icon="⚠️" iconBg="var(--badbg)" label={t("statRoutingFailed")} value={routingFailedCount} />
             )}
           </StatGrid>
 

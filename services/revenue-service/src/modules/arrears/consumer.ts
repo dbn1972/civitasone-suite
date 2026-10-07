@@ -264,7 +264,7 @@ export function registerArrearsConsumers(queue: Queue): void {
   });
 
   // ── waiverCreate ────────────────────────────────────────────────────────────
-  queue.subscribe("revenue.waiver.create", async (msg) => {
+  queue.subscribe(COMMANDS.waiverCreate, async (msg) => {
     const { demandId, amountMinor, reason, waiverType } = msg.payload as {
       demandId: string;
       amountMinor: string;
@@ -336,7 +336,7 @@ export function registerArrearsConsumers(queue: Queue): void {
   });
 
   // ── waiverDecide ─────────────────────────────────────────────────────────────
-  queue.subscribe("revenue.waiver.decide", async (msg) => {
+  queue.subscribe(COMMANDS.waiverDecide, async (msg) => {
     const { waiverId, approve, reason } = msg.payload as {
       waiverId: string;
       approve: boolean;

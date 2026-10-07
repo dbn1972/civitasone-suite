@@ -49,7 +49,13 @@ export function TaxProofsPanel({ fy }: { fy: string }) {
         setLoadFailed(true);
         return;
       }
-      setData((await res.json()) as MineResponse);
+      const body = (await res.json()) as Partial<MineResponse> | null;
+      // A payload without the expected lists is a failed load, not a crash on `data.items.filter`.
+      if (!body || !Array.isArray(body.items) || !Array.isArray(body.summary)) {
+        setLoadFailed(true);
+        return;
+      }
+      setData(body as MineResponse);
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") return;
       setLoadFailed(true);

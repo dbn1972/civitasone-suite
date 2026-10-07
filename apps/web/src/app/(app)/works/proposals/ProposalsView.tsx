@@ -72,6 +72,8 @@ export function ProposalsView({
     acc[s] = (acc[s] ?? 0) + 1;
     return acc;
   }, {});
+  const draftCount = countByStatus["draft"] ?? 0;
+  const daoFinalizedCount = countByStatus["dao_finalized"] ?? 0;
 
   const filtered = activeTab === "all" ? data : data.filter((p) => String(p.status) === activeTab);
   const activeTabLabel = STATUS_TABS.find((t) => t.key === activeTab)?.label ?? "All";
@@ -89,8 +91,8 @@ export function ProposalsView({
     <>
       <StatGrid>
         <StatCard icon="📋" iconBg="var(--infobg, #eff6ff)" label="Total Works"   value={total} />
-        <StatCard icon="📝" iconBg="var(--warnbg, #fef3c7)" label="Draft"         value={countByStatus["draft"] ?? 0} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #ecfdf3)" label="DAO Finalized" value={countByStatus["dao_finalized"] ?? 0} />
+        <StatCard icon="📝" iconBg="var(--warnbg, #fef3c7)" label="Draft"         value={draftCount} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #ecfdf3)" label="DAO Finalized" value={daoFinalizedCount} />
       </StatGrid>
 
       <nav

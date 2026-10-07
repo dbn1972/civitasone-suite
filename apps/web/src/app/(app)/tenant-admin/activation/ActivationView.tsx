@@ -66,6 +66,7 @@ export function ActivationView({
   }));
 
   const empty = agg.totalOffices === 0;
+  const officesSignedIn = agg.stages[0]?.reached ?? 0;
 
   return (
     <>
@@ -73,7 +74,7 @@ export function ActivationView({
         <StatCard icon="⏱" iconBg="#e7edfd" label="Time to first transaction (median)" value={ttfrtDisplay} />
         {platform ? (
           <>
-            <StatCard icon="🏢" iconBg="#eff6ff" label="Offices signed in" value={agg.stages[0]?.reached ?? 0} />
+            <StatCard icon="🏢" iconBg="#eff6ff" label="Offices signed in" value={officesSignedIn} />
             <StatCard icon="✅" iconBg="#ecfdf3" label="Offices activated" value={agg.activatedOffices} />
             <StatCard icon="📈" iconBg="#fffaeb" label="Activation rate" value={`${Math.round(agg.activationRate * 100)}%`} />
           </>

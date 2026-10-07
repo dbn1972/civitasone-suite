@@ -32,6 +32,8 @@ const ROOT = join(__dirname, "../..");
 const WEB_APP_DIR = join(ROOT, "apps/web/src/app");
 const WEB_SRC_DIR = join(ROOT, "apps/web/src");
 const CRM_MODULES_DIR = join(ROOT, "services/crm-service/src/modules");
+// Routes registered outside modules/ (e.g. the audited PII-reveal endpoint, app.register(piiRevealRoutes)).
+const CRM_SHARED_DIR = join(ROOT, "services/crm-service/src/shared");
 const REGISTRY = join(ROOT, "services/gateway-service/src/registry.ts");
 const SCREEN_MANIFEST = join(ROOT, "services/gateway-service/src/screen-manifest.ts");
 const OUT = join(__dirname, "crm-link-integrity.json");
@@ -95,7 +97,7 @@ function tsFilesUnder(dir, acc = []) {
 function collectCrmHttpRoutes() {
   const routeRe = /\bapp\.(get|post|put|patch|delete)\(\s*["'`](\/[^"'`]*)["'`]/g;
   const routes = [];
-  for (const file of tsFilesUnder(CRM_MODULES_DIR)) {
+  for (const file of [...tsFilesUnder(CRM_MODULES_DIR), ...tsFilesUnder(CRM_SHARED_DIR)]) {
     const src = readFileSync(file, "utf8");
     let m;
     while ((m = routeRe.exec(src)) !== null) {

@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { formatMoney } from "@/lib/formatters";
-import { scannedDocumentsPath, mapScannedDocuments } from "./scannedDocuments";
+import { scannedDocumentsEndpoint, mapScannedDocuments } from "./scannedDocuments";
 
-describe("scannedDocumentsPath", () => {
+describe("scannedDocumentsEndpoint", () => {
   it("builds the read path with encoding", () => {
-    expect(scannedDocumentsPath("bills", "abc/1")).toBe("/v1/finance/bills/abc%2F1/scanned-documents");
+    expect(scannedDocumentsEndpoint("bills", "abc/1")).toBe("/v1/finance/bills/abc%2F1/scanned-documents");
   });
 });
 

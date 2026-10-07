@@ -19,7 +19,7 @@ export default async function ServicePage({ params, searchParams }: Props) {
     await loadService(params.serviceKey, { revalidateSeconds: 30, telemetryKey: "citizen.runtime.service" }),
   );
   if (outcome.kind === "not_found") notFound();
-  if (outcome.kind === "unauthorized") redirect(`/login?next=/citizen/services/${params.serviceKey}`);
+  if (outcome.kind === "unauthorized") redirect(`/auth/login?next=${encodeURIComponent(`/citizen/services/${params.serviceKey}`)}`);
   if (outcome.kind === "unavailable") {
     return (
       <>

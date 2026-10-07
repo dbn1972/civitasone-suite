@@ -1,29 +1,14 @@
-import { PageHeader, Card, DataTable, StatusPill, EmptyState, RefreshErrorState } from "../../../../_components/ds";
+import { PageHeader, Card, EmptyState, RefreshErrorState } from "../../../../_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { ChannelForm } from "./ChannelForm";
+import { ChannelsTable, type Channel } from "./ChannelsTable";
 
 // The notification-service channel model is { id, type, name, isDefault,
 // enabled, version } — there is no provider/config/status field (see
 // services/notification-service/src/modules/channels/domain.ts). The web type
 // mirrors that exactly; delivery health is the boolean `enabled`.
-type Channel = {
-  id: string;
-  name: string;
-  type: string;
-  isDefault: boolean;
-  enabled: boolean;
-} & Record<string, unknown>;
-
-const TYPE_LABELS: Record<string, string> = {
-  email: "Email",
-  sms: "SMS",
-  push: "Push notification",
-  in_app: "In-app",
-  whatsapp: "WhatsApp",
-};
-
 async function getChannels(): Promise<LoaderResult<Channel[]>> {
   return fetchJson<unknown, Channel[]>("/api/notification/channels", [], {
     telemetryKey: "notifications.channels",
@@ -58,18 +43,7 @@ export default async function NotificationChannelsPage() {
             message="Add an email or SMS channel below so notifications can be delivered. Without this, approval reminders and alerts won't reach anyone."
           />
         ) : (
-          <DataTable<Channel>
-            columns={[
-              { key: "name", label: "Channel name" },
-              // GAP-CHANNELS-02: no developer hint in the header; values via a label map.
-              { key: "type", label: "Channel type", render: (c) => TYPE_LABELS[c.type] ?? c.type },
-              { key: "isDefault", label: "Default", render: (c) => (c.isDefault ? "Default" : "—") },
-              // GAP-CHANNELS-05: delivery health is the boolean `enabled`, not a status enum.
-              { key: "enabled", label: "Status", render: (c) => <StatusPill status={c.enabled ? "active" : "disabled"} label={c.enabled ? "Enabled" : "Disabled"} variant={c.enabled ? "good" : "mut"} /> },
-            ]}
-            rows={channels}
-            sortable
-          />
+          <ChannelsTable channels={channels} />
         )}
       </Card>
 

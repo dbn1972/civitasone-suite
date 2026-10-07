@@ -88,7 +88,7 @@ export default async function ReportDetailPage({ params }: { params: { id: strin
 
   // GAP-REPORTS-DETAIL-05: distinguish a FAILED job from one still pending.
   const isFailed = job.status === "failed";
-
+  const queueAgainHref = `/reports/list/new${job.module && job.module !== "general" ? `?reportType=${encodeURIComponent(job.module)}` : ""}`;
   return (
     <div className="wrap">
       <PageHeader
@@ -186,7 +186,7 @@ export default async function ReportDetailPage({ params }: { params: { id: strin
               message="This report job did not complete, so there is no data to show. You can queue it again."
               action={
                 <Link
-                  href={`/reports/list/new${job.module && job.module !== "general" ? `?reportType=${encodeURIComponent(job.module)}` : ""}`}
+                  href={queueAgainHref}
                   className="btn primary"
                 >
                   Queue again
