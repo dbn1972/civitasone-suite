@@ -64,7 +64,7 @@ function DakRow({ dak, t }: { dak: DakSummary; t: T }) {
       </td>
       <td className={overdue ? "bad" : undefined}>
         {formatIndianDate(dak.dueDate)}
-        {overdue && <span className="pill bad" style={{ marginLeft: 6 }}>{t("overdue")}</span>}
+        {overdue && <span className="pill bad" style={{ marginInlineStart: 6 }}>{t("overdue")}</span>}
       </td>
       <td>{assigneeLabel(dak.assignedTo)}</td>
       <td>{formatIndianDate(dak.createdAt)}</td>

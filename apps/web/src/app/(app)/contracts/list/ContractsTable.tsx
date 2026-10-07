@@ -98,7 +98,7 @@ export function ContractsTable({
           key: "valueSort",
           label: "Value",
           render: (r) => (
-            <span style={{ display: "block", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+            <span style={{ display: "block", textAlign: "end", fontVariantNumeric: "tabular-nums" }}>
               {r.valueMinor != null && /^[+-]?\d+$/.test(r.valueMinor) ? formatMoney(r.valueMinor) : "—"}
             </span>
           ),

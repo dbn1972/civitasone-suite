@@ -31,7 +31,7 @@ export function UserRef({ id, name, shortLength = 8 }: UserRefProps) {
       <span title={trimmedId || undefined}>
         {name.trim()}
         {trimmedId ? (
-          <span style={{ color: "var(--muted, #667085)", fontSize: "0.85em", marginLeft: 6 }}>
+          <span style={{ color: "var(--muted, #667085)", fontSize: "0.85em", marginInlineStart: 6 }}>
             {trimmedId.slice(0, shortLength)}
           </span>
         ) : null}
