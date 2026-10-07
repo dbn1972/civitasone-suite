@@ -28,14 +28,13 @@ test.describe('Contracts', () => {
     await expect(page.getByText('CON/2024/001')).toBeVisible();
   });
 
-  test('contracts list shows vendor ID', async ({ page }) => {
-    // mapContractsListRows (loaders.ts) is deliberate about this: contract-
-    // service exposes only a raw vendorId, with no joined vendor display
-    // name today (see the mapper's own comment / PR #813 fixup), so the
-    // "Vendor ID" column shows the fixture's vendorId -- a human vendor
-    // *name* like "Tech Corp" is never rendered anywhere in this table.
+  test('contracts list shows the resolved vendor name', async ({ page }) => {
+    // GAP-CONTRACTS-LIST-01: contract-service only stores a raw vendorId; the list resolves
+    // the display name from the procurement vendor master (getVendorOptions) and never prints
+    // the raw id -- an id with no match reads "Unknown vendor". The fixture contract points at
+    // the seeded vendor 'Bharat Electronics' (see global-setup.ts).
     await page.goto('/contracts/list');
-    await expect(page.getByText('VEN-TECHCORP-001')).toBeVisible();
+    await expect(page.getByText('Bharat Electronics')).toBeVisible();
   });
 
   test('contracts list shows contract title Annual AMC', async ({ page }) => {

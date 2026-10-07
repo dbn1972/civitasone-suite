@@ -5,6 +5,13 @@ const PORT = 4001;
 
 const PAGINATION = { hasMore: false, pageSize: 50 };
 
+/** YYYY-MM-DD for N days from today, so date-sensitive fixtures never age into the past. */
+function daysFromToday(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
 // Fixtures keyed by path (query strings stripped at request time)
 const FIXTURES: Record<string, unknown> = {
   // Audit trail — auditEventsListSchema expects array of auditEventApiSchema objects
@@ -279,61 +286,66 @@ const FIXTURES: Record<string, unknown> = {
       ],
     },
   ],
-  '/api/v1/hrms/onboarding': [
-    { id: 'ob-001', employee: 'Sunita Rao', department: 'Finance', joiningDate: '2026-08-11',
-      reportingManager: 'CFO Mahesh Iyer', officeLocation: 'Block C, Udyog Bhavan, New Delhi - 110 001',
-      stepsCompleted: 2, totalSteps: 5, overdue: 0, progress: '40', status: 'in_progress',
-      checklist: [
-        { id: 'docs', label: 'Documents Submitted', status: 'completed', dueDay: 1 },
-        { id: 'id-card', label: 'ID Card Issued', status: 'completed', dueDay: 3 },
-        { id: 'workstation', label: 'Workstation Assigned', status: 'in_progress', dueDay: 3 },
-        { id: 'it-access', label: 'IT Access Created', status: 'pending', dueDay: 7 },
-        { id: 'induction', label: 'Induction Completed', status: 'pending', dueDay: 7 },
+  // The list endpoint returns { data, meta } -- meta.counts feeds the stat tiles, the status tabs and
+  // the overdue alert banner (a bare array leaves every count at 0, so the banner never rendered).
+  '/api/v1/hrms/onboarding': {
+    data: [
+        { id: 'ob-001', employee: 'Sunita Rao', department: 'Finance', joiningDate: '2026-08-11',
+          reportingManager: 'CFO Mahesh Iyer', officeLocation: 'Block C, Udyog Bhavan, New Delhi - 110 001',
+          stepsCompleted: 2, totalSteps: 5, overdue: 0, progress: '40', status: 'in_progress',
+          checklist: [
+            { id: 'docs', label: 'Documents Submitted', status: 'completed', dueDay: 1 },
+            { id: 'id-card', label: 'ID Card Issued', status: 'completed', dueDay: 3 },
+            { id: 'workstation', label: 'Workstation Assigned', status: 'in_progress', dueDay: 3 },
+            { id: 'it-access', label: 'IT Access Created', status: 'pending', dueDay: 7 },
+            { id: 'induction', label: 'Induction Completed', status: 'pending', dueDay: 7 },
+          ],
+          documents: [
+            { id: 'doc-appt', name: 'Appointment Letter', required: true, status: 'verified', category: 'document' },
+            { id: 'doc-id', name: 'Government ID Proof', required: true, status: 'uploaded', category: 'document' },
+            { id: 'doc-address', name: 'Address Proof', required: true, status: 'pending', category: 'document' },
+            { id: 'doc-education', name: 'Education Certificate', required: true, status: 'pending', category: 'document' },
+            { id: 'doc-pan', name: 'PAN Card', required: true, status: 'uploaded', category: 'document' },
+            { id: 'doc-bank', name: 'Bank Account Details', required: true, status: 'pending', category: 'document' },
+          ],
+          tasks: [
+            { id: 't1', title: 'Complete document submission', milestoneDay: 1, status: 'completed' },
+            { id: 't2', title: 'Collect ID card', milestoneDay: 3, status: 'completed' },
+            { id: 't3', title: 'Workstation setup', milestoneDay: 3, status: 'in_progress' },
+            { id: 't4', title: 'IT access & VPN setup', milestoneDay: 7, status: 'pending' },
+            { id: 't5', title: 'HR induction session', milestoneDay: 7, status: 'pending' },
+            { id: 't6', title: 'Probation review meeting', milestoneDay: 30, status: 'pending' },
+          ],
+        },
+        { id: 'ob-002', employee: 'Rajesh Nambiar', department: 'IT', joiningDate: '2026-08-01',
+          reportingManager: 'Director IT', officeLocation: 'Block A, Electronics Niketan, CGO Complex, New Delhi - 110 003',
+          stepsCompleted: 1, totalSteps: 5, overdue: 2, progress: '20', status: 'overdue',
+          checklist: [
+            { id: 'docs', label: 'Documents Submitted', status: 'completed', dueDay: 1 },
+            { id: 'id-card', label: 'ID Card Issued', status: 'overdue', dueDay: 3 },
+            { id: 'workstation', label: 'Workstation Assigned', status: 'overdue', dueDay: 3 },
+            { id: 'it-access', label: 'IT Access Created', status: 'pending', dueDay: 7 },
+            { id: 'induction', label: 'Induction Completed', status: 'pending', dueDay: 7 },
+          ],
+          documents: [
+            { id: 'doc-appt', name: 'Appointment Letter', required: true, status: 'verified', category: 'document' },
+            { id: 'doc-id', name: 'Government ID Proof', required: true, status: 'pending', category: 'document' },
+            { id: 'doc-address', name: 'Address Proof', required: true, status: 'pending', category: 'document' },
+            { id: 'doc-education', name: 'Education Certificate', required: true, status: 'pending', category: 'document' },
+            { id: 'doc-pan', name: 'PAN Card', required: true, status: 'pending', category: 'document' },
+            { id: 'doc-bank', name: 'Bank Account Details', required: true, status: 'pending', category: 'document' },
+          ],
+          tasks: [
+            { id: 't1', title: 'Complete document submission', milestoneDay: 1, status: 'completed' },
+            { id: 't2', title: 'Collect ID card', milestoneDay: 3, status: 'overdue' },
+            { id: 't3', title: 'Workstation setup', milestoneDay: 3, status: 'overdue' },
+            { id: 't4', title: 'IT access & VPN setup', milestoneDay: 7, status: 'pending' },
+            { id: 't5', title: 'HR induction session', milestoneDay: 7, status: 'pending' },
+          ],
+        },
       ],
-      documents: [
-        { id: 'doc-appt', name: 'Appointment Letter', required: true, status: 'verified', category: 'document' },
-        { id: 'doc-id', name: 'Government ID Proof', required: true, status: 'uploaded', category: 'document' },
-        { id: 'doc-address', name: 'Address Proof', required: true, status: 'pending', category: 'document' },
-        { id: 'doc-education', name: 'Education Certificate', required: true, status: 'pending', category: 'document' },
-        { id: 'doc-pan', name: 'PAN Card', required: true, status: 'uploaded', category: 'document' },
-        { id: 'doc-bank', name: 'Bank Account Details', required: true, status: 'pending', category: 'document' },
-      ],
-      tasks: [
-        { id: 't1', title: 'Complete document submission', milestoneDay: 1, status: 'completed' },
-        { id: 't2', title: 'Collect ID card', milestoneDay: 3, status: 'completed' },
-        { id: 't3', title: 'Workstation setup', milestoneDay: 3, status: 'in_progress' },
-        { id: 't4', title: 'IT access & VPN setup', milestoneDay: 7, status: 'pending' },
-        { id: 't5', title: 'HR induction session', milestoneDay: 7, status: 'pending' },
-        { id: 't6', title: 'Probation review meeting', milestoneDay: 30, status: 'pending' },
-      ],
-    },
-    { id: 'ob-002', employee: 'Rajesh Nambiar', department: 'IT', joiningDate: '2026-08-01',
-      reportingManager: 'Director IT', officeLocation: 'Block A, Electronics Niketan, CGO Complex, New Delhi - 110 003',
-      stepsCompleted: 1, totalSteps: 5, overdue: 2, progress: '20', status: 'overdue',
-      checklist: [
-        { id: 'docs', label: 'Documents Submitted', status: 'completed', dueDay: 1 },
-        { id: 'id-card', label: 'ID Card Issued', status: 'overdue', dueDay: 3 },
-        { id: 'workstation', label: 'Workstation Assigned', status: 'overdue', dueDay: 3 },
-        { id: 'it-access', label: 'IT Access Created', status: 'pending', dueDay: 7 },
-        { id: 'induction', label: 'Induction Completed', status: 'pending', dueDay: 7 },
-      ],
-      documents: [
-        { id: 'doc-appt', name: 'Appointment Letter', required: true, status: 'verified', category: 'document' },
-        { id: 'doc-id', name: 'Government ID Proof', required: true, status: 'pending', category: 'document' },
-        { id: 'doc-address', name: 'Address Proof', required: true, status: 'pending', category: 'document' },
-        { id: 'doc-education', name: 'Education Certificate', required: true, status: 'pending', category: 'document' },
-        { id: 'doc-pan', name: 'PAN Card', required: true, status: 'pending', category: 'document' },
-        { id: 'doc-bank', name: 'Bank Account Details', required: true, status: 'pending', category: 'document' },
-      ],
-      tasks: [
-        { id: 't1', title: 'Complete document submission', milestoneDay: 1, status: 'completed' },
-        { id: 't2', title: 'Collect ID card', milestoneDay: 3, status: 'overdue' },
-        { id: 't3', title: 'Workstation setup', milestoneDay: 3, status: 'overdue' },
-        { id: 't4', title: 'IT access & VPN setup', milestoneDay: 7, status: 'pending' },
-        { id: 't5', title: 'HR induction session', milestoneDay: 7, status: 'pending' },
-      ],
-    },
-  ],
+    meta: { total: 2, limit: 50, offset: 0, counts: { total: 2, inProgress: 1, overdue: 1, completed: 0 } },
+  },
 
   // COMP-015: hr/onboarding/[id]'s document checklist now fetches its own
   // employee-scoped endpoint (GET /v1/hrms/employees/:id/onboarding-documents)
@@ -845,7 +857,7 @@ const FIXTURES: Record<string, unknown> = {
   '/api/v1/legal/hearings': [
     {
       id: 'hrg-001', caseId: 'leg-001', caseNo: 'CASE-001', caseTitle: 'State v. ABC Construction Ltd',
-      court: 'High Court Delhi', date: '2026-09-25', time: '11:00', purpose: 'Arguments on interim relief',
+      court: 'High Court Delhi', date: daysFromToday(14), time: '11:00', purpose: 'Arguments on interim relief',
       status: 'scheduled',
     },
   ],
@@ -894,9 +906,14 @@ const FIXTURES: Record<string, unknown> = {
   '/api/v1/workflow/instances': [
     { id: 'wf-001', name: 'Leave Approval', workflowName: 'Leave Approval', instanceNo: 'WF-001', status: 'running', startedAt: '2024-01-01T00:00:00Z' },
   ],
-  '/api/v1/analytics/dashboards': [
-    { id: 'ad-001', name: 'Finance KPI Dashboard', module: 'finance', status: 'active' },
-  ],
+  // getAnalyticsDashboards() only maps a `{ data: [...] }` envelope (a bare array is read as
+  // empty), and /analytics/dashboards renders name / description / owner / visibility / status /
+  // version -- so give it the real shape. (/analytics/list now just redirects there.)
+  '/api/v1/analytics/dashboards': {
+    data: [
+      { id: 'ad-001', name: 'Finance KPI Dashboard', description: 'Monthly finance KPIs', module: 'finance', status: 'active', visibility: 'shared', version: 1, ownerId: null },
+    ],
+  },
   '/api/v1/inventory/items': [
     { id: 'inv-001', itemCode: 'INV-001', name: 'Office Chair', quantity: 10, status: 'active' },
   ],
@@ -942,7 +959,7 @@ const FIXTURES: Record<string, unknown> = {
     // for the "Vendor ID" column -- contract-service has no joined vendor
     // display name yet, so `vendor` (kept for any other/future consumer) is
     // not what renders in ContractsTable.
-    { id: 'con-001', contractNo: 'CON/2024/001', title: 'Annual AMC - IT Equipment', vendor: 'Tech Corp', vendorId: 'VEN-TECHCORP-001', startDate: '2024-01-01', endDate: '2024-12-31', value: 50000000, status: 'active' },
+    { id: 'con-001', contractNo: 'CON/2024/001', title: 'Annual AMC - IT Equipment', vendor: 'Bharat Electronics', vendorId: 'eeeeeeee-0001-0000-0000-000000000001', startDate: '2024-01-01', endDate: '2024-12-31', value: 50000000, status: 'active' },
   ],
   '/api/v1/contract/rate-contracts': [
     { id: 'rc-001', contractNo: 'RC/2024/001', title: 'Stationery Rate Contract', vendor: 'Paper Mart', status: 'active' },
@@ -1132,6 +1149,37 @@ const FIXTURES: Record<string, unknown> = {
     pan: null,
   },
 
+  // hr/onboarding/[id] now resolves the joinee through GET /v1/hrms/employees/:id
+  // (getEmployeeById) before it fetches the per-employee tasks/documents below. With no
+  // fixture here that call failed, so the page rendered only its "We couldn't load
+  // onboarding details" error state for every joinee. reportingTo / postingLocation are
+  // deliberately omitted so the header renders its "Not yet assigned" / "Not specified"
+  // fallbacks, which the onboarding specs assert.
+  '/api/v1/hrms/employees/ob-001': {
+    id: 'ob-001',
+    employeeId: 'ob-001',
+    name: 'Sunita Rao',
+    department: 'Finance',
+    designation: 'Section Officer',
+    joiningDate: '2026-08-11',
+    status: 'Active',
+    bankAccountNo: null,
+    bankIfsc: null,
+    pan: null,
+  },
+  '/api/v1/hrms/employees/ob-002': {
+    id: 'ob-002',
+    employeeId: 'ob-002',
+    name: 'Rajesh Nambiar',
+    department: 'IT',
+    designation: 'Joint Secretary',
+    joiningDate: '2026-08-01',
+    status: 'Active',
+    bankAccountNo: null,
+    bankIfsc: null,
+    pan: null,
+  },
+
   '/api/v1/legal/cases/leg-001': {
     id: 'leg-001',
     caseNo: 'CASE-001',
@@ -1277,6 +1325,10 @@ const FIXTURES: Record<string, unknown> = {
   },
 };
 
+const NOT_FOUND_PATHS = new Set(['/api/v1/hrms/employees/nonexistent']);
+// Paths that must answer 500, to exercise the SSR error + retry states.
+const SERVER_ERROR_PATHS = new Set(['/api/v1/hrms/employees/error-500']);
+
 function handler(req: http.IncomingMessage, res: http.ServerResponse) {
   const path = (req.url ?? '/').split('?')[0];
 
@@ -1289,6 +1341,19 @@ function handler(req: http.IncomingMessage, res: http.ServerResponse) {
       res.end(JSON.stringify({ code: 'UNAUTHENTICATED', message: 'Bearer token required' }));
       return;
     }
+  }
+
+  // Paths that must answer 404 (SSR pages cannot have their data stubbed with page.route()).
+  if (NOT_FOUND_PATHS.has(path)) {
+    res.writeHead(404, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
+    res.end(JSON.stringify({ code: 'NOT_FOUND', message: 'not found' }));
+    return;
+  }
+
+  if (SERVER_ERROR_PATHS.has(path)) {
+    res.writeHead(500, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
+    res.end(JSON.stringify({ code: 'INTERNAL', message: 'boom' }));
+    return;
   }
 
   const body = path in FIXTURES ? FIXTURES[path] : { data: [] };

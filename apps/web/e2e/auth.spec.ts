@@ -40,8 +40,10 @@ test.describe('Authentication', () => {
     await page.goto('/auth/login?error=invalid_credentials');
     await expect(page.getByRole('heading', { name: 'Sign-in unsuccessful' })).toBeVisible();
     // invalid_credentials isn't one of LoginClient's two special-cased errors
-    // (access_denied / session_expired), so it falls into the generic copy.
-    await expect(page.getByText(/Authentication failed \(invalid_credentials\)/)).toBeVisible();
+    // (access_denied / session_expired), so it falls into the generic copy: a plain-language
+    // sentence plus the raw code as a support "Reference".
+    await expect(page.getByText(/Sign-in didn't complete/)).toBeVisible();
+    await expect(page.getByText('Reference: invalid_credentials')).toBeVisible();
   });
 
   test('unauthenticated visit to /dashboard redirects toward /auth/login', async ({ page }) => {
@@ -56,11 +58,9 @@ test.describe('Authentication', () => {
     await authenticate(page);
     await page.goto('/dashboard');
     await expect(page).not.toHaveURL(/\/auth\/login/);
-    // Dashboard renders PageHeader title="Command Center" as the page's h1;
-    // RoleCommandCenter (dashboard tile nav replacement) adds its own
-    // "<Module> Command Center" h2s per role, which also contain the
-    // substring "Command Center" -- scope to the exact page heading.
-    await expect(page.getByRole('heading', { name: 'Command Center', exact: true })).toBeVisible();
+    // The dashboard's own page heading is the h1 "Dashboard"; RoleCommandCenter adds its
+    // "<Module> Command Center" h2s per role, so scope to the level-1 heading.
+    await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible();
   });
 
   test('logout clears cookie and redirects toward the Keycloak end-session endpoint', async ({ page }) => {

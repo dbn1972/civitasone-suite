@@ -10,7 +10,7 @@
  * - Leave approvals queue
  */
 import { test, expect } from '@playwright/test';
-import { setupHrmsPage } from './helpers';
+import { setupHrmsPage, mockLeaveContext } from './helpers';
 import * as fixtures from './fixtures';
 
 test.describe('Leave Management', () => {
@@ -105,14 +105,19 @@ test.describe('Leave Management', () => {
     });
 
     test('validates required fields on empty submit', async ({ page }) => {
+      await mockLeaveContext(page);
       await page.goto('/hr/leave/apply');
+      // Settle the form first: Submit is disabled until the employee list has loaded, so
+      // reading isDisabled() straight after goto() raced it (and click() then waited forever).
+      await page.waitForLoadState('networkidle');
       const submitBtn = page.getByRole('button', { name: /submit|apply/i });
       // Form uses disabled-button pattern: button disabled until fields filled
       if (await submitBtn.isDisabled()) {
         await expect(submitBtn).toBeDisabled();
       } else {
         await submitBtn.click();
-        await expect(page.getByText(/required/i).or(page.getByText(/please/i))).toBeVisible();
+        // Several field errors / the summary message match; any one proves validation fired.
+        await expect(page.getByText(/required/i).or(page.getByText(/please/i)).first()).toBeVisible();
       }
     });
 

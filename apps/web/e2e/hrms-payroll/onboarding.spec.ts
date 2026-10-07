@@ -76,7 +76,8 @@ test.describe('Onboarding — manager list', () => {
   test('overdue alert banner renders at top when any joinee has overdue tasks', async ({ page }) => {
     await mockOnboarding(page);
     await page.goto('/hr/onboarding');
-    const alert = page.locator('[role="alert"]').first();
+    // Scope to the banner: the framework's route announcer is also a (permanently empty) role=alert.
+    const alert = page.locator('[role="alert"]').filter({ hasText: /overdue/i }).first();
     await expect(alert).toBeVisible();
     await expect(alert).toContainText('overdue');
   });
@@ -168,9 +169,11 @@ test.describe('Onboarding — joinee detail', () => {
     await page.goto('/hr/onboarding/ob-001');
     const cal = page.locator('[data-testid="task-calendar"]');
     await expect(cal).toBeVisible();
+    // One column per distinct due day in the joinee's tasks (the per-employee
+    // onboarding-tasks fixture has milestones on days 1, 3 and 7).
     await expect(cal).toContainText('Day 1');
+    await expect(cal).toContainText('Day 3');
     await expect(cal).toContainText('Day 7');
-    await expect(cal).toContainText('Day 30');
   });
 
   test('calendar tasks render with correct titles', async ({ page }) => {
@@ -196,7 +199,7 @@ test.describe('Onboarding — joinee detail', () => {
     await page.goto('/hr/onboarding/ob-001');
     // doc-appt is verified
     const verifiedCard = page.locator('[data-testid="doc-card-doc-appt"]');
-    await expect(verifiedCard).toContainText('VERIFIED');
+    await expect(verifiedCard).toContainText(/verified/i);
   });
 
   test('pending document shows drag-and-drop upload zone', async ({ page }) => {
@@ -205,7 +208,7 @@ test.describe('Onboarding — joinee detail', () => {
     // doc-address is pending — should have upload button/zone
     const pendingCard = page.locator('[data-testid="doc-card-doc-address"]');
     await expect(pendingCard).toBeVisible();
-    await expect(pendingCard).toContainText('PENDING');
+    await expect(pendingCard).toContainText(/pending/i);
     const uploadZone = pendingCard.locator('[role="button"]');
     await expect(uploadZone.first()).toBeVisible();
   });

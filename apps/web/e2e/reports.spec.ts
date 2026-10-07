@@ -42,7 +42,8 @@ test.describe('Reports', () => {
     // pattern the KPI test below already uses for the same reason.
     await expect(page.getByRole('cell', { name: 'Monthly Finance Summary' })).toBeVisible();
     await expect(page.getByRole('cell', { name: 'finance', exact: true })).toBeVisible();
-    await expect(page.getByRole('cell', { name: 'completed', exact: true })).toBeVisible();
+    // Status is rendered as a title-cased pill ("Completed").
+    await expect(page.getByRole('cell', { name: 'Completed', exact: true })).toBeVisible();
   });
 
   test('KPI tracker page shows heading and column headers', async ({ page }) => {
@@ -52,7 +53,9 @@ test.describe('Reports', () => {
     await expect(page.getByRole('heading', { name: 'KPI Monitoring', level: 1 })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'KPI' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Owner Module' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Unit' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Actual' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Target' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Achievement' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Period' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Status' })).toBeVisible();
   });

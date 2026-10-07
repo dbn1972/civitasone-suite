@@ -8,7 +8,7 @@ test.describe('Knowledge', () => {
 
   test('knowledge hub shows heading and navigation links', async ({ page }) => {
     await page.goto('/knowledge');
-    await expect(page.getByRole('heading', { name: 'Knowledge & DMS' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Knowledge & Documents', level: 1 })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Repository' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Records Management' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Search' })).toBeVisible();
@@ -22,14 +22,14 @@ test.describe('Knowledge', () => {
   });
 
   test('documents list page shows heading and column headers', async ({ page }) => {
+    // /knowledge/list now redirects to the Digital Repository (/knowledge/repository).
     await page.goto('/knowledge/list');
-    await expect(page.getByRole('heading', { name: 'Knowledge — Documents' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Doc ID' })).toBeVisible();
+    await expect(page).toHaveURL(/\/knowledge\/repository/);
+    await expect(page.getByRole('heading', { name: 'Digital Repository', level: 1 })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Title' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Category' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Type' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Author' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Version' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Access' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Status' })).toBeVisible();
   });
 

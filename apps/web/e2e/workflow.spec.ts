@@ -31,8 +31,9 @@ test.describe('Workflow', () => {
     await page.goto('/workflow/list');
     await expect(page.getByRole('columnheader', { name: 'ID' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Instance' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Definition' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Status' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Version' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Started' })).toBeVisible();
   });
 
   test('workflow hub navigates to instances list on link click', async ({ page }) => {

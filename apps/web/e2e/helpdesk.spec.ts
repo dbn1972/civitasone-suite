@@ -19,7 +19,8 @@ test.describe('Helpdesk', () => {
     // label. The two labels differing by context (nav tile vs. page title)
     // is intentional, not drift.
     await expect(page.getByRole('link', { name: 'All Tickets' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'SLA Monitor' })).toBeVisible();
+    // The SLA tile is labelled "SLA Queue" (href /helpdesk/slas).
+    await expect(page.getByRole('link', { name: 'SLA Queue' })).toBeVisible();
   });
 
   // ── Tickets list ──────────────────────────────────────────────────────────

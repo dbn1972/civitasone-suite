@@ -73,7 +73,10 @@ test.describe('Notifications', () => {
 
   test('notifications list shows recipient email', async ({ page }) => {
     await page.goto('/notifications/list');
-    await expect(page.getByText('admin@example.com')).toBeVisible();
+    // GAP-NOTIFICATIONS-LIST-01: the recipient is DPDP personal data and is shown masked
+    // (maskRecipient), never verbatim: admin@example.com -> a***@e******.c**.
+    await expect(page.getByText('a***@e******.c**')).toBeVisible();
+    await expect(page.getByText('admin@example.com')).toHaveCount(0);
   });
 
   // ── Deliveries ────────────────────────────────────────────────────────────

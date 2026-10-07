@@ -52,7 +52,7 @@ test.describe('Inventory', () => {
     // card's own title, with each row still deep-linking out to the item
     // detail page (see stock.spec.ts for that route's own coverage).
     await page.goto('/inventory/list');
-    await expect(page.getByText('Stock register')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Stock register' })).toBeVisible();
   });
 
   // ── Reconcile ─────────────────────────────────────────────────────────────

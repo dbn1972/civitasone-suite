@@ -99,7 +99,8 @@ test.describe("Payroll Sub-modules (S12-S13)", () => {
 
   test("F&F form renders employee selector and separation type", async ({ page }) => {
     await page.goto("/hr/payroll/fnf");
-    await expect(page.getByLabel(/Employee ID/i)).toBeVisible();
+    // The employee is picked from a labelled "Employee" select (not a free-text "Employee ID" input).
+    await expect(page.getByRole('combobox', { name: 'Employee', exact: true })).toBeVisible();
     await expect(page.getByLabel(/Separation Type/i)).toBeVisible();
   });
 

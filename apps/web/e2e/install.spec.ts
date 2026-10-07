@@ -15,7 +15,8 @@ test.describe('Install', () => {
 
   test('install page shows progress section', async ({ page }) => {
     await page.goto('/install');
-    await expect(page.getByText(/progress/i)).toBeVisible();
+    // "In progress" status value also matches /progress/i; target the section by its heading.
+    await expect(page.getByRole('heading', { name: 'Overall progress' })).toBeVisible();
   });
 
   test('install page shows step titles from mock API', async ({ page }) => {

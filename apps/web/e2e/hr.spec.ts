@@ -61,7 +61,8 @@ test.describe('HR', () => {
 
   test('employee detail breadcrumb links back to employees list', async ({ page }) => {
     await page.goto('/hr/employees/EMP-001');
-    await expect(page.getByRole('link', { name: 'Employees' })).toBeVisible();
+    // exact: the sidebar/other links contain "Employees" too (strict-mode violation otherwise).
+    await expect(page.getByRole('link', { name: 'Employees', exact: true })).toBeVisible();
   });
 
   test('navigating employees list → detail shows profile', async ({ page }) => {
@@ -107,6 +108,9 @@ test.describe('HR', () => {
       }),
     );
     await page.goto('/hr/leave/apply');
+    // Wait for hydration + the leave-context load (the Leave Type select is disabled until it
+    // arrives); clicking before that submitted the un-hydrated form natively and flaked.
+    await expect(page.getByLabel('Leave Type')).toBeEnabled();
     await page.getByRole('button', { name: /submit/i }).click();
     await expect(page.getByText(/required/i).first()).toBeVisible();
   });

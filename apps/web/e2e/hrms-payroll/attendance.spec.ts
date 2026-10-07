@@ -100,7 +100,7 @@ test.describe('Attendance Management', () => {
 
     test('shows working hours configuration', async ({ page }) => {
       await page.goto('/hr/attendance/config');
-      await expect(page.getByText(/working hours/i)).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Working Hours' })).toBeVisible();
     });
   });
 });
