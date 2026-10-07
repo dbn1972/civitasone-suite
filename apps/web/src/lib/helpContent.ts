@@ -12,11 +12,15 @@
  */
 import { explain } from "./glossary";
 
+/** A single step: plain text, or text with an optional link to the screen it
+ * describes (GAP-HELP-MODULE-03). Plain strings stay valid. */
+export type HelpStep = string | { text: string; href?: string };
+
 export type HelpTask = {
   /** A plain, action-named task, e.g. "Record a bill". */
   title: string;
   /** Numbered steps in everyday language. */
-  steps: string[];
+  steps: HelpStep[];
 };
 
 export type HelpModule = {
@@ -246,19 +250,26 @@ export const HELP_MODULES: HelpModule[] = [
     major: true,
     tasks: [
       {
+        // GAP-HELP-MODULE-01: the coded flow is a direct Release on a pending
+        // installment (grants/installments) that disburses after a typed
+        // reason — there is no separate "send for approval" step on that
+        // screen. Copy now matches the buttons the clerk actually sees.
         title: "Release a grant payment",
         steps: [
-          "Open Grants and find the approved grant.",
-          "Choose the instalment to release.",
-          "Send the payment for approval.",
+          { text: "Open Grants, then Installments.", href: "/grants/installments" },
+          "Find the pending installment and click Release.",
+          "Type the approval reference or reason and confirm; the amount is sent for payment and cannot be undone.",
         ],
       },
       {
+        // GAP-HELP-MODULE-02: UC Management offers only Verify and Reject on a
+        // submitted certificate — there is no office-side "record"/upload
+        // action. Spelling standardised to "installment"/"utilisation".
         title: "Track a Utilisation Certificate",
         steps: [
-          "Open Grants, then UC Management.",
-          "Find the grantee and check whether their certificate is due.",
-          "Record it once received and verified.",
+          { text: "Open Grants, then UC Management.", href: "/grants/utilization" },
+          "Find the grantee's certificate and check its status (Submitted or Pending).",
+          "When the grantee submits the certificate, click Verify to accept it, or Reject to send it back with a reason.",
         ],
       },
     ],

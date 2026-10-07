@@ -1,22 +1,27 @@
-import { ModuleListPage } from "../../../_components/ModuleListPage";
+import { PageHeader } from "../../../_components/ds";
 import { getLoyaltyMembers } from "../_data";
-import { ArrowLeft } from "lucide-react";
+import { MembersTable } from "./MembersTable";
 
 export const dynamic = "force-dynamic";
 
-export default async function Page() {
-  const { data, source } = await getLoyaltyMembers();
+const PAGE_SIZE = 50;
+
+export default async function Page({ searchParams }: { searchParams?: { page?: string; programId?: string } }) {
+  const page = Math.max(1, Number(searchParams?.page ?? "1") || 1);
+  const { data, source } = await getLoyaltyMembers({
+    limit: PAGE_SIZE,
+    offset: (page - 1) * PAGE_SIZE,
+    ...(searchParams?.programId ? { programId: searchParams.programId } : {}),
+  });
   return (
     <div className="page-main" aria-labelledby="page-heading">
-      <nav aria-label="Breadcrumb" className="back">
-        <ArrowLeft aria-hidden="true" size={14} /> <a href="/loyalty">Loyalty Programs</a>
-      </nav>
-      <ModuleListPage
+      <PageHeader
         title="Loyalty — Members"
-        description="Member enrolments and tier status."
-        rows={data}
-        source={source}
+        subtitle="Member enrolments with tier status and point balances."
+        back="/loyalty"
+        backLabel="Loyalty Programs"
       />
+      <MembersTable rows={data} source={source} variant="members" />
     </div>
   );
 }

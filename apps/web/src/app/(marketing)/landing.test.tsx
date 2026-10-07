@@ -4,6 +4,8 @@ import LandingPage from "./page";
 import PricingPage from "./pricing/page";
 import SandboxPage from "./sandbox/page";
 import MarketingLayout from "./layout";
+import { MODULE_COUNT } from "@/app/_data/moduleRegistry";
+import { chapters } from "./docs/_content/chapters";
 
 describe("Marketing Landing Page", () => {
   it("renders the hero headline", () => {
@@ -39,7 +41,10 @@ describe("Marketing Landing Page", () => {
     expect(screen.getByText("AI Assistant")).toBeInTheDocument();
     expect(screen.getByText("Sub-Second")).toBeInTheDocument();
     expect(screen.getByText("Extensible")).toBeInTheDocument();
-    expect(screen.getByText("Zero Cost")).toBeInTheDocument();
+    // GAP-DASHBOARD-HOME-03: "Zero Cost" (implied all editions free) is now
+    // "Open-source core" (true only of the Small Office edition).
+    expect(screen.getByText("Open-source core")).toBeInTheDocument();
+    expect(screen.queryByText("Zero Cost")).not.toBeInTheDocument();
   });
 
   it("renders the comparison table", () => {
@@ -51,6 +56,39 @@ describe("Marketing Landing Page", () => {
     expect(screen.getByText("Oracle")).toBeInTheDocument();
   });
 
+  // GAP-DASHBOARD-HOME-01: the hero card is static copy, not a live feed. It
+  // must not pose as "Live System Stats" with a status dot, and its numbers
+  // must be derived, not fabricated.
+  it("GAP-DASHBOARD-HOME-01: hero card has no 'Live' wording and shows the registry module count", () => {
+    render(<LandingPage />);
+    expect(screen.queryByText(/Live System Stats/i)).not.toBeInTheDocument();
+    expect(screen.getByText("At a glance")).toBeInTheDocument();
+    expect(screen.getByTestId("stat-modules")).toHaveTextContent(String(MODULE_COUNT));
+    // The fabricated "80%+ test coverage" claim is gone.
+    expect(screen.queryByText(/test coverage/i)).not.toBeInTheDocument();
+  });
+
+  // GAP-DASHBOARD-HOME-02: no unsourced competitor pricing/training numbers,
+  // and no "no contest" copy.
+  it("GAP-DASHBOARD-HOME-02: comparison table carries no unsourced competitor numbers", () => {
+    render(<LandingPage />);
+    expect(screen.queryByText(/₹50L/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/₹30L/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/40\+ hours/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/no contest/i)).not.toBeInTheDocument();
+  });
+
+  // GAP-DASHBOARD-HOME-03: no unqualified ₹0 claim; CTA relabelled.
+  it("GAP-DASHBOARD-HOME-03: ₹0 claim is qualified and the hero CTA says 'See editions'", () => {
+    render(<LandingPage />);
+    expect(
+      screen.getByText(/₹0 licensing for Small Office \(open source\)/i)
+    ).toBeInTheDocument();
+    const cta = screen.getByRole("link", { name: /See editions/i });
+    expect(cta).toHaveAttribute("href", "/pricing");
+    expect(screen.queryByRole("link", { name: /^View Pricing$/i })).not.toBeInTheDocument();
+  });
+
   it("renders modules showcase strip", () => {
     render(<LandingPage />);
     const strip = document.querySelector('[data-testid="modules-strip"]');
@@ -59,6 +97,41 @@ describe("Marketing Landing Page", () => {
     expect(screen.getByText("HR")).toBeInTheDocument();
     // "Procurement" appears in both modules strip and sandbox roles section
     expect(screen.getAllByText("Procurement").length).toBeGreaterThanOrEqual(1);
+  });
+
+  // GAP-DASHBOARD-HOME-04: every "Learn more" link must resolve to a real
+  // /docs/<slug> chapter page (the old /#<name> anchors matched no id).
+  it("GAP-DASHBOARD-HOME-04: every 'Learn more' link resolves to an existing docs chapter", () => {
+    render(<LandingPage />);
+    const chapterSlugs = new Set(chapters.map((c) => c.slug));
+    const learnMore = screen.getAllByRole("link", { name: /Learn more/i });
+    expect(learnMore.length).toBeGreaterThan(0);
+    for (const link of learnMore) {
+      const href = link.getAttribute("href") ?? "";
+      expect(href.startsWith("/docs/")).toBe(true);
+      expect(href).not.toContain(" ");
+      const slug = href.replace("/docs/", "");
+      expect(chapterSlugs.has(slug)).toBe(true);
+    }
+  });
+
+  // GAP-DASHBOARD-HOME-05: role chips are keyboard-focusable links into the
+  // sandbox, not dead <span>s styled like buttons.
+  it("GAP-DASHBOARD-HOME-05: role chips are links to the sandbox", () => {
+    render(<LandingPage />);
+    const chips = document.querySelector('[data-testid="role-chips"]');
+    expect(chips).toBeInTheDocument();
+    const links = chips!.querySelectorAll("a");
+    expect(links.length).toBe(6);
+    links.forEach((link) => expect(link.getAttribute("href")).toBe("/sandbox"));
+  });
+
+  // GAP-DASHBOARD-HOME-06: the dead PDF download link is gone; the online docs
+  // link remains.
+  it("GAP-DASHBOARD-HOME-06: no dead PDF download link on the landing page", () => {
+    const { container } = render(<LandingPage />);
+    expect(container.querySelector('a[href="/docs/CivitasOne-User-Manual.pdf"]')).toBeNull();
+    expect(screen.getByRole("link", { name: /Read Online/i })).toHaveAttribute("href", "/docs");
   });
 
   it("renders trust bar badges", () => {
@@ -72,7 +145,7 @@ describe("Marketing Landing Page", () => {
     render(<LandingPage />);
     const sandboxLink = screen.getByRole("link", { name: /Try the Sandbox/i });
     expect(sandboxLink).toHaveAttribute("href", "/sandbox");
-    const pricingLink = screen.getByRole("link", { name: /View Pricing/i });
+    const pricingLink = screen.getByRole("link", { name: /See editions/i });
     expect(pricingLink).toHaveAttribute("href", "/pricing");
   });
 });

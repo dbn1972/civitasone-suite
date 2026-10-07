@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { formatMoneyCompact, formatMoney, formatCrore, formatIndianDate, formatIndianDateTime, todayIST, istDatePart, addDaysIST, minorToRupeesOrNull, formatClockTime12h, percentOfMinor, humanizeStatus, formatEntityRef, utilisationPercent, isOverUtilised } from "./formatters";
+import { formatMoneyCompact, formatMoney, formatCrore, formatIndianDate, formatIndianDateTime, todayIST, istDatePart, addDaysIST, minorToRupeesOrNull, formatClockTime12h, percentOfMinor, humanizeStatus, formatEntityRef, utilisationPercent, isOverUtilised, formatPoints } from "./formatters";
 
 // ---------------------------------------------------------------------------
 // formatClockTime12h -- GAP-HR-ATTENDANCE-CONFIG-02
@@ -526,5 +526,30 @@ describe("todayIST at the IST day boundary (GAP-CRM-ACTIVITIES-03)", () => {
     // 00:30 IST on 11 Mar 2026 is still 10 Mar in UTC.
     vi.setSystemTime(new Date("2026-03-10T19:00:00.000Z"));
     expect(todayIST()).toBe("2026-03-11");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatPoints -- GAP-LOYALTY-ACCRUALS-03
+// ---------------------------------------------------------------------------
+describe("formatPoints (GAP-LOYALTY-ACCRUALS-03)", () => {
+  it("groups points with en-IN (lakh) grouping", () => {
+    expect(formatPoints("1234567")).toBe("12,34,567");
+    expect(formatPoints(4500)).toBe("4,500");
+    expect(formatPoints("120")).toBe("120");
+  });
+
+  it("renders a real zero as 0, but missing/unparseable as —", () => {
+    expect(formatPoints(0)).toBe("0");
+    expect(formatPoints("0")).toBe("0");
+    expect(formatPoints(null)).toBe("—");
+    expect(formatPoints(undefined)).toBe("—");
+    expect(formatPoints("")).toBe("—");
+    expect(formatPoints("garbage")).toBe("—");
+  });
+
+  it("is exact for very large point balances (BigInt, no float drift)", () => {
+    // 9007199254740993 grouped Indian-style: last 3 digits, then pairs.
+    expect(formatPoints("9007199254740993")).toBe("9,00,71,99,25,47,40,993");
   });
 });

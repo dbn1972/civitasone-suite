@@ -1,11 +1,14 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { Card, DataTable, EmptyState, PageHeader, StatCard, StatGrid, StatusPill } from "../../../../_components/ds";
+import { RefreshErrorState } from "../../../../_components/ds/RefreshErrorState";
 import { formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 import { getCdpProfile, getCdpProfileIdentity, getCdpProfileTimeline } from "../../_data";
 import {
   attributionCoveragePct,
   contributingSources,
   lineageNewestFirst,
+  maskAttribute,
   resolveAttributeSources,
 } from "./c360";
 
@@ -41,10 +44,26 @@ export default async function CustomerProfilePage({ params }: { params: { id: st
   const anyLoadFailed = source === "error" || identitySource === "error" || eventsSource === "error";
 
   if (!profile) {
+    // GAP-CDP-PROFILES-DETAIL-03: a failed profile fetch (source==="error")
+    // must not read as "merged or absent". Only a genuine null-with-success is
+    // "not found"; a load failure gets a real, retryable error state.
+    if (source === "error") {
+      return (
+        <>
+          <PageHeader title="Customer 360" back="/cdp/profiles" backLabel="Profiles" />
+          <Card title="Customer 360">
+            <RefreshErrorState
+              error={toHumanError("load", { area: "profile" })}
+              source={{ area: "profile" }}
+              backHref="/cdp/profiles"
+            />
+          </Card>
+        </>
+      );
+    }
     return (
       <>
         <PageHeader title="Customer 360" back="/cdp/profiles" backLabel="Profiles" />
-        {anyLoadFailed && <DataSourceBadge source="error" />}
         <EmptyState
           icon="👤"
           title="Profile not found"
@@ -58,13 +77,19 @@ export default async function CustomerProfilePage({ params }: { params: { id: st
   const coverage = attributionCoveragePct(attributeSources);
   const systems = contributingSources(profile.sourceLineage);
 
-  const attributeRows: AttributeRow[] = attributeSources.map((entry) => ({
-    key: entry.key,
-    attribute: entry.key,
-    value: entry.value,
-    source: entry.source ?? "Unattributed",
-    recordedAt: entry.recordedAt ? formatIndianDate(entry.recordedAt) : "—",
-  }));
+  const attributeRows: AttributeRow[] = attributeSources.map((entry) => {
+    // GAP-CDP-PROFILES-DETAIL-01: mask PII-class attributes by key name. The
+    // masked string is what both the table cell AND the CSV export carry, so a
+    // direct identifier (email, phone, Aadhaar, PAN) can never leak unmasked.
+    const { value } = maskAttribute(entry.key, profile.attributes[entry.key]);
+    return {
+      key: entry.key,
+      attribute: entry.key,
+      value,
+      source: entry.source ?? "Unattributed",
+      recordedAt: entry.recordedAt ? formatIndianDate(entry.recordedAt) : "—",
+    };
+  });
 
   const identityRows: IdentityRow[] = identities.map((link) => ({
     id: link.id,
@@ -91,23 +116,53 @@ export default async function CustomerProfilePage({ params }: { params: { id: st
     <>
       <PageHeader
         title="Customer 360"
-        subtitle={`Golden profile ${profile.id} · ${profile.profileType}`}
+        subtitle={`${profile.profileType} · ref …${profile.id.slice(-8)}`}
         back="/cdp/profiles"
         backLabel="Profiles"
       />
       {anyLoadFailed && <DataSourceBadge source="error" />}
       <StatGrid>
-        <StatCard icon="🧾" iconBg="#e0f2fe" label="Attributes" value={attributeSources.length.toLocaleString("en-IN")} />
-        <StatCard icon="🔎" iconBg="#dcfce7" label="Attribution Coverage" value={`${coverage}%`} />
-        <StatCard icon="🔗" iconBg="#fef3c7" label="Linked Identifiers" value={identityRows.length.toLocaleString("en-IN")} />
-        <StatCard icon="🛰️" iconBg="#fce7f3" label="Contributing Systems" value={systems.length.toLocaleString("en-IN")} />
+        <StatCard
+          icon="🧾"
+          iconBg="#e0f2fe"
+          label="Attributes"
+          value={attributeSources.length.toLocaleString("en-IN")}
+          hint="Number of attribute values currently held on this golden profile."
+        />
+        <StatCard
+          icon="🔎"
+          iconBg="#dcfce7"
+          label="Attribution Coverage"
+          // GAP-CDP-PROFILES-DETAIL-04: a profile with no attributes has no
+          // coverage to report — show "—", not a misleading "0%".
+          value={attributeSources.length === 0 ? "—" : `${coverage}%`} // ux-001-ok: derived from already-loaded profile data, not a fetch
+          hint="Share of attributes whose source system is recorded. 0% means no ingest named the fields it wrote."
+        />
+        <StatCard
+          icon="🔗"
+          iconBg="#fef3c7"
+          label="Linked Identifiers"
+          // GAP-CDP-PROFILES-DETAIL-03: if the identity load failed, show "—"
+          // rather than a fabricated 0.
+          value={identitySource === "error" ? "—" : identityRows.length.toLocaleString("en-IN")}
+          hint="Channel identifiers (email, phone, device) identity resolution has linked to this profile."
+        />
+        <StatCard
+          icon="🛰️"
+          iconBg="#fce7f3"
+          label="Contributing Systems"
+          value={systems.length.toLocaleString("en-IN")}
+          hint="Distinct source systems that have appended a lineage entry to this profile."
+        />
       </StatGrid>
 
       <Card title="Attributes and their source of record">
         <p style={{ fontSize: 13, color: "var(--muted)", margin: "0 0 12px" }}>
           Each value is attributed to the system that last supplied it. An attribute shows as
           <strong> Unattributed</strong> when no ingest recorded which fields it wrote — it is not
-          guessed from the most recent contributor.
+          guessed from the most recent contributor. Personal identifiers (email, phone, Aadhaar,
+          PAN and similar) are <strong>masked</strong> here and in any export, in line with DPDP
+          data-minimisation.
         </p>
         <DataTable<AttributeRow>
           columns={[
@@ -146,32 +201,50 @@ export default async function CustomerProfilePage({ params }: { params: { id: st
           </Card>
 
           <Card title="Recent Events">
-            <DataTable<EventRow>
-              columns={[
-                { key: "eventType", label: "Event" },
-                { key: "occurredAt", label: "Occurred" },
-              ]}
-              rows={eventRows}
-              emptyIcon="📡"
-              emptyTitle="No events yet"
-              emptyMessage="Interaction events appear here as channels report them against this profile."
-            />
+            {eventsSource === "error" ? (
+              // GAP-CDP-PROFILES-DETAIL-03: a failed timeline load must not read
+              // as "No events yet" — show a real, retryable error instead.
+              <RefreshErrorState
+                error={toHumanError("load", { area: "events" })}
+                source={{ area: "events" }}
+              />
+            ) : (
+              <DataTable<EventRow>
+                columns={[
+                  { key: "eventType", label: "Event" },
+                  { key: "occurredAt", label: "Occurred" },
+                ]}
+                rows={eventRows}
+                emptyIcon="📡"
+                emptyTitle="No events yet"
+                emptyMessage="Interaction events appear here as channels report them against this profile."
+              />
+            )}
           </Card>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <Card title="Identity Graph">
-            <DataTable<IdentityRow>
-              columns={[
-                { key: "identifierType", label: "Identifier" },
-                { key: "confidence", label: "Confidence", align: "right" },
-                { key: "linkedOn", label: "Linked" },
-              ]}
-              rows={identityRows}
-              emptyIcon="🔗"
-              emptyTitle="No linked identifiers"
-              emptyMessage="Identifiers appear once identity resolution links a channel identifier to this profile."
-            />
+            {identitySource === "error" ? (
+              // GAP-CDP-PROFILES-DETAIL-03: a failed identity load must not read
+              // as "No linked identifiers" — show a real, retryable error.
+              <RefreshErrorState
+                error={toHumanError("load", { area: "linked identifiers" })}
+                source={{ area: "linked identifiers" }}
+              />
+            ) : (
+              <DataTable<IdentityRow>
+                columns={[
+                  { key: "identifierType", label: "Identifier" },
+                  { key: "confidence", label: "Confidence", align: "right" },
+                  { key: "linkedOn", label: "Linked" },
+                ]}
+                rows={identityRows}
+                emptyIcon="🔗"
+                emptyTitle="No linked identifiers"
+                emptyMessage="Identifiers appear once identity resolution links a channel identifier to this profile."
+              />
+            )}
             <p style={{ fontSize: 12, color: "var(--muted)", margin: "12px 0 0" }}>
               Identifier values are stored hashed and are never displayed.
             </p>

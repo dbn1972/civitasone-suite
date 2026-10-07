@@ -44,6 +44,7 @@ const H = vi.hoisted(() => ({
   redemptionVoidMock: vi.fn(),
   // Tiers repo
   tierListDefinitionsMock: vi.fn(),
+  tierListDefinitionsByTenantMock: vi.fn(),
   tierFindCurrentAssignmentMock: vi.fn(),
   tierListAssignmentHistoryMock: vi.fn(),
   tierInsertAssignmentMock: vi.fn(),
@@ -107,6 +108,7 @@ vi.mock("../src/modules/redemptions/repo.js", () => ({
 
 vi.mock("../src/modules/tiers/repo.js", () => ({
   listDefinitions: (...a: unknown[]) => H.tierListDefinitionsMock(...a),
+  listDefinitionsByTenant: (...a: unknown[]) => H.tierListDefinitionsByTenantMock(...a),
   findCurrentAssignment: (...a: unknown[]) => H.tierFindCurrentAssignmentMock(...a),
   listAssignmentHistory: (...a: unknown[]) => H.tierListAssignmentHistoryMock(...a),
   insertAssignment: (...a: unknown[]) => H.tierInsertAssignmentMock(...a),
@@ -210,6 +212,7 @@ beforeEach(() => {
   H.redemptionInsertMock.mockResolvedValue(undefined);
   H.redemptionVoidMock.mockResolvedValue(true);
   H.tierInsertAssignmentMock.mockResolvedValue(undefined);
+  H.tierListDefinitionsByTenantMock.mockResolvedValue({ rows: [], total: 0 });
   H.enqueueMock.mockResolvedValue(undefined);
   H.publishMock.mockResolvedValue(undefined);
   H.dbTransactionMock.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => cb({}));
@@ -1027,6 +1030,52 @@ describe("Redemptions", () => {
 // TIERS
 // ═══════════════════════════════════════════════════════════════════════════════
 describe("Tiers", () => {
+  // GAP-LOYALTY-TIERS-01: tenant-wide tier DEFINITIONS list (name, threshold,
+  // benefits) — the new GET /v1/loyalty/tiers the Tiers page now calls instead
+  // of re-querying programmes.
+  it("GET /v1/loyalty/tiers — 200 lists tier definitions for the tenant", async () => {
+    H.tierListDefinitionsByTenantMock.mockResolvedValue({
+      rows: [
+        { id: TIER_DEF_ID, tenantId: TENANT, programId: PROGRAM_ID, name: "Gold", level: 3, minPointsThreshold: "100000", benefits: { lounge: true } },
+      ],
+      total: 1,
+    });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/loyalty/tiers",
+      headers: { authorization: `Bearer ${userToken()}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data[0].name).toBe("Gold");
+    expect(res.json().data[0].minPointsThreshold).toBe("100000");
+    expect(res.json().meta.total).toBe(1);
+  });
+
+  it("GET /v1/loyalty/tiers — 403 for a role without loyalty read access", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/loyalty/tiers",
+      headers: { authorization: `Bearer ${noRoleToken()}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("GET /v1/loyalty/tiers?programId= — passes the programId filter to the repo", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/loyalty/tiers?programId=${PROGRAM_ID}`,
+      headers: { authorization: `Bearer ${userToken()}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    expect(H.tierListDefinitionsByTenantMock).toHaveBeenCalledWith(TENANT, 50, 0, PROGRAM_ID);
+  });
+
   it("GET /v1/loyalty/tiers/:enrolmentId — 200 returns current tier", async () => {
     H.enrolmentFindByIdMock.mockResolvedValue(makeEnrolment({ tier: "Silver" }));
     H.tierFindCurrentAssignmentMock.mockResolvedValue({

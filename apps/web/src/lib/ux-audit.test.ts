@@ -24,7 +24,11 @@ describe("UX Audit: Jargon-Free Copy (R14)", () => {
       const allCopy = [
         mod.title,
         mod.summary,
-        ...mod.tasks.flatMap((t) => [t.title, ...t.steps]),
+        // GAP-HELP-MODULE-03: a step is `string | { text, href? }`; scan the text.
+        ...mod.tasks.flatMap((t) => [
+          t.title,
+          ...t.steps.map((s) => (typeof s === "string" ? s : s.text)),
+        ]),
       ].join(" ");
       const found = findBannedTerms(allCopy);
       if (found.length > 0) {

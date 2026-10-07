@@ -13,6 +13,10 @@ const listQuery = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
+const definitionsQuery = listQuery.extend({
+  programId: z.string().uuid().optional(),
+});
+
 const evaluateBody = z.object({
   enrolmentId: z.string().uuid(),
   programId: z.string().uuid(),
@@ -21,6 +25,22 @@ const evaluateBody = z.object({
 const enrolmentIdParam = z.object({ enrolmentId: z.string().uuid() });
 
 export async function tierRoutes(app: FastifyInstance): Promise<void> {
+  // GAP-LOYALTY-TIERS-01: tenant-wide tier DEFINITIONS (name, threshold,
+  // benefits), optionally filtered by programId. The Tiers page used to call
+  // GET /v1/loyalty/programs and render programme rows; this is the real tier
+  // source. Static path registered before the ":enrolmentId" param route so it
+  // is never shadowed.
+  app.get("/v1/loyalty/tiers", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const q = definitionsQuery.parse(req.query);
+
+    const { rows, total } = await repo.listDefinitionsByTenant(ctx.tenantId, q.limit, q.offset, q.programId);
+    const page = Math.floor(q.offset / q.limit) + 1;
+
+    return reply.send({ data: rows.map(repo.toDefView), meta: { page, pageSize: q.limit, total } });
+  });
+
   app.get("/v1/loyalty/tiers/:enrolmentId", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);

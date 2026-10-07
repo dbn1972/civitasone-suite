@@ -12,7 +12,8 @@ describe("mapRows", () => {
       label: "High value donors",
       sublabel: "Top decile lifetime value",
       status: "active",
-      meta: "2026-08-01T00:00:00.000Z",
+      // GAP-CDP-SEGMENTS-04: updatedAt is now formatted in IST, not raw ISO.
+      meta: "01 Aug 2026, 05:30 am",
     });
   });
 
@@ -26,11 +27,12 @@ describe("mapRows", () => {
 
     expect(row.label).toBe("order_placed");
     expect(row.label).not.toBe("9c1f2b3a-0000-4000-8000-000000000001");
-    // sublabel checks `status` before `category` in the fallback chain, so it
-    // matches the separate `status` field here too — pre-existing behaviour,
-    // untouched by this fix.
-    expect(row.sublabel).toBe("approved");
+    // GAP-CDP-EVENTS-04: `status` is no longer part of the sublabel chain, so it
+    // is NOT duplicated into Detail — the sublabel now falls to `category`.
+    expect(row.sublabel).toBe("behavioural");
     expect(row.status).toBe("approved");
+    // GAP-CDP-EVENTS-01: updatedAt is formatted in IST, not shown as raw ISO.
+    expect(row.meta).toBe("01 Aug 2026, 05:30 am");
   });
 
   it("labels an anonymous-visitor row from visitorRef and shows lastSeenAt as meta", () => {
@@ -48,7 +50,8 @@ describe("mapRows", () => {
     ]);
 
     expect(row.label).toBe("a1b2c3d4e5f6");
-    expect(row.meta).toBe("2026-08-20T12:00:00.000Z");
+    // GAP-CDP-IDENTITY-03: lastSeenAt is formatted in IST, not raw ISO.
+    expect(row.meta).toBe("20 Aug 2026, 05:30 pm");
   });
 
   it("falls back to the row id when nothing else identifies it", () => {
@@ -67,5 +70,22 @@ describe("mapRows", () => {
   it("returns an empty list for a payload with no recognizable rows", () => {
     expect(mapRows(null)).toEqual([]);
     expect(mapRows({})).toEqual([{ id: "row-1", label: "row-1" }]);
+  });
+
+  it("does not repeat the status in Detail when a row has only name + status (GAP-CDP-EVENTS-04)", () => {
+    const [row] = mapRows([{ id: "x", name: "A", status: "ACTIVE" }]);
+    expect(row.status).toBe("ACTIVE");
+    // sublabel (Detail column) must be absent, not a second copy of the status.
+    expect(row.sublabel).toBeUndefined();
+  });
+
+  it("keeps a non-date meta field (code) verbatim, only dates are reformatted (GAP-CDP-EVENTS-01)", () => {
+    const [row] = mapRows([{ id: "c1", name: "Coupon", code: "SAVE20" }]);
+    expect(row.meta).toBe("SAVE20");
+  });
+
+  it("passes an unparseable date meta through unchanged rather than 'Invalid Date' (GAP-CDP-IDENTITY-03)", () => {
+    const [row] = mapRows([{ id: "d1", name: "Odd", updatedAt: "not-a-date" }]);
+    expect(row.meta).toBe("not-a-date");
   });
 });

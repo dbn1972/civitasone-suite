@@ -117,6 +117,24 @@ export const PAYROLL_READER_ROLES = [...PAYROLL_ADMIN_ROLES, "hr_admin", "financ
 export const PAYROLL_REPORT_ROLES = [...PAYROLL_ADMIN_ROLES, "hr_admin"];
 
 /**
+ * GAP-RECOMMENDATIONS-HEALTH-02: roles permitted to read the recommendation
+ * surfaces (NBA/predictive, cross-sell matrix, at-risk health, feedback).
+ * Mirrors recommendation-service's REC_ROLES (the READ_ROLES/REC_ROLES array
+ * repeated in every module's routes.ts). The service is the authority and
+ * returns 403 to any other role regardless of what the page renders; gating
+ * the layout on this constant shows PermissionDenied instead of four failed
+ * fetches. At-risk rows carry only accountId/score/band/computedAt (no contact
+ * PII — see health/scoring-routes.ts), so this role gate plus the service RBAC
+ * is the control; there is no unmasked phone/email to leak.
+ */
+export const RECOMMENDATION_READER_ROLES = [
+  "recommendation_admin",
+  "crm_user",
+  "sales_user",
+  "super_admin",
+];
+
+/**
  * Roles permitted to approve/reject a cycle count. Mirrors inventory-service's
  * APPROVE_ROLES in modules/cycle-count/routes.ts (GAP-INVENTORY-CYCLE-COUNTS-DETAIL-02);
  * the server remains the authority (it also enforces maker != checker).
@@ -384,6 +402,16 @@ export const INSTALL_VIEW_ROLES = ["install_user", "install_admin", "super_admin
  */
 export const INSTALL_OPERATE_ROLES = ["install_user", "install_admin", "super_admin", "tenant_admin"];
 
+/**
+ * GAP-CDP-STEWARD-01: roles permitted to decide (approve/reject) profile-merge
+ * suggestions in /cdp/steward. Mirrors cdp-service's STEWARD_ROLES
+ * (services/cdp-service/src/modules/steward/routes.ts), which is the authority —
+ * the POST /v1/cdp/steward/decide route already enforces 403 for anyone outside
+ * this set. This constant drives the defence-in-depth UI gate so a non-steward
+ * is not offered Approve/Reject controls that would only 403 server-side.
+ */
+export const CDP_STEWARD_ROLES = ["cdp_steward", "cdp_admin", "super_admin"];
+
 /** True when any of the session roles is in `allowed`. Pure; for UI gating. */
 export function hasAnyRole(sessionRoles: string[], allowed: string[]): boolean {
   return allowed.some((r) => sessionRoles.includes(r));
@@ -401,6 +429,28 @@ export function hasAnyRole(sessionRoles: string[], allowed: string[]): boolean {
  * this set client-side and re-checked server-side (GAP-POLICY-EVALUATE-01).
  */
 export const POLICY_ADMIN_ROLES = ["platform_admin", "super_admin", "tenant_admin"];
+
+/**
+ * GAP-DASHBOARD-HOME-2-02: true when any session role belongs to the role
+ * `family`. A role belongs to a family when it is EXACTLY the family name, or
+ * is prefixed by `family` followed by a delimiter (`_` or `:`). This replaces
+ * the old `r.includes(family)` substring test used for dashboard tile /
+ * command-center visibility, which leaked modules to unrelated roles — e.g.
+ * `"chr_manager".includes("hr")` was true, so a cadre-HR-manager-ish role
+ * matched the HR family. Pure; UI-gating convenience only (ModuleGate /
+ * requireAnyRole / per-route 403 remain the real authorization boundary).
+ *
+ * Examples:
+ *   hasRoleFamily(["hr_officer"], "hr")   === true
+ *   hasRoleFamily(["hr"], "hr")           === true
+ *   hasRoleFamily(["chr_manager"], "hr")  === false
+ *   hasRoleFamily(["finance:admin"], "finance") === true
+ */
+export function hasRoleFamily(sessionRoles: string[], family: string): boolean {
+  return sessionRoles.some(
+    (r) => r === family || r.startsWith(`${family}_`) || r.startsWith(`${family}:`),
+  );
+}
 
 /**
  * GAP-BILLING-HOME-01 / GAP-BILLING-GSTN-01: billing module role gating.
@@ -542,3 +592,24 @@ export const VISITOR_ADMIN_ROLES = ["tenant_admin", "super_admin"];
  * gate-terminal service account. Defence-in-depth; the service is the gate.
  */
 export const VISITOR_GUARD_ROLES = ["security_admin", "gate_terminal", "protocol_officer", "employee", "tenant_admin", "super_admin"];
+
+/**
+ * GAP-LOYALTY-ACCRUALS-02 / MEMBERS-02 / HOME-03: roles permitted to READ
+ * loyalty data (programmes, enrolments/members, accruals, redemptions, tiers).
+ * Mirrors loyalty-service's READ_ROLES on every GET route
+ * (services/loyalty-service/src/modules/[module]/routes.ts): loyalty_user,
+ * loyalty_admin, super_admin. The service is the authority (every GET route
+ * calls requireRole and 403s others); this web gate is defence-in-depth so a
+ * user whose GET would 403 sees PermissionDenied instead of an unexplained
+ * failed fetch, and member references/balances are not loaded for them.
+ */
+export const LOYALTY_READ_ROLES = ["loyalty_user", "loyalty_admin", "super_admin"];
+
+/**
+ * GAP-LOYALTY-REDEMPTIONS-02 / PROGRAMS-02: roles permitted to perform loyalty
+ * admin actions (void a redemption; manage programmes). Mirrors
+ * loyalty-service's WRITE_ROLES / ADMIN_ROLES (loyalty_admin, super_admin). The
+ * service stays the real gate; this only decides whether the UI offers the
+ * control.
+ */
+export const LOYALTY_ADMIN_ROLES = ["loyalty_admin", "super_admin"];

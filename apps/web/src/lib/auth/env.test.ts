@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { isDevLoginEnabled, defaultLoginPath } from "./env";
+import { isDevLoginEnabled, defaultLoginPath, assertDevLoginConfig } from "./env";
 
 describe("isDevLoginEnabled", () => {
   beforeEach(() => {
@@ -40,5 +40,45 @@ describe("defaultLoginPath", () => {
   it("returns /auth/dev when dev login is enabled", () => {
     vi.stubEnv("ENABLE_DEV_LOGIN", "true");
     expect(defaultLoginPath()).toBe("/auth/dev");
+  });
+});
+
+const SECRET_VAL = "s".repeat(40);
+const PW_VAL = "p".repeat(12);
+
+describe("assertDevLoginConfig (GAP-AUTH-DEV-01)", () => {
+  beforeEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("throws in production", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("JWT_SECRET", SECRET_VAL);
+    vi.stubEnv("DEV_LOGIN_PASSWORD", PW_VAL);
+    expect(() => assertDevLoginConfig()).toThrow(/production/);
+  });
+
+  it("throws when JWT_SECRET is missing", () => {
+    vi.stubEnv("NODE_ENV", "test");
+    vi.stubEnv("JWT_SECRET", "");
+    vi.stubEnv("DEV_LOGIN_PASSWORD", PW_VAL);
+    expect(() => assertDevLoginConfig()).toThrow(/JWT_SECRET/);
+  });
+
+  it("throws when DEV_LOGIN_PASSWORD is empty", () => {
+    vi.stubEnv("NODE_ENV", "test");
+    vi.stubEnv("JWT_SECRET", SECRET_VAL);
+    vi.stubEnv("DEV_LOGIN_PASSWORD", "");
+    expect(() => assertDevLoginConfig()).toThrow(/DEV_LOGIN_PASSWORD/);
+  });
+
+  it("returns the validated secret and password when all invariants hold", () => {
+    vi.stubEnv("NODE_ENV", "test");
+    vi.stubEnv("JWT_SECRET", SECRET_VAL);
+    vi.stubEnv("DEV_LOGIN_PASSWORD", PW_VAL);
+    expect(assertDevLoginConfig()).toEqual({
+      secret: SECRET_VAL,
+      password: PW_VAL,
+    });
   });
 });

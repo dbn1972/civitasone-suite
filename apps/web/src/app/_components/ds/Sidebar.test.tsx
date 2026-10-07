@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
 import { Sidebar } from "./Sidebar";
 
 const COLLAPSED_KEY = "civitas-sidebar-collapsed";
@@ -193,6 +194,30 @@ describe("Sidebar", () => {
     it("is shown (backward compatible) when enabledModules is null", () => {
       render(<Sidebar enabledModules={null} />);
       expect(screen.getByRole("link", { name: /Workflow/ })).toBeInTheDocument();
+    });
+  });
+
+  // GAP-DASHBOARD-HOME-2-05: the Dashboard nav label is now driven by the
+  // next-intl `nav.dashboard` key (same key the /dashboard page title uses),
+  // so nav and page title agree and the label translates. Without a provider
+  // it falls back to the English literal (backward compatible with the tests
+  // above that render Sidebar bare).
+  describe("Dashboard label i18n", () => {
+    it("falls back to English 'Dashboard' when no NextIntlClientProvider is present", () => {
+      render(<Sidebar enabledModules={null} />);
+      const link = screen.getByRole("link", { name: "Dashboard" });
+      expect(link).toHaveAttribute("href", "/dashboard");
+    });
+
+    it("uses the Hindi translation under a hi-locale provider", () => {
+      render(
+        <NextIntlClientProvider locale="hi" messages={{ nav: { dashboard: "डैशबोर्ड" } }}>
+          <Sidebar enabledModules={null} />
+        </NextIntlClientProvider>,
+      );
+      const link = screen.getByRole("link", { name: "डैशबोर्ड" });
+      expect(link).toHaveAttribute("href", "/dashboard");
+      expect(screen.queryByRole("link", { name: "Dashboard" })).not.toBeInTheDocument();
     });
   });
 });

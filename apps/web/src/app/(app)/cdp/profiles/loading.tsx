@@ -1,18 +1,21 @@
+import { SkeletonBar, SkeletonTable } from "../../../_components/ds/Skeleton";
+
+// GAP-CDP-PROFILES-05: heading now matches the loaded page title ("CDP —
+// Profiles", page.tsx) so it does not flicker on load, and the skeleton uses
+// the design-system Skeleton (theme tokens) instead of hard-coded #f1f5f9. The
+// profiles page does render four StatCards above a table, so SkeletonTable
+// (4 stat cards + filter bar + table) is the faithful mirror here.
 export default function Loading() {
   return (
     <div className="page-main" aria-labelledby="page-heading">
       <div className="ph">
-        <div>
-          <h1 id="page-heading">Profiles</h1>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <SkeletonBar w={200} h={28} />
+          <SkeletonBar w={360} h={14} />
         </div>
       </div>
-      <div className="animate-pulse" style={{ display: "grid", gap: 16 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} style={{ height: 80, borderRadius: 12, background: "#f1f5f9" }} />
-          ))}
-        </div>
-        <div style={{ height: 280, borderRadius: 12, background: "#f1f5f9" }} />
+      <div style={{ marginTop: 16 }}>
+        <SkeletonTable rows={8} />
       </div>
     </div>
   );

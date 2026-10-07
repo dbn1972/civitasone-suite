@@ -42,5 +42,32 @@ export function isModuleEnabled(
   if (roles?.includes("super_admin") || roles?.includes("platform_admin")) return true;
   if (!enabled) return true; // unknown → show all
   const key = moduleKey.toLowerCase();
+  // GAP-RECOMMENDATIONS-HOME-04: the recommendations route/nav gate on the key
+  // "recommendation" (singular) while a tenant's entitlement flag may be named
+  // either "recommendation" or "recommendations". The existing bidirectional
+  // substring match below already resolves this (one contains the other), but
+  // only incidentally; this explicit alias pair makes the singular/plural
+  // equivalence a deliberate, tested contract rather than relying on `includes`
+  // happening to line up. It is strictly additive — it can only ENABLE a match
+  // (never hide a module), so no tenant with a legacy flag name is affected, and
+  // the lenient fallback for every other module is left untouched.
+  const RECOMMENDATION_ALIASES = new Set(["recommendation", "recommendations"]);
+  if (RECOMMENDATION_ALIASES.has(key)) {
+    if (enabled.some((name) => RECOMMENDATION_ALIASES.has(name))) return true;
+  }
+  // GAP-JOURNEYS-HOME-03: the journeys route/nav use moduleKey "journey" while
+  // a tenant flag may be registered as the plural "journeys" (or vice versa).
+  // The lenient contains-match below already resolves this pair, but it is
+  // ambiguous (it would also match on any shared substring). Pin the intended
+  // singular/plural equivalences explicitly so the decision is recorded and
+  // cannot silently change if the fallback is ever tightened. This is additive:
+  // the existing lenient fallback is unchanged, so no other module's gating
+  // (e.g. "hrms" ⊇ "hr", "establishment"/"estab") is affected.
+  const MODULE_ALIASES: Record<string, string[]> = {
+    journey: ["journeys"],
+    journeys: ["journey"],
+  };
+  const aliases = MODULE_ALIASES[key] ?? [];
+  if (enabled.some((name) => name === key || aliases.includes(name))) return true;
   return enabled.some((name) => name === key || name.includes(key) || key.includes(name));
 }

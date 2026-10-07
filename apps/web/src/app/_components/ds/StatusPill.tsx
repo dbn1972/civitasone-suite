@@ -330,6 +330,17 @@ const STATUS_MAP: Record<string, PillVariant> = {
   // Device trust (admin/devices): hrms.trusted_devices.trust_status.
   trusted: "good",
 
+  // GAP-RECOMMENDATIONS-HEALTH-01/03: account-health bands (recommendation-
+  // service health/scoring-domain.ts: critical | at_risk | healthy | thriving).
+  // "healthy" already maps to "good" above (its everyday meaning matches here).
+  // The three with no key fell through to the neutral "info" pill, so a
+  // critical account looked no different from a thriving one on the at-risk
+  // table whose whole purpose is to surface the worst first. normalizeStatusKey
+  // turns "at_risk" into "at risk" before lookup.
+  critical: "bad",
+  "at risk": "bad",
+  thriving: "good",
+
   // GAP-PLATFORM-ADMIN-USERS-07: identity-service user account states shown on
   // /platform-admin/users. "suspended" (bad) and "pending" (warn) already map
   // above; "locked" is an attention state (failed-login/lockout) and
@@ -380,6 +391,17 @@ const STATUS_MAP: Record<string, PillVariant> = {
   allow: "good",
   permit: "good",
   deny: "bad",
+  // GAP-FLEET-VEHICLES-02: fleet vehicle lifecycle (asset-service fleet
+  // vehicles status enum: active | in_maintenance | decommissioned; see
+  // services/asset-service/src/modules/fleet/routes.ts PATCH z.enum). "active"
+  // already maps to "good" above. Without these keys a vehicle in the shop or
+  // one taken off the road fell through to the neutral "info" pill -- visually
+  // identical to an unknown value and to a serviceable vehicle. A vehicle in
+  // maintenance is a temporary, attention-needing state (warn); a
+  // decommissioned one is a quiet terminal state (mut). normalizeStatusKey()
+  // turns the on-wire "in_maintenance" into "in maintenance" before lookup.
+  "in maintenance": "warn",
+  decommissioned: "mut",
 };
 // Deliberately NOT added: a generic "flagged" key. tenant-admin/security/SecurityTable.tsx
 // has its own inline outcome->variant mapping that fails closed to "bad" for any

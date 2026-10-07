@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   MUNICIPAL_SERVICE_CATALOG,
   SEC5_SERVICE_COUNT,
+  CITIZEN_LINK_COUNT,
   getMunicipalService,
   listSec5Services,
   officerApplicationsHref,
@@ -17,6 +18,17 @@ describe("municipal web catalog (split per-service)", () => {
     expect(MUNICIPAL_SERVICE_CATALOG).toHaveLength(17);
     expect(SEC5_SERVICE_COUNT).toBe(16);
     expect(listSec5Services()).toHaveLength(16);
+  });
+
+  it("counts only services with a citizen manifest as citizen apply links (HOME-01)", () => {
+    // 6 of 17 services have no citizenServiceKey, so 11 expose a citizen link —
+    // distinct from the catalog length (17). Derived from the catalog, so it
+    // changes automatically if a key is added/removed.
+    expect(CITIZEN_LINK_COUNT).toBe(11);
+    expect(CITIZEN_LINK_COUNT).toBe(
+      MUNICIPAL_SERVICE_CATALOG.filter((s) => s.citizenServiceKey).length,
+    );
+    expect(CITIZEN_LINK_COUNT).not.toBe(MUNICIPAL_SERVICE_CATALOG.length);
   });
 
   it("uses unique service keys and gateway list paths", () => {

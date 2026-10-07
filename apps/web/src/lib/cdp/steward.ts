@@ -61,8 +61,11 @@ export type DecideMergeResult = {
 /**
  * Submit a steward decision. Resolves once the command is accepted (HTTP 202);
  * the actual merge (on approve) happens moments later via the queue consumer.
- * Throws with the server's real `CODE: message` on failure — e.g.
- * "ALREADY_DECIDED: merge request is already approved" if two stewards race.
+ *
+ * On failure this throws a UserFacingError carrying a clerk-safe, plain-language
+ * message built by the app error catalogue (browserJson -> errorMessageFromResponse
+ * -> humanErrorFromFailure); the server's machine code (e.g. "ALREADY_DECIDED" when
+ * two stewards race) and raw text are deliberately NOT surfaced (UX-020).
  */
 export async function decideMerge(
   mergeRequestId: string,
@@ -73,4 +76,48 @@ export async function decideMerge(
     method: "POST",
     body: JSON.stringify({ mergeRequestId, decision, reason }),
   });
+}
+
+/**
+ * GAP-CDP-STEWARD-02: a compact, display-safe view of a profile for the merge
+ * queue and the confirm dialog. A steward must see WHO they are merging — name,
+ * type and a couple of (masked) identifying attributes — not just two opaque
+ * UUID prefixes, before approving an irreversible merge.
+ *
+ * Backed by the existing cdp-service read model GET /v1/cdp/profiles/:id/summary
+ * (profiles/summary-routes.ts), which already projects a bounded KEY_ATTRIBUTES
+ * bag (name/email/phone/city/state/...). No new backend surface is invented.
+ */
+export type ProfileSummary = {
+  id: string;
+  profileType: string;
+  attributes: Record<string, unknown>;
+};
+
+/**
+ * Fetch the display summary for one profile. Returns null when the profile
+ * cannot be loaded (404, merged-away, network/permission error) so the caller
+ * can show an honest "details unavailable" state WITHOUT blocking the decision —
+ * the merge queue must stay usable even if a profile read fails.
+ */
+export async function getProfileSummary(id: string): Promise<ProfileSummary | null> {
+  try {
+    const res = await browserFetch(`v1/cdp/profiles/${id}/summary`);
+    if (!res.ok) return null;
+    const body = (await res.json()) as { data?: ProfileSummary };
+    return body.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Read a string attribute from a summary bag, or null when absent/non-string. */
+export function summaryAttr(summary: ProfileSummary | null | undefined, key: string): string | null {
+  const value = summary?.attributes?.[key];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+/** The best available human label for a profile: its name, else a short id. */
+export function profileDisplayName(summary: ProfileSummary | null | undefined, fallbackId: string): string {
+  return summaryAttr(summary, "name") ?? `${fallbackId.slice(0, 8)}…`;
 }

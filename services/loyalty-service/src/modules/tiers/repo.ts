@@ -54,6 +54,41 @@ export async function listDefinitions(
   );
 }
 
+/**
+ * GAP-LOYALTY-TIERS-01: tenant-wide list of tier DEFINITIONS (name, threshold,
+ * benefits), optionally narrowed to one programme. Backs GET /v1/loyalty/tiers
+ * — the Tiers page previously re-queried GET /v1/loyalty/programs and showed
+ * programme rows, never a tier name/threshold/benefit. Ordered by programme
+ * then level so a flat table groups each programme's tiers in ascending order.
+ */
+export async function listDefinitionsByTenant(
+  tenantId: string,
+  limit: number,
+  offset: number,
+  programId?: string,
+): Promise<{ rows: TierDefinitionRow[]; total: number }> {
+  const where: SQL = programId
+    ? and(eq(tierDefinitions.tenantId, tenantId), eq(tierDefinitions.programId, programId))!
+    : eq(tierDefinitions.tenantId, tenantId);
+
+  const rows = await scopedRead((tx) =>
+    tx
+      .select()
+      .from(tierDefinitions)
+      .where(where)
+      .orderBy(tierDefinitions.programId, tierDefinitions.level)
+      .limit(limit)
+      .offset(offset),
+  );
+
+  const countResult = await scopedRead((tx) =>
+    tx.select({ count: sql<number>`count(*)::int` }).from(tierDefinitions).where(where),
+  );
+  const total = countResult[0]?.count ?? 0;
+
+  return { rows, total };
+}
+
 export async function findCurrentAssignment(
   tenantId: string,
   enrolmentId: string,

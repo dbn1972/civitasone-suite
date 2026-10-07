@@ -33,6 +33,13 @@ import Link from "next/link";
 
 const STORAGE_KEY = "civitasone.tour.dashboard.v1";
 
+/**
+ * The localStorage key that records the dashboard first-run tour as seen.
+ * Exported so ReplayTourButton can clear exactly this key instead of
+ * duplicating the string literal (GAP-HELP-HOME-04).
+ */
+export const TOUR_STORAGE_KEY = STORAGE_KEY;
+
 type TourStep = {
   icon: string;
   title: string;
