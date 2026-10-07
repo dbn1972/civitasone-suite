@@ -100,16 +100,16 @@ export default async function AssesseeDetailPage({ params }: { params: { id: str
 
   // GAP-REVENUE-ASSESSEES-DETAIL-01: deep-link actions so an officer can act on
   // this assessee without re-picking them from a capped select on another lane.
-  const q = `?assesseeId=${encodeURIComponent(params.id)}`;
+  const assesseeIdParam = encodeURIComponent(params.id);
   const ledgerActions = (
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-      <Link href={`/revenue/bills${q}`} className="btn ghost sm">Generate bill</Link>
-      <Link href={`/revenue/receipts${q}`} className="btn ghost sm">Record receipt</Link>
-      <Link href={`/revenue/refunds${q}`} className="btn ghost sm">Raise refund</Link>
-      <Link href={`/revenue/instalments${q}`} className="btn ghost sm">Instalment plan</Link>
-      <Link href={`/revenue/adjustments${q}`} className="btn ghost sm">Adjustment</Link>
-      <Link href={`/revenue/write-offs${q}`} className="btn ghost sm">Write-off</Link>
-      <Link href={`/revenue/recovery${q}`} className="btn ghost sm">Recovery</Link>
+      <Link href={`/revenue/bills?assesseeId=${assesseeIdParam}`} className="btn ghost sm">Generate bill</Link>
+      <Link href={`/revenue/receipts?assesseeId=${assesseeIdParam}`} className="btn ghost sm">Record receipt</Link>
+      <Link href={`/revenue/refunds?assesseeId=${assesseeIdParam}`} className="btn ghost sm">Raise refund</Link>
+      <Link href={`/revenue/instalments?assesseeId=${assesseeIdParam}`} className="btn ghost sm">Instalment plan</Link>
+      <Link href={`/revenue/adjustments?assesseeId=${assesseeIdParam}`} className="btn ghost sm">Adjustment</Link>
+      <Link href={`/revenue/write-offs?assesseeId=${assesseeIdParam}`} className="btn ghost sm">Write-off</Link>
+      <Link href={`/revenue/recovery?assesseeId=${assesseeIdParam}`} className="btn ghost sm">Recovery</Link>
     </div>
   );
 

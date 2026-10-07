@@ -32,7 +32,6 @@ export const EVENTS = {
   // locations
   locationCreated: "location.location.created",
   locationUpdated: "location.location.updated",
-  locationUpdate: "location.location.update",
   // hierarchy
   unitCreated: "location.hierarchy.unit.created",
   unitUpdated: "location.hierarchy.unit.updated",

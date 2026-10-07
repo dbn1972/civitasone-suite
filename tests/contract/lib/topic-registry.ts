@@ -37,7 +37,7 @@ const CONSUMED_EXPORTS = new Set([
  * approval decisions to hrms/procurement/estab/asset command topics; a target
  * that does not handle the command silently drops the approval.
  */
-const DISPATCH_EXPORTS = new Set(["DISPATCH", "INTEGRATION", "OUTBOUND"]);
+const DISPATCH_EXPORTS = new Set(["DISPATCH", "INTEGRATION", "OUTBOUND", "FINANCE_HANDOFF"]);
 
 export type TopicRef = {
   /** Property key inside the object literal, e.g. `sanctionApproved`. */
@@ -141,7 +141,22 @@ function collectTsFiles(dir: string, acc: string[] = []): string[] {
  * empty/partial AST, which would erase a service's whole contract and turn this
  * gate green. Reading `parseDiagnostics` is what makes that impossible.
  */
+// Per-service parse cache. loadContracts() runs three AST scans over every file of
+// a service (call sites, symbol references, import aliases); without this each
+// file was parsed 3x, which made the topic scan ~20s and timed out
+// baseline.test.ts at vitest's 5s default. Scoped to one service at a time so the
+// ASTs (parent nodes set) are released before the next service is scanned.
+let parseCache: Map<string, ts.SourceFile> | null = null;
+
 function parse(file: string): ts.SourceFile {
+  const hit = parseCache?.get(file);
+  if (hit) return hit;
+  const sf = parseUncached(file);
+  parseCache?.set(file, sf);
+  return sf;
+}
+
+function parseUncached(file: string): ts.SourceFile {
   const sf = ts.createSourceFile(
     file,
     readFileSync(file, "utf8"),
@@ -425,6 +440,7 @@ export function loadContracts(): ServiceContract[] {
 
   for (const service of listServiceDirs()) {
     const serviceDir = join(SERVICES_DIR, service);
+    parseCache = new Map();
     const sf = parse(join(serviceDir, "src", "topics.ts"));
     const { maps, skipped, unresolved } = extractTopicMaps(sf);
     const alias = buildAliasIndex(maps);
@@ -440,6 +456,7 @@ export function loadContracts(): ServiceContract[] {
     const { subscribed, emitted } = scanCallSites(serviceDir, alias);
     const referencedSymbols = scanSymbolReferences(serviceDir);
     const importAliases = scanImportAliases(serviceDir);
+    parseCache = null;
 
     contracts.push({
       service,

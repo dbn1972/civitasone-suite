@@ -27,7 +27,7 @@ export default async function ServiceApplyPage({ params, searchParams }: Props) 
   );
   if (outcome.kind === "not_found") notFound();
   if (outcome.kind === "unauthorized") {
-    redirect(`/login?next=/citizen/services/${params.serviceKey}/apply`);
+    redirect(`/auth/login?next=${encodeURIComponent(`/citizen/services/${params.serviceKey}/apply`)}`);
   }
   if (outcome.kind === "unavailable") {
     return (

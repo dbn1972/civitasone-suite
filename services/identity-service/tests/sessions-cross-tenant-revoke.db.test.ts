@@ -42,6 +42,7 @@ function wireTenantAwareQueue(q: Queue): Queue {
   return q;
 }
 
+// FLAKY-SKIP: Requires DATABASE_URL/DB_URL against a real Postgres for the cross-tenant session-revoke isolation + audit check; unset in standard CI so this suite never executes there. (expires: 2026-12-13)
 describe.skipIf(!RUN_DB)("DELETE /identity/sessions/:id — cross-tenant isolation + audit (GAP-TENANT-ADMIN-SESSIONS-06)", () => {
   let app: FastifyInstance;
   let repo: typeof import("../src/modules/sessions/repo.js");

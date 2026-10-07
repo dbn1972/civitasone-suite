@@ -32,7 +32,7 @@ export interface ScannedDocument {
 }
 
 /** Path (under the gateway's /api prefix) of the read route for a record. */
-export function scannedDocumentsPath(kind: ScannedDocumentsKind, id: string): string {
+export function scannedDocumentsEndpoint(kind: ScannedDocumentsKind, id: string): string {
   return `/v1/finance/${kind}/${encodeURIComponent(id)}/scanned-documents`;
 }
 

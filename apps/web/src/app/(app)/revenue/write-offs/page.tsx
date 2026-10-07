@@ -121,7 +121,7 @@ async function getPendingWriteOffs(): Promise<LoaderResult<PendingWriteOffRow[]>
           if (!isRecord(raw) || typeof raw.id !== "string") continue;
           mapped.push({
             id: raw.id,
-            decidePath: `${raw.id}/decide`,
+            decidePath: `/revenue/write-offs/${raw.id}/decide`,
             assesseeId: typeof raw.assesseeId === "string" ? raw.assesseeId : "",
             amountLabel: formatMoney(typeof raw.amountMinor === "string" || typeof raw.amountMinor === "number" ? raw.amountMinor : null),
             reason: typeof raw.reason === "string" ? raw.reason : "—",
@@ -242,7 +242,7 @@ export default async function WriteOffsPage({
             ]}
             rows={pending}
             rowLinkKey="decidePath"
-            rowLinkPrefix="/revenue/write-offs/"
+            rowLinkPrefix=""
             sortable
             filterable
             filterPlaceholder="Filter by reason or amount…"

@@ -132,7 +132,11 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/',
   useSearchParams: () => new URLSearchParams(),
   redirect: vi.fn(),
-  notFound: vi.fn(),
+  // Real Next throws an error carrying this digest; a page that correctly calls
+  // notFound() on an empty record must be judged as "rendered not-found", not crash on null.
+  notFound: () => {
+    throw Object.assign(new Error('NEXT_NOT_FOUND'), { digest: 'NEXT_HTTP_ERROR_FALLBACK;404' });
+  },
   useParams: () => currentScreenParams,
 }));
 
@@ -151,11 +155,16 @@ if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
 // empty-state branch to take over, same as a real empty tenant would hit.
 vi.mock('@/app/_data/apiClient', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
-  const empty = { data: [], source: 'api' as const };
+  // fetchJson(path, empty, options) / fetchJsonWithFallback(path, empty, ...) take the
+  // page's OWN declared empty value (an object, a Map-like record, a number, ...) as
+  // their 2nd argument -- that is exactly what a real empty tenant resolves to. A
+  // blanket `[]` crashed every page whose empty shape is not an array
+  // (`data.summary.total.toLocaleString()`), which is a harness artifact, not a page bug.
+  const emptyFor = (declared: unknown) => ({ data: declared === undefined ? [] : declared, source: 'api' as const });
   return {
     ...actual,
-    fetchJson: async () => empty,
-    fetchJsonWithFallback: async () => empty,
+    fetchJson: async (_path: string, declared?: unknown) => emptyFor(declared),
+    fetchJsonWithFallback: async (_path: string, declared?: unknown) => emptyFor(declared),
   };
 });
 
@@ -191,6 +200,10 @@ function paramsForScreen(screen: string): Record<string, string | string[]> {
 function isClientComponent(src: string): boolean {
   const head = src.split('\n').slice(0, 3).join('\n');
   return /^\s*["']use client["'];?\s*$/m.test(head);
+}
+
+function isNotFoundError(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && (err as { digest?: unknown }).digest === 'NEXT_HTTP_ERROR_FALLBACK;404';
 }
 
 async function renderScreen(row: { module: string; screen: string }): Promise<RenderVerdict> {
@@ -234,6 +247,9 @@ async function renderScreen(row: { module: string; screen: string }): Promise<Re
     const text = container.textContent?.trim() ?? '';
     unmount();
 
+    if (boundaryError && isNotFoundError(boundaryError)) {
+      return { verdict: 'PASS', reason: 'not-found (notFound() on empty record)' };
+    }
     if (boundaryError) {
       const message = boundaryError instanceof Error ? boundaryError.message : String(boundaryError);
       return { verdict: 'FAIL', reason: message.split('\n')[0].slice(0, 200) };
@@ -243,6 +259,7 @@ async function renderScreen(row: { module: string; screen: string }): Promise<Re
     }
     return { verdict: 'PASS', reason: 'ok' };
   } catch (err) {
+    if (isNotFoundError(err)) return { verdict: 'PASS', reason: 'not-found (notFound() on empty record)' };
     const message = err instanceof Error ? err.message : String(err);
     return { verdict: 'FAIL', reason: message.split('\n')[0].slice(0, 200) };
   }

@@ -97,20 +97,6 @@ describe("route-existence contract", () => {
       reason:
         "ML-insights transaction-anomaly drill-through has no destination: unlike its sibling ml-insights domains (crm/leads, inventory, projects, subscriptions, tickets), no finance \"anomalies\" detail page exists anywhere under apps/web/src/app/(app)/finance. Building one is a product feature, not a link correction.",
     },
-    {
-      id: "GAP-HR-SF18-002",
-      file: "apps/web/src/app/(app)/analytics/ml-insights/subscriptions/page.tsx",
-      target: "/billing/subscriptions/",
-      reason:
-        "billing/subscriptions/page.tsx (the list) exists but no billing/subscriptions/[id] detail page was ever built -- contrast billing/plans/[id] and billing/invoices/[id], which both exist. A missing feature, not a link correction.",
-    },
-    {
-      id: "GAP-HR-SF18-003",
-      file: "apps/web/src/app/(app)/citizen/grievances/GrievancesTable.tsx",
-      target: "/citizen/grievances/",
-      reason:
-        "citizen/grievances/ only has a list page and a \"new\" page; no [id] detail page exists yet for a single grievance.",
-    },
   ];
 
   // designer/[id]/**'s WizardShell computes its "select block" / "next" /
@@ -128,7 +114,11 @@ describe("route-existence contract", () => {
   // a narrow, file-path-scoped documented skip (not a blanket dynamic-link
   // carve-out): a genuinely new dead link anywhere else in the app,
   // including elsewhere under designer/, still fails the test below.
-  const DESIGNER_WIZARD_NAV_COUNT = 27;
+  // 28: re-verified by hand 2026-10-07 -- the 28th report is [id]/page.tsx's
+  // status-aware entry redirect to `/designer/${id}/review${suffix}` (added with
+  // GAP-DESIGNER-HOME-02); designer/[id]/review/page.tsx is a real route, the
+  // other 27 are unchanged and still drawn from DEFAULT_BLOCKS b1..b8.
+  const DESIGNER_WIZARD_NAV_COUNT = 28;
   function isDesignerWizardNav(d: LinkRow): boolean {
     return /^apps\/web\/src\/app\/\(app\)\/designer\/\[id\]\//.test(d.file) && d.target.startsWith("/designer/${params.id}/");
   }

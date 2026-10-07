@@ -3,7 +3,7 @@ import { GL_JOURNAL_LIMIT } from "@/lib/financeLimits";
 import { normalizeHexColor } from "@/lib/orgLevels";
 import { pathSeg } from "@/lib/pathSegment";
 import { mapEstabScannedDocuments, estabScannedDocumentsPath, type EstabScannedDocument } from "@/lib/estab/scannedDocuments";
-import { mapScannedDocuments, scannedDocumentsPath, type ScannedDocument, type ScannedDocumentsKind } from "@/lib/finance/scannedDocuments";
+import { mapScannedDocuments, scannedDocumentsEndpoint, type ScannedDocument, type ScannedDocumentsKind } from "@/lib/finance/scannedDocuments";
 import type { AuditParaEvent, GlLinesPagination, GlLinesTotals, PaymentContext } from "@/lib/finance/workflowTypes";
 import { HR_AUDIT_SERVICES } from "@/app/(app)/hr/audit-log/auditResource";
 import type {
@@ -7609,7 +7609,7 @@ export async function getInvoiceOpsData(id: string, includeSettings: boolean): P
  * (masked metadata only; paise stay base-10 strings). A failed load is source:"error", never an empty list.
  */
 export async function getFinanceScannedDocuments(kind: ScannedDocumentsKind, id: string): Promise<LoaderResult<ScannedDocument[]>> {
-  return fetchJson<unknown, ScannedDocument[]>(scannedDocumentsPath(kind, id), [], {
+  return fetchJson<unknown, ScannedDocument[]>(scannedDocumentsEndpoint(kind, id), [], {
     telemetryKey: "finance.scanned-documents",
     mapResponse: mapScannedDocuments,
   });

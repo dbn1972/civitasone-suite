@@ -30,7 +30,11 @@ export function GLTable({ entries, pagination, totals, view }: GLTableProps) {
   const router = useRouter();
   const [query, setQuery] = useState(view.q);
 
-  const go = (next: Partial<GlView>) => router.push(`/finance/accounting/general-ledger${glQuery({ ...view, ...next })}`);
+  const go = (next: Partial<GlView>) => {
+    // glQuery() returns "" or a leading-"?" query string; the base route is a real page.
+    const qs = glQuery({ ...view, ...next });
+    router.push(qs ? `/finance/accounting/general-ledger${qs}` : "/finance/accounting/general-ledger");
+  };
   const range = glRange(view.page, GL_PAGE_SIZE, pagination.total);
   const debit = totals ? BigInt(totals.debitMinor) : null;
   const credit = totals ? BigInt(totals.creditMinor) : null;

@@ -58,8 +58,10 @@ export function GrievanceActions({ id, status, version, canClose = false }: { id
   // reached when NOT disposed. Collapsed to the single `terminal` flag.
   const terminal = status === "DISPOSED";
 
-  async function patch(action: string, payload?: Record<string, unknown>) {
-    const res = await fetch(`/api/proxy/v1/crm/grievances/${id}/${action}`, {
+  // `path` is the full proxy URL (written out at each call site so the CRM contract test can
+  // verify every action route against crm-service instead of seeing an opaque `${action}`).
+  async function patch(path: string, payload?: Record<string, unknown>) {
+    const res = await fetch(path, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
@@ -106,7 +108,7 @@ export function GrievanceActions({ id, status, version, canClose = false }: { id
         confirmDescription={t("forwardDescription")}
         requireReason
         reasonLabel={t("forwardReasonLabel")}
-        onConfirm={(dept) => patch("forward", { forwardedTo: dept })}
+        onConfirm={(dept) => patch(`/api/proxy/v1/crm/grievances/${id}/forward`, { forwardedTo: dept })}
       />
 
       {/* First Appeal — citizen-initiated; bumps priority to urgent */}
@@ -116,7 +118,7 @@ export function GrievanceActions({ id, status, version, canClose = false }: { id
         confirmDescription={t("firstAppealDescription")}
         requireReason
         reasonLabel={t("firstAppealReasonLabel")}
-        onConfirm={(reason) => patch("first-appeal", { ...(reason ? { appealReason: reason } : {}) })}
+        onConfirm={(reason) => patch(`/api/proxy/v1/crm/grievances/${id}/first-appeal`, { ...(reason ? { appealReason: reason } : {}) })}
       />
 
       {/* Resolve — only reachable while not terminal (the terminal branch
@@ -128,7 +130,7 @@ export function GrievanceActions({ id, status, version, canClose = false }: { id
         confirmDescription={t("resolveDescription")}
         requireReason
         reasonLabel={t("resolveReasonLabel")}
-        onConfirm={(reason) => patch("resolve", { resolution: reason })}
+        onConfirm={(reason) => patch(`/api/proxy/v1/crm/grievances/${id}/resolve`, { resolution: reason })}
       />
 
       {/* GAP-CRM-GRIEVANCES-DETAIL-02: Close is an administrator-only action
@@ -142,7 +144,7 @@ export function GrievanceActions({ id, status, version, canClose = false }: { id
           danger
           confirmTitle={t("closeTitle")}
           confirmDescription={t("closeDescription")}
-          onConfirm={() => patch("close")}
+          onConfirm={() => patch(`/api/proxy/v1/crm/grievances/${id}/close`)}
         />
       )}
     </div>

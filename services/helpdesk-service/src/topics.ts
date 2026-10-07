@@ -88,7 +88,6 @@ export const EVENTS = {
   ticketsLinked: "helpdesk.ticket.linked",
   /** TKT-14 — ticket reopened from resolved/closed. */
   ticketReopened: "helpdesk.ticket.reopened",
-  duplicatesSuggested: "helpdesk.ticket.duplicates_suggested",
   /** TKT-11 — saved view lifecycle. */
   viewCreated: "helpdesk.view.created",
   viewUpdated: "helpdesk.view.updated",

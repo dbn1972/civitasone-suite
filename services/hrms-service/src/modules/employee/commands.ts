@@ -82,8 +82,11 @@ export async function createEmployee(ctx: RequestContext, body: CreateEmployeeBo
 }
 
 export async function confirmEmployee(ctx: RequestContext, id: string, body: ConfirmEmployeeBody): Promise<Accepted> {
+  // Stable id so a retried / double-clicked Confirm dedups in the consumer's
+  // markProcessed instead of minting a fresh random messageId per call.
+  const messageId = idempotentId({ idempotencyKey: ctx.idempotencyKey ?? `employee.confirm:${id}`, tenantId: ctx.tenantId });
   await queue.publish(COMMANDS.employeeConfirm, {
-    messageId: randomUUID(), type: COMMANDS.employeeConfirm,
+    messageId, type: COMMANDS.employeeConfirm,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { ...body, id, tenantId: ctx.tenantId },
   });

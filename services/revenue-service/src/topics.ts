@@ -58,6 +58,10 @@ export const COMMANDS = {
   // ── Arrears & Recovery (SVC-137) ─────────────────────────────────────────
   /** payload: { assesseeId, instalmentCount, startDate } — create instalment plan from outstanding */
   instalmentPlanCreate: "revenue.instalment.create",
+  /** payload: { demandId, amountMinor (bigint string), reason, waiverType? } — waiver, maker step */
+  waiverCreate: "revenue.waiver.create",
+  /** payload: { waiverId, approve: boolean, reason? } — waiver, checker step */
+  waiverDecide: "revenue.waiver.decide",
   /** payload: { assesseeId, amountMinor (bigint string), reason } — maker step */
   writeOffCreate: "revenue.write_off.create",
   /** payload: { writeOffId, approvalId, approve: boolean, reason? } — checker step */

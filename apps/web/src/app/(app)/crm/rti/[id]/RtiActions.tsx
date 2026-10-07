@@ -114,8 +114,10 @@ export function RtiActions({
   const inFirstAppeal = status === "FIRST_APPEAL";
   const decidedAt = firstAppealDecidedAt ?? null;
 
-  async function patch(action: string, payload?: Record<string, unknown>) {
-    const res = await fetch(`/api/proxy/v1/crm/rti/${id}/${action}`, {
+  // `path` is the full proxy URL (written out at each call site so the CRM contract test can
+  // verify every action route against crm-service instead of seeing an opaque `${action}`).
+  async function patch(path: string, payload?: Record<string, unknown>) {
+    const res = await fetch(path, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       ...(payload ? { body: JSON.stringify(payload) } : {}),
@@ -190,7 +192,7 @@ export function RtiActions({
               reasonLabel={t("appellateOrderLabel")}
               minReasonLength={20}
               maxReasonLength={10000}
-              onConfirm={(orderText) => patch("first-appeal/decide", { outcome, orderText })}
+              onConfirm={(orderText) => patch(`/api/proxy/v1/crm/rti/${id}/first-appeal/decide`, { outcome, orderText })}
             />
           )}
           {inFirstAppeal && (
@@ -203,7 +205,7 @@ export function RtiActions({
               reasonLabel={t("commissionRefLabel")}
               minReasonLength={3}
               maxReasonLength={500}
-              onConfirm={(reference) => patch("second-appeal", { reference })}
+              onConfirm={(reference) => patch(`/api/proxy/v1/crm/rti/${id}/second-appeal`, { reference })}
             />
           )}
           {canDispose && (
@@ -216,7 +218,7 @@ export function RtiActions({
               reasonLabel={t("disposeReasonLabel")}
               minReasonLength={20}
               maxReasonLength={2000}
-              onConfirm={(reason) => patch("dispose", { reason })}
+              onConfirm={(reason) => patch(`/api/proxy/v1/crm/rti/${id}/dispose`, { reason })}
             />
           )}
         </div>
@@ -288,7 +290,7 @@ export function RtiActions({
               if (!forwardDept) {
                 throw new Error(t("selectAuthorityError"));
               }
-              return patch("forward", { departmentRef: forwardDept });
+              return patch(`/api/proxy/v1/crm/rti/${id}/forward`, { departmentRef: forwardDept });
             }}
           />
 
@@ -304,7 +306,7 @@ export function RtiActions({
             reasonLabel={t("respondReasonLabel")}
             minReasonLength={20}
             maxReasonLength={10000}
-            onConfirm={(text) => patch("respond", { responseText: text })}
+            onConfirm={(text) => patch(`/api/proxy/v1/crm/rti/${id}/respond`, { responseText: text })}
           />
         </>
       )}
@@ -314,7 +316,7 @@ export function RtiActions({
           label={t("firstAppeal")}
           confirmTitle={t("firstAppealConfirmTitle")}
           confirmDescription={t("firstAppealConfirmBody")}
-          onConfirm={() => patch("first-appeal")}
+          onConfirm={() => patch(`/api/proxy/v1/crm/rti/${id}/first-appeal`)}
         />
       )}
     </div>

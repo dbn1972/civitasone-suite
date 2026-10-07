@@ -19,9 +19,9 @@ export function referRecovery(ctx: RequestContext, payload: Record<string, unkno
 }
 
 export function createWaiver(ctx: RequestContext, payload: Record<string, unknown>) {
-  return publishCommand("revenue.waiver.create", ctx, payload);
+  return publishCommand(COMMANDS.waiverCreate, ctx, payload);
 }
 
 export function decideWaiver(ctx: RequestContext, waiverId: string, payload: Record<string, unknown>) {
-  return publishCommand("revenue.waiver.decide", ctx, { ...payload, waiverId });
+  return publishCommand(COMMANDS.waiverDecide, ctx, { ...payload, waiverId });
 }

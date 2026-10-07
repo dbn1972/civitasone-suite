@@ -1615,11 +1615,11 @@
     },
     {
       "module": "works",
-      "screen": "/works/approvals/ts/[id]"
+      "screen": "/works/approvals/ts-new"
     },
     {
       "module": "works",
-      "screen": "/works/approvals/ts-new"
+      "screen": "/works/approvals/ts/[id]"
     },
     {
       "module": "works",
