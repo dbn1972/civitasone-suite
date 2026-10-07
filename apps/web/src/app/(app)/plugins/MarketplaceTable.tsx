@@ -5,7 +5,7 @@
  * "Discover and install plugins", but it previously offered no Install action
  * at all. This table mirrors PluginCatalogTable's columns and adds an
  * install-only action per row (MarketplaceInstallButton), gated by canManage
- * (PLUGIN_MANAGE_ROLES). A row already installed shows "Installed" instead.
+ * (PLUGIN_MARKETPLACE_ROLES). A row already installed shows "Installed" instead.
  *
  * GAP-PLUGINS-MARKETPLACE-03 / -05: plugin-specific columns + StatusPill, and
  * sort / filter / pagination like the Installed list.

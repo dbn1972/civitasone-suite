@@ -18,7 +18,7 @@ import { queue as appQueue } from "../src/shared/infra.js";
 import { registerWorkflowConsumers } from "../src/modules/workflow/consumer.js";
 import { registerFilesConsumers } from "../src/modules/files/consumer.js";
 
-const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr"; // gitleaks:allow
+const SECRET = process.env.JWT_SECRET as string;
 
 function headers(roles: string[], tid: string, sub = randomUUID()): Record<string, string> {
   const jwt = signToken({ sub, tid, roles, sid: "sess-gap-documents" }, SECRET);

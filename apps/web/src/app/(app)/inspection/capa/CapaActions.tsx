@@ -78,11 +78,10 @@ export function CapaRowAction({ id, status }: RowProps) {
 
   // GAP-INSPECTION-CAPA-02: effectiveness verification is a maker-checker
   // sign-off; it now requires an explicit confirmation with verification
-  // remarks instead of firing on a single click. The verify route schema
-  // (verifyCapaSchema) only carries effectivenessVerified, so the typed
-  // remarks are a deliberate confirmation step (recorded here, not sent) —
-  // see HUMAN REVIEW: persisting verifier remarks needs a backend field.
-  async function verify(_reason?: string) {
+  // confirmation instead of firing on a single click. The verify route schema
+  // (verifyCapaSchema) only carries effectivenessVerified, so no remarks are
+  // collected (they could not be persisted).
+  async function verify() {
     const res = await fetch(`/api/proxy/v1/inspection/capa/${id}/verify`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -124,9 +123,7 @@ export function CapaRowAction({ id, status }: RowProps) {
             confirmTitle="Verify effectiveness?"
             confirmDescription="Confirm you have checked that this corrective action was effective. This is a sign-off step."
             confirmLabel="Confirm verification"
-            requireReason
-            reasonLabel="Verification remarks"
-            onConfirm={verify}
+            onConfirm={() => verify()}
             onSuccess={() => {
               setMessage("Verification requested — the status will update shortly.");
               router.refresh();

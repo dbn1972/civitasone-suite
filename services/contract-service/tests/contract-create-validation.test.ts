@@ -18,7 +18,7 @@ import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { contractContracts } from "../src/modules/contracts/schema.js";
 
-const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr"; // gitleaks:allow
+const SECRET = process.env.JWT_SECRET as string;
 const TENANT = "aaaaaaaa-7777-4000-8000-0000000000a5";
 const DUP_NO = "CON-DUP-NEW05";
 const SEEDED = "55555555-7777-4000-8000-0000000000a5";

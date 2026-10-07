@@ -40,17 +40,16 @@ export function lifecycleOf(status: string): PluginLifecycle {
 async function postVerb(
   verb: "install" | "enable" | "disable",
   pluginId: string,
-  reason: string | undefined,
   router: ReturnType<typeof useRouter>,
 ): Promise<void> {
   let url: string;
   let body: string | undefined;
   if (verb === "install") {
     url = `/api/proxy/v1/plugins/install`;
-    body = JSON.stringify({ pluginId, reason });
+    body = JSON.stringify({ pluginId });
   } else {
     url = `/api/proxy/v1/plugins/${pluginId}/${verb}`;
-    body = reason ? JSON.stringify({ reason }) : undefined;
+    body = undefined;
   }
   const res = await fetch(url, {
     method: "POST",
@@ -88,7 +87,7 @@ export function PluginActions({ plugin, canManage = true }: { plugin: Plugin; ca
   }
   const id = plugin.id;
 
-  const run = (verb: "install" | "enable" | "disable", reason?: string) => postVerb(verb, id, reason, router);
+  const run = (verb: "install" | "enable" | "disable") => postVerb(verb, id, router);
   const lifecycle = lifecycleOf(plugin.status);
 
   const wrap = { display: "inline-flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" as const };
@@ -102,9 +101,7 @@ export function PluginActions({ plugin, canManage = true }: { plugin: Plugin; ca
           confirmTitle={`Install “${plugin.name}”?`}
           confirmDescription="Installing provisions this plugin for the entire tenant and may grant it access to tenant data."
           confirmLabel="Install"
-          requireReason
-          reasonLabel="Reason for installing"
-          onConfirm={(reason) => run("install", reason)}
+          onConfirm={() => run("install")}
         />
       </div>
     );
@@ -120,9 +117,7 @@ export function PluginActions({ plugin, canManage = true }: { plugin: Plugin; ca
           confirmTitle={`Disable “${plugin.name}”?`}
           confirmDescription="Disabling immediately removes this feature for all tenant users. This may interrupt active workflows."
           confirmLabel="Disable plugin"
-          requireReason
-          reasonLabel="Reason for disabling"
-          onConfirm={(reason) => run("disable", reason)}
+          onConfirm={() => run("disable")}
         />
       </div>
     );
@@ -137,9 +132,7 @@ export function PluginActions({ plugin, canManage = true }: { plugin: Plugin; ca
           confirmTitle={`Enable “${plugin.name}”?`}
           confirmDescription="Enabling activates this feature for all tenant users."
           confirmLabel="Enable plugin"
-          requireReason
-          reasonLabel="Reason for enabling"
-          onConfirm={(reason) => run("enable", reason)}
+          onConfirm={() => run("enable")}
         />
       </div>
     );
@@ -173,11 +166,9 @@ export function MarketplaceInstallButton({
   if (installed) return <span className="muted">Installed</span>;
   if (!listingId) return <span className="muted">—</span>;
 
-  async function install(reason?: string): Promise<void> {
+  async function install(): Promise<void> {
     const res = await fetch(`/api/proxy/v1/plugins/marketplace/${listingId}/install`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reason }),
     });
     if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
     router.refresh();
@@ -190,9 +181,7 @@ export function MarketplaceInstallButton({
       confirmTitle={`Install “${name}”?`}
       confirmDescription="Installing provisions this plugin for the entire tenant and may grant it access to tenant data."
       confirmLabel="Install"
-      requireReason
-      reasonLabel="Reason for installing"
-      onConfirm={(reason) => install(reason)}
+      onConfirm={() => install()}
     />
   );
 }

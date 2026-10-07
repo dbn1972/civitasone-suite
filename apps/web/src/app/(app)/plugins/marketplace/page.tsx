@@ -2,13 +2,13 @@ import { PageHeader, RefreshErrorState } from "../../../_components/ds";
 import { getPluginMarketplaceCatalog } from "../_data";
 import { MarketplaceTable } from "../MarketplaceTable";
 import { toHumanError } from "@/lib/messages";
-import { getSessionRoles, hasAnyRole, PLUGIN_MANAGE_ROLES } from "@/lib/auth/roleGuard";
+import { getSessionRoles, hasAnyRole, PLUGIN_MARKETPLACE_ROLES } from "@/lib/auth/roleGuard";
 
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
   const { data, source } = await getPluginMarketplaceCatalog();
-  const canManage = hasAnyRole(getSessionRoles(), PLUGIN_MANAGE_ROLES);
+  const canManage = hasAnyRole(getSessionRoles(), PLUGIN_MARKETPLACE_ROLES);
   return (
     <div className="page-main" aria-labelledby="page-heading">
       <PageHeader

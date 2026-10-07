@@ -70,11 +70,12 @@ export function UploadDocumentForm({
       const res = await fetch("/api/v1/documents/files", {
         method: "POST",
         headers: { "content-type": "application/json" },
+        // uploadFileBody declares these optional (not nullable): omit empties.
         body: JSON.stringify({
           name: name.trim(),
-          folderId: folderId || null,
-          mimeType: uploaded?.mimeType || null,
-          sizeBytes: uploaded?.size ?? null,
+          ...(folderId ? { folderId } : {}),
+          ...(uploaded?.mimeType ? { mimeType: uploaded.mimeType } : {}),
+          ...(typeof uploaded?.size === "number" ? { sizeBytes: uploaded.size } : {}),
           tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
         }),
       });

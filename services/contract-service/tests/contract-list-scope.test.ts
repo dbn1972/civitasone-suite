@@ -19,7 +19,7 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { contractContracts } from "../src/modules/contracts/schema.js";
 import { contractObligations } from "../src/modules/obligations/schema.js";
 
-const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr"; // gitleaks:allow
+const SECRET = process.env.JWT_SECRET as string;
 const TENANT_A = "aaaaaaaa-8888-4000-8000-0000000000b1";
 const TENANT_B = "bbbbbbbb-8888-4000-8000-0000000000b1";
 const CON_A = "11111111-8888-4000-8000-0000000000b1";

@@ -708,7 +708,8 @@ export const METADATA_ADMIN_ROLES = ["super_admin", "platform_admin", "metadata_
  * sub-route would admit. PLUGIN_MANAGE_ROLES is the narrower set that may
  * install/enable/disable a tenant plugin.
  */
-export const PLUGIN_MANAGE_ROLES = ["plugin_admin", "super_admin", "platform_admin"];
+export const PLUGIN_MANAGE_ROLES = ["plugin_admin", "super_admin"];
+export const PLUGIN_MARKETPLACE_ROLES = ["super_admin", "platform_admin"];
 export const PLUGIN_MODULE_ROLES = Array.from(
-  new Set([...PLUGIN_MANAGE_ROLES, "plugin_user"]),
+  new Set([...PLUGIN_MANAGE_ROLES, ...PLUGIN_MARKETPLACE_ROLES, "plugin_user"]),
 );
