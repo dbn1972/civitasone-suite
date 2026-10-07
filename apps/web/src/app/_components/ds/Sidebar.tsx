@@ -16,6 +16,7 @@ import {
   Bot, Truck, Star, Archive, Dna, Compass, Sparkles,
   TrendingUp, BookMarked, ScrollText, MessageCircleQuestion, Bell, CreditCard, Building, Shield, Wrench,
   Diamond, ChevronDown,
+  FileSignature,
   LucideIcon,
 } from "lucide-react";
 import { FINANCE_ROLES } from "@/lib/auth/workRoles";
@@ -89,9 +90,16 @@ const NAV: NavGroup[] = [
     items: [
       { icon: Users, label: "HR & Payroll", href: "/hr", moduleKey: "hrms" },
       { icon: ShoppingCart, label: "Procurement", href: "/procurement", moduleKey: "procurement" },
+      // GAP-CONTRACTS-HOME-02: the /contracts area was reachable only from
+      // GlobalSearch/VoiceNav/navRouteManifest and had no Sidebar entry, so an
+      // officer with the contracts module enabled had no visible way in. Gate
+      // on the same moduleKey "contracts" that contracts/layout.tsx's
+      // ModuleGate uses, so the entry appears exactly when the module is on.
+      { icon: FileSignature, label: "Contracts", href: "/contracts", moduleKey: "contracts" },
       { icon: BarChart2, label: "Projects", href: "/projects", moduleKey: "projects" },
       { icon: Gift, label: "Grants", href: "/grants", moduleKey: "grants" },
       { icon: Building2, label: "Establishment", href: "/estab", moduleKey: "establishment" },
+      { icon: FileText, label: "Documents", href: "/documents", moduleKey: "documents" },
       { icon: HardHat, label: "Assets", href: "/assets", moduleKey: "assets" },
       // GAP-FLEET-HOME-03: the /fleet hub (gated on the "assets" module, see
       // fleet/layout.tsx) had no sidebar entry though navRouteManifest lists it.

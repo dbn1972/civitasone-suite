@@ -100,6 +100,17 @@ interface Column<T> {
    * this and keeps the exact current behavior (GAP-PAYROLL-PERIOD-05).
    */
   statusLabels?: Record<string, string>;
+  /**
+   * Opt-in, server-safe (plain data, not a function): when cellType is
+   * "status", maps a raw status value to an explicit StatusPill tone,
+   * overriding the global STATUS_MAP. For register-specific vocabularies whose
+   * words collide with other modules' meanings — e.g. change-request risk
+   * (low/medium/high) and type (emergency), which must NOT be added to the
+   * shared STATUS_MAP because low/medium/high already mean priority/severity
+   * elsewhere (GAP-CHANGE-HOME-04). Every existing caller omits this and keeps
+   * the current STATUS_MAP-driven tone.
+   */
+  statusVariants?: Record<string, "good" | "warn" | "mut" | "bad" | "info">;
   /** Opt-in: set false to exclude a column from sorting when the table is sortable. */
   sortable?: boolean;
   /**
@@ -301,7 +312,7 @@ function cellValue<T extends Record<string, unknown>>(col: Column<T>, row: T): R
     // same "—" the amount/date cells use for absent values rather than an
     // empty, meaningless pill (GAP-REVENUE-BILLS-03).
     if (raw.trim() === "") return "—";
-    return <StatusPill status={raw} label={col.statusLabels?.[raw]} />;
+    return <StatusPill status={raw} label={col.statusLabels?.[raw]} variant={col.statusVariants?.[raw]} />;
   }
   if (col.cellType === "amount") {
     // UX-006: pass the raw value through — formatMoney() itself renders "—"

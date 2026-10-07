@@ -1,5 +1,6 @@
 import { PageHeader, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { getMetadataEntities } from "../_data";
+import { MetadataRowsTable } from "../_components/MetadataRowsTable";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 
@@ -7,25 +8,35 @@ export const dynamic = "force-dynamic";
 
 export default async function MetadataEntitiesPage() {
   const result = await getMetadataEntities();
-  const { data } = result;
   const resource = toResourceState(result);
-  const errored = resource.status === "error";
+
   return (
     <div className="page-main wrap" aria-label="Metadata entities">
       <PageHeader
         title="Entities"
-        subtitle="Custom entity definitions from /api/v1/metadata/entities."
+        subtitle="Custom entity definitions for your organisation."
         back="/metadata"
       />
       <Card title="Entity definitions">
-        {errored ? (
+        {resource.status === "error" ? (
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "entity definitions" })} backHref="/metadata" />
           </div>
-        ) : data.length === 0 ? (
-          <EmptyState icon="📦" title="No entities" message="Create entities via the metadata API." />
+        ) : resource.status === "empty" ? (
+          // GAP-METADATA-ENTITIES-02: no API path in user-facing copy; this is
+          // a read-only viewer (see batch decision), so the empty state does
+          // not promise a create control that does not exist here.
+          <div className="pad">
+            <EmptyState
+              icon="📦"
+              title="No entities defined"
+              message="Custom entities configured for your organisation will appear here."
+            />
+          </div>
         ) : (
-          <pre className="text-xs overflow-auto p-3">{JSON.stringify(data.slice(0, 50), null, 2)}</pre>
+          <div className="pad">
+            <MetadataRowsTable rows={resource.data} resourceLabel="entities" resourceSingular="entity" />
+          </div>
         )}
       </Card>
     </div>

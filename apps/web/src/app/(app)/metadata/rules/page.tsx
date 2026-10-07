@@ -1,33 +1,20 @@
-import { PageHeader, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
-import { getMetadataEntities } from "../_data";
-import { toResourceState } from "@/app/_data/useResource";
-import { toHumanError } from "@/lib/messages";
+import { getRulesForEntity } from "../_data";
+import { EntityScopedListPage } from "../_components/EntityScopedListPage";
 
 export const dynamic = "force-dynamic";
 
-export default async function MetadataRulesPage() {
-  const result = await getMetadataEntities();
-  const { data } = result;
-  const resource = toResourceState(result);
-  const errored = resource.status === "error";
-  return (
-    <div className="page-main wrap" aria-label="Metadata rules">
-      <PageHeader
-        title="Rules"
-        subtitle="Wired to /api/v1/metadata/entities (select entity to drill into rules)."
-        back="/metadata"
-      />
-      <Card title="Rules">
-        {errored ? (
-          <div className="pad">
-            <RefreshErrorState error={toHumanError("load", { area: "rules" })} backHref="/metadata" />
-          </div>
-        ) : data.length === 0 ? (
-          <EmptyState icon="📦" title="No data" message="Entities from the metadata API appear here as the entry point for rules." />
-        ) : (
-          <pre className="text-xs overflow-auto p-3">{JSON.stringify(data.slice(0, 50), null, 2)}</pre>
-        )}
-      </Card>
-    </div>
-  );
+type SP = { entity?: string };
+
+export default async function MetadataRulesPage({ searchParams }: { searchParams?: SP }) {
+  // GAP-METADATA-RULES-02/-03: was calling getMetadataEntities() and labelling
+  // entity rows "Rules"; rules are only listed entity-scoped
+  // (GET /v1/metadata/entities/:entityId/validation-rules).
+  return EntityScopedListPage({
+    title: "Validation rules",
+    resourceLabel: "validation rules",
+    resourceSingular: "validation rule",
+    detailHeader: "Error message",
+    ...(searchParams?.entity ? { selectedEntityId: searchParams.entity } : {}),
+    loadRows: getRulesForEntity,
+  });
 }

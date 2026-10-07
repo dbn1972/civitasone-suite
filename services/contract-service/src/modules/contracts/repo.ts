@@ -9,6 +9,20 @@ export async function findContractById(id: string): Promise<ContractRow | null> 
   return rows[0] ?? null;
 }
 
+/**
+ * GAP-CONTRACTS-NEW-05: look up a contract by its tenant-scoped contractNo, so
+ * the create command can reject a duplicate number with a synchronous 409
+ * BEFORE enqueuing. The DB's `UNIQUE (tenant_id, contract_no)` constraint
+ * (migration 0001) remains the authoritative backstop for the race where two
+ * creates slip past this read concurrently.
+ */
+export async function findContractByTenantAndNo(tenantId: string, contractNo: string): Promise<ContractRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(contractContracts)
+    .where(and(eq(contractContracts.tenantId, tenantId), eq(contractContracts.contractNo, contractNo)))
+    .limit(1));
+  return rows[0] ?? null;
+}
+
 export async function listContractsByTenant(tenantId: string, limit: number): Promise<ContractRow[]> {
   return scopedRead((tx) => tx.select().from(contractContracts)
     .where(eq(contractContracts.tenantId, tenantId))

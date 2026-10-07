@@ -1,28 +1,31 @@
 import Link from "next/link";
 import { PageHeader, EmptyState, RefreshErrorState } from "../../../_components/ds";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { getContracts } from "../../../_data/loaders";
+import { getContracts, getVendorOptions } from "../../../_data/loaders";
 import { toHumanError } from "@/lib/messages";
-import { ContractsTable } from "./ContractsTable";
-
-type ContractRow = {
-  id: string;
-  label: string;
-  sublabel: string;
-  status: string;
-  meta: string;
-} & Record<string, unknown>;
+import { ContractsTable, type ContractRow } from "./ContractsTable";
 
 export default async function ContractsListPage() {
-  const { data, source } = await getContracts();
+  // GAP-CONTRACTS-LIST-01: resolve vendor names web-side (cross-service HTTP
+  // read, never a cross-DB join). The vendor fetch is deliberately non-fatal:
+  // if it fails the table shows "Unknown vendor" (never a raw UUID), while the
+  // contracts fetch failure still drives the single error state below.
+  const [{ data, source }, vendorsRes] = await Promise.all([getContracts(), getVendorOptions()]);
+
+  const vendorNames: Record<string, string> =
+    vendorsRes.source === "api"
+      ? Object.fromEntries(vendorsRes.data.map((v) => [v.id, v.name]))
+      : {};
+  const vendorNamesUnavailable = vendorsRes.source === "error";
 
   const rows: ContractRow[] = data.map((row) => ({
     ...row,
     id: row.id,
     label: row.label,
-    sublabel: row.sublabel ?? "—",
+    vendorId: row.sublabel ?? undefined,
     status: row.status ?? "—",
     meta: row.meta ?? "—",
+    expiry: row.expiry,
+    valueMinor: row.valueMinor,
   }));
 
   return (
@@ -42,10 +45,12 @@ export default async function ContractsListPage() {
         }
       />
 
-      {source === "error" && <DataSourceBadge source={source} />}
-
+      {/* GAP-CONTRACTS-LIST-02: a single error block. The old code stacked a
+          DataSourceBadge ("Couldn't load — showing nothing") above
+          RefreshErrorState for the same failure — two banners, only one with a
+          Retry. RefreshErrorState already carries the retry + back actions. */}
       {source === "error" ? (
-        <RefreshErrorState error={toHumanError("load", { area: "contracts" })} />
+        <RefreshErrorState error={toHumanError("load", { area: "contracts" })} backHref="/contracts" />
       ) : rows.length === 0 ? (
         <EmptyState
           icon="📄"
@@ -54,7 +59,11 @@ export default async function ContractsListPage() {
         />
       ) : (
         <div className="card">
-          <ContractsTable rows={rows} />
+          <ContractsTable
+            rows={rows}
+            vendorNames={vendorNames}
+            vendorNamesUnavailable={vendorNamesUnavailable}
+          />
         </div>
       )}
     </div>

@@ -1,22 +1,29 @@
-import { ModuleListPage } from "../../../_components/ModuleListPage";
-import { getPluginMarketplace } from "../_data";
-import { ArrowLeft } from "lucide-react";
+import { PageHeader, RefreshErrorState } from "../../../_components/ds";
+import { getPluginMarketplaceCatalog } from "../_data";
+import { MarketplaceTable } from "../MarketplaceTable";
+import { toHumanError } from "@/lib/messages";
+import { getSessionRoles, hasAnyRole, PLUGIN_MARKETPLACE_ROLES } from "@/lib/auth/roleGuard";
 
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
-  const { data, source } = await getPluginMarketplace();
+  const { data, source } = await getPluginMarketplaceCatalog();
+  const canManage = hasAnyRole(getSessionRoles(), PLUGIN_MARKETPLACE_ROLES);
   return (
     <div className="page-main" aria-labelledby="page-heading">
-      <nav aria-label="Breadcrumb" className="back">
-        <ArrowLeft aria-hidden="true" size={14} /> <a href="/plugins">Plugins</a>
-      </nav>
-      <ModuleListPage
+      <PageHeader
         title="Plugins — Marketplace"
-        description="Marketplace listings from plugin-service."
-        rows={data}
-        source={source}
+        subtitle="Browse plugins available to install for your organisation."
+        back="/plugins"
+        backLabel="Plugins"
       />
+      <div className="card" style={{ marginTop: 18 }}>
+        {source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "marketplace plugins" })} />
+        ) : (
+          <MarketplaceTable rows={data} canManage={canManage} />
+        )}
+      </div>
     </div>
   );
 }

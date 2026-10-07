@@ -16,18 +16,56 @@ describe("BondActions", () => {
     refreshMock.mockReset();
   });
 
-  it("POSTs bond register and expects 202", async () => {
+  it("POSTs bond register with officer-entered type, dates and exact paise (GAP-CONTRACTS-DETAIL-02/06)", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ status: "accepted" }), { status: 202 }),
     );
     render(<BondActions contractId="c1" canRegister bonds={[]} />);
     fireEvent.change(screen.getByPlaceholderText("BG-…"), { target: { value: "BG-1" } });
-    fireEvent.change(screen.getByPlaceholderText("100000"), { target: { value: "1000" } });
+    // 1234.10 rupees must post exactly 123410 paise (string math, not float).
+    fireEvent.change(screen.getByPlaceholderText("100000"), { target: { value: "1234.10" } });
+    // GAP-CONTRACTS-DETAIL-02: officer enters the real validity window.
+    const dates = Array.from(document.querySelectorAll('input[type="date"]')) as HTMLInputElement[];
+    fireEvent.change(dates[0]!, { target: { value: "2026-04-01" } });
+    fireEvent.change(dates[1]!, { target: { value: "2028-03-31" } });
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "bank_guarantee" } });
     fireEvent.click(screen.getByRole("button", { name: "Register bond" }));
-    await waitFor(() => expect(screen.getByText(/registration accepted/i)).toBeInTheDocument());
+    // GAP-CONTRACTS-DETAIL-06: the copy must not claim completion.
+    await waitFor(() => expect(screen.getByText(/registration received/i)).toBeInTheDocument());
+    expect(screen.queryByText(/accepted \(queued\)/i)).not.toBeInTheDocument();
     expect(String(fetchSpy.mock.calls[0]![0])).toContain("/bonds");
     const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
-    expect(body.amountMinor).toBe(100000);
+    expect(body.amountMinor).toBe(123410);
+    expect(body.bondType).toBe("bank_guarantee");
+    expect(body.validFrom).toBe("2026-04-01");
+    expect(body.validTo).toBe("2028-03-31");
+  });
+
+  it("blocks a bond whose 'valid to' is before 'valid from' (GAP-CONTRACTS-DETAIL-02)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ status: "accepted" }), { status: 202 }),
+    );
+    render(<BondActions contractId="c1" canRegister bonds={[]} />);
+    fireEvent.change(screen.getByPlaceholderText("BG-…"), { target: { value: "BG-9" } });
+    fireEvent.change(screen.getByPlaceholderText("100000"), { target: { value: "500" } });
+    const dates = Array.from(document.querySelectorAll('input[type="date"]')) as HTMLInputElement[];
+    fireEvent.change(dates[0]!, { target: { value: "2028-03-31" } });
+    fireEvent.change(dates[1]!, { target: { value: "2026-04-01" } });
+    fireEvent.click(screen.getByRole("button", { name: "Register bond" }));
+    await waitFor(() => expect(screen.getByText(/'Valid to' must be on or after/i)).toBeInTheDocument());
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects a bond amount with more than two decimals (GAP-CONTRACTS-DETAIL-02)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ status: "accepted" }), { status: 202 }),
+    );
+    render(<BondActions contractId="c1" canRegister bonds={[]} />);
+    fireEvent.change(screen.getByPlaceholderText("BG-…"), { target: { value: "BG-8" } });
+    fireEvent.change(screen.getByPlaceholderText("100000"), { target: { value: "1.005" } });
+    fireEvent.click(screen.getByRole("button", { name: "Register bond" }));
+    await waitFor(() => expect(screen.getByText(/positive bond amount/i)).toBeInTheDocument());
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("shows error when register fails with non-202", async () => {
@@ -37,6 +75,9 @@ describe("BondActions", () => {
     render(<BondActions contractId="c1" canRegister bonds={[]} />);
     fireEvent.change(screen.getByPlaceholderText("BG-…"), { target: { value: "BG-2" } });
     fireEvent.change(screen.getByPlaceholderText("100000"), { target: { value: "500" } });
+    const dates = Array.from(document.querySelectorAll('input[type="date"]')) as HTMLInputElement[];
+    fireEvent.change(dates[0]!, { target: { value: "2026-04-01" } });
+    fireEvent.change(dates[1]!, { target: { value: "2027-03-31" } });
     fireEvent.click(screen.getByRole("button", { name: "Register bond" }));
     await waitFor(() => expect(screen.getByText(/This information was changed by someone else\. Refresh to see the latest version, then try again\./)).toBeInTheDocument());
     expect(screen.queryByText(/bond rejected/i)).not.toBeInTheDocument();
@@ -60,7 +101,7 @@ describe("BondActions", () => {
     render(<BondActions contractId="c1" canRegister={false} bonds={[HELD_BOND]} />);
     fireEvent.click(screen.getByRole("button", { name: "Release" }));
     fireEvent.click(screen.getByRole("button", { name: "Yes, release" }));
-    await waitFor(() => expect(screen.getByText(/bond released accepted/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/bond released request received/i)).toBeInTheDocument());
     const [url, init] = fetchSpy.mock.calls[0]!;
     expect(String(url)).toBe("/api/proxy/v1/contract/contracts/c1/bonds/b1/transition");
     const body = JSON.parse((init as RequestInit).body as string);
@@ -82,7 +123,7 @@ describe("BondActions", () => {
     expect(confirmBtn).toBeEnabled();
     fireEvent.click(confirmBtn);
 
-    await waitFor(() => expect(screen.getByText(/bond claimed accepted/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/bond claimed request received/i)).toBeInTheDocument());
     const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
     expect(body).toMatchObject({
       toStatus: "claimed",
@@ -111,7 +152,7 @@ describe("BondActions", () => {
     expect(screen.getByRole("button", { name: "Forfeit" })).toBeDisabled();
 
     resolveFetch(new Response(JSON.stringify({ status: "accepted" }), { status: 202 }));
-    await waitFor(() => expect(screen.getByText(/bond claimed accepted/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/bond claimed request received/i)).toBeInTheDocument());
   });
 
   it("a released/claimed/forfeited bond offers no transition buttons", () => {

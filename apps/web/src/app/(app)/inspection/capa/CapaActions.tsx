@@ -1,13 +1,10 @@
 "use client";
 
-import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
+import { UserFacingError } from "@/lib/userFacingError";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-
-export type CapaRow = {
-  id: string;
-  status: string;
-};
+import { ActionButton } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 type RowProps = { id: string; status: string };
 
@@ -16,14 +13,16 @@ export function CapaRowAction({ id, status }: RowProps) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | undefined>();
+  // GAP-INSPECTION-CAPA-03: use the app-standard useFormError so a failure
+  // shows catalogued, clerk-safe copy instead of the raw response text
+  // (res.text()) this used to throw.
+  const formError = useFormError("capa");
 
   // CAPA_TRANSITIONS (services/inspection-service/.../capa/domain.ts) only
   // allows open|overdue -> in_progress and in_progress|overdue -> completed —
   // there is intentionally NO open -> completed edge (a CAPA must pass
-  // through in_progress first). Every offered button below corresponds to an
-  // actually-legal transition: showing "Complete" for status "open" (as this
-  // used to) always failed server-side with INVALID_TRANSITION, silently,
-  // because the 202 had already been returned before the async consumer ran.
+  // through in_progress first). Every offered button corresponds to an
+  // actually-legal transition.
   const canStart = status === "open";
   const canComplete = status === "in_progress" || status === "overdue";
   const canVerify = status === "completed";
@@ -37,73 +36,59 @@ export function CapaRowAction({ id, status }: RowProps) {
     setError(undefined);
     setMessage("");
     try {
-      // No body on this request — deliberately no Content-Type header either.
-      // A `Content-Type: application/json` header with an empty body survives
-      // the /api/proxy catch-all verbatim (it forwards whatever content-type
-      // header the browser sent, regardless of whether there was a body) and
-      // reaches Fastify's default JSON parser, which rejects an empty body
-      // under that content-type with 400 FST_ERR_CTP_EMPTY_JSON_BODY —
-      // confirmed live against the real service, not just inferred. Sending
-      // no Content-Type here means no body is sent at all, which the route
-      // (no zod schema on req.body) accepts correctly.
-      const res = await fetch(`/api/proxy/v1/inspection/capa/${id}/start`, {
-        method: "POST",
-      });
+      // No body / no Content-Type header: a Content-Type: application/json
+      // header on a bodyless request is rejected by Fastify's JSON parser with
+      // 400 FST_ERR_CTP_EMPTY_JSON_BODY (confirmed live). The /start route has
+      // no zod body schema, so sending nothing is correct.
+      const res = await fetch(`/api/proxy/v1/inspection/capa/${id}/start`, { method: "POST" });
       if (res.status !== 202 && !res.ok) {
-        throw await userFacingErrorFromResponse(res, "save");
+        throw UserFacingError.from(await formError.fromResponse(res, "save"));
       }
-      setMessage("CAPA start accepted (queued).");
+      // GAP-INSPECTION-CAPA-04: honest async copy — the row changes once the
+      // consumer runs, not immediately.
+      setMessage("Start requested — the status will update shortly.");
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "CAPA start failed");
+      setError(formError.fromException("save", e).message);
     } finally {
       setBusy(false);
     }
   }
 
-  async function complete() {
-    setBusy(true);
-    setError(undefined);
-    setMessage("");
-    try {
-      const res = await fetch(`/api/proxy/v1/inspection/capa/${id}/complete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          evidenceOfClosure: [{ source: "inspection-hub", note: "Marked complete from inspection hub" }],
-        }),
-      });
-      if (res.status !== 202 && !res.ok) {
-        throw await userFacingErrorFromResponse(res, "save");
-      }
-      setMessage("CAPA completion accepted (queued).");
-      router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "CAPA complete failed");
-    } finally {
-      setBusy(false);
+  // GAP-INSPECTION-CAPA-01: completing a CAPA now requires real closure
+  // remarks typed by the user; the hard-coded {source:'inspection-hub', note:
+  // 'Marked complete from inspection hub'} evidence stub is gone. The remarks
+  // become the evidenceOfClosure item the route requires (completeCapaSchema:
+  // at least 1 item). ConfirmDialog gates submit until remarks are non-empty.
+  async function completeWithRemarks(reason?: string) {
+    const note = (reason ?? "").trim();
+    if (!note) {
+      // ConfirmDialog's requireReason already blocks this, but fail closed.
+      throw new Error("Closure remarks are required.");
+    }
+    const res = await fetch(`/api/proxy/v1/inspection/capa/${id}/complete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ evidenceOfClosure: [{ source: "user", note }] }),
+    });
+    if (res.status !== 202 && !res.ok) {
+      throw UserFacingError.from(await formError.fromResponse(res, "save"));
     }
   }
 
+  // GAP-INSPECTION-CAPA-02: effectiveness verification is a maker-checker
+  // sign-off; it now requires an explicit confirmation with verification
+  // confirmation instead of firing on a single click. The verify route schema
+  // (verifyCapaSchema) only carries effectivenessVerified, so no remarks are
+  // collected (they could not be persisted).
   async function verify() {
-    setBusy(true);
-    setError(undefined);
-    setMessage("");
-    try {
-      const res = await fetch(`/api/proxy/v1/inspection/capa/${id}/verify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ effectivenessVerified: true }),
-      });
-      if (res.status !== 202 && !res.ok) {
-        throw await userFacingErrorFromResponse(res, "save");
-      }
-      setMessage("CAPA verification accepted (queued).");
-      router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "CAPA verify failed");
-    } finally {
-      setBusy(false);
+    const res = await fetch(`/api/proxy/v1/inspection/capa/${id}/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ effectivenessVerified: true }),
+    });
+    if (res.status !== 202 && !res.ok) {
+      throw UserFacingError.from(await formError.fromResponse(res, "save"));
     }
   }
 
@@ -116,14 +101,34 @@ export function CapaRowAction({ id, status }: RowProps) {
           </button>
         ) : null}
         {canComplete ? (
-          <button type="button" className="btn ghost" disabled={busy} onClick={() => void complete()}>
-            Complete
-          </button>
+          <ActionButton
+            label="Complete"
+            className="btn ghost"
+            confirmTitle="Complete this corrective action?"
+            confirmDescription="Record what was done to close this CAPA. These remarks are saved as the closure evidence and cannot be left blank."
+            confirmLabel="Mark complete"
+            requireReason
+            reasonLabel="Closure remarks"
+            onConfirm={completeWithRemarks}
+            onSuccess={() => {
+              setMessage("Completion requested — the status will update shortly.");
+              router.refresh();
+            }}
+          />
         ) : null}
         {canVerify ? (
-          <button type="button" className="btn ghost" disabled={busy} onClick={() => void verify()}>
-            Verify
-          </button>
+          <ActionButton
+            label="Verify"
+            className="btn ghost"
+            confirmTitle="Verify effectiveness?"
+            confirmDescription="Confirm you have checked that this corrective action was effective. This is a sign-off step."
+            confirmLabel="Confirm verification"
+            onConfirm={() => verify()}
+            onSuccess={() => {
+              setMessage("Verification requested — the status will update shortly.");
+              router.refresh();
+            }}
+          />
         ) : null}
       </div>
       {message ? (
@@ -136,26 +141,6 @@ export function CapaRowAction({ id, status }: RowProps) {
           {error}
         </span>
       ) : null}
-    </div>
-  );
-}
-
-type Props = { capas: CapaRow[] };
-
-export function CapaActions({ capas }: Props) {
-  const actionable = capas.filter(
-    (row) => row.status === "open" || row.status === "in_progress" || row.status === "overdue" || row.status === "completed",
-  );
-  if (actionable.length === 0) return null;
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
-      {actionable.map((row) => (
-        <div key={row.id} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <span style={{ fontSize: 13, flex: 1 }}>{row.id.slice(0, 8)}… — {row.status}</span>
-          <CapaRowAction id={row.id} status={row.status} />
-        </div>
-      ))}
     </div>
   );
 }

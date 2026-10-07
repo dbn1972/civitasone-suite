@@ -99,8 +99,14 @@ export async function workflowRoutes(app: FastifyInstance): Promise<void> {
     const all = await repo.listByTenant(ctx.tenantId, 500, 0);
     return reply.send({
       inboxCount: inbox.length,
+      // Tenant-wide counts (used by the Library page's "all" tiles).
       pendingCount: all.filter(d => d.status === "pending").length,
       urgentCount: all.filter(d => d.priority === "urgent").length,
+      // Inbox-scoped counts (used by the Inbox page's KPI tiles) so they are
+      // accurate even when the inbox list is paginated/capped (GAP-DOCUMENTS-INBOX-02).
+      inboxUrgentCount: inbox.filter(d => d.priority === "urgent").length,
+      inboxPendingCount: inbox.filter(d => d.status === "pending").length,
+      inboxForwardedCount: inbox.filter(d => d.status === "forwarded").length,
     });
   });
 }

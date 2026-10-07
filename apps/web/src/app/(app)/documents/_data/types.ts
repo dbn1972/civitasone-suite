@@ -29,6 +29,11 @@ export type DakSummary = {
   createdAt:  string;
 };
 
+/** A single dak with its body, for the inbox detail route (GAP-DOCUMENTS-INBOX-01/04). */
+export type DakDetail = DakSummary & {
+  body: string | null;
+};
+
 export type InboxSummary = {
   data:  DakSummary[];
   meta:  { total: number };
@@ -38,4 +43,8 @@ export type DocumentStats = {
   inboxCount:   number;
   pendingCount: number;
   urgentCount:  number;
+  /** Inbox-scoped counts (GAP-DOCUMENTS-INBOX-02) — accurate even when the inbox list is paginated. */
+  inboxUrgentCount:    number;
+  inboxPendingCount:   number;
+  inboxForwardedCount: number;
 };

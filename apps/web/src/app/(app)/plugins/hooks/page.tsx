@@ -1,22 +1,27 @@
-import { ModuleListPage } from "../../../_components/ModuleListPage";
-import { getPluginHooks } from "../_data";
-import { ArrowLeft } from "lucide-react";
+import { PageHeader, RefreshErrorState } from "../../../_components/ds";
+import { getPluginHooksTyped } from "../_data";
+import { HooksTable } from "../HooksTable";
+import { toHumanError } from "@/lib/messages";
 
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
-  const { data, source } = await getPluginHooks();
+  const { data, source } = await getPluginHooksTyped();
   return (
     <div className="page-main" aria-labelledby="page-heading">
-      <nav aria-label="Breadcrumb" className="back">
-        <ArrowLeft aria-hidden="true" size={14} /> <a href="/plugins">Plugins</a>
-      </nav>
-      <ModuleListPage
+      <PageHeader
         title="Plugins — Hooks"
-        description="Registered plugin hooks."
-        rows={data}
-        source={source}
+        subtitle="Business events that installed plugins subscribe to."
+        back="/plugins"
+        backLabel="Plugins"
       />
+      <div className="card" style={{ marginTop: 18 }}>
+        {source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "hooks" })} />
+        ) : (
+          <HooksTable rows={data} />
+        )}
+      </div>
     </div>
   );
 }

@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatusPill, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatusPill, EmptyState, UserRef } from "../../../_components/ds";
 import { getChangeRequest } from "../_data/loaders";
 import { ChangeActions } from "./ChangeActions";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDateTime } from "@/lib/formatters";
 
 export default async function Page({ params }: { params: { id: string } }) {
   const { data: detail, source } = await getChangeRequest(params.id);
@@ -38,11 +38,22 @@ export default async function Page({ params }: { params: { id: string } }) {
         <div className="pad" style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
           {field("Type", c.type)}
           {field("Risk", c.risk)}
-          {field("Requested by", c.requestedBy.slice(0, 8))}
-          {field("Approved by", c.approvedBy ? c.approvedBy.slice(0, 8) : "—")}
+          {field("Requested by", <UserRef id={c.requestedBy} />)}
+          {field("Approved by", c.approvedBy
+            ? (
+              <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <UserRef id={c.approvedBy} />
+                {c.approvedBy === c.requestedBy && (
+                  <span role="alert" style={{ color: "#b42318", fontSize: 12 }}>
+                    ⚠️ Same person as requester — maker-checker not satisfied
+                  </span>
+                )}
+              </span>
+            )
+            : "—")}
           {field("Affected services", c.affectedServices.join(", ") || "—")}
           {field("Release window", c.windowStart && c.windowEnd
-            ? `${formatIndianDate(c.windowStart)} → ${formatIndianDate(c.windowEnd)}`
+            ? `${formatIndianDateTime(c.windowStart)} → ${formatIndianDateTime(c.windowEnd)}`
             : "Not scheduled")}
         </div>
         <div className="pad" style={{ borderTop: "1px solid #eef0f3" }}>
@@ -82,10 +93,10 @@ export default async function Page({ params }: { params: { id: string } }) {
             <tbody>
               {detail.audit.map((a) => (
                 <tr key={a.id}>
-                  <td>{formatIndianDate(a.at)}</td>
+                  <td>{formatIndianDateTime(a.at)}</td>
                   <td>{a.fromStatus?.replace(/_/g, " ") ?? "—"}</td>
                   <td><StatusPill status={a.toStatus} /></td>
-                  <td>{a.actorId.slice(0, 8)}</td>
+                  <td><UserRef id={a.actorId} /></td>
                   <td>{a.note ?? "—"}</td>
                 </tr>
               ))}

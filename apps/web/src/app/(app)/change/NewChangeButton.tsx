@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Modal } from "../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 const TYPES = ["standard", "normal", "emergency"] as const;
@@ -9,7 +10,6 @@ const RISKS = ["low", "medium", "high"] as const;
 
 export function NewChangeButton() {
   const router = useRouter();
-  const titleId = useId();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,15 +23,6 @@ export function NewChangeButton() {
   const formError = useFormError("change request");
 
   const close = useCallback(() => { if (!busy) { setOpen(false); setError(null); } }, [busy]);
-
-  useEffect(() => {
-    if (!open) return;
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") close();
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [open, close]);
 
   const submit = useCallback(async () => {
     setError(null);
@@ -71,43 +62,46 @@ export function NewChangeButton() {
   return (
     <>
       <button type="button" className="btn primary" onClick={() => setOpen(true)}>+ Raise change</button>
-      {open && (
-        <div role="dialog" aria-modal="true" aria-labelledby={titleId}
-          style={{ position: "fixed", inset: 0, background: "rgba(16,24,40,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
-          <div className="card" style={{ width: "min(560px,100%)", maxHeight: "90vh", overflowY: "auto" }}>
-            <div className="card-h"><h3 id={titleId}>Raise change request</h3></div>
-            <div className="pad" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <label className="lbl" htmlFor="ch-title">Title</label>
-              <input id="ch-title" className="inp" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Upgrade payments gateway to v2" />
-              <div style={{ display: "flex", gap: 12 }}>
-                <div style={{ flex: 1 }}>
-                  <label className="lbl" htmlFor="ch-type">Type</label>
-                  <select id="ch-type" className="inp" value={type} onChange={(e) => setType(e.target.value as typeof type)}>
-                    {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label className="lbl" htmlFor="ch-risk">Risk</label>
-                  <select id="ch-risk" className="inp" value={risk} onChange={(e) => setRisk(e.target.value as typeof risk)}>
-                    {RISKS.map((r) => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                </div>
-              </div>
-              <label className="lbl" htmlFor="ch-svc">Affected services (comma-separated)</label>
-              <input id="ch-svc" className="inp" value={services} onChange={(e) => setServices(e.target.value)} placeholder="finance-service, billing-service" />
-              <label className="lbl" htmlFor="ch-desc">Description</label>
-              <textarea id="ch-desc" className="inp" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What is changing and why…" />
-              <label className="lbl" htmlFor="ch-rb">Rollback plan (optional now, required before CAB approval)</label>
-              <textarea id="ch-rb" className="inp" rows={2} value={rollbackPlan} onChange={(e) => setRollbackPlan(e.target.value)} placeholder="How to revert if the release fails…" />
-              {error && <div role="alert" style={{ color: "#b42318", fontSize: 13, marginTop: 4 }}>{error}</div>}
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
-                <button type="button" className="btn ghost" onClick={close} disabled={busy}>Cancel</button>
-                <button type="button" className="btn primary" onClick={() => void submit()} disabled={busy}>{busy ? "Raising…" : "Raise change"}</button>
-              </div>
+      <Modal open={open} onClose={close} title="Raise change request" size="lg" closeOnOverlayClick={!busy}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label className="lbl" htmlFor="ch-title">Title</label>
+          {/* The ds Modal moves focus to the first focusable element on open,
+              which is this Title input, so the dialog opens focused and ready —
+              no autoFocus prop needed (and it avoids the a11y lint warning). */}
+          <input id="ch-title" className="inp" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Upgrade payments gateway to v2" />
+          <div style={{ display: "flex", gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <label className="lbl" htmlFor="ch-type">Type</label>
+              <select id="ch-type" className="inp" value={type} onChange={(e) => setType(e.target.value as typeof type)}>
+                {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div style={{ flex: 1 }}>
+              <label className="lbl" htmlFor="ch-risk">Risk</label>
+              <select id="ch-risk" className="inp" value={risk} onChange={(e) => setRisk(e.target.value as typeof risk)}>
+                {RISKS.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
             </div>
           </div>
+          {type === "emergency" && (
+            <p style={{ fontSize: 12, color: "#b45309", margin: "2px 0 0" }}>
+              Emergency changes are flagged for expedited CAB review. A rollback plan is still
+              required before approval, and the change is reviewed retrospectively.
+            </p>
+          )}
+          <label className="lbl" htmlFor="ch-svc">Affected services (comma-separated)</label>
+          <input id="ch-svc" className="inp" value={services} onChange={(e) => setServices(e.target.value)} placeholder="finance-service, billing-service" />
+          <label className="lbl" htmlFor="ch-desc">Description</label>
+          <textarea id="ch-desc" className="inp" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What is changing and why…" />
+          <label className="lbl" htmlFor="ch-rb">Rollback plan (optional now, required before CAB approval)</label>
+          <textarea id="ch-rb" className="inp" rows={2} value={rollbackPlan} onChange={(e) => setRollbackPlan(e.target.value)} placeholder="How to revert if the release fails…" />
+          {error && <div role="alert" style={{ color: "#b42318", fontSize: 13, marginTop: 4 }}>{error}</div>}
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
+            <button type="button" className="btn ghost" onClick={close} disabled={busy}>Cancel</button>
+            <button type="button" className="btn primary" onClick={() => void submit()} disabled={busy}>{busy ? "Raising…" : "Raise change"}</button>
+          </div>
         </div>
-      )}
+      </Modal>
     </>
   );
 }

@@ -1,11 +1,19 @@
 import Link from "next/link";
-import { PageHeader, EmptyState, RefreshErrorState } from "@/app/_components/ds";
+import { PageHeader, EmptyState, RefreshErrorState, StatusPill } from "@/app/_components/ds";
 import { getInspectionAssignments } from "../_data/loaders";
+import { AssignmentListItemSchema } from "../_data/loaders";
 import { AssignmentActions } from "./AssignmentActions";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
+import { formatIndianDate } from "@/lib/formatters";
 
 export const dynamic = "force-dynamic";
+
+/** Short id for display when no human reference exists. */
+function shortId(id: unknown): string {
+  const s = String(id ?? "");
+  return s ? `${s.slice(0, 8)}…` : "—";
+}
 
 export default async function Page() {
   const result = await getInspectionAssignments();
@@ -20,29 +28,46 @@ export default async function Page() {
         <span aria-current="page">Assignments</span>
       </nav>
       <PageHeader title="Assignments" back="/inspection" />
-      <AssignmentActions />
+      {/* GAP-INSPECTION-ASSIGNMENTS-06: do not show the create form when the
+          list failed to load — a failed page is not a safe place to accept a
+          new assignment. The route itself remains the authoritative RBAC gate
+          (assignment/routes.ts SUPERVISING_ROLES). */}
+      {!errored && <AssignmentActions />}
       {errored ? (
         <RefreshErrorState error={toHumanError("load", { area: "assignments" })} backHref="/inspection" />
       ) : data.length === 0 ? (
-        <EmptyState icon="📭" title="No records" message="No assignments returned from the API." />
+        <EmptyState icon="📭" title="No assignments yet" message="Assignments appear here once an inspector is assigned to an inspection." />
       ) : (
         <div className="card">
           <table className="tbl">
             <thead>
               <tr>
-                <th scope="col">ID</th>
+                <th scope="col">Assignment</th>
+                <th scope="col">Inspection</th>
+                <th scope="col">Inspector</th>
+                <th scope="col">Entity</th>
+                <th scope="col">Scheduled</th>
                 <th scope="col">Status</th>
-                <th scope="col">Summary</th>
               </tr>
             </thead>
             <tbody>
-              {data.map((row) => (
-                <tr key={String(row.id)}>
-                  <td>{String(row.id).slice(0, 8)}…</td>
-                  <td>{String(row.status ?? "—")}</td>
-                  <td>{String(row.title ?? row.name ?? row.findingCode ?? row.entityId ?? "—")}</td>
-                </tr>
-              ))}
+              {/* GAP-INSPECTION-ASSIGNMENTS-04: render the real assignment
+                  fields (assignment/schema.ts: inspectorId, scheduledDate,
+                  entityId, status), not a title/name/findingCode guess that
+                  rendered "—" for every row. */}
+              {data.map((raw) => {
+                const row = AssignmentListItemSchema.parse(raw);
+                return (
+                  <tr key={row.id}>
+                    <td>{shortId(row.id)}</td>
+                    <td>{shortId(row.inspectionId)}</td>
+                    <td>{shortId(row.inspectorId)}</td>
+                    <td>{shortId(row.entityId)}</td>
+                    <td>{formatIndianDate(row.scheduledDate)}</td>
+                    <td>{row.status ? <StatusPill status={row.status} /> : "—"}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

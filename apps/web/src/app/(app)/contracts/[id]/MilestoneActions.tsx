@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ActionButton } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { formatIndianDate } from "@/lib/formatters";
 
 export type ContractMilestone = {
   id: string;
@@ -56,7 +57,15 @@ export function MilestoneActions({ contractId, milestones }: Props) {
       if (res.status !== 202 && !res.ok) {
         throw UserFacingError.from(await formError.fromResponse(res, "save"));
       }
-      setMessage(kind === "late" ? "Late milestone accepted (queued)." : "Milestone completion accepted (queued).");
+      // GAP-CONTRACTS-DETAIL-06: a 202 means the mutation was accepted onto the
+      // queue, NOT that the milestone has already changed state. router.refresh()
+      // may re-render before the async consumer has written the new status, so
+      // the copy must not claim completion — only that the request was received.
+      setMessage(
+        kind === "late"
+          ? "Late-milestone request received — the status will update shortly."
+          : "Completion request received — the status will update shortly.",
+      );
       router.refresh();
     } finally {
       setBusyId(null);
@@ -69,7 +78,14 @@ export function MilestoneActions({ contractId, milestones }: Props) {
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {actionable.map((m) => (
         <div key={m.id} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <span style={{ fontSize: 13, flex: 1 }}>{m.title}</span>
+          <span style={{ fontSize: 13, flex: 1 }}>
+            {m.title}
+            {/* GAP-CONTRACTS-DETAIL-05: show the due date next to each action
+                row so "Complete"/"Mark late" is never decided blind. */}
+            {m.dueDate ? (
+              <span style={{ color: "var(--ink2)" }}> · due {formatIndianDate(m.dueDate)}</span>
+            ) : null}
+          </span>
           <ActionButton
             className="btn ghost"
             label="Complete"
@@ -87,7 +103,7 @@ export function MilestoneActions({ contractId, milestones }: Props) {
             label="Mark late"
             disabled={busyId === m.id}
             confirmTitle={`Mark "${m.title}" as delivered late?`}
-            confirmDescription="Applies the contract's SLA delay penalty and reduces the net payable amount. This cannot be undone."
+            confirmDescription={`${m.dueDate ? `Due ${formatIndianDate(m.dueDate)}. ` : ""}Applies the contract's SLA delay penalty and reduces the net payable amount. This cannot be undone.`}
             confirmLabel="Yes, mark late"
             danger
             requireReason

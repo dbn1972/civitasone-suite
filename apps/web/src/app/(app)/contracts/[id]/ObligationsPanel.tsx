@@ -3,7 +3,9 @@
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ActionButton } from "../../../_components/ds";
+import { ActionButton, EntityPicker } from "../../../_components/ds";
+import { searchIdentityUsers, resolveIdentityUsers } from "@/lib/entityAdapters/identityUser";
+import { formatIndianDate } from "@/lib/formatters";
 
 export type ContractObligation = {
   id: string;
@@ -58,7 +60,7 @@ export function ObligationsPanel({ contractId, obligations }: Props) {
       if (res.status !== 202 && !res.ok) {
         throw await userFacingErrorFromResponse(res, "save");
       }
-      setMessage("Obligation creation accepted (queued).");
+      setMessage("Obligation creation received — it will appear shortly.");
       setTitle("");
       setDescription("");
       setDueDate("");
@@ -89,7 +91,7 @@ export function ObligationsPanel({ contractId, obligations }: Props) {
       if (res.status !== 202 && !res.ok) {
         throw await userFacingErrorFromResponse(res, "save");
       }
-      setMessage(`Obligation status update to "${STATUS_LABEL[nextStatus] ?? nextStatus}" accepted (queued).`);
+      setMessage(`Status change to "${STATUS_LABEL[nextStatus] ?? nextStatus}" received — it will update shortly.`);
       router.refresh();
     } finally {
       setBusyId(null);
@@ -116,7 +118,7 @@ export function ObligationsPanel({ contractId, obligations }: Props) {
           {obligations.map((o) => (
             <li key={o.id} style={{ marginBottom: 8, fontSize: 13 }}>
               <strong>{o.title}</strong> — <span className="pill mut">{STATUS_LABEL[o.status] ?? o.status}</span>
-              {o.dueDate ? <span style={{ color: "var(--ink2)" }}> · due {o.dueDate}</span> : null}
+              {o.dueDate ? <span style={{ color: "var(--ink2)" }}> · due {formatIndianDate(o.dueDate)}</span> : null}
               {o.status !== "completed" ? (
                 <>
                   {" "}
@@ -163,8 +165,19 @@ export function ObligationsPanel({ contractId, obligations }: Props) {
           <input className="inp" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
         </label>
         <label style={{ fontSize: 12 }}>
-          Owner (user id)
-          <input className="inp" value={ownerId} onChange={(e) => setOwnerId(e.target.value)} placeholder="uuid" />
+          Owner
+          {/* GAP-CONTRACTS-DETAIL-03: pick the obligation owner by name via the
+              shared identity-user adapter, instead of pasting a raw 36-char
+              UUID. EntityPicker returns the selected user's id, which the
+              server validates as a uuid (createObligationBody.ownerId). */}
+          <EntityPicker
+            value={ownerId || null}
+            onChange={(v) => setOwnerId(Array.isArray(v) ? (v[0] ?? "") : (v ?? ""))}
+            search={searchIdentityUsers}
+            resolve={resolveIdentityUsers}
+            placeholder="Search users by name…"
+            aria-label="Owner"
+          />
         </label>
         <button type="button" className="btn" disabled={creating} onClick={() => void createObligation()}>
           Add obligation

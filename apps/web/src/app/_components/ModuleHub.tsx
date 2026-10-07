@@ -35,6 +35,13 @@ interface ModuleHubProps {
   children?: ReactNode;
   /** Optional Help Centre slug for a "How this works" link. */
   help?: string;
+  /**
+   * GAP-PLUGINS-HOME-02: tile grid column count passed through to LinkTiles.
+   * Defaults to "three" so every existing hub is unchanged; a hub with four
+   * tiles (e.g. plugins) can pass "four" so the last tile is not orphaned.
+   * Ignored when `groups` is used (grouped hubs keep their three-column grids).
+   */
+  columns?: "three" | "four";
 }
 
 function toTiles(links: ModuleHubLink[]): NavTile[] {
@@ -58,7 +65,7 @@ function visibleLinks(links: ModuleHubLink[]): ModuleHubLink[] {
   return links.filter((link) => !link.roles || hasAnyRole(sessionRoles, link.roles));
 }
 
-export function ModuleHub({ title, description, links = [], groups, children, help }: ModuleHubProps) {
+export function ModuleHub({ title, description, links = [], groups, children, help, columns }: ModuleHubProps) {
 
   return (
     <div className="page-main" aria-labelledby="page-heading">
@@ -72,7 +79,7 @@ export function ModuleHub({ title, description, links = [], groups, children, he
           </section>
         ))
       ) : (
-        <LinkTiles tiles={toTiles(visibleLinks(links))} columns="three" />
+        <LinkTiles tiles={toTiles(visibleLinks(links))} columns={columns ?? "three"} />
       )}
     </div>
   );
