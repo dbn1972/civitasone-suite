@@ -30,7 +30,8 @@ vi.mock("../_data/loaders", () => ({
   getDocumentStats: () => getDocumentStats(),
 }));
 
-import DocumentLibraryPage, { mimeLabel, fileStatusTone } from "./page";
+import DocumentLibraryPage from "./page";
+import { mimeLabel, fileStatusTone } from "./_helpers";
 
 const FOLDER_ID = "aaaaaaaa-1111-4111-8111-111111111111";
 const WORD_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";

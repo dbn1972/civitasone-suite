@@ -19,7 +19,8 @@ vi.mock("next-intl/server", () => ({
   getTranslations: async (ns: string) => (key: string, params?: Record<string, unknown>) => resolveMsg(ns, key, params),
 }));
 
-import DocumentInboxPage, { isOverdue, assigneeLabel } from "./page";
+import DocumentInboxPage from "./page";
+import { isOverdue, assigneeLabel } from "./_helpers";
 const getDocumentInbox = vi.fn();
 const getDocumentStats = vi.fn();
 vi.mock("../_data/loaders", () => ({

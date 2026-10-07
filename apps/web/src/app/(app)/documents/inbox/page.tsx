@@ -5,7 +5,8 @@ import { EmptyState, PageHeader, StatCard, StatGrid, RefreshErrorState } from ".
 import { getDocumentInbox, getDocumentStats } from "../_data/loaders";
 import type { DakSummary } from "../_data/types";
 import { toHumanError } from "@/lib/messages";
-import { formatIndianDate, formatInternalRef, humanizeStatus, istDatePart, todayIST } from "@/lib/formatters";
+import { formatIndianDate, formatInternalRef, humanizeStatus } from "@/lib/formatters";
+import { isOverdue, assigneeLabel } from "./_helpers";
 
 // GAP-DOCUMENTS-INBOX-05: strings come from the `documentsInbox` i18n namespace
 // (next-intl is the single i18n system for apps/web — see src/i18n/config.ts),
@@ -23,29 +24,6 @@ function statusPill(s: string) {
   if (s === "forwarded") return "warn";
   if (s === "pending") return "warn";
   return "mut";
-}
-
-/**
- * GAP-DOCUMENTS-INBOX-03: a dak is overdue when its due date is before today
- * (compared in IST calendar days to avoid an off-by-one around midnight) and
- * it has not yet been acknowledged. An acknowledged dak is never flagged.
- */
-export function isOverdue(dueDate: string | null, status: string): boolean {
-  if (!dueDate || status === "acknowledged") return false;
-  const due = istDatePart(dueDate);
-  if (!due) return false;
-  return due < todayIST();
-}
-
-/**
- * GAP-DOCUMENTS-INBOX-04: never print a raw user UUID (PII / id leakage). The
- * documents module has no user-name lookup wired in, so until one exists we
- * show a short, non-identifying reference token rather than the full uuid.
- */
-export function assigneeLabel(assignedTo: string | null): string {
-  if (!assignedTo) return "—";
-  const short = assignedTo.replace(/-/g, "").slice(0, 6);
-  return short ? `User ${short}` : "—";
 }
 
 function DakRow({ dak, t }: { dak: DakSummary; t: T }) {
