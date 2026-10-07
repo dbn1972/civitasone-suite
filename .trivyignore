@@ -65,30 +65,14 @@ GHSA-8h8q-6873-q5fj exp:2026-11-08
 GHSA-h25m-26qc-wcjf exp:2026-11-08
 GHSA-q4gf-8mx6-v5v3 exp:2026-11-08
 
-# brace-expansion (transitive) -- real patch/minor fix exists but multiple
-# co-installed major-version lines need per-major pnpm.overrides (SEC-018)
-CVE-2026-13149 exp:2026-10-09
-CVE-2026-14257 exp:2026-10-09
-CVE-2026-69152 exp:2026-10-09
+# fastify 4.28.1/4.29.1 -> fixed only in >=5.12.2; re-verified 2026-10-07 via npm
+# registry that 4.29.1 is the last 4.x release (no backport), so no non-major
+# fix exists (SEC-018, tied to REL-016). Same expiry as the entries above.
+CVE-2026-76169 exp:2026-11-08
+CVE-2026-84428 exp:2026-11-08
+CVE-2026-84469 exp:2026-11-08
+CVE-2026-84504 exp:2026-11-08
 
-# browserslist (transitive) -- real patch/minor fix, same per-major-line
-# caveat as brace-expansion above (SEC-018)
-CVE-2026-73088 exp:2026-10-09
-CVE-2026-73089 exp:2026-10-09
-
-# fast-uri (transitive) -- real patch/minor fix, same per-major-line caveat
-# as brace-expansion above (SEC-018)
-CVE-2026-13676 exp:2026-10-09
-CVE-2026-16221 exp:2026-10-09
-CVE-2026-18446 exp:2026-10-09
-CVE-2026-6321 exp:2026-10-09
-CVE-2026-6322 exp:2026-10-09
-CVE-2026-75975 exp:2026-10-09
-CVE-2026-76172 exp:2026-10-09
-CVE-2026-75899 exp:2026-10-09
-
-# js-yaml (transitive) -- real patch/minor fix, same per-major-line caveat
-# as brace-expansion above (SEC-018)
-CVE-2026-59869 exp:2026-10-09
-CVE-2026-84375 exp:2026-10-09
-GHSA-5p4m-2wfm-xmqj exp:2026-10-09
+# 2026-10-07: removed the brace-expansion/browserslist/fast-uri/js-yaml entries
+# (exp 2026-10-09). They were already cleared by version-scoped pnpm.overrides
+# on 2026-09-16; a current `trivy fs` of pnpm-lock.yaml no longer reports them.
