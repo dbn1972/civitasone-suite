@@ -45,7 +45,7 @@ describe("CapaRowAction", () => {
   });
 
   // GAP-INSPECTION-CAPA-02: Verify is a sign-off — it opens a confirm dialog
-  // and fires no request until confirmed with remarks.
+  // and fires no request until confirmed (no remarks are collected: the route cannot persist them).
   it("Verify requires a confirm step before POSTing", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ status: "accepted" }), { status: 202 }),
@@ -55,7 +55,7 @@ describe("CapaRowAction", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
 
     const dialog = await screen.findByRole("alertdialog");
-    fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "Checked, effective" } });
+    expect(within(dialog).queryByRole("textbox")).not.toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: /confirm verification/i }));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
