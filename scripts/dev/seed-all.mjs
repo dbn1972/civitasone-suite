@@ -234,6 +234,13 @@ UPDATE employee.hrms_employees
 SET manager_id = 'eeeeeeee-0001-0000-0000-000000000005', updated_at = now()
 WHERE id = 'eeeeeeee-0001-0000-0000-000000000006' AND tenant_id = '${T}';
 
+-- Link the seeded actor (the identity verify-screens.mjs mints its dev JWT for)
+-- to EMP001, so the self-service /v1/hrms/me/* endpoints resolve an employee
+-- for the actor instead of 404 "No employee record linked to your user".
+UPDATE employee.hrms_employees
+SET user_ref = '${A}', updated_at = now()
+WHERE id = 'eeeeeeee-0001-0000-0000-000000000005' AND tenant_id = '${T}' AND user_ref IS NULL;
+
 INSERT INTO attendance.hrms_attendance_regularisations (id, tenant_id, employee_id, date, reason, requested_status, status, requested_at, created_at, updated_at, created_by, updated_by, version)
 VALUES
   ('eeeeeeee-0001-0000-0000-000000000017', '${T}', 'eeeeeeee-0001-0000-0000-000000000006', '2024-11-28', 'Biometric missed due to field visit', 'present', 'pending',  now(), now(), now(), '${A}', '${A}', 1),
@@ -740,6 +747,13 @@ INSERT INTO config.admin_feature_flags (id, tenant_id, flag_key, enabled, create
 VALUES
   ('bbbbbbbb-0002-0000-0000-000000000001', '${T}', 'analytics_enabled',  true, now(), now(), '${A}', '${A}', 1),
   ('bbbbbbbb-0002-0000-0000-000000000002', '${T}', 'mobile_app_enabled', true, now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+-- GET /v1/admin/tenants/:id/config answers 404 "tenant config not found" until the
+-- tenant has an edition row (config-repo getTenantConfig keys off it).
+INSERT INTO config.admin_editions (id, tenant_id, edition, label, created_at, updated_at, created_by, updated_by, version)
+VALUES
+  ('bbbbbbbb-0002-0000-0000-000000000005', '${T}', 'govt_dept', 'Government Department', now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO config.admin_module_configs (id, tenant_id, module_key, enabled, created_at, updated_at, created_by, updated_by, version)

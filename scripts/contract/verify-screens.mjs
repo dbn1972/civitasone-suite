@@ -62,7 +62,11 @@ const SEED_IDS = {
   helpdeskTicket: '55555555-0004-0000-0000-000000000001',
 };
 
-function resolveApiPath(apiPath) {
+/**
+ * Static :param -> seeded-id rules. Returns null when no rule matches, so the
+ * caller can fall back to discovering a real id from the parent collection.
+ */
+function resolveSeededPath(apiPath) {
   const rules = [
     [/asset\/assets\/:param/, SEED_IDS.asset],
     [/payroll\/runs\/:param/, SEED_IDS.payrollRun],
@@ -91,7 +95,71 @@ function resolveApiPath(apiPath) {
   for (const [pattern, id] of rules) {
     if (pattern.test(apiPath)) return apiPath.replace(':param', id);
   }
-  return apiPath.replace(':param', SEED_IDS.actor);
+  return null;
+}
+
+/**
+ * Loader paths screen-map.mjs cannot fully reconstruct statically: the loader
+ * builds the URL by string concatenation (a trailing id and/or a literal
+ * suffix) or appends a query string, so the recorded path is a truncated
+ * prefix. The loader source is the authority for the shape; each entry names
+ * the loader it mirrors so a drift is easy to spot in review.
+ *   collection: GET this list through the gateway and use the first row's id
+ *   suffix:     literal tail the loader appends after the id
+ *   query:      query string the loader always sends
+ */
+const LOADER_URL_SHAPES = {
+  // getProcurementAnnualPlanById: "/api/v1/procurement/plans/" + id
+  '/api/v1/procurement/plans/': { collection: '/api/v1/procurement/plans' },
+  // getProcurementVendorScorecard: "/api/v1/procurement/vendors/" + id + "/scorecard"
+  '/api/v1/procurement/vendors/': { collection: '/api/v1/procurement/vendors', suffix: '/scorecard' },
+  // getNotificationExperiments: "...experiments?limit=100&offset=0" (route validates the paging query)
+  '/api/v1/notification/experiments': { query: '?limit=100&offset=0' },
+};
+
+const discoveredIds = new Map();
+
+/** First record id of a list endpoint, read through the gateway (null when empty/unreachable). */
+async function discoverId(collectionPath, jwt) {
+  if (discoveredIds.has(collectionPath)) return discoveredIds.get(collectionPath);
+  let id = null;
+  const r = await fetchRoute(collectionPath, jwt);
+  if (r.ok) {
+    const rows = Array.isArray(r.body) ? r.body
+      : Array.isArray(r.body?.data) ? r.body.data
+      : Array.isArray(r.body?.items) ? r.body.items : [];
+    id = rows.find(x => x && typeof x === 'object' && typeof x.id === 'string')?.id ?? null;
+  }
+  discoveredIds.set(collectionPath, id);
+  return id;
+}
+
+/**
+ * Resolves a recorded loader path to a concrete request path. Order: loader URL
+ * shape -> seeded-id rule -> id discovered from the parent collection -> the
+ * placeholder actor id (an id that exists nowhere, so the route is reached but
+ * answers with an application NOT_FOUND; see classifyNotFound()).
+ * `placeholder` is true only for that last fallback.
+ */
+async function resolveApiPath(apiPath, jwt) {
+  const shape = LOADER_URL_SHAPES[apiPath];
+  if (shape) {
+    let out = apiPath;
+    if (shape.collection) {
+      const id = await discoverId(shape.collection, jwt);
+      out = shape.collection + '/' + (id ?? SEED_IDS.actor);
+      if (!id) return { path: out + (shape.suffix ?? '') + (shape.query ?? ''), placeholder: true };
+    }
+    return { path: out + (shape.suffix ?? '') + (shape.query ?? ''), placeholder: false };
+  }
+  if (!apiPath.includes(':param')) return { path: apiPath, placeholder: false };
+  const seeded = resolveSeededPath(apiPath);
+  if (seeded) return { path: seeded, placeholder: false };
+  const at = apiPath.indexOf(':param');
+  const collection = apiPath.slice(0, at).replace(/\/$/, '');
+  const id = await discoverId(collection, jwt);
+  if (id) return { path: apiPath.replace(':param', id), placeholder: false };
+  return { path: apiPath.replace(':param', SEED_IDS.actor), placeholder: true };
 }
 
 // ── JWT minting ───────────────────────────────────────────────────────────────
@@ -207,23 +275,51 @@ async function run() {
     process.stdout.write(`\nLive verification: ${unique.length} unique paths, gateway ${gatewayBase}\n\n`);
   }
 
+  // Live-only ledger: endpoints that answer a non-2xx on purpose today (an
+  // honest 501 NOT_IMPLEMENTED, or a contract mismatch awaiting a product
+  // decision). Distinct from known-broken-chains.json, which is keyed to the
+  // STATIC chain status. A tracked path must keep reproducing the recorded
+  // status: if it starts answering anything else (e.g. 200 once the endpoint
+  // ships) the entry is stale and this run fails until it is removed.
+  const knownGapsPath = join(ROOT, 'scripts/contract/live-known-gaps.json');
+  const knownGaps = new Map(
+    (existsSync(knownGapsPath) ? JSON.parse(readFileSync(knownGapsPath, 'utf8')).entries : [])
+      .map(e => [e.apiPath, e]),
+  );
+
   const results = [];
   let passed = 0;
   let failed = 0;
 
   for (const row of unique) {
-    const apiPath = resolveApiPath(row.apiPaths[0]);
+    const { path: apiPath, placeholder } = await resolveApiPath(row.apiPaths[0], jwt);
     const { status, ok, body, error } = await fetchRoute(apiPath, jwt);
+    const gap = knownGaps.get(row.apiPaths[0]);
 
     let verdict;
     let reason = '';
 
-    if (error) {
+    if (gap) {
+      if (status === gap.status) {
+        verdict = 'KNOWN_GAP';
+        reason = `tracked in live-known-gaps.json (${gap.status}): ${gap.reason}`;
+      } else {
+        verdict = 'FAIL';
+        reason = `stale live-known-gaps.json entry: expected ${gap.status}, got ${status} -- remove or update it`;
+      }
+    } else if (error) {
       verdict = 'FAIL';
       reason = `network error: ${error}`;
     } else if (status === 401 || status === 403) {
       verdict = 'FAIL';
       reason = `auth rejected (${status}) — JWT or role issue`;
+    } else if (status === 404 && placeholder && body && typeof body === 'object' && body.code === 'NOT_FOUND') {
+      // The route is wired and the service answered with its own application
+      // NOT_FOUND for an id that exists nowhere, because the parent list had no
+      // row to take an id from (seed gap, not a wiring gap). A missing route
+      // answers the framework's own 404 body (no `code`) and still FAILs below.
+      verdict = 'ROUTE_OK';
+      reason = 'route reached; parent list empty so no real id (application NOT_FOUND for placeholder id)';
     } else if (status === 404) {
       verdict = 'FAIL';
       reason = `404 not found — route missing in service`;
@@ -252,7 +348,7 @@ async function run() {
     });
 
     if (!jsonOnly) {
-      const icon = verdict === 'PASS' ? '✅' : verdict === 'EMPTY' ? '⚠️' : '❌';
+      const icon = verdict === 'PASS' ? '✅' : (verdict === 'EMPTY' || verdict === 'ROUTE_OK' || verdict === 'KNOWN_GAP') ? '⚠️' : '❌';
       process.stdout.write(`  ${icon} [${row.module}] ${apiPath} → ${status} ${verdict}${reason ? ` (${reason})` : ''}\n`);
     }
   }
@@ -265,7 +361,12 @@ async function run() {
     tenant: tenantId,
     testedAt: new Date().toISOString(),
     results,
-    counts: { total: unique.length, passed, failed, empty: results.filter(r => r.verdict === 'EMPTY').length },
+    counts: {
+      total: unique.length, passed, failed,
+      empty: results.filter(r => r.verdict === 'EMPTY').length,
+      routeOk: results.filter(r => r.verdict === 'ROUTE_OK').length,
+      knownGap: results.filter(r => r.verdict === 'KNOWN_GAP').length,
+    },
   };
 
   writeFileSync(join(outDir, 'verify-report.json'), JSON.stringify(report, null, 2));
@@ -274,7 +375,7 @@ async function run() {
     process.stdout.write(JSON.stringify(report, null, 2));
   } else {
     process.stdout.write('\n────────────────────────────────────────────────────────\n');
-    process.stdout.write(`  Total: ${unique.length}  PASS: ${passed}  FAIL: ${failed}  EMPTY: ${report.counts.empty}\n`);
+    process.stdout.write(`  Total: ${unique.length}  PASS: ${passed}  FAIL: ${failed}  EMPTY: ${report.counts.empty}  ROUTE_OK: ${report.counts.routeOk}  KNOWN_GAP: ${report.counts.knownGap}\n`);
     process.stdout.write('  Output: scripts/contract/verify-report.json\n\n');
   }
 

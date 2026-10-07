@@ -77,12 +77,21 @@ function mapNoting(n: NotingRow, employees: Map<string, EmployeeDisplay>) {
     id: n.id,
     author: officerLabel(n.officerId, employees),
     content: n.body,
-    timestamp: n.createdAt.toISOString(),
+    timestamp: iso(n.createdAt),
     type: mapNoteTypeForUi(n.noteType, n.eSigned),
     noteType: n.noteType,
     noteStatus: n.noteStatus,
     eSigned: n.eSigned,
   };
+}
+
+/**
+ * Rows served from the read-through cache (cache.getOrLoad) come back JSON-round-
+ * tripped, so a timestamp is an ISO string on a cache hit and a Date on a miss.
+ * Calling .toISOString() directly 500s the second read of the same file.
+ */
+function iso(v: Date | string): string {
+  return (v instanceof Date ? v : new Date(v)).toISOString();
 }
 
 function mapFileBase(file: FileRow, employees: Map<string, EmployeeDisplay>) {
@@ -103,8 +112,8 @@ function mapFileBase(file: FileRow, employees: Map<string, EmployeeDisplay>) {
     linkedFileIds: file.linkedFileIds ?? [],
     dakNo: file.dakNo,
     inwardId: file.inwardId,
-    dueBy: file.dueBy?.toISOString() ?? null,
-    createdAt: file.createdAt.toISOString(),
+    dueBy: file.dueBy ? iso(file.dueBy) : null,
+    createdAt: iso(file.createdAt),
   };
 }
 
@@ -135,13 +144,13 @@ export async function getFileDetail(tenantId: string, id: string): Promise<FileD
       toOfficerId: m.toOfficerId,
       action: m.action,
       remarks: m.remarks,
-      movedAt: m.movedAt.toISOString(),
+      movedAt: iso(m.movedAt),
     })),
     dispatchHistory: dispatches.map((d) => ({
       id: d.id,
       dispatchedTo: d.toAddress,
       dispatchedBy: officerLabel(d.createdBy, employees),
-      timestamp: (d.dispatchedAt ?? d.createdAt).toISOString(),
+      timestamp: iso(d.dispatchedAt ?? d.createdAt),
       remarks: d.mode,
     })),
     attachments: attachments.map((a) => ({
@@ -149,7 +158,7 @@ export async function getFileDetail(tenantId: string, id: string): Promise<FileD
       fileName: a.fileName,
       fileType: a.fileType,
       size: a.sizeBytes,
-      uploadedAt: a.uploadedAt.toISOString(),
+      uploadedAt: iso(a.uploadedAt),
     })),
   };
 }

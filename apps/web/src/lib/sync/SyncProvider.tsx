@@ -48,10 +48,18 @@ const SYNC_ENABLED = false;
 
 /** Gmail-style background sync — BFF /api/proxy with device + trust headers. */
 export function SyncProvider() {
+  // The service worker is the offline app shell (precache + network-first
+  // navigation fallback, see public/sw.js). It makes no /devices/register or
+  // /sync/* call of its own (its `sync` handler only runs after
+  // requestBackgroundSync(), which stays behind SYNC_ENABLED), so the SYNC-OFF
+  // 403 storm does not apply to it. Registering it unconditionally keeps the
+  // offline-first acceptance (e2e/offline.spec.ts) honest while sync is parked.
+  useEffect(() => {
+    void registerServiceWorker();
+  }, []);
+
   useEffect(() => {
     if (!SYNC_ENABLED) return;
-
-    void registerServiceWorker();
 
     const deviceId = getOrCreateDeviceId();
 

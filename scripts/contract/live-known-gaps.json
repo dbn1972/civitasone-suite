@@ -1,0 +1,47 @@
+{
+  "_comment": "Live-stack verification ledger (scripts/contract/verify-screens.mjs). Each entry is an endpoint that answers a non-2xx on purpose TODAY (honest 501 NOT_IMPLEMENTED stubs, or a loader/route contract mismatch awaiting a product decision). Not a blanket carve-out: the live verifier requires every entry to keep returning exactly the recorded status and FAILS if it changes (e.g. 200 once the endpoint ships), so a stale entry cannot linger. Distinct from known-broken-chains.json, which is keyed to the STATIC chain status. Added 2026-10-07 with the Live Stack Verification fix (PR fix/main-ci-final-gates).",
+  "entries": [
+    {
+      "apiPath": "/api/v1/citizen/alerts",
+      "status": 501,
+      "reason": "citizen-service/src/modules/gap/routes.ts answers 501 NOT_IMPLEMENTED by design (no alerts store); ticket: needs product decision",
+      "since": "2026-10-07"
+    },
+    {
+      "apiPath": "/api/v1/citizen/notices",
+      "status": 501,
+      "reason": "citizen-service/src/modules/gap/routes.ts answers 501 NOT_IMPLEMENTED by design (no notices store)",
+      "since": "2026-10-07"
+    },
+    {
+      "apiPath": "/api/v1/citizen/surveys",
+      "status": 501,
+      "reason": "citizen-service/src/modules/gap/routes.ts answers 501 NOT_IMPLEMENTED by design (no surveys store)",
+      "since": "2026-10-07"
+    },
+    {
+      "apiPath": "/api/v1/admin/idp/providers",
+      "status": 501,
+      "reason": "admin-service/src/modules/gap/routes.ts answers 501: no distinct IdP-provider store exists",
+      "since": "2026-10-07"
+    },
+    {
+      "apiPath": "/api/v1/admin/sso/providers",
+      "status": 501,
+      "reason": "admin-service/src/modules/gap/routes.ts answers 501: identity-service SAML config route is itself an unfinished stub",
+      "since": "2026-10-07"
+    },
+    {
+      "apiPath": "/api/v1/admin/security/overview",
+      "status": 501,
+      "reason": "admin-service/src/modules/gap/routes.ts answers 501 NOT_IMPLEMENTED by design (no backing aggregate)",
+      "since": "2026-10-07"
+    },
+    {
+      "apiPath": "/api/v1/crm/activities",
+      "status": 400,
+      "reason": "GET /v1/crm/activities requires subjectType+subjectId (deliberate same-tenant-leak fix in crm-service activities/routes.ts) but the /crm/activities page's getCRMActivities() sends neither; needs a scoped tenant-wide feed endpoint or a per-subject page, a product/security decision",
+      "since": "2026-10-07"
+    }
+  ]
+}

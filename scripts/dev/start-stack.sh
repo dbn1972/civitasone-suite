@@ -35,6 +35,18 @@ export JWT_SECRET="${JWT_SECRET:-civitasone-dev-secret}"
 export INTERNAL_SERVICE_SECRET="${INTERNAL_SERVICE_SECRET:-civitasone-internal-dev-secret}"
 export LOG_LEVEL="${LOG_LEVEL:-warn}"
 export NODE_ENV="development"
+
+# Dev-only at-rest-encryption / signing secrets. NODE_ENV is pinned to
+# "development" above, the same posture ecosystem.config.js uses (it falls back
+# to these same non-secret placeholder values only when NODE_ENV is
+# development/test). Without them procurement-service (PII_ENC_KEY, fail-fast in
+# index.ts) and citizen-service (CITIZEN_PII_KEY, asserted in buildApp) exit at
+# boot on a clean runner, which then 502s every screen routed to them.
+# A developer or CI job that already exports a real value keeps it.
+export PII_ENC_KEY="${PII_ENC_KEY:-civitasone-hrms-pii-dev-key-not-for-prod}"
+export CITIZEN_PII_KEY="${CITIZEN_PII_KEY:-civitasone-citizen-pii-dev-key-not-for-prod}"
+export CRM_PII_KEY="${CRM_PII_KEY:-civitasone-crm-pii-dev-key-not-for-prod}"
+export MFA_ENC_KEY="${MFA_ENC_KEY:-civitasone-identity-mfa-dev-key-not-for-prod}"
 export AWS_ENDPOINT_URL="${AWS_ENDPOINT_URL:-http://localhost:4566}"
 export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-ap-south-1}"
 export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-test}"
@@ -194,9 +206,32 @@ start_svc analytics-service "$ROOT/services/analytics-service"  3031 dist/index.
 start_svc location-service "$ROOT/services/location-service"     4012 dist/index.js \
   DATABASE_URL="postgres://location_svc:location_dev_pw@localhost:5435/civitas_location"
 
+# The gateway registry (services/gateway-service/src/registry.ts) routes
+# /api/v1/recommendations -> :3040 and /api/v1/ai -> :3041; without these two
+# every CRM health / AI chat screen 502s ("Cannot reach upstream service").
+start_svc recommendation-service "$ROOT/services/recommendation-service" 3040 dist/index.js \
+  DATABASE_URL="postgres://recommendation_svc:recommendation_dev_pw@localhost:5435/civitas_recommendation"
+
+start_svc ai-agent-service "$ROOT/services/ai-agent-service"     3041 dist/index.js \
+  DATABASE_URL="postgres://ai_agent_svc:ai_agent_dev_pw@localhost:5435/civitas_ai_agent"
+
 # ── Gateway (last) ────────────────────────────────────────────────────────────
 sleep 3
-start_svc gateway-service  "$ROOT/services/gateway-service"      8080 dist/index.js
+# gateway-service builds its tenant DB client (createTenantDb) at module load,
+# which throws without DATABASE_URL, so the gateway needs its catalogue DB even
+# though the proxy path itself does not use it (src/shared/db.ts).
+#
+# GATEWAY_RATE_LIMIT_TENANT_MAX: the gateway's per-tenant limiter defaults to 200
+# requests/minute, which is a production abuse guard. scripts/contract/
+# verify-screens.mjs sends ~270 sequential GETs as ONE tenant, so on a stack
+# started for verification the last ~60 came back 429 and were counted as screen
+# failures. AUTH_RATE_LIMIT_MAX (10/min on /api/identity/*) is raised for the
+# same reason: a re-run of the verifier inside one minute tripped it. Both are
+# raised for this dev/verification stack only (overridable), never in ecosystem.config.js.
+start_svc gateway-service  "$ROOT/services/gateway-service"      8080 dist/index.js \
+  DATABASE_URL="postgres://gateway_svc:gateway_dev_pw@localhost:5435/civitas_gateway" \
+  GATEWAY_RATE_LIMIT_TENANT_MAX="${GATEWAY_RATE_LIMIT_TENANT_MAX:-100000}" \
+  AUTH_RATE_LIMIT_MAX="${AUTH_RATE_LIMIT_MAX:-100000}"
 
 # ── Health check ──────────────────────────────────────────────────────────────
 echo ""
@@ -265,6 +300,8 @@ check_svc workflow-service     3029
 check_svc queue-service        3030
 check_svc analytics-service    3031
 check_svc location-service     4012
+check_svc recommendation-service 3040
+check_svc ai-agent-service       3041
 check_svc gateway-service      8080
 
 echo "──────────────────────────────────────────────────────────"

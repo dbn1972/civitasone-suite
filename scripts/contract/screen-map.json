@@ -10724,6 +10724,17 @@
     },
     {
       "module": "stock",
+      "screen": "/stock/ledger/new",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "stock",
       "screen": "/stock/ledger",
       "loaders": [
         "getStockLedger"
@@ -12011,36 +12022,15 @@
     }
   ],
   "counts": {
-    "totalPages": 881,
+    "totalPages": 882,
     "wired": 371,
     "missing": 4,
     "mismatch": 1,
-    "noLoader": 579,
+    "noLoader": 580,
     "fabricatedData": 0
   },
   "linkAudit": {
     "total": 1699,
-    "dead": [
-      {
-        "file": "apps/web/src/app/(app)/reports/[id]/page.tsx",
-        "href": "/reports/list/new${job.module && job.module !== ",
-        "resolved": false
-      },
-      {
-        "file": "apps/web/src/app/(app)/stock/dashboard/page.tsx",
-        "href": "/stock/ledger/new",
-        "resolved": false
-      },
-      {
-        "file": "apps/web/src/app/(app)/stock/ledger/page.tsx",
-        "href": "/stock/ledger/new",
-        "resolved": false
-      },
-      {
-        "file": "apps/web/src/app/(app)/stock/page.tsx",
-        "href": "/stock/ledger/new",
-        "resolved": false
-      }
-    ]
+    "dead": []
   }
 }

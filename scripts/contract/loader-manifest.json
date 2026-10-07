@@ -1724,6 +1724,434 @@
     {
       "module": "works",
       "screen": "/works/tenders"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/config"
+    },
+    {
+      "module": "ai",
+      "screen": "/ai/governance"
+    },
+    {
+      "module": "analytics",
+      "screen": "/analytics/dashboards/[id]"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/fixed-assets"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/fleet"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/insurance/[id]"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/insurance/claims/[id]"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/list"
+    },
+    {
+      "module": "billing",
+      "screen": "/billing/invoices/[id]"
+    },
+    {
+      "module": "billing",
+      "screen": "/billing/subscriptions"
+    },
+    {
+      "module": "cdp",
+      "screen": "/cdp/events"
+    },
+    {
+      "module": "cdp",
+      "screen": "/cdp/identity"
+    },
+    {
+      "module": "cdp",
+      "screen": "/cdp/profiles/[id]"
+    },
+    {
+      "module": "cdp",
+      "screen": "/cdp/profiles"
+    },
+    {
+      "module": "cdp",
+      "screen": "/cdp/segments"
+    },
+    {
+      "module": "change",
+      "screen": "/change/[id]"
+    },
+    {
+      "module": "citizen",
+      "screen": "/citizen/requests/[id]"
+    },
+    {
+      "module": "citizen",
+      "screen": "/citizen/rti/[id]"
+    },
+    {
+      "module": "citizen",
+      "screen": "/citizen/services/[serviceKey]/apply"
+    },
+    {
+      "module": "citizen",
+      "screen": "/citizen/services/[serviceKey]"
+    },
+    {
+      "module": "contracts",
+      "screen": "/contracts"
+    },
+    {
+      "module": "court",
+      "screen": "/court/cases/[caseId]"
+    },
+    {
+      "module": "court",
+      "screen": "/court/cases"
+    },
+    {
+      "module": "court",
+      "screen": "/court"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/contacts"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/grievances/[id]"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/rti/[id]"
+    },
+    {
+      "module": "documents",
+      "screen": "/documents/inbox/[id]"
+    },
+    {
+      "module": "documents",
+      "screen": "/documents/inbox"
+    },
+    {
+      "module": "documents",
+      "screen": "/documents/library"
+    },
+    {
+      "module": "documents",
+      "screen": "/documents"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/quarters/[id]"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/quarters/allotments/[id]"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/quarters/allotments"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/quarters"
+    },
+    {
+      "module": "field",
+      "screen": "/field/visits"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/accounting/vouchers/new"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/budget/demand-grants/[id]"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/budget/formulation/new"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/budget/fund-releases"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/budget/monitoring"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/budget/sanctions/new"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/chart-of-accounts"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/journal-entry"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/treasury/deposits/[id]"
+    },
+    {
+      "module": "fleet",
+      "screen": "/fleet"
+    },
+    {
+      "module": "grants",
+      "screen": "/grants/disbursements/[id]"
+    },
+    {
+      "module": "grants",
+      "screen": "/grants/schemes/[id]"
+    },
+    {
+      "module": "help",
+      "screen": "/help/[module]"
+    },
+    {
+      "module": "help",
+      "screen": "/help"
+    },
+    {
+      "module": "helpdesk",
+      "screen": "/helpdesk/slas"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/apar/[id]"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/confirmation"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/contractual/[id]"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/directory"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/dpc"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/locations/[id]"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/onboarding"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/overtime"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/tax-declaration"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/recruitment/talent-pool"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/service-book"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/skills"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/social-feed"
+    },
+    {
+      "module": "inventory",
+      "screen": "/inventory/items/[id]"
+    },
+    {
+      "module": "inventory",
+      "screen": "/inventory/items"
+    },
+    {
+      "module": "inventory",
+      "screen": "/inventory/movements/[id]"
+    },
+    {
+      "module": "journeys",
+      "screen": "/journeys/analytics"
+    },
+    {
+      "module": "knowledge",
+      "screen": "/knowledge/assistant"
+    },
+    {
+      "module": "knowledge",
+      "screen": "/knowledge/documents/[id]"
+    },
+    {
+      "module": "knowledge",
+      "screen": "/knowledge/policies/[id]"
+    },
+    {
+      "module": "learning",
+      "screen": "/learning/assessments/[id]"
+    },
+    {
+      "module": "learning",
+      "screen": "/learning/assessments"
+    },
+    {
+      "module": "learning",
+      "screen": "/learning/assessments/verify"
+    },
+    {
+      "module": "learning",
+      "screen": "/learning/calendar"
+    },
+    {
+      "module": "learning",
+      "screen": "/learning/competency"
+    },
+    {
+      "module": "learning",
+      "screen": "/learning/courses"
+    },
+    {
+      "module": "learning",
+      "screen": "/learning/my-learning"
+    },
+    {
+      "module": "learning",
+      "screen": "/learning"
+    },
+    {
+      "module": "learning",
+      "screen": "/learning/training-plans/[id]"
+    },
+    {
+      "module": "learning",
+      "screen": "/learning/training-plans/new"
+    },
+    {
+      "module": "learning",
+      "screen": "/learning/training-plans"
+    },
+    {
+      "module": "loyalty",
+      "screen": "/loyalty"
+    },
+    {
+      "module": "meeting",
+      "screen": "/meeting/meetings/[meetingId]/minutes"
+    },
+    {
+      "module": "meeting",
+      "screen": "/meeting/meetings/[meetingId]"
+    },
+    {
+      "module": "meeting",
+      "screen": "/meeting/meetings"
+    },
+    {
+      "module": "municipal",
+      "screen": "/municipal/[serviceKey]/applications/[id]"
+    },
+    {
+      "module": "municipal",
+      "screen": "/municipal/[serviceKey]/applications"
+    },
+    {
+      "module": "municipal",
+      "screen": "/municipal/[serviceKey]"
+    },
+    {
+      "module": "municipal",
+      "screen": "/municipal"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/grn"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/indents"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/orders"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/reverse-auction/[id]"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/vendors"
+    },
+    {
+      "module": "recommendations",
+      "screen": "/recommendations/feedback"
+    },
+    {
+      "module": "revenue",
+      "screen": "/revenue/instalments/[id]"
+    },
+    {
+      "module": "revenue",
+      "screen": "/revenue/refunds/[id]/decide"
+    },
+    {
+      "module": "revenue",
+      "screen": "/revenue/waivers/[id]/decide"
+    },
+    {
+      "module": "revenue",
+      "screen": "/revenue/write-offs/[id]/decide"
+    },
+    {
+      "module": "setup",
+      "screen": "/setup"
+    },
+    {
+      "module": "stock",
+      "screen": "/stock/ledger/new"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/platform-config"
+    },
+    {
+      "module": "works",
+      "screen": "/works/boq/[workId]"
+    },
+    {
+      "module": "works",
+      "screen": "/works/contractors/[id]"
+    },
+    {
+      "module": "works",
+      "screen": "/works/execution/issues"
+    },
+    {
+      "module": "works",
+      "screen": "/works"
     }
   ]
 }

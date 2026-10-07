@@ -1,8 +1,8 @@
 # Screen Contract Map
 
-Generated: 2026-10-07T13:28:01.249Z
+Generated: 2026-10-07T18:14:49.452Z
 
-**Summary:** 371 WIRED | 4 MISSING | 1 MISMATCH | 579 NO_LOADER | 0 FABRICATED_DATA
+**Summary:** 371 WIRED | 4 MISSING | 1 MISMATCH | 580 NO_LOADER | 0 FABRICATED_DATA
 
 | module | screen | loader | apiPath | upstream | route? | table? | status |
 |--------|--------|--------|---------|----------|--------|--------|--------|
@@ -856,6 +856,7 @@ Generated: 2026-10-07T13:28:01.249Z
 | stock | /stock/dashboard | getStockDashboard | /api/v1/stock/dashboard | stock → /v1/stock/dashboard | ✓ `/v1/stock/dashboard` | ✓ | ✅ WIRED |
 | stock | /stock/dashboard | getStockLedger | /api/v1/stock/ledger | stock → /v1/stock/ledger | ✓ `/v1/stock/ledger` | ✓ | ✅ WIRED |
 | stock | /stock/items/new | — | — | — | — | — | — NO_LOADER |
+| stock | /stock/ledger/new | — | — | — | — | — | — NO_LOADER |
 | stock | /stock/ledger | getStockLedger | /api/v1/stock/ledger | stock → /v1/stock/ledger | ✓ `/v1/stock/ledger` | ✓ | ✅ WIRED |
 | stock | /stock/list | getStockItems | /api/v1/stock/items | stock → /v1/stock/items | ✓ `/v1/stock/items` | ✓ | ✅ WIRED |
 | stock | /stock | — | — | — | — | — | — NO_LOADER |
