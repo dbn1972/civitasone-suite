@@ -29,6 +29,21 @@ const TENANT = randomUUID();
 const ACTOR = randomUUID();
 let queue: MemoryQueue;
 
+/**
+ * Run `fn` in ONE transaction with app.tenant_id set transaction-locally.
+ * A session-level set_config(..., false) on the pooled client is a race: the
+ * follow-up statement can be dispatched on a different pooled connection whose
+ * GUC is empty ("" -> `invalid input syntax for type uuid` / RLS WITH CHECK
+ * violation on query_runs). Pinning GUC + statement to one tx removes it.
+ */
+type TenantTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+function asTenant<T>(fn: (tx: TenantTx) => Promise<T>): Promise<T> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT set_config('app.tenant_id', ${TENANT}, true)`);
+    return fn(tx);
+  }) as Promise<T>;
+}
+
 function publishExport(id: string, queryRunId: string, format: "csv" | "json") {
   return queue.publish(COMMANDS.createExport, {
     messageId: id,
@@ -44,23 +59,25 @@ function publishExport(id: string, queryRunId: string, format: "csv" | "json") {
 async function waitForExportJob(id: string, timeoutMs = 5000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    await db.execute(sql`SELECT set_config('app.tenant_id', ${TENANT}, false)`);
-    const rows = await db
-      .select()
-      .from(exportJobs)
-      .where(and(eq(exportJobs.id, id), eq(exportJobs.tenantId, TENANT)))
-      .limit(1);
+    const rows = await asTenant((tx) =>
+      tx
+        .select()
+        .from(exportJobs)
+        .where(and(eq(exportJobs.id, id), eq(exportJobs.tenantId, TENANT)))
+        .limit(1),
+    );
     const job = rows[0];
     if (job && (job.status === "completed" || job.status === "failed")) return job;
     await new Promise((r) => setTimeout(r, 50));
   }
   // Final attempt
-  await db.execute(sql`SELECT set_config('app.tenant_id', ${TENANT}, false)`);
-  const rows = await db
-    .select()
-    .from(exportJobs)
-    .where(and(eq(exportJobs.id, id), eq(exportJobs.tenantId, TENANT)))
-    .limit(1);
+  const rows = await asTenant((tx) =>
+    tx
+      .select()
+      .from(exportJobs)
+      .where(and(eq(exportJobs.id, id), eq(exportJobs.tenantId, TENANT)))
+      .limit(1),
+  );
   return rows[0] ?? null;
 }
 
@@ -69,8 +86,7 @@ async function insertQueryRun(
   status: "completed" | "failed" | "running",
   result: Record<string, unknown> | null,
 ) {
-  await db.execute(sql`SELECT set_config('app.tenant_id', ${TENANT}, false)`);
-  await db.insert(queryRuns).values({
+  await asTenant((tx) => tx.insert(queryRuns).values({
     id,
     tenantId: TENANT,
     queryName: "test-query",
@@ -81,7 +97,7 @@ async function insertQueryRun(
     resultRows: Array.isArray(result) ? result.length : 0,
     createdBy: ACTOR,
     updatedBy: ACTOR,
-  });
+  }));
 }
 
 beforeAll(async () => {
@@ -93,9 +109,10 @@ beforeAll(async () => {
 afterAll(async () => {
   await queue.stop();
   // Clean up test data (set GUC for RLS-scoped deletes)
-  await db.execute(sql`SELECT set_config('app.tenant_id', ${TENANT}, false)`);
-  await db.delete(exportJobs).where(eq(exportJobs.tenantId, TENANT));
-  await db.delete(queryRuns).where(eq(queryRuns.tenantId, TENANT));
+  await asTenant(async (tx) => {
+    await tx.delete(exportJobs).where(eq(exportJobs.tenantId, TENANT));
+    await tx.delete(queryRuns).where(eq(queryRuns.tenantId, TENANT));
+  });
   await sqlClient.end();
 });
 
@@ -210,12 +227,13 @@ describe("ExportConsumer", () => {
       await new Promise((r) => setTimeout(r, 500));
 
       // Verify the job was NOT reprocessed (updatedAt unchanged, status stable)
-      await db.execute(sql`SELECT set_config('app.tenant_id', ${TENANT}, false)`);
-      const rows = await db
-        .select()
-        .from(exportJobs)
-        .where(and(eq(exportJobs.id, exportId), eq(exportJobs.tenantId, TENANT)))
-        .limit(1);
+      const rows = await asTenant((tx) =>
+        tx
+          .select()
+          .from(exportJobs)
+          .where(and(eq(exportJobs.id, exportId), eq(exportJobs.tenantId, TENANT)))
+          .limit(1),
+      );
       expect(rows).toHaveLength(1);
       expect(rows[0]!.status).toBe("completed");
       // The job should not have been modified by the second delivery
@@ -227,10 +245,6 @@ describe("ExportConsumer", () => {
     it("marks job as failed when source query run does not exist", async () => {
       const nonExistentRunId = randomUUID();
       const exportId = randomUUID();
-
-      // Ensure tenant GUC is initialized on the shared DB connection pool
-      // (same as what insertQueryRun does for other tests)
-      await db.execute(sql`SELECT set_config('app.tenant_id', ${TENANT}, false)`);
 
       await publishExport(exportId, nonExistentRunId, "csv");
       const job = await waitForExportJob(exportId, 10000);
