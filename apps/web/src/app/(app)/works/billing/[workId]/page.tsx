@@ -1,33 +1,14 @@
 import Link from "next/link";
-import { fetchJson } from "@/app/_data/apiClient";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, Card, DataTable, StatGrid, StatCard } from "@/app/_components/ds";
 import { formatMoney } from "@/lib/formatters";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { hasAnyRole } from "@/lib/auth/roleGuard";
+import { BILLING_FINALIZE_ROLES } from "@/lib/auth/workRoles";
+import { getBillsForWork, type BillRow } from "../../_data/loaders";
+import { billStatusLabel } from "../../_data/format";
+import { sumMinor } from "@/lib/money";
 import { BillingActions } from "./BillingActions";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type BillRow = {
-  id: string;
-  workId: string;
-  billNo: string;
-  mode: string;
-  grossAmountMinor: string;
-  netPayableMinor: string;
-  stage: string;
-  status: string;
-  createdAt: string | null;
-};
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function pickData<T>(payload: unknown): T[] {
-  if (payload && typeof payload === "object" && "data" in payload) {
-    const d = (payload as { data: unknown }).data;
-    return Array.isArray(d) ? (d as T[]) : [];
-  }
-  return Array.isArray(payload) ? (payload as T[]) : [];
-}
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
@@ -36,52 +17,53 @@ export default async function BillingDetailPage({
 }: {
   params: { workId: string };
 }) {
-  const billsResult = await fetchJson<unknown, BillRow[]>(
-    `/api/v1/works/billing/${params.workId}/bills`,
-    [],
-    {
-      telemetryKey: "works.billing.detail",
-      mapResponse: (p) => pickData<BillRow>(p),
-    },
-  );
+  // GAP-WORKS-BILLING-WORKID-01: consume the shared loader (mapBillRow) instead
+  // of a local BillRow/pickData that read r.billNo/r.mode/r.stage — fields the
+  // works Bill contract never carries (it is billNumber/billMode/status). The
+  // loader maps billNumber→billNo and billMode→mode via modeLabel, and keeps
+  // the raw workflow code as rawStatus for BillingActions.
+  const billsResult = await getBillsForWork(params.workId);
+  const bills: BillRow[] = billsResult.data;
 
-  const bills = billsResult.data;
+  // GAP-WORKS-BILLING-WORKID-03: server-side role check (never read cookies
+  // client-side). Pass a single canFinalize flag to BillingActions; the server
+  // billing routes remain the real authority.
+  const canFinalize = hasAnyRole(getSessionRoles(), BILLING_FINALIZE_ROLES);
 
   // ── Stats ──────────────────────────────────────────────────────────────────
 
-  const totalGrossPaise = bills.reduce(
-    (sum, b) => sum + Number(String(b.grossAmountMinor ?? 0)),
-    0,
-  );
+  // GAP-WORKS-BILLING-WORKID-05: paise are summed with BigInt (see lib/money
+  // sumMinor), never Number() float accumulation.
+  const totalGrossMinor = sumMinor(bills.map((b) => b.gross));
 
-  const finalizedCount = bills.filter(
-    (b) => b.status === "finalized" || b.status === "do_finalized",
-  ).length;
-
-  const submittedCount = bills.filter(
-    (b) => b.status === "submitted_ifms",
-  ).length;
+  // GAP-WORKS-BILLING-WORKID-02: count against the REAL raw workflow codes.
+  // The old page counted "finalized"/"submitted_ifms" which are display
+  // buckets that never equal a raw bills.status value, so the cards read 0.
+  const finalizedCount = bills.filter((b) => b.rawStatus === "do_finalized").length;
+  const submittedCount = bills.filter((b) => b.rawStatus === "submitted").length;
 
   // ── DataTable rows ─────────────────────────────────────────────────────────
-  // Keep grossAmountMinor / netPayableMinor as paise strings — DataTable
-  // cellType:"amount" calls formatMoney() which expects minor units.
+  // Keep gross/netPayable as paise strings — DataTable cellType:"amount" calls
+  // formatMoney() which expects minor units. GAP-WORKS-BILLING-WORKID-06: the
+  // Status column shows the granular workflow label (billStatusLabel) that
+  // matches "Current:" in the finalize stepper; the register keeps the coarse
+  // bucket pill. The dead Stage column (fed from a non-existent field) is
+  // dropped — the granular Status now carries that information.
 
   type BillDisplayRow = {
     billNo: string;
     mode: string;
     grossAmountMinor: string;
     netPayableMinor: string;
-    stage: string;
     status: string;
   };
 
-  const tableRows: BillDisplayRow[] = bills.map((r) => ({
-    billNo: String(r.billNo ?? "—"),
-    mode: String(r.mode ?? "—"),
-    grossAmountMinor: String(r.grossAmountMinor ?? "0"),
-    netPayableMinor: String(r.netPayableMinor ?? "0"),
-    stage: String(r.stage ?? "—"),
-    status: String(r.status ?? "—"),
+  const tableRows: BillDisplayRow[] = bills.map((b) => ({
+    billNo: b.billNo || "—",
+    mode: b.mode || "—",
+    grossAmountMinor: b.gross,
+    netPayableMinor: b.netPayable,
+    status: billStatusLabel(b.rawStatus),
   }));
 
   const newMbHref = `/works/billing/new-mb?workId=${params.workId}`;
@@ -136,7 +118,7 @@ export default async function BillingDetailPage({
           icon="📊"
           iconBg="#fffaeb"
           label="Total Gross"
-          value={formatMoney(String(Math.round(totalGrossPaise)))}
+          value={formatMoney(totalGrossMinor)}
         />
         <StatCard
           icon="✅"
@@ -169,7 +151,6 @@ export default async function BillingDetailPage({
               cellType: "amount",
               align: "right",
             },
-            { key: "stage", label: "Stage" },
             { key: "status", label: "Status", cellType: "status" },
           ]}
           rows={tableRows}
@@ -180,7 +161,9 @@ export default async function BillingDetailPage({
       </Card>
 
       <BillingActions
-        bills={bills.map((b) => ({ id: b.id, billNo: b.billNo, status: b.status }))}
+        workId={params.workId}
+        canFinalize={canFinalize}
+        bills={bills.map((b) => ({ id: b.id, billNo: b.billNo, status: b.rawStatus }))}
       />
 
       <div style={{ display: "flex", gap: 12, marginTop: 24 }}>

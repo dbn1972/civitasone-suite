@@ -473,6 +473,13 @@ const STATUS_ACRONYM_LABELS: Record<string, string> = {
   bg: "BG",
   pbg: "PBG",
   emd: "EMD",
+  // GAP-WORKS-ORDERS-03: works lifecycle acronym statuses. The generic Title
+  // Case would print "Dao Finalized" / "Ts Eligible" / "Aa Issued" and lose
+  // the acronym; these are the canonical display labels used on /works/orders,
+  // /works/proposals and the proposal detail page so the three agree.
+  dao_finalized: "DAO Finalized",
+  ts_eligible: "TS Eligible",
+  aa_issued: "AA Issued",
 };
 
 export function humanizeStatus(status: string): string {
@@ -807,6 +814,70 @@ export function minorToRupeesOrNull(minor: bigint | number | string | null | und
   const n = typeof minor === "bigint" ? Number(minor) : typeof minor === "number" ? minor : Number(minor);
   if (!Number.isFinite(n)) return null;
   return n / 100;
+}
+
+/**
+ * GAP-WORKS-PROPOSALS-DETAIL-03 / GAP-WORKS-PROPOSALS-NEW-02: exact, BigInt-based
+ * paise ↔ rupee-string conversion for money entry/edit fields. Money is bigint
+ * paise end to end (CLAUDE.md §3.11); a maker flow must never route a stored
+ * paise value through `Math.round(Number(x) / 100)` and back, which silently
+ * rewrites e.g. ₹86,50,000.50 ("865000050" paise) to ₹86,50,001 the moment a
+ * clerk opens and saves an unrelated field.
+ *
+ * `paiseToRupeeString` renders a minor-unit (paise) integer as its exact
+ * decimal rupee string with two fraction digits — the canonical shape for a
+ * form field's initial value, so "no edit" produces byte-identical input and
+ * the diff check sees no change.
+ *
+ *   paiseToRupeeString("865000050") -> "8650000.50"
+ *   paiseToRupeeString(100n)        -> "1.00"
+ *   paiseToRupeeString(null)        -> null   (missing is not a fabricated 0)
+ */
+export function paiseToRupeeString(minor: bigint | number | string | null | undefined): string | null {
+  if (minor === null || minor === undefined || minor === "") return null;
+  let value: bigint;
+  try {
+    if (typeof minor === "bigint") value = minor;
+    else if (typeof minor === "number") {
+      if (!Number.isFinite(minor)) return null;
+      value = BigInt(Math.round(minor));
+    } else {
+      const trimmed = minor.trim();
+      if (!/^[+-]?\d+$/.test(trimmed)) return null;
+      value = BigInt(trimmed);
+    }
+  } catch {
+    return null;
+  }
+  const negative = value < 0n;
+  const abs = negative ? -value : value;
+  const rupees = abs / 100n;
+  const paise = abs % 100n;
+  return `${negative ? "-" : ""}${rupees.toString()}.${paise.toString().padStart(2, "0")}`;
+}
+
+/**
+ * Parse a user-typed rupee string into an exact minor-unit (paise) string, in
+ * BigInt — no float. Accepts an optional single decimal point with at most two
+ * fraction digits; rejects anything else (empty, more than two decimals,
+ * letters, scientific notation, a bare "."), returning null so the caller can
+ * show an inline validation error rather than silently mis-rounding.
+ *
+ *   rupeeStringToPaise("8650000.50") -> "865000050"
+ *   rupeeStringToPaise("500000")     -> "50000000"
+ *   rupeeStringToPaise("1.5")        -> "150"
+ *   rupeeStringToPaise("1.005")      -> null  (too many decimals)
+ *   rupeeStringToPaise("")           -> null
+ */
+export function rupeeStringToPaise(input: string | null | undefined): string | null {
+  if (input === null || input === undefined) return null;
+  const trimmed = input.trim();
+  const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(trimmed);
+  if (!match) return null;
+  const rupees = BigInt(match[1]);
+  const fraction = (match[2] ?? "").padEnd(2, "0");
+  const paise = rupees * 100n + BigInt(fraction);
+  return paise.toString();
 }
 
 /**

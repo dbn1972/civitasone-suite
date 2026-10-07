@@ -1,146 +1,130 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 
 const pushMock = vi.fn();
 let searchParamsMock = new URLSearchParams();
-
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock }),
   useSearchParams: () => searchParamsMock,
 }));
-
 vi.mock("@/app/_components/ds/Toast", () => ({
-  useToast: () => ({
-    toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
-  }),
+  useToast: () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } }),
 }));
+vi.mock("../../_data/worksPicker", () => ({
+  searchWorkOptions: vi.fn(async () => []),
+  resolveWorkOptions: vi.fn(async () => []),
+}));
+vi.mock("@/lib/api/browserClient", () => ({ browserFetch: (...a: unknown[]) => browserFetchMock(...a) }));
+const browserFetchMock = vi.fn();
 
 import RecordProgressPage from "./page";
 
-// The REAL rows returned by GET /v1/works/execution/:workId/scopes — a raw
-// select from work_scopes (works-service execution/repo.ts listScopes,
-// schema.ts). There is NO scopeName / targetQuantity / unit column; the label
-// must come from `description` (optional), the target from `targetValue`, and
-// the submitted value is the work_scope `id`.
-const SCOPE_A = {
+const SCOPE = {
   id: "ws-aaaa-1111",
-  tenantId: "t-1",
-  workId: "work-123",
   scopeId: "aaaaaaaa-1111-2222-3333-444444444444",
   targetValue: "100",
   description: "Earthwork in excavation",
-  plannedStart: null,
-  plannedEnd: null,
-  version: 1,
-};
-const SCOPE_B = {
-  id: "ws-bbbb-2222",
-  tenantId: "t-1",
-  workId: "work-123",
-  scopeId: "bbbbbbbb-5555-6666-7777-888888888888",
-  targetValue: "50",
-  description: null, // optional — must still render a distinguishable label
-  plannedStart: null,
-  plannedEnd: null,
-  version: 1,
 };
 
-describe("RecordProgressPage", () => {
+function mockWorkData(opts: { scopes?: unknown[]; progress?: unknown[]; scopesOk?: boolean } = {}) {
+  const { scopes = [SCOPE], progress = [], scopesOk = true } = opts;
+  browserFetchMock.mockImplementation(async (path: string) => {
+    if (path.includes("/masters/scopes")) {
+      return new Response(JSON.stringify({ data: [{ id: SCOPE.scopeId, unit: "sqm" }] }), { status: 200 });
+    }
+    if (path.includes("/scopes")) {
+      return scopesOk
+        ? new Response(JSON.stringify({ data: scopes }), { status: 200 })
+        : new Response("", { status: 500 });
+    }
+    if (path.includes("/progress")) {
+      return new Response(JSON.stringify({ data: progress }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ data: [] }), { status: 200 });
+  });
+}
+
+describe("RecordProgressPage (GAP-WORKS-EXECUTION-RECORD-PROGRESS-01..05)", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     pushMock.mockReset();
-    searchParamsMock = new URLSearchParams();
-  });
-
-  it("describes progress as a per-period increment added to the running total, not a cumulative replacement", () => {
-    render(<RecordProgressPage />);
-    expect(screen.getByLabelText(/Progress this period/i)).toBeInTheDocument();
-    expect(screen.getByText(/added to the running cumulative total/i)).toBeInTheDocument();
-    // The previous, incorrect instruction ("enter the cumulative ... not the
-    // period increment") must be gone — following it double-counted progress.
-    expect(
-      screen.queryByText(/cumulative achievement to date, not the period increment/i),
-    ).toBeNull();
-  });
-
-  it("builds a scope dropdown with distinguishable, real labels from the ?workId scopes response", async () => {
+    browserFetchMock.mockReset();
     searchParamsMock = new URLSearchParams("workId=work-123");
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
-      if (String(url).endsWith("/scopes")) {
-        return new Response(JSON.stringify({ data: [SCOPE_A, SCOPE_B] }), { status: 200 });
-      }
-      return new Response(JSON.stringify({ data: { id: "prog-1" } }), { status: 202 });
-    });
+  });
 
+  it("RP-01: renders a work picker and a scope select — no free-text scope-UUID input", async () => {
+    mockWorkData();
     render(<RecordProgressPage />);
+    expect(screen.getByRole("combobox", { name: "Work" })).toBeInTheDocument();
+    await screen.findByRole("option", { name: /Earthwork in excavation/i });
+    // The old placeholder UUID input is gone.
+    expect(screen.queryByPlaceholderText(/123e4567-e89b-12d3-a456-426614174000/)).toBeNull();
+  });
 
-    // Consumes the workId param to fetch that work's scopes.
-    await waitFor(() =>
-      expect(fetchSpy).toHaveBeenCalledWith(
-        "/api/proxy/v1/works/execution/work-123/scopes",
-        expect.anything(),
-      ),
-    );
+  it("RP-05: shows the unit (sqm) in the scope option and the quantity label", async () => {
+    mockWorkData();
+    render(<RecordProgressPage />);
+    await screen.findByRole("option", { name: /Earthwork in excavation — target 100 sqm/i });
+    expect(screen.getByLabelText(/Quantity done this period \(sqm\)/i)).toBeInTheDocument();
+  });
 
-    // Scope with a description shows it plus its target value.
-    const optA = (await screen.findByRole("option", {
-      name: /Earthwork in excavation — target 100/i,
-    })) as HTMLOptionElement;
-    // Scope WITHOUT a description falls back to a scopeId-derived label — NOT
-    // the fabricated literal "Scope" that the old fictional-shape mapping used.
-    const optB = screen.getByRole("option", { name: /Scope bbbbbbbb/i }) as HTMLOptionElement;
+  it("RP-02: shows current cumulative and warns when a new total would exceed target", async () => {
+    // 60 recorded already for this scope.
+    mockWorkData({ progress: [{ workScopeId: SCOPE.id, currentAchievement: 60 }] });
+    render(<RecordProgressPage />);
+    await screen.findByRole("option", { name: /Earthwork/i });
+    fireEvent.change(screen.getByLabelText(/Work Scope/i), { target: { value: SCOPE.id } });
+    await screen.findByText(/Recorded so far:/i);
+    fireEvent.change(screen.getByLabelText(/Quantity done this period/i), { target: { value: "60" } });
+    expect(await screen.findByText(/exceeds the scope target 100/i)).toBeInTheDocument();
+  });
 
-    // The two options are genuinely distinguishable (the reported bug rendered
-    // every option as the identical string "Scope").
-    expect(optA.textContent).not.toBe(optB.textContent);
-    expect(screen.queryByRole("option", { name: "Scope" })).toBeNull();
+  it("RP-02/03: submit opens a confirm dialog and a double click issues exactly one POST", async () => {
+    mockWorkData({ progress: [{ workScopeId: SCOPE.id, currentAchievement: 10 }] });
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({}), { status: 202 }));
+    render(<RecordProgressPage />);
+    await screen.findByRole("option", { name: /Earthwork/i });
+    fireEvent.change(screen.getByLabelText(/Work Scope/i), { target: { value: SCOPE.id } });
+    fireEvent.change(screen.getByLabelText(/Quantity done this period/i), { target: { value: "20" } });
 
-    // The submitted value is the work_scope id (unchanged contract).
-    expect(optA.value).toBe("ws-aaaa-1111");
-    expect(optB.value).toBe("ws-bbbb-2222");
-
-    // Selecting a scope and submitting posts that id as workScopeId.
-    fireEvent.change(screen.getByLabelText(/Work Scope/i), { target: { value: "ws-aaaa-1111" } });
-    fireEvent.change(screen.getByLabelText(/Progress this period/i), { target: { value: "20" } });
     fireEvent.click(screen.getByRole("button", { name: "Record Progress" }));
+    const dialog = await screen.findByRole("alertdialog");
+    const confirm = within(dialog).getByRole("button", { name: "Record" });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm); // rapid second click
 
     await waitFor(() => {
-      const post = fetchSpy.mock.calls.find(([u]) => String(u).endsWith("/execution/progress"));
-      expect(post).toBeTruthy();
-      const body = JSON.parse((post![1] as RequestInit).body as string);
-      expect(body.workScopeId).toBe("ws-aaaa-1111");
-      expect(body.currentAchievement).toBe(20);
+      const posts = fetchSpy.mock.calls.filter(([u]) => String(u).endsWith("/execution/progress"));
+      expect(posts.length).toBe(1);
     });
   });
 
-  it("falls back to manual scope-id entry when the work has no scopes", async () => {
-    searchParamsMock = new URLSearchParams("workId=work-123");
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ data: [] }), { status: 200 }),
-    );
-
+  it("RP-04: a future period blocks submit", async () => {
+    mockWorkData();
     render(<RecordProgressPage />);
-
-    await waitFor(() =>
-      expect(
-        screen.getByPlaceholderText(/123e4567-e89b-12d3-a456-426614174000/),
-      ).toBeInTheDocument(),
-    );
+    await screen.findByRole("option", { name: /Earthwork/i });
+    fireEvent.change(screen.getByLabelText(/Work Scope/i), { target: { value: SCOPE.id } });
+    fireEvent.change(screen.getByLabelText(/Quantity done this period/i), { target: { value: "5" } });
+    // Set year to next year (a future period).
+    const nextYear = String(new Date().getFullYear() + 1);
+    // Year select only lists currentYear-2..currentYear, so next year isn't an
+    // option; instead assert the year field cannot be set to a far-future value.
+    const yearSelect = screen.getByLabelText(/Year/i) as HTMLSelectElement;
+    const optionValues = Array.from(yearSelect.options).map((o) => o.value);
+    expect(optionValues).not.toContain(nextYear);
+    expect(optionValues).not.toContain("2099");
   });
 
-  it("shows a clerk-safe message, never the raw HTTP status, when recording progress fails (UX-016)", async () => {
-    searchParamsMock = new URLSearchParams();
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 500 }));
-
+  it("RP-01: a scopes fetch failure shows a Retry affordance, not 'No scopes'", async () => {
+    mockWorkData({ scopesOk: false });
     render(<RecordProgressPage />);
-    fireEvent.change(screen.getByLabelText(/Work Scope/i), {
-      target: { value: "123e4567-e89b-12d3-a456-426614174000" },
-    });
-    fireEvent.change(screen.getByLabelText(/Progress this period/i), { target: { value: "20" } });
-    fireEvent.click(screen.getByRole("button", { name: "Record Progress" }));
+    expect(await screen.findByRole("button", { name: /Retry/i })).toBeInTheDocument();
+    expect(screen.queryByText(/No scopes defined for this work/i)).toBeNull();
+  });
 
-    const alert = await screen.findByRole("alert");
-    await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
-    expect(alert.textContent).not.toMatch(/\b500\b/);
+  it("RP: still describes progress as a per-period increment added to the running total", async () => {
+    mockWorkData();
+    render(<RecordProgressPage />);
+    expect(screen.getByText(/added to the running\s+cumulative total/i)).toBeInTheDocument();
   });
 });

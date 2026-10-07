@@ -6,6 +6,8 @@ import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 
 const WRITE_ROLES = ["works_admin", "works_operator", "super_admin", "dao", "do"];
+// Unmasked PAN is DPDP-sensitive: narrower than WRITE_ROLES (no works_operator).
+const PII_REVEAL_ROLES = ["works_admin", "super_admin", "dao", "do"];
 const READ_ROLES  = [...WRITE_ROLES, "works_viewer", "sdo", "section_officer", "estimator"];
 
 export async function contractorRoutes(app: FastifyInstance): Promise<void> {
@@ -55,8 +57,21 @@ export async function contractorRoutes(app: FastifyInstance): Promise<void> {
     const body = v.rateContractorSchema.parse(req.body);
     const existing = await repo.findContractorById(ctx.tenantId, id);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "contractor not found");
-    const result = await commands.rateContractor(ctx, id, body.rating);
+    const result = await commands.rateContractor(ctx, id, body.rating, body.comment);
     return reply.status(202).send(result);
+  });
+
+  // Reveal a contractor's clear PAN (DPDP: role-gated + reason-audited).
+  app.post("/v1/works/contractors/:id/reveal-pan", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, PII_REVEAL_ROLES);
+    const { id } = v.idParamSchema.parse(req.params);
+    const body = v.revealPanSchema.parse(req.body);
+    const existing = await repo.findContractorById(ctx.tenantId, id);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "contractor not found");
+    const { value } = await commands.revealContractorPan(ctx, id, body.reason);
+    reply.header("cache-control", "no-store");
+    return reply.send({ data: { value } });
   });
 
   // Update contractor basic info

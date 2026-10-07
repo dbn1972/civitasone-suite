@@ -1,9 +1,11 @@
 import { Fragment } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { PageHeader, Card, StatCard } from "@/app/_components/ds";
+import { PageHeader, Card, StatCard, LoadErrorState } from "@/app/_components/ds";
 import { fetchJson } from "@/app/_data/apiClient";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { getSessionRoles, hasAnyRole } from "@/lib/auth/roleGuard";
+import { APPROVAL_FINALIZE_ROLES } from "@/lib/auth/workRoles";
 import { ApprovalFinalizeButton } from "../ApprovalFinalizeButton";
 
 // ---------------------------------------------------------------------------
@@ -29,14 +31,6 @@ type AaRaw = {
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
-}
-
-function pickArray(payload: unknown): unknown[] {
-  if (isRecord(payload) && "data" in payload) {
-    const d = (payload as { data: unknown }).data;
-    return Array.isArray(d) ? d : [];
-  }
-  return Array.isArray(payload) ? payload : [];
 }
 
 function mapRawAa(r: unknown): AaRaw | null {
@@ -90,27 +84,73 @@ export default async function AaDetailPage({
 }: {
   params: { id: string };
 }) {
-  // No GET-by-ID endpoint — fetch list and filter (capped at 100 records)
-  const result = await fetchJson<unknown, AaRaw[]>(
-    "/api/v1/works/approvals/aa?pageSize=100",
-    [],
+  // GET-by-id (GAP-WORKS-APPROVALS-AA-DETAIL-01): fetch the single record so a
+  // record beyond the first list page is reachable. The backend returns
+  // { data: <record> }; a genuinely missing id is a 404, every other failure
+  // is a load error — the two must not be conflated (GAP-...-AA-DETAIL-02).
+  const result = await fetchJson<unknown, AaRaw | null>(
+    `/api/v1/works/approvals/aa/${params.id}`,
+    null,
     {
       telemetryKey: "works.approvals.aa.detail",
-      mapResponse: (p) =>
-        pickArray(p)
-          .map(mapRawAa)
-          .filter((r): r is AaRaw => r !== null),
+      mapResponse: (p) => {
+        const record = isRecord(p) && "data" in p ? (p as { data: unknown }).data : p;
+        return mapRawAa(record);
+      },
     },
   );
 
-  const aa = result.data.find((r) => r.id === params.id);
+  // Only a definitive 404 means "this AA doesn't exist". Any other failure
+  // (401/403/5xx/network) is a load problem — show a retryable error state
+  // with a back link, never a misleading "not found".
+  if (result.source === "error") {
+    if (result.status === 404) notFound();
+    return (
+      <div className="page-main wrap" aria-labelledby="page-heading">
+        <PageHeader
+          title="Administrative Approval"
+          subtitle="Could not load this record."
+          back="/works/approvals"
+          backLabel="Approvals"
+        />
+        <LoadErrorState
+          result={result}
+          area="administrative approval"
+          backHref="/works/approvals"
+          backLabel="Approvals"
+        />
+      </div>
+    );
+  }
+
+  const aa = result.data;
   if (!aa) notFound();
 
-  const detailRows: Array<[string, string]> = [
+  const canFinalize = hasAnyRole(getSessionRoles(), APPROVAL_FINALIZE_ROLES);
+
+  const detailRows: Array<[string, React.ReactNode]> = [
     ["AA Number", aa.aaNumber ?? "—"],
     ["Approval Type", humanize(aa.approvalType)],
-    ["Work ID", aa.workId != null ? aa.workId.slice(0, 8) + "…" : "—"],
-    ["Approving Authority", aa.approvingAuthorityId != null ? aa.approvingAuthorityId.slice(0, 8) + "…" : "—"],
+    [
+      "Work",
+      aa.workId != null ? (
+        <Link href={`/works/billing/${aa.workId}`} title={aa.workId}>
+          {aa.workId.slice(0, 8) + "…"}
+        </Link>
+      ) : (
+        "—"
+      ),
+    ],
+    [
+      "Approving Authority (ID)",
+      aa.approvingAuthorityId != null ? (
+        <span title={aa.approvingAuthorityId} style={{ fontFamily: "var(--font-mono, monospace)" }}>
+          {aa.approvingAuthorityId.slice(0, 8) + "…"}
+        </span>
+      ) : (
+        "—"
+      ),
+    ],
     ["Date", formatIndianDate(aa.aaDate)],
     ["Created", formatIndianDate(aa.createdAt)],
     ["Remarks", aa.remarks ?? "—"],
@@ -178,7 +218,7 @@ export default async function AaDetailPage({
         <Link href="/works/approvals" className="btn ghost">
           ← All approvals
         </Link>
-        <ApprovalFinalizeButton id={aa.id} type="aa" status={aa.status} />
+        <ApprovalFinalizeButton id={aa.id} type="aa" status={aa.status} canFinalize={canFinalize} />
       </div>
     </div>
   );

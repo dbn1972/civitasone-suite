@@ -4,8 +4,8 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
-import { listBoqItems, getRecapitulation, listAllBoqItems, getBoqItemById } from "./repo.js";
-import { canEnterBoq, canModifyBoq } from "./domain.js";
+import { listBoqItems, getRecapitulation, listAllBoqItems, getBoqItemById, boqIndexSummary } from "./repo.js";
+import { canEnterBoq, canModifyBoq, recapitulationBreakdown } from "./domain.js";
 import { hasFinalizedTsForWork } from "../approval/repo.js";
 import { hasTenderForWork, hasPreTenderForWork } from "../tender/repo.js";
 import { getProposal } from "../proposal/repo.js";
@@ -26,8 +26,23 @@ export async function boqRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
     const query = paginationSchema.parse(req.query);
-    const data = await listAllBoqItems(ctx.tenantId, query.page, query.pageSize);
-    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total: data.length } });
+    // GAP-WORKS-BOQ-02: the FE stat cards need the FULL-set count and amount
+    // total, not the length of the page it fetched. meta.total is the exact
+    // tenant-wide row count (so "Showing first N of total" is honest) and
+    // meta.totalAmountMinor is the paise-exact sum of every line.
+    const [data, summary] = await Promise.all([
+      listAllBoqItems(ctx.tenantId, query.page, query.pageSize),
+      boqIndexSummary(ctx.tenantId),
+    ]);
+    return reply.send({
+      data,
+      meta: {
+        page: query.page,
+        pageSize: query.pageSize,
+        total: summary.total,
+        totalAmountMinor: summary.totalAmountMinor,
+      },
+    });
   });
 
   // List BoQ items for a work
@@ -62,7 +77,33 @@ export async function boqRoutes(app: FastifyInstance): Promise<void> {
     const { workId } = req.params as { workId: string };
     const data = await getRecapitulation(ctx.tenantId, workId);
     if (!data) throw new HttpError(404, "NOT_FOUND", "recapitulation not found");
-    return reply.send({ data });
+    // GAP-WORKS-BOQ-WORKID-01: return a per-component breakdown (component,
+    // basis, rate %, paise amount) alongside the stored row so the FE can show
+    // a reviewer HOW the Grand Total is derived — rather than printing bare
+    // percentages next to flat ₹ figures with no basis. Derived with the exact
+    // bigint formula the recapitulate command persisted, so the line amounts
+    // sum back to the stored grandTotal.
+    const { lines, grandTotal } = recapitulationBreakdown(BigInt(data.workAmount), {
+      contingencyPercent: Number(data.contingencyPercent),
+      turnoverTaxPercent: Number(data.turnoverTaxPercent),
+      workChargePercent: Number(data.workChargePercent),
+      qualityControlPercent: Number(data.qualityControlPercent),
+      centagePercent: Number(data.centagePercent),
+      otherCharges: BigInt(data.otherCharges),
+    });
+    return reply.send({
+      data: {
+        ...data,
+        breakdown: lines.map((l) => ({
+          key: l.key,
+          label: l.label,
+          basis: l.basis,
+          ratePercent: l.ratePercent,
+          amountMinor: l.amountMinor.toString(),
+        })),
+        computedGrandTotal: grandTotal.toString(),
+      },
+    });
   });
 
   // Add BoQ item

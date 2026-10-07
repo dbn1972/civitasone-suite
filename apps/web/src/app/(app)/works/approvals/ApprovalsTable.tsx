@@ -1,21 +1,39 @@
 "use client";
 
 import { useState } from "react";
-import { DataTable } from "@/app/_components/ds";
+import { DataTable, StatGrid, StatCard, Tabs, TabPanel } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
+import { PENDING_STATUSES } from "@/lib/auth/workRoles";
 
 const columns = [
-  { key: "workNumber", label: "Work Number", sortable: true },
+  { key: "workNumber", label: "Work (ID)", sortable: true },
   { key: "approvalNumber", label: "Approval Number", sortable: true },
   { key: "date", label: "Date", sortable: true },
-  { key: "authority", label: "Authority", sortable: true },
+  { key: "authority", label: "Authority (ID)", sortable: true },
   { key: "amount", label: "Amount", align: "right" as const, cellType: "amount" as const, sortable: true },
   { key: "type", label: "Type", sortable: true },
   { key: "status", label: "Status", cellType: "status" as const, sortable: true },
 ];
 
 type Tab = "aa" | "ts";
+
+const TAB_LABELS = ["AA Register", "TS Register"] as const;
+
+function pendingCount(rows: Record<string, unknown>[]): number {
+  return rows.filter((r) => PENDING_STATUSES.has(String(r.status ?? ""))).length;
+}
+
+/**
+ * When the rows on screen are NOT live (served from cache / unavailable), a
+ * numeric 0 would read as a confident "zero records" when we really mean "we
+ * don't have an authoritative figure". Show an em dash instead so the count
+ * never contradicts/overstates what the badge reports. GAP-WORKS-APPROVALS-03.
+ */
+function statValue(isLive: boolean, hasRows: boolean, n: number): number | string {
+  if (isLive) return n;
+  return hasRows ? n : "—";
+}
 
 export function ApprovalsTable({
   aaApprovals,
@@ -39,61 +57,67 @@ export function ApprovalsTable({
     offline: tsOffline,
     cachedAt: tsCachedAt,
   } = useSeededResource("works-approvals-ts", tsApprovals, source, (rows) => rows.length === 0);
+
   const rows = tab === "aa" ? aaData : tsData;
   // UX-012: each register has its own independent cache entry, so the two
-  // useSeededResource calls can genuinely disagree with each other (e.g. AA
-  // has a usable cache while TS does not) even though the page fed both the
-  // same upstream `source`. The badge must therefore reflect whichever
-  // register's rows are actually on screen right now, not an aggregate.
+  // useSeededResource calls can genuinely disagree with each other even
+  // though the page fed both the same upstream `source`. The badge and the
+  // stat counts must reflect the register's actually-rendered rows.
   const provenance = tab === "aa" ? aaProvenance : tsProvenance;
   const offline = tab === "aa" ? aaOffline : tsOffline;
   const cachedAt = tab === "aa" ? aaCachedAt : tsCachedAt;
+
+  // GAP-WORKS-APPROVALS-03: compute the stat cards from the SAME cached data
+  // that feeds the table, so a cache fallback can never make the counts
+  // disagree with the rows on screen (the page used to compute them from a
+  // second, independent read of the raw server arrays).
+  const aaLive = aaProvenance == null || aaProvenance === "live";
+  const tsLive = tsProvenance == null || tsProvenance === "live";
+
   const rowHref =
     tab === "aa"
       ? (row: Record<string, unknown>) => "/works/approvals/aa/" + String(row.id ?? "")
       : (row: Record<string, unknown>) => "/works/approvals/ts/" + String(row.id ?? "");
 
+  const activeLabel = tab === "aa" ? TAB_LABELS[0] : TAB_LABELS[1];
+
   return (
     <div>
-      <div className="flex gap-2 mb-4" role="tablist" aria-label="Approval type">
-        <button
-          role="tab"
-          aria-selected={tab === "aa"}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tab === "aa" ? "bg-primary text-primary-foreground" : "bg-muted"}`}
-          onClick={() => setTab("aa")}
-        >
-          AA Register
-        </button>
-        <button
-          role="tab"
-          aria-selected={tab === "ts"}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tab === "ts" ? "bg-primary text-primary-foreground" : "bg-muted"}`}
-          onClick={() => setTab("ts")}
-        >
-          TS Register
-        </button>
-      </div>
-      {/* UX-012: this badge is the ONLY place that reports data provenance for
-          the rows shown below — it reads from the same useSeededResource
-          call (for the active tab) that produces `rows`, so it can never
-          disagree with what the table shows (UX-002's pattern; the page
-          used to render a second, independent badge from the raw `source`
-          prop — removed). */}
-      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
-      <DataTable
-        columns={columns}
-        rows={rows}
-        sortable
-        filterable
-        filterPlaceholder="Search approvals..."
-        pageSize={15}
-        exportable
-        exportFilename={`works-approvals-${tab}`}
-        rowHref={rowHref}
-        emptyIcon="✅"
-        emptyTitle="No approvals found"
-        emptyMessage={`${tab === "aa" ? "Administrative Approval" : "Technical Sanction"} records will appear here.`}
+      <StatGrid>
+        <StatCard icon="📋" iconBg="#eff6ff" label="Total AA" value={statValue(aaLive, aaData.length > 0, aaData.length)} />
+        <StatCard icon="⏳" iconBg="#fffaeb" label="Pending AA" value={statValue(aaLive, aaData.length > 0, pendingCount(aaData))} />
+        <StatCard icon="📑" iconBg="#ecfdf3" label="Total TS" value={statValue(tsLive, tsData.length > 0, tsData.length)} />
+        <StatCard icon="⏳" iconBg="#fef2f2" label="Pending TS" value={statValue(tsLive, tsData.length > 0, pendingCount(tsData))} />
+      </StatGrid>
+
+      {/* GAP-WORKS-APPROVALS-04: replace the hand-rolled role=tab buttons with
+          the DS Tabs (roving tabindex + arrow-key nav + aria-controls) and
+          wrap the table in the matching TabPanel. */}
+      <Tabs
+        tabs={[...TAB_LABELS]}
+        active={activeLabel}
+        onChange={(label) => setTab(label === TAB_LABELS[0] ? "aa" : "ts")}
+        ariaLabel="Approval type"
+        idPrefix="works-approvals"
       />
+
+      <TabPanel idPrefix="works-approvals" active={activeLabel}>
+        <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
+        <DataTable
+          columns={columns}
+          rows={rows}
+          sortable
+          filterable
+          filterPlaceholder="Search approvals..."
+          pageSize={15}
+          exportable
+          exportFilename={`works-approvals-${tab}`}
+          rowHref={rowHref}
+          emptyIcon="✅"
+          emptyTitle="No approvals found"
+          emptyMessage={`${tab === "aa" ? "Administrative Approval" : "Technical Sanction"} records will appear here.`}
+        />
+      </TabPanel>
     </div>
   );
 }

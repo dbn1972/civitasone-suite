@@ -1,11 +1,12 @@
 import { Fragment } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { PageHeader, Card, StatCard } from "@/app/_components/ds";
+import { PageHeader, Card, StatCard, RefreshErrorState } from "@/app/_components/ds";
 import { StatusTimeline } from "@/app/_components/ds/designer/StatusTimeline";
 import type { StatusTimelineStep } from "@/app/_components/ds/designer/StatusTimeline";
 import { fetchJson } from "@/app/_data/apiClient";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { ProposalActions } from "./ProposalActions";
 import { ProposalExtActions } from "./ProposalExtActions";
@@ -114,10 +115,17 @@ async function getProposal(id: string) {
 // Timeline
 // ---------------------------------------------------------------------------
 
-const PROPOSAL_STATUSES = ["draft", "submitted", "dao_finalized", "ts_eligible", "aa_issued"];
-
+// GAP-WORKS-PROPOSALS-DETAIL-02 (WIRING): the timeline previously advertised
+// "Submitted", "TS Eligible" and "AA Issued" steps the backend never sets —
+// work_proposals.status is only ever "draft" (on create) or "dao_finalized"
+// (on DAO finalize); see services/works-service/src/modules/proposal/
+// consumer.ts, the sole writer of that column. That made a draft show
+// "Submitted" as the current step and a finalized proposal show "TS Eligible"
+// as a dead "current" step with no action to advance it. The timeline now
+// shows only the two real, backend-driven lifecycle states. (AA/TS live as
+// separate approval records under /works/approvals, reached via "Create AA".)
 function buildTimelineSteps(proposal: WorkProposal): StatusTimelineStep[] {
-  const statusIdx = PROPOSAL_STATUSES.indexOf(proposal.status);
+  const isFinalized = proposal.status === "dao_finalized";
   function fmtDate(d: string | null): string | undefined {
     const s = formatIndianDate(d);
     return s !== "—" ? s : undefined;
@@ -126,29 +134,16 @@ function buildTimelineSteps(proposal: WorkProposal): StatusTimelineStep[] {
     {
       id: "created",
       label: "Proposal Created",
-      state: statusIdx >= 0 ? "done" : "current",
+      // Known statuses => created is done. An unknown/unexpected status must
+      // not leave "created" marked current with no way to advance.
+      state: "done",
       date: fmtDate(proposal.createdAt),
-    },
-    {
-      id: "submitted",
-      label: "Submitted",
-      state: statusIdx >= 1 ? "done" : statusIdx === 0 ? "current" : "upcoming",
     },
     {
       id: "dao_finalized",
       label: "DAO Finalized",
-      state: statusIdx >= 2 ? "done" : statusIdx === 1 ? "current" : "upcoming",
+      state: isFinalized ? "done" : "current",
       date: fmtDate(proposal.daoFinalizedAt),
-    },
-    {
-      id: "ts_eligible",
-      label: "TS Eligible",
-      state: statusIdx >= 3 ? "done" : statusIdx === 2 ? "current" : "upcoming",
-    },
-    {
-      id: "aa_issued",
-      label: "AA Issued",
-      state: statusIdx >= 4 ? "done" : "upcoming",
     },
   ];
 }
@@ -181,10 +176,26 @@ export default async function WorkProposalDetailPage({
 }: {
   params: { id: string };
 }) {
-  const { data: proposal, source } = await getProposal(params.id);
+  const { data: proposal, source, status } = await getProposal(params.id);
 
-  if (source === "error" || !proposal || !proposal.id) {
+  // GAP-WORKS-PROPOSALS-DETAIL-01 (FAILMASK): a failed fetch used to call
+  // notFound() unconditionally, so a 500/network/401 read as "this proposal
+  // does not exist". Only a real 404 is "not found"; any other failure shows
+  // an honest, retryable error state instead of the 404 page.
+  if (status === 404) {
     notFound();
+  }
+  if (source === "error" || !proposal || !proposal.id) {
+    return (
+      <div className="page-main wrap" aria-labelledby="page-heading">
+        <PageHeader title="Work proposal" back="/works/proposals" backLabel="Proposals" />
+        <RefreshErrorState
+          error={toHumanError("load", { area: "work proposal" })}
+          backHref="/works/proposals"
+          source={{ status, area: "work proposal" }}
+        />
+      </div>
+    );
   }
 
   const roles = getSessionRoles();
@@ -193,6 +204,9 @@ export default async function WorkProposalDetailPage({
     ["Work Number", proposal.workNumber],
     ["Plan/Non-Plan", humanize(proposal.planOrNonPlan)],
     ["Budget Year", proposal.budgetYear],
+    ["Charged / Voted", humanize(proposal.chargedOrVoted)],
+    ["Habitation", proposal.habitation || "—"],
+    ["Sector", humanize(proposal.sector)],
     ["DAO Finalized At", formatIndianDate(proposal.daoFinalizedAt)],
     ["Created", formatIndianDate(proposal.createdAt)],
     ["Updated", formatIndianDate(proposal.updatedAt)],
@@ -290,6 +304,7 @@ export default async function WorkProposalDetailPage({
         style={{
           display: "flex",
           gap: 12,
+          flexWrap: "wrap",
           marginTop: 24,
           paddingBottom: 32,
         }}
@@ -319,7 +334,12 @@ export default async function WorkProposalDetailPage({
         </Link>
       </div>
 
-      <ProposalExtActions workId={proposal.id ?? params.id} roles={roles} />
+      <ProposalExtActions
+        workId={proposal.id ?? params.id}
+        roles={roles}
+        workNumber={proposal.workNumber}
+        estimatedCostMinor={proposal.estimatedCostMinor}
+      />
     </div>
   );
 }

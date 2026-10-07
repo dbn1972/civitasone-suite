@@ -35,6 +35,29 @@ export async function approvalRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total: data.length } });
   });
 
+  // Single AA by id (tenant-scoped) — the FE AA detail page. Added so a record
+  // beyond the first list page is reachable directly instead of the FE having
+  // to fetch a capped list and .find() it (which 404'd anything past row 100).
+  app.get("/v1/works/approvals/aa/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const { id } = v.idParamSchema.parse(req.params);
+    const aa = await getAa(ctx.tenantId, id);
+    if (!aa) throw new HttpError(404, "NOT_FOUND", "AA not found");
+    return reply.send({ data: aa });
+  });
+
+  // Single TS by id (tenant-scoped) — the FE TS detail page. Same rationale as
+  // the AA-by-id route above.
+  app.get("/v1/works/approvals/ts/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const { id } = v.idParamSchema.parse(req.params);
+    const ts = await getTs(ctx.tenantId, id);
+    if (!ts) throw new HttpError(404, "NOT_FOUND", "TS not found");
+    return reply.send({ data: ts });
+  });
+
   // Create AA
   app.post("/v1/works/approvals/aa", async (req, reply) => {
     const ctx = resolveContext(req);

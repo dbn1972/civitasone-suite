@@ -1,10 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { DataTable } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 
 const columns = [
+  // GAP-WORKS-BOQ-01: Work is the first column so a reader can tell which work
+  // each line belongs to (previously rows were only distinguishable by an
+  // opaque 8-char scope UUID).
+  { key: "work", label: "Work", sortable: true },
   { key: "itemCode", label: "Item Code", sortable: true },
   { key: "description", label: "Description", sortable: true },
   { key: "unit", label: "Unit", sortable: true },
@@ -36,7 +41,15 @@ export function BoqTable({ items, source }: { items: Record<string, unknown>[]; 
         exportFilename="works-boq"
         emptyIcon="📐"
         emptyTitle="No BoQ items found"
-        emptyMessage="Bill of Quantities items will appear here once a work is selected."
+        // GAP-WORKS-BOQ-03: this screen has no work selector, so the old "once
+        // a work is selected" copy was wrong. Point the user to the real next
+        // step and give a CTA.
+        emptyMessage="No BoQ items yet. Add an item to a work to get started."
+        emptyAction={
+          <Link href="/works/boq/new" className="btn primary">
+            + Add BoQ item
+          </Link>
+        }
         rowHref={(row) => "/works/boq/" + String(row.workId ?? "")}
       />
     </>

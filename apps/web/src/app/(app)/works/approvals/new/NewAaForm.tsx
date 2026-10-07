@@ -2,22 +2,41 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
-import { Button } from "@/app/_components/ds";
+import { Button, Field, Input, Textarea, EntityPicker, ConfirmDialog } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { rupeesToMinorString } from "@/lib/money";
+import { formatMoney } from "@/lib/formatters";
+import { currentFinancialYear } from "@/lib/fiscalYear";
+import { searchWorkProposals, resolveWorkProposals } from "@/lib/entityAdapters/workProposal";
+import { searchIdentityUsers, resolveIdentityUsers } from "@/lib/entityAdapters/identityUser";
 
-const inputStyle = { width: "100%", padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
-const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
-const errBanner = { background: "#fef2f2", color: "#b42318", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 } as const;
-const okBanner = { background: "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 } as const;
-const hintStyle = { fontSize: 12, color: "#166534", marginTop: 4 } as const;
+// Token-based banner styles (no hard-coded hex — GAP-WORKS-APPROVALS-NEW-04).
+const okBanner: React.CSSProperties = {
+  background: "var(--good-bg, #ecfdf3)",
+  color: "var(--good, #166534)",
+  padding: 12,
+  borderRadius: 12,
+  fontSize: 13,
+};
+const errBanner: React.CSSProperties = {
+  background: "var(--bad-bg, #fef2f2)",
+  color: "var(--bad, #b42318)",
+  padding: 12,
+  borderRadius: 12,
+  fontSize: 13,
+};
+
+// Upper bound: ₹999,99,99,999.99 (just under 1,000 crore) in paise. Guards a
+// fat-fingered extra digit from sending an absurd sanction amount.
+const MAX_AMOUNT_MINOR = 99999999999n;
 
 export function NewAaForm() {
   const router = useRouter();
   const { toast } = useToast();
   const searchParams = useSearchParams();
-  // Pre-fill the Work ID from the ?workId= param so the "Create AA →" button on
-  // a proposal carries its context through instead of dropping it (the officer
-  // no longer has to hand-copy the UUID).
+  // Pre-fill the Work from the ?workId= param so the "Create AA →" button on a
+  // proposal carries its context through; the picker resolves the id to the
+  // work's number/description for display.
   const prefilledWorkId = searchParams.get("workId") ?? "";
   const [form, setForm] = useState({
     workId: prefilledWorkId,
@@ -27,9 +46,11 @@ export function NewAaForm() {
     approvedAmount: "",
     remarks: "",
   });
+  const [amountError, setAmountError] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const formError = useFormError("administrative approval");
 
   function set(field: keyof typeof form) {
@@ -37,19 +58,46 @@ export function NewAaForm() {
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
   }
 
-  async function submit(e: React.FormEvent) {
+  function validateAmount(): string | null {
+    const minor = rupeesToMinorString(form.approvedAmount.trim());
+    if (minor === null) {
+      return "Enter a valid amount in rupees (greater than zero, up to two decimals).";
+    }
+    if (BigInt(minor) > MAX_AMOUNT_MINOR) {
+      return "Amount is too large. Check the figure and try again.";
+    }
+    return null;
+  }
+
+  // Open the confirmation dialog after client-side validation of the amount —
+  // the actual POST only fires from the dialog's confirm (GAP-WORKS-APPROVALS-NEW-03).
+  function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true);
+    setError("");
     setMessage("");
+    const amtErr = validateAmount();
+    setAmountError(amtErr ?? "");
+    if (amtErr) return;
+    setConfirmOpen(true);
+  }
+
+  async function doCreate() {
+    setBusy(true);
     setError("");
     formError.clear();
     try {
+      const approvedAmountMinor = rupeesToMinorString(form.approvedAmount.trim());
+      if (approvedAmountMinor === null) {
+        setAmountError("Enter a valid amount in rupees (greater than zero, up to two decimals).");
+        setConfirmOpen(false);
+        return;
+      }
       const body: Record<string, string> = {
         workId: form.workId.trim(),
         aaNumber: form.aaNumber.trim(),
         aaDate: form.aaDate,
         approvingAuthorityId: form.approvingAuthorityId.trim(),
-        approvedAmountMinor: String(Math.round(Number(form.approvedAmount || "0") * 100)),
+        approvedAmountMinor,
       };
       if (form.remarks.trim()) body.remarks = form.remarks.trim();
 
@@ -59,36 +107,42 @@ export function NewAaForm() {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
+        setConfirmOpen(false);
         setError((await formError.fromResponse(res, "save")).message);
         return;
       }
       // The service accepts the create asynchronously (HTTP 202) — the record is
       // queued, not yet written — so we say "submitted", not "created".
+      setConfirmOpen(false);
       setMessage("Administrative approval submitted. It will appear in the register once processed.");
       toast.success("Administrative approval submitted.");
       setTimeout(() => router.push("/works/approvals"), 700);
     } catch (caught) {
+      setConfirmOpen(false);
       setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }
   }
 
+  const amountMinorPreview = rupeesToMinorString(form.approvedAmount.trim());
+
   return (
     <>
       {message ? (
-        <div role="status" aria-live="polite" style={okBanner}>
+        <div role="status" aria-live="polite" style={{ ...okBanner, marginBottom: 16 }}>
           {message}
         </div>
       ) : null}
       {error ? (
-        <div role="alert" aria-live="assertive" style={errBanner}>
+        <div role="alert" aria-live="assertive" style={{ ...errBanner, marginBottom: 16 }}>
           {error}
         </div>
       ) : null}
       <div className="card">
         <form
-          onSubmit={submit}
+          onSubmit={onSubmit}
+          noValidate
           className="pad"
           style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 640 }}
         >
@@ -101,96 +155,84 @@ export function NewAaForm() {
               gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
             }}
           >
-            <div>
-              <label style={labelStyle} htmlFor="aa-workId">Work ID (UUID) *</label>
-              <input
+            <Field label="Work" required id="aa-workId">
+              <EntityPicker
                 id="aa-workId"
-                style={inputStyle}
-                type="text"
-                value={form.workId}
-                onChange={set("workId")}
-                placeholder="e.g. 123e4567-e89b-12d3-a456-426614174000"
-                required
+                value={form.workId || null}
+                onChange={(v) => setForm((prev) => ({ ...prev, workId: Array.isArray(v) ? (v[0] ?? "") : (v ?? "") }))}
+                search={searchWorkProposals}
+                resolve={resolveWorkProposals}
+                placeholder="Search by work number or description…"
+                aria-label="Work"
               />
               {prefilledWorkId ? (
-                <p style={hintStyle}>Pre-filled from the selected proposal.</p>
+                <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>Pre-filled from the selected proposal.</p>
               ) : null}
-            </div>
+            </Field>
 
-            <div>
-              <label style={labelStyle} htmlFor="aa-number">AA Number *</label>
-              <input
+            <Field label="AA Number" required id="aa-number">
+              <Input
                 id="aa-number"
-                style={inputStyle}
                 type="text"
                 value={form.aaNumber}
                 onChange={set("aaNumber")}
-                placeholder="e.g. AA/2024-25/001"
+                placeholder={`e.g. AA/${currentFinancialYear()}/001`}
                 maxLength={64}
-                required
               />
-            </div>
+            </Field>
 
-            <div>
-              <label style={labelStyle} htmlFor="aa-date">Approval date *</label>
-              <input
-                id="aa-date"
-                style={inputStyle}
-                type="date"
-                value={form.aaDate}
-                onChange={set("aaDate")}
-                required
-              />
-            </div>
+            <Field label="Approval date" required id="aa-date">
+              <Input id="aa-date" type="date" value={form.aaDate} onChange={set("aaDate")} />
+            </Field>
 
-            <div>
-              <label style={labelStyle} htmlFor="aa-authority">Approving authority ID (UUID) *</label>
-              <input
+            <Field label="Approving authority" required id="aa-authority">
+              <EntityPicker
                 id="aa-authority"
-                style={inputStyle}
-                type="text"
-                value={form.approvingAuthorityId}
-                onChange={set("approvingAuthorityId")}
-                placeholder="e.g. 123e4567-e89b-12d3-a456-426614174000"
-                required
+                value={form.approvingAuthorityId || null}
+                onChange={(v) =>
+                  setForm((prev) => ({ ...prev, approvingAuthorityId: Array.isArray(v) ? (v[0] ?? "") : (v ?? "") }))
+                }
+                search={searchIdentityUsers}
+                resolve={resolveIdentityUsers}
+                placeholder="Search by officer name…"
+                aria-label="Approving authority"
               />
-            </div>
+            </Field>
 
-            <div>
-              <label style={labelStyle} htmlFor="aa-amount">Approved amount (&#8377;) *</label>
-              <input
+            <Field
+              label="Approved amount (₹)"
+              required
+              id="aa-amount"
+              error={amountError || undefined}
+            >
+              <Input
                 id="aa-amount"
-                style={inputStyle}
-                type="number"
-                min="0"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
+                pattern="\d+(\.\d{1,2})?"
                 value={form.approvedAmount}
-                onChange={set("approvedAmount")}
+                onChange={(e) => {
+                  setAmountError("");
+                  set("approvedAmount")(e);
+                }}
                 placeholder="0.00"
-                required
               />
-            </div>
+            </Field>
           </div>
 
-          <div>
-            <label style={labelStyle} htmlFor="aa-remarks">Remarks</label>
-            <textarea
+          <Field label="Remarks" id="aa-remarks">
+            <Textarea
               id="aa-remarks"
-              style={{ ...inputStyle, minHeight: 80 }}
+              style={{ minHeight: 80 }}
               value={form.remarks}
               onChange={set("remarks")}
               maxLength={2048}
               placeholder="Optional notes or remarks"
             />
-          </div>
+          </Field>
 
           <div style={{ display: "flex", gap: 12 }}>
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={busy}
-              style={{ minHeight: 44 }}
-            >
+            <Button type="submit" variant="primary" disabled={busy} style={{ minHeight: 44 }}>
               {busy ? "Submitting..." : "Create"}
             </Button>
             <Button
@@ -204,6 +246,20 @@ export function NewAaForm() {
           </div>
         </form>
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Create Administrative Approval"
+        description={
+          `Create AA ${form.aaNumber || "(no number)"} for ${
+            amountMinorPreview !== null ? formatMoney(amountMinorPreview) : "an unspecified amount"
+          }? It will be submitted for processing.`
+        }
+        confirmLabel="Create"
+        busy={busy}
+        onConfirm={doCreate}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </>
   );
 }

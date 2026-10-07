@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray, count } from "drizzle-orm";
 import { workProposals } from "../proposal/schema.js";
 import { scopedRead } from "../../shared/db.js";
 import { tenders, quotations, awards, preTenders } from "./schema.js";
@@ -71,6 +71,44 @@ export async function getAwardById(tenantId: string, id: string) {
   });
 }
 
+/**
+ * GAP-WORKS-CLOSURE-02 (DECISION — safe default): map each workId to its
+ * agreement number ONLY when that work has EXACTLY ONE distinct finalized
+ * (dao/do_finalized) award. A work can carry more than one award
+ * (re-tender/revision), so "the" agreement is genuinely ambiguous; rather
+ * than guess (latest? first?), an ambiguous or absent case maps to null (the
+ * closure register then shows "—") so a contract is never misidentified.
+ * Lives in the tender module because `awards` is this module's table — the
+ * execution route composes it with its own closures (no cross-module schema
+ * import in the execution repo).
+ */
+export async function finalizedAgreementByWorkIds(
+  tenantId: string,
+  workIds: string[],
+): Promise<Map<string, string>> {
+  const result = new Map<string, string>();
+  if (workIds.length === 0) return result;
+  const uniqueIds = Array.from(new Set(workIds));
+  const rows = await scopedRead(async (tx) => {
+    return tx
+      .select({ workId: awards.workId, agreementNumber: awards.agreementNumber, status: awards.status })
+      .from(awards)
+      .where(and(eq(awards.tenantId, tenantId), inArray(awards.workId, uniqueIds)));
+  });
+  const numbersByWork = new Map<string, Set<string>>();
+  for (const r of rows) {
+    if (r.status !== "dao_finalized" && r.status !== "do_finalized") continue;
+    if (!r.agreementNumber) continue;
+    const set = numbersByWork.get(r.workId) ?? new Set<string>();
+    set.add(r.agreementNumber);
+    numbersByWork.set(r.workId, set);
+  }
+  for (const [wid, set] of numbersByWork) {
+    if (set.size === 1) result.set(wid, Array.from(set)[0]!);
+  }
+  return result;
+}
+
 /** Tenant-wide tender register (post pre-tender stage), newest first — backs the FE tenders list page. */
 export async function listTenders(tenantId: string, page: number, pageSize: number) {
   return scopedRead(async (tx) => {
@@ -94,5 +132,51 @@ export async function listTenders(tenantId: string, page: number, pageSize: numb
       .orderBy(desc(tenders.createdAt))
       .limit(pageSize)
       .offset((page - 1) * pageSize);
+  });
+}
+
+/**
+ * GAP-WORKS-TENDERS-DETAIL-03: a single tender read by id, so the detail page
+ * can resolve a tender directly instead of scanning the capped list (tenders
+ * ranked beyond the list cap were previously unreachable by URL). Same
+ * leftJoin to work_proposals as listTenders so the shape matches. Null when
+ * the id does not exist in this tenant.
+ */
+export async function getTenderById(tenantId: string, id: string) {
+  return scopedRead(async (tx) => {
+    const rows = await tx
+      .select({
+        id: tenders.id,
+        tenantId: tenders.tenantId,
+        workId: tenders.workId,
+        tenderTypeId: tenders.tenderTypeId,
+        tenderAmountMinor: tenders.tenderAmountMinor,
+        openingDate: tenders.openingDate,
+        approvingAuthorityId: tenders.approvingAuthorityId,
+        contractorClassId: tenders.contractorClassId,
+        remarks: tenders.remarks,
+        createdAt: tenders.createdAt,
+        workNumber: workProposals.workNumber,
+      })
+      .from(tenders)
+      .leftJoin(workProposals, eq(workProposals.id, tenders.workId))
+      .where(and(eq(tenders.tenantId, tenantId), eq(tenders.id, id)))
+      .limit(1);
+    return rows[0] ?? null;
+  });
+}
+
+/**
+ * GAP-WORKS-TENDERS-06: exact tenant tender count, so the list meta can report
+ * a real total (not `data.length`, which caps at the page size and makes the
+ * list and the stat cards undercount in large tenants).
+ */
+export async function countTenders(tenantId: string): Promise<number> {
+  return scopedRead(async (tx) => {
+    const rows = await tx
+      .select({ value: count() })
+      .from(tenders)
+      .where(eq(tenders.tenantId, tenantId));
+    return Number(rows[0]?.value ?? 0);
   });
 }

@@ -11,7 +11,7 @@ import {
 } from "./domain.js";
 import {
   getMb, getBill, listBillsForWork, listBills, listMeasurementsByMb, listMeasurementsByBoqItem,
-  listBillsByMb,
+  listBillsByMb, listMbsForWork, listAwardsForWork, listAccountCompilations,
 } from "./repo.js";
 import { getAwardById } from "../tender/repo.js";
 import { getBoqItemById, listBoqItemsByIds } from "../boq/repo.js";
@@ -28,6 +28,28 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READ_ROLES);
     const { workId } = req.params as { workId: string };
     const data = await listBillsForWork(ctx.tenantId, workId);
+    return reply.send({ data });
+  });
+
+  // GAP-WORKS-BILLING-WORKID-04: list measurement books for a work — lets the
+  // FE render selectable MBs with their own single "advance one step" button
+  // instead of asking a clerk to paste a full MB UUID.
+  app.get("/v1/works/billing/:workId/mbs", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const { workId } = req.params as { workId: string };
+    const data = await listMbsForWork(ctx.tenantId, workId);
+    return reply.send({ data });
+  });
+
+  // GAP-WORKS-BILLING-BILLS-NEW-01 / NEW-MB-01: list awards for a work — backs
+  // the award picker on the Generate Bill / Issue MB forms (the Tenders list
+  // never carried an award id, so the UUID had to be pasted).
+  app.get("/v1/works/billing/:workId/awards", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const { workId } = req.params as { workId: string };
+    const data = await listAwardsForWork(ctx.tenantId, workId);
     return reply.send({ data });
   });
 
@@ -236,5 +258,15 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ["dao", "do", "works_admin", "super_admin"]);
     const body = v.compileAccountSchema.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.compileAccountCommand(ctx, body));
+  });
+
+  // GAP-WORKS-BILLING-ACCOUNT-COMPILE-03: list prior compilations for a
+  // month/year so the FE can warn before a duplicate treasury submission.
+  app.get("/v1/works/billing/account-compile", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["dao", "do", "works_admin", "super_admin"]);
+    const query = v.listAccountCompileSchema.parse(req.query);
+    const data = await listAccountCompilations(ctx.tenantId, query.month, query.year);
+    return reply.send({ data });
   });
 }

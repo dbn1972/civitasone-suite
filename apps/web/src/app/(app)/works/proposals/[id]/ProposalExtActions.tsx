@@ -5,6 +5,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useToast } from "@/app/_components/ds/Toast";
 import { PROPOSAL_WRITE_ROLES } from "@/lib/auth/workRoles";
+import { formatMoney } from "@/lib/formatters";
 import { ConfirmDialog, useConfirmAction, Button } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
@@ -12,7 +13,12 @@ import { useFormError } from "@/lib/useFormError";
 interface ProposalExtActionsProps {
   workId: string;
   roles: string[];
+  workNumber?: string;
+  estimatedCostMinor?: string;
 }
+
+/** Canonical UUID shape, matching the works-service zod `.uuid()` guards. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const cardStyle: React.CSSProperties = {
   border: "1px solid var(--line)",
@@ -84,9 +90,11 @@ function SubmitBtn({ busy, label }: { busy: boolean; label: string }) {
 
 function SplitProposalForm({
   workId,
+  parentLabel,
   onClose,
 }: {
   workId: string;
+  parentLabel: string;
   onClose: () => void;
 }) {
   const { toast } = useToast();
@@ -192,7 +200,7 @@ function SplitProposalForm({
               borderRadius: 8,
             }}
           >
-            {workId.slice(0, 8)}…
+            {parentLabel}
           </div>
         </div>
         <div style={fieldGroup}>
@@ -218,7 +226,7 @@ function SplitProposalForm({
       <ConfirmDialog
         open={open}
         title="Split this proposal?"
-        description="This creates a new permanent child work record from the split lines — it cannot be undone."
+        description="This requests a new permanent child work record with the description you entered. No amount is apportioned here — it cannot be undone."
         confirmLabel="Confirm Split"
         danger
         busy={busy}
@@ -246,6 +254,7 @@ function MapCOAForm({
   const [subHead, setSubHead] = useState("");
   const [detailHead, setDetailHead] = useState("");
   const [objectHead, setObjectHead] = useState("");
+  const [localError, setLocalError] = useState<string | null>(null);
   const formError = useFormError("chart-of-accounts mapping");
 
   // COA mapping is append-only — the API has no update/delete for it, so a
@@ -274,8 +283,30 @@ function MapCOAForm({
     onSuccess: onClose,
   });
 
+  // GAP-WORKS-PROPOSALS-DETAIL-04: account heads are append-only; a typo is
+  // permanent. Validate the digit-only head format client-side (each head is a
+  // short numeric code) before showing the permanent-record confirmation.
+  const HEAD_RE = /^\d{1,16}$/;
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setLocalError(null);
+    if (!HEAD_RE.test(majorHead.trim())) {
+      setLocalError("Major Head must be a numeric code (digits only).");
+      return;
+    }
+    const optional: Array<[string, string]> = [
+      ["Sub-Major Head", subMajorHead],
+      ["Minor Head", minorHead],
+      ["Sub Head", subHead],
+      ["Detail Head", detailHead],
+      ["Object Head", objectHead],
+    ];
+    for (const [label, val] of optional) {
+      if (val.trim() && !HEAD_RE.test(val.trim())) {
+        setLocalError(`${label} must be a numeric code (digits only).`);
+        return;
+      }
+    }
     trigger();
   }
 
@@ -333,10 +364,23 @@ function MapCOAForm({
         </div>
         <SubmitBtn busy={busy} label="Map COA" />
       </form>
+      {localError ? (
+        <p role="alert" style={{ fontSize: 12, color: "var(--bad, #b42318)", marginTop: 8 }}>
+          {localError}
+        </p>
+      ) : null}
       <ConfirmDialog
         open={open}
         title="Map this chart of accounts?"
-        description="This records a permanent chart-of-accounts mapping for this work. Mappings cannot be edited or removed once submitted — it cannot be undone."
+        description={
+          `This records a PERMANENT chart-of-accounts mapping for this work — it cannot be edited or removed once submitted.\n\n` +
+          `Major Head: ${majorHead}` +
+          (subMajorHead ? `\nSub-Major Head: ${subMajorHead}` : "") +
+          (minorHead ? `\nMinor Head: ${minorHead}` : "") +
+          (subHead ? `\nSub Head: ${subHead}` : "") +
+          (detailHead ? `\nDetail Head: ${detailHead}` : "") +
+          (objectHead ? `\nObject Head: ${objectHead}` : "")
+        }
         confirmLabel="Confirm COA Mapping"
         danger
         busy={busy}
@@ -362,6 +406,7 @@ function MapOfficeForm({
   const [subDivisionId, setSubDivisionId] = useState("");
   const [sectionId, setSectionId]       = useState("");
   const [isNodal, setIsNodal]           = useState(false);
+  const [localError, setLocalError]     = useState<string | null>(null);
   const formError = useFormError("office mapping");
 
   // Office mapping is append-only — the API has no update/delete for it, so a
@@ -387,8 +432,28 @@ function MapOfficeForm({
     onSuccess: onClose,
   });
 
+  // GAP-WORKS-PROPOSALS-DETAIL-04: the works-service office-mapping route
+  // requires divisionId/subDivisionId/sectionId to be UUIDs (mapOfficeSchema).
+  // There is no office/division NAME master in works-service to drive an
+  // EntityPicker (the org structure lives outside this service), so until one
+  // exists we at least block a malformed, permanent mapping client-side with a
+  // precise inline error instead of letting a typo'd id reach an append-only
+  // record. See the per-GAP report's HUMAN REVIEW note.
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setLocalError(null);
+    if (!UUID_RE.test(divisionId.trim())) {
+      setLocalError("Division ID must be a valid UUID.");
+      return;
+    }
+    if (subDivisionId.trim() && !UUID_RE.test(subDivisionId.trim())) {
+      setLocalError("Sub-Division ID must be a valid UUID.");
+      return;
+    }
+    if (sectionId.trim() && !UUID_RE.test(sectionId.trim())) {
+      setLocalError("Section ID must be a valid UUID.");
+      return;
+    }
     trigger();
   }
 
@@ -454,10 +519,21 @@ function MapOfficeForm({
         </div>
         <SubmitBtn busy={busy} label="Map Office" />
       </form>
+      {localError ? (
+        <p role="alert" style={{ fontSize: 12, color: "var(--bad, #b42318)", marginTop: 8 }}>
+          {localError}
+        </p>
+      ) : null}
       <ConfirmDialog
         open={open}
         title="Map this office / division?"
-        description="This records a permanent office mapping for this work. Mappings cannot be edited or removed once submitted — it cannot be undone."
+        description={
+          `This records a PERMANENT office mapping for this work — it cannot be edited or removed once submitted.\n\n` +
+          `Division: ${divisionId}` +
+          (subDivisionId ? `\nSub-Division: ${subDivisionId}` : "") +
+          (sectionId ? `\nSection: ${sectionId}` : "") +
+          `\nNodal: ${isNodal ? "Yes" : "No"}`
+        }
         confirmLabel="Confirm Office Mapping"
         danger
         busy={busy}
@@ -471,7 +547,7 @@ function MapOfficeForm({
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export function ProposalExtActions({ workId, roles }: ProposalExtActionsProps) {
+export function ProposalExtActions({ workId, roles, workNumber, estimatedCostMinor }: ProposalExtActionsProps) {
   const [openSection, setOpenSection] = useState<string | null>(null);
 
   if (!roles.some((r) => (PROPOSAL_WRITE_ROLES as readonly string[]).includes(r))) return null;
@@ -479,6 +555,14 @@ export function ProposalExtActions({ workId, roles }: ProposalExtActionsProps) {
   function toggle(section: string) {
     setOpenSection((prev) => (prev === section ? null : section));
   }
+
+  // GAP-WORKS-PROPOSALS-DETAIL-05: show the parent as its work number + cost
+  // (e.g. "WO-123 · ₹5,00,000.00") rather than a truncated raw UUID.
+  const costLabel = estimatedCostMinor ? formatMoney(estimatedCostMinor) : null;
+  const parentLabel =
+    (workNumber && workNumber.trim())
+      ? `${workNumber}${costLabel && costLabel !== "—" ? ` · ${costLabel}` : ""}`
+      : `${workId.slice(0, 8)}…`;
 
   const sections = [
     { id: "split",  label: "Split Proposal" },
@@ -501,7 +585,7 @@ export function ProposalExtActions({ workId, roles }: ProposalExtActionsProps) {
           </button>
 
           {openSection === id && id === "split" && (
-            <SplitProposalForm workId={workId} onClose={() => setOpenSection(null)} />
+            <SplitProposalForm workId={workId} parentLabel={parentLabel} onClose={() => setOpenSection(null)} />
           )}
           {openSection === id && id === "coa" && (
             <MapCOAForm workId={workId} onClose={() => setOpenSection(null)} />

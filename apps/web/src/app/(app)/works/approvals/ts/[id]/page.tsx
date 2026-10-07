@@ -1,9 +1,11 @@
 import { Fragment } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { PageHeader, Card, StatCard } from "@/app/_components/ds";
+import { PageHeader, Card, StatCard, LoadErrorState } from "@/app/_components/ds";
 import { fetchJson } from "@/app/_data/apiClient";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { getSessionRoles, hasAnyRole } from "@/lib/auth/roleGuard";
+import { APPROVAL_FINALIZE_ROLES } from "@/lib/auth/workRoles";
 import { ApprovalFinalizeButton } from "../ApprovalFinalizeButton";
 
 // ---------------------------------------------------------------------------
@@ -29,14 +31,6 @@ type TsRaw = {
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
-}
-
-function pickArray(payload: unknown): unknown[] {
-  if (isRecord(payload) && "data" in payload) {
-    const d = (payload as { data: unknown }).data;
-    return Array.isArray(d) ? d : [];
-  }
-  return Array.isArray(payload) ? payload : [];
 }
 
 function mapRawTs(r: unknown): TsRaw | null {
@@ -88,27 +82,70 @@ export default async function TsDetailPage({
 }: {
   params: { id: string };
 }) {
-  // No GET-by-ID endpoint — fetch list and filter (capped at 100 records)
-  const result = await fetchJson<unknown, TsRaw[]>(
-    "/api/v1/works/approvals/ts?pageSize=100",
-    [],
+  // GET-by-id (GAP-WORKS-APPROVALS-TS-DETAIL-01): fetch the single record so a
+  // record beyond the first list page is reachable. The backend returns
+  // { data: <record> }; a genuinely missing id is a 404, every other failure
+  // is a load error — the two must not be conflated (GAP-...-TS-DETAIL-02).
+  const result = await fetchJson<unknown, TsRaw | null>(
+    `/api/v1/works/approvals/ts/${params.id}`,
+    null,
     {
       telemetryKey: "works.approvals.ts.detail",
-      mapResponse: (p) =>
-        pickArray(p)
-          .map(mapRawTs)
-          .filter((r): r is TsRaw => r !== null),
+      mapResponse: (p) => {
+        const record = isRecord(p) && "data" in p ? (p as { data: unknown }).data : p;
+        return mapRawTs(record);
+      },
     },
   );
 
-  const ts = result.data.find((r) => r.id === params.id);
+  if (result.source === "error") {
+    if (result.status === 404) notFound();
+    return (
+      <div className="page-main wrap" aria-labelledby="page-heading">
+        <PageHeader
+          title="Technical Sanction"
+          subtitle="Could not load this record."
+          back="/works/approvals"
+          backLabel="Approvals"
+        />
+        <LoadErrorState
+          result={result}
+          area="technical sanction"
+          backHref="/works/approvals"
+          backLabel="Approvals"
+        />
+      </div>
+    );
+  }
+
+  const ts = result.data;
   if (!ts) notFound();
 
-  const detailRows: Array<[string, string]> = [
+  const canFinalize = hasAnyRole(getSessionRoles(), APPROVAL_FINALIZE_ROLES);
+
+  const detailRows: Array<[string, React.ReactNode]> = [
     ["TS Number", ts.tsNumber ?? "—"],
     ["Sanction Type", humanize(ts.sanctionType)],
-    ["Work ID", ts.workId != null ? ts.workId.slice(0, 8) + "…" : "—"],
-    ["TS Authority", ts.tsAuthorityId != null ? ts.tsAuthorityId.slice(0, 8) + "…" : "—"],
+    [
+      "Work",
+      ts.workId != null ? (
+        <Link href={`/works/billing/${ts.workId}`} title={ts.workId}>
+          {ts.workId.slice(0, 8) + "…"}
+        </Link>
+      ) : (
+        "—"
+      ),
+    ],
+    [
+      "TS Authority (ID)",
+      ts.tsAuthorityId != null ? (
+        <span title={ts.tsAuthorityId} style={{ fontFamily: "var(--font-mono, monospace)" }}>
+          {ts.tsAuthorityId.slice(0, 8) + "…"}
+        </span>
+      ) : (
+        "—"
+      ),
+    ],
     ["Date", formatIndianDate(ts.tsDate)],
     ["Created", formatIndianDate(ts.createdAt)],
     ["Remarks", ts.remarks ?? "—"],
@@ -176,7 +213,7 @@ export default async function TsDetailPage({
         <Link href="/works/approvals" className="btn ghost">
           ← All approvals
         </Link>
-        <ApprovalFinalizeButton id={ts.id} type="ts" status={ts.status} />
+        <ApprovalFinalizeButton id={ts.id} type="ts" status={ts.status} canFinalize={canFinalize} />
       </div>
     </div>
   );

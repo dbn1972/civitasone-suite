@@ -1,8 +1,10 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
-import { PageHeader, Button } from "@/app/_components/ds";
+import { PageHeader, Button, EntityPicker, Field } from "@/app/_components/ds";
+import { formatMoney, rupeeStringToPaise } from "@/lib/formatters";
+import { searchWorkTypes, resolveWorkTypes } from "@/lib/entityAdapters/workType";
 import { useFormError } from "@/lib/useFormError";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
@@ -43,22 +45,70 @@ export default function NewProposalPage() {
   const [message, setMessage] = useState("");
   const formError = useFormError("proposal");
 
+  // GAP-WORKS-PROPOSALS-NEW-05: warn before losing unsaved input on reload /
+  // tab close. "dirty" = any field differs from the pristine initial form.
+  const dirty =
+    !message &&
+    (form.description !== "" ||
+      form.estimatedCost !== "" ||
+      form.workTypeId !== "" ||
+      form.district !== "" ||
+      form.taluka !== "" ||
+      form.village !== "" ||
+      form.remarks !== "" ||
+      form.category !== "regular");
+
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirty]);
+
   function set(field: StringFormField) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setForm((f) => ({ ...f, [field]: e.target.value } as ProposalForm));
   }
 
+  // GAP-WORKS-PROPOSALS-NEW-02: money is bigint paise. Parse the typed rupee
+  // string exactly in BigInt (no float), echo the formatted amount live, and
+  // reject a zero / blank / over-precise cost before it ever reaches the API.
+  const estimatedCostMinor = rupeeStringToPaise(form.estimatedCost);
+  const costEcho =
+    form.estimatedCost.trim() === ""
+      ? null
+      : estimatedCostMinor === null
+        ? "Enter a valid amount in rupees (up to two decimals)."
+        : estimatedCostMinor === "0"
+          ? "Estimated cost must be more than ₹0."
+          : formatMoney(estimatedCostMinor);
+  const costValid = estimatedCostMinor !== null && estimatedCostMinor !== "0";
+
+  function handleCancel() {
+    if (dirty && !window.confirm("Discard this draft proposal? Your entries will be lost.")) return;
+    router.push("/works/proposals");
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true);
     setMessage("");
     setError("");
     formError.clear();
+
+    if (!costValid) {
+      setError("Enter a valid estimated cost in rupees (more than ₹0, up to two decimals).");
+      return;
+    }
+
+    setBusy(true);
     try {
       const body: Record<string, string> = {
         description: form.description,
         category: form.category,
-        estimatedCostMinor: String(Math.round(Number(form.estimatedCost || "0") * 100)),
+        estimatedCostMinor,
       };
       if (form.workTypeId) body.workTypeId = form.workTypeId;
       if (form.district) body.district = form.district;
@@ -74,9 +124,14 @@ export default function NewProposalPage() {
         setError((await formError.fromResponse(res, "save")).message);
         return;
       }
-      setMessage("Created.");
-      toast.success("Work proposal submitted.");
-      setTimeout(() => router.push("/works/proposals"), 600);
+      // GAP-WORKS-PROPOSALS-NEW-03: creation yields a DRAFT (the backend sets
+      // status "draft"; DAO finalization is a separate action on the detail
+      // page). Say so honestly rather than "submitted / for approval".
+      const created = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      const newId = typeof created.id === "string" ? created.id : undefined;
+      setMessage("Draft proposal created.");
+      toast.success("Draft proposal created.");
+      setTimeout(() => router.push(newId ? `/works/proposals/${newId}` : "/works/proposals"), 600);
     } catch (caught) {
       setError(formError.fromException("save", caught).message);
     } finally {
@@ -88,7 +143,7 @@ export default function NewProposalPage() {
     <>
       <PageHeader
         title="New Work Proposal"
-        subtitle="Submit a new work proposal for approval."
+        subtitle="Create a draft work proposal. You can finalize it for DAO from its detail page."
         back="/works/proposals"
         backLabel="Proposals"
       />
@@ -153,25 +208,39 @@ export default function NewProposalPage() {
                 id="proposal-new-estimated-cost"
                 type="number"
                 required
-                min={0}
+                min={0.01}
                 step="0.01"
                 value={form.estimatedCost}
                 onChange={set("estimatedCost")}
                 style={inputStyle}
                 placeholder="e.g. 500000"
+                aria-describedby="proposal-new-cost-echo"
+                aria-invalid={costEcho !== null && !costValid ? true : undefined}
               />
+              {costEcho ? (
+                <p
+                  id="proposal-new-cost-echo"
+                  role={costValid ? undefined : "alert"}
+                  style={{ margin: "4px 0 0", fontSize: 12, color: costValid ? "var(--muted)" : "var(--bad, #b42318)" }}
+                >
+                  {costValid ? `= ${costEcho}` : costEcho}
+                </p>
+              ) : null}
             </div>
 
             <div>
-              <label htmlFor="proposal-new-work-type-id" style={labelStyle}>Work type ID (UUID)</label>
-              <input
-                id="proposal-new-work-type-id"
-                type="text"
-                value={form.workTypeId}
-                onChange={set("workTypeId")}
-                style={inputStyle}
-                placeholder="UUID from masters"
-              />
+              <Field label="Work type">
+                <EntityPicker
+                  aria-label="Work type"
+                  value={form.workTypeId || null}
+                  onChange={(val) =>
+                    setForm((f) => ({ ...f, workTypeId: Array.isArray(val) ? (val[0] ?? "") : (val ?? "") }))
+                  }
+                  search={searchWorkTypes}
+                  resolve={resolveWorkTypes}
+                  placeholder="Search work types by name…"
+                />
+              </Field>
             </div>
 
             <div>
@@ -223,14 +292,25 @@ export default function NewProposalPage() {
             />
           </div>
 
-          <Button
-            type="submit"
-            variant="primary"
-            disabled={busy}
-            style={{ minHeight: 44 }}
-          >
-            {busy ? "Submitting..." : "Submit"}
-          </Button>
+          <div style={{ display: "flex", gap: 10 }}>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={busy}
+              style={{ minHeight: 44 }}
+            >
+              {busy ? "Creating…" : "Create draft"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={busy}
+              onClick={handleCancel}
+              style={{ minHeight: 44 }}
+            >
+              Cancel
+            </Button>
+          </div>
         </form>
       </div>
     </>

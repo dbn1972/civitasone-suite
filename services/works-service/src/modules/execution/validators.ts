@@ -22,8 +22,11 @@ export const uploadPhotoSchema = z.object({
   workId: z.string().uuid(),
   fileKey: z.string().min(1).max(512),
   description: z.string().max(2048).optional(),
-  latitude: z.number().optional(),
-  longitude: z.number().optional(),
+  // GAP-WORKS-EXECUTION-PHOTOS-NEW-02: range-validate GPS server-side too
+  // (not UI-only). Coordinates are optional, but when present must be a real
+  // earth coordinate.
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
   source: z.enum(["mobile", "web"]).optional(),
 });
 
@@ -36,6 +39,8 @@ export const createIssueSchema = z.object({
 
 export const closeIssueSchema = z.object({
   id: z.string().uuid(),
+  // GAP-WORKS-EXECUTION-ISSUES-04: optional resolution note persisted on close.
+  resolution: z.string().trim().min(1).max(2048).optional(),
 });
 
 export const closeWorkSchema = z.object({

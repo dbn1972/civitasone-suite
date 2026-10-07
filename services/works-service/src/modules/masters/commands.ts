@@ -30,3 +30,28 @@ export async function publishMasterCreate(
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
+
+/**
+ * Publish a master-UPDATE command (GAP-WORKS-MASTERS-04). Carries the target
+ * row id, the master type (registry prefix) and the field patch. The consumer
+ * applies it to the SAME table the registry resolves masterType to, with an
+ * optimistic version guard, and emits a works.master.updated + audit event in
+ * the same transaction. Deactivation is just an update with { active: false }.
+ */
+export async function publishMasterUpdate(
+  ctx: RequestContext,
+  masterType: string,
+  id: string,
+  patch: Record<string, unknown>,
+): Promise<Accepted> {
+  await queue.publish(COMMANDS.masterUpdate, {
+    messageId: randomUUID(),
+    type: COMMANDS.masterUpdate,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { id, masterType, patch },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}

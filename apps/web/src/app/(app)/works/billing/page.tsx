@@ -1,28 +1,50 @@
 import Link from "next/link";
-import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { PageHeader, Card } from "@/app/_components/ds";
 import { getBills } from "../_data/loaders";
-import { BillingTable } from "./BillingTable";
+import { BillingRegister } from "./BillingTable";
 
 export default async function BillingPage() {
   const { data: bills, source } = await getBills();
 
-  const total = bills.length;
-  const pending = bills.filter((b) => b.status === "pending" || b.status === "draft").length;
-  const finalized = bills.filter((b) => b.status === "finalized").length;
-  const submitted = bills.filter((b) => b.status === "submitted_ifms").length;
-
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
-      {/* UX-012: the data-source badge now lives inside BillingTable, driven
-          by the same useSeededResource call that produces its rows — not a
-          second, independent read of `source` here that could disagree with
-          the table's own cache state (UX-002's pattern). */}
+      {/* UX-012 + GAP-WORKS-BILLING-03: both the stat cards and the table are
+          now driven by the SAME useSeededResource call inside
+          <BillingRegister>, so the counts can never read 0 (raw fetch) next
+          to cached rows (table). The page is a thin server shell that only
+          fetches and hands the seed to the client register. */}
       <PageHeader
         title="Bills & Measurement Books"
         subtitle="e-MB, RA bills, and abstract bill processing."
         back="/works"
         actions={
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            {/* GAP-WORKS-BILLING-04: surface the other billing entry points on
+                the register header, not only "+ Issue MB". Record measurement
+                and Generate bill need a work context (?workId), so from the
+                tenant-wide register they route to the picker-less forms where
+                the clerk selects the work; keep "+ Issue MB" primary. */}
+            <Link
+              href="/works/billing/measurements/new"
+              className="btn ghost"
+              style={{ minHeight: 36, fontSize: 13, padding: "6px 14px" }}
+            >
+              + Record measurement
+            </Link>
+            <Link
+              href="/works/billing/bills/new"
+              className="btn ghost"
+              style={{ minHeight: 36, fontSize: 13, padding: "6px 14px" }}
+            >
+              + Generate bill
+            </Link>
+            <Link
+              href="/works/billing/account-compile"
+              className="btn ghost"
+              style={{ minHeight: 36, fontSize: 13, padding: "6px 14px" }}
+            >
+              Account compile
+            </Link>
             <Link
               href="/works/billing/new-mb"
               className="btn primary"
@@ -33,14 +55,8 @@ export default async function BillingPage() {
           </div>
         }
       />
-      <StatGrid>
-        <StatCard icon="💰" iconBg="#eff6ff" label="Total Bills" value={total} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label="Pending" value={pending} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Finalized" value={finalized} />
-        <StatCard icon="📤" iconBg="#f0fdf4" label="Submitted to IFMS" value={submitted} />
-      </StatGrid>
       <Card title="Works Bills">
-        <BillingTable bills={bills} source={source === "error" ? "error" : "api"} />
+        <BillingRegister bills={bills} source={source === "error" ? "error" : "api"} />
       </Card>
     </div>
   );

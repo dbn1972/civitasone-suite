@@ -43,7 +43,7 @@ describe("ProposalExtActions", () => {
       expect(fetchSpy).not.toHaveBeenCalled();
       expect(screen.getByRole("alertdialog")).toBeInTheDocument();
       expect(
-        screen.getByText(/creates a new permanent child work record/),
+        screen.getByText(/requests a new permanent child work record/),
       ).toBeInTheDocument();
     });
 
@@ -141,7 +141,7 @@ describe("ProposalExtActions", () => {
       expect(fetchSpy).not.toHaveBeenCalled();
       expect(screen.getByRole("alertdialog")).toBeInTheDocument();
       expect(
-        screen.getByText(/Mappings cannot be edited or removed once submitted/),
+        screen.getByText(/cannot be edited or removed once submitted/),
       ).toBeInTheDocument();
     });
 
@@ -187,7 +187,7 @@ describe("ProposalExtActions", () => {
       expect(fetchSpy).not.toHaveBeenCalled();
       expect(screen.getByRole("alertdialog")).toBeInTheDocument();
       expect(
-        screen.getByText(/Mappings cannot be edited or removed once submitted/),
+        screen.getByText(/cannot be edited or removed once submitted/),
       ).toBeInTheDocument();
     });
 
@@ -219,5 +219,65 @@ describe("ProposalExtActions", () => {
         expect(screen.queryByPlaceholderText("Division UUID")).not.toBeInTheDocument(),
       );
     });
+  });
+});
+
+describe("ProposalExtActions — GAP-WORKS-PROPOSALS-DETAIL-04 (typo protection on append-only maps)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("blocks a non-UUID division id with an inline error and never opens the confirm", () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    renderWithToast(<ProposalExtActions workId={WORK_ID} roles={["works_admin"]} />);
+    openSection("Map Office");
+    fireEvent.change(screen.getByPlaceholderText("Division UUID"), { target: { value: "not-a-uuid" } });
+    fireEvent.click(screen.getByRole("button", { name: "Map Office" }));
+
+    expect(screen.getByRole("alert").textContent).toMatch(/valid UUID/i);
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("shows the division id in the office confirm review summary", () => {
+    renderWithToast(<ProposalExtActions workId={WORK_ID} roles={["works_admin"]} />);
+    openSection("Map Office");
+    const div = "11111111-1111-1111-1111-111111111111";
+    fireEvent.change(screen.getByPlaceholderText("Division UUID"), { target: { value: div } });
+    fireEvent.click(screen.getByRole("button", { name: "Map Office" }));
+    const dialog = screen.getByRole("alertdialog");
+    expect(within(dialog).getByText(new RegExp(div))).toBeInTheDocument();
+  });
+
+  it("blocks a non-numeric COA major head with an inline error", () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    renderWithToast(<ProposalExtActions workId={WORK_ID} roles={["works_admin"]} />);
+    openSection("Map COA");
+    fireEvent.change(screen.getByPlaceholderText("e.g. 4059"), { target: { value: "ABCD" } });
+    fireEvent.click(screen.getByRole("button", { name: "Map COA" }));
+
+    expect(screen.getByRole("alert").textContent).toMatch(/numeric code/i);
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("ProposalExtActions — GAP-WORKS-PROPOSALS-DETAIL-05 (split parent context)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("shows the parent work number and cost, not a truncated raw UUID", () => {
+    renderWithToast(
+      <ProposalExtActions
+        workId={WORK_ID}
+        roles={["works_admin"]}
+        workNumber="WO-123"
+        estimatedCostMinor="865000050"
+      />,
+    );
+    openSection("Split Proposal");
+    expect(screen.getByText("WO-123 · ₹86,50,000.50")).toBeInTheDocument();
+    expect(screen.queryByText(/aaaaaaaa…/)).not.toBeInTheDocument();
   });
 });

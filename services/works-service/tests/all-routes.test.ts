@@ -85,7 +85,24 @@ vi.mock("../src/modules/contractor/repo.js", async (importOriginal) => {
 // row; a dedicated test overrides this for the rejection path.
 vi.mock("../src/modules/approval/repo.js", async (importOriginal) => {
   const orig = await importOriginal<typeof import("../src/modules/approval/repo.js")>();
-  return { ...orig, hasFinalizedTsForWork: vi.fn(async () => true) };
+  // getAa/getTs: a bogus "00000000-0000-..." id resolves to null (404), any
+  // other id resolves to a minimal draft record — mirrors this file's
+  // sentinel-id convention and lets the GET-by-id route tests below assert
+  // both the 200 and 404 paths without a real DB.
+  const makeAa = (_t: string, id: string) =>
+    id.startsWith("00000000-0000-")
+      ? null
+      : { id, workId: "00000000-1111-4000-8000-000000000001", aaNumber: "AA/2024/001", status: "draft", approvedAmountMinor: 5000000n };
+  const makeTs = (_t: string, id: string) =>
+    id.startsWith("00000000-0000-")
+      ? null
+      : { id, workId: "00000000-1111-4000-8000-000000000001", tsNumber: "TS/2024/001", status: "draft", tsAmountMinor: 5000000n };
+  return {
+    ...orig,
+    hasFinalizedTsForWork: vi.fn(async () => true),
+    getAa: vi.fn(async (t: string, id: string) => makeAa(t, id)),
+    getTs: vi.fn(async (t: string, id: string) => makeTs(t, id)),
+  };
 });
 
 // Bug fix (works-deep-verify): GET /v1/works/boq/:workId now verifies the
@@ -497,6 +514,70 @@ describe("Approval routes", () => {
     });
     expect(res.statusCode).toBe(404);
   });
+
+  // GET-by-id routes (works-deep-verify / GAP-WORKS-APPROVALS-AA-DETAIL-01 &
+  // TS-DETAIL-01): records beyond the first list page must be reachable
+  // directly, with a real 404 for a genuinely missing id and 403 for a role
+  // the register reader set excludes.
+  it("GET /v1/works/approvals/aa/:id → 401 no token", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/works/approvals/aa/00000000-1111-4000-8000-000000000055" });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("GET /v1/works/approvals/aa/:id → 403 wrong role", async () => {
+    const res = await app.inject({
+      method: "GET", url: "/v1/works/approvals/aa/00000000-1111-4000-8000-000000000055",
+      headers: authHeader(["citizen"]),
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("GET /v1/works/approvals/aa/:id → 200 with the record for a known id", async () => {
+    const res = await app.inject({
+      method: "GET", url: "/v1/works/approvals/aa/00000000-1111-4000-8000-000000000055",
+      headers: authHeader(),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.id).toBe("00000000-1111-4000-8000-000000000055");
+  });
+
+  it("GET /v1/works/approvals/aa/:id → 404 for a genuinely missing id", async () => {
+    const res = await app.inject({
+      method: "GET", url: "/v1/works/approvals/aa/00000000-0000-4000-8000-000000000000",
+      headers: authHeader(),
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("GET /v1/works/approvals/ts/:id → 401 no token", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/works/approvals/ts/00000000-1111-4000-8000-000000000055" });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("GET /v1/works/approvals/ts/:id → 403 wrong role", async () => {
+    const res = await app.inject({
+      method: "GET", url: "/v1/works/approvals/ts/00000000-1111-4000-8000-000000000055",
+      headers: authHeader(["citizen"]),
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("GET /v1/works/approvals/ts/:id → 200 with the record for a known id", async () => {
+    const res = await app.inject({
+      method: "GET", url: "/v1/works/approvals/ts/00000000-1111-4000-8000-000000000055",
+      headers: authHeader(),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.id).toBe("00000000-1111-4000-8000-000000000055");
+  });
+
+  it("GET /v1/works/approvals/ts/:id → 404 for a genuinely missing id", async () => {
+    const res = await app.inject({
+      method: "GET", url: "/v1/works/approvals/ts/00000000-0000-4000-8000-000000000000",
+      headers: authHeader(),
+    });
+    expect(res.statusCode).toBe(404);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -675,6 +756,39 @@ describe("Execution routes", () => {
       payload: { workScopeId: "00000000-1111-4000-8000-000000000001", month: 13, year: 2024, currentAchievement: 25 },
     });
     expect(res.statusCode).toBe(400);
+  });
+
+  // GAP-WORKS-EXECUTION-WORKID-04 / EXECUTION-06: the progress register accepts
+  // an optional ?workId= filter and rejects a malformed one. (The 200/meta.total
+  // happy path needs a real DB join and is covered against Postgres, not this
+  // fully-mocked harness.)
+  it("GET /v1/works/execution/progress?workId=not-a-uuid → 400", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/works/execution/progress?workId=not-a-uuid",
+      headers: authHeader(),
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  // GAP-WORKS-EXECUTION-ISSUES-04: close accepts an optional resolution note.
+  it("POST /v1/works/execution/issues/:id/close → 202 with resolution", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/works/execution/issues/00000000-1111-4000-8000-000000000009/close",
+      headers: authHeader(),
+      payload: { resolution: "Re-grouted and inspected." },
+    });
+    expect(res.statusCode).toBe(202);
+  });
+
+  it("POST /v1/works/execution/issues/:id/close → 403 for a read-only role", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/works/execution/issues/00000000-1111-4000-8000-000000000009/close",
+      headers: authHeader(["works_viewer"]),
+    });
+    expect(res.statusCode).toBe(403);
   });
 
   it("POST /v1/works/execution/photos → 202 valid", async () => {

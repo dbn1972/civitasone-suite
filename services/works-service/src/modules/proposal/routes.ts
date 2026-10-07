@@ -3,7 +3,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { queue } from "../../shared/infra.js";
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
-import { getProposal, listProposals, updateProposal } from "./repo.js";
+import { getProposal, listProposals, updateProposal, countProposals, searchProposals, resolveProposals } from "./repo.js";
 import { canDaoFinalize, validateCoa } from "./domain.js";
 import { paginationSchema } from "../masters/validators.js";
 
@@ -11,13 +11,33 @@ const WRITE_ROLES = ["works_admin", "works_operator", "super_admin", "dao", "do"
 const READ_ROLES = ["works_admin", "works_operator", "works_viewer", "super_admin", "dao", "do", "sdo", "section_officer", "estimator"];
 
 export async function proposalRoutes(app: FastifyInstance): Promise<void> {
-  // List proposals
+  // List proposals — also serves the shared EntityPicker (GAP-WORKS-BOQ-NEW-03):
+  //   ?q=<text>        typeahead by work number / description
+  //   ?ids=a,b,c       resolve a set of ids to {id, workNumber, description}
+  // Both return the same compact row shape the picker adapter expects. Plain
+  // (no q/ids) paginated listing is unchanged for every existing caller.
   app.get("/v1/works/proposals", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
+    const rawQuery = req.query as Record<string, unknown>;
+    const idsParam = typeof rawQuery.ids === "string" ? rawQuery.ids : "";
+    if (idsParam.trim().length > 0) {
+      const ids = idsParam.split(",").map((s) => s.trim()).filter(Boolean).slice(0, 50);
+      const data = await resolveProposals(ctx.tenantId, ids);
+      return reply.send({ data });
+    }
+    const qParam = typeof rawQuery.q === "string" ? rawQuery.q : "";
+    if (qParam.trim().length > 0) {
+      const data = await searchProposals(ctx.tenantId, qParam, 20);
+      return reply.send({ data });
+    }
     const query = paginationSchema.parse(req.query);
     const data = await listProposals(ctx.tenantId, query.page, query.pageSize);
-    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total: data.length } });
+    // GAP-WORKS-PROPOSALS-06: meta.total must be the TRUE tenant row count, not
+    // the current page length, or a client with more than pageSize proposals is
+    // silently told there are only pageSize (same fix as GAP-WORKS-ORDERS-06).
+    const total = await countProposals(ctx.tenantId);
+    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total } });
   });
 
   // Alias: /v1/works/work-orders → same as proposals (UAT compat)
@@ -26,7 +46,13 @@ export async function proposalRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READ_ROLES);
     const query = paginationSchema.parse(req.query);
     const data = await listProposals(ctx.tenantId, query.page, query.pageSize);
-    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total: data.length } });
+    // GAP-WORKS-ORDERS-06: report the TRUE total row count, not data.length.
+    // data.length only ever equals the current page size, so a client that
+    // reads meta.total to paginate (or to know whether rows were truncated)
+    // was silently told there were only `pageSize` work orders even when far
+    // more existed. countProposals returns the tenant-scoped total.
+    const total = await countProposals(ctx.tenantId);
+    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total } });
   });
 
   // Get proposal by id

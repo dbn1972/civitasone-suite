@@ -58,3 +58,34 @@ describe("ExecutionActions — UX-016 clerk-safe errors", () => {
     expect(screen.queryByText(/409/)).not.toBeInTheDocument();
   });
 });
+
+describe("ExecutionActions — GAP-WORKS-EXECUTION-WORKID-02 role gate & preconditions", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    refreshMock.mockReset();
+  });
+
+  it("hides the completion/closure controls for a role that may not manage the work", () => {
+    renderWithToast(<ExecutionActions workId={WORK_ID} canManage={false} openIssues={0} />);
+    expect(screen.queryByRole("button", { name: "Mark Complete" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Close Work" })).toBeNull();
+    expect(screen.getByText(/Only authorised officers can certify/i)).toBeInTheDocument();
+  });
+
+  it("shows an open-issues precondition warning before Close Work", () => {
+    renderWithToast(<ExecutionActions workId={WORK_ID} canManage openIssues={3} />);
+    expect(screen.getByRole("alert")).toHaveTextContent(/3 open issues/i);
+    expect(screen.getByRole("button", { name: "Close Work" })).toBeInTheDocument();
+  });
+
+  it("blocks confirming a 'dropped' closure until a reason is given", () => {
+    renderWithToast(<ExecutionActions workId={WORK_ID} canManage openIssues={0} />);
+    fireEvent.change(screen.getByLabelText(/Closure Type/i), { target: { value: "dropped" } });
+    fireEvent.click(screen.getByRole("button", { name: "Close Work" }));
+    const dialog = screen.getByRole("alertdialog");
+    const confirm = within(dialog).getByRole("button", { name: "Close Work" });
+    expect(confirm).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/Reason for dropping/i), { target: { value: "Abandoned before tender." } });
+    expect(confirm).not.toBeDisabled();
+  });
+});

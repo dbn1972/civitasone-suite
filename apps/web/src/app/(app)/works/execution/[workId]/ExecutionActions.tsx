@@ -7,11 +7,16 @@ import { useFormError } from "@/lib/useFormError";
 
 interface ExecutionActionsProps {
   workId: string;
+  /** UI gate: whether this session may certify completion / close the work.
+   *  The server routes stay authoritative (403); this only hides the controls. */
+  canManage?: boolean;
+  /** Open issue count for the precondition warning; null when unknown (fetch failed). */
+  openIssues?: number | null;
 }
 
 type ClosureType = "closed" | "dropped" | "completion";
 
-export function ExecutionActions({ workId }: ExecutionActionsProps) {
+export function ExecutionActions({ workId, canManage = true, openIssues = null }: ExecutionActionsProps) {
   const router = useRouter();
   const { toast } = useToast();
 
@@ -51,6 +56,7 @@ export function ExecutionActions({ workId }: ExecutionActionsProps) {
 
   // ── Work Closure ───────────────────────────────────────────────────────────
   const [closureType, setClosureType] = useState<ClosureType>("completion");
+  const [closureReason, setClosureReason] = useState("");
   const [closureDialog, setClosureDialog] = useState(false);
   const [closureBusy, setClosureBusy] = useState(false);
   const [closureError, setClosureError] = useState("");
@@ -64,7 +70,7 @@ export function ExecutionActions({ workId }: ExecutionActionsProps) {
       const res = await fetch("/api/proxy/v1/works/execution/close", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workId, closureType }),
+        body: JSON.stringify({ workId, closureType, ...(closureReason.trim() ? { remarks: closureReason.trim() } : {}) }),
       });
       if (!res.ok) {
         const resolved = await closureFormError.fromResponse(res, "save");
@@ -83,7 +89,19 @@ export function ExecutionActions({ workId }: ExecutionActionsProps) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 16 }}>
-      {/* ── Physical Completion Certificate ─────────────────────────────────── */}
+      {!canManage ? (
+        <Card title="Completion & Closure">
+          <p style={{ padding: "16px 20px", margin: 0, fontSize: 13, color: "var(--muted)" }}>
+            Only authorised officers can certify physical completion or close this work.
+          </p>
+        </Card>
+      ) : (
+        <>
+          {typeof openIssues === "number" && openIssues > 0 && (
+            <div role="alert" style={{ padding: "10px 14px", borderRadius: 8, background: "#fffaeb", border: "1px solid #fde68a", color: "#92400e", fontSize: 13 }}>
+              ⚠️ This work has {openIssues} open issue{openIssues === 1 ? "" : "s"}. Resolve them before closing the work.
+            </div>
+          )}
       <Card title="Physical Completion Certificate">
         <div
           style={{
@@ -188,11 +206,29 @@ export function ExecutionActions({ workId }: ExecutionActionsProps) {
               Close Work
             </Button>
           </div>
+          {closureType === "dropped" && (
+            <div>
+              <label htmlFor="execution-closure-reason" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>
+                Reason for dropping (required)
+              </label>
+              <textarea
+                id="execution-closure-reason"
+                className="input"
+                value={closureReason}
+                maxLength={2048}
+                onChange={(e) => setClosureReason(e.target.value)}
+                style={{ minHeight: 64, width: "100%", maxWidth: 560, resize: "vertical" }}
+                placeholder="Why is this work being dropped?"
+              />
+            </div>
+          )}
           {closureError && (
             <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>{closureError}</p>
           )}
         </div>
       </Card>
+      </>
+      )}
 
       {/* Dialogs */}
       <ConfirmDialog
@@ -217,6 +253,7 @@ export function ExecutionActions({ workId }: ExecutionActionsProps) {
         confirmLabel="Close Work"
         danger
         busy={closureBusy}
+        blockConfirm={closureType === "dropped" && !closureReason.trim()}
         errorMessage={closureError || undefined}
         onConfirm={handleClosure}
         onCancel={() => {

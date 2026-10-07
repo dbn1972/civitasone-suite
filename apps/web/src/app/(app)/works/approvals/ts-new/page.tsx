@@ -2,18 +2,25 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
-import { PageHeader, Button } from "@/app/_components/ds";
+import { PageHeader, Button, Field, Input, Select, Textarea, EntityPicker } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { rupeesToMinorString } from "@/lib/money";
+import { recentFinancialYears } from "@/lib/fiscalYear";
+import { searchWorkProposals, resolveWorkProposals } from "@/lib/entityAdapters/workProposal";
+import { searchIdentityUsers, resolveIdentityUsers } from "@/lib/entityAdapters/identityUser";
 
-const inputStyle = { width: "100%", padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
-const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
-const errBanner = { background: "#fef2f2", color: "#b42318", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 } as const;
-const okBanner = { background: "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 } as const;
-const infoBanner = { background: "#eff6ff", color: "#1e40af", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 } as const;
+// Token-based banner styles (no hard-coded hex).
+const okBanner: React.CSSProperties = { background: "var(--good-bg, #ecfdf3)", color: "var(--good, #166534)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 };
+const errBanner: React.CSSProperties = { background: "var(--bad-bg, #fef2f2)", color: "var(--bad, #b42318)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 };
+const infoBanner: React.CSSProperties = { background: "var(--info-bg, #eff6ff)", color: "var(--info, #1e40af)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 };
+
+// Upper bound: ₹999,99,99,999.99 (just under 1,000 crore) in paise.
+const MAX_AMOUNT_MINOR = 99999999999n;
 
 export default function NewTsPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const srYears = recentFinancialYears(6);
   const [form, setForm] = useState({
     workId: "",
     tsNumber: "",
@@ -24,21 +31,41 @@ export default function NewTsPage() {
     tsAmount: "",
     remarks: "",
   });
+  const [amountError, setAmountError] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const formError = useFormError("technical sanction");
 
   function set(field: keyof typeof form) {
-    return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
+  }
+
+  function validateAmount(): string | null {
+    const minor = rupeesToMinorString(form.tsAmount.trim());
+    if (minor === null) {
+      return "Enter a valid amount in rupees (greater than zero, up to two decimals).";
+    }
+    if (BigInt(minor) > MAX_AMOUNT_MINOR) {
+      return "Amount is too large. Check the figure and try again.";
+    }
+    return null;
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true);
     setMessage("");
     setError("");
+    const amtErr = validateAmount();
+    setAmountError(amtErr ?? "");
+    if (amtErr) return;
+    const tsAmountMinor = rupeesToMinorString(form.tsAmount.trim());
+    if (tsAmountMinor === null) {
+      setAmountError("Enter a valid amount in rupees (greater than zero, up to two decimals).");
+      return;
+    }
+    setBusy(true);
     formError.clear();
     try {
       const body: Record<string, string> = {
@@ -46,7 +73,7 @@ export default function NewTsPage() {
         tsNumber: form.tsNumber.trim(),
         tsDate: form.tsDate,
         tsAuthorityId: form.tsAuthorityId.trim(),
-        tsAmountMinor: String(Math.round(Number(form.tsAmount || "0") * 100)),
+        tsAmountMinor,
       };
       if (form.srYear.trim()) body.srYear = form.srYear.trim();
       if (form.zone.trim()) body.zone = form.zone.trim();
@@ -61,9 +88,12 @@ export default function NewTsPage() {
         setError((await formError.fromResponse(res, "save")).message);
         return;
       }
-      setMessage("Technical sanction created.");
-      toast.success("Technical sanction created.");
-      setTimeout(() => router.push("/works/approvals"), 600);
+      // The service accepts the create asynchronously (HTTP 202) — the record
+      // is queued, not yet written — so we say "submitted", not "created", to
+      // match the AA form and the finalize button (GAP-WORKS-APPROVALS-TS-NEW-02).
+      setMessage("Technical sanction submitted. It will appear in the register once processed.");
+      toast.success("Technical sanction submitted.");
+      setTimeout(() => router.push("/works/approvals"), 700);
     } catch (caught) {
       setError(formError.fromException("save", caught).message);
     } finally {
@@ -95,6 +125,7 @@ export default function NewTsPage() {
       <div className="card">
         <form
           onSubmit={submit}
+          noValidate
           className="pad"
           style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 640 }}
         >
@@ -107,120 +138,109 @@ export default function NewTsPage() {
               gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
             }}
           >
-            <div>
-              <label htmlFor="ts-new-work-id" style={labelStyle}>Work ID (UUID) *</label>
-              <input
+            <Field label="Work" required id="ts-new-work-id">
+              <EntityPicker
                 id="ts-new-work-id"
-                style={inputStyle}
-                type="text"
-                value={form.workId}
-                onChange={set("workId")}
-                placeholder="e.g. 123e4567-e89b-12d3-a456-426614174000"
-                required
+                value={form.workId || null}
+                onChange={(v) => setForm((prev) => ({ ...prev, workId: Array.isArray(v) ? (v[0] ?? "") : (v ?? "") }))}
+                search={searchWorkProposals}
+                resolve={resolveWorkProposals}
+                placeholder="Search by work number or description…"
+                aria-label="Work"
               />
-            </div>
+            </Field>
 
-            <div>
-              <label htmlFor="ts-new-ts-number" style={labelStyle}>TS Number *</label>
-              <input
+            <Field label="TS Number" required id="ts-new-ts-number">
+              <Input
                 id="ts-new-ts-number"
-                style={inputStyle}
                 type="text"
                 value={form.tsNumber}
                 onChange={set("tsNumber")}
-                placeholder="e.g. TS/2024-25/001"
+                placeholder="e.g. TS/2026-27/001"
                 maxLength={64}
-                required
               />
-            </div>
+            </Field>
 
-            <div>
-              <label htmlFor="ts-new-sanction-date" style={labelStyle}>Sanction date *</label>
-              <input
-                id="ts-new-sanction-date"
-                style={inputStyle}
-                type="date"
-                value={form.tsDate}
-                onChange={set("tsDate")}
-                required
-              />
-            </div>
+            <Field label="Sanction date" required id="ts-new-sanction-date">
+              <Input id="ts-new-sanction-date" type="date" value={form.tsDate} onChange={set("tsDate")} />
+            </Field>
 
-            <div>
-              <label htmlFor="ts-new-authority-id" style={labelStyle}>TS authority ID (UUID) *</label>
-              <input
+            <Field label="TS authority" required id="ts-new-authority-id">
+              <EntityPicker
                 id="ts-new-authority-id"
-                style={inputStyle}
-                type="text"
-                value={form.tsAuthorityId}
-                onChange={set("tsAuthorityId")}
-                placeholder="e.g. 123e4567-e89b-12d3-a456-426614174000"
-                required
+                value={form.tsAuthorityId || null}
+                onChange={(v) =>
+                  setForm((prev) => ({ ...prev, tsAuthorityId: Array.isArray(v) ? (v[0] ?? "") : (v ?? "") }))
+                }
+                search={searchIdentityUsers}
+                resolve={resolveIdentityUsers}
+                placeholder="Search by officer name…"
+                aria-label="TS authority"
               />
-            </div>
+            </Field>
 
-            <div>
-              <label htmlFor="ts-new-sr-year" style={labelStyle}>SR Year (optional)</label>
-              <input
-                id="ts-new-sr-year"
-                style={inputStyle}
-                type="text"
-                value={form.srYear}
-                onChange={set("srYear")}
-                placeholder="e.g. 2024-25"
-                maxLength={16}
-              />
-            </div>
+            <Field label="SR Year (optional)" id="ts-new-sr-year">
+              <Select id="ts-new-sr-year" value={form.srYear} onChange={set("srYear")}>
+                <option value="">Select SR year…</option>
+                {srYears.map((fy) => (
+                  <option key={fy} value={fy}>
+                    {fy}
+                  </option>
+                ))}
+              </Select>
+            </Field>
 
-            <div>
-              <label htmlFor="ts-new-zone" style={labelStyle}>Zone (optional)</label>
-              <input
+            <Field label="Zone (optional)" id="ts-new-zone">
+              <Input
                 id="ts-new-zone"
-                style={inputStyle}
                 type="text"
                 value={form.zone}
                 onChange={set("zone")}
-                placeholder="e.g. Pune Zone"
+                placeholder="e.g. Central Zone, Bhubaneswar"
                 maxLength={64}
               />
-            </div>
+            </Field>
 
-            <div>
-              <label htmlFor="ts-new-amount" style={labelStyle}>Sanction amount (&#8377;) *</label>
-              <input
+            <Field label="Sanction amount (₹)" required id="ts-new-amount" error={amountError || undefined}>
+              <Input
                 id="ts-new-amount"
-                style={inputStyle}
-                type="number"
-                min="0"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
+                pattern="\d+(\.\d{1,2})?"
                 value={form.tsAmount}
-                onChange={set("tsAmount")}
+                onChange={(e) => {
+                  setAmountError("");
+                  set("tsAmount")(e);
+                }}
                 placeholder="0.00"
-                required
               />
-            </div>
+            </Field>
           </div>
 
-          <div>
-            <label htmlFor="ts-new-remarks" style={labelStyle}>Remarks</label>
-            <textarea
+          <Field label="Remarks" id="ts-new-remarks">
+            <Textarea
               id="ts-new-remarks"
-              style={{ ...inputStyle, minHeight: 80 }}
+              style={{ minHeight: 80 }}
               value={form.remarks}
               onChange={set("remarks")}
               maxLength={2048}
               placeholder="Optional notes or remarks"
             />
-          </div>
+          </Field>
 
-          <Button
-            type="submit"
-            variant="primary"
-            disabled={busy}
-            style={{ minHeight: 44 }}
-          >
-            {busy ? "Submitting..." : "Create"}
-          </Button>
+          <div style={{ display: "flex", gap: 12 }}>
+            <Button type="submit" variant="primary" disabled={busy} style={{ minHeight: 44 }}>
+              {busy ? "Submitting..." : "Create"}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => router.push("/works/approvals")}
+              disabled={busy}
+              style={{ minHeight: 44 }}
+            >
+              Cancel
+            </Button>
+          </div>
         </form>
       </div>
     </>

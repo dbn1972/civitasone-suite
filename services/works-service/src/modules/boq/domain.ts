@@ -49,6 +49,51 @@ export function calculateRecapitulation(workAmount: bigint, charges: RecapCharge
   return workAmount + contingency + turnoverTax + workCharge + qualityControl + centage + charges.otherCharges;
 }
 
+/** One line of the recapitulation breakdown: a component, how it is derived
+ * (its basis), the rate applied (percent, or null for flat ₹ lines) and the
+ * resulting paise amount. */
+export interface RecapLine {
+  key: string;
+  label: string;
+  basis: "work_amount" | "flat";
+  ratePercent: number | null;
+  amountMinor: bigint;
+}
+
+/**
+ * GAP-WORKS-BOQ-WORKID-01: the per-component rupee breakdown behind the recap
+ * grand total, so a reviewer can see HOW the Grand Total is derived rather than
+ * reading bare percentages next to flat ₹ figures. Each %-line is a percentage
+ * OF the work amount (the basis), computed with the exact same bigint formula
+ * calculateRecapitulation uses, so the displayed line amounts sum back to the
+ * same Grand Total. Order of application is additive — every component is taken
+ * on the base work amount, not compounded — so the order of these lines does
+ * not change the total; the FE footnote states this explicitly.
+ */
+export function recapitulationBreakdown(
+  workAmount: bigint,
+  charges: RecapCharges,
+): { lines: RecapLine[]; grandTotal: bigint } {
+  const pctLine = (key: string, label: string, pct: number): RecapLine => ({
+    key,
+    label,
+    basis: "work_amount",
+    ratePercent: pct,
+    amountMinor: (workAmount * BigInt(Math.round(pct * 100))) / 10000n,
+  });
+  const lines: RecapLine[] = [
+    { key: "workAmount", label: "Work Amount", basis: "flat", ratePercent: null, amountMinor: workAmount },
+    pctLine("contingency", "Contingency", charges.contingencyPercent),
+    pctLine("turnoverTax", "Turnover Tax", charges.turnoverTaxPercent),
+    pctLine("workCharge", "Work Charge", charges.workChargePercent),
+    pctLine("qualityControl", "Quality Control", charges.qualityControlPercent),
+    pctLine("centage", "Centage", charges.centagePercent),
+    { key: "otherCharges", label: "Other Charges", basis: "flat", ratePercent: null, amountMinor: charges.otherCharges },
+  ];
+  const grandTotal = lines.reduce((sum, l) => sum + l.amountMinor, 0n);
+  return { lines, grandTotal };
+}
+
 /**
  * BR-015: BoQ cannot be modified once tender details exist.
  */

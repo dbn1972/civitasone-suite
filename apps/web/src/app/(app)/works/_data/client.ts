@@ -75,3 +75,70 @@ export async function fetchBoqItems(): Promise<Row[]> {
   const out = await get<{ data?: Row[] }>("v1/works/boq?pageSize=100");
   return out.data ?? [];
 }
+
+// ─── EntityPicker adapters (SF-06 shared picker) ──────────────────────────────
+
+/** One SR master item, as the BoQ Add-item picker needs it. */
+export interface SrItemOption {
+  id: string;
+  itemCode: string;
+  description: string;
+  unit: string;
+  /** rate in paise (bigint-serialised string) */
+  rate: string;
+}
+
+function asSrItem(r: Row): SrItemOption {
+  return {
+    id: String(r.id ?? ""),
+    itemCode: String(r.itemCode ?? ""),
+    description: String(r.description ?? ""),
+    unit: String(r.unit ?? ""),
+    rate: String(r.rate ?? "0"),
+  };
+}
+
+/**
+ * GAP-WORKS-BOQ-NEW-01: typeahead over the Schedule of Rates. `signal` is
+ * passed through so a superseded keystroke's request is aborted (EntityPicker
+ * contract). Returns the canonical SR rows so the form can prefill
+ * code/unit/rate and post a real srItemId.
+ */
+export async function searchSrItems(query: string, signal?: AbortSignal): Promise<SrItemOption[]> {
+  const res = await browserFetch(`v1/works/masters/sr-items/search?q=${encodeURIComponent(query)}`, { signal });
+  if (!res.ok) throw new Error(readError());
+  const out = (await res.json()) as { data?: Row[] };
+  return (out.data ?? []).map(asSrItem);
+}
+
+/** One work, as a picker option. */
+export interface WorkOption {
+  id: string;
+  workNumber: string;
+  description: string;
+}
+
+function asWork(r: Row): WorkOption {
+  return {
+    id: String(r.id ?? ""),
+    workNumber: String(r.workNumber ?? ""),
+    description: String(r.description ?? ""),
+  };
+}
+
+/** GAP-WORKS-BOQ-NEW-03 / CLOSURE-01: typeahead over works by number/description. */
+export async function searchWorks(query: string, signal?: AbortSignal): Promise<WorkOption[]> {
+  const res = await browserFetch(`v1/works/proposals?q=${encodeURIComponent(query)}`, { signal });
+  if (!res.ok) throw new Error(readError());
+  const out = (await res.json()) as { data?: Row[] };
+  return (out.data ?? []).map(asWork);
+}
+
+/** Resolve work ids to options — EntityPicker seeding for a pre-set workId. */
+export async function resolveWorks(ids: string[]): Promise<WorkOption[]> {
+  if (ids.length === 0) return [];
+  const res = await browserFetch(`v1/works/proposals?ids=${encodeURIComponent(ids.join(","))}`);
+  if (!res.ok) throw new Error(readError());
+  const out = (await res.json()) as { data?: Row[] };
+  return (out.data ?? []).map(asWork);
+}

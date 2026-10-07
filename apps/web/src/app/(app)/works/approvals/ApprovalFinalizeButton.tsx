@@ -4,21 +4,26 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog, useToast, Button } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { FINALIZABLE_STATUSES, FINALIZED_STATUSES } from "@/lib/auth/workRoles";
 
 interface ApprovalFinalizeButtonProps {
   id: string;
   type: "aa" | "ts";
   status: string;
+  /**
+   * Whether the signed-in user holds a role the works-service accepts for
+   * finalizing (APPROVAL_FINALIZE_ROLES). When false the trigger renders
+   * disabled with an explanatory tooltip instead of firing a request that
+   * would 403. Defaults to true so existing callers (and the server, which
+   * stays the authority) are unaffected. GAP-WORKS-APPROVALS-AA/TS-DETAIL-04.
+   */
+  canFinalize?: boolean;
 }
 
-// Only offer Finalize for statuses the backend will actually accept. Other
-// (intermediate / terminal) statuses hide the trigger to avoid a guaranteed
-// error.
-const FINALIZABLE_STATUSES = new Set(["draft", "submitted"]);
-// Terminal states the *server* reports once the async finalize has been applied
-// by the consumer. Derived from the prop every render (see `done` below).
-const FINALIZED_STATUSES = new Set(["finalized", "approved", "published"]);
-
+// Only offer Finalize for statuses the backend will actually accept. The
+// works-service domain rule (approval/domain.ts canFinalize) accepts ONLY
+// "draft" — a "submitted" record returns 422 — so the shared constant is the
+// single source of truth here (GAP-WORKS-APPROVALS-02/04).
 const TYPE_LABEL: Record<"aa" | "ts", string> = {
   aa: "Administrative Approval",
   ts: "Technical Sanction",
@@ -28,6 +33,7 @@ export function ApprovalFinalizeButton({
   id,
   type,
   status,
+  canFinalize = true,
 }: ApprovalFinalizeButtonProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -93,6 +99,22 @@ export function ApprovalFinalizeButton({
 
   // Not in a finalizable state — hide entirely.
   if (!FINALIZABLE_STATUSES.has(status)) return null;
+
+  // Finalizable, but this user holds no role the server accepts for finalize
+  // (APPROVAL_FINALIZE_ROLES). Show a disabled control with an explanation
+  // rather than firing a request that is guaranteed to 403. The server stays
+  // the authority. GAP-WORKS-APPROVALS-AA/TS-DETAIL-04.
+  if (!canFinalize) {
+    return (
+      <Button
+        variant="primary"
+        disabled
+        title="Requires a works approver role (e.g. DAO, DO, SDO)"
+      >
+        {type === "aa" ? "Finalize AA" : "Finalize TS"}
+      </Button>
+    );
+  }
 
   async function handleFinalize() {
     if (busy) return;

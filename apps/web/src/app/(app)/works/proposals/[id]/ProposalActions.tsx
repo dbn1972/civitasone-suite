@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ConfirmDialog, useToast } from "@/app/_components/ds";
+import { ConfirmDialog, useToast, Button } from "@/app/_components/ds";
 import { PROPOSAL_WRITE_ROLES } from "@/lib/auth/workRoles";
 import { useFormError } from "@/lib/useFormError";
 
@@ -54,13 +54,13 @@ export function ProposalActions({ id, status, roles }: ProposalActionsProps) {
 
   return (
     <>
-      <button
+      <Button
         type="button"
+        variant="primary"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
       >
         DAO Finalize
-      </button>
+      </Button>
       <ConfirmDialog
         open={open}
         title="Finalize for DAO Approval"

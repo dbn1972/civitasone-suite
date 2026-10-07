@@ -4,7 +4,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
-import { getAwardById, listTenders, listQuotations, tenderOrPreTenderExists } from "./repo.js";
+import { getAwardById, getTenderById, countTenders, listTenders, listQuotations, tenderOrPreTenderExists } from "./repo.js";
 import { canDaoFinalizeAward, canDoFinalizeAward, canViewBidDetails, redactQuotation } from "./domain.js";
 import { findContractorById, findContractorByName } from "../contractor/repo.js";
 import { paginationSchema } from "../masters/validators.js";
@@ -18,8 +18,27 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
     const query = paginationSchema.parse(req.query);
-    const data = await listTenders(ctx.tenantId, query.page, query.pageSize);
-    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total: data.length } });
+    // GAP-WORKS-TENDERS-06: report the REAL tenant total (not data.length,
+    // which caps at pageSize and makes the list + stat cards undercount).
+    const [data, total] = await Promise.all([
+      listTenders(ctx.tenantId, query.page, query.pageSize),
+      countTenders(ctx.tenantId),
+    ]);
+    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total } });
+  });
+
+  // GAP-WORKS-TENDERS-DETAIL-03: single tender read by id, so the FE detail
+  // page resolves a tender directly instead of scanning the capped list (a
+  // tender ranked beyond the list cap was previously unreachable by URL). A
+  // missing id 404s; a bogus-but-valid uuid 404s too.
+  app.get("/v1/works/tenders/:tenderId", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const { tenderId } = req.params as { tenderId: string };
+    const id = v.idParamSchema.parse({ id: tenderId }).id;
+    const tender = await getTenderById(ctx.tenantId, id);
+    if (!tender) throw new HttpError(404, "NOT_FOUND", "tender not found");
+    return reply.send({ data: tender });
   });
 
   // List quotations for a tender (bid confidentiality enforced for viewers).
@@ -43,6 +62,30 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
       };
     });
     return reply.send({ data });
+  });
+
+  // GAP-WORKS-TENDERS-DETAIL-02: single award read, so the FE detail page can
+  // disable DO-finalize until DAO-finalize is done (the server also enforces
+  // the order via canDoFinalizeAward — this is defence-in-depth + UX). Read
+  // roles only; bid-detail redaction does not apply (an award is not a bid).
+  app.get("/v1/works/tenders/award/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const { id } = v.idParamSchema.parse(req.params);
+    const award = await getAwardById(ctx.tenantId, id);
+    if (!award) throw new HttpError(404, "NOT_FOUND", "award not found");
+    return reply.send({
+      data: {
+        id: award.id,
+        workId: award.workId,
+        contractorId: award.contractorId,
+        contractorName: award.contractorName,
+        acceptedAmountMinor: award.acceptedAmountMinor?.toString() ?? null,
+        status: award.status,
+        daoFinalizedAt: award.daoFinalizedAt,
+        doFinalizedAt: award.doFinalizedAt,
+      },
+    });
   });
 
   // Create pre-tender

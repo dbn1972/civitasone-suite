@@ -658,3 +658,15 @@ export const PROCUREMENT_WRITE_ROLES = [
   "procurement_admin",
   "super_admin",
 ];
+
+/**
+ * Roles permitted to create / edit / deactivate works master data (authorities,
+ * tender types, contractor classes, SR rates, …). Mirrors works-service
+ * masters/routes.ts ADMIN_ROLES exactly (["works_admin", "super_admin"]) — the
+ * server is the real authority and already 403s everyone else on POST/PATCH.
+ * This constant gates the create/edit/deactivate UI so a works_viewer (or any
+ * read-only works role) is not offered a control guaranteed to 403, and so an
+ * API outage can't invite a non-admin to re-create a master. GAP-WORKS-MASTERS-02
+ * (create gate) / GAP-WORKS-MASTERS-04 (edit/deactivate gate).
+ */
+export const WORKS_MASTERS_ADMIN_ROLES = ["works_admin", "super_admin"];

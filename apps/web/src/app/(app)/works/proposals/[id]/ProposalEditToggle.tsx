@@ -2,7 +2,8 @@
 
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
-import { minorToRupeesOrNull } from "@/lib/formatters";
+import { paiseToRupeeString, rupeeStringToPaise } from "@/lib/formatters";
+import { PROPOSAL_WRITE_ROLES } from "@/lib/auth/workRoles";
 import { useFormError } from "@/lib/useFormError";
 import { Button } from "@/app/_components/ds";
 
@@ -22,10 +23,6 @@ interface ProposalEditToggleProps {
   roles: string[];
 }
 
-const WRITE_ROLES = [
-  "works_admin", "works_operator", "super_admin", "dao", "do", "sdo", "section_officer",
-];
-
 const inputStyle: React.CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
@@ -43,7 +40,7 @@ const fieldWrap: React.CSSProperties = { display: "grid", gap: 6 };
 export function ProposalEditToggle({ proposal, roles }: ProposalEditToggleProps) {
   const [open, setOpen] = useState(false);
   const canEdit =
-    roles.some((r) => WRITE_ROLES.includes(r)) && proposal.status === "draft";
+    roles.some((r) => (PROPOSAL_WRITE_ROLES as readonly string[]).includes(r)) && proposal.status === "draft";
 
   if (!canEdit) return null;
 
@@ -58,7 +55,7 @@ export function ProposalEditToggle({ proposal, roles }: ProposalEditToggleProps)
         ✏️ Edit
       </Button>
       {open && (
-        <div id="proposal-edit-form" style={{ marginTop: 16 }}>
+        <div id="proposal-edit-form" style={{ marginTop: 16, flexBasis: "100%", width: "100%" }}>
           <ProposalEditForm proposal={proposal} onClose={() => setOpen(false)} />
         </div>
       )}
@@ -76,12 +73,13 @@ function ProposalEditForm({
   const formId = useId();
   const router = useRouter();
 
-  // UX-006: `Number(proposal.estimatedCostMinor) / 100` turned a missing cost
-  // into a fabricated "0" pre-filled in an editable field the operator might
-  // submit unchanged, silently zeroing out a real proposal's cost. Missing/
-  // unparseable data now leaves the field blank so it's obviously unset.
-  const estimatedCostRupees = minorToRupeesOrNull(proposal.estimatedCostMinor);
-  const rupeesStr = estimatedCostRupees === null ? "" : String(Math.round(estimatedCostRupees));
+  // GAP-WORKS-PROPOSALS-DETAIL-03: money is bigint paise. The old prefill ran
+  // the stored paise through Math.round(minor/100), so opening and saving a
+  // proposal costed ₹86,50,000.50 ("865000050") rewrote it to ₹86,50,001 even
+  // when the clerk never touched the field. Prefill the EXACT rupee string
+  // ("8650000.50") so an unedited field diffs as unchanged, and a genuine
+  // missing cost (UX-006) stays blank rather than a fabricated "0".
+  const rupeesStr = paiseToRupeeString(proposal.estimatedCostMinor) ?? "";
 
   const [description, setDescription] = useState(proposal.description);
   const [costRupees, setCostRupees] = useState(rupeesStr);
@@ -102,9 +100,20 @@ function ProposalEditForm({
     const patch: Record<string, unknown> = {};
     if (description !== proposal.description) patch.description = description;
 
-    const costMinor = Math.round(parseFloat(costRupees) * 100);
-    if (!isNaN(costMinor) && String(costMinor) !== String(proposal.estimatedCostMinor))
-      patch.estimatedCostMinor = String(costMinor);
+    // Only touch estimatedCostMinor when the clerk actually changed the field
+    // from its exact prefill string. rupeeStringToPaise is BigInt-exact and
+    // rejects >2 decimals / junk, so a valid edit converts losslessly and an
+    // invalid one is surfaced inline rather than silently mis-rounded.
+    if (costRupees.trim() !== rupeesStr) {
+      const costMinor = rupeeStringToPaise(costRupees);
+      if (costMinor === null) {
+        setMsg({ text: "Enter a valid amount in rupees (up to two decimals).", ok: false });
+        return;
+      }
+      if (costMinor !== String(proposal.estimatedCostMinor)) {
+        patch.estimatedCostMinor = costMinor;
+      }
+    }
 
     if (district !== (proposal.district ?? "")) patch.district = district || null;
     if (taluka !== (proposal.taluka ?? "")) patch.taluka = taluka || null;
@@ -206,7 +215,7 @@ function ProposalEditForm({
               id={`${formId}-cost`}
               type="number"
               min={0}
-              step={1}
+              step={0.01}
               value={costRupees}
               onChange={(e) => setCostRupees(e.target.value)}
               style={inputStyle}

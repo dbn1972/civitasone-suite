@@ -68,6 +68,7 @@ import {
   MapPin,
   Navigation,
   RefreshCw,
+  PlayCircle,
 } from "lucide-react";
 
 /**
@@ -176,6 +177,8 @@ const STAT_ICON_MAP: Record<string, LucideIcon> = {
   "🧭": Navigation,    // Routes
   "👷": HardHat,       // Agents
   "🔄": RefreshCw,     // Offline Sync
+  // Works hub "Active" stat (GAP-WORKS-HOME-03): used to render raw ▶️ text.
+  "▶️": PlayCircle,
 };
 
 // Variation Selector-16 (U+FE0F) makes an otherwise-identical emoji string

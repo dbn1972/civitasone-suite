@@ -39,6 +39,14 @@ const STATUS_MAP: Record<string, PillVariant> = {
   inactive: "mut",
   closed: "mut",
   confirmed: "good",
+  // GAP-WORKS-ORDERS-03: works proposal/order lifecycle statuses. Without
+  // these keys "dao_finalized"/"ts_eligible"/"aa_issued" all fell through to
+  // the neutral "info" pill, giving the orders/proposals lists no colour
+  // meaning. Keyed in normalizeStatusKey()'s canonical space-separated form
+  // (real API values are snake_case). "draft"/"active"/"closed" already map.
+  "dao finalized": "good", // DAO has finalized the proposal — a positive milestone
+  "ts eligible": "info", // eligible for technical sanction — an in-progress gate
+  "aa issued": "good", // administrative approval issued — a positive milestone
   // GAP-CRM-SERVICE-REQUESTS-04: a resolved service request/ticket is a
   // successful terminal state; without this key it fell through to the neutral
   // "info" blue, visually identical to an unknown value. Added additively (no

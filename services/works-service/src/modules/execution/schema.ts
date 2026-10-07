@@ -72,6 +72,7 @@ export const workIssues = works.table("work_issues", {
   attachmentKey: varchar("attachment_key", { length: 512 }),
   status: varchar("status", { length: 16 }).notNull().default("open"), // open | closed
   closedDate: timestamp("closed_date", { withTimezone: true }),
+  resolution: varchar("resolution", { length: 2048 }), // GAP-WORKS-EXECUTION-ISSUES-04: note recorded on close
   version: integer("version").notNull().default(1),
 });
 
