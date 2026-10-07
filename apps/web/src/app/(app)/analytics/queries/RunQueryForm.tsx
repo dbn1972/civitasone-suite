@@ -174,9 +174,15 @@ export function RunQueryForm() {
         spec: {
           metric,
           dimensions,
+          // HUMAN-REVIEW-BACKLOG #6: wire field must be `op`, matching the
+          // server's querySpecSchema/filterSchema (registry/spec.ts,
+          // analytics-query/validators.ts) — the UI state/label stays
+          // "operator" (clearer to read), but every filter row was being
+          // dropped server-side because the posted key didn't match the
+          // zod schema's `op` field.
           filters: filterRows
             .filter((r) => r.field && r.value.trim() !== "")
-            .map((r) => ({ field: r.field, operator: r.operator, value: r.value.trim() })),
+            .map((r) => ({ field: r.field, op: r.operator, value: r.value.trim() })),
           ...(dateFrom ? { dateFrom } : {}),
           ...(dateTo ? { dateTo } : {}),
           limit: Math.min(Math.max(1, limit), 1000),

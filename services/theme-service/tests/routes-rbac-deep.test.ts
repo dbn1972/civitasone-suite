@@ -2,7 +2,7 @@
  * Theme Service — Route-Level RBAC Tests.
  *
  * Tests authentication (401) and authorization (403) for branding endpoints.
- * Allowed roles: theme_admin, super_admin
+ * Allowed roles: theme_admin, super_admin, tenant_admin
  * Blocked role: employee
  */
 import { describe, it, expect, afterAll } from "vitest";
@@ -41,6 +41,21 @@ describe("PUT /v1/themes/branding — auth", () => {
     });
     await app.close();
     expect(res.statusCode).toBe(403);
+  });
+
+  // HUMAN-REVIEW-BACKLOG #2: tenant_admin must be accepted here — the web
+  // branding page (BRANDING_ADMIN_ROLES) already admits it, so the server
+  // must match or a tenant_admin gets a false-positive-enabled Save button
+  // followed by a 403.
+  it("202 for tenant_admin role (web UI admits this role for branding)", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PUT", url: "/v1/themes/branding",
+      headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
+      payload: { primaryColor: "#000000", logoUrl: "https://example.com/logo.png" },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(202);
   });
 });
 

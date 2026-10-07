@@ -76,9 +76,9 @@ order". This is correct whenever the database is fully up to date, which is
 the normal case for a service you're about to roll back.
 
 It is **not** reliable when:
-- **Migrations are numbered non-sequentially.** `tenant-service` has two
-  `0015_*.sql` files (`0015_org_hierarchy_real.sql` and
-  `0015_placement_policy.sql`); `location-service` has `0005_*`, `0005a_*`,
+- **Migrations are numbered non-sequentially.** `tenant-service` has a
+  non-contiguous `0015_org_hierarchy_real.sql` then `0027_placement_policy.sql`
+  (renamed from a duplicate `0015`); `location-service` has `0005_*`, `0005a_*`,
   `0005b_*`. The tool detects a duplicate leading number and **refuses to
   guess** — pass `--migration <basename>` explicitly.
 - **The database is known to be behind** (some migrations never applied,

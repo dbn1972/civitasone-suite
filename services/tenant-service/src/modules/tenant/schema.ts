@@ -20,7 +20,9 @@ export const tenants = tenantSchema.table("tenants", {
   isolationTier: varchar("isolation_tier", { length: 8 }).notNull().default("pool"),
   dbDsnRef: text("db_dsn_ref"),   // secret-manager reference (silo), never plaintext
   kmsKeyRef: text("kms_key_ref"), // per-tenant encryption key reference (silo BYOK)
-  // Tenant_Placement_Policy provenance (migration 0015_placement_policy.sql):
+  // Tenant_Placement_Policy provenance (migration 0027_placement_policy.sql,
+  // renumbered from 0015 to resolve a duplicate migration-number collision —
+  // see docs/HUMAN-REVIEW-BACKLOG.md):
   // which policy version/reason produced isolationTier — NULL for tenants
   // onboarded before this feature or whose tier was set purely by manual
   // PATCH .../isolation.

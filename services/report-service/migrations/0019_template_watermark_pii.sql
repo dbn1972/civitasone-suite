@@ -1,4 +1,4 @@
--- Migration: 0016_template_watermark_pii.sql
+-- Migration: 0019_template_watermark_pii.sql
 -- Purpose: Add watermark and pii_columns fields to report_templates for controlled exports.
 -- Rollback: ALTER TABLE reports.report_templates DROP COLUMN IF EXISTS watermark;
 --           ALTER TABLE reports.report_templates DROP COLUMN IF EXISTS pii_columns;
