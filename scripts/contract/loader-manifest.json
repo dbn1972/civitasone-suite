@@ -1603,6 +1603,10 @@
     },
     {
       "module": "works",
+      "screen": "/works/approvals/aa/[id]"
+    },
+    {
+      "module": "works",
       "screen": "/works/approvals/new"
     },
     {
@@ -1612,6 +1616,10 @@
     {
       "module": "works",
       "screen": "/works/approvals/ts-new"
+    },
+    {
+      "module": "works",
+      "screen": "/works/approvals/ts/[id]"
     },
     {
       "module": "works",

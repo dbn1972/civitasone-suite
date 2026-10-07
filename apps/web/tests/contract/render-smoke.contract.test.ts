@@ -132,7 +132,11 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/',
   useSearchParams: () => new URLSearchParams(),
   redirect: vi.fn(),
-  notFound: vi.fn(),
+  // Real Next throws an error carrying this digest; a page that correctly calls
+  // notFound() on an empty record must be judged as "rendered not-found", not crash on null.
+  notFound: () => {
+    throw Object.assign(new Error('NEXT_NOT_FOUND'), { digest: 'NEXT_HTTP_ERROR_FALLBACK;404' });
+  },
   useParams: () => currentScreenParams,
 }));
 
@@ -198,6 +202,10 @@ function isClientComponent(src: string): boolean {
   return /^\s*["']use client["'];?\s*$/m.test(head);
 }
 
+function isNotFoundError(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && (err as { digest?: unknown }).digest === 'NEXT_HTTP_ERROR_FALLBACK;404';
+}
+
 async function renderScreen(row: { module: string; screen: string }): Promise<RenderVerdict> {
   const relDir = row.screen.slice(1);
   const filePath = join(APP_DIR, relDir, 'page.tsx');
@@ -239,6 +247,9 @@ async function renderScreen(row: { module: string; screen: string }): Promise<Re
     const text = container.textContent?.trim() ?? '';
     unmount();
 
+    if (boundaryError && isNotFoundError(boundaryError)) {
+      return { verdict: 'PASS', reason: 'not-found (notFound() on empty record)' };
+    }
     if (boundaryError) {
       const message = boundaryError instanceof Error ? boundaryError.message : String(boundaryError);
       return { verdict: 'FAIL', reason: message.split('\n')[0].slice(0, 200) };
@@ -248,6 +259,7 @@ async function renderScreen(row: { module: string; screen: string }): Promise<Re
     }
     return { verdict: 'PASS', reason: 'ok' };
   } catch (err) {
+    if (isNotFoundError(err)) return { verdict: 'PASS', reason: 'not-found (notFound() on empty record)' };
     const message = err instanceof Error ? err.message : String(err);
     return { verdict: 'FAIL', reason: message.split('\n')[0].slice(0, 200) };
   }

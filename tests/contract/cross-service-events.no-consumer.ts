@@ -1,7 +1,7 @@
 /**
  * NO CONSUMER BY DESIGN (audit/status) - fire-and-forget facts.
  *
- * Owner decision 2026-10-07 (PR #1929): 248 audit/status/lifecycle events are
+ * Owner decision 2026-10-07 (PR #1929): 247 audit/status/lifecycle events are
  * emitted for the audit trail and status history of their own service and have no
  * business consumer by design. Each entry was re-verified as emitted (not in
  * unemittedEvents) and as a lifecycle/audit fact, not a missing integration.
@@ -252,7 +252,6 @@ export const NO_CONSUMER_BY_DESIGN: Record<string, string> = {
   "vendor.licence.cancelled": nc("licence cancelled audit/status fact in the vendor lifecycle history"),
   "vendor.licence.issued": nc("licence issued audit/status fact in the vendor lifecycle history"),
   "vendor.licence.suspended": nc("licence suspended audit/status fact in the vendor lifecycle history"),
-  "vendor.lifecycle.decided": nc("lifecycle decided audit/status fact in the vendor lifecycle history"),
   "vendor.registration.approved": nc("registration approved audit/status fact in the vendor lifecycle history"),
   "vendor.registration.created": nc("registration created audit/status fact in the vendor lifecycle history"),
   "vendor.registration.rejected": nc("registration rejected audit/status fact in the vendor lifecycle history"),

@@ -1,11 +1,11 @@
 {
-  "$comment": "GENERATED DEFECT BASELINE — these are KNOWN DEFECTS, not approved exceptions. The contract gate fails if any count grows. Burn these down; never add to them. Regenerate with: BASELINE_WRITE=1 npx vitest run tests/contract/lib/baseline.test.ts NOTE 2026-10-07: orphanEvents includes 34 class-(a) topics added as tracked debt - consumers to be built, owner decision 2026-10-07 (PR #1929); see docs/ORPHAN-EVENTS-FOLLOWUP.md. Those 34 are listed explicitly in orphanEvents; do not add more.",
+  "$comment": "GENERATED DEFECT BASELINE — these are KNOWN DEFECTS, not approved exceptions. The contract gate fails if any count grows. Burn these down; never add to them. Regenerate with: BASELINE_WRITE=1 npx vitest run tests/contract/lib/baseline.test.ts NOTE 2026-10-07: orphanEvents includes 35 class-(a) topics added as tracked debt - consumers to be built, owner decision 2026-10-07 (PR #1929); see docs/ORPHAN-EVENTS-FOLLOWUP.md. Those 35 are listed explicitly in orphanEvents; do not add more.",
   "generatedAt": "2026-10-07",
   "counts": {
     "deadSubscriptions": 20,
     "undeclaredDeadSubscriptions": 66,
     "undeliverableDispatch": 1,
-    "orphanEvents": 945,
+    "orphanEvents": 946,
     "phantomConsumption": 5,
     "unemittedEvents": 37
   },
@@ -916,6 +916,7 @@
     "themes.token.created",
     "trade.application.fee_payment_recorded",
     "vendor.licence.fee_recorded",
+    "vendor.lifecycle.decided",
     "visitor.area.created",
     "visitor.badge_template.created",
     "visitor.badge_template.updated",

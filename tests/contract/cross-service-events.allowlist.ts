@@ -88,6 +88,13 @@ export function allowlistIntegrityErrors(): string[] {
         if (purpose.length < 25 || !/audit|status|history|record|notification/i.test(purpose)) {
           errs.push(`${name}["${topic}"] NO CONSUMER entry must name the audit/status purpose of the event (>=25 chars)`);
         }
+        // The purpose must be specific to THIS event: it has to name the event (everything
+        // after the service prefix, underscores as spaces), so one generic template cannot
+        // be pasted across entries.
+        const named = topic.split(".").slice(1).join(" ").replace(/_/g, " ").toLowerCase();
+        if (!purpose.toLowerCase().includes(named)) {
+          errs.push(`${name}["${topic}"] NO CONSUMER purpose must name the event ("${named}")`);
+        }
         if (!ref.includes(NO_CONSUMER_DECISION_REF)) {
           errs.push(`${name}["${topic}"] NO CONSUMER entry must cite "${NO_CONSUMER_DECISION_REF}"`);
         }
