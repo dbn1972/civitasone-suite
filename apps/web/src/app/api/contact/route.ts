@@ -41,13 +41,26 @@ interface IncomingBody {
   department?: unknown;
   email?: unknown;
   phone?: unknown;
-  message?: unknown;
   topic?: unknown;
   consent?: unknown;
 }
 
 function str(v: unknown): string {
   return typeof v === "string" ? v : "";
+}
+
+/**
+ * Forward the visitor IP (so crm's per-IP rate limit does not collapse every visitor into
+ * this server's bucket; crm must set TRUSTED_PROXY_HOPS to match) and the configured
+ * public Origin (so forms with allowedOrigins do not 403 a missing Origin).
+ */
+function upstreamHeaders(req: NextRequest): Record<string, string> {
+  const h: Record<string, string> = { "content-type": "application/json" };
+  const xff = req.headers.get("x-forwarded-for");
+  if (xff) h["x-forwarded-for"] = xff;
+  const origin = (process.env.CONTACT_LEAD_ORIGIN ?? "").trim();
+  if (origin) h["origin"] = origin;
+  return h;
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
@@ -88,7 +101,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     email,
     department: str(body.department),
     phone: str(body.phone),
-    message: str(body.message),
     topic,
     consent,
   });
@@ -96,7 +108,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const upstream = await fetch(`${GATEWAY}/api/v1/crm/public/leads/${FORM_KEY}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: upstreamHeaders(req),
       body: JSON.stringify(upstreamBody),
     });
 

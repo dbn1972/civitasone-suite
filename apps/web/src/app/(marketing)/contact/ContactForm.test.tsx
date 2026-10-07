@@ -10,9 +10,6 @@ afterEach(() => {
 function fillValid() {
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Priya Das" } });
   fireEvent.change(screen.getByLabelText("Email"), { target: { value: "priya@example.gov.in" } });
-  fireEvent.change(screen.getByLabelText(/How can we help/i), {
-    target: { value: "We would like a demo." },
-  });
   fireEvent.click(screen.getByRole("checkbox", { name: /agree to be contacted/i }));
 }
 
@@ -43,7 +40,6 @@ describe("ContactForm", () => {
 
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "A" } });
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "nope" } });
-    fireEvent.change(screen.getByLabelText(/How can we help/i), { target: { value: "hi" } });
     fireEvent.click(screen.getByRole("checkbox", { name: /agree to be contacted/i }));
     fireEvent.click(screen.getByRole("button", { name: /send message/i }));
 

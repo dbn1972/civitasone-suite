@@ -16,7 +16,6 @@ function base(overrides: Partial<ContactFormInput> = {}): ContactFormInput {
     email: "priya@example.gov.in",
     phone: "+91 98765 43210",
     topic: "sales",
-    message: "We would like a demo for our municipality.",
     consent: true,
     ...overrides,
   };
@@ -34,10 +33,6 @@ describe("validateContact", () => {
   it("requires a valid email", () => {
     expect(validateContact(base({ email: "" })).email).toBeDefined();
     expect(validateContact(base({ email: "not-an-email" })).email).toBeDefined();
-  });
-
-  it("requires a message", () => {
-    expect(validateContact(base({ message: "" })).message).toBeDefined();
   });
 
   it("requires consent (DPDP)", () => {
@@ -79,8 +74,8 @@ describe("isValidEmail", () => {
 });
 
 describe("toPublicLeadBody", () => {
-  it("maps department->company, topic->source and never sends an unmodelled message key", () => {
-    const body = toPublicLeadBody(base({ topic: "security", message: "secret details" }));
+  it("maps department->company, topic->source and maps only crm-modelled fields", () => {
+    const body = toPublicLeadBody(base({ topic: "security" }));
     expect(body).toEqual({
       name: "Priya Das",
       email: "priya@example.gov.in",
@@ -89,8 +84,6 @@ describe("toPublicLeadBody", () => {
       phone: "+91 98765 43210",
       company: "Revenue Department",
     });
-    // Strict crm endpoint rejects unknown keys — the message must not be forwarded.
-    expect(body).not.toHaveProperty("message");
   });
 
   it("omits optional phone/company when blank", () => {

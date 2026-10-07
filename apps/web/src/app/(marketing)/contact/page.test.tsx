@@ -62,7 +62,6 @@ describe("Contact page content (GAP-CONTACT-HOME-01/02/03)", () => {
     render(await ContactPage({}));
     expect(screen.getByRole("button", { name: /send message/i })).toBeInTheDocument();
     expect(screen.getByLabelText("Name")).toBeInTheDocument();
-    expect(screen.getByLabelText(/How can we help/i)).toBeInTheDocument();
   });
 
   it("states a response-time commitment (SLA)", async () => {

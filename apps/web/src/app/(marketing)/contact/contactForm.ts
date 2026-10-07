@@ -35,7 +35,6 @@ export interface ContactFormInput {
   department: string;
   email: string;
   phone: string;
-  message: string;
   topic: ContactTopic;
   consent: boolean;
 }
@@ -48,7 +47,6 @@ const COMPANY_MAX = 200; // department -> company column
 const EMAIL_MAX = 320;
 const PHONE_MIN = 4;
 const PHONE_MAX = 32;
-const MESSAGE_MAX = 4000;
 
 // Pragmatic email shape; the server uses zod .email() as the authority.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -67,7 +65,6 @@ export const CONTACT_FIELD_IDS = {
   email: "contact-email",
   phone: "contact-phone",
   topic: "contact-topic",
-  message: "contact-message",
   consent: "contact-consent",
 } as const;
 
@@ -93,12 +90,6 @@ export function validateContact(input: ContactFormInput): ContactFieldErrors {
     }
   }
 
-  const message = input.message.trim();
-  if (message === "") errors.message = "Please tell us how we can help.";
-  else if (message.length > MESSAGE_MAX) {
-    errors.message = `Message must be ${MESSAGE_MAX} characters or fewer.`;
-  }
-
   if (!CONTACT_TOPICS.includes(input.topic)) errors.topic = "Please choose a topic.";
 
   if (!input.consent) {
@@ -115,7 +106,6 @@ export function firstInvalidFieldId(errors: ContactFieldErrors): string | null {
     "email",
     "phone",
     "topic",
-    "message",
     "consent",
   ];
   for (const key of order) {
@@ -133,8 +123,8 @@ export function firstInvalidFieldId(errors: ContactFieldErrors): string | null {
  * helper maps only the fields the endpoint accepts:
  *   - department -> `company`
  *   - topic      -> `source` (so Sales / General / Security leads are attributable)
- * The free-text message is handled by the `/api/contact` route separately (see there);
- * it is never pushed into a column it does not belong in.
+ * The form deliberately collects NO free-text message: crm has nowhere to store one, so
+ * asking for it would silently discard what the visitor typed.
  */
 export function toPublicLeadBody(input: ContactFormInput): Record<string, unknown> {
   const body: Record<string, unknown> = {

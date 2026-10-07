@@ -14,6 +14,6 @@ describe("DomainsPage (GAP-DOMAINS-NEW-01)", () => {
 
   it("does not fabricate a domain registry listing", () => {
     render(<DomainsPage />);
-    expect(screen.getByText(/registry listing view is not available/i)).toBeInTheDocument();
+    expect(screen.getByText(/registry listing is not available/i)).toBeInTheDocument();
   });
 });

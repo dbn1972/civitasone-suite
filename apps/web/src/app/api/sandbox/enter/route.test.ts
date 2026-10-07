@@ -1,9 +1,11 @@
+import { randomBytes, randomUUID } from "node:crypto";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
 // GAP-SANDBOX-HOME-02: these tests assert the NEW route behaviour and fail on
 // the old code (the route did not exist; cards linked straight to /dashboard).
 
 const ORIGINAL_ENV = { ...process.env };
+let demoTenant = "";
 
 async function load() {
   // Re-import fresh so module-level reads of env (SECRET, DEMO_TENANT) and the
@@ -19,8 +21,9 @@ function decodePayload(token: string): Record<string, unknown> {
 
 beforeEach(() => {
   process.env.ENABLE_SANDBOX = "true";
-  process.env.DEMO_TENANT_ID = "00000000-0000-0000-0000-000000000001";
-  process.env.JWT_SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr"; // gitleaks:allow
+  demoTenant = randomUUID();
+  process.env.DEMO_TENANT_ID = demoTenant;
+  process.env.JWT_SECRET = randomBytes(32).toString("hex");
 });
 
 afterEach(() => {
@@ -58,7 +61,7 @@ describe("GET /api/sandbox/enter", () => {
     expect(cookie?.value).toBeTruthy();
     expect(cookie?.httpOnly).toBe(true);
     const payload = decodePayload(cookie!.value);
-    expect(payload.tenantId).toBe("00000000-0000-0000-0000-000000000001");
+    expect(payload.tenantId).toBe(demoTenant);
     expect(payload.sandbox).toBe(true);
     expect(payload.roles).toEqual(["tenant_admin", "reader", "viewer"]);
   });
@@ -73,7 +76,30 @@ describe("GET /api/sandbox/enter", () => {
       expect(res.status).toBe(303);
       const payload = decodePayload(res.cookies.get("civitasone_at")!.value);
       expect(payload.roles).not.toContain("super_admin");
-      expect(payload.tenantId).toBe("00000000-0000-0000-0000-000000000001");
+      expect(payload.tenantId).toBe(demoTenant);
     }
+  });
+
+  it("returns 404 when JWT_SECRET is unset (no fallback signing secret)", async () => {
+    delete process.env.JWT_SECRET;
+    const { GET } = await load();
+    const res = await GET(new Request("https://demo.test/api/sandbox/enter?role=citizen"));
+    expect(res.status).toBe(404);
+    expect(res.cookies.get("civitasone_at")).toBeUndefined();
+  });
+
+  it("returns 404 when DEMO_TENANT_ID is unset (no fallback tenant)", async () => {
+    delete process.env.DEMO_TENANT_ID;
+    const { GET } = await load();
+    const res = await GET(new Request("https://demo.test/api/sandbox/enter?role=citizen"));
+    expect(res.status).toBe(404);
+  });
+
+  it("refuses the dev default tenant in production", async () => {
+    process.env.DEMO_TENANT_ID = "00000000-0000-0000-0000-000000000001";
+    (process.env as Record<string, string>).NODE_ENV = "production";
+    const { GET } = await load();
+    const res = await GET(new Request("https://demo.test/api/sandbox/enter?role=citizen"));
+    expect(res.status).toBe(404);
   });
 });

@@ -11,9 +11,10 @@ vi.mock("next/navigation", () => ({
 }));
 
 function makeJwt(payload: Record<string, unknown>): string {
-  const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
+  // Opaque test cookie: roleGuard only reads the middle segment, so the other
+  // two are placeholders and the string is not JWT-shaped.
   const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  return `${header}.${body}.fakesig`; // gitleaks:allow
+  return `h.${body}.s`;
 }
 function sessionWithRoles(roles: string[]) {
   mockGet.mockReturnValue({ value: makeJwt({ sub: "u1", roles }) });

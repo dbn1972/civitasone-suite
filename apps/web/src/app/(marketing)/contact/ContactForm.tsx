@@ -27,7 +27,6 @@ export function ContactForm() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [topic, setTopic] = useState<ContactTopic>("sales");
-  const [message, setMessage] = useState("");
   const [consent, setConsent] = useState(false);
   const [errors, setErrors] = useState<ContactFieldErrors>({});
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
@@ -36,7 +35,7 @@ export function ContactForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const input: ContactFormInput = { name, department, email, phone, topic, message, consent };
+    const input: ContactFormInput = { name, department, email, phone, topic, consent };
     const localErrors = validateContact(input);
     if (Object.keys(localErrors).length > 0) {
       setErrors(localErrors);
@@ -54,7 +53,7 @@ export function ContactForm() {
       const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, department, email, phone, topic, message, consent }),
+        body: JSON.stringify({ name, department, email, phone, topic, consent }),
       });
       if (res.status === 503) {
         setStatus("error");
@@ -92,8 +91,7 @@ export function ContactForm() {
       >
         <h2 className="text-lg font-semibold text-green-800">Thank you — your enquiry has been received</h2>
         <p className="mt-2 text-sm text-green-700">
-          A member of our team will respond within 3 business days. We have sent a copy to the email
-          address you provided.
+          A member of our team will respond within 3 business days.
         </p>
         {reference && (
           <p className="mt-3 text-sm text-green-800">
@@ -170,27 +168,6 @@ export function ContactForm() {
           ))}
         </select>
         {fe("topic") && <p className="mt-1 text-sm text-red-600">{fe("topic")}</p>}
-      </div>
-
-      <div>
-        <label htmlFor={CONTACT_FIELD_IDS.message} className="mb-1 block text-sm font-medium text-gray-700">
-          How can we help?
-        </label>
-        <textarea
-          id={CONTACT_FIELD_IDS.message}
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          required
-          rows={5}
-          aria-invalid={fe("message") ? true : undefined}
-          aria-describedby={fe("message") ? `${CONTACT_FIELD_IDS.message}-error` : undefined}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
-        />
-        {fe("message") && (
-          <p id={`${CONTACT_FIELD_IDS.message}-error`} className="mt-1 text-sm text-red-600">
-            {fe("message")}
-          </p>
-        )}
       </div>
 
       <fieldset className="rounded-lg border border-gray-200 p-4">
