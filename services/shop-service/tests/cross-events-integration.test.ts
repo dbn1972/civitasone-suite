@@ -33,7 +33,7 @@ import { eq, and } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
 import { runWithTenant, withTenantScope } from "@civitasone/db";
-import { relayOnce } from "@civitasone/outbox";
+import { relayAll } from "./outbox-relay-support.js";
 import { MUNICIPAL_FEE_RECEIPT_HEAD_CODE } from "@civitasone/events";
 
 import { db as shopDb, sqlClient as shopSqlClient } from "../src/shared/db.js";
@@ -184,13 +184,13 @@ describe("shop-service cross-events wiring — real DB, no mocks", () => {
     // Hop 1: relay shop-service's own outbox — publishes finance.challan.create
     // onto the shared queue, which finance-service's treasury consumer (already
     // subscribed above) picks up and processes against finance's own database.
-    const relayed1 = await relayOnce(shopDb as never, q, 100, "shop-service");
+    const relayed1 = await relayAll(shopDb as never, q as never, "shop-service");
     expect(relayed1, "shop-service must have an unpublished finance.challan.create row to relay").toBeGreaterThan(0);
     await q.drain();
 
     // Hop 2: the treasury consumer enqueued finance.gl.post into finance's OWN
     // outbox (same tx) — relay that too, like the real outbox relay would.
-    await relayOnce(finance.db as never, q, 100, "finance-service");
+    await relayAll(finance.db as never, q as never, "finance-service");
     await q.drain();
 
     const [appRow] = await runWithTenant(TENANT, () =>
@@ -262,7 +262,7 @@ describe("shop-service cross-events wiring — real DB, no mocks", () => {
     // (finance-service's consumers are not registered on this queue, so this
     // row would otherwise sit unpublished forever with no subscriber — that's
     // fine, relayOnce still marks it published once the queue accepts it).
-    await relayOnce(shopDb as never, q, 100, "shop-service");
+    await relayAll(shopDb as never, q as never, "shop-service");
     await q.drain();
 
     await q.publish(
@@ -281,7 +281,7 @@ describe("shop-service cross-events wiring — real DB, no mocks", () => {
     // Relay shop's outbox again — this time it's the notification.send row
     // from submitApplication; notification-service's real delivery consumer
     // (subscribed above) picks it up and writes a delivery row.
-    const relayed = await relayOnce(shopDb as never, q, 100, "shop-service");
+    const relayed = await relayAll(shopDb as never, q as never, "shop-service");
     expect(relayed, "shop-service must have an unpublished notification.send row to relay").toBeGreaterThan(0);
     await q.drain();
 

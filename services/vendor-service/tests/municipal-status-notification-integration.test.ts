@@ -21,7 +21,7 @@ import { eq, and } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
 import { runWithTenant, withTenantScope } from "@civitasone/db";
-import { relayOnce } from "@civitasone/outbox";
+import { acquireOutboxRelayLock, relayAll } from "./outbox-relay-support.js";
 
 import { db as vendorDb, sqlClient as vendorSqlClient } from "../src/shared/db.js";
 import { outboxMessages as vendorOutboxMessages } from "../src/shared/outbox.js";
@@ -60,6 +60,7 @@ const NOTIFICATION_URL =
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let notification: any;
 let registrationId: string;
+let releaseRelayLock: (() => Promise<void>) | undefined;
 
 async function importNotification() {
   const originalUrl = process.env.DATABASE_URL;
@@ -97,12 +98,16 @@ afterAll(async () => {
       tx.delete(vendorOutboxMessages).where(eq(vendorOutboxMessages.tenantId, TENANT)),
     ),
   );
+  if (releaseRelayLock) await releaseRelayLock();
   await vendorSqlClient.end();
   if (notification?.sqlClient) await notification.sqlClient.end();
 });
 
 describe("vendor-service cross-events wiring — status notification, real DB, no mocks", () => {
   it("submitRegistration raises a citizen status notification that lands as a real notification-service delivery, resolved to the municipal template", async () => {
+    // Serialise against the sibling fee-challan test: relayOnce claims every
+    // unpublished vendor outbox row, so the two must not interleave.
+    releaseRelayLock = await acquireOutboxRelayLock();
     await importNotification();
 
     const q = tenantWrappedQueue();
@@ -140,7 +145,7 @@ describe("vendor-service cross-events wiring — status notification, real DB, n
     // Relay vendor's outbox — the single notification.send row from
     // submitRegistration; notification-service's real delivery consumer
     // (subscribed above) picks it up and writes a delivery row.
-    const relayed = await relayOnce(vendorDb as never, q, 100, "vendor-service");
+    const relayed = await relayAll(vendorDb as never, q as never, "vendor-service");
     expect(relayed, "vendor-service must have an unpublished notification.send row to relay").toBeGreaterThan(0);
     await q.drain();
 
