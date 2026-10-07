@@ -11,7 +11,7 @@
  *   node scripts/contract/verify-screens.mjs
  *   node scripts/contract/verify-screens.mjs --module finance
  *   node scripts/contract/verify-screens.mjs --json
- *   node scripts/contract/verify-screens.mjs --gateway http://localhost:8080
+ *   node scripts/contract/verify-screens.mjs --gateway http://localhost:8080   (add --live-known-gaps on the real stack only)
  *
  * Exits non-zero if any in-scope screen fails.
  */
@@ -28,6 +28,9 @@ const ROOT = join(__dirname, '../..');
 const args = process.argv.slice(2);
 const moduleFilter = args.includes('--module') ? (args[args.indexOf('--module') + 1] ?? null) : null;
 const jsonOnly = args.includes('--json');
+// Apply live-known-gaps.json (incl. its staleness FAIL) ONLY against the real stack.
+// The mock gateway answers 200 for everything, so it must not load the ledger.
+const useLiveKnownGaps = args.includes('--live-known-gaps');
 const gatewayBase = (() => {
   const idx = args.indexOf('--gateway');
   return idx >= 0 ? args[idx + 1] : (process.env.GATEWAY_URL ?? 'http://localhost:8080');
@@ -283,7 +286,7 @@ async function run() {
   // ships) the entry is stale and this run fails until it is removed.
   const knownGapsPath = join(ROOT, 'scripts/contract/live-known-gaps.json');
   const knownGaps = new Map(
-    (existsSync(knownGapsPath) ? JSON.parse(readFileSync(knownGapsPath, 'utf8')).entries : [])
+    (useLiveKnownGaps && existsSync(knownGapsPath) ? JSON.parse(readFileSync(knownGapsPath, 'utf8')).entries : [])
       .map(e => [e.apiPath, e]),
   );
 
