@@ -19,8 +19,6 @@ import { GL_PAGE_SIZE, GL_TABS, glQuery, glRange, type GlTab, type GlView } from
 
 type GLRow = GLEntrySummary & Record<string, unknown>;
 
-const GL_PATH = "/finance/accounting/general-ledger";
-
 export interface GLTableProps {
   entries: GLEntrySummary[];
   pagination: GlLinesPagination;
@@ -35,7 +33,7 @@ export function GLTable({ entries, pagination, totals, view }: GLTableProps) {
   const go = (next: Partial<GlView>) => {
     // glQuery() returns "" or a leading-"?" query string; the base route is a real page.
     const qs = glQuery({ ...view, ...next });
-    router.push(qs ? `${GL_PATH}${qs}` : GL_PATH);
+    router.push(qs ? `/finance/accounting/general-ledger${qs}` : "/finance/accounting/general-ledger");
   };
   const range = glRange(view.page, GL_PAGE_SIZE, pagination.total);
   const debit = totals ? BigInt(totals.debitMinor) : null;
