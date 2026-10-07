@@ -1,9 +1,12 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { DataTable, Segmented, EmptyState, ConfirmDialog, Button } from "@/app/_components/ds";
-import { formatIndianDate } from "@/lib/formatters";
+import { maskName } from "@/app/_components/ds/Masked";
+import { formatIndianDate, daysUntilIST } from "@/lib/formatters";
 import { useFormError } from "@/lib/useFormError";
+import { isRtiClosed } from "@/lib/rtiStatus";
 
 interface RTIApplication {
   id: string;
@@ -19,22 +22,21 @@ interface RTIApplication {
 
 interface Props {
   rtis: RTIApplication[];
-  today: string;
+  /** GAP-CITIZEN-RTI-06: when false, the applicant name is masked (DPDP). */
+  canSeePii?: boolean;
 }
 
-const SEG_OPTIONS = ["All", "Due", "Overdue"];
+const SEG_VALUES = ["All", "Due", "Overdue"] as const;
 
 /** RTI Act 2005 §7: 30-day statutory clock. Returns whole days remaining
- * (negative = days past the deadline). null when no deadline / already closed. */
-function daysRemaining(deadline: string | null | undefined, today: string): number | null {
-  if (!deadline) return null;
-  const d = new Date(deadline);
-  const t = new Date(today);
-  if (isNaN(d.getTime()) || isNaN(t.getTime())) return null;
-  return Math.round((d.getTime() - t.getTime()) / (1000 * 60 * 60 * 24));
+ * (negative = days past the deadline). null when no deadline.
+ * GAP-CITIZEN-RTI-07/DETAIL-04: delegate to daysUntilIST so the day count is
+ * computed in Asia/Kolkata calendar days — identical to the detail view and
+ * stable regardless of the browser/server timezone (no local-midnight skew). */
+function daysRemaining(deadline: string | null | undefined): number | null {
+  return daysUntilIST(deadline);
 }
 
-const CLOSED = new Set(["replied", "closed", "appeal"]);
 /** Statuses that allow transfer under RTI Act §6(3) (within 5 days). */
 const TRANSFERABLE = new Set(["received", "under_review"]);
 
@@ -77,13 +79,26 @@ function clockCell(row: Row, labels: ClockLabels) {
 }
 
 
-export function RTIClient({ rtis, today }: Props) {
+export function RTIClient({ rtis, canSeePii = false }: Props) {
   const t = useTranslations("citizenRti");
-  const [active, setActive] = useState("All");
-  const [transferId, setTransferId] = useState<string | null>(null);
+  const router = useRouter();
+  const [active, setActive] = useState("All" as (typeof SEG_VALUES)[number]);
+  const [transferId, setTransferId] = useState(null as string | null);
   const [transferBusy, setTransferBusy] = useState(false);
-  const [transferError, setTransferError] = useState<string | undefined>(undefined);
+  const [transferError, setTransferError] = useState(undefined as string | undefined);
+  // GAP-CITIZEN-RTI-02: confirm the transfer worked and stop offering it again.
+  const [notice, setNotice] = useState("");
+  const [forwardedIds, setForwardedIds] = useState<Set<string>>(() => new Set());
   const formError = useFormError("RTI transfer");
+
+  // GAP-CITIZEN-RTI-07: segment labels are i18n; the internal filter values
+  // (SEG_VALUES) stay stable English keys so the filtering logic is unaffected.
+  const segLabels: Record<(typeof SEG_VALUES)[number], string> = {
+    All: t("segAll"),
+    Due: t("segOpen"),
+    Overdue: t("segOverdue"),
+  };
+  const segOptions = SEG_VALUES.map((v) => segLabels[v]);
 
   const labels: ClockLabels = {
     closed: t("closed"),
@@ -107,20 +122,32 @@ export function RTIClient({ rtis, today }: Props) {
         setTransferBusy(false);
         return;
       }
+      const forwardedId = transferId;
+      const authority = toAuthority.trim();
       setTransferBusy(false);
       setTransferId(null);
-      // Soft-refresh: the server component will revalidate on next navigation.
+      // GAP-CITIZEN-RTI-02: optimistically mark the row forwarded (hides its
+      // Transfer button immediately) and show a §6(3) success notice, then
+      // router.refresh() so the server component re-fetches the real status.
+      setForwardedIds((prev) => {
+        const next = new Set(prev);
+        next.add(forwardedId);
+        return next;
+      });
+      setNotice(t("transferSuccess", { authority }));
+      router.refresh();
     } catch (caught) {
       setTransferError(formError.fromException("save", caught).message);
       setTransferBusy(false);
     }
   }
 
-  const isDue = (r: RTIApplication) =>
-    (r.status === "received" || r.status === "under_review" || r.status === "forwarded");
+  // GAP-CITIZEN-RTI-04: "Due" segment == the page's "Open" stat (still within
+  // the §7 clock, i.e. not closed), so the stat count and the filtered rows agree.
+  const isDue = (r: RTIApplication) => !isRtiClosed(r.status);
   const isOverdue = (r: RTIApplication) => {
-    const n = daysRemaining(r.deadlineDate, today);
-    return n !== null && n < 0 && !CLOSED.has(r.status);
+    const n = daysRemaining(r.deadlineDate);
+    return n !== null && n < 0 && !isRtiClosed(r.status);
   };
 
   const filtered =
@@ -133,15 +160,15 @@ export function RTIClient({ rtis, today }: Props) {
   const rows: Row[] = filtered.map((r) => ({
     id: r.id,
     rtiNo: r.rtiNo,
-    applicantName: r.applicantName,
+    applicantName: canSeePii ? r.applicantName : maskName(r.applicantName),
     subject: r.subject,
     publicAuthority: r.publicAuthority ?? "—",
     filedDate: formatIndianDate(r.filedDate),
     deadlineDate: formatIndianDate(r.deadlineDate),
-    daysLeft: daysRemaining(r.deadlineDate, today),
-    closed: CLOSED.has(r.status),
+    daysLeft: daysRemaining(r.deadlineDate),
+    closed: isRtiClosed(r.status),
     status: r.status,
-    firstAppeal: r.isFirstAppeal ? "Yes" : "No",
+    firstAppeal: r.isFirstAppeal ? t("yes") : t("no"),
   }));
 
   const COLUMNS = [
@@ -158,7 +185,7 @@ export function RTIClient({ rtis, today }: Props) {
       key: "id" as const,
       label: t("colActions"),
       render: (row: Row) =>
-        TRANSFERABLE.has(row.status) ? (
+        TRANSFERABLE.has(row.status) && !forwardedIds.has(row.id) ? (
           <Button
             type="button"
             variant="ghost"
@@ -180,9 +207,21 @@ export function RTIClient({ rtis, today }: Props) {
       <div className="card-h">
         <h3>{t("applicationListTitle")}</h3>
         <div role="group" aria-label={t("filterAriaLabel")}>
-          <Segmented value={active} onChange={setActive} options={SEG_OPTIONS} />
+          <Segmented
+            value={segLabels[active]}
+            onChange={(label) => {
+              const v = SEG_VALUES.find((k) => segLabels[k] === label);
+              if (v) setActive(v);
+            }}
+            options={segOptions}
+          />
         </div>
       </div>
+      {notice ? (
+        <p role="status" aria-live="polite" className="pad" style={{ fontSize: 13, color: "var(--good)", margin: 0 }}>
+          {notice}
+        </p>
+      ) : null}
       {rtis.length === 0 ? (
         <EmptyState icon="📄" title={t("emptyTitle")} message={t("emptyMessage")} />
       ) : (
@@ -202,7 +241,7 @@ export function RTIClient({ rtis, today }: Props) {
         description={t("transferDialogDescription")}
         confirmLabel={t("transfer")}
         requireReason
-        reasonLabel="Transfer to (public authority name)"
+        reasonLabel={t("transferReasonLabel")}
         busy={transferBusy}
         errorMessage={transferError}
         onConfirm={(reason) => void handleTransfer(reason)}

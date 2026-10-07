@@ -486,7 +486,11 @@ export function humanizeStatus(status: string): string {
   const key = status.trim().toLowerCase();
   if (STATUS_ACRONYM_LABELS[key]) return STATUS_ACRONYM_LABELS[key];
   return key
-    .split(/[\s_]+/)
+    // GAP-...-TRACK-05: split on hyphens too (not just space/underscore) so a
+    // hyphenated status like "under-review" humanizes to "Under Review" rather
+    // than "Under-review". Acronym labels are matched above on the full key, so
+    // this does not affect them. Additive: no caller relies on a preserved hyphen.
+    .split(/[\s_-]+/)
     .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");

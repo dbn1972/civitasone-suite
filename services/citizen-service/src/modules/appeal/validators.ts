@@ -11,7 +11,10 @@ export const fileAppealBody = z.object({
   appealType:    z.enum(APPEAL_TYPES).default("appeal"),
   grounds:       safeText({ max: 4000, multiline: true }),
   decisionDate:  z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "decisionDate must be YYYY-MM-DD"),
-  windowDays:    z.number().int().min(1).max(3650).optional(),
+  // GAP-CITIZEN-APPEALS-01: windowDays is NO LONGER accepted from the client —
+  // the statutory filing window is derived server-side (deriveFilingWindowDays).
+  // Any client-sent windowDays is silently stripped by zod (unknown key), so a
+  // late appeal can no longer be smuggled in with an inflated window.
 });
 export type FileAppealBody = z.infer<typeof fileAppealBody>;
 

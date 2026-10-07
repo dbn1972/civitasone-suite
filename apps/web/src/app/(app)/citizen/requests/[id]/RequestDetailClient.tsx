@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { PageHeader, EmptyState, StatusPill, ActionButton, Button } from "@/app/_components/ds";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, humanizeStatus } from "@/lib/formatters";
 import type { Grievance } from "../../_data/loaders";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
@@ -37,6 +37,10 @@ export function RequestDetailClient({
   const [actionForm, setActionForm] = useState({ actionType: "comment", note: "" });
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState("");
+  // GAP-CITIZEN-REQUESTS-DETAIL-05: endpoints accept asynchronously (202), so
+  // a mutation's effect may not be visible on the immediate re-read. Track a
+  // "processing" state and poll a few times until the status actually changes.
+  const [pending, setPending] = useState(false);
   // True only across the very first effect run, and only when the server
   // loader already gave us a trustworthy answer -- skips the redundant
   // client-side fetch-on-mount in that case. Any later run (id changed) or a
@@ -70,12 +74,33 @@ export function RequestDetailClient({
     return () => controller.abort();
   }, [load]);
 
-  // Endpoints accept asynchronously (202). Surface that honestly.
+  // GAP-CITIZEN-REQUESTS-DETAIL-05: endpoints accept asynchronously (202), so
+  // the status may still be the old value on the immediate re-read. Show a
+  // "processing" cue and poll (max ~5 tries, 3s apart) until the status
+  // actually changes, then clear the pending state.
   const afterMutate = useCallback((msg: string) => {
+    const prevStatus = grievance?.status;
     setNotice(msg);
-    void load();
+    setPending(true);
     router.refresh();
-  }, [load, router]);
+    let tries = 0;
+    const tick = async () => {
+      tries += 1;
+      try {
+        const res = await fetch(`/api/proxy/v1/citizen/grievances/${id}`, { cache: "no-store" });
+        if (res.ok) {
+          const next = (await res.json()) as Grievance;
+          setGrievance(next);
+          if (next.status !== prevStatus) { setPending(false); return; }
+        }
+      } catch {
+        /* transient — keep trying up to the cap */
+      }
+      if (tries >= 5) { setPending(false); return; }
+      window.setTimeout(() => { void tick(); }, 3000);
+    };
+    void tick();
+  }, [grievance?.status, id, router]);
 
   async function addAction(e: React.FormEvent) {
     e.preventDefault();
@@ -108,19 +133,24 @@ export function RequestDetailClient({
   }
 
   async function escalate(reason?: string) {
+    // GAP-CITIZEN-REQUESTS-DETAIL-04: never substitute a placeholder reason —
+    // the audit trail must carry the real reason the officer typed. The
+    // ConfirmDialog's requireReason already blocks an empty submission.
     const res = await fetch(`/api/proxy/v1/citizen/grievances/${id}/escalate`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ reason: reason || "Escalated by officer" }),
+      body: JSON.stringify({ reason }),
     });
     if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
   }
 
   async function reopen(reason?: string) {
+    // GAP-CITIZEN-REQUESTS-DETAIL-04: no "Reopened" placeholder — send the
+    // real reason (dialog-enforced non-empty).
     const res = await fetch(`/api/proxy/v1/citizen/grievances/${id}/reopen`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ reason: reason || "Reopened" }),
+      body: JSON.stringify({ reason }),
     });
     if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
   }
@@ -162,7 +192,7 @@ export function RequestDetailClient({
     <>
       <PageHeader
         title={grievance.subject}
-        subtitle={`${requestNo} · ${grievance.category}`}
+        subtitle={`${requestNo} · ${humanizeStatus(grievance.category)}`}
         back="/citizen/requests"
         backLabel={t("detailBack")}
         actions={
@@ -220,10 +250,14 @@ export function RequestDetailClient({
             <div className="card-h"><h3>{t("requestDetailsTitle")}</h3></div>
             <div className="fields">
               <div className="fld"><div className="l">{t("colRequestNoField")}</div><div className="v">{requestNo}</div></div>
-              <div className="fld"><div className="l">{t("categoryField")}</div><div className="v">{grievance.category}</div></div>
-              <div className="fld"><div className="l">{t("statusField")}</div><div className="v"><StatusPill status={grievance.status} /></div></div>
-              <div className="fld"><div className="l">{t("priorityField")}</div><div className="v">{grievance.priority}</div></div>
+              <div className="fld"><div className="l">{t("categoryField")}</div><div className="v">{humanizeStatus(grievance.category)}</div></div>
+              <div className="fld"><div className="l">{t("statusField")}</div><div className="v"><StatusPill status={grievance.status} />{pending ? <span role="status" aria-live="polite" style={{ marginLeft: 8 }}><StatusPill status="in progress" label={t("processing")} /></span> : null}</div></div>
+              <div className="fld"><div className="l">{t("priorityField")}</div><div className="v">{humanizeStatus(grievance.priority)}</div></div>
               {grievance.departmentRef && <div className="fld"><div className="l">{t("departmentField")}</div><div className="v">{grievance.departmentRef}</div></div>}
+              {/* GAP-CITIZEN-REQUESTS-DETAIL-07: show the assigned officer when
+                  present; "—" when unassigned. (A raw UUID would be meaningless
+                  — only render a value the API gives us as a name/ref.) */}
+              <div className="fld"><div className="l">{t("assignedToField")}</div><div className="v">{grievance.assignedTo ?? "—"}</div></div>
               <div className="fld"><div className="l">{t("filedField")}</div><div className="v">{formatIndianDate(grievance.createdAt)}</div></div>
               <div className="fld"><div className="l">{t("lastUpdatedField")}</div><div className="v">{formatIndianDate(grievance.updatedAt)}</div></div>
             </div>
@@ -264,7 +298,7 @@ export function RequestDetailClient({
                 <ul className="tl">
                   {grievance.actions.map((a) => (
                     <li key={a.id} className="done">
-                      <div className="t">{a.actionType}{a.note ? ` — ${a.note}` : ""}</div>
+                      <div className="t">{humanizeStatus(a.actionType)}{a.note ? ` — ${a.note}` : ""}</div>
                       <div className="d">{formatIndianDate(a.createdAt)}</div>
                     </li>
                   ))}

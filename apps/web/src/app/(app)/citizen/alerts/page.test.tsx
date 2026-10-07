@@ -59,4 +59,51 @@ describe("AlertsPage", () => {
     expect(screen.getByText("No alerts published")).toBeInTheDocument();
     expect(screen.getByText("Public alerts and notifications will appear here once published.")).toBeInTheDocument();
   });
+
+  it("GAP-CITIZEN-ALERTS-01: on a failed fetch, stat cards show '—' (not fabricated 0s) and the error state replaces the table", async () => {
+    getCitizenAlertsMock.mockResolvedValue({ data: [], source: "error" });
+    await render(AlertsPage());
+
+    // Four stat cards all read "—" rather than 0.
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(4);
+    // The misleading "No alerts published" prompt must NOT appear on an outage.
+    expect(screen.queryByText("No alerts published")).not.toBeInTheDocument();
+    // A real retry-able error state is shown instead.
+    expect(screen.getByText("We couldn't load alerts.")).toBeInTheDocument();
+  });
+
+  it("GAP-CITIZEN-ALERTS-02/03: counts are case-insensitive and 'Total Published' excludes drafts", async () => {
+    getCitizenAlertsMock.mockResolvedValue({
+      data: [
+        { id: "a1", title: "A", category: "C", publishedDate: "2026-09-01", targetAudience: "All", status: "ACTIVE" },
+        { id: "a2", title: "B", category: "C", publishedDate: "2026-09-02", targetAudience: "All", status: "active" },
+        { id: "a3", title: "C", category: "C", publishedDate: "2026-09-03", targetAudience: "All", status: "Draft" },
+        { id: "a4", title: "D", category: "C", publishedDate: "2026-09-04", targetAudience: "All", status: "expired" },
+      ],
+      source: "api",
+    });
+    await render(AlertsPage());
+
+    // Active = 2 (ACTIVE + active, case-insensitive).
+    const active = screen.getByText("Active Alerts").closest(".stat") as HTMLElement;
+    expect(active).toHaveTextContent("2");
+    // Total Published = 3 (all except the 1 draft), NOT 4 (alerts.length).
+    const total = screen.getByText("Total Published").closest(".stat") as HTMLElement;
+    expect(total).toHaveTextContent("3");
+    const drafts = screen.getByText("Drafts").closest(".stat") as HTMLElement;
+    expect(drafts).toHaveTextContent("1");
+  });
+
+  it("GAP-CITIZEN-ALERTS-04: published date is formatted dd Mon yyyy, not raw ISO", async () => {
+    getCitizenAlertsMock.mockResolvedValue({
+      data: [
+        { id: "a1", title: "Water outage notice", category: "Utilities", publishedDate: "2026-03-05T10:00:00Z", targetAudience: "All wards", status: "Active" },
+      ],
+      source: "api",
+    });
+    await render(AlertsPage());
+
+    expect(screen.getByText("05 Mar 2026")).toBeInTheDocument();
+    expect(screen.queryByText("2026-03-05T10:00:00Z")).not.toBeInTheDocument();
+  });
 });

@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { PageHeader, RefreshErrorState } from "../../../_components/ds";
 import { getCatalogueServices } from "../../../_data/citizenPartials";
+import { CatalogueTable } from "./CatalogueTable";
 import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 
@@ -33,35 +33,8 @@ export default async function CataloguePage() {
         ) : services.length === 0 ? (
           <div className="pad" style={{ color: "var(--muted)" }}>{t("empty")}</div>
         ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ textAlign: "left", fontSize: 12, color: "var(--muted)" }}>
-                  <th scope="col" style={{ padding: 8 }}>{t("colService")}</th>
-                  <th scope="col" style={{ padding: 8 }}>{t("colOwner")}</th>
-                  <th scope="col" style={{ padding: 8 }}>{t("colVersion")}</th>
-                  <th scope="col" style={{ padding: 8 }}>{t("colChannels")}</th>
-                  <th scope="col" style={{ padding: 8 }}>{t("colDocuments")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {services.map((s) => (
-                  <tr key={s.id} style={{ borderTop: "1px solid var(--line)" }}>
-                    <td style={{ padding: 8 }}>
-                      <Link href={`/citizen/services/${encodeURIComponent(s.serviceKey)}`} style={{ fontWeight: 600 }}>
-                        {s.name}
-                      </Link>
-                      <br /><span style={{ fontSize: 11, color: "var(--muted)" }}>{s.serviceKey}</span>
-                    </td>
-                    <td style={{ padding: 8 }}>{s.ownerDepartment || "—"}</td>
-                    <td style={{ padding: 8 }}>v{s.version}</td>
-                    <td style={{ padding: 8 }}>{s.channels.join(", ") || "—"}</td>
-                    <td style={{ padding: 8 }}>{s.requiredDocumentCount}</td>
-                    <td style={{ padding: 8 }}>{s.slaDays != null ? `${s.slaDays}d` : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="pad">
+            <CatalogueTable services={services} />
           </div>
         )}
       </div>

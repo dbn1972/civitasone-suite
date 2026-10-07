@@ -79,6 +79,7 @@ export async function intakeRoutes(app: FastifyInstance): Promise<void> {
       applicantType,
       formData: body.formData,
       documentTypes: body.documentTypes,
+      assistedConsent: body.assistedConsent,
     }));
   });
 

@@ -114,8 +114,13 @@ describe("RegisterGrievancePage — DPDP 2023 consent gate", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("calls fetch and redirects on successful submission with consent", async () => {
-    fetchMock.mockResolvedValue({ ok: true, text: async () => "" });
+  it("shows the grievance number acknowledgement (not an immediate redirect) on successful submission with consent", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ id: "11111111-2222-4333-8444-555555555555", grievanceNo: "CPG-2026-0001" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
 
     render(<RegisterGrievancePage />);
     fillRequiredFields();
@@ -129,7 +134,24 @@ describe("RegisterGrievancePage — DPDP 2023 consent gate", () => {
         expect.objectContaining({ method: "POST" }),
       ),
     );
-    expect(mockPush).toHaveBeenCalledWith("/citizen/grievances");
+    // GAP-CITIZEN-GRIEVANCES-NEW-03: the citizen sees a quotable grievance
+    // number before leaving the page — no immediate redirect.
+    expect(await screen.findByText("CPG-2026-0001")).toBeInTheDocument();
+    expect(mockPush).not.toHaveBeenCalledWith("/citizen/grievances");
+  });
+
+  it("sends a structured DPDP consent object and contact in the POST body (GAP-CITIZEN-GRIEVANCES-NEW-01/02/04)", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ id: "abc", grievanceNo: "GRV-ABC" }), { status: 200, headers: { "content-type": "application/json" } }));
+    render(<RegisterGrievancePage />);
+    fillRequiredFields();
+    fireEvent.change(screen.getByLabelText(/contact mobile/i), { target: { value: "9876543210" } });
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: /register grievance/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [, init] = fetchMock.mock.calls[0];
+    const sent = JSON.parse((init as RequestInit).body as string);
+    expect(sent.dpdpConsent).toEqual({ given: true, noticeVersion: "2023.1", purpose: "grievance_redressal" });
+    expect(sent.complainantContact).toEqual([{ kind: "mobile", value: "9876543210" }]);
   });
 
   it("displays retention and sharing notice in the consent panel", () => {

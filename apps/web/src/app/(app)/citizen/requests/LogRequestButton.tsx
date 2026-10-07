@@ -16,6 +16,7 @@ export function LogRequestButton() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [form, setForm] = useState({ category: "grievance", subject: "", description: "" });
+  const [consent, setConsent] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -26,12 +27,23 @@ export function LogRequestButton() {
       const res = await fetch("/api/proxy/v1/citizen/grievances", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ category: form.category, subject: form.subject, description: form.description }),
+        // GAP-CITIZEN-REQUESTS-03 (DPDP): record explicit consent with the
+        // grievance, matching the dedicated /citizen/grievances/new intake path
+        // and the backend validator's structured dpdpConsent contract, so no
+        // record is logged without it. Complainant identity is bound to the
+        // authenticated citizen server-side (resolveCitizenId).
+        body: JSON.stringify({
+          category: form.category,
+          subject: form.subject,
+          description: form.description,
+          dpdpConsent: { given: true, noticeVersion: "2023.1", purpose: "grievance_redressal" },
+        }),
       });
       if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       setMessage("Request submitted. It will appear in the list once processed.");
       setOpen(false);
       setForm({ category: "grievance", subject: "", description: "" });
+      setConsent(false);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not log the request.");
@@ -62,7 +74,14 @@ export function LogRequestButton() {
             <input id="new-request-subject" required value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} placeholder={t("subjectPlaceholder")} style={inputStyle} />
             <label htmlFor="new-request-description" style={labelStyle}>{t("description")}</label>
             <textarea id="new-request-description" required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder={t("descriptionPlaceholder")} rows={4} style={{ ...inputStyle, minHeight: 100 }} />
-            <Button type="submit" variant="primary" disabled={busy} style={{ minHeight: 44 }}>{busy ? t("submitting") : t("submitRequest")}</Button>
+            {/* GAP-CITIZEN-REQUESTS-03 (DPDP): explicit, mandatory consent —
+                the request cannot be submitted until it is given, so the two
+                intake paths carry the same obligation. */}
+            <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13, margin: "4px 0 12px" }}>
+              <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} style={{ marginTop: 3 }} aria-describedby="new-request-consent-note" />
+              <span id="new-request-consent-note">{t("consentLabel")}</span>
+            </label>
+            <Button type="submit" variant="primary" disabled={busy || !consent} style={{ minHeight: 44 }}>{busy ? t("submitting") : t("submitRequest")}</Button>
             <Button type="button" variant="ghost" style={{ marginLeft: 8, minHeight: 44 }} onClick={() => setOpen(false)}>{t("cancel")}</Button>
           </form>
         </div>

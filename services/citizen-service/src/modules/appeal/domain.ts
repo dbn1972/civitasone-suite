@@ -20,6 +20,27 @@ export type OrderType = typeof ORDER_TYPES[number];
 /** Default statutory filing window (days) when a service does not override it. */
 export const DEFAULT_FILING_WINDOW_DAYS = 30;
 
+/**
+ * GAP-CITIZEN-APPEALS-01: resolve the statutory filing window for an appeal
+ * SERVER-SIDE. The window is a statutory limit and must never be taken from
+ * the request body — a client that passes `windowDays: 3650` would otherwise
+ * make the in-window check meaningless and let time-barred appeals through.
+ *
+ * This helper deliberately IGNORES any `windowDays` on its input and returns
+ * the statutory default. When a per-service / per-decision override is wired
+ * (e.g. resolved from the catalogue service definition), it should be plumbed
+ * in here as `serviceWindowDays`, still without trusting the browser.
+ */
+export function deriveFilingWindowDays(
+  _body: { windowDays?: number } = {},
+  serviceWindowDays?: number,
+): number {
+  if (typeof serviceWindowDays === "number" && Number.isInteger(serviceWindowDays) && serviceWindowDays >= 1) {
+    return serviceWindowDays;
+  }
+  return DEFAULT_FILING_WINDOW_DAYS;
+}
+
 export function addDays(from: Date, days: number): Date {
   const d = new Date(from);
   d.setDate(d.getDate() + days);

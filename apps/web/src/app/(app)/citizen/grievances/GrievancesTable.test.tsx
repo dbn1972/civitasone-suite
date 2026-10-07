@@ -39,6 +39,16 @@ describe("GrievancesTable", () => {
     expect(screen.getByText("Days Left")).toBeInTheDocument();
   });
 
+  // GAP-CITIZEN-GRIEVANCES-01: there is no /citizen/grievances/[id] route; the
+  // grievance detail is served at /citizen/requests/[id]. A row must therefore
+  // link to /citizen/requests/{id}, otherwise clicking a row lands on not-found.
+  it("links each row to the real grievance detail at /citizen/requests/{id}, not the dead /citizen/grievances/{id}", () => {
+    const { container } = renderTable([BASE_ROW]);
+    const link = container.querySelector('a[href="/citizen/requests/g1"]');
+    expect(link).not.toBeNull();
+    expect(container.querySelector('a[href="/citizen/grievances/g1"]')).toBeNull();
+  });
+
   it("shows the singular day-count form", () => {
     renderTable([{ ...BASE_ROW, daysLeft: 1 }]);
     expect(screen.getByText("1 day left")).toBeInTheDocument();

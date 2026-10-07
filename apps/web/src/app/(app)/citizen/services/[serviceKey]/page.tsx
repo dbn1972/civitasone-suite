@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { Card, PageHeader } from "@/app/_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
-import { parsePublishedService } from "../_data/runtimeApi";
+import { RefreshErrorState } from "@/app/_components/ds/RefreshErrorState";
+import { toHumanError } from "@/lib/messages";
+import { classifyServiceLoad, loadService } from "../_data/loadService";
 import { ServicePageClient } from "../_components/ServicePageClient";
 
 interface Props {
@@ -11,24 +12,36 @@ interface Props {
   searchParams: { counter?: string };
 }
 
-async function loadService(serviceKey: string) {
-  const result = await fetchJson<unknown, ReturnType<typeof parsePublishedService>>(
-    `/api/v1/citizen/catalogue/published/lookup?serviceKey=${encodeURIComponent(serviceKey)}`,
-    null,
-    {
-      revalidateSeconds: 30,
-      telemetryKey: "citizen.runtime.service",
-      mapResponse: (p) => parsePublishedService(p),
-    },
-  );
-  return result;
-}
-
 /** FN-13 — published service landing page (mobile-first). */
 export default async function ServicePage({ params, searchParams }: Props) {
   const t = await getTranslations("citizenServices");
-  const { data: service, source } = await loadService(params.serviceKey);
-  if (!service || source === "error") notFound();
+  const outcome = classifyServiceLoad(
+    await loadService(params.serviceKey, { revalidateSeconds: 30, telemetryKey: "citizen.runtime.service" }),
+  );
+  if (outcome.kind === "not_found") notFound();
+  if (outcome.kind === "unauthorized") redirect(`/login?next=/citizen/services/${params.serviceKey}`);
+  if (outcome.kind === "unavailable") {
+    return (
+      <>
+        <PageHeader
+          title={t("backToCatalogue")}
+          actions={
+            <Link href="/citizen/catalogue" className="btn ghost" style={{ minHeight: 44 }}>
+              {t("backToCatalogue")}
+            </Link>
+          }
+        />
+        <div style={{ maxWidth: 640, margin: "0 auto", width: "100%" }}>
+          <RefreshErrorState
+            error={toHumanError("load", { area: "service details" })}
+            backHref="/citizen/catalogue"
+            source={{ status: outcome.status, area: "service details" }}
+          />
+        </div>
+      </>
+    );
+  }
+  const service = outcome.service;
 
   const counterMode = searchParams.counter === "1";
 

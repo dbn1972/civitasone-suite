@@ -1,7 +1,8 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, RefreshErrorState } from "../../../_components/ds";
+import { PageHeader, RefreshErrorState, StatusPill } from "../../../_components/ds";
 import { getCertificates } from "../../../_data/citizenGaps";
 import { CertificateVerify } from "./CertificateVerify";
+import { CopyVerifyLink } from "./CopyVerifyLink";
 import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 
@@ -53,9 +54,16 @@ export default async function CertificatesPage() {
                   <tr key={c.id} style={{ borderTop: "1px solid var(--line)" }}>
                     <td style={{ padding: 8, fontFamily: "monospace" }}>{c.certNo}</td>
                     <td style={{ padding: 8 }}>{c.certType}</td>
-                    <td style={{ padding: 8 }}>{c.status}</td>
+                    {/* GAP-CITIZEN-CERTIFICATES-06: human-readable status pill. */}
+                    <td style={{ padding: 8 }}><StatusPill status={c.status} /></td>
                     <td style={{ padding: 8 }}>{c.validTo || "—"}</td>
-                    <td style={{ padding: 8, fontFamily: "monospace", fontSize: 11 }}>{c.verifyToken ? `${c.verifyToken.slice(0, 12)}…` : "—"}</td>
+                    {/* GAP-CITIZEN-CERTIFICATES-02: the verify token is a bearer
+                        for the public verify endpoint — never printed. Offer a
+                        'Copy verify link' action that copies the full URL
+                        without rendering the token itself. */}
+                    <td style={{ padding: 8 }}>
+                      {c.verifyToken ? <CopyVerifyLink token={c.verifyToken} /> : "—"}
+                    </td>
                   </tr>
                 ))}
               </tbody>

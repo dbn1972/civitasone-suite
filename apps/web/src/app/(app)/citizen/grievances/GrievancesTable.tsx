@@ -3,6 +3,12 @@
 import { useTranslations } from "next-intl";
 import { DataTable } from "../../../_components/ds";
 
+// GAP-CITIZEN-GRIEVANCES-03: complainant names are DPDP personal data. The
+// server pre-masks `complainantName` for non-privileged viewers before it ever
+// reaches this client component (see grievances/page.tsx), so there is no full
+// name to leak client-side. A fully audited reveal is a separate
+// backend-dependent follow-up. Decision recorded: fail closed to masked.
+
 export interface GrievanceRow extends Record<string, unknown> {
   id: string;
   grievanceNo: string;
@@ -68,7 +74,7 @@ export function GrievancesTable({ rows }: { rows: GrievanceRow[] }) {
       filterable
       pageSize={15}
       rowLinkKey="id"
-      rowLinkPrefix="/citizen/grievances/"
+      rowLinkPrefix="/citizen/requests/"
     />
   );
 }

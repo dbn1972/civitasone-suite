@@ -14,11 +14,12 @@ async function audit(
   msg: { tenantId: string; actorId: string; correlationId: string },
   action: string,
   resourceId: string,
+  newValue?: Record<string, unknown>,
 ): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT, eventType: AUDIT,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "citizen", action, resourceType: "document_submission", resourceId, outcome: "success" },
+    payload: { service: "citizen", action, resourceType: "document_submission", resourceId, outcome: "success", ...(newValue ? { newValue } : {}) },
   });
 }
 
@@ -49,7 +50,7 @@ export function registerDocumentsConsumers(rawQueue: Queue): void {
       id: string; tenantId: string; applicationId: string | null; citizenId: string | null;
       serviceId: string | null; docType: string; digilockerRef: string | null;
       providerStatus: string; configured: boolean; verificationStatus: string;
-      status: string; authenticity: string;
+      status: string; authenticity: string; consent?: boolean;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -69,7 +70,9 @@ export function registerDocumentsConsumers(rawQueue: Queue): void {
           payload: { id: p.id, docType: p.docType, source: "digilocker", authenticity: p.authenticity },
         });
       }
-      await audit(tx, msg, "digilocker_fetch", p.id);
+      await audit(tx, msg, "digilocker_fetch", p.id, {
+        digilockerConsent: { given: p.consent === true, recordedAt: new Date().toISOString() },
+      });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "document", p.id));
   });

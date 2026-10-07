@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render as rtlRender, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -8,6 +10,10 @@ vi.mock("@/app/_data/apiClient", () => ({
 vi.mock("./CertificateVerify", () => ({
   CertificateVerify: () => null,
 }));
+
+function render(ui: React.ReactElement) {
+  return rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+}
 
 // See citizen/grievances/page.test.tsx for the full explanation: next-intl/server
 // resolves to a throwing guard under plain Vitest (no `react-server` condition),
@@ -53,6 +59,22 @@ describe("CertificatesPage", () => {
     render(await CertificatesPage());
     expect(screen.getByText("CERT-0001")).toBeInTheDocument();
     expect(screen.getByText("1 active")).toBeInTheDocument();
+  });
+
+  it("GAP-CITIZEN-CERTIFICATES-02: the verify token is never printed; a 'Copy verify link' action is shown instead", async () => {
+    mockCertificates({ data: MOCK_CERTS, source: "api" });
+    render(await CertificatesPage());
+    // The raw token (or its 12-char prefix) must not appear anywhere in the DOM text.
+    expect(document.body.textContent).not.toContain("abcdef1234567890");
+    expect(document.body.textContent).not.toContain("abcdef123456");
+    expect(screen.getByRole("button", { name: "Copy verify link" })).toBeInTheDocument();
+  });
+
+  it("GAP-CITIZEN-CERTIFICATES-06: status is a human-readable pill, not a raw code", async () => {
+    mockCertificates({ data: MOCK_CERTS, source: "api" });
+    render(await CertificatesPage());
+    // StatusPill humanizes "active" → "Active".
+    expect(screen.getByText("Active")).toBeInTheDocument();
   });
 
   it("shows the honest empty state when a tenant genuinely has zero certificates (source: api, [])", async () => {

@@ -9,6 +9,7 @@ vi.mock("@/app/_data/apiClient", async () => {
 vi.mock("next-intl/server", () => ({
   getTranslations: async () => (key: string) => key,
 }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 import CitizenPortalPage from "./page";
 
@@ -43,5 +44,27 @@ describe("CitizenPortalPage", () => {
     expect(screen.getByText("statActiveRequests").closest(".stat")).toHaveTextContent("—");
     expect(screen.getByText("statResolvedThisMonth").closest(".stat")).toHaveTextContent("—");
     expect(screen.getByText("statAvgResolutionDays").closest(".stat")).toHaveTextContent("—");
+  });
+
+  it("GAP-CITIZEN-PORTAL-01: avg resolution days renders to at most one decimal", async () => {
+    mockCitizenLoader({ data: { ...MOCK_METRICS, avgResolutionDays: 6.3333333 }, source: "api" });
+    render(await CitizenPortalPage());
+    const card = screen.getByText("statAvgResolutionDays").closest(".stat");
+    expect(card).toHaveTextContent("6.3");
+    expect(card).not.toHaveTextContent("6.333");
+  });
+
+  it("GAP-CITIZEN-PORTAL-02: offers a retry affordance (not just a badge) when the loader fails", async () => {
+    mockCitizenLoader({ data: MOCK_METRICS, source: "error" });
+    render(await CitizenPortalPage());
+    // RefreshErrorState renders a "Try again" button wired to router.refresh().
+    expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
+  });
+
+  it("GAP-CITIZEN-PORTAL-03: Active Requests stat links to /citizen/requests", async () => {
+    mockCitizenLoader({ data: MOCK_METRICS, source: "api" });
+    render(await CitizenPortalPage());
+    const link = screen.getByText("statActiveRequests").closest("a");
+    expect(link).toHaveAttribute("href", "/citizen/requests");
   });
 });

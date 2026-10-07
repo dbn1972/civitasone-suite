@@ -8,6 +8,15 @@ vi.mock("@/app/_data/apiClient", () => ({
   fetchJson: (...args: unknown[]) => fetchJsonMock(...args),
 }));
 
+// GAP-CITIZEN-GRIEVANCES-03: roleGuard reads the session cookie via next/headers,
+// which is unavailable under jsdom — mock it with a controllable roles value so
+// we can assert both the masked (non-privileged) and full (officer) renders.
+const rolesMock = vi.fn(() => [] as string[]);
+vi.mock("@/lib/auth/roleGuard", () => ({
+  getSessionRoles: () => rolesMock(),
+  hasAnyRole: (sessionRoles: string[], allowed: string[]) => sessionRoles.some((r) => allowed.includes(r)),
+}));
+
 // Pre-existing, unrelated infra gap (confirmed via `git stash` A/B test against
 // origin/main, not introduced by UX-017): next-intl publishes "next-intl/server"
 // with a `react-server` conditional export; without that condition (which
@@ -73,12 +82,61 @@ const MOCK_GRIEVANCES = [
 ];
 
 describe("GrievancesPage", () => {
-  beforeEach(() => fetchJsonMock.mockReset());
+  beforeEach(() => { fetchJsonMock.mockReset(); rolesMock.mockReset(); rolesMock.mockReturnValue([]); });
+
+  it("masks the complainant name for a non-privileged signed-in user (GAP-CITIZEN-GRIEVANCES-03)", async () => {
+    rolesMock.mockReturnValue(["citizen"]);
+    fetchJsonMock.mockResolvedValue({ data: MOCK_GRIEVANCES, source: "api" });
+    await render(GrievancesPage());
+    expect(screen.queryByText("Ramesh Kumar")).not.toBeInTheDocument();
+    // maskName("Ramesh Kumar") -> "R••••• K•••r"
+    expect(screen.getByText("R••••• K•••r")).toBeInTheDocument();
+  });
+
+  it("shows the full complainant name for a grievance officer (GAP-CITIZEN-GRIEVANCES-03)", async () => {
+    rolesMock.mockReturnValue(["citizen_officer"]);
+    fetchJsonMock.mockResolvedValue({ data: MOCK_GRIEVANCES, source: "api" });
+    await render(GrievancesPage());
+    expect(screen.getByText("Ramesh Kumar")).toBeInTheDocument();
+  });
 
   it("renders grievances and real stat counts on success", async () => {
     fetchJsonMock.mockResolvedValue({ data: MOCK_GRIEVANCES, source: "api" });
     await render(GrievancesPage());
     expect(screen.getByText("CPG-001")).toBeInTheDocument();
+  });
+
+  // GAP-CITIZEN-GRIEVANCES-06: the register CTA must not carry a literal "+".
+  it("renders the register CTA without a literal '+' prefix", async () => {
+    fetchJsonMock.mockResolvedValue({ data: MOCK_GRIEVANCES, source: "api" });
+    await render(GrievancesPage());
+    const cta = screen.getByText("Register grievance");
+    expect(cta).toBeInTheDocument();
+    expect(screen.queryByText("+ Register Grievance")).not.toBeInTheDocument();
+  });
+
+  // GAP-CITIZEN-GRIEVANCES-02: a grievance the backend sends with no dueDate
+  // must show "—" (SLA not set), never a client-fabricated createdAt+30d clock.
+  it("shows '—' for a grievance with no backend dueDate (no fabricated statutory clock)", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: [
+        {
+          id: "g2",
+          grievanceNo: "CPG-002",
+          subject: "Street light",
+          complainantName: "Sita Devi",
+          category: "electricity",
+          status: "pending",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          // no dueDate / due_date
+        },
+      ],
+      source: "api",
+    });
+    await render(GrievancesPage());
+    expect(screen.getByText("CPG-002")).toBeInTheDocument();
+    // The statutory-clock cell renders "—" (DataTable's clock cell for null daysLeft).
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
 
   it("shows the honest empty state when a tenant genuinely has zero grievances (source: api, [])", async () => {

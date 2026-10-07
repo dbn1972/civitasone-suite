@@ -4,6 +4,7 @@ import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import type { FormDesignState } from "@/app/_components/ds/designer/formTypes";
 import { formDesignFromService } from "@/app/_components/ds/designer/StatusTimeline";
 import { toHumanError } from "@/lib/messages";
+import { formatMoney } from "@/lib/formatters";
 
 export interface PublishedServiceRuntime {
   id: string;
@@ -33,7 +34,7 @@ export interface ApplicationDraft {
 }
 
 export interface TrackingAck {
-  trackingNo: string;
+  trackingNo: string | null;
   applicationId: string;
   status: string;
   channel: string;
@@ -114,6 +115,24 @@ export async function listDraftsForService(serviceId: string): Promise<Applicati
     }));
 }
 
+/**
+ * GAP-...-SERVICEKEY-03: lightweight "is there a resumable draft?" probe for the
+ * service landing banner. Returns only the latest matching draft id and does
+ * NOT map formData into the browser (the banner only needs an id). Prefer a
+ * server-side ?serviceId&status=draft filter / count endpoint when the intake
+ * API gains one (see HUMAN REVIEW); until then this at least stops copying
+ * every draft's form fields for a banner.
+ */
+export async function firstDraftIdForService(serviceId: string): Promise<string | null> {
+  const res = await fetch("/api/proxy/v1/citizen/intake/drafts", { cache: "no-store" });
+  if (!res.ok) return null;
+  const payload = (await res.json()) as { data?: unknown[] };
+  const match = (payload.data ?? [])
+    .filter(isRecord)
+    .find((d) => str(d.serviceId) === serviceId && str(d.status) === "draft");
+  return match ? str(match.id) : null;
+}
+
 export async function saveDraft(payload: {
   serviceId: string;
   serviceKey: string;
@@ -161,7 +180,23 @@ export async function submitDraft(draftId: string): Promise<TrackingAck> {
     body: JSON.stringify({}),
   });
   if (!(res.ok || res.status === 202)) throw new Error(await readErrorMessage());
-  // Poll tracking after consumer processes
+  // GAP-...-APPLY-03: the backend returns trackingNo + applicationId in the 202
+  // body synchronously (citizen-service submitDraft command). Use it directly
+  // instead of polling and returning a fake "PENDING" tracking number.
+  const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  const trackingNo = typeof body.trackingNo === "string" && body.trackingNo ? body.trackingNo : null;
+  const applicationId = typeof body.applicationId === "string" ? body.applicationId : "";
+  if (trackingNo) {
+    return {
+      trackingNo,
+      applicationId,
+      status: typeof body.status === "string" ? body.status : "submitted",
+      channel: typeof body.channel === "string" ? body.channel : "portal",
+      acknowledgedAt: typeof body.acknowledgedAt === "string" ? body.acknowledgedAt : null,
+    };
+  }
+  // Not yet issued — fall back to a short poll of the draft/application, then
+  // return null tracking (the UI shows a "received, number shortly" state).
   await new Promise((r) => setTimeout(r, 200));
   const draftsRes = await fetch(`/api/proxy/v1/citizen/intake/drafts/${draftId}`, { cache: "no-store" });
   if (draftsRes.ok) {
@@ -184,7 +219,7 @@ export async function submitDraft(draftId: string): Promise<TrackingAck> {
       }
     }
   }
-  return { trackingNo: "PENDING", applicationId: "", status: "submitted", channel: "portal", acknowledgedAt: null };
+  return { trackingNo: null, applicationId, status: "submitted", channel: "portal", acknowledgedAt: null };
 }
 
 /** FN-14 — create online payment intent for a submitted application. */
@@ -214,7 +249,7 @@ export async function createPaymentIntent(payload: {
  */
 export async function confirmPayment(
   paymentId: string,
-  mode: "sandbox" | "gateway" = "sandbox",
+  mode: "sandbox" | "gateway",
   gatewayRef?: string,
 ): Promise<void> {
   const res = await fetch(`/api/proxy/v1/citizen/payments/${paymentId}/confirm`, {
@@ -225,13 +260,37 @@ export async function confirmPayment(
   if (!(res.ok || res.status === 202)) throw await userFacingErrorFromResponse(res, "save");
 }
 
+/**
+ * GAP-...-TRACK-01: distinguish a real "number not found" (404) from a
+ * transient "status unavailable" (5xx / network / proxy blip) so a citizen who
+ * just paid is never told their application does not exist. Never carries the
+ * backend's own error text to the citizen.
+ */
+export class TrackingError extends Error {
+  constructor(
+    public readonly kind: "not_found" | "unavailable",
+    public readonly status?: number,
+  ) {
+    super(kind);
+    this.name = "TrackingError";
+  }
+}
+
 export async function trackApplication(trackingNo: string): Promise<TrackingAck> {
-  const res = await fetch(`/api/proxy/v1/citizen/intake/track/${encodeURIComponent(trackingNo)}`, {
-    cache: "no-store",
-  });
-  if (!res.ok) throw new Error("Tracking number not found.");
+  let res: Response;
+  try {
+    res = await fetch(`/api/proxy/v1/citizen/intake/track/${encodeURIComponent(trackingNo)}`, {
+      cache: "no-store",
+    });
+  } catch {
+    // network failure — transient, not a missing tracking number
+    throw new TrackingError("unavailable");
+  }
+  if (!res.ok) {
+    throw new TrackingError(res.status === 404 ? "not_found" : "unavailable", res.status);
+  }
   const raw = await res.json();
-  if (!isRecord(raw)) throw new Error("Invalid tracking response.");
+  if (!isRecord(raw)) throw new TrackingError("unavailable", res.status);
   return {
     trackingNo: str(raw.trackingNo),
     applicationId: str(raw.applicationId),
@@ -241,17 +300,42 @@ export async function trackApplication(trackingNo: string): Promise<TrackingAck>
   };
 }
 
+/**
+ * Structured fee for the service page so the caller can localise the
+ * "from"/"on approval" wording (GAP-...-SERVICEKEY-04) while the amount itself
+ * is formatted by the shared bigint-paise formatMoney (CLAUDE.md money rule,
+ * GAP-...-SERVICEKEY-07). `amount` is null when the fee is decided on approval.
+ */
+export interface FeeDisplay {
+  kind: "from" | "exact" | "onApproval";
+  amount: string | null;
+}
+
+export function feeDisplay(minor: number | null, currency: string, exact = false): FeeDisplay {
+  if (minor == null) return { kind: "onApproval", amount: null };
+  return { kind: exact ? "exact" : "from", amount: feeAmount(minor, currency) };
+}
+
+/**
+ * Format a fee amount (minor paise) for citizen display using the shared
+ * bigint-paise formatMoney (CLAUDE.md money rule) and dropping a trailing
+ * ".00" so whole-rupee fees read "₹500" not "₹500.00" (preserves the prior
+ * citizen-page convention; non-zero paise are kept, e.g. "₹12,34,567.89").
+ */
+function feeAmount(minor: number, currency: string): string {
+  const formatted = formatMoney(minor).replace(/\.00$/, "");
+  return currency !== "INR" ? `${formatted} ${currency}` : formatted;
+}
+
 export function formatFee(minor: number | null, currency: string): string {
   if (minor == null) return "Fee on approval";
-  const major = minor / 100;
-  return `from ₹${major.toLocaleString("en-IN")}${currency !== "INR" ? ` ${currency}` : ""}`;
+  return `from ${feeAmount(minor, currency)}`;
 }
 
 /** Exact demand amount (citizen fee screen), not the "from ₹" service-page phrasing. */
 export function formatFeeExact(minor: number | null, currency: string): string {
   if (minor == null) return "Calculated on approval";
-  const major = minor / 100;
-  return `₹${major.toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}${currency !== "INR" ? ` ${currency}` : ""}`;
+  return feeAmount(minor, currency);
 }
 
 export function validateField(apiName: string, value: string, required: boolean): string | undefined {
@@ -261,6 +345,14 @@ export function validateField(apiName: string, value: string, required: boolean)
   }
   if (apiName.includes("email") && value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
     return "Enter a valid email address.";
+  }
+  // GAP-...-APPLY-06: Aadhaar / PIN format checks (heuristic by apiName until
+  // field metadata drives validation). Server validation remains authoritative.
+  if (value && /(^|_)aadhaar|aadhar|uid/.test(apiName) && !/^\d{12}$/.test(value.replace(/\s/g, ""))) {
+    return "Enter a valid 12-digit Aadhaar number.";
+  }
+  if (value && /(^|_)(pin|pincode|postal)/.test(apiName) && !/^\d{6}$/.test(value.replace(/\s/g, ""))) {
+    return "Enter a valid 6-digit PIN code.";
   }
   return undefined;
 }
@@ -313,6 +405,19 @@ function normalizeStatus(status: string): string {
   return status.trim().toLowerCase().replace(/[\s_]+/g, "-");
 }
 
+/**
+ * GAP-...-TRACK-04: single source of truth for "the application has reached its
+ * final/issued lane" so the timeline's last lane and the certificate/closure
+ * card never disagree (previously the card checked a shorter list that omitted
+ * 'closed'/'resolved', so a resolved grievance showed all steps done yet
+ * "Not issued yet"). normalizeStatus makes it case/space/underscore-insensitive.
+ */
+export const ISSUED_STATUSES = ["issued", "approved", "completed", "closed", "resolved", "confirmed"] as const;
+
+export function isTerminalStatus(status: string): boolean {
+  return (ISSUED_STATUSES as readonly string[]).includes(normalizeStatus(status));
+}
+
 function slaDaysRemaining(acknowledgedAt: string | null | undefined, slaDays: number | null | undefined): number | undefined {
   if (slaDays == null || slaDays <= 0) return undefined;
   if (!acknowledgedAt) return slaDays;
@@ -329,10 +434,9 @@ function slaDaysRemaining(acknowledgedAt: string | null | undefined, slaDays: nu
  */
 export function trackingLaneIndex(status: string, hasFee: boolean): number {
   const s = normalizeStatus(status);
-  const issued = ["issued", "approved", "completed", "closed", "resolved", "confirmed"];
   const fee = ["payment-due", "fee-pending", "awaiting-payment", "paid", "payment-received"];
   const review = ["under-review", "in-review", "review", "inspection", "assigned", "in-progress"];
-  if (issued.includes(s)) return hasFee ? 3 : 2;
+  if (isTerminalStatus(status)) return hasFee ? 3 : 2;
   if (hasFee && (fee.includes(s) || s === "payment_due")) return 2;
   if (review.includes(s)) return 1;
   return 0;
@@ -377,7 +481,7 @@ export function buildTrackingTimeline(opts: TrackingTimelineOptions): {
   }
 
   const currentIdx = trackingLaneIndex(status, hasFee);
-  const allDone = ["issued", "approved", "completed", "closed", "resolved", "confirmed"].includes(status);
+  const allDone = isTerminalStatus(status);
   const sla = slaDaysRemaining(opts.acknowledgedAt, opts.slaDays);
 
   return laneDefs.map((lane, idx) => {

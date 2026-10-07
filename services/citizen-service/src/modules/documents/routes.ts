@@ -9,11 +9,22 @@ import {
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import { isDigiLockerConfigured } from "./domain.js";
 
 const CITIZEN_ROLES = ["citizen", "citizen_officer", "citizen_admin", "super_admin"];
 const OFFICER_ROLES = ["citizen_officer", "citizen_admin", "super_admin"];
 
 export async function documentsRoutes(app: FastifyInstance): Promise<void> {
+  // GAP-CITIZEN-DOCUMENTS-02: let the web disable the "Fetch from DigiLocker"
+  // control when the provider is not configured, instead of offering a button
+  // that always returns provider_unconfigured. Reuses the same honesty gate the
+  // fetch command uses; exposes only a boolean, never credentials.
+  app.get("/v1/citizen/documents/digilocker-status", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CITIZEN_ROLES);
+    return reply.send({ configured: isDigiLockerConfigured() });
+  });
+
   app.post("/v1/citizen/documents/upload", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);

@@ -6,17 +6,20 @@ import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { GrievancesTable, type GrievanceRow } from "./GrievancesTable";
 import { getTranslations } from "next-intl/server";
+import { daysUntilIST } from "@/lib/formatters";
+import { maskName } from "../../../_components/ds";
+import { getSessionRoles, hasAnyRole } from "@/lib/auth/roleGuard";
 
-const TODAY = new Date().toISOString().slice(0, 10);
+// GAP-CITIZEN-GRIEVANCES-05: "today" and days-left must be computed per request
+// in Asia/Kolkata, not at module load in UTC. A module-scope UTC TODAY freezes
+// at server start (stale in a long-lived process) and skews the statutory clock
+// by up to a day during 00:00-05:30 IST. daysUntilIST() resolves both correctly.
+export const dynamic = "force-dynamic";
 
-/** CPGRAMS 30-day lifecycle: returns whole days remaining (negative = overdue). */
-function daysRemaining(dueDate: string | null | undefined, today: string): number | null {
-  if (!dueDate) return null;
-  const d = new Date(dueDate);
-  const t = new Date(today);
-  if (isNaN(d.getTime()) || isNaN(t.getTime())) return null;
-  return Math.round((d.getTime() - t.getTime()) / (1000 * 60 * 60 * 24));
-}
+// GAP-CITIZEN-GRIEVANCES-03: only grievance officers/admins see full complainant
+// names; everyone else sees a masked name. Resolved server-side so the full
+// name is never serialised to the client for a non-privileged viewer.
+const GRIEVANCE_PRIVILEGED_ROLES = ["citizen_officer", "citizen_admin", "super_admin"];
 
 const CLOSED_STATUSES = new Set(["resolved", "closed", "disposed"]);
 
@@ -36,14 +39,15 @@ export default async function GrievancesPage() {
   const escalated = errored ? null : grievances.filter((g) => g.status === "escalated").length;
   const resolved = errored ? null : grievances.filter((g) => CLOSED_STATUSES.has(g.status.toLowerCase())).length;
 
+  const canSeeNames = hasAnyRole(getSessionRoles(), GRIEVANCE_PRIVILEGED_ROLES);
   const rows: GrievanceRow[] = grievances.map((g: GrievanceSummary) => ({
     id: g.id,
     grievanceNo: g.grievanceNo,
     subject: g.subject,
-    complainantName: g.complainantName,
+    complainantName: canSeeNames ? g.complainantName : maskName(g.complainantName),
     category: g.category.replace(/_/g, " "),
     status: g.status,
-    daysLeft: daysRemaining(g.dueDate, TODAY),
+    daysLeft: daysUntilIST(g.dueDate),
   }));
 
   return (

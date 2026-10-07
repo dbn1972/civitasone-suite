@@ -20,6 +20,8 @@ export function registerGrievanceConsumers(rawQueue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; citizenId: string;
       category: string; subject: string; description: string;
+      complainantName?: string;
+      dpdpConsent?: { given: boolean; noticeVersion: string; purpose: string };
     };
     const priority = inferPriority(p.category);
     const departmentRef = inferDepartmentRef(p.category);
@@ -36,7 +38,12 @@ export function registerGrievanceConsumers(rawQueue: Queue): void {
         actionType: "auto_assign", note: `Auto-assigned to ${departmentRef}`,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      await audit(tx, msg, "register", "citizen_grievance", p.id);
+      // DPDP: persist the consent record in the tamper-evident audit chain; the
+      // server (not the client) stamps the authoritative time.
+      await audit(tx, msg, "register", "citizen_grievance", p.id, {
+        ...(p.dpdpConsent ? { dpdpConsent: { ...p.dpdpConsent, recordedAt: new Date().toISOString() } } : {}),
+        ...(p.complainantName ? { complainantName: p.complainantName } : {}),
+      });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "grievance", p.id));
   });
@@ -210,10 +217,13 @@ export function registerGrievanceConsumers(rawQueue: Queue): void {
   });
 }
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
+async function audit(
+  tx: any, msg: any, action: string, resourceType: string, resourceId: string,
+  newValue?: Record<string, unknown>,
+): Promise<void> {
   await enqueue(tx, {
     topic: "audit.event.record", eventType: "audit.event.record",
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "citizen", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "citizen", action, resourceType, resourceId, outcome: "success", ...(newValue ? { newValue } : {}) },
   });
 }

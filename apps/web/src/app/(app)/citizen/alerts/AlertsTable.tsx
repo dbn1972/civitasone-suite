@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { Card, DataTable, EmptyState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { formatIndianDate } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { CitizenAlert } from "../../../_data/loaders";
 
@@ -31,7 +32,10 @@ export function AlertsTable({ alerts, source = "api" }: { alerts: CitizenAlert[]
         id: a.id,
         title: a.title,
         category: a.category,
-        publishedDate: a.publishedDate,
+        // GAP-CITIZEN-ALERTS-04: format via formatIndianDate (dd Mon yyyy; "—"
+        // for empty) so the column and the CSV export (which reads the row
+        // value) match the sibling RTI/requests pages instead of a raw ISO.
+        publishedDate: formatIndianDate(a.publishedDate),
         targetAudience: a.targetAudience,
         status: a.status,
       })),
@@ -47,7 +51,12 @@ export function AlertsTable({ alerts, source = "api" }: { alerts: CitizenAlert[]
           badge from the raw `source` prop — removed). */}
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       {tableRows.length === 0 ? (
-        <EmptyState icon="🔔" title={t("emptyTitle")} message={t("emptyMessage")} />
+        // GAP-CITIZEN-ALERTS-01: a fetch failure (error-no-data) must not read
+        // as the cheerful "No alerts published" prompt — that is reserved for
+        // a genuine 200-empty. The badge above already states the failure.
+        provenance === "error-no-data" ? null : (
+          <EmptyState icon="🔔" title={t("emptyTitle")} message={t("emptyMessage")} />
+        )
       ) : (
         <DataTable<AlertRow>
           rows={tableRows}

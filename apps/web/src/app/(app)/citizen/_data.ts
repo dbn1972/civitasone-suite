@@ -48,16 +48,11 @@ function mapGrievances(payload: unknown): GrievanceSummary[] | null {
     const category = toText(row.category) ?? "other";
     const status = toText(row.status) ?? "registered";
     const createdAt = toText(row.createdAt) ?? new Date().toISOString();
-    // dueDate: 30-day lifecycle from createdAt unless a dueDate field is present
-    const dueDate =
-      toText(row.dueDate) ??
-      toText(row.due_date) ??
-      (() => {
-        const d = new Date(createdAt);
-        if (isNaN(d.getTime())) return null;
-        d.setDate(d.getDate() + 30);
-        return d.toISOString().slice(0, 10);
-      })();
+    // GAP-CITIZEN-GRIEVANCES-02: dueDate is a STATUTORY deadline and must come
+    // from the backend (per-category CPGRAMS SLA). Never fabricate it here: a
+    // client-invented createdAt+30d would be shown as a real statutory clock
+    // and skew overdue counts. Absent => null, rendered as "—"/"SLA not set".
+    const dueDate = toText(row.dueDate) ?? toText(row.due_date) ?? null;
     mapped.push({ id, grievanceNo, subject, complainantName, category, status, createdAt, dueDate });
   }
   return mapped.length > 0 ? mapped : null;
