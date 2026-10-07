@@ -162,11 +162,17 @@ describe("maxPixels / maxImageSize", () => {
 
 describe("pageConcurrency: bounded window, results in page order", () => {
   /** Chain whose OCR takes a while and records the max number of pages in OCR at once. */
-  function slowChain(delays: (n: number) => number) {
+  function slowChain(delays: (n: number) => number, waitForOverlap = false) {
     let active = 0;
     let maxActive = 0;
     const provider = fakeProvider("tesseract", async (_c, ps) => {
       active++; maxActive = Math.max(maxActive, active);
+      if (waitForOverlap) {
+        // Deterministic overlap: hold every page until a second page is in OCR (10 s safety cap). A fixed sleep
+        // raced page rendering on a loaded CI host, so a second page was never in flight and max() stayed 1.
+        const deadline = Date.now() + 10_000;
+        while (maxActive < 2 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 5));
+      }
       await new Promise((r) => setTimeout(r, delays(ps[0]!.pageNumber)));
       active--;
       return ps.map((p) => pageResult(p, 0.9, "tesseract", `page ${p.pageNumber}`));
@@ -201,7 +207,7 @@ describe("pageConcurrency: bounded window, results in page order", () => {
 
   it("pageConcurrency 1 is strictly sequential; 3 never exceeds 3; invalid values clamp to 1", async () => {
     for (const [conc, lo, hi] of [[1, 1, 1], [3, 2, 3], [0, 1, 1], [-4, 1, 1]] as const) {
-      const { chain, max } = slowChain(() => 400);
+      const { chain, max } = slowChain(() => 400, conc === 3);
       await processDocument({ data: await scannedPdf(5) }, { chain, ...NO_ORIENT, pageConcurrency: conc });
       expect(max()).toBeGreaterThanOrEqual(lo);
       expect(max()).toBeLessThanOrEqual(hi);

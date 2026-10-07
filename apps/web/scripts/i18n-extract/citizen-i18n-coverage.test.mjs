@@ -44,7 +44,8 @@ function walk(dir, out = []) {
   return out;
 }
 
-const CITIZEN_HARDCODED_STRING_CEILING = 44;
+// 2026-10-07: ceiling = exact count (0) re-measured with the entity-aware scanner.mjs: no hardcoded-string findings remain, so any new one fails this test.
+const CITIZEN_HARDCODED_STRING_CEILING = 0;
 // Bumped 39 -> 44 (2026-09-12): merging UX-013/UX-016 into this branch pulled in
 // unrelated upstream drift that shifted scanner output in 4 already-translated
 // files (services/_components/ServiceRuntimeFlow.tsx, TrackClient.tsx,

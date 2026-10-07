@@ -46,7 +46,8 @@ function walk(dir, out = []) {
 // Re-baselined 27 -> 37 (test-triage batch 2): every added hit was reviewed and is a scanner false positive --
 // `useState<T>` generics, `) : cond ? (` ternary chains and comment prose in AllocateLeaveForm, ApplyLeaveForm, LeaveApprovalsPanel, LeaveBalanceClient, LeaveHistoryClient, allocate/loading (10 hits; the allocate/loading.tsx hit is the string "Loading…" inside a doc comment).
 // No new user-visible English was added.
-const HR_LEAVE_HARDCODED_STRING_CEILING = 37;
+// 2026-10-07: ceiling = exact count re-measured with the entity-aware scanner.mjs (HTML entities such as &apos; are no longer read as `;` code): 1 genuine `aria-label="Loading…"` text inside a doc-comment example in allocate/loading.tsx, and 2 comment fragments (`, page` / `, its own breadcrumb nav...`) from // comments in ApplyLeaveForm.tsx that sit between angle brackets (scanner false positives; the leading-comma shape is real JSX prose elsewhere, so it cannot be dropped).
+const HR_LEAVE_HARDCODED_STRING_CEILING = 3;
 
 describe("hr/leave i18n coverage (UX-017 tranche 2)", () => {
   it("does not exceed the known false-positive baseline for hardcoded strings", () => {

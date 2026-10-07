@@ -61,7 +61,7 @@ const SLICE_FILES = SLICE_SUBDIRS.flatMap((dir) => walk(dir));
 // invalidField bugfix note in GenerateForm16Form.tsx) gets swept into the
 // same match as the useState declaration right after it. None are real
 // remaining UI text.
-const HR_PAYROLL_INCOME_TAX_FORM16_HARDCODED_STRING_CEILING = 17;
+const HR_PAYROLL_INCOME_TAX_FORM16_HARDCODED_STRING_CEILING = 0;
 
 describe("hr/payroll income-tax/tax-declaration/form16 i18n coverage (UX-017 tranche 14)", () => {
   it("does not exceed the known false-positive baseline for hardcoded strings", () => {

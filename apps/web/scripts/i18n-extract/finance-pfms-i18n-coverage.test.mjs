@@ -42,7 +42,8 @@ function walk(dir, out = []) {
   return out;
 }
 
-const FINANCE_PFMS_HARDCODED_STRING_CEILING = 30;
+// 2026-10-07: ceiling = exact count (0) re-measured with the entity-aware scanner.mjs: no hardcoded-string findings remain, so any new one fails this test.
+const FINANCE_PFMS_HARDCODED_STRING_CEILING = 0;
 
 describe("finance/pfms i18n coverage (UX-017 tranche 5)", () => {
   it("does not exceed the known false-positive baseline for hardcoded strings", () => {

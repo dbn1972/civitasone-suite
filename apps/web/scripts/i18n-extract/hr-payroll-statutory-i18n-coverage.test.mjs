@@ -88,7 +88,8 @@ const SLICE_FILES = [...directFilesOnly(STATUTORY_ROOT), ...STATUTORY_SUBDIRS.fl
 // preceding one) -- none are real UI text. See this tranche's PR description
 // for the per-file breakdown.
 // Lowered 23 -> 22 (test-triage batch 2): re-measured after rebasing onto main; one finding went away.
-const HR_PAYROLL_STATUTORY_HARDCODED_STRING_CEILING = 22;
+// 2026-10-07: ceiling = exact count (0) re-measured with the entity-aware scanner.mjs: no hardcoded-string findings remain, so any new one fails this test.
+const HR_PAYROLL_STATUTORY_HARDCODED_STRING_CEILING = 0;
 
 describe("hr/payroll/statutory (pf/gpf/nps/esi/gratuity/lwf/pt + hub root) i18n coverage (UX-017 tranche 12)", () => {
   it("does not exceed the known false-positive baseline for hardcoded strings", () => {
@@ -124,7 +125,8 @@ describe("hr/payroll/statutory (pf/gpf/nps/esi/gratuity/lwf/pt + hub root) i18n 
       "pf",
       "ecrGeneratorForm",
       "pt",
-      "ptSlabForm",
+      // "ptSlabForm" was retired in favour of "ptVersionForm" (asserted gone by pt/page.test.tsx).
+      "ptVersionForm",
     ];
 
     function leafKeys(obj, prefix = "") {

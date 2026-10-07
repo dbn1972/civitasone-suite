@@ -47,7 +47,8 @@ function walk(dir, out = []) {
   return out;
 }
 
-const HR_WORKFORCE_HARDCODED_STRING_CEILING = 13;
+// 2026-10-07: ceiling = exact count re-measured with the entity-aware scanner.mjs (HTML entities such as &apos; are no longer read as `;` code): all 10 are genuine `aria-label="Loading…"` literals in hr/workforce/**/loading.tsx, tracked here rather than hidden.
+const HR_WORKFORCE_HARDCODED_STRING_CEILING = 10;
 
 describe("hr/workforce i18n coverage (UX-017 tranche 6)", () => {
   it("does not exceed the known false-positive baseline for hardcoded strings", () => {
@@ -86,7 +87,6 @@ describe("hr/workforce i18n coverage (UX-017 tranche 6)", () => {
       "workforceAnalytics",
       // "workforceContractual" was deliberately dropped as unreferenced in #1763 (asserted
       // by src/app/(app)/hr/outsourced/messages.test.ts), so it is no longer a live namespace.
-      "workforceInterns",
       "workforceOutsourced",
       "workforceWfh",
       "workforceWorkSummary",

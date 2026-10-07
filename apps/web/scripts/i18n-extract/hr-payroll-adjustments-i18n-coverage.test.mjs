@@ -73,7 +73,8 @@ function walk(dir, out = []) {
 // Re-baselined 42 -> 44 (test-triage batch 2): every added hit was reviewed and is a scanner false positive --
 // `useState<T>`/`useRef<T>` generics in CreateSalaryRevisionForm (salary-revisions gap closure, #1756).
 // No new user-visible English was added.
-const HR_PAYROLL_ADJUSTMENTS_HARDCODED_STRING_CEILING = 44;
+// 2026-10-07: ceiling = exact count (0) re-measured with the entity-aware scanner.mjs: no hardcoded-string findings remain, so any new one fails this test.
+const HR_PAYROLL_ADJUSTMENTS_HARDCODED_STRING_CEILING = 0;
 
 describe("hr/payroll/{arrears,corrections,off-cycle,salary-revisions} i18n coverage (UX-017 tranche 11)", () => {
   it("does not exceed the known false-positive baseline for hardcoded strings", () => {

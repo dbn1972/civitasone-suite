@@ -70,6 +70,33 @@ function looksUserFacing(text) {
   return !NON_USER_FACING.some((re) => re.test(trimmed));
 }
 
+// A `>`...`<` span that is really TypeScript, not a JSX text node: a generic
+// closing bracket (`useState<T>(null);` ... `useRef<`), a ternary/conditional
+// chain (`) : x ? (`), or a comment block sitting between two angle brackets.
+// Real JSX text never contains statement terminators, arrow/strict-equality/
+// logical operators or comment markers, and never starts with call/array
+// punctuation. Treating these as code removes the scanner's false positives
+// at the source instead of re-baselining them.
+const CODE_LIKE = [
+  /;\s*($|\n|\}|\/[/*]|[A-Za-z_$][\w$]*\s*[=(.<:])/, // statement terminator followed by EOL / next statement (prose ";" is followed by a word)
+  /=>|===|!==|&&|\|\|/, // arrow / comparison / logical operators
+  /^\s*\)\s*[:?]/, // ") : x ? (" ternary continuation
+  /^\s*\(\s*($|\n|\/[/*])/, // bare "(" then newline / comment
+  /^\s*(Promise|Array|Record|Map|Set|Partial|Omit|Pick)\s*$/, // bare generic type name between "<" ... "<"
+  /^\s*((const|let|var)\s+[\w$[{][^\n]*[=:]|return\s*[([{<]|function\s+\w+\s*\()/, // declaration / return / function at the start ("return for ..." is prose)
+  /\s\?\s[^\n]*\s:\s/, // inline ternary "a ? b : c"
+  /^[^\n]*[\w\]]\)\s*:\s*[A-Z]\w*\s*$/, // "...(x: T): Promise" return-type tail before a generic "<"
+  /^\s*[(\[][^\n]*[)\]]\s*[,:)]/, // "(path: string): Promise" signatures, "[f, x])," tuples ("(top level)" alone is prose)
+  /\)\s*:\s*[\w$.!]+\s*\?\s*\(|\?\s*\(\s*(\n|$)|\(\)/, // ternary / empty call
+  /(^|\n)\s*(\/\/|\/\*)|\/\*|\*\/|\n\s*\*(\s|\/)/, // comment lines (a leading "* " alone is prose, e.g. "* required")
+];
+
+function isCodeLike(text) {
+  // &apos; &amp; &quot; &#39; ... carry a semicolon but are ordinary JSX prose.
+  const stripped = text.replace(/&(#\d+|#x[0-9a-f]+|[a-z]+);/gi, "");
+  return CODE_LIKE.some((re) => re.test(stripped));
+}
+
 function lineAt(source, index) {
   let line = 1;
   for (let i = 0; i < index; i++) {
@@ -93,7 +120,7 @@ export function scanSource(filePath, source) {
   let m;
   while ((m = textNodeRe.exec(source))) {
     const text = m[1];
-    if (looksUserFacing(text)) {
+    if (looksUserFacing(text) && !isCodeLike(text)) {
       // The captured text starts right after the `>`.
       const textStart = m.index + 1;
       findings.push({ file: filePath, line: lineAt(source, textStart), kind: "jsx-text", text: text.trim() });

@@ -41,7 +41,8 @@ function walk(dir, out = []) {
   return out;
 }
 
-const FINANCE_EXPENDITURE_HARDCODED_STRING_CEILING = 10;
+// 2026-10-07: ceiling = exact count (0) re-measured with the entity-aware scanner.mjs: no hardcoded-string findings remain, so any new one fails this test.
+const FINANCE_EXPENDITURE_HARDCODED_STRING_CEILING = 0;
 
 describe("finance/expenditure i18n coverage (UX-017 tranche 10)", () => {
   it("does not exceed the known false-positive baseline for hardcoded strings", () => {

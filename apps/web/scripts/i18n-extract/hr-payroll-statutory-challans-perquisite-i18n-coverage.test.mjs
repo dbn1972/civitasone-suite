@@ -61,7 +61,8 @@ const SLICE_FILES = SLICE_SUBDIRS.flatMap((dir) => walk(dir));
 // IngestChallanForm.tsx. Both new findings individually reviewed and
 // confirmed the same useState/useRef false-positive class above -- not real
 // UI text.
-const HR_PAYROLL_STATUTORY_CHALLANS_PERQUISITE_HARDCODED_STRING_CEILING = 20;
+// 2026-10-07: ceiling = exact count (0) re-measured with the entity-aware scanner.mjs: no hardcoded-string findings remain, so any new one fails this test.
+const HR_PAYROLL_STATUTORY_CHALLANS_PERQUISITE_HARDCODED_STRING_CEILING = 0;
 
 describe("hr/payroll/statutory challans/ + perquisite/ i18n coverage (UX-017 tranche 13)", () => {
   it("does not exceed the known false-positive baseline for hardcoded strings", () => {

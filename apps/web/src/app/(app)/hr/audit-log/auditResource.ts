@@ -124,6 +124,25 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "visiting_card",
   "work_summary_list",
   "workforce_plan",
+  // Added to match what hrms-service/payroll-service now emit (drift guard: auditResource.test.ts).
+  "allowance_rule_config",
+  "assessment_certificate",
+  "bonus_rule_config",
+  "disbursement_transfer",
+  "gratuity_rule_config",
+  "hrms_suspension",
+  "job_opening_advertisement",
+  "pay_profile",
+  "payroll_arrear_policy",
+  "payroll_letterhead",
+  "payroll_pt_slab_version",
+  "payroll_register",
+  "payroll_run_suspension",
+  "payroll_slip",
+  "payroll_tax_proof",
+  "payroll_tax_proof_settings",
+  "recruitment_edition_policy",
+  "recruitment_settings",
 ] as const;
 
 /** Detail-page route per resource type, for the types that have one keyed by the audited id. */

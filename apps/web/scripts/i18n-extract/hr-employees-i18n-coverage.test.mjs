@@ -47,7 +47,8 @@ function walk(dir, out = []) {
 // Re-baselined 19 -> 33 (test-triage batch 2): every added hit was reviewed and is a scanner false positive --
 // `useState<T>`/`Record<..>` generics and long comment blocks in EditEmployeeForm, ImportForm, AddEmployeeWizard, employees/page, EmployeeTypeForm, edit/loading (14 hits; the one real hit, a hardcoded "Clear" link in employees/page.tsx, was translated instead of baselined).
 // No new user-visible English was added.
-const HR_EMPLOYEES_HARDCODED_STRING_CEILING = 33;
+// 2026-10-07: ceiling = exact count (0) re-measured with the entity-aware scanner.mjs: no hardcoded-string findings remain, so any new one fails this test.
+const HR_EMPLOYEES_HARDCODED_STRING_CEILING = 0;
 
 describe("hr/employees + hr/employee-types i18n coverage (UX-017 tranche 7)", () => {
   it("does not exceed the known false-positive baseline for hardcoded strings", () => {

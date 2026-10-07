@@ -65,7 +65,8 @@ function walk(dir, out = []) {
 // Re-baselined 20 -> 37 (test-triage batch 2): every added hit was reviewed and is a scanner false positive --
 // generic-bracket `useState<T>(...)`/`Promise<void>` declarations and `x.length > 0 && ...` comparisons in AparStageActions, AparNewForm, apar/page and PromoteWithApproval (17 hits).
 // No new user-visible English was added.
-const HR_APAR_DPC_PROMOTION_HARDCODED_STRING_CEILING = 37;
+// 2026-10-07: ceiling = exact count re-measured with the entity-aware scanner.mjs (HTML entities such as &apos; are no longer read as `;` code): 4 are `aria-label="Loading…"` literals in hr/apar and hr/dpc loading.tsx files (genuine hardcoded copy, tracked rather than hidden) and 1 is a `key mapping.` fragment from a // comment in PromotionCard.tsx that sits between two angle brackets (scanner false positive).
+const HR_APAR_DPC_PROMOTION_HARDCODED_STRING_CEILING = 5;
 
 describe("hr/apar + hr/dpc + hr/promotion i18n coverage (UX-017 tranche 8)", () => {
   it("does not exceed the known false-positive baseline for hardcoded strings", () => {

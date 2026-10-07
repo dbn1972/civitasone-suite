@@ -61,7 +61,8 @@ const SLICE_FILES = SLICE_SUBDIRS.flatMap((dir) => walk(dir));
 // Re-baselined 14 -> 16 (test-triage batch 2): every added hit was reviewed and is a scanner false positive --
 // `useState<T>`/`Record<..>`/`new Map<..>` generics and `=== null` comparisons in CreateLoanForm, LoanSearchForm, LoansTable, loans/page, gpf/page, nps/page.
 // No new user-visible English was added.
-const HR_PAYROLL_LOANS_GPF_NPS_PENSIONERS_HARDCODED_STRING_CEILING = 16;
+// 2026-10-07: ceiling = exact count (0) re-measured with the entity-aware scanner.mjs: no hardcoded-string findings remain, so any new one fails this test.
+const HR_PAYROLL_LOANS_GPF_NPS_PENSIONERS_HARDCODED_STRING_CEILING = 0;
 
 describe("hr/payroll loans/gpf/nps/pensioners i18n coverage (UX-017 tranche 15)", () => {
   it("does not exceed the known false-positive baseline for hardcoded strings", () => {
