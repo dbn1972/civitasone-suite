@@ -12,7 +12,7 @@ export const contractVersions = versionsSchema.table("contract_versions", {
   createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const redlines = versionsSchema.table("redlines", {
+export const redlines = versionsSchema.table("contract_redlines", {
   id:            uuid("id").primaryKey().defaultRandom(),
   tenantId:      uuid("tenant_id").notNull(),
   contractId:    uuid("contract_id").notNull(),

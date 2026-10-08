@@ -5590,6 +5590,17 @@
   },
   "procurement": {
     "title": "Procurement",
+    "gfr": {
+      "band": {
+        "LS": { "name": "Local Shopping", "note": "Spot purchase up to ₹5,000 without tender" },
+        "DP": { "name": "Direct Purchase", "note": "Direct purchase up to ₹25,000; single quotation" },
+        "LTR": { "name": "Limited Tender Request", "note": "₹25,001 to ₹10,00,000; minimum 3 quotations" },
+        "LTE": { "name": "Limited Tender Enquiry", "note": "₹10,00,001 to ₹25,00,000; minimum 10 vendors invited" },
+        "OT": { "name": "Open Tender", "note": "₹25,00,001 to ₹5,00,00,000; advertised tender" },
+        "GT": { "name": "Global Tender", "note": "Above ₹5,00,00,000 or for specialised unavailable items" },
+        "ST": { "name": "Single Tender", "note": "Single source; requires committee justification" }
+      }
+    },
     "tenders": "Tenders",
     "bids": "Bids",
     "purchase": "Purchase Order",

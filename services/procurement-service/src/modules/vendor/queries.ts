@@ -24,6 +24,11 @@ export async function listEmpanelments(tenantId: string, limit: number, offset: 
   }));
 }
 
+/** GAP2-PROCUREMENT-EMPANELMENT-02 / GAPLIST-03: true total empanelment count for meta.total. */
+export async function countEmpanelments(tenantId: string): Promise<number> {
+  return repo.countEmpanelmentsByTenant(tenantId);
+}
+
 export async function getVendor(id: string, tenantId: string): Promise<VendorRow | null> {
   return cache.getOrLoad<VendorRow>(
     cache.makeKey(tenantId, "vendor", id),

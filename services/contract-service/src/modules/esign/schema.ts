@@ -19,7 +19,7 @@ export interface SignatoryEntry {
  * Manages sequential signature routing for contracts.
  * Signatories sign in ordinal order; only the current ordinal can sign.
  */
-export const esignRoutes = esignSchema.table("esign_routes", {
+export const esignRoutes = esignSchema.table("contract_esign_routes", {
   id:             uuid("id").primaryKey().defaultRandom(),
   tenantId:       uuid("tenant_id").notNull(),
   contractId:     uuid("contract_id").notNull(),

@@ -2,7 +2,7 @@ import { pgSchema, uuid, text, integer, varchar, timestamp, jsonb } from "drizzl
 
 export const clausesSchema = pgSchema("clauses");
 
-export const clauseLibrary = clausesSchema.table("clause_library", {
+export const clauseLibrary = clausesSchema.table("contract_clause_library", {
   id:          uuid("id").primaryKey().defaultRandom(),
   tenantId:    uuid("tenant_id").notNull(),
   title:       text("title").notNull(),

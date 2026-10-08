@@ -96,6 +96,23 @@ export type PrebidAggregateRow = {
  * report; callers surface that honestly via meta.reason rather than
  * fabricating attendance figures.
  */
+/**
+ * GAP2-PROCUREMENT-GAPLIST-03: count of distinct tenders that have pre-bid
+ * query threads for this tenant — the true "number of conferences" the
+ * aggregated list paginates over.
+ */
+export async function countPrebidAggregatesByTenant(tenantId: string): Promise<number> {
+  const rows = await db.transaction((tx) => tx
+    .select({ n: sql<number>`COUNT(DISTINCT ${procurementPrebidQueries.tenderId})` })
+    .from(procurementPrebidQueries)
+    .innerJoin(procurementTenders, and(
+      eq(procurementPrebidQueries.tenderId, procurementTenders.id),
+      eq(procurementTenders.tenantId, tenantId),
+    ))
+    .where(eq(procurementPrebidQueries.tenantId, tenantId)));
+  return Number(rows[0]?.n ?? 0);
+}
+
 export async function listPrebidAggregatesByTenant(tenantId: string, limit: number, offset: number): Promise<PrebidAggregateRow[]> {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.

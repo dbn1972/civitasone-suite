@@ -1257,6 +1257,11 @@ export const GRNSummarySchema = z.object({
   id: z.string(),
   grnNo: z.string(),
   poRef: z.string(),
+  // GAP2-PROCUREMENT-GRN-DETAIL-06: server-resolved PO uuid (for linking) and
+  // human PO number (for display), so the web never renders the opaque
+  // `procurement_po:<uuid>` composite. Optional for an unresolvable/absent ref.
+  poId: z.string().optional(),
+  poNo: z.string().optional(),
   vendor: z.string(),
   receivedDate: z.string(),
   receivedBy: z.string(),

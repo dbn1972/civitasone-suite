@@ -1187,6 +1187,11 @@ export type GRNSummary = {
   id: string;
   grnNo: string;
   poRef: string;
+  // GAP2-PROCUREMENT-GRN-DETAIL-06: the resolved PO uuid (for linking) and human
+  // PO number (for display), derived server-side from the opaque `poRef`
+  // composite. Optional so an unresolvable/absent ref falls back to "—".
+  poId?: string;
+  poNo?: string;
   vendor: string;
   receivedDate: string;
   receivedBy: string;

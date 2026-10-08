@@ -160,6 +160,29 @@ describe("GAP-PROCUREMENT-INDENTS-NEW-06 — GFR mode-bands server-side", () => 
     expect(body.applicableMode).not.toBe("DP");
   });
 
+  it("GAP2-PROCUREMENT-GFR-BANDS-07: bands carry i18n keys (nameKey/notesKey) and NO English prose", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/procurement/gfr/mode-bands",
+      headers: { authorization: `Bearer ${wideToken()}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const bands = res.json().data as Array<Record<string, unknown>>;
+    expect(bands.length).toBe(7);
+    for (const b of bands) {
+      // Stable i18n keys drive the human copy; raw prose fields are gone.
+      expect(typeof b.nameKey).toBe("string");
+      expect(typeof b.notesKey).toBe("string");
+      expect(b.nameKey).toMatch(/^procurement\.gfr\.band\./);
+      expect(b.notesKey).toMatch(/^procurement\.gfr\.band\./);
+      expect(b.name).toBeUndefined();
+      expect(b.notes).toBeUndefined();
+    }
+    // Thresholds remain minor-unit integer strings sourced from one config.
+    const ls = bands.find((b) => b.id === "LS");
+    expect(ls?.thresholdMaxMinor).toBe("500000");
+  });
+
   it("POST create rejects a procurement mode that violates the value band (GFR floor)", async () => {
     // Rs 1,00,00,000 (above the limited-tender ceiling) with mode=direct_purchase
     // must be refused synchronously, before the create is queued.

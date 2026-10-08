@@ -39,7 +39,7 @@ function expiryLabel(validUntil: string): string {
   return `Expires in ${days} day${days === 1 ? "" : "s"}`;
 }
 
-export function EmpanelmentTable({ vendors, source = "api" }: { vendors: EmpanelmentEntry[]; source?: "api" | "error" }) {
+export function EmpanelmentTable({ vendors, source = "api", serverTotal = null }: { vendors: EmpanelmentEntry[]; source?: "api" | "error"; serverTotal?: number | null }) {
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<EmpanelmentEntry[]>(
     "procurement.empanelment",
     vendors,
@@ -67,9 +67,17 @@ export function EmpanelmentTable({ vendors, source = "api" }: { vendors: Empanel
   // GAP-PROCUREMENT-EMPANELMENT-01/03: stats derived from the SAME rows the
   // table renders. On a failed fetch with no cache they read "—", never a
   // fabricated 0 that would read as "no vendors empanelled".
-  const total = errored ? "—" : rows.length;
+  // GAP2-PROCUREMENT-EMPANELMENT-02: "Total Empanelled" is the tenant-wide
+  // server COUNT (meta.total) when available, not rows.length — the fetched
+  // page is capped at the loader's limit, so rows.length under-counts a tenant
+  // with more empanelled vendors than that page. Fall back to rows.length only
+  // when the server total is absent (older contract).
+  const total = errored ? "—" : (typeof serverTotal === "number" ? serverTotal : rows.length);
   const active = errored ? "—" : rows.filter((v) => v.status === "Active").length;
   const expiring = errored ? "—" : rows.filter((v) => v.status === "Expiring").length;
+  // GAP2-PROCUREMENT-EMPANELMENT-02: when the real total exceeds the rows we
+  // actually fetched, say so honestly rather than silently showing a subset.
+  const truncated = !errored && typeof serverTotal === "number" && serverTotal > rows.length;
   // GAP-PROCUREMENT-EMPANELMENT-02: average rating over NON-Expired vendors
   // only (an expired empanelment should not drag the live panel's quality
   // figure), shown on the same "/5" scale. "—" when there are none / errored.
@@ -102,7 +110,13 @@ export function EmpanelmentTable({ vendors, source = "api" }: { vendors: Empanel
         ) : tableRows.length === 0 ? (
           <EmptyState icon="🏢" title="No empanelled vendors" message="Vendors will appear here once empanelled." />
         ) : (
-          <DataTable<EmpanelmentRow>
+          <>
+            {truncated ? (
+              <p className="muted" style={{ margin: "0 0 0.75rem" }} role="status">
+                Showing {rows.length} of {serverTotal} empanelled vendors.
+              </p>
+            ) : null}
+            <DataTable<EmpanelmentRow>
             rows={tableRows}
             sortable
             filterable
@@ -119,6 +133,7 @@ export function EmpanelmentTable({ vendors, source = "api" }: { vendors: Empanel
               { key: "status", label: "Status", cellType: "status" },
             ]}
           />
+          </>
         )}
       </Card>
     </>

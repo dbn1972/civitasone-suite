@@ -20,8 +20,21 @@ type GemRow = {
   gemStatus: string;
 } & Record<string, unknown>;
 
-export function GemTable({ items, source = "api" }: { items: GemItem[]; source?: "api" | "error" }) {
+export function GemTable({
+  items,
+  source = "api",
+  query = "",
+  integrationDisabled = false,
+  reason = null,
+}: {
+  items: GemItem[];
+  source?: "api" | "error";
+  query?: string;
+  integrationDisabled?: boolean;
+  reason?: string | null;
+}) {
   const router = useRouter();
+  const [searchTerm, setSearchTerm] = useState(query);
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<GemItem[]>(
     "procurement.gem",
     items,
@@ -29,6 +42,15 @@ export function GemTable({ items, source = "api" }: { items: GemItem[]; source?:
     (d) => d.length === 0,
   );
   const errored = provenance === "error-no-data";
+
+  // GAP2-PROCUREMENT-GEM-ITEMS-08: push the typed search term into the URL (?q=)
+  // so the server re-fetches against the live GeM catalog. An empty term clears
+  // the query.
+  function runSearch(e: React.FormEvent) {
+    e.preventDefault();
+    const term = searchTerm.trim();
+    router.push(term ? `/procurement/gem?q=${encodeURIComponent(term)}` : "/procurement/gem");
+  }
 
   // GAP-PROCUREMENT-GEM-03: an honest "last updated" stamp — the cached copy's
   // timestamp when serving cache, otherwise the time this view was rendered.
@@ -96,12 +118,44 @@ export function GemTable({ items, source = "api" }: { items: GemItem[]; source?:
         {provenance === "cached" ? (
           <DataSourceBadge provenance="cached" cachedAt={cachedAt} offline={offline} />
         ) : null}
+
+        {/* GAP2-PROCUREMENT-GEM-ITEMS-08: a real search box that drives ?q= —
+            the live GeM catalog is only queried when a term is supplied. */}
+        <form onSubmit={runSearch} role="search" style={{ display: "flex", gap: 8, margin: "0 0 12px" }}>
+          <input
+            type="search"
+            aria-label="Search the GeM catalog"
+            placeholder="Search the GeM catalog by item or keyword…"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{ flex: 1, minHeight: 40, padding: "0 10px" }}
+          />
+          <Button type="submit" variant="primary" size="sm">Search</Button>
+        </form>
+
         {errored ? (
           // GAP-PROCUREMENT-GEM-01: a failed fetch is a real error with retry —
           // not "No GeM orders found" and not zeroed stats.
           <RefreshErrorState error={toHumanError("load", { area: "GeM orders" })} />
+        ) : integrationDisabled && tableRows.length === 0 ? (
+          // GAP2-PROCUREMENT-GEM-ITEMS-08: distinct from "no results" — the
+          // integration itself is not configured, so searching cannot help. The
+          // server's own `reason` is shown as a diagnostic when present.
+          <EmptyState
+            icon="🔌"
+            title="GeM integration is not configured"
+            message={reason ?? "The Government e-Marketplace connection has not been set up, so live catalogue items cannot be fetched. Contact your administrator to enable it."}
+          />
+        ) : !query && tableRows.length === 0 ? (
+          // GAP2-PROCUREMENT-GEM-ITEMS-08: no term entered — tell the operator to
+          // search, rather than showing a bare "no items" that reads as "none exist".
+          <EmptyState
+            icon="🔎"
+            title="Enter a search term"
+            message="Type an item or keyword above and press Search to query the live GeM catalogue."
+          />
         ) : tableRows.length === 0 ? (
-          <EmptyState icon="🛒" title="No GeM orders found" message="Orders placed on GeM will appear here." />
+          <EmptyState icon="🛒" title="No GeM items found" message={`No GeM catalogue items matched “${query}”. Try a different search term.`} />
         ) : (
           <DataTable<GemRow>
             rows={tableRows}

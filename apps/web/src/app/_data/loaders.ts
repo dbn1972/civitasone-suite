@@ -3472,12 +3472,41 @@ export type GemItem = {
   gemStatus: string;
 };
 
-export async function getProcurementGem(): Promise<LoaderResult<GemItem[]>> {
-  return fetchJson<unknown, GemItem[]>("/api/v1/procurement/gem/items", [], {
+export type ProcurementGemResult = LoaderResult<GemItem[]> & {
+  /**
+   * GAP2-PROCUREMENT-GEM-ITEMS-08: honest empty-state context the backend
+   * returns in meta. `integrationDisabled` → GeM is not configured;
+   * `reason` → a human string (e.g. "no search query supplied"). Both null on a
+   * successful search with results or a failed fetch.
+   */
+  integrationDisabled?: boolean;
+  reason?: string | null;
+};
+
+export async function getProcurementGem(q?: string): Promise<ProcurementGemResult> {
+  // GAP2-PROCUREMENT-GEM-ITEMS-08: pass the operator's search term through as
+  // ?q= (the backend aliases the live GeM catalog only when a term is given)
+  // and capture meta.reason / meta.integrationDisabled so the UI can show a
+  // specific empty state instead of a bare "no items".
+  let integrationDisabled = false;
+  let reason: string | null = null;
+  const qs = q && q.trim() ? `?q=${encodeURIComponent(q.trim())}` : "";
+  const result = await fetchJson<unknown, GemItem[]>(`/api/v1/procurement/gem/items${qs}`, [], {
     revalidateSeconds: 120,
     telemetryKey: "procurement.gem",
-    mapResponse: (p) => getArrayPayload(p) as GemItem[] | null,
+    mapResponse: (p) => {
+      if (isRecord(p) && isRecord(p.meta)) {
+        if (p.meta.integrationDisabled === true) integrationDisabled = true;
+        if (typeof p.meta.reason === "string") reason = p.meta.reason;
+      }
+      return getArrayPayload(p) as GemItem[] | null;
+    },
   });
+  return {
+    ...result,
+    integrationDisabled: result.source === "api" ? integrationDisabled : false,
+    reason: result.source === "api" ? reason : null,
+  };
 }
 
 export type EmdBgEntry = {
@@ -3516,12 +3545,41 @@ export type EmpanelmentEntry = {
   status: string;
 };
 
-export async function getProcurementEmpanelment(): Promise<LoaderResult<EmpanelmentEntry[]>> {
-  return fetchJson<unknown, EmpanelmentEntry[]>("/api/v1/procurement/empanelment", [], {
-    revalidateSeconds: 120,
-    telemetryKey: "procurement.empanelment",
-    mapResponse: (p) => getArrayPayload(p) as EmpanelmentEntry[] | null,
-  });
+/** The page size this loader requests — the empanelment route's maximum. */
+export const PROCUREMENT_EMPANELMENT_PAGE_LIMIT = 500;
+
+export type ProcurementEmpanelmentResult = LoaderResult<EmpanelmentEntry[]> & {
+  /**
+   * GAP2-PROCUREMENT-EMPANELMENT-02: tenant-wide empanelment total from the
+   * server's `meta.total` (a real COUNT, not the capped page length), so the
+   * "Total Empanelled" stat and a "showing N of M" hint are honest for tenants
+   * with more than one page. Null when the backend omitted it or the load failed.
+   */
+  total?: number | null;
+};
+
+export async function getProcurementEmpanelment(): Promise<ProcurementEmpanelmentResult> {
+  // GAP2-PROCUREMENT-EMPANELMENT-02: previously the loader sent no limit, so the
+  // route defaulted to 50 and the page presented that capped page length as the
+  // complete count. Request the route maximum (500) AND capture the real
+  // `meta.total` the service now returns before the mapper reduces the payload
+  // to the row array.
+  let total: number | null = null;
+  const result = await fetchJson<unknown, EmpanelmentEntry[]>(
+    `/api/v1/procurement/empanelment?limit=${PROCUREMENT_EMPANELMENT_PAGE_LIMIT}`,
+    [],
+    {
+      revalidateSeconds: 120,
+      telemetryKey: "procurement.empanelment",
+      mapResponse: (p) => {
+        if (isRecord(p) && isRecord(p.meta) && typeof p.meta.total === "number") {
+          total = p.meta.total;
+        }
+        return getArrayPayload(p) as EmpanelmentEntry[] | null;
+      },
+    },
+  );
+  return { ...result, total: result.source === "api" ? total : null };
 }
 
 export type PreBidConference = {

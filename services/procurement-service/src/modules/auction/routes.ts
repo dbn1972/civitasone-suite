@@ -15,8 +15,12 @@ export async function auctionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
-    const data = await queries.listAuctions(ctx.tenantId, q.limit, q.offset);
-    return reply.send({ data, meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, total: data.length } });
+    // GAP2-PROCUREMENT-GAPLIST-03: real COUNT(*) total, not the page length.
+    const [data, total] = await Promise.all([
+      queries.listAuctions(ctx.tenantId, q.limit, q.offset),
+      queries.countAuctions(ctx.tenantId),
+    ]);
+    return reply.send({ data, meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, total } });
   });
 
   app.post("/v1/procurement/auctions", async (req, reply) => {

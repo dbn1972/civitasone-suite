@@ -3,14 +3,18 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { LineItemsEditor, emptyLineItem, lineItemsTotalMinor, type LineItem } from "../../_components/LineItemsEditor";
+import { useTranslations } from "next-intl";
+import { LineItemsEditor, emptyLineItem, lineItemsTotalMinor, lineUnitPriceMinor, isLineUnitPriceInvalid, type LineItem } from "../../_components/LineItemsEditor";
 import { trackActivation } from "@/lib/activation";
 import { useFormError } from "@/lib/useFormError";
 import { formatMoney } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { Button } from "@/app/_components/ds";
 
-type GfrBand = { id: string; name: string; notes: string; requiresTender: boolean };
+// GAP2-PROCUREMENT-GFR-BANDS-07: the API now carries stable i18n keys
+// (nameKey/notesKey) instead of baked English prose; the band name and note are
+// resolved against the message tree below so they render in en/hi.
+type GfrBand = { id: string; nameKey: string; notesKey: string; requiresTender: boolean };
 type ModeState = "idle" | "loading" | "ready" | "error";
 
 export function CreateIndentForm({
@@ -18,6 +22,9 @@ export function CreateIndentForm({
   prefillTruncated = false,
 }: { initialItem?: LineItem | null; prefillTruncated?: boolean } = {}) {
   const router = useRouter();
+  // GAP2-PROCUREMENT-GFR-BANDS-07: resolve the GFR band's name/note from the
+  // message tree (the API now sends i18n keys, not English prose).
+  const tRoot = useTranslations();
 
   // GAP-PROCUREMENT-INDENTS-NEW-04: no browser-generated indent number. The
   // server allocates a gapless per-tenant number on submit; the field is a
@@ -84,6 +91,11 @@ export function CreateIndentForm({
     if (!department.trim()) fe.department = "Choose the department raising this indent.";
     if (purpose.trim().length < 3) fe.purpose = "Enter a purpose of at least 3 characters.";
     if (validItems.length === 0) fe.items = "Add at least one line item with a code and description.";
+    // GAP2-PROCUREMENT-MONEY-WEB-04: block submit on any syntactically invalid
+    // unit price (>2 decimals / non-numeric) rather than silently rounding it.
+    if (validItems.some((it) => isLineUnitPriceInvalid(it.unitPrice))) {
+      fe.items = "One or more line items have an invalid unit price — enter rupees with at most 2 decimal places.";
+    }
     if (requiredBy && indentDate && requiredBy < indentDate) {
       fe.requiredBy = "Required-by date cannot be before the indent date.";
     }
@@ -95,7 +107,7 @@ export function CreateIndentForm({
     }
     setFieldErrors({});
 
-    const unpriced = validItems.filter((it) => !(it.unitPrice > 0)).length;
+    const unpriced = validItems.filter((it) => (lineUnitPriceMinor(it.unitPrice) ?? 0n) <= 0n).length;
     if (unpriced > 0 && !zeroPriceAck) {
       setZeroPriceAck(true);
       setStatus("error");
@@ -118,7 +130,11 @@ export function CreateIndentForm({
         description: it.description.trim(),
         quantity: Math.max(1, it.quantity),
         unit: it.unit, // NEW-04: the clerk-chosen unit, not a hard-coded "nos"
-        unitPriceMinor: Math.max(0, Math.round(it.unitPrice * 100)),
+        // GAP2-PROCUREMENT-MONEY-WEB-04: exact paise from the rupees STRING via
+        // BigInt (nonNegativeRupeesToMinorString inside lineUnitPriceMinor),
+        // never `Math.round(float * 100)`. The invalid-price guard above means
+        // this is non-null here; `?? 0n` keeps the type sound for the empty case.
+        unitPriceMinor: Number(lineUnitPriceMinor(it.unitPrice) ?? 0n),
       })),
     };
     try {
@@ -210,7 +226,7 @@ export function CreateIndentForm({
                 <span style={{ background: modeBand.requiresTender ? "var(--warn)" : "var(--good)", color: "#fff", borderRadius: 3, padding: "2px 8px", fontSize: 12, fontWeight: 600 }}>
                   {modeBand.id}
                 </span>
-                <span style={{ fontSize: 12, color: "var(--ink2)" }}>{modeBand.name} — {modeBand.notes}</span>
+                <span style={{ fontSize: 12, color: "var(--ink2)" }}>{tRoot(modeBand.nameKey)} — {tRoot(modeBand.notesKey)}</span>
               </>
             ) : modeState === "loading" ? (
               <span style={{ fontSize: 12, color: "var(--ink2)" }}>Determining mode…</span>

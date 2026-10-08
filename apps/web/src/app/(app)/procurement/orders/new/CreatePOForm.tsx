@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { LineItemsEditor, emptyLineItem, lineItemsTotalMinor, type LineItem } from "../../_components/LineItemsEditor";
+import { LineItemsEditor, emptyLineItem, lineItemsTotalMinor, lineUnitPriceMinor, isLineUnitPriceInvalid, type LineItem } from "../../_components/LineItemsEditor";
 import { toHumanError } from "@/lib/messages";
 import { useFormError } from "@/lib/useFormError";
 import { Button, Field, Select, Input } from "@/app/_components/ds";
@@ -86,6 +86,13 @@ export function CreatePOForm() {
       setMessage("Choose a vendor and an approved indent, and add at least one complete line item.");
       return;
     }
+    // GAP2-PROCUREMENT-MONEY-WEB-04: reject any invalid unit price (>2 decimals
+    // / non-numeric) up front rather than silently rounding a committed PO total.
+    if (validItems.some((it) => isLineUnitPriceInvalid(it.unitPrice))) {
+      setStatus("error");
+      setMessage("One or more line items have an invalid unit price — enter rupees with at most 2 decimal places.");
+      return;
+    }
     if (deliveryDate && deliveryDate < today) {
       setStatus("error");
       setMessage("Delivery date cannot be in the past.");
@@ -109,7 +116,9 @@ export function CreatePOForm() {
         description: it.description.trim(),
         quantity: Math.max(1, it.quantity),
         unit: it.unit || "nos",
-        unitPriceMinor: Math.max(0, Math.round(it.unitPrice * 100)),
+        // GAP2-PROCUREMENT-MONEY-WEB-04: exact paise from the rupees STRING via
+        // BigInt, never `Math.round(float * 100)`.
+        unitPriceMinor: Number(lineUnitPriceMinor(it.unitPrice) ?? 0n),
       })),
     };
     try {
