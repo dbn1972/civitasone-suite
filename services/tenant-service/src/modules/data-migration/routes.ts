@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, RouteHandlerMethod } from "fastify";
 import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -16,11 +16,15 @@ export async function dataMigrationRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(202).send({ data: { migrationId: id, status: "queued", dryRun: body.dryRun } });
   });
 
-  app.get("/v1/org/migrations", async (req, reply) => {
+  const listMigrations: RouteHandlerMethod = async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);
     const data = await repo.listMigrations(ctx.tenantId);
     return reply.send({ data, meta: { total: data.length } });
-  });
+  };
+  // GAP2-TENANT-WIRING-01: web loader calls /api/v1/tenant/org/migrations
+  // (gateway forwards verbatim). Alias so it resolves instead of 404.
+  app.get("/v1/org/migrations", listMigrations);
+  app.get("/v1/tenant/org/migrations", listMigrations);
 
   app.get("/v1/org/migrations/:id", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);

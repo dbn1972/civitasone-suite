@@ -14,6 +14,13 @@ function upstream(name: string, port: number): string {
 
 export const SERVICE_ROUTES: ServiceRoute[] = [
   { name: "identity",     prefix: "/api/identity",     upstream: upstream("identity", 3001) },
+  // GAP2-IDENTITY-WEBAUTHN-01: the "My passkeys" page loader + Remove action
+  // call /api/v1/identity/webauthn/credentials[/:id], but the only identity
+  // entry was /api/identity (-> /identity). identity-service registers the
+  // webauthn surface under /v1/identity/*, which /api/identity can never reach,
+  // so every request 404'd. This versioned prefix forwards verbatim to
+  // /v1/identity/*; longest-prefix match keeps it distinct from /api/identity.
+  { name: "identity-v1",  prefix: "/api/v1/identity",   upstream: upstream("identity", 3001), upstreamPath: "/v1/identity" },
   { name: "policy",       prefix: "/api/policy",       upstream: upstream("policy", 3003) },
   { name: "policy-v1",   prefix: "/api/v1/policy",    upstream: upstream("policy", 3003) },
   { name: "audit-events", prefix: "/api/audit",        upstream: upstream("audit", 3004) },

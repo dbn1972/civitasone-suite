@@ -71,10 +71,12 @@ export default async function PlatformAuditLogPage() {
         subtitle="Chronological record of all admin actions — timestamp, actor, role, before/after diffs, IP."
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
-        <StatCard icon="📋" iconBg="#f1f5f9" label="Events (today)" value={today24h} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Success" value={successes} />
-        <StatCard icon="❌" iconBg="#fef3f2" label="Failures" value={failures} />
-        <StatCard icon="👥" iconBg="#eff6ff" label="Unique actors" value={uniqueActors} />
+        {/* GAP2-PLATFORM-ADMIN-COLOURS-04: theme tones (dark-mode aware) in
+            place of fixed light-pastel hex iconBg values. */}
+        <StatCard icon="📋" tone="neutral" label="Events (today)" value={today24h} />
+        <StatCard icon="✅" tone="good" label="Success" value={successes} />
+        <StatCard icon="❌" tone="bad" label="Failures" value={failures} />
+        <StatCard icon="👥" tone="info" label="Unique actors" value={uniqueActors} />
       </div>
       <AuditLogTable events={events} canExport={canExport} />
     </div>

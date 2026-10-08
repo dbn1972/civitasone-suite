@@ -14,12 +14,6 @@ import * as commands from "./commands.js";
 
 const ADMIN_ROLES = ["theme_admin", "super_admin"];
 
-function resolveTenantId(req: { headers: Record<string, string | string[] | undefined> }): string {
-  const tenantId = req.headers["x-tenant-id"] as string | undefined;
-  if (!tenantId) throw new HttpError(400, "MISSING_TENANT", "x-tenant-id header is required");
-  return tenantId;
-}
-
 function buildCssVars(config: BrandConfigRow | typeof DEFAULTS & { tenantId?: string }): string {
   let css = `:root {
   --color-primary: ${config.colorPrimary};
@@ -65,7 +59,13 @@ function sanitizeCss(raw: string): string {
 
 export async function brandRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/themes/brand", async (req, reply) => {
-    const tenantId = resolveTenantId(req);
+    // GAP2-THEMES-BRAND-AUTHZ-02: resolve the tenant from the VERIFIED JWT
+    // context (resolveContext -> payload.tid), never from the raw, client-
+    // controllable x-tenant-id header. The cache key is built from that same
+    // trusted id so a forged header cannot read/poison another tenant's brand.
+    const ctx = resolveContext(req);
+    const tenantId = ctx.tenantId;
+    if (!tenantId) throw new HttpError(400, "MISSING_TENANT", "no tenant in context");
     const config = await cache.getOrLoad<BrandConfigRow>(
       cache.makeKey(tenantId, BRAND_RESOURCE, "config"),
       () => brandRepo.findByTenant(tenantId),
@@ -103,7 +103,11 @@ export async function brandRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/v1/themes/brand/css", async (req, reply) => {
-    const tenantId = resolveTenantId(req);
+    // GAP2-THEMES-BRAND-AUTHZ-02: tenant from the verified JWT context, not the
+    // raw x-tenant-id header; cache key keyed on the trusted id.
+    const ctx = resolveContext(req);
+    const tenantId = ctx.tenantId;
+    if (!tenantId) throw new HttpError(400, "MISSING_TENANT", "no tenant in context");
     const config = await cache.getOrLoad<BrandConfigRow>(
       cache.makeKey(tenantId, BRAND_RESOURCE, "config"),
       () => brandRepo.findByTenant(tenantId),

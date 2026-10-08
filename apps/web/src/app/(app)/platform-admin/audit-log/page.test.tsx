@@ -54,4 +54,25 @@ describe("PlatformAuditLogPage (GAP-PLATFORM-ADMIN-AUDIT-LOG-01/03)", () => {
       vi.useRealTimers();
     }
   });
+
+  // GAP2-PLATFORM-ADMIN-COLOURS-04: StatCard icon tiles must use theme tones
+  // (var(--goodbg)/--badbg/--infobg/--bg2, each redefined for dark mode), not
+  // fixed light-pastel hex iconBg values that stay pale in dark mode.
+  it("StatCard icon tiles use theme tokens, not hard-coded hex backgrounds", async () => {
+    getTenantAuditLogMock.mockResolvedValue({
+      data: [
+        { id: "a", timestamp: "2026-09-29T06:30:00.000Z", actor: "x", action: "role.update", outcome: "success" },
+      ],
+      source: "api",
+    });
+    const { container } = render((await PlatformAuditLogPage()) as React.ReactElement);
+    const tiles = Array.from(container.querySelectorAll<HTMLElement>(".stat .ic"));
+    expect(tiles.length).toBe(4);
+    for (const tile of tiles) {
+      const bg = tile.style.background;
+      expect(bg).toContain("var(--");
+      // None of the old fixed pastel hex values survive.
+      expect(bg).not.toMatch(/#f1f5f9|#ecfdf3|#fef3f2|#eff6ff/i);
+    }
+  });
 });

@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, RouteHandlerMethod } from "fastify";
 import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -10,11 +10,15 @@ const CLASS = ["public", "internal", "confidential", "restricted"] as const;
 
 export async function stewardshipRoutes(app: FastifyInstance): Promise<void> {
   // ── data domains ──────────────────────────────────────────────────
-  app.get("/v1/data-governance/domains", async (req, reply) => {
+  const listDomains: RouteHandlerMethod = async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);
     const data = await repo.listDomains(ctx.tenantId);
     return reply.send({ data, meta: { total: data.length } });
-  });
+  };
+  // GAP2-TENANT-WIRING-01: web stewardship loader calls
+  // /api/v1/tenant/data-governance/domains (gateway forwards verbatim). Alias.
+  app.get("/v1/data-governance/domains", listDomains);
+  app.get("/v1/tenant/data-governance/domains", listDomains);
 
   app.get("/v1/data-governance/domains/:id", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);

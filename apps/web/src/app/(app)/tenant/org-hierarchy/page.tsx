@@ -17,6 +17,7 @@ export default async function Page() {
         description="Organisation units and hierarchy nodes."
         rows={data}
         source={source}
+        errorArea="org hierarchy"
       />
     </div>
   );

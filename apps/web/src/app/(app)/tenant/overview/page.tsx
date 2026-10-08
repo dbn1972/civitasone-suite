@@ -17,6 +17,9 @@ export default async function Page() {
         description="Your organisation's current profile."
         rows={data}
         source={source}
+        // GAP2-TENANT-ERRORSTATE-03: specific error copy ("Couldn't load the
+        // office profile") instead of the generic "records".
+        errorArea="office profile"
       />
     </div>
   );

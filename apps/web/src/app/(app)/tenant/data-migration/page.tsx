@@ -17,6 +17,7 @@ export default async function Page() {
         description="Organisation data migrations and reconciliation jobs."
         rows={data}
         source={source}
+        errorArea="data migrations"
       />
     </div>
   );

@@ -308,13 +308,17 @@ describe("GET /v1/themes/brand", () => {
     expect(res.statusCode).toBe(401);
   });
 
-  it("→ 400 missing x-tenant-id header", async () => {
+  it("→ 200 without x-tenant-id header (tenant resolved from JWT tid)", async () => {
+    // GAP2-THEMES-BRAND-AUTHZ-02: the GET routes no longer read the raw
+    // x-tenant-id header for identity — the tenant comes from the verified JWT
+    // context (payload.tid). A request with a valid token but NO x-tenant-id
+    // header therefore succeeds (200), using the token's tenant, instead of
+    // the old 400 "x-tenant-id header is required".
     const res = await app.inject({
       method: "GET", url: "/v1/themes/brand",
       headers: { authorization: `Bearer ${token(["theme_admin"])}` },
     });
-    // resolveTenantId checks x-tenant-id header explicitly
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(200);
   });
 
   it("→ 200 returns brand config/defaults", async () => {
@@ -458,12 +462,15 @@ describe("GET /v1/themes/brand/css", () => {
     expect(res.statusCode).toBe(401);
   });
 
-  it("→ 400 without x-tenant-id", async () => {
+  it("→ 200 without x-tenant-id header (tenant resolved from JWT tid)", async () => {
+    // GAP2-THEMES-BRAND-AUTHZ-02: tenant comes from the verified JWT context,
+    // not the raw x-tenant-id header, so a token-only request succeeds (200).
     const res = await app.inject({
       method: "GET", url: "/v1/themes/brand/css",
       headers: { authorization: `Bearer ${token(["theme_admin"])}` },
     });
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toContain("text/css");
   });
 
   it("→ 200 returns CSS with content-type text/css", async () => {

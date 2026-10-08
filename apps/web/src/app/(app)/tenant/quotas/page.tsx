@@ -17,6 +17,8 @@ export default async function Page() {
         source={source}
         back="/tenant"
         backLabel={LABELS.tenantTitle}
+        // GAP2-TENANT-ERRORSTATE-03
+        errorArea="quotas & usage"
       />
     </div>
   );

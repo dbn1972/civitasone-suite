@@ -2,7 +2,7 @@
  * Settings module HTTP routes (Fastify plugin).
  * Writes return 202. Reads return 200 from cache.
  */
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, RouteHandlerMethod } from "fastify";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -34,7 +34,7 @@ export async function settingRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // LIST all settings for current tenant
-  app.get("/v1/settings", async (req, reply) => {
+  const listSettings: RouteHandlerMethod = async (req, reply) => {
     const ctx = resolveContext(req);
     // GAP-TENANT-HOME-01: tenant-scoped configuration is governance data; a
     // bare signed-in session is not enough to read the settings registry.
@@ -42,7 +42,11 @@ export async function settingRoutes(app: FastifyInstance): Promise<void> {
     if (!ctx.tenantId) throw new HttpError(401, "UNAUTHENTICATED", "no tenant in context");
     const settings = await repo.findAllByTenant(ctx.tenantId);
     return reply.send(settings);
-  });
+  };
+  // GAP2-TENANT-WIRING-01: web settings loader calls /api/v1/tenant/settings
+  // (gateway forwards verbatim). Alias so it resolves instead of 404.
+  app.get("/v1/settings", listSettings);
+  app.get("/v1/tenant/settings", listSettings);
 
   // GET specific setting by key (cache-first)
   app.get("/v1/settings/:key", async (req, reply) => {
