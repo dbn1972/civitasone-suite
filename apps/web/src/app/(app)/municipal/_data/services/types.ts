@@ -50,6 +50,23 @@ export type MunicipalServiceConfig = {
    * after these, alphabetically by label.
    */
   fieldOrder?: readonly string[];
+  /**
+   * GAP2-MUNICIPAL-APPLICATIONS-STATUS-01: the service's real status
+   * vocabulary (its backend domain status enum, in lifecycle order). The
+   * applications status-filter tabs are driven from this, so an officer never
+   * sees a universal set of tabs that silently mismatch a service whose
+   * statuses differ (e.g. animal complaints are reported|assigned|…|closed and
+   * none of submitted/under_review/approved/rejected/issued can ever match).
+   * When omitted, the page renders NO status tabs rather than a guessed set.
+   */
+  statusVocabulary?: readonly string[];
+  /**
+   * GAP2-MUNICIPAL-DETAIL-MONEY-01: record keys that hold money as bigint
+   * minor units (paise) and must be rendered via formatMoney (₹1,500.00), not
+   * as a raw paise integer. The `*_minor`/`*Minor` key-name heuristic catches
+   * these automatically; this list is for money fields the heuristic misses.
+   */
+  moneyFields?: readonly string[];
   /** Sec5 scope (shop is reference template, not part of the 16) */
   sec5: boolean;
   /**

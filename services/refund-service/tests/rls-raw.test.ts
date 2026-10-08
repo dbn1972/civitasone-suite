@@ -44,6 +44,15 @@ import { registerProcessingConsumers } from "../src/modules/processing/consumer.
 import { registerReconciliationConsumers } from "../src/modules/reconciliation/consumer.js";
 import { hdr, drainQueue, waitFor, TENANT_A, TENANT_B } from "./support.js";
 
+// GAP2-REFUND-APPROVAL-01 (segregation of duties): the request creator (the
+// default hdr() sub, ACTOR_A) may not approve, and no single officer may
+// approve both levels — so approvals below run as distinct non-creator
+// officers. (This file's subject is RLS, not SOD; these identities just keep
+// the approval/disbursement rows getting created so the raw-SELECT proof can
+// run.)
+const RLS_CHECKER = "e5000002-0000-4000-8000-00000000d001";
+const RLS_AUTHORIZER = "e5000002-0000-4000-8000-00000000d002";
+
 let app: FastifyInstance;
 
 beforeAll(async () => {
@@ -119,7 +128,7 @@ describe("RLS — raw unfiltered query proof (bypasses app-level tenant filters)
     const approve = await app.inject({
       method: "POST",
       url: "/v1/refund/processing/approve",
-      headers: hdr(undefined, TENANT_A),
+      headers: hdr(RLS_CHECKER, TENANT_A),
       payload: { requestId, level: 1, remarks: "rls raw test" },
     });
     const { id: approvalId } = approve.json() as { id: string };
@@ -154,9 +163,9 @@ describe("RLS — raw unfiltered query proof (bypasses app-level tenant filters)
       const r = await app.inject({ method: "GET", url: `/v1/refund/requests/${requestId}`, headers: hdr(undefined, TENANT_A) });
       return (r.json() as { data: { status: string } }).data.status === "under_review";
     });
-    await app.inject({ method: "POST", url: "/v1/refund/processing/approve", headers: hdr(undefined, TENANT_A), payload: { requestId, level: 1, remarks: "l1" } });
+    await app.inject({ method: "POST", url: "/v1/refund/processing/approve", headers: hdr(RLS_CHECKER, TENANT_A), payload: { requestId, level: 1, remarks: "l1" } });
     await drainQueue();
-    await app.inject({ method: "POST", url: "/v1/refund/processing/approve", headers: hdr(undefined, TENANT_A), payload: { requestId, level: 2, remarks: "l2" } });
+    await app.inject({ method: "POST", url: "/v1/refund/processing/approve", headers: hdr(RLS_AUTHORIZER, TENANT_A), payload: { requestId, level: 2, remarks: "l2" } });
     await waitFor(async () => {
       const r = await app.inject({ method: "GET", url: `/v1/refund/requests/${requestId}`, headers: hdr(undefined, TENANT_A) });
       return (r.json() as { data: { status: string } }).data.status === "approved";

@@ -22,14 +22,14 @@ export function validateGeneratorTransition(from: GeneratorStatus, to: Generator
 // water-connections/domain.ts FEE_TABLE keyed on connectionType+pipeSize):
 // a fixed table keyed on the legitimate pricing inputs (generatorType,
 // category), called from the consumer — never from the route handler.
-const FEE_TABLE: Record<GeneratorType, Record<WasteCategory, number>> = {
-  hotel: { wet: 1000000, dry: 800000, mixed: 1200000 },
-  restaurant: { wet: 700000, dry: 500000, mixed: 900000 },
-  mall: { wet: 1500000, dry: 1200000, mixed: 1800000 },
-  hospital: { wet: 2000000, dry: 1800000, mixed: 2500000 },
-  market: { wet: 600000, dry: 400000, mixed: 800000 },
+const FEE_TABLE: Record<GeneratorType, Record<WasteCategory, bigint>> = {
+  hotel: { wet: 1000000n, dry: 800000n, mixed: 1200000n },
+  restaurant: { wet: 700000n, dry: 500000n, mixed: 900000n },
+  mall: { wet: 1500000n, dry: 1200000n, mixed: 1800000n },
+  hospital: { wet: 2000000n, dry: 1800000n, mixed: 2500000n },
+  market: { wet: 600000n, dry: 400000n, mixed: 800000n },
 };
 
-export function calculateFeeMinor(generatorType: GeneratorType, category: WasteCategory): number {
-  return FEE_TABLE[generatorType]?.[category] ?? 500000;
+export function calculateFeeMinor(generatorType: GeneratorType, category: WasteCategory): bigint {
+  return FEE_TABLE[generatorType]?.[category] ?? 500000n;
 }

@@ -109,8 +109,10 @@ describe("TX-008: fee is server-derived, never client-priced", () => {
       return get.statusCode === 200;
     });
 
-    expect(get!.json().data.feeMinor).toBe(2500000);
-    expect(get!.json().data.feeMinor).not.toBe(1);
+    // GAP2-PLATFORM-MONEY-INT-02: feeMinor is now bigint paise, serialized as
+    // a canonical base-10 string in the JSON view (safe past 2^31/2^53).
+    expect(get!.json().data.feeMinor).toBe("2500000");
+    expect(get!.json().data.feeMinor).not.toBe("1");
   });
 
   it("ignores an attacker-supplied feeMinor on the patch/update route too", async () => {
@@ -144,6 +146,6 @@ describe("TX-008: fee is server-derived, never client-priced", () => {
       get = await app.inject({ method: "GET", url: `/v1/swm/bulk-generators/${id}`, headers: hdr() });
       return get.json().data.version === 2;
     });
-    expect(get!.json().data.feeMinor).toBe(600000);
+    expect(get!.json().data.feeMinor).toBe("600000");
   });
 });

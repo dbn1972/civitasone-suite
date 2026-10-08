@@ -11,6 +11,8 @@ export const advertisementService: MunicipalServiceConfig = {
   resourceLabel: "Applications",
   titleFields: ["advertiserName", "advertiserOrg"],
   numberFields: ["applicationNumber"],
+  // GAP2-MUNICIPAL-APPLICATIONS-STATUS-01: advertisement/applications/domain.ts.
+  statusVocabulary: ["draft", "submitted", "under_review", "approved", "rejected", "withdrawn"],
   citizenServiceKey: "advertisement-hoarding",
   sec5: true,
 };

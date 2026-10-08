@@ -11,6 +11,8 @@ export const fireService: MunicipalServiceConfig = {
   resourceLabel: "Applications",
   titleFields: ["buildingName"],
   numberFields: ["applicationNumber"],
+  // GAP2-MUNICIPAL-APPLICATIONS-STATUS-01: fire/applications/domain.ts.
+  statusVocabulary: ["draft", "submitted", "under_review", "inspection_scheduled", "approved", "rejected", "withdrawn"],
   citizenServiceKey: "fire-noc",
   sec5: true,
 };

@@ -11,6 +11,8 @@ export const sewerageService: MunicipalServiceConfig = {
   resourceLabel: "Desludging bookings",
   titleFields: ["address", "requestedSlot"],
   numberFields: ["bookingNumber"],
+  // GAP2-MUNICIPAL-APPLICATIONS-STATUS-01: sewerage/desludging/domain.ts BookingStatus.
+  statusVocabulary: ["requested", "scheduled", "dispatched", "completed", "cancelled"],
   citizenServiceKey: "desludging-booking",
   sec5: true,
 };

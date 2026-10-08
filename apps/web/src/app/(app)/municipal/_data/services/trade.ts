@@ -11,6 +11,8 @@ export const tradeService: MunicipalServiceConfig = {
   resourceLabel: "Applications",
   titleFields: ["businessName", "ownerName"],
   numberFields: ["applicationNumber"],
+  // GAP2-MUNICIPAL-APPLICATIONS-STATUS-01: trade/applications/domain.ts APPLICATION_STATUSES.
+  statusVocabulary: ["draft", "submitted", "under_scrutiny", "inspecting", "approved", "rejected", "withdrawn"],
   citizenServiceKey: "trade-license",
   // GAP-...-DETAIL-01: contact/identity fields to mask; GAP-...-DETAIL-03: lead
   // with the fields officers scan first. Key-name heuristics also catch

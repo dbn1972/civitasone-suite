@@ -1,5 +1,5 @@
 import type { MunicipalServiceConfig } from "./services";
-import { formatIndianDate, formatIndianDateTime } from "@/lib/formatters";
+import { formatIndianDate, formatIndianDateTime, formatMoney, humanizeStatus } from "@/lib/formatters";
 
 export type MunicipalRecordRow = {
   id: string;
@@ -133,6 +133,26 @@ export function isInProgressStatus(status: string): boolean {
   return !TERMINAL_STATUSES.has(s);
 }
 
+export type MunicipalStatusFilter = { value: string; label: string };
+
+/**
+ * GAP2-MUNICIPAL-APPLICATIONS-STATUS-01 + -02: the status-filter tab options
+ * for a service's applications list. Driven from the service's real status
+ * vocabulary (config.statusVocabulary, populated from its backend domain enum)
+ * so the tabs can actually match records — the old universal set
+ * (submitted/under_review/approved/rejected/issued) silently returned empty on
+ * every service whose enum differs (e.g. animal complaints). When a service has
+ * no known vocabulary, returns [] so the page renders NO status tabs rather
+ * than a guessed set that mismatches.
+ *
+ * Labels are humanized + Title-cased via the shared humanizeStatus (STATUS-02),
+ * so a tab reads "Under Review", never the raw snake_case "under_review".
+ */
+export function statusFilterOptions(config: MunicipalServiceConfig): MunicipalStatusFilter[] {
+  const vocab = config.statusVocabulary ?? [];
+  return vocab.map((value) => ({ value, label: humanizeStatus(value) }));
+}
+
 /** Count of rows still in progress among the given (page-scoped) rows. */
 export function countInProgress(rows: readonly MunicipalRecordRow[]): number {
   return rows.filter((r) => isInProgressStatus(r.status)).length;
@@ -172,6 +192,31 @@ function piiKindForKey(key: string): MunicipalPiiKind | null {
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}(T.*)?$/;
 
+// GAP2-MUNICIPAL-DETAIL-MONEY-01: money columns are bigint minor units
+// (paise) — e.g. refund originalAmountMinor/refundAmountMinor,
+// trade/building/advertisement feeMinor. Rendering the raw integer ("150000")
+// is misleading financial display; these must go through formatMoney
+// ("₹1,500.00"). Key-name heuristic: anything ending in `Minor` or `_minor`.
+const MONEY_KEY_RE = /(_minor|minor)$/i;
+function isMoneyKey(key: string, config?: MunicipalServiceConfig): boolean {
+  if ((config?.moneyFields ?? []).includes(key)) return true;
+  return MONEY_KEY_RE.test(key);
+}
+
+// GAP2-MUNICIPAL-DETAIL-UUID-01: raw actor/foreign-key UUID columns (animal's
+// reportedBy/assignedTo and similar `*By`/`*Id` columns on other services) are
+// opaque to officers and a minor identity leak of internal user ids. We hide a
+// column when its NAME looks like an actor/FK reference AND its VALUE is a bare
+// UUID (so a human-readable `*By` string, or a non-UUID `*Id`, still shows).
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// `*By` (reportedBy, createdBy…), `*To` (assignedTo…) and `*Id` (requestedById…)
+// are the actor/foreign-key reference shapes across the services.
+const ACTOR_FK_KEY_RE = /(by|to|id)$/i;
+function isRawActorOrFkUuid(key: string, value: unknown): boolean {
+  if (typeof value !== "string" || !UUID_RE.test(value)) return false;
+  return ACTOR_FK_KEY_RE.test(key);
+}
+
 /**
  * Flatten a record for the read-only detail panel.
  *
@@ -193,8 +238,18 @@ export function detailEntries(
 
   const entries: MunicipalDetailEntry[] = Object.entries(record)
     .filter(([k]) => !hidden.has(k))
+    // GAP2-MUNICIPAL-DETAIL-UUID-01: drop raw actor/FK UUID columns
+    // (reportedBy/assignedTo/*By/*Id whose value is a bare UUID) — opaque to
+    // officers and a minor identity leak. Resolving to names needs an identity
+    // lookup; until then the safe default is to not surface the raw id.
+    .filter(([k, v]) => !isRawActorOrFkUuid(k, v))
     .map(([key, value]) => {
       const label = key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase());
+      // GAP2-MUNICIPAL-DETAIL-MONEY-01: money minor-unit columns render via
+      // formatMoney (₹1,500.00), never as a raw paise integer.
+      if (isMoneyKey(key, config) && (typeof value === "number" || typeof value === "bigint" || (typeof value === "string" && /^[+-]?\d+$/.test(value.trim())))) {
+        return { key, label, value: formatMoney(value as number | bigint | string), kind: "text" as const };
+      }
       const piiKind = explicitPii.has(key) ? (piiKindForKey(key) ?? "account") : piiKindForKey(key);
       const rawString = typeof value === "string" ? value : typeof value === "number" ? String(value) : null;
 

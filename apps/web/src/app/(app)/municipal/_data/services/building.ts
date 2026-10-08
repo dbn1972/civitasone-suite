@@ -11,6 +11,8 @@ export const buildingService: MunicipalServiceConfig = {
   resourceLabel: "Applications",
   titleFields: ["architectName", "siteAddress"],
   numberFields: ["applicationNumber"],
+  // GAP2-MUNICIPAL-APPLICATIONS-STATUS-01: building/applications/domain.ts.
+  statusVocabulary: ["draft", "submitted", "under_scrutiny", "approved", "rejected", "withdrawn"],
   // citizenServiceKey intentionally omitted — no citizen-service manifest exists yet.
   sec5: true,
 };

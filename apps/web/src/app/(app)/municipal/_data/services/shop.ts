@@ -11,6 +11,8 @@ export const shopService: MunicipalServiceConfig = {
   resourceLabel: "Applications",
   titleFields: ["establishmentName", "ownerName"],
   numberFields: ["applicationNumber"],
+  // GAP2-MUNICIPAL-APPLICATIONS-STATUS-01: shop/registrations/domain.ts APPLICATION_STATUSES.
+  statusVocabulary: ["draft", "submitted", "under_scrutiny", "inspecting", "approved", "rejected", "withdrawn"],
   citizenServiceKey: "shops-establishments",
   sec5: false,
 };

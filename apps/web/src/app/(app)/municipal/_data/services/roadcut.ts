@@ -11,6 +11,8 @@ export const roadcutService: MunicipalServiceConfig = {
   resourceLabel: "Applications",
   titleFields: ["applicantName", "purpose"],
   numberFields: ["applicationNumber"],
+  // GAP2-MUNICIPAL-APPLICATIONS-STATUS-01: roadcut/applications/domain.ts.
+  statusVocabulary: ["draft", "submitted", "under_review", "approved", "rejected", "withdrawn"],
   citizenServiceKey: "road-cutting",
   sec5: true,
 };
