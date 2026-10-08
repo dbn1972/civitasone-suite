@@ -40,20 +40,48 @@ async function verify(token: string): Promise<VerifyResult | null> {
 export default async function PublicVerifyPage({ params }: { params: { token: string } }) {
   const result = await verify(params.token);
 
-  const bg = result?.validity === "valid" ? "#ecfdf3" : result?.validity === "expired" ? "#fffaeb" : "#fef3f2";
+  // GAP2-SHELL-VERIFY-01: use the design-system status tokens (same set the
+  // offline page adopted in GAP-OFFLINE-HOME-03) instead of hard-coded light
+  // hex, so a dark-mode client is not forced into a light card. valid -> good,
+  // expired -> warn, invalid/not-found -> bad.
+  const tone =
+    result?.validity === "valid" ? "good" : result?.validity === "expired" ? "warn" : "bad";
+  const badgeBg = `var(--${tone}bg)`;
+  const badgeFg = `var(--${tone})`;
+  const badgeBd = `var(--${tone}bd)`;
 
   return (
-    <main style={{ maxWidth: 560, margin: "48px auto", padding: 24, fontFamily: "system-ui, sans-serif" }}>
-      <h1 style={{ fontSize: 22 }}>Certificate verification</h1>
+    <main
+      style={{
+        maxWidth: 560,
+        margin: "48px auto",
+        padding: 24,
+        background: "var(--bg)",
+        color: "var(--ink)",
+      }}
+    >
+      <h1 style={{ fontSize: 22, color: "var(--ink)" }}>Certificate verification</h1>
       {result === null ? (
-        <p role="alert">We couldn&apos;t verify this certificate right now. Please try again later.</p>
+        <p role="alert" style={{ color: "var(--ink2)" }}>
+          We couldn&apos;t verify this certificate right now. Please try again later.
+        </p>
       ) : (
         <div style={{ marginTop: 16 }}>
-          <div style={{ display: "inline-block", padding: "6px 14px", borderRadius: 999, background: bg, fontWeight: 600 }}>
+          <div
+            style={{
+              display: "inline-block",
+              padding: "6px 14px",
+              borderRadius: 999,
+              background: badgeBg,
+              color: badgeFg,
+              border: `1px solid ${badgeBd}`,
+              fontWeight: 600,
+            }}
+          >
             {result.found ? `Certificate is ${result.validity}` : "Certificate not found"}
           </div>
           {result.found ? (
-            <dl style={{ fontSize: 14, marginTop: 16 }}>
+            <dl style={{ fontSize: 14, marginTop: 16, color: "var(--ink)" }}>
               <div><strong>Number:</strong> {result.certNo ?? "—"}</div>
               <div><strong>Type:</strong> {result.certType ? humanizeStatus(result.certType) : "—"}</div>
               <div><strong>Status:</strong> {result.status ? humanizeStatus(result.status) : "—"}</div>

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { getEnabledModules, isModuleEnabled } from "@/lib/moduleVisibility";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 
 interface ModuleGateProps {
   /** The module key to check (e.g. "finance", "hrms", "procurement"). */
@@ -22,7 +23,16 @@ interface ModuleGateProps {
 export async function ModuleGate({ moduleKey, children }: ModuleGateProps) {
   const enabledModules = await getEnabledModules();
 
-  if (isModuleEnabled(enabledModules, moduleKey)) {
+  // GAP2-SHELL-MODULEGATE-01: thread the session roles so the documented
+  // super_admin / platform_admin bypass in isModuleEnabled actually applies at
+  // the server-side module gate. Without this third argument a platform operator
+  // hit the "Module Not Enabled" wall on a module their tenant has disabled, even
+  // though the Sidebar/help surfaces (which do pass roles) let them through. Real
+  // authorization is still enforced server-side; this only stops over-restricting
+  // the highest-privilege operators.
+  const roles = getSessionRoles();
+
+  if (isModuleEnabled(enabledModules, moduleKey, roles)) {
     return <>{children}</>;
   }
 

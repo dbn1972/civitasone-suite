@@ -69,7 +69,19 @@ function buildNextResponse(req: NextRequest): NextResponse {
   const csp = [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}'${ALLOW_UNSAFE_EVAL_DEV ? " 'unsafe-eval'" : ""}`,
-    "style-src 'self' 'unsafe-inline'",
+    // GAP2-SHELL-CSP-01: drop 'unsafe-inline' from style-src (it now governs
+    // only <style> ELEMENTS and external stylesheets, which this app loads via
+    // <link>, so they need no inline allowance). React renders component
+    // `style={{…}}` props as inline style ATTRIBUTES, which CSP cannot nonce or
+    // hash per-element; those are confined to the narrower style-src-attr
+    // directive. style-src-elem is pinned explicitly so a UA that treats the
+    // bare style-src as the attr fallback cannot silently re-admit inline <style>
+    // elements. Net effect: inline <style> injection (a CSS-exfiltration vector)
+    // is now blocked, while the existing 1,584 inline-style-attribute call sites
+    // keep rendering. Scripts remain strict (nonce-only).
+    "style-src 'self'",
+    "style-src-elem 'self'",
+    "style-src-attr 'unsafe-inline'",
     "img-src 'self' data: blob:",
     `connect-src 'self'${KEYCLOAK_ORIGIN ? ` ${KEYCLOAK_ORIGIN}` : ''}`,
     "font-src 'self'",

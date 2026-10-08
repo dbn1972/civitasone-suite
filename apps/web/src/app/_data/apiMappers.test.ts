@@ -177,6 +177,19 @@ describe("parsePaiseFromDisplay", () => {
     // ₹12,34,567.89 = 123456789 paise
     expect(parsePaiseFromDisplay("₹12,34,567.89")).toBe(123456789);
   });
+
+  // GAP2-SHELL-APIMAPPERS-01: parse paise with BigInt-safe math, not float.
+  it("converts ₹1,000.07 to exactly 100007 paise (no float mis-round)", () => {
+    expect(parsePaiseFromDisplay("₹1,000.07")).toBe(100007);
+  });
+
+  it("rejects a sub-paise (>2 dp) amount instead of silently rounding it", () => {
+    // Old float code did Math.round(1.005 * 100) === 100 — a silent rounding of
+    // an amount that cannot be represented exactly in paise. The BigInt path
+    // rejects it (returns the 0 fallback) rather than inventing a figure.
+    expect(parsePaiseFromDisplay("1.005")).toBe(0);
+    expect(parsePaiseFromDisplay("₹2.675")).toBe(0);
+  });
 });
 
 describe("mapProcurementPOListItems", () => {
