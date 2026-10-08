@@ -1,7 +1,8 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState, useTransition, type FormEvent } from "react";
-import { Button } from "@/app/_components/ds";
+import { Button, EntityPicker } from "@/app/_components/ds";
+import { searchDivisions, resolveDivisions } from "@/lib/entityAdapters/division";
 
 interface ReportFiltersProps {
   fromDate?: string;
@@ -19,24 +20,23 @@ export function ReportFilters({ fromDate, toDate, divisionId }: ReportFiltersPro
   // inverted range before navigating (GAP-WORKS-REPORTS-04).
   const [from, setFrom] = useState(fromDate ?? "");
   const [to, setTo] = useState(toDate ?? "");
+  // GAP-WORKS-REPORTS-01: the division is now chosen via EntityPicker (name ->
+  // uuid), so divisionId holds a real works.divisions id, never a typed code.
+  const [division, setDivision] = useState<string | null>(divisionId ?? null);
   const [error, setError] = useState<string | null>(null);
 
   function handleApply(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const div = ((fd.get("divisionId") as string) ?? "").trim();
+    const div = (division ?? "").trim();
 
     if (from && to && to < from) {
       setError("“To” date must be on or after the “From” date.");
       return;
     }
-    // GAP-WORKS-REPORTS-01: the works-service reports accept divisionId only as
-    // a UUID (reportFiltersSchema.divisionId.uuid()). A typed code like
-    // "DIV-001" silently returns an empty register ("No works match…"). There
-    // is no division NAME master to drive an EntityPicker, so until one exists
-    // we at least block a non-UUID before navigating, with a precise message.
+    // Defence in depth: the picker only ever yields a real uuid, but keep the
+    // guard so a seeded/garbage value can never navigate to an empty register.
     if (div && !UUID_RE.test(div)) {
-      setError("Division ID must be a valid UUID (copied from the division record).");
+      setError("Select a division from the list.");
       return;
     }
     setError(null);
@@ -54,6 +54,7 @@ export function ReportFilters({ fromDate, toDate, divisionId }: ReportFiltersPro
   function handleClear() {
     setFrom("");
     setTo("");
+    setDivision(null);
     setError(null);
     startTransition(() => {
       router.push("/works/reports");
@@ -100,19 +101,22 @@ export function ReportFilters({ fromDate, toDate, divisionId }: ReportFiltersPro
             aria-invalid={error ? true : undefined}
           />
         </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
           <span>Division</span>
-          <input
-            type="text"
-            name="divisionId"
-            defaultValue={divisionId ?? ""}
-            disabled={pending}
-            placeholder="Division UUID"
-            aria-label="Filter by division UUID"
-            aria-invalid={error && error.includes("Division") ? true : undefined}
-            style={{ width: 220 }}
-          />
-        </label>
+          <div style={{ width: 240 }}>
+            <EntityPicker
+              value={division}
+              onChange={(v) => setDivision(Array.isArray(v) ? (v[0] ?? null) : v)}
+              search={searchDivisions}
+              resolve={resolveDivisions}
+              {...(divisionId ? { initialOptions: [{ id: divisionId, label: divisionId }] } : {})}
+              disabled={pending}
+              minQueryLength={1}
+              aria-label="Filter by division"
+              placeholder="Search division by name…"
+            />
+          </div>
+        </div>
         <Button type="submit" disabled={pending}>
           {pending ? "Applying…" : "Apply"}
         </Button>

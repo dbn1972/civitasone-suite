@@ -7,6 +7,7 @@ const approveAndIssueOrderMock = vi.fn();
 const sendBackOrderMock = vi.fn();
 const recallOrderMock = vi.fn();
 const fetchCaseOrdersMock = vi.fn();
+const verifyOrderDscMock = vi.fn();
 
 vi.mock("../_data/client", () => ({
   recordOrder: (...args: unknown[]) => recordOrderMock(...args),
@@ -15,6 +16,7 @@ vi.mock("../_data/client", () => ({
   sendBackOrder: (...args: unknown[]) => sendBackOrderMock(...args),
   recallOrder: (...args: unknown[]) => recallOrderMock(...args),
   fetchCaseOrders: (...args: unknown[]) => fetchCaseOrdersMock(...args),
+  verifyOrderDsc: (...args: unknown[]) => verifyOrderDscMock(...args),
 }));
 
 import { OrdersConsole } from "./OrdersConsole";
@@ -51,6 +53,23 @@ describe("OrdersConsole", () => {
     recallOrderMock.mockReset();
     fetchCaseOrdersMock.mockReset();
     fetchCaseOrdersMock.mockResolvedValue([]);
+    verifyOrderDscMock.mockReset();
+    // Default: a genuine, server-verified signature (chain not trusted since no
+    // trust store is configured in the fake). Individual tests override.
+    verifyOrderDscMock.mockResolvedValue({
+      ok: true,
+      structureValid: true,
+      signatureChecked: true,
+      signatureValid: true,
+      chainTrusted: false,
+      trustStoreConfigured: false,
+      signerCN: "Hon'ble Judge",
+      signerSerial: "01ab",
+      notBefore: "2026-01-01",
+      notAfter: "2027-01-01",
+      keyUsage: ["digitalSignature"],
+      issues: ["trust_store_not_configured"],
+    });
   });
 
   it("renders the orders list", () => {
@@ -109,29 +128,67 @@ describe("OrdersConsole", () => {
     await waitFor(() => expect(screen.getByText(/Order draft submitted\./)).toBeInTheDocument());
   });
 
-  it("requires a DSC signature before approve & issue reaches the server, then surfaces a server error", async () => {
+  it("requires server-side DSC verification before approve & issue, then surfaces a server error", async () => {
     approveAndIssueOrderMock.mockRejectedValue(new Error("SELF_APPROVAL_REJECTED: approver must differ from maker"));
     render(
       <OrdersConsole
         caseId="case-1"
         caseSummary={caseSummary}
-        initialOrders={[makeOrder({ status: "pending_approval" })]}
+        initialOrders={[makeOrder({ status: "pending_approval", createdBy: "maker-x" })]}
         ordersSource="api"
+        currentUserId="checker-y"
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /Approve and issue the/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Approve & issue" }));
-    expect(screen.getByRole("alert")).toHaveTextContent(/Paste the DSC signature/);
+    // The issue button is disabled until the signature verifies on the server.
+    const issueBtn = screen.getByRole("button", { name: "Approve & issue" });
+    expect(issueBtn).toBeDisabled();
     expect(approveAndIssueOrderMock).not.toHaveBeenCalled();
 
     fireEvent.change(screen.getByLabelText(/Digital Signature Certificate/), {
       target: { value: "-----BEGIN PKCS7----- abc" },
     });
+    fireEvent.click(screen.getByRole("button", { name: "Verify signature" }));
+    await waitFor(() => expect(verifyOrderDscMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText(/Signature verified/)).toBeInTheDocument());
+
     fireEvent.click(screen.getByRole("button", { name: "Approve & issue" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm approve & issue" }));
     await waitFor(() =>
       expect(screen.getByText(/SELF_APPROVAL_REJECTED: approver must differ from maker/)).toBeInTheDocument(),
     );
+  });
+
+  it("blocks issue when server verification FAILS (fail-closed) and shows the issues", async () => {
+    verifyOrderDscMock.mockResolvedValue({
+      ok: false,
+      structureValid: true,
+      signatureChecked: true,
+      signatureValid: false,
+      chainTrusted: false,
+      trustStoreConfigured: false,
+      signerCN: "Hon'ble Judge",
+      keyUsage: ["digitalSignature"],
+      issues: ["digest_mismatch"],
+    });
+    render(
+      <OrdersConsole
+        caseId="case-1"
+        caseSummary={caseSummary}
+        initialOrders={[makeOrder({ status: "pending_approval", createdBy: "maker-x" })]}
+        ordersSource="api"
+        currentUserId="checker-y"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Approve and issue the/ }));
+    fireEvent.change(screen.getByLabelText(/Digital Signature Certificate/), {
+      target: { value: "-----BEGIN PKCS7----- abc" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Verify signature" }));
+    await waitFor(() => expect(screen.getByText(/Signature did not verify: digest_mismatch/)).toBeInTheDocument());
+    // The issue button stays disabled; the order can't be issued.
+    expect(screen.getByRole("button", { name: "Approve & issue" })).toBeDisabled();
+    expect(approveAndIssueOrderMock).not.toHaveBeenCalled();
   });
 
   it("recalls an issued order with a mandatory reason", async () => {
@@ -214,12 +271,13 @@ describe("OrdersConsole", () => {
     fireEvent.change(screen.getByLabelText(/Digital Signature Certificate/), {
       target: { value: "plain text, not a signature" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Approve & issue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Verify signature" }));
     expect(screen.getByRole("alert")).toHaveTextContent(/doesn't look like a DSC signature|base64/);
+    expect(verifyOrderDscMock).not.toHaveBeenCalled();
     expect(approveAndIssueOrderMock).not.toHaveBeenCalled();
   });
 
-  it("accepts a well-formed PEM PKCS#7 blob and submits it", async () => {
+  it("verifies a well-formed PEM PKCS#7 blob server-side and submits it after verification", async () => {
     approveAndIssueOrderMock.mockResolvedValue(undefined);
     const pkcs7 =
       ["-----BEGIN", "PKCS7-----"].join(" ") + "\n" +
@@ -238,6 +296,11 @@ describe("OrdersConsole", () => {
     fireEvent.change(screen.getByLabelText(/Digital Signature Certificate/), {
       target: { value: pkcs7 },
     });
+    fireEvent.click(screen.getByRole("button", { name: "Verify signature" }));
+    await waitFor(() => expect(verifyOrderDscMock).toHaveBeenCalledTimes(1));
+    expect(verifyOrderDscMock.mock.calls[0]).toEqual(["order-1", pkcs7]);
+    await waitFor(() => expect(screen.getByText(/Signature verified/)).toBeInTheDocument());
+
     fireEvent.click(screen.getByRole("button", { name: "Approve & issue" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm approve & issue" }));
     await waitFor(() => expect(approveAndIssueOrderMock).toHaveBeenCalledTimes(1));

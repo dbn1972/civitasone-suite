@@ -27,9 +27,17 @@ export default async function VigilancePage() {
   const resource = toResourceState(result);
   const errored = resource.status === "error";
   const canViewPII = hasAnyRole(getSessionRoles(), PII_ROLES);
-  // Redact on the server so officer/charges never enter the RSC payload for
-  // unprivileged roles (the table mask alone is cosmetic).
-  const visibleCases = canViewPII ? cases : cases.map((c) => ({ ...c, officer: maskName(String(c.officer ?? "")), charges: "••••" }));
+  // GAP-AUDIT-VIGILANCE-02 (DPDP): officer identity + charge text NEVER enter
+  // the RSC payload in the clear — not even for privileged roles. Every row is
+  // masked here; a PII reader (canViewPII) obtains the clear value only through
+  // the audited reveal endpoint (POST /v1/audit/vigilance/:id/reveal), so each
+  // access to disciplinary data leaves an audit record. A non-reader has no
+  // reveal control at all and the clear value is never sent to their browser.
+  const visibleCases = cases.map((c) => ({
+    ...c,
+    officer: maskName(String(c.officer ?? "")),
+    charges: "••••",
+  }));
 
   const totalCases = errored ? null : cases.length;
   // GAP-AUDIT-VIGILANCE-03: derive every KPI bucket from one status->bucket

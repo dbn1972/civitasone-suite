@@ -1,13 +1,16 @@
 import { PageHeader } from "../../_components/ds";
 import { SetupWizard } from "./SetupWizard";
 import { evaluateSteps } from "./progress";
+import { getSkippedSteps } from "./skippedSteps";
 import {
   WIZARD_STEPS,
   REQUIRED_STEP_KEYS,
   countComplete,
+  countableKeys,
   progressPct,
   allRequiredComplete,
   firstIncompleteIndex,
+  applySkippedSteps,
   type StepStatus,
   type WizardStepKey,
 } from "@/lib/setupSteps";
@@ -40,8 +43,18 @@ export default async function SetupPage() {
     statuses = Object.fromEntries(keys.map((k) => [k, "todo" as StepStatus]));
   }
 
+  // GAP-SETUP-HOME-02: fold in the persisted per-tenant deferrals so skipped
+  // optional steps are excluded from the resume target and the denominator but
+  // stay visible and openable. A best-effort read: a non-admin viewer or an
+  // offline settings service yields no skips (every step stays to-do).
+  const skippedKeys = await getSkippedSteps();
+  statuses = applySkippedSteps(statuses, steps, skippedKeys);
+
   const stepViews = steps.map((s) => ({ ...s, status: statuses[s.key] ?? "todo" }));
-  const doneCount = countComplete(statuses, keys);
+  // Denominator excludes skipped steps so progress can reach 100% once the
+  // office is ready. doneCount is counted over the same countable set.
+  const countable = countableKeys(statuses, keys);
+  const doneCount = countComplete(statuses, countable);
   const progress = progressPct(statuses, keys);
   const ready = allRequiredComplete(statuses, steps);
   const resumeIndex = firstIncompleteIndex(steps, statuses);
@@ -61,7 +74,7 @@ export default async function SetupPage() {
       <SetupWizard
         steps={stepViews}
         doneCount={doneCount}
-        totalCount={keys.length}
+        totalCount={countable.length}
         progress={progress}
         ready={ready}
         resumeIndex={resumeIndex}

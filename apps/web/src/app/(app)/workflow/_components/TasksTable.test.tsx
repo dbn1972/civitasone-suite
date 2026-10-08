@@ -60,4 +60,25 @@ describe("TasksTable — GAP-WORKFLOW-MY-TASKS-02/05", () => {
     // StatusFilter is a radiogroup; it must be absent on the single-status inbox.
     expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
   });
+
+  // GAP-WORKFLOW-INSTANCES-DETAIL-01 — the Assignee column names the person.
+  it("renders the resolved assignee name when assigneeName is present", () => {
+    const assigned = task("1", { assigneeId: "8f2d41ab-1111-4222-8333-444455556666", assigneeName: "A. Kumar" });
+    render(<TasksTable tasks={[assigned]} showStatusFilter={false} />);
+    const name = screen.getByText("A. Kumar");
+    expect(name).toBeInTheDocument();
+    expect(name.closest("span")).toHaveAttribute("title", "8f2d41ab-1111-4222-8333-444455556666");
+  });
+
+  it("falls back to a short id for an assigned task with no resolved name", () => {
+    const assigned = task("1", { assigneeId: "8f2d41ab-1111-4222-8333-444455556666" });
+    render(<TasksTable tasks={[assigned]} showStatusFilter={false} />);
+    expect(screen.getByTitle("8f2d41ab-1111-4222-8333-444455556666").textContent).toContain("8f2d41ab");
+    expect(screen.queryByText("A. Kumar")).not.toBeInTheDocument();
+  });
+
+  it("still shows an Unassigned pill when there is no assignee", () => {
+    render(<TasksTable tasks={[task("1", { assigneeId: null })]} showStatusFilter={false} />);
+    expect(screen.getByText("Unassigned")).toBeInTheDocument();
+  });
 });

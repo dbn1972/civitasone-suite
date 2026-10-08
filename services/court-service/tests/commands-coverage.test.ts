@@ -52,6 +52,28 @@ vi.mock("../src/shared/outbox.js", () => ({
   versionedUpdate: vi.fn(async () => {}),
 }));
 
+// GAP-COURT-ORDERS-02: approveAndIssue now runs server-side DSC verification in
+// its pre-check. These command-coverage tests assert the validate+publish path
+// with dummy signature strings, so stub verification to accept — the real
+// crypto verification is covered by packages/render's detached-verify tests and
+// the DB-backed tests/order-dsc-verification.e2e.test.ts.
+vi.mock("../src/modules/order-issuance/dsc-verify.js", () => ({
+  verifyOrderDsc: vi.fn(() => ({
+    ok: true,
+    structureValid: true,
+    signatureChecked: true,
+    signatureValid: true,
+    chainTrusted: false,
+    trustStoreConfigured: false,
+    acceptedForIssue: true,
+    signerCN: "Test Judge",
+    signerSerial: "01ab",
+    keyUsage: ["digitalSignature"],
+    issues: [],
+  })),
+  canonicalOrderContent: vi.fn(() => "canonical"),
+}));
+
 vi.mock("../src/shared/pii-crypto.js", async () => {
   // encryptedText is a Drizzle customType factory -- at schema definition
   // time it is called like `encryptedText("column_name")` and must return a

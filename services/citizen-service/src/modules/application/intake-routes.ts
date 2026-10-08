@@ -7,7 +7,7 @@ import { resolveContext, requireRole, HttpError, resolveCitizenId, isOfficer } f
 import { idParam, trackingParam, saveDraftBody, updateDraftBody, submitDraftBody } from "./intake-validators.js";
 import {
   buildTrackingNumber, resolveAssistedBy, isAssistedChannel, resolveAndGateApplicantType,
-  ApplicantTypeRejectedError, type IntakeChannel,
+  hasFormAnswers, ApplicantTypeRejectedError, type IntakeChannel,
 } from "./intake-domain.js";
 import * as intake from "./intake.js";
 import * as commands from "./commands.js";
@@ -128,6 +128,12 @@ export async function intakeRoutes(app: FastifyInstance): Promise<void> {
     const draft = await intake.getDraft(ctx, id);
     if (!draft) throw new HttpError(404, "NOT_FOUND", "draft not found");
     if (draft.status !== "draft") throw new HttpError(409, "ALREADY_SUBMITTED", "draft has already been submitted");
+    // GAP-CITIZEN-INTAKE-01: fail closed — a draft with no form answers cannot be
+    // handed a tracking number. The real data-entry flow lives in the services
+    // runtime; an empty intake draft must not become an "acknowledged" application.
+    if (!hasFormAnswers(draft.formData)) {
+      throw new HttpError(422, "FORM_DATA_REQUIRED", "cannot submit an application with no answers");
+    }
     // FN-24 — re-check at submit so a channel disabled after draft save cannot be smuggled through.
     await requireAllowedChannel(ctx.tenantId, draft.channel, {
       serviceId: draft.serviceId,

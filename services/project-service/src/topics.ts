@@ -11,6 +11,7 @@ export const COMMANDS = {
   physicalProgressRecord:  "project.physical_progress.record",
   financialProgressRecord: "project.financial_progress.record",
   dprSubmit:               "project.dpr.submit",
+  dprTransition:           "project.dpr.transition",
   ucSubmit:                "project.uc.submit",
   geoTag:                  "project.geo.tag",
   photoUpload:             "project.photo.upload",
@@ -25,6 +26,7 @@ export const COMMANDS = {
   taskUpdate:              "project.task.update",
   memberAdd:               "project.member.add",
   memberRemove:            "project.member.remove",
+  escalationAct:           "project.escalation.act",
 } as const;
 
 export const EVENTS = {
@@ -40,9 +42,11 @@ export const EVENTS = {
   fundReleaseDisbursed:    "project.fund_release.disbursed",
   physicalProgressRecorded: "project.physical_progress.recorded",
   dprSubmitted:            "project.dpr.submitted",
+  dprTransitioned:         "project.dpr.transitioned",
   ucSubmitted:             "project.uc.submitted",
   ucExpenditureExceeded:   "project.uc.expenditure_exceeded",
   geoTagged:               "project.geo.tagged",
+  escalationActioned:      "project.escalation.actioned",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */

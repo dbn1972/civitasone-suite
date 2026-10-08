@@ -56,3 +56,50 @@ export async function fetchMunicipalDetail(
     errorCode: result.errorCode,
   };
 }
+
+export interface MunicipalHistoryEvent {
+  id: string;
+  action: string;
+  fromStatus: string | null;
+  toStatus: string;
+  note: string | null;
+  actorId: string;
+  createdAt: string;
+}
+
+/**
+ * GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-DETAIL-02: fetch an application's
+ * timeline from the service's history endpoint. Returns [] when the service
+ * has no workflow endpoints configured or the fetch fails — the panel then
+ * simply shows no History card rather than an error.
+ */
+export async function fetchMunicipalHistory(
+  config: MunicipalServiceConfig,
+  id: string,
+): Promise<{ events: MunicipalHistoryEvent[]; source: "api" | "error" }> {
+  if (!config.workflow) return { events: [], source: "api" };
+  const path = `${config.workflow.historyBasePath}/${encodeURIComponent(id)}/history`;
+  const result = await fetchJson<unknown, MunicipalHistoryEvent[]>(path, [], {
+    revalidateSeconds: 5,
+    telemetryKey: `municipal.${config.serviceKey}.history`,
+    mapResponse: (payload) => {
+      const data = (payload as { data?: unknown })?.data;
+      if (!Array.isArray(data)) return [];
+      return data.flatMap((row) => {
+        if (!row || typeof row !== "object") return [];
+        const r = row as Record<string, unknown>;
+        if (typeof r.id !== "string" || typeof r.action !== "string" || typeof r.toStatus !== "string") return [];
+        return [{
+          id: r.id,
+          action: r.action,
+          fromStatus: typeof r.fromStatus === "string" ? r.fromStatus : null,
+          toStatus: r.toStatus,
+          note: typeof r.note === "string" ? r.note : null,
+          actorId: typeof r.actorId === "string" ? r.actorId : "",
+          createdAt: typeof r.createdAt === "string" ? r.createdAt : new Date().toISOString(),
+        }];
+      });
+    },
+  });
+  return { events: result.data, source: result.source };
+}

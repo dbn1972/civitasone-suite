@@ -1,9 +1,13 @@
 export type DocumentFormat = "pdf" | "jpg" | "png";
 
-export interface LocaleLabels {
-  en: string;
-  hi: string;
-}
+/**
+ * GAP-DESIGNER-DETAIL-B8-01: a document label set may carry any locale code the
+ * tenant publishes in, not just en/hi. `en`/`hi` stay declared so existing
+ * readers keep their non-optional `string` type under noUncheckedIndexedAccess,
+ * while the index signature allows additional locale codes (dynamic access is
+ * `string | undefined` and callers coalesce with `?? ""`).
+ */
+export type LocaleLabels = { en: string; hi: string } & Record<string, string>;
 
 export interface RequiredDocumentUi {
   id: string;

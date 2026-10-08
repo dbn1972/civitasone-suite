@@ -52,8 +52,10 @@ export const COMMANDS = {
   refundCreate: "revenue.refund.create",
   /** payload: { refundId, approvalId, approve: boolean, reason? } — checker step */
   refundDecide: "revenue.refund.decide",
-  /** payload: { assesseeId, fromDemandId, toDemandId, amountMinor (bigint string), reason } */
+  /** payload: { assesseeId, fromDemandId, toDemandId, amountMinor (bigint string), reason } — maker step */
   adjustmentCreate: "revenue.adjustment.create",
+  /** payload: { adjustmentId, approve: boolean, reason? } — checker step */
+  adjustmentDecide: "revenue.adjustment.decide",
 
   // ── Arrears & Recovery (SVC-137) ─────────────────────────────────────────
   /** payload: { assesseeId, instalmentCount, startDate } — create instalment plan from outstanding */

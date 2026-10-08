@@ -24,3 +24,16 @@ export async function listUsers(tenantId: string, limit: number, offset: number)
 export async function searchUsers(tenantId: string, f: repo.UserSearch) {
   return repo.search(tenantId, f);
 }
+
+/**
+ * Shared user-directory lookup (GAP-WORKFLOW-INSTANCES-DETAIL-01 /
+ * GAP-PROJECTS-DETAIL-MEMBERS-01). Returns ONLY {id, displayName}. Not cached:
+ * the id-batch join and the type-ahead must both reflect current names.
+ */
+export async function directoryByIds(tenantId: string, ids: string[]): Promise<repo.DirectoryEntry[]> {
+  return repo.directoryByIds(tenantId, ids);
+}
+
+export async function directoryByQuery(tenantId: string, q: string, limit: number): Promise<repo.DirectoryEntry[]> {
+  return repo.directoryByQuery(tenantId, q, limit);
+}

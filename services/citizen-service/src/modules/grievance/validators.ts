@@ -18,6 +18,10 @@ export const registerGrievanceBody = z.object({
     .array(z.object({ kind: z.enum(["mobile", "email"]), value: safeText({ max: 320 }) }))
     .max(5)
     .optional(),
+  // GAP-CITIZEN-GRIEVANCES-NEW-02: when an officer files for a citizen, flag it.
+  // The authoritative filing actor is derived server-side from the JWT, never
+  // the client; this only records the officer's INTENT to file on behalf.
+  filedOnBehalf: z.boolean().optional(),
   // GAP-CITIZEN-GRIEVANCES-NEW-01: structured DPDP consent record. The server
   // stamps the authoritative time; the client cannot be trusted for it.
   dpdpConsent: z

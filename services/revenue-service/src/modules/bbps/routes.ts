@@ -1,8 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { uuidParam, paginationQuery } from "../../shared/validators.js";
 import { isBbpsEnabled } from "./domain.js";
 import * as commands from "./commands.js";
+import * as repo from "./repo.js";
 import { fetchBillBody, payBillBody } from "./validators.js";
 
 // Matches collection/routes.ts — BBPS is another revenue collection channel
@@ -76,5 +78,36 @@ export async function bbpsRoutes(app: FastifyInstance): Promise<void> {
     const body = payBillBody.parse(req.body);
     const result = await commands.payBill(ctx, body);
     return reply.code(202).send({ data: result });
+  });
+
+  // ── GET /v1/revenue/bbps/requests/:id ─────────────────────────────────────
+  // GAP-REVENUE-BBPS-02: poll the outcome of a fire-and-forget fetch/pay request
+  // by the queue messageId returned at submit time. Returns status
+  // (pending|success|failed), the resulting receiptId on success, and a human
+  // failure reason on failure. Tenant-scoped (a payment outcome is sensitive).
+  app.get("/v1/revenue/bbps/requests/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, REVENUE_ROLES);
+    const { id } = uuidParam.parse(req.params);
+    const request = await repo.findRequestByMessageId(ctx.tenantId, id);
+    if (!request) {
+      // Not yet consumed (still queued) OR unknown id — report pending rather
+      // than 404 so the client poller keeps waiting through the async window.
+      return reply.send({ data: { messageId: id, status: "pending" } });
+    }
+    return reply.send({ data: request });
+  });
+
+  // ── GET /v1/revenue/bbps/requests ─────────────────────────────────────────
+  // GAP-REVENUE-BBPS-02: the "Recent BBPS requests" list. Tenant-scoped.
+  app.get("/v1/revenue/bbps/requests", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, REVENUE_ROLES);
+    const q = paginationQuery.parse(req.query);
+    const { rows, total } = await repo.listRequests(ctx.tenantId, q);
+    return reply.send({
+      data: rows,
+      meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, total },
+    });
   });
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { DataTable, StatusPill } from "@/app/_components/ds";
+import { DataTable, StatusPill, RevealableValue } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { VigilanceCaseSummary } from "@/app/_data/loaders";
@@ -22,9 +22,25 @@ const OUTCOME_LABELS: Record<VigilanceCaseSummary["outcome"], string> = {
 export function VigilanceTable({ rows, source, canViewPII = false }: { rows: VigilanceCaseSummary[]; source: "api" | "error"; canViewPII?: boolean }) {
   const { data, provenance, offline, cachedAt } = useSeededResource("audit.vigilance.cases", rows, source, (d) => d.length === 0);
 
-  // GAP-AUDIT-VIGILANCE-02 (DPDP): mask officer identity + charge text for
-  // anyone outside the vigilance reader roles, and never offer a client-side
-  // CSV of disciplinary data to them.
+  // GAP-AUDIT-VIGILANCE-02 (DPDP): officer identity + charge text are
+  // disciplinary data. The page sends only the SERVER-MASKED value in the RSC
+  // payload (never the clear value, even to privileged roles). A PII reader
+  // (canViewPII) gets an audited reveal control that round-trips to
+  // POST /v1/audit/vigilance/:id/reveal, which returns the clear value AND
+  // writes a `vigilance_reveal` audit event in the same transaction. A
+  // non-reader sees the mask with no reveal, and no client-side CSV export.
+  const revealCell = (field: "officer" | "charges", label: string) =>
+    (row: VigilanceCaseSummary) => (
+      <RevealableValue
+        maskedText={field === "officer" ? row.officer : row.charges}
+        revealPath={`v1/audit/vigilance/${row.id}/reveal`}
+        revealBody={{ field }}
+        pick={(json) => (json as { data?: { value?: string | null } })?.data?.value}
+        canReveal={canViewPII}
+        label={label}
+        fallback="••••"
+      />
+    );
 
   return (
     <>
@@ -34,8 +50,8 @@ export function VigilanceTable({ rows, source, canViewPII = false }: { rows: Vig
       <DataTable<VigilanceCaseSummary & Record<string, unknown>>
         columns={[
           { key: "caseNo", label: "Case No.", sortable: true },
-          { key: "officer", label: "Officer", render: (row) => row.officer },
-          { key: "charges", label: "Charges", render: (row) => (canViewPII ? row.charges : "••••") },
+          { key: "officer", label: "Officer", render: (row) => revealCell("officer", "officer")(row) },
+          { key: "charges", label: "Charges", render: (row) => revealCell("charges", "charges")(row) },
           { key: "inquiryStatus", label: "Inquiry Status", render: (row) => <StatusPill status={INQUIRY_LABELS[row.inquiryStatus as VigilanceCaseSummary["inquiryStatus"]] ?? String(row.inquiryStatus)} /> },
           { key: "outcome", label: "Outcome", render: (row) => <StatusPill status={OUTCOME_LABELS[row.outcome as VigilanceCaseSummary["outcome"]] ?? String(row.outcome)} /> },
         ]}

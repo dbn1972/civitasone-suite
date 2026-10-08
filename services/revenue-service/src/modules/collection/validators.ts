@@ -49,3 +49,25 @@ export const createAdjustmentBody = z.object({
   amountMinor: bigintString,
   reason: z.string().min(1).max(500),
 });
+
+/**
+ * GAP-REVENUE-ADJUSTMENTS-01: a checker approves or rejects a pending balance
+ * transfer. Mirrors refundDecideBody — the server enforces maker!=checker.
+ */
+export const adjustmentDecideBody = z.object({
+  approve: z.boolean(),
+  reason: z.string().max(500).optional(),
+});
+
+/**
+ * GAP-REVENUE-ADJUSTMENTS-01: query for the adjustment approval queue —
+ * pagination plus an optional status filter (e.g. ?status=pending so a checker
+ * can find transfers awaiting approval without being handed a UUID). Status is
+ * constrained to the collection.adjustments lifecycle so a typo can't silently
+ * return nothing.
+ */
+export const adjustmentListQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+  status: z.enum(["pending", "approved", "rejected"]).optional(),
+});

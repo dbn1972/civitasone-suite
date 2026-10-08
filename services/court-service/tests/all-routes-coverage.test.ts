@@ -321,6 +321,7 @@ vi.mock("../src/modules/order-issuance/commands.js", () => ({
   approveAndIssue: async () => ({ accepted: true }),
   sendBack: async () => ({ accepted: true }),
   recall: async () => ({ accepted: true }),
+  verifyDsc: async () => ({ ok: true, structureValid: true, signatureChecked: true, signatureValid: true, chainTrusted: false, trustStoreConfigured: false, acceptedForIssue: true, signerCN: "Test Judge", keyUsage: ["digitalSignature"], issues: [] }),
 }));
 
 vi.mock("../src/modules/config-registry/commands.js", () => ({
@@ -1678,6 +1679,27 @@ describe("Order Issuance Routes", () => {
         method: "PATCH", url: `/v1/court/orders/${ORDER_ID}/approve-issue`,
         headers: { authorization: `Bearer ${REGISTRAR_TOKEN()}` },
         payload: { dscSignature: "MEUCIG...", expectedVersion: 1 },
+      });
+      expect(res.statusCode).toBe(403);
+    });
+  });
+
+  describe("POST /v1/court/orders/:id/verify-dsc", () => {
+    it("returns 200 with the verification verdict for a checker", async () => {
+      const res = await app.inject({
+        method: "POST", url: `/v1/court/orders/${ORDER_ID}/verify-dsc`,
+        headers: { authorization: `Bearer ${makeToken(["judge"])}` },
+        payload: { dscSignature: "MEUCIG...(base64-dsc)...==" },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().ok).toBe(true);
+    });
+
+    it("returns 403 for registrar (not a checker/bench role)", async () => {
+      const res = await app.inject({
+        method: "POST", url: `/v1/court/orders/${ORDER_ID}/verify-dsc`,
+        headers: { authorization: `Bearer ${REGISTRAR_TOKEN()}` },
+        payload: { dscSignature: "MEUCIG..." },
       });
       expect(res.statusCode).toBe(403);
     });

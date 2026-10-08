@@ -17,6 +17,8 @@ export const COMMANDS = {
   rtiResponseReceive:      "citizen.rti.response_receive",
   rtiAppeal:               "citizen.rti.appeal",
   rtiTransfer:             "citizen.rti.transfer",
+  // GAP-CITIZEN-RTI-03 — CPIO / public-authority directory maintenance.
+  cpioDirectoryCreate:     "citizen.rti.cpio_directory_create",
   ticketCreate:            "citizen.ticket.create",
   ticketNote:              "citizen.ticket.note",
   ticketClose:             "citizen.ticket.close",
@@ -66,6 +68,9 @@ export const COMMANDS = {
   discoveryAssistedEnrol:  "citizen.discovery.assisted_enrol",
   documentUpload:          "citizen.document.upload",
   documentDigilockerFetch: "citizen.document.digilocker_fetch",
+  // GAP-CITIZEN-DOCUMENTS-02 — OAuth consent grant (callback) + verified pull.
+  documentConsentGrant:    "citizen.document.consent_grant",
+  documentDigilockerCallback: "citizen.document.digilocker_callback",
   documentVerify:          "citizen.document.verify",
   documentResubmit:        "citizen.document.resubmit",
   eligibilityRuleSetCreate:  "citizen.eligibility.ruleset_create",

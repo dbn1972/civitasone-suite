@@ -5,6 +5,7 @@ import { toHumanError } from "@/lib/messages";
 import { getSessionUserId } from "@/lib/auth/roleGuard";
 import { Breadcrumbs } from "../_components/Breadcrumbs";
 import { TasksTable } from "../_components/TasksTable";
+import { resolveUsers } from "@/lib/directory/resolveUsers";
 import { getTasks } from "../_data/workflowData";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,15 @@ export default async function MyTasksPage() {
       ? tasks.filter((t) => t.assigneeId === currentUserId).length
       : null
     : null;
+
+  // GAP-WORKFLOW-INSTANCES-DETAIL-01 — resolve assignee ids to display names via
+  // the shared tenant-scoped directory so the inbox names the assignee instead
+  // of a raw UUID fragment. Fail-soft: unresolved ids fall back to a short id.
+  const names = ok ? await resolveUsers(tasks.map((t) => t.assigneeId ?? "")) : new Map<string, string>();
+  const tasksNamed = tasks.map((t) => ({
+    ...t,
+    assigneeName: t.assigneeId ? (names.get(t.assigneeId) ?? null) : null,
+  }));
 
   // GAP-WORKFLOW-MY-TASKS-04 — the inbox is capped at TASK_LIMIT with no total;
   // when the window is full the counts above stop being exhaustive. Say so.
@@ -75,7 +85,7 @@ export default async function MyTasksPage() {
               ) : null}
               <Suspense fallback={<SkeletonTable rows={6} />}>
                 {/* GAP-WORKFLOW-MY-TASKS-03 — single-status inbox: no status filter. */}
-                <TasksTable tasks={tasks} currentUserId={currentUserId} showStatusFilter={false} />
+                <TasksTable tasks={tasksNamed} currentUserId={currentUserId} showStatusFilter={false} />
               </Suspense>
             </div>
           )}

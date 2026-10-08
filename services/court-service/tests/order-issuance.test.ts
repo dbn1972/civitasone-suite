@@ -35,6 +35,31 @@ vi.mock("../src/modules/order/schema.js", () => ({ orders: {} }));
 
 vi.mock("../src/modules/order-issuance/repo.js", () => ({
   getOrderForIssuance: vi.fn(async () => currentOrder),
+  getOrderSignableInTx: vi.fn(async () =>
+    currentOrder
+      ? { id: "o1", caseId: "c1", orderType: "final", orderText: "txt", orderDate: "2026-07-11" }
+      : undefined,
+  ),
+}));
+
+// GAP-COURT-ORDERS-02: the consumer re-verifies the DSC inside the issuing tx.
+// These are state-machine tests with dummy signatures, so stub verification to
+// accept — the real crypto is covered by the render + DB-backed court tests.
+vi.mock("../src/modules/order-issuance/dsc-verify.js", () => ({
+  verifyOrderDsc: vi.fn(() => ({
+    ok: true,
+    structureValid: true,
+    signatureChecked: true,
+    signatureValid: true,
+    chainTrusted: false,
+    trustStoreConfigured: false,
+    acceptedForIssue: true,
+    signerCN: "Test Judge",
+    signerSerial: "01ab",
+    keyUsage: ["digitalSignature"],
+    issues: [],
+  })),
+  canonicalOrderContent: vi.fn(() => "canonical"),
 }));
 
 vi.mock("../src/topics.js", () => ({

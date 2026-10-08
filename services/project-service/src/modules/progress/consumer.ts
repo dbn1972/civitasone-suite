@@ -1,4 +1,4 @@
-import type { Queue } from "@civitasone/queue";
+import type { Queue, CommandEnvelope } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -113,12 +113,52 @@ export function registerProgressConsumers(queue: Queue): void {
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "progress", p.projectId));
   });
+
+  // GAP-PROJECTS-DPR-TRACKING-01: DPR review workflow transition. The valid
+  // state machine (matches progress.project_dprs's status CHECK):
+  //   review:  submitted    → under_review
+  //   approve: under_review → approved
+  //   return:  under_review → revision
+  // The transition is enforced server-side (source status + optimistic
+  // version guard in repo.transitionDprTx) and audited in the SAME transaction.
+  queue.subscribe(COMMANDS.dprTransition, async (msg) => {
+    const p = msg.payload as {
+      dprId: string; tenantId: string; projectId: string;
+      action: "review" | "approve" | "return"; reason: string | null;
+    };
+    const target: Record<string, { from: string; to: string; auditAction: string }> = {
+      review:  { from: "submitted",    to: "under_review", auditAction: "dpr_review" },
+      approve: { from: "under_review", to: "approved",     auditAction: "dpr_approve" },
+      return:  { from: "under_review", to: "revision",     auditAction: "dpr_return" },
+    };
+    const t = target[p.action];
+    if (!t) return; // unknown action — drop (route already validates, defence-in-depth)
+
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const dpr = await repo.findDprByIdTx(tx, p.dprId, p.projectId, p.tenantId);
+      // Not found, or not in the required source state → idempotent no-op (a
+      // replay or a stale/duplicate transition). No audit for a no-op.
+      if (!dpr || dpr.status !== t.from) return;
+      const updated = await repo.transitionDprTx(
+        tx, p.dprId, p.tenantId, t.from, t.to, msg.actorId, p.reason, dpr.version ?? 1,
+      );
+      if (updated === 0) return; // lost the optimistic-lock race → no-op, no audit
+      await enqueue(tx, {
+        topic: EVENTS.dprTransitioned, eventType: EVENTS.dprTransitioned,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { dprId: p.dprId, projectId: p.projectId, from: t.from, to: t.to },
+      });
+      await audit(tx, msg, t.auditAction, "dpr", p.dprId, p.reason ?? undefined);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "progress", p.projectId));
+  });
 }
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
+async function audit(tx: Parameters<typeof enqueue>[0], msg: Pick<CommandEnvelope, "tenantId" | "actorId" | "correlationId">, action: string, resourceType: string, resourceId: string, reason?: string): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "project", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "project", action, resourceType, resourceId, outcome: "success", ...(reason ? { reason } : {}) },
   });
 }

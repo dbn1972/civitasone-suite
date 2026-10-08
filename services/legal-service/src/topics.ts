@@ -1,5 +1,7 @@
 export const COMMANDS = {
   caseCreate:           "legal.case.create",
+  caseTypeCreate:       "legal.case_type.create",
+  caseTypeSeedDefaults: "legal.case_type.seed_defaults",
   hearingCreate:        "legal.hearing.create",
   hearingAdjourn:       "legal.hearing.adjourn",
   orderRecord:          "legal.order.record",

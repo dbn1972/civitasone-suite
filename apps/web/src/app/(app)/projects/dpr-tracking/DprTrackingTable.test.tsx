@@ -39,3 +39,37 @@ describe("DprTrackingTable (GAP-PROJECTS-DPR-TRACKING-03/04)", () => {
     expect(link).toHaveAttribute("href", "/projects/p-42");
   });
 });
+
+describe("DprTrackingTable actions (GAP-PROJECTS-DPR-TRACKING-01)", () => {
+  const withId = (status: string): DprRow => ({ ...row, id: "dpr-1", status });
+
+  it("shows NO action controls to a non-reviewer (canReview=false)", () => {
+    render(<DprTrackingTable rows={[withId("submitted")]} source="api" />);
+    expect(screen.queryAllByRole("button", { name: "Start review" })).toHaveLength(0);
+    expect(screen.queryAllByRole("button", { name: "Approve" })).toHaveLength(0);
+  });
+
+  it("offers only 'Start review' on a submitted DPR to a reviewer", () => {
+    render(<DprTrackingTable rows={[withId("submitted")]} source="api" canReview />);
+    expect(screen.getAllByRole("button", { name: "Start review" }).length).toBeGreaterThan(0);
+    expect(screen.queryAllByRole("button", { name: "Approve" })).toHaveLength(0);
+  });
+
+  it("offers Approve and Return for revision on an under_review DPR to a reviewer", () => {
+    render(<DprTrackingTable rows={[withId("under_review")]} source="api" canReview />);
+    expect(screen.getAllByRole("button", { name: "Approve" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "Return for revision" }).length).toBeGreaterThan(0);
+  });
+
+  it("offers no actions on a terminal (approved) DPR even to a reviewer", () => {
+    render(<DprTrackingTable rows={[withId("approved")]} source="api" canReview />);
+    expect(screen.queryAllByRole("button", { name: "Start review" })).toHaveLength(0);
+    expect(screen.queryAllByRole("button", { name: "Approve" })).toHaveLength(0);
+    expect(screen.queryAllByRole("button", { name: "Return for revision" })).toHaveLength(0);
+  });
+
+  it("renders a returned (revision) DPR with the 'Returned for revision' label", () => {
+    render(<DprTrackingTable rows={[withId("revision")]} source="api" />);
+    expect(screen.getByText("Returned for revision")).toBeInTheDocument();
+  });
+});

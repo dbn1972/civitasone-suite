@@ -52,4 +52,26 @@ export type MunicipalServiceConfig = {
   fieldOrder?: readonly string[];
   /** Sec5 scope (shop is reference template, not part of the 16) */
   sec5: boolean;
+  /**
+   * GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-DETAIL-02: officer workflow wiring.
+   * Only set for services whose backend exposes the per-service action +
+   * history endpoints (trade as of this pass). When omitted, the detail panel
+   * stays an honest read-only view with no action buttons — never fake ones.
+   */
+  workflow?: MunicipalWorkflowConfig;
+};
+
+export type MunicipalWorkflowConfig = {
+  /** Gateway path (no id) for the application timeline, e.g. /api/v1/trade/applications */
+  historyBasePath: string;
+  /** Gateway path for the approve/reject decision endpoint. */
+  decisionPath: string;
+  /** Gateway path for initiating scrutiny / inspection. */
+  scrutinyPath: string;
+  /** Roles permitted to act (UI gate; the server independently enforces). */
+  officerRoles: readonly string[];
+  /** Application statuses from which an approve/reject decision is allowed. */
+  decidableStatuses: readonly string[];
+  /** Application statuses from which an inspection can be initiated. */
+  inspectableStatuses: readonly string[];
 };

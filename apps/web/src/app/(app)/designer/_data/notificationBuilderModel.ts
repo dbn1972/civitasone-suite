@@ -71,24 +71,29 @@ export function mergeFieldsForNotifications(formFields: FormFieldDefinition[] = 
 export interface MatrixCompleteness {
   enabledCount: number;
   configuredSlots: number;
-  locale: {
-    en: { filled: number; total: number };
-    hi: { filled: number; total: number };
-  };
+  /** Per-locale filled/total counts, keyed by locale code (en, hi, or, …). */
+  locale: Record<string, { filled: number; total: number }>;
   meterLabel: string;
-  /** True when every enabled cell has both EN and HI body text. */
+  /** True when every enabled cell has body text in EVERY requested locale. */
   localesComplete: boolean;
+  /** Locale codes that are not yet complete across all enabled cells. */
+  missingLocales: string[];
 }
 
 export function matrixCompleteness(
   matrix: NotificationMatrixState,
   pattern: string,
+  // GAP-DESIGNER-DETAIL-B8-01: the locales to measure completeness against.
+  // Defaults to en/hi so existing callers keep the previous behaviour; the
+  // notification builder passes the tenant's B1 governance locales so an
+  // Odia-only (['or']) or ['en','or'] service is measured correctly.
+  locales: readonly string[] = ["en", "hi"],
 ): MatrixCompleteness {
+  const localeList = locales.length > 0 ? [...locales] : ["en", "hi"];
   const active = new Set(eventsForPattern(pattern));
   let enabledCount = 0;
   let configuredSlots = 0;
-  let enFilled = 0;
-  let hiFilled = 0;
+  const filled: Record<string, number> = Object.fromEntries(localeList.map((l) => [l, 0]));
   let localeTotal = 0;
 
   for (const event of NOTIFICATION_EVENTS) {
@@ -99,20 +104,25 @@ export function matrixCompleteness(
       if (!cell?.enabled) continue;
       enabledCount += 1;
       localeTotal += 1;
-      if (cell.body.en.trim()) enFilled += 1;
-      if (cell.body.hi.trim()) hiFilled += 1;
+      for (const l of localeList) {
+        if ((cell.body[l] ?? "").trim()) filled[l] = (filled[l] ?? 0) + 1;
+      }
     }
   }
+
+  const locale: Record<string, { filled: number; total: number }> = Object.fromEntries(
+    localeList.map((l) => [l, { filled: filled[l] ?? 0, total: localeTotal }]),
+  );
+  const missingLocales = localeList.filter((l) => localeTotal > 0 && (filled[l] ?? 0) < localeTotal);
+  const meterLabel = localeList.map((l) => `${l.toUpperCase()} ${filled[l] ?? 0}/${localeTotal}`).join(" · ");
 
   return {
     enabledCount,
     configuredSlots,
-    locale: {
-      en: { filled: enFilled, total: localeTotal },
-      hi: { filled: hiFilled, total: localeTotal },
-    },
-    meterLabel: `EN ${enFilled}/${localeTotal} · HI ${hiFilled}/${localeTotal}`,
-    localesComplete: localeTotal > 0 && enFilled === localeTotal && hiFilled === localeTotal,
+    locale,
+    meterLabel,
+    localesComplete: localeTotal > 0 && missingLocales.length === 0,
+    missingLocales,
   };
 }
 
@@ -162,8 +172,12 @@ export function localeBodyComplete(cell: NotificationCellBinding, locale: Locale
   return Boolean(cell.body[locale]?.trim());
 }
 
-export function summarizeDesign(design: NotificationsDesignState, pattern: string): string {
-  const c = matrixCompleteness(design.matrix, pattern);
+export function summarizeDesign(
+  design: NotificationsDesignState,
+  pattern: string,
+  locales: readonly string[] = ["en", "hi"],
+): string {
+  const c = matrixCompleteness(design.matrix, pattern, locales);
   if (c.enabledCount === 0) {
     return "No messages enabled — applicants will not be notified unless you turn channels on.";
   }

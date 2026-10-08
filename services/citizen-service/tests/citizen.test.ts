@@ -93,7 +93,7 @@ describe("RTI CQRS — file wiring (integration)", () => {
         cpioRef: ACTOR, citizenId: CITIZEN,
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await q.drain();
     await q.stop();
 
     const rows = await asTenant((tx) => tx.select().from(citizenRtiRequests).where(eq(citizenRtiRequests.id, RTI_1)));

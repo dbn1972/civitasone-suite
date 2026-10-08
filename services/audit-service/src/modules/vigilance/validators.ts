@@ -47,3 +47,13 @@ export const decideActionBody = z.object({
   remarks:  z.string().max(4000).optional(),
 });
 export type DecideActionBody = z.infer<typeof decideActionBody>;
+
+/**
+ * GAP-AUDIT-VIGILANCE-02: audited reveal of one confidential field. A
+ * substantive reason is mandatory for the DPDP accountability trail.
+ */
+export const revealBody = z.object({
+  field:  z.enum(["officer", "charges"]),
+  reason: z.string().trim().min(10).max(2000),
+});
+export type RevealBody = z.infer<typeof revealBody>;

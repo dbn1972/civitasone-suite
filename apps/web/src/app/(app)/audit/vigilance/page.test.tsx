@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render as rtlRender, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
+
+// VigilanceTable renders RevealableValue (client), which uses next-intl.
+function render(ui: React.ReactElement) {
+  return rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+}
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -72,30 +79,41 @@ describe("VigilancePage", () => {
   });
 
   // GAP-AUDIT-VIGILANCE-02 (DPDP): officer identity + charge text are masked
-  // and the client CSV export is withheld for callers outside the vigilance
-  // reader roles; a vigilance reader sees them in the clear.
-  it("masks officer/charges and hides export for a non-vigilance role (e.g. finance_admin)", async () => {
+  // in the RSC payload for EVERY role (never shipped in the clear). Callers
+  // outside the vigilance reader roles get no reveal control and no CSV
+  // export; a vigilance reader gets an audited reveal control per field.
+  it("masks officer/charges and hides export + reveal for a non-vigilance role (e.g. finance_admin)", async () => {
     sessionRoles = ["finance_admin"];
     fetchJsonMock.mockResolvedValue({
       data: [{ id: "v1", caseNo: "VC-1", officer: "Ramesh Kumar", charges: "Misappropriation of funds", inquiryStatus: "under_investigation", outcome: "pending" }],
       source: "api",
     });
-    render(await VigilancePage());
+    const { container } = render(await VigilancePage());
     expect(screen.queryByText("Ramesh Kumar")).not.toBeInTheDocument();
     expect(screen.queryByText("Misappropriation of funds")).not.toBeInTheDocument();
     expect(screen.getByText("RK ••••")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /csv/i })).not.toBeInTheDocument();
+    // No reveal control at all for a non-reader.
+    expect(screen.queryByRole("button", { name: /reveal/i })).not.toBeInTheDocument();
+    // The clear value is never shipped to the browser.
+    expect(container.innerHTML).not.toContain("Ramesh Kumar");
+    expect(container.innerHTML).not.toContain("Misappropriation of funds");
   });
 
-  it("shows officer/charges in the clear for a vigilance reader role", async () => {
+  it("offers an audited reveal (and CSV) to a vigilance reader, but still never ships the clear value", async () => {
     sessionRoles = ["vigilance_officer"];
     fetchJsonMock.mockResolvedValue({
       data: [{ id: "v1", caseNo: "VC-1", officer: "Ramesh Kumar", charges: "Misappropriation of funds", inquiryStatus: "under_investigation", outcome: "pending" }],
       source: "api",
     });
-    render(await VigilancePage());
-    expect(screen.getByText("Ramesh Kumar")).toBeInTheDocument();
-    expect(screen.getByText("Misappropriation of funds")).toBeInTheDocument();
+    const { container } = render(await VigilancePage());
+    // Masked in the payload even for a reader; the clear value is fetched
+    // on demand through the audited endpoint, never pre-rendered.
+    expect(screen.getByText("RK ••••")).toBeInTheDocument();
+    expect(container.innerHTML).not.toContain("Ramesh Kumar");
+    expect(container.innerHTML).not.toContain("Misappropriation of funds");
+    // One reveal control per revealable field (officer + charges).
+    expect(screen.getAllByRole("button", { name: /reveal/i }).length).toBeGreaterThanOrEqual(2);
     expect(screen.getByRole("button", { name: /csv/i })).toBeInTheDocument();
   });
 

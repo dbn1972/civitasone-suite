@@ -1,11 +1,14 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import Link from "next/link";
 import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
+import { StatusPill } from "@/app/_components/ds/StatusPill";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 import { rupeesToMinorString } from "@/lib/money";
 import { BBPS_CHANNELS, channelLabel } from "@/lib/revenue/channels";
+import { useBbpsRequestStatus } from "./useBbpsRequestStatus";
 
 type AcceptedResponse = { data?: { messageId?: string } };
 
@@ -22,6 +25,9 @@ export function PayBillForm() {
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"good" | "bad">("good");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [lastAssesseeId, setLastAssesseeId] = useState<string>("");
+  const [messageId, setMessageId] = useState<string | null>(null);
+  const { status, pollFailed, reset: resetStatus } = useBbpsRequestStatus(messageId);
 
   const identifierId = useId();
   const amountId = useId();
@@ -71,11 +77,14 @@ export function PayBillForm() {
     if (!minorAmount) return;
     setBusy(true);
     setDialogError(undefined);
+    resetStatus();
+    setMessageId(null);
+    const submittedIdentifier = assesseeIdentifier.trim();
     try {
       const res = await browserJson<AcceptedResponse>("v1/revenue/bbps/pay-bill", {
         method: "POST",
         body: JSON.stringify({
-          assesseeIdentifier: assesseeIdentifier.trim(),
+          assesseeIdentifier: submittedIdentifier,
           amountMinor: minorAmount,
           bbpsTxnId: bbpsTxnId.trim(),
           channel,
@@ -83,9 +92,12 @@ export function PayBillForm() {
       });
       setConfirmOpen(false);
       setTone("good");
+      setLastAssesseeId(submittedIdentifier);
+      const id = res.data?.messageId ?? null;
+      setMessageId(id);
       setMessage(
-        res.data?.messageId
-          ? `Payment request submitted (message ID ${res.data.messageId}). It is processed asynchronously — check Collection Receipts once it settles.`
+        id
+          ? "Payment request submitted — tracking its outcome below."
           : "Payment request submitted.",
       );
       setAssesseeIdentifier("");
@@ -218,6 +230,32 @@ export function PayBillForm() {
               style={{ width: "fit-content" }}
             >
               {message}
+            </p>
+          )}
+
+          {messageId && status && (
+            <div aria-live="polite" style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontSize: 13.5 }}>
+              <span style={{ fontWeight: 600 }}>Payment status:</span>
+              <StatusPill status={status.status} />
+              {status.status === "pending" && (
+                <span style={{ color: "var(--ink2)" }}>Checking with the biller…</span>
+              )}
+              {status.status === "success" && (
+                <Link href={`/revenue/receipts?assesseeId=${encodeURIComponent(lastAssesseeId)}`} className="link">
+                  View the receipt
+                </Link>
+              )}
+              {status.status === "failed" && (
+                <span role="alert" style={{ color: "var(--bad, #c0392b)" }}>
+                  {status.failureReason || "The payment could not be processed."} You can submit it again.
+                </span>
+              )}
+            </div>
+          )}
+
+          {messageId && status?.status === "pending" && pollFailed && (
+            <p role="status" style={{ margin: 0, fontSize: 12.5, color: "var(--ink2)" }}>
+              Still checking — the status service is slow to respond; retrying automatically.
             </p>
           )}
         </div>

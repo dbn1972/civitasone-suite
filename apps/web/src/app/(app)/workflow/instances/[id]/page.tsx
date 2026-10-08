@@ -5,6 +5,7 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { toHumanError } from "@/lib/messages";
 import { HistoryTimeline } from "../../_components/HistoryTimeline";
 import { TasksTable } from "../../_components/TasksTable";
+import { resolveUsers } from "@/lib/directory/resolveUsers";
 import {
   getInstanceById,
   getInstanceHistory,
@@ -45,6 +46,21 @@ export default async function InstanceDetailPage({ params }: { params: { id: str
   }
 
   const openTasks = tasks.filter((t) => t.status === "pending");
+
+  // GAP-WORKFLOW-INSTANCES-DETAIL-01 — resolve every actor/assignee id on this
+  // page to a display name via the shared tenant-scoped directory (batched,
+  // request-cached, fail-soft), then attach the names so the audit timeline and
+  // the task table name people instead of printing a bare UUID fragment.
+  const names = await resolveUsers([
+    ...history.map((t) => t.actorId),
+    ...openTasks.map((t) => t.assigneeId ?? ""),
+  ]);
+  const historyNamed = history.map((t) => ({ ...t, actorName: names.get(t.actorId) ?? null }));
+  const openTasksNamed = openTasks.map((t) => ({
+    ...t,
+    assigneeName: t.assigneeId ? (names.get(t.assigneeId) ?? null) : null,
+  }));
+
   const latest = [...history].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   )[0];
@@ -102,7 +118,7 @@ export default async function InstanceDetailPage({ params }: { params: { id: str
           ) : (
             <div className="pad">
               <Suspense fallback={null}>
-                <TasksTable tasks={openTasks} showInstance={false} />
+                <TasksTable tasks={openTasksNamed} showInstance={false} />
               </Suspense>
             </div>
           )}
@@ -118,7 +134,7 @@ export default async function InstanceDetailPage({ params }: { params: { id: str
               message="State changes for this instance will appear here as it progresses."
             />
           ) : (
-            <HistoryTimeline transitions={history} />
+            <HistoryTimeline transitions={historyNamed} />
           )}
         </Card>
       </div>

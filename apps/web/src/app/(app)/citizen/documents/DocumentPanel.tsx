@@ -25,6 +25,10 @@ export function DocumentPanel({ services }: { services: DocumentServiceOption[] 
   const [error, setError] = useState("");
   const [uploaded, setUploaded] = useState<Uploaded | null>(null);
   const [checklist, setChecklist] = useState<Checklist | null>(null);
+  // GAP-CITIZEN-DOCUMENTS-01: the file the citizen attaches. Upload now presigns
+  // a direct-to-storage PUT, uploads the bytes, then records the object key —
+  // no document can be recorded without a real file.
+  const [file, setFile] = useState<File | null>(null);
   // GAP-CITIZEN-DOCUMENTS-02: probe whether DigiLocker is configured so the
   // fetch control is disabled (with an explanation) when the provider is absent,
   // rather than offering a button that always returns provider_unconfigured.
@@ -46,19 +50,61 @@ export function DocumentPanel({ services }: { services: DocumentServiceOption[] 
     return () => { active = false; };
   }, []);
 
+  /**
+   * GAP-CITIZEN-DOCUMENTS-02: begin the real DigiLocker OAuth consent redirect.
+   * POST /authorize mints PKCE + state server-side and returns an authorizeUrl;
+   * we redirect the browser to the provider. A 409 PROVIDER_UNCONFIGURED keeps
+   * the honest disabled state (never a fabricated docUri or fake success).
+   */
+  async function startDigiLocker() {
+    setBusy(true); setError(""); setUploaded(null);
+    try {
+      const redirectUri = `${window.location.origin}/citizen/documents/digilocker/callback`;
+      const res = await fetch("/api/proxy/v1/citizen/documents/digilocker/authorize", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          docType, purpose: t("digilockerPurpose", { docType }), redirectUri,
+          applicationId: applicationId || undefined, serviceId,
+        }),
+      });
+      if (res.status === 409) {
+        // Provider unconfigured: stay honest and keep the disabled state.
+        setDigilockerConfigured(false);
+        setError(t("digilockerUnavailable"));
+        return;
+      }
+      if (!res.ok) throw UserFacingError.from(await formError.fromResponse(res, "save"));
+      const body = (await res.json()) as { authorizeUrl?: string };
+      if (!body.authorizeUrl) { setError(t("digilockerUnavailable")); return; }
+      window.location.assign(body.authorizeUrl);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function post<T>(path: string, body: unknown): Promise<T> {
     const res = await fetch(`/api/proxy${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     if (!res.ok) throw UserFacingError.from(await formError.fromResponse(res, "save"));
     return (await res.json()) as T;
   }
 
-  async function upload(source: "upload" | "digilocker") {
+  async function upload() {
     setBusy(true); setError(""); setUploaded(null);
     try {
-      const body = source === "upload"
-        ? { applicationId: applicationId || undefined, serviceId, docType }
-        : { applicationId: applicationId || undefined, serviceId, docType, docUri: `digilocker://${docType}`, consent: true };
-      setUploaded(await post<Uploaded>(`/v1/citizen/documents/${source === "upload" ? "upload" : "digilocker-fetch"}`, body));
+      // GAP-CITIZEN-DOCUMENTS-01: real presign → PUT to storage → record key.
+      if (!file) { setError(t("fileRequired")); return; }
+      const presign = await post<{ uploadUrl: string; key: string; method: string; headers?: Record<string, string> }>(
+        "/v1/citizen/documents/presign",
+        { filename: file.name, contentType: file.type || "application/octet-stream", sizeBytes: file.size },
+      );
+      const put = await fetch(presign.uploadUrl, { method: "PUT", headers: presign.headers ?? {}, body: file });
+      if (!put.ok) { setError(t("uploadFailed")); return; }
+      setUploaded(await post<Uploaded>("/v1/citizen/documents/upload", {
+        applicationId: applicationId || undefined, serviceId, docType, storageKey: presign.key,
+      }));
     } catch (caught) { setError(formError.fromException("save", caught).message); } finally { setBusy(false); }
   }
 
@@ -107,6 +153,16 @@ export function DocumentPanel({ services }: { services: DocumentServiceOption[] 
             <p id="d-type" style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>{t("docTypeHint")}</p>
           )}
 
+          {/* GAP-CITIZEN-DOCUMENTS-01: attach the actual file to upload. */}
+          <label htmlFor="d-file" style={labelStyle}>{t("fileLabel")}</label>
+          <input
+            id="d-file"
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,application/pdf,image/jpeg,image/png,image/webp,image/heic"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            style={{ ...inputStyle, padding: 6 }}
+          />
+
           {/* GAP-CITIZEN-DOCUMENTS-02: DPDP consent attestation before a DigiLocker fetch. */}
           <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13, margin: "4px 0 12px" }}>
             <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} style={{ marginTop: 3, minWidth: 18, minHeight: 18 }} />
@@ -114,13 +170,13 @@ export function DocumentPanel({ services }: { services: DocumentServiceOption[] 
           </label>
 
           <div style={{ display: "flex", gap: 8 }}>
-            <Button type="button" variant="primary" style={{ minHeight: 44 }} disabled={busy || !docType || !serviceId} onClick={() => upload("upload")}>{t("upload")}</Button>
+            <Button type="button" variant="primary" style={{ minHeight: 44 }} disabled={busy || !docType || !serviceId || !file} onClick={() => upload()}>{t("upload")}</Button>
             <Button
               type="button"
               variant="primary"
               style={{ minHeight: 44 }}
               disabled={busy || !docType || !serviceId || !consent || digilockerConfigured === false}
-              onClick={() => upload("digilocker")}
+              onClick={() => startDigiLocker()}
             >
               {t("fetchDigilocker")}
             </Button>

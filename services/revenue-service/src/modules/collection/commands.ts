@@ -21,3 +21,7 @@ export function decideRefund(ctx: RequestContext, refundId: string, payload: Rec
 export function createAdjustment(ctx: RequestContext, payload: Record<string, unknown>) {
   return publishCommand(COMMANDS.adjustmentCreate, ctx, payload);
 }
+
+export function decideAdjustment(ctx: RequestContext, adjustmentId: string, payload: Record<string, unknown>) {
+  return publishCommand(COMMANDS.adjustmentDecide, ctx, { ...payload, adjustmentId });
+}

@@ -29,6 +29,8 @@ import {
   recordOrder,
   sendBackOrder,
   submitOrderForApproval,
+  verifyOrderDsc,
+  type DscVerificationResult,
 } from "../_data/client";
 
 const fieldStyle: React.CSSProperties = {
@@ -656,6 +658,10 @@ function ApproveIssueDialog({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [serverError, setServerError] = useState<string | undefined>();
+  // GAP-COURT-ORDERS-02: server-side DSC verification before the irreversible issue.
+  const [verifying, setVerifying] = useState(false);
+  const [verification, setVerification] = useState<DscVerificationResult | null>(null);
+  const [verifyError, setVerifyError] = useState<string | undefined>();
 
   const dscId = useId();
   const dscErrId = useId();
@@ -663,6 +669,36 @@ function ApproveIssueDialog({
   const dateErrId = useId();
   const dscRef = useRef<HTMLTextAreaElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
+
+  // Any edit to the pasted blob invalidates a prior verification result.
+  function onDscChange(v: string) {
+    setDsc(v);
+    if (verification) setVerification(null);
+    if (verifyError) setVerifyError(undefined);
+  }
+
+  async function runVerify() {
+    setVerifyError(undefined);
+    setVerification(null);
+    const dscProblem = validateDscBlob(dsc);
+    if (dscProblem) {
+      setDscError(dscProblem);
+      dscRef.current?.focus();
+      return;
+    }
+    setDscError(undefined);
+    setVerifying(true);
+    try {
+      const result = await verifyOrderDsc(order.id, dsc.trim());
+      setVerification(result);
+    } catch (err) {
+      setVerifyError(
+        err instanceof Error ? err.message : "Could not verify the DSC signature on the server.",
+      );
+    } finally {
+      setVerifying(false);
+    }
+  }
 
   function validate(): boolean {
     let ok = true;
@@ -673,6 +709,18 @@ function ApproveIssueDialog({
       ok = false;
     } else {
       setDscError(undefined);
+    }
+    // GAP-COURT-ORDERS-02: require a SUCCESSFUL server-side verification of the
+    // pasted signature before allowing the irreversible issue — fail closed. The
+    // server independently re-verifies and rejects a bad signature regardless, so
+    // this is a UX guard, not the authority.
+    if (!verification || !verification.ok) {
+      setVerifyError(
+        verification
+          ? "The signature did not verify on the server — resolve the issues above before issuing."
+          : "Verify the DSC signature before issuing this order.",
+      );
+      ok = false;
     }
     if (issuedDate) {
       const d = new Date(`${issuedDate}T00:00:00`);
@@ -725,11 +773,12 @@ function ApproveIssueDialog({
         rejects a self-approval.
       </p>
       <p style={{ fontSize: 12, color: "var(--ink2)", margin: 0 }}>
-        Paste the detached PKCS#7 signature produced by your signing token for this order. This
-        pasted-blob step is an interim fallback: the signer-token / eSign integration and
-        server-side certificate verification (signer identity, validity) are pending — see the
-        order-issuance workflow note. The blob is checked for structural validity here; it is not
-        yet cryptographically verified in the browser.
+        Paste the detached PKCS#7 signature produced by your signing token for this order, then{" "}
+        <strong>verify</strong> it. Verification is performed on the server: it parses the PKCS#7,
+        checks the signer certificate&apos;s validity and key usage, and cryptographically verifies
+        the signature over this order&apos;s content. Chain-of-trust is additionally checked when a
+        trust store is configured. The order can only be issued after the signature verifies; the
+        server independently re-verifies and rejects an invalid signature.
       </p>
       <div style={{ display: "grid", gap: 4 }}>
         <label htmlFor={dscId} style={{ fontSize: 12.5, fontWeight: 600 }}>
@@ -740,7 +789,7 @@ function ApproveIssueDialog({
           ref={dscRef}
           placeholder="-----BEGIN PKCS7----- …"
           value={dsc}
-          onChange={(e) => setDsc(e.target.value)}
+          onChange={(e) => onDscChange(e.target.value)}
           rows={2}
           aria-required="true"
           aria-invalid={!!dscError || undefined}
@@ -753,6 +802,33 @@ function ApproveIssueDialog({
           </p>
         )}
       </div>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <Button variant="ghost" size="sm" disabled={verifying || !dsc.trim()} onClick={() => void runVerify()}>
+          {verifying ? "Verifying…" : "Verify signature"}
+        </Button>
+        {verification?.ok && (
+          <span style={{ fontSize: 12, color: "var(--good, #1a7f37)" }}>
+            ✓ Signature verified{verification.signerCN ? ` — signer: ${verification.signerCN}` : ""}
+            {verification.notAfter ? ` · valid until ${fmtDate(verification.notAfter)}` : ""}
+            {verification.trustStoreConfigured
+              ? verification.chainTrusted
+                ? " · chain trusted"
+                : " · chain NOT trusted"
+              : " · chain-of-trust not configured on server"}
+          </span>
+        )}
+      </div>
+      {verifyError && (
+        <p role="alert" style={errStyle}>
+          {verifyError}
+        </p>
+      )}
+      {verification && !verification.ok && (
+        <p role="alert" style={errStyle}>
+          Signature did not verify: {verification.issues.join(", ")}.
+          {verification.signerCN ? ` Signer certificate CN: ${verification.signerCN}.` : ""}
+        </p>
+      )}
       <div style={{ display: "grid", gap: 4, maxWidth: 200 }}>
         <label htmlFor={dateId} style={{ fontSize: 12.5, fontWeight: 600 }}>
           Pronouncement date
@@ -774,7 +850,13 @@ function ApproveIssueDialog({
         )}
       </div>
       <div style={{ display: "flex", gap: 8 }}>
-        <Button variant="primary" size="sm" onClick={proceed}>
+        <Button
+          variant="primary"
+          size="sm"
+          disabled={!verification?.ok}
+          title={verification?.ok ? undefined : "Verify the DSC signature first"}
+          onClick={proceed}
+        >
           Approve &amp; issue
         </Button>
         <Button variant="ghost" size="sm" onClick={onClose}>
@@ -791,9 +873,10 @@ function ApproveIssueDialog({
         errorMessage={serverError}
         description={
           <>
-            Pronounce the {rowLabel} with the pasted DSC signature. This is a human, irreversible
-            act of the court and cannot be undone (an issued order may only be recalled, not
-            un-issued).
+            Pronounce the {rowLabel} with the server-verified DSC signature
+            {verification?.signerCN ? ` (signer: ${verification.signerCN})` : ""}. This is a human,
+            irreversible act of the court and cannot be undone (an issued order may only be
+            recalled, not un-issued).
           </>
         }
         onConfirm={() => void confirm()}

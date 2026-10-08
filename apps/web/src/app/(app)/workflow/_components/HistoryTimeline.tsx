@@ -4,6 +4,7 @@
  * newest-first, with from→to step, action, decision and actor.
  */
 import { formatIndianDate } from "@/lib/formatters";
+import { UserRef } from "@/app/_components/ds";
 import type { WorkflowTransition } from "../_data/workflowTypes";
 import { titleCase } from "../_data/workflowTypes";
 
@@ -51,9 +52,10 @@ export function HistoryTimeline({ transitions }: { transitions: WorkflowTransiti
           </div>
           <div className="d">
             {fmtTime(t.createdAt)} · actor{" "}
-            <span className="mono" title={`User ID: ${t.actorId}`} aria-label={`User ID ${t.actorId}`}>
-              {t.actorId ? `${t.actorId.slice(0, 8)}…` : "unknown"}
-            </span>
+            {/* GAP-WORKFLOW-INSTANCES-DETAIL-01 — show the server-resolved actor
+                name (UserRef) when present; otherwise an honest short id with the
+                full id in the title for copy. Never a guessed name on an audit view. */}
+            <UserRef id={t.actorId} name={t.actorName ?? null} />
           </div>
         </li>
       ))}

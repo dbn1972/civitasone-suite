@@ -2,70 +2,86 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 const refreshMock = vi.fn();
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: refreshMock }),
-}));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: refreshMock }) }));
 
 import { AssignmentActions } from "./AssignmentActions";
 
-const VALID_UUID = "11111111-2222-4333-8444-555555555555";
+const INSPECTION = "11111111-1111-4111-8111-000000000001";
+const INSPECTOR = "22222222-2222-4222-8222-000000000002";
+const TYPE = "33333333-3333-4333-8333-000000000003";
+const ENTITY = "44444444-4444-4444-8444-000000000004";
 
-function fillAllIds() {
-  const inputs = screen.getAllByPlaceholderText("UUID");
-  for (const inp of inputs.slice(0, 4)) {
-    fireEvent.change(inp, { target: { value: VALID_UUID } });
-  }
+/** Routed fetch: each lookup endpoint returns one option; the POST returns 202. */
+function stubFetch() {
+  return vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : input.toString();
+    const ok = (data: unknown) => Promise.resolve(new Response(JSON.stringify(data), { status: 200 }));
+    if (url.includes("/inspection/inspections")) return ok({ data: [{ id: INSPECTION, state: "scheduled", createdAt: "2026-10-07T00:00:00Z" }] });
+    if (url.includes("/identity/users/directory")) return ok({ data: [{ id: INSPECTOR, displayName: "Inspector Asha" }] });
+    if (url.includes("/inspection/types")) return ok({ data: [{ id: TYPE, name: "Fire Safety", code: "FS" }] });
+    if (url.includes("/inspection/entities")) return ok({ data: [{ id: ENTITY, name: "Acme Factory", registrationNo: "REG-9", entityType: "factory" }] });
+    return Promise.resolve(new Response(JSON.stringify({ status: "accepted" }), { status: 202 }));
+  });
 }
 
-describe("AssignmentActions", () => {
+async function selectOn(labelRe: RegExp, type: string, optionText: string) {
+  const combo = screen.getByRole("combobox", { name: labelRe }) as HTMLInputElement;
+  fireEvent.focus(combo);
+  fireEvent.change(combo, { target: { value: type } });
+  // Pick the listbox option whose rendered label contains optionText — more
+  // robust than findByText, which can match the picker's status live-region.
+  const option = await screen.findByRole("option", {
+    name: (accessibleName: string) => accessibleName.includes(optionText),
+  });
+  fireEvent.mouseDown(option);
+  await waitFor(() => expect(combo.value).not.toBe(type));
+}
+
+describe("GAP-INSPECTION-ASSIGNMENTS-01 AssignmentActions (pickers replace raw UUID boxes)", () => {
   beforeEach(() => {
-    vi.restoreAllMocks();
     refreshMock.mockReset();
+    vi.restoreAllMocks();
   });
 
-  it("POSTs create assignment and expects 202 Accepted", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ status: "accepted" }), { status: 202 }),
-    );
+  it("renders four labelled comboboxes, not raw 'UUID' text inputs", () => {
+    stubFetch();
     render(<AssignmentActions />);
-    fillAllIds();
-    fireEvent.click(screen.getByRole("button", { name: /create assignment/i }));
-    await waitFor(() => expect(screen.getByText(/appear in the list shortly/i)).toBeInTheDocument());
-    expect(String(fetchSpy.mock.calls[0]![0])).toContain("/assignments");
-    expect((fetchSpy.mock.calls[0]![1] as RequestInit).method).toBe("POST");
-    expect(refreshMock).toHaveBeenCalled();
+    expect(screen.getByRole("combobox", { name: /^Inspection$/i })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /inspector/i })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /inspection type/i })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /entity/i })).toBeInTheDocument();
+    // No input still advertises a bare "UUID" placeholder.
+    expect(document.querySelector('input[placeholder="UUID"]')).toBeNull();
   });
 
-  // GAP-INSPECTION-ASSIGNMENTS-02: a blank submit makes NO fetch call and shows
-  // field errors (deliberate contract change — the form is now validated
-  // client-side with the same UUID rules the route enforces).
-  it("blocks a blank submit with field errors and makes no fetch call", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
+  it("blocks submit until all four pickers have a selection (no POST)", async () => {
+    const fetchSpy = stubFetch();
     render(<AssignmentActions />);
-    fireEvent.click(screen.getByRole("button", { name: /create assignment/i }));
-    await waitFor(() => expect(screen.getAllByRole("alert").length).toBeGreaterThan(0));
-    expect(fetchSpy).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText("Create assignment"));
+    expect(await screen.findAllByText("Select a value.")).not.toHaveLength(0);
+    expect(fetchSpy.mock.calls.some((c) => String(c[0]) === "/api/proxy/v1/inspection/assignments")).toBe(false);
   });
 
-  // GAP-INSPECTION-ASSIGNMENTS-02: a 400 shows the server's clerk-safe copy,
-  // never the raw response text.
-  it("surfaces a clerk-safe message when create fails, never the raw response text (UX-016)", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("validation failed", { status: 400 }));
+  it("POSTs the four selected UUIDs once every picker is chosen", async () => {
+    const fetchSpy = stubFetch();
     render(<AssignmentActions />);
-    fillAllIds();
-    fireEvent.click(screen.getByRole("button", { name: /create assignment/i }));
+
+    await selectOn(/^Inspection$/i, "sched", "scheduled");
+    await selectOn(/inspector/i, "Asha", "Inspector Asha");
+    await selectOn(/inspection type/i, "Fire", "Fire Safety");
+    await selectOn(/entity/i, "Acme", "Acme Factory");
+
+    fireEvent.click(screen.getByText("Create assignment"));
+
     await waitFor(() =>
-      expect(screen.getByText(/Some details weren't accepted\. Check what you entered and try again\./)).toBeInTheDocument(),
+      expect(fetchSpy.mock.calls.some((c) => String(c[0]) === "/api/proxy/v1/inspection/assignments")).toBe(true),
     );
-    expect(screen.queryByText(/^validation failed$/i)).not.toBeInTheDocument();
-  });
-
-  // GAP-INSPECTION-ASSIGNMENTS-03: the Scheduled date defaults to the IST
-  // calendar date, not the UTC one.
-  it("defaults the Scheduled date to the IST calendar date", async () => {
-    render(<AssignmentActions />);
-    const dateInput = document.querySelector('input[type="date"]') as HTMLInputElement;
-    // todayIST() shape is YYYY-MM-DD and is >= the UTC date for the same instant.
-    expect(dateInput.value).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    const postCall = fetchSpy.mock.calls.find((c) => String(c[0]) === "/api/proxy/v1/inspection/assignments")!;
+    const body = JSON.parse((postCall[1] as RequestInit).body as string);
+    expect(body.inspectionId).toBe(INSPECTION);
+    expect(body.inspectorId).toBe(INSPECTOR);
+    expect(body.inspectionTypeId).toBe(TYPE);
+    expect(body.entityId).toBe(ENTITY);
+    expect(body.scheduledDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 });

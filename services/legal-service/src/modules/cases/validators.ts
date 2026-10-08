@@ -28,3 +28,15 @@ export const listCasesQuery = z.object({
   status: z.enum(["pending", "disposed", "appealed", "stayed", "settled"]).optional(),
   type:   z.string().uuid().optional(),
 });
+
+/**
+ * GAP-LEGAL-CASES-NEW-01: case-type master. A case type is a tenant-scoped
+ * (code, name) pair; `code` is the stable machine key the adverse-risk logic
+ * and the create-case select key off, `name` is the human label. `code` is
+ * lower-snake/kebab-ish and bounded; the DB enforces UNIQUE (tenant_id, code).
+ */
+export const createCaseTypeBody = z.object({
+  code: z.string().trim().min(1).max(32).regex(/^[a-z0-9_]+$/, "code must be lower-case letters, digits or underscores"),
+  name: z.string().trim().min(1).max(128),
+});
+export type CreateCaseTypeBody = z.infer<typeof createCaseTypeBody>;

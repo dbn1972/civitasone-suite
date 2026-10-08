@@ -8,7 +8,7 @@ type TableType = typeof s.authorities | typeof s.workTypes | typeof s.workSubTyp
   typeof s.repairTypes | typeof s.schemes | typeof s.scopes |
   typeof s.tenderTypes | typeof s.userDepartments | typeof s.contractorClasses |
   typeof s.issueTypes | typeof s.issueDescriptionTypes | typeof s.assets |
-  typeof s.workDescriptionTypes | typeof s.srItems;
+  typeof s.workDescriptionTypes | typeof s.srItems | typeof s.divisions;
 
 // Bug fix (works-masters-deep-verify, CRITICAL): this used `table._.name`,
 // drizzle-orm's internal accessor, which is undefined on the installed
@@ -18,6 +18,11 @@ type TableType = typeof s.authorities | typeof s.workTypes | typeof s.workSubTyp
 // 500'd unconditionally. masters/consumer.ts already carries the fix and a
 // comment about it (`getTableName`, not `table._.name`) — that fix was never
 // mirrored here. Use the same public API.
+/** Escape LIKE wildcards so a search for 100% or a_b is literal. */
+function escapeLike(term: string): string {
+  return term.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
 export async function listMaster(table: TableType, tenantId: string, page: number, pageSize: number) {
   return cache.getOrLoad(`works:${tenantId}:master:${getTableName(table)}:${page}:${pageSize}`, async () => {
     return scopedRead(async (tx) => {
@@ -55,7 +60,7 @@ export async function searchSrItems(tenantId: string, query: string, limit = 20)
   return scopedRead(async (tx) => {
     const conditions = [eq(s.srItems.tenantId, tenantId), eq(s.srItems.active, true)];
     if (q.length > 0) {
-      const like = `%${q}%`;
+      const like = `%${escapeLike(q)}%`;
       const match = or(ilike(s.srItems.itemCode, like), ilike(s.srItems.description, like));
       if (match) conditions.push(match);
     }
@@ -72,6 +77,39 @@ export async function searchSrItems(tenantId: string, query: string, limit = 20)
       .from(s.srItems)
       .where(and(...conditions))
       .orderBy(desc(s.srItems.srYear), s.srItems.itemCode)
+      .limit(safeLimit);
+  });
+}
+
+/**
+ * GAP-WORKS-REPORTS-01: typeahead search over the works division master
+ * (works.divisions) for the reports division picker. Matches the trimmed query
+ * against division name or code (case-insensitive), active divisions only,
+ * returning {id, name, code} so the FE can resolve a seeded id's label and send
+ * the real division uuid as ?divisionId= instead of letting a user free-type a
+ * code that silently returns an empty register. Empty query returns the first
+ * `limit` active divisions so the picker is useful before the user types.
+ */
+export async function searchDivisions(tenantId: string, query: string, limit = 20) {
+  const q = query.trim();
+  const safeLimit = Math.min(Math.max(limit, 1), 50);
+  return scopedRead(async (tx) => {
+    const conditions = [eq(s.divisions.tenantId, tenantId), eq(s.divisions.active, true)];
+    if (q.length > 0) {
+      const like = `%${escapeLike(q)}%`;
+      const match = or(ilike(s.divisions.name, like), ilike(s.divisions.code, like));
+      if (match) conditions.push(match);
+    }
+    return tx
+      .select({
+        id: s.divisions.id,
+        name: s.divisions.name,
+        code: s.divisions.code,
+        officeType: s.divisions.officeType,
+      })
+      .from(s.divisions)
+      .where(and(...conditions))
+      .orderBy(s.divisions.name)
       .limit(safeLimit);
   });
 }

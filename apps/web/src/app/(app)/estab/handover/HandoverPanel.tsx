@@ -32,6 +32,10 @@ export function HandoverPanel() {
   const [operators, setOperators] = useState<Operator[]>([]);
   const [rows, setRows] = useState<Handover[]>([]);
   const [loading, setLoading] = useState(true);
+  // True once the FIRST load has settled. Until then the officer pickers would
+  // render with empty rosters (a selection made in that window silently snaps
+  // back to "Select…"), so the form shows a loading placeholder instead.
+  const [loadedOnce, setLoadedOnce] = useState(false);
   const [form, setForm] = useState({ ...EMPTY });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -72,6 +76,7 @@ export function HandoverPanel() {
       setLoadError(err instanceof Error ? err.message : "Failed to load");
     } finally {
       setLoading(false);
+      setLoadedOnce(true);
     }
   }, []);
 
@@ -177,6 +182,8 @@ export function HandoverPanel() {
               onRetry={() => void load()}
             />
           </div>
+        ) : !loadedOnce ? (
+          <p className="pad" style={{ textAlign: "center", color: "var(--mut)" }}>Loading…</p>
         ) : (
           <>
             <div className="pad" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>

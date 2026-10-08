@@ -5,7 +5,7 @@
  * deficiency/resubmission, appeal filing-window + order maker-checker + remand,
  * RLS cross-tenant 404, and outbox emission.
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
@@ -15,6 +15,13 @@ import { registerAppealConsumers } from "../src/modules/appeal/consumer.js";
 import { registerCatalogueConsumers } from "../src/modules/catalogue/consumer.js";
 import { registerDocumentsConsumers } from "../src/modules/documents/consumer.js";
 import type { FastifyInstance } from "fastify";
+
+// The object store is not reachable in unit tests: treat every presigned key as
+// already PUT (the uploader's HEAD check is covered in documents-object-exists.test.ts).
+vi.mock("../src/modules/documents/storage.js", async (orig) => ({
+  ...(await orig<typeof import("../src/modules/documents/storage.js")>()),
+  objectExists: async () => true,
+}));
 
 registerApplicationConsumers(queue);
 registerAppealConsumers(queue);
@@ -44,6 +51,16 @@ async function waitFor<T>(fn: () => Promise<T | null | undefined>, ms = 3000): P
     await new Promise((r) => setTimeout(r, 25));
   }
   throw new Error("waitFor timeout");
+}
+
+// GAP-CITIZEN-DOCUMENTS-01: /upload now requires a presigned object key. Mint one
+// as the given citizen so the upload references a real (caller-owned) key.
+async function presignKey(app: FastifyInstance, actor: string): Promise<string> {
+  const res = await app.inject({
+    method: "POST", url: "/v1/citizen/documents/presign", headers: hdr(tok(TENANT_A, actor, ["citizen"])),
+    payload: { filename: "doc.pdf", contentType: "application/pdf", sizeBytes: 1024 },
+  });
+  return res.json().key as string;
 }
 
 async function outboxTopics(): Promise<string[]> {
@@ -306,9 +323,10 @@ describe("SVC-084 upload/DigiLocker-gated/checklist/deficiency/resubmit", () => 
   });
 
   it("upload intake records a self-attested pending submission", async () => {
+    const key = await presignKey(app, CITIZEN);
     const res = await app.inject({
       method: "POST", url: "/v1/citizen/documents/upload", headers: hdr(tok(TENANT_A, CITIZEN, ["citizen"])),
-      payload: { applicationId: APP_ID, serviceId: SERVICE_ID, docType: "address_proof" },
+      payload: { applicationId: APP_ID, serviceId: SERVICE_ID, docType: "address_proof", storageKey: key },
     });
     expect(res.statusCode).toBe(202);
     docId = res.json().id;
@@ -350,9 +368,10 @@ describe("SVC-084 upload/DigiLocker-gated/checklist/deficiency/resubmit", () => 
   });
 
   it("resubmission supersedes the deficient submission", async () => {
+    const key = await presignKey(app, CITIZEN);
     const res = await app.inject({
       method: "POST", url: `/v1/citizen/documents/${docId}/resubmit`, headers: hdr(tok(TENANT_A, CITIZEN, ["citizen"])),
-      payload: { source: "upload" },
+      payload: { source: "upload", storageKey: key },
     });
     expect(res.statusCode).toBe(202);
     // `supersedes` travels inside the F3 `data` envelope — a bare top-level
@@ -365,9 +384,10 @@ describe("SVC-084 upload/DigiLocker-gated/checklist/deficiency/resubmit", () => 
   });
 
   it("verify emits a document.verified outbox event", async () => {
+    const key = await presignKey(app, CITIZEN);
     const fresh = await app.inject({
       method: "POST", url: "/v1/citizen/documents/upload", headers: hdr(tok(TENANT_A, CITIZEN, ["citizen"])),
-      payload: { applicationId: APP_ID, serviceId: SERVICE_ID, docType: "id_proof" },
+      payload: { applicationId: APP_ID, serviceId: SERVICE_ID, docType: "id_proof", storageKey: key },
     });
     const id = fresh.json().id;
     await waitFor(async () => {
@@ -538,9 +558,10 @@ describe("SVC-084 IDOR: a citizen cannot read/attribute another citizen's docume
   let docId: string;
 
   it("citizen A uploads a submission (owned by A)", async () => {
+    const key = await presignKey(app, CITIZEN);
     const res = await app.inject({
       method: "POST", url: "/v1/citizen/documents/upload", headers: hdr(tok(TENANT_A, CITIZEN, ["citizen"])),
-      payload: { applicationId: APP_ID, serviceId: SERVICE_ID, docType: "id_proof" },
+      payload: { applicationId: APP_ID, serviceId: SERVICE_ID, docType: "id_proof", storageKey: key },
     });
     expect(res.statusCode).toBe(202);
     docId = res.json().id;
@@ -566,9 +587,10 @@ describe("SVC-084 IDOR: a citizen cannot read/attribute another citizen's docume
   });
 
   it("citizen B CANNOT upload attributing the document to citizen A (403 FORBIDDEN)", async () => {
+    const key = await presignKey(app, CITIZEN_B);
     const res = await app.inject({
       method: "POST", url: "/v1/citizen/documents/upload", headers: hdr(tok(TENANT_A, CITIZEN_B, ["citizen"])),
-      payload: { applicationId: APP_ID, serviceId: SERVICE_ID, docType: "id_proof", citizenId: CITIZEN },
+      payload: { applicationId: APP_ID, serviceId: SERVICE_ID, docType: "id_proof", citizenId: CITIZEN, storageKey: key },
     });
     expect(res.statusCode).toBe(403);
     expect(res.json().code).toBe("FORBIDDEN");

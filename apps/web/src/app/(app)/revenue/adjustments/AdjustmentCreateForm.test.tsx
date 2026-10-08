@@ -74,7 +74,7 @@ describe("AdjustmentCreateForm", () => {
     expect(breakdown).toHaveTextContent("₹4,800.00"); // principal
   });
 
-  it("applies an adjustment on confirm (happy path)", async () => {
+  it("requests an adjustment for approval on confirm (happy path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ id: "adj-1", status: "accepted" }), { status: 202 }),
     );
@@ -83,12 +83,15 @@ describe("AdjustmentCreateForm", () => {
     fillValidForm();
     fireEvent.click(screen.getByRole("button", { name: "Raise Adjustment" }));
 
-    await waitFor(() => expect(screen.getByText("Apply this adjustment?")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("Apply adjustment"));
+    await waitFor(() => expect(screen.getByText("Request this adjustment?")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Request adjustment"));
 
     await waitFor(() => {
-      // GAP-REVENUE-ADJUSTMENTS-02: message names amount + both FYs, no raw UUID.
-      expect(screen.getByText("Moved ₹250.00 from FY 2025-2026 to FY 2026-2027.")).toBeInTheDocument();
+      // GAP-REVENUE-ADJUSTMENTS-01/02: message names amount + both FYs, no raw
+      // UUID, and makes clear the transfer is pending a checker (not applied).
+      expect(
+        screen.getByText("Requested transfer of ₹250.00 from FY 2025-2026 to FY 2026-2027 — pending a distinct checker's approval."),
+      ).toBeInTheDocument();
     });
     expect(screen.queryByText(/adj-1/)).not.toBeInTheDocument();
     expect(refreshMock).toHaveBeenCalled();
@@ -101,8 +104,8 @@ describe("AdjustmentCreateForm", () => {
     fillValidForm();
     fireEvent.click(screen.getByRole("button", { name: "Raise Adjustment" }));
 
-    await waitFor(() => expect(screen.getByText("Apply this adjustment?")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("Apply adjustment"));
+    await waitFor(() => expect(screen.getByText("Request this adjustment?")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Request adjustment"));
 
     await waitFor(() => {
       expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();

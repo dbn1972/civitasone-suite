@@ -9,10 +9,18 @@ export type NotificationEvent =
   | "issued"
   | "inspection_scheduled";
 
-export interface LocaleTemplateBody {
-  en: string;
-  hi: string;
-}
+/**
+ * GAP-DESIGNER-DETAIL-B8-01: a template body/subject may carry ANY locale the
+ * tenant publishes in (B1 governance locales, e.g. `or` for Odia), not just
+ * en/hi. `en`/`hi` stay declared so the many existing readers (`body.en`,
+ * `body.hi`) keep their non-optional `string` type under
+ * noUncheckedIndexedAccess, while the index signature allows additional locale
+ * codes. Dynamic access `body[localeCode]` is `string | undefined` and callers
+ * coalesce with `?? ""`. The persisted shape is opaque jsonb in the catalogue
+ * `outputs` (see citizen-service validators: outputs is z.array(z.unknown())),
+ * so arbitrary locale keys round-trip with no backend schema change.
+ */
+export type LocaleTemplateBody = { en: string; hi: string } & Record<string, string>;
 
 export interface NotificationCellBinding {
   enabled: boolean;
@@ -313,8 +321,27 @@ export function smsStats(text: string): { chars: number; segments: number; warn:
 export function cellChipLabel(cell: NotificationCellBinding | undefined): string {
   if (!cell?.enabled) return "Off";
   if (cell.templateName?.trim()) return cell.templateName.trim();
-  const hasBody = Boolean(cell.body.en.trim() || cell.body.hi.trim());
+  // GAP-DESIGNER-DETAIL-B8-01: a cell has content if ANY locale body is filled,
+  // not just en/hi, so an Odia-only template reads "On · Edit", not "On · empty".
+  const hasBody = Object.values(cell.body).some((v) => (v ?? "").trim().length > 0);
   return hasBody ? "On · Edit" : "On · empty";
+}
+
+/**
+ * GAP-DESIGNER-DETAIL-B8-01: a blank template body keyed by the given locales.
+ * `en`/`hi` are always present so the LocaleTemplateBody shape is satisfied;
+ * any extra tenant locale (e.g. `or`) is seeded blank too.
+ */
+export function emptyLocaleBody(locales: readonly string[] = ["en", "hi"]): LocaleTemplateBody {
+  const body: Record<string, string> = { en: "", hi: "" };
+  for (const l of locales) body[l] = body[l] ?? "";
+  return body as LocaleTemplateBody;
+}
+
+/** True when every one of `locales` has non-empty body text in this cell. */
+export function cellLocalesComplete(cell: NotificationCellBinding, locales: readonly string[]): boolean {
+  if (locales.length === 0) return true;
+  return locales.every((l) => Boolean((cell.body[l] ?? "").trim()));
 }
 
 export function enableCell(

@@ -4,8 +4,8 @@ import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, resolveCitizenId, isOfficer, assertOwnership, HttpError } from "../../shared/context.js";
 import {
-  idParam, uploadBody, digilockerFetchBody, verifyBody, resubmitBody,
-  checklistQuery, applicationQuery,
+  idParam, uploadBody, presignBody, digilockerFetchBody, verifyBody, resubmitBody,
+  checklistQuery, applicationQuery, authorizeBody, callbackBody,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -25,6 +25,13 @@ export async function documentsRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ configured: isDigiLockerConfigured() });
   });
 
+  app.post("/v1/citizen/documents/presign", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CITIZEN_ROLES);
+    const body = presignBody.parse(req.body);
+    return reply.send(await commands.presignUpload(ctx, body));
+  });
+
   app.post("/v1/citizen/documents/upload", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
@@ -39,6 +46,28 @@ export async function documentsRoutes(app: FastifyInstance): Promise<void> {
     const body = digilockerFetchBody.parse(req.body);
     const citizenId = resolveCitizenId(ctx, body.citizenId);
     return sendAccepted(reply, acceptedResponseSchema, await commands.digilockerFetchIntake(ctx, { ...body, citizenId }));
+  });
+
+  // GAP-CITIZEN-DOCUMENTS-02 — begin the OAuth consent redirect. The server
+  // mints PKCE + state bound to tenant+actor+citizen and returns the provider
+  // authorize URL. 409 PROVIDER_UNCONFIGURED when no creds (fail-closed).
+  app.post("/v1/citizen/documents/digilocker/authorize", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CITIZEN_ROLES);
+    const body = authorizeBody.parse(req.body);
+    const citizenId = resolveCitizenId(ctx, body.citizenId);
+    return reply.send(await commands.beginDigiLockerAuthorize(ctx, { ...body, citizenId }));
+  });
+
+  // GAP-CITIZEN-DOCUMENTS-02 — the OAuth callback. Exchanges the code for the
+  // citizen-authorised docUri, persists a consent record, and verifies the
+  // issued-document artefact before marking it source-verified. The state is
+  // single-use and bound to the original actor+tenant.
+  app.post("/v1/citizen/documents/digilocker/callback", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CITIZEN_ROLES);
+    const body = callbackBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.digilockerCallback(ctx, body));
   });
 
   app.get("/v1/citizen/documents/checklist", async (req, reply) => {

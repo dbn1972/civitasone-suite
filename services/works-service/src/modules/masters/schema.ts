@@ -163,8 +163,22 @@ export const srItems = works.table("sr_items", {
   version: integer("version").notNull().default(1),
 });
 
+// GAP-WORKS-REPORTS-01: division master (works.divisions). Source of
+// name->uuid for the reports division picker (its id is matched against
+// work_office_mappings.division_id). office_type is optional metadata.
+export const divisions = works.table("divisions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull(),
+  name: varchar("name", { length: 256 }).notNull(),
+  code: varchar("code", { length: 64 }).notNull(),
+  officeType: varchar("office_type", { length: 64 }),
+  active: boolean("active").notNull().default(true),
+  version: integer("version").notNull().default(1),
+});
+
 export const schema = {
   authorities,
+  divisions,
   workTypes,
   workSubTypes,
   proposerTypes,

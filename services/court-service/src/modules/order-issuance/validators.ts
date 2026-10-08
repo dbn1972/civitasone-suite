@@ -13,7 +13,7 @@ export type SubmitForApprovalBody = z.infer<typeof submitForApprovalBody>;
  *  detached Digital Signature Certificate blob applied by the human checker;
  *  `issuedDate` (optional) overrides the pronouncement calendar date. */
 export const approveAndIssueBody = z.object({
-  dscSignature:    z.string().trim().min(1).max(4000),
+  dscSignature:    z.string().trim().min(1).max(100000),
   issuedDate:      z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "issuedDate must be YYYY-MM-DD").optional(),
   expectedVersion: z.coerce.number().int().min(1),
 });
@@ -32,3 +32,14 @@ export const recallBody = z.object({
   expectedVersion: z.coerce.number().int().min(1),
 });
 export type RecallBody = z.infer<typeof recallBody>;
+
+/**
+ * Pre-flight DSC verification (GAP-COURT-ORDERS-02). The checker can verify a
+ * pasted/uploaded detached PKCS#7 signature against the order BEFORE the
+ * irreversible approve+issue round-trip, so a bad signature surfaces as a
+ * clear "signer CN / validity / issues" result instead of a late rejection.
+ */
+export const verifyDscBody = z.object({
+  dscSignature: z.string().trim().min(1).max(100000),
+});
+export type VerifyDscBody = z.infer<typeof verifyDscBody>;

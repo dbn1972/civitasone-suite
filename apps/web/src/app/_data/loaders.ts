@@ -6863,6 +6863,10 @@ export async function getProjectBeneficiaries(): Promise<LoaderResult<ProjectBen
 }
 
 export type ProjectDprRow = {
+  // GAP-PROJECTS-DPR-TRACKING-01: the DPR id (server-emitted) is the path
+  // segment for the review-transition route. Optional so older cached payloads
+  // (pre-fix) still satisfy the type.
+  id?: string;
   dprNo: string;
   // GAP-PROJECTS-DPR-TRACKING-03: opaque project id for linking the DPR to
   // /projects/<id>. Optional until the endpoint returns it (now does).

@@ -103,6 +103,14 @@ export const createRepairTypeSchema = z.object({
   active: z.boolean().optional(),
 });
 
+/** GAP-WORKS-REPORTS-01: body for the works division master (name/code + optional office type). */
+export const createDivisionSchema = z.object({
+  name: z.string().min(1).max(256),
+  code: z.string().min(1).max(64),
+  officeType: z.string().max(64).optional(),
+  active: z.boolean().optional(),
+});
+
 export const paginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(20),
@@ -110,6 +118,12 @@ export const paginationSchema = z.object({
 
 /** GAP-WORKS-BOQ-NEW-01: query for the SR-items typeahead (BoQ Add-item picker). */
 export const srItemSearchSchema = z.object({
+  q: z.string().max(256).optional().default(""),
+  limit: z.coerce.number().int().min(1).max(50).optional().default(20),
+});
+
+/** GAP-WORKS-REPORTS-01: query for the divisions typeahead (reports division picker). */
+export const divisionSearchSchema = z.object({
   q: z.string().max(256).optional().default(""),
   limit: z.coerce.number().int().min(1).max(50).optional().default(20),
 });

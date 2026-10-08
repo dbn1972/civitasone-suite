@@ -42,6 +42,7 @@ export default function DesignerB8Page() {
     pattern: "certificate",
     version: 1,
     status: "draft",
+    locales: [] as string[],
   });
 
   useEffect(() => {
@@ -58,6 +59,9 @@ export default function DesignerB8Page() {
           pattern,
           version: def.version,
           status: def.status,
+          // GAP-DESIGNER-DETAIL-B8-01: author notifications in the service's own
+          // B1 governance locales (e.g. ['en','or']), not a hard-coded en/hi.
+          locales: def.locales ?? [],
         });
         setInitialDesign(notificationsConfigToUi(def.outputs, pattern));
 
@@ -154,6 +158,7 @@ export default function DesignerB8Page() {
         serviceKey={meta.serviceKey}
         serviceName={meta.name}
         pattern={meta.pattern}
+        locales={meta.locales}
         formFields={formFields}
         initial={initialDesign}
         onSaveState={setSaveState}

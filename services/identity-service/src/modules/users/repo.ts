@@ -58,6 +58,51 @@ export async function search(tenantId: string, f: UserSearch): Promise<{ rows: U
   });
 }
 
+export type DirectoryEntry = { id: string; displayName: string };
+
+/**
+ * Shared user-directory lookup (GAP-WORKFLOW-INSTANCES-DETAIL-01 /
+ * GAP-PROJECTS-DETAIL-MEMBERS-01). Tenant-scoped (RLS + explicit WHERE) and
+ * returns ONLY {id, displayName} — never email/phone/empCode/status.
+ *
+ *   • byIds: the directory rows for exactly these ids (any status, since a
+ *     workflow history row can reference a since-deactivated actor whose name
+ *     must still render). Order is unspecified; callers map by id.
+ *   • byQuery: a capped, name-ordered type-ahead over NAME ONLY (never email /
+ *     empCode: any authenticated same-tenant caller can reach it, so matching
+ *     those would let them enumerate addresses/codes by prefix), active users only — a search
+ *     picker should surface people you can still assign work to.
+ */
+export async function directoryByIds(tenantId: string, ids: string[]): Promise<DirectoryEntry[]> {
+  if (ids.length === 0) return [];
+  return scopedRead(async (tx) => {
+    const rows = await tx
+      .select({ id: users.id, name: users.name })
+      .from(users)
+      .where(and(eq(users.tenantId, tenantId), inArray(users.id, ids)));
+    return rows.map((r) => ({ id: r.id, displayName: r.name }));
+  });
+}
+
+export async function directoryByQuery(tenantId: string, q: string, limit: number): Promise<DirectoryEntry[]> {
+  const like = `%${escapeLike(q.trim())}%`;
+  return scopedRead(async (tx) => {
+    const rows = await tx
+      .select({ id: users.id, name: users.name })
+      .from(users)
+      .where(
+        and(
+          eq(users.tenantId, tenantId),
+          eq(users.status, "active"),
+          ilike(users.name, like),
+        ),
+      )
+      .orderBy(asc(users.name), asc(users.id))
+      .limit(limit);
+    return rows.map((r) => ({ id: r.id, displayName: r.name }));
+  });
+}
+
 /** Of these ids, the ones that are ACTIVE users of the tenant. */
 export async function activeAmong(tx: Writer, tenantId: string, ids: string[]): Promise<string[]> {
   if (ids.length === 0) return [];

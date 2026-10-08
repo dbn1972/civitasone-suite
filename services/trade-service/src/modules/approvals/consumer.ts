@@ -29,6 +29,11 @@ export function registerApprovalConsumers(rawQueue: Queue): void {
         id: p.id, tenantId: msg.tenantId, applicationId: p.applicationId, scrutinyType: p.scrutinyType, officerId: p.officerId, status: "pending", createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await appRepo.updateStatus(tx, p.applicationId, msg.tenantId, "under_scrutiny", msg.actorId);
+      // DETAIL-02 timeline: field inspection / scrutiny started.
+      await appRepo.insertEvent(tx, {
+        tenantId: msg.tenantId, applicationId: p.applicationId, action: "inspect",
+        fromStatus: null, toStatus: "under_scrutiny", note: p.scrutinyType, actorId: msg.actorId,
+      });
       // See applications/consumer.ts's header comment: GET /applications/:id is
       // cached and this write (via a DIFFERENT module) mutates that same row.
       await cache.invalidateResourceAfterCommit(tx, msg.tenantId, "application");
@@ -62,6 +67,13 @@ export function registerApprovalConsumers(rawQueue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await appRepo.updateStatus(tx, p.applicationId, msg.tenantId, p.decision, msg.actorId);
+      // DETAIL-02 timeline: officer decision (approved | rejected).
+      await appRepo.insertEvent(tx, {
+        tenantId: msg.tenantId, applicationId: p.applicationId,
+        action: p.decision === "rejected" ? "reject" : "approve",
+        fromStatus: application?.status ?? null, toStatus: p.decision,
+        note: p.reason ?? null, actorId: msg.actorId,
+      });
       await cache.invalidateResourceAfterCommit(tx, msg.tenantId, "application");
       await enqueue(tx, { topic: EVENTS.applicationDecided, eventType: EVENTS.applicationDecided, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { applicationId: p.applicationId, decision: p.decision, reason: p.reason, decidedBy: msg.actorId } });
       if (p.decision === "approved" || p.decision === "rejected") {

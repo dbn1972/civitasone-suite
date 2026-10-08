@@ -4,7 +4,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as v from "./validators.js";
 import { publishMasterCreate, publishMasterUpdate } from "./commands.js";
-import { listMaster, getMaster, searchSrItems } from "./repo.js";
+import { listMaster, getMaster, searchSrItems, searchDivisions } from "./repo.js";
 import { masters } from "./registry.js";
 
 const ADMIN_ROLES = ["works_admin", "super_admin"];
@@ -20,6 +20,17 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READ_ROLES);
     const { q, limit } = v.srItemSearchSchema.parse(req.query);
     const data = await searchSrItems(ctx.tenantId, q, limit);
+    return reply.send({ data });
+  });
+
+  // GAP-WORKS-REPORTS-01: division typeahead for the reports division picker.
+  // Registered BEFORE the generic ":id" lookup for the same reason as
+  // sr-items/search above — the static "search" segment wins over ":id".
+  app.get("/v1/works/masters/divisions/search", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const { q, limit } = v.divisionSearchSchema.parse(req.query);
+    const data = await searchDivisions(ctx.tenantId, q, limit);
     return reply.send({ data });
   });
 

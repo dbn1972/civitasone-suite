@@ -210,6 +210,38 @@ export async function approveAndIssueOrder(
   });
 }
 
+/** Server-side DSC verification verdict (GAP-COURT-ORDERS-02). */
+export interface DscVerificationResult {
+  ok: boolean;
+  structureValid: boolean;
+  signatureChecked: boolean;
+  signatureValid: boolean;
+  chainTrusted: boolean;
+  trustStoreConfigured: boolean;
+  signerCN?: string | null;
+  signerSerial?: string | null;
+  notBefore?: string | null;
+  notAfter?: string | null;
+  keyUsage: string[];
+  issues: string[];
+}
+
+/**
+ * Pre-flight verify a pasted detached PKCS#7 DSC signature against an order,
+ * server-side (GAP-COURT-ORDERS-02). Read-only — no state change. Returns the
+ * real verification verdict (signer CN, validity, cryptographic signature over
+ * the order content, and chain-of-trust when a trust store is configured) so
+ * the checker sees it BEFORE the irreversible approve+issue.
+ */
+export async function verifyOrderDsc(
+  orderId: string,
+  dscSignature: string,
+): Promise<DscVerificationResult> {
+  return send<DscVerificationResult>("POST", `v1/court/orders/${orderId}/verify-dsc`, {
+    body: { dscSignature },
+  });
+}
+
 /** Send a pending order back to its maker for revision (pending_approval → draft). */
 export async function sendBackOrder(
   orderId: string,

@@ -207,11 +207,9 @@ describe("Collection Consumer", () => {
     });
   });
 
-  describe("adjustmentCreate", () => {
-    it("creates 2 DCB entries (debit source + credit target)", async () => {
-      mockGetDemandBalance
-        .mockResolvedValueOnce(200000n) // fromDemand balance
-        .mockResolvedValueOnce(100000n); // toDemand balance
+  describe("adjustmentCreate (maker step — GAP-REVENUE-ADJUSTMENTS-01)", () => {
+    it("records a PENDING adjustment with NO DCB movement and NO adjustmentApplied event", async () => {
+      mockGetDemandBalance.mockResolvedValueOnce(200000n); // fromDemand balance for up-front validation
 
       const msg = buildMsg({
         payload: {
@@ -226,12 +224,15 @@ describe("Collection Consumer", () => {
       await handlers["revenue.adjustment.create"]!(msg);
 
       expect(mockMarkProcessed).toHaveBeenCalledTimes(1);
-      // 3 inserts: adjustment + 2 DCB entries
-      expect(mockInsert).toHaveBeenCalledTimes(3);
-      // 2 enqueue: adjustmentApplied + audit
-      expect(mockEnqueue).toHaveBeenCalledTimes(2);
-      expect(mockEnqueue.mock.calls[0]![1].topic).toBe("revenue.adjustment.applied");
-      expect(mockEnqueue.mock.calls[1]![1].topic).toBe("audit.event.record");
+      // ONE insert: the pending adjustment row only — no DCB entries yet.
+      expect(mockInsert).toHaveBeenCalledTimes(1);
+      // ONE enqueue: audit (outcome=pending). The adjustmentApplied event is
+      // deferred to the checker's approval, so it must NOT be emitted here.
+      expect(mockEnqueue).toHaveBeenCalledTimes(1);
+      expect(mockEnqueue.mock.calls[0]![1].topic).toBe("audit.event.record");
+      expect(mockEnqueue.mock.calls[0]![1].payload.outcome).toBe("pending");
+      const appliedEmitted = mockEnqueue.mock.calls.some((c) => c[1].topic === "revenue.adjustment.applied");
+      expect(appliedEmitted).toBe(false);
     });
 
     it("skips processing on duplicate messageId (idempotency)", async () => {
@@ -249,6 +250,67 @@ describe("Collection Consumer", () => {
 
       expect(mockInsert).not.toHaveBeenCalled();
       expect(mockEnqueue).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("adjustmentDecide (checker step — GAP-REVENUE-ADJUSTMENTS-01)", () => {
+    it("on approve moves both balances (2 DCB entries) and emits adjustmentApplied", async () => {
+      // 1st select → the pending adjustment; getDemandBalanceTx is then called
+      // twice (source re-read, target read) during application.
+      mockSelectLimit.mockResolvedValueOnce([
+        {
+          id: "adj-1",
+          tenantId: "tenant-1",
+          assesseeId: "assessee-1",
+          fromDemandId: "demand-from",
+          toDemandId: "demand-to",
+          amountMinor: 50000n,
+          reason: "Reassignment",
+          status: "pending",
+          makerUserId: "maker-9",
+        },
+      ]);
+      mockGetDemandBalance
+        .mockResolvedValueOnce(200000n) // source re-read for re-validation
+        .mockResolvedValueOnce(100000n); // target balance
+
+      const msg = buildMsg({ payload: { adjustmentId: "adj-1", approve: true } });
+      await handlers["revenue.adjustment.decide"]!(msg);
+
+      // update(status) + 2 DCB inserts.
+      expect(mockUpdate).toHaveBeenCalledTimes(1);
+      expect(mockInsert).toHaveBeenCalledTimes(2);
+      const appliedEmitted = mockEnqueue.mock.calls.some((c) => c[1].topic === "revenue.adjustment.applied");
+      expect(appliedEmitted).toBe(true);
+    });
+
+    it("on reject updates status, moves NO balance, and emits NO adjustmentApplied", async () => {
+      mockSelectLimit.mockResolvedValueOnce([
+        {
+          id: "adj-2", tenantId: "tenant-1", assesseeId: "assessee-1",
+          fromDemandId: "demand-from", toDemandId: "demand-to",
+          amountMinor: 50000n, reason: "Reassignment", status: "pending", makerUserId: "maker-9",
+        },
+      ]);
+
+      const msg = buildMsg({ payload: { adjustmentId: "adj-2", approve: false } });
+      await handlers["revenue.adjustment.decide"]!(msg);
+
+      expect(mockUpdate).toHaveBeenCalledTimes(1);
+      expect(mockInsert).not.toHaveBeenCalled(); // no DCB movement
+      const appliedEmitted = mockEnqueue.mock.calls.some((c) => c[1].topic === "revenue.adjustment.applied");
+      expect(appliedEmitted).toBe(false);
+    });
+
+    it("no-ops when the adjustment is not pending (double-decide / replay guard)", async () => {
+      mockSelectLimit.mockResolvedValueOnce([
+        { id: "adj-3", tenantId: "tenant-1", status: "approved", makerUserId: "maker-9", amountMinor: 50000n },
+      ]);
+      const msg = buildMsg({ payload: { adjustmentId: "adj-3", approve: true } });
+      await handlers["revenue.adjustment.decide"]!(msg);
+
+      expect(mockUpdate).not.toHaveBeenCalled();
+      expect(mockInsert).not.toHaveBeenCalled();
     });
   });
 });

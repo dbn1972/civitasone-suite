@@ -3,21 +3,24 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { z } from "zod";
-import { Button } from "@/app/_components/ds";
+import { Button, EntityPicker, Field } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { searchDirectoryUsers, resolveDirectoryUsers } from "@/lib/directory/searchUsers";
 
 type Props = { projectId: string };
 
 const ROLES = ["project_manager", "project_officer", "engineer", "finance_officer", "viewer"] as const;
 
 // GAP-PROJECTS-DETAIL-MEMBERS-01 (fix step 4): zod uuid guard at the boundary so
-// a non-UUID (e.g. a pasted name or truncated id) is caught here with a clear
-// message instead of round-tripping to a raw server validation error.
+// a selection without a valid id (empty, or a stale/bad value) is caught here
+// with a clear message instead of round-tripping to a raw server validation
+// error. The EntityPicker already yields a real directory id on selection; this
+// is defence in depth.
 const userIdSchema = z.string().uuid();
 
 export function AddMemberForm({ projectId }: Props) {
   const router = useRouter();
-  const [userId, setUserId]   = useState("");
+  const [userId, setUserId]   = useState<string | null>(null);
   const [role, setRole]       = useState<typeof ROLES[number]>("viewer");
   const [status, setStatus]   = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
@@ -25,9 +28,9 @@ export function AddMemberForm({ projectId }: Props) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!userIdSchema.safeParse(userId.trim()).success) {
+    if (!userId || !userIdSchema.safeParse(userId.trim()).success) {
       setStatus("error");
-      setMessage("Enter a valid User ID (UUID).");
+      setMessage("Search for and select a person to add.");
       return;
     }
     setStatus("submitting");
@@ -45,7 +48,7 @@ export function AddMemberForm({ projectId }: Props) {
       }
       setStatus("success");
       setMessage("Member added. Reloading…");
-      setUserId("");
+      setUserId(null);
       setRole("viewer");
       router.refresh();
     } catch (caught) {
@@ -57,16 +60,18 @@ export function AddMemberForm({ projectId }: Props) {
   return (
     <form onSubmit={(e) => void handleSubmit(e)} style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 260px" }}>
-        <label className="label" htmlFor="userId" style={{ fontSize: "0.82rem" }}>User ID (UUID)</label>
-        <input
-          id="userId"
-          className="inp"
-          value={userId}
-          onChange={(e) => setUserId(e.target.value)}
-          placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-          style={{ minHeight: 40 }}
-          aria-required="true"
-        />
+        {/* GAP-PROJECTS-DETAIL-MEMBERS-01: searchable person picker (by name) via the
+            shared tenant-scoped user directory, replacing the raw UUID paste box. */}
+        <Field label="Member" id="member">
+          <EntityPicker
+            value={userId}
+            onChange={(v) => setUserId(Array.isArray(v) ? (v[0] ?? null) : v)}
+            search={searchDirectoryUsers}
+            resolve={resolveDirectoryUsers}
+            minQueryLength={2}
+            placeholder="Search people by name…"
+          />
+        </Field>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "0 0 180px" }}>
         <label className="label" htmlFor="role" style={{ fontSize: "0.82rem" }}>Role</label>

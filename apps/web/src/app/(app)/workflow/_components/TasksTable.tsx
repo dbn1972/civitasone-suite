@@ -7,7 +7,7 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { DataTable, StatusPill } from "@/app/_components/ds";
+import { DataTable, StatusPill, UserRef } from "@/app/_components/ds";
 import type { WorkflowTask } from "../_data/workflowTypes";
 import { titleCase } from "../_data/workflowTypes";
 import { formatIndianDate } from "@/lib/formatters";
@@ -147,7 +147,10 @@ export function TasksTable({ tasks, showInstance = true, currentUserId = null, s
             label: "Assignee",
             render: (r) =>
               r.assigneeId ? (
-                <span className="mono" style={{ fontSize: 12 }} title={`User ID: ${r.assigneeId}`} aria-label={`User ID ${r.assigneeId}`}>{r.assigneeId.slice(0, 8)}…</span>
+                // GAP-WORKFLOW-INSTANCES-DETAIL-01 — show the server-resolved
+                // assignee name (UserRef) when present, else an honest short id
+                // with the full id in the title; never a guessed name.
+                <UserRef id={r.assigneeId} name={r.assigneeName ?? null} />
               ) : (
                 <span className="pill warn np" style={{ fontSize: 11 }}>Unassigned</span>
               ),

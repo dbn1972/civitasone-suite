@@ -187,6 +187,29 @@ export const PROJECT_READER_ROLES = [
 export const PROJECT_FUND_DISBURSE_ROLES = ["project_manager", "finance_officer", "super_admin"];
 
 /**
+ * GAP-PROJECTS-DPR-TRACKING-01: roles permitted to REVIEW a DPR (move it
+ * submitted→under_review→approved|revision). Mirrors project-service's
+ * DPR_REVIEW_ROLES on PATCH /v1/projects/:id/dpr/:dprId/transition
+ * (modules/progress/routes.ts), which already enforces 403 for everyone else —
+ * notably a plain project_officer (who typically SUBMITS the DPR) cannot
+ * approve their own. The server is the authority; this web constant is
+ * defence-in-depth + UX so Approve/Return controls are hidden from a
+ * non-reviewer whose PATCH is guaranteed to 403.
+ */
+export const PROJECT_DPR_REVIEW_ROLES = ["project_manager", "super_admin"];
+
+/**
+ * GAP-PROJECTS-ESCALATIONS-02: roles permitted to ACT on a project escalation
+ * (acknowledge / reassign / clear). Mirrors project-service's
+ * ESCALATION_ACTION_ROLES on the POST /v1/projects/:id/escalation/* routes
+ * (modules/escalation/routes.ts), which already 403s everyone else. Acting on
+ * an escalation is a supervisory control, not a read, so a plain
+ * project_officer is excluded. The server is the authority; this gate only
+ * decides whether the UI offers the controls.
+ */
+export const PROJECT_ESCALATION_ACTION_ROLES = ["project_manager", "super_admin"];
+
+/**
  * Roles permitted to activate/deactivate a bin. Mirrors inventory-service's
  * BIN_ADMIN_ROLES in modules/items/routes.ts (GAP-INVENTORY-BINS-03); the
  * service stays the authority.

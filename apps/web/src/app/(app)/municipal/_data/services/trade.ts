@@ -20,4 +20,16 @@ export const tradeService: MunicipalServiceConfig = {
   hiddenFields: [],
   fieldOrder: ["status", "applicationNumber", "businessName", "ownerName"],
   sec5: true,
+  // GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-DETAIL-02: trade-service exposes the
+  // per-service officer workflow + timeline endpoints, so wire the actions and
+  // History card. decide requires under_scrutiny (approvals/domain.canDecide);
+  // inspection can be initiated from submitted/under_scrutiny.
+  workflow: {
+    historyBasePath: "/api/v1/trade/applications",
+    decisionPath: "/api/v1/trade/approvals/decide",
+    scrutinyPath: "/api/v1/trade/approvals/scrutiny",
+    officerRoles: ["trade_admin", "trade_officer", "super_admin"],
+    decidableStatuses: ["under_scrutiny", "inspecting"],
+    inspectableStatuses: ["submitted", "under_scrutiny"],
+  },
 };

@@ -98,6 +98,11 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { applicationId: p.id, applicationNumber, businessName: p.businessName, feeMinor: String(feeMinor), feeCurrency: "INR" },
       });
+      // DETAIL-02 timeline: the first event — application drafted.
+      await repo.insertEvent(tx, {
+        tenantId: msg.tenantId, applicationId: p.id, action: "create",
+        fromStatus: null, toStatus: "draft", actorId: msg.actorId,
+      });
       await writeAudit(tx, ctxOf(msg), { action: "application.create", resourceType: "trade_application", resourceId: p.id });
     });
     log.info({ id: p.id, applicationNumber }, "trade application created");
@@ -113,6 +118,10 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "submitted", msg.actorId);
       if (!ok) return;
+      await repo.insertEvent(tx, {
+        tenantId: msg.tenantId, applicationId: p.id, action: "submit",
+        fromStatus: application?.status ?? null, toStatus: "submitted", actorId: msg.actorId,
+      });
       await cache.invalidateResourceAfterCommit(tx, msg.tenantId, "application");
       await enqueue(tx, { topic: EVENTS.applicationSubmitted, eventType: EVENTS.applicationSubmitted, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { applicationId: p.id } });
       if (application && application.feeMinor && application.feeMinor > 0n) {
@@ -134,10 +143,15 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.withdrawApplication, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
+    const prior = await repo.findById(p.id, msg.tenantId);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "withdrawn", msg.actorId);
       if (!ok) return;
+      await repo.insertEvent(tx, {
+        tenantId: msg.tenantId, applicationId: p.id, action: "withdraw",
+        fromStatus: prior?.status ?? null, toStatus: "withdrawn", actorId: msg.actorId,
+      });
       await cache.invalidateResourceAfterCommit(tx, msg.tenantId, "application");
       await enqueue(tx, { topic: EVENTS.applicationWithdrawn, eventType: EVENTS.applicationWithdrawn, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { applicationId: p.id } });
       await writeAudit(tx, ctxOf(msg), { action: "application.withdraw", resourceType: "trade_application", resourceId: p.id });
@@ -150,6 +164,10 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.updateFeePayment(tx, p.id, msg.tenantId, p.transactionId, msg.actorId);
       if (!ok) return;
+      await repo.insertEvent(tx, {
+        tenantId: msg.tenantId, applicationId: p.id, action: "fee_payment",
+        fromStatus: null, toStatus: "fee_paid", note: `txn:${p.transactionId}`, actorId: msg.actorId,
+      });
       await cache.invalidateResourceAfterCommit(tx, msg.tenantId, "application");
       await enqueue(tx, { topic: EVENTS.feePaymentRecorded, eventType: EVENTS.feePaymentRecorded, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { applicationId: p.id, transactionId: p.transactionId } });
       await writeAudit(tx, ctxOf(msg), { action: "application.fee_payment", resourceType: "trade_application", resourceId: p.id });

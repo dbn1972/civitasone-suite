@@ -102,6 +102,11 @@
       "kind": "env-gated"
     },
     {
+      "key": "services/court-service/tests/order-dsc-verification.e2e.test.ts::GAP-COURT-ORDERS-02 server-side DSC verification (real DB)",
+      "file": "services/court-service/tests/order-dsc-verification.e2e.test.ts",
+      "kind": "env-gated"
+    },
+    {
       "key": "services/court-service/tests/overdue.e2e.test.ts::court-service overdue / pendency MIS reads (e2e, RLS)",
       "file": "services/court-service/tests/overdue.e2e.test.ts",
       "kind": "env-gated"

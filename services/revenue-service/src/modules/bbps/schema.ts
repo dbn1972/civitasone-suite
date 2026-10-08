@@ -31,6 +31,12 @@ export const bbpsTransactions = bbpsSchema.table("bbps_transactions", {
   channel:        varchar("channel", { length: 16 }).notNull(),
   status:         varchar("status", { length: 16 }).notNull().default("pending"), // pending, success, failed
   receiptId:      uuid("receipt_id"),
+  // GAP-REVENUE-BBPS-02: request status read model keyed by the queue messageId
+  // returned to the client, so GET /v1/revenue/bbps/requests/:messageId can
+  // report the outcome of a fire-and-forget fetch/pay request.
+  messageId:      uuid("message_id"),
+  failureReason:  text("failure_reason"),
+  requestType:    varchar("request_type", { length: 16 }), // fetch, pay
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   version:        integer("version").notNull().default(1),

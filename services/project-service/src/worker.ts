@@ -12,6 +12,7 @@ import { registerGeoConsumers }         from "./modules/geo/consumer.js";
 import { startRagScheduler }            from "./modules/project/rag.js";
 import { registerDelayForecastConsumers } from "./modules/delay-forecast/consumer.js";
 import { registerBoardIntakeConsumers }   from "./modules/board-intake/consumer.js";
+import { registerEscalationConsumers }     from "./modules/escalation/consumer.js";
 import { registerEvidenceConsumers }      from "./modules/evidence/consumer.js";
 import { registerSchedulingConsumers }    from "./modules/scheduling/consumer.js";
 import { registerF3ProjectConsumers }   from "./modules/project/f3-consumer.js";
@@ -38,6 +39,8 @@ registerGeoConsumers(queue);
 registerDelayForecastConsumers(queue);
 // Cross-service choreography: board decision → project intake (for-review).
 registerBoardIntakeConsumers(queue);
+// GAP-PROJECTS-ESCALATIONS-02: escalation acknowledge/reassign/clear actions.
+registerEscalationConsumers(queue);
 registerEvidenceConsumers(queue);
 registerSchedulingConsumers(queue);
 registerF3ProjectConsumers(queue);

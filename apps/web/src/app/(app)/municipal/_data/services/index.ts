@@ -17,6 +17,7 @@ import { parkingService } from "./parking";
 import { marketService } from "./market";
 
 export type { MunicipalServiceConfig } from "./types";
+export type { MunicipalWorkflowConfig } from "./types";
 import type { MunicipalServiceConfig } from "./types";
 
 /** 16 Sec5 services + shop reference (17 total). Order matches BRD §5 listing. */

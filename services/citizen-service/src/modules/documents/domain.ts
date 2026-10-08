@@ -32,6 +32,38 @@ export interface DigiLockerResult {
 }
 
 /**
+ * The outcome of exchanging an OAuth authorization code at the callback. A real
+ * provider returns the citizen-authorised docUri plus the signed issued-document
+ * artefact (PKCS#7/CMS DER + the content it signs) so the server can verify it
+ * locally. Fail-closed providers return `ok: false`.
+ */
+export interface DigiLockerExchangeResult {
+  ok: boolean;
+  providerStatus: string;
+  docUri: string | null;
+  /** The signed issued-document artefact, when the provider returns one. */
+  artefact?: { content: Uint8Array; signatureDer: Uint8Array } | undefined;
+}
+
+/**
+ * GAP-CITIZEN-DOCUMENTS-02 — in-repo DigiLocker provider interface. A real
+ * integration implements `authorizeUrl` (the OAuth consent redirect) and
+ * `fetchDocument` (the signed pull of the citizen-authorised docUri). The
+ * default provider is FAIL-CLOSED: with no credentials configured it never
+ * fabricates a source-verified success — it honestly reports
+ * `provider_unconfigured`. Wiring a real provider is a HUMAN REVIEW follow-up.
+ */
+export interface DigiLockerProvider {
+  isConfigured(): boolean;
+  /** The provider-issued OAuth authorize URL to redirect the citizen to. */
+  authorizeUrl(params: { docType: string; redirectUri: string; state: string; codeChallenge?: string }): string | null;
+  /** Exchange the callback authorization code (+ PKCE verifier) for a docUri + signed artefact. */
+  exchangeCode(params: { code: string; codeVerifier: string; redirectUri: string }): Promise<DigiLockerExchangeResult>;
+  /** Resolve a citizen-authorised docUri into a source-verified result. */
+  fetchDocument(docUri: string): DigiLockerResult;
+}
+
+/**
  * DigiLocker honesty gate: a real source-verified fetch only happens when
  * provider credentials are configured. With none, the fetch is honestly
  * recorded as `provider_unconfigured` — NOT a fake source-verified success.
@@ -41,6 +73,35 @@ export function isDigiLockerConfigured(env: NodeJS.ProcessEnv = process.env): bo
   const secret = env.CITIZEN_DIGILOCKER_CLIENT_SECRET ?? env.DIGILOCKER_CLIENT_SECRET;
   return typeof id === "string" && id.trim().length > 0 && typeof secret === "string" && secret.trim().length > 0;
 }
+
+/**
+ * The default fail-closed provider. Honest when unconfigured; records the
+ * source-verified provenance only when credentials are present (the real signed
+ * pull would run here). Thrown behind an interface so a real provider adapter
+ * can be injected without touching callers.
+ */
+export const defaultDigiLockerProvider: DigiLockerProvider = {
+  isConfigured: () => isDigiLockerConfigured(),
+  authorizeUrl: ({ docType, redirectUri, state, codeChallenge }) => {
+    if (!isDigiLockerConfigured()) return null;
+    const base = process.env.CITIZEN_DIGILOCKER_AUTHORIZE_URL ?? "https://api.digitallocker.gov.in/public/oauth2/1/authorize";
+    const clientId = process.env.CITIZEN_DIGILOCKER_CLIENT_ID ?? process.env.DIGILOCKER_CLIENT_ID ?? "";
+    const qs = new URLSearchParams({
+      response_type: "code", client_id: clientId, redirect_uri: redirectUri,
+      state, scope: "avs_parent_file", doctype: docType,
+    });
+    if (codeChallenge) {
+      qs.set("code_challenge", codeChallenge);
+      qs.set("code_challenge_method", "S256");
+    }
+    return `${base}?${qs.toString()}`;
+  },
+  // Fail-closed: with no credentials the default provider never fabricates a
+  // code exchange. A real adapter POSTs to the token endpoint, pulls the
+  // docUri, and returns the signed artefact for local verification.
+  exchangeCode: async () => ({ ok: false, providerStatus: "provider_unconfigured", docUri: null }),
+  fetchDocument: (docUri: string) => digiLockerFetch(docUri),
+};
 
 /**
  * Resolve the outcome of a DigiLocker fetch WITHOUT calling out to any provider

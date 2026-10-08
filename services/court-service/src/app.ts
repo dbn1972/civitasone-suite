@@ -27,6 +27,7 @@ import { publicLookupRoutes } from "./modules/public-lookup/routes.js";
 import { courtDocumentsRoutes } from "./modules/court-documents/routes.js";
 import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
+import { registerRateLimit } from "@civitasone/rate-limit";
 import { randomUUID } from "node:crypto";
 
 /**
@@ -58,6 +59,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
 
   await app.register(authPlugin);
+
+  // Plugin must be registered for the per-route rate limits (crypto/OAuth routes).
+  await registerRateLimit(app, { max: 200, timeWindow: "1 minute" });
 
   // G2: RLS enforcement — set app.tenant_id GUC per request so RLS policies
   // enforce tenant isolation even if app-layer WHERE is accidentally omitted.

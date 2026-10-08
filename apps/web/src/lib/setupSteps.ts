@@ -18,8 +18,18 @@ export type WizardStepKey =
   | "leave-policies"
   | "pay-structure";
 
-/** Honest tri-state: we never guess "to do" when we couldn't check. (R8.4, R10.3) */
-export type StepStatus = "complete" | "todo" | "unknown";
+/** Honest tri-state plus an explicit per-tenant deferral. (R8.4, R10.3)
+ *
+ * GAP-SETUP-HOME-02: "skipped" is a persisted per-tenant deferral of an
+ * OPTIONAL step (stored in tenant-service settings under `setup.skipped_steps`).
+ * It is distinct from "todo": a skipped step is excluded from the resume target
+ * and from the progress denominator, but stays openable and un-skippable. A
+ * required step is never skippable, so it can never be "skipped".
+ */
+export type StepStatus = "complete" | "todo" | "unknown" | "skipped";
+
+/** The tenant-settings key that stores the array of skipped (deferred) step keys. */
+export const SETUP_SKIPPED_STEPS_KEY = "setup.skipped_steps";
 
 export type WizardStep = {
   key: WizardStepKey;
@@ -161,10 +171,22 @@ export function countComplete(statuses: Record<string, StepStatus>, keys: Wizard
   return keys.filter((k) => statuses[k] === "complete").length;
 }
 
-/** Progress percentage computed from completed steps only. (R8.2) */
+/**
+ * GAP-SETUP-HOME-02: progress is computed over the steps that still COUNT —
+ * i.e. every step except ones the tenant explicitly skipped. A skipped
+ * optional step is neither "done" nor still "to do"; counting it in the
+ * denominator would keep progress below 100% forever even though the office is
+ * ready. Required steps are never skippable, so they always count.
+ */
+export function countableKeys(statuses: Record<string, StepStatus>, keys: WizardStepKey[]): WizardStepKey[] {
+  return keys.filter((k) => statuses[k] !== "skipped");
+}
+
+/** Progress percentage computed from completed steps over the non-skipped denominator. (R8.2) */
 export function progressPct(statuses: Record<string, StepStatus>, keys: WizardStepKey[]): number {
-  if (keys.length === 0) return 0;
-  return Math.round((countComplete(statuses, keys) / keys.length) * 100);
+  const denom = countableKeys(statuses, keys);
+  if (denom.length === 0) return 0;
+  return Math.round((countComplete(statuses, denom) / denom.length) * 100);
 }
 
 /** True when every required step is complete — enables the readiness state. (R7.7)
@@ -185,8 +207,38 @@ export function allRequiredComplete(
   return requiredVisible.every((k) => statuses[k] === "complete");
 }
 
-/** Index of the first step that is not complete, for resume-on-return. (R9.2) */
+/** Index of the first step that is not complete AND not skipped, for
+ * resume-on-return. (R9.2)
+ *
+ * GAP-SETUP-HOME-02: a skipped step is no longer the resume target — the
+ * wizard resumes at the next step the tenant has neither finished nor
+ * explicitly deferred, so "Skip for now" on step 6 moves the focus past it.
+ * Falls back to 0 when every step is complete or skipped.
+ */
 export function firstIncompleteIndex(steps: WizardStep[], statuses: Record<string, StepStatus>): number {
-  const i = steps.findIndex((s) => statuses[s.key] !== "complete");
+  const i = steps.findIndex((s) => statuses[s.key] !== "complete" && statuses[s.key] !== "skipped");
   return i === -1 ? 0 : i;
+}
+
+/**
+ * GAP-SETUP-HOME-02: fold the persisted skipped-step keys into the computed
+ * statuses. Only OPTIONAL, not-yet-complete steps may be marked skipped: a
+ * required step is never deferrable, and a step the tenant has since completed
+ * must read "complete", not "skipped" (so finishing a skipped step clears the
+ * deferral visually without needing a settings write).
+ */
+export function applySkippedSteps(
+  statuses: Record<string, StepStatus>,
+  steps: WizardStep[],
+  skippedKeys: readonly string[],
+): Record<string, StepStatus> {
+  const skip = new Set(skippedKeys);
+  const next: Record<string, StepStatus> = { ...statuses };
+  for (const step of steps) {
+    if (!skip.has(step.key)) continue;
+    if (step.required) continue;
+    if (next[step.key] === "complete") continue;
+    next[step.key] = "skipped";
+  }
+  return next;
 }

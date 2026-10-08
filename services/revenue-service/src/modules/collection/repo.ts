@@ -36,6 +36,52 @@ export async function listAdjustments(
   });
 }
 
+/**
+ * GAP-REVENUE-ADJUSTMENTS-01: fetch a single adjustment by id, tenant-scoped.
+ * The maker-checker decide screen needs amount + from/to demand + who raised it
+ * before a checker approves or rejects a balance transfer blind.
+ */
+export async function findAdjustmentById(tenantId: string, id: string) {
+  const rows = await tenantTransaction(db, tenantId, async (tx) => {
+    const t = tx as typeof db;
+    return t
+      .select()
+      .from(adjustments)
+      .where(and(eq(adjustments.tenantId, tenantId), eq(adjustments.id, id)))
+      .limit(1);
+  });
+  return rows[0] ?? null;
+}
+
+/**
+ * GAP-REVENUE-ADJUSTMENTS-01: list adjustments for the tenant, newest first,
+ * optionally filtered by status (e.g. ?status=pending so a checker can find
+ * transfers awaiting approval without being handed a UUID). Tenant-scoped via
+ * tenantTransaction/RLS — an adjustment moves money between demands and must
+ * never cross tenants.
+ */
+export async function listAdjustmentsByStatus(
+  tenantId: string,
+  pagination: { limit: number; offset: number },
+  status?: string,
+) {
+  return tenantTransaction(db, tenantId, async (tx) => {
+    const t = tx as typeof db;
+    const where = status
+      ? and(eq(adjustments.tenantId, tenantId), eq(adjustments.status, status))
+      : eq(adjustments.tenantId, tenantId);
+    const rows = await t
+      .select()
+      .from(adjustments)
+      .where(where)
+      .orderBy(desc(adjustments.createdAt))
+      .limit(pagination.limit)
+      .offset(pagination.offset);
+    const counted = await t.select({ n: sql<number>`count(*)::int` }).from(adjustments).where(where);
+    return { rows: rows ?? [], total: Number(counted[0]?.n ?? 0) };
+  });
+}
+
 export async function listReceipts(tenantId: string, assesseeId: string, pagination: { limit: number; offset: number }) {
   return tenantTransaction(db, tenantId, async (tx) => {
     const t = tx as typeof db;

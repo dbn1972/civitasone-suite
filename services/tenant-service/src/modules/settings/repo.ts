@@ -2,6 +2,7 @@
  * settings repo — Drizzle queries against `settings.*` ONLY (L2).
  */
 import { eq, and } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { tenantSettings, type SettingRow, type SettingInsert } from "./schema.js";
 
@@ -28,15 +29,23 @@ function toView(r: SettingRow): SettingView {
 }
 
 // ── reads (query path) ───────────────────────────────────────────────
+// GAP-SETUP-HOME-02: settings.tenant_settings has FORCE ROW LEVEL SECURITY
+// (migration 0010), so a bare db.select() with no app.tenant_id GUC set
+// returns ZERO rows — which surfaced as a spurious 404 on GET /v1/settings/:key
+// even right after a successful write. Scope every query-path read under
+// runWithTenant(tenantId, () => db.transaction(...)) so the tenant GUC is set
+// before the read, mirroring the other tenant-service read modules
+// (org-hierarchy/stewardship/consent-exchange readScoped).
 export async function findByTenantAndKey(tenantId: string, key: string): Promise<SettingView | null> {
-  const rows = await db.select().from(tenantSettings)
+  const rows = await runWithTenant(tenantId, () => db.transaction((tx) => tx.select().from(tenantSettings)
     .where(and(eq(tenantSettings.tenantId, tenantId), eq(tenantSettings.key, key)))
-    .limit(1);
+    .limit(1)));
   return rows[0] ? toView(rows[0]) : null;
 }
 
 export async function findAllByTenant(tenantId: string): Promise<SettingView[]> {
-  const rows = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenantId));
+  const rows = await runWithTenant(tenantId, () => db.transaction((tx) => tx.select().from(tenantSettings)
+    .where(eq(tenantSettings.tenantId, tenantId))));
   return rows.map(toView);
 }
 

@@ -11,6 +11,11 @@ import { cache } from "../../shared/infra.js";
 import { db } from "../../shared/db.js";
 import { projectProjects, projectTasks } from "../project/schema.js";
 import { projectDprs } from "../progress/schema.js";
+// GAP-PROJECTS-ESCALATIONS-02: overlay persisted escalation action state onto
+// the synthetic projection below. mock-elimination-routes already reaches
+// across modules for its read-only projections (see the progress import
+// above); this follows the same established pattern (read-only, same tx).
+import * as escalationRepo from "../escalation/repo.js";
 import { eq, and, desc, sql } from "drizzle-orm";
 
 const READER_ROLES = ["project_officer", "project_admin", "finance_officer", "tenant_admin", "super_admin", "audit_officer"];
@@ -32,29 +37,49 @@ export async function mockEliminationRoutes(app: FastifyInstance): Promise<void>
         // Escalations are projects with status delayed/on_hold and flagged
         // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
         // before this read — a bare db.select() runs with no RLS GUC set.
-        const result = await db.transaction((tx) => tx.select({
-          id: projectProjects.id,
-          projectCode: projectProjects.code,
-          name: projectProjects.name,
-          status: projectProjects.status,
-          createdAt: projectProjects.createdAt,
-        }).from(projectProjects)
-          .where(and(
-            eq(projectProjects.tenantId, tenantId),
-            sql`${projectProjects.status} IN ('delayed', 'on_hold', 'blocked')`,
-          ))
-          .orderBy(desc(projectProjects.createdAt))
-          .limit(200));
-        return result.map((r, i) => ({
-          escalationId: `ESC-${String(i + 1).padStart(3, "0")}`,
-          projectId: r.id,
-          project: r.name,
-          issue: r.status === "blocked" ? "Critical blocker reported" : r.status === "delayed" ? "Timeline exceeded" : "Under review",
-          severity: r.status === "blocked" ? "blocked" : r.status === "delayed" ? "overdue" : "pending",
-          escalatedTo: "Program Director",
-          raisedDate: (r.createdAt as Date).toISOString().slice(0, 10),
-          status: r.status === "blocked" ? "open" : "submitted",
-        }));
+        return db.transaction(async (tx) => {
+          const result = await tx.select({
+            id: projectProjects.id,
+            projectCode: projectProjects.code,
+            name: projectProjects.name,
+            status: projectProjects.status,
+            createdAt: projectProjects.createdAt,
+          }).from(projectProjects)
+            .where(and(
+              eq(projectProjects.tenantId, tenantId),
+              sql`${projectProjects.status} IN ('delayed', 'on_hold', 'blocked')`,
+            ))
+            .orderBy(desc(projectProjects.createdAt))
+            .limit(200);
+
+          // GAP-PROJECTS-ESCALATIONS-02: overlay the persisted ACTION STATE
+          // (acknowledge/reassign/clear) onto the synthetic projection. A
+          // project with no persisted escalation row reads as its default
+          // projected status; once acted on, the persisted status/assignee win,
+          // so an acknowledged/cleared escalation is reflected in the queue and
+          // the colour follows (open=bad, acknowledged=warn, cleared=good).
+          const persisted = await escalationRepo.listByProjectIdsTx(
+            tx, tenantId, result.map((r) => r.id),
+          );
+          const byProject = new Map(persisted.map((e) => [e.projectId, e]));
+
+          return result.map((r, i) => {
+            const e = byProject.get(r.id);
+            const defaultStatus = r.status === "blocked" ? "open" : "submitted";
+            return {
+              escalationId: `ESC-${String(i + 1).padStart(3, "0")}`,
+              projectId: r.id,
+              project: r.name,
+              issue: e?.issue
+                ?? (r.status === "blocked" ? "Critical blocker reported" : r.status === "delayed" ? "Timeline exceeded" : "Under review"),
+              severity: e?.severity
+                ?? (r.status === "blocked" ? "blocked" : r.status === "delayed" ? "overdue" : "pending"),
+              escalatedTo: e?.escalatedTo ?? "Program Director",
+              raisedDate: (r.createdAt as Date).toISOString().slice(0, 10),
+              status: e?.status ?? defaultStatus,
+            };
+          });
+        });
       },
     );
 
@@ -125,6 +150,7 @@ export async function mockEliminationRoutes(app: FastifyInstance): Promise<void>
               .where(and(eq(projectProjects.id, r.projectId), eq(projectProjects.tenantId, tenantId)))
               .limit(1);
             out.push({
+              id: r.id,
               dprNo: r.dprNo,
               projectId: r.projectId,
               projectTitle: proj[0]?.name ?? "Unknown Project",

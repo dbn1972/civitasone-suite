@@ -7,8 +7,14 @@ vi.mock("@/app/_data/apiClient", async () => {
   return { ...actual, fetchJson: (...args: unknown[]) => fetchJsonMock(...args) };
 });
 vi.mock("./DprTrackingTable", () => ({
-  DprTrackingTable: ({ rows }: { rows: unknown[] }) => <div>dpr-table:{rows.length}</div>,
+  DprTrackingTable: ({ rows, canReview }: { rows: unknown[]; canReview?: boolean }) => <div>dpr-table:{rows.length}:{canReview ? "review" : "readonly"}</div>,
 }));
+// getSessionRoles reads cookies() (next/headers); stub the role gate so the
+// server page renders under vitest without a request context.
+vi.mock("@/lib/auth/roleGuard", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/auth/roleGuard")>("@/lib/auth/roleGuard");
+  return { ...actual, getSessionRoles: () => ["project_manager"] };
+});
 
 import DprTrackingPage from "./page";
 
@@ -22,12 +28,22 @@ function tile(label: string): string | null | undefined {
 describe("DprTrackingPage (GAP-PROJECTS-DPR-TRACKING-01)", () => {
   beforeEach(() => fetchJsonMock.mockReset());
 
-  it("labels the rejected-count tile 'Rejected' (matching the status pill), not 'Returned'", async () => {
+  it("labels the returned-count tile 'Returned for revision' (matching the status pill) and counts the real 'revision' status", async () => {
     mock([
-      { dprNo: "D1", projectId: "p", projectTitle: "A", submittedBy: "u", submittedDate: "2026-01-01", estimatedCost: "—", status: "rejected", reviewingAuthority: "PMU" },
+      { id: "d1", dprNo: "D1", projectId: "p", projectTitle: "A", submittedBy: "u", submittedDate: "2026-01-01", estimatedCost: "—", status: "revision", reviewingAuthority: "PMU" },
     ]);
     render(await DprTrackingPage());
-    expect(tile("Rejected")).toContain("1");
-    expect(screen.queryByText("Returned")).not.toBeInTheDocument();
+    expect(tile("Returned for revision")).toContain("1");
+    // The misleading 'Rejected' label (a status this backend never emits) is gone.
+    expect(screen.queryByText("Rejected")).not.toBeInTheDocument();
+  });
+
+  it("counts submitted + under_review DPRs under 'Under Review'", async () => {
+    mock([
+      { id: "d1", dprNo: "D1", projectId: "p", projectTitle: "A", submittedBy: "u", submittedDate: "2026-01-01", estimatedCost: "—", status: "submitted", reviewingAuthority: "PMU" },
+      { id: "d2", dprNo: "D2", projectId: "p2", projectTitle: "B", submittedBy: "u", submittedDate: "2026-01-02", estimatedCost: "—", status: "under_review", reviewingAuthority: "PMU" },
+    ]);
+    render(await DprTrackingPage());
+    expect(tile("Under Review")).toContain("2");
   });
 });

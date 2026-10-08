@@ -17,7 +17,7 @@
  * (approvedBy) is HARD-enforced to differ from the maker (createdBy / signedBy)
  * in the order-issuance consumer; issuance is a human, DSC-signed act.
  */
-import { pgSchema, uuid, text, integer, date, varchar, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, text, integer, date, varchar, timestamp, boolean } from "drizzle-orm/pg-core";
 
 /** The `court` PG schema — every court-service table is namespaced under it. */
 export const courtSchema = pgSchema("court");
@@ -42,6 +42,14 @@ export const orders = courtSchema.table("orders", {
   approvedBy:   uuid("approved_by"),
   issuedAt:     timestamp("issued_at", { withTimezone: true }),
   recallReason: text("recall_reason"),
+  // ── DSC verification metadata (0020_court_order_dsc_verification.sql) ───────────
+  // GAP-COURT-ORDERS-02: outcome of the server-side PKCS#7 verification done at
+  // issue. signerCn/signerSerial identify the DSC; verifiedAt stamps the check;
+  // chainTrusted is TRUE only when the signer chained to a configured trust store.
+  dscSignerCn:     varchar("dsc_signer_cn", { length: 255 }),
+  dscSignerSerial: varchar("dsc_signer_serial", { length: 128 }),
+  dscVerifiedAt:   timestamp("dsc_verified_at", { withTimezone: true }),
+  dscChainTrusted: boolean("dsc_chain_trusted").notNull().default(false),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:    uuid("created_by"),

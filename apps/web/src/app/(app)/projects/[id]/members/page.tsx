@@ -1,13 +1,20 @@
 import { getProjectMembers } from "../../../../_data/loaders";
-import { PageHeader, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
+import { PageHeader, Card, EmptyState, RefreshErrorState, UserRef } from "@/app/_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { formatIndianDate, humanizeStatus } from "@/lib/formatters";
 import { getSessionRoles, hasAnyRole, PROJECT_WRITE_ROLES } from "@/lib/auth/roleGuard";
+import { resolveUsers } from "@/lib/directory/resolveUsers";
 import { AddMemberForm } from "./AddMemberForm";
 
 export default async function ProjectMembersPage({ params }: { params: { id: string } }) {
   const { data: members, source } = await getProjectMembers(params.id);
   const errored = source === "error";
+
+  // GAP-PROJECTS-DETAIL-MEMBERS-01: resolve member userIds to display names via
+  // the shared tenant-scoped user directory (server-side, batched, non-PII).
+  // Fail-soft: an unresolved id renders as a short id via UserRef, never a
+  // guessed name. The full id stays available in the UserRef title for copy.
+  const names = errored ? new Map<string, string>() : await resolveUsers(members.map((m) => m.userId));
 
   // GAP-PROJECTS-DETAIL-MEMBERS-02: only project managers/officers (project-service
   // PROJ_ROLES) may add/remove members; the server already 403s others. Hide the
@@ -53,7 +60,7 @@ export default async function ProjectMembersPage({ params }: { params: { id: str
             <table className="tbl">
               <thead>
                 <tr>
-                  {["User ID", "Role", "Added"].map((c) => (
+                  {["Member", "Role", "Added"].map((c) => (
                     <th key={c} scope="col">{c}</th>
                   ))}
                 </tr>
@@ -61,7 +68,12 @@ export default async function ProjectMembersPage({ params }: { params: { id: str
               <tbody>
                 {members.map((m) => (
                   <tr key={m.id}>
-                    <td style={{ fontFamily: "monospace", fontSize: "0.82rem" }}>{m.userId}</td>
+                    {/* GAP-PROJECTS-DETAIL-MEMBERS-01: show the resolved person name
+                        (UserRef) instead of a bare UUID. userId stays in the title for
+                        copy; an unresolved id falls back to a short id, never a guess. */}
+                    <td style={{ fontSize: "0.9rem" }}>
+                      <UserRef id={m.userId} name={names.get(m.userId) ?? null} />
+                    </td>
                     <td>
                       <span
                         style={{
