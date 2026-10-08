@@ -56,4 +56,36 @@ describe("dedupCandidates HTTP client (DQ-001)", () => {
       expect(u).not.toContain("/api/proxy//");
     }
   });
+
+  it("GAP2-CRM-DEDUP-CANDIDATES-07: getDedupCandidates returns the live pairs with source 'api' on 200", async () => {
+    const pair = {
+      pairId: "a:b",
+      confidence: 85,
+      left: { id: "a", name: "Priya", email: null, phone: null, company: "Nimbus", lastActivity: null },
+      right: { id: "b", name: "Priya", email: null, phone: null, company: "Nimbus", lastActivity: null },
+    };
+    fetchMock.mockResolvedValueOnce(res({ data: [pair] }));
+    const out = await dedup.getDedupCandidates();
+    expect(out.source).toBe("api");
+    expect(out.data).toHaveLength(1);
+    expect(out.data[0]!.pairId).toBe("a:b");
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(String(url)).toContain("v1/crm/contacts/dedup-candidates");
+  });
+
+  it("GAP2-CRM-DEDUP-CANDIDATES-07: getDedupCandidates fails closed to source 'error' on a non-2xx (honest badge, not a fake empty)", async () => {
+    fetchMock.mockResolvedValueOnce(res({ code: "BOOM" }, { status: 500 }));
+    const out = await dedup.getDedupCandidates();
+    expect(out.source).toBe("error");
+    expect(out.data).toEqual([]);
+  });
+
+  it("GAP2-CRM-DEDUP-CANDIDATES-07: dismissDedupPair PATCHes the real dismiss route and resolves on 200", async () => {
+    fetchMock.mockResolvedValueOnce(res({ data: { pairId: "a:b" } }, { status: 200 }));
+    await expect(dedup.dismissDedupPair("a:b", "distinct people")).resolves.toBeUndefined();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(String(url)).toContain("v1/crm/contacts/dedup-candidates/a:b/dismiss");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(init.body as string)).toEqual({ reason: "distinct people" });
+  });
 });

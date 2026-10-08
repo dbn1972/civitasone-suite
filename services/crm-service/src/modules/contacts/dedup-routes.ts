@@ -51,6 +51,18 @@ const duplicateCheckBody = z.object({  id: z.string().uuid().optional(),
   limit: z.number().int().min(1).max(50).optional(),
 });
 
+// GAP2-CRM-DEDUP-CANDIDATES-07: list + dismiss schemas for the post-save queue.
+const listCandidatesQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(500).default(200),
+});
+const dismissParams = z.object({
+  // "contactA:contactB" — validated more strictly in the repo against uuids.
+  pairId: z.string().min(1).max(128),
+});
+const dismissBody = z.object({
+  reason: z.string().trim().max(500).optional(),
+});
+
 export async function dedupRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/crm/dedup-rules", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -116,5 +128,39 @@ export async function dedupRoutes(app: FastifyInstance): Promise<void> {
     );
 
     return reply.send({ data: matches });
+  });
+
+  /**
+   * GAP2-CRM-DEDUP-CANDIDATES-07 — the post-save duplicate-review LIST.
+   * Computes near-duplicate PAIRS from the tenant's active contacts under the
+   * configured rules, excluding pairs the tenant has dismissed. Returns a stable
+   * shape the /crm/dedup-candidates screen renders directly.
+   */
+  app.get("/v1/crm/contacts/dedup-candidates", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CRM_ROLES);
+    const q = listCandidatesQuery.parse(req.query ?? {});
+    const data = await dedupRepo.listDedupCandidatePairs(ctx.tenantId, ctx.actorId, q.limit);
+    return reply.send({ data });
+  });
+
+  /**
+   * GAP2-CRM-DEDUP-CANDIDATES-07 — dismiss a flagged pair so it does not
+   * resurface. Persisted + audited in one transaction. 200 on success (the
+   * dismissal is applied synchronously; there is no CQRS consumer for it).
+   */
+  app.patch("/v1/crm/contacts/dedup-candidates/:pairId/dismiss", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CRM_ROLES);
+    const { pairId } = dismissParams.parse(req.params);
+    const body = dismissBody.parse(req.body ?? {});
+    const result = await dedupRepo.dismissDedupPair(
+      ctx.tenantId,
+      pairId,
+      ctx.actorId,
+      ctx.correlationId,
+      body.reason,
+    );
+    return reply.send({ data: result });
   });
 }
