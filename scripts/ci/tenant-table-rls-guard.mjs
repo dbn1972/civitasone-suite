@@ -58,7 +58,7 @@
 // ALTER's own file is held to the identical same-file-RLS requirement as a
 // CREATE-TABLE-time tenant_id. At the time of this fix, two real fleet
 // migrations exercise this exact shape — admin-service's
-// 0004b_missing_module_tables.sql / 0014_webhook_lifecycle.sql
+// 0004b_missing_module_tables.sql / 0014b_webhook_lifecycle.sql
 // (webhooks.webhook_deliveries) and payroll-service's
 // 0012_p1_challan_taxcfg_perq_26q.sql / 0039_tax_slab_config_tenant_scope.sql
 // (payroll.tax_slab_config) — both already carry ENABLE + FORCE + CREATE

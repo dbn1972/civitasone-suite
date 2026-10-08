@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
+import { idempotentId } from "@civitasone/auth";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
@@ -30,6 +31,7 @@ export async function scoreApplication(ctx: RequestContext, id: string, body: Sc
     throw new HttpError(403, "SOD_VIOLATION", "scoring must be performed by someone other than the submitter (separation of duties)");
   }
   await queue.publish(COMMANDS.applicationScore, {
+    messageId: idempotentId({ idempotencyKey: `application-score:${id}:${ctx.actorId}`, tenantId: ctx.tenantId }),
     type: COMMANDS.applicationScore,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, ...body },
@@ -48,6 +50,7 @@ export async function approveApplication(ctx: RequestContext, id: string, body: 
     throw new HttpError(403, "SOD_VIOLATION", "approver must be different from the submitter (separation of duties)");
   }
   await queue.publish(COMMANDS.applicationApprove, {
+    messageId: idempotentId({ idempotencyKey: `application-approve:${id}`, tenantId: ctx.tenantId }),
     type: COMMANDS.applicationApprove,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, approvedBy: ctx.actorId, ...body },
@@ -58,6 +61,7 @@ export async function approveApplication(ctx: RequestContext, id: string, body: 
 
 export async function rejectApplication(ctx: RequestContext, id: string, body: RejectApplicationBody): Promise<Accepted> {
   await queue.publish(COMMANDS.applicationReject, {
+    messageId: idempotentId({ idempotencyKey: `application-reject:${id}`, tenantId: ctx.tenantId }),
     type: COMMANDS.applicationReject,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, reason: body.reason },
@@ -74,6 +78,7 @@ export async function withdrawApplication(ctx: RequestContext, id: string, body:
     throw new HttpError(409, "INVALID_STATE", `cannot withdraw an application in status '${app.status}'`);
   }
   await queue.publish(COMMANDS.applicationWithdraw, {
+    messageId: idempotentId({ idempotencyKey: `application-withdraw:${id}`, tenantId: ctx.tenantId }),
     type: COMMANDS.applicationWithdraw,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, withdrawnBy: ctx.actorId, reason: body.reason },
@@ -93,6 +98,7 @@ export async function assignReviewer(ctx: RequestContext, id: string, body: Assi
     throw new HttpError(409, "INVALID_STATE", `cannot assign reviewer to application in status '${app.status}'`);
   }
   await queue.publish(COMMANDS.applicationAssignReviewer, {
+    messageId: idempotentId(ctx),
     type: COMMANDS.applicationAssignReviewer,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, assignedBy: ctx.actorId, ...body },

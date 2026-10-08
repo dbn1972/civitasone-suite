@@ -49,6 +49,7 @@ export async function createTenant(ctx: RequestContext, body: CreateTenantBody):
 
 export async function updateTenant(ctx: RequestContext, id: string, body: UpdateTenantBody): Promise<Accepted> {
   await queue.publish(COMMANDS.updateTenant, {
+    messageId: randomUUID(),
     type: COMMANDS.updateTenant,
     tenantId: id,
     actorId: ctx.actorId,
@@ -62,6 +63,7 @@ export async function updateTenant(ctx: RequestContext, id: string, body: Update
 
 export async function suspendTenant(ctx: RequestContext, id: string, body: SuspendTenantBody): Promise<Accepted> {
   await queue.publish(COMMANDS.suspendTenant, {
+    messageId: randomUUID(),
     type: COMMANDS.suspendTenant,
     tenantId: id,
     actorId: ctx.actorId,
@@ -80,6 +82,7 @@ export async function suspendTenant(ctx: RequestContext, id: string, body: Suspe
  */
 export async function setIsolation(ctx: RequestContext, id: string, body: SetIsolationBody): Promise<Accepted> {
   await queue.publish(COMMANDS.setIsolation, {
+    messageId: randomUUID(),
     type: COMMANDS.setIsolation,
     tenantId: id,
     actorId: ctx.actorId,

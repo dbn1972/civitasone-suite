@@ -15,6 +15,7 @@
  *
  * _Requirements: 7.2, 17.1, 17.3, 17.4_
  */
+import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
@@ -41,6 +42,7 @@ export async function aiTranscribe(
   body: AiTranscribeInput,
 ): Promise<AiCommandAccepted> {
   await queue.publish(COMMANDS.aiTranscribe, {
+    messageId: randomUUID(),
     type: COMMANDS.aiTranscribe,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,
@@ -67,6 +69,7 @@ export async function aiDraftMinutes(
   body: AiDraftMinutesInput,
 ): Promise<AiCommandAccepted> {
   await queue.publish(COMMANDS.aiDraftMinutes, {
+    messageId: randomUUID(),
     type: COMMANDS.aiDraftMinutes,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,
@@ -93,6 +96,7 @@ export async function aiExtractActions(
   body: AiExtractActionsInput,
 ): Promise<AiCommandAccepted> {
   await queue.publish(COMMANDS.aiExtractActions, {
+    messageId: randomUUID(),
     type: COMMANDS.aiExtractActions,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,

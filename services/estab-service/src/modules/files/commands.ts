@@ -50,6 +50,7 @@ export async function submitNotingForApproval(
   body: SubmitNotingBody,
 ): Promise<Accepted> {
   await queue.publish(COMMANDS.notingSubmit, {
+    messageId: randomUUID(),
     type: COMMANDS.notingSubmit,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { fileId, notingId: body.notingId, tenantId: ctx.tenantId },
@@ -65,6 +66,7 @@ export async function submitNotingForApproval(
  */
 export async function signNoting(ctx: RequestContext, fileId: string, notingId: string): Promise<Accepted> {
   await queue.publish(COMMANDS.notingSign, {
+    messageId: randomUUID(),
     type: COMMANDS.notingSign,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { fileId, notingId, tenantId: ctx.tenantId },
@@ -92,6 +94,7 @@ export async function openFileFromInward(
 
 export async function moveFile(ctx: RequestContext, fileId: string, body: MoveFileBody): Promise<Accepted> {
   await queue.publish(COMMANDS.fileMove, {
+    messageId: randomUUID(),
     type: COMMANDS.fileMove,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { fileId, tenantId: ctx.tenantId, ...body },
@@ -102,6 +105,7 @@ export async function moveFile(ctx: RequestContext, fileId: string, body: MoveFi
 
 export async function closeFile(ctx: RequestContext, fileId: string, body: CloseFileBody): Promise<Accepted> {
   await queue.publish(COMMANDS.fileClose, {
+    messageId: randomUUID(),
     type: COMMANDS.fileClose,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { fileId, tenantId: ctx.tenantId, ...body },
@@ -112,6 +116,7 @@ export async function closeFile(ctx: RequestContext, fileId: string, body: Close
 
 export async function recallFile(ctx: RequestContext, fileId: string, body: RecallFileBody): Promise<Accepted> {
   await queue.publish(COMMANDS.fileRecall, {
+    messageId: randomUUID(),
     type: COMMANDS.fileRecall,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { fileId, tenantId: ctx.tenantId, ...body },
@@ -122,6 +127,7 @@ export async function recallFile(ctx: RequestContext, fileId: string, body: Reca
 
 export async function reopenFile(ctx: RequestContext, fileId: string, body: ReopenFileBody): Promise<Accepted> {
   await queue.publish(COMMANDS.fileReopen, {
+    messageId: randomUUID(),
     type: COMMANDS.fileReopen,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { fileId, tenantId: ctx.tenantId, ...body },

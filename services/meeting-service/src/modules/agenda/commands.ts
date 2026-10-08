@@ -78,6 +78,7 @@ export async function agendaItemUpdate(
   body: AgendaItemUpdateInput,
 ): Promise<AgendaCommandAccepted> {
   await queue.publish(COMMANDS.agendaItemUpdate, {
+    messageId: randomUUID(),
     type: COMMANDS.agendaItemUpdate,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,
@@ -96,6 +97,7 @@ export async function agendaItemWithdraw(
   body: AgendaItemWithdrawInput,
 ): Promise<AgendaCommandAccepted> {
   await queue.publish(COMMANDS.agendaItemWithdraw, {
+    messageId: randomUUID(),
     type: COMMANDS.agendaItemWithdraw,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,
@@ -117,6 +119,7 @@ export async function agendaReorder(
   body: AgendaReorderInput,
 ): Promise<AgendaCommandAccepted> {
   await queue.publish(COMMANDS.agendaReorder, {
+    messageId: randomUUID(),
     type: COMMANDS.agendaReorder,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,
@@ -139,6 +142,7 @@ export async function agendaLock(
   body: AgendaLockInput,
 ): Promise<AgendaCommandAccepted> {
   await queue.publish(COMMANDS.agendaLock, {
+    messageId: randomUUID(),
     type: COMMANDS.agendaLock,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,

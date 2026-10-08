@@ -69,7 +69,7 @@ export function registerF3_pay_matrix_Consumers(queue: Queue): void {
               // REDELIVERY of this SAME message, not that): insert the
               // service-book row first, conflict-checked against the
               // partial unique index from
-              // migrations/0132_pay_matrix_increment_idempotency.sql. Only
+              // migrations/0132b_pay_matrix_increment_idempotency.sql. Only
               // the first of two racing plans to have its insert land here
               // gets zero-rows-back protection lifted; the loser sees an
               // empty `inserted` and skips the pay write entirely below.

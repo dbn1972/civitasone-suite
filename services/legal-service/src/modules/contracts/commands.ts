@@ -18,6 +18,7 @@ export async function createReview(ctx: RequestContext, body: CreateReviewBody):
 
 export async function clearReview(ctx: RequestContext, reviewId: string, body: ClearReviewBody): Promise<Accepted> {
   await queue.publish(COMMANDS.contractReviewClear, {
+    messageId: randomUUID(),
     type: COMMANDS.contractReviewClear,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { reviewId, tenantId: ctx.tenantId, ...body },

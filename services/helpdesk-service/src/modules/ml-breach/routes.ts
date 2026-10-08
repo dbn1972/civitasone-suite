@@ -10,6 +10,7 @@
  * is available.
  */
 
+import { randomUUID } from "node:crypto";
 import { SYSTEM_ACTOR_ID } from "@civitasone/outbox";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
@@ -198,6 +199,7 @@ async function emitBreachRiskHighEvent(
 ): Promise<void> {
   try {
     await queue.publish(CONSUMES.mlBreachRiskHigh, {
+      messageId: randomUUID(),
       type: CONSUMES.mlBreachRiskHigh,
       tenantId,
       actorId: SYSTEM_ACTOR_ID,

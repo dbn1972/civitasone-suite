@@ -21,8 +21,9 @@ export async function createBill(ctx: RequestContext, body: CreateBillBody): Pro
 }
 
 export async function approveBill(ctx: RequestContext, id: string, body: ApproveBillBody): Promise<Accepted> {
+  const messageId = idempotentId({ idempotencyKey: `bill-approve:${id}`, tenantId: ctx.tenantId });
   await queue.publish(COMMANDS.billApprove, {
-    type: COMMANDS.billApprove,
+    messageId, type: COMMANDS.billApprove,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, notes: body.notes },
   });
@@ -71,8 +72,9 @@ export async function createUC(ctx: RequestContext, body: CreateUCBody): Promise
 }
 
 export async function adjustAdvance(ctx: RequestContext, id: string, body: AdjustAdvanceBody): Promise<Accepted> {
+  const messageId = idempotentId(ctx); // EVT-4: double-submit dedupe on the client idempotency key
   await queue.publish(COMMANDS.advanceAdjust, {
-    type: COMMANDS.advanceAdjust,
+    messageId, type: COMMANDS.advanceAdjust,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, ...body },
   });
@@ -88,8 +90,9 @@ export async function adjustAdvance(ctx: RequestContext, id: string, body: Adjus
  * the file is under approval.
  */
 export async function submitPaymentForApproval(ctx: RequestContext, id: string): Promise<Accepted> {
+  const messageId = idempotentId({ idempotencyKey: `payment-submit-approval:${id}`, tenantId: ctx.tenantId });
   await queue.publish(COMMANDS.paymentSubmitApproval, {
-    type: COMMANDS.paymentSubmitApproval,
+    messageId, type: COMMANDS.paymentSubmitApproval,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId },
   });

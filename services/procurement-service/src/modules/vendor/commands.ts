@@ -18,6 +18,7 @@ export async function createVendor(ctx: RequestContext, body: CreateVendorBody):
 
 export async function empanelVendor(ctx: RequestContext, id: string, body: EmpanelBody): Promise<Accepted> {
   await queue.publish(COMMANDS.vendorEmpanel, {
+    messageId: randomUUID(),
     type: COMMANDS.vendorEmpanel,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, ...body },
@@ -28,6 +29,7 @@ export async function empanelVendor(ctx: RequestContext, id: string, body: Empan
 
 export async function blacklistVendor(ctx: RequestContext, id: string, body: BlacklistBody): Promise<Accepted> {
   await queue.publish(COMMANDS.vendorBlacklist, {
+    messageId: randomUUID(),
     type: COMMANDS.vendorBlacklist,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, ...body },

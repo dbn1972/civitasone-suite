@@ -191,6 +191,7 @@ export async function processWaitingReminderCycle(
 
       // Send waiting reminder to host (push)
       await queue.publish(NOTIFICATION_SEND, {
+        messageId: randomUUID(),
         type: NOTIFICATION_SEND,
         tenantId: ci.tenantId,
         actorId: SYSTEM_ACTOR_ID,

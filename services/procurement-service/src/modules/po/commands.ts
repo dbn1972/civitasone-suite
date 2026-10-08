@@ -18,6 +18,7 @@ export async function createPo(ctx: RequestContext, body: CreatePoBody): Promise
 
 export async function dispatchPo(ctx: RequestContext, id: string, body: DispatchBody): Promise<Accepted> {
   await queue.publish(COMMANDS.poDispatch, {
+    messageId: randomUUID(),
     type: COMMANDS.poDispatch,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, ...body },
@@ -45,6 +46,7 @@ export async function createGemOrder(ctx: RequestContext, body: GemOrderBody): P
  */
 export async function submitPoForApproval(ctx: RequestContext, id: string): Promise<Accepted> {
   await queue.publish(COMMANDS.poSubmitApproval, {
+    messageId: randomUUID(),
     type: COMMANDS.poSubmitApproval,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId },

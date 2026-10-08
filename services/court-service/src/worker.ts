@@ -154,6 +154,9 @@ async function deadLetter(originTopic: string, msg: CommandEnvelope, err: unknow
 
   try {
     await queue.publish(DLQ_TOPIC, {
+      // Reuse the original message id so re-dead-lettering the same failed
+      // message dedupes on the DLQ instead of piling up a fresh entry per attempt.
+      messageId: msg.messageId,
       type: DLQ_TOPIC,
       tenantId: msg.tenantId,
       actorId: msg.actorId,

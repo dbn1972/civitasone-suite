@@ -131,6 +131,7 @@ export async function processRecurringPassExpiryCycle(
     try {
       // Notify pass holder via email (Requirement 12.5)
       await queue.publish(NOTIFICATION_SEND, {
+        messageId: randomUUID(),
         type: NOTIFICATION_SEND,
         tenantId: pass.tenantId,
         actorId: SYSTEM_ACTOR_ID,
@@ -152,6 +153,7 @@ export async function processRecurringPassExpiryCycle(
 
       // Notify issuing facility manager via push (Requirement 12.5)
       await queue.publish(NOTIFICATION_SEND, {
+        messageId: randomUUID(),
         type: NOTIFICATION_SEND,
         tenantId: pass.tenantId,
         actorId: SYSTEM_ACTOR_ID,

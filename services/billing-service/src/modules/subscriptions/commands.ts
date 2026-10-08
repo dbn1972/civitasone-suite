@@ -18,7 +18,7 @@ export async function createSubscription(ctx: RequestContext, tenantId: string, 
 
 export async function activateSubscription(ctx: RequestContext, id: string): Promise<Accepted> {
   await queue.publish(COMMANDS.subscriptionActivate, {
-    type: COMMANDS.subscriptionActivate, tenantId: ctx.tenantId,
+    messageId: randomUUID(), type: COMMANDS.subscriptionActivate, tenantId: ctx.tenantId,
     actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id },
   });
@@ -27,7 +27,7 @@ export async function activateSubscription(ctx: RequestContext, id: string): Pro
 
 export async function cancelSubscription(ctx: RequestContext, id: string): Promise<Accepted> {
   await queue.publish(COMMANDS.subscriptionCancel, {
-    type: COMMANDS.subscriptionCancel, tenantId: ctx.tenantId,
+    messageId: randomUUID(), type: COMMANDS.subscriptionCancel, tenantId: ctx.tenantId,
     actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id },
   });
