@@ -13,13 +13,20 @@ import { signToken } from "@civitasone/auth";
 const listBillsByTenant = vi.fn();
 const findBillByIdAndTenant = vi.fn();
 const getVendorById = vi.fn();
+const getVendorNamesByIds = vi.fn();
 const createBill = vi.fn();
 
 vi.mock("../src/modules/payments/repo.js", () => ({
   listBillsByTenant: (...a: unknown[]) => listBillsByTenant(...a),
   findBillByIdAndTenant: (...a: unknown[]) => findBillByIdAndTenant(...a),
 }));
-vi.mock("../src/modules/masters/repo.js", () => ({ getVendorById: (...a: unknown[]) => getVendorById(...a) }));
+vi.mock("../src/modules/masters/repo.js", () => ({
+  getVendorById: (...a: unknown[]) => getVendorById(...a),
+  // GAP2-FINANCE-BILLS-VENDORNAME-01: listBillSummaries now resolves vendor
+  // names from the masters repo (batched); provide the stub so these route
+  // tests stay DB-free. Returns the names set by each test (default empty).
+  getVendorNamesByIds: (...a: unknown[]) => getVendorNamesByIds(...a),
+}));
 vi.mock("../src/modules/payments/commands.js", () => ({ createBill: (...a: unknown[]) => createBill(...a) }));
 
 import { paymentsRoutes } from "../src/modules/payments/routes.js";
@@ -45,7 +52,7 @@ const row = (id: string, status: string, over: Record<string, unknown> = {}) => 
 });
 
 describe("bills routes with passed / on_hold rows", () => {
-  beforeEach(() => { [listBillsByTenant, findBillByIdAndTenant, getVendorById, createBill].forEach((m) => m.mockReset()); });
+  beforeEach(() => { [listBillsByTenant, findBillByIdAndTenant, getVendorById, getVendorNamesByIds, createBill].forEach((m) => m.mockReset()); getVendorNamesByIds.mockResolvedValue(new Map()); getVendorById.mockResolvedValue(null); });
 
   it("GET /v1/finance/bills serves passed, on_hold, draft and approved rows (200, statuses as emitted)", async () => {
     listBillsByTenant.mockResolvedValue([
@@ -54,10 +61,16 @@ describe("bills routes with passed / on_hold rows", () => {
       row("00000000-0000-4000-8000-000000000003", "draft"),
       row("00000000-0000-4000-8000-000000000004", "approved"),
     ]);
+    // GAP2-FINANCE-BILLS-VENDORNAME-01: a non-fixture vendor id resolves to its
+    // real master-data name; an unresolved one shows "Unknown vendor".
+    getVendorNamesByIds.mockResolvedValue(new Map([[VENDOR, "M/s Real Tenant Vendor Ltd."]]));
     const res = await (await app()).inject({ method: "GET", url: "/v1/finance/bills", headers: hdr(["finance_officer"]) });
     expect(res.statusCode).toBe(200);
-    const statuses = JSON.parse(res.body).map((b: { status: string }) => b.status);
+    const body = JSON.parse(res.body);
+    const statuses = body.map((b: { status: string }) => b.status);
     expect(statuses).toEqual(["passed", "on_hold", "pending", "passed"]);
+    expect(body[0].vendor).toBe("M/s Real Tenant Vendor Ltd.");
+    expect(body[0].vendor).not.toMatch(/^Vendor \(/);
   });
 
   it("GET /v1/finance/bills/:id serves a passed bill with threeWayMatch 'pending' (PO without GRN)", async () => {

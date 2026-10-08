@@ -158,6 +158,24 @@ export async function listPaymentsByTenant(tenantId: string, limit: number, offs
     .offset(offset));
 }
 
+/**
+ * GAP2-FINANCE-PAYMENTS-TOTALS-03: tenant-wide payment counts grouped by raw
+ * status, computed in the database — so the register's stat cards reflect ALL
+ * payments, not just the first (capped) page. One grouped aggregate, no row
+ * transfer. The caller maps raw status -> display bucket.
+ */
+export async function getPaymentStatusCounts(tenantId: string): Promise<{ total: number; byStatus: Record<string, number> }> {
+  const rows = await scopedRead((tx) => tx
+    .select({ status: financePayments.status, n: sql<number>`count(*)::int` })
+    .from(financePayments)
+    .where(eq(financePayments.tenantId, tenantId))
+    .groupBy(financePayments.status));
+  const byStatus: Record<string, number> = {};
+  let total = 0;
+  for (const r of rows) { byStatus[r.status] = r.n; total += r.n; }
+  return { total, byStatus };
+}
+
 export async function listBillsByTenant(tenantId: string, limit: number, offset = 0): Promise<BillRow[]> {
   return scopedRead((tx) => tx.select().from(financeBills)
     .where(eq(financeBills.tenantId, tenantId))

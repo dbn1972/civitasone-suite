@@ -12,7 +12,9 @@ export async function createChallan(ctx: RequestContext, body: CreateChallanBody
   await queue.publish(COMMANDS.challanCreate, {
     messageId: id, type: COMMANDS.challanCreate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, ...body },
+    // GAP2-FINANCE-TREASURY-MONEY-05: amountMinor is now a bigint — cross the
+    // queue boundary as a base-10 string (rule 7), exactly as payments/budget do.
+    payload: { id, tenantId: ctx.tenantId, ...body, amountMinor: body.amountMinor.toString() },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
@@ -22,7 +24,7 @@ export async function createDeposit(ctx: RequestContext, body: CreateDepositBody
   await queue.publish(COMMANDS.depositCreate, {
     messageId: id, type: COMMANDS.depositCreate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, ...body },
+    payload: { id, tenantId: ctx.tenantId, ...body, balanceMinor: body.balanceMinor.toString() },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
@@ -43,7 +45,8 @@ async function publishDisposition(
   await queue.publish(topic, {
     messageId: id, type: topic,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, depositId, ...body },
+    // GAP2-FINANCE-TREASURY-MONEY-05: amountMinor is a bigint — base-10 string over the queue.
+    payload: { id, tenantId: ctx.tenantId, depositId, ...body, amountMinor: body.amountMinor.toString() },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

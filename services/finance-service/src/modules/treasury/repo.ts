@@ -77,6 +77,25 @@ export async function findDepositByIdAndTenant(id: string, tenantId: string): Pr
   return rows[0] ?? null;
 }
 
+/**
+ * GAP2-FINANCE-TREASURY-DEPOSITS-TOTALS-06: tenant-wide deposit counts grouped
+ * by status plus the SUM of balance_minor per status, computed in the database.
+ * The register's count cards and the "Active Balance" money total therefore
+ * reflect EVERY deposit, never a capped page. Caller maps raw status (active |
+ * refunded | forfeited) to the cards and takes the active-status sum.
+ */
+export async function getDepositStatusAggregates(tenantId: string): Promise<Array<{ status: string; n: number; balanceMinor: bigint }>> {
+  return scopedRead((tx) => tx
+    .select({
+      status: financeDeposits.status,
+      n: sql<number>`count(*)::int`,
+      balanceMinor: sql<bigint>`coalesce(sum(${financeDeposits.balanceMinor}), 0)`.mapWith(BigInt),
+    })
+    .from(financeDeposits)
+    .where(eq(financeDeposits.tenantId, tenantId))
+    .groupBy(financeDeposits.status));
+}
+
 /** Ledger of a deposit: its refund / forfeit / adjustment events, oldest first (stable by id). */
 export async function listDepositEvents(tenantId: string, depositId: string) {
   return scopedRead((tx) => tx.select().from(financeDepositEvents)
