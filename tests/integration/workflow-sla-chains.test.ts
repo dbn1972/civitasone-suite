@@ -109,6 +109,9 @@ describe("Cross-service chain #8: workflow SLA sweeper → notification + escala
 
     // tasks select → one overdue task; instances select → its owner; the CAS
     // update returns the claimed row with the bumped escalation count.
+    // The sweeper enumerates tenants via the workflow.sweep_task_tenants() helper
+    // (RLS: a GUC-less scan sees nothing) and runs each tenant's sweep scoped.
+    harness.seedExecute([{ tenant_id: TENANT }]);
     harness.seedSelect("tasks", [overdueTask(now)]);
     harness.seedSelect("instances", [{ createdBy: OWNER_ID }]);
     harness.seedUpdateReturning([{ id: TASK_ID, escalationCount: 1 }]);
@@ -172,6 +175,9 @@ describe("Cross-service chain #8: workflow SLA sweeper → notification + escala
 
   it("falls back to the role ref as recipient when the instance has no owner", async () => {
     const now = new Date("2026-06-25T10:00:00.000Z");
+    // The sweeper enumerates tenants via the workflow.sweep_task_tenants() helper
+    // (RLS: a GUC-less scan sees nothing) and runs each tenant's sweep scoped.
+    harness.seedExecute([{ tenant_id: TENANT }]);
     harness.seedSelect("tasks", [overdueTask(now)]);
     harness.seedSelect("instances", []); // no owner row
     harness.seedUpdateReturning([{ id: TASK_ID, escalationCount: 1 }]);
@@ -184,6 +190,9 @@ describe("Cross-service chain #8: workflow SLA sweeper → notification + escala
 
   it("emits nothing when the CAS row-claim loses the race (idempotency guard)", async () => {
     const now = new Date("2026-06-25T10:00:00.000Z");
+    // The sweeper enumerates tenants via the workflow.sweep_task_tenants() helper
+    // (RLS: a GUC-less scan sees nothing) and runs each tenant's sweep scoped.
+    harness.seedExecute([{ tenant_id: TENANT }]);
     harness.seedSelect("tasks", [overdueTask(now)]);
     harness.seedSelect("instances", [{ createdBy: OWNER_ID }]);
     // A concurrent sweep already claimed the row → update returns zero rows.

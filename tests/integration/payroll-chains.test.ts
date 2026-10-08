@@ -51,6 +51,17 @@ vi.mock("../../services/payroll-service/src/shared/outbox.js", async () => {
   };
 });
 
+// leaveApproved / attendanceMarked now gate the LOP-ledger write on the DIC
+// engagement exemption, resolved by a real HTTP call to hrms-service
+// (shared/hrms-client.ts fetchAttendanceLopApplies). No hrms-service listens in
+// this in-memory harness, so the real fetch fails closed (HrmsUnavailableError)
+// and the ledger row would never be written. Stub only that one network
+// boundary -- "LOP applies" -- and keep every other hrms-client export real.
+vi.mock("../../services/payroll-service/src/shared/hrms-client.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../services/payroll-service/src/shared/hrms-client.js")>();
+  return { ...actual, fetchAttendanceLopApplies: async () => true };
+});
+
 // Imported AFTER the mocks are declared (vi.mock is hoisted above imports).
 const { registerIntegrationConsumers } = await import(
   "../../services/payroll-service/src/modules/integration/consumer.js"
