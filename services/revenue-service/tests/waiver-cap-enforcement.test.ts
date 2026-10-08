@@ -142,7 +142,11 @@ describe("waiverCreate consumer — server-side cap (GAP-REVENUE-WAIVERS-01)", (
     expect(mockInsert).toHaveBeenCalledTimes(1);
     const row = mockValues.mock.calls[0]![0];
     expect(row.demandId).toBe("demand-1");
-    expect(row.amountMinor).toBe("42000");
+    // GAP2-PLATFORM-REVENUE-MONEY-01: waivers.amount_minor is now a bigint
+    // column (drizzle mode:"bigint"); the consumer inserts a bigint, not a
+    // String(...). The DB value is identical (42000 paise); only the JS type
+    // changed from "42000" to 42000n.
+    expect(row.amountMinor).toBe(42000n);
     expect(row.status).toBe("pending");
     expect(row.requestedBy).toBe("actor-1");
     // audit event enqueued

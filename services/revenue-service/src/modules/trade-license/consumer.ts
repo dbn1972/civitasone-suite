@@ -39,7 +39,7 @@ export function registerTradeLicenseConsumers(queue: Queue): void {
         category:       (p.category as string | undefined) ?? 'A',
         issuedDate:     (p.issuedDate as string | undefined) ?? null,
         expiryDate:     (p.expiryDate as string | undefined) ?? null,
-        feeMinor:       String(p.feeMinor ?? '0'),
+        feeMinor:       BigInt((p.feeMinor as string | number | bigint | undefined) ?? 0),
         status:         'active',
         createdBy:      msg.actorId,
         updatedBy:      msg.actorId,
@@ -89,8 +89,8 @@ export function registerTradeLicenseConsumers(queue: Queue): void {
         .update(tradeLicenses)
         .set({
           expiryDate:   expiryDate ?? null,
-          feeMinor:     String(p.feeMinor ?? rows[0]!.feeMinor),
-          feePaidMinor: '0',
+          feeMinor:     p.feeMinor != null ? BigInt(p.feeMinor as string | number | bigint) : rows[0]!.feeMinor,
+          feePaidMinor: 0n,
           renewalCount: (rows[0]!.renewalCount ?? 0) + 1,
           status:       'active',
           updatedAt:    new Date(),
@@ -165,8 +165,8 @@ export function registerTradeLicenseConsumers(queue: Queue): void {
       if (!rows[0]) return;
 
       const paid = BigInt(p.amountMinor as string);
-      const current = BigInt(rows[0]!.feePaidMinor ?? '0');
-      const fee = BigInt(rows[0]!.feeMinor ?? '0');
+      const current = rows[0]!.feePaidMinor ?? 0n;
+      const fee = rows[0]!.feeMinor ?? 0n;
 
       // TX-008: reject a payment that would push feePaidMinor past feeMinor
       // instead of silently accepting whatever amountMinor the client sent
@@ -179,7 +179,7 @@ export function registerTradeLicenseConsumers(queue: Queue): void {
       await tx
         .update(tradeLicenses)
         .set({
-          feePaidMinor: String(newPaid),
+          feePaidMinor: newPaid,
           status:       newStatus,
           updatedAt:    new Date(),
           updatedBy:    msg.actorId,

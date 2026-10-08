@@ -29,7 +29,27 @@ export async function bbpsRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(403, "BBPS_DISABLED", "BBPS not enabled");
     }
     const ctx = resolveContext(req);
+    // GAP2-REVENUE-BBPS-10: fetch-bill is a MUTATION (its consumer probes the
+    // assessee's live DCB outstanding by free-text identifier and INSERTs a
+    // bbps_transactions row) and must be gated exactly like pay-bill and every
+    // other collection/arrears write route — not merely BBPS_ENABLED. Without
+    // this, any authenticated tenant user (incl. roles with no revenue
+    // permission) could use it as an arrears-balance probing oracle over any
+    // assessee identifier in the tenant.
+    requireRole(ctx, REVENUE_ROLES);
     const body = fetchBillBody.parse(req.body);
+
+    // GAP2-REVENUE-BBPS-11: resolve the free-text identifier to a real assessee
+    // SYNCHRONOUSLY and reject an unknown one with 404 here, instead of
+    // returning 202 and letting the consumer silently no-op (`if (!dcb) return`)
+    // on an identifier that maps to nothing. A fire-and-forget 202 for an
+    // unknown identifier presents a failed lookup as success and leaves the
+    // caller no way to learn it was unknown.
+    const dcb = await repo.getDcbOutstanding(ctx.tenantId, body.assesseeIdentifier);
+    if (!dcb) {
+      throw new HttpError(404, "ASSESSEE_NOT_FOUND", "No assessee matches this identifier");
+    }
+
     const result = await commands.fetchBill(ctx, body);
     return reply.code(202).send({ data: result });
   });
