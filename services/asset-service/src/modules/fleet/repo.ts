@@ -48,7 +48,7 @@ export async function updateVehiclePosition(
   id: string,
   tenantId: string,
   fields: { lat: string; lng: string; fuelLevelPct?: number | null | undefined; lastGpsAt: Date },
-  opts?: { onlyIfNotOlder?: boolean },
+  opts?: { onlyIfNotOlder?: boolean; actorId?: string },
 ): Promise<boolean> {
   // onlyIfNotOlder: a back-dated reading must not move the live position
   // backwards -- apply only when last_gps_at is null or <= the reading's time.
@@ -56,6 +56,8 @@ export async function updateVehiclePosition(
     .set({
       currentLat: fields.lat, currentLng: fields.lng,
       lastGpsAt: fields.lastGpsAt,
+      updatedAt: new Date(),
+      ...(opts?.actorId ? { updatedBy: opts.actorId } : {}),
       ...(fields.fuelLevelPct !== undefined ? { fuelLevelPct: fields.fuelLevelPct } : {}),
     })
     .where(and(
@@ -128,6 +130,16 @@ export async function listDevicesByTenant(tenantId: string, opts?: { limit?: num
     .offset(opts?.offset ?? 0));
 }
 
+/**
+ * GAP2-ASSETS-FLEET-DEVICES-01: the true tenant device count (no paging), so
+ * `meta.total` reflects every device, not just the current page size.
+ */
+export async function countDevicesByTenant(tenantId: string): Promise<number> {
+  const rows = await scopedRead((tx) => tx.select({ n: sql<number>`count(*)::int` }).from(fleetDevices)
+    .where(eq(fleetDevices.tenantId, tenantId)));
+  return rows[0]?.n ?? 0;
+}
+
 // ── telemetry ────────────────────────────────────────────────────────────
 
 export async function insertTelemetry(tx: Writer, row: FleetDeviceTelemetryInsert): Promise<void> {
@@ -159,13 +171,15 @@ export async function updateVehicleFields(
     odometerKm?: number | null;
     status?: string;
   },
+  actorId?: string,
 ): Promise<void> {
   const clean = Object.fromEntries(
     Object.entries(fields).filter(([, v]) => v !== undefined),
   ) as Partial<typeof fields>;
   if (Object.keys(clean).length === 0) return;
+  // GAP2-ASSETS-FLEET-SCHEMA-01: stamp who/when last changed the row.
   await (tx as typeof db).update(fleetVehicles)
-    .set(clean)
+    .set({ ...clean, updatedAt: new Date(), ...(actorId ? { updatedBy: actorId } : {}), version: sql`${fleetVehicles.version} + 1` })
     .where(and(eq(fleetVehicles.id, id), eq(fleetVehicles.tenantId, tenantId)));
 }
 
@@ -174,9 +188,10 @@ export async function assignDriverToVehicle(
   vehicleId: string,
   tenantId: string,
   driverId: string | null,
+  actorId?: string,
 ): Promise<void> {
   await (tx as typeof db).update(fleetVehicles)
-    .set({ assignedDriverId: driverId })
+    .set({ assignedDriverId: driverId, updatedAt: new Date(), ...(actorId ? { updatedBy: actorId } : {}), version: sql`${fleetVehicles.version} + 1` })
     .where(and(eq(fleetVehicles.id, vehicleId), eq(fleetVehicles.tenantId, tenantId)));
 }
 
@@ -200,8 +215,10 @@ export async function updateMaintenanceStatus(
   tenantId: string,
   status: string,
   costMinor?: bigint | null,
+  actorId?: string,
 ): Promise<void> {
-  const update: Record<string, unknown> = { status };
+  const update: Record<string, unknown> = { status, updatedAt: new Date(), version: sql`${fleetMaintenance.version} + 1` };
+  if (actorId) update.updatedBy = actorId;
   if (costMinor !== undefined) update.costMinor = costMinor;
   await (tx as typeof db).update(fleetMaintenance)
     .set(update)
@@ -209,18 +226,19 @@ export async function updateMaintenanceStatus(
 }
 
 /** Completes an OPEN (scheduled) job; returns whether a row changed. */
-export async function completeMaintenance(tx: Writer, id: string, tenantId: string, costMinor: bigint | null): Promise<boolean> {
+export async function completeMaintenance(tx: Writer, id: string, tenantId: string, costMinor: bigint | null, actorId?: string): Promise<boolean> {
+  // GAP2-ASSETS-FLEET-SCHEMA-01: record the completing actor on the row.
   const rows = await (tx as typeof db).update(fleetMaintenance)
-    .set({ status: "completed", ...(costMinor !== null ? { costMinor } : {}) })
+    .set({ status: "completed", updatedAt: new Date(), ...(actorId ? { updatedBy: actorId } : {}), version: sql`${fleetMaintenance.version} + 1`, ...(costMinor !== null ? { costMinor } : {}) })
     .where(and(eq(fleetMaintenance.id, id), eq(fleetMaintenance.tenantId, tenantId), eq(fleetMaintenance.status, "scheduled")))
     .returning({ id: fleetMaintenance.id });
   return rows.length > 0;
 }
 
 /** Cancels an OPEN (scheduled) job; returns whether a row changed. */
-export async function cancelMaintenance(tx: Writer, id: string, tenantId: string): Promise<boolean> {
+export async function cancelMaintenance(tx: Writer, id: string, tenantId: string, actorId?: string): Promise<boolean> {
   const rows = await (tx as typeof db).update(fleetMaintenance)
-    .set({ status: "cancelled" })
+    .set({ status: "cancelled", updatedAt: new Date(), ...(actorId ? { updatedBy: actorId } : {}), version: sql`${fleetMaintenance.version} + 1` })
     .where(and(eq(fleetMaintenance.id, id), eq(fleetMaintenance.tenantId, tenantId), eq(fleetMaintenance.status, "scheduled")))
     .returning({ id: fleetMaintenance.id });
   return rows.length > 0;

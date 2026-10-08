@@ -66,6 +66,14 @@ export async function submitVerification(ctx: RequestContext, verificationId: st
 }
 
 export async function approveVerification(ctx: RequestContext, verificationId: string): Promise<Accepted> {
+  // GAP2-ASSETS-VERIFICATION-01 (segregation of duties, GFR stock verification):
+  // the approver may never be the same user who created/submitted the session.
+  // Mirrors approveWriteoffRequest below and the condemnation maker-checker.
+  const session = await repo.findVerificationById(verificationId, ctx.tenantId);
+  if (!session) throw new HttpError(404, "NOT_FOUND", "verification session not found");
+  if (session.createdBy === ctx.actorId) {
+    throw new HttpError(403, "SELF_APPROVAL_FORBIDDEN", "the approver cannot be the person who created the verification session (segregation of duties)");
+  }
   await guardSession(ctx, verificationId, "approve");
   return pub(ctx, COMMANDS.verificationApprove, verificationId, {});
 }

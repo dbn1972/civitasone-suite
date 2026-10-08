@@ -24,8 +24,13 @@ export async function fleetDeviceRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/assets/fleet/devices", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);
     const q = listQuerySchema.parse(req.query);
-    const rows = await repo.listDevicesByTenant(ctx.tenantId, { limit: q.limit, offset: q.offset });
-    return reply.send({ data: rows, meta: { total: rows.length } });
+    const [rows, total] = await Promise.all([
+      repo.listDevicesByTenant(ctx.tenantId, { limit: q.limit, offset: q.offset }),
+      repo.countDevicesByTenant(ctx.tenantId),
+    ]);
+    // GAP2-ASSETS-FLEET-DEVICES-01: `total` is the real tenant device count, not
+    // the page size; shape matches the sibling vehicles/maintenance lists.
+    return reply.send({ data: rows, limit: q.limit, offset: q.offset, total });
   });
   app.post("/v1/assets/fleet/devices/:id/telemetry", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);

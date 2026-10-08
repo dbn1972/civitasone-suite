@@ -6,19 +6,27 @@
  *    name/code (the web asset picker types partial words).
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
+import { MemoryQueue } from "@civitasone/queue";
 import { signToken } from "@civitasone/auth";
 import { db, sqlClient } from "../src/shared/db.js";
 import { assetPolicies, assetClaims } from "../src/modules/insurance/schema.js";
 import { assetAssets } from "../src/modules/register/schema.js";
 import * as registerRepo from "../src/modules/register/repo.js";
 import * as insuranceRepo from "../src/modules/insurance/repo.js";
+import { registerInsuranceConsumers } from "../src/modules/insurance/consumer.js";
+import { COMMANDS } from "../src/topics.js";
 import { outboxMessages } from "../src/shared/outbox.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "11111111-aaaa-4000-8000-0000ab030001";
 const ACTOR = "00000000-aaaa-4000-8000-0000ab030001";
+// GAP2-ASSETS-INSURANCE-CLAIMS-01: a claim decision may not be taken by its
+// filer. These claims are FILED by a distinct actor so ACTOR (the asset_admin
+// approver in every decision call below) is a valid, different checker.
+const FILER = "0000000f-aaaa-4000-8000-0000ab030001";
 const POLICY = "33333333-cccc-4000-8000-0000ab030001";
 const ASSET = "22222222-bbbb-4000-8000-0000ab030001";
 const CLAIMS = {
@@ -60,7 +68,7 @@ beforeAll(async () => {
         id, tenantId: TENANT, policyId: POLICY, assetId: ASSET, claimDate: "2026-06-01",
         claimAmountMinor: 800_000n, status: key === "decided" ? "settled" : "pending",
         notes: key === "notes" ? "Water damage in server room" : null,
-        createdBy: ACTOR, updatedBy: ACTOR,
+        createdBy: FILER, updatedBy: FILER,
       });
     }
     await tx.insert(assetPolicies).values({
@@ -93,6 +101,37 @@ async function patch(path: string, roles: string[], payload: unknown) {
   return res;
 }
 
+// GAP2-ASSETS-INSURANCE-CLAIMS-02: the decision/policy-update routes now
+// publish a command and answer 202; the write + audit happen in the consumer.
+// These helpers apply the equivalent command through the real consumer so the
+// tests can still assert the persisted row/audit, driven by ACTOR (a valid
+// checker, != FILER).
+async function applyDecide(id: string, decision: "approve" | "settle" | "reject", extra: Record<string, unknown> = {}): Promise<void> {
+  const q = new MemoryQueue();
+  registerInsuranceConsumers(q);
+  await q.start();
+  await q.publish(COMMANDS.insuranceClaimDecide, {
+    messageId: randomUUID(), type: COMMANDS.insuranceClaimDecide,
+    tenantId: TENANT, actorId: ACTOR, correlationId: "corr-ml3", schemaVersion: "1.0",
+    payload: { id, tenantId: TENANT, decision, ...extra },
+  });
+  await new Promise<void>((r) => setTimeout(r, 350));
+  await q.stop();
+}
+
+async function applyPolicyUpdate(id: string, patchBody: Record<string, unknown>): Promise<void> {
+  const q = new MemoryQueue();
+  registerInsuranceConsumers(q);
+  await q.start();
+  await q.publish(COMMANDS.insurancePolicyUpdate, {
+    messageId: randomUUID(), type: COMMANDS.insurancePolicyUpdate,
+    tenantId: TENANT, actorId: ACTOR, correlationId: "corr-ml3-pol", schemaVersion: "1.0",
+    payload: { id, tenantId: TENANT, ...patchBody },
+  });
+  await new Promise<void>((r) => setTimeout(r, 350));
+  await q.stop();
+}
+
 describe("insurance claim decisions", () => {
   it("settle: an amount above the claim is refused 400 SETTLEMENT_EXCEEDS_CLAIM and the claim stays pending", async () => {
     const res = await patch(`/v1/assets/insurance/claims/${CLAIMS.settle}/settle`, ["asset_admin"], { settlementAmountMinor: 800_001 });
@@ -104,7 +143,8 @@ describe("insurance claim decisions", () => {
 
   it("settle: a valid amount settles the claim and records the settled amount", async () => {
     const res = await patch(`/v1/assets/insurance/claims/${CLAIMS.settle}/settle`, ["asset_admin"], { settlementAmountMinor: 750_050 });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(202); // GAP2-ASSETS-INSURANCE-CLAIMS-02: CQRS → 202
+    await applyDecide(CLAIMS.settle, "settle", { settlementAmountMinor: 750_050 });
     const row = await asTenant((tx) => tx.select().from(assetClaims).where(eq(assetClaims.id, CLAIMS.settle)));
     expect(row[0]?.status).toBe("settled");
     expect(row[0]?.settledAmountMinor).toBe(750_050n);
@@ -125,7 +165,8 @@ describe("insurance claim decisions", () => {
     const blank = await patch(`/v1/assets/insurance/claims/${CLAIMS.reject}/reject`, ["asset_admin"], { reason: "   " });
     expect(blank.statusCode).toBe(400);
     const ok = await patch(`/v1/assets/insurance/claims/${CLAIMS.reject}/reject`, ["asset_admin"], { reason: "Not covered" });
-    expect(ok.statusCode).toBe(200);
+    expect(ok.statusCode).toBe(202); // GAP2-ASSETS-INSURANCE-CLAIMS-02: CQRS → 202
+    await applyDecide(CLAIMS.reject, "reject", { reason: "Not covered" });
     const row = await asTenant((tx) => tx.select().from(assetClaims).where(eq(assetClaims.id, CLAIMS.reject)));
     expect(row[0]?.status).toBe("rejected");
   });
@@ -160,7 +201,8 @@ describe("conditional decisions, audit and policy rules", () => {
 
   it("reject keeps the filer's notes and appends the reason; an audit event with before/after/reason is queued", async () => {
     const res = await patch(`/v1/assets/insurance/claims/${CLAIMS.notes}/reject`, ["asset_admin"], { reason: "Not covered" });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(202); // GAP2-ASSETS-INSURANCE-CLAIMS-02: CQRS → 202
+    await applyDecide(CLAIMS.notes, "reject", { reason: "Not covered" });
     const row = await asTenant((tx) => tx.select().from(assetClaims).where(eq(assetClaims.id, CLAIMS.notes)));
     expect(row[0]?.notes).toBe("Water damage in server room\nRejected: Not covered");
     const events = await asTenant((tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT)));
@@ -184,7 +226,8 @@ describe("conditional decisions, audit and policy rules", () => {
 
   it("policy PATCH: a valid change is applied and audited", async () => {
     const ok = await patch(`/v1/assets/insurance/policies/${POLICY}`, ["asset_admin"], { expiryDate: "2027-06-30" });
-    expect(ok.statusCode).toBe(200);
+    expect(ok.statusCode).toBe(202); // GAP2-ASSETS-INSURANCE-CLAIMS-02: CQRS → 202
+    await applyPolicyUpdate(POLICY, { endDate: "2027-06-30" });
     const row = await asTenant((tx) => tx.select().from(assetPolicies).where(eq(assetPolicies.id, POLICY)));
     expect(row[0]?.endDate).toBe("2027-06-30");
   });

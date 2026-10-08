@@ -3,7 +3,8 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { queue } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
 import { createAssetBody, assetQueryParams, idParam, tagBarcodeBody, createCategoryBody, updateCategoryBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -29,22 +30,20 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ["asset_admin", "super_admin"]);
     const body = createCategoryBody.parse(req.body);
+    // GAP2-ASSETS-INSURANCE-CLAIMS-02: category mutations move onto the CQRS
+    // command path (validate here, apply in the consumer, return 202).
     const { randomUUID } = await import("node:crypto");
     const id = randomUUID();
-    await db.transaction(async (tx) => {
-      await repo.insertCategory(tx, {
-        id,
-        tenantId: ctx.tenantId,
-        name: body.name,
-        code: body.code,
-        depMethod: body.depMethod as "SLM" | "WDV",
-        depRate: String(body.depRate),
-        usefulLifeYears: body.usefulLifeYears,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
+    await queue.publish(COMMANDS.assetCategoryCreate, {
+      messageId: id, type: COMMANDS.assetCategoryCreate,
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+      payload: {
+        id, tenantId: ctx.tenantId,
+        name: body.name, code: body.code,
+        depMethod: body.depMethod, depRate: body.depRate, usefulLifeYears: body.usefulLifeYears,
+      },
     });
-    return reply.code(201).send({ id });
+    return reply.code(202).send({ id, status: "accepted" });
   });
 
   app.get("/v1/assets/categories", async (req, reply) => {
@@ -61,18 +60,21 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const body = updateCategoryBody.parse(req.body);
     const existing = await repo.findCategoryById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "category not found");
-    const patch: Record<string, unknown> = {};
-    if (body.name !== undefined) patch.name = body.name;
-    if (body.code !== undefined) patch.code = body.code;
-    if (body.depMethod !== undefined) patch.depMethod = body.depMethod;
-    if (body.depRate !== undefined) patch.depRate = String(body.depRate);
-    if (body.usefulLifeYears !== undefined) patch.usefulLifeYears = body.usefulLifeYears;
-    // db.transaction() so wrapWithTenantGuc sets app.tenant_id before the
-    // UPDATE runs — see the comment on repo.updateCategory.
-    await db.transaction(async (tx) => {
-      await repo.updateCategory(tx, id, ctx.tenantId, patch, ctx.actorId);
+    const { randomUUID } = await import("node:crypto");
+    const msgId = randomUUID();
+    await queue.publish(COMMANDS.assetCategoryUpdate, {
+      messageId: msgId, type: COMMANDS.assetCategoryUpdate,
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+      payload: {
+        id, tenantId: ctx.tenantId,
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.code !== undefined ? { code: body.code } : {}),
+        ...(body.depMethod !== undefined ? { depMethod: body.depMethod } : {}),
+        ...(body.depRate !== undefined ? { depRate: body.depRate } : {}),
+        ...(body.usefulLifeYears !== undefined ? { usefulLifeYears: body.usefulLifeYears } : {}),
+      },
     });
-    return reply.send({ id });
+    return reply.code(202).send({ id, status: "accepted" });
   });
 
   app.post("/v1/assets/assets", async (req, reply) => {

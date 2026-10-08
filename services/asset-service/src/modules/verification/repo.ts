@@ -26,6 +26,17 @@ export async function findVerificationById(id: string, tenantId: string) {
   return rows[0] ?? null;
 }
 
+/**
+ * Tx-scoped variant of findVerificationById — reads through the caller's
+ * already-open consumer transaction (GAP2-ASSETS-VERIFICATION-01 SoD re-assert),
+ * avoiding a nested scopedRead transaction (see findAssetByIdTx rationale).
+ */
+export async function findVerificationByIdTx(tx: Writer, id: string, tenantId: string) {
+  const rows = await tx.select().from(physicalVerifications)
+    .where(and(eq(physicalVerifications.id, id), eq(physicalVerifications.tenantId, tenantId))).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function listVerifications(tenantId: string, limit = 50) {
   // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
   // read — a bare db.select() runs with no RLS GUC set.

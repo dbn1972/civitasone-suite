@@ -22,6 +22,10 @@ import { COMMANDS } from "../src/topics.js";
 
 const TENANT = "aaaaaaaa-5555-4000-8000-0000000000a5";
 const ACTOR = "cccccccc-5555-4000-8000-0000000000c5";
+// GAP2-ASSETS-VERIFICATION-01: an approver may not be the session's creator.
+// Sessions here are CREATED by a distinct actor so ACTOR is a valid, different
+// approver in the approve commands below.
+const CREATOR = "ffffffff-5555-4000-8000-0000000000f5";
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 const asTenant = <T>(fn: (tx: Tx) => Promise<T>): Promise<T> => runWithTenant(TENANT, () => db.transaction(fn)) as Promise<T>;
 const tick = (ms = 400) => new Promise<void>((r) => setTimeout(r, ms));
@@ -59,7 +63,7 @@ describe("ml-assets-05 consumers", () => {
 
   async function session(status: string): Promise<string> {
     const id = randomUUID();
-    await asTenant((tx) => tx.insert(physicalVerifications).values({ id, tenantId: TENANT, verificationDate: "2026-01-01", verifiedBy: ACTOR, status, createdBy: ACTOR, updatedBy: ACTOR }));
+    await asTenant((tx) => tx.insert(physicalVerifications).values({ id, tenantId: TENANT, verificationDate: "2026-01-01", verifiedBy: CREATOR, status, createdBy: CREATOR, updatedBy: CREATOR }));
     return id;
   }
 
