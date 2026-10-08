@@ -278,4 +278,5 @@ export const NO_CONSUMER_BY_DESIGN: Record<string, string> = {
   "crm.service_request.status_changed": `${NO_CONSUMER_CATEGORY} — 2026-10-08 — service request status changed audit/status fact in the crm lifecycle history (review-2 u07); no business consumer expected — ${NO_CONSUMER_DECISION_REF}`,
   "works.contractor.updated": `${NO_CONSUMER_CATEGORY} — 2026-10-08 — contractor updated audit/status fact in the works lifecycle history (review-2 u11); no business consumer expected — ${NO_CONSUMER_DECISION_REF}`,
   "project.fund_release.sod_violation": `${NO_CONSUMER_CATEGORY} — 2026-10-08 — fund release sod violation audit/status fact in the project lifecycle history (review-2 u18); no business consumer expected — ${NO_CONSUMER_DECISION_REF}`,
+  "inventory.custodian.created": `${NO_CONSUMER_CATEGORY} — 2026-10-08 — custodian created audit/status fact in the inventory lifecycle history (review-2 u16); no business consumer expected — ${NO_CONSUMER_DECISION_REF}`,
 };
