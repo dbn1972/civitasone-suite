@@ -87,7 +87,10 @@ describe("TenantDetailPage hardening", () => {
     expect(screen.getByText("Module seats in use")).toBeInTheDocument();
     expect(screen.getByText(/Domain: acme\.gov\.in/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Onboarding queue" })).toHaveAttribute("href", "/admin/onboarding");
-    expect(screen.getByText("theme")).toBeInTheDocument();
+    // GAP2-ADMIN-TENANTS-DETAIL-01: settings keys are now human-labelled
+    // (title-cased), not shown as the raw jsonb key; the value is still shown.
+    expect(screen.getByText("Theme")).toBeInTheDocument();
+    expect(screen.getByText("blue")).toBeInTheDocument();
   });
 });
 

@@ -16,6 +16,7 @@ export type DeviceRow = {
   lastSeen: string;
   loginCount: number;
   employeeName: string;
+  lastIp?: string;
 } & Record<string, unknown>;
 
 const STATUS_OPTIONS = ["All", "Trusted", "Flagged", "Blocked"] as const;
@@ -23,6 +24,64 @@ type StatusOption = (typeof STATUS_OPTIONS)[number];
 
 /** `flagged` is deliberately not in StatusPill's global map, so the tone is passed explicitly. */
 const TRUST_VARIANT: Record<string, PillVariant> = { trusted: "good", flagged: "warn", blocked: "bad" };
+
+/**
+ * GAP2-ADMIN-DEVICES-01: a device's last IP links a person to a network
+ * location (personal data under DPDP), so it is masked to its network prefix by
+ * default and only shown in full behind an explicit, audited reveal — matching
+ * the onboarding/operators reveal-and-audit convention used elsewhere in Admin.
+ * IPv4 drops the host octet (203.0.113.9 -> 203.0.113.x); IPv6 keeps the first
+ * two groups (2001:db8:... -> 2001:db8:…). Non-IP / empty values pass through.
+ */
+export function maskIp(ip: string | null | undefined): string {
+  if (!ip) return "—";
+  const v = ip.trim();
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(v)) {
+    const parts = v.split(".");
+    return `${parts[0]}.${parts[1]}.${parts[2]}.x`;
+  }
+  if (v.includes(":")) {
+    const groups = v.split(":");
+    return `${groups.slice(0, 2).join(":")}:…`;
+  }
+  return v;
+}
+
+/**
+ * GAP2-ADMIN-DEVICES-01: revealing a clear IP is recorded (hrms-service
+ * POST /v1/hrms/devices/reveal-ip, same roles as the list). Fire-and-forget:
+ * the audit never blocks the operator, but it leaves a trail of who looked.
+ */
+export async function recordIpReveal(deviceId: string): Promise<void> {
+  await fetch("/api/proxy/v1/hrms/devices/reveal-ip", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ deviceId }),
+  });
+}
+
+/** IP cell: masked prefix with an audited "Reveal" that swaps in the full value. */
+function IpCell({ row }: { row: DeviceRow }) {
+  const [revealed, setRevealed] = useState(false);
+  const full = typeof row.lastIp === "string" ? row.lastIp : "";
+  if (!full) return <span>—</span>;
+  if (revealed) return <span>{full}</span>;
+  return (
+    <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+      <span>{maskIp(full)}</span>
+      <button
+        type="button"
+        className="btn ghost sm"
+        onClick={() => {
+          setRevealed(true);
+          void recordIpReveal(row.id).catch(() => undefined);
+        }}
+      >
+        Reveal
+      </button>
+    </span>
+  );
+}
 
 /**
  * GAP-ADMIN-DEVICES-04: the CSV carries employee names and device inventory, so
@@ -82,6 +141,15 @@ export function DevicesTable({ items }: { items: DeviceRow[] }) {
           { key: "osVersion", label: "OS" },
           { key: "appVersion", label: "App Ver" },
           { key: "lastSeen", label: "Last Active", cellType: "datetime" },
+          {
+            // GAP2-ADMIN-DEVICES-01: masked by default, audited reveal; CSV
+            // carries only the masked prefix so a bulk export never leaks IPs.
+            key: "lastIp",
+            label: "Last IP",
+            sortable: false,
+            render: (r) => <IpCell row={r} />,
+            csv: (r) => maskIp(typeof r.lastIp === "string" ? r.lastIp : ""),
+          },
           { key: "loginCount", label: "Logins", align: "right" },
           {
             key: "trustStatus",

@@ -95,6 +95,32 @@ describe("DevicesTable", () => {
     expect(screen.getByText(/no screen lock/i)).toBeInTheDocument();
   });
 
+  // GAP2-ADMIN-DEVICES-01: lastIp is personal data — masked until an explicit,
+  // audited reveal, matching the onboarding/operators reveal convention.
+  it("masks the Last IP to its /24 prefix until Reveal, then shows the full IP and records the reveal", async () => {
+    render(<DevicesTable items={[dev({ id: "dev-ip", lastIp: "203.0.113.9" })]} />);
+    expect(screen.getByText("203.0.113.x")).toBeInTheDocument();
+    expect(screen.queryByText("203.0.113.9")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Reveal" }));
+    await waitFor(() => expect(screen.getByText("203.0.113.9")).toBeInTheDocument());
+    expect(screen.queryByText("203.0.113.x")).not.toBeInTheDocument();
+    const call = fetchSpy.mock.calls.find((c) => String(c[0]).endsWith("/reveal-ip"));
+    expect(call).toBeTruthy();
+    expect(JSON.parse((call![1] as RequestInit).body as string)).toEqual({ deviceId: "dev-ip" });
+  });
+
+  it("keeps the IP masked in the CSV export (no cleartext IP leaves the screen)", async () => {
+    URL.createObjectURL = vi.fn(() => "blob:mock");
+    URL.revokeObjectURL = vi.fn();
+    const blobs: Blob[] = [];
+    (URL.createObjectURL as unknown as ReturnType<typeof vi.fn>).mockImplementation((b: Blob) => { blobs.push(b); return "blob:mock"; });
+    render(<DevicesTable items={[dev({ id: "dev-ip", lastIp: "203.0.113.9" })]} />);
+    fireEvent.click(screen.getByText("⬇ CSV"));
+    const csv = await new Promise<string>((resolve) => { const fr = new FileReader(); fr.onload = () => resolve(String(fr.result)); fr.readAsText(blobs[0] as Blob); });
+    expect(csv).toContain("203.0.113.x");
+    expect(csv).not.toContain("203.0.113.9");
+  });
+
   it("the Block confirm text does not claim a sign-out that does not happen", async () => {
     render(<DevicesTable items={[dev({})]} />);
     fireEvent.click(screen.getByRole("button", { name: "Block" }));

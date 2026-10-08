@@ -102,9 +102,51 @@ function toProcess(row: Pm2Process): OperationProcess {
   };
 }
 
+// GAP2-ADMIN-OPERATIONS-01: a public IPv4/IPv6 address in a service error line
+// links a person to a network location and is personal data under DPDP. Loopback
+// and RFC1918/unique-local/link-local ranges are infrastructure, not citizen PII,
+// so they are kept to stay useful to operators; only public addresses are masked.
+function isPrivateIpv4(ip: string): boolean {
+  const o = ip.split(".").map((n) => Number(n));
+  if (o.length !== 4 || o.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return false;
+  const [a, b] = o as [number, number, number, number];
+  return (
+    a === 10 ||
+    a === 127 ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 169 && b === 254) ||
+    a === 0
+  );
+}
+
+function isPrivateIpv6(ip: string): boolean {
+  const lower = ip.toLowerCase();
+  // loopback (::1), unspecified (::), unique-local (fc00::/7 -> fc/fd), link-local (fe80::/10).
+  return (
+    lower === "::1" ||
+    lower === "::" ||
+    lower.startsWith("fc") ||
+    lower.startsWith("fd") ||
+    lower.startsWith("fe8") ||
+    lower.startsWith("fe9") ||
+    lower.startsWith("fea") ||
+    lower.startsWith("feb")
+  );
+}
+
 export function redactLogLine(line: string): string {
   return line
     .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "<email>")
+    // GAP2-ADMIN-OPERATIONS-01: mask public IPv4 (private/loopback kept). Runs
+    // before PAN/Aadhaar/phone — dotted octets never collide with those rules.
+    .replace(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g, (m) => (isPrivateIpv4(m) ? m : "<ip>"))
+    // GAP2-ADMIN-OPERATIONS-01: mask public IPv6 (compressed or full), keeping
+    // loopback/unique-local/link-local. Requires either the "::" compression or
+    // a hex letter (a-f) so it never swallows HH:MM:SS clock timestamps.
+    .replace(/\b(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}\b/gi, (m) =>
+      (m.includes("::") || /[a-f]/i.test(m)) && !isPrivateIpv6(m) ? "<ip>" : m,
+    )
     .replace(/\b(Bearer\s+)[A-Za-z0-9._~+/=-]+\b/gi, "$1<redacted>")
     .replace(/\b((?:api[_-]?key|token|secret|password|passwd|pwd)\s*[:=]\s*)[^\s,"'}]+/gi, "$1<redacted>")
     .replace(/\b(postgres(?:ql)?:\/\/)[^\s]+/gi, "$1<redacted>")
