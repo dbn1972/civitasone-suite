@@ -67,3 +67,36 @@ describe("migrate-all inventory", () => {
     }
   });
 });
+
+/**
+ * GAP2-LOCATIONS-MIGRATE-01: one non-idempotent migration failure must not
+ * strand the service's LATER migrations (RLS retrofits, tenant indexes). The
+ * old runner `break`ed out of the per-service loop on the first hard error, so
+ * every file after the failed one was silently skipped. The fix continues the
+ * chain (still exiting non-zero at the end). This asserts the error branch of
+ * the per-service migration loop does not `break` — it fails on the old code.
+ */
+describe("migrate-all does not strand later migrations after a single failure", () => {
+  const src = readFileSync(MIGRATE_ALL, "utf8");
+
+  it("the per-migration error branch continues instead of breaking out of the service loop", () => {
+    // Isolate the per-service `for (const file of files)` loop body.
+    const loopStart = src.indexOf("for (const file of files)");
+    expect(loopStart, "could not find the per-migration loop").toBeGreaterThan(-1);
+    const loopBody = src.slice(loopStart, src.indexOf("── Migration summary"));
+
+    // The hard-error branch must NOT abort the remaining chain.
+    expect(
+      /\bbreak\s*;/.test(loopBody),
+      "migrate-all per-migration loop must not `break` on a single failure — that strands later RLS/perf migrations (GAP2-LOCATIONS-MIGRATE-01)",
+    ).toBe(false);
+    expect(
+      /\bcontinue\s*;/.test(loopBody),
+      "migrate-all should `continue` past a failed migration so later migrations still apply",
+    ).toBe(true);
+  });
+
+  it("still fails the whole run loudly (non-zero exit) when any migration errors", () => {
+    expect(src).toMatch(/if \(errors > 0\) process\.exit\(1\)/);
+  });
+});

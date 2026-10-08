@@ -1,22 +1,22 @@
-import { ModuleListPage } from "../../../_components/ModuleListPage";
-import { getLocationGeofences } from "../_data";
-import { ArrowLeft } from "lucide-react";
+import { PageHeader } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { getLocationGeofencesTyped } from "../_data";
+import { GeofencesTable } from "../_tables";
 
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
-  const { data, source } = await getLocationGeofences();
+  const { data, source } = await getLocationGeofencesTyped();
   return (
     <div className="page-main">
-      <nav aria-label="Breadcrumb" className="back">
-        <ArrowLeft aria-hidden="true" size={14} /> <a href="/locations">Locations</a>
-      </nav>
-      <ModuleListPage
+      <PageHeader
         title="Locations — Geofences"
-        description="Geofence definitions from location-service."
-        rows={data}
-        source={source}
+        subtitle="Geofence definitions from location-service."
+        back="/locations"
+        backLabel="Locations"
       />
+      <DataSourceBadge source={source === "error" ? "error" : "api"} />
+      <GeofencesTable rows={data} />
     </div>
   );
 }

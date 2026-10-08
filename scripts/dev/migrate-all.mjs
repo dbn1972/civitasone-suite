@@ -163,20 +163,27 @@ for (const svc of SERVICES) {
         console.log(`[idem] ${svc.name}/${file} (already applied)`);
         applied++;
       } else {
-        // Fail loud AND stop: a broken migration used to be logged as [ERR]
-        // and the loop just kept going onto the service's LATER migrations
-        // (which often depend on the failed one), silently leaving the
-        // schema half-applied while the script kept chugging. Abort this
-        // service's remaining migrations immediately so a failure can never
-        // hide behind a wall of unrelated [ok] lines further down the log.
+        // GAP2-LOCATIONS-MIGRATE-01: fail LOUD but do NOT strand the rest of
+        // the chain. The previous behaviour `break`ed out of this service's
+        // migration loop on the first non-idempotent error, so ONE failing
+        // file (e.g. a `CREATE INDEX CONCURRENTLY` migration, or one that
+        // errors on a cluster missing an extension) silently left EVERY later
+        // migration unapplied — including security retrofits (RLS) and tenant
+        // indexes that live further down the chain. Those migrations are
+        // independent of the failed file, so skipping them turned one
+        // migration failure into a cascade of unapplied security/perf
+        // migrations (empirically: 0009 failing stranded 0011/0014/0024…).
+        // Record the error and CONTINUE to the next file so an unrelated
+        // later migration still gets a chance to apply; the non-zero
+        // `errors` count still makes the whole run fail loudly at the end.
         console.error(`
 ════════════════════════════════════════════════════`);
         console.error(`[ERR]  ${svc.name}/${file}: ${combined.trim().slice(0, 300)}`);
-        console.error(`[ABORT] ${svc.name}: skipping remaining migrations for this service after failure above`);
+        console.error(`[CONTINUE] ${svc.name}: this file failed; later migrations are NOT stranded — continuing the chain (run still exits non-zero).`);
         console.error(`════════════════════════════════════════════════════
 `);
         errors++;
-        break;
+        continue;
       }
     }
   }

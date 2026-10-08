@@ -7,16 +7,25 @@ import { listQuerySchema } from "@civitasone/schemas/common";
 import * as repo from "./repo.js";
 import { createLandRecordBody, mutateLandRecordBody, idParam } from "./validators.js";
 import { LAND_RECORD_CREATE, LAND_RECORD_MUTATE } from "./consumer.js";
+import { LAND_RECORD_PII_REVEAL_ROLES, maskOwnerName } from "./pii.js";
+import type { LandRecordView } from "./schema.js";
 
 const ADMIN = ["super_admin", "location_admin", "revenue_officer"];
+const AUDIT_TOPIC = "audit.event.record";
+
+/** Mask owner_name (citizen PII) in a view unless the caller may reveal it. */
+function maskView<T extends LandRecordView>(rec: T): T {
+  return { ...rec, ownerName: maskOwnerName(rec.ownerName) };
+}
 
 export async function landRecordRoutes(app: FastifyInstance): Promise<void> {
   // SVC-113: real read from location.land_records (was a hardcoded []).
+  // GAP2-LOCATIONS-LANDRECORDS-PII-01: owner_name is masked by default.
   app.get("/v1/locations/land-records", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);
     const q = listQuerySchema.parse(req.query);
     const data = await repo.listByTenant(ctx.tenantId, q.limit, q.offset);
-    return reply.send({ data, meta: { total: data.length }, pagination: { hasMore: data.length === q.limit, pageSize: q.limit } });
+    return reply.send({ data: data.map(maskView), meta: { total: data.length }, pagination: { hasMore: data.length === q.limit, pageSize: q.limit } });
   });
 
   app.get("/v1/locations/land-records/:id", async (req, reply) => {
@@ -24,7 +33,23 @@ export async function landRecordRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const rec = await repo.findById(id, ctx.tenantId);
     if (!rec) throw new HttpError(404, "NOT_FOUND", "land record not found");
-    return reply.send({ data: rec });
+    return reply.send({ data: maskView(rec) });
+  });
+
+  // GAP2-LOCATIONS-LANDRECORDS-PII-01: audited reveal of the cleartext owner
+  // name, gated on a stricter role set. Every reveal emits an audit event.
+  app.get("/v1/locations/land-records/:id/reveal-owner", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, [...LAND_RECORD_PII_REVEAL_ROLES]);
+    const { id } = idParam.parse(req.params);
+    const rec = await repo.findById(id, ctx.tenantId);
+    if (!rec) throw new HttpError(404, "NOT_FOUND", "land record not found");
+    await queue.publish(AUDIT_TOPIC, {
+      messageId: randomUUID(), type: AUDIT_TOPIC, tenantId: ctx.tenantId, actorId: ctx.actorId,
+      correlationId: ctx.correlationId, schemaVersion: "1.0",
+      payload: { service: "location", action: "reveal_owner_name", resourceType: "land_record", resourceId: id, outcome: "success" },
+    });
+    return reply.send({ data: { id: rec.id, ownerName: rec.ownerName } });
   });
 
   app.post("/v1/locations/land-records", async (req, reply) => {

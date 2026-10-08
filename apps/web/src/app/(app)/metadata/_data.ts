@@ -70,10 +70,14 @@ function loader(path: string, key: string) {
 }
 
 export const getMetadataEntities = loader("/api/v1/metadata/entities", "metadata.entities");
-export const getMetadataFields = loader("/api/v1/metadata/fields", "metadata.fields");
-export const getMetadataRules = loader("/api/v1/metadata/rules", "metadata.rules");
-export const getMetadataRecords = loader("/api/v1/metadata/records", "metadata.records");
-export const getMetadataForms = loader("/api/v1/metadata/forms", "metadata.forms");
+
+// GAP2-METADATA-DATA-02: the metadata-service exposes fields/rules/records/
+// layouts ONLY entity-scoped — there is NO top-level /v1/metadata/{fields,rules,
+// records,forms} list route (see the entity-scoped loaders below). The four
+// top-level loaders that pointed at those non-existent routes were dead code
+// (no page imported them) and would 404 if ever wired, so they are removed.
+// Use the entity-scoped getFieldsForEntity / getRulesForEntity /
+// getRecordsForEntity / getFormsForEntity instead.
 
 /**
  * GAP-METADATA-{FIELDS,RULES,RECORDS,FORMS}-02/-03: the metadata-service exposes

@@ -89,3 +89,116 @@ export const getLocationList = moduleLoader("/api/v1/locations", "locations.list
 export const getLocationGeofences = moduleLoader("/api/v1/geofences", "locations.geofences");
 export const getLocationJurisdictions = moduleLoader("/api/v1/jurisdictions", "locations.jurisdictions");
 export const getLocationInfrastructure = moduleLoader("/api/v1/locations/infrastructure", "locations.infrastructure");
+
+// ───────────────────────────────────────────────────────────────────────────
+// GAP2-LOCATIONS-INFRASTRUCTURE-01: typed loaders for the infrastructure,
+// geofence and jurisdiction child pages. The generic mapRows above flattens
+// every record to id/label/sublabel/status/meta and prints row.id.slice(0,8)
+// as a UUID column, dropping the attributes that define each record (asset
+// type/condition; geofence shape/radius; jurisdiction level/office). These
+// typed loaders preserve those attributes so the typed tables (_tables.tsx)
+// can show real columns and no raw-UUID column.
+// ───────────────────────────────────────────────────────────────────────────
+
+export type InfrastructureRow = {
+  id: string;
+  name: string;
+  type: string;
+  condition: string;
+  status: string;
+};
+
+export type GeofenceRow = {
+  id: string;
+  name: string;
+  type: string;
+  shape: string;
+  radius: string;
+  status: string;
+};
+
+export type JurisdictionRow = {
+  id: string;
+  level: string;
+  office: string;
+  unit: string;
+};
+
+function toNum(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() && Number.isFinite(Number(value))) return Number(value);
+  return undefined;
+}
+
+function mapInfrastructure(payload: unknown): InfrastructureRow[] {
+  const out: InfrastructureRow[] = [];
+  for (const [i, row] of extractRows(payload).entries()) {
+    if (!isRecord(row)) continue;
+    const score = toNum(row.conditionScore);
+    out.push({
+      id: toText(row.id) ?? `row-${i + 1}`,
+      name: toText(row.name) ?? "—",
+      type: toText(row.type) ?? "—",
+      condition: score !== undefined ? `${score}/5` : "—",
+      status: toText(row.status) ?? "—",
+    });
+  }
+  return out;
+}
+
+function mapGeofences(payload: unknown): GeofenceRow[] {
+  const out: GeofenceRow[] = [];
+  for (const [i, row] of extractRows(payload).entries()) {
+    if (!isRecord(row)) continue;
+    const radius = toNum(row.radiusMeters);
+    const hasPolygon = Array.isArray(row.polygon) && row.polygon.length > 0;
+    const active = row.active;
+    out.push({
+      id: toText(row.id) ?? `row-${i + 1}`,
+      name: toText(row.name) ?? "—",
+      type: toText(row.type) ?? "—",
+      shape: hasPolygon ? "polygon" : radius !== undefined ? "circle" : "—",
+      radius: radius !== undefined ? `${radius} m` : "—",
+      status: active === false ? "inactive" : active === true ? "active" : (toText(row.status) ?? "—"),
+    });
+  }
+  return out;
+}
+
+function mapJurisdictions(payload: unknown): JurisdictionRow[] {
+  const out: JurisdictionRow[] = [];
+  for (const [i, row] of extractRows(payload).entries()) {
+    if (!isRecord(row)) continue;
+    out.push({
+      id: toText(row.id) ?? `row-${i + 1}`,
+      level: toText(row.level) ?? "—",
+      office: toText(row.officeId) ?? "—",
+      unit: toText(row.unitId) ?? "—",
+    });
+  }
+  return out;
+}
+
+export function getLocationInfrastructureTyped(): Promise<LoaderResult<InfrastructureRow[]>> {
+  return fetchJson<unknown, InfrastructureRow[]>("/api/v1/locations/infrastructure", [], {
+    revalidateSeconds: 30,
+    telemetryKey: "locations.infrastructure.typed",
+    mapResponse: mapInfrastructure,
+  });
+}
+
+export function getLocationGeofencesTyped(): Promise<LoaderResult<GeofenceRow[]>> {
+  return fetchJson<unknown, GeofenceRow[]>("/api/v1/geofences", [], {
+    revalidateSeconds: 30,
+    telemetryKey: "locations.geofences.typed",
+    mapResponse: mapGeofences,
+  });
+}
+
+export function getLocationJurisdictionsTyped(): Promise<LoaderResult<JurisdictionRow[]>> {
+  return fetchJson<unknown, JurisdictionRow[]>("/api/v1/jurisdictions", [], {
+    revalidateSeconds: 30,
+    telemetryKey: "locations.jurisdictions.typed",
+    mapResponse: mapJurisdictions,
+  });
+}
