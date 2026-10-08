@@ -15,6 +15,18 @@ const FILER_ROLES = [...STATUTORY_ROLES, "hr_admin", "finance_officer"];
 /** YYYY-MM guard. */
 const isPeriod = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}$/.test(v);
 
+/**
+ * GAP2-PAYROLL-STATUTORY-CHALLANS-01: TDS challan money is paise (bigint minor
+ * units) end to end per CLAUDE.md §3.11. The canonical wire fields are now the
+ * `*Minor` integer-paise strings the web sends via rupeesToMinorString; a
+ * floating-point rupee number is never rounded server-side.
+ *
+ * Legacy rupee-number fields (`tdsAmount`, `totalAmount`, `interest`, `fee`)
+ * are still ACCEPTED for backward compatibility with any un-migrated caller,
+ * but a `*Minor` field, when present, always wins. At least one of
+ * `tdsAmountMinor` / `tdsAmount` must be supplied.
+ */
+const minorString = z.string().regex(/^\d+$/, "must be an integer number of paise (minor units)");
 const challanBodySchema = z.object({
   period: z.string().regex(/^\d{4}-\d{2}$/, "period required (YYYY-MM)"),
   bsrCode: z.string().regex(/^\d{7}$/, "bsrCode must be a 7-digit RBI BSR code"),
@@ -22,10 +34,19 @@ const challanBodySchema = z.object({
   depositDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "depositDate required (YYYY-MM-DD)"),
   section: z.string().max(8).optional(),
   formType: z.enum(["24Q", "26Q"]).optional(),
-  tdsAmount: z.number().finite().nonnegative(),
+  // Canonical paise fields.
+  tdsAmountMinor: minorString.optional(),
+  totalAmountMinor: minorString.optional(),
+  interestMinor: minorString.optional(),
+  feeMinor: minorString.optional(),
+  // Legacy rupee-number fields (deprecated; kept for back-compat).
+  tdsAmount: z.number().finite().nonnegative().optional(),
   totalAmount: z.number().finite().nonnegative().optional(),
   interest: z.number().finite().nonnegative().optional(),
   fee: z.number().finite().nonnegative().optional(),
+}).refine((b) => b.tdsAmountMinor != null || b.tdsAmount != null, {
+  message: "tdsAmountMinor (paise) is required",
+  path: ["tdsAmountMinor"],
 });
 
 /**
@@ -202,9 +223,26 @@ export async function challanRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "DUPLICATE_CHALLAN", `a challan with CIN ${cin} is already recorded`);
     }
 
-    const paise = (v?: number): bigint => BigInt(Math.round((v ?? 0) * 100));
-    const tdsMinor = paise(b.tdsAmount);
-    const totalMinor = b.totalAmount != null ? paise(b.totalAmount) : tdsMinor + paise(b.interest) + paise(b.fee);
+    // GAP2-PAYROLL-STATUTORY-CHALLANS-01: prefer the canonical paise field
+    // (exact bigint). A legacy rupee NUMBER is converted via its fixed-2
+    // decimal STRING (integer paise = rupees*100 + fractional paise), never a
+    // float `Math.round(v * 100)`, so no precision/contract risk remains on
+    // this statutory money field.
+    const rupeesNumberToMinor = (v?: number): bigint => {
+      if (v == null) return 0n;
+      const [whole = "0", frac = "00"] = v.toFixed(2).split(".");
+      const sign = whole.startsWith("-") ? -1n : 1n;
+      const wholeAbs = whole.replace("-", "");
+      return sign * (BigInt(wholeAbs) * 100n + BigInt(frac.padEnd(2, "0").slice(0, 2)));
+    };
+    const minorOf = (minor: string | undefined, legacyRupees: number | undefined): bigint =>
+      minor != null ? BigInt(minor) : rupeesNumberToMinor(legacyRupees);
+    const tdsMinor = minorOf(b.tdsAmountMinor, b.tdsAmount);
+    const interestMinorVal = minorOf(b.interestMinor, b.interest);
+    const feeMinorVal = minorOf(b.feeMinor, b.fee);
+    const totalMinor = (b.totalAmountMinor != null || b.totalAmount != null)
+      ? minorOf(b.totalAmountMinor, b.totalAmount)
+      : tdsMinor + interestMinorVal + feeMinorVal;
 
     return sendAccepted(reply, acceptedResponseSchema, await challanCommands.ingestChallan(ctx, {
       period: b.period,
@@ -216,8 +254,8 @@ export async function challanRoutes(app: FastifyInstance): Promise<void> {
       cin,
       tdsAmountMinor: tdsMinor.toString(),
       totalAmountMinor: totalMinor.toString(),
-      interestMinor: paise(b.interest).toString(),
-      feeMinor: paise(b.fee).toString(),
+      interestMinor: interestMinorVal.toString(),
+      feeMinor: feeMinorVal.toString(),
     }));
   });
 

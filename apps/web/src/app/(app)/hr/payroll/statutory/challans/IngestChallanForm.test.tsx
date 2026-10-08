@@ -111,4 +111,26 @@ describe("IngestChallanForm", () => {
     });
     expect(screen.queryByText(/CIN X/)).not.toBeInTheDocument();
   });
+
+  it("GAP2-PAYROLL-STATUTORY-CHALLANS-01: sends tdsAmountMinor (paise) on the wire, never a float tdsAmount", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "x", status: "accepted", correlationId: "c" }), { status: 202 }),
+    );
+
+    renderForm();
+    fireEvent.change(screen.getByLabelText(/BSR Code/), { target: { value: "1234567" } });
+    fireEvent.change(screen.getByLabelText(/Challan Serial/), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText(/Deposit Date/), { target: { value: "2026-06-07" } });
+    // 123456.00 rupees -> 12345600 paise, exact.
+    fireEvent.change(screen.getByLabelText(/TDS Amount/), { target: { value: "123456" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ingest Challan" }));
+
+    await waitFor(() => expect(screen.getByText("Ingest this TDS challan?")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Confirm & Ingest"));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const body = JSON.parse(String((fetchSpy.mock.calls[0]![1] as RequestInit).body));
+    expect(body.tdsAmountMinor).toBe("12345600");
+    expect("tdsAmount" in body).toBe(false);
+  });
 });

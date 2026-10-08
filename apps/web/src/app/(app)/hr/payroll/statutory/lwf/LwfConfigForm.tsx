@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatRupees } from "@/lib/formatters";
+import { nonNegativeRupeesToMinorString } from "@/lib/money";
 
 // GAP-PAYROLL-STATUTORY-LWF-02: mirrors payroll-service LWF_FREQUENCIES
 // (modules/payroll/state-rules.ts). "" = keep the stored frequency.
@@ -18,10 +19,23 @@ const FREQUENCY_LABEL_KEY = {
   yearly: "frequencyYearly",
 } as const;
 
-/** Rupee input → paise, or undefined when left blank (server keeps the stored value). */
+/**
+ * Rupee input → paise, or undefined when left blank (server keeps the stored
+ * value). GAP2-PAYROLL-STATUTORY-CHALLANS-01: converted via the shared,
+ * float-free rupeesToMinorString family (bigint minor units) instead of
+ * `Math.round(parseFloat(v) * 100)`, so a statutory LWF contribution never
+ * crosses the wire as a mis-rounded float. The backend state-rules schema
+ * takes an integer number of paise, so the paise STRING is read back as an
+ * integer with Number(); the value is a small contribution amount, always
+ * well within Number.MAX_SAFE_INTEGER paise.
+ */
 function toPaiseOrUndefined(v: string): number | undefined {
   if (v.trim() === "") return undefined;
-  return Math.round((parseFloat(v) || 0) * 100);
+  const minor = nonNegativeRupeesToMinorString(v);
+  // A non-numeric / sub-paise entry resolves to 0 paise rather than a
+  // float-rounded value (the field is a plain number input; the server
+  // additionally validates it as a non-negative integer).
+  return minor == null ? 0 : Number(minor);
 }
 
 type ExistingLwfConfig = { state_code: string };
