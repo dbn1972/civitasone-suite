@@ -6,12 +6,17 @@
  * 2. Route tests: CRUD on DLT templates, auth checks
  * 3. Integration: 422 on unregistered template in send path
  */
-import { describe, it, expect, afterAll, vi } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { validateDltTemplate } from "../src/modules/dlt/validate.js";
 import { buildApp } from "../src/app.js";
 import { sqlClient, db } from "../src/shared/db.js";
 import { randomUUID } from "node:crypto";
+import { MemoryQueue } from "@civitasone/queue";
+import type { Queue, Handler } from "@civitasone/queue";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
+import { registerDltConsumers } from "../src/modules/dlt/consumer.js";
+import { COMMANDS } from "../src/topics.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000001";
@@ -23,6 +28,37 @@ function adminToken(tenantId = TENANT) {
 
 function userToken(tenantId = TENANT) {
   return signToken({ sub: ACTOR, tid: tenantId, roles: ["notification_user"], sid: "sess-dlt" }, SECRET);
+}
+
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
+}
+
+/**
+ * GAP2-NOTIFICATIONS-DLT-10: create is CQRS now, so a test that needs a
+ * persisted template seeds it by driving the create CONSUMER directly (the
+ * same code path the worker runs), not by relying on a synchronous HTTP POST
+ * write. Returns the new row id.
+ */
+async function seedDltTemplate(payload: {
+  entityId: string; templateId: string; headerId: string; contentType: string;
+  templateBody: string; channel: string; status?: string; expiresAt?: string;
+}): Promise<string> {
+  const q = wireTenantAwareQueue(new MemoryQueue());
+  registerDltConsumers(q);
+  await q.start();
+  const id = randomUUID();
+  await q.publish(COMMANDS.createDltTemplate, {
+    messageId: id, type: COMMANDS.createDltTemplate,
+    tenantId: TENANT, actorId: ACTOR, correlationId: "corr-dlt", schemaVersion: "1.0",
+    payload: { id, tenantId: TENANT, ...payload },
+  });
+  await new Promise<void>((r) => setTimeout(r, 250));
+  await q.stop();
+  return id;
 }
 
 afterAll(async () => { await sqlClient.end(); });
@@ -82,7 +118,10 @@ describe("validateDltTemplate — pattern matching", () => {
 // ---------- Route tests: CRUD on DLT templates ----------
 
 describe("DLT template routes", () => {
-  it("POST /notifications/dlt-templates — creates a DLT template (admin)", async () => {
+  it("POST /notifications/dlt-templates — accepts a DLT template create command (admin, 202)", async () => {
+    // GAP2-NOTIFICATIONS-DLT-10: create is now CQRS — the route validates and
+    // enqueues a command, returning 202 Accepted with the new id; the consumer
+    // applies the write + audit event. (Was a direct 201 write with no audit.)
     const app = await buildApp();
     const uniqueTemplateId = `110716${Date.now().toString().slice(-7)}`;
     const res = await app.inject({
@@ -99,11 +138,10 @@ describe("DLT template routes", () => {
       },
     });
     await app.close();
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
     const json = res.json();
-    expect(json.data.templateId).toBe(uniqueTemplateId);
-    expect(json.data.channel).toBe("sms");
-    expect(json.data.status).toBe("active");
+    expect(json.id).toBeDefined();
+    expect(json.status).toBe("accepted");
   });
 
   it("POST /notifications/dlt-templates — 403 for non-admin", async () => {
@@ -233,23 +271,17 @@ describe("validateDltCompliance — domain integration", () => {
 
   it("returns valid:false when body does not match any template", async () => {
     const { validateDltCompliance } = await import("../src/modules/dlt/validator.js");
-    // Register a template first, then test with non-matching body
-    const app = await buildApp();
+    // Register a template first (via the create consumer), then test with a
+    // non-matching body.
     const uniqueId = `COMPL${Date.now().toString().slice(-7)}`;
-    await app.inject({
-      method: "POST",
-      url: "/notifications/dlt-templates",
-      headers: { authorization: `Bearer ${adminToken()}` },
-      payload: {
-        entityId: "1001234567890",
-        templateId: uniqueId,
-        headerId: "MYAPP",
-        contentType: "transactional",
-        templateBody: "Your OTP is {#var#}. Valid for 10 minutes.",
-        channel: "sms",
-      },
+    await seedDltTemplate({
+      entityId: "1001234567890",
+      templateId: uniqueId,
+      headerId: "MYAPP",
+      contentType: "transactional",
+      templateBody: "Your OTP is {#var#}. Valid for 10 minutes.",
+      channel: "sms",
     });
-    await app.close();
 
     const result = await validateDltCompliance(TENANT, "sms", "This doesn't match anything");
     expect(result.valid).toBe(false);
@@ -258,22 +290,15 @@ describe("validateDltCompliance — domain integration", () => {
 
   it("returns valid:true with matched dltTemplateId when body matches", async () => {
     const { validateDltCompliance } = await import("../src/modules/dlt/validator.js");
-    const app = await buildApp();
     const uniqueId = `MATCH${Date.now().toString().slice(-7)}`;
-    await app.inject({
-      method: "POST",
-      url: "/notifications/dlt-templates",
-      headers: { authorization: `Bearer ${adminToken()}` },
-      payload: {
-        entityId: "1001234567890",
-        templateId: uniqueId,
-        headerId: "MYAPP",
-        contentType: "transactional",
-        templateBody: "Hello {#var#}, your order {#var#} has shipped.",
-        channel: "sms",
-      },
+    await seedDltTemplate({
+      entityId: "1001234567890",
+      templateId: uniqueId,
+      headerId: "MYAPP",
+      contentType: "transactional",
+      templateBody: "Hello {#var#}, your order {#var#} has shipped.",
+      channel: "sms",
     });
-    await app.close();
 
     const result = await validateDltCompliance(TENANT, "sms", "Hello John, your order ORD123 has shipped.");
     expect(result.valid).toBe(true);
@@ -286,29 +311,19 @@ describe("validateDltCompliance — domain integration", () => {
 describe("DLT guard — expired template handling", () => {
   it("checkDlt rejects when only expired templates exist", async () => {
     const { checkDlt } = await import("../src/modules/dlt/guard.js");
-    const app = await buildApp();
     const uniqueId = `EXP${Date.now().toString().slice(-8)}`;
-    // Register with already-expired date
-    const res = await app.inject({
-      method: "POST",
-      url: "/notifications/dlt-templates",
-      headers: { authorization: `Bearer ${adminToken()}` },
-      payload: {
-        entityId: "1001234567890",
-        templateId: uniqueId,
-        headerId: "MYAPP",
-        contentType: "transactional",
-        templateBody: "Expired template {#var#} test",
-        channel: "whatsapp",
-        status: "expired",
-      },
+    // Register with already-expired status (via the create consumer).
+    await seedDltTemplate({
+      entityId: "1001234567890",
+      templateId: uniqueId,
+      headerId: "MYAPP",
+      contentType: "transactional",
+      templateBody: "Expired template {#var#} test",
+      channel: "whatsapp",
+      status: "expired",
     });
-    await app.close();
-    expect(res.statusCode).toBe(201);
 
     // checkDlt only finds 'active' templates, so expired ones won't match.
-    // Reads through the caller's tx now (task_477fafd4) instead of opening
-    // a second, nested transaction via scopedRead -- see dlt/guard.ts.
     const result = await db.transaction((tx) => checkDlt(tx, TENANT, "whatsapp", "Expired template XYZ test"));
     expect(result.passed).toBe(false);
   });
@@ -317,25 +332,21 @@ describe("DLT guard — expired template handling", () => {
 // ---------- DLT template PATCH to revoked status ----------
 
 describe("DLT template status management", () => {
-  it("can update template status to revoked", async () => {
-    const app = await buildApp();
+  it("can update template status to revoked (CQRS: PATCH 202, consumer applies + audits)", async () => {
+    // GAP2-NOTIFICATIONS-DLT-10: seed an active template via the create
+    // consumer, PATCH it (route returns 202 + enqueues), then drive the update
+    // consumer and assert the row is revoked and an audit event was emitted.
     const uniqueId = `REV${Date.now().toString().slice(-8)}`;
-    const createRes = await app.inject({
-      method: "POST",
-      url: "/notifications/dlt-templates",
-      headers: { authorization: `Bearer ${adminToken()}` },
-      payload: {
-        entityId: "1001234567890",
-        templateId: uniqueId,
-        headerId: "MYAPP",
-        contentType: "promotional",
-        templateBody: "Sale! {#var#}% off today.",
-        channel: "sms",
-      },
+    const templateUuid = await seedDltTemplate({
+      entityId: "1001234567890",
+      templateId: uniqueId,
+      headerId: "MYAPP",
+      contentType: "promotional",
+      templateBody: "Sale! {#var#}% off today.",
+      channel: "sms",
     });
-    expect(createRes.statusCode).toBe(201);
-    const templateUuid = createRes.json().data.id;
 
+    const app = await buildApp();
     const patchRes = await app.inject({
       method: "PATCH",
       url: `/notifications/dlt-templates/${templateUuid}`,
@@ -343,8 +354,42 @@ describe("DLT template status management", () => {
       payload: { status: "revoked" },
     });
     await app.close();
-    expect(patchRes.statusCode).toBe(200);
-    expect(patchRes.json().data.status).toBe("revoked");
+    expect(patchRes.statusCode).toBe(202);
+    expect(patchRes.json().id).toBe(templateUuid);
+
+    // Drive the update consumer directly (the worker's code path).
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerDltConsumers(q);
+    await q.start();
+    await q.publish(COMMANDS.updateDltTemplate, {
+      messageId: randomUUID(), type: COMMANDS.updateDltTemplate,
+      tenantId: TENANT, actorId: ACTOR, correlationId: "corr-rev", schemaVersion: "1.0",
+      payload: { id: templateUuid, tenantId: TENANT, status: "revoked" },
+    });
+    await new Promise<void>((r) => setTimeout(r, 250));
+    await q.stop();
+
+    const repo = await import("../src/modules/dlt/repo.js");
+    const row = await runWithTenant(TENANT, () => repo.findById(TENANT, templateUuid));
+    expect(row?.status).toBe("revoked");
+
+    // The mutation left an audit event in the outbox (CQRS/audit rule).
+    const { outboxMessages } = await import("@civitasone/outbox");
+    const { eq, and } = await import("drizzle-orm");
+    const auditRows = await runWithTenant(TENANT, () =>
+      db
+        .select()
+        .from(outboxMessages)
+        .where(and(eq(outboxMessages.eventType, "audit.event.record"), eq(outboxMessages.tenantId, TENANT))),
+    );
+    const found = auditRows.some(
+      (r) =>
+        typeof r.payload === "object" &&
+        r.payload !== null &&
+        (r.payload as Record<string, unknown>).resourceId === templateUuid &&
+        (r.payload as Record<string, unknown>).action === "update_dlt_template",
+    );
+    expect(found).toBe(true);
   });
 
   it("POST /notifications/dlt-templates — 400 for invalid body", async () => {

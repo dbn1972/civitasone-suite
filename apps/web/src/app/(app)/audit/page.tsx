@@ -46,10 +46,34 @@ export default async function AuditPage() {
           failures count under a different label — a fabricated signal with no
           backing data. Removed; the honest three KPIs the log can actually
           compute remain in a 3-up grid. */}
+      {/* GAP2-AUDIT-HOME-10: these KPIs are computed over the loaded slice, and
+          the service defaults the window to the last 7 days and caps the page
+          at 50 rows (listQuerySchema.limit default) with no `total`. Presenting
+          `auditItems.length` as an all-time "Total Events" silently pins a busy
+          tenant at 50. Relabel honestly ("recent" + the window/cap in the hint)
+          so the figure is not mistaken for an all-time total. */}
       <div className="grid g-3" style={{ marginBottom: 18 }}>
-        <StatCard icon="📜" iconBg="#eef2ff" label="Total Events" value={total} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Success" value={successes} />
-        <StatCard icon="🔐" iconBg="var(--warnbg)" label="Failures" value={failures} />
+        <StatCard
+          icon="📜"
+          iconBg="#eef2ff"
+          label="Recent events"
+          value={total}
+          hint="Events in the last 7 days, up to the most recent 50 shown below — not an all-time total."
+        />
+        <StatCard
+          icon="✅"
+          iconBg="#e6f7f0"
+          label="Success (recent)"
+          value={successes}
+          hint="Successful outcomes among the recent events shown below."
+        />
+        <StatCard
+          icon="🔐"
+          iconBg="var(--warnbg)"
+          label="Failures (recent)"
+          value={failures}
+          hint="Failed outcomes among the recent events shown below."
+        />
       </div>
       {errored ? (
         <Card title="Audit event log">

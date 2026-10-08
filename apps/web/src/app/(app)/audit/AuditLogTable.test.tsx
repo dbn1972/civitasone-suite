@@ -26,4 +26,18 @@ describe("AuditLogTable (GAP-AUDIT-HOME-03)", () => {
     const firstData = rowEls[1];
     expect(within(firstData).getByText("delete")).toBeInTheDocument();
   });
+
+  it("GAP2-AUDIT-HOME-11: renders a non-success/failure outcome as its own neutral pill, not a red failure", () => {
+    const rows: AuditRowSummary[] = [
+      { actor: "a@x.gov", action: "export", resource: "report:7", outcome: "skipped", at: "2026-01-06T10:00:00.000Z", id: "skip1" },
+    ];
+    render(<AuditLogTable rows={rows} />);
+    const pill = screen.getByText("skipped");
+    expect(pill).toBeInTheDocument();
+    // It must NOT be painted as a failure pill.
+    expect(pill.className).not.toContain("bad");
+    expect(pill.className).toContain("pill");
+    // And no spurious "failure" label was substituted for it.
+    expect(screen.queryByText("failure")).not.toBeInTheDocument();
+  });
 });

@@ -31,6 +31,7 @@ import { registerPushConsumers } from "./modules/push/consumer.js";
 import { registerBounceConsumers } from "./modules/bounces/consumer.js";
 import { registerInboxConsumers } from "./modules/inbox/consumer.js";
 import { registerConversationConsumers } from "./modules/conversations/consumer.js";
+import { registerDltConsumers } from "./modules/dlt/consumer.js";
 
 const log = pino({ name: "notification-worker" });
 
@@ -75,6 +76,8 @@ registerBounceConsumers(queue);
 registerInboxConsumers(queue);
 // G5: conversation thread CQRS consumers (create, add message, update).
 registerConversationConsumers(queue);
+// G8: DLT (TRAI) template registry — regulated create/update/delete mutations.
+registerDltConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 // G7: scheduled outbox purge — remove published messages older than 7 days.

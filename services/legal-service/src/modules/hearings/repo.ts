@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { legalHearings, legalOrders, legalOpinions, type HearingRow } from "./schema.js";
 
@@ -29,6 +29,64 @@ export async function listHearingsByTenant(tenantId: string, limit: number): Pro
 export async function listOrdersByTenant(tenantId: string, limit: number) {
   return db.transaction(async (tx) =>
     tx.select().from(legalOrders).where(eq(legalOrders.tenantId, tenantId)).limit(limit));
+}
+
+/**
+ * GAP2-LEGAL-COURT-ORDERS-10: page-aware list (limit + offset, newest order
+ * first) so the compliance table is pageable instead of silently capped at
+ * the first 50 rows.
+ */
+export async function listOrdersByTenantPaged(tenantId: string, limit: number, offset: number) {
+  return db.transaction(async (tx) =>
+    tx
+      .select()
+      .from(legalOrders)
+      .where(eq(legalOrders.tenantId, tenantId))
+      .orderBy(desc(legalOrders.orderDate))
+      .limit(limit)
+      .offset(offset));
+}
+
+/** GAP2-LEGAL-COURT-ORDERS-10: true total for the tenant (not the page size). */
+export async function countOrdersByTenant(tenantId: string): Promise<number> {
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(legalOrders)
+      .where(eq(legalOrders.tenantId, tenantId));
+    return rows[0]?.n ?? 0;
+  });
+}
+
+/**
+ * GAP2-LEGAL-COURT-ORDERS-10: compliance KPIs computed over the FULL tenant
+ * set in SQL, never a 50-row page slice. `today` is the caller's IST calendar
+ * date (YYYY-MM-DD); contempt risk is compliance-required orders whose
+ * deadline is strictly before today. The orders table carries no status
+ * column (reads project status as "pending"), so "complied" is 0 here and
+ * every compliance-required order is still "due".
+ */
+export async function aggregateOrderStats(
+  tenantId: string,
+  today: string,
+): Promise<{ total: number; pendingCompliance: number; complied: number; contemptRisk: number }> {
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .select({
+        total: sql<number>`count(*)::int`,
+        pendingCompliance: sql<number>`count(*) filter (where ${legalOrders.complianceRequired})::int`,
+        contemptRisk: sql<number>`count(*) filter (where ${legalOrders.complianceRequired} and ${legalOrders.complianceDeadline} is not null and ${legalOrders.complianceDeadline} < ${today})::int`,
+      })
+      .from(legalOrders)
+      .where(eq(legalOrders.tenantId, tenantId));
+    const r = rows[0];
+    return {
+      total: r?.total ?? 0,
+      pendingCompliance: r?.pendingCompliance ?? 0,
+      complied: 0,
+      contemptRisk: r?.contemptRisk ?? 0,
+    };
+  });
 }
 
 export async function listOpinionsByTenant(tenantId: string, limit: number) {

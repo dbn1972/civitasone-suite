@@ -44,10 +44,15 @@ export function CourtOrdersTable({
   items,
   today,
   source = "api",
+  initialFilter = "All",
 }: {
   items: CourtOrderSummary[];
   today: string;
   source?: "api" | "error";
+  // GAP2-LEGAL-COURT-ORDERS-11: seed the segmented filter from the URL
+  // (?filter=risk → "Risk") so "Contempt watch" shows the at-risk view on
+  // first render instead of defaulting to "All" and ignoring the query string.
+  initialFilter?: (typeof FILTERS)[number];
 }) {
   const { data: rows0, provenance, offline, cachedAt } = useSeededResource<CourtOrderSummary[]>(
     "legal.court-orders",
@@ -55,7 +60,7 @@ export function CourtOrdersTable({
     source,
     (d) => d.length === 0,
   );
-  const [filter, setFilter] = useState<string>("All");
+  const [filter, setFilter] = useState<string>(initialFilter);
 
   const rows = useMemo<Row[]>(() => {
     const base = rows0 as Row[];

@@ -79,3 +79,47 @@ export async function listCourtOrderSummaries(tenantId: string, limit: number) {
     };
   });
 }
+
+/**
+ * GAP2-LEGAL-COURT-ORDERS-10: page-aware court-order summaries plus the true
+ * tenant total and compliance KPIs computed over the FULL set in SQL. The
+ * previous list capped at `limit` and the web page then derived "Contempt
+ * Risk"/"Orders Tracked" from that ≤50-row slice, undercounting contempt
+ * exposure for a legal cell with more than 50 tracked orders. `today` is the
+ * caller's IST calendar date used for the overdue comparison.
+ */
+export async function listCourtOrderSummariesPaged(
+  tenantId: string,
+  limit: number,
+  offset: number,
+  today: string,
+) {
+  const [rows, total, stats] = await Promise.all([
+    repo.listOrdersByTenantPaged(tenantId, limit, offset),
+    repo.countOrdersByTenant(tenantId),
+    repo.aggregateOrderStats(tenantId, today),
+  ]);
+
+  const caseIds = [...new Set(rows.map((row) => row.caseId))];
+  const cases = await caseRepo.findCasesByIds(caseIds);
+  const caseById = new Map(cases.map((c) => [c.id, c]));
+
+  const items = rows.map((row) => {
+    const legalCase = caseById.get(row.caseId);
+    return {
+      id: row.id,
+      caseId: row.caseId,
+      caseNo: legalCase?.caseNo ?? row.caseId,
+      court: legalCase?.court ?? "Court",
+      orderDate: row.orderDate.toString(),
+      orderType: row.orderType,
+      summary: row.summary,
+      complianceRequired: row.complianceRequired,
+      complianceDeadline: row.complianceDeadline ? row.complianceDeadline.toString() : undefined,
+      department: row.deptRef ?? undefined,
+      status: "pending" as const,
+    };
+  });
+
+  return { items, total, limit, offset, stats };
+}

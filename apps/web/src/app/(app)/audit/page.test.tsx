@@ -19,9 +19,22 @@ describe("AuditPage", () => {
   it("renders KPIs and the log on success", async () => {
     fetchJsonMock.mockResolvedValue({ data: MOCK_ROWS, source: "api" });
     render(await AuditPage());
-    expect(screen.getByText("Total Events")).toBeInTheDocument();
-    expect(screen.getByText("Success")).toBeInTheDocument();
-    expect(screen.getByText("Failures")).toBeInTheDocument();
+    expect(screen.getByText("Recent events")).toBeInTheDocument();
+    expect(screen.getByText("Success (recent)")).toBeInTheDocument();
+    expect(screen.getByText("Failures (recent)")).toBeInTheDocument();
+  });
+
+  it("GAP2-AUDIT-HOME-10: does not present the capped/windowed slice as an all-time 'Total Events'", async () => {
+    fetchJsonMock.mockResolvedValue({ data: MOCK_ROWS, source: "api" });
+    render(await AuditPage());
+    // The old mislabel claimed an all-time total over a 7-day / 50-row slice.
+    expect(screen.queryByText("Total Events")).not.toBeInTheDocument();
+    // The honest label names the figure as recent and explains the window/cap.
+    const recent = screen.getByText("Recent events");
+    expect(recent).toBeInTheDocument();
+    const tile = recent.closest(".stat");
+    expect(tile?.getAttribute("title") ?? "").toMatch(/last 7 days/i);
+    expect(tile?.getAttribute("title") ?? "").toMatch(/50/);
   });
 
   it("GAP-AUDIT-HOME-02: has no fabricated 'Policy Alerts' tile", async () => {

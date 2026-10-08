@@ -166,6 +166,7 @@ import type {
   LegalCaseDetail,
   HearingSummary,
   CourtOrderSummary,
+  CourtOrderPage,
   LegalOpinionSummary,
   UserSummary,
   UserDetail,
@@ -348,7 +349,7 @@ import {
   LegalCaseSummaryListSchema,
   LegalCaseDetailSchema,
   HearingSummaryListSchema,
-  CourtOrderSummaryListSchema,
+  CourtOrderPageSchema,
   SessionSummaryListSchema,
   SessionDetailSchema,
   BreakglassSummaryListSchema,
@@ -452,9 +453,15 @@ function mapAuditRows(payload: unknown): AuditRowSummary[] | null {
     // "failure") -- an audit trail must never call an action successful
     // when it isn't sure. Flipped the fallback's polarity: only a
     // positively-known-good severity reads as success now.
-    const outcome: "success" | "failure" =
-      row.outcome === "success" || row.outcome === "failure"
-        ? row.outcome
+    // GAP2-AUDIT-HOME-11: when the row carries an EXPLICIT outcome string that
+    // is neither success nor failure (e.g. "skipped", "held"), preserve it so
+    // the Result column can render it as its own neutral pill rather than
+    // mislabelling it red "failure". The severity-derived fallback (LOG-06)
+    // only applies when there is no explicit outcome at all.
+    const explicitOutcome = toText(row.outcome);
+    const outcome: AuditRowSummary["outcome"] =
+      explicitOutcome
+        ? explicitOutcome
         : row.severity === "info" || row.severity === "warning"
           ? "success"
           : "failure";
@@ -5467,13 +5474,42 @@ export async function getLegalHearings(): Promise<LoaderResult<HearingSummary[]>
   });
 }
 
-export async function getCourtOrders(): Promise<LoaderResult<CourtOrderSummary[]>> {
-  return fetchJson<unknown, CourtOrderSummary[]>("/api/v1/legal/court-orders", [], {
-    revalidateSeconds: 60,
-    telemetryKey: "legal.court-orders",
-    responseSchema: CourtOrderSummaryListSchema,
-    mapResponse: (p) => getArrayPayload(p) as CourtOrderSummary[] | null,
-  });
+export async function getCourtOrdersPage(opts?: {
+  limit?: number;
+  offset?: number;
+}): Promise<LoaderResult<CourtOrderPage>> {
+  const limit = Math.min(Math.max(Math.trunc(opts?.limit ?? 25), 1), 100);
+  const offset = Math.max(Math.trunc(opts?.offset ?? 0), 0);
+  const empty: CourtOrderPage = {
+    items: [],
+    total: 0,
+    limit,
+    offset,
+    stats: { total: 0, pendingCompliance: 0, complied: 0, contemptRisk: 0 },
+  };
+  return fetchJson<unknown, CourtOrderPage>(
+    `/api/v1/legal/court-orders?limit=${limit}&offset=${offset}`,
+    empty,
+    {
+      revalidateSeconds: 60,
+      telemetryKey: "legal.court-orders",
+      responseSchema: CourtOrderPageSchema,
+      mapResponse: (p) => {
+        if (!isRecord(p)) return null;
+        const items = Array.isArray(p.items) ? (p.items as CourtOrderSummary[]) : [];
+        const stats = isRecord(p.stats)
+          ? {
+              total: Number(p.stats.total) || 0,
+              pendingCompliance: Number(p.stats.pendingCompliance) || 0,
+              complied: Number(p.stats.complied) || 0,
+              contemptRisk: Number(p.stats.contemptRisk) || 0,
+            }
+          : empty.stats;
+        const total = typeof p.total === "number" && Number.isFinite(p.total) ? p.total : items.length;
+        return { items, total, limit, offset, stats };
+      },
+    },
+  );
 }
 
 export async function getLegalOpinions(): Promise<LoaderResult<LegalOpinionSummary[]>> {
