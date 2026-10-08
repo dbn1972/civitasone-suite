@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, StatusPill } from "@/app/_components/ds";
 import { ProvisionStepsTable, type ProvisionStep } from "./ProvisionStepsTable";
 import { ProvisionRequestFromUrl } from "./ProvisionRequestFromUrl";
 import { AdminAccessDenied, sessionHasAnyRole } from "../_components/AdminAccessGate";
@@ -41,9 +41,15 @@ export default function TenantProvisionPage() {
         subtitle="Reference: the steps a new tenant goes through. The guided wizard is not available yet."
         back="/admin"
         actions={
-          <Link className="btn ghost" href="/admin/onboarding">
-            Open onboarding queue
-          </Link>
+          <>
+            {/* GAP2-ADMIN-TENANT-PROVISION-01: this screen is documentation-only
+                (no backing route). A "Reference" marker makes it visually
+                distinct from the live operator screens it sits beside. */}
+            <StatusPill status="reference" label="Reference" variant="info" />
+            <Link className="btn ghost" href="/admin/onboarding">
+              Open onboarding queue
+            </Link>
+          </>
         }
       />
       {/* GAP-ADMIN-ONBOARDING-07: opened from a queue row (?requestId=), shows which request this visit is for. */}

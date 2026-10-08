@@ -36,6 +36,29 @@ describe("GAP-TENANT-ADMIN-OPERATIONS-04 — redactLogLine", () => {
     expect(out).not.toContain("u:p@host");
     expect(out).toContain("<redacted>");
   });
+
+  // GAP2-ADMIN-OPERATIONS-01: public client IPs in error lines are personal data.
+  it("masks a public IPv4 address but not a clock timestamp", () => {
+    const out = redactLogLine("request from 203.0.113.9 failed at 10:00:00");
+    expect(out).not.toContain("203.0.113.9");
+    expect(out).toContain("<ip>");
+    expect(out).toContain("10:00:00");
+  });
+
+  it("keeps loopback and RFC1918 private IPv4 (operator-useful infra)", () => {
+    const out = redactLogLine("upstream 10.0.0.5 via 127.0.0.1 and 192.168.1.4 timed out");
+    expect(out).toContain("10.0.0.5");
+    expect(out).toContain("127.0.0.1");
+    expect(out).toContain("192.168.1.4");
+    expect(out).not.toContain("<ip>");
+  });
+
+  it("masks a public IPv6 address but keeps the loopback", () => {
+    const out = redactLogLine("peer 2001:db8::1 unreachable; local ::1 ok");
+    expect(out).not.toContain("2001:db8::1");
+    expect(out).toContain("<ip>");
+    expect(out).toContain("::1");
+  });
 });
 
 describe("GAP-TENANT-ADMIN-OPERATIONS-06 — PM2 unavailable", () => {
