@@ -18,6 +18,8 @@ export default async function Page() {
         source={source}
         back="/tenant"
         backLabel={LABELS.tenantTitle}
+        // GAP2-TENANT-ERRORSTATE-03: "Couldn't load settings", not "records".
+        errorArea="settings"
       />
     </div>
   );

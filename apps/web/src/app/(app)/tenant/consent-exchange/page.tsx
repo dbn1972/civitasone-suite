@@ -17,6 +17,7 @@ export default async function Page() {
         description="Cross-organisation consent requests (read-only)."
         rows={data}
         source={source}
+        errorArea="consent requests"
       />
     </div>
   );

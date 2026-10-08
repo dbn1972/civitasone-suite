@@ -5,7 +5,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
  * Middleware order: correlationId → auth → authz → zod validate → handler.
  * Writes return 202 (command accepted, applied async). Reads return 200 from cache.
  */
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, RouteHandlerMethod } from "fastify";
 import { ZodError } from "zod";
 import {
   resolveContext,
@@ -42,14 +42,20 @@ export async function tenantRoutes(app: FastifyInstance): Promise<void> {
   // READ — the current actor's own tenant (resolved from the session).
   // Static path registered before the parametric :tenantId route. Powers the
   // setup wizard's org-profile completion check.
-  app.get("/v1/tenants/current", async (req, reply) => {
+  const readCurrentTenant: RouteHandlerMethod = async (req, reply) => {
     const ctx = resolveContext(req);
     if (!ctx.tenantId)
       throw new HttpError(401, "UNAUTHENTICATED", "no tenant in context");
     const view = await queries.getTenant(ctx.tenantId);
     if (!view) throw new HttpError(404, "NOT_FOUND", "tenant not found");
     return reply.send(view);
-  });
+  };
+  app.get("/v1/tenants/current", readCurrentTenant);
+  // GAP2-TENANT-WIRING-01: the web overview loader calls /api/v1/tenant/current
+  // (singular). The gateway `tenant-singular` prefix forwards it verbatim as
+  // /v1/tenant/current, which previously had no handler -> permanent 404.
+  // Register the singular alias alongside the canonical plural path.
+  app.get("/v1/tenant/current", readCurrentTenant);
 
   // READ — any authenticated actor in the tenant (cache-first)
   app.get("/v1/tenants/:tenantId", async (req, reply) => {

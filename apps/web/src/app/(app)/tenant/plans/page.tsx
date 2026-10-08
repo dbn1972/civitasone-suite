@@ -17,6 +17,7 @@ export default async function Page() {
         description="Available plans with pricing and module entitlements."
         rows={data}
         source={source}
+        errorArea="plans"
       />
     </div>
   );
