@@ -6,39 +6,27 @@
  * Registered as a route only but had zero test references anywhere in the
  * service.
  *
- * TWO REAL BUGS found while writing this test, not fixed here (see PR
- * description):
+ * Two real bugs were found while writing this test:
  *
- * 1. KNOWN ISSUE -- migration gap (this codebase's own recurring pattern;
- *    matches migrations/0007_missing_module_tables.sql's own precedent,
- *    which fixed the identical "declared in Drizzle, no migration ever
- *    created it" gap for plans/subscriptions/settings/quotas -- but never
- *    touched tenant_configs, a different table entirely, per that file's own
- *    closing note "0006_quotas.sql... created an unrelated
- *    tenant.tenant_quotas table -- a different concept, left untouched.").
- *    `tenant/schema.ts` declares `tenantSchema.table("tenant_configs", ...)`,
- *    but no migration anywhere creates it -- confirmed directly: grepping
- *    every migration for it, and `\dt tenant.tenant_configs` against a
- *    freshly bootstrapped disposable Postgres finds nothing (tenant_quotas
- *    DOES exist -- a real, different table these routes ALSO use, only for
- *    /stats). Every route here except GET /stats calls the shared
- *    getOrInitConfig() helper against tenant_configs, so config/modules/
- *    feature-flags/billing all 500 on every real request past the auth
- *    layer.
+ * 1. (FIXED -- migration 0029_tenant_configs.sql.) `tenant/schema.ts` declares
+ *    `tenantSchema.table("tenant_configs", ...)` but no migration ever created
+ *    it, so config / modules / feature-flags / billing answered 500
+ *    (`relation "tenant.tenant_configs" does not exist`) on every real request
+ *    past the auth layer; this file used to assert that 500. It now asserts the
+ *    real round trip. (tenant_quotas, the table /stats reads, always existed.)
  *
- * 2. REAL BUG -- GET /v1/tenants/:tenantId/feature-flags's cross-tenant
- *    guard is broken: `if (ctx.tenantId !== req.params && ...)` compares a
- *    string (ctx.tenantId) to req.params, THE WHOLE OBJECT (`{tenantId:
- *    "..."}`), not the destructured tenantId string its two sibling routes
- *    (GET /config, GET /stats) correctly compare against -- a string is
- *    never `!==`-false against an object, so this half of the condition is
- *    always true, and the guard collapses to "must have a PLAT role",
- *    unconditionally, even for a caller reading their OWN tenant's flags.
- *    Confirmed in isolation below: the identical pattern on GET /stats
- *    (compared correctly there) lets a same-tenant non-PLAT caller through
- *    and still 403s a cross-tenant one; feature-flags 403s a same-tenant
- *    non-PLAT caller too, proving the check itself -- not roles or intent --
- *    is what's broken.
+ * 2. (STILL OPEN, pinned below as-is.) GET /v1/tenants/:tenantId/feature-flags's
+ *    cross-tenant guard is broken: `if (ctx.tenantId !== req.params && ...)`
+ *    compares a string (ctx.tenantId) to req.params, THE WHOLE OBJECT
+ *    (`{tenantId: "..."}`), not the destructured tenantId string its two sibling
+ *    routes (GET /config, GET /stats) correctly compare against -- a string is
+ *    never `!==`-false against an object, so this half of the condition is always
+ *    true, and the guard collapses to "must have a PLAT role", unconditionally,
+ *    even for a caller reading their OWN tenant's flags. Confirmed in isolation
+ *    below: the identical pattern on GET /stats (compared correctly there) lets a
+ *    same-tenant non-PLAT caller through and still 403s a cross-tenant one;
+ *    feature-flags 403s a same-tenant non-PLAT caller too, proving the check
+ *    itself -- not roles or intent -- is what's broken.
  */
 import { randomUUID } from "node:crypto";
 import { describe, it, expect, afterAll } from "vitest";
@@ -59,7 +47,7 @@ afterAll(async () => {
   await sqlClient.end();
 });
 
-describe("COMP-007: tenant-extensions -- auth layer + the one route not blocked by the migration gap (GET /stats)", () => {
+describe("COMP-007: tenant-extensions -- auth layer + GET /stats", () => {
   it("returns 401 without a token", async () => {
     const tid = randomUUID();
     const res = await app.inject({ method: "GET", url: `/v1/tenants/${tid}/stats` });
@@ -135,7 +123,7 @@ describe("COMP-007: tenant-extensions -- auth layer + the one route not blocked 
   });
 });
 
-describe("COMP-007: tenant-extensions -- REAL BUG: GET /feature-flags's cross-tenant guard (see file header)", () => {
+describe("COMP-007: tenant-extensions -- OPEN BUG: GET /feature-flags's cross-tenant guard (see file header)", () => {
   it("a non-PLAT caller reading their OWN tenant's flags is incorrectly 403'd (should be allowed, like GET /stats above)", async () => {
     const tid = randomUUID();
     const res = await app.inject({
@@ -149,41 +137,81 @@ describe("COMP-007: tenant-extensions -- REAL BUG: GET /feature-flags's cross-te
     expect(res.statusCode).toBe(403);
   });
 
-  it("a PLAT caller passes the (accidentally permissive-for-them) guard, then hits the SEPARATE missing-table bug", async () => {
+  it("a PLAT caller passes the (accidentally permissive-for-them) guard and reads the default, empty flags from tenant_configs", async () => {
     const tid = randomUUID();
     const res = await app.inject({
       method: "GET",
       url: `/v1/tenants/${tid}/feature-flags`,
       headers: { authorization: `Bearer ${token(["platform_admin"], tid)}` },
     });
-    expect(res.statusCode).toBe(500);
-    expect(res.json().message).toContain('relation "tenant.tenant_configs" does not exist');
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ tenantId: tid, featureFlags: {} });
   });
 });
 
-describe("COMP-007: tenant-extensions -- KNOWN ISSUE: tenant_configs was never migrated (see file header)", () => {
-  it("GET /config 500s for an authorized (PLAT) caller", async () => {
+describe("COMP-007: tenant-extensions -- tenant_configs round trip (0029_tenant_configs.sql)", () => {
+  const plat = (tid: string) => ({ authorization: `Bearer ${token(["platform_admin"], tid)}` });
+  const admin = (tid: string) => ({ authorization: `Bearer ${token(["tenant_admin"], tid)}` });
+
+  it("GET /config lazily creates the tenant's row with empty modules / flags / billing", async () => {
     const tid = randomUUID();
-    const res = await app.inject({
-      method: "GET",
-      url: `/v1/tenants/${tid}/config`,
-      headers: { authorization: `Bearer ${token(["platform_admin"], tid)}` },
-    });
-    expect(res.statusCode).toBe(500);
-    expect(res.json().message).toContain('relation "tenant.tenant_configs" does not exist');
+    const res = await app.inject({ method: "GET", url: `/v1/tenants/${tid}/config`, headers: plat(tid) });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ tenantId: tid, modules: {}, featureFlags: {}, billing: {} });
+
+    // The row now exists: a second read returns the same persisted shape.
+    const again = await app.inject({ method: "GET", url: `/v1/tenants/${tid}/config`, headers: plat(tid) });
+    expect(again.json()).toMatchObject({ tenantId: tid, modules: {}, featureFlags: {}, billing: {} });
   });
 
-  it("PATCH /config, PATCH /modules, GET /billing, and PATCH /feature-flags all 500 the same way for an authorized (PLAT) caller", async () => {
+  it("PATCH /modules merges into the stored modules and is visible via GET /config", async () => {
     const tid = randomUUID();
-    const plat = { authorization: `Bearer ${token(["platform_admin"], tid)}` };
-    for (const [method, url, payload] of [
-      ["PATCH", `/v1/tenants/${tid}/config`, { settings: { x: 1 } }],
-      ["PATCH", `/v1/tenants/${tid}/modules`, { modules: { hrms: true } }],
-      ["GET", `/v1/tenants/${tid}/billing`, undefined],
-      ["PATCH", `/v1/tenants/${tid}/feature-flags`, { featureFlags: { beta: true } }],
-    ] as const) {
-      const res = await app.inject({ method, url, headers: plat, payload });
-      expect(res.statusCode, `${method} ${url}`).toBe(500);
-    }
+    expect((await app.inject({ method: "PATCH", url: `/v1/tenants/${tid}/modules`, headers: plat(tid), payload: { modules: { hrms: true } } })).statusCode).toBe(202);
+    expect((await app.inject({ method: "PATCH", url: `/v1/tenants/${tid}/modules`, headers: plat(tid), payload: { modules: { finance: false } } })).statusCode).toBe(202);
+
+    const cfg = await app.inject({ method: "GET", url: `/v1/tenants/${tid}/config`, headers: plat(tid) });
+    expect(cfg.json().modules).toEqual({ hrms: true, finance: false });
+  });
+
+  it("PATCH /feature-flags merges, and GET /feature-flags returns the merged flags", async () => {
+    const tid = randomUUID();
+    await app.inject({ method: "PATCH", url: `/v1/tenants/${tid}/feature-flags`, headers: plat(tid), payload: { featureFlags: { beta: true } } });
+    await app.inject({ method: "PATCH", url: `/v1/tenants/${tid}/feature-flags`, headers: plat(tid), payload: { featureFlags: { newUi: true, beta: false } } });
+
+    const res = await app.inject({ method: "GET", url: `/v1/tenants/${tid}/feature-flags`, headers: plat(tid) });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ tenantId: tid, featureFlags: { beta: false, newUi: true } });
+  });
+
+  it("PATCH /billing (PLAT) is readable by a tenant_admin via GET /billing", async () => {
+    const tid = randomUUID();
+    const patch = await app.inject({ method: "PATCH", url: `/v1/tenants/${tid}/billing`, headers: plat(tid), payload: { billing: { plan: "annual", seats: 25 } } });
+    expect(patch.statusCode).toBe(202);
+
+    const res = await app.inject({ method: "GET", url: `/v1/tenants/${tid}/billing`, headers: admin(tid) });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ tenantId: tid, billing: { plan: "annual", seats: 25 } });
+  });
+
+  it("PATCH /config (tenant_admin) replaces the sections it is given and keeps the rest", async () => {
+    const tid = randomUUID();
+    await app.inject({ method: "PATCH", url: `/v1/tenants/${tid}/modules`, headers: plat(tid), payload: { modules: { hrms: true } } });
+    const patch = await app.inject({
+      method: "PATCH",
+      url: `/v1/tenants/${tid}/config`,
+      headers: admin(tid),
+      payload: { featureFlags: { beta: true } },
+    });
+    expect(patch.statusCode).toBe(202);
+
+    const cfg = await app.inject({ method: "GET", url: `/v1/tenants/${tid}/config`, headers: admin(tid) });
+    expect(cfg.json()).toMatchObject({ modules: { hrms: true }, featureFlags: { beta: true } });
+  });
+
+  it("is tenant-isolated: a tenant_admin cannot read another tenant's config", async () => {
+    const own = randomUUID();
+    const other = randomUUID();
+    const res = await app.inject({ method: "GET", url: `/v1/tenants/${other}/config`, headers: admin(own) });
+    expect(res.statusCode).toBe(403);
   });
 });
