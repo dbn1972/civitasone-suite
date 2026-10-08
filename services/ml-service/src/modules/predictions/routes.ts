@@ -10,9 +10,16 @@
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { eq, and, sql, desc } from "drizzle-orm";
-import { resolveContext, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { mlPredictions } from "./schema.js";
+
+// GAP2-ML-PREDICTIONS-01: the prediction-history read must be role-gated like
+// every other read in this unit. Prediction factors expose scored, decision-
+// sensitive signals, so object-level read is restricted to the ML reader set
+// (identical to evaluations/routes.ts EVALUATION_ROLES) rather than any
+// authenticated tenant user.
+const PREDICTION_READ_ROLES = ["ml_admin", "analytics_admin", "super_admin"];
 
 const predictionsQuery = z.object({
   entityId: z.string().uuid(),
@@ -24,10 +31,13 @@ const predictionsQuery = z.object({
 export async function predictionRoutes(app: FastifyInstance): Promise<void> {
   /**
    * GET /v1/ml/predictions — Prediction history lookup by entityId + domain
-   * Requires: JWT auth (any role, tenant-scoped)
+   * Requires: ml_admin / analytics_admin / super_admin (GAP2-ML-PREDICTIONS-01).
+   * Prediction factors expose decision-sensitive signals, so this read is
+   * role-gated like GET /v1/ml/evaluations — not open to any tenant user.
    */
   app.get("/v1/ml/predictions", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, PREDICTION_READ_ROLES);
 
     const query = predictionsQuery.parse(req.query);
     const { entityId, domain, page, pageSize } = query;

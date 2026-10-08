@@ -1,7 +1,7 @@
 /**
  * jobs repo — Drizzle queries against domain schema ONLY.
  */
-import { and, eq } from "drizzle-orm";
+import { and, eq, count } from "drizzle-orm";
 import { db, readScoped } from "../../shared/db.js";
 import { jobs, type JobRow, type JobInsert, type JobView } from "./schema.js";
 
@@ -16,6 +16,7 @@ function toView(r: JobRow): JobView {
     rowCount: r.rowCount,
     requestedBy: r.requestedBy,
     completedAt: r.completedAt,
+    createdAt: r.createdAt,
     downloadUrl: r.downloadUrl,
     version: r.version,
   };
@@ -35,6 +36,16 @@ export async function listByTenant(tenantId: string, limit: number, offset: numb
     .limit(limit)
     .offset(offset));
   return rows.map(toView);
+}
+
+/**
+ * GAP2-REPORTS-PAGINATION-01: tenant-scoped total row count, so meta.total
+ * reflects the TRUE number of jobs rather than the length of the capped page.
+ */
+export async function countByTenant(tenantId: string): Promise<number> {
+  const rows = await readScoped(tenantId, (tx) =>
+    tx.select({ value: count() }).from(jobs).where(eq(jobs.tenantId, tenantId)));
+  return Number(rows[0]?.value ?? 0);
 }
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;

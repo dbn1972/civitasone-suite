@@ -865,3 +865,59 @@ export const DESIGNER_AUTHOR_ROLES = ["citizen_admin", "super_admin"];
  * POST/deploy route.
  */
 export const WORKFLOW_DESIGNER_AUTHOR_ROLES = ["workflow_admin", "super_admin", "tenant_admin"];
+
+/**
+ * GAP2-ANALYTICS-ROLES-01: roles permitted to READ the analytics module
+ * (KPI library, Data Warehouse, AI Insights, Dashboards, Queries, Exports).
+ * MUST mirror analytics-service's canonical ANALYTICS_READ_ROLES
+ * (services/analytics-service/src/shared/roles.ts) — the UNION of the two
+ * historical reader names (`analytics_user` + `analytics_viewer`) plus the
+ * admin/platform roles. Before the fix the analytics layout had no role gate
+ * (ModuleGate-only), so a user whose role the API would 403 saw four failed
+ * fetches instead of PermissionDenied. The service remains the authority; this
+ * gate is defence-in-depth + honest UX.
+ */
+export const ANALYTICS_READER_ROLES = [
+  "analytics_user",
+  "analytics_viewer",
+  "analytics_admin",
+  "tenant_admin",
+  "super_admin",
+  "platform_admin",
+];
+
+/**
+ * GAP2-ANALYTICS-MLINSIGHTS-01: roles permitted to reach the ML Insights
+ * surfaces under /analytics/ml-insights. MUST mirror ml-service's
+ * EVALUATION_ROLES (services/ml-service/src/modules/evaluations/routes.ts),
+ * which gate GET /v1/ml/evaluations. The ML Insights pages live under the
+ * analytics layout (any analytics reader can reach them) but the backing
+ * evaluations endpoint only admits this narrower set — so a plain
+ * analytics_user/analytics_viewer previously saw a generic "couldn't load"
+ * error. Gating the ml-insights route on this set shows PermissionDenied (and
+ * the hub hides the tile) rather than a silent 403. The server remains the
+ * authority.
+ */
+export const ML_INSIGHTS_READ_ROLES = ["ml_admin", "analytics_admin", "super_admin"];
+
+/**
+ * GAP2-REPORTS-ROLES-01: roles permitted to READ the reports module (report
+ * jobs, KPIs, MIS, dashboards, scheduled reports). MUST mirror
+ * report-service's canonical REPORT_READ_ROLES
+ * (services/report-service/src/shared/roles.ts) — the UNION of the two
+ * historical reader names (`report_user` + `report_viewer`) plus the admin/
+ * finance/tenant roles. Before the fix the /reports layout had no role gate
+ * (ModuleGate-only) and the service modules disagreed on the vocabulary, so a
+ * report_user could build jobs but was 403'd on scheduled reports (and a
+ * report_viewer the reverse) with no web signal. The service remains the
+ * authority; this gate is defence-in-depth + honest UX.
+ */
+export const REPORTS_READER_ROLES = [
+  "report_user",
+  "report_viewer",
+  "report_admin",
+  "finance_admin",
+  "admin",
+  "tenant_admin",
+  "super_admin",
+];

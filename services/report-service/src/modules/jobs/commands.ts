@@ -22,6 +22,11 @@ export async function createJob(ctx: RequestContext, body: CreateJobBody): Promi
     rowCount: null,
     requestedBy: ctx.actorId,
     completedAt: null,
+    // GAP2-REPORTS-JOBS-01: stamp the projection's createdAt at creation so a
+    // just-queued job's Requested time (derived from createdAt in the route
+    // mapper) is correct even while served from the write-through cache,
+    // before the DB row is read back.
+    createdAt: new Date(),
     downloadUrl: null,
     version: 1,
   };

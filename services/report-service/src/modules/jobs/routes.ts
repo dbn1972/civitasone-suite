@@ -17,38 +17,49 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as kpiQueries from "../kpis/queries.js";
 import * as misQueries from "../mis/queries.js";
-
-const ROLES = ["report_user", "report_admin", "super_admin"];
+// GAP2-REPORTS-ROLES-01: single canonical report role vocabulary shared with
+// the dashboard and scheduled modules. READ_ROLES gates the GET surfaces,
+// WRITE_ROLES the POST surfaces (create/share a job). Previously this file
+// used a bare ["report_user","report_admin","super_admin"] that disagreed
+// with the scheduled routes' ["report_viewer", ...].
+import { REPORT_READ_ROLES as READ_ROLES, REPORT_JOB_WRITE_ROLES as WRITE_ROLES } from "../../shared/roles.js";
 
 export async function jobRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/reports/jobs", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, WRITE_ROLES);
     const body = createJobBody.parse(req.body);
     sendAccepted(reply, acceptedResponseSchema, await commands.createJob(ctx, body));
   });
 
   app.get("/v1/reports", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, READ_ROLES);
     const q = listQuerySchema.parse(req.query);
-    const result = await queries.listJobs(ctx.tenantId, q.limit, q.offset);
+    const [result, total] = await Promise.all([
+      queries.listJobs(ctx.tenantId, q.limit, q.offset),
+      queries.countJobs(ctx.tenantId),
+    ]);
     return reply.send({
       data: result.data,
-      meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, total: result.data.length },
+      // GAP2-REPORTS-PAGINATION-01: meta.total is the TRUE tenant-scoped row
+      // count (count(*)), not result.data.length (the capped page size), so a
+      // tenant with more than `limit` jobs gets a correct total and the UI can
+      // tell there are more pages.
+      meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, total },
     });
   });
 
   app.get("/v1/reports/jobs", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, READ_ROLES);
     const q = listQuerySchema.parse(req.query);
     sendValidated(reply, jobsListSchema, await queries.listJobs(ctx.tenantId, q.limit, q.offset));
   });
 
   app.get("/v1/reports/report-jobs", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, READ_ROLES);
     const q = listQuerySchema.parse(req.query);
     const result = await queries.listJobs(ctx.tenantId, q.limit, q.offset);
     sendValidated(reply, ReportJobSummaryListSchema, result.data.map((job) => ({
@@ -56,7 +67,10 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
       reportName: job.name,
       module: job.reportType ?? "general",
       requestedBy: job.requestedBy ?? job.tenantId,
-      requestedAt: job.completedAt ? new Date(job.completedAt as unknown as string).toISOString() : new Date().toISOString(),
+      // GAP2-REPORTS-JOBS-01: Requested is the job's real creation time
+      // (reports.jobs.created_at), never the current request time. A still-
+      // queued/running job must not appear "requested just now" on every load.
+      requestedAt: new Date(job.createdAt as unknown as string).toISOString(),
       completedAt: job.completedAt ? new Date(job.completedAt as unknown as string).toISOString() : undefined,
       format: (["pdf", "xlsx", "csv", "html"].includes(job.format) ? job.format : "pdf") as "pdf" | "xlsx" | "csv" | "html",
       status: (["queued", "running", "completed", "failed"].includes(job.status) ? job.status : "queued") as "queued" | "running" | "completed" | "failed",
@@ -67,7 +81,7 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/reports/report-jobs/:id", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, READ_ROLES);
     const { id } = idParam.parse(req.params);
     const job = await queries.getJob(ctx.tenantId, id);
     if (!job) throw new HttpError(404, "NOT_FOUND", "report job not found");
@@ -76,7 +90,10 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
       reportName: job.name,
       module: job.reportType ?? "general",
       requestedBy: job.requestedBy ?? job.tenantId,
-      requestedAt: job.completedAt ? new Date(job.completedAt as unknown as string).toISOString() : new Date().toISOString(),
+      // GAP2-REPORTS-JOBS-01: Requested is the job's real creation time
+      // (reports.jobs.created_at), never the current request time. A still-
+      // queued/running job must not appear "requested just now" on every load.
+      requestedAt: new Date(job.createdAt as unknown as string).toISOString(),
       completedAt: job.completedAt ? new Date(job.completedAt as unknown as string).toISOString() : undefined,
       format: (["pdf", "xlsx", "csv", "html"].includes(job.format) ? job.format : "pdf") as "pdf" | "xlsx" | "csv" | "html",
       status: (["queued", "running", "completed", "failed"].includes(job.status) ? job.status : "queued") as "queued" | "running" | "completed" | "failed",
@@ -91,7 +108,7 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/reports/jobs/:id", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, READ_ROLES);
     const { id } = idParam.parse(req.params);
     const job = await queries.getJob(ctx.tenantId, id);
     if (!job) throw new HttpError(404, "NOT_FOUND", "report job not found");
@@ -100,7 +117,7 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/reports/jobs/:id/share", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, WRITE_ROLES);
     const { id } = idParam.parse(req.params);
     const { recipients, message } = shareJobBody.parse(req.body);
     const job = await queries.getJob(ctx.tenantId, id);
@@ -116,7 +133,7 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
    *  Accepts optional `watermarkText` query param for ad-hoc watermarking. */
   app.get("/v1/reports/jobs/:id/download", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, READ_ROLES);
     const { id } = idParam.parse(req.params);
     const { watermarkText } = downloadQuerySchema.parse(req.query);
     const job = await queries.getJob(ctx.tenantId, id);
@@ -135,14 +152,14 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/reports/kpis", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, READ_ROLES);
     const q = listQuerySchema.parse(req.query);
     sendValidated(reply, KPISummaryListSchema, await kpiQueries.listKpis(ctx.tenantId, q.limit));
   });
 
   app.get("/v1/reports/mis", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, READ_ROLES);
     const q = listQuerySchema.parse(req.query);
     sendValidated(reply, MISSummaryListSchema, await misQueries.listMisSummary(ctx.tenantId, q.limit));
   });

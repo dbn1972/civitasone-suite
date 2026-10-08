@@ -14,13 +14,17 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { createScheduledReportBody, updateScheduledReportBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
-
-const REPORT_ROLES = ["report_viewer", "report_admin", "finance_admin", "super_admin", "admin", "tenant_admin"];
+// GAP2-REPORTS-ROLES-01: scheduled reports now share the single canonical
+// report vocabulary. Reads use REPORT_READ_ROLES, mutations REPORT_WRITE_ROLES
+// — both of which include `report_user` AND `report_viewer`, so a report_user
+// (who can build jobs) is no longer 403'd here while a report_viewer is no
+// longer 403'd on jobs.
+import { REPORT_READ_ROLES, REPORT_WRITE_ROLES } from "../../shared/roles.js";
 
 export async function scheduledRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/reports/scheduled", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, REPORT_ROLES);
+    requireRole(ctx, REPORT_WRITE_ROLES);
     const body = createScheduledReportBody.parse(req.body);
     const result = await commands.createScheduledReport(ctx, body);
     return reply.code(202).send({ data: result });
@@ -28,18 +32,24 @@ export async function scheduledRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/reports/scheduled", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, REPORT_ROLES);
+    requireRole(ctx, REPORT_READ_ROLES);
     const q = listQuerySchema.parse(req.query);
-    const result = await queries.listScheduledReports(ctx.tenantId, q.limit, q.offset);
+    const [result, total] = await Promise.all([
+      queries.listScheduledReports(ctx.tenantId, q.limit, q.offset),
+      queries.countScheduledReports(ctx.tenantId),
+    ]);
     return reply.send({
       data: result.data,
-      meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, total: result.data.length },
+      // GAP2-REPORTS-PAGINATION-01: meta.total is the TRUE count of enabled
+      // scheduled reports (count(*) with the same enabled filter), not the
+      // capped page length, so pagination can tell there are more pages.
+      meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, total },
     });
   });
 
   app.get("/v1/reports/scheduled/:id", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, REPORT_ROLES);
+    requireRole(ctx, REPORT_READ_ROLES);
     const { id } = idParam.parse(req.params);
     const row = await queries.getScheduledReport(ctx.tenantId, id);
     if (!row) throw new HttpError(404, "NOT_FOUND", "scheduled report not found");
@@ -48,7 +58,7 @@ export async function scheduledRoutes(app: FastifyInstance): Promise<void> {
 
   app.patch("/v1/reports/scheduled/:id", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, REPORT_ROLES);
+    requireRole(ctx, REPORT_WRITE_ROLES);
     const { id } = idParam.parse(req.params);
     const body = updateScheduledReportBody.parse(req.body);
     const result = await commands.updateScheduledReport(ctx, id, body);
@@ -57,7 +67,7 @@ export async function scheduledRoutes(app: FastifyInstance): Promise<void> {
 
   app.delete("/v1/reports/scheduled/:id", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, REPORT_ROLES);
+    requireRole(ctx, REPORT_WRITE_ROLES);
     const { id } = idParam.parse(req.params);
     const result = await commands.disableScheduledReport(ctx, id);
     return reply.code(202).send({ data: result });
@@ -65,7 +75,7 @@ export async function scheduledRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/reports/scheduled/:id/run", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, REPORT_ROLES);
+    requireRole(ctx, REPORT_WRITE_ROLES);
     const { id } = idParam.parse(req.params);
     const result = await commands.runScheduledReport(ctx, id);
     return reply.code(202).send({ data: result });

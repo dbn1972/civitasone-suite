@@ -4,8 +4,9 @@ import { ReportDashboardSchema } from "@civitasone/schemas/web";
 import { sendValidated } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole } from "../../shared/context.js";
 import * as kpiQueries from "../kpis/queries.js";
-
-const ROLES = ["report_user", "report_admin", "super_admin"];
+// GAP2-REPORTS-ROLES-01: dashboard reads use the single canonical report
+// reader vocabulary shared with jobs/kpis/mis/scheduled.
+import { REPORT_READ_ROLES as ROLES } from "../../shared/roles.js";
 
 export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/reports/dashboards", async (req, reply) => {

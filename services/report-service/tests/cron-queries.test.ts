@@ -325,11 +325,13 @@ describe("kpis/queries — listDashboardItems", () => {
     expect(items[0]!.title).toBe("Tickets Resolved");
     expect(items[0]!.module).toBe("helpdesk");
     expect(items[0]!.changeDirection).toBe("up");
-    // achievementPct is 110 which is >=100, so changePct should be 5
-    expect(items[0]!.changePct).toBe(5);
+    // GAP2-REPORTS-DASHBOARD-01: no fabricated changePct — the KPI row carries
+    // no prior-period value, so a honest delta cannot be computed and the
+    // field is omitted entirely (was a hardcoded 5).
+    expect(items[0]!).not.toHaveProperty("changePct");
   });
 
-  it("shows negative change for underperformers", async () => {
+  it("underperformer emits no fabricated changePct (GAP2-REPORTS-DASHBOARD-01)", async () => {
     mockState.selectResult = [
       {
         id: "kpi-d2",
@@ -346,7 +348,9 @@ describe("kpis/queries — listDashboardItems", () => {
     ];
     const { listDashboardItems } = await import("../src/modules/kpis/queries.js");
     const items = await listDashboardItems(TENANT_ID, 10);
-    expect(items[0]!.changePct).toBe(-3);
+    // GAP2-REPORTS-DASHBOARD-01: no fabricated -3 changePct; direction (a real
+    // stored signal) still drives the arrow.
+    expect(items[0]!).not.toHaveProperty("changePct");
     expect(items[0]!.changeDirection).toBe("down");
   });
 
@@ -422,8 +426,9 @@ describe("mis/queries — listMisSummary", () => {
     expect(financeGroup).toBeDefined();
     expect(financeGroup!.metrics).toHaveLength(2);
     expect(financeGroup!.metrics[0]!.label).toBe("Bills Processed");
-    // trend is "up" so change should be "+5%"
-    expect(financeGroup!.metrics[0]!.change).toBe("+5%");
+    // GAP2-REPORTS-MIS-01: no fabricated magnitude — the KPI source has no
+    // prior-period value, so `change` is omitted (was a hardcoded "+5%").
+    expect(financeGroup!.metrics[0]!).not.toHaveProperty("change");
 
     const hrmsGroup = result.find((r) => r.module === "hrms");
     expect(hrmsGroup).toBeDefined();
@@ -437,7 +442,7 @@ describe("mis/queries — listMisSummary", () => {
     expect(result).toEqual([]);
   });
 
-  it("handles down trend with -3% change", async () => {
+  it("down trend emits no fabricated change magnitude (GAP2-REPORTS-MIS-01)", async () => {
     mockState.selectResult = [
       {
         id: "kpi-m4",
@@ -454,10 +459,11 @@ describe("mis/queries — listMisSummary", () => {
     ];
     const { listMisSummary } = await import("../src/modules/mis/queries.js");
     const result = await listMisSummary(TENANT_ID, 10);
-    expect(result[0]!.metrics[0]!.change).toBe("-3%");
+    // GAP2-REPORTS-MIS-01: a down trend no longer fabricates "-3%".
+    expect(result[0]!.metrics[0]!).not.toHaveProperty("change");
   });
 
-  it("handles stable trend with 0% change", async () => {
+  it("stable trend emits no fabricated change magnitude (GAP2-REPORTS-MIS-01)", async () => {
     mockState.selectResult = [
       {
         id: "kpi-m5",
@@ -474,6 +480,7 @@ describe("mis/queries — listMisSummary", () => {
     ];
     const { listMisSummary } = await import("../src/modules/mis/queries.js");
     const result = await listMisSummary(TENANT_ID, 10);
-    expect(result[0]!.metrics[0]!.change).toBe("0%");
+    // GAP2-REPORTS-MIS-01: a stable trend no longer fabricates "0%".
+    expect(result[0]!.metrics[0]!).not.toHaveProperty("change");
   });
 });

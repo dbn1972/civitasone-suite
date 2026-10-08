@@ -57,4 +57,21 @@ describe("DataWarehousePage", () => {
     // clean numeric total sums correctly
     expect(screen.getByText("Total Records").closest(".stat")).toHaveTextContent("30");
   });
+
+  it("GAP2-ANALYTICS-DATA-WAREHOUSE-01: when every row's status is unknown ('—'), Healthy and Attention both show '—'", async () => {
+    // The backend no longer stamps a blanket 'Healthy'; it returns '—' when
+    // no quality signal exists. Rows with no health signal must count as
+    // neither Healthy nor Attention (previously all such rows read as
+    // Attention, which is just as misleading as all-Healthy).
+    mockDw({
+      data: [
+        { dataset: "A", lastRefresh: "2023-01-02 03:04", records: "10", size: "—", qualityScore: "—", status: "—" },
+        { dataset: "B", lastRefresh: "2023-01-02 03:04", records: "20", size: "—", qualityScore: "—", status: "—" },
+      ],
+      source: "api",
+    });
+    render(await DataWarehousePage());
+    expect(screen.getByText("Healthy").closest(".stat")).toHaveTextContent("—");
+    expect(screen.getByText("Attention").closest(".stat")).toHaveTextContent("—");
+  });
 });

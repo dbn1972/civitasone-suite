@@ -5,12 +5,16 @@
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole } from "../../shared/context.js";
 import { cache } from "../../shared/infra.js";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { savedMetrics } from "../metrics/schema.js";
 import { factEvents } from "../facts/schema.js";
-import { eq, count } from "drizzle-orm";
-
-const READ_ROLES = ["analytics_viewer", "analytics_admin", "tenant_admin", "super_admin", "platform_admin"];
+import { eq, count, max } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
+// GAP2-ANALYTICS-ROLES-01: single canonical reader vocabulary across every
+// analytics read route (union of the two historical names so no existing
+// principal loses access). Previously this file used a bare
+// ["analytics_viewer", ...] array that did NOT include "analytics_user".
+import { ANALYTICS_READ_ROLES as READ_ROLES } from "../../shared/roles.js";
 
 function paginationMeta(total: number, page: number, pageSize: number) {
   return { page, pageSize, total };
@@ -26,7 +30,7 @@ export async function kpiRoutes(app: FastifyInstance): Promise<void> {
     const rows = await cache.getOrLoad(
       cache.makeKey(tenantId, "analytics", "kpis"),
       async () => {
-        const result = await scopedRead(async (tx) =>
+        const result = await runWithTenant(tenantId, () => scopedRead(async (tx) =>
           tx.select({
             id: savedMetrics.id,
             name: savedMetrics.name,
@@ -35,7 +39,7 @@ export async function kpiRoutes(app: FastifyInstance): Promise<void> {
             .where(eq(savedMetrics.tenantId, tenantId))
             .orderBy(savedMetrics.name)
             .limit(200),
-        );
+        ));
         return result.map((r) => ({
           kpiName: r.name,
           category: r.metricKey?.split(".")[0] ?? "General",
@@ -59,25 +63,38 @@ export async function kpiRoutes(app: FastifyInstance): Promise<void> {
     const rows = await cache.getOrLoad(
       cache.makeKey(tenantId, "analytics", "data-warehouse"),
       async () => {
-        // Summarize fact_events by source module
-        const result = await scopedRead(async (tx) =>
+        // Summarize fact_events by source module. GAP2-ANALYTICS-DATA-WAREHOUSE-01:
+        // `lastRefresh` is derived from the real max(occurred_at) of each
+        // source's fact_events — NOT request time. The old
+        // `new Date().toISOString()` stamped "now" on every request, falsely
+        // implying a just-completed refresh. `size`/`qualityScore` remain "—"
+        // (no real signal exists), and `status` is now "—" (unknown) rather
+        // than a blanket "Healthy" that made the page's Attention count
+        // structurally always 0.
+        const result = await runWithTenant(tenantId, () => scopedRead(async (tx) =>
           tx.select({
             source: factEvents.source,
             recordCount: count(factEvents.id),
+            lastOccurredAt: max(factEvents.occurredAt),
           }).from(factEvents)
             .where(eq(factEvents.tenantId, tenantId))
             .groupBy(factEvents.source)
             .orderBy(factEvents.source)
             .limit(50),
-        );
-        return result.map((r) => ({
-          dataset: r.source ?? "Unknown",
-          lastRefresh: new Date().toISOString().slice(0, 16).replace("T", " "),
-          records: String(r.recordCount),
-          size: "—",
-          qualityScore: "—",
-          status: "Healthy",
-        }));
+        ));
+        return result.map((r) => {
+          const last = r.lastOccurredAt
+            ? new Date(r.lastOccurredAt as unknown as string | Date)
+            : null;
+          return {
+            dataset: r.source ?? "Unknown",
+            lastRefresh: last ? last.toISOString().slice(0, 16).replace("T", " ") : "—",
+            records: String(r.recordCount),
+            size: "—",
+            qualityScore: "—",
+            status: "—",
+          };
+        });
       },
     );
 
