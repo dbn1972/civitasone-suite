@@ -29,7 +29,6 @@
     "services/hrms-service/src/modules/social/routes.ts::POST /v1/hrms/birthdays/:id/wish",
     "services/hrms-service/src/modules/social/routes.ts::POST /v1/hrms/devices/register",
     "services/hrms-service/src/modules/social/routes.ts::POST /v1/hrms/expenses",
-    "services/hrms-service/src/modules/social/routes.ts::POST /v1/hrms/kudos",
     "services/hrms-service/src/modules/social/routes.ts::POST /v1/hrms/travel-requests",
     "services/hrms-service/src/modules/visiting-cards/routes.ts::PATCH /v1/hrms/visiting-card/me",
     "services/hrms-service/src/modules/visiting-cards/routes.ts::POST /v1/hrms/visiting-card/me/share",

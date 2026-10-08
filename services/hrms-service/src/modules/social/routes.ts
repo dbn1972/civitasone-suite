@@ -7,6 +7,7 @@ import { sqlClient } from "../../shared/db.js";
 import { withRawTenantGuc } from "@civitasone/db";
 import { presignedGetUrl } from "@civitasone/storage";
 import { writeAuditLog } from "../../shared/audit.js";
+import { resolveEmployeeForActor } from "../employee/actor-link.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
@@ -159,11 +160,33 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
   /** POST /v1/hrms/kudos — give kudos to a colleague */
   app.post("/v1/hrms/kudos", async (req, reply) => {
     const ctx = resolveContext(req);
+    // GAP2-HR-SOCIAL-FEED-07 (SEC): this handler had NO requireRole call --
+    // any authenticated tenant principal (even a role outside the feature's
+    // audience) could insert a kudos row and fire a push notification at an
+    // arbitrary receiverId. Every other mutating route in this file is gated,
+    // and the two sibling GET feed handlers were deliberately patched (SF-16)
+    // to add this exact gate; the POST was missed. Same role set as the feed
+    // handlers (HR + manager + employee).
+    requireRole(ctx, ALL_ROLES);
     const body = kudosCreateSchema.parse(req.body);
     const id = randomUUID();
     const now = new Date().toISOString();
 
-    const { receiverName, giverName } = await withTenantGuc(ctx.tenantId, async (pool) => {
+    // GAP2-HR-SOCIAL-FEED-08 (CROSS): kudos rows must live in ONE identity
+    // space. receiver_id is an employee.hrms_employees.id (body.receiverId),
+    // so giver_id must be the caller's OWN hrms_employees.id too -- resolved
+    // via resolveEmployeeForActor (keyed on user_ref), exactly as the rest of
+    // the service does. The old code stored ctx.actorId (a Keycloak user_ref,
+    // a different id space) in giver_id, which (a) made the two columns
+    // incomparable and (b) made the feed's "my received" stat -- which
+    // compares receiver_id against ctx.actorId -- permanently 0 for every user.
+    const giverEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+    if (!giverEmp) {
+      throw new HttpError(403, "GIVER_NOT_LINKED", "No employee record is linked to this account");
+    }
+    const giverId = giverEmp.id;
+
+    const { giverName } = await withTenantGuc(ctx.tenantId, async (pool) => {
       // Get receiver name for feed display.
       // Audit: employee.hrms_employees has no first_name/last_name (only
       // full_name) and no user_id (only user_ref) -- this and every other
@@ -179,20 +202,17 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
 
       const receiverName = receiver.full_name;
 
-      // Get giver name
-      const giverRow = await pool.query(
-        `SELECT full_name FROM employee.hrms_employees WHERE user_ref = $1 AND tenant_id = $2`,
-        [ctx.actorId, ctx.tenantId],
-      );
-      const giverName = giverRow.rows[0]?.full_name ?? "Unknown";
+      // Giver name comes from the resolved employee row (same id space as
+      // giver_id now), not a second user_ref lookup.
+      const giverName = giverEmp.fullName ?? "Unknown";
 
       await pool.query(
         `INSERT INTO employee.hrms_social_kudos (id, tenant_id, giver_id, receiver_id, giver_name, receiver_name, badge, message, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [id, ctx.tenantId, ctx.actorId, body.receiverId, giverName, receiverName, body.badge, body.message, now],
+        [id, ctx.tenantId, giverId, body.receiverId, giverName, receiverName, body.badge, body.message, now],
       );
 
-      return { receiverName, giverName };
+      return { giverName };
     });
 
     // Emit notification event
@@ -223,7 +243,16 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
   /** GET /v1/hrms/kudos/feed — organization-wide kudos feed */
   app.get("/v1/hrms/kudos/feed", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, ALL_ROLES);
     const limit = Math.min(Number((req.query as any)?.limit ?? 50), 100);
+
+    // GAP2-HR-SOCIAL-FEED-08: giver_id/receiver_id are both
+    // employee.hrms_employees.id now (see the POST handler), so "my" stats
+    // must compare against the caller's OWN employee id, not ctx.actorId (a
+    // user_ref). Resolve it once; a not-yet-linked caller legitimately has
+    // zero kudos either way, so a null id yields 0/0 without a special case.
+    const myEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+    const myEmpId = myEmp?.id ?? null;
 
     const { rows, myStats } = await withTenantGuc(ctx.tenantId, async (pool) => {
       const rows = await pool.query(
@@ -241,7 +270,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
         `SELECT
            (SELECT COUNT(*) FROM employee.hrms_social_kudos WHERE receiver_id = $1 AND tenant_id = $2) AS received,
            (SELECT COUNT(*) FROM employee.hrms_social_kudos WHERE giver_id = $1 AND tenant_id = $2) AS given`,
-        [ctx.actorId, ctx.tenantId],
+        [myEmpId, ctx.tenantId],
       );
 
       return { rows, myStats };

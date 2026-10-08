@@ -47,6 +47,7 @@ export function ElectionForm({ plans }: Props) {
   const [planId, setPlanId] = useState(plans[0]?.id ?? "");
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [invalid, setInvalid] = useState<Set<string>>(new Set());
+  const [overCap, setOverCap] = useState<Set<string>>(new Set());
   const [message, setMessage] = useState<{ tone: "good" | "bad"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const router = useRouter();
@@ -59,12 +60,14 @@ export function ElectionForm({ plans }: Props) {
   function setAmount(component: string, value: string) {
     setAmounts((a) => ({ ...a, [component]: value }));
     setInvalid((s) => { const n = new Set(s); n.delete(component); return n; });
+    setOverCap((s) => { const n = new Set(s); n.delete(component); return n; });
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedPlan) return;
     const errs = new Set<string>();
+    const caps = new Set<string>();
     const elections: Array<{ component: string; electedMinor: number }> = [];
     for (const c of selectedPlan.components) {
       const raw = amounts[c.name];
@@ -74,11 +77,19 @@ export function ElectionForm({ plans }: Props) {
         errs.add(c.name);
         continue;
       }
+      // GAP2-HR-BENEFITS-07: mirror the server-side cap (benefit_plans
+      // components[].maxMinor) so an over-cap amount is caught inline before
+      // the round trip, instead of relying on the backend 422 alone.
+      if (Number(minor) > c.maxMinor) {
+        caps.add(c.name);
+        continue;
+      }
       elections.push({ component: c.name, electedMinor: Number(minor) });
     }
-    if (elections.length === 0) errs.add("__form__");
+    if (elections.length === 0 && caps.size === 0) errs.add("__form__");
     setInvalid(errs);
-    if (errs.size > 0) return;
+    setOverCap(caps);
+    if (errs.size > 0 || caps.size > 0) return;
 
     setBusy(true);
     setMessage(null);
@@ -125,7 +136,7 @@ export function ElectionForm({ plans }: Props) {
               <select
                 id={ids.plan}
                 value={planId}
-                onChange={(e) => { setPlanId(e.target.value); setAmounts({}); setInvalid(new Set()); }}
+                onChange={(e) => { setPlanId(e.target.value); setAmounts({}); setInvalid(new Set()); setOverCap(new Set()); }}
                 style={inputStyle}
               >
                 {plans.map((p) => (
@@ -147,13 +158,18 @@ export function ElectionForm({ plans }: Props) {
                   placeholder="0.00"
                   value={amounts[c.name] ?? ""}
                   onChange={(e) => setAmount(c.name, e.target.value)}
-                  style={invalid.has(c.name) ? inputErrStyle : inputStyle}
-                  aria-invalid={invalid.has(c.name)}
-                  aria-describedby={invalid.has(c.name) ? `${ids.plan}-${c.name}-err` : undefined}
+                  style={invalid.has(c.name) || overCap.has(c.name) ? inputErrStyle : inputStyle}
+                  aria-invalid={invalid.has(c.name) || overCap.has(c.name)}
+                  aria-describedby={invalid.has(c.name) || overCap.has(c.name) ? `${ids.plan}-${c.name}-err` : undefined}
                 />
                 {invalid.has(c.name) && (
                   <p id={`${ids.plan}-${c.name}-err`} role="alert" style={fieldErrStyle}>
                     {t("invalidAmount")}
+                  </p>
+                )}
+                {overCap.has(c.name) && !invalid.has(c.name) && (
+                  <p id={`${ids.plan}-${c.name}-err`} role="alert" style={fieldErrStyle}>
+                    {t("amountOverCap")}
                   </p>
                 )}
               </div>
