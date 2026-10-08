@@ -147,9 +147,13 @@ describe("GET /v1/admin/health/readiness", () => {
     expect(res.statusCode).not.toBe(403);
   });
 
-  it("returns 403 for tenant_admin (SA only)", async () => {
+  // GAP2-TENANT-ADMIN-READINESS-08: readiness is now consumed by the
+  // tenant-admin dashboard/readiness page, so tenant_admin must pass auth
+  // (gated to TENANT_ADMIN_ROLES like /v1/admin/health), not 403.
+  it("passes auth for tenant_admin (consumed by tenant-admin pages)", async () => {
     const res = await app.inject({ method: "GET", url: "/v1/admin/health/readiness", headers: authHeader(["tenant_admin"]) });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).not.toBe(401);
+    expect(res.statusCode).not.toBe(403);
   });
 });
 

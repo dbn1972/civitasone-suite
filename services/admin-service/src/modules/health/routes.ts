@@ -17,11 +17,23 @@ export async function healthRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(await queries.getAggregateHealth());
   });
 
-  // P0-1: readiness exposes platform internals and is restricted to super_admin.
+  // GAP2-TENANT-ADMIN-READINESS-07: readiness is computed from the live
+  // per-service health rollup (not a frozen 100/true constant); a null result
+  // means it cannot be computed at runtime, which the web renders as its honest
+  // "not available" state.
+  // GAP2-TENANT-ADMIN-READINESS-08: this route is consumed by the tenant-admin
+  // dashboard and readiness page (role `tenant_admin`), so it must be gated to
+  // TENANT_ADMIN_ROLES — consistent with GET /v1/admin/health above. Under the
+  // previous requireSuperAdmin gate a tenant_admin got 403, which flipped the
+  // whole dashboard loader to source:"error" and blanked the home KPIs.
   app.get("/v1/admin/health/readiness", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireSuperAdmin(ctx);
-    return reply.send(computeProductionReadiness());
+    requireRole(ctx, [...TENANT_ADMIN_ROLES]);
+    const readiness = await computeProductionReadiness();
+    if (!readiness) {
+      return reply.send({ available: false, checkedAt: new Date().toISOString() });
+    }
+    return reply.send(readiness);
   });
 
   app.get("/v1/admin/operations", async (req, reply) => {

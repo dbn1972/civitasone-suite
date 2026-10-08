@@ -49,20 +49,33 @@ describe("GET /v1/admin/health", () => {
 });
 
 describe("GET /v1/admin/health/readiness", () => {
-  it("returns 200 for super_admin with readiness data", async () => {
+  // GAP2-TENANT-ADMIN-READINESS-07: readiness is derived from the LIVE
+  // per-service health rollup. Live probe results are non-deterministic on a
+  // shared host, so we assert the SHAPE is the derived one — the gate keys are
+  // the live rollup keys (allServicesHealthy/serviceQuorum/...), NOT the old
+  // frozen constant's keys (queueFirstWrites/responseValidation/...). The pure
+  // derivation values are covered deterministically by readiness-live-signals
+  // and the readinessFromHealth unit tests below.
+  it("returns 200 for super_admin with LIVE-derived readiness (gate keys reflect the health rollup, not the old constant)", async () => {
     const res = await app.inject({ method: "GET", url: "/v1/admin/health/readiness", headers: authHeader(["super_admin"]) });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.overall).toBe(100);
-    expect(body.productionReady).toBe(true);
     expect(body.gates).toBeDefined();
+    expect(Object.prototype.hasOwnProperty.call(body.gates, "allServicesHealthy")).toBe(true);
+    expect(Object.prototype.hasOwnProperty.call(body.gates, "serviceQuorum")).toBe(true);
+    // The old fabricated gate keys must be gone.
+    expect(Object.prototype.hasOwnProperty.call(body.gates, "queueFirstWrites")).toBe(false);
     expect(body.scores).toBeDefined();
+    expect(body.scores.serviceHealth).toBeDefined();
     expect(body.checkedAt).toBeDefined();
   });
 
-  it("returns 403 for tenant_admin", async () => {
+  // GAP2-TENANT-ADMIN-READINESS-08: the tenant-admin dashboard + readiness page
+  // (role tenant_admin) call this route, so it is gated to TENANT_ADMIN_ROLES
+  // (consistent with /v1/admin/health). A tenant_admin must NOT get 403.
+  it("returns 200 for tenant_admin (consumed by the tenant-admin dashboard)", async () => {
     const res = await app.inject({ method: "GET", url: "/v1/admin/health/readiness", headers: authHeader(["tenant_admin"]) });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(200);
   });
 });
 
@@ -1240,7 +1253,7 @@ import { resolveFeatureFlag, assertModuleEnabled, DomainError as ConfigDomainErr
 import { aggregateHealth } from "../src/modules/health/domain.js";
 import { breakGlassExpiresAt, isBreakGlassExpired, BREAK_GLASS_TTL_MS } from "../src/modules/support/domain.js";
 import { disallowedScopes, allowsAllScopes } from "../src/modules/api-keys/scopes.js";
-import { computeProductionReadiness } from "../src/modules/health/readiness.js";
+import { readinessFromHealth } from "../src/modules/health/readiness.js";
 import { isValidCron, meetsMinimumInterval } from "../src/modules/backup/validators.js";
 import { redactLogLine } from "../src/modules/health/operations.js";
 import { commandMessageId } from "../src/shared/idempotency.js";
@@ -1377,19 +1390,31 @@ describe("api-keys/scopes — disallowedScopes", () => {
 });
 
 describe("health/readiness — computeProductionReadiness", () => {
-  it("returns overall 100 and productionReady true", () => {
-    const result = computeProductionReadiness();
+  // GAP2-TENANT-ADMIN-READINESS-07: computeProductionReadiness() is now an
+  // async derivation over the live per-service health rollup (not a frozen
+  // 100/true constant), so these deterministic assertions drive the PURE core
+  // readinessFromHealth() with a synthetic rollup instead.
+  it("derives overall 100 / productionReady true when every service is healthy", () => {
+    const result = readinessFromHealth({
+      status: "ok",
+      services: [{ service: "identity-service", status: "ok" }, { service: "billing-service", status: "ok" }],
+      checkedAt: "2026-10-08T00:00:00.000Z",
+    });
     expect(result.overall).toBe(100);
     expect(result.productionReady).toBe(true);
     expect(result.allGreen).toBe(true);
     expect(result.checkedAt).toBeDefined();
   });
 
-  it("has all expected gates", () => {
-    const result = computeProductionReadiness();
-    expect(result.gates.queueFirstWrites).toBe(true);
-    expect(result.gates.responseValidation).toBe(true);
-    expect(result.gates.workersRunning).toBe(true);
+  it("derives productionReady false and failing gates when a dependency is down", () => {
+    const result = readinessFromHealth({
+      status: "degraded",
+      services: [{ service: "identity-service", status: "ok" }, { service: "billing-service", status: "down" }],
+      checkedAt: "2026-10-08T00:00:00.000Z",
+    });
+    expect(result.productionReady).toBe(false);
+    expect(result.gates.allServicesHealthy).toBe(false);
+    expect(result.gates.platformResponsive).toBe(true);
   });
 });
 
