@@ -8,8 +8,29 @@
  * Run: pnpm exec vitest run tests/architecture/queue-publish-messageid-guard.test.ts
  */
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import ts from "typescript";
 import { checkFile, objectLiteralOwnPropertyNames } from "../../scripts/ci/queue-publish-messageid-guard.mjs";
+
+// GAP2-PLATFORM-QUEUE-MESSAGEID-01: the 88 (live 87 on this tree) direct
+// queue.publish() call sites that omitted an explicit messageId were all
+// fixed and the baseline burned down to zero. This test fails on the old
+// code, where the checked-in baseline carried 87 tracked-debt entries.
+describe("GAP2-PLATFORM-QUEUE-MESSAGEID-01: baseline fully burned down", () => {
+  const baselinePath = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "../../scripts/ci/queue-publish-messageid-baseline.json",
+  );
+  const baseline = JSON.parse(readFileSync(baselinePath, "utf8"));
+
+  it("checked-in baseline has zero tracked-debt entries", () => {
+    expect(Array.isArray(baseline.entries)).toBe(true);
+    expect(baseline.entries).toHaveLength(0);
+    expect(baseline.count).toBe(0);
+  });
+});
 
 function parse(source) {
   return ts.createSourceFile("fixture.ts", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);

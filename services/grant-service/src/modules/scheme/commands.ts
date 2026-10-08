@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
+import { idempotentId } from "@civitasone/auth";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import type { CreateSchemeBody, CreateCriterionBody, UpdateSchemeBody, CloseSchemeBody } from "./validators.js";
@@ -18,6 +19,7 @@ export async function createScheme(ctx: RequestContext, body: CreateSchemeBody):
 
 export async function updateScheme(ctx: RequestContext, id: string, body: UpdateSchemeBody): Promise<Accepted> {
   await queue.publish(COMMANDS.schemeUpdate, {
+    messageId: idempotentId(ctx),
     type: COMMANDS.schemeUpdate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, updatedBy: ctx.actorId, ...body },
@@ -27,6 +29,7 @@ export async function updateScheme(ctx: RequestContext, id: string, body: Update
 
 export async function closeScheme(ctx: RequestContext, id: string, body: CloseSchemeBody = {}): Promise<Accepted> {
   await queue.publish(COMMANDS.schemeClose, {
+    messageId: idempotentId({ idempotencyKey: `scheme-close:${id}`, tenantId: ctx.tenantId }),
     type: COMMANDS.schemeClose,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, closedBy: ctx.actorId, ...(body.reason ? { reason: body.reason } : {}) },

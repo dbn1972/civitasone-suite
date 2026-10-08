@@ -192,7 +192,7 @@ describe("tenant-table-rls-guard: SEC-022 — ALTER TABLE ... ADD COLUMN tenant_
     expect(findTenantTableViolations(sql)).toHaveLength(0);
   });
 
-  it("passes the SEC-022 shape when ENABLE + FORCE + CREATE POLICY are added in the same file as the ALTER (mirrors the two real fleet migrations found while fixing this: admin-service 0014_webhook_lifecycle.sql, payroll-service 0039_tax_slab_config_tenant_scope.sql)", () => {
+  it("passes the SEC-022 shape when ENABLE + FORCE + CREATE POLICY are added in the same file as the ALTER (mirrors the two real fleet migrations found while fixing this: admin-service 0014b_webhook_lifecycle.sql, payroll-service 0039_tax_slab_config_tenant_scope.sql)", () => {
     const sql = `
       CREATE TABLE webhooks.webhook_deliveries (
         id uuid PRIMARY KEY,

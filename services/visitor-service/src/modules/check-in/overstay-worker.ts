@@ -135,6 +135,7 @@ export async function processOvstayDetectionCycle(
     // ── Step 1a: Publish overstayDetect command for standard handling ───
     try {
       await queue.publish(COMMANDS.overstayDetect, {
+        messageId: randomUUID(),
         type: COMMANDS.overstayDetect,
         tenantId: pass.tenantId,
         actorId: SYSTEM_ACTOR_ID,
@@ -183,6 +184,7 @@ export async function processOvstayDetectionCycle(
 
         // Higher-severity notification to security supervisor
         await queue.publish(NOTIFICATION_SEND, {
+          messageId: randomUUID(),
           type: NOTIFICATION_SEND,
           tenantId: pass.tenantId,
           actorId: SYSTEM_ACTOR_ID,

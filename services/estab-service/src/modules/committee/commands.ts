@@ -38,6 +38,7 @@ export async function createResolution(ctx: RequestContext, meetingId: string, b
 
 export async function uploadMinutes(ctx: RequestContext, meetingId: string, body: MinutesBody): Promise<Accepted> {
   await queue.publish(COMMANDS.meetingMinutes, {
+    messageId: randomUUID(),
     type: COMMANDS.meetingMinutes,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { meetingId, tenantId: ctx.tenantId, ...body },

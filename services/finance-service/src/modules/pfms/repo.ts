@@ -351,7 +351,7 @@ export async function upsertAdapterPfmsRecord(params: {
       // submissionStatus carries e-Kuber's own disposition vocabulary
       // (accepted/rejected/processing/completed/failed/pending) —
       // finance_pfms_submission_status_check was extended for this channel
-      // in migrations/0076_pfms_channel_reconciliation.sql. `status` is left
+      // in migrations/0076b_pfms_channel_reconciliation.sql. `status` is left
       // at its column default ('pending') deliberately: it's constrained to
       // the treasury batch's own vocabulary and no UI surfaces it for this
       // channel — submissionStatus is what GET /v1/finance/pfms/batches and

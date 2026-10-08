@@ -63,6 +63,7 @@ export async function submitDisbursementForApproval(ctx: RequestContext, id: str
     throw new HttpError(403, "SOD_VIOLATION", "submission for approval must be made by someone other than who initiated the disbursement (separation of duties)");
   }
   await queue.publish(COMMANDS.disbursementSubmitApproval, {
+    messageId: idempotentId({ idempotencyKey: `disbursement-submit-approval:${id}`, tenantId: ctx.tenantId }),
     type: COMMANDS.disbursementSubmitApproval,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId },

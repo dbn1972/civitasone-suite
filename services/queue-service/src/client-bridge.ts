@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { Queue } from "./bus.js";
 import type {
   QueueAdapter,
@@ -10,13 +11,16 @@ export function wrapQueueAsClient(queue: Queue, adapter: QueueAdapter): QueueCli
   return {
     async publish(options: QueuePublishOptions): Promise<void> {
       await queue.publish(options.queue, {
+        // Forward the caller's idempotency key as the stable messageId so a
+        // retried publish reuses it (consumer-side dedup); fall back to a fresh
+        // id only when the caller supplied none.
+        messageId: options.idempotencyKey ?? randomUUID(),
         type: options.queue,
         tenantId: options.tenantId,
         actorId: options.tenantId,
         correlationId: options.correlationId,
         schemaVersion: "1.0",
         payload: options.payload,
-        ...(options.idempotencyKey ? { messageId: options.idempotencyKey } : {}),
       });
     },
 

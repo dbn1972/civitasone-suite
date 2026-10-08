@@ -95,6 +95,7 @@ export async function attendanceCheckOut(
 ): Promise<AttendanceCommandAccepted> {
   const checkOutAt = (body.checkOutAt ?? new Date()).toISOString();
   await queue.publish(COMMANDS.attendanceCheckOut, {
+    messageId: randomUUID(),
     type: COMMANDS.attendanceCheckOut,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,

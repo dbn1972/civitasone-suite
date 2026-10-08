@@ -39,6 +39,7 @@ export async function createRti(ctx: RequestContext, body: CreateRtiBody): Promi
 
 export async function respondRti(ctx: RequestContext, rtiId: string, body: RespondRtiBody): Promise<Accepted> {
   await queue.publish(COMMANDS.rtiRespond, {
+    messageId: randomUUID(),
     type: COMMANDS.rtiRespond,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { rtiId, tenantId: ctx.tenantId, ...body },

@@ -28,6 +28,7 @@ export async function submitBid(ctx: RequestContext, auctionId: string, body: Su
 
 export async function closeAuction(ctx: RequestContext, auctionId: string): Promise<Accepted> {
   await queue.publish(COMMANDS.auctionClose, {
+    messageId: randomUUID(),
     type: COMMANDS.auctionClose,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id: auctionId, tenantId: ctx.tenantId },

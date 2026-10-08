@@ -19,6 +19,7 @@ export async function createHearing(ctx: RequestContext, caseId: string, body: C
 
 export async function adjournHearing(ctx: RequestContext, caseId: string, hearingId: string, body: AdjournBody): Promise<Accepted> {
   await queue.publish(COMMANDS.hearingAdjourn, {
+    messageId: randomUUID(),
     type: COMMANDS.hearingAdjourn,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { caseId, hearingId, tenantId: ctx.tenantId, ...body },

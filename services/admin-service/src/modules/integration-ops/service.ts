@@ -53,13 +53,16 @@ export async function recordDeadLetter(
 async function publishToTopic(row: DeadLetterRow, actorId: string): Promise<void> {
   try {
     await queue.publish(row.topic, {
+      // Reuse the original messageId so a replay dedupes at the consumer
+      // (`_inbox.processed`); fall back to the dead-letter row's own id when the
+      // original was never captured, which is still stable across replay retries.
+      messageId: row.messageId ?? row.id,
       type: row.topic,
       tenantId: row.tenantId,
       actorId,
       correlationId: row.correlationId ?? randomUUID(),
       schemaVersion: "1",
       payload: row.payload,
-      ...(row.messageId ? { messageId: row.messageId } : {}),
     });
   } catch (err) {
     throw new ReplayError(503, "REPLAY_UNAVAILABLE", `failed to republish to '${row.topic}': ${(err as Error).message}`);

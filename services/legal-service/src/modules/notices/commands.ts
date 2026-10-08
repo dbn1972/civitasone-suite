@@ -18,6 +18,7 @@ export async function createNotice(ctx: RequestContext, body: CreateNoticeBody):
 
 export async function respondNotice(ctx: RequestContext, noticeId: string, body: RespondNoticeBody): Promise<Accepted> {
   await queue.publish(COMMANDS.noticeRespond, {
+    messageId: randomUUID(),
     type: COMMANDS.noticeRespond,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { noticeId, tenantId: ctx.tenantId, ...body },

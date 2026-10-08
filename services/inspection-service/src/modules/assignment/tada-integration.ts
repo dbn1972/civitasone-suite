@@ -115,6 +115,7 @@ export async function publishTaDaClaim(
 
   // Also publish internal event for audit tracking
   await queue.publish(COMMANDS.tadaClaimCreate, {
+    messageId: randomUUID(),
     type: COMMANDS.tadaClaimCreate,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,

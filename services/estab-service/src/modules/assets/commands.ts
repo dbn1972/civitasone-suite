@@ -28,6 +28,7 @@ export async function bookVehicle(ctx: RequestContext, body: BookVehicleBody): P
 
 export async function returnVehicle(ctx: RequestContext, bookingId: string, body: ReturnVehicleBody): Promise<Accepted> {
   await queue.publish(COMMANDS.vehicleReturn, {
+    messageId: randomUUID(),
     type: COMMANDS.vehicleReturn,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { bookingId, tenantId: ctx.tenantId, ...body },

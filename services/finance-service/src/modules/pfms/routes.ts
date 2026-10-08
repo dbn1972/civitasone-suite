@@ -103,7 +103,7 @@ export async function pfmsRoutes(app: FastifyInstance): Promise<void> {
         // Reconciliation: which PFMS mechanism produced this row —
         // 'treasury_batch' (this route's own batch/DSC-sign/SFTP path) or
         // 'ekuber_adapter' (adapter-routes.ts's live REST path, unified into
-        // this same table/lookup — see migrations/0076_pfms_channel_reconciliation.sql).
+        // this same table/lookup — see migrations/0076b_pfms_channel_reconciliation.sql).
         channel: r.channel,
         // M1: emit paise as an exact decimal string (no Number() precision loss
         // on aggregate paise > 2^53).
@@ -149,7 +149,7 @@ export async function pfmsRoutes(app: FastifyInstance): Promise<void> {
     // completed synchronous REST submission, not a treasury batch — it has
     // no beneficiary set in finance_payments and nothing to put in a bank
     // file. Now that both channels share this table (see migrations/
-    // 0076_pfms_channel_reconciliation.sql), guard explicitly instead of
+    // 0076b_pfms_channel_reconciliation.sql), guard explicitly instead of
     // silently emitting a header-only CSV.
     if (batch.channel !== "treasury_batch") {
       throw new HttpError(400, "INVALID_CHANNEL", "bank file is only applicable to treasury batch submissions");

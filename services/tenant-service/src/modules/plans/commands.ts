@@ -48,6 +48,7 @@ export async function planCreate(ctx: RequestContext, body: CreatePlanBody): Pro
 
 export async function planUpdate(ctx: RequestContext, planId: string, body: UpdatePlanBody): Promise<Accepted> {
   await queue.publish(COMMANDS.planUpdate, {
+    messageId: randomUUID(),
     type: COMMANDS.planUpdate,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,
