@@ -251,7 +251,11 @@ export function mapRateRows(payload: unknown): ModuleRowSummary[] | null {
     // raw Drizzle rows whose column is `rateValue`, so reading `rateValueMinor`
     // alone left every amount blank (GAP2-CATALOGUE-RATES-02). Prefer the
     // event-contract name when present, else the serialized DB field.
-    const amountRaw = r.rateValueMinor ?? r.rateValue;
+    // `rateValue` is accepted ONLY in the shape the bigint column serialises to
+    // (an integer string of minor units). A JS number such as 125.5 is a legacy
+    // major-unit figure and must never be read as paise (shows "—" instead).
+    const serializedMinor = typeof r.rateValue === "string" && /^-?\d+$/.test(r.rateValue) ? r.rateValue : undefined;
+    const amountRaw = r.rateValueMinor ?? serializedMinor;
     const amount =
       typeof amountRaw === "bigint" || typeof amountRaw === "number" || typeof amountRaw === "string"
         ? formatMoney(amountRaw)
