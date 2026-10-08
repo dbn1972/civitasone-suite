@@ -104,7 +104,14 @@ export async function controlTowerRoutes(app: FastifyInstance): Promise<void> {
         kind: "aged_lead",
         label: "Leads ageing past 30 days",
         severity: aged > 10 ? "high" : "medium",
-        href: "/crm/dashboard",
+        // GAP2-CRM-CONTROL-TOWER-07: there is no aged-lead view that filters the
+        // contact register to lead age > 30d, so the previous href "/crm/dashboard"
+        // was a drill-down to a page that shows none of these records. Rather than
+        // send the operator somewhere that cannot show the drilled-into leads, the
+        // affordance is dropped: an empty href makes ExceptionTable render a
+        // disabled "Open" (isSafeInternalHref("") === false) instead of a dead
+        // link. Re-point this at a real age-filtered leads view once one exists.
+        href: "",
         count: aged,
       },
       {
@@ -125,9 +132,15 @@ export async function controlTowerRoutes(app: FastifyInstance): Promise<void> {
           pipelineMinor: String(r.pipelineMinor ?? "0"),
         })),
         exceptions,
+        // GAP2-CRM-CONTROL-TOWER-07: both reports used to point at /crm/dashboard,
+        // which has neither a region breakdown nor an aged-lead list. The region
+        // report IS this control-tower screen's "Pipeline by region" table, so
+        // regionReport points back here (a real, populated view). ageingReport is
+        // emptied because no aged-lead view exists yet — an empty string signals
+        // "no drill-down available" rather than a dead link to unrelated tiles.
         drillDown: {
-          regionReport: "/crm/dashboard",
-          ageingReport: "/crm/dashboard",
+          regionReport: "/crm/control-tower",
+          ageingReport: "",
           accounts: "/crm/accounts",
         },
       },

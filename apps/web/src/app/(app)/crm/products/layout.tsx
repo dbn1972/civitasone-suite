@@ -10,7 +10,14 @@ import { requireAnyRole } from "@/lib/auth/roleGuard";
  * crm_user could load and interact with a fully-wired Save/Delete price/tax
  * editor. Gate it to admins; the server stays the authority.
  */
-const ALLOWED_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
+// GAP2-CRM-PRODUCTS-07: match the backend product write routes exactly. The
+// crm-service products routes guard POST/PATCH/DELETE with
+// ADMIN_ROLES = [crm_admin, super_admin, tenant_admin] (products/routes.ts), and
+// read with [..., tenant_admin]. admin and platform_admin are accepted by NO
+// product route, so admitting them here gave those roles a fully-wired
+// Save/Delete price/tax editor whose every mutation 403'd. Narrowed to the
+// server set so the gate and the route agree (parity).
+const ALLOWED_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
 
 export default function ProductsLayout({ children }: { children: ReactNode }) {
   requireAnyRole(ALLOWED_ROLES, "/crm");
