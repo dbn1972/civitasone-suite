@@ -35,6 +35,27 @@ export async function getDocumentById(tenantId: string, id: string): Promise<Doc
   return repo.getById(tenantId, id);
 }
 
+/**
+ * GAP2-KNOWLEDGE-RECORDS-01: records projection joined to applied retention
+ * policy (see repo.listRecords). Not cached — retention fields are derived
+ * and the Records view is a low-traffic compliance screen.
+ */
+export async function listRecords(
+  tenantId: string,
+  limit: number,
+  offset: number,
+): Promise<repo.RecordProjection[]> {
+  return repo.listRecords(tenantId, limit, offset);
+}
+
+/**
+ * GAP2-KNOWLEDGE-DASHBOARD-CAP-01: repository-wide document aggregate for the
+ * dashboard StatCards + category chart (not page-capped).
+ */
+export async function summarizeDocuments(tenantId: string): Promise<repo.DocumentsSummary> {
+  return repo.summarize(tenantId);
+}
+
 export async function listDocumentsByCategory(tenantId: string, categoryId: string, limit: number, offset: number): Promise<DocumentView[]> {
   return repo.listByCategory(tenantId, categoryId, limit, offset);
 }

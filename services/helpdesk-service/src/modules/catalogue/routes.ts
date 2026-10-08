@@ -217,6 +217,15 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const request = await repo.findRequest(id, ctx.tenantId);
     if (!request) throw new HttpError(404, "NOT_FOUND", "service request not found");
+    // GAP2-HELPDESK-CATALOGUE-REQUEST-IDOR-01: a low-privilege helpdesk_user
+    // may only read THEIR OWN request detail (which can carry requester-entered
+    // PII in formData). Agents/admins may view any request. A non-owning
+    // helpdesk_user is 404'd (ids are not enumerable), matching the list
+    // endpoint's `?mine=true` self-scoping.
+    const isAgent = ["helpdesk_agent", "helpdesk_admin", "super_admin"].some((r) => ctx.roles.includes(r));
+    if (!isAgent && request.requestedBy !== ctx.actorId) {
+      throw new HttpError(404, "NOT_FOUND", "service request not found");
+    }
     const [approvals, stageEvents] = await Promise.all([
       repo.listApprovals(ctx.tenantId, id),
       repo.listStageEvents(ctx.tenantId, id),

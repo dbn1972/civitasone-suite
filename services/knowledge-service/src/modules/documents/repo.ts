@@ -33,6 +33,139 @@ export async function listByTenant(tenantId: string, limit: number, offset: numb
   return rows.map(toView);
 }
 
+/**
+ * GAP2-KNOWLEDGE-RECORDS-01: a records projection that joins each document to
+ * the retention policy applied to its category, so the Records Management
+ * view can surface real `retentionPeriod` / `disposalDueDate` / `department`
+ * instead of always-absent fields (which made the review/weeding KPIs
+ * structurally always 0).
+ *
+ * The link is document.category (a category NAME/slug on the document) →
+ * knowledge.categories (name OR slug) → knowledge.retention_policies.category_id.
+ * When a document's category has no applied retention policy, retention fields
+ * come back null and the page shows the honest "—"/unconfigured state.
+ *
+ * disposalDueDate = created_at + retention_years years + retention_days days.
+ * A policy with retention_years >= 100 is treated as "Permanent" (no disposal
+ * due date), matching the page's `retentionPeriod.includes("perm")` KPI.
+ */
+export type RecordProjection = {
+  id: string;
+  title: string;
+  status: string;
+  createdAt: Date;
+  department: string | null;
+  retentionPeriod: string | null;
+  disposalDueDate: string | null;
+};
+
+export async function listRecords(tenantId: string, limit: number, offset: number): Promise<RecordProjection[]> {
+  const rows = await scopedRead(async (tx) => {
+    // RLS on knowledge.documents/categories/retention_policies is keyed on the
+    // app.tenant_id GUC. scopedRead already runs inside db.transaction (so the
+    // request's tenant hook has set it), but this raw cross-table join reads
+    // categories/retention_policies which are not in this service's drizzle
+    // SCHEMA map — set the GUC explicitly to guarantee RLS admits the join on
+    // every path (direct-test included), matching the admin-service/config
+    // repo pattern.
+    await tx.execute(sql`SELECT set_config('app.tenant_id', ${tenantId}, true)`);
+    return tx.execute(sql`
+      SELECT
+        d.id,
+        d.title,
+        d.status,
+        d.created_at AS "createdAt",
+        c.name AS department,
+        rp.retention_years AS "retentionYears",
+        rp.retention_days  AS "retentionDays",
+        rp.action          AS "retentionAction"
+      FROM knowledge.documents d
+      LEFT JOIN knowledge.categories c
+        ON c.tenant_id = d.tenant_id
+       AND (c.name = d.category OR c.slug = d.category)
+      LEFT JOIN knowledge.retention_policies rp
+        ON rp.tenant_id = d.tenant_id
+       AND rp.category_id = c.id
+      WHERE d.tenant_id = ${tenantId}
+      ORDER BY d.updated_at DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `);
+  });
+  const data = (rows as unknown as { rows?: Array<Record<string, unknown>> }).rows ?? (rows as unknown as Array<Record<string, unknown>>);
+  return data.map((r) => {
+    const retentionYears = r.retentionYears === null || r.retentionYears === undefined ? null : Number(r.retentionYears);
+    const retentionDays = r.retentionDays === null || r.retentionDays === undefined ? 0 : Number(r.retentionDays);
+    const createdAt = new Date(r.createdAt as string);
+    let retentionPeriod: string | null = null;
+    let disposalDueDate: string | null = null;
+    if (retentionYears !== null) {
+      if (retentionYears >= 100) {
+        retentionPeriod = "Permanent";
+      } else {
+        retentionPeriod = `${retentionYears} year${retentionYears === 1 ? "" : "s"}`;
+        const due = new Date(createdAt);
+        due.setFullYear(due.getFullYear() + retentionYears);
+        due.setDate(due.getDate() + retentionDays);
+        disposalDueDate = due.toISOString().slice(0, 10);
+      }
+    }
+    return {
+      id: String(r.id),
+      title: String(r.title),
+      status: String(r.status),
+      createdAt,
+      department: r.department === null || r.department === undefined ? null : String(r.department),
+      retentionPeriod,
+      disposalDueDate,
+    };
+  });
+}
+
+/**
+ * GAP2-KNOWLEDGE-DASHBOARD-CAP-01: server-side repository-wide aggregate so the
+ * dashboard StatCards reflect TRUE totals instead of a count over the first
+ * (page-capped) 50 documents. Returns the total, counts by status, counts by
+ * category, and a derived circular count (category contains "circular").
+ */
+export type DocumentsSummary = {
+  total: number;
+  byStatus: Record<string, number>;
+  byCategory: Array<{ category: string; count: number }>;
+  circulars: number;
+  active: number;
+  archived: number;
+};
+
+export async function summarize(tenantId: string): Promise<DocumentsSummary> {
+  return scopedRead(async (tx) => {
+    await tx.execute(sql`SELECT set_config('app.tenant_id', ${tenantId}, true)`);
+    const statusRows = (await tx.execute(sql`
+      SELECT status, count(*)::int AS n
+      FROM knowledge.documents WHERE tenant_id = ${tenantId}
+      GROUP BY status`)) as unknown as Array<{ status: string; n: number }>;
+    const categoryRows = (await tx.execute(sql`
+      SELECT coalesce(category, 'general') AS category, count(*)::int AS n
+      FROM knowledge.documents WHERE tenant_id = ${tenantId}
+      GROUP BY coalesce(category, 'general')
+      ORDER BY count(*) DESC`)) as unknown as Array<{ category: string; n: number }>;
+
+    const byStatus: Record<string, number> = {};
+    let total = 0;
+    for (const r of statusRows) {
+      const n = Number(r.n);
+      byStatus[r.status] = n;
+      total += n;
+    }
+    const active = (byStatus["approved"] ?? 0) + (byStatus["under_review"] ?? 0);
+    const archived = byStatus["archived"] ?? 0;
+    const byCategory = categoryRows.map((r) => ({ category: String(r.category), count: Number(r.n) }));
+    const circulars = byCategory
+      .filter((c) => c.category.toLowerCase().includes("circular"))
+      .reduce((s, c) => s + c.count, 0);
+    return { total, byStatus, byCategory, circulars, active, archived };
+  });
+}
+
 export async function searchByTenant(
   tenantId: string,
   query: string,

@@ -185,6 +185,7 @@ import type {
   KPISummary,
   MISSummary,
   KnowledgeDocSummary,
+  KnowledgeDocsSummary,
   KnowledgeRecord,
   NotificationItem,
   NotificationDelivery,
@@ -369,6 +370,7 @@ import {
   KPISummaryListSchema,
   MISSummaryListSchema,
   KnowledgeDocSummaryListSchema,
+  KnowledgeDocsSummarySchema,
   KnowledgeRecordListSchema,
   NotificationItemListSchema,
   NotificationDeliveryListSchema,
@@ -954,7 +956,13 @@ export async function getInternalHelpdeskTicketById(id: string): Promise<LoaderR
           slaStatus: str(t.slaStatus),
           assignee: str(t.assignee),
           createdAt: str(t.createdAt),
-          requester: str(t.requester) ?? str(t.requestedBy),
+          // GAP2-HELPDESK-INTERNAL-DETAIL-01: the helpdesk-service TicketView
+          // exposes no requester NAME (requester identity is an opaque uuid in
+          // created_by, deliberately not surfaced). Map `requester` only from a
+          // real resolved-name field if the backend ever provides one; never
+          // from a uuid-only field. When absent it stays undefined and the
+          // detail page omits the "Requester:" row rather than rendering a blank.
+          requester: str(t.requester) ?? str(t.requesterName),
           ticketNo: str(t.ticketNo),
         } satisfies InternalHelpdeskTicketDetail;
       },
@@ -6022,6 +6030,20 @@ export async function getKnowledgeRecords(): Promise<LoaderResult<KnowledgeRecor
     telemetryKey: "knowledge.records",
     responseSchema: KnowledgeRecordListSchema,
     mapResponse: (p) => getArrayPayload(p) as KnowledgeRecord[] | null,
+  });
+}
+
+// GAP2-KNOWLEDGE-DASHBOARD-CAP-01: repository-wide document aggregate for the
+// dashboard StatCards + category chart (not capped at the list page size).
+const EMPTY_KNOWLEDGE_SUMMARY: KnowledgeDocsSummary = {
+  total: 0, byStatus: {}, byCategory: [], circulars: 0, active: 0, archived: 0,
+};
+export async function getKnowledgeDocsSummary(): Promise<LoaderResult<KnowledgeDocsSummary>> {
+  return fetchJson<unknown, KnowledgeDocsSummary>("/api/v1/knowledge/documents/summary", EMPTY_KNOWLEDGE_SUMMARY, {
+    revalidateSeconds: 120,
+    telemetryKey: "knowledge.docs.summary",
+    responseSchema: KnowledgeDocsSummarySchema,
+    mapResponse: (p) => (p && typeof p === "object" ? (p as KnowledgeDocsSummary) : null),
   });
 }
 
