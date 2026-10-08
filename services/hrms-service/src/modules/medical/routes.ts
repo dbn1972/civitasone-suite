@@ -147,6 +147,76 @@ async function auditMedicalClaimsListRead(
   });
 }
 
+/**
+ * GAP2-HRMS-MEDICAL-01 / -02: emit a PRECISE audit.event.record for a medical
+ * claim's maker-write (create) and the checker-write (approve/reject).
+ *
+ * These two writes are the only mutating writes in this module that run as
+ * synchronous raw-SQL (the disclosed exception documented on the
+ * submit/approve handlers below), so — unlike every CQRS write in this
+ * service — they get no in-transaction consumer audit. The generic
+ * onResponse audit hook (shared/audit-log.ts) that would otherwise cover
+ * them records only a coarse `resourceType="medical", action="update",
+ * resourceId=null` row (the URL segment at index 3 is the literal "claims",
+ * not a UUID, and PATCH maps to a generic "update"), so it can say neither
+ * WHICH claim was decided, nor whether it was approved vs rejected, nor the
+ * approved amount.
+ *
+ * Fixed exactly like auditMedicalClaimsListRead above: publish a lightweight
+ * command (fire-and-forget — a route may not write to Postgres directly;
+ * f3-leftover-hrms-cqrs.test.ts) whose consumer (medical/consumer.ts) writes
+ * the audit outbox row. The two previously-orphaned medicalClaimCreate /
+ * medicalClaimApprove subscriptions are repurposed into those audit
+ * recorders, so every `queue.subscribe` in this module now has a matching
+ * `queue.publish` (GAP2-HRMS-MEDICAL-02) and the write path's audit story is
+ * honest. The business write itself stays in the handler's own
+ * withTenantGuc transaction, unchanged.
+ */
+async function auditMedicalClaimCreate(
+  ctx: RequestContext,
+  details: { claimId: string; employeeId: string; amountMinor: number },
+): Promise<void> {
+  await queue.publish(COMMANDS.medicalClaimCreate, {
+    messageId: randomUUID(),
+    type: COMMANDS.medicalClaimCreate,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: {
+      service: "hrms",
+      action: "create",
+      resourceType: "medical_claim",
+      resourceId: details.claimId,
+      outcome: "success",
+      employeeId: details.employeeId,
+      amountMinor: details.amountMinor,
+    },
+  });
+}
+
+async function auditMedicalClaimDecision(
+  ctx: RequestContext,
+  details: { claimId: string; status: "approved" | "rejected"; approvedAmountMinor: number },
+): Promise<void> {
+  await queue.publish(COMMANDS.medicalClaimApprove, {
+    messageId: randomUUID(),
+    type: COMMANDS.medicalClaimApprove,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: {
+      service: "hrms",
+      action: details.status === "approved" ? "approve" : "reject",
+      resourceType: "medical_claim",
+      resourceId: details.claimId,
+      outcome: "success",
+      approvedAmountMinor: details.approvedAmountMinor,
+    },
+  });
+}
+
 const submitClaimBody = z.object({
   employeeId: z.string().uuid(),
   // Must match migration 0040_medical_claims.sql's hrms_medical_claims_type_check
@@ -208,6 +278,15 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
       )
       RETURNING claim_no
     `);
+
+    // GAP2-HRMS-MEDICAL-01: record a precise create audit (claim's own id,
+    // employee, amount) — the coarse onResponse hook can't (resourceId=null,
+    // resourceType="medical"). Fire-and-forget, after the write committed.
+    await auditMedicalClaimCreate(ctx, {
+      claimId: id,
+      employeeId: ownerEmployeeId,
+      amountMinor: body.amountMinor,
+    });
 
     return reply.code(201).send({
       data: { id, claimNo: inserted?.claim_no ?? null, employeeId: ownerEmployeeId, status: "pending", amountMinor: body.amountMinor },
@@ -368,6 +447,16 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
       }
 
       return amount;
+    });
+
+    // GAP2-HRMS-MEDICAL-01: record a precise decision audit — WHICH claim,
+    // approve vs reject, and the approved amount. The coarse onResponse hook
+    // records only resourceType="medical", action="update", resourceId=null.
+    // Fire-and-forget, after the guarded UPDATE committed.
+    await auditMedicalClaimDecision(ctx, {
+      claimId: id,
+      status: body.status,
+      approvedAmountMinor: approvedAmount,
     });
 
     return reply.send({ data: { id, status: body.status, approvedAmountMinor: approvedAmount } });
