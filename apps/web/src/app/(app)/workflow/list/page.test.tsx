@@ -47,7 +47,7 @@ describe("WorkflowInstancesPage — GAP-WORKFLOW-LIST-01/02", () => {
     getInstancesMock.mockResolvedValue({ data: [instance("a"), instance("b")], source: "api" });
     getAnalyticsSummaryMock.mockResolvedValue({ data: EMPTY_ANALYTICS, source: "error" });
 
-    render(await WorkflowInstancesPage());
+    render(await WorkflowInstancesPage({}));
 
     // Four stat tiles all read "—" on analytics failure.
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(4);
@@ -62,7 +62,7 @@ describe("WorkflowInstancesPage — GAP-WORKFLOW-LIST-01/02", () => {
       source: "api",
     });
 
-    render(await WorkflowInstancesPage());
+    render(await WorkflowInstancesPage({}));
     expect(screen.getByText("500")).toBeInTheDocument();
   });
 
@@ -70,7 +70,7 @@ describe("WorkflowInstancesPage — GAP-WORKFLOW-LIST-01/02", () => {
     getInstancesMock.mockResolvedValue({ data: [], source: "error" });
     getAnalyticsSummaryMock.mockResolvedValue({ data: EMPTY_ANALYTICS, source: "error" });
 
-    render(await WorkflowInstancesPage());
+    render(await WorkflowInstancesPage({}));
     expect(screen.getByText("We couldn't load instances.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
   });
@@ -120,7 +120,7 @@ describe("WorkflowInstancesPage — GAP2-WORKFLOW-DEFINITIONS-DETAIL-01 (definit
     getInstancesMock.mockResolvedValue({ data: [instance("a")], source: "api" });
     getAnalyticsSummaryMock.mockResolvedValue({ data: EMPTY_ANALYTICS, source: "api" });
 
-    render(await WorkflowInstancesPage());
+    render(await WorkflowInstancesPage({}));
     expect(screen.queryByText(/Filtered to/)).not.toBeInTheDocument();
     expect(getInstancesMock).toHaveBeenCalledWith({});
   });

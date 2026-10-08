@@ -11,7 +11,7 @@ export default async function WorkflowInstancesPage({
   searchParams,
 }: {
   searchParams?: { definitionId?: string };
-} = {}) {
+}) {
   // GAP2-WORKFLOW-DEFINITIONS-DETAIL-01 — honor the per-definition filter the
   // definition detail page's "View instances" link sends. Previously this page
   // ignored ?definitionId entirely and rendered every tenant instance, so the

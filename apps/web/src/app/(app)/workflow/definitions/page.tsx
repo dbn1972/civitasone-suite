@@ -139,7 +139,7 @@ export default async function WorkflowDefinitionsPage() {
               become approval workflows only once published. Continue editing a
               draft in the designer.
             </p>
-            <DataTable<{ id: string; name: string; status: string; version: number; elementCount: number }>
+            <DataTable<{ id: string; name: string; status: string; version: number; elementCount: number; designerHref: string }>
               columns={[
                 { key: "name", label: "Draft Name" },
                 { key: "version", label: "Version", align: "right" },
@@ -152,9 +152,11 @@ export default async function WorkflowDefinitionsPage() {
                 status: d.status,
                 version: d.version,
                 elementCount: d.elementCount,
+                // Full path (query-string deep link) so the route-existence contract sees /workflow/designer, not /workflow/designer/<id>.
+                designerHref: `/workflow/designer?definitionId=${encodeURIComponent(d.id)}`,
               }))}
-              rowLinkKey="id"
-              rowLinkPrefix="/workflow/designer?definitionId="
+              rowLinkKey="designerHref"
+              rowLinkPrefix=""
               sortable
               filterPlaceholder="Search drafts…"
             />
