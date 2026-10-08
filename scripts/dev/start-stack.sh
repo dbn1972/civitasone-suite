@@ -16,8 +16,16 @@ if [ "${SKIP_BUILD:-0}" != "1" ]; then
   (cd "$ROOT" && pnpm turbo run build --filter='./services/*' --output-logs=errors-only)
 fi
 
-# Stop stale processes so fresh dist is loaded
-if [ -x "$ROOT/scripts/dev/stop-stack.sh" ]; then
+# START_STACK_ONLY="gateway-service,inventory-service,..." starts just those entries
+# (names exactly as passed to start_svc below). Used by CI lanes that probe a handful
+# of live endpoints (quality-gates-schema's L3 drift regressions) and must not pay for
+# -- or be broken by -- the whole fleet. Unset = the full stack, as before.
+only_filter() { [ -z "${START_STACK_ONLY:-}" ] || [[ ",${START_STACK_ONLY}," == *",$1,"* ]]; }
+
+# Stop stale processes so fresh dist is loaded. A partial start (START_STACK_ONLY)
+# must not stop services it was not asked about; start_svc replaces its own port's
+# stale listener anyway.
+if [ -z "${START_STACK_ONLY:-}" ] && [ -x "$ROOT/scripts/dev/stop-stack.sh" ]; then
   bash "$ROOT/scripts/dev/stop-stack.sh" 2>/dev/null || true
   sleep 1
 fi
@@ -60,6 +68,8 @@ start_svc() {
   local main="$4"
   shift 4
   local extra_env=("$@")
+
+  only_filter "$name" || return 0
 
   local pidfile="$PID_DIR/${name}.pid"
 
@@ -251,6 +261,7 @@ echo "────────────────────────�
 check_svc() {
   local name="$1"
   local port="$2"
+  only_filter "$name" || return 0
   local path="${3:-/health}"
   local status
   if curl -sf "http://localhost:${port}${path}" >/dev/null 2>&1; then
