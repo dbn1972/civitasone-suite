@@ -110,3 +110,28 @@ export async function updateContractor(
       .where(and(eq(contractors.id, id), eq(contractors.tenantId, tenantId)));
   });
 }
+
+/**
+ * GAP2-WORKS-CONTRACTORS-03: tx-aware basic-info update used by the CQRS
+ * consumer so the write and its audit event share ONE transaction. Returns
+ * false when no row matched (contractor absent / wrong tenant) so the consumer
+ * can reject the command. `pan` is written through the encryptedText custom
+ * type (ciphertext at rest) exactly as the create path does.
+ */
+export async function applyContractorUpdate(
+  tx: ScopedTx,
+  tenantId: string,
+  id: string,
+  patch: Partial<ContractorInsert>,
+  updatedBy: string,
+): Promise<boolean> {
+  const existing = await tx.select({ id: contractors.id }).from(contractors)
+    .where(and(eq(contractors.id, id), eq(contractors.tenantId, tenantId)))
+    .limit(1);
+  if (existing.length === 0) return false;
+  await tx
+    .update(contractors)
+    .set({ ...patch, updatedAt: new Date(), updatedBy })
+    .where(and(eq(contractors.id, id), eq(contractors.tenantId, tenantId)));
+  return true;
+}

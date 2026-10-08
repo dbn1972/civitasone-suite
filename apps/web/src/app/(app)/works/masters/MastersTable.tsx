@@ -29,11 +29,13 @@ interface MastersTableProps {
   canManage: boolean;
   /** Options for the parent picker (GAP-WORKS-MASTERS-03), keyed id -> label. */
   parentOptions: ParentOption[];
+  /** True tenant-wide count for this master type (GAP2-WORKS-MASTERS-09). */
+  total?: number;
 }
 
 type DisplayRow = Record<string, string> & { __id: string; __version: string };
 
-export function MastersTable({ masterType, items, failed, canManage, parentOptions }: MastersTableProps) {
+export function MastersTable({ masterType, items, failed, canManage, parentOptions, total }: MastersTableProps) {
   const router = useRouter();
   const { toast } = useToast();
   const formError = useFormError("master data");
@@ -138,6 +140,11 @@ export function MastersTable({ masterType, items, failed, canManage, parentOptio
 
       <div style={{ marginTop: 16 }}>
         <Card title={`${typeLabel} (${rows.length})`}>
+          {typeof total === "number" && rows.length < total ? (
+            <p style={{ fontSize: 13, color: "var(--muted)", margin: "0 0 12px" }} role="note">
+              Showing the first {rows.length} of {total} {typeLabel.toLowerCase()}.
+            </p>
+          ) : null}
           <DataTable<DisplayRow>
             columns={columns.map((c) =>
               c.key === "__actions"

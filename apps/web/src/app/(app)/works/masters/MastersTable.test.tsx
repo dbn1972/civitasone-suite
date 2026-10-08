@@ -123,3 +123,35 @@ describe("MastersTable — GAP-WORKS-MASTERS-04 edit/deactivate controls", () =>
     expect(screen.queryByRole("button", { name: /^Deactivate$/i })).not.toBeInTheDocument();
   });
 });
+
+describe("MastersTable — GAP2-WORKS-MASTERS-09 truncation notice", () => {
+  const rows = Array.from({ length: 100 }, (_v, i) => ({
+    id: `a${i}`,
+    version: 1,
+    name: `Authority ${i}`,
+    code: `A${i}`,
+    active: true,
+  }));
+
+  it("warns 'showing the first N of M' when the true total exceeds the shown page", () => {
+    render(
+      <MastersTable masterType="authorities" items={rows} failed={false} canManage={false} parentOptions={[]} total={142} />,
+    );
+    const note = screen.getByText(/showing the first 100 of 142/i);
+    expect(note).toBeInTheDocument();
+  });
+
+  it("renders NO truncation notice when the page holds the whole set (rows == total)", () => {
+    render(
+      <MastersTable masterType="authorities" items={rows} failed={false} canManage={false} parentOptions={[]} total={100} />,
+    );
+    expect(screen.queryByText(/showing the first/i)).not.toBeInTheDocument();
+  });
+
+  it("renders NO truncation notice when total is unknown (prop omitted)", () => {
+    render(
+      <MastersTable masterType="authorities" items={rows} failed={false} canManage={false} parentOptions={[]} />,
+    );
+    expect(screen.queryByText(/showing the first/i)).not.toBeInTheDocument();
+  });
+});

@@ -1,4 +1,4 @@
-import { eq, and, getTableName, ilike, or, desc } from "drizzle-orm";
+import { eq, and, getTableName, ilike, or, desc, count } from "drizzle-orm";
 import { cache } from "../../shared/infra.js";
 import { scopedRead, type Db } from "../../shared/db.js";
 import * as s from "./schema.js";
@@ -43,6 +43,23 @@ export async function getMaster(table: TableType, tenantId: string, id: string) 
       return rows[0] ?? null;
     });
   });
+}
+
+/**
+ * GAP2-WORKS-APPROVALS-05 / GAP2-WORKS-MASTERS-09: tenant-wide row count for a
+ * master table, so the list route can report the TRUE total instead of
+ * data.length (which caps at the page size). Cached under the same per-table
+ * key family as the list.
+ */
+export async function countMaster(table: TableType, tenantId: string): Promise<number> {
+  const cached = await cache.getOrLoad(`works:${tenantId}:master:${getTableName(table)}:count`, async () => {
+    return scopedRead(async (tx) => {
+      const rows = await tx.select({ value: count() }).from(table)
+        .where(eq(table.tenantId, tenantId));
+      return Number(rows[0]?.value ?? 0);
+    });
+  });
+  return cached ?? 0;
 }
 
 /**

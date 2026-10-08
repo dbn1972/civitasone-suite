@@ -3,7 +3,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { queue } from "../../shared/infra.js";
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
-import { getProposal, listProposals, updateProposal, countProposals, searchProposals, resolveProposals } from "./repo.js";
+import { getProposal, listProposals, countProposals, searchProposals, resolveProposals } from "./repo.js";
 import { canDaoFinalize, validateCoa } from "./domain.js";
 import { paginationSchema } from "../masters/validators.js";
 
@@ -129,6 +129,12 @@ export async function proposalRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // Update proposal (draft only)
+  //
+  // GAP2-WORKS-PROPOSALS-02: this edit now goes through the CQRS command path
+  // (publish works.proposal.update → consumer applies + emits audit in one tx)
+  // instead of writing to Postgres directly in the handler and returning 200
+  // with no audit event. The draft-only + existence checks stay here as a
+  // fast pre-enqueue rejection; the consumer re-asserts them authoritatively.
   app.patch("/v1/works/proposals/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
@@ -137,8 +143,7 @@ export async function proposalRoutes(app: FastifyInstance): Promise<void> {
     const existing = await getProposal(ctx.tenantId, id);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "proposal not found");
     if (existing.status !== "draft") throw new HttpError(422, "NOT_DRAFT", "only draft proposals can be edited");
-    await updateProposal(ctx.tenantId, id, body as Record<string, unknown>, ctx.actorId);
-    const updated = await getProposal(ctx.tenantId, id);
-    return reply.send({ data: updated });
+    await commands.publishProposalUpdate(ctx, id, body as Record<string, unknown>);
+    return reply.status(202).send({ id, status: "accepted" });
   });
 }

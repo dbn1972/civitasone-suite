@@ -5,7 +5,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
 import {
-  listScopes, listIssues, listExecutionProgress, listAllIssues, listClosures,
+  listScopes, listIssues, listExecutionProgress, listAllIssues, listClosures, countClosures,
   getWorkScope, listScopeProgress, hasPhysicalCompletion,
   countExecutionProgress, countAllIssues,
 } from "./repo.js";
@@ -73,7 +73,10 @@ export async function executionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
     const query = paginationSchema.parse(req.query);
-    const data = await listClosures(ctx.tenantId, query.page, query.pageSize);
+    const [data, total] = await Promise.all([
+      listClosures(ctx.tenantId, query.page, query.pageSize),
+      countClosures(ctx.tenantId),
+    ]);
     // GAP-WORKS-CLOSURE-02: enrich each row with its agreement number when the
     // work has exactly one finalized award (unambiguous). Composed here (not in
     // the execution repo) because `awards` belongs to the tender module —
@@ -83,7 +86,9 @@ export async function executionRoutes(app: FastifyInstance): Promise<void> {
       data.map((r) => r.workId),
     );
     const enriched = data.map((r) => ({ ...r, agreementNumber: agreements.get(r.workId) ?? null }));
-    return reply.send({ data: enriched, meta: { page: query.page, pageSize: query.pageSize, total: enriched.length } });
+    // GAP2-WORKS-CLOSURE-06: report the REAL tenant total (not enriched.length,
+    // which caps at pageSize and makes the closure register undercount).
+    return reply.send({ data: enriched, meta: { page: query.page, pageSize: query.pageSize, total } });
   });
 
   // List scopes

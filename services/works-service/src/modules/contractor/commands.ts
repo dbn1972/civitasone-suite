@@ -25,6 +25,19 @@ export async function createContractor(ctx: RequestContext, body: CreateContract
   return publish(COMMANDS.contractorCreate, ctx, id, { id, tenantId: ctx.tenantId, ...body });
 }
 
+export async function updateContractor(
+  ctx: RequestContext,
+  contractorId: string,
+  patch: Record<string, unknown>,
+): Promise<Accepted> {
+  const messageId = randomUUID();
+  return publish(COMMANDS.contractorUpdate, ctx, messageId, {
+    id: contractorId,
+    tenantId: ctx.tenantId,
+    patch,
+  });
+}
+
 export async function rateContractor(ctx: RequestContext, contractorId: string, rating: number, comment?: string): Promise<Accepted> {
   const messageId = randomUUID();
   return publish(COMMANDS.contractorRate, ctx, messageId, {

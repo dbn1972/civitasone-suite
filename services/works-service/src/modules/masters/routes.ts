@@ -4,7 +4,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as v from "./validators.js";
 import { publishMasterCreate, publishMasterUpdate } from "./commands.js";
-import { listMaster, getMaster, searchSrItems, searchDivisions } from "./repo.js";
+import { listMaster, getMaster, countMaster, searchSrItems, searchDivisions } from "./repo.js";
 import { masters } from "./registry.js";
 
 const ADMIN_ROLES = ["works_admin", "super_admin"];
@@ -40,8 +40,13 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
       const ctx = resolveContext(req);
       requireRole(ctx, READ_ROLES);
       const query = v.paginationSchema.parse(req.query);
-      const data = (await listMaster(master.table, ctx.tenantId, query.page, query.pageSize)) ?? [];
-      return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total: data.length } });
+      const [data, total] = await Promise.all([
+        listMaster(master.table, ctx.tenantId, query.page, query.pageSize).then((d) => d ?? []),
+        countMaster(master.table, ctx.tenantId),
+      ]);
+      // GAP2-WORKS-APPROVALS-05 / GAP2-WORKS-MASTERS-09: report the REAL total
+      // (not data.length, which caps at pageSize and silently drops rows).
+      return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total } });
     });
 
     // GET by id

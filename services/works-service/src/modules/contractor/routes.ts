@@ -75,6 +75,12 @@ export async function contractorRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // Update contractor basic info
+  //
+  // GAP2-WORKS-CONTRACTORS-03: this edit now routes through the CQRS command
+  // path (publish works.contractor.update → consumer applies + emits
+  // audit.event.record in one tx) instead of writing to Postgres directly in
+  // the handler and returning 200 with no audit event. Existence is checked
+  // here for a fast 404; the consumer re-asserts it authoritatively.
   app.patch("/v1/works/contractors/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
@@ -84,10 +90,9 @@ export async function contractorRoutes(app: FastifyInstance): Promise<void> {
     if (!existing) throw new HttpError(404, "NOT_FOUND", "contractor not found");
     const patch = Object.fromEntries(
       Object.entries(body).filter(([, val]) => val !== undefined),
-    ) as Parameters<typeof repo.updateContractor>[2];
-    await repo.updateContractor(ctx.tenantId, id, patch, ctx.actorId);
-    const updated = await repo.findContractorById(ctx.tenantId, id);
-    return reply.send({ data: updated });
+    ) as Record<string, unknown>;
+    const result = await commands.updateContractor(ctx, id, patch);
+    return reply.status(202).send(result);
   });
 
   app.setErrorHandler((err, req, reply) => {

@@ -1,9 +1,9 @@
 import { pino } from "pino";
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { COMMANDS } from "../../topics.js";
+import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 
 const log = pino({ name: "works-contractor-consumer" });
@@ -40,6 +40,39 @@ export function registerContractorConsumers(rawQueue: Queue): void {
       });
     } catch (err) {
       log.error({ err, messageId: msg.messageId }, "contractorCreate processing failed");
+    }
+  });
+
+  // works.contractor.update → apply basic-info patch + audit (GAP2-WORKS-
+  // CONTRACTORS-03). The PATCH edit path now routes through this consumer
+  // (CQRS) instead of writing to Postgres inside the route handler with no
+  // audit event. The before/after of changed fields is recorded in the audit
+  // event WITHOUT the clear PAN value (DPDP): the pan field is reported only
+  // as "changed", never its decrypted value.
+  queue.subscribe(COMMANDS.contractorUpdate, async (msg) => {
+    try {
+      const p = msg.payload as { id: string; tenantId: string; patch: Record<string, unknown> };
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        const applied = await repo.applyContractorUpdate(tx, msg.tenantId, p.id, p.patch, msg.actorId);
+        if (!applied) throw new NonRetryableError("CONTRACTOR_NOT_FOUND: contractor not found for update");
+        // Record WHICH fields changed, never PII values (pan is reported as a
+        // changed field name only — the clear value is never logged).
+        const changedFields = Object.keys(p.patch);
+        await enqueue(tx, {
+          topic: EVENTS.contractorUpdated, eventType: EVENTS.contractorUpdated,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { id: p.id, fields: changedFields },
+        });
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { service: "works", action: "update", resourceType: "contractor", resourceId: p.id, outcome: "success", fields: changedFields },
+        });
+      });
+    } catch (err) {
+      log.error({ err, messageId: msg.messageId }, "contractorUpdate processing failed");
+      throw err;
     }
   });
 
