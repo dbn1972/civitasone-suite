@@ -8,6 +8,7 @@ import { describe, it, expect, afterAll, beforeAll, vi } from "vitest";
 import { MemoryQueue, type Handler } from "@civitasone/queue";
 import { queue } from "../src/shared/infra.js";
 import { registerApprovalsConsumers } from "../src/modules/approvals/consumer.js";
+import { registerBudgetConsumers } from "../src/modules/budget/consumer.js";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
@@ -23,6 +24,18 @@ const TENANT_A = randomUUID();
 const TENANT_B = randomUUID();
 const HOA = "210100101010101010";
 const HOA2 = "210100101010101011";
+
+// GAP2-FINANCE-CHART-OF-ACCOUNTS-07: POST/PATCH /v1/finance/accounts are now
+// CQRS'd — the route publishes and these budget consumers (registered on the
+// shared queue singleton the routes publish to, wrapped in runWithTenant like
+// worker.ts) perform the write. Drain after a create before reading it back.
+type Drainable = { subscribe: (topic: string, handler: (msg: any) => Promise<void>) => void; drain(): Promise<void> };
+const qShared = queue as unknown as Drainable;
+const rawSub = qShared.subscribe.bind(qShared);
+qShared.subscribe = (topic, handler) =>
+  rawSub(topic, (msg: any) => runWithTenant(msg.tenantId, () => handler(msg)));
+registerBudgetConsumers(queue);
+
 
 function auth(tenant: string) {
   return { authorization: `Bearer ${signToken({ sub: ACTOR, tid: tenant, roles: ["finance_officer"], sid: "s1" }, SECRET)}` };
@@ -41,12 +54,14 @@ describe("POST /v1/finance/accounts -- parent hierarchy", () => {
     const app = await buildApp();
     try {
       const major = await createHead(app, TENANT_A, { code: `M${Date.now() % 100000}`, name: "Major head", level: 0 });
-      expect(major.statusCode).toBe(201);
+      expect(major.statusCode).toBe(202);
+      await qShared.drain();
       const majorId = major.json().id as string;
 
       const minor = await createHead(app, TENANT_A, { code: `m${Date.now() % 100000}`, name: "Minor head", level: 1, parentId: majorId });
-      expect(minor.statusCode).toBe(201);
+      expect(minor.statusCode).toBe(202);
       expect(minor.json().parentId).toBe(majorId);
+      await qShared.drain();
 
       const noParent = await createHead(app, TENANT_A, { code: "np1", name: "No parent", level: 1 });
       expect(noParent.statusCode).toBe(400);
@@ -62,7 +77,8 @@ describe("POST /v1/finance/accounts -- parent hierarchy", () => {
 
       // tenant-scoped lookup: another tenant's head is not a valid parent
       const foreign = await createHead(app, TENANT_B, { code: `F${Date.now() % 100000}`, name: "Foreign major", level: 0 });
-      expect(foreign.statusCode).toBe(201);
+      expect(foreign.statusCode).toBe(202);
+      await qShared.drain();
       const crossTenant = await createHead(app, TENANT_A, { code: "ct1", name: "Cross tenant", level: 1, parentId: foreign.json().id });
       expect(crossTenant.statusCode).toBe(400);
       expect(crossTenant.body).toMatch(/HEAD_PARENT_NOT_FOUND/);
@@ -84,7 +100,8 @@ describe("PATCH /v1/finance/accounts/:id/hoa", () => {
     const app = await buildApp();
     try {
       const head = await createHead(app, TENANT_A, { code: `H${Date.now() % 100000}`, name: "HoA head", level: 0, hoaCode: HOA });
-      expect(head.statusCode).toBe(201);
+      expect(head.statusCode).toBe(202);
+      await qShared.drain();
       const id = head.json().id as string;
       const url = `/v1/finance/accounts/${id}/hoa`;
 

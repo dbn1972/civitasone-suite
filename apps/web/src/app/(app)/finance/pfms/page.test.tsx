@@ -93,7 +93,58 @@ describe("PfmsOpsConsolePage", () => {
     expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
   });
 
-  // GAP-FINANCE-PFMS-04: one corrupt amount must not take the whole page into error.tsx.
+  // GAP2-FINANCE-PFMS-08: a failed /pfms/batches read must dash the count/value
+  // stats and show a retry state in the batches panel, NOT "Batches 0 /
+  // Signed 0 / Pending 0 / Total ₹0.00" with an empty batch list.
+  it("dashes the batch stats and shows a retry state when /pfms/batches fails", async () => {
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("/batches")) return Promise.resolve({ data: [], source: "error", status: 500 });
+      if (path.includes("/departments") || path.includes("/bills")) return Promise.resolve({ data: [], source: "api" });
+      return Promise.resolve({ data: { agencyCode: "AG01", defaultDdo: "DDO01" }, source: "api" });
+    });
+
+    const ui = await PfmsOpsConsolePage();
+    renderPage(ui);
+
+    // stats are dashed, not a believable zero
+    expect(screen.getByText("Signed").parentElement).toHaveTextContent("—");
+    expect(screen.getByText("Pending Signature").parentElement).toHaveTextContent("—");
+    expect(screen.getByText("Total Batch Value").parentElement).toHaveTextContent("—");
+    expect(screen.getByText("Total Batch Value").parentElement).not.toHaveTextContent("₹0.00");
+    // the batch panel shows a retry affordance, not the "no batches" empty state
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.queryByText("No PFMS batches yet")).not.toBeInTheDocument();
+  });
+
+  // A 403 on batches is an access-restricted state, not a retry.
+  it("shows an access-restricted state (no retry) when /pfms/batches is 403", async () => {
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("/batches")) return Promise.resolve({ data: [], source: "error", status: 403 });
+      if (path.includes("/departments") || path.includes("/bills")) return Promise.resolve({ data: [], source: "api" });
+      return Promise.resolve({ data: { agencyCode: "AG01", defaultDdo: "DDO01" }, source: "api" });
+    });
+
+    const ui = await PfmsOpsConsolePage();
+    renderPage(ui);
+
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+    expect(screen.queryByText("No PFMS batches yet")).not.toBeInTheDocument();
+  });
+
+  // A genuine empty (200 []) still shows the empty batch list, not the error state.
+  it("still shows the empty batch state for a genuine empty batches list", async () => {
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("/batches")) return Promise.resolve({ data: [], source: "api" });
+      if (path.includes("/departments") || path.includes("/bills")) return Promise.resolve({ data: [], source: "api" });
+      return Promise.resolve({ data: { agencyCode: "AG01", defaultDdo: "DDO01" }, source: "api" });
+    });
+
+    const ui = await PfmsOpsConsolePage();
+    renderPage(ui);
+
+    expect(screen.getByText("No PFMS batches yet")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+  });
   it("degrades the Total stat to a dash with a note when a batch amount is unreadable", async () => {
     fetchJsonMock.mockImplementation((path: string) => {
       if (path.includes("/batches")) {
