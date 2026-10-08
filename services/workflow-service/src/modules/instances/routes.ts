@@ -31,7 +31,16 @@ export async function instanceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, instancesListSchema, await queries.listInstances(ctx.tenantId, q.limit, q.offset));
+    // GAP2-WORKFLOW-DEFINITIONS-DETAIL-01 — optional per-definition filter so a
+    // definition's "View instances" link shows only that definition's cases.
+    const { definitionId } = z
+      .object({ definitionId: z.string().uuid().optional() })
+      .parse(req.query);
+    sendValidated(
+      reply,
+      instancesListSchema,
+      await queries.listInstances(ctx.tenantId, q.limit, q.offset, definitionId),
+    );
   });
 
   // D1 (FE↔BE high ROI) — full single-instance detail. Registered BEFORE

@@ -179,4 +179,46 @@ describe("DesignerHomeClient", () => {
       expect(statCard?.textContent).toContain("1");
     });
   });
+
+  // ── GAP2-DESIGNER-HOME-01: authoring controls hidden for non-authors ──
+  describe("GAP2-DESIGNER-HOME-01: authoring gate", () => {
+    it("hides the 'New Service' action when canAuthor is false", () => {
+      render(
+        <DesignerHomeClient
+          services={[draftRow]}
+          domainPacks={samplePacks}
+          servicesSource="api"
+          canAuthor={false}
+        />,
+      );
+      expect(screen.queryByRole("link", { name: "New Service" })).toBeNull();
+    });
+
+    it("shows the 'New Service' action when canAuthor is true", () => {
+      render(
+        <DesignerHomeClient
+          services={[draftRow]}
+          domainPacks={samplePacks}
+          servicesSource="api"
+          canAuthor={true}
+        />,
+      );
+      expect(screen.getByRole("link", { name: "New Service" })).toHaveAttribute("href", "/designer/new");
+    });
+
+    it("hides the empty-state 'New Service' action for a non-author (read view stays open)", () => {
+      render(
+        <DesignerHomeClient
+          services={[]}
+          domainPacks={samplePacks}
+          servicesSource="api"
+          canAuthor={false}
+        />,
+      );
+      expect(screen.getByText("No services yet")).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "New Service" })).toBeNull();
+      // The read-only "Browse Domain Packs" affordance remains.
+      expect(screen.getByRole("link", { name: "Browse Domain Packs" })).toBeInTheDocument();
+    });
+  });
 });

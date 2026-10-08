@@ -84,6 +84,14 @@ interface Props {
   embedded?: boolean;
   /** GAP-WORKFLOW-DESIGNER-01 / DETAIL-01 — deep-link a draft to open on mount. */
   initialDefinitionId?: string;
+  /**
+   * GAP2-DESIGNER-HOME-01 — whether the caller may author (save drafts). When
+   * false the Save control is hidden (the canvas stays usable as a read-only
+   * viewer: open a draft, validate). workflow-service's designer routes remain
+   * the authority (403 on POST). Defaults true so embedded authoring surfaces
+   * (the service-designer wizard) are unchanged.
+   */
+  canAuthor?: boolean;
 }
 
 function seedToFlow(seed?: DesignerCanvasSeedGraph): { nodes: Node[]; edges: Edge[] } {
@@ -107,7 +115,7 @@ function seedToFlow(seed?: DesignerCanvasSeedGraph): { nodes: Node[]; edges: Edg
   };
 }
 
-export function DesignerCanvas({ definitions, seedGraph, embedded = false, initialDefinitionId }: Props) {
+export function DesignerCanvas({ definitions, seedGraph, embedded = false, initialDefinitionId, canAuthor = true }: Props) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const seeded = useMemo(() => seedToFlow(seedGraph), [seedGraph]);
@@ -527,15 +535,17 @@ export function DesignerCanvas({ definitions, seedGraph, embedded = false, initi
                 </select>
               </>
             )}
-            <button
-              type="button"
-              className="rounded-lg px-3 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
-              style={{ background: "var(--primary, #00439C)", color: "#fff", border: "1px solid var(--line)" }}
-              onClick={() => void onSave()}
-              disabled={saveState.kind === "saving"}
-            >
-              {saveState.kind === "saving" ? "Saving…" : "Save as draft"}
-            </button>
+            {canAuthor ? (
+              <button
+                type="button"
+                className="rounded-lg px-3 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                style={{ background: "var(--primary, #00439C)", color: "#fff", border: "1px solid var(--line)" }}
+                onClick={() => void onSave()}
+                disabled={saveState.kind === "saving"}
+              >
+                {saveState.kind === "saving" ? "Saving…" : "Save as draft"}
+              </button>
+            ) : null}
             {saveState.text ? (
               <span
                 role={saveState.kind === "err" ? "alert" : "status"}

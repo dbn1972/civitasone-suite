@@ -40,7 +40,7 @@ export type {
   WorkflowTask,
   WorkflowAnalytics,
 } from "./workflowTypes";
-export { formatDuration, titleCase, inProgressCount, formatBreachRate, formatSlaMinutes } from "./workflowTypes";
+export { formatDuration, titleCase, inProgressCount, formatBreachRate, formatSlaMinutes, isLiveDefinition, humanizeRefType, hasRefDeepLink } from "./workflowTypes";
 // Local value import (the line above only re-exports): mapInstance uses titleCase
 // to prefer a human definition name over a raw UUID (GAP-WORKFLOW-LIST-03).
 import { titleCase } from "./workflowTypes";
@@ -207,9 +207,17 @@ function mapInstance(v: unknown): WorkflowInstance | null {
   };
 }
 
-export async function getInstances(): Promise<WorkflowResult<WorkflowInstance[]>> {
+export async function getInstances(
+  opts: { definitionId?: string } = {},
+): Promise<WorkflowResult<WorkflowInstance[]>> {
+  // GAP2-WORKFLOW-DEFINITIONS-DETAIL-01 — pass the per-definition filter through
+  // to the service so a definition's "View instances" link shows only that
+  // definition's cases. An invalid id would 404 at the service; we only append
+  // a well-formed UUID and otherwise fetch the unfiltered list.
+  const qs = new URLSearchParams({ limit: "200" });
+  if (opts.definitionId && isUuid(opts.definitionId)) qs.set("definitionId", opts.definitionId);
   return getJson<WorkflowInstance[]>(
-    "/v1/workflow/instances?limit=200",
+    `/v1/workflow/instances?${qs.toString()}`,
     [],
     (raw) => {
       const arr = unwrap(raw);
@@ -314,16 +322,24 @@ export async function getTasks(
 ): Promise<WorkflowResult<WorkflowTask[]>> {
   const qs = new URLSearchParams({ limit: "200" });
   if (opts.status) qs.set("status", opts.status);
-  return getJson<WorkflowTask[]>(
+  // GAP2-WORKFLOW-MY-TASKS-02 — capture pagination.total (the exact count of
+  // the WHOLE matching set, which the tasks list endpoint already computes) so
+  // the inbox can show a true total instead of only the capped window length.
+  let total: number | undefined;
+  const result = await getJson<WorkflowTask[]>(
     `/v1/workflow/tasks?${qs.toString()}`,
     [],
     (raw) => {
+      if (isRecord(raw) && isRecord(raw.pagination) && typeof raw.pagination.total === "number") {
+        total = raw.pagination.total;
+      }
       const arr = unwrap(raw);
       if (!Array.isArray(arr)) return null;
       return arr.map(mapTask).filter((t): t is WorkflowTask => t !== null);
     },
     10,
   );
+  return total !== undefined ? { ...result, total } : result;
 }
 
 /**
