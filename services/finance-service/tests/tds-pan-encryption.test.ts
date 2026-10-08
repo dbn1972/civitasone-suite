@@ -32,7 +32,7 @@
  */
 import { describe, it, expect, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
@@ -107,12 +107,15 @@ describe("POST /v1/finance/vendor-tds -> consumer -> GET — PAN encryption roun
       headers: { authorization: `Bearer ${token()}` },
     });
     expect(getRes.statusCode).toBe(200);
-    const rows = getRes.json().data as Array<{ pan: string | null; vendor_name: string }>;
+    const rows = getRes.json().data as Array<{ id: string; pan: string | null; vendor_name: string }>;
     expect(rows).toHaveLength(1);
-    // Decrypted back to the ORIGINAL plaintext — proves the write-side
-    // encrypt and read-side decrypt round-trip exactly, not just "some
-    // string came back."
-    expect(rows[0].pan).toBe(pan);
+    // GAP2-FINANCE-STATUTORY-TDS-RETURNS-07: the bulk read now returns the
+    // MASKED PAN by default — the full plaintext PAN no longer crosses the API
+    // boundary unaudited. (This assertion fails on the old code, which sent the
+    // full "ABCPD1234E".) The encrypt/decrypt round-trip is still proven by the
+    // audited reveal below returning the exact original plaintext.
+    expect(rows[0].pan).toBe("ABCPD****E");
+    expect(rows[0].pan).not.toBe(pan);
     expect(rows[0].vendor_name).toBe("Test Contractor Pvt Ltd");
 
     const form26qRes = await app.inject({
@@ -123,9 +126,36 @@ describe("POST /v1/finance/vendor-tds -> consumer -> GET — PAN encryption roun
     expect(form26qRes.statusCode).toBe(200);
     const deductees = form26qRes.json().deductees as Array<{ pan: string | null }>;
     expect(deductees).toHaveLength(1);
-    // The actual statutory-filing-integrity assertion: Form 26Q must carry
-    // the real PAN, not null.
-    expect(deductees[0].pan).toBe(pan);
+    // Form 26Q is masked by default too; the filing flow reveals per-vendor.
+    expect(deductees[0].pan).toBe("ABCPD****E");
+
+    // GAP2-FINANCE-STATUTORY-TDS-RETURNS-07: the full PAN is obtainable ONLY via
+    // the audited reveal endpoint, which round-trips the exact original
+    // plaintext AND writes exactly one audit row (actor/tenant/vendor/reason,
+    // never the PAN). This whole reveal path fails on the old code (no route).
+    const revealRes = await app.inject({
+      method: "POST",
+      url: `/v1/finance/vendor-tds/${rows[0].id}/pan/reveal`,
+      headers: { authorization: `Bearer ${token()}` },
+      payload: { reason: "Form 26Q quarterly filing reconciliation" },
+    });
+    expect(revealRes.statusCode).toBe(200);
+    expect(revealRes.json().pan).toBe(pan);
+
+    await q.drain();
+    const auditRows = await scoped(TENANT, async (tx) => {
+      const r: any = await tx.execute(sql`
+        SELECT payload FROM _outbox.messages
+        WHERE topic = 'audit.event.record'
+          AND payload->>'action' = 'reveal_vendor_pan'
+          AND payload->>'resourceId' = ${rows[0].id}
+      `);
+      return (Array.isArray(r) ? r : r.rows ?? []) as Array<{ payload: any }>;
+    });
+    expect(auditRows).toHaveLength(1);
+    expect(auditRows[0].payload).toMatchObject({ action: "reveal_vendor_pan", resourceType: "vendor_tds", resourceId: rows[0].id });
+    // the PAN itself is NEVER in the audit payload
+    expect(JSON.stringify(auditRows[0].payload)).not.toContain(pan);
 
     await app.close();
   });

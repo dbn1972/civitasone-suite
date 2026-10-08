@@ -10,6 +10,8 @@ import type { PfmsBatchRow, PfmsBill, PfmsConfig, PfmsDepartment } from "./types
 
 interface PfmsConsoleProps {
   batches: PfmsBatchRow[];
+  /** GAP2-FINANCE-PFMS-08: non-null when the batches fetch failed; drives the batch panel's retry state. */
+  batchesError?: { status?: number } | null;
   config: PfmsConfig | null;
   departments?: PfmsDepartment[];
   /** Bills the payment-advice form can pick from (GAP-FINANCE-PFMS-07). */
@@ -19,7 +21,7 @@ interface PfmsConsoleProps {
   canRelease?: boolean;
 }
 
-export function PfmsConsole({ batches, config, departments = [], bills = [], canDownloadBankFile = true, canRelease = true }: PfmsConsoleProps) {
+export function PfmsConsole({ batches, batchesError = null, config, departments = [], bills = [], canDownloadBankFile = true, canRelease = true }: PfmsConsoleProps) {
   const t = useTranslations("pfmsConsole");
   // The shared Tabs design-system component uses each tab string as both its
   // display label and its identity (selection compares by ===, and it doubles
@@ -35,7 +37,7 @@ export function PfmsConsole({ batches, config, departments = [], bills = [], can
     <Card title={t("title")}>
       <Tabs tabs={[...TABS]} active={active} onChange={(tab) => setActive(tab as Tab)} />
 
-      {active === TABS[0] && <BatchesPanel batches={batches} canDownloadBankFile={canDownloadBankFile} canRelease={canRelease} />}
+      {active === TABS[0] && <BatchesPanel batches={batches} batchesError={batchesError} canDownloadBankFile={canDownloadBankFile} canRelease={canRelease} />}
       {active === TABS[1] && <ConfigPanel config={config} />}
       {active === TABS[2] && <PaymentsPanel
           departments={departments}

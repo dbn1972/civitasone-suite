@@ -1,5 +1,4 @@
-import { PageHeader, StatGrid, StatCard } from "../../../_components/ds";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PageHeader, StatGrid, StatCard, LoadErrorState } from "../../../_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatIndianDate, todayIST } from "@/lib/formatters";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
@@ -7,15 +6,18 @@ import { canWrite, RECURRING_WRITE_ROLES } from "@/lib/finance/writeRoles";
 import { RecurringEntryForm, type AccountOption } from "./RecurringEntryForm";
 import { RecurringEntriesTable, type RecurringEntryRow } from "./RecurringEntriesTable";
 
+// GAP2-FINANCE-RECURRING-ENTRIES-08: the API now returns a validated camelCase
+// contract (id, name, voucherType, frequency, amountMinor, nextRunDate,
+// endDate, isActive) with the internal account UUIDs / created_by dropped.
 type RawRow = {
   id: string;
   name: string;
-  voucher_type: string;
+  voucherType: string;
   frequency: string;
-  amount_minor: string | number;
-  next_run_date: string;
-  end_date: string | null;
-  is_active: boolean;
+  amountMinor: string | number;
+  nextRunDate: string | null;
+  endDate: string | null;
+  isActive: boolean;
 } & Record<string, unknown>;
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -38,14 +40,14 @@ function mapRecurringEntries(payload: unknown): RecurringEntryRow[] | null {
     mapped.push({
       id: row.id,
       name: row.name,
-      voucherType: String(row.voucher_type ?? "journal"),
+      voucherType: String(row.voucherType ?? "journal"),
       frequency: String(row.frequency ?? ""),
-      amountMinor: row.amount_minor ?? 0,
-      nextRunDateDisplay: formatIndianDate(row.next_run_date ?? null),
-      endDateDisplay: row.end_date ? formatIndianDate(row.end_date) : "—",
-      statusLabel: row.is_active ? "active" : "inactive",
+      amountMinor: row.amountMinor ?? 0,
+      nextRunDateDisplay: formatIndianDate(row.nextRunDate ?? null),
+      endDateDisplay: row.endDate ? formatIndianDate(row.endDate) : "—",
+      statusLabel: row.isActive ? "active" : "inactive",
       // inactive AND already past its end date: neither Resume nor End applies
-      ended: !row.is_active && !!row.end_date && String(row.end_date).slice(0, 10) <= todayIST(),
+      ended: !row.isActive && !!row.endDate && String(row.endDate).slice(0, 10) <= todayIST(),
     });
   }
   return mapped;
@@ -88,10 +90,29 @@ async function getAccountOptions(): Promise<LoaderResult<AccountOption[]>> {
 }
 
 export default async function RecurringEntriesPage() {
-  const [{ data: entries, source }, { data: accounts, source: accountsSource }] = await Promise.all([
+  const [entriesResult, { data: accounts, source: accountsSource }] = await Promise.all([
     getRecurringEntries(),
     getAccountOptions(),
   ]);
+  const { data: entries, source } = entriesResult;
+
+  // GAP2-FINANCE-RECURRING-ENTRIES-07: a failed /recurring-entries read must not
+  // render as a believable "Total Templates 0 / Active 0" clean record next to
+  // the table's own "no recurring entries" empty state. Mirror period-close:
+  // one error state (403 -> access-restricted) replaces the stats, the create
+  // form and the table. A genuine empty (200 []) still shows the empty state.
+  if (source === "error") {
+    return (
+      <div className="page-main wrap">
+        <PageHeader
+          title="Recurring Entries"
+          subtitle="Standing journal instructions for recurring transactions."
+          back="/finance"
+        />
+        <LoadErrorState result={entriesResult} area="recurring entries" backHref="/finance" />
+      </div>
+    );
+  }
 
   const active = entries.filter((e) => e.statusLabel === "active").length;
 
@@ -101,7 +122,6 @@ export default async function RecurringEntriesPage() {
         title="Recurring Entries"
         subtitle="Standing journal instructions for recurring transactions."
         back="/finance"
-        actions={source === "error" ? <DataSourceBadge source="error" /> : null}
       />
 
       <StatGrid>

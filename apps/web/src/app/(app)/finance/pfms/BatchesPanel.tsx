@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { DataTable, EmptyState } from "../../../_components/ds";
+import { DataTable, EmptyState, LoadErrorState } from "../../../_components/ds";
 import { SignBatchAction } from "./SignBatchAction";
 import { BankFileAction } from "./BankFileAction";
 import { SigningCell } from "./SigningCell";
@@ -17,8 +17,21 @@ import type { PfmsBatchRow } from "./types";
  * route registered on finance-service (see PR "## BACKEND FOLLOW-UPS"); batches
  * are created by the payments workflow, not from this console.
  */
-export function BatchesPanel({ batches, canDownloadBankFile = true, canRelease: mayRelease = true }: { batches: PfmsBatchRow[]; canDownloadBankFile?: boolean; canRelease?: boolean }) {
+export function BatchesPanel({ batches, batchesError = null, canDownloadBankFile = true, canRelease: mayRelease = true }: { batches: PfmsBatchRow[]; batchesError?: { status?: number } | null; canDownloadBankFile?: boolean; canRelease?: boolean }) {
   const t = useTranslations("pfmsBatchesPanel");
+
+  // GAP2-FINANCE-PFMS-08: a failed /pfms/batches fetch shows a retry (or 403
+  // access-restricted) state here instead of the "no batches yet" empty state,
+  // so an error is never mistaken for a genuinely empty batch list.
+  if (batchesError) {
+    return (
+      <LoadErrorState
+        result={{ status: batchesError.status }}
+        area="PFMS batches"
+        backHref="/finance"
+      />
+    );
+  }
 
   if (batches.length === 0) {
     return (

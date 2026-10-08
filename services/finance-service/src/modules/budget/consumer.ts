@@ -593,7 +593,77 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
     });
   });
 
+  // GAP2-FINANCE-CHART-OF-ACCOUNTS-07: budget-head (chart-of-accounts) create.
+  // The route validates (parent/level, admin control-flag gate) and publishes;
+  // this consumer performs the insert and enqueues the audit event in ONE
+  // transaction — no route handler writes to Postgres directly anymore.
+  sub(COMMANDS.accountCreate, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; code: string; name: string; level: number;
+      hoaCode?: string | null; classification?: string | null; parentId?: string | null; isControl?: boolean;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await repo.insertHead(tx as Parameters<typeof repo.insertHead>[0], {
+        id: p.id, tenantId: p.tenantId,
+        code: p.code, name: p.name, level: p.level,
+        hoaCode: p.hoaCode ?? null, classification: p.classification ?? null,
+        parentId: p.parentId ?? null,
+        isControl: p.isControl ?? false,
+        createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      // Flagging a head as a control account gates manual journals, so the
+      // control change is audited with its old -> new value, same as before.
+      if (p.isControl) await auditHeadControl(tx, msg, p.id, false, true);
+    });
+    await cache.invalidateResource(msg.tenantId, "accounts");
+  });
 
+  // GAP2-FINANCE-CHART-OF-ACCOUNTS-07: budget-head update (name / classification
+  // / isControl). Mirrors the old route transaction: re-read the before value
+  // inside the tx so the control-flag audit records what was actually replaced.
+  sub(COMMANDS.accountUpdate, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; name?: string; classification?: string | null; isControl?: boolean;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const before = await repo.findHeadByIdTx(tx as Parameters<typeof repo.findHeadByIdTx>[0], p.id);
+      if (!before || before.tenantId !== p.tenantId) {
+        throw new NonRetryableError(`[finance/budget] head ${p.id} not found for tenant ${p.tenantId}`);
+      }
+      const patch: Record<string, unknown> = { updatedBy: msg.actorId };
+      if (p.name !== undefined) patch.name = p.name;
+      if (p.classification !== undefined) patch.classification = p.classification;
+      if (p.isControl !== undefined) patch.isControl = p.isControl;
+      await repo.updateHead(tx as Parameters<typeof repo.updateHead>[0], p.id, patch as Parameters<typeof repo.updateHead>[2]);
+      // Only a genuine control-flag change is audited (old -> new), matching the
+      // original route; a plain rename or an unchanged isControl writes none.
+      if (p.isControl !== undefined && before.isControl !== p.isControl) {
+        await auditHeadControl(tx, msg, p.id, before.isControl, p.isControl === true);
+      }
+    });
+    await cache.invalidateResource(msg.tenantId, "accounts");
+  });
+
+}
+
+/** Audit a control-flag change on a budget head (old -> new), in-transaction. */
+async function auditHeadControl(
+  tx: Parameters<typeof enqueue>[0],
+  msg: CommandEnvelope<unknown>,
+  headId: string,
+  oldValue: boolean,
+  newValue: boolean,
+): Promise<void> {
+  await enqueue(tx, {
+    topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+    tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+    payload: {
+      service: "finance", action: "update_head_control", resourceType: "finance_head", resourceId: headId,
+      outcome: "success", details: { isControl: { old: oldValue, new: newValue } },
+    },
+  });
 }
 
 async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {

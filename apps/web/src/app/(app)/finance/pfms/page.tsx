@@ -102,7 +102,7 @@ async function getBills(): Promise<LoaderResult<PfmsBill[]>> {
 export default async function PfmsOpsConsolePage() {
   const t = await getTranslations("pfms");
   const [
-    { data: batches, source: batchesSource },
+    { data: batches, source: batchesSource, status: batchesStatus },
     { data: config, source: configSource },
     { data: departments },
     { data: billsData },
@@ -110,6 +110,13 @@ export default async function PfmsOpsConsolePage() {
   const bills = Array.isArray(billsData) ? billsData : [];
 
   const source = batchesSource === "error" || configSource === "error" ? "error" : "api";
+  // GAP2-FINANCE-PFMS-08: a failed /pfms/batches read must not render as a
+  // believable "Batches 0 / Signed 0 / Pending 0 / Total ₹0.00" clean record
+  // with an empty batches panel. The count/value stats dash to "—" and the
+  // batches section shows a retry state (passed into PfmsConsole), matching
+  // reconciliation/page.tsx which dashes each stat per source. (A genuine
+  // empty 200 [] still shows the empty batch list.)
+  const batchesError = batchesSource === "error";
 
   const signedCount = batches.filter((b) => b.submissionStatus === "signed").length;
   const pendingCount = batches.filter((b) => b.submissionStatus === "pending").length;
@@ -127,25 +134,25 @@ export default async function PfmsOpsConsolePage() {
       {source === "error" && <DataSourceBadge source="error" />}
 
       <StatGrid>
-        <StatCard icon="📦" iconBg="#eff6ff" label={t("statBatches")} value={batches.length} />
-        <StatCard icon="✍️" iconBg="#ecfdf3" label={t("statSigned")} value={signedCount} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label={t("statPendingSignature")} value={pendingCount} />
+        <StatCard icon="📦" iconBg="#eff6ff" label={t("statBatches")} value={batchesError ? "—" : batches.length} />
+        <StatCard icon="✍️" iconBg="#ecfdf3" label={t("statSigned")} value={batchesError ? "—" : signedCount} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label={t("statPendingSignature")} value={batchesError ? "—" : pendingCount} />
         <StatCard
           icon="💰"
           iconBg="#fef3f2"
           label={t("statTotalBatchValue")}
           // Money formatting: amountMinor is paise (minor units) — use formatMoney,
-          // not formatRupees.
-          value={invalidAmounts > 0 ? "—" : formatMoney(totalMinor)}
+          // not formatRupees. A failed batches fetch dashes it too (not "₹0.00").
+          value={batchesError || invalidAmounts > 0 ? "—" : formatMoney(totalMinor)}
         />
       </StatGrid>
-      {invalidAmounts > 0 && (
+      {!batchesError && invalidAmounts > 0 && (
         <p role="note" style={{ margin: "0 0 12px", color: "var(--ink2)", fontSize: 13 }}>
           {t("unreadableAmounts", { count: invalidAmounts })}
         </p>
       )}
 
-      <PfmsConsole batches={batches} config={config} departments={departments} bills={bills} canDownloadBankFile={canDownloadBankFile(getSessionRoles())} canRelease={canReleaseBatch(getSessionRoles())} />
+      <PfmsConsole batches={batches} batchesError={batchesError ? { status: batchesStatus } : null} config={config} departments={departments} bills={bills} canDownloadBankFile={canDownloadBankFile(getSessionRoles())} canRelease={canReleaseBatch(getSessionRoles())} />
     </div>
   );
 }

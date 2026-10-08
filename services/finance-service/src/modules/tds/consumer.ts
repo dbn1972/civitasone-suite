@@ -1,3 +1,4 @@
+import type { CommandEnvelope } from "@civitasone/queue";
 import { pino } from "pino";
 import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
@@ -135,12 +136,23 @@ export function registerTdsConsumers(queue: Queue): void {
     await cache.invalidateResource(msg.tenantId, "tds");
     log.info({ id: msg.messageId }, "Processed tds.return_file");
   });
+  // GAP2-FINANCE-STATUTORY-TDS-RETURNS-07: DPDP audit trail for an unmasked
+  // (full) vendor PAN read. Records actor (envelope), tenant, vendor, row id
+  // and the stated reason — never the PAN value itself.
+  queue.subscribe(COMMANDS.tdsPanReveal, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; vendorId: string; reason: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await audit(tx, msg, "reveal_vendor_pan", "vendor_tds", p.id, { vendorId: p.vendorId, reason: p.reason });
+    });
+    log.info({ id: msg.messageId }, "Processed tds.pan_reveal");
+  });
 }
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
+async function audit(tx: Parameters<typeof enqueue>[0], msg: Pick<CommandEnvelope, "tenantId" | "actorId" | "correlationId">, action: string, resourceType: string, resourceId: string, details?: Record<string, unknown>): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "finance", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "finance", action, resourceType, resourceId, outcome: "success", ...(details ? { details } : {}) },
   });
 }
