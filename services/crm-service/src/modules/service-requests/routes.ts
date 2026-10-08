@@ -7,7 +7,8 @@ import { listQuery, windowOf, listEnvelope } from "../../shared/list-query.js";
 import { maskList, maskRecord } from "../../shared/pii-reveal.js";
 import { recordStatusHistory, listStatusHistory } from "../../shared/case-status-history.js";
 import { enqueue } from "../../shared/outbox.js";
-import { COMMANDS } from "../../topics.js";
+import { emitWithAudit } from "../../shared/route-audit.js";
+import { COMMANDS, EVENTS } from "../../topics.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
 const ADMIN_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
@@ -125,6 +126,17 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
         toStatus: "open",
         note: null,
         actorId: ctx.actorId,
+      });
+      // GAP2-CRM-SERVICE-REQUESTS-AUDIT-02: emit the platform audit event in the
+      // SAME tx as the write. case_status_history is an in-service timeline, not
+      // the cross-service audit.event.record the audit-service consumes. Payload
+      // carries NO citizen PII.
+      await emitWithAudit(tx, ctx, {
+        eventType: EVENTS.serviceRequestCreated,
+        action: "create",
+        resourceType: "service_request",
+        resourceId: String(inserted[0]?.id),
+        payload: { serviceRequestId: String(inserted[0]?.id), status: "open", serviceType: body.serviceType },
       });
       return inserted[0];
     });
@@ -280,6 +292,20 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
           toStatus: body.status,
           note: body.resolution ?? body.statusNote ?? null,
           actorId: ctx.actorId,
+        });
+
+        // GAP2-CRM-SERVICE-REQUESTS-AUDIT-02: emit the platform audit event in
+        // the SAME tx as the status change. Payload carries NO PII.
+        await emitWithAudit(tx, ctx, {
+          eventType: EVENTS.serviceRequestStatusChanged,
+          action: "status_changed",
+          resourceType: "service_request",
+          resourceId: id,
+          payload: {
+            serviceRequestId: id,
+            fromStatus: (updated[0]?.["fromStatus"] as string | null) ?? null,
+            toStatus: body.status,
+          },
         });
 
         // F6-02: on resolve/close, enqueue a transactional citizen notification

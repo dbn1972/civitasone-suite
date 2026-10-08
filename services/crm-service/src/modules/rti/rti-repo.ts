@@ -40,6 +40,8 @@ export type RtiListOpts = {
 export type RtiCreateData = {
   tenantId: string;
   actorId: string;
+  /** GAP2-CRM-RTI-AUDIT-03: correlation id for the audit event emitted on create. */
+  correlationId?: string;
   referenceNo: string;
   section: string;
   departmentRef: string;
@@ -276,6 +278,25 @@ export async function createRti(data: RtiCreateData): Promise<RtiRow> {
       note: null,
       actorId: data.actorId,
     });
+    // GAP2-CRM-RTI-AUDIT-03: logging an RTI is a statutory act; emit the audit
+    // event in the SAME tx. emitWithAudit only reads tenantId/actorId/
+    // correlationId from the context. Payload carries NO applicant PII.
+    const auditCtx = {
+      tenantId: data.tenantId,
+      actorId: data.actorId,
+      correlationId: data.correlationId ?? "",
+    } as AuditCtx;
+    await emitWithAudit(tx, auditCtx, {
+      eventType: EVENTS.rtiCreated,
+      action: "create",
+      resourceType: "rti_request",
+      resourceId: String(inserted[0]?.["id"]),
+      payload: {
+        rtiId: String(inserted[0]?.["id"]),
+        status: String(inserted[0]?.["status"] ?? "RECEIVED"),
+        section: data.section,
+      },
+    });
     return inserted;
   })) as unknown as RtiRow[];
 
@@ -283,11 +304,12 @@ export async function createRti(data: RtiCreateData): Promise<RtiRow> {
 }
 
 export async function forwardRti(
-  tenantId: string,
-  actorId: string,
+  ctx: AuditCtx,
   id: string,
   departmentRef: string,
 ): Promise<RtiRow | null> {
+  const tenantId = ctx.tenantId;
+  const actorId = ctx.actorId;
   return scopedRead(async (tx) => {
     const prev = (await tx.execute(sql`
       SELECT status FROM crm.rti_requests WHERE id = ${id}::uuid AND tenant_id = ${tenantId}
@@ -314,16 +336,25 @@ export async function forwardRti(
       note: `Transferred to ${departmentRef}`,
       actorId,
     });
+    // GAP2-CRM-RTI-AUDIT-03: a department transfer is a statutory act -> audit it.
+    await emitWithAudit(tx, ctx, {
+      eventType: EVENTS.rtiForwarded,
+      action: "forward",
+      resourceType: "rti_request",
+      resourceId: id,
+      payload: { rtiId: id, status: "TRANSFERRED", departmentRef },
+    });
     return rows[0];
   });
 }
 
 export async function respondRti(
-  tenantId: string,
-  actorId: string,
+  ctx: AuditCtx,
   id: string,
   responseText: string,
 ): Promise<RtiRow | null> {
+  const tenantId = ctx.tenantId;
+  const actorId = ctx.actorId;
   return scopedRead(async (tx) => {
     const prev = (await tx.execute(sql`
       SELECT status FROM crm.rti_requests WHERE id = ${id}::uuid AND tenant_id = ${tenantId}
@@ -352,16 +383,26 @@ export async function respondRti(
       note: responseText,
       actorId,
     });
+    // GAP2-CRM-RTI-AUDIT-03: a statutory response is exactly what an RTI audit
+    // needs. Payload carries NO response text (that can contain PII).
+    await emitWithAudit(tx, ctx, {
+      eventType: EVENTS.rtiResponded,
+      action: "respond",
+      resourceType: "rti_request",
+      resourceId: id,
+      payload: { rtiId: id, status: "RESPONDED" },
+    });
     return rows[0];
   });
 }
 
 /** s.19 RTI Act — first-appeal within 30 days of response. */
 export async function firstAppeal(
-  tenantId: string,
-  actorId: string,
+  ctx: AuditCtx,
   id: string,
 ): Promise<RtiRow | null> {
+  const tenantId = ctx.tenantId;
+  const actorId = ctx.actorId;
   return scopedRead(async (tx) => {
     const prev = (await tx.execute(sql`
       SELECT status FROM crm.rti_requests WHERE id = ${id}::uuid AND tenant_id = ${tenantId}
@@ -387,6 +428,14 @@ export async function firstAppeal(
       toStatus: "FIRST_APPEAL",
       note: null,
       actorId,
+    });
+    // GAP2-CRM-RTI-AUDIT-03: filing a first appeal is a statutory transition.
+    await emitWithAudit(tx, ctx, {
+      eventType: EVENTS.rtiFirstAppealed,
+      action: "first_appeal",
+      resourceType: "rti_request",
+      resourceId: id,
+      payload: { rtiId: id, status: "FIRST_APPEAL" },
     });
     return rows[0];
   });
