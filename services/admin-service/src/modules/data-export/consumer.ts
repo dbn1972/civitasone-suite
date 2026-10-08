@@ -3,6 +3,7 @@
  * Creates the request record, then processes it (collects data → generates file → uploads).
  */
 import { pino } from "pino";
+import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -26,6 +27,15 @@ export function registerDataExportConsumers(queue: Queue): void {
     purpose?: string | null; entityId?: string | null;
   }>("admin.data_export.request", async (msg) => {
     try {
+      // GAP2-TENANT-ADMIN-DATA-EXPORT-07: the request row is inserted as
+      // `pending`; the follow-up `admin.data_export.process` command (which
+      // drives pending → ready and produces the downloadUrl) was never
+      // produced by any production code, so the export was stuck at `pending`
+      // forever and the download endpoint returned 409 permanently. Chain the
+      // processing command here. `created` is only true on the FIRST delivery
+      // (markProcessed is idempotent), so a redelivery never re-publishes a
+      // duplicate process command.
+      let created = false;
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         const p = msg.payload;
@@ -47,8 +57,22 @@ export function registerDataExportConsumers(queue: Queue): void {
           purpose: p.purpose ?? null,
           entityId: p.entityId ?? null,
         }, "request", p.id);
+        created = true;
       });
       await cache.invalidate(cacheKey(msg.payload.tenantId));
+      if (created) {
+        // Trigger processing. Only after the request row has been committed, so
+        // the process consumer always finds the row it is asked to advance.
+        await queue.publish("admin.data_export.process", {
+          messageId: randomUUID(),
+          type: "admin.data_export.process",
+          tenantId: msg.payload.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          schemaVersion: "1.0",
+          payload: { exportId: msg.payload.id, tenantId: msg.payload.tenantId },
+        });
+      }
     } catch (err) {
       log.error({ err, messageId: msg.messageId, type: "admin.data_export.request" }, "Consumer processing failed");
     }
