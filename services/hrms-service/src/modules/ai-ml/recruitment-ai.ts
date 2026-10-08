@@ -24,10 +24,66 @@
  * - Scoring factors are transparent and auditable
  */
 import type { FastifyInstance } from "fastify";
-import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { resolveContext, HttpError } from "../../shared/context.js";
-import { sqlPool as sqlClient } from "../../shared/db.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { sqlClient as rawSqlClient } from "../../shared/db.js";
+import { withRawTenantGuc } from "@civitasone/db";
+
+/**
+ * GAP2-PLATFORM-HRMS-AIML-02 (authz + raw-SQL): every route below previously
+ * called only resolveContext() with no requireRole -- unlike every other hrms
+ * module -- so any authenticated role could score JDs, parse resumes against
+ * tenant vacancies, batch-screen candidates (driving shortlist/hire
+ * decisions) and generate interview questions. Gated to the recruiter/HR
+ * roles the rest of this service's recruitment module already uses
+ * (hr_admin/hr_officer/super_admin), fail closed otherwise.
+ *
+ * The handlers also read hrms.vacancies via `sqlPool.query` -- a bare pooled
+ * connection with NO app.tenant_id GUC set. hrms.vacancies is tenant-scoped
+ * and the queries already filter `tenant_id = $2` in the WHERE, but running
+ * them off a GUC-less pooled connection is exactly the fail-closed/leak-prone
+ * shape the rest of this service fixed with withRawTenantGuc (see
+ * nlu-chatbot.ts / face-verification.ts headers). Routed every vacancy read
+ * through a tenant-scoped connection so RLS is enforced and the query runs in
+ * the caller's tenant GUC, matching the sibling modules. All queries remain
+ * parameterized ($1/$2) -- no string interpolation of request input.
+ */
+const RECRUITER_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+
+function withTenantGuc<T>(
+  tenantId: string,
+  fn: (pool: {
+    query<R = Record<string, unknown>>(text: string, params?: readonly unknown[]): Promise<{ rows: R[]; rowCount: number }>;
+  }) => Promise<T>,
+): Promise<T> {
+  return withRawTenantGuc(rawSqlClient, tenantId, async (tx) => {
+    const pool = {
+      async query<R = Record<string, unknown>>(text: string, params: readonly unknown[] = []): Promise<{ rows: R[]; rowCount: number }> {
+        const result = await tx.unsafe(text, params as unknown as never[]);
+        const rows = result as unknown as R[];
+        const rowCount = (result as unknown as { count?: number }).count ?? rows.length;
+        return { rows, rowCount };
+      },
+    };
+    return fn(pool);
+  });
+}
+
+/**
+ * Shape of a hrms.vacancies row as read by the AI recruitment routes. Columns
+ * may be absent/null for partially-filled vacancies, and requirements/
+ * preferred_skills are stored either as a JSON string or a native array
+ * depending on how the row was written, so both are accepted here (the
+ * handlers already branch on Array.isArray before use).
+ */
+type VacancyRow = {
+  title?: string | null;
+  requirements?: string[] | string | null;
+  preferred_skills?: string[] | string | null;
+  min_experience?: number | null;
+  max_experience?: number | null;
+  education_level?: string | null;
+};
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
@@ -271,6 +327,7 @@ export async function recruitmentAiRoutes(app: FastifyInstance): Promise<void> {
   /** POST /v1/hrms/ai/recruitment/score-jd — AI scores job description quality */
   app.post("/v1/hrms/ai/recruitment/score-jd", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, RECRUITER_ROLES);
     const body = jdScoreSchema.parse(req.body);
     const result = scoreJobDescription(body);
     return reply.send({ data: result });
@@ -279,26 +336,27 @@ export async function recruitmentAiRoutes(app: FastifyInstance): Promise<void> {
   /** POST /v1/hrms/ai/recruitment/parse-resume — extract structured data from resume */
   app.post("/v1/hrms/ai/recruitment/parse-resume", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, RECRUITER_ROLES);
     const body = resumeParseSchema.parse(req.body);
     const parsed = await parseResume(body.resumeKey);
 
     // If vacancyId provided, also score against JD
     let scoring = null;
     if (body.vacancyId) {
-      const vacancy = await sqlClient.query(
+      const vacancy = await withTenantGuc(ctx.tenantId, (pool) => pool.query<VacancyRow>(
         `SELECT title, requirements, preferred_skills, min_experience, max_experience, education_level
          FROM hrms.vacancies WHERE id = $1 AND tenant_id = $2`,
         [body.vacancyId, ctx.tenantId],
-      );
+      ));
       if (vacancy.rowCount && vacancy.rowCount > 0) {
-        const v = vacancy.rows[0];
+        const v = vacancy.rows[0]!;
         const jd = {
-          title: v.title,
+          title: v.title ?? "",
           description: "",
           requirements: Array.isArray(v.requirements) ? v.requirements : JSON.parse(v.requirements ?? "[]"),
           preferredSkills: Array.isArray(v.preferred_skills) ? v.preferred_skills : JSON.parse(v.preferred_skills ?? "[]"),
           experienceYears: { min: v.min_experience ?? 0, max: v.max_experience ?? 30 },
-          educationLevel: v.education_level ?? "any" as any,
+          educationLevel: (v.education_level ?? "any") as z.infer<typeof jdScoreSchema>["educationLevel"],
         };
         scoring = scoreResumeAgainstJd(parsed, jd);
       }
@@ -327,23 +385,24 @@ export async function recruitmentAiRoutes(app: FastifyInstance): Promise<void> {
   /** POST /v1/hrms/ai/recruitment/batch-screen — score + auto-shortlist multiple candidates */
   app.post("/v1/hrms/ai/recruitment/batch-screen", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, RECRUITER_ROLES);
     const body = batchScreenSchema.parse(req.body);
 
     // Get vacancy JD
-    const vacancy = await sqlClient.query(
+    const vacancy = await withTenantGuc(ctx.tenantId, (pool) => pool.query<VacancyRow>(
       `SELECT title, requirements, preferred_skills, min_experience, max_experience, education_level
        FROM hrms.vacancies WHERE id = $1 AND tenant_id = $2`,
       [body.vacancyId, ctx.tenantId],
-    );
+    ));
     if (vacancy.rowCount === 0) throw new HttpError(404, "NOT_FOUND", "Vacancy not found");
-    const v = vacancy.rows[0];
+    const v = vacancy.rows[0]!;
     const jd = {
-      title: v.title,
+      title: v.title ?? "",
       description: "",
       requirements: Array.isArray(v.requirements) ? v.requirements : JSON.parse(v.requirements ?? "[]"),
       preferredSkills: Array.isArray(v.preferred_skills) ? v.preferred_skills : JSON.parse(v.preferred_skills ?? "[]"),
       experienceYears: { min: v.min_experience ?? 0, max: v.max_experience ?? 30 },
-      educationLevel: v.education_level ?? "any" as any,
+      educationLevel: (v.education_level ?? "any") as z.infer<typeof jdScoreSchema>["educationLevel"],
     };
 
     // Score each candidate
@@ -384,17 +443,18 @@ export async function recruitmentAiRoutes(app: FastifyInstance): Promise<void> {
   /** POST /v1/hrms/ai/recruitment/interview-questions — generate tailored questions */
   app.post("/v1/hrms/ai/recruitment/interview-questions", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, RECRUITER_ROLES);
     const body = interviewQuestionsSchema.parse(req.body);
 
     // Get JD
-    const vacancy = await sqlClient.query(
+    const vacancy = await withTenantGuc(ctx.tenantId, (pool) => pool.query<VacancyRow>(
       `SELECT title, requirements, preferred_skills FROM hrms.vacancies WHERE id = $1 AND tenant_id = $2`,
       [body.vacancyId, ctx.tenantId],
-    );
+    ));
     if (vacancy.rowCount === 0) throw new HttpError(404, "NOT_FOUND", "Vacancy not found");
-    const v = vacancy.rows[0];
+    const v = vacancy.rows[0]!;
     const jd = {
-      title: v.title,
+      title: v.title ?? "",
       requirements: Array.isArray(v.requirements) ? v.requirements : JSON.parse(v.requirements ?? "[]"),
       preferredSkills: Array.isArray(v.preferred_skills) ? v.preferred_skills : JSON.parse(v.preferred_skills ?? "[]"),
     };
@@ -422,6 +482,7 @@ export async function recruitmentAiRoutes(app: FastifyInstance): Promise<void> {
   /** POST /v1/hrms/ai/recruitment/interview-summary — AI summarizes interview notes */
   app.post("/v1/hrms/ai/recruitment/interview-summary", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, RECRUITER_ROLES);
     const body = z.object({
       candidateId: z.string().uuid(),
       vacancyId: z.string().uuid(),

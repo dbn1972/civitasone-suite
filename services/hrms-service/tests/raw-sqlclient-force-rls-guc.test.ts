@@ -305,9 +305,14 @@ describe("ai-predictions/routes.ts -- workforce-insights GUC fix", () => {
 
 describe("ai-ml/face-verification.ts -- GUC fix", () => {
   it("enroll, verify (matching selfie), and status all see the real enrolled embedding (was: 404 NOT_ENROLLED / enrolled:false)", async () => {
+    // GAP2-PLATFORM-HRMS-AIML-01: biometric face enroll/verify/status is now
+    // HR/biometric-admin only (any-authenticated-role access was the HIGH
+    // DPDP finding). This GUC regression is role-agnostic, so authenticate as
+    // hr_admin in TENANT_A; the tenant/target (empA2) and the GUC-isolation
+    // assertion are unchanged.
     const enroll = await app.inject({
       method: "POST", url: "/v1/hrms/ai/face/enroll",
-      headers: auth(TENANT_A, empA2, ["employee"]),
+      headers: auth(TENANT_A, HR_A, ["hr_admin"]),
       payload: { employeeId: empA2, photoKey: "s3://fixtures/empA2-enroll.jpg" },
     });
     expect(enroll.statusCode).toBe(201);
@@ -315,7 +320,7 @@ describe("ai-ml/face-verification.ts -- GUC fix", () => {
 
     const status = await app.inject({
       method: "GET", url: `/v1/hrms/ai/face/status/${empA2}`,
-      headers: auth(TENANT_A, empA2, ["employee"]),
+      headers: auth(TENANT_A, HR_A, ["hr_admin"]),
     });
     expect(status.statusCode).toBe(200);
     expect(status.json().enrolled).toBe(true);
@@ -324,7 +329,7 @@ describe("ai-ml/face-verification.ts -- GUC fix", () => {
     // cosine similarity 1.0 -> PASS.
     const verify = await app.inject({
       method: "POST", url: "/v1/hrms/ai/face/verify",
-      headers: auth(TENANT_A, empA2, ["employee"]),
+      headers: auth(TENANT_A, HR_A, ["hr_admin"]),
       payload: { employeeId: empA2, selfieKey: "s3://fixtures/empA2-enroll.jpg" },
     });
     expect(verify.statusCode).toBe(200);
@@ -332,9 +337,12 @@ describe("ai-ml/face-verification.ts -- GUC fix", () => {
   });
 
   it("verifying an employee who was never enrolled in THIS tenant still 404s (fail-closed preserved)", async () => {
+    // GAP2-PLATFORM-HRMS-AIML-01: face/verify is now HR-only; authenticate as
+    // hr_admin in TENANT_B. Tenant/target (empB1, never enrolled) and the
+    // fail-closed 404 assertion are unchanged.
     const r = await app.inject({
       method: "POST", url: "/v1/hrms/ai/face/verify",
-      headers: auth(TENANT_B, empB1, ["employee"]),
+      headers: auth(TENANT_B, HR_B, ["hr_admin"]),
       payload: { employeeId: empB1, selfieKey: "s3://fixtures/never-enrolled.jpg" },
     });
     expect(r.statusCode).toBe(404);
