@@ -15,7 +15,8 @@
  * stays read-only.
  */
 import { DataTable } from "@/app/_components/ds/DataTable";
-import { formatSubjectRef, type NbaScoreRow } from "../_data";
+import type { NbaScoreRow } from "../_data";
+import { formatSubjectRef } from "../_format";
 
 export function NbaTable({ rows }: { rows: NbaScoreRow[] }) {
   return (

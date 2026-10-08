@@ -73,13 +73,7 @@ function mapNba(payload: z.infer<ReturnType<typeof listEnvelope<typeof predictiv
  * string. The full id is kept for a tooltip. Values that are NOT full UUIDs
  * (already-short refs like "account-9") are returned unchanged.
  */
-const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-export function formatSubjectRef(subjectId: string): string {
-  const trimmed = subjectId.trim();
-  if (trimmed === "") return "—";
-  if (UUID_RE.test(trimmed)) return `#${trimmed.slice(0, 8)}`;
-  return trimmed;
-}
+export { formatSubjectRef } from "./_format";
 
 export const getRecNba = (): Promise<LoaderResult<NbaScoreRow[]>> =>
   fetchJson<z.infer<ReturnType<typeof listEnvelope<typeof predictiveItem>>>, NbaScoreRow[]>(
