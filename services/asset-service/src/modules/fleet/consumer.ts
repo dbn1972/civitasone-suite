@@ -51,7 +51,7 @@ export function registerFleetConsumers(rawQueue: Queue): void {
         await repo.insertVehicle(tx, {
           id: p.id, tenantId: p.tenantId, registrationNo: p.registrationNo,
           make: p.make, model: p.model, year: p.year, fuelType: p.fuelType,
-          status: "active", createdBy: msg.actorId,
+          status: "active", createdBy: msg.actorId, updatedBy: msg.actorId,
         });
         await audit(tx, msg, "create", "fleet_vehicle", p.id);
       });
@@ -74,7 +74,7 @@ export function registerFleetConsumers(rawQueue: Queue): void {
         if (!(await markProcessed(tx, msg.messageId))) return;
         await repo.updateVehiclePosition(tx, p.id, p.tenantId, {
           lat: String(p.lat), lng: String(p.lng), lastGpsAt: new Date(),
-        });
+        }, { actorId: msg.actorId });
         await audit(tx, msg, "gps_update", "fleet_vehicle", p.id);
       });
     } catch (err) {
@@ -96,7 +96,7 @@ export function registerFleetConsumers(rawQueue: Queue): void {
           scheduledDate: p.scheduledDate.slice(0, 10),
           status: "scheduled", costMinor: null,
           odometerThresholdKm: p.odometerThresholdKm ?? null,
-          createdBy: msg.actorId,
+          createdBy: msg.actorId, updatedBy: msg.actorId,
         });
         await audit(tx, msg, "schedule", "fleet_maintenance", p.id);
       });
@@ -117,7 +117,7 @@ export function registerFleetConsumers(rawQueue: Queue): void {
         await repo.insertDevice(tx, {
           id: p.id, tenantId: p.tenantId, vehicleId: p.vehicleId,
           deviceImei: p.deviceImei, protocol: p.protocol,
-          simIccid: p.simIccid ?? null, status: "active", createdBy: msg.actorId,
+          simIccid: p.simIccid ?? null, status: "active", createdBy: msg.actorId, updatedBy: msg.actorId,
         });
         await audit(tx, msg, "register", "fleet_device", p.id);
       });
@@ -151,7 +151,7 @@ export function registerFleetConsumers(rawQueue: Queue): void {
           applied = await repo.updateVehiclePosition(tx, device.vehicleId, p.tenantId, {
             lat: String(p.lat), lng: String(p.lng),
             fuelLevelPct: p.fuelLevelPct ?? undefined, lastGpsAt: new Date(p.timestamp),
-          }, { onlyIfNotOlder: true });
+          }, { onlyIfNotOlder: true, actorId: msg.actorId });
         }
         await audit(tx, msg, "telemetry", "fleet_device", p.deviceId, {
           recordedAt: p.timestamp, lat: p.lat, lng: p.lng, backdated: !applied,
@@ -179,7 +179,7 @@ export function registerFleetConsumers(rawQueue: Queue): void {
         if (p.fuelType !== undefined)       fields.fuelType = p.fuelType;
         if (p.odometerKm !== undefined)     fields.odometerKm = p.odometerKm;
         if (p.status !== undefined)         fields.status = p.status;
-        await repo.updateVehicleFields(tx, p.id, p.tenantId, fields);
+        await repo.updateVehicleFields(tx, p.id, p.tenantId, fields, msg.actorId);
         await audit(tx, msg, "update", "fleet_vehicle", p.id);
       });
     } catch (err) {
@@ -198,7 +198,7 @@ export function registerFleetConsumers(rawQueue: Queue): void {
       const p = msg.payload as { vehicleId: string; tenantId: string; driverId: string | null };
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        await repo.assignDriverToVehicle(tx, p.vehicleId, p.tenantId, p.driverId);
+        await repo.assignDriverToVehicle(tx, p.vehicleId, p.tenantId, p.driverId, msg.actorId);
         await audit(tx, msg, "assign_driver", "fleet_vehicle", p.vehicleId);
       });
     } catch (err) {
@@ -212,7 +212,7 @@ export function registerFleetConsumers(rawQueue: Queue): void {
       const p = msg.payload as { id: string; tenantId: string; costMinor?: number | null };
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        const changed = await repo.completeMaintenance(tx, p.id, p.tenantId, p.costMinor != null ? BigInt(p.costMinor) : null);
+        const changed = await repo.completeMaintenance(tx, p.id, p.tenantId, p.costMinor != null ? BigInt(p.costMinor) : null, msg.actorId);
         if (changed) await audit(tx, msg, "complete", "fleet_maintenance", p.id);
       });
     } catch (err) {
@@ -227,7 +227,7 @@ export function registerFleetConsumers(rawQueue: Queue): void {
       const p = msg.payload as { id: string; tenantId: string };
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        const changed = await repo.cancelMaintenance(tx, p.id, p.tenantId);
+        const changed = await repo.cancelMaintenance(tx, p.id, p.tenantId, msg.actorId);
         if (changed) await audit(tx, msg, "cancel", "fleet_maintenance", p.id);
       });
     } catch (err) {

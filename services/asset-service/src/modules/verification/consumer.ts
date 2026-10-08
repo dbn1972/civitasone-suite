@@ -95,6 +95,15 @@ export function registerVerificationConsumers(rawQueue: Queue): void {
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
+        // GAP2-ASSETS-VERIFICATION-01: re-assert segregation of duties inside the
+        // write tx. The route already blocks self-approval; this stops a command
+        // that raced past (or bypassed) the preflight from ever persisting.
+        const session = await repo.findVerificationByIdTx(tx, p.id, p.tenantId);
+        if (session && session.createdBy === msg.actorId) {
+          await enqueue(tx, audit(msg.actorId, msg.tenantId, msg.correlationId, "verification_approve_rejected", "verification", p.id, "failure"));
+          log.warn({ messageId: msg.messageId, id: p.id }, "verificationApprove refused: self-approval (SoD)");
+          return;
+        }
         if (!(await repo.transitionVerification(tx, p.id, p.tenantId, "submitted", {
           status: "approved", approvedBy: msg.actorId, approvedAt: new Date(),
         }))) {

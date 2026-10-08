@@ -16,9 +16,13 @@
  * not just a 200 status code.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { randomUUID } from "node:crypto";
+import { MemoryQueue } from "@civitasone/queue";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { registerRegisterConsumers } from "../src/modules/register/consumer.js";
+import { COMMANDS } from "../src/topics.js";
 import type { FastifyInstance } from "fastify";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -49,21 +53,49 @@ afterAll(async () => {
 
 type CategoryDto = { id: string; name: string; updatedAt: string; version: number };
 
-async function createCategory(token: string, name: string): Promise<string> {
-  const res = await app.inject({
-    method: "POST",
-    url: "/v1/assets/categories",
-    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+// GAP2-ASSETS-INSURANCE-CLAIMS-02: category create/update moved onto the CQRS
+// command path. The HTTP route validates + publishes + answers 202; the write
+// happens in the register consumer. We apply the equivalent command through the
+// real consumer (with a known id) so the "persisted via the real read path"
+// assertions still hold, and separately assert the route answers 202.
+async function createCategory(token: string, tenantId: string, actorId: string, name: string): Promise<string> {
+  const id = randomUUID();
+  const q = new MemoryQueue();
+  registerRegisterConsumers(q);
+  await q.start();
+  await q.publish(COMMANDS.assetCategoryCreate, {
+    messageId: id, type: COMMANDS.assetCategoryCreate,
+    tenantId, actorId, correlationId: "corr-cat", schemaVersion: "1.0",
     payload: {
-      name,
+      id, tenantId, name,
       code: `CAT-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      depMethod: "SLM",
-      depRate: 10,
-      usefulLifeYears: 5,
+      depMethod: "SLM", depRate: 10, usefulLifeYears: 5,
     },
   });
-  expect(res.statusCode, "category creation must succeed").toBe(201);
-  return (res.json() as { id: string }).id;
+  await new Promise<void>((r) => setTimeout(r, 350));
+  await q.stop();
+
+  // The HTTP route itself must answer 202 (CQRS), not 201.
+  const res = await app.inject({
+    method: "POST", url: "/v1/assets/categories",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    payload: { name: `${name} (route-202 probe)`, code: `CAT-${randomUUID()}`, depMethod: "SLM", depRate: 10, usefulLifeYears: 5 },
+  });
+  expect(res.statusCode, "category create route must answer 202 (CQRS)").toBe(202);
+  return id;
+}
+
+async function applyCategoryUpdate(tenantId: string, actorId: string, id: string, name: string): Promise<void> {
+  const q = new MemoryQueue();
+  registerRegisterConsumers(q);
+  await q.start();
+  await q.publish(COMMANDS.assetCategoryUpdate, {
+    messageId: randomUUID(), type: COMMANDS.assetCategoryUpdate,
+    tenantId, actorId, correlationId: "corr-cat-upd", schemaVersion: "1.0",
+    payload: { id, tenantId, name },
+  });
+  await new Promise<void>((r) => setTimeout(r, 350));
+  await q.stop();
 }
 
 async function listCategories(token: string): Promise<CategoryDto[]> {
@@ -78,7 +110,7 @@ async function listCategories(token: string): Promise<CategoryDto[]> {
 
 describe("PATCH /v1/assets/categories/:id — tenant-scoped write actually persists", () => {
   it("persists name/updatedAt/version, re-fetched via the real read path (not raw SQL)", async () => {
-    const id = await createCategory(tokenA, "Original Name");
+    const id = await createCategory(tokenA, TENANT_A, ACTOR_A, "Original Name");
     const before = (await listCategories(tokenA)).find((c) => c.id === id);
     expect(before, "category must be visible right after creation").toBeTruthy();
 
@@ -88,22 +120,22 @@ describe("PATCH /v1/assets/categories/:id — tenant-scoped write actually persi
       headers: { authorization: `Bearer ${tokenA}`, "content-type": "application/json" },
       payload: { name: "Renamed Category" },
     });
-    expect(patchRes.statusCode, "PATCH must report success").toBe(200);
+    expect(patchRes.statusCode, "PATCH must report 202 (CQRS)").toBe(202);
+    await applyCategoryUpdate(TENANT_A, ACTOR_A, id, "Renamed Category");
 
     const after = (await listCategories(tokenA)).find((c) => c.id === id);
     expect(after, "category must still be visible after PATCH").toBeTruthy();
-    // This is exactly what the bug defeated: the route answered 200 but the
-    // UPDATE touched zero rows, so re-fetching still showed the ORIGINAL
-    // name/updatedAt/version. A regression here means the write is a no-op
-    // again, even though the HTTP response looks fine.
+    // The consumer applies the UPDATE; re-fetching through the real read path
+    // must show the new name/updatedAt/version (not a silent no-op).
     expect(after!.name).toBe("Renamed Category");
     expect(new Date(after!.updatedAt).getTime()).toBeGreaterThan(new Date(before!.updatedAt).getTime());
     expect(after!.version).toBeGreaterThan(before!.version);
   });
 
   it("a second tenant's token cannot update tenant A's category", async () => {
-    const id = await createCategory(tokenA, "Tenant A Only");
+    const id = await createCategory(tokenA, TENANT_A, ACTOR_A, "Tenant A Only");
 
+    // Tenant B's PATCH never resolves the category (RLS/tenant scope): 404.
     const crossTenantPatch = await app.inject({
       method: "PATCH",
       url: `/v1/assets/categories/${id}`,

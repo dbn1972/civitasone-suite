@@ -5,9 +5,7 @@ import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import { objectExists } from "@civitasone/storage";
 import * as queries from "./queries.js";
-import * as repo from "./repo.js";
 import type { PolicyBody, ClaimBody } from "./validators.js";
-import type { PolicyInsert, ClaimInsert, ClaimRow } from "./schema.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -77,51 +75,63 @@ function assertDecidable(status: string): void {
   }
 }
 
-async function loadDecidableClaim(ctx: RequestContext, id: string) {
+/**
+ * GAP2-ASSETS-INSURANCE-CLAIMS-01 (maker-checker / segregation of duties):
+ * a money-bearing claim decision (approve/settle/reject) may never be taken by
+ * the same user who filed the claim. Mirrors the write-off SoD guard
+ * (verification/commands.ts approveWriteoffRequest → 403 SELF_APPROVAL_FORBIDDEN)
+ * and the condemnation maker-checker (condemnation/preflight.ts). Re-asserted in
+ * the consumer's conditional UPDATE for defence in depth.
+ */
+async function loadDecidableClaim(ctx: RequestContext, id: string, enforceSoD = true) {
   const claim = await queries.getClaim(ctx.tenantId, id);
   if (!claim) throw new HttpError(404, "NOT_FOUND", "claim not found");
+  if (enforceSoD && claim.createdBy === ctx.actorId) {
+    throw new HttpError(403, "SELF_APPROVAL_FORBIDDEN", "the approver cannot be the person who filed the claim (segregation of duties)");
+  }
   assertDecidable(claim.status);
   return claim;
 }
 
-const DECIDABLE: string[] = ["pending", "approved"];
+export type ClaimDecision = "approve" | "settle" | "reject";
 
-function auditFor(ctx: RequestContext, action: string, resourceType: "insurance_claim" | "insurance_policy", before: { status: string; amountMinor: bigint }, reason?: string): repo.DecisionAudit {
-  return { actorId: ctx.actorId, correlationId: ctx.correlationId, action, resourceType, before, reason };
-}
-
-async function decideClaim(
-  ctx: RequestContext, id: string, action: string, patch: Partial<ClaimInsert>, reason?: string,
-  check?: (claim: ClaimRow) => void, appendNote?: string,
-): Promise<void> {
-  const claim = await loadDecidableClaim(ctx, id);
-  check?.(claim);
-  // The UPDATE itself is conditional on the status, so a concurrent or stale
-  // second decision changes 0 rows and is refused rather than silently applied.
-  const row = await repo.updateClaim(
-    ctx.tenantId, id, { ...patch, updatedAt: new Date(), updatedBy: ctx.actorId }, DECIDABLE,
-    auditFor(ctx, action, "insurance_claim", { status: claim.status, amountMinor: claim.settledAmountMinor }, reason),
-    appendNote,
-  );
-  if (!row) throw new HttpError(409, "CLAIM_NOT_DECIDABLE", "claim was already decided");
-}
-
-export async function approveClaim(ctx: RequestContext, id: string): Promise<void> {
-  await decideClaim(ctx, id, "approve", { status: "approved" });
-}
-
-export async function settleClaim(ctx: RequestContext, id: string, settlementAmountMinor: number): Promise<void> {
-  await decideClaim(ctx, id, "settle", { status: "settled", settledAmountMinor: BigInt(settlementAmountMinor) }, undefined, (claim) => {
-    // Money-safety: a settlement can never exceed what was claimed.
-    if (BigInt(settlementAmountMinor) > BigInt(claim.claimAmountMinor)) {
-      throw new HttpError(400, "SETTLEMENT_EXCEEDS_CLAIM", "settlement amount exceeds the claim amount");
-    }
+/**
+ * GAP2-ASSETS-INSURANCE-CLAIMS-02 (CQRS write path, CLAUDE.md §6): the route
+ * only validates (status, SoD, money bounds) and publishes a command; the
+ * conditional UPDATE + audit live in the consumer. Returns the accepted
+ * envelope so the route answers 202.
+ */
+async function publishClaimDecision(
+  ctx: RequestContext, id: string, decision: ClaimDecision,
+  extra: Record<string, unknown>,
+): Promise<Accepted> {
+  const messageId = randomUUID();
+  await queue.publish(COMMANDS.insuranceClaimDecide, {
+    messageId, type: COMMANDS.insuranceClaimDecide,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, decision, ...extra },
   });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function rejectClaim(ctx: RequestContext, id: string, reason: string): Promise<void> {
-  // The filer's notes are kept; the reason is appended as "Rejected: <reason>".
-  await decideClaim(ctx, id, "reject", { status: "rejected" }, reason, undefined, `Rejected: ${reason}`);
+export async function approveClaim(ctx: RequestContext, id: string): Promise<Accepted> {
+  await loadDecidableClaim(ctx, id);
+  return publishClaimDecision(ctx, id, "approve", {});
+}
+
+export async function settleClaim(ctx: RequestContext, id: string, settlementAmountMinor: number): Promise<Accepted> {
+  const claim = await loadDecidableClaim(ctx, id);
+  // Money-safety: a settlement can never exceed what was claimed. Preflight here;
+  // re-asserted in the consumer before the UPDATE.
+  if (BigInt(settlementAmountMinor) > BigInt(claim.claimAmountMinor)) {
+    throw new HttpError(400, "SETTLEMENT_EXCEEDS_CLAIM", "settlement amount exceeds the claim amount");
+  }
+  return publishClaimDecision(ctx, id, "settle", { settlementAmountMinor });
+}
+
+export async function rejectClaim(ctx: RequestContext, id: string, reason: string): Promise<Accepted> {
+  await loadDecidableClaim(ctx, id);
+  return publishClaimDecision(ctx, id, "reject", { reason });
 }
 
 const IS_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -135,7 +145,7 @@ export async function updatePolicy(
   ctx: RequestContext,
   id: string,
   body: { status?: string | undefined; expiryDate?: string | undefined; premiumMinor?: number | undefined },
-): Promise<void> {
+): Promise<Accepted> {
   const existing = await queries.getPolicy(ctx.tenantId, id);
   if (!existing) throw new HttpError(404, "NOT_FOUND", "policy not found");
   if (body.expiryDate !== undefined && !isRealDate(body.expiryDate)) {
@@ -145,13 +155,17 @@ export async function updatePolicy(
   if (body.status === "active" && (existing.status === "cancelled" || existing.status === "expired")) {
     throw new HttpError(409, "POLICY_REACTIVATION_NOT_ALLOWED", `a ${existing.status} policy cannot be set back to active`);
   }
-  const patch: Partial<PolicyInsert> = { updatedAt: new Date(), updatedBy: ctx.actorId };
-  if (body.status !== undefined) patch.status = body.status;
-  if (body.expiryDate !== undefined) patch.endDate = body.expiryDate;
-  if (body.premiumMinor !== undefined) patch.premiumMinor = BigInt(body.premiumMinor);
-  const row = await repo.updatePolicy(
-    ctx.tenantId, id, patch,
-    auditFor(ctx, "update", "insurance_policy", { status: existing.status, amountMinor: existing.premiumMinor }),
-  );
-  if (!row) throw new HttpError(404, "NOT_FOUND", "policy not found");
+  // GAP2-ASSETS-INSURANCE-CLAIMS-02: validate here, apply the UPDATE + audit in the consumer.
+  const messageId = randomUUID();
+  await queue.publish(COMMANDS.insurancePolicyUpdate, {
+    messageId, type: COMMANDS.insurancePolicyUpdate,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: {
+      id, tenantId: ctx.tenantId,
+      ...(body.status !== undefined ? { status: body.status } : {}),
+      ...(body.expiryDate !== undefined ? { endDate: body.expiryDate } : {}),
+      ...(body.premiumMinor !== undefined ? { premiumMinor: body.premiumMinor } : {}),
+    },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
 }
