@@ -49,6 +49,18 @@ export async function updateBid(tx: Writer, id: string, patch: Partial<BidInsert
   await tx.update(procurementBids).set({ ...patch, updatedAt: new Date() }).where(eq(procurementBids.id, id));
 }
 
+/**
+ * GAP2-PROCUREMENT-GAPLIST-03: real COUNT(*) over the tenant's auctions (same
+ * WHERE as listAuctionsByTenant, no limit/offset).
+ */
+export async function countAuctionsByTenant(tenantId: string): Promise<number> {
+  const rows = await db.transaction((tx) => tx
+    .select({ n: sql<number>`COUNT(*)` })
+    .from(procurementAuctions)
+    .where(eq(procurementAuctions.tenantId, tenantId)));
+  return Number(rows[0]?.n ?? 0);
+}
+
 export async function listAuctionsByTenant(tenantId: string, limit: number, offset: number): Promise<AuctionRow[]> {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.

@@ -12,6 +12,25 @@ export async function listActiveByTenant(tenantId: string, limit = 50, offset = 
     .limit(limit).offset(offset));
 }
 
+/**
+ * GAP2-PROCUREMENT-GAPLIST-03: real COUNT(*) over the tenant's ACTIVE
+ * blacklist rows (same WHERE as listActiveByTenant, no limit/offset).
+ */
+export async function countActiveByTenant(tenantId: string): Promise<number> {
+  const rows = await db.transaction((tx) => tx
+    .select({ n: sql<number>`COUNT(*)` }).from(vendorBlacklist)
+    .where(and(eq(vendorBlacklist.tenantId, tenantId), eq(vendorBlacklist.status, "active"))));
+  return Number(rows[0]?.n ?? 0);
+}
+
+/** GAP2-PROCUREMENT-GAPLIST-03: real COUNT(*) over ACTIVE central debarments (same WHERE as listActiveCentral, no limit/offset). */
+export async function countActiveCentral(): Promise<number> {
+  const rows = await db.transaction((tx) => tx
+    .select({ n: sql<number>`COUNT(*)` }).from(vendorBlacklist)
+    .where(and(eq(vendorBlacklist.scope, "central"), eq(vendorBlacklist.status, "active"))));
+  return Number(rows[0]?.n ?? 0);
+}
+
 export async function findActive(tenantId: string, vendorId: string): Promise<VendorBlacklistRow | null> {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.

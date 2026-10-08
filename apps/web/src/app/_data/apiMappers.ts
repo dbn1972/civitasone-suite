@@ -388,6 +388,8 @@ export function mapProcurementGRNSummaries(payload: unknown): GRNSummary[] | nul
       id,
       grnNo,
       poRef: toText(row.poRef) ?? "—",
+      poId: toText(row.poId) ?? undefined,
+      poNo: toText(row.poNo) ?? undefined,
       vendor: toText(row.vendor) ?? "—",
       receivedDate: toText(row.receivedDate) ?? "—",
       receivedBy: toText(row.receivedBy) ?? "—",

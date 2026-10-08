@@ -8,6 +8,7 @@ import { getSessionUserId } from "@/lib/auth/roleGuard";
 import { AmendGrnForm } from "./AmendGrnForm";
 import { InspectGrnForm } from "./InspectGrnForm";
 import { grnStatusLabel } from "../statusLabels";
+import { parsePoRef } from "../poRef";
 
 
 // Req 1.2 — GRN partial-delivery amendment. Only editable while `draft` or
@@ -75,6 +76,13 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
     unit: item.unit,
   }));
 
+  // GAP2-PROCUREMENT-GRN-DETAIL-06 — the service resolves the opaque
+  // `procurement_po:<uuid>` reference to its bare uuid (poId, for the link href)
+  // and human PO number (poNo, for display). parsePoRef is kept as a defensive
+  // fallback if an older payload omits poId. Never render the raw composite.
+  const poId = grn.poId ?? parsePoRef(grn.poRef);
+  const poNumber = grn.poNo ?? null;
+
   // GAP-PROCUREMENT-GRN-DETAIL-02 — the match is only "known" once computed
   // (post-inspection). An uninspected GRN must read as a neutral pending state,
   // never a red mismatch.
@@ -120,7 +128,11 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
           </div>
           <div className="field">
             <span className="label">PO Ref</span>
-            <span className="mono">{grn.poRef}</span>
+            {poId ? (
+              <Link href={`/procurement/orders/${poId}`} className="mono">{poNumber ?? "View purchase order"}</Link>
+            ) : (
+              <span className="mono">—</span>
+            )}
           </div>
           <div className="field">
             <span className="label">Vendor</span>

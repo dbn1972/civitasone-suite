@@ -3,10 +3,10 @@
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
-import { estimatedValueRupees } from "./estimatedValueRupees";
 import { PageHeader, Button, EntityPicker, type EntityOption } from "@/app/_components/ds";
 import { searchDepartments, resolveDepartments } from "@/lib/entityAdapters/department";
 import { formatMoney } from "@/lib/formatters";
+import { nonNegativeRupeesToMinorString } from "@/lib/money";
 import { currentFinancialYearStart, fyLabel } from "@/lib/financialYear";
 import { METHOD_LABELS } from "@/lib/procurementLabels";
 
@@ -29,7 +29,11 @@ type PlanLine = {
   description: string;
   quantity: number;
   uom: string;
-  estimatedValueMinor: number;
+  // GAP2-PROCUREMENT-MONEY-WEB-04: the RAW rupees string the clerk typed (was
+  // a float that fed `Math.round(parseFloat(x) * 100)`). Converted to paise
+  // via nonNegativeRupeesToMinorString (BigInt, string-based) — a >2-decimal
+  // or non-numeric value is rejected, never silently rounded.
+  estimatedValueInput: string;
   procurementCategory: string;
   budgetLine: string;
   procurementMethod: string;
@@ -42,12 +46,30 @@ function emptyLine(): PlanLine {
     description: "",
     quantity: 1,
     uom: "nos",
-    estimatedValueMinor: 0,
+    estimatedValueInput: "",
     procurementCategory: "goods",
     budgetLine: "",
     procurementMethod: "gem",
     timelineQuarter: "Q1",
   };
+}
+
+/**
+ * GAP2-PROCUREMENT-MONEY-WEB-04: exact paise for a line's estimated value as a
+ * BigInt, or null when the typed rupees string is invalid (non-numeric or more
+ * than 2 decimal places). Blank -> 0n (an unpriced plan line is a legitimate
+ * draft state). Float-free (nonNegativeRupeesToMinorString, BigInt).
+ */
+function lineEstimatedValueMinor(input: string): bigint | null {
+  const trimmed = input.trim();
+  if (trimmed === "") return 0n;
+  const minor = nonNegativeRupeesToMinorString(trimmed);
+  return minor === null ? null : BigInt(minor);
+}
+
+/** True when a plan line's typed estimated value is syntactically invalid. */
+function isLineEstimatedValueInvalid(input: string): boolean {
+  return lineEstimatedValueMinor(input) === null;
 }
 
 export default function NewAnnualPlanPage() {
@@ -97,11 +119,13 @@ export default function NewAnnualPlanPage() {
     );
   }
 
-  // GAP-PROCUREMENT-PLANNING-NEW-04: show the plan total (sum of valid line
-  // values) in BigInt paise, so the user sees it before submit with no drift.
+  // GAP2-PROCUREMENT-PLANNING-NEW-04 / MONEY-WEB-04: show the plan total (sum of
+  // VALID line values) in BigInt paise, so the user sees it before submit with
+  // no drift. Each line's paise come from nonNegativeRupeesToMinorString (no
+  // float `* 100`); an invalid/blank line contributes 0 to the preview.
   const totalMinor = useMemo(
     () =>
-      lines.reduce((s, l) => s + BigInt(Math.max(0, Math.round(l.estimatedValueMinor))), 0n),
+      lines.reduce((s, l) => s + (lineEstimatedValueMinor(l.estimatedValueInput) ?? 0n), 0n),
     [lines],
   );
 
@@ -117,6 +141,13 @@ export default function NewAnnualPlanPage() {
     if (validLines.length === 0) { // ux-001-ok: form-validation of user-entered lines, not a loader empty state
       setStatus("error");
       setClientMessage("Add at least one line item (item code and description).");
+      return;
+    }
+    // GAP2-PROCUREMENT-MONEY-WEB-04: block submit on any invalid estimated
+    // value (>2 decimals / non-numeric) rather than silently rounding it.
+    if (validLines.some((l) => isLineEstimatedValueInvalid(l.estimatedValueInput))) {
+      setStatus("error");
+      setClientMessage("One or more line items have an invalid estimated value — enter rupees with at most 2 decimal places.");
       return;
     }
     setStatus("submitting");
@@ -139,7 +170,9 @@ export default function NewAnnualPlanPage() {
             description: l.description.trim(),
             aggregatedQty: l.quantity,
             uom: l.uom.trim() || "nos",
-            estimatedValueMinor: Math.max(0, Math.round(l.estimatedValueMinor)),
+            // GAP2-PROCUREMENT-MONEY-WEB-04: exact paise from the rupees STRING
+            // via BigInt, never `Math.round(parseFloat(x) * 100)`.
+            estimatedValueMinor: Number(lineEstimatedValueMinor(l.estimatedValueInput) ?? 0n),
             procurementCategory: l.procurementCategory,
             procurementMethod: l.procurementMethod,
             timelineQuarter: l.timelineQuarter,
@@ -391,19 +424,23 @@ export default function NewAnnualPlanPage() {
                       </td>
                       <td>
                         <input
-                          type="number"
+                          type="text"
+                          inputMode="decimal"
                           className="inp"
                           aria-label={`Estimated value INR, line ${i + 1}`}
-                          value={estimatedValueRupees(l.estimatedValueMinor)}
+                          aria-invalid={isLineEstimatedValueInvalid(l.estimatedValueInput) ? true : undefined}
+                          value={l.estimatedValueInput}
+                          placeholder="0.00"
                           onChange={(e) =>
-                            updateLine(i, {
-                              estimatedValueMinor: Math.round(
-                                (parseFloat(e.target.value) || 0) * 100,
-                              ),
-                            })
+                            updateLine(i, { estimatedValueInput: e.target.value })
                           }
-                          style={{ width: 120, textAlign: "end" }}
-                          step="0.01"
+                          style={{
+                            width: 120,
+                            textAlign: "end",
+                            ...(isLineEstimatedValueInvalid(l.estimatedValueInput)
+                              ? { borderColor: "var(--bad)" }
+                              : {}),
+                          }}
                         />
                       </td>
                       <td>

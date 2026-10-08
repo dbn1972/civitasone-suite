@@ -138,6 +138,11 @@ export type BidEvaluationSummary = {
  * sealed (financialOpened=false), financialScore is withheld (null) and
  * totalScore reflects the technical score only (GAP-PROCUREMENT-BID-EVALUATION-06).
  */
+/** GAP2-PROCUREMENT-GAPLIST-03: true total count of technically-evaluated bids for meta.total. */
+export async function countBidEvaluations(tenantId: string): Promise<number> {
+  return repo.countBidEvaluationsByTenant(tenantId);
+}
+
 export async function listBidEvaluations(tenantId: string, limit: number, offset: number): Promise<BidEvaluationSummary[]> {
   const rows = await repo.listBidEvaluationsByTenant(tenantId, limit, offset);
   return rows.map((r) => {
@@ -190,6 +195,11 @@ export type PreBidConferenceSummary = {
  * and callers MUST surface `meta.reason` explaining the substitution rather
  * than presenting it as a genuine attendance figure.
  */
+/** GAP2-PROCUREMENT-GAPLIST-03: true total count of pre-bid-conference (tender) threads for meta.total. */
+export async function countPreBidConferenceAggregates(tenantId: string): Promise<number> {
+  return docsRepo.countPrebidAggregatesByTenant(tenantId);
+}
+
 export async function listPreBidConferenceAggregates(tenantId: string, limit: number, offset: number): Promise<PreBidConferenceSummary[]> {
   const rows = await docsRepo.listPrebidAggregatesByTenant(tenantId, limit, offset);
   return rows.map((r) => {

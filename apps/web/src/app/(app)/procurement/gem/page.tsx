@@ -2,8 +2,17 @@ import { PageHeader } from "../../../_components/ds";
 import { getProcurementGem } from "../../../_data/loaders";
 import { GemTable } from "./GemTable";
 
-export default async function GemPage() {
-  const { data: items, source } = await getProcurementGem();
+export default async function GemPage({
+  searchParams,
+}: {
+  searchParams?: Record<string, string | string[] | undefined>;
+}) {
+  // GAP2-PROCUREMENT-GEM-ITEMS-08: the search term is driven from the URL (?q=)
+  // so a server render reflects the operator's query and the loader can hit the
+  // live GeM catalog.
+  const rawQ = searchParams?.q;
+  const q = (Array.isArray(rawQ) ? rawQ[0] : rawQ)?.trim() ?? "";
+  const { data: items, source, integrationDisabled, reason } = await getProcurementGem(q);
 
   return (
     <>
@@ -18,7 +27,13 @@ export default async function GemPage() {
         subtitle="Government e-Marketplace orders and delivery tracking."
       />
 
-      <GemTable items={items} source={source} />
+      <GemTable
+        items={items}
+        source={source}
+        query={q}
+        integrationDisabled={integrationDisabled ?? false}
+        reason={reason ?? null}
+      />
     </>
   );
 }

@@ -15,7 +15,7 @@ export const contractTemplates = templatesSchema.table("contract_templates", {
   updatedBy:   uuid("updated_by").notNull(),
 });
 
-export const templateClauses = templatesSchema.table("template_clauses", {
+export const templateClauses = templatesSchema.table("contract_template_clauses", {
   id:                uuid("id").primaryKey().defaultRandom(),
   tenantId:          uuid("tenant_id").notNull(),
   templateId:        uuid("template_id").notNull(),

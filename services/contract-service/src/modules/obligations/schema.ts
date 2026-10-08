@@ -18,7 +18,7 @@ export const contractObligations = obligationsSchema.table("contract_obligations
   version:     integer("version").notNull().default(1),
 });
 
-export const obligationReminders = obligationsSchema.table("obligation_reminders", {
+export const obligationReminders = obligationsSchema.table("contract_obligation_reminders", {
   id:            uuid("id").primaryKey().defaultRandom(),
   tenantId:      uuid("tenant_id").notNull(),
   obligationId:  uuid("obligation_id").notNull(),

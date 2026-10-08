@@ -65,7 +65,7 @@ export function registerThreeWayMatchConsumers(queue: Queue): void {
       // HTTP endpoints (routes.ts) now REQUIRE invoiceRef below whenever
       // this is present, and it is persisted alongside the match instead of
       // being accepted and silently discarded.
-      invoiceAmountMinor?: number;
+      invoiceAmountMinor?: number | string;
       invoiceRef?: string;
       /** DOM-032: invoice date as supplied by the client. Same discard-then-fixed shape as invoiceRef above, just for a field that stays optional on its one caller (matches/invoice) -- see routes.ts. */
       invoiceDate?: string;

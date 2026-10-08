@@ -90,4 +90,24 @@ describe("EmpanelmentTable", () => {
     expect(stat("Total Empanelled")).toHaveTextContent("3");
     expect(stat("Active")).toHaveTextContent("2");
   });
+
+  // GAP2-PROCUREMENT-EMPANELMENT-02: "Total Empanelled" is the tenant-wide
+  // server COUNT (meta.total), NOT the capped fetched page length. With 3 rows
+  // fetched but a serverTotal of 60, the stat must read 60 and a "showing N of
+  // M" notice must appear. Before the fix the stat read rows.length (3/50).
+  it("shows the server-side total (meta.total), not the fetched page length", () => {
+    seed(VENDORS, "live");
+    render(<EmpanelmentTable vendors={VENDORS} source="api" serverTotal={60} />);
+    expect(screen.getByText("Total Empanelled").closest(".stat")).toHaveTextContent("60");
+    expect(screen.getByText(/Showing 3 of 60 empanelled vendors/i)).toBeInTheDocument();
+  });
+
+  // GAP2-PROCUREMENT-EMPANELMENT-02: when the fetched page already holds the
+  // whole dataset, no truncation notice is shown and the total matches.
+  it("omits the 'showing N of M' notice when the page holds every row", () => {
+    seed(VENDORS, "live");
+    render(<EmpanelmentTable vendors={VENDORS} source="api" serverTotal={3} />);
+    expect(screen.getByText("Total Empanelled").closest(".stat")).toHaveTextContent("3");
+    expect(screen.queryByText(/Showing .* of .* empanelled vendors/i)).not.toBeInTheDocument();
+  });
 });

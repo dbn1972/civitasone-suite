@@ -55,11 +55,26 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
       repo.listAdvancesByTenant(ctx.tenantId, advOpts),
       repo.listDebitNotesByTenant(ctx.tenantId, dnOpts),
     ]);
+    // GAP2-PROCUREMENT-GAPLIST-03: real COUNT(*) over BOTH underlying sets
+    // (same filters, no limit/offset) — the /payments list concatenates
+    // advances + debit notes, so its true total is the sum of the two counts,
+    // not the length of the (per-set capped) concatenated page.
+    const advCountOpts: { poRef?: string; vendorId?: string; status?: string } = {};
+    if (q.poId) advCountOpts.poRef = q.poId;
+    if (q.vendorId) advCountOpts.vendorId = q.vendorId;
+    if (q.status) advCountOpts.status = q.status;
+    const dnCountOpts: { grnRef?: string; vendorId?: string; status?: string } = {};
+    if (q.vendorId) dnCountOpts.vendorId = q.vendorId;
+    if (q.status) dnCountOpts.status = q.status;
+    const [advTotal, dnTotal] = await Promise.all([
+      repo.countAdvancesByTenant(ctx.tenantId, advCountOpts),
+      repo.countDebitNotesByTenant(ctx.tenantId, dnCountOpts),
+    ]);
     const data = [
       ...advances.map((a) => serAdv(a as unknown as Record<string, unknown>)),
       ...debitNotes.map((d) => serDN(d as unknown as Record<string, unknown>)),
     ];
-    return reply.send({ data, total: data.length });
+    return reply.send({ data, total: advTotal + dnTotal });
   });
 
   app.get("/v1/procurement/payments/:id", async (req, reply) => {

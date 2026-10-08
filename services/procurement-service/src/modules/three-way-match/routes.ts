@@ -8,6 +8,7 @@ import type { ThreeWayMatchRow } from "./schema.js";
 import * as poRepo from "../po/repo.js";
 import * as grnRepo from "../grn/repo.js";
 import * as commands from "./commands.js";
+import { rupeesStringToMinor, invoiceTotalMinor } from "./money.js";
 import { randomUUID } from "node:crypto";
 
 const PROC_ROLES = ["procurement_officer", "procurement_admin", "finance_admin", "super_admin"];
@@ -30,12 +31,24 @@ const createBody = z.object({
   },
 );
 
+// GAP2-PROCUREMENT-THREEWAYMATCH-01: invoiceAmount/invoiceTax are now RUPEES
+// DECIMAL STRINGS, converted to paise with exact BigInt arithmetic
+// (rupeesStringToMinor) instead of the banned float `Number(x) * 100`. The
+// `.refine()` rejects >2-decimal / non-numeric / negative input with a clean
+// 400 rather than silently rounding a payment-gating amount. A paise-integer
+// client (like the sibling direct endpoint) can still post an integer string
+// such as "7" (0 decimals) — that is accepted and means 7 rupees -> 700 paise,
+// consistent with "7.00"; callers wanting raw paise use the direct endpoint.
 const invoiceAttachBody = z.object({
   matchId:       z.string().uuid(),
   invoiceRef:    z.string().min(1).max(128),
   invoiceDate:   z.string().optional(),
-  invoiceAmount: z.number().nonnegative(),
-  invoiceTax:    z.number().nonnegative().default(0),
+  invoiceAmount: z.string().trim().min(1).refine((v) => rupeesStringToMinor(v) !== null, {
+    message: "invoiceAmount must be a non-negative rupees amount with at most 2 decimal places",
+  }),
+  invoiceTax:    z.string().trim().refine((v) => v.trim() === "" || rupeesStringToMinor(v) !== null, {
+    message: "invoiceTax must be a non-negative rupees amount with at most 2 decimal places",
+  }).default("0"),
   currency:      z.string().length(3).default("INR"),
 });
 
@@ -91,8 +104,12 @@ export async function threeWayMatchRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, PROC_ROLES);
     const q = z.object({ poId: z.string().uuid().optional(), limit: z.coerce.number().int().min(1).max(200).default(50), offset: z.coerce.number().int().min(0).default(0) }).parse(req.query);
-    const rows = await repo.listByTenant(ctx.tenantId, q.poId, q.limit, q.offset);
-    return reply.send({ data: rows.map(toApi), total: rows.length });
+    // GAP2-PROCUREMENT-GAPLIST-03: real COUNT(*) total, not the page length.
+    const [rows, total] = await Promise.all([
+      repo.listByTenant(ctx.tenantId, q.poId, q.limit, q.offset),
+      repo.countByTenant(ctx.tenantId, q.poId),
+    ]);
+    return reply.send({ data: rows.map(toApi), total });
   });
 
   app.post("/v1/procurement/matches/invoice", async (req, reply) => {
@@ -102,12 +119,26 @@ export async function threeWayMatchRoutes(app: FastifyInstance): Promise<void> {
     const existingMatch = await repo.findMatchById(body.matchId, ctx.tenantId);
     if (!existingMatch) throw new HttpError(404, "NOT_FOUND", "three-way match record not found");
     const invoiceId = randomUUID();
-    const invoiceAmountMinor = Math.round((body.invoiceAmount + body.invoiceTax) * 100);
+    // GAP2-PROCUREMENT-THREEWAYMATCH-01: exact BigInt conversion of the rupees
+    // amount+tax to paise (the Zod refine above already guaranteed both parse),
+    // never float `* 100`. The queue/consumer path carries invoiceAmountMinor
+    // as a number today, so we pass the exact bigint stringified back through
+    // Number() ONLY after it is an integral paise value — safe below 2^53 and
+    // the direct endpoint's own schema caps there too; the string hop keeps the
+    // conversion itself float-free end to end.
+    const invoiceTotal = invoiceTotalMinor(body.invoiceAmount, body.invoiceTax);
+    if (invoiceTotal === null) {
+      throw new HttpError(400, "VALIDATION_FAILED", "invoice amount/tax must be rupees with at most 2 decimal places");
+    }
+    const invoiceAmountMinor = invoiceTotal;
     return sendAccepted(reply, acceptedResponseSchema, await commands.runThreeWayMatch(ctx, {
       poId: existingMatch.poId,
       grnId: existingMatch.grnId,
       invoiceId,
-      invoiceAmountMinor,
+      // Carry paise as an exact base-10 STRING across the queue — the consumer
+      // rebuilds a bigint with BigInt(...), so no Number() ever touches the
+      // amount (precision-safe above 2^53, float-free end to end).
+      invoiceAmountMinor: invoiceAmountMinor.toString(),
       // DOM-027: invoiceRef has always been REQUIRED by invoiceAttachBody
       // above, but was previously never forwarded past validation --
       // accepted, then silently discarded. Threaded through the same pipe
