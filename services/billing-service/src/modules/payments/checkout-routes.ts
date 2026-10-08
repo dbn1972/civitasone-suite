@@ -41,7 +41,13 @@ export async function checkoutRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "PLAN_NOT_FOUND", `plan ${body.planId} not found`);
     }
 
-    const amountPaise = Number(plan.priceMinor) * (body.billingCycle === "annual" ? 12 : 1);
+    // GAP2-BILLING-CHECKOUT-01: keep the charged amount in BigInt paise. Previously
+    // this was `Number(plan.priceMinor) * (annual ? 12 : 1)` — IEEE-754 float math
+    // on money, which loses integer precision above Number.MAX_SAFE_INTEGER paise
+    // (CLAUDE.md §3.11 / §4). plan.priceMinor is a bigint; multiply with bigint
+    // literals and serialise to a string only at the response/audit boundary.
+    const amountPaise = BigInt(plan.priceMinor) * (body.billingCycle === "annual" ? 12n : 1n);
+    const amountPaiseStr = amountPaise.toString();
     const currency = plan.currency ?? "INR";
 
     const order = await razorpay.createOrder(amountPaise, currency, receipt, {
@@ -62,14 +68,14 @@ export async function checkoutRoutes(app: FastifyInstance): Promise<void> {
         razorpayOrderId: order.id,
         planId: body.planId,
         billingCycle: body.billingCycle,
-        amountPaise,
+        amountPaise: amountPaiseStr,
         currency,
       },
     }).catch(() => {/* best-effort audit */});
 
     return reply.code(200).send({
       orderId: order.id,
-      amountPaise,
+      amountPaise: amountPaiseStr,
       currency,
       keyId: razorpay.getPublicKeyId(),
     });

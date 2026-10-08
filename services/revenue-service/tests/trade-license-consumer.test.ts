@@ -84,14 +84,18 @@ function buildPaymentMsg(amountMinor: string) {
   };
 }
 
-function licenseRow(feeMinor: string, feePaidMinor: string) {
+// GAP2-REVENUE-TRADE-LICENSES-10: fee_minor / fee_paid_minor are now `bigint`
+// columns (drizzle mode:"bigint"), so a selected row carries native bigint
+// values, not strings. The mock rows and the update assertion reflect that
+// contract change; the TX-008 over-payment guard behaviour is unchanged.
+function licenseRow(feeMinor: bigint, feePaidMinor: bigint) {
   return { id: "license-1", tenantId: "tenant-1", feeMinor, feePaidMinor };
 }
 
 describe("Trade License Payment Consumer — TX-008", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockSelectLimit.mockResolvedValue([licenseRow("500000", "0")]); // fee Rs 5,000, nothing paid yet
+    mockSelectLimit.mockResolvedValue([licenseRow(500000n, 0n)]); // fee Rs 5,000, nothing paid yet
     const queue = createMockQueue();
     registerTradeLicenseConsumers(queue);
   });
@@ -102,7 +106,7 @@ describe("Trade License Payment Consumer — TX-008", () => {
 
     expect(mockUpdate).toHaveBeenCalledTimes(1);
     expect(mockSet).toHaveBeenCalledWith(
-      expect.objectContaining({ feePaidMinor: "500000", status: "active" }),
+      expect.objectContaining({ feePaidMinor: 500000n, status: "active" }),
     );
     expect(mockEnqueue).toHaveBeenCalled();
   });
@@ -120,7 +124,7 @@ describe("Trade License Payment Consumer — TX-008", () => {
 
   it("rejects a top-up payment that would push feePaidMinor past feeMinor", async () => {
     // Fee is 500000, 400000 already paid — outstanding is 100000.
-    mockSelectLimit.mockResolvedValueOnce([licenseRow("500000", "400000")]);
+    mockSelectLimit.mockResolvedValueOnce([licenseRow(500000n, 400000n)]);
     const msg = buildPaymentMsg("100001"); // 1 paisa over outstanding
 
     await expect(handlers["revenue.trade_license.payment"]!(msg)).rejects.toThrow(/OVERPAYMENT|exceeds outstanding/);

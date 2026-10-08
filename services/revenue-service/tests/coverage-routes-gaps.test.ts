@@ -19,6 +19,26 @@ const AUTH = { authorization: `Bearer ${makeToken(["revenue_admin"])}` };
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
+// GAP2-REVENUE-BBPS-10/11: fetch-bill now resolves the identifier synchronously
+// via bbps repo.getDcbOutstanding and 404s an unknown one. Mock it so the known
+// identifier used in the happy-path test resolves to a DCB outstanding row.
+vi.mock("../src/modules/bbps/repo.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../src/modules/bbps/repo.js")>();
+  return {
+    ...original,
+    getDcbOutstanding: vi.fn(async (_tenantId: string, identifier: string) => {
+      if (identifier.startsWith("UNKNOWN")) return null;
+      return {
+        assesseeId: "33333333-3333-3333-3333-333333333333",
+        ownerName: "Test Owner",
+        totalOutstandingMinor: 500000n,
+        oldestDueDate: new Date().toISOString(),
+        demandCount: 1,
+      };
+    }),
+  };
+});
+
 vi.mock("../src/shared/db.js", () => ({
   db: {
     transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({})),

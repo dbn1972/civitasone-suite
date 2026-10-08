@@ -57,25 +57,43 @@ const BASE_URL = "https://api.razorpay.com/v1";
 /**
  * Create a Razorpay order. The frontend uses the returned order_id to launch
  * the Checkout.js modal.
+ *
+ * GAP2-BILLING-CHECKOUT-01: `amountPaise` is a bigint (paise / minor units) end
+ * to end — never a JS float. Razorpay's JSON API expects `amount` as an integer
+ * number, so we serialise the bigint as a bare integer token in the request
+ * body (JSON.stringify cannot encode a bigint, and Number(bigint) would reintroduce
+ * the IEEE-754 precision loss this fix exists to remove). Building the body with
+ * the amount injected as an exact integer literal keeps the charged amount
+ * precise even above Number.MAX_SAFE_INTEGER paise.
  */
 export async function createOrder(
-  amountPaise: number,
+  amountPaise: bigint,
   currency: string,
   receipt: string,
   notes?: Record<string, string>,
 ): Promise<RazorpayOrder> {
+  if (amountPaise < 0n) {
+    throw new Error("Razorpay createOrder amount must be non-negative");
+  }
+  // Serialise the amount as an exact integer literal. `JSON.stringify` with a
+  // sentinel placeholder, then substitute the bigint's decimal string, so the
+  // wire value is a precise integer regardless of magnitude.
+  const AMOUNT_SENTINEL = "__AMOUNT_PAISE__";
+  const bodyTemplate = JSON.stringify({
+    amount: AMOUNT_SENTINEL,
+    currency,
+    receipt,
+    ...(notes ? { notes } : {}),
+  });
+  const body = bodyTemplate.replace(`"${AMOUNT_SENTINEL}"`, amountPaise.toString());
+
   const res = await fetch(`${BASE_URL}/orders`, {
     method: "POST",
     headers: {
       Authorization: authHeader(),
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      amount: amountPaise,
-      currency,
-      receipt,
-      ...(notes ? { notes } : {}),
-    }),
+    body,
   });
 
   if (!res.ok) {

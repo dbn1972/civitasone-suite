@@ -60,7 +60,6 @@
     "services/policy-service/src/modules/abac/routes.ts::POST /v1/policy/abac/evaluate",
     "services/policy-service/src/modules/evaluate/routes.ts::POST /v1/policy/evaluate",
     "services/policy-service/src/modules/policies/routes.ts::POST /v1/policy/policies/:id/acknowledge",
-    "services/revenue-service/src/modules/bbps/routes.ts::POST /v1/revenue/bbps/fetch-bill",
     "services/tenant-service/src/modules/quotas/routes.ts::POST /v1/quotas/check",
     "services/visitor-service/src/modules/badge-print/routes.ts::POST /v1/visitor/badges/jobs/:jobId/acknowledge",
     "services/visitor-service/src/modules/badge-print/routes.ts::POST /v1/visitor/badges/jobs/:jobId/fail",
