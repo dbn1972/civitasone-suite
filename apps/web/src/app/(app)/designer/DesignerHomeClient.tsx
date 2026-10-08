@@ -17,6 +17,13 @@ interface Props {
   servicesSource?: LoaderSource;
   /** GAP-DESIGNER-HOME-01: loader outcome for the domain packs list. */
   domainPacksSource?: LoaderSource;
+  /**
+   * GAP2-DESIGNER-HOME-01: whether the caller may author services (create a new
+   * service). Computed server-side from the session roles vs the citizen
+   * catalogue ADMIN_ROLES. When false, the "New Service" affordances are hidden
+   * (read views stay open); the service remains the authority on write.
+   */
+  canAuthor?: boolean;
 }
 
 /** GAP-DESIGNER-HOME-03: title-case label for a raw service-pattern token. */
@@ -29,6 +36,7 @@ export function DesignerHomeClient({
   domainPacks,
   servicesSource = "api",
   domainPacksSource = "api",
+  canAuthor = false,
 }: Props) {
   const [tab, setTab] = useState("My Services");
 
@@ -76,9 +84,11 @@ export function DesignerHomeClient({
         title="Service Designer"
         subtitle="Compose government services from templates — form, approval chain, fee, and certificate."
         actions={
-          <Link href="/designer/new" className="btn primary" style={{ minHeight: 40 }}>
-            New Service
-          </Link>
+          canAuthor ? (
+            <Link href="/designer/new" className="btn primary" style={{ minHeight: 40 }}>
+              New Service
+            </Link>
+          ) : null
         }
       />
 
@@ -116,7 +126,9 @@ export function DesignerHomeClient({
             action={
               <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
                 <Link href="/designer/library" className="btn ghost">Browse Domain Packs</Link>
-                <Link href="/designer/new" className="btn primary">New Service</Link>
+                {canAuthor ? (
+                  <Link href="/designer/new" className="btn primary">New Service</Link>
+                ) : null}
               </div>
             }
           />

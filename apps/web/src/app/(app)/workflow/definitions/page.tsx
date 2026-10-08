@@ -4,6 +4,8 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { combineResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { TemplatesTable, type TemplateRow } from "../_components/TemplatesTable";
+import { isLiveDefinition } from "../_data/workflowTypes";
+import { getDesignerDefinitions } from "../designer/_data/designerData";
 
 // GAP-WORKFLOW-DEFINITIONS-02 — the workflow-service definitions list
 // (GET /v1/workflow/definitions, repo.findByTenant) returns the definitions
@@ -41,9 +43,21 @@ async function getTemplates(): Promise<LoaderResult<Definition[]>> {
 }
 
 export default async function WorkflowDefinitionsPage() {
-  const [definitionsResult, templatesResult] = await Promise.all([getDefinitions(), getTemplates()]);
+  const [definitionsResult, templatesResult, draftsResult] = await Promise.all([
+    getDefinitions(),
+    getTemplates(),
+    // GAP2-WORKFLOW-DEFINITIONS-02 — the "New workflow" button opens the BPMN
+    // designer, which saves to workflow.designer_definitions (a SEPARATE table
+    // from the executable workflow.definitions that backs this list). Without
+    // surfacing those drafts here, a user who clicks "New workflow", designs
+    // and saves sees nothing appear on this screen. List the designer drafts in
+    // their own section so the create affordance has a visible result, each
+    // deep-linking back into the designer to continue editing.
+    getDesignerDefinitions(),
+  ]);
   const definitions = definitionsResult.data;
   const templates = templatesResult.data;
+  const drafts = draftsResult.data;
   // getDefinitions()/getTemplates() used to return only r.data, discarding
   // LoaderResult's source entirely — a failure on either endpoint was
   // indistinguishable from a tenant with zero workflows configured. Combine
@@ -55,7 +69,11 @@ export default async function WorkflowDefinitionsPage() {
     (d) => d.length === 0,
   );
   const errored = resource.status === "error";
-  const active = errored ? null : definitions.filter((d) => d.status === "active" || d.status === "deployed").length;
+  // GAP2-WORKFLOW-DEFINITIONS-03 — count definitions whose status the service
+  // treats as live/deployed, using the single authoritative status set
+  // (LIVE_DEFINITION_STATUSES) rather than two web-local literals (one of which,
+  // "deployed", never existed in the DB CHECK and so was dead code).
+  const active = errored ? null : definitions.filter((d) => isLiveDefinition(d.status)).length;
 
   return (
     <div className="page-main">
@@ -66,7 +84,7 @@ export default async function WorkflowDefinitionsPage() {
         backLabel="Workflow"
         actions={
           <Link href="/workflow/designer" className="btn primary sm">
-            New workflow
+            Design new workflow
           </Link>
         }
       />
@@ -106,6 +124,43 @@ export default async function WorkflowDefinitionsPage() {
           />
         )}
       </Card>
+
+      {/* GAP2-WORKFLOW-DEFINITIONS-02 — designer drafts live in a SEPARATE
+          table (workflow.designer_definitions) and are not executable
+          definitions, so they get their own section. This gives the "Design new
+          workflow" affordance a visible result on this screen and makes the two
+          tables' distinct nature explicit, instead of a create button that
+          produces nothing the user can see here. */}
+      {draftsResult.source !== "error" && drafts.length > 0 && (
+        <Card title="Designer drafts (not yet executable)">
+          <div className="pad">
+            <p style={{ color: "var(--mut)", fontSize: 13.5, marginBottom: 12 }}>
+              Visual designs saved from the BPMN designer. These are drafts — they
+              become approval workflows only once published. Continue editing a
+              draft in the designer.
+            </p>
+            <DataTable<{ id: string; name: string; status: string; version: number; elementCount: number }>
+              columns={[
+                { key: "name", label: "Draft Name" },
+                { key: "version", label: "Version", align: "right" },
+                { key: "elementCount", label: "Elements", align: "right" },
+                { key: "status", label: "Status", cellType: "status" },
+              ]}
+              rows={drafts.map((d) => ({
+                id: d.id,
+                name: d.name,
+                status: d.status,
+                version: d.version,
+                elementCount: d.elementCount,
+              }))}
+              rowLinkKey="id"
+              rowLinkPrefix="/workflow/designer?definitionId="
+              sortable
+              filterPlaceholder="Search drafts…"
+            />
+          </div>
+        </Card>
+      )}
 
       {!errored && templates.length > 0 && (
         <Card title="Templates (ready to use)">

@@ -7,11 +7,31 @@ import { getInstances, getAnalyticsSummary, inProgressCount } from "../_data/wor
 
 const LIST_LIMIT = 200;
 
-export default async function WorkflowInstancesPage() {
+export default async function WorkflowInstancesPage({
+  searchParams,
+}: {
+  searchParams?: { definitionId?: string };
+} = {}) {
+  // GAP2-WORKFLOW-DEFINITIONS-DETAIL-01 — honor the per-definition filter the
+  // definition detail page's "View instances" link sends. Previously this page
+  // ignored ?definitionId entirely and rendered every tenant instance, so the
+  // control presented as a filter but silently showed an unfiltered list.
+  const definitionId = searchParams?.definitionId;
   const [{ data: instances, source }, { data: analytics, source: analyticsSource }] = await Promise.all([
-    getInstances(),
+    getInstances(definitionId ? { definitionId } : {}),
     getAnalyticsSummary(),
   ]);
+
+  // When a definition filter is active the stat tiles describe the WHOLE tenant
+  // (analytics is not per-definition), so they would contradict the filtered
+  // table. Suppress them in that case to avoid a misleading mix.
+  const filtered = Boolean(definitionId);
+  // The active filter's human label, taken from the first matching row.
+  const filterLabel = filtered
+    ? instances.find((i) => i.definitionName)?.definitionName ??
+      instances.find((i) => i.definitionCode)?.definitionCode ??
+      "this definition"
+    : null;
 
   // GAP-WORKFLOW-LIST-01 — do NOT discard the analytics source. When analytics
   // failed, the EMPTY_ANALYTICS fallback would render active/completed/
@@ -45,11 +65,25 @@ export default async function WorkflowInstancesPage() {
       />
 
       <StatGrid>
-        <StatCard icon="🧩" iconBg="#eef2ff" label="Total" value={total} />
-        <StatCard icon="⏳" iconBg="#fff7ed" label="In progress" value={active} />
-        <StatCard icon="✅" iconBg="#ecfdf5" label="Completed" value={completed} />
-        <StatCard icon="🚫" iconBg="#fef2f2" label="Cancelled" value={cancelled} />
+        <StatCard icon="🧩" iconBg="#eef2ff" label="Total" value={filtered ? instances.length : total} />
+        <StatCard icon="⏳" iconBg="#fff7ed" label="In progress" value={filtered ? null : active} />
+        <StatCard icon="✅" iconBg="#ecfdf5" label="Completed" value={filtered ? null : completed} />
+        <StatCard icon="🚫" iconBg="#fef2f2" label="Cancelled" value={filtered ? null : cancelled} />
       </StatGrid>
+
+      {filtered ? (
+        <div className="pad" style={{ paddingBottom: 0 }}>
+          <span
+            className="chip"
+            style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13 }}
+          >
+            Filtered to {filterLabel}
+            <a href="/workflow/list" style={{ textDecoration: "underline" }}>
+              Clear filter
+            </a>
+          </span>
+        </div>
+      ) : null}
 
       <div style={{ marginTop: 18 }}>
         <Card title="Instances">
