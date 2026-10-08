@@ -30,6 +30,7 @@ export default defineConfig({
         "src/modules/opinions/eoffice-consumer.ts",
         "src/modules/documents/consumer.ts",
         "src/modules/limitations/consumer.ts",
+        "**/*.config.{ts,js,mjs,cjs}",
       ],
       thresholds: {
         lines: 80,

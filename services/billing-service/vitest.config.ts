@@ -30,6 +30,7 @@ export default defineConfig({
         "src/**/repo.ts",
         "src/**/commands.ts",
         "src/**/queries.ts",
+        "**/*.config.{ts,js,mjs,cjs}",
       ],
       thresholds: {
         lines: 80,

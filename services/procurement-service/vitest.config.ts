@@ -40,6 +40,7 @@ export default defineConfig({
         "src/modules/vendor/scorecard-consumer.ts",
         "src/modules/tender/docs-consumer.ts",
         "src/modules/gem/reconcile-consumer.ts",
+        "**/*.config.{ts,js,mjs,cjs}",
       ],
       thresholds: {
         lines: 80,

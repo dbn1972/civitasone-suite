@@ -61,6 +61,7 @@ export default defineConfig({
         "src/modules/orchestrator/schema.ts",
         "src/modules/provisioning/schema.ts",
         "src/modules/stages/schema.ts",
+        "**/*.config.{ts,js,mjs,cjs}",
       ],
       thresholds: {
         lines: 80,

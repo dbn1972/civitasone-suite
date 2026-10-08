@@ -38,6 +38,7 @@ export default defineConfig({
         "**/*.config.ts",
         "**/*.config.js",
         "tests/**",
+        "**/*.config.{ts,js,mjs,cjs}",
       ],
       thresholds: {
         lines: 80,

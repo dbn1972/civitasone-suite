@@ -47,7 +47,7 @@ export default defineConfig({
     },
     coverage: {
       provider: "v8",
-      exclude: ["dist/**", "src/index.ts", "src/worker.ts"],
+      exclude: ["dist/**", "src/index.ts", "src/worker.ts", "**/*.config.{ts,js,mjs,cjs}"],
       // REL-013: thresholds set at/just below real measured coverage
       // (lines 80.34 / branches 77.94 / functions 77.63 / statements
       // 80.34, via `pnpm --filter @civitasone/parking-service run

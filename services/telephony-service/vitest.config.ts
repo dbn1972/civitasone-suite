@@ -33,6 +33,7 @@ export default defineConfig({
         "src/modules/did/consumer.ts",
         "src/modules/recordings/consumer.ts",
         "src/modules/transcription/consumer.ts",
+        "**/*.config.{ts,js,mjs,cjs}",
       ],
       thresholds: {
         lines: 80,

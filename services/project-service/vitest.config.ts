@@ -44,6 +44,7 @@ export default defineConfig({
         "src/**/queries.ts",
         "src/modules/geo/domain.ts",
         "src/modules/utilisation/domain.ts",
+        "**/*.config.{ts,js,mjs,cjs}",
       ],
       thresholds: {
         lines: 80,

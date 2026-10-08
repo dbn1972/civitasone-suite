@@ -41,6 +41,7 @@ export default defineConfig({
         "src/modules/config/consumer.ts",
         "src/modules/backup/consumer.ts",
         "src/modules/support/consumer.ts",
+        "**/*.config.{ts,js,mjs,cjs}",
       ],
       thresholds: {
         lines: 80,
