@@ -18,6 +18,19 @@ export default defineConfig({
     baseURL: process.env.BASE_URL ?? `http://localhost:${E2E_PORT}`,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    // Playwright's page.route() cannot see requests a service worker issues.
+    // The app registers /sw.js on first load and, once it controls the page,
+    // answers `GET /api/proxy/*` itself (network-first with a cache fallback),
+    // so the per-test stubs in e2e/helpers/auth.ts and the specs' own seed
+    // routes were bypassed whenever the worker had taken control before the
+    // read. Measured on the telephony call-log spec: the read reached the mock
+    // gateway instead of the seeded stub, returned a different row shape, and
+    // the page's route error boundary rendered (a `trim` of undefined inside
+    // StatusPill) -- so the same spec passed or failed on registration timing.
+    // Block workers everywhere; e2e/offline.spec.ts, the one spec that tests the
+    // worker itself, opts back in with test.use({ serviceWorkers: 'allow' }).
+    // (06-verification.md D-V1, option A.)
+    serviceWorkers: 'block',
   },
   projects: [
     // Desktop browsers
