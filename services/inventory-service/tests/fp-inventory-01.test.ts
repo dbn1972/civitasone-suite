@@ -309,12 +309,12 @@ describe("GAP-INVENTORY-SUBSTITUTES-04: bulk substitutes read", () => {
   it("is tenant-scoped, ordered, paged and role-gated", async () => {
     await runWithTenant(T1, () => db.transaction(async (tx) => {
       await tx.insert(itemSubstitutes).values([
-        { id: randomUUID(), tenantId: T1, itemId: ITEM1, substituteId: ITEM2, priority: 2, conversionFactor: "1", createdBy: MAKER },
-        { id: randomUUID(), tenantId: T1, itemId: ITEM2, substituteId: ITEM1, priority: 1, conversionFactor: "1", createdBy: MAKER },
+        { id: randomUUID(), tenantId: T1, itemId: ITEM1, substituteId: ITEM2, priority: 2, conversionFactor: "1", createdBy: MAKER, updatedBy: MAKER },
+        { id: randomUUID(), tenantId: T1, itemId: ITEM2, substituteId: ITEM1, priority: 1, conversionFactor: "1", createdBy: MAKER, updatedBy: MAKER },
       ]);
     }));
     await runWithTenant(T2, () => db.transaction(async (tx) => {
-      await tx.insert(itemSubstitutes).values({ id: randomUUID(), tenantId: T2, itemId: ITEM_T2, substituteId: ITEM_T2, priority: 1, conversionFactor: "1", createdBy: ACTOR_T2 });
+      await tx.insert(itemSubstitutes).values({ id: randomUUID(), tenantId: T2, itemId: ITEM_T2, substituteId: ITEM_T2, priority: 1, conversionFactor: "1", createdBy: ACTOR_T2, updatedBy: ACTOR_T2 });
     }));
     const res = await app.inject({ method: "GET", url: "/v1/inventory/substitutes?limit=200", headers: mgr(T1, MAKER) });
     expect(res.statusCode).toBe(200);
