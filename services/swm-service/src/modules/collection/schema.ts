@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, integer, timestamp, jsonb, text, boolean, date } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, bigint, timestamp, jsonb, text, boolean, date } from "drizzle-orm/pg-core";
 
 const swmSchema = pgSchema("civitas_swm");
 
@@ -14,7 +14,10 @@ export const swmCollectionRequests = swmSchema.table("swm_collection_requests", 
   preferredSlot: varchar("preferred_slot", { length: 24 }),
   status: varchar("status", { length: 24 }).notNull().default("requested"),
   vehicleId: text("vehicle_id"),
-  feeMinor: integer("fee_minor"),
+  // Money minor units (paise), stored as bigint (see migrations/
+  // 0004_money_bigint_paise.sql) — was `integer`, which overflows past
+  // ~₹2.14 crore (2^31 paise). Money is bigint paise end to end.
+  feeMinor: bigint("fee_minor", { mode: "bigint" }),
   feePaid: boolean("fee_paid").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

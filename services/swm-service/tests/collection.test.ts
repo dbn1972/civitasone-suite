@@ -189,7 +189,9 @@ describe("TX-008: fee is server-derived, never client-priced", () => {
     // of what the client sent (or whether it sent feeMinor at all — the
     // field is rejected by the zod schema in routes.ts as an unknown key
     // would be if strict, but here it's simply dropped before publishing).
-    expect(get!.json().data.feeMinor).toBe(1000000);
-    expect(get!.json().data.feeMinor).not.toBe(1);
+    // GAP2-PLATFORM-MONEY-INT-02: feeMinor is now bigint paise, serialized as
+    // a canonical base-10 string in the JSON view.
+    expect(get!.json().data.feeMinor).toBe("1000000");
+    expect(get!.json().data.feeMinor).not.toBe("1");
   });
 });

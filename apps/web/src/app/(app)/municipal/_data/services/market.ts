@@ -11,6 +11,8 @@ export const marketService: MunicipalServiceConfig = {
   resourceLabel: "Allotments",
   titleFields: ["allotteeName", "allotmentType"],
   numberFields: ["allotmentNumber"],
+  // GAP2-MUNICIPAL-APPLICATIONS-STATUS-01: market/allotments/domain.ts AllotmentStatus.
+  statusVocabulary: ["applied", "selected", "agreement_signed", "active", "transferred", "cancelled", "evicted"],
   citizenServiceKey: "market-stall",
   sec5: true,
 };

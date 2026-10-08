@@ -11,6 +11,8 @@ export const parkingService: MunicipalServiceConfig = {
   resourceLabel: "Bookings",
   titleFields: ["vehicleNumber", "vehicleType"],
   numberFields: ["bookingNumber"],
+  // GAP2-MUNICIPAL-APPLICATIONS-STATUS-01: parking/bookings/domain.ts.
+  statusVocabulary: ["booked", "active", "completed", "cancelled"],
   citizenServiceKey: "parking-pass",
   sec5: true,
 };

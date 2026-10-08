@@ -53,6 +53,38 @@ async function assertNextApprovalLevel(requestId: string, tenantId: string, leve
   }
 }
 
+/**
+ * GAP2-REFUND-APPROVAL-01 / segregation-of-duties: the two-level maker-checker
+ * (level 1 CHECKER, level 2 AUTHORIZER) previously enforced level *ordering*
+ * only (assertNextApprovalLevel) and never that a *different* officer performs
+ * each level, nor that the approver is not the request's creator. One officer
+ * holding refund_admin/refund_approver/super_admin could approve level 1 then
+ * level 2 on the same request, fully approving a monetary refund alone — a
+ * self-approval bypass on a money-disbursing workflow. This rejects an approve
+ * when the actor is the request's creator, or has already recorded an approved
+ * decision at a lower level in the current round. The authoritative duplicate
+ * of this check runs in processing/consumer.ts under lockForStatusChange (so a
+ * racing pair of approve commands can't both pass a read-before-write), but
+ * doing it here too gives the caller a synchronous 409 instead of a silent
+ * swallow in the consumer.
+ */
+function assertNotSelfApproval(actorId: string, createdBy: string, actorAlreadyApproved: boolean): void {
+  if (actorId === createdBy) {
+    throw new HttpError(
+      409,
+      "SELF_APPROVAL_FORBIDDEN",
+      "The officer who created this refund request may not approve it (segregation of duties)",
+    );
+  }
+  if (actorAlreadyApproved) {
+    throw new HttpError(
+      409,
+      "SELF_APPROVAL_FORBIDDEN",
+      "An officer who already approved a lower level of this refund may not also approve the next level (segregation of duties)",
+    );
+  }
+}
+
 export async function processingRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/refund/processing/review", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -76,6 +108,8 @@ export async function processingRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "INVALID_STATUS", `Cannot approve request in status '${request.status}'`);
     }
     await assertNextApprovalLevel(body.requestId, ctx.tenantId, body.level);
+    const actorAlreadyApproved = await repo.hasActorAlreadyApproved(body.requestId, ctx.tenantId, ctx.actorId);
+    assertNotSelfApproval(ctx.actorId, request.createdBy, actorAlreadyApproved);
     return reply.code(202).send(
       await commands.approveRequest(ctx, body.requestId, body.level, body.remarks),
     );

@@ -11,6 +11,8 @@ export const drainageService: MunicipalServiceConfig = {
   resourceLabel: "Complaints",
   titleFields: ["complaintType", "location"],
   numberFields: ["complaintNumber"],
+  // GAP2-MUNICIPAL-APPLICATIONS-STATUS-01: drainage/complaints/domain.ts ComplaintStatus.
+  statusVocabulary: ["reported", "assigned", "in_progress", "resolved", "closed"],
   // citizenServiceKey intentionally omitted — no citizen-service manifest exists yet.
   sec5: true,
 };

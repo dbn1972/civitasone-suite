@@ -35,14 +35,14 @@ export function validateTaskTransition(from: FieldTaskStatus, to: FieldTaskStatu
 // water-connections/domain.ts): a fixed rate table keyed on the one
 // legitimate pricing input (wasteType), called from the consumer — never
 // from the route handler, and the client-submitted value is ignored.
-const FEE_TABLE: Record<WasteType, number> = {
-  construction_debris: 500000, // Rs 5,000
-  garden_waste: 20000, // Rs 200
-  e_waste: 30000, // Rs 300
-  hazardous: 1000000, // Rs 10,000
-  bulky_item: 50000, // Rs 500
+const FEE_TABLE: Record<WasteType, bigint> = {
+  construction_debris: 500000n, // Rs 5,000
+  garden_waste: 20000n, // Rs 200
+  e_waste: 30000n, // Rs 300
+  hazardous: 1000000n, // Rs 10,000
+  bulky_item: 50000n, // Rs 500
 };
 
-export function calculateFeeMinor(wasteType: WasteType): number {
-  return FEE_TABLE[wasteType] ?? 50000;
+export function calculateFeeMinor(wasteType: WasteType): bigint {
+  return FEE_TABLE[wasteType] ?? 50000n;
 }

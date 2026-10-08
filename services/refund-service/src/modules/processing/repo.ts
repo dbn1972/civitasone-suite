@@ -58,6 +58,47 @@ function getMaxApprovalLevelQuery(tx: ScopedTx, requestId: string, tenantId: str
     .limit(1);
 }
 
+/**
+ * SOD (GAP2-REFUND-APPROVAL-01) / segregation-of-duties: returns true when
+ * `approverId` has already recorded a CURRENT-round "approved" decision on
+ * this request (at any level). Used to forbid one officer from approving
+ * both the level-1 CHECKER and level-2 AUTHORIZER steps of the same money-
+ * disbursing refund. Only current-round rows count — "superseded" rows from
+ * a prior round that was returned for correction (see supersedeApprovals)
+ * must NOT block the same officer from legitimately approving the fresh
+ * round, mirroring getMaxApprovalLevel's own "approved"-only filter.
+ */
+export async function hasActorAlreadyApproved(
+  requestId: string,
+  tenantId: string,
+  approverId: string,
+): Promise<boolean> {
+  const rows = await scopedRead((tx) => hasActorAlreadyApprovedQuery(tx, requestId, tenantId, approverId));
+  return rows.length > 0;
+}
+
+/** Same lookup, scoped to an existing transaction (see `hasActorAlreadyApproved`). */
+export async function hasActorAlreadyApprovedTx(
+  tx: ScopedTx,
+  requestId: string,
+  tenantId: string,
+  approverId: string,
+): Promise<boolean> {
+  const rows = await hasActorAlreadyApprovedQuery(tx, requestId, tenantId, approverId);
+  return rows.length > 0;
+}
+
+function hasActorAlreadyApprovedQuery(tx: ScopedTx, requestId: string, tenantId: string, approverId: string) {
+  return tx.select({ id: refundApprovals.id }).from(refundApprovals)
+    .where(and(
+      eq(refundApprovals.tenantId, tenantId),
+      eq(refundApprovals.requestId, requestId),
+      eq(refundApprovals.approverId, approverId),
+      eq(refundApprovals.decision, "approved"),
+    ))
+    .limit(1);
+}
+
 export async function insertApproval(tx: ScopedTx, row: RefundApprovalInsert): Promise<void> {
   await tx.insert(refundApprovals).values(row);
 }

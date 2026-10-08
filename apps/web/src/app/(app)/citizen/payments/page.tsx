@@ -5,9 +5,15 @@ import { PaymentPanel } from "./PaymentPanel";
 import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { formatMoney } from "@/lib/formatters";
+import { requireAnyRole, CITIZEN_OFFICER_ROLES } from "@/lib/auth/roleGuard";
 
 /** SVC-085 — Service fee & payment handling. */
 export default async function PaymentsPage() {
+  // GAP2-CITIZEN-AUTHZ-ROLEGATE-01: this screen records offline/counter
+  // payments and raises payment intents — officer paths (fee-payment/routes.ts
+  // offline/intent are OFFICER_ROLES). Gate the web page so a citizen-role user
+  // is redirected rather than shown a staff tool that 403s on every action.
+  requireAnyRole(CITIZEN_OFFICER_ROLES, "/citizen");
   const t = await getTranslations("citizenPayments");
   const result = await getFeeSchedules();
   const { data: schedules } = result;

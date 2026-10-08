@@ -7,7 +7,7 @@ export function toView(r: BulkGeneratorRow) {
     id: r.id, tenantId: r.tenantId, registrationNumber: r.registrationNumber,
     generatorName: r.generatorName, generatorType: r.generatorType,
     address: r.address, estimatedWasteKgPerDay: r.estimatedWasteKgPerDay,
-    category: r.category, status: r.status, feeMinor: r.feeMinor,
+    category: r.category, status: r.status, feeMinor: r.feeMinor != null ? r.feeMinor.toString() : null,
     createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(), version: r.version,
   };
 }
