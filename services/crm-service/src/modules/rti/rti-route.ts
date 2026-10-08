@@ -126,6 +126,7 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     const row = await repo.createRti({
       tenantId: ctx.tenantId,
       actorId: ctx.actorId,
+      correlationId: ctx.correlationId,
       referenceNo,
       section: body.section,
       departmentRef: body.departmentRef,
@@ -194,8 +195,7 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     const body = forwardBody.parse(req.body);
 
     const row = await repo.forwardRti(
-      ctx.tenantId,
-      ctx.actorId,
+      ctx,
       id,
       body.departmentRef,
     );
@@ -216,8 +216,7 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     const body = respondBody.parse(req.body);
 
     const row = await repo.respondRti(
-      ctx.tenantId,
-      ctx.actorId,
+      ctx,
       id,
       body.responseText,
     );
@@ -236,7 +235,7 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CRM_ROLES);
     const { id } = idParam.parse(req.params);
 
-    const row = await repo.firstAppeal(ctx.tenantId, ctx.actorId, id);
+    const row = await repo.firstAppeal(ctx, id);
     if (!row)
       throw new HttpError(
         422,

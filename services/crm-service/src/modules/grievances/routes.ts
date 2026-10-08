@@ -5,6 +5,8 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { scopedRead } from "../../shared/db.js";
 import { listQuery, windowOf, listEnvelope } from "../../shared/list-query.js";
 import { maskList, maskRecord } from "../../shared/pii-reveal.js";
+import { emitWithAudit } from "../../shared/route-audit.js";
+import { EVENTS } from "../../topics.js";
 import {
   STATUS,
   PRIORITY,
@@ -85,7 +87,7 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
       const seq = Number(seqRow!.seq).toString().padStart(6, "0");
       const refNo = `${MINISTRY_CODE}/${yr}/${seq}`;
 
-      return tx.execute(sql`
+      const inserted = (await tx.execute(sql`
         INSERT INTO crm.grievances (
           tenant_id, contact_id, citizen_name, citizen_phone, citizen_email,
           category, subject, description, priority, status,
@@ -100,7 +102,18 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
         RETURNING id, reference_no AS "referenceNo",
                   citizen_name AS "citizenName", category, subject,
                   priority, status, created_at AS "createdAt"
-      `);
+      `)) as unknown as Array<Record<string, unknown>>;
+      // GAP2-CRM-GRIEVANCES-AUDIT-01: emit the domain + audit event in the SAME
+      // tx as the write so the tamper-evident trail commits/rolls back with the
+      // row. Payload carries NO citizen PII (name/phone/email).
+      await emitWithAudit(tx, ctx, {
+        eventType: EVENTS.grievanceRegistered,
+        action: "register",
+        resourceType: "grievance",
+        resourceId: String(inserted[0]?.["id"]),
+        payload: { grievanceId: String(inserted[0]?.["id"]), status: "REGISTERED", category: body.category },
+      });
+      return inserted;
     })) as unknown as Array<Record<string, unknown>>;
     return reply.code(201).send({ data: rows[0] });
   });
@@ -207,14 +220,26 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     const ifMatch = ifMatchVersion(req);
     const versionF = ifMatch !== undefined ? sql`AND version = ${ifMatch}` : sql``;
 
-    const rows = (await scopedRead((tx) => tx.execute(sql`
+    const rows = (await scopedRead(async (tx) => {
+      const updated = (await tx.execute(sql`
       UPDATE crm.grievances
       SET assigned_to = ${body.assignedTo}::uuid,
           status = CASE WHEN status = 'REGISTERED' THEN 'FORWARDED' ELSE status END,
           updated_by = ${ctx.actorId}, updated_at = now(), version = version + 1
       WHERE id = ${id} AND tenant_id = ${ctx.tenantId} ${versionF}
       RETURNING id, status, assigned_to AS "assignedTo", version
-    `))) as unknown as Array<Record<string, unknown>>;
+    `)) as unknown as Array<Record<string, unknown>>;
+      if (updated.length > 0) {
+        await emitWithAudit(tx, ctx, {
+          eventType: EVENTS.grievanceAssigned,
+          action: "assign",
+          resourceType: "grievance",
+          resourceId: id,
+          payload: { grievanceId: id, status: String(updated[0]?.["status"]) },
+        });
+      }
+      return updated;
+    })) as unknown as Array<Record<string, unknown>>;
 
     if (rows.length === 0) {
       if (ifMatch !== undefined) await raiseConflictOrNotFound(ctx.tenantId, id, ifMatch, "grievance not found");
@@ -232,7 +257,8 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     const ifMatch = ifMatchVersion(req);
     const versionF = ifMatch !== undefined ? sql`AND version = ${ifMatch}` : sql``;
 
-    const rows = (await scopedRead((tx) => tx.execute(sql`
+    const rows = (await scopedRead(async (tx) => {
+      const updated = (await tx.execute(sql`
       UPDATE crm.grievances
       SET status = 'FORWARDED',
           forwarded_to = ${body.forwardedTo},
@@ -243,7 +269,18 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
       RETURNING id, status,
                 forwarded_to AS "forwardedTo", forwarded_at AS "forwardedAt",
                 version
-    `))) as unknown as Array<Record<string, unknown>>;
+    `)) as unknown as Array<Record<string, unknown>>;
+      if (updated.length > 0) {
+        await emitWithAudit(tx, ctx, {
+          eventType: EVENTS.grievanceForwarded,
+          action: "forward",
+          resourceType: "grievance",
+          resourceId: id,
+          payload: { grievanceId: id, status: "FORWARDED", forwardedTo: body.forwardedTo },
+        });
+      }
+      return updated;
+    })) as unknown as Array<Record<string, unknown>>;
 
     if (rows.length === 0) {
       if (ifMatch !== undefined) await raiseConflictOrNotFound(ctx.tenantId, id, ifMatch, "grievance not found or already disposed");
@@ -261,7 +298,8 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     const ifMatch = ifMatchVersion(req);
     const versionF = ifMatch !== undefined ? sql`AND version = ${ifMatch}` : sql``;
 
-    const rows = (await scopedRead((tx) => tx.execute(sql`
+    const rows = (await scopedRead(async (tx) => {
+      const updated = (await tx.execute(sql`
       UPDATE crm.grievances
       SET status = 'DISPOSED', resolution = ${body.resolution},
           resolved_at = now(),
@@ -269,7 +307,18 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
       WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
         AND status != 'DISPOSED' ${versionF}
       RETURNING id, status, resolved_at AS "resolvedAt", version
-    `))) as unknown as Array<Record<string, unknown>>;
+    `)) as unknown as Array<Record<string, unknown>>;
+      if (updated.length > 0) {
+        await emitWithAudit(tx, ctx, {
+          eventType: EVENTS.grievanceResolved,
+          action: "resolve",
+          resourceType: "grievance",
+          resourceId: id,
+          payload: { grievanceId: id, status: "DISPOSED" },
+        });
+      }
+      return updated;
+    })) as unknown as Array<Record<string, unknown>>;
 
     if (rows.length === 0) {
       if (ifMatch !== undefined) await raiseConflictOrNotFound(ctx.tenantId, id, ifMatch, "grievance not found or already disposed");
@@ -286,14 +335,26 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     const ifMatch = ifMatchVersion(req);
     const versionF = ifMatch !== undefined ? sql`AND version = ${ifMatch}` : sql``;
 
-    const rows = (await scopedRead((tx) => tx.execute(sql`
+    const rows = (await scopedRead(async (tx) => {
+      const updated = (await tx.execute(sql`
       UPDATE crm.grievances
       SET status = 'DISPOSED', closed_at = now(),
           updated_by = ${ctx.actorId}, updated_at = now(), version = version + 1
       WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
         AND status != 'DISPOSED' ${versionF}
       RETURNING id, status, closed_at AS "closedAt", version
-    `))) as unknown as Array<Record<string, unknown>>;
+    `)) as unknown as Array<Record<string, unknown>>;
+      if (updated.length > 0) {
+        await emitWithAudit(tx, ctx, {
+          eventType: EVENTS.grievanceClosed,
+          action: "close",
+          resourceType: "grievance",
+          resourceId: id,
+          payload: { grievanceId: id, status: "DISPOSED" },
+        });
+      }
+      return updated;
+    })) as unknown as Array<Record<string, unknown>>;
 
     if (rows.length === 0) {
       if (ifMatch !== undefined) await raiseConflictOrNotFound(ctx.tenantId, id, ifMatch, "grievance not found or already disposed");
@@ -302,22 +363,43 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: rows[0] });
   });
 
-  // PATCH /v1/crm/grievances/:id/escalate — legacy alias; transitions to APPEAL
+  // PATCH /v1/crm/grievances/:id/escalate — DEPRECATED legacy alias of
+  // /first-appeal. Kept for API back-compat but now shares the exact first-appeal
+  // logic (accepts + records `appeal_reason`, emits the same audit event) so the
+  // two routes can never diverge into inconsistent statutory records
+  // (GAP2-CRM-GRIEVANCES-ESCALATE-05). Prefer /first-appeal.
   app.patch("/v1/crm/grievances/:id/escalate", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const { id } = idParam.parse(req.params);
+    const body = appealBody.parse(req.body ?? {});
     const ifMatch = ifMatchVersion(req);
     const versionF = ifMatch !== undefined ? sql`AND version = ${ifMatch}` : sql``;
 
-    const rows = (await scopedRead((tx) => tx.execute(sql`
+    const rows = (await scopedRead(async (tx) => {
+      const updated = (await tx.execute(sql`
       UPDATE crm.grievances
-      SET status = 'APPEAL', priority = 'urgent', escalated_at = now(),
+      SET status = 'APPEAL', priority = 'urgent',
+          appeal_reason = ${body.appealReason ?? null},
+          escalated_at = now(),
           updated_by = ${ctx.actorId}, updated_at = now(), version = version + 1
       WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
         AND status != 'DISPOSED' ${versionF}
-      RETURNING id, status, priority, escalated_at AS "escalatedAt", version
-    `))) as unknown as Array<Record<string, unknown>>;
+      RETURNING id, status, priority,
+                appeal_reason AS "appealReason",
+                escalated_at AS "escalatedAt", version
+    `)) as unknown as Array<Record<string, unknown>>;
+      if (updated.length > 0) {
+        await emitWithAudit(tx, ctx, {
+          eventType: EVENTS.grievanceAppealed,
+          action: "first_appeal",
+          resourceType: "grievance",
+          resourceId: id,
+          payload: { grievanceId: id, status: "APPEAL" },
+        });
+      }
+      return updated;
+    })) as unknown as Array<Record<string, unknown>>;
 
     if (rows.length === 0) {
       if (ifMatch !== undefined) await raiseConflictOrNotFound(ctx.tenantId, id, ifMatch, "grievance not found or already disposed");
@@ -335,7 +417,8 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     const ifMatch = ifMatchVersion(req);
     const versionF = ifMatch !== undefined ? sql`AND version = ${ifMatch}` : sql``;
 
-    const rows = (await scopedRead((tx) => tx.execute(sql`
+    const rows = (await scopedRead(async (tx) => {
+      const updated = (await tx.execute(sql`
       UPDATE crm.grievances
       SET status = 'APPEAL', priority = 'urgent',
           appeal_reason = ${body.appealReason ?? null},
@@ -346,7 +429,18 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
       RETURNING id, status, priority,
                 appeal_reason AS "appealReason",
                 escalated_at AS "escalatedAt", version
-    `))) as unknown as Array<Record<string, unknown>>;
+    `)) as unknown as Array<Record<string, unknown>>;
+      if (updated.length > 0) {
+        await emitWithAudit(tx, ctx, {
+          eventType: EVENTS.grievanceAppealed,
+          action: "first_appeal",
+          resourceType: "grievance",
+          resourceId: id,
+          payload: { grievanceId: id, status: "APPEAL" },
+        });
+      }
+      return updated;
+    })) as unknown as Array<Record<string, unknown>>;
 
     if (rows.length === 0) {
       if (ifMatch !== undefined) await raiseConflictOrNotFound(ctx.tenantId, id, ifMatch, "grievance not found or already disposed");

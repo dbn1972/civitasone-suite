@@ -498,6 +498,36 @@ export const EVENTS = {
    * never the phone/email value.
    */
   serviceRequestCitizenNotified: "crm.service_request.citizen_notified",
+
+  // ── GAP2-CRM-GRIEVANCES-AUDIT-01: CPGRAMS grievance lifecycle (no PII in payload) ──
+  /** A grievance was registered. Payload: { grievanceId, status, category }. */
+  grievanceRegistered: "crm.grievance.registered",
+  /** A grievance was assigned to an officer. Payload: { grievanceId, status }. */
+  grievanceAssigned: "crm.grievance.assigned",
+  /** A grievance was forwarded to a department/office. Payload: { grievanceId, status, forwardedTo }. */
+  grievanceForwarded: "crm.grievance.forwarded",
+  /** A grievance was resolved (attended & disposed). Payload: { grievanceId, status }. */
+  grievanceResolved: "crm.grievance.resolved",
+  /** A grievance was administratively closed/disposed. Payload: { grievanceId, status }. */
+  grievanceClosed: "crm.grievance.closed",
+  /** A grievance moved to APPEAL (first appeal / legacy escalate). Payload: { grievanceId, status }. */
+  grievanceAppealed: "crm.grievance.appealed",
+
+  // ── GAP2-CRM-SERVICE-REQUESTS-AUDIT-02: service request lifecycle (no PII) ──
+  /** A service request was created. Payload: { serviceRequestId, status, serviceType }. */
+  serviceRequestCreated: "crm.service_request.created",
+  /** A service request status changed. Payload: { serviceRequestId, fromStatus, toStatus }. */
+  serviceRequestStatusChanged: "crm.service_request.status_changed",
+
+  // ── GAP2-CRM-RTI-AUDIT-03: RTI early-lifecycle acts now audited too (no PII) ──
+  /** An RTI request was logged. Payload: { rtiId, status, section }. */
+  rtiCreated: "crm.rti.created",
+  /** An RTI request was transferred to another CPIO/department. Payload: { rtiId, status, departmentRef }. */
+  rtiForwarded: "crm.rti.forwarded",
+  /** A statutory RTI response was issued. Payload: { rtiId, status }. */
+  rtiResponded: "crm.rti.responded",
+  /** A first appeal was filed against an RTI response (s.19). Payload: { rtiId, status }. */
+  rtiFirstAppealed: "crm.rti.first_appealed",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */

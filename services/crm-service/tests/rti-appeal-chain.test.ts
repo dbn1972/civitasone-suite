@@ -78,6 +78,12 @@ async function inFirstAppeal(): Promise<string> {
   return id;
 }
 
+// Count audit events for the APPEAL-CHAIN acts only (decide / record_second_appeal
+// / dispose). GAP2-CRM-RTI-AUDIT-03 added audit events to the earlier lifecycle
+// acts (create / forward / respond / first_appeal), so an unscoped count would no
+// longer equal the number of appeal-chain steps this test exercises. Scoping to
+// the appeal-chain actions preserves this test's original intent (one audit event
+// per appeal-chain transition) under the new contract.
 async function auditCount(id: string): Promise<number> {
   const rows = await sqlClient.begin(async (tx) => {
     await tx`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
@@ -85,6 +91,7 @@ async function auditCount(id: string): Promise<number> {
       SELECT count(*)::int AS n FROM _outbox.messages
       WHERE tenant_id = ${TENANT} AND event_type = 'audit.event.record'
         AND payload->>'resourceId' = ${id}
+        AND payload->>'action' IN ('decide_first_appeal', 'record_second_appeal', 'dispose')
     `;
   });
   return rows[0]?.n ?? 0;
