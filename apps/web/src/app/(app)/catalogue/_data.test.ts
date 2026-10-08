@@ -108,9 +108,12 @@ describe("mapRateRows / isRateInForce — GAP-CATALOGUE-RATES-01 (MISSING-FIELDS
     expect(row.meta).toBe("manual");
   });
 
-  it("never reads a legacy rateValue as money (minor units only)", () => {
-    const row = mapRateRows([{ id: "r-2", rateValue: "100", effectiveDate: "2026-01-01" }])![0]!;
-    expect(row.label).toBe("—");
+  it("renders the money amount from the serialized DB field rateValue (GAP2-CATALOGUE-RATES-02)", () => {
+    // GET /v1/catalogue/rates returns raw Drizzle rows whose money column is
+    // `rateValue` (minor units/paise bigint) — the mapper must read it, not
+    // only the event-contract alias `rateValueMinor`.
+    const row = mapRateRows([{ id: "r-2", rateValue: "12550", effectiveDate: "2026-01-01" }])![0]!;
+    expect(row.label).toBe("₹125.50");
   });
 
   it("orders cards newest effective-from first, undated last", () => {

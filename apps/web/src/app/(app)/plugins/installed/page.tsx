@@ -37,10 +37,10 @@ export default async function Page() {
 			/>
 
 			<StatGrid>
-				<StatCard icon="🧩" iconBg="#eff8ff" label="Total Plugins" value={total === null ? "—" : total} />
-				<StatCard icon="✅" iconBg="#e6f7f0" label="Enabled" value={enabled === null ? "—" : enabled} />
-				<StatCard icon="⏸️" iconBg="#f4f5f7" label="Disabled" value={disabled === null ? "—" : disabled} />
-				<StatCard icon="⚠️" iconBg="#fff6e6" label="Other" value={other === null ? "—" : other} />
+				<StatCard icon="🧩" tone="info" label="Total Plugins" value={total === null ? "—" : total} />
+				<StatCard icon="✅" tone="good" label="Enabled" value={enabled === null ? "—" : enabled} />
+				<StatCard icon="⏸️" tone="neutral" label="Disabled" value={disabled === null ? "—" : disabled} />
+				<StatCard icon="⚠️" tone="warn" label="Other" value={other === null ? "—" : other} />
 			</StatGrid>
 
 			{source === "error" && (

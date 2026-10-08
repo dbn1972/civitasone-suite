@@ -244,9 +244,14 @@ export function mapRateRows(payload: unknown): ModuleRowSummary[] | null {
     if (!isRecord(row)) continue;
     const r = row as RateRowInput;
     const id = toText(r.id) ?? `rate-${index + 1}`;
-    // Money: the API contract is minor units in `rateValueMinor` ONLY. Never fall back to a
-    // legacy `rateValue` field, which could be a major-unit figure mis-read as paise.
-    const amountRaw = r.rateValueMinor;
+    // Money: both the create/update EVENT contract field `rateValueMinor` and
+    // the GET /v1/catalogue/rates serialized row field `rateValue` carry the
+    // SAME value — minor units (paise/cents) as bigint (schema.ts: "Rate value
+    // stored in minor units (paise/cents) as bigint"). The list endpoint sends
+    // raw Drizzle rows whose column is `rateValue`, so reading `rateValueMinor`
+    // alone left every amount blank (GAP2-CATALOGUE-RATES-02). Prefer the
+    // event-contract name when present, else the serialized DB field.
+    const amountRaw = r.rateValueMinor ?? r.rateValue;
     const amount =
       typeof amountRaw === "bigint" || typeof amountRaw === "number" || typeof amountRaw === "string"
         ? formatMoney(amountRaw)

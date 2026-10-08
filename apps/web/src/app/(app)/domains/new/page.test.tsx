@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, type MockInstance } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 
 const pushMock = vi.fn();
 const refreshMock = vi.fn();
@@ -24,6 +24,20 @@ function fillValidForm() {
   fill(/Contact Email/, "webmaster@example.gov.in");
 }
 
+// GAP2-DOMAINS-NEW-07 deliberately changes this form's contract: there is NO
+// `domains` backend (no gateway registry entry, no service serving
+// POST /v1/domains), so the form is now annotated "not yet available", the
+// submit button is DISABLED, and the submit handler never issues the (doomed)
+// fetch. The field-validation wiring (NEW-02/03/06) is unchanged and still
+// reachable by submitting the form directly; the earlier NEW-01 "POST then
+// route to /domains on success" behaviour is retired by NEW-07 (it could never
+// actually succeed against a non-existent route) and the tests below are
+// aligned to the new contract rather than deleted.
+function submitForm() {
+  const form = screen.getByRole("button", { name: /register/i }).closest("form")!;
+  fireEvent.submit(form);
+}
+
 describe("NewDomainPage", () => {
   let spy: MockInstance<typeof fetch>;
   beforeEach(() => {
@@ -35,33 +49,43 @@ describe("NewDomainPage", () => {
     );
   });
 
-  // GAP-DOMAINS-NEW-01
-  it("routes to /domains (not a dead /domains/{id}) on success", async () => {
+  // GAP2-DOMAINS-NEW-07: honest "not available" treatment.
+  it("shows a not-available notice and disables the Register submit", () => {
     render(<NewDomainPage />);
-    fillValidForm();
-    fireEvent.click(screen.getByRole("button", { name: "Register Domain" }));
-    await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
-    expect(String(spy.mock.calls[0]![0])).toBe("/api/v1/domains");
-    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/domains"));
-    expect(pushMock.mock.calls.every((c) => !/\/domains\/[^/]+$/.test(String(c[0])) || c[0] === "/domains")).toBe(true);
+    expect(screen.getByText(/not yet connected to a backend service/i)).toBeInTheDocument();
+    const submit = screen.getByRole("button", { name: /register/i }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
   });
 
-  // GAP-DOMAINS-NEW-02
+  // GAP2-DOMAINS-NEW-07 (was NEW-01): the dead POST to the non-existent
+  // /api/v1/domains route is never issued, and no routing/save-failure occurs.
+  it("never POSTs to the non-existent /api/v1/domains route and does not route away", () => {
+    render(<NewDomainPage />);
+    fillValidForm();
+    submitForm();
+    expect(spy).not.toHaveBeenCalled();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  // GAP-DOMAINS-NEW-02 (validation wiring preserved)
   it("rejects example.co.in and does not POST", async () => {
     render(<NewDomainPage />);
     fill(/Domain Name/, "example.co.in");
     fill(/Organisation/, "Ministry of X");
     fill(/Contact Email/, "webmaster@example.gov.in");
-    fireEvent.click(screen.getByRole("button", { name: "Register Domain" }));
+    submitForm();
     expect(await screen.findByText(/valid \.gov\.in or \.nic\.in domain/i)).toBeInTheDocument();
     expect(spy).not.toHaveBeenCalled();
   });
 
-  it("accepts example.gov.in", async () => {
+  it("accepts example.gov.in (valid form clears field errors, still never POSTs)", () => {
     render(<NewDomainPage />);
     fillValidForm();
-    fireEvent.click(screen.getByRole("button", { name: "Register Domain" }));
-    await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+    submitForm();
+    // No validation error for a valid .gov.in domain name…
+    expect(screen.queryByText(/valid \.gov\.in or \.nic\.in domain/i)).not.toBeInTheDocument();
+    // …and still no POST (endpoint absent).
+    expect(spy).not.toHaveBeenCalled();
   });
 
   it("domainType nic.in with a .gov.in name shows a field error and does not POST", async () => {
@@ -70,7 +94,7 @@ describe("NewDomainPage", () => {
     fill(/Organisation/, "Ministry of X");
     fill(/Contact Email/, "webmaster@example.gov.in");
     fireEvent.change(screen.getByLabelText(/Domain Type/), { target: { value: "nic.in" } });
-    fireEvent.click(screen.getByRole("button", { name: "Register Domain" }));
+    submitForm();
     expect(await screen.findByText(/requires a \.nic\.in domain/i)).toBeInTheDocument();
     expect(spy).not.toHaveBeenCalled();
   });
@@ -82,13 +106,13 @@ describe("NewDomainPage", () => {
     expect(values).not.toContain("other");
   });
 
-  // GAP-DOMAINS-NEW-03
+  // GAP-DOMAINS-NEW-03 (validation wiring preserved)
   it("rejects 'a@b' as email with the custom message (noValidate so it is reachable)", async () => {
     render(<NewDomainPage />);
     fill(/Domain Name/, "example.gov.in");
     fill(/Organisation/, "Ministry of X");
     fill(/Contact Email/, "a@b");
-    fireEvent.click(screen.getByRole("button", { name: "Register Domain" }));
+    submitForm();
     expect(await screen.findByText("Enter a valid email address.")).toBeInTheDocument();
     expect(spy).not.toHaveBeenCalled();
   });
@@ -103,17 +127,18 @@ describe("NewDomainPage", () => {
     render(<NewDomainPage />);
     fillValidForm();
     fill(/Contact Phone/, "abc");
-    fireEvent.click(screen.getByRole("button", { name: "Register Domain" }));
+    submitForm();
     expect(await screen.findByText(/valid Indian phone number/i)).toBeInTheDocument();
     expect(spy).not.toHaveBeenCalled();
   });
 
-  it("accepts a valid STD phone and POSTs", async () => {
+  it("accepts a valid STD phone (no field error, still never POSTs)", () => {
     render(<NewDomainPage />);
     fillValidForm();
     fill(/Contact Phone/, "011-24301001");
-    fireEvent.click(screen.getByRole("button", { name: "Register Domain" }));
-    await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+    submitForm();
+    expect(screen.queryByText(/valid Indian phone number/i)).not.toBeInTheDocument();
+    expect(spy).not.toHaveBeenCalled();
   });
 
   // GAP-DOMAINS-NEW-06
@@ -130,17 +155,6 @@ describe("NewDomainPage", () => {
     fireEvent.change(input, { target: { value: "  Example.GOV.in  " } });
     fireEvent.blur(input);
     expect(input.value).toBe("example.gov.in");
-  });
-
-  it("submits a lower-cased domain name even if typed in mixed case", async () => {
-    render(<NewDomainPage />);
-    fill(/Domain Name/, "Example.GOV.in");
-    fill(/Organisation/, "Ministry of X");
-    fill(/Contact Email/, "webmaster@example.gov.in");
-    fireEvent.click(screen.getByRole("button", { name: "Register Domain" }));
-    await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
-    const body = JSON.parse((spy.mock.calls[0]![1] as RequestInit).body as string);
-    expect(body.domainName).toBe("example.gov.in");
   });
 
   // GAP-DOMAINS-NEW-04

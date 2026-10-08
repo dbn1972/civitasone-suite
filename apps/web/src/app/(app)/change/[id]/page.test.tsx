@@ -52,3 +52,14 @@ describe("change detail page (GAP-CHANGE-DETAIL-03 / -04)", () => {
     expect(screen.getByText(/14 Sep 2026, 10:00 pm.*15 Sep 2026, 02:00 am/)).toBeInTheDocument();
   });
 });
+
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+describe("change/[id] page — DS theme tokens, no hex literals (GAP2-CHANGE-DETAIL-02)", () => {
+  it("contains no #rrggbb colour literal", () => {
+    const src = readFileSync(join(__dirname, "page.tsx"), "utf8");
+    const hexMatches = src.match(/#[0-9a-fA-F]{6}\b/g) ?? [];
+    expect(hexMatches).toEqual([]);
+  });
+});

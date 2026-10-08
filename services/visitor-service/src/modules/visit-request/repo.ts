@@ -16,7 +16,7 @@
  * `audit.event.record` via the shared DPDP helper when actor context is
  * provided.
  */
-import { and, eq } from "drizzle-orm";
+import { and, eq, getTableColumns } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { logPiiAccess } from "../dpdp/consent.js";
@@ -36,14 +36,32 @@ export interface ListVisitRequestsFilter {
   hostEmployeeId?: string | undefined;
 }
 
-export async function listVisitRequests(tenantId: string, filter: ListVisitRequestsFilter = {}, piiCtx?: PiiAccessContext): Promise<VisitRequestRow[]> {
+/**
+ * Reduced list projection (GAP2-VISITOR-VISIT-REQUESTS-01). The LIST read
+ * deliberately omits the raw PII contact fields `visitorPhone` and
+ * `visitorEmail` (and the encrypted `identityDocRef`) — the list is visible
+ * to any host in the tenant for their own requests, and no caller needs a
+ * visitor's phone/email just to see the request list. Full contact detail is
+ * only returned by `getVisitRequestById` (the owner/elevated detail read),
+ * which logs PII access. `visitorName` is retained because the list is only
+ * ever scoped to the caller's own hosted requests (or an elevated oversight
+ * role) and the name is needed to identify the row.
+ */
+export type VisitRequestListRow = Omit<VisitRequestRow, "visitorPhone" | "visitorEmail" | "identityDocRef">;
+
+export async function listVisitRequests(tenantId: string, filter: ListVisitRequestsFilter = {}, piiCtx?: PiiAccessContext): Promise<VisitRequestListRow[]> {
   const conditions = [eq(visitRequests.tenantId, tenantId)];
   if (filter.status !== undefined) conditions.push(eq(visitRequests.status, filter.status));
   if (filter.locationId !== undefined) conditions.push(eq(visitRequests.locationId, filter.locationId));
   if (filter.hostEmployeeId !== undefined) conditions.push(eq(visitRequests.hostEmployeeId, filter.hostEmployeeId));
-  const rows = await scopedRead((tx) => tx.select().from(visitRequests).where(and(...conditions)));
+  // Select every column EXCEPT visitorPhone / visitorEmail / identityDocRef so
+  // the raw contact PII never crosses the API boundary on the list path.
+  const { visitorPhone: _p, visitorEmail: _e, identityDocRef: _d, ...listColumns } = getTableColumns(visitRequests);
+  void _p; void _e; void _d;
+  const rows = await scopedRead((tx) => tx.select(listColumns).from(visitRequests).where(and(...conditions)));
 
-  // Requirement 18.6: log PII access for each row containing decrypted PII
+  // Requirement 18.6: log PII access for each row (visitorName is still
+  // decrypted + returned, so the access is auditable).
   if (piiCtx && rows.length > 0) {
     await scopedRead(async (tx) => {
       for (const row of rows) {

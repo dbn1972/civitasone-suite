@@ -36,3 +36,27 @@ describe("NbaTable (GAP-RECOMMENDATIONS-NBA-02/03)", () => {
     expect(screen.getByText(/No predictive scores/i)).toBeInTheDocument();
   });
 });
+
+describe("NbaTable — Subject column shortens an opaque UUID (GAP2-RECOMMENDATIONS-NBA-04)", () => {
+  const FULL_UUID = "ab12cd34-5678-4abc-9def-0123456789ab";
+  const uuidRow: NbaScoreRow = {
+    id: "s-uuid",
+    subject: FULL_UUID,
+    subjectType: "account",
+    model: "churn",
+    score: "0.9100",
+    confidence: "0.8000",
+    computedAt: null,
+  };
+
+  it("renders a full 36-char UUID as a short labelled reference, not the raw UUID", () => {
+    render(<NbaTable rows={[uuidRow]} />);
+    expect(screen.getByText("#ab12cd34")).toBeInTheDocument();
+    expect(screen.queryByText(FULL_UUID)).not.toBeInTheDocument();
+  });
+
+  it("keeps the full id available as a tooltip", () => {
+    render(<NbaTable rows={[uuidRow]} />);
+    expect(screen.getByText("#ab12cd34").getAttribute("title")).toBe(FULL_UUID);
+  });
+});

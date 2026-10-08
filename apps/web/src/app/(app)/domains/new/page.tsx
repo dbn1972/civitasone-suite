@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button, Field, Input, PageHeader, Select, Textarea } from "@/app/_components/ds";
-import { useFormError } from "@/lib/useFormError";
 import { DOMAIN_TYPES, domainSchema, toFieldErrors } from "../schema";
 
 const INDIAN_STATES = [
@@ -34,10 +33,8 @@ export default function NewDomainPage() {
     domainType: "gov.in",
     notes: "",
   });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [busy] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const formError = useFormError("domain");
 
   function clearFieldError(name: string) {
     setFieldErrors((f) => (f[name] ? { ...f, [name]: "" } : f));
@@ -45,37 +42,21 @@ export default function NewDomainPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // GAP-DOMAINS-NEW-02/03: validate everything with the shared zod schema
-    // (not includes("@") / a mis-written regex). GAP-DOMAINS-NEW-06: lower-case
-    // and trim happen HERE (and in the schema), not on every keystroke.
+    // GAP2-DOMAINS-NEW-07: there is NO `domains` backend — no gateway registry
+    // entry and no service serving POST /v1/domains anywhere in the repo — so a
+    // real submission 404s at the gateway and can never succeed. Rather than
+    // present a live-looking submit that always fails with a generic save
+    // error, this form is annotated "not yet available" (same honest treatment
+    // as the /domains index) and the submit is disabled. We still run the
+    // shared zod validation so the field-level feedback works, but we never
+    // issue the doomed fetch. Remove this guard and re-enable the button once a
+    // registration endpoint (gateway `domains` prefix → a service) exists.
     const parsed = domainSchema.safeParse(form);
     if (!parsed.success) {
       setFieldErrors(toFieldErrors(parsed.error));
       return;
     }
     setFieldErrors({});
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/v1/domains", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(parsed.data),
-      });
-      if (!res.ok) {
-        setError((await formError.fromResponse(res, "save")).message);
-        return;
-      }
-      // GAP-DOMAINS-NEW-01: there is no /domains/[id] detail route in this
-      // snapshot, so routing to /domains/{id} on success landed on a 404.
-      // Route to the /domains index (created alongside this fix) instead.
-      router.push("/domains");
-      router.refresh();
-    } catch (caught) {
-      setError(formError.fromException("save", caught).message);
-    } finally {
-      setBusy(false);
-    }
   }
 
   return (
@@ -87,23 +68,28 @@ export default function NewDomainPage() {
         backLabel="Domains"
       />
 
-      {error && (
-        <div
-          role="alert"
-          aria-live="polite"
-          style={{
-            background: "color-mix(in srgb, var(--bad) 12%, transparent)",
-            color: "var(--bad)",
-            border: "1px solid color-mix(in srgb, var(--bad) 35%, transparent)",
-            borderRadius: 8,
-            padding: "10px 14px",
-            marginBottom: 16,
-            fontSize: 13,
-          }}
-        >
-          {error}
-        </div>
-      )}
+      {/* GAP2-DOMAINS-NEW-07: honest "not available" notice. There is no
+          `domains` backend (no gateway registry entry, no service serving
+          POST /v1/domains), so registration cannot succeed. Surface that up
+          front — same honest treatment as the /domains index — instead of a
+          live-looking submit that always 404s. */}
+      <div
+        role="status"
+        aria-live="polite"
+        style={{
+          background: "color-mix(in srgb, var(--warn) 12%, transparent)",
+          color: "var(--warn)",
+          border: "1px solid color-mix(in srgb, var(--warn) 35%, transparent)",
+          borderRadius: 8,
+          padding: "10px 14px",
+          marginBottom: 16,
+          fontSize: 13,
+        }}
+      >
+        Domain registration is not yet connected to a backend service, so this
+        form cannot be submitted yet. You can review the fields below; the
+        Register button is disabled until the registration service is available.
+      </div>
 
       <div className="card">
         {/* GAP-DOMAINS-NEW-03: noValidate so the custom accessible messages are
@@ -213,8 +199,8 @@ export default function NewDomainPage() {
             <Button type="button" variant="secondary" onClick={() => router.back()}>
               Cancel
             </Button>
-            <Button type="submit" loading={busy}>
-              {busy ? "Registering…" : "Register Domain"}
+            <Button type="submit" loading={busy} disabled title="Domain registration is not yet connected to a backend service">
+              Register Domain (unavailable)
             </Button>
           </div>
         </form>
