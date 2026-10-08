@@ -70,6 +70,11 @@ export const COMMANDS = {
   recordComplaint:        "notification.complaint.record",
   // F.5: Human handoff — AI pause/resume protocol
   transitionHandoff:      "notification.inbox.handoff.transition",
+  // G8: DLT (TRAI) template registry — regulated mutations go through the
+  // command bus + consumer + outbox like every other notification module.
+  createDltTemplate:      "notification.dlt_template.create",
+  updateDltTemplate:      "notification.dlt_template.update",
+  deleteDltTemplate:      "notification.dlt_template.delete",
   // G7: Channel usage metering → billing
   recordChannelUsage:     "notification.channel.usage",
   // G5: Conversation thread model
@@ -95,7 +100,10 @@ export const EVENTS = {
   digestFlushed:          "notification.digest.flushed",
   // Webhook
   webhookEndpointCreated: "notification.webhook.created",
-  // Analytics
+  // G8: DLT (TRAI) template registry lifecycle
+  dltTemplateRegistered:  "notification.dlt_template.registered",
+  dltTemplateUpdated:     "notification.dlt_template.updated",
+  dltTemplateDeleted:     "notification.dlt_template.deleted",  // Analytics
   openTracked:            "notification.analytics.open_tracked",
   clickTracked:           "notification.analytics.click_tracked",
   // DND

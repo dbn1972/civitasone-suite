@@ -2289,6 +2289,23 @@ export const CourtOrderSummarySchema = z.object({
 });
 export const CourtOrderSummaryListSchema = z.array(CourtOrderSummarySchema);
 
+// GAP2-LEGAL-COURT-ORDERS-10: page-aware court-order response. `total` is the
+// true tenant count and `stats` are computed server-side over the full set so
+// the "Contempt Risk" tile is not derived from a 50-row page slice.
+export const CourtOrderStatsSchema = z.object({
+  total: z.number().int().nonnegative(),
+  pendingCompliance: z.number().int().nonnegative(),
+  complied: z.number().int().nonnegative(),
+  contemptRisk: z.number().int().nonnegative(),
+});
+export const CourtOrderPageSchema = z.object({
+  items: CourtOrderSummaryListSchema,
+  total: z.number().int().nonnegative(),
+  limit: z.number().int().positive(),
+  offset: z.number().int().nonnegative(),
+  stats: CourtOrderStatsSchema,
+});
+
 export const LegalOpinionSummarySchema = z.object({
   id: z.string(),
   opinionNo: z.string(),

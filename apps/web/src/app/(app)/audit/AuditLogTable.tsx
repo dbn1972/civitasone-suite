@@ -11,7 +11,9 @@ type AuditRow = {
   actor: string;
   action: string;
   resource: string;
-  outcome: "success" | "failure";
+  // GAP2-AUDIT-HOME-11: keep the real outcome string (not just success/failure)
+  // so an outcome like "skipped"/"held" is not collapsed into a red failure.
+  outcome: string;
   eventId: string;
 };
 
@@ -49,8 +51,17 @@ export function AuditLogTable({ rows }: { rows: AuditRowSummary[] }) {
         {
           key: "outcome",
           label: "Result",
+          // GAP2-AUDIT-HOME-11: success -> good, failure -> bad, anything else
+          // (skipped/held/unknown) -> a neutral pill showing its real value,
+          // never a red "failure" for an outcome we don't actually know is bad.
           render: (r) =>
-            r.outcome === "success" ? <span className="pill good">success</span> : <span className="pill bad">failure</span>,
+            r.outcome === "success" ? (
+              <span className="pill good">success</span>
+            ) : r.outcome === "failure" ? (
+              <span className="pill bad">failure</span>
+            ) : (
+              <span className="pill">{r.outcome || "unknown"}</span>
+            ),
         },
         {
           key: "eventId",

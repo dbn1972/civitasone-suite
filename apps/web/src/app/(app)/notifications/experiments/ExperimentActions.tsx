@@ -13,9 +13,9 @@ import { useFormError } from "@/lib/useFormError";
  *
  * This client component surfaces the two real service endpoints that already
  * exist and are role-gated server-side (requireRole(WRITE_ROLES)):
- *   - running/draft  -> POST /notification/experiments/:id/conclude
+ *   - running/draft  -> POST /v1/notification/experiments/:id/conclude
  *                       (requestWinnerApproval → status pending_approval)
- *   - pending_approval -> POST /notification/experiments/:id/approve-winner
+ *   - pending_approval -> POST /v1/notification/experiments/:id/approve-winner
  *                       (promotes the winner → concluded)
  * Both are gated behind an explicit ConfirmDialog (fail-closed, no accidental
  * promotion) and router.refresh() re-reads the list afterwards.
@@ -46,8 +46,8 @@ export function ExperimentActions({ id, status }: { id: string; status: string }
     setError(undefined);
     formError.clear();
     const path = action === "request"
-      ? `/api/proxy/notification/experiments/${id}/conclude`
-      : `/api/proxy/notification/experiments/${id}/approve-winner`;
+      ? `/api/proxy/v1/notification/experiments/${id}/conclude`
+      : `/api/proxy/v1/notification/experiments/${id}/approve-winner`;
     try {
       const res = await fetch(path, {
         method: "POST",
