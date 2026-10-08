@@ -32,11 +32,11 @@ function makeToken(roles: string[] = ["project_manager"]) {
 
 beforeAll(async () => {
   await sqlClient`SELECT set_config('app.tenant_id', ${TENANT}, false)`;
-  await sqlClient`DELETE FROM project.baselines WHERE tenant_id = ${TENANT}::uuid`;
+  await sqlClient`DELETE FROM project.project_baselines WHERE tenant_id = ${TENANT}::uuid`;
 });
 
 afterAll(async () => {
-  await sqlClient`DELETE FROM project.baselines WHERE tenant_id = ${TENANT}::uuid`;
+  await sqlClient`DELETE FROM project.project_baselines WHERE tenant_id = ${TENANT}::uuid`;
   await sqlClient.end();
 });
 
@@ -182,7 +182,7 @@ describe("POST /v1/projects/:id/baselines — create baseline", () => {
 
     // Clean up
     await sqlClient`SELECT set_config('app.tenant_id', ${TENANT}, false)`;
-    await sqlClient`DELETE FROM project.baselines WHERE project_id = ${limitProject}::uuid AND tenant_id = ${TENANT}::uuid`;
+    await sqlClient`DELETE FROM project.project_baselines WHERE project_id = ${limitProject}::uuid AND tenant_id = ${TENANT}::uuid`;
   });
 });
 

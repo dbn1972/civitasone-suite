@@ -163,8 +163,12 @@ export async function listSchemeSummaries(tenantId: string, limit: number) {
     schemeCode: row.code,
     name: row.name,
     fundingType: mapFundingType(row.type),
-    totalAllocation: minorToAmount(row.totalOutlayMinor),
-    releasedAmount: minorToAmount(row.releasedMinor),
+    // GAP2-PROJECTS-SCHEMES-MONEY-04: emit bigint MINOR units (paise) as a
+    // string, same as getSchemeDetail — NOT minorToAmount() (whole rupees),
+    // which forced the web list onto formatRupees while the detail page used
+    // formatMoney on paise (a standing 100x hazard between sibling endpoints).
+    totalAllocation: (row.totalOutlayMinor ?? 0n).toString(),
+    releasedAmount: (row.releasedMinor ?? 0n).toString(),
     projectCount: projectCountBySchemeId.get(row.id) ?? 0,
     status: (row.status === "completed" ? "completed" : row.status === "cancelled" ? "cancelled" : "active") as "active" | "completed" | "cancelled",
   }));

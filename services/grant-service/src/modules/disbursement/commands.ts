@@ -5,6 +5,7 @@ import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
+import * as applicationRepo from "../application/repo.js";
 import type { CreateInstallmentsBody, DisburseBody, PfmsReconcileBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -25,6 +26,25 @@ export async function createInstallments(ctx: RequestContext, applicationId: str
 }
 
 export async function inititateDisbursement(ctx: RequestContext, installmentId: string, body: DisburseBody): Promise<Accepted> {
+  // GAP2-GRANTS-INSTALLMENTS-07: separation of duties on a direct (non-approval
+  // -gated) money-out disbursement. A first-tranche release that is NOT routed
+  // through the eOffice approval path (requireApproval=false) must not be
+  // initiated by the actor who created the installment or who approved the
+  // underlying application — otherwise one officer could approve a grant and
+  // immediately pay it with no second signatory. When requireApproval=true the
+  // eOffice decidedBy ≠ initiator check applies downstream, so the SoD guard is
+  // scoped to the direct path. Mirrors submitDisbursementForApproval's SoD.
+  if (!body.requireApproval) {
+    const installment = await repo.findInstallmentById(installmentId, ctx.tenantId);
+    if (!installment) throw new HttpError(404, "NOT_FOUND", "installment not found");
+    if (installment.createdBy && installment.createdBy === ctx.actorId) {
+      throw new HttpError(403, "SOD_VIOLATION", "the actor who created the installment may not directly disburse it; route it through approval (separation of duties)");
+    }
+    const application = await applicationRepo.findApplicationById(installment.applicationId, ctx.tenantId);
+    if (application?.approvedBy && application.approvedBy === ctx.actorId) {
+      throw new HttpError(403, "SOD_VIOLATION", "the actor who approved the application may not directly disburse it; route it through approval (separation of duties)");
+    }
+  }
   const id = idempotentId(ctx); // EVT-4: double-submit dedupe on disbursement
   await queue.publish(COMMANDS.disbursementInitiate, {
     messageId: id, type: COMMANDS.disbursementInitiate,
@@ -64,6 +84,9 @@ export async function submitDisbursementForApproval(ctx: RequestContext, id: str
   }
   await queue.publish(COMMANDS.disbursementSubmitApproval, {
     messageId: idempotentId({ idempotencyKey: `disbursement-submit-approval:${id}`, tenantId: ctx.tenantId }),
+    // messageId for queue-level dedupe/traceability (consistent with every other
+    // publish in this module); the eOffice submit is a one-shot command.
+    messageId: randomUUID(),
     type: COMMANDS.disbursementSubmitApproval,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId },

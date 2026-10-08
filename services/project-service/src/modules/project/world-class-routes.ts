@@ -71,23 +71,18 @@ export async function worldClassProjectRoutes(app: FastifyInstance): Promise<voi
     requireRole(ctx, READER_ROLES);
     const { id } = projectIdParam.parse(req.params);
 
-    // Check if a baseline exists in new baselines table (Req 11.5)
+    // GAP2-PROJECTS-DB-BASELINES-PREFIX-01: read the single, prefixed baseline
+    // table (project.project_baselines, migration 0026). The former legacy
+    // project_baselines backward-compat fallback is gone — the two baseline
+    // tables were consolidated into one.
     const baselineCheck = await db.transaction((tx) => tx.execute(sql`
-      SELECT id, label FROM project.baselines
+      SELECT id, label FROM project.project_baselines
       WHERE tenant_id = ${ctx.tenantId} AND project_id = ${id}
       ORDER BY created_at DESC LIMIT 1
     `));
 
-    // Also check legacy project_baselines for backward compat
     if (baselineCheck.length === 0) {
-      const legacyCheck = await db.transaction((tx) => tx.execute(sql`
-        SELECT id FROM project.project_baselines
-        WHERE tenant_id = ${ctx.tenantId} AND project_id = ${id}
-        LIMIT 1
-      `));
-      if (legacyCheck.length === 0) {
-        throw new HttpError(422, "BASELINE_REQUIRED", "a baseline snapshot is required before EVM metrics can be computed");
-      }
+      throw new HttpError(422, "BASELINE_REQUIRED", "a baseline snapshot is required before EVM metrics can be computed");
     }
 
     // If pv/ev/ac query params present, compute real-time EVM metrics

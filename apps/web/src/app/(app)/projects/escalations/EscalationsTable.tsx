@@ -6,15 +6,20 @@ import { useSeededResource } from "@/lib/sync/resource";
 import { EscalationActions } from "./EscalationActions";
 
 export type EscalationRow = {
-  escalationId: string;
+  // GAP2-PROJECTS-ESCALATIONS-04: real persisted record id (null until the
+  // escalation is acted on) — no fabricated "ESC-NNN" sequence.
+  escalationId: string | null;
   // GAP-PROJECTS-ESCALATIONS-03: opaque project id for linking to
   // /projects/<id>. Optional until the endpoint supplies it; DataTable leaves
   // the row un-linked (no ".../undefined") while absent.
   projectId?: string;
   project: string;
-  issue: string;
+  // GAP2-PROJECTS-ESCALATIONS-04: issue/escalatedTo come from the persisted
+  // record only and are null when no escalation has been raised (no invented
+  // "Critical blocker reported" / "Program Director" text).
+  issue: string | null;
   severity: string;
-  escalatedTo: string;
+  escalatedTo: string | null;
   raisedDate: string;
   status: string;
 } & Record<string, unknown>;
@@ -48,16 +53,18 @@ const COLUMNS: {
   render?: (row: EscalationRow) => React.ReactNode;
 }[] = [
   { key: "project", label: "Project" },
-  { key: "issue", label: "Issue" },
+  // GAP2-PROJECTS-ESCALATIONS-04: issue/escalatedTo/escalationId are null until
+  // a real escalation record exists — render an honest "—", never fabricated text.
+  { key: "issue", label: "Issue", render: (r) => r.issue ?? "—" },
   { key: "severity", label: "Severity", render: (r) => SEVERITY_LABEL[r.severity] ?? r.severity },
-  { key: "escalatedTo", label: "Escalated To" },
+  { key: "escalatedTo", label: "Escalated To", render: (r) => r.escalatedTo ?? "—" },
   { key: "raisedDate", label: "Raised Date" },
   {
     key: "status",
     label: "Status",
     render: (r) => <StatusPill status={r.status} variant={ESCALATION_STATUS_VARIANT[r.status.toLowerCase()]} />,
   },
-  { key: "escalationId", label: "Ref" },
+  { key: "escalationId", label: "Ref", render: (r) => r.escalationId ?? "—" },
 ];
 
 export function EscalationsTable({ rows, source = "api", canAct = false }: { rows: EscalationRow[]; source?: "api" | "error"; canAct?: boolean }) {
@@ -89,10 +96,10 @@ export function EscalationsTable({ rows, source = "api", canAct = false }: { row
             return (
               <EscalationActions
                 projectId={r.projectId}
-                escalationId={r.escalationId}
+                escalationId={r.escalationId ?? r.project}
                 status={r.status}
                 severity={r.severity}
-                issue={r.issue}
+                issue={r.issue ?? undefined}
               />
             );
           },

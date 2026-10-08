@@ -176,6 +176,29 @@ export const PROJECT_READER_ROLES = [
 ];
 
 /**
+ * GAP2-PROJECTS-LAYOUT-AUTHZ-01: roles permitted to VIEW any /projects screen
+ * (the view-gate on projects/layout.tsx, mirroring grants/layout.tsx's
+ * GRANTS_VIEW_ROLES). The projects tree previously had NO role gate — only
+ * ModuleGate (tenant enablement) — so any signed-in user in a projects-enabled
+ * tenant could load every projects screen. This superset mirrors the union of
+ * the project-service READER_ROLES across its route modules (project/routes.ts
+ * PROJ_ROLES + mock-elimination READER_ROLES + scheme READER_ROLES), which all
+ * already enforce requireRole server-side — so this gate is defence-in-depth +
+ * UX, never looser than the backend. Includes project_manager (a maker role
+ * absent from PROJECT_READER_ROLES, which mirrors only the beneficiaries
+ * endpoint's reader set).
+ */
+export const PROJECT_VIEW_ROLES = [
+  "project_officer",
+  "project_manager",
+  "project_admin",
+  "finance_officer",
+  "tenant_admin",
+  "super_admin",
+  "audit_officer",
+];
+
+/**
  * Roles permitted to DISBURSE a project fund release (a money-moving,
  * irreversible action). Mirrors project-service's SCHEME_ROLES in
  * modules/scheme/routes.ts, which the disburse route

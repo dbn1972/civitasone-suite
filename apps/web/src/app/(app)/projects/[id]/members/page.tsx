@@ -5,6 +5,7 @@ import { formatIndianDate, humanizeStatus } from "@/lib/formatters";
 import { getSessionRoles, hasAnyRole, PROJECT_WRITE_ROLES } from "@/lib/auth/roleGuard";
 import { resolveUsers } from "@/lib/directory/resolveUsers";
 import { AddMemberForm } from "./AddMemberForm";
+import { RemoveMemberButton } from "./RemoveMemberButton";
 
 export default async function ProjectMembersPage({ params }: { params: { id: string } }) {
   const { data: members, source } = await getProjectMembers(params.id);
@@ -63,6 +64,10 @@ export default async function ProjectMembersPage({ params }: { params: { id: str
                   {["Member", "Role", "Added"].map((c) => (
                     <th key={c} scope="col">{c}</th>
                   ))}
+                  {/* GAP2-PROJECTS-MEMBERS-06: a role-gated Remove action column
+                      (membership was add-only from the UI before). Only rendered
+                      for a manager; the server (DELETE route) stays the authority. */}
+                  {canManage && <th scope="col">Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -97,6 +102,15 @@ export default async function ProjectMembersPage({ params }: { params: { id: str
                           createdAt renders "—" instead of "Invalid Date". */}
                       {formatIndianDate(m.createdAt)}
                     </td>
+                    {canManage && (
+                      <td>
+                        <RemoveMemberButton
+                          projectId={params.id}
+                          memberId={m.id}
+                          memberLabel={names.get(m.userId) ?? m.userId}
+                        />
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

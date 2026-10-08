@@ -13,6 +13,9 @@ export function registerBeneficiaryConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // GAP2-GRANTS-GRANTEES-07: assign a real, stable grantee registration
+      // code (GR-NNNNN) inside the same transaction — no UUID fragment.
+      const granteeCode = await repo.allocateGranteeCode(tx, p.tenantId);
       await repo.insertBeneficiary(tx, {
         id: p.id, tenantId: p.tenantId, name: p.name, type: p.type,
         category: p.category ?? null, age: p.age ?? null,
@@ -20,6 +23,7 @@ export function registerBeneficiaryConsumers(queue: Queue): void {
         currency: p.currency ?? "INR",
         geography: p.geography ?? null,
         status: "active",
+        granteeCode,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await enqueue(tx, {

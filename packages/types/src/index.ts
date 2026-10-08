@@ -1601,8 +1601,10 @@ export type SchemeSummary = {
   ministry?: string;
   department?: string;
   fundingType: "central" | "state" | "centrally_sponsored" | "external";
-  totalAllocation: number;
-  releasedAmount: number;
+  // GAP2-PROJECTS-SCHEMES-MONEY-04: bigint MINOR units (paise) as a string,
+  // same convention as SchemeDetail's *Minor fields — render with formatMoney.
+  totalAllocation: string;
+  releasedAmount: string;
   projectCount: number;
   status: "active" | "completed" | "cancelled";
 };
