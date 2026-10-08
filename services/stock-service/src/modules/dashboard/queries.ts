@@ -1,74 +1,43 @@
-import { eq, and, sql } from "drizzle-orm";
-import { runWithTenant } from "@civitasone/db";
-import { db, scopedRead } from "../../shared/db.js";
-import { stockItems } from "../item/schema.js";
-import { stockLedger } from "../ledger/schema.js";
-import { stockValuationRates } from "../valuation/schema.js";
+/**
+ * Stock dashboard read model.
+ *
+ * GAP2-STOCK-DASHBOARD-02: each figure is produced by the owning module's own
+ * query interface (item, valuation, ledger) and assembled here in JS. No single
+ * SQL statement spans two module schemas (no cross-module correlated subquery),
+ * so the DB-per-module boundary holds.
+ *
+ * GAP2-STOCK-DASHBOARD-01: inventoryValue is a bigint-paise STRING end-to-end;
+ * it is never coerced through a JS Number (which would lose precision past
+ * Number.MAX_SAFE_INTEGER paise).
+ */
+import * as itemRepo from "../item/repo.js";
+import * as valuationRepo from "../valuation/repo.js";
+import * as ledgerRepo from "../ledger/repo.js";
 
 export async function getDashboard(tenantId: string) {
-  return runWithTenant(tenantId, () => scopedRead(async (tx) => {
-    const [total] = await tx
-      .select({ count: sql<number>`count(*)::int` })
-      .from(stockItems)
-      .where(eq(stockItems.tenantId, tenantId));
+  // Each read touches only its own module's schema.
+  const [items, valuation, grnsThisMonth] = await Promise.all([
+    itemRepo.findReorderDescriptors(tenantId),
+    valuationRepo.getTenantValuation(tenantId),
+    ledgerRepo.countReceiptsThisMonth(tenantId),
+  ]);
 
-    const [grnsRow] = await tx
-      .select({ count: sql<number>`count(*)::int` })
-      .from(stockLedger)
-      .where(
-        and(
-          eq(stockLedger.tenantId, tenantId),
-          eq(stockLedger.voucherType, "receipt"),
-          sql`${stockLedger.postingDate} >= date_trunc('month', current_date)`,
-        )
-      );
+  const onHand = valuation.onHandByItem;
 
-    const [valueRow] = await tx
-      .select({
-        total: sql<string>`COALESCE(SUM(qty * rate_minor), 0)::text`,
-      })
-      .from(stockValuationRates)
-      .where(eq(stockValuationRates.tenantId, tenantId));
+  let lowStockAlerts = 0;
+  let stockOuts = 0;
+  for (const it of items) {
+    const qty = onHand.get(it.id) ?? 0;
+    if (it.reorderLevel > 0 && qty < it.reorderLevel) lowStockAlerts += 1;
+    if (it.isActive && qty <= 0) stockOuts += 1;
+  }
 
-    const [alertRow] = await tx
-      .select({ count: sql<number>`count(*)::int` })
-      .from(stockItems)
-      .where(
-        and(
-          eq(stockItems.tenantId, tenantId),
-          sql`${stockItems.reorderLevel} > 0`,
-          sql`COALESCE((
-            SELECT sv.qty FROM valuation.stock_valuation_rates sv
-            WHERE sv.tenant_id = ${stockItems.tenantId}
-              AND sv.item_id = ${stockItems.id}
-            LIMIT 1
-          ), 0) < ${stockItems.reorderLevel}`,
-        )
-      );
-
-    // GAP-STOCK-DASHBOARD-04: stock-outs are active items whose total on-hand qty
-    // (summed across warehouses) is zero or below. Previously the dashboard tile was a hard-coded "—".
-    const [stockOutRow] = await tx
-      .select({ count: sql<number>`count(*)::int` })
-      .from(stockItems)
-      .where(
-        and(
-          eq(stockItems.tenantId, tenantId),
-          eq(stockItems.isActive, true),
-          sql`COALESCE((
-            SELECT SUM(sv.qty) FROM valuation.stock_valuation_rates sv
-            WHERE sv.tenant_id = ${stockItems.tenantId}
-              AND sv.item_id = ${stockItems.id}
-          ), 0) <= 0`,
-        )
-      );
-
-    return {
-      totalSKUs: total?.count ?? 0,
-      lowStockAlerts: alertRow?.count ?? 0,
-      stockOuts: stockOutRow?.count ?? 0,
-      grnsThisMonth: grnsRow?.count ?? 0,
-      inventoryValue: Number(valueRow?.total ?? "0"),
-    };
-  }));
+  return {
+    totalSKUs: items.length,
+    lowStockAlerts,
+    stockOuts,
+    grnsThisMonth,
+    // Bigint-paise string — never round-tripped through Number().
+    inventoryValue: valuation.totalValuePaise,
+  };
 }

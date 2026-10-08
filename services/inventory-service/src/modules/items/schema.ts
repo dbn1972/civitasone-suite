@@ -78,6 +78,9 @@ export const itemSubstitutes = domainSchema.table("item_substitutes", {
   conversionFactor: numeric("conversion_factor", { precision: 10, scale: 4 }).notNull().default("1.0"),
   createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:       uuid("created_by").notNull(),
+  updatedAt:       timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedBy:       uuid("updated_by").notNull(),
+  version:         integer("version").notNull().default(1),
 });
 
 /** Bin/rack locations within a store — physical storage positions. */

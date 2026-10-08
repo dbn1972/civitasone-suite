@@ -2021,7 +2021,10 @@ export const StockDashboardSchema = z.object({
   // GAP-STOCK-DASHBOARD-04: real stock-out count from the dashboard query.
   stockOuts: z.number().default(0),
   grnsThisMonth: z.number().default(0),
-  inventoryValue: z.number().default(0),
+  // GAP2-STOCK-DASHBOARD-01: inventory valuation is a bigint-paise string
+  // (money is bigint minor units end-to-end). Carrying it as a float lost
+  // precision past Number.MAX_SAFE_INTEGER paise. formatMoney() accepts strings.
+  inventoryValue: z.string().default("0"),
 });
 
 export const StockItemSummarySchema = z.object({

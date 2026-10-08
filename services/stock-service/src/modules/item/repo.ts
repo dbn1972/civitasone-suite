@@ -28,6 +28,20 @@ export async function findItemsByTenant(tenantId: string, opts?: { category?: st
   ));
 }
 
+/**
+ * GAP2-STOCK-DASHBOARD-02 — item-module read model for the dashboard.
+ * Queries ONLY the item module's own schema (stock_items). The dashboard
+ * handler joins these descriptors with the valuation module's on-hand totals
+ * in JS, avoiding a cross-module (item -> valuation) correlated SQL subquery.
+ */
+export async function findReorderDescriptors(tenantId: string): Promise<Array<{ id: string; reorderLevel: number; isActive: boolean }>> {
+  return runWithTenant(tenantId, () => scopedRead(async (tx) =>
+    tx.select({ id: stockItems.id, reorderLevel: stockItems.reorderLevel, isActive: stockItems.isActive })
+      .from(stockItems)
+      .where(eq(stockItems.tenantId, tenantId))
+  ));
+}
+
 export async function findItemWithUomById(id: string, tenantId: string): Promise<ItemWithUom | null> {
   return runWithTenant(tenantId, () => scopedRead(async (tx) => {
     const rows = await tx

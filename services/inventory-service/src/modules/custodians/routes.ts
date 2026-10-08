@@ -1,17 +1,23 @@
 /**
- * Custodian routes — store custodian assignment (master data, no CQRS).
+ * Custodian routes — store custodian assignment.
  *
- * POST   /v1/inventory/custodians              — create assignment
+ * POST   /v1/inventory/custodians              — create assignment (CQRS: 202 Accepted)
  * GET    /v1/inventory/stores/:id/custodians   — list by store
  * GET    /v1/inventory/custodians              — list all (tenant-scoped)
+ *
+ * GAP2-INVENTORY-CUSTODIANS-01: the create no longer writes Postgres in the
+ * route handler and no longer skips auditing. It publishes a command; the
+ * consumer applies the insert and emits an audit event in the same transaction.
  */
 import type { FastifyInstance } from "fastify";
-import { randomUUID } from "node:crypto";
 import { eq, and } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { scopedRead } from "../../shared/db.js";
 import { custodians } from "../items/schema.js";
 import { resolveContext, requireRole, registerErrorHandler } from "../../shared/context.js";
 import { createCustodianBody, idParam, custodianQueryParams } from "./validators.js";
+import * as commands from "./commands.js";
 
 const WRITE_ROLES    = ["inventory_admin", "super_admin"];
 const READ_ALL_ROLES = ["inventory_admin", "super_admin", "audit_officer"];
@@ -21,26 +27,12 @@ const READ_STORE_ROLES = [
 ];
 
 export async function custodianRoutes(app: FastifyInstance): Promise<void> {
-  // POST /v1/inventory/custodians
+  // POST /v1/inventory/custodians — CQRS write path (publish command, 202)
   app.post("/v1/inventory/custodians", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = createCustodianBody.parse(req.body);
-    const id = randomUUID();
-    // Wrap in db.transaction() so wrapWithTenantGuc sets app.tenant_id GUC (required by FORCE RLS WITH CHECK).
-    await db.transaction(async (tx) => (tx as unknown as typeof db).insert(custodians).values({
-      id,
-      tenantId:      ctx.tenantId,
-      storeId:       body.storeId,
-      employeeRef:   body.employeeRef,
-      designation:   body.designation ?? null,
-      effectiveFrom: body.effectiveFrom,
-      effectiveTo:   body.effectiveTo ?? null,
-      status:        "active",
-      createdBy:     ctx.actorId,
-      updatedBy:     ctx.actorId,
-    }));
-    return reply.code(201).send({ id, status: "created" });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createCustodian(ctx, body));
   });
 
   // GET /v1/inventory/stores/:id/custodians

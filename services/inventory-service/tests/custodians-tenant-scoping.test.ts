@@ -12,8 +12,15 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
+import { MemoryQueue } from "@civitasone/queue";
+import type { Queue, Handler } from "@civitasone/queue";
+import { withTenantConsumer, runWithTenant } from "@civitasone/db";
+import { and, eq } from "drizzle-orm";
 import { buildApp } from "../src/app.js";
-import { sqlClient } from "../src/shared/db.js";
+import { db, sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
+import { outboxMessages } from "../src/shared/outbox.js";
+import { registerCustodianConsumers } from "../src/modules/custodians/consumer.js";
 import type { FastifyInstance } from "fastify";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -27,6 +34,27 @@ function tokenForTenant(tenantId: string, actorId: string, roles: string[] = ["s
   return signToken({ sub: actorId, tid: tenantId, roles, sid: "sess-custodians" }, SECRET, 3600);
 }
 
+const drain = () => (queue as unknown as MemoryQueue).drain();
+
+/** Wrap the shared queue so consumer handlers run inside the tenant GUC. */
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
+}
+
+/** Read custodian audit events enqueued to the transactional outbox. */
+async function custodianAuditActions(): Promise<string[]> {
+  const rows = await runWithTenant(TENANT_A, () =>
+    db.transaction((tx) => tx.select().from(outboxMessages)
+      .where(and(eq(outboxMessages.tenantId, TENANT_A), eq(outboxMessages.topic, "audit.event.record")))));
+  return rows
+    .map((r) => (r.payload ?? {}) as { resourceType?: string; action?: string; resourceId?: string })
+    .filter((p) => p.resourceType === "custodian")
+    .map((p) => `${p.action}:${p.resourceId}`);
+}
+
 let app: FastifyInstance;
 let tokenA: string;
 let tokenB: string;
@@ -34,18 +62,28 @@ const storeId = randomUUID();
 let createdCustodianId: string | undefined;
 
 beforeAll(async () => {
+  wireTenantAwareQueue(queue);
+  registerCustodianConsumers(queue);
   app = await buildApp();
   tokenA = tokenForTenant(TENANT_A, ACTOR_A);
   tokenB = tokenForTenant(TENANT_B, ACTOR_B);
 });
 
 afterAll(async () => {
+  // Clean the rows this suite created so repeat runs stay deterministic.
+  const { custodians } = await import("../src/modules/items/schema.js");
+  for (const t of [TENANT_A, TENANT_B]) {
+    await runWithTenant(t, () => db.transaction(async (tx) => {
+      await tx.delete(custodians).where(eq(custodians.tenantId, t));
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, t));
+    }));
+  }
   await app.close();
   await sqlClient.end();
 });
 
-describe("Custodians — tenant-scoped reads", () => {
-  it("Tenant A creates a custodian assignment", async () => {
+describe("Custodians — CQRS write path + tenant-scoped reads", () => {
+  it("Tenant A creates a custodian assignment via CQRS (202 Accepted), no insert in the route", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/inventory/custodians",
@@ -57,10 +95,20 @@ describe("Custodians — tenant-scoped reads", () => {
         effectiveFrom: "2026-01-01",
       },
     });
-    expect(res.statusCode).toBe(201);
+    // GAP2-INVENTORY-CUSTODIANS-01: route publishes a command and returns 202, not 201.
+    expect(res.statusCode).toBe(202);
     const body = res.json();
     createdCustodianId = body.id;
     expect(createdCustodianId).toBeDefined();
+    expect(body.status).toBe("accepted");
+
+    // Drive the consumer: it applies the insert and audits in one transaction.
+    await drain();
+
+    // GAP2-INVENTORY-CUSTODIANS-01: the create must emit an audit event
+    // (enqueued to the transactional outbox in the same tx as the insert).
+    const actions = await custodianAuditActions();
+    expect(actions).toContain(`create:${createdCustodianId}`);
   });
 
   it("Tenant A: GET /v1/inventory/custodians (list all) returns the new custodian, not an empty list", async () => {

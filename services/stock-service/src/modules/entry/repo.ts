@@ -71,6 +71,31 @@ export async function getValuationRateTx(tx: Writer, tenantId: string, itemId: s
   return { qty: row?.qty ?? 0, rateMinor: row?.rateMinor ?? 0n };
 }
 
+/**
+ * GAP2-STOCK-ENTRY-02 — like getValuationRateTx but takes a row lock
+ * (SELECT ... FOR UPDATE) so a read-modify-write weighted-average revaluation
+ * cannot lose an update under concurrent writers for the same
+ * (tenant,item,warehouse). The lock is held until the enclosing transaction
+ * commits. Serializes concurrent grn.accepted revaluations for one item.
+ *
+ * When no valuation row exists yet there is nothing to lock; the caller treats
+ * the absent row as qty 0 / rate 0 and the subsequent upsert's INSERT path (or
+ * its ON CONFLICT) is itself serialized by the unique index, so the first
+ * writer wins the insert and the second takes the locked ON CONFLICT branch.
+ */
+export async function lockValuationRateTx(tx: Writer, tenantId: string, itemId: string, warehouseId: string): Promise<{ qty: number; rateMinor: bigint }> {
+  const rows = await (tx as typeof db).select().from(stockValuationRates)
+    .where(and(
+      eq(stockValuationRates.tenantId, tenantId),
+      eq(stockValuationRates.itemId, itemId),
+      eq(stockValuationRates.warehouseId, warehouseId)
+    ))
+    .for("update")
+    .limit(1);
+  const row = rows[0];
+  return { qty: row?.qty ?? 0, rateMinor: row?.rateMinor ?? 0n };
+}
+
 export async function upsertValuationRate(
   tx: Writer, tenantId: string, itemId: string, warehouseId: string,
   qty: number, rateMinor: bigint, currency: string

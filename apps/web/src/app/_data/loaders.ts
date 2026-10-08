@@ -5173,7 +5173,7 @@ const STOCK_DASHBOARD_EMPTY: StockDashboard = {
   lowStockAlerts: 0,
   stockOuts: 0,
   grnsThisMonth: 0,
-  inventoryValue: 0,
+  inventoryValue: "0",
 };
 
 // GAP-STOCK-DASHBOARD-02: a dashboard field that is not a number is a broken
@@ -5186,7 +5186,17 @@ export function mapStockDashboard(payload: unknown): StockDashboard | null {
   const totalSKUs = num(payload.totalSKUs);
   const lowStockAlerts = num(payload.lowStockAlerts);
   const grnsThisMonth = num(payload.grnsThisMonth);
-  const inventoryValue = num(payload.inventoryValue);
+  // GAP2-STOCK-DASHBOARD-01: inventoryValue is a bigint-paise string
+  // (money is bigint minor units end-to-end). A non-string / non-numeric value
+  // is a broken payload. We accept a numeric type only for backward-compat with
+  // an older backend and normalise it to a string so the money invariant holds.
+  const rawValue = payload.inventoryValue;
+  const inventoryValue =
+    typeof rawValue === "string" && /^-?\d+$/.test(rawValue)
+      ? rawValue
+      : typeof rawValue === "number" && Number.isFinite(rawValue)
+        ? String(rawValue)
+        : null;
   if (totalSKUs === null || lowStockAlerts === null || grnsThisMonth === null || inventoryValue === null) {
     return null;
   }
