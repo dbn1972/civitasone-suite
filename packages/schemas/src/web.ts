@@ -2876,6 +2876,34 @@ export const FinanceDepositSummarySchema = z.object({
 });
 export const FinanceDepositSummaryListSchema = z.array(FinanceDepositSummarySchema);
 
+// GAP2-FINANCE-PAYMENTS-TOTALS-03 / SANCTIONS-TOTALS-04 / TREASURY-DEPOSITS-TOTALS-06:
+// server-side register totals, aggregated in the DB so the stat cards reflect
+// EVERY row — never a capped (default-50) page summed on the client.
+export const PaymentsSummarySchema = z.object({
+  total: z.number().int().nonnegative(),
+  released: z.number().int().nonnegative(),
+  pendingApproval: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+});
+
+export const SanctionsSummarySchema = z.object({
+  total: z.number().int().nonnegative(),
+  active: z.number().int().nonnegative(),
+  pending: z.number().int().nonnegative(),
+  approved: z.number().int().nonnegative(),
+  // Bigint-safe paise string: SUM of amount_minor over APPROVED sanctions only.
+  approvedMinor: zMoneyMinorString,
+});
+
+export const FinanceDepositsSummarySchema = z.object({
+  total: z.number().int().nonnegative(),
+  active: z.number().int().nonnegative(),
+  refunded: z.number().int().nonnegative(),
+  forfeited: z.number().int().nonnegative(),
+  // Bigint-safe paise string: SUM of balance_minor over ACTIVE deposits.
+  activeBalanceMinor: zMoneyMinorString,
+});
+
 export const FinanceGuaranteeSummarySchema = z.object({
   id: z.string(),
   entity: z.string(),

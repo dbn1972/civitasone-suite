@@ -198,6 +198,25 @@ export async function listSanctionsByTenant(tenantId: string, limit: number, off
     .offset(offset));
 }
 
+/**
+ * GAP2-FINANCE-SANCTIONS-TOTALS-04: tenant-wide sanction counts grouped by raw
+ * status, plus the SUM of amount_minor per status, computed in the database.
+ * The register's "Sanctioned Value (approved)" money total and the status
+ * counts are therefore over ALL sanctions, never a capped page. The caller
+ * maps raw status -> the web approved|pending|rejected bucket.
+ */
+export async function getSanctionStatusAggregates(tenantId: string): Promise<Array<{ status: string; n: number; sumMinor: bigint }>> {
+  return scopedRead((tx) => tx
+    .select({
+      status: financeSanctions.status,
+      n: sql<number>`count(*)::int`,
+      sumMinor: sql<bigint>`coalesce(sum(${financeSanctions.amountMinor}), 0)`.mapWith(BigInt),
+    })
+    .from(financeSanctions)
+    .where(eq(financeSanctions.tenantId, tenantId))
+    .groupBy(financeSanctions.status));
+}
+
 export async function listBudgetsByTenant(tenantId: string, limit: number, offset = 0): Promise<BudgetRow[]> {
   return scopedRead((tx) => tx.select().from(financeBudgets)
     .where(eq(financeBudgets.tenantId, tenantId))

@@ -59,6 +59,18 @@ export const rejectSanctionBody = z.object({
 export type RejectSanctionBody = z.infer<typeof rejectSanctionBody>;
 
 /**
+ * GAP2-FINANCE-SANCTIONS-APPROVE-REASON-07: an approval decision may carry a
+ * reason/remark, consistent with the vendor approve route (reason
+ * optional-but-captured; vendor reject / sanction reject require it). When
+ * supplied it is persisted into the approve audit event's details, so an
+ * auditable financial approval records the approver's rationale.
+ */
+export const approveSanctionBody = z.object({
+  reason: z.string().trim().min(3).max(500).optional(),
+});
+export type ApproveSanctionBody = z.infer<typeof approveSanctionBody>;
+
+/**
  * Submit a budget re-appropriation to eOffice for administrative approval.
  * Creates the re-appropriation request (status pending_approval); the route
  * `:id` becomes the request id / eFile refId. The transfer moves `amountMinor`

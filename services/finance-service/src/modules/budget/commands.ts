@@ -171,7 +171,7 @@ export async function submitSanctionForApproval(ctx: RequestContext, id: string,
  * inside the write transaction. On approval the sanction becomes `approved` and
  * emits finance.sanction.approved.
  */
-export async function approveSanction(ctx: RequestContext, id: string): Promise<Accepted> {
+export async function approveSanction(ctx: RequestContext, id: string, reason?: string): Promise<Accepted> {
   // BUG FIX (missing synchronous pre-accept validation): R11 maker-checker
   // (assertSanctionApproverDistinct) previously ran only inside the async
   // consumer (sub(COMMANDS.sanctionApprove, ...), consumer.ts), so a
@@ -198,7 +198,7 @@ export async function approveSanction(ctx: RequestContext, id: string): Promise<
   await queue.publish(COMMANDS.sanctionApprove, {
     messageId: randomUUID(), type: COMMANDS.sanctionApprove,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId },
+    payload: { id, tenantId: ctx.tenantId, ...(reason ? { reason } : {}) },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "sanction", id));
   return { id, status: "accepted", correlationId: ctx.correlationId };

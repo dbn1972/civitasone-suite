@@ -1,15 +1,18 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import * as glRepo from "../gl/repo.js";
+import { fetchUserNames } from "../../shared/identity-client.js";
 import { pino } from "pino";
 import { sanctionAvailable, effectiveHeadType, isKnownSanctionStatus, mapSanctionStatus as domainMapSanctionStatus, type SanctionWebStatus } from "./domain.js";
 import type { BudgetRow, SanctionRow } from "./schema.js";
 
-const OFFICER_NAMES: Record<string, string> = {
-  "00000000-0000-0000-0000-000000000099": "Sh. Rajesh Kumar (IAS)",
-  "00000000-0000-0000-0000-000000000098": "Sh. Arvind Singh",
-  "00000000-0000-0000-0000-000000000097": "CA Meena Sharma",
-};
+/**
+ * GAP2-FINANCE-SANCTIONS-OFFICER-01: shown as "Sanctioned By" when the
+ * sanction's creator id cannot be resolved to a real identity-service user
+ * (unreachable service, or a user no longer present). A neutral honest label,
+ * never a raw-UUID-derived token presented as the authoritative officer.
+ */
+const UNKNOWN_OFFICER = "Unknown officer";
 
 
 /**
@@ -228,6 +231,10 @@ export async function listSanctionSummaries(tenantId: string, limit: number, off
   const headIds_s = [...new Set((rows ?? []).map((r) => r.headId))];
   const headList_s = await repo.findHeadsByIds(headIds_s);
   const headMap_s = new Map(headList_s.map((h) => [h.id, h]));
+  // GAP2-FINANCE-SANCTIONS-OFFICER-01: resolve the creator id to a real
+  // display name via identity-service (batched, fail-OPEN to an honest
+  // "Unknown officer"), never a raw-UUID-derived token.
+  const officerNames = await fetchUserNames(tenantId, (rows ?? []).map((r) => r.createdBy));
   const summaries = [];
   for (const row of rows ?? []) {
     const head = headMap_s.get(row.headId);
@@ -237,7 +244,7 @@ export async function listSanctionSummaries(tenantId: string, limit: number, off
       subject: row.purpose,
       // H3: string to avoid 2^53 precision loss on large government sanction amounts.
       amount: row.amountMinor.toString(),
-      sanctionedBy: OFFICER_NAMES[row.createdBy] ?? `Officer (${row.createdBy.slice(-4)})`,
+      sanctionedBy: officerNames.get(row.createdBy) ?? UNKNOWN_OFFICER,
       date: new Date(row.createdAt as unknown as string).toISOString().slice(0, 10),
       status: mapSanctionStatus(row.status),
       majorHead: head?.code ?? row.headId,
@@ -246,25 +253,74 @@ export async function listSanctionSummaries(tenantId: string, limit: number, off
   return summaries;
 }
 
-export async function getSanctionDetail(id: string, tenantId: string) {
-  const row = await cache.getOrLoad<SanctionRow>(
+export type SanctionsSummary = {
+  total: number;
+  active: number;
+  pending: number;
+  approved: number;
+  /** Bigint-safe paise string: SUM over APPROVED sanctions only. */
+  approvedMinor: string;
+};
+
+/**
+ * GAP2-FINANCE-SANCTIONS-TOTALS-04: tenant-wide sanction totals for the
+ * register stat cards, aggregated in the DB so the approved-value money total
+ * and the counts are never summed from a capped page. Buckets by the same
+ * approved|pending|rejected mapping the rows use; "active" = approved + pending
+ * (rejected excluded), matching the web's summariseSanctions.
+ */
+export async function getSanctionsSummary(tenantId: string): Promise<SanctionsSummary> {
+  const rows = await repo.getSanctionStatusAggregates(tenantId);
+  const s: SanctionsSummary = { total: 0, active: 0, pending: 0, approved: 0, approvedMinor: "0" };
+  let approvedMinor = 0n;
+  for (const r of rows) {
+    s.total += r.n;
+    const bucket = mapSanctionStatus(r.status);
+    if (bucket === "approved") { s.approved += r.n; approvedMinor += r.sumMinor; }
+    else if (bucket === "pending") { s.pending += r.n; }
+  }
+  s.active = s.approved + s.pending;
+  s.approvedMinor = approvedMinor.toString();
+  return s;
+}
+
+export async function getSanctionDetail(id: string, tenantId: string) {  const row = await cache.getOrLoad<SanctionRow>(
     cache.makeKey(tenantId, "sanction", id),
     () => repo.findSanctionByIdAndTenant(id, tenantId),
   );
   if (!row || row.tenantId !== tenantId) return null;
   const head = await repo.findHeadById(row.headId);
+  // GAP2-FINANCE-SANCTIONS-OFFICER-01: resolve maker (and, where present,
+  // checker) ids to real display names via identity-service, batched, fail-OPEN.
+  const names = await fetchUserNames(tenantId, [row.createdBy, row.updatedBy]);
+  const makerName = names.get(row.createdBy) ?? UNKNOWN_OFFICER;
+  const checkerName = names.get(row.updatedBy) ?? UNKNOWN_OFFICER;
+  // GAP2-FINANCE-SANCTIONS-DETAIL-STUB-02: build the approval trail from the
+  // maker-create and (once approved) checker-approve the sanction row already
+  // records (createdBy/createdAt + updatedBy/updatedAt), instead of a hard-coded
+  // []. "approved" is the terminal state the R11 maker-checker /approve (or the
+  // eOffice decision) sets; "cancelled" is a reject. A still-pending sanction
+  // has only the create event. Line items have no backing table, so stay [].
+  const approvalTrail: Array<{ action: string; actor: string; timestamp: string }> = [
+    { action: "created", actor: makerName, timestamp: new Date(row.createdAt as unknown as string).toISOString() },
+  ];
+  if (row.status === "approved") {
+    approvalTrail.push({ action: "approved", actor: checkerName, timestamp: new Date(row.updatedAt as unknown as string).toISOString() });
+  } else if (row.status === "cancelled") {
+    approvalTrail.push({ action: "rejected", actor: checkerName, timestamp: new Date(row.updatedAt as unknown as string).toISOString() });
+  }
   return {
     id: row.id,
     sanctionNo: row.sanctionNo,
     subject: row.purpose,
     // H3: string to avoid 2^53 precision loss on large government sanction amounts.
     amount: row.amountMinor.toString(),
-    sanctionedBy: OFFICER_NAMES[row.createdBy] ?? `Officer (${row.createdBy.slice(-4)})`,
+    sanctionedBy: makerName,
     date: new Date(row.createdAt as unknown as string).toISOString().slice(0, 10),
     status: mapSanctionStatus(row.status),
     majorHead: head?.code ?? row.headId,
     lineItems: [],
-    approvalTrail: [],
+    approvalTrail,
     efileInFlight: row.efileSubmittedAt != null,
     ...(row.efileFileNo ? { efileFileNo: row.efileFileNo } : {}),
   };

@@ -2,7 +2,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 
 const getPaymentsMock = vi.fn();
-vi.mock("../../../_data/loaders", () => ({ getPayments: () => getPaymentsMock() }));
+const getPaymentsSummaryMock = vi.fn();
+vi.mock("../../../_data/loaders", () => ({
+  getPayments: () => getPaymentsMock(),
+  getPaymentsSummary: () => getPaymentsSummaryMock(),
+}));
 const rolesMock = vi.fn();
 vi.mock("@/lib/auth/roleGuard", () => ({ getSessionRoles: () => rolesMock() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
@@ -26,8 +30,22 @@ const ROWS = [
 describe("PaymentsPage", () => {
   beforeEach(() => {
     getPaymentsMock.mockReset();
+    getPaymentsSummaryMock.mockReset();
     rolesMock.mockReset();
     getPaymentsMock.mockResolvedValue({ data: ROWS, source: "api" });
+    // GAP2-FINANCE-PAYMENTS-TOTALS-03: cards come from the server-side summary,
+    // not the (capped) register page — e.g. 60 total even though 3 rows show.
+    getPaymentsSummaryMock.mockResolvedValue({ data: { total: 60, released: 40, pendingApproval: 15, failed: 5 }, source: "api" });
+  });
+
+  // GAP2-FINANCE-PAYMENTS-TOTALS-03
+  it("Total Payments shows the server-side total (60), not the fetched page length (3)", async () => {
+    rolesMock.mockReturnValue(["finance_officer"]);
+    await renderPage();
+    expect(screen.getByText("Total Payments").closest(".stat")).toHaveTextContent("60");
+    // "Released" also appears as a table pill, so scope to the stat card.
+    const releasedCard = screen.getAllByText("Released").find((e) => e.closest(".stat") && !e.closest("table"))!.closest(".stat")!;
+    expect(releasedCard).toHaveTextContent("40");
   });
 
   // GAP-FINANCE-PAYMENTS-06

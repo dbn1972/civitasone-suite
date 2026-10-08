@@ -3,6 +3,7 @@ import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/com
 import {
   BudgetSummaryListSchema,
   SanctionSummaryListSchema,
+  SanctionsSummarySchema,
   SanctionDetailSchema,
   FinanceDemandSummaryListSchema,
   FinanceSchemeSummaryListSchema,
@@ -12,7 +13,7 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
-import { createBudgetBody, reappropriateBody, createSanctionBody, budgetQueryParams, idParam, updateHeadHoABody, rejectSanctionBody, submitReappropriationBody } from "./validators.js";
+import { createBudgetBody, reappropriateBody, createSanctionBody, budgetQueryParams, idParam, updateHeadHoABody, rejectSanctionBody, approveSanctionBody, submitReappropriationBody } from "./validators.js";
 import * as repo from "./repo.js";
 import { systemHeads } from "../gl/system-heads.js";
 import { assertValidHeadParent, DomainError } from "./domain.js";
@@ -143,6 +144,15 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
     sendValidated(reply, SanctionSummaryListSchema, await queries.listSanctionSummaries(ctx.tenantId, q.limit, q.offset));
   });
 
+  // GAP2-FINANCE-SANCTIONS-TOTALS-04: tenant-wide totals for the register stat
+  // cards (approved money total + counts), aggregated server-side so they are
+  // never summed from the 50-row page.
+  app.get("/v1/finance/sanctions/summary", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    sendValidated(reply, SanctionsSummarySchema, await queries.getSanctionsSummary(ctx.tenantId));
+  });
+
   app.get("/v1/finance/sanctions/:id/available", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
@@ -183,7 +193,10 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ["finance_admin", "super_admin"]);
     const { id } = idParam.parse(req.params);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.approveSanction(ctx, id));
+    // GAP2-FINANCE-SANCTIONS-APPROVE-REASON-07: capture an optional approval
+    // reason/remark into the audit trail, consistent with the vendor approve route.
+    const body = approveSanctionBody.parse(req.body ?? {});
+    return sendAccepted(reply, acceptedResponseSchema, await commands.approveSanction(ctx, id, body.reason));
   });
 
   // H1 — submit a sanction to eOffice for administrative approval. The eFile is

@@ -1,13 +1,15 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
+import * as mastersRepo from "../masters/repo.js";
 import type { PaymentRow } from "./schema.js";
 
-const VENDOR_NAMES: Record<string, string> = {
-  "eeeeeeee-0001-0000-0000-000000000001": "M/s Bharat Construction Pvt. Ltd.",
-  "eeeeeeee-0001-0000-0000-000000000002": "Infosys BPM Government Solutions",
-  "eeeeeeee-0001-0000-0000-000000000003": "TCIL Infrastructure Ltd.",
-  "eeeeeeee-0001-0000-0000-000000000004": "BEML Limited",
-};
+/**
+ * GAP2-FINANCE-BILLS-VENDORNAME-01: shown when a bill's vendor id cannot be
+ * resolved to a tenant vendor master row (deleted vendor, or a legacy bill
+ * citing an id that was never a tenant vendor). An explicit honest label, never
+ * a raw-UUID-derived token presented as the authoritative payee.
+ */
+const UNKNOWN_VENDOR = "Unknown vendor";
 
 
 // Bigint-safe end to end (no Number() conversion) — ports the same
@@ -81,6 +83,30 @@ export type PaymentSummary = {
   status: "Queued" | "Released" | "Pending Approval" | "Failed";
 };
 
+export type PaymentsSummary = {
+  total: number;
+  released: number;
+  pendingApproval: number;
+  failed: number;
+};
+
+/**
+ * GAP2-FINANCE-PAYMENTS-TOTALS-03: tenant-wide payment totals for the register
+ * stat cards, aggregated in the database so they are never capped at a page.
+ * Reuses mapPaymentStatus so the buckets match the rows the table renders.
+ */
+export async function getPaymentsSummary(tenantId: string): Promise<PaymentsSummary> {
+  const { total, byStatus } = await repo.getPaymentStatusCounts(tenantId);
+  const summary: PaymentsSummary = { total, released: 0, pendingApproval: 0, failed: 0 };
+  for (const [status, n] of Object.entries(byStatus)) {
+    const bucket = mapPaymentStatus(status);
+    if (bucket === "Released") summary.released += n;
+    else if (bucket === "Pending Approval") summary.pendingApproval += n;
+    else if (bucket === "Failed") summary.failed += n;
+  }
+  return summary;
+}
+
 export async function getPayment(id: string, tenantId: string): Promise<PaymentRow | null> {
   const row = await cache.getOrLoad<PaymentRow>(
     cache.makeKey(tenantId, "payment", id),
@@ -94,19 +120,22 @@ export async function getPayment(id: string, tenantId: string): Promise<PaymentR
 export async function listPayments(tenantId: string, limit: number, offset: number): Promise<{ data: PaymentSummary[]; pagination: { hasMore: boolean; pageSize: number; cursor?: string } }> {
   return cache.listOrLoad(tenantId, "payment", `list:${limit}:${offset}`, async () => {
     const rows = await repo.listPaymentsByTenant(tenantId, limit, offset);
-    // Build bill->vendor map for beneficiary resolution
+    // Build bill->vendor map for beneficiary resolution, then resolve vendor
+    // ids to their registered master-data names in ONE batched query
+    // (GAP2-FINANCE-BILLS-VENDORNAME-01) — no N+1, no hard-coded fixture.
     const uniqueBillIds = [...new Set(rows.map((r) => r.billId))];
-    const billVendorMap = new Map<string, string>();
     const bills = await repo.findBillsByIds(uniqueBillIds, tenantId);
-    for (const bill of bills) {
-      const vendorName = VENDOR_NAMES[bill.vendorId];
-      if (vendorName) billVendorMap.set(bill.id, vendorName);
-    }
+    const billToVendor = new Map(bills.map((b) => [b.id, b.vendorId]));
+    const vendorNames = await mastersRepo.getVendorNamesByIds(tenantId, bills.map((b) => b.vendorId));
+    const beneficiaryFor = (billId: string): string => {
+      const vendorId = billToVendor.get(billId);
+      return (vendorId && vendorNames.get(vendorId)) || UNKNOWN_VENDOR;
+    };
     return {
       data: rows.map((r) => ({
         id: r.id,
         referenceId: r.eftRef ?? ("PAY-" + r.id.slice(-6).toUpperCase()),
-        beneficiary: billVendorMap.get(r.billId) ?? `Bill Ref ${r.billId.slice(-6)}`,
+        beneficiary: beneficiaryFor(r.billId),
         amountDisplay: formatMinor(r.amountMinor),
         amountMinor: toMinorBigInt(r.amountMinor).toString(),
         status: mapPaymentStatus(r.status),
@@ -135,12 +164,17 @@ export async function listBillSummaries(tenantId: string, limit: number, offset 
     () => repo.listBillsByTenant(tenantId, limit, offset),
     60,
   );
-  return (rows ?? []).map((row) => {
+  const list = rows ?? [];
+  // GAP2-FINANCE-BILLS-VENDORNAME-01: resolve the payee from the vendor master
+  // (batched), not a 4-entry seed fixture. An unresolved vendor shows an honest
+  // "Unknown vendor", never a raw-UUID token.
+  const vendorNames = await mastersRepo.getVendorNamesByIds(tenantId, list.map((row) => row.vendorId));
+  return list.map((row) => {
     const netMinor = toMinorBigInt(row.netMinor);
     return {
       id: row.id,
       billNo: row.billNo,
-      vendor: VENDOR_NAMES[row.vendorId] ?? `Vendor (${row.vendorId.slice(-4)})`,
+      vendor: vendorNames.get(row.vendorId) ?? UNKNOWN_VENDOR,
       // H3: string to avoid 2^53 precision loss on large government bill amounts.
       amount: netMinor.toString(),
       amountDisplay: formatMinor(netMinor),
@@ -229,10 +263,13 @@ export async function getBillDetail(id: string, tenantId: string) {
   if (!row || row.tenantId !== tenantId) return null;
   const threeWayMatch: "matched" | "pending" | "na" = (row.poRef && row.grnRef) ? "matched" : (row.poRef || row.grnRef) ? "pending" : "na";
   const netMinor = toMinorBigInt(row.netMinor);
+  // GAP2-FINANCE-BILLS-VENDORNAME-01: real master-data vendor name, honest
+  // "Unknown vendor" fallback — never a raw-UUID token on a money document.
+  const vendor = await mastersRepo.getVendorById(tenantId, row.vendorId);
   return {
     id: row.id,
     billNo: row.billNo,
-    vendor: VENDOR_NAMES[row.vendorId] ?? `Vendor (${row.vendorId.slice(-4)})`,
+    vendor: vendor?.name ?? UNKNOWN_VENDOR,
     // H3: string to avoid 2^53 precision loss on large government bill amounts.
     amount: netMinor.toString(),
     amountDisplay: formatMinor(netMinor),

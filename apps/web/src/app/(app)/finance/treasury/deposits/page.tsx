@@ -1,14 +1,19 @@
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { formatMoney } from "@/lib/formatters";
-import { depositStats } from "./depositStats";
-import { getFinanceDeposits } from "@/app/_data/loaders";
+import { getFinanceDeposits, getFinanceDepositsSummary } from "@/app/_data/loaders";
 import { DepositsTable } from "./DepositsTable";
 
 export default async function DepositsPage() {
-  const { data: deposits, source } = await getFinanceDeposits();
-  const stats = depositStats(deposits);
+  const [{ data: deposits, source }, summaryResult] = await Promise.all([
+    getFinanceDeposits(),
+    // GAP2-FINANCE-TREASURY-DEPOSITS-TOTALS-06: counts and the active-balance
+    // total come from a server-side aggregate over ALL deposits, not the
+    // (default-50-capped) register page.
+    getFinanceDepositsSummary(),
+  ]);
+  const stats = summaryResult.data;
   // A failed load must not show zeros that look like real figures.
-  const failed = source === "error";
+  const failed = summaryResult.source === "error";
 
   return (
     <div className="page-main wrap">

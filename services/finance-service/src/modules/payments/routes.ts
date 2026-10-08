@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { listQuerySchema } from "@civitasone/schemas/common";
-import { paymentsListSchema, BillSummaryListSchema, BillDetailSchema, AdvanceSummaryListSchema, UCSummaryListSchema } from "@civitasone/schemas/web";
+import { paymentsListSchema, BillSummaryListSchema, BillDetailSchema, AdvanceSummaryListSchema, UCSummaryListSchema, PaymentsSummarySchema } from "@civitasone/schemas/web";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
@@ -36,6 +36,14 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FINANCE_ROLES);
     const q = listQuerySchema.parse(req.query);
     sendValidated(reply, paymentsListSchema, await queries.listPayments(ctx.tenantId, q.limit, q.offset));
+  });
+
+  // GAP2-FINANCE-PAYMENTS-TOTALS-03: tenant-wide totals for the register stat
+  // cards, aggregated server-side so they are never capped at the 50-row page.
+  app.get("/v1/finance/payments/summary", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FINANCE_ROLES);
+    sendValidated(reply, PaymentsSummarySchema, await queries.getPaymentsSummary(ctx.tenantId));
   });
 
   app.get("/v1/finance/bills", async (req, reply) => {

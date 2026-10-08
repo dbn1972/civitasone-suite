@@ -207,6 +207,8 @@ import {
   PayrollStructureListSchema,
   ticketsListSchema,
   metricsListResponseSchema,
+  PaymentsSummarySchema,
+  FinanceDepositsSummarySchema,
   slaListResponseSchema,
   employeesListSchema,
   leaveListResponseSchema,
@@ -242,6 +244,7 @@ import {
   FinanceDashboardSchema,
   BudgetSummaryListSchema,
   SanctionSummaryListSchema,
+  SanctionsSummarySchema,
   SanctionDetailSchema,
   BillSummaryListSchema,
   BillDetailSchema,
@@ -979,6 +982,23 @@ export async function getPayments(): Promise<LoaderResult<PaymentSummary[]>> {
     telemetryKey: "finance.payments",
     responseSchema: paymentsListSchema,
     mapResponse: mapPayments,
+  });
+}
+
+export type PaymentsSummary = z.infer<typeof PaymentsSummarySchema>;
+const PAYMENTS_SUMMARY_EMPTY: PaymentsSummary = { total: 0, released: 0, pendingApproval: 0, failed: 0 };
+
+/**
+ * GAP2-FINANCE-PAYMENTS-TOTALS-03: tenant-wide payment totals for the stat
+ * cards, aggregated server-side so "Total Payments" and the status counts
+ * reflect every payment, not just the first (capped) page the register shows.
+ */
+export async function getPaymentsSummary(): Promise<LoaderResult<PaymentsSummary>> {
+  return fetchJson<unknown, PaymentsSummary>("/api/v1/finance/payments/summary", PAYMENTS_SUMMARY_EMPTY, {
+    revalidateSeconds: 20,
+    telemetryKey: "finance.payments.summary",
+    responseSchema: PaymentsSummarySchema,
+    mapResponse: (p) => (isRecord(p) ? (p as PaymentsSummary) : null),
   });
 }
 
@@ -2378,6 +2398,23 @@ export async function getFinanceSanctions(): Promise<LoaderResult<SanctionSummar
   });
 }
 
+export type SanctionsSummary = z.infer<typeof SanctionsSummarySchema>;
+const SANCTIONS_SUMMARY_EMPTY: SanctionsSummary = { total: 0, active: 0, pending: 0, approved: 0, approvedMinor: "0" };
+
+/**
+ * GAP2-FINANCE-SANCTIONS-TOTALS-04: tenant-wide sanction totals (approved money
+ * value + status counts), aggregated server-side so the register's money total
+ * is never summed from a capped page.
+ */
+export async function getFinanceSanctionsSummary(): Promise<LoaderResult<SanctionsSummary>> {
+  return fetchJson<unknown, SanctionsSummary>("/api/v1/finance/sanctions/summary", SANCTIONS_SUMMARY_EMPTY, {
+    revalidateSeconds: 60,
+    telemetryKey: "finance.sanctions.summary",
+    responseSchema: SanctionsSummarySchema,
+    mapResponse: (p) => (isRecord(p) ? (p as SanctionsSummary) : null),
+  });
+}
+
 export async function getFinanceSanctionById(id: string): Promise<LoaderResult<SanctionDetail | null>> {
   return fetchJson<unknown, SanctionDetail | null>(`/api/v1/finance/sanctions/${id}`, null, {
     revalidateSeconds: 30,
@@ -2478,6 +2515,23 @@ export async function getFinanceDeposits(): Promise<LoaderResult<FinanceDepositS
     telemetryKey: "finance.deposits",
     responseSchema: FinanceDepositSummaryListSchema,
     mapResponse: (p) => getArrayPayload(p) as FinanceDepositSummary[] | null,
+  });
+}
+
+export type FinanceDepositsSummary = z.infer<typeof FinanceDepositsSummarySchema>;
+const FINANCE_DEPOSITS_SUMMARY_EMPTY: FinanceDepositsSummary = { total: 0, active: 0, refunded: 0, forfeited: 0, activeBalanceMinor: "0" };
+
+/**
+ * GAP2-FINANCE-TREASURY-DEPOSITS-TOTALS-06: tenant-wide deposit totals (counts +
+ * active balance), aggregated server-side so the register's cards are never
+ * derived from a capped page.
+ */
+export async function getFinanceDepositsSummary(): Promise<LoaderResult<FinanceDepositsSummary>> {
+  return fetchJson<unknown, FinanceDepositsSummary>("/api/v1/finance/deposits/summary", FINANCE_DEPOSITS_SUMMARY_EMPTY, {
+    revalidateSeconds: 120,
+    telemetryKey: "finance.deposits.summary",
+    responseSchema: FinanceDepositsSummarySchema,
+    mapResponse: (p) => (isRecord(p) ? (p as FinanceDepositsSummary) : null),
   });
 }
 
