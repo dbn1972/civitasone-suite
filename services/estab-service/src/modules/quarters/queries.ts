@@ -1,7 +1,7 @@
 /**
  * Quarters read queries — tenant-scoped via db.transaction() for RLS.
  */
-import { eq, and, inArray, count, type SQL } from "drizzle-orm";
+import { eq, and, inArray, count, desc, type SQL } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import {
   estabQuarters, estabQuarterAllotments, estabLicenceFeeRates,
@@ -134,7 +134,12 @@ export async function getAllotment(tenantId: string, id: string): Promise<Allotm
   };
 }
 
-export async function listLicenceFeeRates(tenantId: string): Promise<LicenceFeeRateRow[]> {
+export async function listLicenceFeeRates(
+  tenantId: string,
+  opts: { limit: number; offset: number } = { limit: 50, offset: 0 },
+): Promise<LicenceFeeRateRow[]> {
   return db.transaction((tx) => tx.select().from(estabLicenceFeeRates)
-    .where(eq(estabLicenceFeeRates.tenantId, tenantId)));
+    .where(eq(estabLicenceFeeRates.tenantId, tenantId))
+    .orderBy(desc(estabLicenceFeeRates.effectiveFrom))
+    .limit(opts.limit).offset(opts.offset));
 }

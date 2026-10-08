@@ -15,6 +15,8 @@ import { schema as fleetModule }       from "../modules/fleet/schema.js";
 import { schema as spacesModule }      from "../modules/spaces/schema.js";
 import { schema as consumablesModule } from "../modules/consumables/schema.js";
 import { schema as scanLinkModule }    from "../modules/scan-link/schema.js";
+import { schema as bookingModule }     from "../modules/booking/schema.js";
+import { schema as citizenLeaseModule } from "../modules/citizen-lease/schema.js";
 import { outboxSchema }               from "./outbox.js";
 
 const url = process.env.DATABASE_URL;
@@ -26,6 +28,7 @@ const ESTAB_SCHEMA = {
   ...filesModule, ...committeeModule, ...assetsModule, ...facilitiesModule, ...legalModule,
   ...approvalRulesModule, ...dfaModule, ...handoverModule, ...migrationModule, ...operatorsModule,
   ...quartersModule, ...fleetModule, ...spacesModule, ...consumablesModule, ...scanLinkModule,
+  ...bookingModule, ...citizenLeaseModule,
   ...outboxSchema,
 };
 

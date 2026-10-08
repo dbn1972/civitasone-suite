@@ -1,8 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
+// GAP2-ESTAB-NOTIFICATIONS-DFALINK-01: DfaPanel now reads ?focus= via
+// useSearchParams. Tests set the param through this controllable mock.
+let mockSearch = new URLSearchParams();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useSearchParams: () => mockSearch,
 }));
 
 import { DfaPanel } from "./DfaPanel";
@@ -149,5 +153,53 @@ describe("DfaPanel — GAP-ESTAB-DFA-02 (approve needs remarks)", () => {
     // Confirm button should be disabled until reason is filled (requireReason)
     const confirmBtn = Array.from(dialog.querySelectorAll("button")).find((b) => b.textContent === "Approve");
     expect(confirmBtn).toBeTruthy();
+  });
+});
+
+describe("DfaPanel — GAP2-ESTAB-NOTIFICATIONS-DFALINK-01 (?focus= deep-link)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    mockSearch = new URLSearchParams();
+  });
+
+  it("highlights the focused draft and shows a 'you selected' banner when it is in view", async () => {
+    const dfa = {
+      id: "dfa-focus-1", dfaNo: "DFA-F01", communicationType: "letter", subject: "Follow me from a notification",
+      status: "pending_approval", editable: false, recipientName: null, updatedAt: "2026-10-01T00:00:00Z", fileId: null,
+    };
+    mockSearch = new URLSearchParams({ focus: "dfa-focus-1" });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [dfa] }));
+
+    render(<DfaPanel />);
+
+    const banner = await screen.findByTestId("dfa-focus-banner");
+    expect(banner.textContent).toMatch(/DFA-F01/);
+    // the DFA No cell for the focused row is marked
+    await waitFor(() => {
+      const cell = document.querySelector('[data-focused="true"]');
+      expect(cell?.textContent).toMatch(/DFA-F01/);
+    });
+  });
+
+  it("tells the officer the draft isn't in this view when the focus id is absent from the current list", async () => {
+    const dfa = {
+      id: "dfa-other", dfaNo: "DFA-OTHER", communicationType: "letter", subject: "A different draft",
+      status: "draft", editable: true, recipientName: null, updatedAt: "2026-10-01T00:00:00Z", fileId: null,
+    };
+    mockSearch = new URLSearchParams({ focus: "dfa-missing-id" });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [dfa] }));
+
+    render(<DfaPanel />);
+
+    const banner = await screen.findByTestId("dfa-focus-banner");
+    expect(banner.textContent).toMatch(/isn't in this view/i);
+    expect(document.querySelector('[data-focused="true"]')).toBeNull();
+  });
+
+  it("renders no focus banner when no ?focus= is present", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [] }));
+    render(<DfaPanel />);
+    await waitFor(() => expect(screen.getByRole("tab", { name: "All" })).toBeInTheDocument());
+    expect(screen.queryByTestId("dfa-focus-banner")).toBeNull();
   });
 });

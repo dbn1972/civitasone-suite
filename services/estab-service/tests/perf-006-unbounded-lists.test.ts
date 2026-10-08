@@ -44,6 +44,7 @@
 import { describe, it, expect, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { estabFacilitiesCatalog, estabBookings } from "../src/modules/booking/schema.js";
 import { estabLeaseProperties, estabLeases, estabLeaseRequests } from "../src/modules/citizen-lease/schema.js";
@@ -88,8 +89,12 @@ async function assertBoundedPagination<T>(
 
 afterAll(async () => { await sqlClient.end(); });
 
-// FLAKY-SKIP: See file header above — no Postgres schema exists yet for booking/citizen_lease (no migration creates these tables, confirmed twice independently); un-skip once that migration lands. PERF-006 itself is Fixed (PR #1384) except for this sub-scope. (expires: 2026-12-13)
-describe.skip("PERF-006 — estab-service unbounded tenant-wide list queries", () => {
+// GAP2-ESTAB-BOOKING-ORPHAN-01: the booking + citizen_lease Postgres schemas
+// are now created (migrations 0050/0051) and both modules are registered with
+// consumers, so this suite's blocker ("no migration creates these tables") is
+// resolved and the suite is un-skipped. PERF-006's pagination fix itself was
+// always correct by inspection; this now actually exercises it end to end.
+describe("PERF-006 — estab-service unbounded tenant-wide list queries", () => {
   it("listBookings: bounded page regardless of how many bookings the tenant has", async () => {
     const tenant = randomUUID();
     const facilityId = randomUUID();
@@ -99,14 +104,14 @@ describe.skip("PERF-006 — estab-service unbounded tenant-wide list queries", (
       eventDate: "2026-01-01", startTime: "10:00", endTime: "12:00",
       createdBy: ACTOR, updatedBy: ACTOR,
     }));
-    await db.insert(estabBookings).values(rows);
+    await runWithTenant(tenant, () => db.transaction((tx) => tx.insert(estabBookings).values(rows)));
     try {
       await assertBoundedPagination(
-        (limit, offset) => bookingQueries.listBookings(tenant, {}, limit, offset),
+        (limit, offset) => runWithTenant(tenant, () => bookingQueries.listBookings(tenant, {}, limit, offset)),
         TOTAL, PAGE_SIZE,
       );
     } finally {
-      await db.delete(estabBookings).where(eq(estabBookings.tenantId, tenant));
+      await runWithTenant(tenant, () => db.transaction((tx) => tx.delete(estabBookings).where(eq(estabBookings.tenantId, tenant))));
     }
   });
 
@@ -116,14 +121,14 @@ describe.skip("PERF-006 — estab-service unbounded tenant-wide list queries", (
       tenantId: tenant, facilityName: `Hall ${i}`, facilityType: "community_hall",
       createdBy: ACTOR, updatedBy: ACTOR,
     }));
-    await db.insert(estabFacilitiesCatalog).values(rows);
+    await runWithTenant(tenant, () => db.transaction((tx) => tx.insert(estabFacilitiesCatalog).values(rows)));
     try {
       await assertBoundedPagination(
-        (limit, offset) => bookingQueries.listFacilities(tenant, {}, limit, offset),
+        (limit, offset) => runWithTenant(tenant, () => bookingQueries.listFacilities(tenant, {}, limit, offset)),
         TOTAL, PAGE_SIZE,
       );
     } finally {
-      await db.delete(estabFacilitiesCatalog).where(eq(estabFacilitiesCatalog.tenantId, tenant));
+      await runWithTenant(tenant, () => db.transaction((tx) => tx.delete(estabFacilitiesCatalog).where(eq(estabFacilitiesCatalog.tenantId, tenant))));
     }
   });
 
@@ -133,14 +138,14 @@ describe.skip("PERF-006 — estab-service unbounded tenant-wide list queries", (
       tenantId: tenant, propertyCode: `PROP-${tenant.slice(0, 8)}-${i}`, propertyType: "shop",
       monthlyRentMinor: 50000n, createdBy: ACTOR, updatedBy: ACTOR,
     }));
-    await db.insert(estabLeaseProperties).values(rows);
+    await runWithTenant(tenant, () => db.transaction((tx) => tx.insert(estabLeaseProperties).values(rows)));
     try {
       await assertBoundedPagination(
-        (limit, offset) => leaseQueries.listProperties(tenant, {}, limit, offset),
+        (limit, offset) => runWithTenant(tenant, () => leaseQueries.listProperties(tenant, {}, limit, offset)),
         TOTAL, PAGE_SIZE,
       );
     } finally {
-      await db.delete(estabLeaseProperties).where(eq(estabLeaseProperties.tenantId, tenant));
+      await runWithTenant(tenant, () => db.transaction((tx) => tx.delete(estabLeaseProperties).where(eq(estabLeaseProperties.tenantId, tenant))));
     }
   });
 
@@ -153,14 +158,14 @@ describe.skip("PERF-006 — estab-service unbounded tenant-wide list queries", (
       leaseStartDate: "2026-01-01", leaseEndDate: "2027-01-01",
       monthlyRentMinor: 50000n, createdBy: ACTOR, updatedBy: ACTOR,
     }));
-    await db.insert(estabLeases).values(rows);
+    await runWithTenant(tenant, () => db.transaction((tx) => tx.insert(estabLeases).values(rows)));
     try {
       await assertBoundedPagination(
-        (limit, offset) => leaseQueries.listLeases(tenant, {}, limit, offset),
+        (limit, offset) => runWithTenant(tenant, () => leaseQueries.listLeases(tenant, {}, limit, offset)),
         TOTAL, PAGE_SIZE,
       );
     } finally {
-      await db.delete(estabLeases).where(eq(estabLeases.tenantId, tenant));
+      await runWithTenant(tenant, () => db.transaction((tx) => tx.delete(estabLeases).where(eq(estabLeases.tenantId, tenant))));
     }
   });
 
@@ -171,14 +176,14 @@ describe.skip("PERF-006 — estab-service unbounded tenant-wide list queries", (
       tenantId: tenant, leaseId, requestType: "renewal", requestNumber: `REQ-${i}`,
       requestedBy: ACTOR, createdBy: ACTOR, updatedBy: ACTOR,
     }));
-    await db.insert(estabLeaseRequests).values(rows);
+    await runWithTenant(tenant, () => db.transaction((tx) => tx.insert(estabLeaseRequests).values(rows)));
     try {
       await assertBoundedPagination(
-        (limit, offset) => leaseQueries.listRequests(tenant, {}, limit, offset),
+        (limit, offset) => runWithTenant(tenant, () => leaseQueries.listRequests(tenant, {}, limit, offset)),
         TOTAL, PAGE_SIZE,
       );
     } finally {
-      await db.delete(estabLeaseRequests).where(eq(estabLeaseRequests.tenantId, tenant));
+      await runWithTenant(tenant, () => db.transaction((tx) => tx.delete(estabLeaseRequests).where(eq(estabLeaseRequests.tenantId, tenant))));
     }
   });
 });

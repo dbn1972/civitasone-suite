@@ -69,3 +69,12 @@ export const quarterQueryParams = z.object({
   limit:     z.coerce.number().int().positive().max(200).default(50),
   offset:    z.coerce.number().int().nonnegative().default(0),
 });
+
+// GAP2-ESTAB-LICENCEFEE-RATE-UNBOUNDED-01: bound the licence-fee rate list the
+// same way quarters/allotments are bounded, so a long effective-dated history
+// can't be read tenant-wide in one unbounded query.
+export const licenceFeeQueryParams = z.object({
+  limit:  z.coerce.number().int().positive().max(200).default(50),
+  offset: z.coerce.number().int().nonnegative().default(0),
+});
+export type LicenceFeeQueryParams = z.infer<typeof licenceFeeQueryParams>;

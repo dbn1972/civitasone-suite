@@ -36,35 +36,39 @@ export async function listFacilities(
   limit: number,
   offset: number,
 ): Promise<ListPage<unknown>> {
+  // GAP2-ESTAB-BOOKING-ORPHAN-01: reads go through db.transaction() so the
+  // per-tenant app.tenant_id GUC is set (wrapWithTenantGuc) — the booking
+  // tables are FORCE RLS, so a plain db.select() would fail CLOSED (empty)
+  // for every tenant. Mirrors fleet/consumables queries in this service.
   const rows = q.status
-    ? await db.select().from(estabFacilitiesCatalog)
-        .where(and(eq(estabFacilitiesCatalog.tenantId, tenantId), eq(estabFacilitiesCatalog.status, q.status)))
+    ? await db.transaction((tx) => tx.select().from(estabFacilitiesCatalog)
+        .where(and(eq(estabFacilitiesCatalog.tenantId, tenantId), eq(estabFacilitiesCatalog.status, q.status!)))
         .orderBy(estabFacilitiesCatalog.id)
-        .limit(limit).offset(offset)
-    : await db.select().from(estabFacilitiesCatalog)
+        .limit(limit).offset(offset))
+    : await db.transaction((tx) => tx.select().from(estabFacilitiesCatalog)
         .where(eq(estabFacilitiesCatalog.tenantId, tenantId))
         .orderBy(estabFacilitiesCatalog.id)
-        .limit(limit).offset(offset);
+        .limit(limit).offset(offset));
   return paginate(rows, limit, offset);
 }
 
 export async function getFacility(tenantId: string, id: string): Promise<unknown | undefined> {
-  const rows = await db.select().from(estabFacilitiesCatalog)
+  const rows = await db.transaction((tx) => tx.select().from(estabFacilitiesCatalog)
     .where(and(eq(estabFacilitiesCatalog.tenantId, tenantId), eq(estabFacilitiesCatalog.id, id)))
-    .limit(1);
+    .limit(1));
   return rows[0];
 }
 
 export async function getFacilityAvailability(tenantId: string, facilityId: string, date: string): Promise<unknown[]> {
   // Scoped to one facility + one date, not tenant-wide -- naturally bounded
   // by real-world cardinality (a day's worth of slots), so out of scope for
-  // PERF-006 and left as-is.
-  return db.select().from(estabBookingCalendar)
+  // PERF-006.
+  return db.transaction((tx) => tx.select().from(estabBookingCalendar)
     .where(and(
       eq(estabBookingCalendar.tenantId, tenantId),
       eq(estabBookingCalendar.facilityId, facilityId),
       eq(estabBookingCalendar.bookingDate, date),
-    ));
+    )));
 }
 
 export async function listBookings(
@@ -74,20 +78,20 @@ export async function listBookings(
   offset: number,
 ): Promise<ListPage<unknown>> {
   const rows = q.status
-    ? await db.select().from(estabBookings)
-        .where(and(eq(estabBookings.tenantId, tenantId), eq(estabBookings.status, q.status)))
+    ? await db.transaction((tx) => tx.select().from(estabBookings)
+        .where(and(eq(estabBookings.tenantId, tenantId), eq(estabBookings.status, q.status!)))
         .orderBy(estabBookings.id)
-        .limit(limit).offset(offset)
-    : await db.select().from(estabBookings)
+        .limit(limit).offset(offset))
+    : await db.transaction((tx) => tx.select().from(estabBookings)
         .where(eq(estabBookings.tenantId, tenantId))
         .orderBy(estabBookings.id)
-        .limit(limit).offset(offset);
+        .limit(limit).offset(offset));
   return paginate(rows, limit, offset);
 }
 
 export async function getBooking(tenantId: string, id: string): Promise<unknown | undefined> {
-  const rows = await db.select().from(estabBookings)
+  const rows = await db.transaction((tx) => tx.select().from(estabBookings)
     .where(and(eq(estabBookings.tenantId, tenantId), eq(estabBookings.id, id)))
-    .limit(1);
+    .limit(1));
   return rows[0];
 }
