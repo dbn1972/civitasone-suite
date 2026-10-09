@@ -8,8 +8,7 @@
  *  - pure/unit: CommandRefusal, refusalCodeOf, isEventShapedTopic,
  *    subscribeCommand's event-topic refusal + onOutcome composition, the D-20
  *    retention policy, and that getCommandResult never surfaces `reason`.
- *  - live Postgres (skipped unless DATABASE_URL is set — same convention as
- *    purge-live-pg.test.ts): the §2.4 guarded upsert against a real driver —
+ *  - live Postgres (always runs; see COMMAND_RESULT_PG_URL below — never skipped): the §2.4 guarded upsert against a real driver —
  *    rejected→succeeded flips, a late rejected cannot downgrade a succeeded,
  *    attempts increments, and getCommandResult returns code+params but NOT
  *    reason.
@@ -217,17 +216,25 @@ describe("COMMAND_RESULT_RETENTION (D-20)", () => {
 // ---------------------------------------------------------------------------
 // Live Postgres: the §2.4 guarded upsert against a real driver.
 // ---------------------------------------------------------------------------
-const DATABASE_URL = process.env.DATABASE_URL;
-const client = DATABASE_URL ? postgres(DATABASE_URL) : null;
-const db = client ? (drizzle(client) as unknown as DrizzleTx) : null;
+// NOT skipped: these suites always run. CI's `Tests` job provisions Postgres on
+// localhost:5435 (civitas/civitas_test, DB civitas_test — no service owns that DB or
+// its `_inbox` schema), so the default below works there with no extra env. Locally,
+// point COMMAND_RESULT_PG_URL at a disposable Postgres. A separate var from
+// DATABASE_URL on purpose: setting DATABASE_URL would also switch on the unrelated
+// *-live-pg suites, which need their own schema. A missing database fails loudly in
+// beforeAll instead of silently skipping (flaky-skip-guard / REL-014).
+const COMMAND_RESULT_PG_URL =
+  process.env.COMMAND_RESULT_PG_URL ?? "postgres://civitas:civitas_test@localhost:5435/civitas_test";
+const client = postgres(COMMAND_RESULT_PG_URL, { max: 4 });
+const db = drizzle(client) as unknown as DrizzleTx;
 
 const TENANT = "99999999-9999-9999-9999-999999999999";
 
 async function ensureSchema(): Promise<void> {
   // The evolved _inbox.command_results shape (index.ts / 03-designs/FF-01.md
   // §2.3). Every FF-01-added column is nullable or defaulted.
-  await client!`CREATE SCHEMA IF NOT EXISTS _inbox`;
-  await client!`
+  await client`CREATE SCHEMA IF NOT EXISTS _inbox`;
+  await client`
     CREATE TABLE IF NOT EXISTS _inbox.command_results (
       message_id     uuid PRIMARY KEY,
       tenant_id      uuid NOT NULL,
@@ -252,11 +259,11 @@ async function ensureSchema(): Promise<void> {
 // must keep working against that exact shape until the B/C migrations add the
 // FF-01 columns (zero-downtime expand step). Runs before the evolved-shape suite
 // and drops the table afterwards so ensureSchema() recreates the evolved shape.
-describe.skipIf(!DATABASE_URL)("recordCommandOutcome - legacy 6-column table (live Postgres, 0039/0048 shape)", () => {
+describe("recordCommandOutcome - legacy 6-column table (live Postgres, 0039/0048 shape)", () => {
   beforeAll(async () => {
-    await client!`CREATE SCHEMA IF NOT EXISTS _inbox`;
-    await client!`DROP TABLE IF EXISTS _inbox.command_results`;
-    await client!`
+    await client`CREATE SCHEMA IF NOT EXISTS _inbox`;
+    await client`DROP TABLE IF EXISTS _inbox.command_results`;
+    await client`
       CREATE TABLE _inbox.command_results (
         message_id  uuid PRIMARY KEY,
         tenant_id   uuid NOT NULL,
@@ -267,44 +274,44 @@ describe.skipIf(!DATABASE_URL)("recordCommandOutcome - legacy 6-column table (li
       )`;
   });
   afterAll(async () => {
-    await client!`DROP TABLE IF EXISTS _inbox.command_results`;
+    await client`DROP TABLE IF EXISTS _inbox.command_results`;
   });
 
   it("records and reads back an outcome without referencing any FF-01 column", async () => {
     const messageId = crypto.randomUUID();
-    await db!.transaction((tx) =>
+    await db.transaction((tx) =>
       recordCommandOutcome(tx, { messageId, tenantId: TENANT, topic: "procurement.tender.publish", status: "rejected", reason: "BIDDING_CLOSED" }),
     );
-    const got = await getCommandOutcome(db!, TENANT, messageId);
+    const got = await getCommandOutcome(db, TENANT, messageId);
     expect(got).not.toBeNull();
     expect(got!.status).toBe("rejected");
     expect(got!.reason).toBe("BIDDING_CLOSED");
-    expect(await getCommandOutcome(db!, "88888888-8888-8888-8888-888888888888", messageId)).toBeNull();
+    expect(await getCommandOutcome(db, "88888888-8888-8888-8888-888888888888", messageId)).toBeNull();
   });
 
   it("is idempotent on redelivery (ON CONFLICT DO NOTHING keeps the first outcome)", async () => {
     const messageId = crypto.randomUUID();
-    await db!.transaction((tx) =>
+    await db.transaction((tx) =>
       recordCommandOutcome(tx, { messageId, tenantId: TENANT, topic: "t", status: "succeeded" }),
     );
-    await db!.transaction((tx) =>
+    await db.transaction((tx) =>
       recordCommandOutcome(tx, { messageId, tenantId: TENANT, topic: "t", status: "failed", reason: "later" }),
     );
-    expect((await getCommandOutcome(db!, TENANT, messageId))!.status).toBe("succeeded");
+    expect((await getCommandOutcome(db, TENANT, messageId))!.status).toBe("succeeded");
   });
 });
 
-describe.skipIf(!DATABASE_URL)("recordCommandResult — guarded upsert (live Postgres, §2.4)", () => {
+describe("recordCommandResult — guarded upsert (live Postgres, §2.4)", () => {
   beforeAll(async () => {
     await ensureSchema();
   });
   afterAll(async () => {
-    await client?.end({ timeout: 0 });
+    await client.end({ timeout: 0 });
   });
 
   it("rejected then succeeded flips the row and increments attempts; a late rejected cannot downgrade", async () => {
     const messageId = crypto.randomUUID();
-    await db!.transaction((tx) =>
+    await db.transaction((tx) =>
       recordCommandResult(tx, {
         messageId,
         tenantId: TENANT,
@@ -316,22 +323,22 @@ describe.skipIf(!DATABASE_URL)("recordCommandResult — guarded upsert (live Pos
       }),
     );
 
-    let view = await getCommandResult(db!, TENANT, messageId);
+    let view = await getCommandResult(db, TENANT, messageId);
     expect(view?.status).toBe("rejected");
     expect(view?.code).toBe("OVER_APPROPRIATION");
     expect(view?.attempts).toBe(1);
 
     // Legitimate deterministic-id retry succeeds (D-20).
-    await db!.transaction((tx) =>
+    await db.transaction((tx) =>
       recordCommandResult(tx, { messageId, tenantId: TENANT, topic: "finance.bill.create", status: "succeeded" }),
     );
-    view = await getCommandResult(db!, TENANT, messageId);
+    view = await getCommandResult(db, TENANT, messageId);
     expect(view?.status).toBe("succeeded");
     expect(view?.code).toBeNull();
     expect(view?.attempts).toBe(2);
 
     // A late rejected must NOT downgrade a succeeded (invariant I1).
-    await db!.transaction((tx) =>
+    await db.transaction((tx) =>
       recordCommandResult(tx, {
         messageId,
         tenantId: TENANT,
@@ -340,7 +347,7 @@ describe.skipIf(!DATABASE_URL)("recordCommandResult — guarded upsert (live Pos
         code: "OVER_APPROPRIATION",
       }),
     );
-    view = await getCommandResult(db!, TENANT, messageId);
+    view = await getCommandResult(db, TENANT, messageId);
     expect(view?.status).toBe("succeeded");
     expect(view?.attempts).toBe(2); // guard matched 0 rows, nothing changed
   });
@@ -348,7 +355,7 @@ describe.skipIf(!DATABASE_URL)("recordCommandResult — guarded upsert (live Pos
   it("getCommandResult exposes code+params and resource but NEVER the free-text reason (D-20)", async () => {
     const messageId = crypto.randomUUID();
     const resourceId = crypto.randomUUID();
-    await db!.transaction((tx) =>
+    await db.transaction((tx) =>
       recordCommandResult(tx, {
         messageId,
         tenantId: TENANT,
@@ -361,7 +368,7 @@ describe.skipIf(!DATABASE_URL)("recordCommandResult — guarded upsert (live Pos
         resourceId,
       }),
     );
-    const view = await getCommandResult(db!, TENANT, messageId);
+    const view = await getCommandResult(db, TENANT, messageId);
     expect(view).not.toBeNull();
     expect(view!.code).toBe("PERIOD_CLOSED");
     expect(view!.params).toEqual({ period: "2026-03" });
@@ -373,11 +380,11 @@ describe.skipIf(!DATABASE_URL)("recordCommandResult — guarded upsert (live Pos
 
   it("returns null for an unknown id (processing) and for another tenant's id (isolation)", async () => {
     const messageId = crypto.randomUUID();
-    await db!.transaction((tx) =>
+    await db.transaction((tx) =>
       recordCommandResult(tx, { messageId, tenantId: TENANT, topic: "finance.bill.create", status: "succeeded" }),
     );
-    expect(await getCommandResult(db!, TENANT, crypto.randomUUID())).toBeNull();
+    expect(await getCommandResult(db, TENANT, crypto.randomUUID())).toBeNull();
     const otherTenant = "88888888-8888-8888-8888-888888888888";
-    expect(await getCommandResult(db!, otherTenant, messageId)).toBeNull();
+    expect(await getCommandResult(db, otherTenant, messageId)).toBeNull();
   });
 });
