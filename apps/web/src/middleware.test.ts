@@ -40,12 +40,10 @@ describe("middleware CSP style policy (GAP2-SHELL-CSP-01)", () => {
     return middleware(anonReq(path)).headers.get("Content-Security-Policy") ?? "";
   }
 
-  it("drops 'unsafe-inline' from style-src and style-src-elem", () => {
+  it("keeps inline <style> elements allowed (components render them without a nonce)", () => {
     const csp = cspOf("/sandbox");
-    expect(csp).toContain("style-src 'self'");
-    expect(csp).not.toMatch(/style-src 'self' 'unsafe-inline'/);
-    expect(csp).toContain("style-src-elem 'self'");
-    expect(csp).not.toMatch(/style-src-elem[^;]*'unsafe-inline'/);
+    expect(csp).toMatch(/style-src self unsafe-inline/);
+    expect(csp).toMatch(/style-src-elem self unsafe-inline/);
   });
 
   it("keeps inline style ATTRIBUTES working via style-src-attr only", () => {

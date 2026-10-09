@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 /**
@@ -37,7 +38,7 @@ describe("GAP2-SHELL-PROXY-02 — assistant/ask session gate", () => {
   });
 
   it("answers a glossary question when a session cookie is present", async () => {
-    cookieValue = "test-token"; // gitleaks:allow
+    cookieValue = randomUUID();
     const res = await POST(makeReq(JSON.stringify({ question: "what is a challan?" })));
     expect(res.status).toBe(200);
     const json = await res.json();
@@ -46,7 +47,7 @@ describe("GAP2-SHELL-PROXY-02 — assistant/ask session gate", () => {
   });
 
   it("rejects an oversized body with 413", async () => {
-    cookieValue = "test-token"; // gitleaks:allow
+    cookieValue = randomUUID();
     const huge = JSON.stringify({ question: "x".repeat(20 * 1024) });
     const res = await POST(makeReq(huge));
     expect(res.status).toBe(413);

@@ -18,7 +18,7 @@ import { buildApp } from "../src/app.js";
 import { applyConfig } from "../src/runtime-config.js";
 import { _test as moduleGuardTest } from "../src/module-guard.js";
 
-const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr"; // gitleaks:allow
+const SECRET = process.env.JWT_SECRET as string; // provided by vitest.config env
 const TENANT_A = "aaaaaaaa-0000-4000-8000-000000000001";
 const TENANT_B = "bbbbbbbb-0000-4000-8000-000000000002";
 const ACTOR_A = "11111111-0000-4000-8000-000000000001";
