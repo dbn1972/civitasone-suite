@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import { render as rtlRender } from "@testing-library/react";
+import { render, screen } from "@/test-utils/intl-render";
+import hiMessages from "@/messages/hi.json";
 import { InfrastructureTable, GeofencesTable, JurisdictionsTable } from "./_tables";
 
 // GAP2-LOCATIONS-INFRASTRUCTURE-01: the child pages used the generic
@@ -52,5 +55,25 @@ describe("JurisdictionsTable (GAP2-LOCATIONS-INFRASTRUCTURE-01)", () => {
     expect(screen.getByRole("columnheader", { name: /Office/i })).toBeTruthy();
     expect(screen.getByText("district")).toBeTruthy();
     expect(screen.queryByText("33333333")).toBeNull();
+  });
+});
+
+// i18n: labels, placeholders and empty states come from t(), with real en + hi keys.
+describe("locations tables i18n (round-1 review)", () => {
+  it("renders the empty state from en keys when there are no rows", () => {
+    render(<InfrastructureTable rows={[]} />);
+    expect(screen.getByText("No assets")).toBeTruthy();
+  });
+
+  it("renders Hindi labels under the hi locale (not hard-coded English)", () => {
+    const rows = [{ id: "44444444-4444-4444-8444-444444444444", name: "Gate", type: "zone", shape: "circle", radius: "5 m", status: "active" }];
+    rtlRender(
+      <NextIntlClientProvider locale="hi" messages={hiMessages}>
+        <GeofencesTable rows={rows} />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getByRole("columnheader", { name: "आकार" })).toBeTruthy();
+    expect(screen.queryByRole("columnheader", { name: "Shape" })).toBeNull();
+    expect(screen.getByPlaceholderText("जियोफ़ेंस फ़िल्टर करें…")).toBeTruthy();
   });
 });

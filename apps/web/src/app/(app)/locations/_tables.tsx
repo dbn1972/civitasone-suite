@@ -15,6 +15,7 @@
  * Client components (hence `render:`/cellType is allowed per
  * datatable-render-guard) so the Server pages fetch typed rows and pass them in.
  */
+import { useTranslations } from "next-intl";
 import { Card, DataTable, EmptyState } from "../../_components/ds";
 import type { InfrastructureRow, GeofenceRow, JurisdictionRow } from "./_data";
 
@@ -23,22 +24,23 @@ type GeoRow = GeofenceRow & Record<string, unknown>;
 type JurisRow = JurisdictionRow & Record<string, unknown>;
 
 export function InfrastructureTable({ rows }: { rows: InfrastructureRow[] }) {
+  const t = useTranslations("locationsOps.infra");
   return (
-    <Card title="Infrastructure assets">
+    <Card title={t("cardTitle")}>
       {rows.length === 0 ? (
-        <EmptyState icon="🏗️" title="No assets" message="No infrastructure assets to show yet." />
+        <EmptyState icon="🏗️" title={t("emptyTitle")} message={t("emptyMessage")} />
       ) : (
         <DataTable<InfraRow>
           columns={[
-            { key: "name", label: "Name" },
-            { key: "type", label: "Type" },
-            { key: "condition", label: "Condition", align: "right" },
-            { key: "status", label: "Status", cellType: "status" },
+            { key: "name", label: t("colName") },
+            { key: "type", label: t("colType") },
+            { key: "condition", label: t("colCondition"), align: "right" },
+            { key: "status", label: t("colStatus"), cellType: "status" },
           ]}
           rows={rows as InfraRow[]}
           sortable
           filterable
-          filterPlaceholder="Filter assets…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
         />
       )}
@@ -47,23 +49,24 @@ export function InfrastructureTable({ rows }: { rows: InfrastructureRow[] }) {
 }
 
 export function GeofencesTable({ rows }: { rows: GeofenceRow[] }) {
+  const t = useTranslations("locationsOps.geofences");
   return (
-    <Card title="Geofences">
+    <Card title={t("cardTitle")}>
       {rows.length === 0 ? (
-        <EmptyState icon="🗺️" title="No geofences" message="No geofence definitions to show yet." />
+        <EmptyState icon="🗺️" title={t("emptyTitle")} message={t("emptyMessage")} />
       ) : (
         <DataTable<GeoRow>
           columns={[
-            { key: "name", label: "Name" },
-            { key: "type", label: "Type" },
-            { key: "shape", label: "Shape" },
-            { key: "radius", label: "Radius", align: "right" },
-            { key: "status", label: "Status", cellType: "status" },
+            { key: "name", label: t("colName") },
+            { key: "type", label: t("colType") },
+            { key: "shape", label: t("colShape") },
+            { key: "radius", label: t("colRadius"), align: "right" },
+            { key: "status", label: t("colStatus"), cellType: "status" },
           ]}
           rows={rows as GeoRow[]}
           sortable
           filterable
-          filterPlaceholder="Filter geofences…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
         />
       )}
@@ -72,21 +75,22 @@ export function GeofencesTable({ rows }: { rows: GeofenceRow[] }) {
 }
 
 export function JurisdictionsTable({ rows }: { rows: JurisdictionRow[] }) {
+  const t = useTranslations("locationsOps.jurisdictions");
   return (
-    <Card title="Jurisdictions">
+    <Card title={t("cardTitle")}>
       {rows.length === 0 ? (
-        <EmptyState icon="🏛️" title="No jurisdictions" message="No jurisdiction records to show yet." />
+        <EmptyState icon="🏛️" title={t("emptyTitle")} message={t("emptyMessage")} />
       ) : (
         <DataTable<JurisRow>
           columns={[
-            { key: "level", label: "Level" },
-            { key: "office", label: "Office" },
-            { key: "unit", label: "Unit" },
+            { key: "level", label: t("colLevel") },
+            { key: "office", label: t("colOffice") },
+            { key: "unit", label: t("colUnit") },
           ]}
           rows={rows as JurisRow[]}
           sortable
           filterable
-          filterPlaceholder="Filter jurisdictions…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
         />
       )}

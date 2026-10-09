@@ -152,15 +152,23 @@ export const getFieldSyncWithMeta = (): Promise<LoaderResult<FieldSyncPage>> => 
  * GAP2-FIELD-SYNC-WINDOW-01: honest one-line summary of the sync window/cap.
  * Pure + exported so a page and a test can share the exact copy.
  */
-export function fieldSyncWindowNote(page: Pick<FieldSyncPage, "shown" | "total" | "windowDays" | "limit">): string {
-  const base = `Showing pending changes from the last ${page.windowDays} days`;
+export type FieldSyncNoteTranslator = (
+  key: "windowNoteBase" | "windowNotePartial" | "windowNoteCapped" | "windowNoteShown",
+  values: Record<string, string | number>,
+) => string;
+
+export function fieldSyncWindowNote(
+  page: Pick<FieldSyncPage, "shown" | "total" | "windowDays" | "limit">,
+  t: FieldSyncNoteTranslator,
+): string {
+  const base = t("windowNoteBase", { days: page.windowDays });
   if (page.total !== null && page.total > page.shown) {
-    return `${base}: ${page.shown} of ${page.total} total — older or additional changes beyond this window are not shown.`;
+    return t("windowNotePartial", { base, shown: page.shown, total: page.total });
   }
   if (page.shown >= page.limit) {
-    return `${base}: first ${page.limit} shown — there may be more pending changes beyond this window.`;
+    return t("windowNoteCapped", { base, limit: page.limit });
   }
-  return `${base}: ${page.shown} shown.`;
+  return t("windowNoteShown", { base, shown: page.shown });
 }
 
 

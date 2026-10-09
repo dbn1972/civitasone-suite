@@ -1,4 +1,5 @@
-import { PageHeader } from "../../../_components/ds";
+import { getTranslations } from "next-intl/server";
+import { PageHeader, LoadErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getLocationInfrastructureTyped } from "../_data";
 import { InfrastructureTable } from "../_tables";
@@ -6,17 +7,25 @@ import { InfrastructureTable } from "../_tables";
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
-  const { data, source } = await getLocationInfrastructureTyped();
+  const result = await getLocationInfrastructureTyped();
+  const t = await getTranslations("locationsOps");
   return (
     <div className="page-main">
       <PageHeader
-        title="Locations — Infrastructure"
-        subtitle="Infrastructure assets from location-service."
+        title={t("infra.pageTitle")}
+        subtitle={t("infra.pageSubtitle")}
         back="/locations"
-        backLabel="Locations"
+        backLabel={t("backLabel")}
       />
-      <DataSourceBadge source={source === "error" ? "error" : "api"} />
-      <InfrastructureTable rows={data} />
+      {/* A failed load must read as a failure, never as an empty data set. */}
+      {result.source === "error" ? (
+        <LoadErrorState result={result} area={t("infra.area")} backHref="/locations" backLabel={t("backLabel")} />
+      ) : (
+        <>
+          <DataSourceBadge source="api" />
+          <InfrastructureTable rows={result.data} />
+        </>
+      )}
     </div>
   );
 }
