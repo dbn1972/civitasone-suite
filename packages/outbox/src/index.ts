@@ -14,7 +14,7 @@
  * the relay then publishes and marks rows published — "DB committed ⇒ event will
  * be delivered" with no dual-write hole.
  */
-import { pgSchema, uuid, varchar, jsonb, timestamp, text, integer, boolean } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, jsonb, timestamp, text } from "drizzle-orm/pg-core";
 import type { PgDatabase } from "drizzle-orm/pg-core";
 import { and, asc, eq, isNull, inArray, sql } from "drizzle-orm";
 import type { PostgresJsQueryResultHKT } from "drizzle-orm/postgres-js";
@@ -130,27 +130,6 @@ export const commandResults = inbox.table("command_results", {
   status:     varchar("status", { length: 16 }).notNull().$type<CommandOutcomeStatus>(),
   reason:     text("reason"),
   occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
-  // FF-01 slice A (C1) — additive columns for the command-result LIBRARY in
-  // command-result.ts. Every one is nullable or defaulted, so this stays the
-  // zero-downtime "expand" step (03-designs/FF-01.md §3.2): the live table
-  // ships these as `ADD COLUMN ... NULL`/`DEFAULT` in the per-service B/C
-  // migrations (03-designs/FF-01.md §3.1), and the existing recordCommandOutcome()
-  // path keeps writing only the original columns unchanged. recordCommandResult()
-  // (command-result.ts) is the only writer that populates these. Nothing here
-  // narrows or renames an existing column.
-  //
-  // D-20: `code` + `params` are the ONLY refusal detail the status API exposes;
-  // the free-text `reason` above stays internal (operators only), never returned
-  // to clients. See getCommandResult()'s doc comment in command-result.ts.
-  code:          varchar("code", { length: 64 }),            // stable refusal code, e.g. OVER_APPROPRIATION
-  params:        jsonb("params").$type<Record<string, unknown>>(), // non-PII; money as {minor:"123",currency:"INR"}
-  actorId:       uuid("actor_id"),
-  correlationId: varchar("correlation_id", { length: 64 }),
-  resourceType:  varchar("resource_type", { length: 64 }),
-  resourceId:    uuid("resource_id"),
-  attempts:      integer("attempts").notNull().default(1),
-  retryable:     boolean("retryable").notNull().default(false),
-  updatedAt:     timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const outboxSchema = { outboxMessages, processed, commandResults };

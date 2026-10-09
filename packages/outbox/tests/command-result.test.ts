@@ -34,6 +34,8 @@ import {
   outcomeToResultInput,
   makeRecordOutcome,
   COMMAND_RESULT_RETENTION,
+  recordCommandOutcome,
+  getCommandOutcome,
   DEFAULT_REFUSAL_CODE,
   type DrizzleTx,
 } from "../src/index.js";
@@ -244,6 +246,53 @@ async function ensureSchema(): Promise<void> {
       updated_at     timestamptz  NOT NULL DEFAULT now()
     )`;
 }
+
+// Regression (review round 1): the LIVE procurement 0039 / notification 0048 tables
+// have ONLY the six original columns. recordCommandOutcome()/getCommandOutcome()
+// must keep working against that exact shape until the B/C migrations add the
+// FF-01 columns (zero-downtime expand step). Runs before the evolved-shape suite
+// and drops the table afterwards so ensureSchema() recreates the evolved shape.
+describe.skipIf(!DATABASE_URL)("recordCommandOutcome - legacy 6-column table (live Postgres, 0039/0048 shape)", () => {
+  beforeAll(async () => {
+    await client!`CREATE SCHEMA IF NOT EXISTS _inbox`;
+    await client!`DROP TABLE IF EXISTS _inbox.command_results`;
+    await client!`
+      CREATE TABLE _inbox.command_results (
+        message_id  uuid PRIMARY KEY,
+        tenant_id   uuid NOT NULL,
+        topic       varchar(128) NOT NULL,
+        status      varchar(16)  NOT NULL,
+        reason      text,
+        occurred_at timestamptz  NOT NULL DEFAULT now()
+      )`;
+  });
+  afterAll(async () => {
+    await client!`DROP TABLE IF EXISTS _inbox.command_results`;
+  });
+
+  it("records and reads back an outcome without referencing any FF-01 column", async () => {
+    const messageId = crypto.randomUUID();
+    await db!.transaction((tx) =>
+      recordCommandOutcome(tx, { messageId, tenantId: TENANT, topic: "procurement.tender.publish", status: "rejected", reason: "BIDDING_CLOSED" }),
+    );
+    const got = await getCommandOutcome(db!, TENANT, messageId);
+    expect(got).not.toBeNull();
+    expect(got!.status).toBe("rejected");
+    expect(got!.reason).toBe("BIDDING_CLOSED");
+    expect(await getCommandOutcome(db!, "88888888-8888-8888-8888-888888888888", messageId)).toBeNull();
+  });
+
+  it("is idempotent on redelivery (ON CONFLICT DO NOTHING keeps the first outcome)", async () => {
+    const messageId = crypto.randomUUID();
+    await db!.transaction((tx) =>
+      recordCommandOutcome(tx, { messageId, tenantId: TENANT, topic: "t", status: "succeeded" }),
+    );
+    await db!.transaction((tx) =>
+      recordCommandOutcome(tx, { messageId, tenantId: TENANT, topic: "t", status: "failed", reason: "later" }),
+    );
+    expect((await getCommandOutcome(db!, TENANT, messageId))!.status).toBe("succeeded");
+  });
+});
 
 describe.skipIf(!DATABASE_URL)("recordCommandResult — guarded upsert (live Postgres, §2.4)", () => {
   beforeAll(async () => {

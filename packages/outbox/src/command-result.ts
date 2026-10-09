@@ -38,14 +38,45 @@
  * COMMAND_RESULT_RETENTION so adopters' purge wiring reads one source of truth.
  */
 import { and, eq, sql } from "drizzle-orm";
+import { pgSchema, uuid, varchar, jsonb, timestamp, text, integer, boolean } from "drizzle-orm/pg-core";
 import { NonRetryableError } from "@civitasone/queue";
 import type { Queue, Handler, SubscribeOptions, CommandOutcome } from "@civitasone/queue";
 import {
-  commandResults,
   markProcessed,
   type DrizzleTx,
   type CommandOutcomeStatus,
 } from "./index.js";
+
+/**
+ * The EVOLVED `_inbox.command_results` shape (03-designs/FF-01.md §2.3), used
+ * ONLY by recordCommandResult()/getCommandResult(). Deliberately a SEPARATE
+ * drizzle object from index.ts `commandResults` (the legacy 6-column shape used
+ * by recordCommandOutcome()/getCommandOutcome()): drizzle emits every table
+ * column in an INSERT, and the live procurement 0039 / notification 0048 tables
+ * only have the original six columns until the per-service B/C migrations add
+ * the rest. Adding these columns to the shared object would break every
+ * existing recordCommandOutcome() caller before those migrations land.
+ * `_inbox` is declared locally (not imported from index.ts) to avoid a
+ * circular-import TDZ at module load.
+ */
+const inboxSchema = pgSchema("_inbox");
+export const commandResultsV2 = inboxSchema.table("command_results", {
+  messageId:  uuid("message_id").primaryKey(),
+  tenantId:   uuid("tenant_id").notNull(),
+  topic:      varchar("topic", { length: 128 }).notNull(),
+  status:     varchar("status", { length: 16 }).notNull().$type<CommandOutcomeStatus>(),
+  reason:     text("reason"),
+  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+  code:          varchar("code", { length: 64 }),            // stable refusal code, e.g. OVER_APPROPRIATION
+  params:        jsonb("params").$type<Record<string, unknown>>(), // non-PII; money as {minor:"123",currency:"INR"}
+  actorId:       uuid("actor_id"),
+  correlationId: varchar("correlation_id", { length: 64 }),
+  resourceType:  varchar("resource_type", { length: 64 }),
+  resourceId:    uuid("resource_id"),
+  attempts:      integer("attempts").notNull().default(1),
+  retryable:     boolean("retryable").notNull().default(false),
+  updatedAt:     timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 /**
  * D-20 retention policy, in days, by terminal status. The library is the single
@@ -227,7 +258,7 @@ export interface CommandResultInput {
 export async function recordCommandResult(tx: DrizzleTx, input: CommandResultInput): Promise<void> {
   const retryable = input.retryable ?? (input.status === "failed");
   await tx
-    .insert(commandResults)
+    .insert(commandResultsV2)
     .values({
       messageId: input.messageId,
       tenantId: input.tenantId,
@@ -242,7 +273,7 @@ export async function recordCommandResult(tx: DrizzleTx, input: CommandResultInp
       attempts: 1,
     })
     .onConflictDoUpdate({
-      target: commandResults.messageId,
+      target: commandResultsV2.messageId,
       set: {
         status: input.status,
         code: input.code ?? null,
@@ -251,11 +282,11 @@ export async function recordCommandResult(tx: DrizzleTx, input: CommandResultInp
         retryable,
         resourceType: input.resourceType ?? null,
         resourceId: input.resourceId ?? null,
-        attempts: sql`${commandResults.attempts} + 1`,
+        attempts: sql`${commandResultsV2.attempts} + 1`,
         updatedAt: sql`now()`,
       },
       // I1: a succeeded result is terminal and never downgraded.
-      setWhere: sql`${commandResults.status} <> 'succeeded'`,
+      setWhere: sql`${commandResultsV2.status} <> 'succeeded'`,
     });
 }
 
@@ -277,17 +308,17 @@ export async function getCommandResult(
 ): Promise<CommandResultView | null> {
   const rows = await db
     .select({
-      status: commandResults.status,
-      code: commandResults.code,
-      params: commandResults.params,
-      retryable: commandResults.retryable,
-      attempts: commandResults.attempts,
-      resourceType: commandResults.resourceType,
-      resourceId: commandResults.resourceId,
-      occurredAt: commandResults.occurredAt,
+      status: commandResultsV2.status,
+      code: commandResultsV2.code,
+      params: commandResultsV2.params,
+      retryable: commandResultsV2.retryable,
+      attempts: commandResultsV2.attempts,
+      resourceType: commandResultsV2.resourceType,
+      resourceId: commandResultsV2.resourceId,
+      occurredAt: commandResultsV2.occurredAt,
     })
-    .from(commandResults)
-    .where(and(eq(commandResults.messageId, messageId), eq(commandResults.tenantId, tenantId)))
+    .from(commandResultsV2)
+    .where(and(eq(commandResultsV2.messageId, messageId), eq(commandResultsV2.tenantId, tenantId)))
     .limit(1);
   const row = rows[0];
   if (!row) return null;
