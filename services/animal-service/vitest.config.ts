@@ -78,7 +78,7 @@ export default defineConfig({
     fileParallelism: false,
     coverage: {
       provider: "v8",
-      exclude: ["dist/**", "src/index.ts", "src/worker.ts", "**/*.config.ts"],
+      exclude: ["dist/**", "src/index.ts", "src/worker.ts", "**/*.config.ts", "**/*.config.{ts,js,mjs,cjs}"],
       // REL-013: thresholds set at/just below real measured coverage
       // (lines 96.23 / branches 84.41 / functions 93.84 / statements 96.23,
       // via `pnpm --filter @civitasone/animal-service run coverage` against

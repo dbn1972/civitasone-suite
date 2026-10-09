@@ -37,6 +37,7 @@ export default defineConfig({
         "src/modules/quotas/**",
         "src/modules/settings/**",
         "src/modules/subscriptions/**",
+        "**/*.config.{ts,js,mjs,cjs}",
       ],
       thresholds: {
         lines: 80,

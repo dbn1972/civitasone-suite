@@ -21,7 +21,7 @@ export default defineConfig({
     },
     coverage: {
       provider: "v8",
-      exclude: ["dist/**", "src/index.ts", "src/worker.ts", "vitest.config.ts"],
+      exclude: ["dist/**", "src/index.ts", "src/worker.ts", "vitest.config.ts", "**/*.config.{ts,js,mjs,cjs}"],
       thresholds: {
         lines: 80,
         functions: 75,

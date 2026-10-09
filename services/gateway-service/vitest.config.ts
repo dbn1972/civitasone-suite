@@ -29,7 +29,7 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: ["src/**/*.ts"],
-      exclude: ["src/index.ts", "**/*.d.ts"],
+      exclude: ["src/index.ts", "**/*.d.ts", "**/*.config.{ts,js,mjs,cjs}"],
       thresholds: {
         lines: 80,
         statements: 80,

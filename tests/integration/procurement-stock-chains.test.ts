@@ -31,6 +31,11 @@ vi.mock("../../services/stock-service/src/shared/outbox.js", async () => {
   return {
     enqueue: h.mockEnqueue,
     markProcessed: h.mockMarkProcessed,
+    // The GRN handler derives its per-item inbox key with stableUuid(), which
+    // shared/outbox.ts re-exports from @civitasone/outbox. A mock that omits it
+    // makes the handler throw before it writes anything. It is a pure, deterministic
+    // hash, so take the real one.
+    stableUuid: (await import("../../packages/outbox/dist/index.js")).stableUuid,
     outboxMessages: {},
     processed: {},
     outboxSchema: {},

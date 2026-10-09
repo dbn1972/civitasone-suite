@@ -46,6 +46,7 @@ export default defineConfig({
         "src/index.ts",
         "src/worker.ts",
         "src/modules/**/consumer.ts",
+        "**/*.config.{ts,js,mjs,cjs}",
       ],
       thresholds: {
         lines: 80,

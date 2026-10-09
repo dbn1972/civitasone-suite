@@ -27,6 +27,7 @@ export default defineConfig({
         "src/modules/roles/consumer.ts",
         "src/modules/bindings/consumer.ts",
         "src/modules/abac/consumer.ts",
+        "**/*.config.{ts,js,mjs,cjs}",
       ],
       thresholds: {
         lines: 80,

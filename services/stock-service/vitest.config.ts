@@ -34,6 +34,7 @@ export default defineConfig({
         "src/modules/eway-bill/nic-ewb-client.ts",
         "src/modules/receipt/repo.ts",
         "vitest.config.ts",
+        "**/*.config.{ts,js,mjs,cjs}",
       ],
       thresholds: {
         lines: 80,

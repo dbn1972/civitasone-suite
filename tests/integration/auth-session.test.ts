@@ -14,7 +14,9 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { createRequire } from "node:module";
 import { verifyToken, signToken, toRequestContext } from "../../packages/auth/src/index.js";
 
-const require = createRequire(import.meta.url);
+// jsonwebtoken is a dependency of @civitasone/auth only; under pnpm's strict
+// layout it is not resolvable from the repo root, so resolve it from that package.
+const require = createRequire(new URL("../../packages/auth/package.json", import.meta.url));
 const jwt = require("jsonwebtoken") as typeof import("jsonwebtoken");
 
 const SECRET = "test_secret_for_civitasone_32chr";

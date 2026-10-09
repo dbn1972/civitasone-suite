@@ -51,7 +51,7 @@ export default defineConfig({
     fileParallelism: false,
     coverage: {
       provider: "v8",
-      exclude: ["dist/**", "src/index.ts", "src/worker.ts"],
+      exclude: ["dist/**", "src/index.ts", "src/worker.ts", "**/*.config.{ts,js,mjs,cjs}"],
       // REL-013: thresholds set at/just below real measured coverage
       // (lines 91.6 / branches 81.41 / functions 89.01 / statements 91.6,
       // via `pnpm --filter @civitasone/parks-service run coverage` against

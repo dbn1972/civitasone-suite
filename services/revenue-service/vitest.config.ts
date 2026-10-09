@@ -28,6 +28,7 @@ export default defineConfig({
         "src/shared/db.ts",
         "src/shared/infra.ts",
         "src/shared/outbox.ts",
+        "**/*.config.{ts,js,mjs,cjs}",
       ],
       thresholds: {
         lines: 99,

@@ -109,6 +109,7 @@ export default defineConfig({
         "src/modules/recruitment/interview-comms-repo.ts",
         "src/modules/recruitment/requisition-repo.ts",
         "src/modules/recruitment/offer-repo.ts",
+        "**/*.config.{ts,js,mjs,cjs}",
       ],
       thresholds: {
         lines: 80,
