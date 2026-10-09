@@ -21,6 +21,7 @@
  *
  * HOW TO RUN (own disposable Postgres, non-superuser roles, --maxWorkers=2):
  *   export PGHOST=localhost PGPORT=<free port>
+ *   export PII_ENC_KEY="$PII_ENC_KEY"   # inherited from the secret manager / CI
  *   PGPORT=$PGPORT bash scripts/ci/bootstrap-postgres.sh
  *   pnpm exec vitest run --maxWorkers=2 tests/cross-service-live/harness.selftest.test.ts
  */
@@ -41,9 +42,13 @@ let financeHeads: any;
 
 beforeAll(async () => {
   h = new LiveHarness();
-  finance = await h.mount("finance-service", {
-    PII_ENC_KEY: "test_pii_enc_key_for_finance_32c",
-  });
+  // PII_ENC_KEY is NOT inlined here: mount() does `process.env[k] ?? v`, so the
+  // self-test inherits it from the ambient environment (CI's Tests job exports
+  // it at ci.yml:1629; locally, export it — see HOW TO RUN above). The self-test
+  // never exercises PII crypto itself; finance's modules only read the key
+  // lazily. Hardcoding a secret-shaped literal here is forbidden (house rule 10;
+  // inline scanner allow-directives are not permitted either).
+  finance = await h.mount("finance-service");
   await assertFresh([finance]);
   ({ financeHeads } = await import(
     "../../services/finance-service/src/modules/budget/schema.js"
