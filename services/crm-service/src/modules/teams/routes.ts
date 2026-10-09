@@ -13,8 +13,12 @@ import { COMMANDS } from "../../topics.js";
 import { sql } from "drizzle-orm";
 import * as commands from "./commands.js";
 
-const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
-const ADMIN_ROLES = ["crm_admin", "super_admin"];
+// GAP2-CRM-AGENT-WORKLOAD-05: the agent-workload web layout admits tenant_admin
+// (and the products/service-requests sibling admin routes already accept it), so
+// the teams read/write lists include tenant_admin too — otherwise a tenant_admin
+// reaching the capacity editor could neither GET the agent list nor save a change.
+const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
+const ADMIN_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
 
 const idParam = z.object({ id: z.string().uuid() });
 const agentIdParam = z.object({ agentId: z.string().uuid() });

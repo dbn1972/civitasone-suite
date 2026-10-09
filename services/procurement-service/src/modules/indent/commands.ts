@@ -49,6 +49,7 @@ export async function approveIndent(ctx: RequestContext, id: string, body: Appro
   }
 
   await queue.publish(COMMANDS.indentApprove, {
+    messageId: randomUUID(),
     type: COMMANDS.indentApprove,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, ...body },
@@ -64,6 +65,7 @@ export async function rejectIndent(ctx: RequestContext, id: string, body: Reject
   }
 
   await queue.publish(COMMANDS.indentReject, {
+    messageId: randomUUID(),
     type: COMMANDS.indentReject,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, reason: body.reason },

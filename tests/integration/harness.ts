@@ -103,6 +103,8 @@ export class ChainHarness {
   private readonly selectSeeds: Array<{ hint: string; rows: unknown[] }> = [];
   /** Per-test canned `update(...).returning()` rows (default: one `{}` row). */
   private updateReturningRows: unknown[] | null = null;
+  /** Per-test canned `db.execute(sql`...`)` rows (default: none). */
+  private executeRows: unknown[] = [];
 
   constructor() {
     this.queue = new MemoryQueue();
@@ -122,6 +124,18 @@ export class ChainHarness {
   /** Seed the rows an `update(...).set(...).where(...).returning()` resolves to. */
   seedUpdateReturning(rows: unknown[]): this {
     this.updateReturningRows = rows;
+    return this;
+  }
+
+  /**
+   * Seed the rows a raw `db.execute(sql`...`)` resolves to. The sweepers
+   * enumerate tenants through a SECURITY DEFINER SQL helper (workflow
+   * `sweep_task_tenants()`, helpdesk `sweep_sla_tenants()`) that returns rows of
+   * `{ tenant_id }`; with nothing seeded that enumeration is empty and the
+   * sweep correctly does nothing.
+   */
+  seedExecute(rows: unknown[]): this {
+    this.executeRows = rows;
     return this;
   }
 
@@ -188,6 +202,7 @@ export class ChainHarness {
     insert: (t: unknown) => this.tx.insert(t),
     update: (t: unknown) => this.tx.update(t),
     select: (proj?: unknown) => this.tx.select(proj),
+    execute: (_query?: unknown): Promise<unknown[]> => Promise.resolve(this.executeRows),
   };
 
   // Simulated outbox relay: publish the enqueued event onto the shared queue
@@ -249,6 +264,7 @@ export const mockDb = {
   insert: (t: unknown) => current().db.insert(t),
   update: (t: unknown) => current().db.update(t),
   select: (proj?: unknown) => current().db.select(proj),
+  execute: (q?: unknown) => current().db.execute(q),
 };
 
 /** Stable fns used to replace a service's `shared/outbox.js` outbox helpers. */

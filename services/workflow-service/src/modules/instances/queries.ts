@@ -5,11 +5,14 @@ import { INSTANCE_RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as defRepo from "../definitions/repo.js";
 
-export async function listInstances(tenantId: string, limit: number, offset: number) {
-  return cache.listOrLoad(tenantId, INSTANCE_RESOURCE, `list:${limit}:${offset}`, async () => {
+export async function listInstances(tenantId: string, limit: number, offset: number, definitionId?: string) {
+  // GAP2-WORKFLOW-DEFINITIONS-DETAIL-01 — definitionId is part of the cache key
+  // so a filtered list is never served from (or written to) the unfiltered slot.
+  const key = `list:${limit}:${offset}${definitionId ? `:def:${definitionId}` : ""}`;
+  return cache.listOrLoad(tenantId, INSTANCE_RESOURCE, key, async () => {
     // GAP-WORKFLOW-LIST-03 — enriched rows (subject/definition/current step/
     // dates) so the list surface can show what each instance is about.
-    const rows = await repo.listByTenantEnriched(tenantId, limit, offset);
+    const rows = await repo.listByTenantEnriched(tenantId, limit, offset, definitionId);
     return {
       data: rows,
       pagination: {

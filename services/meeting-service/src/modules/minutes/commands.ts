@@ -88,6 +88,7 @@ export async function minutesUpdate(
   body: MinutesUpdateInput,
 ): Promise<MinutesCommandAccepted> {
   await queue.publish(COMMANDS.minutesUpdate, {
+    messageId: randomUUID(),
     type: COMMANDS.minutesUpdate,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,
@@ -112,6 +113,7 @@ export async function minutesSubmit(
   body: MinutesSubmitInput,
 ): Promise<MinutesCommandAccepted> {
   await queue.publish(COMMANDS.minutesSubmit, {
+    messageId: randomUUID(),
     type: COMMANDS.minutesSubmit,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,
@@ -133,6 +135,7 @@ export async function minutesApprove(
   body: MinutesApproveInput,
 ): Promise<MinutesCommandAccepted> {
   await queue.publish(COMMANDS.minutesApprove, {
+    messageId: randomUUID(),
     type: COMMANDS.minutesApprove,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,
@@ -160,6 +163,7 @@ export async function minutesReject(
   body: MinutesRejectInput,
 ): Promise<MinutesCommandAccepted> {
   await queue.publish(COMMANDS.minutesReject, {
+    messageId: randomUUID(),
     type: COMMANDS.minutesReject,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,
@@ -186,6 +190,7 @@ export async function minutesSign(
   body: MinutesSignInput,
 ): Promise<MinutesCommandAccepted> {
   await queue.publish(COMMANDS.minutesSign, {
+    messageId: randomUUID(),
     type: COMMANDS.minutesSign,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,
@@ -212,6 +217,7 @@ export async function minutesCirculate(
   body: MinutesCirculateInput,
 ): Promise<MinutesCommandAccepted> {
   await queue.publish(COMMANDS.minutesCirculate, {
+    messageId: randomUUID(),
     type: COMMANDS.minutesCirculate,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,

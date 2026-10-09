@@ -11,6 +11,8 @@ export const crematoriumService: MunicipalServiceConfig = {
   resourceLabel: "Bookings",
   titleFields: ["deceasedName", "applicantName"],
   numberFields: ["bookingNumber"],
+  // GAP2-MUNICIPAL-APPLICATIONS-STATUS-01: crematorium/bookings/domain.ts.
+  statusVocabulary: ["requested", "confirmed", "completed", "cancelled"],
   citizenServiceKey: "crematorium-booking",
   sec5: true,
 };

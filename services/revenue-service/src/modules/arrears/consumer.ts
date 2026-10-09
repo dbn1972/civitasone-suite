@@ -313,7 +313,9 @@ export function registerArrearsConsumers(queue: Queue): void {
       await tx.insert(waivers).values({
         tenantId:    msg.tenantId,
         demandId,
-        amountMinor: String(amountMinor),
+        // GAP2-PLATFORM-REVENUE-MONEY-01: waivers.amount_minor is bigint (drizzle
+        // mode:"bigint"); pass a bigint, not String(...).
+        amountMinor: BigInt(amountMinor),
         reason,
         status:      "pending",
         requestedBy: msg.actorId,

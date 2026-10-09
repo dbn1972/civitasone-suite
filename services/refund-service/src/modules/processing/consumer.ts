@@ -150,6 +150,33 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
       // — see assertActionable's doc comment.
       if (!(await assertActionable(p.requestId, msg.tenantId, p.level, tx))) return false;
 
+      // GAP2-REFUND-APPROVAL-01 (segregation of duties): refuse — under the
+      // same lock, so a racing pair of approve commands can't both pass a
+      // read-before-write — when the actor is the request's creator or has
+      // already recorded an approved decision at a lower level of this
+      // (current) round. The route layer performs the identical check for a
+      // synchronous 409; this is the authoritative copy. A plain `return
+      // false` (no insert happened yet) leaves the request untouched in
+      // under_review with no new approval row — exactly the acceptance
+      // outcome.
+      const requestForSod = await reqRepo.findByIdTx(tx, p.requestId, msg.tenantId);
+      if (!requestForSod) return false;
+      if (
+        msg.actorId === requestForSod.createdBy ||
+        (await repo.hasActorAlreadyApprovedTx(tx, p.requestId, msg.tenantId, msg.actorId))
+      ) {
+        log.warn(
+          { requestId: p.requestId, actorId: msg.actorId, level: p.level },
+          "self-approval forbidden (segregation of duties): actor is the creator or already approved a lower level — approval refused",
+        );
+        await writeAudit(tx, ctxOf(msg), {
+          action: "request.approve.self_approval_blocked",
+          resourceType: "refund_request",
+          resourceId: p.requestId,
+        });
+        return true;
+      }
+
       await repo.insertApproval(tx, {
         id: p.id,
         tenantId: msg.tenantId,

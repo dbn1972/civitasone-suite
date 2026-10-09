@@ -42,6 +42,7 @@ export default defineConfig({
         "src/modules/grievance/consumer.ts",
         "src/modules/rti/consumer.ts",
         "src/modules/helpdesk/consumer.ts",
+        "**/*.config.{ts,js,mjs,cjs}",
       ],
       thresholds: {
         lines: 80,

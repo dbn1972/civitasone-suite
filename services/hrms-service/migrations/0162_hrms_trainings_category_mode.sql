@@ -19,17 +19,42 @@ ALTER TABLE training.hrms_trainings
   ADD COLUMN IF NOT EXISTS mode TEXT,
   ADD COLUMN IF NOT EXISTS enrollment_deadline DATE;
 
-ALTER TABLE training.hrms_trainings
-  ADD CONSTRAINT hrms_trainings_category_check
-    CHECK (category IS NULL OR category IN ('mandatory', 'optional', 'leadership'));
+-- Idempotent: a bare ADD CONSTRAINT aborts on a second run of the bootstrap
+-- ("constraint ... already exists"), which is the regression the CI
+-- "Bootstrap Postgres again" guard exists to catch. Guard each by name.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'hrms_trainings_category_check'
+      AND conrelid = 'training.hrms_trainings'::regclass
+  ) THEN
+    ALTER TABLE training.hrms_trainings
+      ADD CONSTRAINT hrms_trainings_category_check
+        CHECK (category IS NULL OR category IN ('mandatory', 'optional', 'leadership'));
+  END IF;
 
-ALTER TABLE training.hrms_trainings
-  ADD CONSTRAINT hrms_trainings_mode_check
-    CHECK (mode IS NULL OR mode IN ('online', 'classroom', 'blended'));
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'hrms_trainings_mode_check'
+      AND conrelid = 'training.hrms_trainings'::regclass
+  ) THEN
+    ALTER TABLE training.hrms_trainings
+      ADD CONSTRAINT hrms_trainings_mode_check
+        CHECK (mode IS NULL OR mode IN ('online', 'classroom', 'blended'));
+  END IF;
 
--- Deadline must not fall after the programme itself starts. NULL (no
--- deadline recorded) is always allowed -- this campaign's existing rows,
--- and any future row where HR chooses not to set one.
-ALTER TABLE training.hrms_trainings
-  ADD CONSTRAINT hrms_trainings_enrollment_deadline_check
-    CHECK (enrollment_deadline IS NULL OR enrollment_deadline <= from_date);
+  -- Deadline must not fall after the programme itself starts. NULL (no
+  -- deadline recorded) is always allowed -- this campaign's existing rows,
+  -- and any future row where HR chooses not to set one.
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'hrms_trainings_enrollment_deadline_check'
+      AND conrelid = 'training.hrms_trainings'::regclass
+  ) THEN
+    ALTER TABLE training.hrms_trainings
+      ADD CONSTRAINT hrms_trainings_enrollment_deadline_check
+        CHECK (enrollment_deadline IS NULL OR enrollment_deadline <= from_date);
+  END IF;
+END
+$$;

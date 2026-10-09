@@ -157,6 +157,16 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
       runId: z.string().uuid().optional(),
     }).parse(req.query);
     const rows = await repo.listRegister(ctx.tenantId, q.period ?? null, q.runId ?? null);
+    // GAP2-PAYROLL-REGISTER-01: department-wise gross/net/deduction salary
+    // totals are financial, DPDP-adjacent aggregate data and are exported
+    // client-side from the web register page. Record who read org-wide salary
+    // totals, mirroring the salary-revisions pay-history read above, so the
+    // access is auditable (not just an unlogged client export).
+    await recordAudit(ctx, {
+      action: "read_payroll_register", resourceType: "payroll_register",
+      resourceId: q.runId ?? q.period ?? "all",
+      details: { period: q.period ?? null, runId: q.runId ?? null, rows: rows.length },
+    });
     return reply.send({ data: rows });
   });
 

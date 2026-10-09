@@ -17,6 +17,7 @@ export default async function Page() {
         description="Reference code lists and their dated values."
         rows={data}
         source={source}
+        errorArea="code lists"
       />
     </div>
   );

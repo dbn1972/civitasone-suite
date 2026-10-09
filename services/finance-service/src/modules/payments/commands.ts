@@ -20,11 +20,21 @@ export async function createBill(ctx: RequestContext, body: CreateBillBody): Pro
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function approveBill(ctx: RequestContext, id: string, body: ApproveBillBody): Promise<Accepted> {
+export async function approveBill(ctx: RequestContext, id: string, body: ApproveBillBody, expectedStage?: string): Promise<Accepted> {
+  // NEW-001 (FF-06, D-66): the message id names ONE delivery — one bill, one
+  // stage, one actor. A constant `bill-approve:${id}` key meant stage 1 and
+  // stage 2 hashed to the SAME id, so `markProcessed` silently swallowed the
+  // second stage and no bill could ever reach 'passed' (probe P1). Including
+  // the stage the approver saw and the acting officer makes a double click by
+  // the same officer on the same stage idempotent, while a different officer
+  // or a different stage is a distinct, processable delivery. The approval key
+  // includes stage and actor and must never be relaxed (D-66).
+  const stageKey = expectedStage ?? "unstaged";
+  const messageId = idempotentId({ idempotencyKey: `bill-approve:${id}:${stageKey}:${ctx.actorId}`, tenantId: ctx.tenantId });
   await queue.publish(COMMANDS.billApprove, {
-    type: COMMANDS.billApprove,
-    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, notes: body.notes },
+    messageId, type: COMMANDS.billApprove,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.1",
+    payload: { id, tenantId: ctx.tenantId, notes: body.notes, ...(expectedStage ? { expectedStage } : {}) },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "bill", id));
   return { id, status: "accepted", correlationId: ctx.correlationId };
@@ -71,8 +81,9 @@ export async function createUC(ctx: RequestContext, body: CreateUCBody): Promise
 }
 
 export async function adjustAdvance(ctx: RequestContext, id: string, body: AdjustAdvanceBody): Promise<Accepted> {
+  const messageId = idempotentId(ctx); // EVT-4: double-submit dedupe on the client idempotency key
   await queue.publish(COMMANDS.advanceAdjust, {
-    type: COMMANDS.advanceAdjust,
+    messageId, type: COMMANDS.advanceAdjust,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, ...body },
   });
@@ -88,8 +99,9 @@ export async function adjustAdvance(ctx: RequestContext, id: string, body: Adjus
  * the file is under approval.
  */
 export async function submitPaymentForApproval(ctx: RequestContext, id: string): Promise<Accepted> {
+  const messageId = idempotentId({ idempotencyKey: `payment-submit-approval:${id}`, tenantId: ctx.tenantId });
   await queue.publish(COMMANDS.paymentSubmitApproval, {
-    type: COMMANDS.paymentSubmitApproval,
+    messageId, type: COMMANDS.paymentSubmitApproval,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId },
   });

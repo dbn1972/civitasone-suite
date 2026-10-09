@@ -23,7 +23,7 @@ describe("ExperimentActions (GAP-NOTIFICATIONS-EXPERIMENTS-01)", () => {
     fireEvent.click(screen.getByRole("button", { name: /^request approval$/i }));
 
     await waitFor(() => expect(refresh).toHaveBeenCalled());
-    expect(String(fetchSpy.mock.calls[0]?.[0])).toContain("/api/proxy/notification/experiments/exp-1/conclude");
+    expect(String(fetchSpy.mock.calls[0]?.[0])).toContain("/api/proxy/v1/notification/experiments/exp-1/conclude");
   });
 
   it("offers 'Approve winner' for a pending_approval experiment and posts to approve-winner", async () => {
@@ -36,7 +36,7 @@ describe("ExperimentActions (GAP-NOTIFICATIONS-EXPERIMENTS-01)", () => {
     fireEvent.click(approveButtons[approveButtons.length - 1]!);
 
     await waitFor(() => expect(refresh).toHaveBeenCalled());
-    expect(String(fetchSpy.mock.calls[0]?.[0])).toContain("/api/proxy/notification/experiments/exp-2/approve-winner");
+    expect(String(fetchSpy.mock.calls[0]?.[0])).toContain("/api/proxy/v1/notification/experiments/exp-2/approve-winner");
   });
 
   it("renders nothing actionable for a concluded experiment", () => {

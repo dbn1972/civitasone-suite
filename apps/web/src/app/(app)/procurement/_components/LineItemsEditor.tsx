@@ -2,13 +2,19 @@
 
 import { useRef, useState } from "react";
 import { formatMoney } from "@/lib/formatters";
+import { nonNegativeRupeesToMinorString } from "@/lib/money";
 import { Button } from "@/app/_components/ds";
 
 export type LineItem = {
   itemCode: string;
   description: string;
   quantity: number;
-  unitPrice: number; // rupees (UI), converted to paise on submit
+  // GAP2-PROCUREMENT-MONEY-WEB-04: rupees as the RAW string the clerk typed
+  // (was a float). Converted to paise via nonNegativeRupeesToMinorString
+  // (BigInt, string-based) on submit — never `Math.round(float * 100)`, which
+  // silently rounds a pasted 3-decimal value and mis-handles half-paise. An
+  // empty string means "no price yet".
+  unitPrice: string;
   // GAP-PROCUREMENT-INDENTS-NEW-04: unit of measure per line (was hard-coded
   // "nos" for every line at submit). A short UoM code from UNIT_OPTIONS below.
   unit: string;
@@ -19,14 +25,65 @@ export type LineItem = {
 export const UNIT_OPTIONS = ["nos", "kg", "litre", "metre", "set", "pair", "box", "pkt", "ream", "unit"] as const;
 
 export function emptyLineItem(): LineItem {
-  return { itemCode: "", description: "", quantity: 1, unitPrice: 0, unit: "nos" };
+  return { itemCode: "", description: "", quantity: 1, unitPrice: "", unit: "nos" };
 }
 
+/**
+ * GAP2-PROCUREMENT-MONEY-WEB-04: the exact paise for one line's unit price as a
+ * BigInt, or null when the typed rupees value is invalid (non-numeric, negative
+ * or MORE THAN 2 decimal places — a value the clerk must correct, not one we
+ * silently round). An empty price is treated as 0 paise (an unpriced line is a
+ * legitimate draft state the forms warn about separately). Float-free.
+ */
+export function lineUnitPriceMinor(unitPrice: string): bigint | null {
+  const trimmed = unitPrice.trim();
+  if (trimmed === "") return 0n;
+  const minor = nonNegativeRupeesToMinorString(trimmed);
+  return minor === null ? null : BigInt(minor);
+}
+
+/** True when a line's typed price is syntactically invalid (would be rejected). */
+export function isLineUnitPriceInvalid(unitPrice: string): boolean {
+  return lineUnitPriceMinor(unitPrice) === null;
+}
+
+/**
+ * GAP2-PROCUREMENT-MONEY-WEB-04: a line's total paise (unit price × quantity)
+ * as a BigInt, or null if the unit price is invalid. Pure BigInt — no float.
+ */
+export function lineTotalMinor(it: LineItem): bigint | null {
+  const unit = lineUnitPriceMinor(it.unitPrice);
+  if (unit === null) return null;
+  return unit * BigInt(Math.max(0, Math.trunc(it.quantity)));
+}
+
+/**
+ * Sum of all line totals in paise as a BigInt, or null if ANY line's price is
+ * invalid (so callers can block submit and flag the offending field). Float-free.
+ */
+export function lineItemsTotalMinorStrict(items: LineItem[]): bigint | null {
+  let total = 0n;
+  for (const it of items) {
+    const line = lineTotalMinor(it);
+    if (line === null) return null;
+    total += line;
+  }
+  return total;
+}
+
+/**
+ * Lenient total (paise) for live preview: invalid lines contribute 0 rather
+ * than collapsing the whole preview to an error. Returned as a Number for the
+ * existing callers that keep estimatedValueMinor as a number; it is a sum of
+ * exact per-line BigInt paise, so no float `* 100` ever happens.
+ */
 export function lineItemsTotalMinor(items: LineItem[]): number {
-  return items.reduce(
-    (sum, it) => sum + Math.max(0, Math.round(it.unitPrice * 100)) * Math.max(0, it.quantity),
-    0,
-  );
+  let total = 0n;
+  for (const it of items) {
+    const line = lineTotalMinor(it);
+    if (line !== null) total += line;
+  }
+  return Number(total);
 }
 
 export function LineItemsEditor({
@@ -90,7 +147,8 @@ export function LineItemsEditor({
           </thead>
           <tbody>
             {items.map((it, idx) => {
-              const lineMinor = Math.max(0, Math.round(it.unitPrice * 100)) * Math.max(0, it.quantity);
+              const lineMinorBig = lineTotalMinor(it);
+              const priceInvalid = isLineUnitPriceInvalid(it.unitPrice);
               return (
                 <tr key={keyFor(idx)}>
                   <td>
@@ -119,11 +177,25 @@ export function LineItemsEditor({
                   </td>
                   <td className="num">
                     <label className="sr-only" htmlFor={`li-price-${idx}`}>Unit price, row {idx + 1}</label>
-                    <input id={`li-price-${idx}`} type="number" min={0} step="0.01" value={it.unitPrice}
-                      onChange={(e) => update(idx, { unitPrice: Number(e.target.value) })}
-                      style={{ minHeight: 40, width: 120, textAlign: "right" }} />
+                    {/* GAP2-PROCUREMENT-MONEY-WEB-04: a plain text input holding
+                        the raw rupees string (inputMode numeric for mobile),
+                        NOT a float `type=number`. Conversion to paise happens
+                        via nonNegativeRupeesToMinorString; a >2-decimal or
+                        non-numeric value is flagged here and blocks submit,
+                        never silently rounded. */}
+                    <input id={`li-price-${idx}`} type="text" inputMode="decimal" value={it.unitPrice}
+                      onChange={(e) => update(idx, { unitPrice: e.target.value })}
+                      aria-invalid={priceInvalid ? true : undefined}
+                      aria-describedby={priceInvalid ? `li-price-err-${idx}` : undefined}
+                      placeholder="0.00"
+                      style={{ minHeight: 40, width: 120, textAlign: "right", ...(priceInvalid ? { borderColor: "var(--bad)" } : {}) }} />
+                    {priceInvalid ? (
+                      <span id={`li-price-err-${idx}`} role="alert" style={{ display: "block", fontSize: 11, color: "var(--bad)" }}>
+                        Enter rupees with at most 2 decimal places.
+                      </span>
+                    ) : null}
                   </td>
-                  <td className="num">{formatMoney(lineMinor)}</td>
+                  <td className="num">{lineMinorBig === null ? "—" : formatMoney(Number(lineMinorBig))}</td>
                   <td>
                     <Button type="button" variant="ghost" size="sm" onClick={() => remove(idx)}
                       disabled={items.length <= 1} aria-label={`Remove line item ${idx + 1}`} style={{ minHeight: 40 }}>

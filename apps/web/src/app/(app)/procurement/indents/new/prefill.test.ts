@@ -4,7 +4,10 @@ import { parseIndentPrefill } from "./prefill";
 describe("GAP-INVENTORY-LOW-STOCK-03: indent prefill from the low-stock link", () => {
   it("builds the first line item from item code, description and quantity", () => {
     expect(parseIndentPrefill({ itemCode: "PEN-01", description: "Gel pen", quantity: "40" })).toEqual({
-      item: { itemCode: "PEN-01", description: "Gel pen", quantity: 40, unitPrice: 0, unit: "nos" },
+      // GAP2-PROCUREMENT-MONEY-WEB-04: LineItem.unitPrice is now a rupees STRING
+      // (empty = unpriced), not a float 0 — the prefill carries "" so the form's
+      // float-free conversion applies.
+      item: { itemCode: "PEN-01", description: "Gel pen", quantity: 40, unitPrice: "", unit: "nos" },
       truncated: false,
     });
   });

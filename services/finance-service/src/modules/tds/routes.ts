@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
-import { resolveContext, requireRole, financeErrorHandler } from "../../shared/context.js";
+import { resolveContext, requireRole, financeErrorHandler, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
@@ -10,6 +10,19 @@ import { decryptPii } from "../../shared/pii-crypto.js";
 import { TDS_SECTION_CODES, isValidTdsRateForSection } from "./section-rates.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
+
+/**
+ * GAP2-FINANCE-STATUTORY-TDS-RETURNS-07: the bulk TDS reads return MASKED PAN
+ * only (ABCDE****F); the full PAN crosses the API boundary solely through the
+ * audited per-row reveal endpoint below. ABCDE1234F -> ABCDE****F; anything
+ * that is not a 10-char PAN is masked in full (never partially exposed).
+ */
+export function maskTdsPanValue(pan: string | null | undefined): string | null {
+  const v = (pan ?? "").trim();
+  if (!v) return null;
+  if (v.length !== 10) return "*".repeat(Math.min(v.length, 10));
+  return `${v.slice(0, 5)}****${v.slice(9)}`;
+}
 
 export async function vendorTdsRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/finance/vendor-tds", async (req, reply) => {
@@ -38,12 +51,16 @@ export async function vendorTdsRoutes(app: FastifyInstance): Promise<void> {
       LIMIT ${q.limit} OFFSET ${q.offset}
     `));
 
-    const decryptedRows = (rows as Record<string, unknown>[]).map((row) => ({
+    // GAP2-FINANCE-STATUTORY-TDS-RETURNS-07: return MASKED PAN by default — the
+    // full plaintext PAN must never cross the API boundary unaudited. Decrypt
+    // then mask (so a stored ciphertext still yields the right ABCDE****F); the
+    // clear PAN is available only via the audited reveal endpoint below.
+    const maskedRows = (rows as Record<string, unknown>[]).map((row) => ({
       ...row,
-      pan: row.pan ? decryptPii(row.pan as string) : null,
+      pan: row.pan ? maskTdsPanValue(decryptPii(row.pan as string)) : null,
     }));
 
-    return reply.send({ data: decryptedRows });
+    return reply.send({ data: maskedRows });
   });
 
   app.post("/v1/finance/vendor-tds", async (req, reply) => {
@@ -93,6 +110,43 @@ export async function vendorTdsRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(202).send({ data: { id, status: "accepted" } });
   });
 
+  // GAP2-FINANCE-STATUTORY-TDS-RETURNS-07: reveal the FULL PAN for a single TDS
+  // deduction row, DPDP-audited. The reveal command is published BEFORE any
+  // digit of the PAN is returned and the request fails closed if it cannot be
+  // (no reveal without a trail), mirroring the bank-account reveal
+  // (masters/bank-routes.ts). The audit records actor (envelope), tenant,
+  // vendor and the row id — never the PAN value itself.
+  app.post("/v1/finance/vendor-tds/:id/pan/reveal", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FINANCE_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const { reason } = z.object({
+      reason: z.string().trim().min(10, "Reason must be at least 10 characters").max(500),
+    }).parse(req.body ?? {});
+
+    const rows = await scopedRead((tx) => tx.execute(sql`
+      SELECT id, vendor_id, vendor_name, pan
+      FROM gl.finance_vendor_tds
+      WHERE id = ${id}::uuid AND tenant_id = ${ctx.tenantId}::uuid
+      LIMIT 1
+    `));
+    const row = (rows as Record<string, unknown>[])[0];
+    if (!row) throw new HttpError(404, "NOT_FOUND", "TDS deduction not found");
+    const pan = row.pan ? decryptPii(row.pan as string) : null;
+    if (!pan) throw new HttpError(404, "NO_PAN", "this deduction has no PAN on record");
+
+    // Audit BEFORE returning the clear value (fail closed): never the PAN itself.
+    await queue.publish(COMMANDS.tdsPanReveal, {
+      messageId: randomUUID(), type: COMMANDS.tdsPanReveal,
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+      payload: { id, tenantId: ctx.tenantId, vendorId: String(row.vendor_id ?? ""), reason },
+    });
+
+    return reply.header("Cache-Control", "no-store").send({
+      id, vendorId: row.vendor_id ?? null, vendorName: row.vendor_name ?? null, pan,
+    });
+  });
+
   app.get("/v1/finance/vendor-tds/form-26q", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
@@ -118,7 +172,9 @@ export async function vendorTdsRoutes(app: FastifyInstance): Promise<void> {
 
     const deductees = (rows as Record<string, unknown>[]).map((row) => ({
       ...row,
-      pan: row.pan ? decryptPii(row.pan as string) : null,
+      // GAP2-FINANCE-STATUTORY-TDS-RETURNS-07: masked by default here too; the
+      // full PAN for a vendor is obtained via the audited reveal endpoint.
+      pan: row.pan ? maskTdsPanValue(decryptPii(row.pan as string)) : null,
     }));
 
     return reply.send({

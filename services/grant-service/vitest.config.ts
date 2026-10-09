@@ -26,7 +26,7 @@ export default defineConfig({
     },
     coverage: {
       provider: "v8",
-      exclude: ["src/index.ts", "src/worker.ts"],
+      exclude: ["src/index.ts", "src/worker.ts", "**/*.config.{ts,js,mjs,cjs}"],
       thresholds: {
         lines: 80,
         functions: 75,

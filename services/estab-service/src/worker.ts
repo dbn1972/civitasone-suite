@@ -24,6 +24,8 @@ import { registerRecordsConsumers } from "./modules/records/consumer.js";
 import { registerEsignConsumers } from "./modules/esign/consumer.js";
 import { registerConsumablesConsumers } from "./modules/consumables/consumer.js";
 import { registerScanLinkConsumers } from "./modules/scan-link/consumer.js";
+import { registerBookingConsumers } from "./modules/booking/consumer.js";
+import { registerCitizenLeaseConsumers } from "./modules/citizen-lease/consumer.js";
 
 const log = pino({ name: "estab-worker" });
 
@@ -58,6 +60,8 @@ registerRecordsConsumers(queue);
 registerEsignConsumers(queue);
 registerConsumablesConsumers(queue);
 registerScanLinkConsumers(queue);
+registerBookingConsumers(queue);
+registerCitizenLeaseConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

@@ -154,7 +154,7 @@ export async function payMatrixRoutes(app: FastifyInstance): Promise<void> {
   //     and both would then publish a plan proposing the identical advance
   //     for the same employee.
   //   - That second race is closed at the DB layer, not in application logic:
-  //     migrations/0132_pay_matrix_increment_idempotency.sql adds a partial
+  //     migrations/0132b_pay_matrix_increment_idempotency.sql adds a partial
   //     unique index on hrms_service_book_entries
   //     (tenant_id, employee_id, effective_date) WHERE entry_type='increment'.
   //     The consumer inserts the service-book row FIRST, conflict-checked

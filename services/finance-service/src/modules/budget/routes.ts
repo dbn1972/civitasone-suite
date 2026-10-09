@@ -3,6 +3,7 @@ import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/com
 import {
   BudgetSummaryListSchema,
   SanctionSummaryListSchema,
+  SanctionsSummarySchema,
   SanctionDetailSchema,
   FinanceDemandSummaryListSchema,
   FinanceSchemeSummaryListSchema,
@@ -12,14 +13,14 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
-import { createBudgetBody, reappropriateBody, createSanctionBody, budgetQueryParams, idParam, updateHeadHoABody, rejectSanctionBody, submitReappropriationBody } from "./validators.js";
+import { createBudgetBody, reappropriateBody, createSanctionBody, budgetQueryParams, idParam, updateHeadHoABody, rejectSanctionBody, approveSanctionBody, submitReappropriationBody } from "./validators.js";
 import * as repo from "./repo.js";
 import { systemHeads } from "../gl/system-heads.js";
 import { assertValidHeadParent, DomainError } from "./domain.js";
 
 const submitSanctionBody = z.object({ fileNo: z.string().trim().min(1).max(64).optional() });
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
+import { queue } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -27,17 +28,6 @@ const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 const READER_ROLES  = [...FINANCE_ROLES, "audit_officer", "procurement_officer"];
 /** Only admins may flag or un-flag a control account (it gates manual journal postings). */
 const HEAD_CONTROL_ROLES = ["finance_admin", "super_admin"];
-
-async function auditHeadControl(tx: Parameters<typeof enqueue>[0], ctx: { tenantId: string; actorId: string; correlationId: string }, headId: string, oldValue: boolean, newValue: boolean): Promise<void> {
-  await enqueue(tx, {
-    topic: "audit.event.record", eventType: "audit.event.record",
-    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
-    payload: {
-      service: "finance", action: "update_head_control", resourceType: "finance_head", resourceId: headId,
-      outcome: "success", details: { isControl: { old: oldValue, new: newValue } },
-    },
-  });
-}
 
 export async function budgetRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/finance/budgets", async (req, reply) => {
@@ -143,6 +133,15 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
     sendValidated(reply, SanctionSummaryListSchema, await queries.listSanctionSummaries(ctx.tenantId, q.limit, q.offset));
   });
 
+  // GAP2-FINANCE-SANCTIONS-TOTALS-04: tenant-wide totals for the register stat
+  // cards (approved money total + counts), aggregated server-side so they are
+  // never summed from the 50-row page.
+  app.get("/v1/finance/sanctions/summary", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    sendValidated(reply, SanctionsSummarySchema, await queries.getSanctionsSummary(ctx.tenantId));
+  });
+
   app.get("/v1/finance/sanctions/:id/available", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
@@ -183,7 +182,10 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ["finance_admin", "super_admin"]);
     const { id } = idParam.parse(req.params);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.approveSanction(ctx, id));
+    // GAP2-FINANCE-SANCTIONS-APPROVE-REASON-07: capture an optional approval
+    // reason/remark into the audit trail, consistent with the vendor approve route.
+    const body = approveSanctionBody.parse(req.body ?? {});
+    return sendAccepted(reply, acceptedResponseSchema, await commands.approveSanction(ctx, id, body.reason));
   });
 
   // H1 — submit a sanction to eOffice for administrative approval. The eFile is
@@ -258,20 +260,22 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
       if (err instanceof DomainError) throw new HttpError(400, err.code, err.message);
       throw err;
     }
+    // GAP2-FINANCE-CHART-OF-ACCOUNTS-07: CQRS — validate above (incl. parent &
+    // control-flag admin gate), then publish; the consumer performs the insert
+    // and the audit event transactionally. No direct Postgres write in the route.
     const id = randomUUID();
-    await db.transaction(async (tx) => {
-      await repo.insertHead(tx, {
+    await queue.publish(COMMANDS.accountCreate, {
+      messageId: id, type: COMMANDS.accountCreate,
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+      payload: {
         id, tenantId: ctx.tenantId,
         code: body.code, name: body.name, level: body.level,
         hoaCode: body.hoaCode ?? null, classification: body.classification ?? null,
-        parentId: body.parentId ?? null,
-        isControl: body.isControl,
-        createdBy: ctx.actorId, updatedBy: ctx.actorId,
-      });
-      if (body.isControl) await auditHeadControl(tx, ctx, id, false, true);
+        parentId: body.parentId ?? null, isControl: body.isControl,
+      },
     });
-    return reply.code(201).send({
-      id, code: body.code, name: body.name, level: body.level, parentId: body.parentId ?? null, status: "created",
+    return reply.code(202).send({
+      id, code: body.code, name: body.name, level: body.level, parentId: body.parentId ?? null, status: "accepted",
     });
   });
 
@@ -290,19 +294,21 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
     // Changing isControl alters which journals are accepted: admin-only, audited with old and new value.
     const changesControl = body.isControl !== undefined && body.isControl !== head.isControl;
     if (changesControl) requireRole(ctx, HEAD_CONTROL_ROLES);
-    const patch: Record<string, unknown> = { updatedBy: ctx.actorId };
-    if (body.name) patch.name = body.name;
-    if (body.classification) patch.classification = body.classification;
-    if (body.isControl !== undefined) patch.isControl = body.isControl;
-    await db.transaction(async (tx) => {
-      // Re-read the old value inside the transaction so the audit records what was actually replaced.
-      const before = changesControl ? await repo.findHeadByIdTx(tx, id) : null;
-      await repo.updateHead(tx, id, patch as Parameters<typeof repo.updateHead>[2]);
-      if (changesControl && before && before.isControl !== body.isControl) {
-        await auditHeadControl(tx, ctx, id, before.isControl, body.isControl === true);
-      }
+    // GAP2-FINANCE-CHART-OF-ACCOUNTS-07: CQRS — validate above (404 + control
+    // admin gate), then publish; the consumer re-reads the before value and
+    // applies the update + audit transactionally. No direct Postgres write here.
+    const messageId = randomUUID();
+    await queue.publish(COMMANDS.accountUpdate, {
+      messageId, type: COMMANDS.accountUpdate,
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+      payload: {
+        id, tenantId: ctx.tenantId,
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.classification !== undefined ? { classification: body.classification } : {}),
+        ...(body.isControl !== undefined ? { isControl: body.isControl } : {}),
+      },
     });
-    return reply.send({ id, status: "updated" });
+    return reply.code(202).send({ id, status: "accepted" });
   });
 
   // ── Budget estimates ─────────────────────────────────────────────────────────

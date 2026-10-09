@@ -13,6 +13,14 @@ export const COMMANDS = {
   impairmentTestRun:    "asset.impairment_test.run",
   insurancePolicyCreate:"asset.insurance.policy.create",
   insuranceClaimCreate: "asset.insurance.claim.create",
+  // GAP2-ASSETS-INSURANCE-CLAIMS-02: claim decisions + policy update move onto
+  // the command/consumer (CQRS) path — routes preflight + publish + 202.
+  insuranceClaimDecide: "asset.insurance.claim.decide",
+  insurancePolicyUpdate:"asset.insurance.policy.update",
+  // GAP2-ASSETS-INSURANCE-CLAIMS-02: category master-data mutations move onto
+  // the command/consumer path too.
+  assetCategoryCreate:  "asset.category.create",
+  assetCategoryUpdate:  "asset.category.update",
   // Condemnation/disposal/auction (SVC-060)
   condemnationSurveyCreate:  "asset.condemnation.survey.create",
   condemnationSurveySubmit:  "asset.condemnation.survey.submit",

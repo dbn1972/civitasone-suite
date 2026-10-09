@@ -53,10 +53,11 @@ export default async function SystemSettingsRoute() {
         subtitle="General, Email, Security, and Integration configuration for the platform."
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
-        <StatCard icon="🏢" iconBg="#eff6ff" label="General" value={generalConfigured} />
-        <StatCard icon="📧" iconBg="#ecfdf3" label="Email (SMTP)" value={smtpHost} />
-        <StatCard icon="🛡️" iconBg="#fef3f2" label="MFA" value={mfaValue} />
-        <StatCard icon="🔗" iconBg="#fffaeb" label="Integrations connected" value={settings.integrations.configured ? integrationsConnected : null} />
+        {/* GAP2-PLATFORM-ADMIN-COLOURS-04: theme tones instead of fixed hex. */}
+        <StatCard icon="🏢" tone="info" label="General" value={generalConfigured} />
+        <StatCard icon="📧" tone="good" label="Email (SMTP)" value={smtpHost} />
+        <StatCard icon="🛡️" tone="bad" label="MFA" value={mfaValue} />
+        <StatCard icon="🔗" tone="warn" label="Integrations connected" value={settings.integrations.configured ? integrationsConnected : null} />
       </div>
       <SystemSettingsPage initial={settings} />
     </div>

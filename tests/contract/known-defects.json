@@ -7,7 +7,7 @@
     "undeliverableDispatch": 1,
     "orphanEvents": 946,
     "phantomConsumption": 5,
-    "unemittedEvents": 37
+    "unemittedEvents": 36
   },
   "deadSubscriptions": [
     "asset-service|asset.disposal.file_decided",
@@ -1093,7 +1093,6 @@
     "visitor-service|visitor.passage.abandoned",
     "visitor-service|visitor.visit_request.blocked",
     "workflow-service|workflow.authority.escalated",
-    "works-service|works.proposal.updated",
     "works-service|works.tender.created"
   ]
 }

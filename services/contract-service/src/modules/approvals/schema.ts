@@ -2,7 +2,7 @@ import { pgSchema, uuid, text, integer, varchar, bigint, timestamp } from "drizz
 
 export const approvalsSchema = pgSchema("approvals");
 
-export const approvalLevels = approvalsSchema.table("approval_levels", {
+export const approvalLevels = approvalsSchema.table("contract_approval_levels", {
   id:            uuid("id").primaryKey().defaultRandom(),
   tenantId:      uuid("tenant_id").notNull(),
   minValuePaise: bigint("min_value_paise", { mode: "bigint" }).notNull(),

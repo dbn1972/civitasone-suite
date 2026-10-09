@@ -10,7 +10,7 @@ import {
   billedQuantityExceedsBoq, computeMeasuredValueMinor, boqItemBelongsToMbWork,
 } from "./domain.js";
 import {
-  getMb, getBill, listBillsForWork, listBills, listMeasurementsByMb, listMeasurementsByBoqItem,
+  getMb, getBill, listBillsForWork, listBills, countBills, listMeasurementsByMb, listMeasurementsByBoqItem,
   listBillsByMb, listMbsForWork, listAwardsForWork, listAccountCompilations,
 } from "./repo.js";
 import { getAwardById } from "../tender/repo.js";
@@ -58,14 +58,18 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
     const query = paginationSchema.parse(req.query);
-    const rows = await listBills(ctx.tenantId, query.page, query.pageSize);
+    const [rows, total] = await Promise.all([
+      listBills(ctx.tenantId, query.page, query.pageSize),
+      countBills(ctx.tenantId),
+    ]);
     const data = rows.map((r) => ({
       ...r,
       grossAmountMinor: r.grossAmountMinor?.toString() ?? null,
       netPayableMinor: r.netPayableMinor?.toString() ?? null,
       deductionsMinor: r.deductionsMinor?.toString() ?? null,
     }));
-    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total: data.length } });
+    // GAP2-WORKS-APPROVALS-05: report the REAL tenant total (not data.length).
+    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total } });
   });
 
   // Issue MB

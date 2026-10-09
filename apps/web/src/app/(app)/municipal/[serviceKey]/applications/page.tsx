@@ -7,6 +7,7 @@ import { CitizenServiceLinks } from "../../_components/CitizenServiceLinks";
 import { RecordsTable } from "../../_components/RecordsTable";
 import { getMunicipalService } from "../../_data/services";
 import { fetchMunicipalList } from "../../_data/municipalApi";
+import { statusFilterOptions } from "../../_data/records";
 
 export const dynamic = "force-dynamic";
 
@@ -20,11 +21,6 @@ const searchParamsSchema = z.object({
   page: z.coerce.number().int().positive().catch(1),
   status: z.string().trim().min(1).max(40).optional(),
 });
-
-// Common municipal lifecycle statuses offered as a quick filter. The gateway
-// accepts ?status; the exact per-service enum is not verifiable in this
-// snapshot, so this is a conservative shared set (see HUMAN REVIEW).
-const STATUS_FILTERS = ["submitted", "under_review", "approved", "rejected", "issued"] as const;
 
 function withParams(serviceKey: string, params: { page?: number; status?: string }): string {
   const sp = new URLSearchParams();
@@ -41,6 +37,8 @@ export default async function MunicipalApplicationsPage({ params, searchParams }
   const parsed = searchParamsSchema.parse(searchParams ?? {});
   const page = parsed.page;
   const status = parsed.status;
+
+  const statusFilters = statusFilterOptions(config);
 
   const { data: list, source, status: httpStatus } = await fetchMunicipalList(config, {
     page,
@@ -78,24 +76,28 @@ export default async function MunicipalApplicationsPage({ params, searchParams }
         </div>
       ) : null}
 
-      {/* GAP-...-APPLICATIONS-05: status filter bound to ?status= (server-rendered
-          Links so this stays a Server Component). */}
-      <div className="seg" role="tablist" style={{ marginBottom: 14, flexWrap: "wrap" }}>
-        <Link role="tab" aria-selected={!status} className={!status ? "on" : undefined} href={withParams(config.serviceKey, {})}>
-          All
-        </Link>
-        {STATUS_FILTERS.map((s) => (
-          <Link
-            key={s}
-            role="tab"
-            aria-selected={status === s}
-            className={status === s ? "on" : undefined}
-            href={withParams(config.serviceKey, { status: s })}
-          >
-            {s.replace(/_/g, " ")}
+      {/* GAP2-MUNICIPAL-APPLICATIONS-STATUS-01/-02: status filter driven by the
+          service's real status vocabulary (statusFilterOptions), with humanized
+          en labels — never a universal guessed set, and never raw snake_case.
+          Services with no known vocabulary render no status tabs. */}
+      {statusFilters.length > 0 ? (
+        <div className="seg" role="tablist" style={{ marginBottom: 14, flexWrap: "wrap" }}>
+          <Link role="tab" aria-selected={!status} className={!status ? "on" : undefined} href={withParams(config.serviceKey, {})}>
+            All
           </Link>
-        ))}
-      </div>
+          {statusFilters.map((s) => (
+            <Link
+              key={s.value}
+              role="tab"
+              aria-selected={status === s.value}
+              className={status === s.value ? "on" : undefined}
+              href={withParams(config.serviceKey, { status: s.value })}
+            >
+              {s.label}
+            </Link>
+          ))}
+        </div>
+      ) : null}
 
       {failed ? (
         <RefreshErrorState

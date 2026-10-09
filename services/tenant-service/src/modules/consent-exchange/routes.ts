@@ -4,7 +4,7 @@
  * one synchronous path: it evaluates consent and returns the in-scope data
  * (200) or a 403 with the deny reason, and is always written to the ledger.
  */
-import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import type { FastifyInstance, FastifyRequest, FastifyReply, RouteHandlerMethod } from "fastify";
 import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -62,12 +62,16 @@ export async function consentExchangeRoutes(app: FastifyInstance): Promise<void>
     return reply.code(202).send({ data: { id, status: "requested" } });
   });
 
-  app.get("/v1/consent/requests", async (req, reply) => {
+  const listConsentRequests: RouteHandlerMethod = async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, VIEWER);
     const q = z.object({ principalId: z.string().uuid().optional(), status: z.string().max(16).optional() }).parse(req.query);
     const data = await repo.listArtefacts(ctx.tenantId, q);
     return reply.send({ data, meta: { total: data.length } });
-  });
+  };
+  // GAP2-TENANT-WIRING-01: web consent-exchange loader calls
+  // /api/v1/tenant/consent/requests (gateway forwards verbatim). Alias.
+  app.get("/v1/consent/requests", listConsentRequests);
+  app.get("/v1/tenant/consent/requests", listConsentRequests);
 
   app.get("/v1/consent/:id", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, VIEWER);

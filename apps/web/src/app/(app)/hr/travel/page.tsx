@@ -81,10 +81,22 @@ export default async function TravelRequestsPage() {
       </StatGrid>
       <TravelRequestForm />
 
-      {teamResult && teamResult.source !== "error" && (
+      {/* GAP2-HR-TRAVEL-07: a FAILED team-queue fetch must not render as
+          "nothing to approve". The old code only rendered this card when
+          teamResult.source !== "error", silently omitting the whole approvals
+          section on a failed fetch. Mirror the self-list's own RefreshErrorState
+          branch so an approver sees an explicit error instead.
+          GAP2-HR-TRAVEL-08: title is now an i18n key, not a hard-coded literal. */}
+      {teamResult && (
         <div style={{ marginTop: 16 }}>
-          <Card title="Pending Approvals">
-            <TravelApprovalsTable rows={teamResult.data} />
+          <Card title={t("pendingApprovalsCardTitle")}>
+            {teamResult.source === "error" ? (
+              <div className="pad">
+                <RefreshErrorState error={toHumanError("load", { area: "pending approvals" })} backHref="/hr" />
+              </div>
+            ) : (
+              <TravelApprovalsTable rows={teamResult.data} />
+            )}
           </Card>
         </div>
       )}

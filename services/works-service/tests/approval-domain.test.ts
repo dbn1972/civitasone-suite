@@ -82,8 +82,17 @@ describe("canEnterTS (BR-011)", () => {
     expect(result.allowed).toBe(true);
   });
 
-  it("allows TS entry for any other status (permissive)", () => {
-    const result = canEnterTS("in_progress");
-    expect(result.allowed).toBe(true);
+  it("GAP2-WORKS-APPROVALS-07: blocks TS entry for any non-dao_finalized status (allow-list)", () => {
+    // Deliberate contract change: canEnterTS is now an ALLOW-LIST — only
+    // dao_finalized / ts_eligible are permitted. A `submitted` (or any other)
+    // non-finalized status must be BLOCKED (was wrongly permissive before).
+    const result = canEnterTS("submitted");
+    expect(result.allowed).toBe(false);
+    expect(result.blockingReason).toContain("BR-011");
+  });
+
+  it("GAP2-WORKS-APPROVALS-07: blocks in_progress / cancelled too", () => {
+    expect(canEnterTS("in_progress").allowed).toBe(false);
+    expect(canEnterTS("cancelled").allowed).toBe(false);
   });
 });

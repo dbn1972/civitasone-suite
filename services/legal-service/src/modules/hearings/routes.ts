@@ -2,7 +2,7 @@ import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
 import {
   HearingSummaryListSchema,
-  CourtOrderSummaryListSchema,
+  CourtOrderPageSchema,
 } from "@civitasone/schemas/web";
 import * as queries from "./queries.js";
 import type { FastifyInstance } from "fastify";
@@ -50,7 +50,16 @@ export async function hearingRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, CourtOrderSummaryListSchema, await queries.listCourtOrderSummaries(ctx.tenantId, q.limit));
+    // GAP2-LEGAL-COURT-ORDERS-10: compute "today" as the IST (Asia/Kolkata)
+    // calendar date so an order due today is not counted overdue between
+    // 00:00–05:30 IST, matching the web page's todayIST() convention. The
+    // overdue/contempt comparison then happens in SQL over the full set.
+    const today = new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+    sendValidated(
+      reply,
+      CourtOrderPageSchema,
+      await queries.listCourtOrderSummariesPaged(ctx.tenantId, q.limit, q.offset, today),
+    );
   });
 
   // NOTE: GET /v1/legal/opinions previously approximated legal opinions from the

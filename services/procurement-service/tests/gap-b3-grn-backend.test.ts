@@ -180,3 +180,35 @@ describe("GRN-DETAIL-02 — GET reports match pending until inspected", () => {
     expect(after.json().threeWayMatch).toBe(true);
   });
 });
+
+describe("GRN-DETAIL-06 — opaque poRef resolved to the human PO number (GAP2-PROCUREMENT-GRN-DETAIL-06)", () => {
+  it("GET detail exposes poId (bare uuid) and poNo (human number), not just the opaque composite", async () => {
+    const q = wire(new MemoryQueue()) as MemoryQueue;
+    registerGrnConsumers(q);
+    await q.start();
+    const id = await createViaFlow(q);
+
+    const res = await app.inject({ method: "GET", url: `/v1/procurement/grns/${id}`, headers: hdr(["procurement_officer"]) });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    // The raw composite is still carried for linking, but the resolved number
+    // and bare id are now present (absent entirely on the old code).
+    expect(body.poRef).toBe(`procurement_po:${PO_ID}`);
+    expect(body.poId).toBe(PO_ID);
+    expect(body.poNo).toBe("PO-B3-001");
+  });
+
+  it("GET list exposes poNo per row for the same resolution", async () => {
+    const q = wire(new MemoryQueue()) as MemoryQueue;
+    registerGrnConsumers(q);
+    await q.start();
+    const id = await createViaFlow(q);
+
+    const res = await app.inject({ method: "GET", url: "/v1/procurement/grns?limit=200", headers: hdr(["procurement_officer"]) });
+    expect(res.statusCode).toBe(200);
+    const rows = res.json() as Array<{ id: string; poNo?: string; poId?: string }>;
+    const row = rows.find((r) => r.id === id);
+    expect(row?.poNo).toBe("PO-B3-001");
+    expect(row?.poId).toBe(PO_ID);
+  });
+});

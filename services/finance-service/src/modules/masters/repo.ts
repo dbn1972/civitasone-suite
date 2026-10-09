@@ -1,8 +1,27 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { financePao, financeDdo, financeVendors, type PaoRow, type DdoRow, type VendorRow } from "./schema.js";
 
 export type Reader = Pick<typeof db, "select">;
+
+/**
+ * GAP2-FINANCE-BILLS-VENDORNAME-01: batched tenant-scoped id -> registered
+ * vendor name resolver for the bills/payments read-models, so those money
+ * documents show the vendor's real master-data name instead of a hard-coded
+ * fixture label or a raw-UUID-derived token. One IN (...) query, not N
+ * getVendorById round-trips. A vendor id that does not resolve (deleted, or
+ * never a tenant vendor) is simply absent from the map — the caller renders a
+ * neutral "Unknown vendor", never the raw id.
+ */
+export async function getVendorNamesByIds(tenantId: string, ids: readonly string[]): Promise<Map<string, string>> {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return new Map();
+  const rows = await scopedRead((tx) => tx
+    .select({ id: financeVendors.id, name: financeVendors.name })
+    .from(financeVendors)
+    .where(and(eq(financeVendors.tenantId, tenantId), inArray(financeVendors.id, unique))));
+  return new Map(rows.map((r) => [r.id, r.name]));
+}
 
 export async function listPao(tenantId: string, limit = 500): Promise<PaoRow[]> {
   return scopedRead((tx) => tx.select().from(financePao)

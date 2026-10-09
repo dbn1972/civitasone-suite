@@ -45,6 +45,11 @@ function formatTimeRemaining(remainingMs: number, status: string): string {
   return hours >= 24 ? `${Math.floor(hours / 24)}d ${hours % 24}h` : `${hours}h ${mins}m`;
 }
 
+/** GAP2-PROCUREMENT-GAPLIST-03: true total count of auctions for meta.total. */
+export async function countAuctions(tenantId: string): Promise<number> {
+  return repo.countAuctionsByTenant(tenantId);
+}
+
 /** Reverse-auction register (gap/routes.ts real-data lift) — no N+1: one grouped bid-stats query. */
 export async function listAuctions(tenantId: string, limit: number, offset: number): Promise<ReverseAuctionSummary[]> {
   const auctions = await repo.listAuctionsByTenant(tenantId, limit, offset);

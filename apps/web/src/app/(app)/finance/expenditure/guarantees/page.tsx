@@ -32,6 +32,11 @@ export default async function GuaranteesPage() {
         <StatCard icon="⏳" iconBg="#fffaeb" label={t("statExpiringSoon", { days: GUARANTEE_EXPIRY_WINDOW_DAYS })} value={failed ? null : stats.expiringSoon} />
         <StatCard icon="⚠️" iconBg="#fce7ee" label={t("statLapsed")} value={failed ? null : stats.lapsed} />
       </StatGrid>
+      {/* GAP2-FINANCE-GUARANTEES-COPY-08: make the read-only, Procurement-managed
+          nature unambiguous — no guarantee lifecycle action happens in Finance. */}
+      <p className="muted" style={{ margin: "4px 0 12px", fontSize: 13, color: "var(--ink2)" }}>
+        {t("reportingOnlyNote")}
+      </p>
       {/* UX-012: the data-source badge now lives inside GuaranteesTable,
           driven by the same useSeededResource call that produces its rows —
           not a second, independent read of `source` here that could

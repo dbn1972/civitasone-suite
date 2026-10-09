@@ -24,6 +24,8 @@ export const fleetVehicles = fleetSchema.table("fleet_vehicles", {
   status:           varchar("status", { length: 16 }).notNull().default("active"),
   createdAt:        timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:        uuid("created_by").notNull(),
+  updatedAt:        timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedBy:        uuid("updated_by"),
   version:          integer("version").notNull().default(1),
 });
 // Expression unique index uq_fleet_vehicles_tenant_plate (tenant_id,
@@ -43,6 +45,9 @@ export const fleetMaintenance = fleetSchema.table("fleet_maintenance", {
   odometerThresholdKm:  integer("odometer_threshold_km"),
   createdBy:            uuid("created_by"),
   createdAt:            timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:            timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedBy:            uuid("updated_by"),
+  version:              integer("version").notNull().default(1),
 });
 
 export const fleetDevices = fleetSchema.table("fleet_devices", {
@@ -55,6 +60,8 @@ export const fleetDevices = fleetSchema.table("fleet_devices", {
   status:     varchar("status", { length: 16 }).notNull().default("active"),
   createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:  uuid("created_by").notNull(),
+  updatedAt:  timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedBy:  uuid("updated_by"),
   version:    integer("version").notNull().default(1),
 });
 
@@ -70,6 +77,8 @@ export const fleetDeviceTelemetry = fleetSchema.table("fleet_device_telemetry", 
   engineOn:     boolean("engine_on"),
   recordedAt:   timestamp("recorded_at", { withTimezone: true }).notNull(),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedBy:    uuid("updated_by"),
 });
 
 export type FleetVehicleRow    = typeof fleetVehicles.$inferSelect;

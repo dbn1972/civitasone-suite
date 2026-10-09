@@ -57,6 +57,20 @@ vi.mock("../src/modules/bbps/repo.js", async (importOriginal) => {
       };
     }),
     listRequests: vi.fn(async () => ({ rows: [], total: 0 })),
+    // GAP2-REVENUE-BBPS-10/11: fetch-bill now resolves the identifier
+    // synchronously via getDcbOutstanding. Any identifier starting with
+    // "UNKNOWN" maps to no assessee (null) so the 404 path can be exercised;
+    // every other identifier returns a DCB outstanding row.
+    getDcbOutstanding: vi.fn(async (_tenantId: string, identifier: string) => {
+      if (identifier.startsWith("UNKNOWN")) return null;
+      return {
+        assesseeId: "33333333-3333-3333-3333-333333333333",
+        ownerName: "Test Owner",
+        totalOutstandingMinor: 500000n,
+        oldestDueDate: new Date().toISOString(),
+        demandCount: 1,
+      };
+    }),
   };
 });
 
@@ -231,6 +245,62 @@ describe("SEC-001: POST /v1/revenue/bbps/pay-bill authorization gate (BBPS_ENABL
       url: "/v1/revenue/bbps/pay-bill",
       headers: AUTH,
       payload,
+    });
+    expect(res.statusCode).toBe(202);
+    expect(publishSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── GAP2-REVENUE-BBPS-10 / BBPS-11: fetch-bill authz gate + unknown identifier ─
+//
+// BBPS-10: fetch-bill is a mutation (consumer probes DCB and inserts a
+// bbps_transactions row). Before this fix it only checked isBbpsEnabled(), so
+// ANY authenticated user could call it as an arrears-balance probing oracle.
+// It now requires a revenue/collection role exactly like pay-bill.
+//
+// BBPS-11: an identifier that maps to no assessee was previously accepted with
+// 202 and silently no-op'd in the consumer. It now resolves synchronously and
+// returns 404 ASSESSEE_NOT_FOUND, so an unknown identifier is never reported
+// as accepted.
+describe("GAP2-REVENUE-BBPS-10/11: POST /v1/revenue/bbps/fetch-bill (BBPS_ENABLED=true)", () => {
+  beforeEach(() => {
+    process.env.BBPS_ENABLED = "true";
+    publishSpy.mockClear();
+  });
+  afterEach(() => {
+    delete process.env.BBPS_ENABLED;
+  });
+
+  it("fetch-bill returns 403 with wrong role — no command published", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/revenue/bbps/fetch-bill",
+      headers: UNPRIVILEGED_AUTH,
+      payload: { assesseeIdentifier: "PROP-12345" },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error.code).toBe("FORBIDDEN");
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("fetch-bill returns 404 for an identifier that maps to no assessee — no command published", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/revenue/bbps/fetch-bill",
+      headers: AUTH,
+      payload: { assesseeIdentifier: "UNKNOWN-999" },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error.code).toBe("ASSESSEE_NOT_FOUND");
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("fetch-bill accepts a revenue_admin for a known identifier — publishes the command", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/revenue/bbps/fetch-bill",
+      headers: AUTH,
+      payload: { assesseeIdentifier: "PROP-12345" },
     });
     expect(res.statusCode).toBe(202);
     expect(publishSpy).toHaveBeenCalledTimes(1);

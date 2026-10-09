@@ -75,7 +75,8 @@ export async function vendorBlacklistRoutes(app: FastifyInstance): Promise<void>
       offset: z.coerce.number().int().min(0).default(0),
     }).parse(req.query);
     const rows = await repo.listActiveCentral(q.limit, q.offset);
-    return reply.send({ data: rows.map((r) => ({ ...toApi(r), scope: r.scope, pan: r.pan })), total: rows.length });
+    const total = await repo.countActiveCentral();
+    return reply.send({ data: rows.map((r) => ({ ...toApi(r), scope: r.scope, pan: r.pan })), total });
   });
 
   app.get("/v1/procurement/vendor-blacklist", async (req, reply) => {
@@ -86,7 +87,8 @@ export async function vendorBlacklistRoutes(app: FastifyInstance): Promise<void>
       offset: z.coerce.number().int().min(0).default(0),
     }).parse(req.query);
     const rows = await repo.listActiveByTenant(ctx.tenantId, q.limit, q.offset);
-    return reply.send({ data: rows.map(toApi), total: rows.length });
+    const total = await repo.countActiveByTenant(ctx.tenantId);
+    return reply.send({ data: rows.map(toApi), total });
   });
 
   app.get("/v1/procurement/vendors/blacklisted", async (req, reply) => {
@@ -97,7 +99,8 @@ export async function vendorBlacklistRoutes(app: FastifyInstance): Promise<void>
       offset: z.coerce.number().int().min(0).default(0),
     }).parse(req.query);
     const rows = await repo.listActiveByTenant(ctx.tenantId, q.limit, q.offset);
-    return reply.send({ data: rows.map(toApi), total: rows.length });
+    const total = await repo.countActiveByTenant(ctx.tenantId);
+    return reply.send({ data: rows.map(toApi), total });
   });
 
   app.delete("/v1/procurement/vendors/:id/blacklist", async (req, reply) => {

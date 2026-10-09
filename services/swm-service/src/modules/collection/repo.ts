@@ -7,7 +7,7 @@ export function requestToView(r: CollectionRequestRow) {
     id: r.id, tenantId: r.tenantId, requestNumber: r.requestNumber, requestedBy: r.requestedBy,
     wasteType: r.wasteType, estimatedQuantity: r.estimatedQuantity, address: r.address,
     preferredDate: r.preferredDate, preferredSlot: r.preferredSlot,
-    status: r.status, vehicleId: r.vehicleId, feeMinor: r.feeMinor, feePaid: r.feePaid,
+    status: r.status, vehicleId: r.vehicleId, feeMinor: r.feeMinor != null ? r.feeMinor.toString() : null, feePaid: r.feePaid,
     createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(), version: r.version,
   };
 }

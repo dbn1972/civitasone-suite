@@ -109,11 +109,20 @@ describe("Cross-service chain: admin.module.toggle → RBAC module enablement + 
     );
 
     const msg = await auditEvent;
-    const ap = msg.payload as { service: string; action: string; resourceType: string; resourceId: string; outcome: string };
+    const ap = msg.payload as {
+      service: string; action: string; resourceType: string; resourceId: string; outcome: string;
+      moduleKey: string; enabled: boolean; reason: string | null;
+    };
     expect(ap.service).toBe("admin");
     expect(ap.action).toBe("module_toggle");
     expect(ap.resourceType).toBe("config");
-    expect(ap.resourceId).toBe(TENANT);
+    // The audited resource is the module that was toggled (config/consumer.ts,
+    // #1864 "audited, confirmed writes"), not the tenant: the tenant is already
+    // the event's own tenantId, the module key is what an auditor needs to see.
+    expect(ap.resourceId).toBe("finance");
+    expect(ap.moduleKey).toBe("finance");
+    expect(ap.enabled).toBe(true);
+    expect(ap.reason).toBeNull();
     expect(ap.outcome).toBe("success");
   });
 

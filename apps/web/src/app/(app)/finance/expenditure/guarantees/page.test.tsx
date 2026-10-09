@@ -22,4 +22,14 @@ describe("GuaranteesPage", () => {
     expect(screen.queryByText("guarantees-table")).not.toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(4);
   });
+
+  // GAP2-FINANCE-GUARANTEES-COPY-08: the copy must make the read-only,
+  // Procurement-managed nature unambiguous and not imply any Finance action.
+  it("states the register is a read-only mirror of Procurement-managed instruments", async () => {
+    loaderMock.mockResolvedValue({ data: [], source: "api" });
+    render(await GuaranteesPage());
+    expect(screen.getByText(/read-only mirror of Procurement-managed/i)).toBeInTheDocument();
+    // The old subtitle "Bank guarantees, performance securities, and earnest money deposits." is gone.
+    expect(screen.queryByText("Bank guarantees, performance securities, and earnest money deposits.")).not.toBeInTheDocument();
+  });
 });

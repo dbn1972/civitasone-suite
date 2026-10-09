@@ -1,7 +1,21 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import * as vendorRepo from "../vendor/repo.js";
+import * as poRepo from "../po/repo.js";
 import type { GrnRow } from "./schema.js";
+
+/**
+ * GAP2-PROCUREMENT-GRN-DETAIL-06 — GRN rows carry the cross-domain PO reference
+ * as the opaque composite `procurement_po:<uuid>` (house rule 13). Extract the
+ * bare PO uuid so callers can resolve it to a human PO number; null for a
+ * missing/placeholder ref.
+ */
+function poIdFromRef(ref: string | null | undefined): string | null {
+  if (!ref) return null;
+  const PREFIX = "procurement_po:";
+  const id = ref.startsWith(PREFIX) ? ref.slice(PREFIX.length) : ref;
+  return id && id !== "undefined" ? id : null;
+}
 
 export async function getGrn(id: string, tenantId: string): Promise<Record<string, unknown> | null> {
   const row = await cache.getOrLoad<GrnRow | null>(
@@ -14,10 +28,18 @@ export async function getGrn(id: string, tenantId: string): Promise<Record<strin
   const inspection = await repo.findInspectionByGrnId(id);
   const vendor = await vendorRepo.findVendorById(row.vendorId, tenantId);
 
+  // GAP2-PROCUREMENT-GRN-DETAIL-06 — resolve the opaque poRef to its human PO
+  // number so the web detail can render a readable link instead of the raw
+  // `procurement_po:<uuid>` composite. poId is still exposed for the link href.
+  const poId = poIdFromRef(row.poRef);
+  const po = poId ? await poRepo.findPoById(poId, tenantId) : null;
+
   return {
     id: row.id,
     grnNo: row.grnNo,
     poRef: row.poRef,
+    poId: poId ?? undefined,
+    poNo: po?.poNo ?? undefined,
     vendor: vendor?.name ?? row.vendorId.slice(0, 8),
     vendorId: row.vendorId,
     receivedDate: String(row.receivedDate),
@@ -74,9 +96,16 @@ export async function listGrns(tenantId: string, limit: number, offset: number) 
   const vendors = await vendorRepo.listVendorsByTenant(tenantId, 500);
   const vendorNameById = new Map(vendors.map((v) => [v.id, v.name]));
   const countById = await repo.countItemsByGrnIds(grnRows.map((row) => row.id));
+  // GAP2-PROCUREMENT-GRN-DETAIL-06 — resolve each GRN's opaque poRef to a human
+  // PO number via a SINGLE tenant PO fetch (no N+1), mirroring the vendor-name
+  // map above, so the list column can show the PO number instead of the raw
+  // `procurement_po:<uuid>` composite.
+  const pos = await poRepo.listPosByTenant(tenantId, 500);
+  const poNoById = new Map(pos.map((p) => [p.id, p.poNo]));
 
   return grnRows.map((row) => {
     const status = mapGrnStatus(row.status);
+    const poId = poIdFromRef(row.poRef);
     // GAP-PROCUREMENT-GRN-04 — the three-way match is only known once the GRN
     // has a quality decision (accepted/rejected/partially_rejected). While it is
     // still draft/under_inspection/received/quality_check the match is pending,
@@ -88,6 +117,8 @@ export async function listGrns(tenantId: string, limit: number, offset: number) 
       id: row.id,
       grnNo: row.grnNo,
       poRef: row.poRef,
+      poId: poId ?? undefined,
+      poNo: (poId ? poNoById.get(poId) : undefined) ?? undefined,
       vendor: vendorNameById.get(row.vendorId) ?? row.vendorId.slice(0, 8),
       receivedDate: String(row.receivedDate),
       receivedBy: row.createdBy,

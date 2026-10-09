@@ -98,6 +98,7 @@ export async function decisionUpdate(
   body: DecisionUpdateInput,
 ): Promise<DecisionCommandAccepted> {
   await queue.publish(COMMANDS.decisionUpdate, {
+    messageId: randomUUID(),
     type: COMMANDS.decisionUpdate,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,

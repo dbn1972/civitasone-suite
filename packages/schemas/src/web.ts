@@ -1257,6 +1257,11 @@ export const GRNSummarySchema = z.object({
   id: z.string(),
   grnNo: z.string(),
   poRef: z.string(),
+  // GAP2-PROCUREMENT-GRN-DETAIL-06: server-resolved PO uuid (for linking) and
+  // human PO number (for display), so the web never renders the opaque
+  // `procurement_po:<uuid>` composite. Optional for an unresolvable/absent ref.
+  poId: z.string().optional(),
+  poNo: z.string().optional(),
   vendor: z.string(),
   receivedDate: z.string(),
   receivedBy: z.string(),
@@ -2289,6 +2294,23 @@ export const CourtOrderSummarySchema = z.object({
 });
 export const CourtOrderSummaryListSchema = z.array(CourtOrderSummarySchema);
 
+// GAP2-LEGAL-COURT-ORDERS-10: page-aware court-order response. `total` is the
+// true tenant count and `stats` are computed server-side over the full set so
+// the "Contempt Risk" tile is not derived from a 50-row page slice.
+export const CourtOrderStatsSchema = z.object({
+  total: z.number().int().nonnegative(),
+  pendingCompliance: z.number().int().nonnegative(),
+  complied: z.number().int().nonnegative(),
+  contemptRisk: z.number().int().nonnegative(),
+});
+export const CourtOrderPageSchema = z.object({
+  items: CourtOrderSummaryListSchema,
+  total: z.number().int().nonnegative(),
+  limit: z.number().int().positive(),
+  offset: z.number().int().nonnegative(),
+  stats: CourtOrderStatsSchema,
+});
+
 export const LegalOpinionSummarySchema = z.object({
   id: z.string(),
   opinionNo: z.string(),
@@ -2566,6 +2588,17 @@ export const KnowledgeDocSummarySchema = z.object({
   version: z.string().default("1.0"),
 });
 export const KnowledgeDocSummaryListSchema = z.array(KnowledgeDocSummarySchema);
+
+// GAP2-KNOWLEDGE-DASHBOARD-CAP-01: repository-wide document aggregate (not
+// page-capped) powering the dashboard StatCards + category chart.
+export const KnowledgeDocsSummarySchema = z.object({
+  total: z.number(),
+  byStatus: z.record(z.string(), z.number()).default({}),
+  byCategory: z.array(z.object({ category: z.string(), count: z.number() })).default([]),
+  circulars: z.number(),
+  active: z.number(),
+  archived: z.number(),
+});
 
 export const KnowledgeRecordSchema = z.object({
   id: z.string(),
@@ -2875,6 +2908,34 @@ export const FinanceDepositSummarySchema = z.object({
   version: z.number(),
 });
 export const FinanceDepositSummaryListSchema = z.array(FinanceDepositSummarySchema);
+
+// GAP2-FINANCE-PAYMENTS-TOTALS-03 / SANCTIONS-TOTALS-04 / TREASURY-DEPOSITS-TOTALS-06:
+// server-side register totals, aggregated in the DB so the stat cards reflect
+// EVERY row — never a capped (default-50) page summed on the client.
+export const PaymentsSummarySchema = z.object({
+  total: z.number().int().nonnegative(),
+  released: z.number().int().nonnegative(),
+  pendingApproval: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+});
+
+export const SanctionsSummarySchema = z.object({
+  total: z.number().int().nonnegative(),
+  active: z.number().int().nonnegative(),
+  pending: z.number().int().nonnegative(),
+  approved: z.number().int().nonnegative(),
+  // Bigint-safe paise string: SUM of amount_minor over APPROVED sanctions only.
+  approvedMinor: zMoneyMinorString,
+});
+
+export const FinanceDepositsSummarySchema = z.object({
+  total: z.number().int().nonnegative(),
+  active: z.number().int().nonnegative(),
+  refunded: z.number().int().nonnegative(),
+  forfeited: z.number().int().nonnegative(),
+  // Bigint-safe paise string: SUM of balance_minor over ACTIVE deposits.
+  activeBalanceMinor: zMoneyMinorString,
+});
 
 export const FinanceGuaranteeSummarySchema = z.object({
   id: z.string(),

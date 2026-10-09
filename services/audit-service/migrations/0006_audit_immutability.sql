@@ -24,6 +24,32 @@ BEGIN
 END;
 $$;
 
+-- IDEMPOTENCY (GAP2-PLATFORM-MIGRATIONS-IDEMPOTENT-02): the REVOKE below strips
+-- the owner's own TRIGGER privilege from the parent's ACL and, via partition
+-- propagation, from each child partition. A second run of a bare
+-- `CREATE TRIGGER events.events` (which cascades to every partition) then fails
+-- with "permission denied for table events_yYYYYmMM" on the first partition.
+-- Fix: re-grant TRIGGER to the owner across the whole partition tree first,
+-- then (re)create the trigger. The owner may grant on tables it owns, so this
+-- runs under the migration's own audit_svc role. This block also makes 0006
+-- authoritative over 0005 (same trigger name, newer reject_audit_mutation
+-- function) on every run, not just the first.
+DO $$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT n.nspname AS nsp, c.relname AS rel
+    FROM pg_inherits i
+    JOIN pg_class c ON c.oid = i.inhrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE i.inhparent = 'events.events'::regclass
+    UNION ALL
+    SELECT 'events', 'events'
+  LOOP
+    EXECUTE format('GRANT TRIGGER ON %I.%I TO audit_svc', r.nsp, r.rel);
+  END LOOP;
+END $$;
+
 DROP TRIGGER IF EXISTS trg_events_immutable ON events.events;
 CREATE TRIGGER trg_events_immutable
   BEFORE UPDATE OR DELETE ON events.events

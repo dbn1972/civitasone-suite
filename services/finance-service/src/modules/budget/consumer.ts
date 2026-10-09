@@ -64,7 +64,7 @@ export async function handleAllocationDistributionCreate(
       effectiveFrom: p.effectiveFrom ?? new Date().toISOString().slice(0, 10),
       createdBy: msg.actorId, updatedBy: msg.actorId,
     });
-    await audit(tx, msg, "create", "allocation_distribution", p.id);
+    await audit(tx as Parameters<typeof enqueue>[0], msg, "create", "allocation_distribution", p.id);
   });
 }
 
@@ -86,7 +86,7 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
         allocatedMinor: 0n, utilisedMinor: 0n, currency: "INR",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      await audit(tx, msg, "create", "budget", p.id);
+      await audit(tx as Parameters<typeof enqueue>[0], msg, "create", "budget", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "budget", `${(msg.payload as any).headId}:${(msg.payload as any).fy}`));
   });
@@ -108,7 +108,7 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
       if (!moved) {
         throw new DomainError("INSUFFICIENT_SAVINGS", `source budget ${p.fromBudgetId} lacks savings for ${amount} paise`);
       }
-      await audit(tx, msg, "re_appropriate", "budget", p.id);
+      await audit(tx as Parameters<typeof enqueue>[0], msg, "re_appropriate", "budget", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "budget", p.id));
     await cache.invalidate(cache.makeKey(msg.tenantId, "budget", p.fromBudgetId));
@@ -129,13 +129,13 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
         currency: p.currency ?? "INR", status: "pending_approval",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      await audit(tx, msg, "create", "sanction", p.id);
+      await audit(tx as Parameters<typeof enqueue>[0], msg, "create", "sanction", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "sanction", p.id));
   });
 
   sub(COMMANDS.sanctionApprove, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string };
+    const p = msg.payload as { id: string; tenantId: string; reason?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const sanction = await repo.findSanctionByIdTx(tx, p.id);
@@ -160,7 +160,7 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { sanctionId: p.id, headId: sanction.headId, amountMinor: minorString(sanction.amountMinor) },
       });
-      await audit(tx, msg, "approve", "sanction", p.id);
+      await audit(tx as Parameters<typeof enqueue>[0], msg, "approve", "sanction", p.id, p.reason ? { reason: p.reason } : undefined);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "sanction", p.id));
   });
@@ -174,7 +174,7 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
         throw new NonRetryableError(`[finance/budget] IDOR or not-found: id=${p.id} tenant=${p.tenantId}`);
       assertSanctionApproverDistinct(sanction.createdBy, msg.actorId);
       await repo.updateSanction(tx, p.id, { status: "cancelled", updatedBy: msg.actorId });
-      await audit(tx, msg, "reject", "sanction", p.id);
+      await audit(tx as Parameters<typeof enqueue>[0], msg, "reject", "sanction", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "sanction", p.id));
   });
@@ -195,7 +195,7 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
         status: "pending_approval", updatedBy: msg.actorId,
         efileSubmittedAt: new Date(), efileFileNo: p.fileNo ?? null,
       });
-      await audit(tx, msg, "submit_for_eoffice_approval", "sanction", p.id);
+      await audit(tx as Parameters<typeof enqueue>[0], msg, "submit_for_eoffice_approval", "sanction", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "sanction", p.id));
   });
@@ -210,7 +210,7 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
         amountMinor: BigInt(p.amountMinor), reason: p.reason, status: "pending_approval",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      await audit(tx, msg, "submit_for_eoffice_approval", "reappropriation", p.id);
+      await audit(tx as Parameters<typeof enqueue>[0], msg, "submit_for_eoffice_approval", "reappropriation", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "reappropriation", p.id));
   });
@@ -227,7 +227,7 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
         allocatedMinor: BigInt(p.allocatedMinor),
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      await audit(tx, msg, "upsert", "budget_allocation", p.id);
+      await audit(tx as Parameters<typeof enqueue>[0], msg, "upsert", "budget_allocation", p.id);
     });
   });
 
@@ -259,7 +259,7 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
         ...(p.reason ? { reason: p.reason } : {}),
         createdBy: msg.actorId,
       });
-      await audit(tx, msg, "reappropriate", "budget_allocation", p.id);
+      await audit(tx as Parameters<typeof enqueue>[0], msg, "reappropriate", "budget_allocation", p.id);
     });
   });
 
@@ -285,7 +285,7 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
           effectiveFrom: row.effectiveFrom,
         },
       });
-      await audit(tx, msg, "issue", "allocation_distribution", p.id);
+      await audit(tx as Parameters<typeof enqueue>[0], msg, "issue", "allocation_distribution", p.id);
     });
   });
 
@@ -304,7 +304,7 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
         status: "acknowledged", acknowledgedBy: msg.actorId, acknowledgedAt: new Date(),
         acknowledgeNote: p.note ?? null, updatedBy: msg.actorId,
       });
-      await audit(tx, msg, "acknowledge", "allocation_distribution", p.id);
+      await audit(tx as Parameters<typeof enqueue>[0], msg, "acknowledge", "allocation_distribution", p.id);
     });
   });
 
@@ -323,7 +323,7 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
         effectiveFrom: p.effectiveFrom ?? new Date().toISOString().slice(0, 10),
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      await audit(tx, msg, "create", "budget_proposal", p.id);
+      await audit(tx as Parameters<typeof enqueue>[0], msg, "create", "budget_proposal", p.id);
     });
   });
 
@@ -338,7 +338,7 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
       if (!row) throw new NonRetryableError(`[finance/budget] entity ${p.id} not found for tenant ${p.tenantId}`);
       assertProposalTransition(row.status as any, "submitted");
       await repo.updateProposal(tx, p.id, { status: "submitted", updatedBy: msg.actorId });
-      await audit(tx, msg, "transition_submitted", "budget_proposal", p.id);
+      await audit(tx as Parameters<typeof enqueue>[0], msg, "transition_submitted", "budget_proposal", p.id);
     });
   });
 
@@ -356,7 +356,7 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
       await repo.updateProposal(tx, p.id, {
         status: to, reviewNote: p.note ?? null, reviewedBy: msg.actorId, reviewedAt: new Date(), updatedBy: msg.actorId,
       } as any);
-      await audit(tx, msg, `transition_${to}`, "budget_proposal", p.id);
+      await audit(tx as Parameters<typeof enqueue>[0], msg, `transition_${to}`, "budget_proposal", p.id);
     });
   });
 
@@ -380,7 +380,7 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
         effectiveFrom: parent.effectiveFrom, version: nextVersion(parent.version),
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      await audit(tx, msg, "revise", "budget_proposal", p.id);
+      await audit(tx as Parameters<typeof enqueue>[0], msg, "revise", "budget_proposal", p.id);
     });
   });
 
@@ -406,7 +406,7 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
           proposedMinor: row.proposedMinor.toString(),
         },
       });
-      await audit(tx, msg, "approve", "budget_proposal", p.id);
+      await audit(tx as Parameters<typeof enqueue>[0], msg, "approve", "budget_proposal", p.id);
     });
   });
 
@@ -435,7 +435,7 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
         effectiveFrom: p.effectiveFrom,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      await audit(tx, msg, "create", "budget_outcome", p.id);
+      await audit(tx as Parameters<typeof enqueue>[0], msg, "create", "budget_outcome", p.id);
     });
   });
 
@@ -453,7 +453,7 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
       await outcomeRepo.updateOutcome(tx, p.id, {
         achievedValue: BigInt(p.achievedValue), achievementRecorded: true, updatedBy: msg.actorId,
       });
-      await audit(tx, msg, "record_achievement", "budget_outcome", p.id);
+      await audit(tx as Parameters<typeof enqueue>[0], msg, "record_achievement", "budget_outcome", p.id);
     });
   });
 
@@ -483,7 +483,7 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
           achievedValue: row.achievedValue.toString(), targetValue: row.targetValue.toString(),
         },
       });
-      await audit(tx, msg, "evaluate", "budget_outcome", p.id);
+      await audit(tx as Parameters<typeof enqueue>[0], msg, "evaluate", "budget_outcome", p.id);
     });
   });
 
@@ -516,7 +516,7 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
         }
         throw err;
       }
-      await audit(tx, msg, "set_lines", "demand_grant", p.demandId);
+      await audit(tx as Parameters<typeof enqueue>[0], msg, "set_lines", "demand_grant", p.demandId);
     });
   });
 
@@ -536,7 +536,7 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
         status: "pending_approval", effectiveFrom: p.effectiveFrom,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      await audit(tx, msg, "create", "supplementary_demand", p.id);
+      await audit(tx as Parameters<typeof enqueue>[0], msg, "create", "supplementary_demand", p.id);
     });
   });
 
@@ -572,7 +572,7 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
           amountMinor: row.amountMinor.toString(), kind: row.kind, authority: row.authority,
         },
       });
-      await audit(tx, msg, "approve", "supplementary_demand", p.id);
+      await audit(tx as Parameters<typeof enqueue>[0], msg, "approve", "supplementary_demand", p.id);
     });
   });
 
@@ -589,17 +589,87 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
       await suppRepo.updateSupplementary(tx, p.id, {
         status: "rejected", rejectReason: p.reason, updatedBy: msg.actorId,
       });
-      await audit(tx, msg, "reject", "supplementary_demand", p.id);
+      await audit(tx as Parameters<typeof enqueue>[0], msg, "reject", "supplementary_demand", p.id);
     });
   });
 
+  // GAP2-FINANCE-CHART-OF-ACCOUNTS-07: budget-head (chart-of-accounts) create.
+  // The route validates (parent/level, admin control-flag gate) and publishes;
+  // this consumer performs the insert and enqueues the audit event in ONE
+  // transaction — no route handler writes to Postgres directly anymore.
+  sub(COMMANDS.accountCreate, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; code: string; name: string; level: number;
+      hoaCode?: string | null; classification?: string | null; parentId?: string | null; isControl?: boolean;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await repo.insertHead(tx as Parameters<typeof repo.insertHead>[0], {
+        id: p.id, tenantId: p.tenantId,
+        code: p.code, name: p.name, level: p.level,
+        hoaCode: p.hoaCode ?? null, classification: p.classification ?? null,
+        parentId: p.parentId ?? null,
+        isControl: p.isControl ?? false,
+        createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      // Flagging a head as a control account gates manual journals, so the
+      // control change is audited with its old -> new value, same as before.
+      if (p.isControl) await auditHeadControl(tx, msg, p.id, false, true);
+    });
+    await cache.invalidateResource(msg.tenantId, "accounts");
+  });
+
+  // GAP2-FINANCE-CHART-OF-ACCOUNTS-07: budget-head update (name / classification
+  // / isControl). Mirrors the old route transaction: re-read the before value
+  // inside the tx so the control-flag audit records what was actually replaced.
+  sub(COMMANDS.accountUpdate, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; name?: string; classification?: string | null; isControl?: boolean;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const before = await repo.findHeadByIdTx(tx as Parameters<typeof repo.findHeadByIdTx>[0], p.id);
+      if (!before || before.tenantId !== p.tenantId) {
+        throw new NonRetryableError(`[finance/budget] head ${p.id} not found for tenant ${p.tenantId}`);
+      }
+      const patch: Record<string, unknown> = { updatedBy: msg.actorId };
+      if (p.name !== undefined) patch.name = p.name;
+      if (p.classification !== undefined) patch.classification = p.classification;
+      if (p.isControl !== undefined) patch.isControl = p.isControl;
+      await repo.updateHead(tx as Parameters<typeof repo.updateHead>[0], p.id, patch as Parameters<typeof repo.updateHead>[2]);
+      // Only a genuine control-flag change is audited (old -> new), matching the
+      // original route; a plain rename or an unchanged isControl writes none.
+      if (p.isControl !== undefined && before.isControl !== p.isControl) {
+        await auditHeadControl(tx, msg, p.id, before.isControl, p.isControl === true);
+      }
+    });
+    await cache.invalidateResource(msg.tenantId, "accounts");
+  });
 
 }
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
+/** Audit a control-flag change on a budget head (old -> new), in-transaction. */
+async function auditHeadControl(
+  tx: Parameters<typeof enqueue>[0],
+  msg: CommandEnvelope<unknown>,
+  headId: string,
+  oldValue: boolean,
+  newValue: boolean,
+): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "finance", action, resourceType, resourceId, outcome: "success" },
+    payload: {
+      service: "finance", action: "update_head_control", resourceType: "finance_head", resourceId: headId,
+      outcome: "success", details: { isControl: { old: oldValue, new: newValue } },
+    },
+  });
+}
+
+async function audit(tx: Parameters<typeof enqueue>[0], msg: Pick<CommandEnvelope, "tenantId" | "actorId" | "correlationId">, action: string, resourceType: string, resourceId: string, details?: Record<string, unknown>): Promise<void> {
+  await enqueue(tx, {
+    topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+    tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+    payload: { service: "finance", action, resourceType, resourceId, outcome: "success", ...(details ? { details } : {}) },
   });
 }

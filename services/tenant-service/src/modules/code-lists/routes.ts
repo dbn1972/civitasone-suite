@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, RouteHandlerMethod } from "fastify";
 import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -10,11 +10,15 @@ const READ = [...ADMIN, "tenant_user"];
 
 export async function codeListRoutes(app: FastifyInstance): Promise<void> {
   // List tenant + global code lists.
-  app.get("/v1/code-lists", async (req, reply) => {
+  const listLists: RouteHandlerMethod = async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, READ);
     const data = await repo.listLists(ctx.tenantId);
     return reply.send({ data, meta: { total: data.length } });
-  });
+  };
+  // GAP2-TENANT-WIRING-01: web code-lists loader calls /api/v1/tenant/code-lists
+  // (gateway forwards verbatim). Alias so it resolves instead of 404.
+  app.get("/v1/code-lists", listLists);
+  app.get("/v1/tenant/code-lists", listLists);
 
   // Lookup active values for a list code (tenant-owned or global fallback).
   app.get("/v1/code-lists/:code/values", async (req, reply) => {

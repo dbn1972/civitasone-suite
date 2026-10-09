@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, integer, timestamp, jsonb, text, boolean, date } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, bigint, timestamp, jsonb, text, boolean, date } from "drizzle-orm/pg-core";
 
 export const sewerageSchema = pgSchema("civitas_sewerage");
 
@@ -11,7 +11,10 @@ export const sewerageApplications = sewerageSchema.table("sewerage_applications"
   waterConnectionRef: text("water_connection_ref"),
   connectionClass: varchar("connection_class", { length: 24 }).notNull(),
   siteDetails: jsonb("site_details").$type<Record<string, unknown>>(),
-  feeMinor: integer("fee_minor"),
+  // Money minor units (paise), stored as bigint (see migrations/
+  // 0005_money_bigint_applications.sql) — was `integer`, which overflows
+  // past ~₹2.14 crore (2^31 paise); matches sibling bills/desludging columns.
+  feeMinor: bigint("fee_minor", { mode: "bigint" }),
   feePaid: boolean("fee_paid").notNull().default(false),
   feasibilityReport: jsonb("feasibility_report").$type<Record<string, unknown>>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

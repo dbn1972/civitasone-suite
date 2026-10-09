@@ -29,12 +29,12 @@ describe("RecurringEntriesPage", () => {
           {
             id: "r1",
             name: "Monthly Rent",
-            voucher_type: "journal",
+            voucherType: "journal",
             frequency: "monthly",
-            amount_minor: "500000",
-            next_run_date: "2026-09-01",
-            end_date: null,
-            is_active: true,
+            amountMinor: "500000",
+            nextRunDate: "2026-09-01",
+            endDate: null,
+            isActive: true,
           },
         ],
         source: "api",
@@ -58,15 +58,50 @@ describe("RecurringEntriesPage", () => {
     expect(screen.getByText("No recurring entries yet")).toBeInTheDocument();
   });
 
-  it("shows the data-source badge when the loader falls back on error", async () => {
+  // GAP2-FINANCE-RECURRING-ENTRIES-07: a failed /recurring-entries fetch must
+  // render a retry error state replacing the stats + table, NOT a believable
+  // "Total Templates 0" + "no recurring entries" clean record. (Before this
+  // fix the page showed only a small DataSourceBadge and the "0" stats/empty
+  // table.)
+  it("renders a retry error state (not 0-stats + empty table) when the entries fetch fails", async () => {
     fetchJsonMock
-      .mockResolvedValueOnce({ data: [], source: "error" })
+      .mockResolvedValueOnce({ data: [], source: "error", status: 500 })
       .mockResolvedValueOnce({ data: [], source: "api" });
 
     const ui = await RecurringEntriesPage();
     render(ui);
 
-    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+    // The retry affordance is present...
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    // ...and the misleading "0 / no recurring entries" clean record is NOT.
+    expect(screen.queryByText("Total Templates")).not.toBeInTheDocument();
+    expect(screen.queryByText("No recurring entries yet")).not.toBeInTheDocument();
+  });
+
+  // GAP2-FINANCE-RECURRING-ENTRIES-07: a 403 is an access-restricted state, not a retry.
+  it("renders an access-restricted state (no retry) when the entries fetch is 403", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce({ data: [], source: "error", status: 403 })
+      .mockResolvedValueOnce({ data: [], source: "api" });
+
+    const ui = await RecurringEntriesPage();
+    render(ui);
+
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Total Templates")).not.toBeInTheDocument();
+  });
+
+  // A genuine empty (200 []) still shows the empty state, not the error state.
+  it("still shows the empty state for a genuine empty entries list", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce({ data: [], source: "api" })
+      .mockResolvedValueOnce({ data: [], source: "api" });
+
+    const ui = await RecurringEntriesPage();
+    render(ui);
+
+    expect(screen.getByText("No recurring entries yet")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
   });
 
   // GAP-FINANCE-RECURRING-ENTRIES-03: an empty chart of accounts is NOT a load error.

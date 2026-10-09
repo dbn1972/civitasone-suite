@@ -56,6 +56,24 @@ export function canDoFinalizeAward(status: string): { allowed: boolean; reason?:
   return { allowed: true };
 }
 
+/**
+ * GAP2-WORKS-TENDERS-04: maker-checker (two-person rule) for award
+ * finalization. The finalizer must NOT be the actor who created the award,
+ * and (for the DO level) must NOT be the actor who performed the prior DAO
+ * finalization — no single actor may drive the whole create→DAO→DO chain on
+ * a money-bearing award. Returns true → the caller rejects with 422
+ * SELF_APPROVAL_FORBIDDEN.
+ */
+export function isSelfApprovalAward(
+  finalizerId: string,
+  award: { createdBy?: string | null },
+  priorFinalizerId?: string | null,
+): boolean {
+  if (award.createdBy && award.createdBy === finalizerId) return true;
+  if (priorFinalizerId && priorFinalizerId === finalizerId) return true;
+  return false;
+}
+
 /** Roles that may read unredacted bid/quotation amounts (operators + approvers). */
 const BID_DETAIL_ROLES = new Set([
   "works_admin", "works_operator", "super_admin", "dao", "do", "sdo",

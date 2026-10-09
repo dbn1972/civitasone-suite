@@ -16,14 +16,36 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
-import { assertValidTransition, assertMakerChecker, computeEligibilityScore } from "./domain.js";
+import { assertValidTransition, assertMakerChecker, computeEligibilityScore, findApplicableRate, computeOverstayPenalty } from "./domain.js";
 import { eq, and, sql } from "drizzle-orm";
-import { estabQuarters, estabQuarterAllotments, estabLicenceFeeRates } from "./schema.js";
+import { randomUUID } from "node:crypto";
+import { estabQuarters, estabQuarterAllotments, estabLicenceFeeRates, estabOverstayPenalties } from "./schema.js";
 
 const log = pino({ name: "quarters-consumer" });
 const AUDIT_TOPIC = "audit.event.record";
 const PAYROLL_DEDUCTION_TOPIC = "payroll.deduction.create";
 const FINANCE_RECEIVABLE_TOPIC = "finance.receivable.create";
+
+/**
+ * Current calendar date in IST (Asia/Kolkata, UTC+5:30) as an ISO yyyy-mm-dd
+ * string. Occupation/vacation effective dates are business dates in IST, not
+ * UTC — using the raw UTC date can roll a late-evening IST action onto the
+ * wrong day and pick the wrong effective-dated rate.
+ */
+function istDateIso(d: Date): string {
+  const ist = new Date(d.getTime() + 5.5 * 3_600_000);
+  return ist.toISOString().slice(0, 10);
+}
+
+/**
+ * Derive the per-day licence fee (paise, integer floor) from the monthly rate
+ * using the actual number of days in the overstay month. Integer math only
+ * (money is bigint paise end to end).
+ */
+function dailyRateFromMonthly(monthlyMinor: bigint, onDate: Date): bigint {
+  const daysInMonth = new Date(onDate.getUTCFullYear(), onDate.getUTCMonth() + 1, 0).getUTCDate();
+  return monthlyMinor / BigInt(daysInMonth);
+}
 
 export function registerQuarterConsumers(queue: Queue): void {
   // ── Create Quarter ─────────────────────────────────────────────────────
@@ -118,13 +140,21 @@ export function registerQuarterConsumers(queue: Queue): void {
           .where(eq(estabQuarters.id, allotment.quarterId)).limit(1);
         const quarter = qtrRows[0];
         if (quarter && allotment.payLevel) {
+          // GAP2-ESTAB-QUARTERS-LICENCE-FEE-01: the rate table is effective-dated
+          // and has no unique constraint on (tenant, quarter_type, pay_level), so
+          // a bare .limit(1) returns an ARBITRARY row (possibly expired or not yet
+          // effective) once a fee revision adds a second row. Fetch ALL candidate
+          // rates and resolve the one applicable on the occupation date with the
+          // pure effective-dating helper, so the correct monthly amount is pushed
+          // into payroll + finance.
+          const occupationDateIso = istDateIso(new Date());
           const rateRows = await tx.select().from(estabLicenceFeeRates)
             .where(and(
               eq(estabLicenceFeeRates.tenantId, p.tenantId),
               eq(estabLicenceFeeRates.quarterType, quarter.quarterType),
               eq(estabLicenceFeeRates.payLevel, allotment.payLevel),
-            )).limit(1);
-          const rate = rateRows[0];
+            ));
+          const rate = findApplicableRate(rateRows, occupationDateIso);
           if (rate) {
             // Emit payroll deduction command
             await enqueue(tx, {
@@ -135,7 +165,7 @@ export function registerQuarterConsumers(queue: Queue): void {
                 deductionType: "quarter_licence_fee",
                 amountMinor: rate.monthlyMinor.toString(),
                 currency: rate.currency,
-                effectiveFrom: new Date().toISOString().slice(0, 10),
+                effectiveFrom: occupationDateIso,
                 refType: "quarter_allotment",
                 refId: p.id,
               },
@@ -191,13 +221,71 @@ export function registerQuarterConsumers(queue: Queue): void {
         const allotment = rows[0];
         if (!allotment) throw new Error("ALLOTMENT_NOT_FOUND");
         assertValidTransition(allotment.status, "vacated");
-        await tx.update(estabQuarterAllotments)
-          .set({ status: "vacated", vacatedAt: new Date(), handoverNotes: p.handoverNotes ?? null, updatedBy: msg.actorId, updatedAt: new Date(), version: sql`${estabQuarterAllotments.version} + 1` })
-          .where(and(eq(estabQuarterAllotments.id, p.id), eq(estabQuarterAllotments.version, p.version)));
+        const vacatedAt = new Date();
+        const vacated = await tx.update(estabQuarterAllotments)
+          .set({ status: "vacated", vacatedAt, handoverNotes: p.handoverNotes ?? null, updatedBy: msg.actorId, updatedAt: new Date(), version: sql`${estabQuarterAllotments.version} + 1` })
+          .where(and(eq(estabQuarterAllotments.id, p.id), eq(estabQuarterAllotments.version, p.version)))
+          .returning({ id: estabQuarterAllotments.id });
+        // Optimistic-lock miss (stale version): nothing was vacated, so do not
+        // free the quarter or raise an overstay penalty for a vacate that did not happen.
+        if (vacated.length === 0) throw new Error("ALLOTMENT_VERSION_CONFLICT");
         await tx.update(estabQuarters)
           .set({ status: "vacant", updatedBy: msg.actorId, updatedAt: new Date() })
           .where(eq(estabQuarters.id, allotment.quarterId));
         await audit(tx, msg, "allotment_vacated", "quarter_allotment", p.id);
+
+        // GAP2-ESTAB-QUARTERS-OVERSTAY-01: if the occupant vacated after the
+        // vacation_due_date, recover an overstay penalty. The feature (table +
+        // domain fn) existed but had no insert/recovery path, a direct
+        // revenue leak. Compute the penalty, persist one estab_overstay_penalties
+        // row (audited in the same tx) and emit a finance receivable for
+        // recovery. The daily rate is derived from the effective-dated licence
+        // fee for this quarter type + pay level on the due date.
+        if (allotment.vacationDueDate) {
+          const dueDate = new Date(`${allotment.vacationDueDate}T00:00:00.000Z`);
+          const { penaltyDays } = computeOverstayPenalty(dueDate, vacatedAt, 1n, 1);
+          if (penaltyDays > 0 && allotment.payLevel) {
+            const qtrRows = await tx.select().from(estabQuarters)
+              .where(eq(estabQuarters.id, allotment.quarterId)).limit(1);
+            const quarter = qtrRows[0];
+            if (quarter) {
+              const rateRows = await tx.select().from(estabLicenceFeeRates)
+                .where(and(
+                  eq(estabLicenceFeeRates.tenantId, p.tenantId),
+                  eq(estabLicenceFeeRates.quarterType, quarter.quarterType),
+                  eq(estabLicenceFeeRates.payLevel, allotment.payLevel),
+                ));
+              const rate = findApplicableRate(rateRows, allotment.vacationDueDate);
+              if (rate) {
+                const dailyRateMinor = dailyRateFromMonthly(rate.monthlyMinor, dueDate);
+                const multiplier = Number(process.env.ESTAB_OVERSTAY_MULTIPLIER ?? "2");
+                const { totalMinor } = computeOverstayPenalty(dueDate, vacatedAt, dailyRateMinor, multiplier);
+                const penaltyId = randomUUID();
+                await tx.insert(estabOverstayPenalties).values({
+                  id: penaltyId, tenantId: p.tenantId, allotmentId: p.id,
+                  employeeRef: allotment.employeeRef, penaltyDays,
+                  dailyRateMinor, multiplier: multiplier.toFixed(2),
+                  totalMinor, currency: rate.currency, status: "pending",
+                  createdBy: msg.actorId,
+                });
+                await enqueue(tx, {
+                  topic: FINANCE_RECEIVABLE_TOPIC, eventType: FINANCE_RECEIVABLE_TOPIC,
+                  tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+                  payload: {
+                    debtorRef: allotment.employeeRef,
+                    debtorType: "employee",
+                    amountMinor: totalMinor.toString(),
+                    currency: rate.currency,
+                    description: `Quarter overstay penalty (${penaltyDays} day(s)) - ${quarter.quarterNo}`,
+                    refType: "quarter_overstay_penalty",
+                    refId: penaltyId,
+                  },
+                });
+                await audit(tx, msg, "overstay_penalty_raised", "overstay_penalty", penaltyId);
+              }
+            }
+          }
+        }
       });
     } catch (err) { log.error({ err, messageId: msg.messageId }, "quarterVacate failed"); }
   });
@@ -251,14 +339,35 @@ export function registerQuarterConsumers(queue: Queue): void {
         });
         await audit(tx, msg, "licence_fee_rate_created", "licence_fee_rate", p.id);
       });
-    } catch (err) { log.error({ err, messageId: msg.messageId }, "quarterLicenceFeeRate failed"); }
+    } catch (err) {
+      // 23P01 = exclusion_violation (0049): a concurrent/overlapping rate won the
+      // race past the route pre-check. The tx rolled back (including its inbox
+      // mark); record an audited refusal in a fresh tx so the conflict is
+      // visible rather than silently dropped.
+      if (pgCode(err) === "23P01") {
+        const p = msg.payload as { id: string };
+        log.warn({ messageId: msg.messageId, rateId: p.id }, "quarterLicenceFeeRate refused: overlapping effective period");
+        await db.transaction(async (tx) => {
+          if (!(await markProcessed(tx, msg.messageId))) return;
+          await audit(tx, msg, "licence_fee_rate_refused_overlap", "licence_fee_rate", p.id, "refused");
+        });
+        return;
+      }
+      log.error({ err, messageId: msg.messageId }, "quarterLicenceFeeRate failed");
+    }
   });
 }
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
+/** Postgres SQLSTATE of an error, whether raw (postgres.js) or wrapped by drizzle (`cause`). */
+function pgCode(err: unknown): string | undefined {
+  const e = err as { code?: string; cause?: { code?: string } } | null;
+  return e?.code ?? e?.cause?.code;
+}
+
+async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string, outcome = "success"): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "estab", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "estab", action, resourceType, resourceId, outcome },
   });
 }

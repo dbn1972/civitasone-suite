@@ -166,6 +166,7 @@ import type {
   LegalCaseDetail,
   HearingSummary,
   CourtOrderSummary,
+  CourtOrderPage,
   LegalOpinionSummary,
   UserSummary,
   UserDetail,
@@ -184,6 +185,7 @@ import type {
   KPISummary,
   MISSummary,
   KnowledgeDocSummary,
+  KnowledgeDocsSummary,
   KnowledgeRecord,
   NotificationItem,
   NotificationDelivery,
@@ -207,6 +209,8 @@ import {
   PayrollStructureListSchema,
   ticketsListSchema,
   metricsListResponseSchema,
+  PaymentsSummarySchema,
+  FinanceDepositsSummarySchema,
   slaListResponseSchema,
   employeesListSchema,
   leaveListResponseSchema,
@@ -242,6 +246,7 @@ import {
   FinanceDashboardSchema,
   BudgetSummaryListSchema,
   SanctionSummaryListSchema,
+  SanctionsSummarySchema,
   SanctionDetailSchema,
   BillSummaryListSchema,
   BillDetailSchema,
@@ -345,7 +350,7 @@ import {
   LegalCaseSummaryListSchema,
   LegalCaseDetailSchema,
   HearingSummaryListSchema,
-  CourtOrderSummaryListSchema,
+  CourtOrderPageSchema,
   SessionSummaryListSchema,
   SessionDetailSchema,
   BreakglassSummaryListSchema,
@@ -365,6 +370,7 @@ import {
   KPISummaryListSchema,
   MISSummaryListSchema,
   KnowledgeDocSummaryListSchema,
+  KnowledgeDocsSummarySchema,
   KnowledgeRecordListSchema,
   NotificationItemListSchema,
   NotificationDeliveryListSchema,
@@ -449,9 +455,15 @@ function mapAuditRows(payload: unknown): AuditRowSummary[] | null {
     // "failure") -- an audit trail must never call an action successful
     // when it isn't sure. Flipped the fallback's polarity: only a
     // positively-known-good severity reads as success now.
-    const outcome: "success" | "failure" =
-      row.outcome === "success" || row.outcome === "failure"
-        ? row.outcome
+    // GAP2-AUDIT-HOME-11: when the row carries an EXPLICIT outcome string that
+    // is neither success nor failure (e.g. "skipped", "held"), preserve it so
+    // the Result column can render it as its own neutral pill rather than
+    // mislabelling it red "failure". The severity-derived fallback (LOG-06)
+    // only applies when there is no explicit outcome at all.
+    const explicitOutcome = toText(row.outcome);
+    const outcome: AuditRowSummary["outcome"] =
+      explicitOutcome
+        ? explicitOutcome
         : row.severity === "info" || row.severity === "warning"
           ? "success"
           : "failure";
@@ -944,7 +956,13 @@ export async function getInternalHelpdeskTicketById(id: string): Promise<LoaderR
           slaStatus: str(t.slaStatus),
           assignee: str(t.assignee),
           createdAt: str(t.createdAt),
-          requester: str(t.requester) ?? str(t.requestedBy),
+          // GAP2-HELPDESK-INTERNAL-DETAIL-01: the helpdesk-service TicketView
+          // exposes no requester NAME (requester identity is an opaque uuid in
+          // created_by, deliberately not surfaced). Map `requester` only from a
+          // real resolved-name field if the backend ever provides one; never
+          // from a uuid-only field. When absent it stays undefined and the
+          // detail page omits the "Requester:" row rather than rendering a blank.
+          requester: str(t.requester) ?? str(t.requesterName),
           ticketNo: str(t.ticketNo),
         } satisfies InternalHelpdeskTicketDetail;
       },
@@ -979,6 +997,23 @@ export async function getPayments(): Promise<LoaderResult<PaymentSummary[]>> {
     telemetryKey: "finance.payments",
     responseSchema: paymentsListSchema,
     mapResponse: mapPayments,
+  });
+}
+
+export type PaymentsSummary = z.infer<typeof PaymentsSummarySchema>;
+const PAYMENTS_SUMMARY_EMPTY: PaymentsSummary = { total: 0, released: 0, pendingApproval: 0, failed: 0 };
+
+/**
+ * GAP2-FINANCE-PAYMENTS-TOTALS-03: tenant-wide payment totals for the stat
+ * cards, aggregated server-side so "Total Payments" and the status counts
+ * reflect every payment, not just the first (capped) page the register shows.
+ */
+export async function getPaymentsSummary(): Promise<LoaderResult<PaymentsSummary>> {
+  return fetchJson<unknown, PaymentsSummary>("/api/v1/finance/payments/summary", PAYMENTS_SUMMARY_EMPTY, {
+    revalidateSeconds: 20,
+    telemetryKey: "finance.payments.summary",
+    responseSchema: PaymentsSummarySchema,
+    mapResponse: (p) => (isRecord(p) ? (p as PaymentsSummary) : null),
   });
 }
 
@@ -2378,6 +2413,23 @@ export async function getFinanceSanctions(): Promise<LoaderResult<SanctionSummar
   });
 }
 
+export type SanctionsSummary = z.infer<typeof SanctionsSummarySchema>;
+const SANCTIONS_SUMMARY_EMPTY: SanctionsSummary = { total: 0, active: 0, pending: 0, approved: 0, approvedMinor: "0" };
+
+/**
+ * GAP2-FINANCE-SANCTIONS-TOTALS-04: tenant-wide sanction totals (approved money
+ * value + status counts), aggregated server-side so the register's money total
+ * is never summed from a capped page.
+ */
+export async function getFinanceSanctionsSummary(): Promise<LoaderResult<SanctionsSummary>> {
+  return fetchJson<unknown, SanctionsSummary>("/api/v1/finance/sanctions/summary", SANCTIONS_SUMMARY_EMPTY, {
+    revalidateSeconds: 60,
+    telemetryKey: "finance.sanctions.summary",
+    responseSchema: SanctionsSummarySchema,
+    mapResponse: (p) => (isRecord(p) ? (p as SanctionsSummary) : null),
+  });
+}
+
 export async function getFinanceSanctionById(id: string): Promise<LoaderResult<SanctionDetail | null>> {
   return fetchJson<unknown, SanctionDetail | null>(`/api/v1/finance/sanctions/${id}`, null, {
     revalidateSeconds: 30,
@@ -2478,6 +2530,23 @@ export async function getFinanceDeposits(): Promise<LoaderResult<FinanceDepositS
     telemetryKey: "finance.deposits",
     responseSchema: FinanceDepositSummaryListSchema,
     mapResponse: (p) => getArrayPayload(p) as FinanceDepositSummary[] | null,
+  });
+}
+
+export type FinanceDepositsSummary = z.infer<typeof FinanceDepositsSummarySchema>;
+const FINANCE_DEPOSITS_SUMMARY_EMPTY: FinanceDepositsSummary = { total: 0, active: 0, refunded: 0, forfeited: 0, activeBalanceMinor: "0" };
+
+/**
+ * GAP2-FINANCE-TREASURY-DEPOSITS-TOTALS-06: tenant-wide deposit totals (counts +
+ * active balance), aggregated server-side so the register's cards are never
+ * derived from a capped page.
+ */
+export async function getFinanceDepositsSummary(): Promise<LoaderResult<FinanceDepositsSummary>> {
+  return fetchJson<unknown, FinanceDepositsSummary>("/api/v1/finance/deposits/summary", FINANCE_DEPOSITS_SUMMARY_EMPTY, {
+    revalidateSeconds: 120,
+    telemetryKey: "finance.deposits.summary",
+    responseSchema: FinanceDepositsSummarySchema,
+    mapResponse: (p) => (isRecord(p) ? (p as FinanceDepositsSummary) : null),
   });
 }
 
@@ -3472,12 +3541,41 @@ export type GemItem = {
   gemStatus: string;
 };
 
-export async function getProcurementGem(): Promise<LoaderResult<GemItem[]>> {
-  return fetchJson<unknown, GemItem[]>("/api/v1/procurement/gem/items", [], {
+export type ProcurementGemResult = LoaderResult<GemItem[]> & {
+  /**
+   * GAP2-PROCUREMENT-GEM-ITEMS-08: honest empty-state context the backend
+   * returns in meta. `integrationDisabled` → GeM is not configured;
+   * `reason` → a human string (e.g. "no search query supplied"). Both null on a
+   * successful search with results or a failed fetch.
+   */
+  integrationDisabled?: boolean;
+  reason?: string | null;
+};
+
+export async function getProcurementGem(q?: string): Promise<ProcurementGemResult> {
+  // GAP2-PROCUREMENT-GEM-ITEMS-08: pass the operator's search term through as
+  // ?q= (the backend aliases the live GeM catalog only when a term is given)
+  // and capture meta.reason / meta.integrationDisabled so the UI can show a
+  // specific empty state instead of a bare "no items".
+  let integrationDisabled = false;
+  let reason: string | null = null;
+  const qs = q && q.trim() ? `?q=${encodeURIComponent(q.trim())}` : "";
+  const result = await fetchJson<unknown, GemItem[]>(`/api/v1/procurement/gem/items${qs}`, [], {
     revalidateSeconds: 120,
     telemetryKey: "procurement.gem",
-    mapResponse: (p) => getArrayPayload(p) as GemItem[] | null,
+    mapResponse: (p) => {
+      if (isRecord(p) && isRecord(p.meta)) {
+        if (p.meta.integrationDisabled === true) integrationDisabled = true;
+        if (typeof p.meta.reason === "string") reason = p.meta.reason;
+      }
+      return getArrayPayload(p) as GemItem[] | null;
+    },
   });
+  return {
+    ...result,
+    integrationDisabled: result.source === "api" ? integrationDisabled : false,
+    reason: result.source === "api" ? reason : null,
+  };
 }
 
 export type EmdBgEntry = {
@@ -3516,12 +3614,41 @@ export type EmpanelmentEntry = {
   status: string;
 };
 
-export async function getProcurementEmpanelment(): Promise<LoaderResult<EmpanelmentEntry[]>> {
-  return fetchJson<unknown, EmpanelmentEntry[]>("/api/v1/procurement/empanelment", [], {
-    revalidateSeconds: 120,
-    telemetryKey: "procurement.empanelment",
-    mapResponse: (p) => getArrayPayload(p) as EmpanelmentEntry[] | null,
-  });
+/** The page size this loader requests — the empanelment route's maximum. */
+export const PROCUREMENT_EMPANELMENT_PAGE_LIMIT = 500;
+
+export type ProcurementEmpanelmentResult = LoaderResult<EmpanelmentEntry[]> & {
+  /**
+   * GAP2-PROCUREMENT-EMPANELMENT-02: tenant-wide empanelment total from the
+   * server's `meta.total` (a real COUNT, not the capped page length), so the
+   * "Total Empanelled" stat and a "showing N of M" hint are honest for tenants
+   * with more than one page. Null when the backend omitted it or the load failed.
+   */
+  total?: number | null;
+};
+
+export async function getProcurementEmpanelment(): Promise<ProcurementEmpanelmentResult> {
+  // GAP2-PROCUREMENT-EMPANELMENT-02: previously the loader sent no limit, so the
+  // route defaulted to 50 and the page presented that capped page length as the
+  // complete count. Request the route maximum (500) AND capture the real
+  // `meta.total` the service now returns before the mapper reduces the payload
+  // to the row array.
+  let total: number | null = null;
+  const result = await fetchJson<unknown, EmpanelmentEntry[]>(
+    `/api/v1/procurement/empanelment?limit=${PROCUREMENT_EMPANELMENT_PAGE_LIMIT}`,
+    [],
+    {
+      revalidateSeconds: 120,
+      telemetryKey: "procurement.empanelment",
+      mapResponse: (p) => {
+        if (isRecord(p) && isRecord(p.meta) && typeof p.meta.total === "number") {
+          total = p.meta.total;
+        }
+        return getArrayPayload(p) as EmpanelmentEntry[] | null;
+      },
+    },
+  );
+  return { ...result, total: result.source === "api" ? total : null };
 }
 
 export type PreBidConference = {
@@ -5355,13 +5482,42 @@ export async function getLegalHearings(): Promise<LoaderResult<HearingSummary[]>
   });
 }
 
-export async function getCourtOrders(): Promise<LoaderResult<CourtOrderSummary[]>> {
-  return fetchJson<unknown, CourtOrderSummary[]>("/api/v1/legal/court-orders", [], {
-    revalidateSeconds: 60,
-    telemetryKey: "legal.court-orders",
-    responseSchema: CourtOrderSummaryListSchema,
-    mapResponse: (p) => getArrayPayload(p) as CourtOrderSummary[] | null,
-  });
+export async function getCourtOrdersPage(opts?: {
+  limit?: number;
+  offset?: number;
+}): Promise<LoaderResult<CourtOrderPage>> {
+  const limit = Math.min(Math.max(Math.trunc(opts?.limit ?? 25), 1), 100);
+  const offset = Math.max(Math.trunc(opts?.offset ?? 0), 0);
+  const empty: CourtOrderPage = {
+    items: [],
+    total: 0,
+    limit,
+    offset,
+    stats: { total: 0, pendingCompliance: 0, complied: 0, contemptRisk: 0 },
+  };
+  return fetchJson<unknown, CourtOrderPage>(
+    `/api/v1/legal/court-orders?limit=${limit}&offset=${offset}`,
+    empty,
+    {
+      revalidateSeconds: 60,
+      telemetryKey: "legal.court-orders",
+      responseSchema: CourtOrderPageSchema,
+      mapResponse: (p) => {
+        if (!isRecord(p)) return null;
+        const items = Array.isArray(p.items) ? (p.items as CourtOrderSummary[]) : [];
+        const stats = isRecord(p.stats)
+          ? {
+              total: Number(p.stats.total) || 0,
+              pendingCompliance: Number(p.stats.pendingCompliance) || 0,
+              complied: Number(p.stats.complied) || 0,
+              contemptRisk: Number(p.stats.contemptRisk) || 0,
+            }
+          : empty.stats;
+        const total = typeof p.total === "number" && Number.isFinite(p.total) ? p.total : items.length;
+        return { items, total, limit, offset, stats };
+      },
+    },
+  );
 }
 
 export async function getLegalOpinions(): Promise<LoaderResult<LegalOpinionSummary[]>> {
@@ -5874,6 +6030,20 @@ export async function getKnowledgeRecords(): Promise<LoaderResult<KnowledgeRecor
     telemetryKey: "knowledge.records",
     responseSchema: KnowledgeRecordListSchema,
     mapResponse: (p) => getArrayPayload(p) as KnowledgeRecord[] | null,
+  });
+}
+
+// GAP2-KNOWLEDGE-DASHBOARD-CAP-01: repository-wide document aggregate for the
+// dashboard StatCards + category chart (not capped at the list page size).
+const EMPTY_KNOWLEDGE_SUMMARY: KnowledgeDocsSummary = {
+  total: 0, byStatus: {}, byCategory: [], circulars: 0, active: 0, archived: 0,
+};
+export async function getKnowledgeDocsSummary(): Promise<LoaderResult<KnowledgeDocsSummary>> {
+  return fetchJson<unknown, KnowledgeDocsSummary>("/api/v1/knowledge/documents/summary", EMPTY_KNOWLEDGE_SUMMARY, {
+    revalidateSeconds: 120,
+    telemetryKey: "knowledge.docs.summary",
+    responseSchema: KnowledgeDocsSummarySchema,
+    mapResponse: (p) => (p && typeof p === "object" ? (p as KnowledgeDocsSummary) : null),
   });
 }
 

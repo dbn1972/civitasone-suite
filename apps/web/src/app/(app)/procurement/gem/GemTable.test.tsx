@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, within, fireEvent } from "@testing-library/react";
 
 const refreshMock = vi.fn();
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: refreshMock }) }));
+const pushMock = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pushMock, refresh: refreshMock }) }));
 vi.mock("@/lib/sync/resource", () => ({ useSeededResource: vi.fn() }));
 
 import { useSeededResource } from "@/lib/sync/resource";
@@ -30,7 +31,7 @@ const ITEMS: GemItem[] = [
 ];
 
 describe("GemTable", () => {
-  beforeEach(() => { mockedHook.mockReset(); refreshMock.mockReset(); });
+  beforeEach(() => { mockedHook.mockReset(); refreshMock.mockReset(); pushMock.mockReset(); });
 
   // GAP-PROCUREMENT-GEM-02: formatMoney; 125050 paise -> ₹1,250.50.
   it("formats amounts with formatMoney", () => {
@@ -81,11 +82,45 @@ describe("GemTable", () => {
     expect(screen.getByRole("button", { name: /try again|retry/i })).toBeInTheDocument();
   });
 
-  // GAP-PROCUREMENT-GEM-01: genuine empty api -> the real empty state, 0 stats.
-  it("on a genuine empty api result, shows the empty state with 0 orders", () => {
+  // GAP-PROCUREMENT-GEM-01: genuine empty api WITH a query -> the no-results
+  // empty state, 0 stats (an empty result for a real search, not an error).
+  it("on a genuine empty api result for a query, shows the no-results state with 0 orders", () => {
     seed([], "live");
-    render(<GemTable items={[]} source="api" />);
-    expect(screen.getByText(/No GeM orders found/i)).toBeInTheDocument();
+    render(<GemTable items={[]} source="api" query="chairs" />);
+    expect(screen.getByText(/No GeM items found/i)).toBeInTheDocument();
+    expect(screen.getByText(/chairs/)).toBeInTheDocument();
     expect(screen.getByText("Total Orders").closest(".stat")).toHaveTextContent("0");
+  });
+
+  // GAP2-PROCUREMENT-GEM-ITEMS-08: integration-disabled is a DISTINCT empty
+  // state ("GeM integration is not configured"), never a generic "no items".
+  it("shows the integration-not-configured message when integrationDisabled", () => {
+    seed([], "live");
+    render(<GemTable items={[]} source="api" integrationDisabled reason="GeM integration is not configured (GEM_ENABLED/GEM_BASE_URL/GEM_API_KEY)." />);
+    // The title is the distinct, operator-facing heading; the server reason is
+    // shown as the diagnostic message beneath it.
+    expect(screen.getByRole("heading", { name: /GeM integration is not configured/i })).toBeInTheDocument();
+    expect(screen.getByText(/GEM_ENABLED/)).toBeInTheDocument();
+    expect(screen.queryByText(/No GeM items found/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Enter a search term/i)).not.toBeInTheDocument();
+  });
+
+  // GAP2-PROCUREMENT-GEM-ITEMS-08: no query entered -> prompt to search, not a
+  // bare "no items" that reads as "none exist".
+  it("prompts the operator to enter a search term when no query is supplied", () => {
+    seed([], "live");
+    render(<GemTable items={[]} source="api" query="" />);
+    expect(screen.getByText(/Enter a search term/i)).toBeInTheDocument();
+    expect(screen.queryByText(/No GeM items found/i)).not.toBeInTheDocument();
+  });
+
+  // GAP2-PROCUREMENT-GEM-ITEMS-08: the search box drives ?q= navigation.
+  it("navigates to ?q=<term> when a search is submitted", () => {
+    seed([], "live");
+    render(<GemTable items={[]} source="api" query="" />);
+    const box = screen.getByRole("searchbox", { name: /search the gem catalog/i });
+    fireEvent.change(box, { target: { value: "office chairs" } });
+    fireEvent.submit(box.closest("form")!);
+    expect(pushMock).toHaveBeenCalledWith("/procurement/gem?q=office%20chairs");
   });
 });

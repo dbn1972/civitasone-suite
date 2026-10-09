@@ -57,17 +57,24 @@ import { COMMANDS } from "../src/topics.js";
 const TENANT = "00000000-0000-0000-0000-000000000001";
 const ACTOR = "6e000001-ec00-4000-8000-0000000000ff";
 
-function makeMsg(type: string, payload: Record<string, unknown>) {
+function makeMsg(type: string, payload: Record<string, unknown>, actorId: string = ACTOR) {
   return {
     messageId: randomUUID(),
     type,
     tenantId: TENANT,
-    actorId: ACTOR,
+    actorId,
     correlationId: randomUUID(),
     schemaVersion: "1.0",
     payload,
   };
 }
+
+// GAP2-REFUND-APPROVAL-01 (segregation of duties): the request creator (ACTOR)
+// may not approve, and no single officer may approve both levels. These two
+// distinct approver identities let the notification-routing assertions below
+// drive a legitimate two-officer approval instead of self-approving as ACTOR.
+const CHECKER = "6e000001-ec00-4000-8000-0000000000c1";
+const AUTHORIZER = "6e000001-ec00-4000-8000-0000000000c2";
 
 /** Mirrors worker.ts's global subscribe wrap: every handler runs under the
  *  message's tenant GUC so FORCE RLS reads/writes succeed, exactly like
@@ -232,7 +239,7 @@ describe("refund-service cross-events wiring — status notification, real DB, n
 
     await q.publish(COMMANDS.approveRequest, makeMsg(COMMANDS.approveRequest, {
       id: randomUUID(), requestId, tenantId: TENANT, level: 1, remarks: "checker ok",
-    }));
+    }, CHECKER));
     await q.drain();
 
     // Level-1 (checker) approval alone must NOT notify the citizen — only
@@ -244,7 +251,7 @@ describe("refund-service cross-events wiring — status notification, real DB, n
 
     await q.publish(COMMANDS.approveRequest, makeMsg(COMMANDS.approveRequest, {
       id: randomUUID(), requestId, tenantId: TENANT, level: 2, remarks: "authorizer ok",
-    }));
+    }, AUTHORIZER));
     await q.drain();
 
     const [row] = await runWithTenant(TENANT, () =>
@@ -309,11 +316,11 @@ describe("refund-service cross-events wiring — status notification, real DB, n
 
     await q.publish(COMMANDS.approveRequest, makeMsg(COMMANDS.approveRequest, {
       id: randomUUID(), requestId, tenantId: TENANT, level: 1, remarks: "checker ok",
-    }));
+    }, CHECKER));
     await q.drain();
     await q.publish(COMMANDS.approveRequest, makeMsg(COMMANDS.approveRequest, {
       id: randomUUID(), requestId, tenantId: TENANT, level: 2, remarks: "authorizer ok",
-    }));
+    }, AUTHORIZER));
     await q.drain();
     // Drain away the requestApproved-side notification so it doesn't get
     // confused for the disbursement one below when both share this

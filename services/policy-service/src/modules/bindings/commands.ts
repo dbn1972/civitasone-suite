@@ -18,7 +18,7 @@ export async function createBinding(ctx: RequestContext, body: CreateBindingBody
 
 export async function revokeBinding(ctx: RequestContext, id: string, reason?: string): Promise<Accepted> {
   await queue.publish(COMMANDS.revokeBinding, {
-    type: COMMANDS.revokeBinding, tenantId: ctx.tenantId, actorId: ctx.actorId,
+    messageId: randomUUID(), type: COMMANDS.revokeBinding, tenantId: ctx.tenantId, actorId: ctx.actorId,
     correlationId: ctx.correlationId, schemaVersion: "1.0", payload: { id, ...(reason ? { reason } : {}) },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };

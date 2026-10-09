@@ -21,7 +21,7 @@
  *
  * Requirements validated: 3.2, 3.3, 3.4, 3.5, 3.6, 3.8
  */
-import { SYSTEM_ACTOR_ID } from "@civitasone/outbox";
+import { SYSTEM_ACTOR_ID, stableUuid } from "@civitasone/outbox";
 import { pino } from "pino";
 import { and, eq } from "drizzle-orm";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
@@ -271,6 +271,10 @@ async function checkOfflineAlert(
 
     // Send critical alert via NOTIFICATION_SEND
     await queue.publish(NOTIFICATION_SEND, {
+      // Stable id keyed on the same per-device offline-alert key the Redis TTL
+      // flag above dedups on, so a retried publish within the alert window
+      // reuses it and the consumer dedups rather than re-notifying.
+      messageId: stableUuid(alertKey),
       type: NOTIFICATION_SEND,
       tenantId,
       actorId: SYSTEM_ACTOR_ID,

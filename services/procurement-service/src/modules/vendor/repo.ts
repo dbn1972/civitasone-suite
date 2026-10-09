@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { procurementVendors, procurementEmpanelment, type VendorRow, type VendorInsert } from "./schema.js";
 import { procurementVendorScorecards } from "./scorecard-schema.js";
@@ -77,6 +77,23 @@ export type EmpanelmentListRow = {
  * scorecard rating (SVC-049) — no fabricated rating; 0/null when the vendor
  * has no computed scorecard yet.
  */
+/**
+ * GAP2-PROCUREMENT-EMPANELMENT-02 / GAP2-PROCUREMENT-GAPLIST-03: true row
+ * count over the tenant-filtered empanelment set (same WHERE as the list, no
+ * limit/offset) so meta.total is the dataset size, not the capped page length.
+ */
+export async function countEmpanelmentsByTenant(tenantId: string): Promise<number> {
+  const rows = await db.transaction((tx) => tx
+    .select({ n: sql<number>`COUNT(*)` })
+    .from(procurementEmpanelment)
+    .innerJoin(procurementVendors, and(
+      eq(procurementEmpanelment.vendorId, procurementVendors.id),
+      eq(procurementVendors.tenantId, tenantId),
+    ))
+    .where(eq(procurementEmpanelment.tenantId, tenantId)));
+  return Number(rows[0]?.n ?? 0);
+}
+
 export async function listEmpanelmentsByTenant(tenantId: string, limit: number, offset: number): Promise<EmpanelmentListRow[]> {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.

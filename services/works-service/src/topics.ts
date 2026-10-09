@@ -52,6 +52,7 @@ export const COMMANDS = {
   accountCompile:              "works.account.compile",
   // Contractor
   contractorCreate:            "works.contractor.create",
+  contractorUpdate:            "works.contractor.update",
   contractorRate:              "works.contractor.rate",
 } as const;
 
@@ -108,6 +109,9 @@ export const EVENTS = {
   billCreated:                  "works.bill.created",
   billFinalized:                "works.bill.finalized",
   accountCompiled:              "works.account.compiled",
+
+  // Contractor
+  contractorUpdated:            "works.contractor.updated",
 } as const;
 
 export const CONSUMED_EVENTS = {} as const;

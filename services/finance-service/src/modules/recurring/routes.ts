@@ -2,12 +2,54 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
+import { sendValidated } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
+
+/**
+ * GAP2-FINANCE-RECURRING-ENTRIES-08: the wire contract for GET
+ * /v1/finance/recurring-entries. Only the fields the UI consumes — the
+ * internal debit/credit account UUIDs and created_by are deliberately NOT
+ * exposed, and the payload is validated by this schema before it is sent, so a
+ * column rename can no longer silently change the API shape (mirrors
+ * budget/routes.ts's sendValidated(FinanceDemandSummaryListSchema, …)).
+ */
+export const RecurringEntryListItemSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  voucherType: z.string(),
+  frequency: z.string(),
+  amountMinor: z.string(),
+  nextRunDate: z.string().nullable(),
+  endDate: z.string().nullable(),
+  isActive: z.boolean(),
+});
+export const RecurringEntryListResponseSchema = z.object({ data: z.array(RecurringEntryListItemSchema) });
+
+/** A date-ish DB value (string | Date | null) rendered as YYYY-MM-DD or null. */
+function toDateString(v: unknown): string | null {
+  if (v == null) return null;
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v).slice(0, 10);
+}
+
+/** Map a raw snake_case row to the camelCase wire contract (drops account UUIDs / created_by). */
+export function serializeRecurringEntry(row: Record<string, unknown>): z.infer<typeof RecurringEntryListItemSchema> {
+  return {
+    id: String(row.id),
+    name: String(row.name ?? ""),
+    voucherType: String(row.voucher_type ?? "journal"),
+    frequency: String(row.frequency ?? ""),
+    amountMinor: String(row.amount_minor ?? "0"),
+    nextRunDate: toDateString(row.next_run_date),
+    endDate: toDateString(row.end_date),
+    isActive: Boolean(row.is_active),
+  };
+}
 
 /**
  * Voucher types a template may carry (GAP-FINANCE-RECURRING-ENTRIES-04): the
@@ -55,9 +97,7 @@ export async function recurringRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.query);
 
     const rows = await scopedRead((tx) => tx.execute(sql`
-      SELECT id, name, voucher_type, frequency, debit_account_id, credit_account_id,
-             amount_minor, narration, next_run_date, last_run_date, end_date,
-             is_active, created_at, created_by
+      SELECT id, name, voucher_type, frequency, amount_minor, next_run_date, end_date, is_active
       FROM gl.finance_recurring_entries
       WHERE tenant_id = ${ctx.tenantId}::uuid
         AND (${q.active ?? null}::boolean IS NULL OR is_active = ${q.active ?? null})
@@ -65,7 +105,12 @@ export async function recurringRoutes(app: FastifyInstance): Promise<void> {
       LIMIT ${q.limit} OFFSET ${q.offset}
     `));
 
-    return reply.send({ data: rows });
+    // GAP2-FINANCE-RECURRING-ENTRIES-08: serialize to the camelCase wire
+    // contract (no debit_account_id/credit_account_id/created_by) and validate
+    // the response before sending.
+    return sendValidated(reply, RecurringEntryListResponseSchema, {
+      data: (rows as Record<string, unknown>[]).map(serializeRecurringEntry),
+    });
   });
 
   app.post("/v1/finance/recurring-entries", async (req, reply) => {

@@ -37,6 +37,7 @@ export type Accepted = { id: string; status: string; correlationId: string };
 
 export async function assignCategory(ctx: RequestContext, fileId: string, body: AssignCategoryBody): Promise<Accepted> {
   await queue.publish(COMMANDS.assignCategory, {
+    messageId: randomUUID(),
     type: COMMANDS.assignCategory,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { fileId, tenantId: ctx.tenantId, category: body.category, disposalAction: body.disposalAction },
@@ -47,6 +48,7 @@ export async function assignCategory(ctx: RequestContext, fileId: string, body: 
 
 export async function recordDisposal(ctx: RequestContext, fileId: string, body: RecordDisposalBody): Promise<Accepted> {
   await queue.publish(COMMANDS.recordDisposal, {
+    messageId: randomUUID(),
     type: COMMANDS.recordDisposal,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { fileId, tenantId: ctx.tenantId, disposalAction: body.disposalAction },
@@ -67,6 +69,7 @@ export async function proposeWeedout(ctx: RequestContext, body: ProposeWeedoutBo
 
 export async function approveWeedout(ctx: RequestContext, weedoutId: string): Promise<Accepted> {
   await queue.publish(COMMANDS.weedoutApprove, {
+    messageId: randomUUID(),
     type: COMMANDS.weedoutApprove,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id: weedoutId, tenantId: ctx.tenantId },
@@ -77,6 +80,7 @@ export async function approveWeedout(ctx: RequestContext, weedoutId: string): Pr
 
 export async function rejectWeedout(ctx: RequestContext, weedoutId: string, body: RejectWeedoutBody): Promise<Accepted> {
   await queue.publish(COMMANDS.weedoutReject, {
+    messageId: randomUUID(),
     type: COMMANDS.weedoutReject,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id: weedoutId, tenantId: ctx.tenantId, reason: body.reason },
@@ -87,6 +91,7 @@ export async function rejectWeedout(ctx: RequestContext, weedoutId: string, body
 
 export async function destroyWeedout(ctx: RequestContext, weedoutId: string, body: DestroyWeedoutBody): Promise<Accepted> {
   await queue.publish(COMMANDS.weedoutDestroy, {
+    messageId: randomUUID(),
     type: COMMANDS.weedoutDestroy,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id: weedoutId, tenantId: ctx.tenantId, destructionCertRef: body.destructionCertRef },
@@ -100,6 +105,7 @@ export async function destroyWeedout(ctx: RequestContext, weedoutId: string, bod
 
 export async function transferToRecordRoom(ctx: RequestContext, fileId: string, body: TransferToRecordRoomBody): Promise<Accepted> {
   await queue.publish(COMMANDS.transferToRecordRoom, {
+    messageId: randomUUID(),
     type: COMMANDS.transferToRecordRoom,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { fileId, tenantId: ctx.tenantId, ...body },
@@ -120,6 +126,7 @@ export async function requisitionRecord(ctx: RequestContext, body: RequisitionRe
 
 export async function returnRecord(ctx: RequestContext, body: ReturnRecordBody): Promise<Accepted> {
   await queue.publish(COMMANDS.returnRecord, {
+    messageId: randomUUID(),
     type: COMMANDS.returnRecord,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { requisitionId: body.requisitionId, tenantId: ctx.tenantId },
@@ -142,6 +149,7 @@ export async function archiveFile(ctx: RequestContext, fileId: string, body: Arc
 
 export async function recordNaiTransfer(ctx: RequestContext, fileId: string, body: RecordNaiTransferBody): Promise<Accepted> {
   await queue.publish(COMMANDS.recordNaiTransfer, {
+    messageId: randomUUID(),
     type: COMMANDS.recordNaiTransfer,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { fileId, tenantId: ctx.tenantId, naiReference: body.naiReference, registerNo: body.registerNo ?? null, remarks: body.remarks ?? null },

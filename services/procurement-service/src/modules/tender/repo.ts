@@ -1,4 +1,4 @@
-import { and, desc, eq, isNotNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import {
   procurementTenders, procurementTenderBids, procurementTenderFinancialBids,
@@ -120,6 +120,25 @@ export type BidEvaluationRow = {
  * procurementTenderFinancialBids (sealed amounts) — financialScore here is
  * the evaluation-derived score column on the bid itself, not the raw amount.
  */
+/**
+ * GAP2-PROCUREMENT-GAPLIST-03: real COUNT(*) over the same tenant-filtered,
+ * technically-evaluated bid set (same WHERE as the list, no limit/offset).
+ */
+export async function countBidEvaluationsByTenant(tenantId: string): Promise<number> {
+  const rows = await db.transaction((tx) => tx
+    .select({ n: sql<number>`COUNT(*)` })
+    .from(procurementTenderBids)
+    .innerJoin(procurementTenders, and(
+      eq(procurementTenderBids.tenderId, procurementTenders.id),
+      eq(procurementTenders.tenantId, tenantId),
+    ))
+    .where(and(
+      eq(procurementTenderBids.tenantId, tenantId),
+      isNotNull(procurementTenderBids.technicalScore),
+    )));
+  return Number(rows[0]?.n ?? 0);
+}
+
 export async function listBidEvaluationsByTenant(tenantId: string, limit: number, offset: number): Promise<BidEvaluationRow[]> {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.

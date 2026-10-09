@@ -9,7 +9,7 @@ import { payrollTds } from "../statutory/schema.js";
 import { taxDeclarations, taxDeclarationWindows } from "./schema.js";
 import { exemptionCeilings } from "../fnf/schema.js";
 import { buildForm16 } from "./form16.js";
-import { computeTax, stdDeduction, UnconfiguredFyError } from "./engine.js";
+import { computeTax, stdDeduction, UnconfiguredFyError, getTaxConfig, type Regime, type FyTaxConfig } from "./engine.js";
 import { resolveRunStatutoryConfig } from "../payroll/consumer.js";
 import { HrmsUnavailableError, fetchPayrollInput } from "../../shared/hrms-client.js";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
@@ -475,6 +475,55 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
       sec80ccd1bCapMinor: cfg.sec80ccd1bCapMinor.toString(),
       landlordPanRentThresholdMinor: String(LANDLORD_PAN_RENT_THRESHOLD_MINOR),
     });
+  });
+
+  /**
+   * GAP2-PAYROLL-TAX-CONFIG-01: GET /v1/payroll/tax/slab-config?fy=2025-26
+   * The tenant's EFFECTIVE income-tax slab configuration for the FY — the same
+   * (tenant-override-then-platform-default) rows the TDS engine actually
+   * applies (engine.ts getTaxConfig), serialised for the Tax Configuration
+   * screen. Both regimes are returned so the page renders exactly what payroll
+   * computes, not a hard-coded statutory copy. A regime with no configured row
+   * for the FY is returned as null (the page shows an empty/"not available"
+   * state); if NEITHER regime is configured the route 422s FY_NOT_CONFIGURED.
+   */
+  app.get("/v1/payroll/tax/slab-config", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { fy } = z.object({ fy: z.string() }).parse(req.query);
+    const { startYear } = parseFy(fy);
+
+    const serialise = (regime: Regime) => {
+      let cfg: FyTaxConfig;
+      try {
+        cfg = getTaxConfig(regime, startYear, ctx.tenantId);
+      } catch (err) {
+        if (err instanceof UnconfiguredFyError) return null;
+        throw err;
+      }
+      return {
+        regime,
+        // Rupee thresholds (the engine's slab `from`/`to` are rupees; an
+        // open-ended top slab has `to: null`). The web formats these.
+        slabs: cfg.slabs.map((s) => ({
+          from: s.from,
+          to: Number.isFinite(s.to) ? s.to : null,
+          ratePct: Math.round(s.rate * 10000) / 100,
+        })),
+        stdDeduction: cfg.stdDeduction,
+        rebateIncomeCap: cfg.rebateIncomeCap,
+        rebateMax: cfg.rebateMax,
+        surchargeBands: cfg.surchargeBands.map((b) => ({ above: b.above, ratePct: Math.round(b.rate * 10000) / 100 })),
+      };
+    };
+
+    const newRegime = serialise("new");
+    const oldRegime = serialise("old");
+    if (!newRegime && !oldRegime) {
+      throw new HttpError(422, "FY_NOT_CONFIGURED",
+        `no tax configuration for FY ${fy}; configure payroll.tax_slab_config before viewing`);
+    }
+    return reply.send({ fy, new: newRegime, old: oldRegime });
   });
 
   /** GET /v1/payroll/tax-declarations/window?fy= -- submission window + whether it is open now (IST). */

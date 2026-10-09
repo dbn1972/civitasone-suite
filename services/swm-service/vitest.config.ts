@@ -22,7 +22,7 @@ export default defineConfig({
     },
     coverage: {
       provider: "v8",
-      exclude: ["dist/**", "src/index.ts", "src/worker.ts", "**/*.config.ts"],
+      exclude: ["dist/**", "src/index.ts", "src/worker.ts", "**/*.config.ts", "**/*.config.{ts,js,mjs,cjs}"],
       // REL-013: thresholds set at/just below real measured coverage
       // (lines 89.52 / branches 77.81 / functions 84.52 / statements
       // 89.52, via `pnpm --filter @civitasone/swm-service run coverage`

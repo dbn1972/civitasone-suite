@@ -32,6 +32,13 @@ import { registerProcessingConsumers } from "../src/modules/processing/consumer.
 import { registerReconciliationConsumers } from "../src/modules/reconciliation/consumer.js";
 import { hdr, drainQueue, waitFor, TENANT_A } from "./support.js";
 
+// GAP2-REFUND-APPROVAL-01: distinct non-creator approver identities for the
+// two-level maker-checker SOD (the default hdr() sub, ACTOR_A, is the creator
+// and so may not approve).
+const SOD_CHECKER = "e5000001-0000-4000-8000-00000000c001";
+const SOD_AUTHORIZER = "e5000001-0000-4000-8000-00000000c002";
+const APPROVER_ROLES = ["refund_admin", "refund_approver", "super_admin"];
+
 let app: FastifyInstance;
 
 beforeAll(async () => {
@@ -87,10 +94,14 @@ describe("refund-service HTTP routes — full request → approval → disbursem
     const id = await createSubmittedRequest();
 
     // Two-level maker-checker approval, in sequence, over real HTTP.
+    // GAP2-REFUND-APPROVAL-01 (segregation of duties): the creator (ACTOR_A,
+    // the default hdr() sub) may not approve, and no single officer may
+    // approve both levels — so level 1 and level 2 run as two DISTINCT
+    // non-creator officers.
     const approve1 = await app.inject({
       method: "POST",
       url: "/v1/refund/processing/approve",
-      headers: hdr(),
+      headers: hdr(SOD_CHECKER, TENANT_A, APPROVER_ROLES),
       payload: { requestId: id, level: 1, remarks: "checker ok" },
     });
     expect(approve1.statusCode).toBe(202);
@@ -104,7 +115,7 @@ describe("refund-service HTTP routes — full request → approval → disbursem
     const approve2 = await app.inject({
       method: "POST",
       url: "/v1/refund/processing/approve",
-      headers: hdr(),
+      headers: hdr(SOD_AUTHORIZER, TENANT_A, APPROVER_ROLES),
       payload: { requestId: id, level: 2, remarks: "authorizer ok" },
     });
     expect(approve2.statusCode).toBe(202);

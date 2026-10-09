@@ -26,4 +26,25 @@ export const dedupRules = crmSchema.table("dedup_rules", {
 export type DedupRuleRow = typeof dedupRules.$inferSelect;
 export type DedupRuleInsert = typeof dedupRules.$inferInsert;
 
-export const schema = { dedupRules };
+/**
+ * GAP2-CRM-DEDUP-CANDIDATES-07 — persisted DISMISSALS for the post-save
+ * duplicate-review screen. Candidate pairs are recomputed live from
+ * crm.contacts; this table only records which pairs an operator chose to
+ * suppress. `pairId` is the order-independent "min:max" contact-id key.
+ * Table created via migration 0112.
+ */
+export const dedupDismissals = crmSchema.table("dedup_dismissals", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull(),
+  pairId: varchar("pair_id", { length: 128 }).notNull(),
+  contactA: uuid("contact_a").notNull(),
+  contactB: uuid("contact_b").notNull(),
+  reason: varchar("reason", { length: 500 }),
+  dismissedBy: uuid("dismissed_by").notNull(),
+  dismissedAt: timestamp("dismissed_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type DedupDismissalRow = typeof dedupDismissals.$inferSelect;
+export type DedupDismissalInsert = typeof dedupDismissals.$inferInsert;
+
+export const schema = { dedupRules, dedupDismissals };

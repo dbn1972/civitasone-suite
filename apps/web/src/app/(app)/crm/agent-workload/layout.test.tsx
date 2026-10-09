@@ -45,12 +45,29 @@ describe("AgentWorkloadLayout (GAP-CRM-AGENT-WORKLOAD-01)", () => {
     expect(screen.getByText("workload editor")).toBeInTheDocument();
   });
 
-  it("admits the other admin roles the sibling layouts allow", () => {
-    for (const role of ["admin", "super_admin", "platform_admin", "tenant_admin"]) {
+  it("admits the teams-route admin roles (super_admin, tenant_admin)", () => {
+    // GAP2-CRM-AGENT-WORKLOAD-05: the gate now matches the crm-service teams
+    // routes exactly, which accept [crm_admin, super_admin, tenant_admin] for the
+    // capacity write. super_admin and tenant_admin are admitted.
+    for (const role of ["super_admin", "tenant_admin"]) {
       mockRedirect.mockReset();
       sessionWithRoles([role]);
       const { unmount } = render(<AgentWorkloadLayout>{`editor ${role}`}</AgentWorkloadLayout>);
       expect(mockRedirect).not.toHaveBeenCalled();
+      unmount();
+    }
+  });
+
+  it("redirects admin and platform_admin (no teams route accepts them)", () => {
+    // GAP2-CRM-AGENT-WORKLOAD-05: these roles passed the broad CRM_ADMIN_ROLES
+    // set but NO crm-service teams route accepts them, so they used to get a
+    // fully-wired capacity editor that could neither load (GET agents 403) nor
+    // save (PATCH capacity 403). The gate now denies them so UI and server agree.
+    for (const role of ["admin", "platform_admin"]) {
+      mockRedirect.mockReset();
+      sessionWithRoles([role]);
+      const { unmount } = render(<AgentWorkloadLayout>{`editor ${role}`}</AgentWorkloadLayout>);
+      expect(mockRedirect).toHaveBeenCalledWith("/crm");
       unmount();
     }
   });

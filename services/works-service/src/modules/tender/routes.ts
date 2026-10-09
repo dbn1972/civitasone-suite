@@ -5,7 +5,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
 import { getAwardById, getTenderById, countTenders, listTenders, listQuotations, tenderOrPreTenderExists } from "./repo.js";
-import { canDaoFinalizeAward, canDoFinalizeAward, canViewBidDetails, redactQuotation } from "./domain.js";
+import { canDaoFinalizeAward, canDoFinalizeAward, canViewBidDetails, redactQuotation, isSelfApprovalAward } from "./domain.js";
 import { findContractorById, findContractorByName } from "../contractor/repo.js";
 import { paginationSchema } from "../masters/validators.js";
 
@@ -159,6 +159,12 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
     const check = canDaoFinalizeAward(award.status);
     if (!check.allowed) throw new HttpError(422, "FINALIZATION_BLOCKED", check.reason!);
 
+    // GAP2-WORKS-TENDERS-04: maker-checker — the DAO finalizer must not be the
+    // actor who created the award (a money-bearing record). Self-finalize 422.
+    if (isSelfApprovalAward(ctx.actorId, { createdBy: award.createdBy })) {
+      throw new HttpError(422, "SELF_APPROVAL_FORBIDDEN", "The creator of an award cannot DAO-finalize it (maker-checker rule)");
+    }
+
     return sendAccepted(reply, acceptedResponseSchema, await commands.daoFinalizeAwardCommand(ctx, body.id));
   });
 
@@ -171,6 +177,13 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
     if (!award) throw new HttpError(404, "NOT_FOUND", "award not found");
     const check = canDoFinalizeAward(award.status);
     if (!check.allowed) throw new HttpError(422, "FINALIZATION_BLOCKED", check.reason!);
+
+    // GAP2-WORKS-TENDERS-04: maker-checker — the DO finalizer must differ from
+    // BOTH the award creator AND the DAO finalizer (no single actor may drive
+    // the whole create→DAO→DO chain). Self-finalize 422.
+    if (isSelfApprovalAward(ctx.actorId, { createdBy: award.createdBy }, award.daoFinalizedBy)) {
+      throw new HttpError(422, "SELF_APPROVAL_FORBIDDEN", "The DO finalizer must differ from both the award creator and the DAO finalizer (maker-checker rule)");
+    }
 
     return sendAccepted(reply, acceptedResponseSchema, await commands.doFinalizeAwardCommand(ctx, body.id));
   });

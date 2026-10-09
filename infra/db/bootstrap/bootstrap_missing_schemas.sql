@@ -32,6 +32,8 @@ CREATE SCHEMA IF NOT EXISTS quotas        AUTHORIZATION tenant_svc;
 
 \connect civitas_policy
 CREATE SCHEMA IF NOT EXISTS role_features AUTHORIZATION policy_svc;
+-- V0: policy-service's policies module (0013_policy_documents_tables.sql).
+CREATE SCHEMA IF NOT EXISTS policies      AUTHORIZATION policy_svc;
 
 \connect civitas_audit
 CREATE SCHEMA IF NOT EXISTS vigilance     AUTHORIZATION audit_svc;

@@ -4,7 +4,7 @@ import { getProcurementEmpanelment } from "../../../_data/loaders";
 import { EmpanelmentTable } from "./EmpanelmentTable";
 
 export default async function EmpanelmentPage() {
-  const { data: vendors, source } = await getProcurementEmpanelment();
+  const { data: vendors, source, total } = await getProcurementEmpanelment();
 
   return (
     <>
@@ -25,7 +25,7 @@ export default async function EmpanelmentPage() {
         }
       />
 
-      <EmpanelmentTable vendors={vendors} source={source} />
+      <EmpanelmentTable vendors={vendors} source={source} serverTotal={total ?? null} />
     </>
   );
 }

@@ -21,7 +21,7 @@ export default defineConfig({
     },
     coverage: {
       provider: "v8",
-      exclude: ["dist/**", "src/index.ts", "src/worker.ts"],
+      exclude: ["dist/**", "src/index.ts", "src/worker.ts", "**/*.config.{ts,js,mjs,cjs}"],
       // REL-013: thresholds set at/just below real measured coverage
       // (lines 96.34 / branches 86.12 / functions 95.78 / statements
       // 96.34, via `pnpm --filter @civitasone/roadcut-service run

@@ -46,6 +46,7 @@ export async function bookRoom(ctx: RequestContext, body: BookRoomBody): Promise
 
 export async function checkin(ctx: RequestContext, bookingId: string): Promise<Accepted> {
   await queue.publish(COMMANDS.roomCheckin, {
+    messageId: randomUUID(),
     type: COMMANDS.roomCheckin,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { bookingId, tenantId: ctx.tenantId },
@@ -56,6 +57,7 @@ export async function checkin(ctx: RequestContext, bookingId: string): Promise<A
 
 export async function checkout(ctx: RequestContext, bookingId: string, body: CheckoutBody): Promise<Accepted> {
   await queue.publish(COMMANDS.roomCheckout, {
+    messageId: randomUUID(),
     type: COMMANDS.roomCheckout,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { bookingId, tenantId: ctx.tenantId, ...body },

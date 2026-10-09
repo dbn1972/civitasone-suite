@@ -32,6 +32,7 @@ export default defineConfig({
         "src/modules/maintenance/consumer.ts",
         "src/modules/insurance/consumer.ts",
         "src/modules/enterprise/consumer.ts",
+        "**/*.config.{ts,js,mjs,cjs}",
       ],
       thresholds: {
         lines: 80,

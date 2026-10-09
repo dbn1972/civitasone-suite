@@ -9,6 +9,7 @@
  * This ensures real-time re-scoring on every ticket status or assignment update.
  */
 
+import { randomUUID } from "node:crypto";
 import { SYSTEM_ACTOR_ID } from "@civitasone/outbox";
 import type { Queue } from "@civitasone/queue";
 import { tenantScoped } from "../../shared/tenant-queue.js";
@@ -123,6 +124,7 @@ async function rescoreTicket(
     // Emit breach_risk_high event if threshold exceeded
     if (probability > BREACH_HIGH_THRESHOLD) {
       await queueInstance.publish(CONSUMES.mlBreachRiskHigh, {
+        messageId: randomUUID(),
         type: CONSUMES.mlBreachRiskHigh,
         tenantId,
         actorId: SYSTEM_ACTOR_ID,

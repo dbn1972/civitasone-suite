@@ -52,6 +52,7 @@ export async function subscriptionCreate(ctx: RequestContext, body: CreateSubscr
 
 export async function subscriptionUpgrade(ctx: RequestContext, subscriptionId: string, body: UpgradeSubscriptionBody): Promise<Accepted> {
   await queue.publish(COMMANDS.subscriptionUpgrade, {
+    messageId: randomUUID(),
     type: COMMANDS.subscriptionUpgrade,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,
@@ -64,6 +65,7 @@ export async function subscriptionUpgrade(ctx: RequestContext, subscriptionId: s
 
 export async function subscriptionCancel(ctx: RequestContext, subscriptionId: string, body: CancelSubscriptionBody): Promise<Accepted> {
   await queue.publish(COMMANDS.subscriptionCancel, {
+    messageId: randomUUID(),
     type: COMMANDS.subscriptionCancel,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,
@@ -76,6 +78,7 @@ export async function subscriptionCancel(ctx: RequestContext, subscriptionId: st
 
 export async function subscriptionRenew(ctx: RequestContext, subscriptionId: string, body: RenewSubscriptionBody): Promise<Accepted> {
   await queue.publish(COMMANDS.subscriptionRenew, {
+    messageId: randomUUID(),
     type: COMMANDS.subscriptionRenew,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,
@@ -88,6 +91,7 @@ export async function subscriptionRenew(ctx: RequestContext, subscriptionId: str
 
 export async function subscriptionSuspend(ctx: RequestContext, subscriptionId: string, body: SuspendSubscriptionBody): Promise<Accepted> {
   await queue.publish(COMMANDS.subscriptionSuspend, {
+    messageId: randomUUID(),
     type: COMMANDS.subscriptionSuspend,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,

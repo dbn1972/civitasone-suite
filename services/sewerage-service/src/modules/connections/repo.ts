@@ -12,7 +12,11 @@ export function appToView(r: ApplicationRow) {
     waterConnectionRef: r.waterConnectionRef,
     connectionClass: r.connectionClass,
     siteDetails: r.siteDetails,
-    feeMinor: r.feeMinor,
+    // feeMinor is a native JS bigint (drizzle bigint mode) or null — surface
+    // it as a canonical base-10 string so it JSON-serializes safely and keeps
+    // paise precision, exactly like desludging/repo.ts does for its booking
+    // feeMinor. Money is bigint paise end to end.
+    feeMinor: r.feeMinor != null ? r.feeMinor.toString() : null,
     feePaid: r.feePaid,
     feasibilityReport: r.feasibilityReport,
     createdAt: r.createdAt.toISOString(),

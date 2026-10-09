@@ -18,7 +18,7 @@ export async function createRole(ctx: RequestContext, body: CreateRoleBody): Pro
 
 export async function updateRole(ctx: RequestContext, id: string, body: UpdateRoleBody): Promise<Accepted> {
   await queue.publish(COMMANDS.updateRole, {
-    type: COMMANDS.updateRole, tenantId: ctx.tenantId, actorId: ctx.actorId,
+    messageId: randomUUID(), type: COMMANDS.updateRole, tenantId: ctx.tenantId, actorId: ctx.actorId,
     correlationId: ctx.correlationId, schemaVersion: "1.0", payload: { id, ...body },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };

@@ -1,6 +1,24 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, count } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { administrativeApprovals, technicalSanctions } from "./schema.js";
+
+/** Tenant-wide AA count — GAP2-WORKS-APPROVALS-05 true register total. */
+export async function countAa(tenantId: string): Promise<number> {
+  return scopedRead(async (tx) => {
+    const rows = await tx.select({ value: count() }).from(administrativeApprovals)
+      .where(eq(administrativeApprovals.tenantId, tenantId));
+    return Number(rows[0]?.value ?? 0);
+  });
+}
+
+/** Tenant-wide TS count — GAP2-WORKS-APPROVALS-05 true register total. */
+export async function countTs(tenantId: string): Promise<number> {
+  return scopedRead(async (tx) => {
+    const rows = await tx.select({ value: count() }).from(technicalSanctions)
+      .where(eq(technicalSanctions.tenantId, tenantId));
+    return Number(rows[0]?.value ?? 0);
+  });
+}
 
 export async function countAaForWork(tenantId: string, workId: string): Promise<number> {
   return scopedRead(async (tx) => {

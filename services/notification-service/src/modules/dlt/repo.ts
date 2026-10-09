@@ -29,6 +29,29 @@ export async function findActiveByChannel(tenantId: string, channel: string): Pr
 }
 
 /**
+ * GAP2-NOTIFICATIONS-DLT-10: uniqueness pre-check for the create route. The
+ * table's unique key is (tenant_id, template_id, channel); the route uses this
+ * to return a synchronous 409 before enqueuing a create command that the
+ * consumer would otherwise reject asynchronously.
+ */
+export async function findByTemplateAndChannel(
+  tenantId: string,
+  templateId: string,
+  channel: string,
+): Promise<DltTemplateRow | undefined> {
+  const rows = await scopedRead((tx) =>
+    tx.select().from(dltTemplates)
+      .where(and(
+        eq(dltTemplates.tenantId, tenantId),
+        eq(dltTemplates.templateId, templateId),
+        eq(dltTemplates.channel, channel),
+      ))
+      .limit(1),
+  );
+  return rows[0];
+}
+
+/**
  * Same lookup as `findActiveByChannel`, but reads through an ALREADY-OPEN
  * transaction instead of opening a second one via `scopedRead`. See
  * `quota-repo.ts`'s `findCurrentQuotaInTx` for the full pool-exhaustion

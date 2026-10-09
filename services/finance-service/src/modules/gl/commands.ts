@@ -42,8 +42,11 @@ export async function createJournal(ctx: RequestContext, body: PostJournalBody):
  * draft-creation time.
  */
 export async function approveJournal(ctx: RequestContext, id: string): Promise<Accepted> {
+  // Deterministic messageId keyed on (tenant, action, journal) so a
+  // double-submit / redelivery of the same approval dedupes at the consumer.
+  const messageId = idempotentId({ idempotencyKey: `journal-approve:${id}`, tenantId: ctx.tenantId });
   await queue.publish(COMMANDS.journalApprove, {
-    type: COMMANDS.journalApprove,
+    messageId, type: COMMANDS.journalApprove,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId },
   });

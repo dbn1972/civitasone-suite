@@ -123,7 +123,7 @@ export const financePfms = paymentsSchema.table("finance_pfms", {
   // row: 'treasury_batch' (routes.ts / integrations SFTP egress — every
   // pre-existing row, via the column default) or 'ekuber_adapter' (the live
   // e-Kuber REST adapter, adapter-routes.ts). See migrations/
-  // 0076_pfms_channel_reconciliation.sql for why this exists.
+  // 0076b_pfms_channel_reconciliation.sql for why this exists.
   channel:          varchar("channel", { length: 24 }).notNull().default("treasury_batch"),
   // Bank UTR from the e-Kuber adapter's status-check response. The treasury/
   // SFTP channel's UTR lives on payments.finance_payments instead (see

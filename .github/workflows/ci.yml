@@ -1563,11 +1563,20 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
+      # The gateway (started below for the L3 drift probes) needs Redis at start-up:
+      # without it ioredis raises an unhandled 'error' and the process exits.
+      redis:
+        image: redis:7-alpine
+        ports: ['6381:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 10s
     env:
       PGHOST: localhost
       PGPORT: '5435'
       PGUSER: civitas
       PGPASSWORD: civitas_test
+      REDIS_URL: redis://localhost:6381
+      QUEUE_DRIVER: memory
+      CACHE_DRIVER: memory
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -1614,7 +1623,34 @@ jobs:
       # the next lane overwrites it.
       - name: Set evidence date stamp
         run: echo "EVIDENCE_DATE=$(date -u +%Y%m%d)" >> "$GITHUB_ENV"
+      # L3's schema-drift-regressions probes GET four live endpoints (inventory
+      # three-way match, contract templates, knowledge categories / retention
+      # policies) through the gateway AND at each service port, and deliberately
+      # fails (never skips) when nothing answers, because a green result must mean
+      # the query ran. So the lane needs those three services plus the gateway --
+      # not the 35-service fleet: START_STACK_ONLY starts just these four.
+      - name: Build the services the L3 drift probes call
+        run: >-
+          pnpm turbo build
+          --filter=@civitasone/gateway-service
+          --filter=@civitasone/inventory-service
+          --filter=@civitasone/contract-service
+          --filter=@civitasone/knowledge-service
+          --output-logs=errors-only
+      - name: Start gateway + the three probed services
+        env:
+          START_STACK_ONLY: gateway-service,inventory-service,contract-service,knowledge-service
+          SKIP_BUILD: '1'
+        run: bash scripts/dev/start-stack.sh
       - name: Run L3 Schema Integrity gate
+        # POSTGRES_ADMIN_*: bootstrap-postgres.sh gives civitas_admin the superuser
+        # password in force (here PGPASSWORD), but the lane defaults to the dev
+        # cluster's civitas_dev_pw, so its admin-connection preflight -- and every
+        # check that needs the admin role (BYPASSRLS audit, canaries) -- reported
+        # UNMEASURED. Same pair the schema-drift guard step in the Integration job uses.
+        env:
+          POSTGRES_ADMIN_USER: civitas_admin
+          POSTGRES_ADMIN_PASSWORD: civitas_test
         run: |
           mkdir -p "evidence/${EVIDENCE_DATE}"
           cd tests/quality-program

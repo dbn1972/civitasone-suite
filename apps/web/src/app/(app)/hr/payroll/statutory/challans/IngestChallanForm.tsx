@@ -76,18 +76,13 @@ export function IngestChallanForm({ period }: { period: string }) {
       bsrRef.current?.focus();
       return;
     }
-    // GAP-PAYROLL-STATUTORY-CHALLANS-02 [HUMAN REVIEW: statutory compliance]:
-    // validated the same way every other money field in this codebase is
-    // (rupeesToMinorString -- rejects non-numeric, negative, zero, and more
-    // than 2 decimal places) instead of a bare parseFloat/NaN check. The
-    // wire format itself is UNCHANGED: services/payroll-service/src/modules/
-    // statutory-returns/challan-routes.ts's challanBodySchema expects
-    // `tdsAmount` as a plain rupee number and does its own paise rounding
-    // server-side (`Math.round(tdsAmount * 100)`) -- confirmed from that
-    // route's actual Zod schema, not assumed. Converting to minor units on
-    // the client and sending THAT instead would silently break a contract
-    // that already works; only the client-side validation strictness
-    // changes here.
+    // GAP2-PAYROLL-STATUTORY-CHALLANS-01: validated the same way every other
+    // money field in this codebase is (rupeesToMinorString -- rejects
+    // non-numeric, negative, zero, and more than 2 decimal places). The wire
+    // value is now the already-computed PAISE string (bigint minor units end
+    // to end per CLAUDE.md §3.11), sent as `tdsAmountMinor`; the server no
+    // longer float-rounds a rupee number into paise. See challan-routes.ts
+    // (challanBodySchema's tdsAmountMinor path).
     const tdsAmountMinor = rupeesToMinorString(tdsAmount);
     if (tdsAmountMinor == null) {
       setTone("bad");
@@ -114,6 +109,18 @@ export function IngestChallanForm({ period }: { period: string }) {
     setBusy(true);
     setDialogError(undefined);
     try {
+      // GAP2-PAYROLL-STATUTORY-CHALLANS-01: recompute the paise string here
+      // (handleSubmit already validated it is non-null before opening the
+      // dialog). Exact bigint minor units, never a float rupee number.
+      const tdsAmountMinor = rupeesToMinorString(tdsAmount);
+      if (tdsAmountMinor == null) {
+        setBusy(false);
+        setConfirmOpen(false);
+        setTone("bad");
+        setMessage(t("tdsAmountInvalidError"));
+        setInvalidFields(new Set(["amt"]));
+        return;
+      }
       // GAP-PAYROLL-STATUTORY-CHALLANS-01/06: a duplicate CIN (409) and a
       // rejected field (400) get their own messages instead of the one
       // generic "couldn't save" sentence for every failure.
@@ -123,7 +130,9 @@ export function IngestChallanForm({ period }: { period: string }) {
         challanSerial: challanSerial.trim(),
         depositDate,
         formType,
-        tdsAmount: parseFloat(tdsAmount),
+        // GAP2-PAYROLL-STATUTORY-CHALLANS-01: paise (bigint minor units) on the
+        // wire, not a float rupee number.
+        tdsAmountMinor,
       }, {
         DUPLICATE_CHALLAN: t("duplicateChallanError"),
         VALIDATION_FAILED: t("validationFailedError"),

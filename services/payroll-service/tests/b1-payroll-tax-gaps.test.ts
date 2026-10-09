@@ -198,6 +198,43 @@ describe("GAP-PAYROLL-STATUTORY-CHALLANS-01: duplicate challan", () => {
   });
 });
 
+describe("GAP2-PAYROLL-STATUTORY-CHALLANS-01: TDS challan money is bigint paise end to end", () => {
+  const base = { period: "2026-08", bsrCode: "0510308", challanSerial: "456", depositDate: "2026-09-07" };
+
+  it("forwards the exact paise from tdsAmountMinor without any float rounding", async () => {
+    readQueue.push([]); // no duplicate CIN
+    const r = await post("/v1/payroll/statutory/challans", MAKER, { ...base, tdsAmountMinor: "12345600" });
+    expect(r.statusCode).toBe(202);
+    const cmd = mockPublish.mock.calls.find((c) => (c[1] as { payload?: { tdsAmountMinor?: string } })?.payload?.tdsAmountMinor != null);
+    expect(cmd).toBeDefined();
+    const payload = (cmd![1] as { payload: { tdsAmountMinor: string; totalAmountMinor: string } }).payload;
+    // Exact integer paise, byte-for-byte — not 12345600.000001 or similar.
+    expect(payload.tdsAmountMinor).toBe("12345600");
+    expect(payload.totalAmountMinor).toBe("12345600");
+  });
+
+  it("rejects a non-integer (sub-paise) tdsAmountMinor with 400", async () => {
+    const r = await post("/v1/payroll/statutory/challans", MAKER, { ...base, challanSerial: "457", tdsAmountMinor: "123.45" });
+    expect(r.statusCode).toBe(400);
+    expect(mockPublish).not.toHaveBeenCalled();
+  });
+
+  it("requires at least one of tdsAmountMinor / tdsAmount", async () => {
+    const r = await post("/v1/payroll/statutory/challans", MAKER, { ...base, challanSerial: "458" });
+    expect(r.statusCode).toBe(400);
+    expect(mockPublish).not.toHaveBeenCalled();
+  });
+
+  it("still accepts the legacy rupee tdsAmount and converts it exactly to paise", async () => {
+    readQueue.push([]);
+    const r = await post("/v1/payroll/statutory/challans", MAKER, { ...base, challanSerial: "459", tdsAmount: 50000 });
+    expect(r.statusCode).toBe(202);
+    const cmd = mockPublish.mock.calls.find((c) => (c[1] as { payload?: { tdsAmountMinor?: string } })?.payload?.tdsAmountMinor != null);
+    expect(cmd).toBeDefined();
+    expect((cmd![1] as { payload: { tdsAmountMinor: string } }).payload.tdsAmountMinor).toBe("5000000");
+  });
+});
+
 describe("GAP-PAYROLL-STATUTORY-PF-02: ECR export is audited", () => {
   it("publishes exactly one export_ecr audit event with the record count", async () => {
     readQueue.push([

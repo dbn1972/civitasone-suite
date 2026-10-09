@@ -38,6 +38,14 @@ vi.mock("../src/shared/infra.js", () => ({
   },
 }));
 
+// GAP2-FINANCE-BILLS-VENDORNAME-01: vendor names now resolve from the masters
+// repo (not a hard-coded fixture). Mock it so these pure cache-shape tests stay
+// DB-free; vendor-name correctness is covered in bills-vendor-name.test.ts.
+vi.mock("../src/modules/masters/repo.js", () => ({
+  getVendorNamesByIds: vi.fn(async () => new Map<string, string>()),
+  getVendorById: vi.fn(async () => null),
+}));
+
 import { listBillSummaries, listAdvances, getBillDetail, listUCs, toMinorBigInt } from "../src/modules/payments/queries.js";
 import { UCSummaryListSchema } from "@civitasone/schemas/web";
 

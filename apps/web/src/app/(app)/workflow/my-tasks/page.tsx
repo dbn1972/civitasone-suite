@@ -14,7 +14,7 @@ const TASK_LIMIT = 200;
 
 export default async function MyTasksPage() {
   // Role-targeted pending inbox for the caller (service scopes to ctx.roles).
-  const { data: tasks, source } = await getTasks({ status: "pending" });
+  const { data: tasks, source, total } = await getTasks({ status: "pending" });
   const currentUserId = getSessionUserId();
   const ok = source !== "error";
 
@@ -22,7 +22,6 @@ export default async function MyTasksPage() {
   // already status=pending, so "Open" and "Pending" were the same number;
   // "Claimed" counted ANY assignee (not mine). Replace with Open / Unassigned /
   // Claimed by me, each null on error so an outage reads as "—", not zeros.
-  const open = ok ? tasks.length : null;
   const unassigned = ok ? tasks.filter((t) => !t.assigneeId).length : null;
   const claimedByMe = ok
     ? currentUserId
@@ -42,6 +41,18 @@ export default async function MyTasksPage() {
   // GAP-WORKFLOW-MY-TASKS-04 — the inbox is capped at TASK_LIMIT with no total;
   // when the window is full the counts above stop being exhaustive. Say so.
   const capped = ok && tasks.length >= TASK_LIMIT;
+
+  // GAP2-WORKFLOW-MY-TASKS-02 — the Open tile must reflect the TRUE total, not a
+  // flat window count. Prefer the exact pagination.total the endpoint reports;
+  // otherwise, when the window is full, show "N+" so a 200-row inbox never reads
+  // as exactly 200 open. Null on error → "—".
+  const open: number | string | null = !ok
+    ? null
+    : typeof total === "number"
+      ? total
+      : capped
+        ? `${TASK_LIMIT}+`
+        : tasks.length;
 
   return (
     <>
@@ -80,7 +91,10 @@ export default async function MyTasksPage() {
             <div className="pad">
               {capped ? (
                 <p className="mut" style={{ margin: "0 0 10px", fontSize: 13 }}>
-                  Showing the first {TASK_LIMIT} tasks. Counts above cover this window only — act on the oldest first.
+                  Showing the first {TASK_LIMIT}
+                  {typeof total === "number" ? ` of ${total}` : ""} tasks. The Open tile
+                  shows the full count; Unassigned and Claimed cover this window only —
+                  act on the oldest first.
                 </p>
               ) : null}
               <Suspense fallback={<SkeletonTable rows={6} />}>

@@ -100,6 +100,20 @@ export async function listByTenant(tenantId: string, poId: string | undefined, l
   return db.transaction((tx) => tx.select().from(threeWayMatch).where(where).limit(limit).offset(offset));
 }
 
+/**
+ * GAP2-PROCUREMENT-GAPLIST-03: real COUNT(*) over the same tenant(+poId)
+ * filtered set as listByTenant (no limit/offset) so GET returns the dataset
+ * size, not the capped page length.
+ */
+export async function countByTenant(tenantId: string, poId: string | undefined): Promise<number> {
+  const where = poId
+    ? and(eq(threeWayMatch.tenantId, tenantId), eq(threeWayMatch.poId, poId))
+    : eq(threeWayMatch.tenantId, tenantId);
+  const rows = await db.transaction((tx) => tx
+    .select({ n: sql<number>`COUNT(*)` }).from(threeWayMatch).where(where));
+  return Number(rows[0]?.n ?? 0);
+}
+
 export async function findLatestForPoGrn(tenantId: string, poId: string, grnId: string): Promise<ThreeWayMatchRow | null> {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.

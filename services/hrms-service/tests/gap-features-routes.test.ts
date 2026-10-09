@@ -834,6 +834,14 @@ describe("POST /v1/hrms/benefits/plans", () => {
 describe("POST /v1/hrms/benefits/elections", () => {
   it("submits benefit elections (201)", async () => {
     const app = await buildApp();
+    // GAP2-HR-BENEFITS-07: the handler now loads the plan first and rejects
+    // 404/422 unless it exists, the fy matches, the component is a real plan
+    // component, and the amount is within its maxMinor cap / the plan's flex
+    // budget. Mock the plan lookup so this happy-path election is accepted.
+    H.poolQuery.mockResolvedValueOnce({
+      rows: [{ id: ID1, fy: "2025-26", flex_budget_minor: 1000000, components: [{ name: "Medical", maxMinor: 100000, taxExempt: true }] }],
+      rowCount: 1,
+    });
     const r = await app.inject({ method: "POST", url: "/v1/hrms/benefits/elections", headers: auth(), payload: { planId: ID1, fy: "2025-26", elections: [{ component: "Medical", electedMinor: 50000 }] } });
     expect(r.statusCode).toBe(201);
     expect(r.json().data.totalElectedMinor).toBe(50000);

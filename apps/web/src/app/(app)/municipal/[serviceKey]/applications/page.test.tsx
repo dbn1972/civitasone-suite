@@ -92,7 +92,27 @@ describe("Municipal per-service applications list page", () => {
       expect.objectContaining({ serviceKey: "trade" }),
       expect.objectContaining({ status: "approved", page: 1 }),
     );
-    const approvedTab = screen.getByRole("tab", { name: "approved" });
+    // GAP2-MUNICIPAL-APPLICATIONS-STATUS-02: the tab label is humanized Title
+    // case ("Approved"), not the raw enum value, and the value "approved" is a
+    // real member of trade's status vocabulary (STATUS-01).
+    const approvedTab = screen.getByRole("tab", { name: "Approved" });
     expect(approvedTab).toHaveAttribute("aria-selected", "true");
+  });
+
+  // GAP2-MUNICIPAL-APPLICATIONS-STATUS-01: the Animal console's status tabs
+  // show its real complaint statuses (not the old universal set), so an
+  // officer can actually filter. "Action Taken" is a real animal status;
+  // "issued" (an old universal filter value) is NOT and must not appear.
+  it("renders per-service status tabs from the real vocabulary (Animal), humanized (STATUS-01/02)", async () => {
+    mocked.mockResolvedValue({
+      data: { rows: [], meta: { page: 1, pageSize: 20, total: 0 } },
+      source: "api",
+    });
+    render(await Page({ params: { serviceKey: "animal" } }));
+    expect(screen.getByRole("tab", { name: "Action Taken" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Reported" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /issued/i })).not.toBeInTheDocument();
+    // no raw snake_case label reaches the DOM
+    expect(screen.queryByRole("tab", { name: "action_taken" })).not.toBeInTheDocument();
   });
 });

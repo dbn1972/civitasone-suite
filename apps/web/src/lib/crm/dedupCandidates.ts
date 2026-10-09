@@ -1,30 +1,20 @@
 /**
  * API client for dedup-candidate review (DQ-001).
  *
- * KNOWN GAP (investigated, not silently patched over — see this PR's
- * description for the full writeup): `getDedupCandidates` and
- * `dismissDedupPair` below still call endpoints that do not exist anywhere in
- * crm-service. The real backend (contacts/dedup-routes.ts) only offers
- * `POST /v1/crm/contacts/duplicate-check` — an ON-DEMAND check of ONE
- * candidate (by id or raw field values) against the tenant's contacts,
- * returning ranked `{id, matchedFields, score}` matches. There is no table,
- * job, or endpoint anywhere that persists a tenant-wide queue of "flagged
- * pairs" for this page's list view to load, and no "dismiss" concept to
- * un-flag one (dedup is recomputed fresh every time duplicate-check runs, so
- * nothing to dismiss is ever stored). That's a real product decision — redesign
- * this page around the real per-contact on-demand check, or invest in the
- * backend work an actual persisted/dismissible queue would need — not a
- * one-line endpoint-name fix, so it was intentionally left alone here rather
- * than guessed at. `getDedupCandidates` already fails closed to
- * `{source:"error"}` on any non-2xx response (see below), so the page shows
- * the honest DataSourceBadge error state rather than a fabricated "0
- * duplicates" empty state.
+ * GAP2-CRM-DEDUP-CANDIDATES-07: these endpoints now EXIST server-side.
+ *   - GET  /v1/crm/contacts/dedup-candidates          — computes near-duplicate
+ *       PAIRS live from the tenant's active contacts under the configured dedup
+ *       rules, excluding pairs the tenant has dismissed. Returns
+ *       `{ data: DedupPair[] }`. On any non-2xx this still fails closed to
+ *       `{source:"error"}` so the page shows the honest DataSourceBadge error
+ *       rather than a fabricated "0 duplicates" empty state.
+ *   - PATCH /v1/crm/contacts/dedup-candidates/:pairId/dismiss — persists +
+ *       audits the operator's decision to suppress a pair (so it never
+ *       resurfaces). `pairId` is the order-independent "contactA:contactB" key
+ *       the list returns. An optional `reason` is forwarded when supplied.
  *
- * `mergeDedupPair`, in contrast, DOES have a direct, unambiguous real
- * endpoint and has been fixed to call it: `POST /v1/crm/contacts/merge`
- * (contacts/routes.ts), body `{ primaryId, duplicateId }` — not the
- * `PATCH /v1/crm/contacts/:leftId/merge` + `{ mergeIntoId }` this used to
- * send, which 404'd unconditionally.
+ * `mergeDedupPair` posts to the real `POST /v1/crm/contacts/merge`
+ * (contacts/routes.ts), body `{ primaryId, duplicateId }`.
  */
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 

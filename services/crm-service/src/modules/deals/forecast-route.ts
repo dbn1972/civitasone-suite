@@ -13,7 +13,12 @@ import { pipelines, type PipelineStage } from "../pipelines/schema.js";
 import { weightedForecast, weightedForecastByStage, type DealForForecast } from "./forecast.js";
 import { eq, and, sql } from "drizzle-orm";
 
-const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
+// GAP2-CRM-FORECAST-07: include tenant_admin to match the sibling pipeline/deal
+// reads (deals/quotations-routes.ts, deals/tenders-routes.ts, accounts/plans-routes.ts,
+// accounts/qbr-routes.ts all read the same deal/pipeline domain with tenant_admin).
+// A tenant_admin who can view quotations, tenders and account plans was otherwise
+// 403'd specifically on the forecast — an inconsistent gap in the pipeline review flow.
+const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
 
 const forecastQuerySchema = z.object({
   pipelineId: z.string().uuid().optional(),

@@ -6,6 +6,7 @@ import * as vendorQueries from "../vendor/queries.js";
 import * as tenderQueries from "../tender/queries.js";
 import * as auctionQueries from "../auction/queries.js";
 import { searchProducts, isEnabled as gemIsEnabled, GemAdapterError, CircuitBreakerOpenError } from "../gem/adapter.js";
+import { gfrBandsForApi, applicableGfrMode } from "./gfr-bands.js";
 
 const ROLES = ["procurement_officer", "procurement_admin", "finance_officer", "super_admin"];
 
@@ -25,16 +26,25 @@ export async function procurementGapRoutes(app: FastifyInstance): Promise<void> 
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const q = listQuerySchema.parse(req.query);
-    const data = await tenderQueries.listBidEvaluations(ctx.tenantId, q.limit, q.offset);
-    return reply.send({ data, meta: pageMeta(q.limit, q.offset, data.length) });
+    // GAP2-PROCUREMENT-GAPLIST-03: meta.total is a real COUNT(*) over the
+    // tenant set, not the capped page length (data.length).
+    const [data, total] = await Promise.all([
+      tenderQueries.listBidEvaluations(ctx.tenantId, q.limit, q.offset),
+      tenderQueries.countBidEvaluations(ctx.tenantId),
+    ]);
+    return reply.send({ data, meta: pageMeta(q.limit, q.offset, total) });
   });
 
   app.get("/v1/procurement/empanelment", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const q = listQuerySchema.parse(req.query);
-    const data = await vendorQueries.listEmpanelments(ctx.tenantId, q.limit, q.offset);
-    return reply.send({ data, meta: pageMeta(q.limit, q.offset, data.length) });
+    // GAP2-PROCUREMENT-EMPANELMENT-02 / GAPLIST-03: real COUNT(*) total.
+    const [data, total] = await Promise.all([
+      vendorQueries.listEmpanelments(ctx.tenantId, q.limit, q.offset),
+      vendorQueries.countEmpanelments(ctx.tenantId),
+    ]);
+    return reply.send({ data, meta: pageMeta(q.limit, q.offset, total) });
   });
 
   /**
@@ -108,11 +118,15 @@ export async function procurementGapRoutes(app: FastifyInstance): Promise<void> 
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const q = listQuerySchema.parse(req.query);
-    const data = await tenderQueries.listPreBidConferenceAggregates(ctx.tenantId, q.limit, q.offset);
+    // GAP2-PROCUREMENT-GAPLIST-03: real COUNT(DISTINCT tender) total.
+    const [data, total] = await Promise.all([
+      tenderQueries.listPreBidConferenceAggregates(ctx.tenantId, q.limit, q.offset),
+      tenderQueries.countPreBidConferenceAggregates(ctx.tenantId),
+    ]);
     return reply.send({
       data,
       meta: {
-        ...pageMeta(q.limit, q.offset, data.length),
+        ...pageMeta(q.limit, q.offset, total),
         reason: "pre-bid conferences are aggregated from pre-bid query threads; this system does not track scheduled meetings or attendance, so 'attendees' is always 0.",
       },
     });
@@ -122,8 +136,12 @@ export async function procurementGapRoutes(app: FastifyInstance): Promise<void> 
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const q = listQuerySchema.parse(req.query);
-    const data = await auctionQueries.listAuctions(ctx.tenantId, q.limit, q.offset);
-    return reply.send({ data, meta: pageMeta(q.limit, q.offset, data.length) });
+    // GAP2-PROCUREMENT-GAPLIST-03: real COUNT(*) total.
+    const [data, total] = await Promise.all([
+      auctionQueries.listAuctions(ctx.tenantId, q.limit, q.offset),
+      auctionQueries.countAuctions(ctx.tenantId),
+    ]);
+    return reply.send({ data, meta: pageMeta(q.limit, q.offset, total) });
   });
   /**
    * GFR 2017 procurement mode bands by estimated value.
@@ -137,28 +155,12 @@ export async function procurementGapRoutes(app: FastifyInstance): Promise<void> 
       estimatedValueMinor: z.coerce.bigint().optional(),
     }).parse(req.query);
 
-    const bands = [
-      { id: "LS",  name: "Local Shopping",        rule: "GFR Rule 154",     thresholdMaxMinor: 500000n,       requiresTender: false, minBidders: null, notes: "Spot purchase up to Rs 5,000 without tender" },
-      { id: "DP",  name: "Direct Purchase",        rule: "GFR Rule 154",     thresholdMaxMinor: 2500000n,      requiresTender: false, minBidders: 1,    notes: "Direct purchase up to Rs 25,000; single quotation" },
-      { id: "LTR", name: "Limited Tender Request", rule: "GFR Rule 152a",    thresholdMaxMinor: 100000000n,    requiresTender: true,  minBidders: 3,    notes: "Rs 25,001 to Rs 10,00,000; minimum 3 quotations" },
-      { id: "LTE", name: "Limited Tender Enquiry", rule: "GFR Rule 152b",    thresholdMaxMinor: 2500000000n,   requiresTender: true,  minBidders: 10,   notes: "Rs 10,00,001 to Rs 25,00,000; minimum 10 vendors invited" },
-      { id: "OT",  name: "Open Tender",            rule: "GFR Rule 149",     thresholdMaxMinor: 500000000000n, requiresTender: true,  minBidders: null, notes: "Rs 25,00,001 to Rs 5,00,00,000; advertised tender" },
-      { id: "GT",  name: "Global Tender",          rule: "GFR Rule 160",     thresholdMaxMinor: null,          requiresTender: true,  minBidders: null, notes: "Above Rs 5,00,00,000 or for specialised unavailable items" },
-      { id: "ST",  name: "Single Tender",          rule: "GFR Rule 160a",    thresholdMaxMinor: null,          requiresTender: true,  minBidders: 1,    notes: "Single source; requires committee justification" },
-    ];
-
-    const apiSafe = bands.map(function(b) { return Object.assign({}, b, { thresholdMaxMinor: b.thresholdMaxMinor != null ? String(b.thresholdMaxMinor) : null }); });
-
-    let applicableMode: string | null = null;
-    if (estimatedValueMinor != null) {
-      for (const b of bands) {
-        if (b.id === "ST") continue;
-        if (b.thresholdMaxMinor == null || estimatedValueMinor <= b.thresholdMaxMinor) {
-          applicableMode = b.id;
-          break;
-        }
-      }
-    }
+    // GAP2-PROCUREMENT-GFR-BANDS-07: thresholds come from the single config
+    // source (gfr-bands.ts), not an inline literal, and the human copy is
+    // carried as i18n keys (nameKey/notesKey) the web resolves — no English
+    // prose crosses the API any more.
+    const apiSafe = gfrBandsForApi();
+    const applicableMode = estimatedValueMinor != null ? applicableGfrMode(estimatedValueMinor) : null;
 
     return reply.send({ data: apiSafe, ...(applicableMode ? { applicableMode } : {}) });
   });

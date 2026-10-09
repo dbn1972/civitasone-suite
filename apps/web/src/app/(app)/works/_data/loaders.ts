@@ -692,3 +692,56 @@ export function getWorksStatus(): Promise<LoaderResult<WorksStatusCount[]>> {
     mapResponse: (p) => pickItems(p).map((r) => ({ status: str(r.status), count: num(r.count) })),
   });
 }
+
+// ─── Register totals (GAP2-WORKS-APPROVALS-05 / CLOSURE-06 / MASTERS-09) ──────
+
+/**
+ * The true tenant-wide total for a paginated register, plus how many rows the
+ * fetched page actually returned. Lets a list page render a "showing first N
+ * of M" truncation notice and compute stat counts against the real total
+ * instead of the capped page. Mirrors the BoqIndexSummary pattern.
+ */
+export interface RegisterMeta {
+  total: number;
+  fetched: number;
+}
+
+function readRegisterMeta(p: unknown): RegisterMeta {
+  const rows = pickItems(p);
+  const meta = asObj((p as { meta?: unknown })?.meta);
+  const metaTotal = typeof meta.total === "number" ? meta.total : num(meta.total, NaN);
+  const fetched = rows.length;
+  return { total: Number.isFinite(metaTotal) ? metaTotal : fetched, fetched };
+}
+
+/** AA register true total — GET /v1/works/approvals/aa meta. */
+export function getApprovalsAaMeta(): Promise<LoaderResult<RegisterMeta>> {
+  return fetchJson<unknown, RegisterMeta>("/api/v1/works/approvals/aa?pageSize=100", { total: 0, fetched: 0 }, {
+    telemetryKey: "works.approvals.aa.meta",
+    mapResponse: readRegisterMeta,
+  });
+}
+
+/** TS register true total — GET /v1/works/approvals/ts meta. */
+export function getApprovalsTsMeta(): Promise<LoaderResult<RegisterMeta>> {
+  return fetchJson<unknown, RegisterMeta>("/api/v1/works/approvals/ts?pageSize=100", { total: 0, fetched: 0 }, {
+    telemetryKey: "works.approvals.ts.meta",
+    mapResponse: readRegisterMeta,
+  });
+}
+
+/** Bills register true total — GET /v1/works/billing/bills meta. */
+export function getBillsMeta(): Promise<LoaderResult<RegisterMeta>> {
+  return fetchJson<unknown, RegisterMeta>("/api/v1/works/billing/bills?pageSize=100", { total: 0, fetched: 0 }, {
+    telemetryKey: "works.billing.meta",
+    mapResponse: readRegisterMeta,
+  });
+}
+
+/** Master register true total — GET /v1/works/masters/<type> meta. */
+export function getMasterMeta(type: string): Promise<LoaderResult<RegisterMeta>> {
+  return fetchJson<unknown, RegisterMeta>(`/api/v1/works/masters/${type}?pageSize=100`, { total: 0, fetched: 0 }, {
+    telemetryKey: `works.masters.${type}.meta`,
+    mapResponse: readRegisterMeta,
+  });
+}

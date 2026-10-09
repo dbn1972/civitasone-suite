@@ -19,6 +19,7 @@ export async function seekOpinion(ctx: RequestContext, body: SeekOpinionBody): P
 
 export async function draftOpinion(ctx: RequestContext, opinionId: string, body: DraftOpinionBody): Promise<Accepted> {
   await queue.publish(COMMANDS.opinionDraft, {
+    messageId: randomUUID(),
     type: COMMANDS.opinionDraft,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { opinionId, tenantId: ctx.tenantId, ...body },
@@ -29,6 +30,7 @@ export async function draftOpinion(ctx: RequestContext, opinionId: string, body:
 
 export async function issueOpinion(ctx: RequestContext, opinionId: string, body: IssueOpinionBody): Promise<Accepted> {
   await queue.publish(COMMANDS.opinionIssue, {
+    messageId: randomUUID(),
     type: COMMANDS.opinionIssue,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { opinionId, tenantId: ctx.tenantId, ...body },
@@ -46,6 +48,7 @@ export async function issueOpinion(ctx: RequestContext, opinionId: string, body:
  */
 export async function submitOpinionForApproval(ctx: RequestContext, opinionId: string): Promise<Accepted> {
   await queue.publish(COMMANDS.opinionSubmitApproval, {
+    messageId: randomUUID(),
     type: COMMANDS.opinionSubmitApproval,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { opinionId, tenantId: ctx.tenantId },

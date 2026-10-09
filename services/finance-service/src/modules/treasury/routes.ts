@@ -3,7 +3,7 @@ import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/com
 import {
   FinanceDebtSummaryListSchema, FinanceGuaranteeSummaryListSchema,
   FinanceChallanSummaryListSchema, FinanceChallanSummarySchema,
-  FinanceDepositSummaryListSchema,
+  FinanceDepositSummaryListSchema, FinanceDepositsSummarySchema,
 } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
@@ -103,6 +103,15 @@ export async function treasuryRoutes(app: FastifyInstance): Promise<void> {
       balanceMinor: r.balanceMinor.toString(), currency: r.currency, status: r.status,
       createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(), version: r.version,
     })));
+  });
+
+  // GAP2-FINANCE-TREASURY-DEPOSITS-TOTALS-06: tenant-wide totals for the register
+  // stat cards (counts + active balance), aggregated server-side so they never
+  // reflect only the 50-row default page.
+  app.get("/v1/finance/deposits/summary", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    sendValidated(reply, FinanceDepositsSummarySchema, await queries.getDepositsSummary(ctx.tenantId));
   });
 
   // GAP-FINANCE-TREASURY-DEPOSITS-03: one deposit with its ledger of events.

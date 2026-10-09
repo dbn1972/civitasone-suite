@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, RouteHandlerMethod } from "fastify";
 import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -11,11 +11,17 @@ const UNIT_TYPES = ["department", "division", "section", "unit", "branch"] as co
 
 export async function orgHierarchyRoutes(app: FastifyInstance): Promise<void> {
   // Real DB read — returns actual org units from PostgreSQL (RLS-scoped).
-  app.get("/v1/org/hierarchy", async (req, reply) => {
+  // GAP2-TENANT-WIRING-01: the web org-hierarchy loader calls
+  // /api/v1/tenant/org/hierarchy; the gateway `tenant-singular` prefix forwards
+  // that verbatim as /v1/tenant/org/hierarchy. Register the alias so the loader
+  // resolves (200) instead of a permanent 404 — mirrors the usage/plans aliases.
+  const listHierarchy: RouteHandlerMethod = async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);
     const units = await repo.listOrgUnits(ctx.tenantId);
     return reply.send({ data: units, meta: { total: units.length } });
-  });
+  };
+  app.get("/v1/org/hierarchy", listHierarchy);
+  app.get("/v1/tenant/org/hierarchy", listHierarchy);
 
   // Single unit with its direct children.
   app.get("/v1/org/hierarchy/:id", async (req, reply) => {

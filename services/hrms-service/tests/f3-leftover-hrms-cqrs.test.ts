@@ -405,7 +405,7 @@ describe("F3 leftover hrms CQRS route boundary", () => {
    * conversion would reopen (two concurrent requests both deciding to
    * increment the same employee before either consumer has written) is
    * closed at the DB layer by a partial unique index — see
-   * migrations/0132_pay_matrix_increment_idempotency.sql and the
+   * migrations/0132b_pay_matrix_increment_idempotency.sql and the
    * insert-first/conflict-checked write in f3-consumer.ts.
    */
   it("pay-matrix annual-increment forwards an exact plan; consumer applies it without re-deriving anything", () => {

@@ -7,6 +7,7 @@ import {
   resolveOwnEmployeeIdIfBareEmployee,
   resolveOwnEmployeeIdIfNonHr,
 } from "../../shared/self-scope.js";
+import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import {
   computeProgress, deriveEnrollmentStatus, nextResumeLesson, checkPrerequisites,
 } from "./domain.js";
@@ -361,6 +362,16 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const row = await repo.getEnrollmentById(ctx.tenantId, id);
     if (!row) throw new HttpError(404, "NOT_FOUND", "enrollment not found");
+    // GAP2-LEARNING-ENROLLMENTS-IDOR-01: a bare employee may only read their
+    // OWN enrolment record. HR/manager pass through (same privilege boundary
+    // as the dashboard handler). A non-privileged caller requesting a
+    // colleague's enrolment id is 404'd (indistinguishable from not-found, so
+    // ids are not enumerable).
+    const isPrivileged = ["hr_admin", "hr_officer", "super_admin", "manager"].some((r) => ctx.roles.includes(r));
+    if (!isPrivileged) {
+      const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+      if (!actorEmp || actorEmp.id !== row.employeeId) throw new HttpError(404, "NOT_FOUND", "enrollment not found");
+    }
     return reply.send(row);
   });
 
@@ -374,6 +385,14 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body);
     const existing = await repo.getEnrollmentById(ctx.tenantId, id);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "enrollment not found");
+    // GAP2-LEARNING-ENROLLMENTS-IDOR-01: a bare employee may only write
+    // progress on their OWN enrolment; otherwise an employee could overwrite a
+    // colleague's progress/status to completed. HR/manager pass through.
+    const isPrivileged = ["hr_admin", "hr_officer", "super_admin", "manager"].some((r) => ctx.roles.includes(r));
+    if (!isPrivileged) {
+      const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+      if (!actorEmp || actorEmp.id !== existing.employeeId) throw new HttpError(404, "NOT_FOUND", "enrollment not found");
+    }
     const pct = body.percentComplete;
     const status = pct >= 100 ? "completed" : pct > 0 ? "in_progress" : "enrolled";
     await publishF3Write(ctx, "learning_routes__10", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });

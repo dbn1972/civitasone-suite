@@ -359,7 +359,7 @@ describe("CCS leave apply (CQRS) + approve authz", () => {
 // for the same effectiveDate both deciding to advance the same employee
 // before either has durably written. (1) is closed by forwarding an exact
 // plan; (2) is closed by a partial unique index — see migrations/
-// 0132_pay_matrix_increment_idempotency.sql — the "simulated concurrent
+// 0132b_pay_matrix_increment_idempotency.sql — the "simulated concurrent
 // double-submit" test below proves it directly against real Postgres.
 describe("7th CPC pay matrix + annual increment (idempotent, async F3)", () => {
   it("pay-matrix lookup returns a cell value", async () => {
@@ -464,7 +464,7 @@ describe("7th CPC pay matrix + annual increment (idempotent, async F3)", () => {
     // both routes independently read "not yet incremented" and each
     // publishes its own plan proposing the SAME advance for the same
     // employee — this is the exact scenario the partial unique index in
-    // migrations/0132_pay_matrix_increment_idempotency.sql exists to close.
+    // migrations/0132b_pay_matrix_increment_idempotency.sql exists to close.
     const [r1, r2] = await Promise.all([
       app.inject({ method: "POST", url: "/v1/hrms/pay-matrix/annual-increment", headers: { ...HR, ...CT }, payload: { effectiveDate: "2026-07-01" } }),
       app.inject({ method: "POST", url: "/v1/hrms/pay-matrix/annual-increment", headers: { ...HR, ...CT }, payload: { effectiveDate: "2026-07-01" } }),

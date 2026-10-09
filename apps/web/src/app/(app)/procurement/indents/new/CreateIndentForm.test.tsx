@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+// GAP2-PROCUREMENT-GFR-BANDS-07: CreateIndentForm now calls useTranslations()
+// to render the GFR band copy, so render through the English intl wrapper.
+import { render, screen, fireEvent, waitFor } from "@/test-utils/intl-render";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -21,7 +23,7 @@ function jsonResponse(body: unknown, status = 200) {
  * distinguish the two. `postResponse` controls what the POST returns.
  */
 function mockFetch(postResponse: () => Response) {
-  const bands = [{ id: "DP", name: "Direct Purchase", notes: "x", requiresTender: false }];
+  const bands = [{ id: "DP", nameKey: "procurement.gfr.band.DP.name", notesKey: "procurement.gfr.band.DP.note", requiresTender: false }];
   const spy = vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
     const url = typeof input === "string" ? input : input.toString();
     if (url.startsWith(MODE_BANDS_URL)) {
@@ -115,6 +117,25 @@ describe("CreateIndentForm — purpose is required and actually sent (regression
 });
 
 
+// GAP2-PROCUREMENT-GFR-BANDS-07: the mode-band copy is now resolved from the
+// i18n message tree via the API's nameKey/notesKey, not baked English prose.
+describe("CreateIndentForm — GFR band renders translated copy (GAP2-PROCUREMENT-GFR-BANDS-07)", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it("renders the band's translated name/note (from nameKey/notesKey), not a raw key", async () => {
+    mockFetch(() => jsonResponse({ id: "x", status: "accepted" }, 202));
+    render(<CreateIndentForm />);
+    fireEvent.change(await screen.findByLabelText("Item code, row 1"), { target: { value: "PEN-001" } });
+    fireEvent.change(screen.getByLabelText("Description, row 1"), { target: { value: "Ball pens" } });
+    fireEvent.change(screen.getByLabelText("Unit price, row 1"), { target: { value: "100" } });
+    // The band lookup fires on a positive total; the English copy resolves via
+    // the intl provider. The raw key must never leak to the screen.
+    await waitFor(() => expect(screen.getByText(/Direct Purchase/)).toBeInTheDocument());
+    expect(screen.getByText(/single quotation/i)).toBeInTheDocument();
+    expect(screen.queryByText(/procurement\.gfr\.band/)).not.toBeInTheDocument();
+  });
+});
+
 
 describe("CreateIndentForm: unit price 0 asks for confirmation", () => {
   beforeEach(() => vi.restoreAllMocks());
@@ -160,7 +181,7 @@ describe("CreateIndentForm: unit price 0 asks for confirmation", () => {
 
   it("shows a note when the prefill was truncated", () => {
     mockFetch(() => jsonResponse({ id: "x", status: "accepted" }, 202));
-    render(<CreateIndentForm initialItem={{ itemCode: "A", description: "d", quantity: 1, unitPrice: 0, unit: "nos" }} prefillTruncated />);
+    render(<CreateIndentForm initialItem={{ itemCode: "A", description: "d", quantity: 1, unitPrice: "", unit: "nos" }} prefillTruncated />);
     expect(screen.getByRole("note")).toHaveTextContent(/shortened/i);
   });
 });

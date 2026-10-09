@@ -76,4 +76,25 @@ describe("MyTasksPage — GAP-WORKFLOW-MY-TASKS-03/05", () => {
     expect(statLabels).toContain("Open tasks");
     expect(statLabels).toContain("Claimed by me");
   });
+
+  // GAP2-WORKFLOW-MY-TASKS-02 — the Open tile must reflect the TRUE total.
+  it("shows the exact total on the Open tile when the endpoint reports pagination.total", async () => {
+    const many = Array.from({ length: 200 }, (_, i) => task(`t${i}`));
+    getTasksMock.mockResolvedValue({ data: many, source: "api", total: 517 });
+    const { container } = render(await MyTasksPage());
+    const tiles = Array.from(container.querySelectorAll(".stat"));
+    const openTile = tiles.find((t) => t.querySelector(".lab")?.textContent === "Open tasks");
+    expect(openTile?.querySelector(".val")?.textContent).toBe("517");
+    // The prose reflects the real "of M".
+    expect(screen.getByText(/Showing the first 200 of 517 tasks/)).toBeInTheDocument();
+  });
+
+  it("shows '200+' on the Open tile when capped and no total is reported", async () => {
+    const many = Array.from({ length: 200 }, (_, i) => task(`t${i}`));
+    getTasksMock.mockResolvedValue({ data: many, source: "api" }); // no `total`
+    const { container } = render(await MyTasksPage());
+    const tiles = Array.from(container.querySelectorAll(".stat"));
+    const openTile = tiles.find((t) => t.querySelector(".lab")?.textContent === "Open tasks");
+    expect(openTile?.querySelector(".val")?.textContent).toBe("200+");
+  });
 });

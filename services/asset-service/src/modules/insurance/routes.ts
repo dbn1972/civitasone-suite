@@ -76,17 +76,15 @@ export async function insuranceRoutes(app: FastifyInstance): Promise<void> {
       expiryDate: z2.string().optional(),
       premiumMinor: z2.number().int().nonnegative().optional(),
     }).parse(req.body);
-    await commands.updatePolicy(ctx, id, body);
-    return reply.send({ id });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updatePolicy(ctx, id, body));
   });
 
-  // ── Claim lifecycle (writes live in commands/repo, inside the tenant tx) ─
+  // ── Claim lifecycle (CQRS: route preflights, consumer applies the write) ─
   app.patch("/v1/assets/insurance/claims/:id/approve", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ["asset_admin", "super_admin"]);
     const { id } = idParam.parse(req.params);
-    await commands.approveClaim(ctx, id);
-    return reply.send({ id });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.approveClaim(ctx, id));
   });
 
   app.patch("/v1/assets/insurance/claims/:id/settle", async (req, reply) => {
@@ -97,8 +95,7 @@ export async function insuranceRoutes(app: FastifyInstance): Promise<void> {
       settlementAmountMinor: z2.number().int().nonnegative(),
       currency: z2.string().length(3).default("INR"),
     }).parse(req.body);
-    await commands.settleClaim(ctx, id, body.settlementAmountMinor);
-    return reply.send({ id });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.settleClaim(ctx, id, body.settlementAmountMinor));
   });
 
   app.patch("/v1/assets/insurance/claims/:id/reject", async (req, reply) => {
@@ -106,8 +103,7 @@ export async function insuranceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ["asset_admin", "super_admin"]);
     const { id } = idParam.parse(req.params);
     const body = z2.object({ reason: z2.string().trim().min(1).max(1000) }).parse(req.body);
-    await commands.rejectClaim(ctx, id, body.reason);
-    return reply.send({ id });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.rejectClaim(ctx, id, body.reason));
   });
 
   app.setErrorHandler((err, req, reply) => {

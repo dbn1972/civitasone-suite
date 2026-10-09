@@ -50,11 +50,26 @@ describe("CompetencyPage — GAP-LEARNING-COMPETENCY-01/02/03/04/05", () => {
     expect(screen.queryByText("comp-1")).not.toBeInTheDocument();
   });
 
-  it("COMPETENCY-01: unknown competency id shows 'Unknown competency', never a uuid", async () => {
+  it("COMPETENCY-01: unknown competency id shows the unmapped placeholder, never a uuid", async () => {
+    // Contract change GAP2-LEARNING-COMPETENCY-UUID-01: the unmapped placeholder
+    // wording is now "Competency (unmapped)" (was "Unknown competency").
     getCompetencyProfileMock.mockResolvedValue({ data: [{ id: "h1", competencyId: "ghost-id", currentLevel: 2, source: "manual", evidenceRef: null }], source: "api" });
     await renderPage();
-    expect(screen.getByText("Unknown competency")).toBeInTheDocument();
+    expect(screen.getByText("Competency (unmapped)")).toBeInTheDocument();
     expect(screen.queryByText("ghost-id")).not.toBeInTheDocument();
+  });
+
+  it("COMPETENCY-UUID-01: when the dictionary is UNAVAILABLE ([]), gap rows show the placeholder, never a 36-char UUID", async () => {
+    const UUID = "123e4567-e89b-42d3-a456-426614174000";
+    getCompetenciesMock.mockResolvedValue({ data: [], source: "error" });
+    getCompetencyProfileMock.mockResolvedValue({ data: [{ id: "h1", competencyId: UUID, currentLevel: 2, source: "manual", evidenceRef: null }], source: "api" });
+    getGapAnalysisMock.mockResolvedValue({
+      data: { employeeId: "emp-9", roleCode: "ROLE_X", rows: [{ competencyId: UUID, requiredLevel: 3, heldLevel: 1, gap: 2, met: false }], requiredCount: 1, metCount: 0, gapCount: 1, readinessPct: 0 },
+      source: "api",
+    });
+    await renderPage({ roleCode: "ROLE_X" });
+    expect(screen.queryByText(UUID)).not.toBeInTheDocument();
+    expect(screen.getAllByText("Competency (unmapped)").length).toBeGreaterThan(0);
   });
 
   it("COMPETENCY-02: no linked employee record shows an honest prompt, not a uuid instruction", async () => {

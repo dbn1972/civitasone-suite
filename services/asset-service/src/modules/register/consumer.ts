@@ -150,6 +150,59 @@ export function registerRegisterConsumers(rawQueue: Queue): void {
     }
   });
 
+  // GAP2-ASSETS-INSURANCE-CLAIMS-02: category master-data on the CQRS path.
+  // Validate at the route; the conditional, tenant-scoped write + audit live here.
+  queue.subscribe(COMMANDS.assetCategoryCreate, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; name: string; code: string;
+      depMethod: "SLM" | "WDV"; depRate: number; usefulLifeYears: number;
+    };
+    try {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        await repo.insertCategory(tx, {
+          id: p.id, tenantId: p.tenantId, name: p.name, code: p.code,
+          depMethod: p.depMethod, depRate: String(p.depRate), usefulLifeYears: p.usefulLifeYears,
+          createdBy: msg.actorId, updatedBy: msg.actorId,
+        });
+        await audit(tx, msg, "create", "asset_category", p.id);
+      });
+    } catch (err) {
+      if (isUniqueViolation(err)) {
+        await db.transaction(async (tx) => {
+          if (!(await markProcessed(tx, msg.messageId))) return;
+          await enqueue(tx, {
+            topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: { service: "asset", action: "create_rejected_duplicate_code", resourceType: "asset_category", resourceId: p.id, outcome: "failure", code: p.code },
+          });
+        });
+        return;
+      }
+      throw err;
+    }
+    await cache.invalidateResource(msg.tenantId, "asset_category");
+  });
+
+  queue.subscribe(COMMANDS.assetCategoryUpdate, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string;
+      name?: string; code?: string; depMethod?: "SLM" | "WDV"; depRate?: number; usefulLifeYears?: number;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const patch: Record<string, unknown> = {};
+      if (p.name !== undefined) patch.name = p.name;
+      if (p.code !== undefined) patch.code = p.code;
+      if (p.depMethod !== undefined) patch.depMethod = p.depMethod;
+      if (p.depRate !== undefined) patch.depRate = String(p.depRate);
+      if (p.usefulLifeYears !== undefined) patch.usefulLifeYears = p.usefulLifeYears;
+      await repo.updateCategory(tx, p.id, p.tenantId, patch, msg.actorId);
+      await audit(tx, msg, "update", "asset_category", p.id);
+    });
+    await cache.invalidateResource(msg.tenantId, "asset_category");
+  });
+
   queue.subscribe(COMMANDS.assetTagBarcode, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; barcode: string };
     try {

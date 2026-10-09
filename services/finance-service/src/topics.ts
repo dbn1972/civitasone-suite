@@ -68,6 +68,10 @@ export const COMMANDS = {
   changeRequestDecide: "finance.change_request.decide",
   financeSettingsUpdate: "finance.settings.update",
   hoaChangeApply: "finance.hoa.change_apply",
+  // GAP2-FINANCE-CHART-OF-ACCOUNTS-07: budget-head (chart-of-accounts) create /
+  // update are CQRS'd — the route validates then publishes; the consumer writes.
+  accountCreate: "finance.account.create",
+  accountUpdate: "finance.account.update",
   // fp-finance-01: registers
   ucVerify: "finance.uc.verify",
   ucReject: "finance.uc.reject",
@@ -101,6 +105,8 @@ export const COMMANDS = {
   tdsDeductionRecord: "finance.tds.deduction_record",
   tdsDepositMark: "finance.tds.deposit_mark",
   tdsReturnFile: "finance.tds.return_file",
+  // GAP2-FINANCE-STATUTORY-TDS-RETURNS-07: DPDP-audited full-PAN reveal.
+  tdsPanReveal: "finance.tds.pan_reveal",
   // fp-finance-02 workflows (route -> command -> consumer; each consumer is one transaction)
   vendorDecide: "finance.vendor.decide",
   vendorBankChangePropose: "finance.vendor.bank_change_propose",

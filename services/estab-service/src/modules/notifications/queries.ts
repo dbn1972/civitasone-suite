@@ -85,7 +85,11 @@ export async function getNotifications(tenantId: string, limit: number): Promise
     items.push({
       id: `dfa_pa:${r.id}`, kind: "dfa_pending_approval", severity: "warning",
       title: `DFA awaiting approval: ${r.dfa_no}`, detail: r.subject,
-      at: new Date(r.updated_at).toISOString(), link: `/estab/dfa/${r.id}`,
+      // GAP2-ESTAB-NOTIFICATIONS-DFALINK-01: there is no /estab/dfa/[id] detail
+      // route (DFA-04 deferred it to Phase 2), so /estab/dfa/<uuid> 404'd on
+      // every click. Point at the existing list route with a ?focus= query the
+      // DFA panel honours (scrolls + highlights the row) instead.
+      at: new Date(r.updated_at).toISOString(), link: `/estab/dfa?focus=${r.id}`,
     });
   }
 
@@ -93,7 +97,8 @@ export async function getNotifications(tenantId: string, limit: number): Promise
     items.push({
       id: `dfa_disp:${r.id}`, kind: "dfa_awaiting_dispatch", severity: "info",
       title: `Ready to dispatch: ${r.dfa_no}`, detail: r.subject,
-      at: new Date(r.updated_at).toISOString(), link: `/estab/dfa/${r.id}`,
+      // GAP2-ESTAB-NOTIFICATIONS-DFALINK-01: see above — reachable list route.
+      at: new Date(r.updated_at).toISOString(), link: `/estab/dfa?focus=${r.id}`,
     });
   }
 

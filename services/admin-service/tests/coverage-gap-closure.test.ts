@@ -410,7 +410,7 @@ describe("previously-missing-table modules — end-to-end persistence smoke test
   beforeAll(async () => { wireSharedQueueConsumersOnce(); await cleanup(); });
   afterAll(cleanup);
 
-  it("POST /v1/admin/data-export → GET list shows the row with status=pending (data-export consumer actually writes now)", async () => {
+  it("POST /v1/admin/data-export → GET list shows the row progressing to ready (data-export consumer writes + auto-chains processing)", async () => {
     const create = await app.inject({
       method: "POST", url: "/v1/admin/data-export",
       headers: bearer(["tenant_admin"], T, ACTOR),
@@ -419,9 +419,12 @@ describe("previously-missing-table modules — end-to-end persistence smoke test
     expect(create.statusCode).toBe(202);
     const createdId = create.json().id as string;
 
+    // GAP2-TENANT-ADMIN-DATA-EXPORT-07: the request consumer now chains
+    // `admin.data_export.process`, so the row advances pending → ready on its
+    // own (previously it was stuck at `pending` forever).
     await waitFor(
       () => runWithTenant(T, () => db.transaction((tx) => tx.select().from(exportRequests).where(eq(exportRequests.id, createdId)))),
-      (found) => found.length > 0,
+      (found) => found[0]?.status === "ready",
     );
 
     const list = await app.inject({ method: "GET", url: "/v1/admin/data-export", headers: bearer(["tenant_admin"], T, ACTOR) });
@@ -429,7 +432,7 @@ describe("previously-missing-table modules — end-to-end persistence smoke test
     const rows = (list.json() as { data: Array<{ id: string; status: string; tenantId: string }> }).data;
     const created = rows.find((r) => r.id === createdId);
     expect(created).toBeDefined();
-    expect(created?.status).toBe("pending");
+    expect(created?.status).toBe("ready");
     expect(created?.tenantId).toBe(T);
   });
 
@@ -702,20 +705,12 @@ describe("previously-missing-table modules — lifecycle (update/delete/kill/pau
       payload: { type: "full", format: "json", purpose: "Annual statutory audit export" },
     });
     const exportId = create.json().id as string;
-    await waitFor(
-      () => runWithTenant(T, () => db.transaction((tx) => tx.select().from(exportRequests).where(eq(exportRequests.id, exportId)))),
-      (found) => found.length > 0,
-    );
 
-    const notReady = await app.inject({ method: "GET", url: `/v1/admin/data-export/${exportId}/download`, headers: bearer(["tenant_admin"], T, ACTOR) });
-    expect(notReady.statusCode).toBe(409);
-
-    // Directly publish the process command (no dedicated HTTP trigger route
-    // exists for this — exportProcess is invoked internally after data
-    // collection in production) to exercise the second consumer handler.
-    const { exportProcess } = await import("../src/modules/data-export/commands.js");
-    await exportProcess({ tenantId: T, actorId: ACTOR, correlationId: "corr-export-process" } as any, exportId);
-
+    // GAP2-TENANT-ADMIN-DATA-EXPORT-07: the request consumer now chains the
+    // `admin.data_export.process` command itself after inserting the pending
+    // row, so the export drives through to `ready` with NO manual
+    // exportProcess() call and NO dedicated HTTP trigger. On the OLD code the
+    // row stayed `pending` forever and this wait would time out / download 409.
     const rows = await waitFor(
       () => runWithTenant(T, () => db.transaction((tx) => tx.select().from(exportRequests).where(eq(exportRequests.id, exportId)))),
       (found) => found[0]?.status === "ready",

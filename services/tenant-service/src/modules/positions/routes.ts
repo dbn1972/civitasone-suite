@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, RouteHandlerMethod } from "fastify";
 import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -9,11 +9,15 @@ import { findById as findOrgUnit } from "../org-hierarchy/repo.js";
 const ADMIN = ["super_admin", "platform_admin", "tenant_admin"];
 
 export async function positionRoutes(app: FastifyInstance): Promise<void> {
-  app.get("/v1/positions", async (req, reply) => {
+  const listPositions: RouteHandlerMethod = async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);
     const data = await repo.listPositions(ctx.tenantId);
     return reply.send({ data, meta: { total: data.length } });
-  });
+  };
+  // GAP2-TENANT-WIRING-01: web positions loader calls /api/v1/tenant/positions
+  // (gateway forwards verbatim). Alias so it resolves instead of 404.
+  app.get("/v1/positions", listPositions);
+  app.get("/v1/tenant/positions", listPositions);
 
   app.get("/v1/positions/:id", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);

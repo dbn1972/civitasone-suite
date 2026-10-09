@@ -81,3 +81,24 @@ describe("CourtOrdersTable overdue semantics (GAP-LEGAL-COURT-ORDERS-03)", () =>
     expect(screen.queryByText("Overdue")).not.toBeInTheDocument();
   });
 });
+
+describe("CourtOrdersTable initial filter from URL (GAP2-LEGAL-COURT-ORDERS-11)", () => {
+  beforeEach(() => mockedHook.mockReset());
+
+  const overdue: CourtOrderSummary = { ...base, id: "o-overdue", caseNo: "WP/OVERDUE/1", orderType: "direction", complianceRequired: true, status: "pending", complianceDeadline: "2026-01-01" };
+  const safe: CourtOrderSummary = { ...base, id: "o-safe", caseNo: "WP/SAFE/2", orderType: "judgment", complianceRequired: false, status: "pending" };
+
+  it("defaults to All (shows both the at-risk and the non-risk order)", () => {
+    seed([overdue, safe]);
+    renderTable(<CourtOrdersTable items={[]} today="2026-02-01" />);
+    expect(screen.getByText("WP/OVERDUE/1")).toBeInTheDocument();
+    expect(screen.getByText("WP/SAFE/2")).toBeInTheDocument();
+  });
+
+  it("initialFilter='Risk' shows only the at-risk order on first render", () => {
+    seed([overdue, safe]);
+    renderTable(<CourtOrdersTable items={[]} today="2026-02-01" initialFilter="Risk" />);
+    expect(screen.getByText("WP/OVERDUE/1")).toBeInTheDocument();
+    expect(screen.queryByText("WP/SAFE/2")).not.toBeInTheDocument();
+  });
+});

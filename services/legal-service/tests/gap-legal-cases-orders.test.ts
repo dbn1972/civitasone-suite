@@ -86,7 +86,12 @@ describe("court-orders list exposes orderType (GAP-LEGAL-COURT-ORDERS-01)", () =
       headers: { authorization: `Bearer ${makeToken(["legal_officer"])}`, "x-tenant-id": TENANT },
     });
     expect(res.statusCode).toBe(200);
-    const rows = res.json() as Array<{ id: string; orderType?: string }>;
+    // GAP2-LEGAL-COURT-ORDERS-10: the list is now a paged envelope
+    // ({ items, total, limit, offset, stats }) rather than a bare array, so the
+    // compliance KPIs can be computed server-side over the full set. The row
+    // shape (incl. orderType) is unchanged; it just lives under `items`.
+    const body = res.json() as { items: Array<{ id: string; orderType?: string }> };
+    const rows = body.items;
     const row = rows.find((r) => r.id === ORDER_1);
     expect(row?.orderType).toBe("judgment");
     await app.close();

@@ -134,7 +134,7 @@ describe("DOM-032 — POST /v1/procurement/matches/invoice forwards invoiceDate 
       const app = await buildApp();
       const res = await app.inject({
         method: "POST", url: "/v1/procurement/matches/invoice", headers: auth,
-        payload: { matchId, invoiceRef: "INV-DOM032-00001", invoiceDate: "2026-05-10", invoiceAmount: 200, invoiceTax: 36 },
+        payload: { matchId, invoiceRef: "INV-DOM032-00001", invoiceDate: "2026-05-10", invoiceAmount: "200", invoiceTax: "36" },
       });
       await app.close();
       expect(res.statusCode).toBe(202);
@@ -165,7 +165,7 @@ describe("DOM-032 — POST /v1/procurement/matches/invoice forwards invoiceDate 
       const app = await buildApp();
       const res = await app.inject({
         method: "POST", url: "/v1/procurement/matches/invoice", headers: auth,
-        payload: { matchId, invoiceRef: "INV-DOM032-00002", invoiceAmount: 200, invoiceTax: 36 },
+        payload: { matchId, invoiceRef: "INV-DOM032-00002", invoiceAmount: "200", invoiceTax: "36" },
       });
       await app.close();
       expect(res.statusCode).toBe(202);

@@ -644,11 +644,24 @@ export interface AccountSummary {
   status: 'active' | 'inactive';
 }
 
+/** GAP2-AUDIT-HOME-11: audit outcomes beyond the binary success/failure.
+ * The well-known values are enumerated for ergonomics; the trailing
+ * `(string & {})` keeps the union open so a new outcome from the stream is
+ * carried through verbatim (and rendered neutrally) rather than being
+ * collapsed into "failure". */
+export type AuditOutcome = 'success' | 'failure' | 'skipped' | 'held' | 'unknown' | (string & {});
+
 export interface AuditRowSummary {
   actor: string;
   action: string;
   resource: string;
-  outcome: 'success' | 'failure';
+  /** GAP2-AUDIT-HOME-11: an audit outcome is not strictly binary. When the
+   * stream carries an explicit outcome that is neither success nor failure
+   * (e.g. `skipped`, `held`, `unknown`), preserve it so the investigator view
+   * can render it as its own neutral state instead of mislabelling it as a
+   * red "failure". `success`/`failure` remain the common, known-good/known-bad
+   * values; the open string keeps forward-compat for new outcomes. */
+  outcome: AuditOutcome;
   /** GAP-HR-AUDIT-LOG-03: ISO timestamp of the event, when the source
    * provided one. Optional (not every caller of this shared row shape
    * populates it) so adding it here cannot break an existing consumer. */
@@ -1187,6 +1200,11 @@ export type GRNSummary = {
   id: string;
   grnNo: string;
   poRef: string;
+  // GAP2-PROCUREMENT-GRN-DETAIL-06: the resolved PO uuid (for linking) and human
+  // PO number (for display), derived server-side from the opaque `poRef`
+  // composite. Optional so an unresolvable/absent ref falls back to "—".
+  poId?: string;
+  poNo?: string;
   vendor: string;
   receivedDate: string;
   receivedBy: string;
@@ -2319,6 +2337,24 @@ export type CourtOrderSummary = {
   status: "pending" | "complied" | "appealed" | "stayed";
 };
 
+/** GAP2-LEGAL-COURT-ORDERS-10: compliance KPIs computed server-side over the
+ * full tenant set (not a page slice). */
+export type CourtOrderStats = {
+  total: number;
+  pendingCompliance: number;
+  complied: number;
+  contemptRisk: number;
+};
+
+/** GAP2-LEGAL-COURT-ORDERS-10: page-aware court-order response. */
+export type CourtOrderPage = {
+  items: CourtOrderSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+  stats: CourtOrderStats;
+};
+
 export type LegalOpinionSummary = {
   id: string;
   opinionNo: string;
@@ -2555,6 +2591,16 @@ export type KnowledgeRecord = {
   retentionPeriod?: string;
   disposalDueDate?: string;
   status: "active" | "inactive" | "disposed" | "transferred";
+};
+
+// GAP2-KNOWLEDGE-DASHBOARD-CAP-01: repository-wide document aggregate.
+export type KnowledgeDocsSummary = {
+  total: number;
+  byStatus: Record<string, number>;
+  byCategory: Array<{ category: string; count: number }>;
+  circulars: number;
+  active: number;
+  archived: number;
 };
 
 export type NotificationItem = {

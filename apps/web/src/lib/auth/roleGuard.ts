@@ -832,3 +832,36 @@ export const AI_CHAT_READ_ROLES = ["ai_user", "ai_admin", "super_admin"];
  * controls are admin-only. The service stays the authority.
  */
 export const AI_AGENT_ADMIN_ROLES = ["ai_admin", "super_admin"];
+
+/**
+ * GAP2-CITIZEN-AUTHZ-ROLEGATE-01: roles permitted to use the officer/clerk
+ * citizen-services tools (service discovery, assisted intake, offline/counter
+ * payment recording). MUST mirror citizen-service's OFFICER_ROLES
+ * (discovery/routes.ts, intake/..., fee-payment/routes.ts) — the single source
+ * of truth for the web role gate on those /citizen officer screens, so the
+ * hidden-tile logic and the per-page requireAnyRole stay in sync with what the
+ * server actually enforces. The server remains authoritative; this constant
+ * only drives UI gating (hidden tiles + a PermissionDenied redirect instead of
+ * a 403-on-first-fetch for a citizen-role user who deep-links the page).
+ */
+export const CITIZEN_OFFICER_ROLES = ["citizen_officer", "citizen_admin", "super_admin"];
+
+/**
+ * GAP2-DESIGNER-HOME-01: roles permitted to AUTHOR citizen services in the
+ * Service Designer (create/submit/publish a service definition). Mirrors
+ * citizen-service's catalogue ADMIN_ROLES (modules/catalogue/routes.ts:
+ * ["citizen_admin", "super_admin"]) — the server is the authority and already
+ * returns 403 to anyone else. This constant only drives UI gating so a
+ * non-admin does not see create/submit/publish affordances that would 403 on
+ * use. Read views stay open to any signed-in officer.
+ */
+export const DESIGNER_AUTHOR_ROLES = ["citizen_admin", "super_admin"];
+
+/**
+ * GAP2-DESIGNER-HOME-01: roles permitted to AUTHOR (save/deploy) a BPMN process
+ * in the workflow Designer canvas. Mirrors workflow-service's definitions
+ * ADMIN_ROLES (modules/definitions/routes.ts: workflow_admin, super_admin,
+ * tenant_admin). UI gating only; the service enforces the same on every
+ * POST/deploy route.
+ */
+export const WORKFLOW_DESIGNER_AUTHOR_ROLES = ["workflow_admin", "super_admin", "tenant_admin"];

@@ -33,13 +33,10 @@
 # re-add `CONDITIONAL: ` to the postgis entries by hand (the write mode
 # doesn't know about that tag, same as the first-run allow-list).
 #
-# Generated: 2026-09-23  Count: 20 (6 CONDITIONAL: require the postgis extension)
+# Generated: 2026-09-23 (U27 review-2: audit 0005/0006 idempotency fixed, removed). 2026-10-09 (V0): audit 0029 now passes a second run, removed. Count: 17 (6 CONDITIONAL: require the postgis extension)
 analytics-service/0002_hardening.sql                       # unique constraint on partitioned table must include all partitioning columns
 analytics-service/0004_money_bigint.sql                    # unrecognized configuration parameter "app.tenant_id"
-audit-service/0005_audit_immutability.sql                  # permission denied for table events_y2026m09
-audit-service/0006_audit_immutability.sql                  # permission denied for table events_y2026m09
 audit-service/0028_restore_cert_in_columns_partition_gap.sql # permission denied for table events
-audit-service/0029_events_immutability_trigger_missing_on_partitions.sql # trg_events_immutable is missing on 5 partition(s) of events.events after CREATE TRIGGER on the parent — see pr
 crm-service/0047_lead_escalation.sql                       # must be owner of function list_escalation_tenants
 crm-service/0055_task_escalation_rules.sql                 # must be owner of function list_task_escalation_tenants
 crm-service/0068_document_types.sql                        # must be owner of function list_document_alert_tenants

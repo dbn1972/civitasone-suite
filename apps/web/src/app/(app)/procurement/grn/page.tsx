@@ -5,6 +5,7 @@ import { getProcurementGRNs } from "../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { isAwaitingInspection, matchState, MATCH_LABELS, MATCH_PILL_STATUS, MATCH_STATUS_LABELS, GRN_STATUS_LABELS } from "./statusLabels";
+import { parsePoRef } from "./poRef";
 
 // GAP-PROCUREMENT-GRN-02 — the API cap. Until server-side pagination with a
 // true total/summary is wired in, the list fetches at most this many rows and
@@ -46,7 +47,10 @@ export default async function GRNPage() {
     return {
       id: g.id,
       grnNo: g.grnNo,
-      poRef: g.poRef,
+      // GAP2-PROCUREMENT-GRN-DETAIL-06 — show the human PO number (resolved
+      // server-side), never the opaque `procurement_po:<uuid>` composite. Fall
+      // back to the bare uuid (prefix stripped) and finally "—" when absent.
+      poRef: g.poNo ?? parsePoRef(g.poRef) ?? "—",
       vendor: g.vendor,
       receivedDate: formatIndianDate(g.receivedDate),
       itemCount: g.itemCount,
