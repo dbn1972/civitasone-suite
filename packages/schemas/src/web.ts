@@ -2593,6 +2593,17 @@ export const KnowledgeDocSummarySchema = z.object({
 });
 export const KnowledgeDocSummaryListSchema = z.array(KnowledgeDocSummarySchema);
 
+// GAP2-KNOWLEDGE-DASHBOARD-CAP-01: repository-wide document aggregate (not
+// page-capped) powering the dashboard StatCards + category chart.
+export const KnowledgeDocsSummarySchema = z.object({
+  total: z.number(),
+  byStatus: z.record(z.string(), z.number()).default({}),
+  byCategory: z.array(z.object({ category: z.string(), count: z.number() })).default([]),
+  circulars: z.number(),
+  active: z.number(),
+  archived: z.number(),
+});
+
 export const KnowledgeRecordSchema = z.object({
   id: z.string(),
   recordNo: z.string(),

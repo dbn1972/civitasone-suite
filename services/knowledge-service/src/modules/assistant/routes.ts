@@ -114,7 +114,12 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/knowledge/assistant/metrics", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    // GAP2-KNOWLEDGE-ASSISTANT-METRICS-01: tenant-wide deflection/escalation
+    // analytics are an operational management metric across ALL users'
+    // assistant interactions — gate to editors/admins (ADMIN_ROLES), matching
+    // the editorial/analytics boundary used for FAQ/flow management, not the
+    // base knowledge_user role.
+    requireRole(ctx, ADMIN_ROLES);
     const q = metricsQuery.parse(req.query);
     return reply.send(await queries.metrics(ctx.tenantId, q.from, q.to));
   });

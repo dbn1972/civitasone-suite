@@ -81,13 +81,17 @@ describe("GAP2-ASSETS-FLEET-SCHEMA-01 — audit columns on fleet tables", () => 
       tenantId: TENANT, actorId: ACTOR, correlationId: "c1", schemaVersion: "1.0",
       payload: { id: VEHICLE, tenantId: TENANT, registrationNo: "MH12FL0001", make: "Tata", model: "Ace", year: 2024, fuelType: "diesel" },
     });
+    // Deterministic ordering: the vehicle tx must commit before the maintenance insert
+    // (fleet_maintenance.vehicle_id FK). Back-to-back publishes run on separate pool
+    // connections and raced on loaded CI runners; wait on the queue, not a timer.
+    await q.drain();
     const maintId = randomUUID();
     await q.publish(COMMANDS.fleetScheduleMaintenance, {
       messageId: maintId, type: COMMANDS.fleetScheduleMaintenance,
       tenantId: TENANT, actorId: ACTOR, correlationId: "c2", schemaVersion: "1.0",
       payload: { id: maintId, tenantId: TENANT, vehicleId: VEHICLE, type: "oil_change", scheduledDate: new Date(Date.now() + 86400000).toISOString() },
     });
-    await new Promise<void>((r) => setTimeout(r, 400));
+    await q.drain();
 
     // complete it as a DIFFERENT actor (COMPLETER) → updated_by must be COMPLETER
     await q.publish(COMMANDS.fleetMaintenanceComplete, {
@@ -95,7 +99,7 @@ describe("GAP2-ASSETS-FLEET-SCHEMA-01 — audit columns on fleet tables", () => 
       tenantId: TENANT, actorId: COMPLETER, correlationId: "c3", schemaVersion: "1.0",
       payload: { id: maintId, tenantId: TENANT, costMinor: 150000 },
     });
-    await new Promise<void>((r) => setTimeout(r, 400));
+    await q.drain();
     await q.stop();
 
     const rows = await asTenant(TENANT, (tx) => tx.select().from(fleetMaintenance).where(eq(fleetMaintenance.id, maintId)));
@@ -120,7 +124,7 @@ describe("GAP2-ASSETS-FLEET-DEVICES-01 — real total device count", () => {
         payload: { id: did, tenantId: TENANT, vehicleId: VEHICLE, deviceImei: `12345678901234${i}`, protocol: "gt06" },
       });
     }
-    await new Promise<void>((r) => setTimeout(r, 450));
+    await q.drain();
     await q.stop();
 
     const res = await app.inject({

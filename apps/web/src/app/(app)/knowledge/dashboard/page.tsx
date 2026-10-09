@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { getKnowledgeDocs } from "../../../_data/loaders";
+import { getKnowledgeDocs, getKnowledgeDocsSummary } from "../../../_data/loaders";
 import { EmptyState, PageHeader, StatCard, StatGrid, RefreshErrorState } from "../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
@@ -66,28 +66,22 @@ function docStatusLabel(s: string) {
 //   bulk upload button removed (no bulk flow exists — see DOCUMENTS-NEW-02).
 export default async function KnowledgeDashboardPage() {
   const { data: docs, source } = await getKnowledgeDocs();
+  // GAP2-KNOWLEDGE-DASHBOARD-CAP-01: StatCards + category chart are now bound to
+  // a server-side repository-wide aggregate, so they reflect TRUE totals rather
+  // than a count over the first (page-capped) 50 documents. The list is kept
+  // only for the "recent publications" table below.
+  const { data: summary, source: summarySource } = await getKnowledgeDocsSummary();
   const errored = source === "error";
+  const summaryErrored = summarySource === "error";
 
-  const total = docs.length;
-  const circulars = errored ? 0 : docs.filter((d) => d.category?.toLowerCase().includes("circular")).length;
+  const total = summaryErrored ? 0 : summary.total;
+  const circulars = summaryErrored ? 0 : summary.circulars;
   // GAP-KNOWLEDGE-DASHBOARD-02: label matches computation
-  const active = errored ? 0 : docs.filter((d) => d.status === "approved" || d.status === "under_review").length;
-  const archived = errored ? 0 : docs.filter((d) => d.status === "archived").length;
+  const active = summaryErrored ? 0 : summary.active;
+  const archived = summaryErrored ? 0 : summary.archived;
 
-  // GAP-KNOWLEDGE-DASHBOARD-07: these aggregates are computed from the documents
-  // list, which the backend caps at its default page size (listQuerySchema
-  // default limit = 50). There is no server-side aggregate endpoint yet, so when
-  // the list is full we warn that the figures are based on the first N documents
-  // rather than silently presenting a partial count as the whole repository.
-  const DOCS_PAGE_LIMIT = 50;
-  const capped = !errored && total >= DOCS_PAGE_LIMIT;
-
-  const categoryMap = docs.reduce<Record<string, number>>((acc, d) => {
-    acc[d.category] = (acc[d.category] ?? 0) + 1;
-    return acc;
-  }, {});
-  const categoryList = Object.entries(categoryMap)
-    .map(([name, count]) => ({ name, count }))
+  const categoryList = (summaryErrored ? [] : summary.byCategory)
+    .map((c) => ({ name: c.category, count: c.count }))
     .sort((a, b) => b.count - a.count);
 
   const recentRows: RecentDocRow[] = [...docs]
@@ -115,16 +109,17 @@ export default async function KnowledgeDashboardPage() {
       />
 
       <StatGrid>
-        <StatCard icon="📂" iconBg="#fef9e7" label="Documents" value={errored ? "—" : total.toLocaleString("en-IN")} />
-        <StatCard icon="📜" iconBg="#eff6ff" label="Circulars/Policies" value={errored ? "—" : circulars.toLocaleString("en-IN")} />
-        <StatCard icon="🗃️" iconBg="#ecfdf3" label="Active" value={errored ? "—" : active.toLocaleString("en-IN")} />
-        <StatCard icon="📦" iconBg="#fffaeb" label="Archived" value={errored ? "—" : archived.toLocaleString("en-IN")} />
+        <StatCard icon="📂" iconBg="#fef9e7" label="Documents" value={summaryErrored ? "—" : total.toLocaleString("en-IN")} />
+        <StatCard icon="📜" iconBg="#eff6ff" label="Circulars/Policies" value={summaryErrored ? "—" : circulars.toLocaleString("en-IN")} />
+        <StatCard icon="🗃️" iconBg="#ecfdf3" label="Active" value={summaryErrored ? "—" : active.toLocaleString("en-IN")} />
+        <StatCard icon="📦" iconBg="#fffaeb" label="Archived" value={summaryErrored ? "—" : archived.toLocaleString("en-IN")} />
       </StatGrid>
 
-      {/* GAP-KNOWLEDGE-DASHBOARD-07: honest note when the list is page-capped */}
-      {capped && (
+      {/* GAP2-KNOWLEDGE-DASHBOARD-CAP-01: StatCards reflect repository-wide totals
+          from the server aggregate; show an honest note if that aggregate failed. */}
+      {summaryErrored && (
         <p role="note" style={{ margin: "8px 0 0", fontSize: 12, color: "var(--mut, #667085)" }}>
-          Figures are based on the most recent {DOCS_PAGE_LIMIT} documents. A repository-wide summary is not yet available.
+          Repository totals are temporarily unavailable.
         </p>
       )}
 
