@@ -222,9 +222,13 @@ export function registerQuarterConsumers(queue: Queue): void {
         if (!allotment) throw new Error("ALLOTMENT_NOT_FOUND");
         assertValidTransition(allotment.status, "vacated");
         const vacatedAt = new Date();
-        await tx.update(estabQuarterAllotments)
+        const vacated = await tx.update(estabQuarterAllotments)
           .set({ status: "vacated", vacatedAt, handoverNotes: p.handoverNotes ?? null, updatedBy: msg.actorId, updatedAt: new Date(), version: sql`${estabQuarterAllotments.version} + 1` })
-          .where(and(eq(estabQuarterAllotments.id, p.id), eq(estabQuarterAllotments.version, p.version)));
+          .where(and(eq(estabQuarterAllotments.id, p.id), eq(estabQuarterAllotments.version, p.version)))
+          .returning({ id: estabQuarterAllotments.id });
+        // Optimistic-lock miss (stale version): nothing was vacated, so do not
+        // free the quarter or raise an overstay penalty for a vacate that did not happen.
+        if (vacated.length === 0) throw new Error("ALLOTMENT_VERSION_CONFLICT");
         await tx.update(estabQuarters)
           .set({ status: "vacant", updatedBy: msg.actorId, updatedAt: new Date() })
           .where(eq(estabQuarters.id, allotment.quarterId));
@@ -335,14 +339,35 @@ export function registerQuarterConsumers(queue: Queue): void {
         });
         await audit(tx, msg, "licence_fee_rate_created", "licence_fee_rate", p.id);
       });
-    } catch (err) { log.error({ err, messageId: msg.messageId }, "quarterLicenceFeeRate failed"); }
+    } catch (err) {
+      // 23P01 = exclusion_violation (0049): a concurrent/overlapping rate won the
+      // race past the route pre-check. The tx rolled back (including its inbox
+      // mark); record an audited refusal in a fresh tx so the conflict is
+      // visible rather than silently dropped.
+      if (pgCode(err) === "23P01") {
+        const p = msg.payload as { id: string };
+        log.warn({ messageId: msg.messageId, rateId: p.id }, "quarterLicenceFeeRate refused: overlapping effective period");
+        await db.transaction(async (tx) => {
+          if (!(await markProcessed(tx, msg.messageId))) return;
+          await audit(tx, msg, "licence_fee_rate_refused_overlap", "licence_fee_rate", p.id, "refused");
+        });
+        return;
+      }
+      log.error({ err, messageId: msg.messageId }, "quarterLicenceFeeRate failed");
+    }
   });
 }
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
+/** Postgres SQLSTATE of an error, whether raw (postgres.js) or wrapped by drizzle (`cause`). */
+function pgCode(err: unknown): string | undefined {
+  const e = err as { code?: string; cause?: { code?: string } } | null;
+  return e?.code ?? e?.cause?.code;
+}
+
+async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string, outcome = "success"): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "estab", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "estab", action, resourceType, resourceId, outcome },
   });
 }

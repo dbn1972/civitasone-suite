@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, type SQL } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { estabFacilitiesCatalog, estabBookings, estabBookingCalendar } from "./schema.js";
 
@@ -73,25 +73,24 @@ export async function getFacilityAvailability(tenantId: string, facilityId: stri
 
 export async function listBookings(
   tenantId: string,
-  q: { status?: string | undefined },
+  q: { status?: string | undefined; ownerId?: string | undefined },
   limit: number,
   offset: number,
 ): Promise<ListPage<unknown>> {
-  const rows = q.status
-    ? await db.transaction((tx) => tx.select().from(estabBookings)
-        .where(and(eq(estabBookings.tenantId, tenantId), eq(estabBookings.status, q.status!)))
-        .orderBy(estabBookings.id)
-        .limit(limit).offset(offset))
-    : await db.transaction((tx) => tx.select().from(estabBookings)
-        .where(eq(estabBookings.tenantId, tenantId))
-        .orderBy(estabBookings.id)
-        .limit(limit).offset(offset));
+  // IDOR: ownerId (set for citizen/employee callers) restricts to rows they created.
+  const conds: SQL[] = [eq(estabBookings.tenantId, tenantId)];
+  if (q.status) conds.push(eq(estabBookings.status, q.status));
+  if (q.ownerId) conds.push(eq(estabBookings.createdBy, q.ownerId));
+  const rows = await db.transaction((tx) => tx.select().from(estabBookings)
+    .where(and(...conds))
+    .orderBy(estabBookings.id)
+    .limit(limit).offset(offset));
   return paginate(rows, limit, offset);
 }
 
-export async function getBooking(tenantId: string, id: string): Promise<unknown | undefined> {
+export async function getBooking(tenantId: string, id: string, ownerId?: string): Promise<unknown | undefined> {
   const rows = await db.transaction((tx) => tx.select().from(estabBookings)
-    .where(and(eq(estabBookings.tenantId, tenantId), eq(estabBookings.id, id)))
+    .where(and(eq(estabBookings.tenantId, tenantId), eq(estabBookings.id, id), ...(ownerId ? [eq(estabBookings.createdBy, ownerId)] : [])))
     .limit(1));
   return rows[0];
 }

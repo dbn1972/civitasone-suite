@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render as rtlRender } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import hiMessages from "@/messages/hi.json";
+// DfaPanel reads its copy through next-intl; render with the English provider.
+import { render, screen, fireEvent, waitFor } from "@/test-utils/intl-render";
 
 // GAP2-ESTAB-NOTIFICATIONS-DFALINK-01: DfaPanel now reads ?focus= via
 // useSearchParams. Tests set the param through this controllable mock.
@@ -201,5 +205,22 @@ describe("DfaPanel — GAP2-ESTAB-NOTIFICATIONS-DFALINK-01 (?focus= deep-link)",
     render(<DfaPanel />);
     await waitFor(() => expect(screen.getByRole("tab", { name: "All" })).toBeInTheDocument());
     expect(screen.queryByTestId("dfa-focus-banner")).toBeNull();
+  });
+});
+
+describe("DfaPanel — focus banner is localised (not hardcoded English)", () => {
+  beforeEach(() => { vi.restoreAllMocks(); });
+
+  it("renders the hi copy for the not-in-view banner", async () => {
+    mockSearch = new URLSearchParams({ focus: "dfa-missing-id" });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [] }));
+    rtlRender(
+      <NextIntlClientProvider locale="hi" messages={hiMessages}>
+        <DfaPanel />
+      </NextIntlClientProvider>,
+    );
+    const banner = await screen.findByTestId("dfa-focus-banner");
+    expect(banner.textContent).toBe(hiMessages.estabDfaFocus.missing);
+    expect(banner.textContent).not.toMatch(/in this view/i);
   });
 });

@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, type SQL } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { estabLeaseProperties, estabLeases, estabLeasePayments, estabLeaseRequests } from "./schema.js";
 
@@ -57,25 +57,24 @@ export async function getProperty(tenantId: string, id: string): Promise<unknown
 
 export async function listLeases(
   tenantId: string,
-  q: { status?: string | undefined },
+  q: { status?: string | undefined; ownerId?: string | undefined },
   limit: number,
   offset: number,
 ): Promise<ListPage<unknown>> {
-  const rows = q.status
-    ? await db.transaction((tx) => tx.select().from(estabLeases)
-        .where(and(eq(estabLeases.tenantId, tenantId), eq(estabLeases.status, q.status!)))
-        .orderBy(estabLeases.id)
-        .limit(limit).offset(offset))
-    : await db.transaction((tx) => tx.select().from(estabLeases)
-        .where(eq(estabLeases.tenantId, tenantId))
-        .orderBy(estabLeases.id)
-        .limit(limit).offset(offset));
+  // IDOR: ownerId (set for citizen/employee callers) restricts to rows they created.
+  const conds: SQL[] = [eq(estabLeases.tenantId, tenantId)];
+  if (q.status) conds.push(eq(estabLeases.status, q.status));
+  if (q.ownerId) conds.push(eq(estabLeases.createdBy, q.ownerId));
+  const rows = await db.transaction((tx) => tx.select().from(estabLeases)
+    .where(and(...conds))
+    .orderBy(estabLeases.id)
+    .limit(limit).offset(offset));
   return paginate(rows, limit, offset);
 }
 
-export async function getLease(tenantId: string, id: string): Promise<unknown | undefined> {
+export async function getLease(tenantId: string, id: string, ownerId?: string): Promise<unknown | undefined> {
   const rows = await db.transaction((tx) => tx.select().from(estabLeases)
-    .where(and(eq(estabLeases.tenantId, tenantId), eq(estabLeases.id, id)))
+    .where(and(eq(estabLeases.tenantId, tenantId), eq(estabLeases.id, id), ...(ownerId ? [eq(estabLeases.createdBy, ownerId)] : [])))
     .limit(1));
   return rows[0];
 }
@@ -89,25 +88,24 @@ export async function listLeasePayments(tenantId: string, leaseId: string): Prom
 
 export async function listRequests(
   tenantId: string,
-  q: { status?: string | undefined },
+  q: { status?: string | undefined; ownerId?: string | undefined },
   limit: number,
   offset: number,
 ): Promise<ListPage<unknown>> {
-  const rows = q.status
-    ? await db.transaction((tx) => tx.select().from(estabLeaseRequests)
-        .where(and(eq(estabLeaseRequests.tenantId, tenantId), eq(estabLeaseRequests.status, q.status!)))
-        .orderBy(estabLeaseRequests.id)
-        .limit(limit).offset(offset))
-    : await db.transaction((tx) => tx.select().from(estabLeaseRequests)
-        .where(eq(estabLeaseRequests.tenantId, tenantId))
-        .orderBy(estabLeaseRequests.id)
-        .limit(limit).offset(offset));
+  // IDOR: ownerId (set for citizen/employee callers) restricts to rows they created.
+  const conds: SQL[] = [eq(estabLeaseRequests.tenantId, tenantId)];
+  if (q.status) conds.push(eq(estabLeaseRequests.status, q.status));
+  if (q.ownerId) conds.push(eq(estabLeaseRequests.createdBy, q.ownerId));
+  const rows = await db.transaction((tx) => tx.select().from(estabLeaseRequests)
+    .where(and(...conds))
+    .orderBy(estabLeaseRequests.id)
+    .limit(limit).offset(offset));
   return paginate(rows, limit, offset);
 }
 
-export async function getRequest(tenantId: string, id: string): Promise<unknown | undefined> {
+export async function getRequest(tenantId: string, id: string, ownerId?: string): Promise<unknown | undefined> {
   const rows = await db.transaction((tx) => tx.select().from(estabLeaseRequests)
-    .where(and(eq(estabLeaseRequests.tenantId, tenantId), eq(estabLeaseRequests.id, id)))
+    .where(and(eq(estabLeaseRequests.tenantId, tenantId), eq(estabLeaseRequests.id, id), ...(ownerId ? [eq(estabLeaseRequests.createdBy, ownerId)] : [])))
     .limit(1));
   return rows[0];
 }

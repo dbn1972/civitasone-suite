@@ -131,6 +131,17 @@ export async function quartersRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, RATE_ADMIN_ROLES);
     const body = createLicenceFeeRateBody.parse(req.body);
+    if (body.effectiveTo && body.effectiveTo < body.effectiveFrom) {
+      throw new HttpError(400, "INVALID_RANGE", "effectiveTo must not be before effectiveFrom");
+    }
+    // 0049 exclusion constraint: refuse an overlapping rate up front (the async
+    // consumer cannot report back to the caller).
+    const clash = await queries.findOverlappingLicenceFeeRate(
+      ctx.tenantId, body.quarterType, body.payLevel, body.effectiveFrom, body.effectiveTo);
+    if (clash) {
+      throw new HttpError(409, "LICENCE_FEE_OVERLAP",
+        `an existing rate (${clash.id}) already covers part of this period for the same quarter type and pay level`);
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createLicenceFeeRate(ctx, body));
   });
 

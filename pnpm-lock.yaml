@@ -2061,6 +2061,9 @@ importers:
       '@civitasone/cache':
         specifier: workspace:*
         version: link:../../packages/cache
+      '@civitasone/data-governance':
+        specifier: workspace:*
+        version: link:../../packages/data-governance
       '@civitasone/db':
         specifier: workspace:*
         version: link:../../packages/db

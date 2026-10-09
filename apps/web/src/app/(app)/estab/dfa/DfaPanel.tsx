@@ -3,6 +3,7 @@
 import { UserFacingError } from "@/lib/userFacingError";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button, DataTable, StatusPill, ActionButton, Segmented, ErrorState } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { humanizeStatus, formatIndianDate } from "@/lib/formatters";
@@ -86,6 +87,7 @@ export function DfaPanel() {
   // detail route). Honour that param: surface which draft the officer followed
   // in and highlight its row when it is present in the current view.
   const searchParams = useSearchParams();
+  const tFocus = useTranslations("estabDfaFocus");
   const focusId = searchParams?.get("focus") ?? "";
   const focusedRow = focusId ? rows.find((d) => d.id === focusId) : undefined;
 
@@ -284,8 +286,8 @@ export function DfaPanel() {
         <div className="card" data-testid="dfa-focus-banner">
           <p className="pad" style={{ fontSize: "0.875rem", color: "var(--ink2)" }}>
             {focusedRow
-              ? `Showing the draft you selected: ${focusedRow.dfaNo} — ${focusedRow.subject}.`
-              : "The draft you selected isn't in this view — switch to \u201CAll\u201D or another status to find it."}
+              ? tFocus("shown", { dfaNo: focusedRow.dfaNo, subject: focusedRow.subject })
+              : tFocus("missing")}
           </p>
         </div>
       ) : null}

@@ -117,6 +117,10 @@ export function registerBookingConsumers(queue: Queue): void {
   const transition = (
     topic: string, target: string, action: string,
     extra?: (p: Record<string, unknown>, actorId: string) => Record<string, unknown>,
+    // current status -> intermediate status that is folded into this one command
+    // (an approved booking has no separate "request payment" command: recording the
+    // payment walks approved -> payment_pending -> confirmed in one legal step).
+    via: Record<string, string> = {},
   ) =>
     queue.subscribe(topic, async (msg: Msg) => {
       try {
@@ -127,7 +131,9 @@ export function registerBookingConsumers(queue: Queue): void {
             .where(and(eq(estabBookings.id, p.id), eq(estabBookings.tenantId, p.tenantId))).limit(1);
           const booking = rows[0];
           if (!booking) throw new DomainError("BOOKING_NOT_FOUND", "booking not found");
-          assertValidTransition(booking.status, target);
+          const mid = via[booking.status];
+          if (mid) assertValidTransition(booking.status, mid);
+          assertValidTransition(mid ?? booking.status, target);
           const set: Record<string, unknown> = {
             status: target, updatedBy: msg.actorId, updatedAt: new Date(),
             version: sql`${estabBookings.version} + 1`,
@@ -144,7 +150,8 @@ export function registerBookingConsumers(queue: Queue): void {
   transition(COMMANDS.bookingApprove, "approved", "booking_approved",
     (_p, actorId) => ({ approvedBy: actorId, approvedAt: new Date() }));
   transition(COMMANDS.bookingRecordPayment, "confirmed", "booking_payment_recorded",
-    (p) => ({ paymentRef: (p.paymentRef as string | undefined) ?? null, paidAt: new Date() }));
+    (p) => ({ paymentRef: (p.paymentRef as string | undefined) ?? null, paidAt: new Date() }),
+    { approved: "payment_pending" });
   transition(COMMANDS.bookingCancel, "cancelled", "booking_cancelled",
     (p) => ({ cancellationReason: (p.cancellationReason as string | undefined) ?? null, cancelledAt: new Date() }));
   transition(COMMANDS.bookingComplete, "completed", "booking_completed");
