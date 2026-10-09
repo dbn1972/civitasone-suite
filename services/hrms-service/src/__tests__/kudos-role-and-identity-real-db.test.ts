@@ -85,6 +85,18 @@ describe("kudos identity space (GAP2-HR-SOCIAL-FEED-08)", () => {
     expect(rows[0]!.receiver_id).toBe(receiverEmpId);
   });
 
+  it("a caller with no hrms_employees row is rejected (403 GIVER_NOT_LINKED) and writes nothing", async () => {
+    const before = await withRawTenantGuc(sqlClient, TENANT, (tx) => tx`SELECT COUNT(*)::int AS n FROM employee.hrms_social_kudos WHERE tenant_id = ${TENANT}`) as unknown as Array<{ n: number }>;
+    const r = await app.inject({
+      method: "POST", url: "/v1/hrms/kudos", headers: auth(randomUUID(), ["employee"]),
+      payload: { receiverId: receiverEmpId, badge: "rocket", message: "Thanks for the help" },
+    });
+    expect(r.statusCode).toBe(403);
+    expect(r.json().error?.code ?? r.json().code).toBe("GIVER_NOT_LINKED");
+    const after = await withRawTenantGuc(sqlClient, TENANT, (tx) => tx`SELECT COUNT(*)::int AS n FROM employee.hrms_social_kudos WHERE tenant_id = ${TENANT}`) as unknown as Array<{ n: number }>;
+    expect(after[0]!.n).toBe(before[0]!.n);
+  });
+
   it("the receiver's /kudos/feed myReceived counts the kudos they received", async () => {
     const r = await app.inject({ method: "GET", url: "/v1/hrms/kudos/feed", headers: auth(RECEIVER_ACTOR, ["employee"]) });
     expect(r.statusCode).toBe(200);

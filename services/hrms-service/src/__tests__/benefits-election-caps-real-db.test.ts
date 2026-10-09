@@ -100,6 +100,17 @@ describe("POST /v1/hrms/benefits/elections — plan & cap validation", () => {
     expect(r.statusCode).toBe(422);
   });
 
+  it("a repeated component whose entries sum above its cap is rejected (422) and inserts nothing", async () => {
+    const before = await countElections();
+    const r = await app.inject({
+      method: "POST", url: "/v1/hrms/benefits/elections", headers: auth(EMPLOYEE_ACTOR, ["employee"]),
+      // 3,000,000 + 3,000,000 = 6,000,000 > hra cap 5,000,000 (each entry alone is within cap, sum equals the budget)
+      payload: { planId, fy: FY, elections: [{ component: "hra", electedMinor: 3000000 }, { component: "hra", electedMinor: 3000000 }] },
+    });
+    expect(r.statusCode).toBe(422);
+    expect(await countElections()).toBe(before);
+  });
+
   it("a fy that does not match the plan is rejected (422)", async () => {
     const r = await app.inject({
       method: "POST", url: "/v1/hrms/benefits/elections", headers: auth(EMPLOYEE_ACTOR, ["employee"]),

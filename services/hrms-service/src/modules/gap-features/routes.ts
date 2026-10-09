@@ -688,7 +688,14 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
       }
       const components = Array.isArray(plan.components) ? plan.components : [];
       const capByName = new Map(components.map((c) => [c.name, Number(c.maxMinor)]));
+      const seenComponents = new Set<string>();
       for (const e of body.elections) {
+        // A repeated component would let each entry pass the per-component cap
+        // on its own while their sum exceeds it; the UI sends one per component.
+        if (seenComponents.has(e.component)) {
+          throw new HttpError(422, "DUPLICATE_COMPONENT", `component "${e.component}" is elected more than once`);
+        }
+        seenComponents.add(e.component);
         if (!capByName.has(e.component)) {
           throw new HttpError(422, "UNKNOWN_COMPONENT", `component "${e.component}" is not part of this plan`);
         }
