@@ -27,7 +27,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
-import { withTenantScope, eq } from "@civitasone/db";
+import { withTenantScope, eq, sql } from "@civitasone/db";
 import { enqueue } from "@civitasone/outbox";
 import { LiveHarness, assertFresh, tenant, type MountedService } from "./harness.js";
 
@@ -35,6 +35,7 @@ const ACTOR = randomUUID();
 
 let h: LiveHarness;
 let finance: MountedService;
+let notification: MountedService;
 // finance_heads Drizzle table is loaded after the service is mounted (its
 // db.ts must bind first against civitas_finance as finance_svc).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -49,7 +50,10 @@ beforeAll(async () => {
   // lazily. Hardcoding a secret-shaped literal here is forbidden (house rule 10;
   // inline scanner allow-directives are not permitted either).
   finance = await h.mount("finance-service");
-  await assertFresh([finance]);
+  // notification-service owns _inbox.command_results (migration 0048); mounted
+  // so silent() can be proven to SEE rows through the tenant GUC.
+  notification = await h.mount("notification-service");
+  await assertFresh([finance, notification]);
   ({ financeHeads } = await import(
     "../../services/finance-service/src/modules/budget/schema.js"
   ));
@@ -102,10 +106,11 @@ describe("harness v0 — drain() relays outbox -> queue -> consumer", () => {
     const topic = "harness.selftest.event";
     const marker = randomUUID();
 
-    // A real consumer on the shared queue, registered through the tenant-scoped
-    // facade so it runs inside the message's tenant context.
+    // A real consumer on the shared queue. It is registered directly (no tenant
+    // GUC): the harness has no tenant-scoped queue; real consumers wrap with the
+    // owning service's own tenantScoped().
     const received: Array<{ tenantId: string; marker: string }> = [];
-    h.scopedQueue.subscribe(topic, async (msg: {
+    h.queue.subscribe(topic, async (msg: {
       tenantId: string;
       payload: { marker: string };
     }) => {
@@ -142,5 +147,34 @@ describe("harness v0 — drain() relays outbox -> queue -> consumer", () => {
     expect(mine.length, "tap() must record the boundary-crossing envelope").toBeGreaterThanOrEqual(1);
     expect(mine.every((t) => t.valid), "the transport envelope must validate").toBe(true);
     expect(mine.every((t) => t.tenantId === tenantA)).toBe(true);
+  });
+});
+
+describe("harness v0 — silent() sees recorded command outcomes through tenant scope", () => {
+  it("reports a failed command_results row for its tenant only", async () => {
+    const tenantA = tenant();
+    const tenantB = tenant();
+    const messageId = randomUUID();
+
+    await withTenantScope(notification.db, tenantA, async (tx: typeof notification.db) =>
+      tx.execute(sql`
+        insert into _inbox.command_results (message_id, tenant_id, topic, status, reason)
+        values (${messageId}, ${tenantA}, 'harness.selftest.cmd', 'failed', 'selftest')`),
+    );
+
+    const asA = await h.silent([tenantA]);
+    expect(
+      asA.recordedOutcomes["notification-service"]!.map((r) => r.messageId),
+      "silent([A]) must see the failed row seeded under tenant A",
+    ).toContain(messageId);
+
+    const asB = await h.silent([tenantB]);
+    expect(
+      asB.recordedOutcomes["notification-service"]!.map((r) => r.messageId),
+      "silent([B]) must not see tenant A's row",
+    ).not.toContain(messageId);
+
+    // finance has no command_results table yet: 42P01 is tolerated, not an error.
+    expect(asA.recordedOutcomes["finance-service"]).toEqual([]);
   });
 });

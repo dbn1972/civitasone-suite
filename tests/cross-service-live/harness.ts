@@ -42,6 +42,7 @@
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
 import { relayOnce, type DrizzleTx } from "@civitasone/outbox";
+import { withTenantScope, sql } from "@civitasone/db";
 
 /**
  * `<db>:<role>` per service, mirroring the SERVICE_DBS map in
@@ -148,6 +149,17 @@ export async function mountService(
         `harness: services/${name}/src/shared/db.js did not export both { db, sqlClient }`,
       );
     }
+    // First import wins: if the service's db.ts was imported earlier in this
+    // worker it kept that earlier DSN. Prove we really are the NOSUPERUSER,
+    // NOBYPASSRLS service role, or FORCE RLS would be silently bypassed.
+    const [who] = await sqlClient`
+      select current_user as "u", r.rolsuper as "su", r.rolbypassrls as "bypass"
+      from pg_roles r where r.rolname = current_user`;
+    if (!who || who.u !== entry.role || who.su || who.bypass) {
+      throw new Error(
+        `harness: ${name} is connected as ${who?.u} (superuser=${who?.su}, bypassrls=${who?.bypass}); expected non-superuser, non-BYPASSRLS ${entry.role}. Was services/${name}/src/shared/db.js imported before mountService()?`,
+      );
+    }
     return { name, dsn, role: entry.role, db, sqlClient };
   } finally {
     // Restore so the next mountService() can swap again, and so anything that
@@ -181,8 +193,11 @@ export interface TappedEnvelope {
  */
 export class LiveHarness {
   readonly queue: MemoryQueue;
-  /** tenant-scoped Queue facade — consumers registered through this run inside the message's tenant GUC. */
-  readonly scopedQueue: MemoryQueue;
+  // NOTE: there is deliberately no "tenant-scoped queue" here. Consumers
+  // subscribed on `queue` run WITHOUT a tenant GUC. A caller that needs the
+  // handler to run inside the message's tenant context wraps the queue with the
+  // owning service's own `tenantScoped()` (per service:
+  // services/<name>/src/shared/tenant-queue.js) before subscribing.
   private readonly services: MountedService[] = [];
   readonly tapped: TappedEnvelope[] = [];
   private tapping = false;
@@ -191,7 +206,6 @@ export class LiveHarness {
     // maxAttempts: 1 so a failing consumer reaches the dead-letter list at once,
     // with no retry backoff hiding a refusal (06-verification.md §2.3).
     this.queue = new MemoryQueue({ maxAttempts: opts.maxAttempts ?? 1 });
-    this.scopedQueue = this.queue;
   }
 
   /** Register a mounted service so relayAll() drains its outbox. */
@@ -212,7 +226,8 @@ export class LiveHarness {
    * timestamp, schemaVersion the bus adds in `envelope()`) is validated with
    * the real `parseEnvelope`. Validating at the consumer boundary, not at the
    * publish call, is why the stamped `timestamp`/`traceparent` are present.
-   * Idempotent.
+   * Idempotent. Only subscriptions made AFTER tap() is called are recorded, so
+   * call it before any `queue.subscribe(...)`.
    *
    * When PR-FF02-01 lands the event-contract registry, add an
    * `expectContract(topic, payload)` check alongside the envelope check here;
@@ -272,35 +287,49 @@ export class LiveHarness {
    * outbox rows per service, and (where the table exists) command_results rows
    * recorded as failed/rejected. Lets a trace test assert "no refusal was acked
    * without a record".
+   *
+   * `_inbox.command_results` is FORCE RLS (D-20), so a read with no tenant GUC
+   * returns zero rows. The caller therefore passes the tenant id(s) under test
+   * and the query runs inside `withTenantScope` for each, with an explicit
+   * tenant_id filter as well (the table may not carry the D-20 policy yet). Only SQLSTATE 42P01
+   * (table not rolled out in that service yet) is treated as "no records";
+   * every other error is rethrown.
    */
-  async silent(): Promise<{
+  async silent(tenantIds: string[]): Promise<{
     deadLetters: Array<{ topic: string; messageId: string; error: string }>;
     unpublished: Record<string, number>;
     recordedOutcomes: Record<string, Array<{ messageId: string; status: string; reason: string | null }>>;
   }> {
+    type Outcome = { messageId: string; status: string; reason: string | null };
     const deadLetters = this.queue.dlq.map((d) => ({
       topic: d.topic,
       messageId: d.msg.messageId,
       error: d.error,
     }));
     const unpublished: Record<string, number> = {};
-    const recordedOutcomes: Record<
-      string,
-      Array<{ messageId: string; status: string; reason: string | null }>
-    > = {};
+    const recordedOutcomes: Record<string, Outcome[]> = {};
     for (const svc of this.services) {
       const [u] = await svc.sqlClient`select count(*)::int as c from _outbox.messages where published_at is null`;
       unpublished[svc.name] = u?.c ?? 0;
-      try {
-        const rows = await svc.sqlClient`
-          select message_id as "messageId", status, reason
-          from _inbox.command_results
-          where status in ('failed','rejected')`;
-        recordedOutcomes[svc.name] = rows as Array<{ messageId: string; status: string; reason: string | null }>;
-      } catch {
-        // command_results is rolled out per service by FF-01; absent is fine.
-        recordedOutcomes[svc.name] = [];
+      const out: Outcome[] = [];
+      for (const tenantId of tenantIds) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const rows = await withTenantScope(svc.db, tenantId, async (tx: any) =>
+            tx.execute(sql`
+              select message_id as "messageId", status, reason
+              from _inbox.command_results
+              where tenant_id = ${tenantId}::uuid
+                and status in ('failed','rejected')`),
+          );
+          out.push(...(rows as unknown as Outcome[]));
+        } catch (e) {
+          const err = e as { code?: string; cause?: { code?: string } };
+          if ((err.code ?? err.cause?.code) === "42P01") continue; // table not rolled out in this service
+          throw e;
+        }
       }
+      recordedOutcomes[svc.name] = out;
     }
     return { deadLetters, unpublished, recordedOutcomes };
   }
