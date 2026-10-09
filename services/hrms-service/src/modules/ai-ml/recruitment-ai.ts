@@ -70,20 +70,38 @@ function withTenantGuc<T>(
 }
 
 /**
- * Shape of a hrms.vacancies row as read by the AI recruitment routes. Columns
- * may be absent/null for partially-filled vacancies, and requirements/
- * preferred_skills are stored either as a JSON string or a native array
- * depending on how the row was written, so both are accepted here (the
- * handlers already branch on Array.isArray before use).
+ * Shape of a recruitment.hrms_job_openings row as read by the AI recruitment
+ * routes (the vacancy source of truth; there is no hrms.vacancies table).
+ * The table has no discrete requirements / preferred-skills / education
+ * columns, so the JD requirements are derived from qualification_required
+ * (free text, split on newlines, semicolons and commas). Preferred skills
+ * and education level are therefore empty / "any" for these reads.
  */
 type VacancyRow = {
   title?: string | null;
-  requirements?: string[] | string | null;
-  preferred_skills?: string[] | string | null;
-  min_experience?: number | null;
-  max_experience?: number | null;
-  education_level?: string | null;
+  description?: string | null;
+  qualification_required?: string | null;
+  min_experience_years?: number | null;
+  max_experience_years?: number | null;
 };
+
+const VACANCY_SQL = `SELECT title, description, qualification_required, min_experience_years, max_experience_years
+  FROM recruitment.hrms_job_openings WHERE id = $1 AND tenant_id = $2`;
+
+/** Load a vacancy under the tenant GUC; throws 404 when it does not exist. */
+async function loadVacancyJd(tenantId: string, vacancyId: string) {
+  const res = await withTenantGuc(tenantId, (pool) => pool.query<VacancyRow>(VACANCY_SQL, [vacancyId, tenantId]));
+  if (!res.rowCount) throw new HttpError(404, "NOT_FOUND", "Vacancy not found");
+  const v = res.rows[0]!;
+  return {
+    title: v.title ?? "",
+    description: v.description ?? "",
+    requirements: (v.qualification_required ?? "").split(/[\n;,]/).map((x) => x.trim()).filter(Boolean),
+    preferredSkills: [] as string[],
+    experienceYears: { min: v.min_experience_years ?? 0, max: v.max_experience_years ?? 30 },
+    educationLevel: "any" as z.infer<typeof jdScoreSchema>["educationLevel"],
+  };
+}
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
@@ -343,23 +361,8 @@ export async function recruitmentAiRoutes(app: FastifyInstance): Promise<void> {
     // If vacancyId provided, also score against JD
     let scoring = null;
     if (body.vacancyId) {
-      const vacancy = await withTenantGuc(ctx.tenantId, (pool) => pool.query<VacancyRow>(
-        `SELECT title, requirements, preferred_skills, min_experience, max_experience, education_level
-         FROM hrms.vacancies WHERE id = $1 AND tenant_id = $2`,
-        [body.vacancyId, ctx.tenantId],
-      ));
-      if (vacancy.rowCount && vacancy.rowCount > 0) {
-        const v = vacancy.rows[0]!;
-        const jd = {
-          title: v.title ?? "",
-          description: "",
-          requirements: Array.isArray(v.requirements) ? v.requirements : JSON.parse(v.requirements ?? "[]"),
-          preferredSkills: Array.isArray(v.preferred_skills) ? v.preferred_skills : JSON.parse(v.preferred_skills ?? "[]"),
-          experienceYears: { min: v.min_experience ?? 0, max: v.max_experience ?? 30 },
-          educationLevel: (v.education_level ?? "any") as z.infer<typeof jdScoreSchema>["educationLevel"],
-        };
-        scoring = scoreResumeAgainstJd(parsed, jd);
-      }
+      const jd = await loadVacancyJd(ctx.tenantId, body.vacancyId);
+      scoring = scoreResumeAgainstJd(parsed, jd);
     }
 
     return reply.send({
@@ -389,21 +392,7 @@ export async function recruitmentAiRoutes(app: FastifyInstance): Promise<void> {
     const body = batchScreenSchema.parse(req.body);
 
     // Get vacancy JD
-    const vacancy = await withTenantGuc(ctx.tenantId, (pool) => pool.query<VacancyRow>(
-      `SELECT title, requirements, preferred_skills, min_experience, max_experience, education_level
-       FROM hrms.vacancies WHERE id = $1 AND tenant_id = $2`,
-      [body.vacancyId, ctx.tenantId],
-    ));
-    if (vacancy.rowCount === 0) throw new HttpError(404, "NOT_FOUND", "Vacancy not found");
-    const v = vacancy.rows[0]!;
-    const jd = {
-      title: v.title ?? "",
-      description: "",
-      requirements: Array.isArray(v.requirements) ? v.requirements : JSON.parse(v.requirements ?? "[]"),
-      preferredSkills: Array.isArray(v.preferred_skills) ? v.preferred_skills : JSON.parse(v.preferred_skills ?? "[]"),
-      experienceYears: { min: v.min_experience ?? 0, max: v.max_experience ?? 30 },
-      educationLevel: (v.education_level ?? "any") as z.infer<typeof jdScoreSchema>["educationLevel"],
-    };
+    const jd = await loadVacancyJd(ctx.tenantId, body.vacancyId);
 
     // Score each candidate
     const results: { candidateId: string; matchScore: number; shortlisted: boolean }[] = [];
@@ -447,17 +436,7 @@ export async function recruitmentAiRoutes(app: FastifyInstance): Promise<void> {
     const body = interviewQuestionsSchema.parse(req.body);
 
     // Get JD
-    const vacancy = await withTenantGuc(ctx.tenantId, (pool) => pool.query<VacancyRow>(
-      `SELECT title, requirements, preferred_skills FROM hrms.vacancies WHERE id = $1 AND tenant_id = $2`,
-      [body.vacancyId, ctx.tenantId],
-    ));
-    if (vacancy.rowCount === 0) throw new HttpError(404, "NOT_FOUND", "Vacancy not found");
-    const v = vacancy.rows[0]!;
-    const jd = {
-      title: v.title ?? "",
-      requirements: Array.isArray(v.requirements) ? v.requirements : JSON.parse(v.requirements ?? "[]"),
-      preferredSkills: Array.isArray(v.preferred_skills) ? v.preferred_skills : JSON.parse(v.preferred_skills ?? "[]"),
-    };
+    const jd = await loadVacancyJd(ctx.tenantId, body.vacancyId);
 
     // Get candidate resume data (mock)
     const resume = await parseResume(body.candidateId);
