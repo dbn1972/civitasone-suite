@@ -80,12 +80,27 @@ export async function listRecords(tenantId: string, limit: number, offset: numbe
         rp.retention_days  AS "retentionDays",
         rp.action          AS "retentionAction"
       FROM knowledge.documents d
-      LEFT JOIN knowledge.categories c
-        ON c.tenant_id = d.tenant_id
-       AND (c.name = d.category OR c.slug = d.category)
-      LEFT JOIN knowledge.retention_policies rp
-        ON rp.tenant_id = d.tenant_id
-       AND rp.category_id = c.id
+      -- One category per document: categories.name is not unique, so a
+      -- name/slug match can hit several rows. Prefer the slug match, then the
+      -- oldest category, so the choice is deterministic and never fans out.
+      LEFT JOIN LATERAL (
+        SELECT c1.id, c1.name
+          FROM knowledge.categories c1
+         WHERE c1.tenant_id = d.tenant_id
+           AND (c1.name = d.category OR c1.slug = d.category)
+         ORDER BY (c1.slug = d.category) DESC, c1.created_at ASC, c1.id ASC
+         LIMIT 1
+      ) c ON TRUE
+      -- One policy per category: retention_policies.category_id is not unique.
+      -- Take the longest retention (conservative for disposal), id as tiebreak.
+      LEFT JOIN LATERAL (
+        SELECT p.retention_years, p.retention_days, p.action
+          FROM knowledge.retention_policies p
+         WHERE p.tenant_id = d.tenant_id
+           AND p.category_id = c.id
+         ORDER BY p.retention_years DESC, p.retention_days DESC, p.id ASC
+         LIMIT 1
+      ) rp ON TRUE
       WHERE d.tenant_id = ${tenantId}
       ORDER BY d.updated_at DESC
       LIMIT ${limit} OFFSET ${offset}
