@@ -151,6 +151,40 @@ export async function updateBill(tx: Writer, id: string, patch: Partial<BillInse
   await tx.update(financeBills).set({ ...patch, updatedAt: new Date() }).where(eq(financeBills.id, id));
 }
 
+/**
+ * NEW-001 (FF-06, D-66): the single, race-safe stage advance. The stage, status
+ * and version predicates are part of the UPDATE itself, so the database — not a
+ * stale pre-read — is the authority (house rule: "the database is the guard").
+ *
+ * A bill advances `section -> accounts -> pay` by exactly one approval per
+ * stage, applied ONLY while the bill is in the stage the approver saw
+ * (`fromStage`), has status 'pending' and is at the version the consumer loaded.
+ * Zero rows updated means "refuse" — the stage moved, the status changed, or a
+ * concurrent approval already won the race — whatever the inbox dedup says.
+ *
+ * Tenant scope (`tenant_id = $tenantId`) is belt-and-braces on top of FORCE RLS:
+ * the consumer runs inside a tenant-scoped transaction, but the explicit
+ * predicate makes a cross-tenant advance impossible even if the GUC were unset.
+ *
+ * Returns the number of rows updated (1 = advanced, 0 = refused).
+ */
+export async function advanceBillStage(
+  tx: Writer,
+  args: { id: string; tenantId: string; fromStage: string; toStage: string; toStatus: string; version: number; updatedBy: string },
+): Promise<number> {
+  const rows = await tx.update(financeBills)
+    .set({ stage: args.toStage, status: args.toStatus, updatedBy: args.updatedBy, version: args.version + 1, updatedAt: new Date() })
+    .where(and(
+      eq(financeBills.id, args.id),
+      eq(financeBills.tenantId, args.tenantId),
+      eq(financeBills.stage, args.fromStage),
+      eq(financeBills.status, "pending"),
+      eq(financeBills.version, args.version),
+    ))
+    .returning({ id: financeBills.id });
+  return rows.length;
+}
+
 export async function listPaymentsByTenant(tenantId: string, limit: number, offset: number): Promise<PaymentRow[]> {
   return scopedRead((tx) => tx.select().from(financePayments)
     .where(eq(financePayments.tenantId, tenantId))
