@@ -136,28 +136,80 @@ function isWireString(type: SchemaNode): boolean {
   return false;
 }
 
-function enforceMoneyAndCurrency(topic: string, major: number, node: SchemaNode): void {
-  const fields = topLevelFields(node);
-  const moneyFields = Object.keys(fields).filter((k) => MONEY_FIELD_RE.test(k));
+interface MoneyHolder {
+  /** Path of the object that directly holds the money fields ("" = top level). */
+  path: string;
+  moneyFields: string[];
+  currencyRequired: boolean;
+}
 
-  for (const name of moneyFields) {
-    const field = fields[name];
-    if (field && !isWireString(field.type)) {
-      throw new ContractDefinitionError(
-        `contract '${topic}': money field '${name}' must be carried as a string on the wire (house rule 4 / D-18). ` +
-          `Use zMoneyMinorString from @civitasone/schemas (a string|number union whose string branch is the wire form); ` +
-          `a bare z.number() or a number-only field is rejected.`,
-      );
+/**
+ * Walk the WHOLE schema tree (object fields, array items, union options,
+ * nullable) and collect every object that directly holds a `*Minor` field, so
+ * the money rule cannot be bypassed by nesting money in a line array.
+ */
+function collectMoneyHolders(
+  topic: string,
+  node: SchemaNode,
+  path: string,
+  out: MoneyHolder[],
+): void {
+  switch (node.kind) {
+    case "object": {
+      const moneyFields: string[] = [];
+      for (const [name, field] of Object.entries(node.fields)) {
+        const where = path ? `${path}.${name}` : name;
+        if (MONEY_FIELD_RE.test(name)) {
+          if (!isWireString(field.type)) {
+            throw new ContractDefinitionError(
+              `contract '${topic}': money field '${where}' must be carried as a string on the wire (house rule 4 / D-18). ` +
+                `Use zMoneyMinorString from @civitasone/schemas (a string|number union whose string branch is the wire form); ` +
+                `a bare z.number() or a number-only field is rejected.`,
+            );
+          }
+          moneyFields.push(name);
+        }
+        collectMoneyHolders(topic, field.type, where, out);
+      }
+      if (moneyFields.length > 0) {
+        out.push({
+          path,
+          moneyFields,
+          currencyRequired: Boolean(node.fields.currency?.required),
+        });
+      }
+      return;
     }
+    case "array":
+      collectMoneyHolders(topic, node.element, `${path}[]`, out);
+      return;
+    case "union":
+      for (const option of node.options) collectMoneyHolders(topic, option, path, out);
+      return;
+    case "nullable":
+      collectMoneyHolders(topic, node.inner, path, out);
+      return;
+    default:
+      return;
   }
+}
 
-  // D-18 / D-11: from schema v2 a currency field is required whenever money is carried.
-  if (major >= 2 && moneyFields.length > 0) {
-    const currency = fields.currency;
-    if (!currency || !currency.required) {
+function enforceMoneyAndCurrency(topic: string, major: number, node: SchemaNode): void {
+  const top = topLevelFields(node);
+  const holders: MoneyHolder[] = [];
+  collectMoneyHolders(topic, node, "", holders);
+
+  // D-18 / D-11: from schema v2 a currency field is required whenever money is
+  // carried, at ANY depth. It must be a required 'currency' on the object that
+  // holds the money (nearest enclosing object) or a required top-level 'currency'.
+  if (major >= 2) {
+    const topCurrencyRequired = Boolean(top.currency?.required);
+    for (const holder of holders) {
+      if (holder.currencyRequired || topCurrencyRequired) continue;
+      const where = holder.path === "" ? "the top level" : `'${holder.path}'`;
       throw new ContractDefinitionError(
-        `contract '${topic}' v${major}.x carries money (${moneyFields.join(", ")}) so a required 'currency' ` +
-          `field is mandatory from schema v2 (D-18).`,
+        `contract '${topic}' v${major}.x carries money (${holder.moneyFields.join(", ")}) at ${where} so a required ` +
+          `'currency' field is mandatory from schema v2, on that object or at the top level (D-18).`,
       );
     }
   }

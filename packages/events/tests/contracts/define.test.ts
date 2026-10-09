@@ -404,3 +404,148 @@ describe("defineContract — assert() under each mode", () => {
     expect(rec).not.toBeNull();
   });
 });
+
+describe("defineContract — money at any depth (D-18 / house rule 4)", () => {
+  it("REJECTS a bare z.number() money field inside an array of objects", () => {
+    expect(() =>
+      defineContract({
+        topic: "billing.invoice.lines",
+        kind: "event",
+        owner: "billing-service",
+        version: "1.0",
+        schema: z.object({
+          lines: z.array(z.object({ amountMinor: z.number() })),
+        }),
+        pii: [],
+      }),
+    ).toThrow(/lines\[\]\.amountMinor/);
+  });
+
+  it("REJECTS a bare z.number() money field in a nested object", () => {
+    expect(() =>
+      defineContract({
+        topic: "billing.invoice.nested",
+        kind: "event",
+        owner: "billing-service",
+        version: "1.0",
+        schema: z.object({ inner: z.object({ amountMinor: z.number() }) }),
+        pii: [],
+      }),
+    ).toThrow(ContractDefinitionError);
+  });
+
+  it("REJECTS nested bare number money behind nullable and union wrappers", () => {
+    expect(() =>
+      defineContract({
+        topic: "billing.invoice.wrapped",
+        kind: "event",
+        owner: "billing-service",
+        version: "1.0",
+        schema: z.object({
+          lines: z.array(z.object({ amountMinor: z.number() })).nullable(),
+        }),
+        pii: [],
+      }),
+    ).toThrow(ContractDefinitionError);
+    expect(() =>
+      defineContract({
+        topic: "billing.invoice.union",
+        kind: "event",
+        owner: "billing-service",
+        version: "1.0",
+        schema: z.object({
+          detail: z.union([z.object({ amountMinor: z.number() }), z.object({ note: z.string() })]),
+        }),
+        pii: [],
+      }),
+    ).toThrow(ContractDefinitionError);
+  });
+
+  it("ACCEPTS nested zMoneyMinorString in arrays and objects (v1)", () => {
+    expect(() =>
+      defineContract({
+        topic: "billing.invoice.lines.ok",
+        kind: "event",
+        owner: "billing-service",
+        version: "1.0",
+        schema: z.object({
+          lines: z.array(z.object({ amountMinor: zMoneyMinorString })),
+          summary: z.object({ taxMinor: zMoneyMinorString }),
+        }),
+        pii: [],
+      }),
+    ).not.toThrow();
+  });
+
+  it("v1 is unaffected: nested money without currency is accepted", () => {
+    expect(() =>
+      defineContract({
+        topic: "billing.invoice.v1.nocurrency",
+        kind: "event",
+        owner: "billing-service",
+        version: "1.3",
+        schema: z.object({ lines: z.array(z.object({ amountMinor: zMoneyMinorString })) }),
+        pii: [],
+      }),
+    ).not.toThrow();
+  });
+
+  it("v2 nested money with NO currency anywhere is rejected, naming the path", () => {
+    expect(() =>
+      defineContract({
+        topic: "billing.invoice.v2.nested",
+        kind: "event",
+        owner: "billing-service",
+        version: "2.0",
+        schema: z.object({ lines: z.array(z.object({ amountMinor: zMoneyMinorString })) }),
+        pii: [],
+      }),
+    ).toThrow(/lines\[\]/);
+  });
+
+  it("v2 nested money with only an OPTIONAL currency is rejected", () => {
+    expect(() =>
+      defineContract({
+        topic: "billing.invoice.v2.optcur",
+        kind: "event",
+        owner: "billing-service",
+        version: "2.0",
+        schema: z.object({
+          lines: z.array(z.object({ amountMinor: zMoneyMinorString, currency: z.string().optional() })),
+        }),
+        pii: [],
+      }),
+    ).toThrow(ContractDefinitionError);
+  });
+
+  it("v2 nested money is accepted with a required currency on the holding object", () => {
+    expect(() =>
+      defineContract({
+        topic: "billing.invoice.v2.linecur",
+        kind: "event",
+        owner: "billing-service",
+        version: "2.0",
+        schema: z.object({
+          lines: z.array(z.object({ amountMinor: zMoneyMinorString, currency: z.string() })),
+        }),
+        pii: [],
+      }),
+    ).not.toThrow();
+  });
+
+  it("v2 nested money is accepted with a required top-level currency", () => {
+    expect(() =>
+      defineContract({
+        topic: "billing.invoice.v2.topcur",
+        kind: "event",
+        owner: "billing-service",
+        version: "2.0",
+        schema: z.object({
+          currency: z.string(),
+          lines: z.array(z.object({ amountMinor: zMoneyMinorString })),
+        }),
+        pii: [],
+      }),
+    ).not.toThrow();
+  });
+});
