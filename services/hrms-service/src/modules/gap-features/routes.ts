@@ -665,8 +665,49 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ planId: z.string().uuid(), fy: z.string().regex(/^\d{4}-\d{2}$/), elections: z.array(z.object({ component: z.string(), electedMinor: z.number().int().min(0) })).min(1) }).parse(req.body);
     const total = body.elections.reduce((s, e) => s + e.electedMinor, 0);
     const id = randomUUID();
+    // GAP2-HR-BENEFITS-07: the old handler trusted the body blindly -- it never
+    // confirmed the plan existed in this tenant, never checked the submitted
+    // `fy` matched the plan, never checked the elected components were real
+    // plan components, and never enforced the per-component `maxMinor` caps or
+    // the plan-level `flex_budget_minor` budget. An employee could therefore
+    // persist an election into a non-existent plan, name made-up components, or
+    // blow past every configured cap. Load the plan first and reject (404/422)
+    // before any write; the caps live on benefit_plans (flex_budget_minor +
+    // components[].maxMinor), set by POST /benefits/plans.
     await sqlClient.begin(async (sql) => {
       await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
+      const planRows = (await sql.unsafe(
+        `SELECT id, fy, flex_budget_minor, components FROM employee.benefit_plans WHERE tenant_id = $1 AND id = $2`,
+        [ctx.tenantId, body.planId],
+      )) as unknown as Array<{ id: string; fy: string; flex_budget_minor: string | number; components: Array<{ name: string; maxMinor: number }> }>;
+      const plan = planRows[0];
+      if (!plan) throw new HttpError(404, "PLAN_NOT_FOUND", "benefit plan not found for this tenant");
+      // `fy` is CHAR(7) in the DB ("2026-27") so trim before comparing.
+      if (String(plan.fy).trim() !== body.fy) {
+        throw new HttpError(422, "FY_MISMATCH", "election fy does not match the plan's financial year");
+      }
+      const components = Array.isArray(plan.components) ? plan.components : [];
+      const capByName = new Map(components.map((c) => [c.name, Number(c.maxMinor)]));
+      const seenComponents = new Set<string>();
+      for (const e of body.elections) {
+        // A repeated component would let each entry pass the per-component cap
+        // on its own while their sum exceeds it; the UI sends one per component.
+        if (seenComponents.has(e.component)) {
+          throw new HttpError(422, "DUPLICATE_COMPONENT", `component "${e.component}" is elected more than once`);
+        }
+        seenComponents.add(e.component);
+        if (!capByName.has(e.component)) {
+          throw new HttpError(422, "UNKNOWN_COMPONENT", `component "${e.component}" is not part of this plan`);
+        }
+        const cap = capByName.get(e.component)!;
+        if (e.electedMinor > cap) {
+          throw new HttpError(422, "CAP_EXCEEDED", `elected amount for "${e.component}" exceeds its configured cap`);
+        }
+      }
+      const flexBudget = Number(plan.flex_budget_minor);
+      if (flexBudget > 0 && total > flexBudget) {
+        throw new HttpError(422, "BUDGET_EXCEEDED", "total elected amount exceeds the plan's flex budget");
+      }
       await sql.unsafe(`INSERT INTO employee.benefit_elections (id, tenant_id, plan_id, employee_id, fy, elections, total_elected_minor) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (tenant_id, plan_id, employee_id, fy) DO UPDATE SET elections = EXCLUDED.elections, total_elected_minor = EXCLUDED.total_elected_minor`, [id, ctx.tenantId, body.planId, ctx.actorId, body.fy, JSON.stringify(body.elections), total]);
     });
     return reply.code(201).send({ data: { id, totalElectedMinor: total } });
