@@ -115,14 +115,23 @@ function topLevelFields(node: SchemaNode): Record<string, { required: boolean; t
   return node.fields;
 }
 
-/** Is this described node a plain wire STRING (string, or a union of strings)? */
+/**
+ * Does this described node ACCEPT a wire string?
+ *
+ * The canonical money codec `zMoneyMinorString` is
+ * `z.union([z.string().regex(...), z.number().int()]).transform(toMinorString)`:
+ * its *output* is always a base-10 string, but the walker sees the union INPUT,
+ * which is `union([string, number])`. The number option exists only so a
+ * consumer can tolerantly read a legacy JSON-number payload; the field is still
+ * carried on the wire as a string. So a union is a valid wire-string money
+ * field when AT LEAST ONE option is a wire string (the string branch of the
+ * codec). A bare `z.number()` (no union) and a number-only union carry money as
+ * a JSON float and are still rejected (house rule 4 / D-18).
+ */
 function isWireString(type: SchemaNode): boolean {
   if (type.kind === "string") return true;
   if (type.kind === "literal") return typeof type.value === "string";
-  // A money codec field is `z.union([z.string(), z.number()]).transform(String)`:
-  // the walker sees the union INPUT. Money on the wire must be representable as
-  // a string, so every union option must be a string or string-literal.
-  if (type.kind === "union") return type.options.every(isWireString);
+  if (type.kind === "union") return type.options.some(isWireString);
   if (type.kind === "nullable") return isWireString(type.inner);
   return false;
 }
@@ -135,8 +144,9 @@ function enforceMoneyAndCurrency(topic: string, major: number, node: SchemaNode)
     const field = fields[name];
     if (field && !isWireString(field.type)) {
       throw new ContractDefinitionError(
-        `contract '${topic}': money field '${name}' must be a string on the wire (house rule 4 / D-18). ` +
-          `Use zMoneyMinorString (a string|number union transformed to a string), never a bare z.number().`,
+        `contract '${topic}': money field '${name}' must be carried as a string on the wire (house rule 4 / D-18). ` +
+          `Use zMoneyMinorString from @civitasone/schemas (a string|number union whose string branch is the wire form); ` +
+          `a bare z.number() or a number-only field is rejected.`,
       );
     }
   }
