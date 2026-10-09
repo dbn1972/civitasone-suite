@@ -35,6 +35,17 @@ export type DrizzleTx = PgDatabase<PostgresJsQueryResultHKT, any, any>;
 export const outbox = pgSchema("_outbox");
 export const inbox = pgSchema("_inbox");
 
+/**
+ * FF-01 slice A (C1): reserved payload key under which enqueue() stashes an
+ * optional `causationId` when there is no `_outbox.messages.causation_id`
+ * column to hold it (see enqueue()/relayOnce() doc comments; the column is
+ * deferred to FF-02 — 03-designs/FF-01.md §2.6). The double-underscore prefix
+ * marks it as a transport-reserved key: relayOnce() strips it before delivery,
+ * so no consumer ever observes it in a payload. Chosen to not collide with any
+ * domain payload field in this fleet.
+ */
+export const OUTBOX_CAUSATION_KEY = "__causationId";
+
 export const outboxMessages = outbox.table("messages", {
   id:            uuid("id").primaryKey().defaultRandom(),
   topic:         varchar("topic", { length: 128 }).notNull(),
@@ -202,6 +213,21 @@ export async function getCommandOutcome(
  * HERE, at enqueue time, and persisted on the row — not a single hardcoded
  * literal shared by every topic. Backward compatible: every one of this
  * repo's existing call sites omits schemaVersion and keeps working unchanged.
+ *
+ * FF-01 slice A (C1): `causationId` is optional and additive. It names the
+ * command that CAUSED this event — e.g. a producing service stamps the
+ * `commandId` it was handling, so a downstream refusal (finance.gl.rejected)
+ * can be tied back to its source command across services (03-designs/FF-01.md
+ * §0 item 6, §2.6). The envelope already carries a top-level `causationId`
+ * (services/queue-service/src/bus.ts CommandEnvelope / envelope()), but the
+ * relay had no way to set it. Rather than add a `causation_id` column to
+ * `_outbox.messages` in 65 databases (deferred to FF-02 — §2.6), enqueue()
+ * stashes it in the stored payload under the reserved key `OUTBOX_CAUSATION_KEY`;
+ * relayOnce() lifts it back out to the ENVELOPE and strips it from the
+ * DELIVERED payload, so consumers see a clean payload plus a populated
+ * envelope.causationId — exactly as if the column existed. Omitting
+ * `causationId` (every existing call site) leaves the stored payload and the
+ * delivered envelope byte-for-byte unchanged.
  */
 export async function enqueue(
   tx: DrizzleTx,
@@ -213,12 +239,16 @@ export async function enqueue(
     correlationId: string;
     payload: Record<string, unknown>;
     schemaVersion?: string;
+    causationId?: string;
   }
 ): Promise<void> {
-  const { schemaVersion, ...rest } = e;
+  const { schemaVersion, causationId, payload, ...rest } = e;
   await tx.insert(outboxMessages).values({
     ...rest,
     schemaVersion: schemaVersion ?? getTopicSchemaVersion(e.topic),
+    // Reserved-key stash (see doc comment): only present when a causationId was
+    // supplied, so existing callers' stored payloads are unchanged.
+    payload: causationId ? { ...payload, [OUTBOX_CAUSATION_KEY]: causationId } : payload,
   });
 }
 
@@ -292,6 +322,20 @@ export async function relayOnce(
     const results = await Promise.allSettled(
       chunk.map(async (row) => {
         try {
+          // FF-01 slice A (C1): lift the reserved causationId stash (set by
+          // enqueue()) out of the stored payload and onto the ENVELOPE, and
+          // deliver a payload with the reserved key removed — so a consumer
+          // sees a clean payload plus a populated envelope.causationId, as if
+          // _outbox.messages had a causation_id column. Rows enqueued without a
+          // causationId have no such key, so `causationId` stays undefined and
+          // the delivered payload is the stored payload unchanged.
+          const rawPayload = row.payload as Record<string, unknown>;
+          const causationId = rawPayload[OUTBOX_CAUSATION_KEY] as string | undefined;
+          let deliverPayload = rawPayload;
+          if (causationId !== undefined) {
+            const { [OUTBOX_CAUSATION_KEY]: _stripped, ...rest } = rawPayload;
+            deliverPayload = rest;
+          }
           await queue.publish(row.topic, {
             // SEC C1: forward the stable outbox row id as the messageId so a relay
             // re-publish (after a crash between publish and mark-published) reuses
@@ -306,7 +350,12 @@ export async function relayOnce(
             // actually is. Deliberately NOT re-resolved from the registry
             // here — see enqueue()'s doc comment on why enqueue-time is the
             // correct point to fix the version, not relay time.
-            correlationId: row.correlationId, schemaVersion: row.schemaVersion, payload: row.payload,
+            correlationId: row.correlationId,
+            // FF-01: only set when present, so the envelope() builder's existing
+            // `...(input.causationId ? {...} : {})` guard keeps omitting it for
+            // every row enqueued without one.
+            ...(causationId !== undefined ? { causationId } : {}),
+            schemaVersion: row.schemaVersion, payload: deliverPayload,
           });
           return row.id;
         } catch (err) {
@@ -517,3 +566,32 @@ export function startOutboxPurge(db: DrizzleTx, opts: OutboxPurgeOptions = {}): 
 }
 
 export { and, eq, isNull, inArray };
+
+/**
+ * FF-01 slice A (C1): the command-result LIBRARY. Re-exported here so adopters
+ * import everything command-result-related from the one package entrypoint
+ * (`@civitasone/outbox`), exactly as they already do for enqueue /
+ * recordCommandOutcome / markProcessed. See command-result.ts for the design
+ * rationale and why this is additive on top of the existing
+ * recordCommandOutcome()/getCommandOutcome() (which stay for the two services
+ * already using them).
+ */
+export {
+  CommandRefusal,
+  isCommandRefusal,
+  refusalCodeOf,
+  isEventShapedTopic,
+  recordCommandResult,
+  getCommandResult,
+  outcomeToResultInput,
+  subscribeCommand,
+  makeRecordOutcome,
+  COMMAND_RESULT_RETENTION,
+  DEFAULT_REFUSAL_CODE,
+} from "./command-result.js";
+export type {
+  CommandResultRecord,
+  CommandResultView,
+  CommandResultInput,
+  RecordOutcome,
+} from "./command-result.js";
