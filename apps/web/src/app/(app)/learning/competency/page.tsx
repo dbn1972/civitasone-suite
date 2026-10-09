@@ -41,9 +41,12 @@ export default async function Page({ searchParams }: { searchParams?: Search }) 
     getCompetencies(),
   ]);
 
-  // GAP-LEARNING-COMPETENCY-01: resolve raw competencyId UUIDs to names.
-  const nameById = new Map(competencyDict.map((c) => [c.id, c.name || c.code || "Unknown competency"]));
-  const resolveName = (id: string) => nameById.get(id) ?? "Unknown competency";
+  // GAP-LEARNING-COMPETENCY-01 / GAP2-LEARNING-COMPETENCY-UUID-01: resolve raw
+  // competencyId UUIDs to names. When the dictionary is unavailable (fetch
+  // degraded to []) or a specific id is missing from it, show a stable
+  // placeholder — NEVER the raw 36-char UUID.
+  const nameById = new Map(competencyDict.map((c) => [c.id, c.name || c.code || "Competency (unmapped)"]));
+  const resolveName = (id: string) => nameById.get(id) ?? "Competency (unmapped)";
 
   const heldRows: HeldRow[] = held.map((h) => ({
     id: h.id, competency: resolveName(h.competencyId), level: `L${h.currentLevel}`,
