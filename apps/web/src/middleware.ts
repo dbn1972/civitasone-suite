@@ -76,8 +76,8 @@ function buildNextResponse(req: NextRequest): NextResponse {
     // browser. Inline style ATTRIBUTES are pinned explicitly via style-src-attr.
     // Scripts remain strict (nonce-only). Tightening <style> needs a nonce
     // threaded through every such component first.
-    "style-src self unsafe-inline",
-    "style-src-elem self unsafe-inline",
+    "style-src 'self' 'unsafe-inline'",
+    "style-src-elem 'self' 'unsafe-inline'",
     "style-src-attr 'unsafe-inline'",
     "img-src 'self' data: blob:",
     `connect-src 'self'${KEYCLOAK_ORIGIN ? ` ${KEYCLOAK_ORIGIN}` : ''}`,

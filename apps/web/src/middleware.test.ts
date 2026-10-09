@@ -32,9 +32,9 @@ describe("middleware public sandbox access", () => {
   });
 });
 
-// GAP2-SHELL-CSP-01: style-src must no longer carry 'unsafe-inline'. Inline
-// style ATTRIBUTES are confined to the narrower style-src-attr directive, and
-// inline <style> ELEMENTS are blocked (style-src-elem has no unsafe-inline).
+// GAP2-SHELL-CSP-01: style-src / style-src-elem keep 'unsafe-inline' because
+// ~28 components render inline <style> elements without a nonce. Inline style
+// ATTRIBUTES are pinned via style-src-attr. Keywords MUST be single-quoted.
 describe("middleware CSP style policy (GAP2-SHELL-CSP-01)", () => {
   function cspOf(path: string): string {
     return middleware(anonReq(path)).headers.get("Content-Security-Policy") ?? "";
@@ -42,8 +42,8 @@ describe("middleware CSP style policy (GAP2-SHELL-CSP-01)", () => {
 
   it("keeps inline <style> elements allowed (components render them without a nonce)", () => {
     const csp = cspOf("/sandbox");
-    expect(csp).toMatch(/style-src self unsafe-inline/);
-    expect(csp).toMatch(/style-src-elem self unsafe-inline/);
+    expect(csp).toContain("style-src 'self' 'unsafe-inline'");
+    expect(csp).toContain("style-src-elem 'self' 'unsafe-inline'");
   });
 
   it("keeps inline style ATTRIBUTES working via style-src-attr only", () => {
