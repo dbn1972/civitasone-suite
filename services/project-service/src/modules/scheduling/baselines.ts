@@ -23,7 +23,10 @@ import * as commands from "./commands.js";
 
 const projectSchema = pgSchema("project");
 
-export const baselines = projectSchema.table("baselines", {
+// GAP2-PROJECTS-DB-BASELINES-PREFIX-01 (migration 0026): the physical table is
+// project.project_baselines (prefixed per CLAUDE.md §3.2). The drizzle object is
+// still named `baselines` for brevity; only the mapped table name changed.
+export const baselines = projectSchema.table("project_baselines", {
   id:           uuid("id").primaryKey().defaultRandom(),
   tenantId:     uuid("tenant_id").notNull(),
   projectId:    uuid("project_id").notNull(),

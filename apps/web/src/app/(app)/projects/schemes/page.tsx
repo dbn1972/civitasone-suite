@@ -1,6 +1,6 @@
 import { getSchemes } from "../../../_data/loaders";
 import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
-import { formatRupees } from "@/lib/formatters";
+import { formatMoney } from "@/lib/formatters";
 import { SchemesTable, type SchemeRow } from "./SchemesTable";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
@@ -17,8 +17,13 @@ export default async function SchemesPage() {
   // on error (UX-006: no data is not a real zero). Treat "no schemes" the same
   // as errored for the money/active tiles.
   const noData = errored || resource.status === "empty";
-  const totalAllocation = noData ? null : schemes.reduce((sum, s) => sum + s.totalAllocation, 0);
-  const totalReleased = noData ? null : schemes.reduce((sum, s) => sum + s.releasedAmount, 0);
+  // GAP2-PROJECTS-SCHEMES-MONEY-04: totalAllocation/releasedAmount are now
+  // bigint MINOR units (paise) as strings (same unit as the detail endpoint),
+  // so sum them as BigInt and render with formatMoney — not formatRupees.
+  // A malformed (non-digit) value counts as 0 rather than crashing the page in BigInt().
+  const minor = (v: string | null | undefined) => (v && /^\d+$/.test(v) ? BigInt(v) : 0n);
+  const totalAllocation = noData ? null : schemes.reduce((sum, s) => sum + minor(s.totalAllocation), 0n);
+  const totalReleased = noData ? null : schemes.reduce((sum, s) => sum + minor(s.releasedAmount), 0n);
 
   const rows: SchemeRow[] = schemes.map((s) => ({ ...s }));
 
@@ -33,15 +38,12 @@ export default async function SchemesPage() {
       <StatGrid>
         <StatCard icon="📋" iconBg="#eef0fe" label="Total" value={errored ? "—" : schemes.length} />
         <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={active ?? "—"} />
-        {/* COMP-017: totalAllocation/releasedAmount are whole-rupee numbers
-            (project-service's listSchemeSummaries() / SchemeSummarySchema),
-            not minor units -- formatMoney() was treating this dashboard sum
-            as paise and under-displaying it 100x. formatRupees() matches
-            the per-row fix in SchemesTable.tsx (see its column defs for the
-            full rationale); this stat card sums the same already-rupee
-            fields each row renders. */}
-        <StatCard icon="💰" iconBg="#eff6ff" label="Total Allocation" value={totalAllocation === null ? "—" : formatRupees(totalAllocation)} />
-        <StatCard icon="📤" iconBg="#fffaeb" label="Released" value={totalReleased === null ? "—" : formatRupees(totalReleased)} />
+        {/* GAP2-PROJECTS-SCHEMES-MONEY-04: totalAllocation/releasedAmount are
+            bigint MINOR units (paise) as strings, summed as BigInt and rendered
+            with formatMoney — the same unit the detail endpoint uses, replacing
+            the old whole-rupee + formatRupees workaround (COMP-017). */}
+        <StatCard icon="💰" iconBg="#eff6ff" label="Total Allocation" value={totalAllocation === null ? "—" : formatMoney(totalAllocation)} />
+        <StatCard icon="📤" iconBg="#fffaeb" label="Released" value={totalReleased === null ? "—" : formatMoney(totalReleased)} />
       </StatGrid>
       <Card title="Schemes">
         {errored ? (

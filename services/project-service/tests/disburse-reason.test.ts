@@ -15,6 +15,7 @@ const { mockTx, dbTransactionFn, enqueuedMessages, markProcessedMock, publish, r
     markProcessedMock: vi.fn(async () => true),
     publish: vi.fn(async () => undefined),
     repoMock: {
+      findFundReleaseById: vi.fn(),
       findFundReleaseByIdTx: vi.fn(),
       updateFundReleaseTx: vi.fn(async () => undefined),
       incrementSchemeReleasedTx: vi.fn(async () => undefined),
@@ -63,6 +64,10 @@ describe("disburse reason", () => {
   it("command payload carries reason", async () => {
     const ctx = { tenantId: TENANT, actorId: ACTOR, correlationId: "c", roles: [] };
     const body = disburseBody.parse({ pfmsRef: "PFMS-1", reason: "UC verified" });
+    // GAP2-PROJECTS-FUND-RELEASES-07: the command now reads the release to
+    // enforce separation of duties. A release created by a DIFFERENT actor
+    // passes the SoD check and the command publishes as before.
+    repoMock.findFundReleaseById.mockResolvedValue({ id: "r", createdBy: "99999999-cccc-4000-8000-000000000009", status: "approved" });
     await disburseFundRelease(ctx as never, randomUUID(), randomUUID(), body);
     const msg = publish.mock.calls[0]![1] as { payload: Record<string, unknown> };
     expect(msg.payload.reason).toBe("UC verified");

@@ -45,13 +45,32 @@ export async function listGranteeSummaries(tenantId: string, limit: number) {
     cache.makeKey(tenantId, "grantees", `list:${limit}`),
     () => repo.listBeneficiariesByTenant(tenantId, limit),
   );
-  return (rows ?? []).map((row) => ({
-    id: row.id,
-    granteeCode: row.id.slice(0, 8).toUpperCase(),
-    name: row.name,
-    type: mapBeneficiaryType(row.type),
-    activeGrants: 0,
-    totalGrantsReceived: 0,
-    ucCompliancePct: 0,
-  }));
+  const list = rows ?? [];
+  // GAP2-GRANTS-GRANTEES-06: real per-grantee metrics (approved grants,
+  // completed disbursements in paise, UC compliance) instead of hard-coded 0s.
+  const portfolio = await repo.listGranteePortfolio(list.map((r) => r.id), tenantId);
+  return list.map((row) => {
+    const p = portfolio.get(row.id);
+    // UC compliance = validated UC statements / UC statements due. A grantee
+    // with nothing due reads as 0% due (not a fabricated figure); one with an
+    // overdue (unvalidated) UC reads lower than one fully validated.
+    const ucCompliancePct = p && p.ucDue > 0
+      ? Math.round((p.ucValidated / p.ucDue) * 1000) / 10
+      : 0;
+    return {
+      id: row.id,
+      // GAP2-GRANTS-GRANTEES-07: real stored grantee code (null-safe) — never a
+      // UUID fragment. Backfilled for existing rows by migration 0016.
+      granteeCode: row.granteeCode ?? "—",
+      name: row.name,
+      type: mapBeneficiaryType(row.type),
+      activeGrants: p?.activeGrants ?? 0,
+      // Contract field is z.number(): clamp at MAX_SAFE_INTEGER paise rather than
+      // silently losing precision above 2^53.
+      totalGrantsReceived: p
+        ? Number(p.totalGrantsReceivedMinor > BigInt(Number.MAX_SAFE_INTEGER) ? BigInt(Number.MAX_SAFE_INTEGER) : p.totalGrantsReceivedMinor)
+        : 0,
+      ucCompliancePct,
+    };
+  });
 }

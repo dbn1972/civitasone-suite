@@ -15,6 +15,12 @@ export const grantBeneficiaries = beneficiarySchema.table("grant_beneficiaries",
   currency:           char("currency", { length: 3 }).notNull().default("INR"),
   geography:          text("geography"),
   status:             varchar("status", { length: 24 }).notNull().default("active"),
+  // GAP2-GRANTS-GRANTEES-07 (migration 0016): a real, stable grantee
+  // registration code (GR-NNNNN), unique per tenant, assigned at registration
+  // by the beneficiaryCreate consumer. Replaces the UUID-fragment "code" the
+  // API used to derive on the fly. Nullable only to keep the migration
+  // additive; new rows always get one.
+  granteeCode:        text("grantee_code"),
   createdAt:          timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:          timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:          uuid("created_by").notNull(),
@@ -62,4 +68,12 @@ export type BankAccountInsert = typeof grantBankAccounts.$inferInsert;
 export type AadhaarLinkRow    = typeof grantAadhaarLinks.$inferSelect;
 export type AadhaarLinkInsert = typeof grantAadhaarLinks.$inferInsert;
 
-export const schema = { grantBeneficiaries, grantBankAccounts, grantAadhaarLinks };
+// GAP2-GRANTS-GRANTEES-07 (migration 0016): per-tenant gapless counter for
+// grantee codes (same pattern as application.grant_sanction_counters).
+export const grantBeneficiaryCounters = beneficiarySchema.table("grant_beneficiary_counters", {
+  tenantId: uuid("tenant_id").notNull().primaryKey(),
+  nextVal:  bigint("next_val", { mode: "bigint" }).notNull().default(1n),
+});
+export type BeneficiaryCounterRow = typeof grantBeneficiaryCounters.$inferSelect;
+
+export const schema = { grantBeneficiaries, grantBankAccounts, grantAadhaarLinks, grantBeneficiaryCounters };

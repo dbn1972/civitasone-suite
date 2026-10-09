@@ -40,6 +40,9 @@ export const EVENTS = {
   fundReleaseApproved:     "project.fund_release.approved",
   fundReleaseAllocationExceeded: "project.fund_release.allocation_exceeded",
   fundReleaseDisbursed:    "project.fund_release.disbursed",
+  // GAP2-PROJECTS-FUND-RELEASES-07: separation-of-duties rejection — the actor
+  // who created a fund release may not disburse it (money-out maker/checker).
+  fundReleaseSodViolation: "project.fund_release.sod_violation",
   physicalProgressRecorded: "project.physical_progress.recorded",
   dprSubmitted:            "project.dpr.submitted",
   dprTransitioned:         "project.dpr.transitioned",

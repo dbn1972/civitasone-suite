@@ -1,5 +1,10 @@
 /**
  * Board-decision project intake — CQRS routes (accept/reject → 202).
+ *
+ * GAP2-PLATFORM-PROJECT-GATEWAY-01: mounted under the PLURAL /v1/projects/...
+ * path so the gateway's upstreamPath "/v1/projects" rewrite reaches these
+ * routes. They were previously mounted under the SINGULAR /v1/project/... which
+ * the gateway rewrote to a non-existent /v1/projects/board-intake → 404.
  */
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
@@ -13,7 +18,7 @@ const idParam = z.object({ id: z.string().uuid() });
 const STATUSES = ["pending_review", "accepted", "rejected"] as const;
 
 export async function boardIntakeRoutes(app: FastifyInstance): Promise<void> {
-  app.get("/v1/project/board-intake", async (req, reply) => {
+  app.get("/v1/projects/board-intake", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { status } = z.object({
@@ -23,7 +28,7 @@ export async function boardIntakeRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: rows });
   });
 
-  app.get("/v1/project/board-intake/:id", async (req, reply) => {
+  app.get("/v1/projects/board-intake/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = idParam.parse(req.params);
@@ -32,7 +37,7 @@ export async function boardIntakeRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(row);
   });
 
-  app.post("/v1/project/board-intake/:id/accept", async (req, reply) => {
+  app.post("/v1/projects/board-intake/:id/accept", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PROJ_ROLES);
     const { id } = idParam.parse(req.params);
@@ -45,7 +50,7 @@ export async function boardIntakeRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(202).send(await commands.acceptIntake(ctx, id, body.note));
   });
 
-  app.post("/v1/project/board-intake/:id/reject", async (req, reply) => {
+  app.post("/v1/projects/board-intake/:id/reject", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PROJ_ROLES);
     const { id } = idParam.parse(req.params);

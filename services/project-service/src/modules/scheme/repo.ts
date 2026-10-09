@@ -121,6 +121,18 @@ export async function findFundReleaseByIdTx(tx: Writer, id: string, tenantId: st
   return rows[0] ?? null;
 }
 
+/**
+ * GAP2-PROJECTS-FUND-RELEASES-07: command-side (pre-publish) read of a fund
+ * release so the HTTP command can enforce separation of duties synchronously
+ * (the actor who created the release may not disburse it). Wrapped in
+ * db.transaction() so wrapWithTenantGuc injects app.tenant_id before the read.
+ */
+export async function findFundReleaseById(id: string, tenantId: string): Promise<FundReleaseRow | null> {
+  const rows = await db.transaction((tx) => tx.select().from(projectFundReleases)
+    .where(and(eq(projectFundReleases.id, id), eq(projectFundReleases.tenantId, tenantId))).limit(1));
+  return rows[0] ?? null;
+}
+
 export async function insertFundRelease(tx: Writer, row: FundReleaseInsert): Promise<void> {
   await tx.insert(projectFundReleases).values(row);
 }

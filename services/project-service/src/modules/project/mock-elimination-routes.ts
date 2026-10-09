@@ -63,18 +63,23 @@ export async function mockEliminationRoutes(app: FastifyInstance): Promise<void>
           );
           const byProject = new Map(persisted.map((e) => [e.projectId, e]));
 
-          return result.map((r, i) => {
+          return result.map((r) => {
             const e = byProject.get(r.id);
             const defaultStatus = r.status === "blocked" ? "open" : "submitted";
+            // GAP2-PROJECTS-ESCALATIONS-04: do NOT fabricate owner/issue/id.
+            // escalationId is the REAL persisted escalation record id (null
+            // until the escalation has been acted on); escalatedTo/issue come
+            // from the persisted record only. severity is derived from the
+            // project's real status (a factual projection, not invented text).
+            // No hard-coded "Program Director"/"Critical blocker"/"ESC-NNN".
             return {
-              escalationId: `ESC-${String(i + 1).padStart(3, "0")}`,
+              escalationId: e?.id ?? null,
               projectId: r.id,
               project: r.name,
-              issue: e?.issue
-                ?? (r.status === "blocked" ? "Critical blocker reported" : r.status === "delayed" ? "Timeline exceeded" : "Under review"),
+              issue: e?.issue ?? null,
               severity: e?.severity
                 ?? (r.status === "blocked" ? "blocked" : r.status === "delayed" ? "overdue" : "pending"),
-              escalatedTo: e?.escalatedTo ?? "Program Director",
+              escalatedTo: e?.escalatedTo ?? null,
               raisedDate: (r.createdAt as Date).toISOString().slice(0, 10),
               status: e?.status ?? defaultStatus,
             };

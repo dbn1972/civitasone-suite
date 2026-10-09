@@ -1616,8 +1616,12 @@ export const SchemeSummarySchema = z.object({
   ministry: z.string().optional(),
   department: z.string().optional(),
   fundingType: z.enum(["central", "state", "centrally_sponsored", "external"]),
-  totalAllocation: z.number(),
-  releasedAmount: z.number().default(0),
+  // GAP2-PROJECTS-SCHEMES-MONEY-04: money is bigint MINOR units (paise) as a
+  // string end to end, matching getSchemeDetail and grant-service. The list
+  // previously returned whole-rupee numbers (minorToAmount), a 100x hazard
+  // vs the detail endpoint; both now use the same unit + formatMoney.
+  totalAllocation: zMoneyMinorString,
+  releasedAmount: zMoneyMinorString,
   projectCount: z.number().default(0),
   status: z.enum(["active", "completed", "cancelled"]),
 });

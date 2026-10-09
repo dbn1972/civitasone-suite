@@ -982,41 +982,41 @@ describe("Board Intake Routes", () => {
     mockState.countResult = 1;
   });
 
-  describe("GET /v1/project/board-intake", () => {
+  describe("GET /v1/projects/board-intake", () => {
     it("returns intake list", async () => {
-      const res = await app.inject({ method: "GET", url: "/v1/project/board-intake", headers: { authorization: `Bearer ${ADMIN_TOKEN()}` } });
+      const res = await app.inject({ method: "GET", url: "/v1/projects/board-intake", headers: { authorization: `Bearer ${ADMIN_TOKEN()}` } });
       expect(res.statusCode).toBe(200);
       expect(res.json().data).toBeDefined();
     });
 
     it("returns 401 without auth", async () => {
-      const res = await app.inject({ method: "GET", url: "/v1/project/board-intake" });
+      const res = await app.inject({ method: "GET", url: "/v1/projects/board-intake" });
       expect(res.statusCode).toBe(401);
     });
 
     it("returns 403 for employee role", async () => {
-      const res = await app.inject({ method: "GET", url: "/v1/project/board-intake", headers: { authorization: `Bearer ${NO_ROLE_TOKEN()}` } });
+      const res = await app.inject({ method: "GET", url: "/v1/projects/board-intake", headers: { authorization: `Bearer ${NO_ROLE_TOKEN()}` } });
       expect(res.statusCode).toBe(403);
     });
   });
 
-  describe("GET /v1/project/board-intake/:id", () => {
+  describe("GET /v1/projects/board-intake/:id", () => {
     it("returns intake item when found", async () => {
-      const res = await app.inject({ method: "GET", url: `/v1/project/board-intake/${INTAKE_ID}`, headers: { authorization: `Bearer ${ADMIN_TOKEN()}` } });
+      const res = await app.inject({ method: "GET", url: `/v1/projects/board-intake/${INTAKE_ID}`, headers: { authorization: `Bearer ${ADMIN_TOKEN()}` } });
       expect(res.statusCode).toBe(200);
     });
 
     it("returns 404 when not found", async () => {
       mockState.queryResult = [];
-      const res = await app.inject({ method: "GET", url: `/v1/project/board-intake/${INTAKE_ID}`, headers: { authorization: `Bearer ${ADMIN_TOKEN()}` } });
+      const res = await app.inject({ method: "GET", url: `/v1/projects/board-intake/${INTAKE_ID}`, headers: { authorization: `Bearer ${ADMIN_TOKEN()}` } });
       expect(res.statusCode).toBe(404);
     });
   });
 
-  describe("POST /v1/project/board-intake/:id/accept", () => {
+  describe("POST /v1/projects/board-intake/:id/accept", () => {
     it("returns 200 for valid accept", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/project/board-intake/${INTAKE_ID}/accept`,
+        method: "POST", url: `/v1/projects/board-intake/${INTAKE_ID}/accept`,
         headers: { authorization: `Bearer ${ADMIN_TOKEN()}` },
         payload: { note: "Accepted for action" },
       });
@@ -1031,7 +1031,7 @@ describe("Board Intake Routes", () => {
     it("returns 404 when item not found", async () => {
       mockState.queryResult = [];
       const res = await app.inject({
-        method: "POST", url: `/v1/project/board-intake/${INTAKE_ID}/accept`,
+        method: "POST", url: `/v1/projects/board-intake/${INTAKE_ID}/accept`,
         headers: { authorization: `Bearer ${ADMIN_TOKEN()}` },
         payload: {},
       });
@@ -1041,7 +1041,7 @@ describe("Board Intake Routes", () => {
     it("returns 409 when not pending_review", async () => {
       mockState.queryResult = [{ ...SEED_INTAKE, status: "accepted" }];
       const res = await app.inject({
-        method: "POST", url: `/v1/project/board-intake/${INTAKE_ID}/accept`,
+        method: "POST", url: `/v1/projects/board-intake/${INTAKE_ID}/accept`,
         headers: { authorization: `Bearer ${ADMIN_TOKEN()}` },
         payload: {},
       });
@@ -1050,7 +1050,7 @@ describe("Board Intake Routes", () => {
 
     it("returns 403 for employee", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/project/board-intake/${INTAKE_ID}/accept`,
+        method: "POST", url: `/v1/projects/board-intake/${INTAKE_ID}/accept`,
         headers: { authorization: `Bearer ${NO_ROLE_TOKEN()}` },
         payload: {},
       });
@@ -1058,10 +1058,10 @@ describe("Board Intake Routes", () => {
     });
   });
 
-  describe("POST /v1/project/board-intake/:id/reject", () => {
+  describe("POST /v1/projects/board-intake/:id/reject", () => {
     it("returns 200 for valid reject with note", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/project/board-intake/${INTAKE_ID}/reject`,
+        method: "POST", url: `/v1/projects/board-intake/${INTAKE_ID}/reject`,
         headers: { authorization: `Bearer ${ADMIN_TOKEN()}` },
         payload: { note: "Not relevant to this department" },
       });
@@ -1074,7 +1074,7 @@ describe("Board Intake Routes", () => {
 
     it("returns 400 for missing note (required for reject)", async () => {
       const res = await app.inject({
-        method: "POST", url: `/v1/project/board-intake/${INTAKE_ID}/reject`,
+        method: "POST", url: `/v1/projects/board-intake/${INTAKE_ID}/reject`,
         headers: { authorization: `Bearer ${ADMIN_TOKEN()}` },
         payload: {},
       });
@@ -1084,7 +1084,7 @@ describe("Board Intake Routes", () => {
     it("returns 409 when not pending_review", async () => {
       mockState.queryResult = [{ ...SEED_INTAKE, status: "rejected" }];
       const res = await app.inject({
-        method: "POST", url: `/v1/project/board-intake/${INTAKE_ID}/reject`,
+        method: "POST", url: `/v1/projects/board-intake/${INTAKE_ID}/reject`,
         headers: { authorization: `Bearer ${ADMIN_TOKEN()}` },
         payload: { note: "Already done" },
       });

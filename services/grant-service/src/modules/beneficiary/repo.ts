@@ -1,7 +1,7 @@
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db, scopedRead } from "../../shared/db.js";
-import { grantBeneficiaries, grantBankAccounts, grantAadhaarLinks, type BeneficiaryRow, type BeneficiaryInsert, type BankAccountRow, type BankAccountInsert, type AadhaarLinkRow, type AadhaarLinkInsert } from "./schema.js";
+import { grantBeneficiaries, grantBankAccounts, grantAadhaarLinks, grantBeneficiaryCounters, type BeneficiaryRow, type BeneficiaryInsert, type BankAccountRow, type BankAccountInsert, type AadhaarLinkRow, type AadhaarLinkInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -84,4 +84,99 @@ export async function listBeneficiariesByTenant(tenantId: string, limit: number)
       tx.select().from(grantBeneficiaries)
         .where(eq(grantBeneficiaries.tenantId, tenantId))
         .limit(limit)));
+}
+
+/**
+ * GAP2-GRANTS-GRANTEES-07: allocate the next gapless per-tenant grantee code
+ * (GR-NNNNN) inside the caller's transaction. Mirrors
+ * application/repo.ts::allocateSanctionNo — a rolled-back insert releases the
+ * number, so there are no gaps or collisions.
+ */
+export async function allocateGranteeCode(tx: Writer, tenantId: string): Promise<string> {
+  const rows = await (tx as typeof db)
+    .insert(grantBeneficiaryCounters)
+    .values({ tenantId, nextVal: 2n })
+    .onConflictDoUpdate({
+      target: [grantBeneficiaryCounters.tenantId],
+      set: { nextVal: sql`${grantBeneficiaryCounters.nextVal} + 1` },
+    })
+    .returning({ nextVal: grantBeneficiaryCounters.nextVal });
+  const stored = rows[0]!.nextVal;
+  const allocated = stored - 1n;
+  return `GR-${allocated.toString().padStart(5, "0")}`;
+}
+
+export type GranteePortfolioMetrics = {
+  activeGrants: number;
+  totalGrantsReceivedMinor: bigint;
+  ucDue: number;
+  ucValidated: number;
+};
+
+/**
+ * GAP2-GRANTS-GRANTEES-06: compute REAL per-grantee portfolio metrics
+ * (replacing the hard-coded 0/0/0 the API used to emit). For each beneficiary
+ * in `ids`:
+ *   - activeGrants              = count of APPROVED applications
+ *   - totalGrantsReceivedMinor  = sum of COMPLETED disbursements (paise)
+ *   - ucDue / ucValidated       = UC statements raised vs validated (compliance)
+ * All queries are same-service, tenant-scoped. Beneficiaries with no grants are
+ * simply absent from the returned Map; the caller defaults them to zeros (an
+ * honest "nothing yet", not a fabricated figure for a grantee that HAS grants).
+ */
+export async function listGranteePortfolio(
+  ids: string[], tenantId: string,
+): Promise<Map<string, GranteePortfolioMetrics>> {
+  const out = new Map<string, GranteePortfolioMetrics>();
+  if (ids.length === 0) return out;
+  return runWithTenant(tenantId, () => scopedRead(async (tx) => {
+    const idList = sql.join(ids.map((id) => sql`${id}::uuid`), sql`, `);
+    // approved applications per beneficiary + total disbursed (completed) + UC counts
+    const rows = await (tx as typeof db).execute(sql`
+      SELECT a.beneficiary_id AS beneficiary_id,
+             COUNT(*) FILTER (WHERE a.status = 'approved') AS active_grants,
+             COALESCE(SUM(dis.received_minor), 0) AS total_received_minor,
+             COALESCE(SUM(uc.uc_due), 0) AS uc_due,
+             COALESCE(SUM(uc.uc_validated), 0) AS uc_validated
+      FROM application.grant_applications a
+      -- Disbursements and UC statements are aggregated per application in
+      -- independent subqueries so the two child sets never multiply each other
+      -- (joining both to the same application fans the SUM out by UC count).
+      LEFT JOIN (
+        SELECT i.application_id, i.tenant_id,
+               SUM(d.amount_minor) FILTER (WHERE d.status = 'completed') AS received_minor
+        FROM disbursement.grant_installments i
+        JOIN disbursement.grant_disbursements d
+          ON d.installment_id = i.id AND d.tenant_id = i.tenant_id
+        WHERE i.tenant_id = ${tenantId}::uuid
+        GROUP BY i.application_id, i.tenant_id
+      ) dis ON dis.application_id = a.id AND dis.tenant_id = a.tenant_id
+      LEFT JOIN (
+        SELECT u.application_id, u.tenant_id,
+               COUNT(*) AS uc_due,
+               COUNT(*) FILTER (WHERE u.validation_status = 'validated') AS uc_validated
+        FROM utilisation.grant_uc_statements u
+        WHERE u.tenant_id = ${tenantId}::uuid
+        GROUP BY u.application_id, u.tenant_id
+      ) uc ON uc.application_id = a.id AND uc.tenant_id = a.tenant_id
+      WHERE a.tenant_id = ${tenantId}::uuid
+        AND a.beneficiary_id IN (${idList})
+      GROUP BY a.beneficiary_id
+    `) as unknown as Array<{
+      beneficiary_id: string;
+      active_grants: number | string;
+      total_received_minor: number | string;
+      uc_due: number | string;
+      uc_validated: number | string;
+    }>;
+    for (const r of rows) {
+      out.set(r.beneficiary_id, {
+        activeGrants: Number(r.active_grants),
+        totalGrantsReceivedMinor: BigInt(r.total_received_minor),
+        ucDue: Number(r.uc_due),
+        ucValidated: Number(r.uc_validated),
+      });
+    }
+    return out;
+  }));
 }

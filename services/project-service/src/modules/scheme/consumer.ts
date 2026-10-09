@@ -141,6 +141,19 @@ export function registerSchemeConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const release = await repo.findFundReleaseByIdTx(tx, p.rId, p.tenantId);
       if (!release) throw new Error(`fund release ${p.rId} not found`);
+      // GAP2-PROJECTS-FUND-RELEASES-07: separation of duties, defence in depth.
+      // Even if a message reaches the consumer (replay/forged), the actor who
+      // created the release must not disburse it. On violation, emit an
+      // auditable rejection event and do NOT flip the status to 'disbursed'.
+      if (release.createdBy && release.createdBy === msg.actorId) {
+        await enqueue(tx, {
+          topic: EVENTS.fundReleaseSodViolation, eventType: EVENTS.fundReleaseSodViolation,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { releaseId: p.rId, schemeId: p.schemeId, createdBy: release.createdBy, reason: "disburser equals creator (separation of duties)" },
+        });
+        await audit(tx, msg, "disburse_rejected", "fund_release", p.rId, "SOD_VIOLATION: disburser equals creator");
+        return;
+      }
       assertFundReleaseCanDisburse(release.status ?? "pending");
       await repo.updateFundReleaseTx(tx, p.rId, {
         status: "disbursed",

@@ -6996,12 +6996,16 @@ export async function getRoleFeatureGrants(): Promise<LoaderResult<RoleFeatureGr
 // ── Project sub-resource loaders ──────────────────────────────────────────────
 
 export type ProjectEscalationRow = {
-  escalationId: string;
+  // GAP2-PROJECTS-ESCALATIONS-04: escalationId/issue/escalatedTo are the REAL
+  // persisted escalation record fields and are null until an escalation has
+  // been acted on — the endpoint no longer fabricates "Program Director" /
+  // "Critical blocker reported" / "ESC-NNN" placeholders.
+  escalationId: string | null;
   projectId?: string;
   project: string;
-  issue: string;
+  issue: string | null;
   severity: string;
-  escalatedTo: string;
+  escalatedTo: string | null;
   raisedDate: string;
   status: string;
 };

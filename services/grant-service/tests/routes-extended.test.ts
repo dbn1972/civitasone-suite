@@ -282,8 +282,29 @@ describe("POST /v1/grants/applications/:id/installments", () => {
 
 describe("POST /v1/grants/installments/:id/disburse", () => {
   it("202 — accepts disbursement with empty body (mode defaults)", async () => {
+    // GAP2-GRANTS-INSTALLMENTS-07: the direct-disburse command now reads the
+    // installment to enforce separation of duties (the installment creator /
+    // application approver may not directly disburse). Seed a real installment
+    // created by a DIFFERENT actor (ACTOR2) and an application approved by
+    // ACTOR2, then disburse as ACTOR — SoD passes and the empty body (mode
+    // defaults) is accepted with 202, which is this test's intent.
+    const APP_ID = "cccccccc-0000-4000-8000-0000000000a1";
+    const INST_ID = "cccccccc-0000-4000-8000-0000000000a2";
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(grantApplications).values({
+        id: APP_ID, tenantId: TENANT, grantNo: "G-EXT-DISB", schemeId: "cccccccc-0000-4000-8000-0000000000a0",
+        beneficiaryId: "cccccccc-0000-4000-8000-0000000000a3", purpose: "x",
+        amountApprovedMinor: 100000n, currency: "INR", status: "approved",
+        approvedBy: ACTOR2, submittedBy: ACTOR2, createdBy: ACTOR2, updatedBy: ACTOR2,
+      }).onConflictDoNothing();
+      await tx.insert(grantInstallments).values({
+        id: INST_ID, tenantId: TENANT, applicationId: APP_ID, installmentNo: 1,
+        amountMinor: 50000n, currency: "INR", status: "pending",
+        createdBy: ACTOR2, updatedBy: ACTOR2,
+      }).onConflictDoNothing();
+    }));
     const res = await app.inject({
-      method: "POST", url: "/v1/grants/installments/00000000-0000-4000-8000-000000000001/disburse",
+      method: "POST", url: `/v1/grants/installments/${INST_ID}/disburse`,
       headers: { authorization: `Bearer ${makeToken()}` },
       payload: {},
     });
