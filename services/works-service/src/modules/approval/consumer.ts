@@ -3,7 +3,9 @@ import { db } from "../../shared/db.js";
 import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { administrativeApprovals, technicalSanctions } from "./schema.js";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { NonRetryableError } from "@civitasone/queue";
+import { isSelfApproval } from "./domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -47,9 +49,22 @@ export function registerApprovalConsumers(q: Queue): void {
       if (!ok) return;
 
       const { id } = msg.payload as { id: string };
+
+      // GAP2-WORKS-APPROVALS-01: maker-checker enforced HERE (the consumer),
+      // inside the transaction, so a directly-published or racing command
+      // cannot bypass the route-level pre-check.
+      const rows = await tx.select().from(administrativeApprovals)
+        .where(and(eq(administrativeApprovals.tenantId, msg.tenantId), eq(administrativeApprovals.id, id)))
+        .limit(1);
+      const existing = rows[0];
+      if (!existing) throw new NonRetryableError("AA_NOT_FOUND: AA not found for finalize");
+      if (isSelfApproval(msg.actorId, { createdBy: existing.createdBy })) {
+        throw new NonRetryableError("SELF_APPROVAL_FORBIDDEN: the creator of a AA cannot finalize it (maker-checker rule)");
+      }
+
       await tx.update(administrativeApprovals)
         .set({ status: "finalized", finalizedBy: msg.actorId, finalizedAt: new Date() })
-        .where(eq(administrativeApprovals.id, id));
+        .where(and(eq(administrativeApprovals.tenantId, msg.tenantId), eq(administrativeApprovals.id, id)));
 
       await enqueue(tx, {
         topic: EVENTS.aaFinalized,
@@ -104,9 +119,22 @@ export function registerApprovalConsumers(q: Queue): void {
       if (!ok) return;
 
       const { id } = msg.payload as { id: string };
+
+      // GAP2-WORKS-APPROVALS-01: maker-checker enforced HERE (the consumer),
+      // inside the transaction, so a directly-published or racing command
+      // cannot bypass the route-level pre-check.
+      const rows = await tx.select().from(technicalSanctions)
+        .where(and(eq(technicalSanctions.tenantId, msg.tenantId), eq(technicalSanctions.id, id)))
+        .limit(1);
+      const existing = rows[0];
+      if (!existing) throw new NonRetryableError("TS_NOT_FOUND: TS not found for finalize");
+      if (isSelfApproval(msg.actorId, { createdBy: existing.createdBy })) {
+        throw new NonRetryableError("SELF_APPROVAL_FORBIDDEN: the creator of a TS cannot finalize it (maker-checker rule)");
+      }
+
       await tx.update(technicalSanctions)
         .set({ status: "finalized", finalizedBy: msg.actorId, finalizedAt: new Date() })
-        .where(eq(technicalSanctions.id, id));
+        .where(and(eq(technicalSanctions.tenantId, msg.tenantId), eq(technicalSanctions.id, id)));
 
       await enqueue(tx, {
         topic: EVENTS.tsFinalized,

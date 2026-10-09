@@ -20,21 +20,30 @@
 
 SET lock_timeout = '5s';
 
--- measurement_books already carries issued_by/issued_at; add created_at (as a
--- backfill from issued_at where present), updated_at, updated_by. Backfill
--- existing rows: created_at defaults to the issued_at that already records
--- when the MB was created, so provenance is correct for historical rows.
+-- measurement_books already carries issued_by/issued_at. created_at is added
+-- NULLABLE first (a NOT NULL DEFAULT now() column would be filled with the
+-- migration timestamp, making any COALESCE(created_at, issued_at) backfill a
+-- silent no-op and recording wrong provenance for historical rows), backfilled
+-- from issued_at / issued_by, and only then tightened to NOT NULL DEFAULT now().
 ALTER TABLE works.measurement_books
-  ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now(),
+  ADD COLUMN IF NOT EXISTS created_at timestamptz,
   ADD COLUMN IF NOT EXISTS created_by uuid,
   ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now(),
   ADD COLUMN IF NOT EXISTS updated_by uuid;
--- Backfill created_by/created_at from the existing issued_by/issued_at so the
--- new columns are not left null on historical rows.
+
+-- The backfill is DML on a FORCE-RLS table (0010). An owner-run migration has
+-- no app.tenant_id GUC, so under FORCE RLS the UPDATE would match 0 rows.
+-- Wrap it in NO FORCE / FORCE (repo rule); FORCE is restored unconditionally.
+ALTER TABLE works.measurement_books NO FORCE ROW LEVEL SECURITY;
 UPDATE works.measurement_books
   SET created_by = COALESCE(created_by, issued_by),
       created_at = COALESCE(created_at, issued_at)
   WHERE created_by IS NULL OR created_at IS NULL;
+ALTER TABLE works.measurement_books FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE works.measurement_books
+  ALTER COLUMN created_at SET DEFAULT now(),
+  ALTER COLUMN created_at SET NOT NULL;
 
 ALTER TABLE works.measurements
   ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now(),
