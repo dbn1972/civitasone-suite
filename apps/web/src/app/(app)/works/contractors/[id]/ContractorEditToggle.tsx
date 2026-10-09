@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
 import { Button } from "@/app/_components/ds";
@@ -86,6 +86,10 @@ function ContractorEditForm({
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [idErrors, setIdErrors] = useState<IndianIdFieldErrors>({});
   const formError = useFormError("contractor");
+  // The post-save close is deferred so the success message is visible; cancel it
+  // if the form unmounts first (otherwise it fires setState after teardown).
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (closeTimer.current) clearTimeout(closeTimer.current); }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -146,7 +150,8 @@ function ContractorEditForm({
         return;
       }
       setMsg({ text: "Contractor updated.", ok: true });
-      setTimeout(() => {
+      closeTimer.current = setTimeout(() => {
+        closeTimer.current = null;
         router.refresh();
         onClose();
       }, 800);

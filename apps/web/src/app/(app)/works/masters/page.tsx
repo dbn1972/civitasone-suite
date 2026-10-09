@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/app/_components/ds";
 import { fetchJson } from "@/app/_data/apiClient";
+import { getMasterMeta } from "../_data/loaders";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { WORKS_MASTERS_ADMIN_ROLES } from "@/lib/auth/roleGuard";
 import { MastersTable, type MasterItem, type ParentOption } from "./MastersTable";
@@ -41,6 +42,10 @@ export default async function MastersPage({
 
   const { data: items, source } = await fetchMaster(type);
   const failed = source === "error";
+  // GAP2-WORKS-MASTERS-09: the true tenant-wide total for this master type, so
+  // the table can warn "showing first N of M" when a type has more rows than
+  // the page cap (backend meta.total is now correct — GAP2-WORKS-APPROVALS-05).
+  const { data: typeMeta } = await getMasterMeta(type);
 
   // GAP-WORKS-MASTERS-02: create/edit/deactivate controls are admin-only (the
   // works-service POST/PATCH already 403 everyone else). getSessionRoles reads
@@ -95,6 +100,7 @@ export default async function MastersPage({
             failed={failed}
             canManage={canManage}
             parentOptions={parentOptions}
+            total={typeMeta.total}
           />
         </div>
       </div>

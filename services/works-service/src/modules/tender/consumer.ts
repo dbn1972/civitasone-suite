@@ -4,6 +4,7 @@ import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { preTenders, tenders, quotations, awards } from "./schema.js";
 import { contractors } from "../contractor/schema.js";
+import { isSelfApprovalAward } from "./domain.js";
 import { eq, and, sql } from "drizzle-orm";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -162,6 +163,19 @@ export function registerTenderConsumers(q: Queue): void {
       if (!ok) return;
 
       const { id } = msg.payload as { id: string };
+
+      // GAP2-WORKS-TENDERS-04: maker-checker enforced HERE (the consumer),
+      // inside the transaction, so a directly-published or racing command
+      // cannot bypass the route-level pre-check.
+      const rows = await tx.select().from(awards)
+        .where(and(eq(awards.tenantId, msg.tenantId), eq(awards.id, id)))
+        .limit(1);
+      const existing = rows[0];
+      if (!existing) throw new NonRetryableError("AWARD_NOT_FOUND: award not found for finalize");
+      if (isSelfApprovalAward(msg.actorId, { createdBy: existing.createdBy })) {
+        throw new NonRetryableError("SELF_APPROVAL_FORBIDDEN: The creator of an award cannot DAO-finalize it (maker-checker rule)");
+      }
+
       await tx.update(awards)
         .set({ status: "dao_finalized", daoFinalizedBy: msg.actorId, daoFinalizedAt: new Date() })
         .where(and(eq(awards.tenantId, msg.tenantId), eq(awards.id, id), eq(awards.status, "draft")));
@@ -185,6 +199,19 @@ export function registerTenderConsumers(q: Queue): void {
       if (!ok) return;
 
       const { id } = msg.payload as { id: string };
+
+      // GAP2-WORKS-TENDERS-04: maker-checker enforced HERE (the consumer),
+      // inside the transaction, so a directly-published or racing command
+      // cannot bypass the route-level pre-check.
+      const rows = await tx.select().from(awards)
+        .where(and(eq(awards.tenantId, msg.tenantId), eq(awards.id, id)))
+        .limit(1);
+      const existing = rows[0];
+      if (!existing) throw new NonRetryableError("AWARD_NOT_FOUND: award not found for finalize");
+      if (isSelfApprovalAward(msg.actorId, { createdBy: existing.createdBy }, existing.daoFinalizedBy)) {
+        throw new NonRetryableError("SELF_APPROVAL_FORBIDDEN: The DO finalizer must differ from both the award creator and the DAO finalizer (maker-checker rule)");
+      }
+
       await tx.update(awards)
         .set({ status: "do_finalized", doFinalizedBy: msg.actorId, doFinalizedAt: new Date() })
         .where(and(eq(awards.tenantId, msg.tenantId), eq(awards.id, id), eq(awards.status, "dao_finalized")));

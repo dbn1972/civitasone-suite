@@ -3,9 +3,15 @@ import { render, screen } from "@testing-library/react";
 
 const aaMock = vi.fn();
 const tsMock = vi.fn();
+// GAP2-WORKS-APPROVALS-05: the page now also fetches the true register totals
+// so the table can show real counts + a truncation notice. Stub them here.
+const aaMetaMock = vi.fn();
+const tsMetaMock = vi.fn();
 vi.mock("../_data/loaders", () => ({
   getApprovalsAa: () => aaMock(),
   getApprovalsTs: () => tsMock(),
+  getApprovalsAaMeta: () => aaMetaMock(),
+  getApprovalsTsMeta: () => tsMetaMock(),
 }));
 
 const rolesMock = vi.fn<() => string[]>();
@@ -28,6 +34,10 @@ describe("ApprovalsPage — create actions are role-gated (GAP-WORKS-APPROVALS-0
     rolesMock.mockReset();
     aaMock.mockResolvedValue({ data: [], source: "api" });
     tsMock.mockResolvedValue({ data: [], source: "api" });
+    aaMetaMock.mockReset();
+    tsMetaMock.mockReset();
+    aaMetaMock.mockResolvedValue({ data: { total: 0, fetched: 0 }, source: "api" });
+    tsMetaMock.mockResolvedValue({ data: { total: 0, fetched: 0 }, source: "api" });
   });
 
   it("hides + New AA / + New TS for a read-only role", async () => {

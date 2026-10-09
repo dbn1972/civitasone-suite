@@ -1,8 +1,17 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, count } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { measurementBooks, bills, measurements, accountCompilations } from "./schema.js";
 import { workProposals } from "../proposal/schema.js";
 import { awards } from "../tender/schema.js";
+
+/** Tenant-wide bill count — GAP2-WORKS-APPROVALS-05 true register total. */
+export async function countBills(tenantId: string): Promise<number> {
+  return scopedRead(async (tx) => {
+    const rows = await tx.select({ value: count() }).from(bills)
+      .where(eq(bills.tenantId, tenantId));
+    return Number(rows[0]?.value ?? 0);
+  });
+}
 
 export async function getMb(tenantId: string, id: string) {
   return scopedRead(async (tx) => {

@@ -39,10 +39,16 @@ export function ApprovalsTable({
   aaApprovals,
   tsApprovals,
   source,
+  aaTotal,
+  tsTotal,
 }: {
   aaApprovals: Record<string, unknown>[];
   tsApprovals: Record<string, unknown>[];
   source: "api" | "error";
+  /** True tenant-wide AA count from the register meta (GAP2-WORKS-APPROVALS-05). */
+  aaTotal?: number;
+  /** True tenant-wide TS count from the register meta (GAP2-WORKS-APPROVALS-05). */
+  tsTotal?: number;
 }) {
   const [tab, setTab] = useState<Tab>("aa");
   const {
@@ -74,6 +80,20 @@ export function ApprovalsTable({
   const aaLive = aaProvenance == null || aaProvenance === "live";
   const tsLive = tsProvenance == null || tsProvenance === "live";
 
+  // GAP2-WORKS-APPROVALS-05: the "Total" cards show the TRUE tenant count from
+  // the register meta (not the capped page length). The register fetches at
+  // most 100 rows, so when the true total exceeds the rows actually shown we
+  // render a "first N of M" notice and the pending count is explicitly labelled
+  // as being computed over the shown page only (it cannot be exact past the
+  // cap without fetching every row).
+  const aaTrueTotal = aaLive && typeof aaTotal === "number" ? aaTotal : aaData.length;
+  const tsTrueTotal = tsLive && typeof tsTotal === "number" ? tsTotal : tsData.length;
+  const aaTruncated = aaData.length < aaTrueTotal;
+  const tsTruncated = tsData.length < tsTrueTotal;
+  const activeTruncated = tab === "aa" ? aaTruncated : tsTruncated;
+  const shownCount = tab === "aa" ? aaData.length : tsData.length;
+  const trueTotal = tab === "aa" ? aaTrueTotal : tsTrueTotal;
+
   const rowHref =
     tab === "aa"
       ? (row: Record<string, unknown>) => "/works/approvals/aa/" + String(row.id ?? "")
@@ -84,10 +104,10 @@ export function ApprovalsTable({
   return (
     <div>
       <StatGrid>
-        <StatCard icon="📋" iconBg="#eff6ff" label="Total AA" value={statValue(aaLive, aaData.length > 0, aaData.length)} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label="Pending AA" value={statValue(aaLive, aaData.length > 0, pendingCount(aaData))} />
-        <StatCard icon="📑" iconBg="#ecfdf3" label="Total TS" value={statValue(tsLive, tsData.length > 0, tsData.length)} />
-        <StatCard icon="⏳" iconBg="#fef2f2" label="Pending TS" value={statValue(tsLive, tsData.length > 0, pendingCount(tsData))} />
+        <StatCard icon="📋" iconBg="#eff6ff" label="Total AA" value={statValue(aaLive, aaData.length > 0, aaTrueTotal)} />
+        <StatCard icon="⏳" iconBg="#fffaeb" label={aaTruncated ? "Pending AA (shown)" : "Pending AA"} value={statValue(aaLive, aaData.length > 0, pendingCount(aaData))} />
+        <StatCard icon="📑" iconBg="#ecfdf3" label="Total TS" value={statValue(tsLive, tsData.length > 0, tsTrueTotal)} />
+        <StatCard icon="⏳" iconBg="#fef2f2" label={tsTruncated ? "Pending TS (shown)" : "Pending TS"} value={statValue(tsLive, tsData.length > 0, pendingCount(tsData))} />
       </StatGrid>
 
       {/* GAP-WORKS-APPROVALS-04: replace the hand-rolled role=tab buttons with
@@ -103,6 +123,11 @@ export function ApprovalsTable({
 
       <TabPanel idPrefix="works-approvals" active={activeLabel}>
         <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
+        {activeTruncated ? (
+          <p style={{ fontSize: 13, color: "var(--muted)", margin: "0 0 12px" }} role="note">
+            Showing the first {shownCount} of {trueTotal} {tab === "aa" ? "AA" : "TS"} records.
+          </p>
+        ) : null}
         <DataTable
           columns={columns}
           rows={rows}

@@ -2,13 +2,20 @@ import Link from "next/link";
 import { PageHeader, Card } from "@/app/_components/ds";
 import { getSessionRoles, hasAnyRole } from "@/lib/auth/roleGuard";
 import { AA_CREATE_ROLES, TS_CREATE_ROLES } from "@/lib/auth/workRoles";
-import { getApprovalsAa, getApprovalsTs } from "../_data/loaders";
+import { getApprovalsAa, getApprovalsTs, getApprovalsAaMeta, getApprovalsTsMeta } from "../_data/loaders";
 import { ApprovalsTable } from "./ApprovalsTable";
 
 export default async function ApprovalsPage() {
-  const [{ data: aaApprovals, source: aaSource }, { data: tsApprovals, source: tsSource }] = await Promise.all([
+  const [
+    { data: aaApprovals, source: aaSource },
+    { data: tsApprovals, source: tsSource },
+    { data: aaMeta },
+    { data: tsMeta },
+  ] = await Promise.all([
     getApprovalsAa(),
     getApprovalsTs(),
+    getApprovalsAaMeta(),
+    getApprovalsTsMeta(),
   ]);
 
   const source = aaSource === "error" || tsSource === "error" ? "error" : "api";
@@ -43,7 +50,13 @@ export default async function ApprovalsPage() {
         }
       />
       <Card title="Approvals">
-        <ApprovalsTable aaApprovals={aaApprovals} tsApprovals={tsApprovals} source={source} />
+        <ApprovalsTable
+          aaApprovals={aaApprovals}
+          tsApprovals={tsApprovals}
+          source={source}
+          aaTotal={aaMeta.total}
+          tsTotal={tsMeta.total}
+        />
       </Card>
     </div>
   );

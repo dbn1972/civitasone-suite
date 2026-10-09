@@ -48,6 +48,8 @@ export function registerBillingConsumers(q: Queue): void {
         mbNumber: p.mbNumber as string,
         issuedBy: msg.actorId,
         status: "draft",
+        createdBy: msg.actorId,
+        updatedBy: msg.actorId,
       });
 
       await enqueue(tx, {
@@ -208,6 +210,8 @@ export function registerBillingConsumers(q: Queue): void {
           quantity: String(quantity),
           rate,
           amountMinor: calculateBoqAmount(rate, quantity),
+          createdBy: msg.actorId,
+          updatedBy: msg.actorId,
         });
       }
 
@@ -352,6 +356,8 @@ export function registerBillingConsumers(q: Queue): void {
         breadthVal: p.breadthVal !== undefined ? String(p.breadthVal) : null,
         depthVal: p.depthVal !== undefined ? String(p.depthVal) : null,
         remarks: (p.remarks as string) ?? null,
+        createdBy: msg.actorId,
+        updatedBy: msg.actorId,
       });
 
       await enqueue(tx, {
