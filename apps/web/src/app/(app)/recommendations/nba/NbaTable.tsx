@@ -16,6 +16,7 @@
  */
 import { DataTable } from "@/app/_components/ds/DataTable";
 import type { NbaScoreRow } from "../_data";
+import { formatSubjectRef } from "../_format";
 
 export function NbaTable({ rows }: { rows: NbaScoreRow[] }) {
   return (
@@ -23,7 +24,14 @@ export function NbaTable({ rows }: { rows: NbaScoreRow[] }) {
       caption="Predictive model scores, highest score first"
       rows={rows as (NbaScoreRow & Record<string, unknown>)[]}
       columns={[
-        { key: "subject", label: "Subject" },
+        {
+          key: "subject",
+          label: "Subject",
+          // GAP2-RECOMMENDATIONS-NBA-04: show an explicitly-labelled short id
+          // reference, not the raw 36-char UUID (which read like a name). Full
+          // id stays available as a tooltip.
+          render: (r) => <span title={r.subject}>{formatSubjectRef(r.subject)}</span>,
+        },
         { key: "subjectType", label: "Type" },
         { key: "model", label: "Model" },
         { key: "confidence", label: "Confidence", align: "right", render: (r) => r.confidence ?? "—" },

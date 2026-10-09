@@ -1,10 +1,12 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button, Field, Input, PageHeader, Select, Textarea } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { DOMAIN_TYPES, domainSchema, toFieldErrors } from "../schema";
+import { DOMAIN_REGISTRATION_AVAILABLE } from "./availability";
 
 const INDIAN_STATES = [
   "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
@@ -24,6 +26,7 @@ const DOMAIN_TYPE_LABELS: Record<(typeof DOMAIN_TYPES)[number], string> = {
 
 export default function NewDomainPage() {
   const router = useRouter();
+  const t = useTranslations("domainsNew");
   const [form, setForm] = useState({
     domainName: "",
     organisation: "",
@@ -54,6 +57,9 @@ export default function NewDomainPage() {
       return;
     }
     setFieldErrors({});
+    // GAP2-DOMAINS-NEW-07: no registration backend yet (see ./availability);
+    // never issue the doomed fetch while it is unavailable.
+    if (!DOMAIN_REGISTRATION_AVAILABLE) return;
     setBusy(true);
     setError(null);
     try {
@@ -102,6 +108,27 @@ export default function NewDomainPage() {
           }}
         >
           {error}
+        </div>
+      )}
+
+      {/* GAP2-DOMAINS-NEW-07: honest "not available" notice while there is no
+          `domains` backend (see ./availability) -- same treatment as the
+          /domains index -- instead of a live-looking submit that always 404s. */}
+      {!DOMAIN_REGISTRATION_AVAILABLE && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            background: "color-mix(in srgb, var(--warn) 12%, transparent)",
+            color: "var(--warn)",
+            border: "1px solid color-mix(in srgb, var(--warn) 35%, transparent)",
+            borderRadius: 8,
+            padding: "10px 14px",
+            marginBottom: 16,
+            fontSize: 13,
+          }}
+        >
+          {t("unavailableNotice")}
         </div>
       )}
 
@@ -213,8 +240,13 @@ export default function NewDomainPage() {
             <Button type="button" variant="secondary" onClick={() => router.back()}>
               Cancel
             </Button>
-            <Button type="submit" loading={busy}>
-              {busy ? "Registering…" : "Register Domain"}
+            <Button
+              type="submit"
+              loading={busy}
+              disabled={!DOMAIN_REGISTRATION_AVAILABLE}
+              title={DOMAIN_REGISTRATION_AVAILABLE ? undefined : t("unavailableTitle")}
+            >
+              {!DOMAIN_REGISTRATION_AVAILABLE ? t("registerUnavailable") : busy ? t("registering") : t("register")}
             </Button>
           </div>
         </form>

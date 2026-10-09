@@ -21,7 +21,7 @@ export default async function Page({ params }: { params: { id: string } }) {
 
   const field = (label: string, value: React.ReactNode) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 180 }}>
-      <span className="lbl" style={{ color: "#667085", fontSize: 12 }}>{label}</span>
+      <span className="lbl" style={{ color: "var(--mut)", fontSize: 12 }}>{label}</span>
       <span>{value}</span>
     </div>
   );
@@ -44,7 +44,7 @@ export default async function Page({ params }: { params: { id: string } }) {
               <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                 <UserRef id={c.approvedBy} />
                 {c.approvedBy === c.requestedBy && (
-                  <span role="alert" style={{ color: "#b42318", fontSize: 12 }}>
+                  <span role="alert" style={{ color: "var(--bad)", fontSize: 12 }}>
                     ⚠️ Same person as requester — maker-checker not satisfied
                   </span>
                 )}
@@ -56,26 +56,26 @@ export default async function Page({ params }: { params: { id: string } }) {
             ? `${formatIndianDateTime(c.windowStart)} → ${formatIndianDateTime(c.windowEnd)}`
             : "Not scheduled")}
         </div>
-        <div className="pad" style={{ borderTop: "1px solid #eef0f3" }}>
+        <div className="pad" style={{ borderTop: "1px solid var(--line)" }}>
           {field("Description", <span style={{ whiteSpace: "pre-wrap" }}>{c.description}</span>)}
         </div>
-        <div className="pad" style={{ borderTop: "1px solid #eef0f3" }}>
+        <div className="pad" style={{ borderTop: "1px solid var(--line)" }}>
           {field("Rollback plan", c.rollbackPlan
             ? <span style={{ whiteSpace: "pre-wrap" }}>{c.rollbackPlan}</span>
-            : <span style={{ color: "#b42318" }}>Not captured — required before CAB approval</span>)}
+            : <span style={{ color: "var(--bad)" }}>Not captured — required before CAB approval</span>)}
         </div>
         {c.rejectedReason && (
-          <div className="pad" style={{ borderTop: "1px solid #eef0f3" }}>
-            {field("Rejection reason", <span style={{ color: "#b42318" }}>{c.rejectedReason}</span>)}
+          <div className="pad" style={{ borderTop: "1px solid var(--line)" }}>
+            {field("Rejection reason", <span style={{ color: "var(--bad)" }}>{c.rejectedReason}</span>)}
           </div>
         )}
         {c.pirOutcome && (
-          <div className="pad" style={{ borderTop: "1px solid #eef0f3" }}>
+          <div className="pad" style={{ borderTop: "1px solid var(--line)" }}>
             {field("Post-implementation review", `${c.pirOutcome.replace(/_/g, " ")} — ${c.pirNotes ?? ""}`)}
           </div>
         )}
         {c.releaseNotes && (
-          <div className="pad" style={{ borderTop: "1px solid #eef0f3" }}>
+          <div className="pad" style={{ borderTop: "1px solid var(--line)" }}>
             {field("Release notes", <span style={{ whiteSpace: "pre-wrap" }}>{c.releaseNotes}</span>)}
           </div>
         )}

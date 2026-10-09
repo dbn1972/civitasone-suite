@@ -64,6 +64,17 @@ function mapNba(payload: z.infer<ReturnType<typeof listEnvelope<typeof predictiv
   }));
 }
 
+/**
+ * GAP2-RECOMMENDATIONS-NBA-04: the Subject column rendered the raw opaque
+ * `subjectId` UUID verbatim, reading like a human-meaningful name. There is no
+ * cross-service name-resolution available here (subjectType varies and this is
+ * an internal ML/analytics screen), so present a full UUID as an
+ * explicitly-labelled short reference ("#ab12cd34") instead of a 36-char
+ * string. The full id is kept for a tooltip. Values that are NOT full UUIDs
+ * (already-short refs like "account-9") are returned unchanged.
+ */
+export { formatSubjectRef } from "./_format";
+
 export const getRecNba = (): Promise<LoaderResult<NbaScoreRow[]>> =>
   fetchJson<z.infer<ReturnType<typeof listEnvelope<typeof predictiveItem>>>, NbaScoreRow[]>(
     "/api/v1/recommendations/predictive",

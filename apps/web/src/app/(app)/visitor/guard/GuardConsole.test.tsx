@@ -177,6 +177,18 @@ describe("GuardConsole", () => {
     expect(screen.getByText("98XXXXX210")).toBeInTheDocument();
   });
 
+  it("shows a server-masked visitor phone verbatim (last 4 digits kept for verification)", async () => {
+    const req = {
+      id: "vr-1", status: "approved" as const, purpose: "Meeting", scheduledAt: new Date().toISOString(),
+      visitorName: "Priya Singh", visitorPhone: "*********0001", visitorEmail: null, hostEmployeeId: "emp-1",
+      locationId: "loc-1", passType: "single", visitorCategory: "standard", permittedAreas: [],
+      rejectionReason: null, trackingRef: null, createdAt: null,
+    };
+    render(<GuardConsole locations={[location]} expectedToday={[req]} expectedTodaySource="api" />);
+    await waitFor(() => expect(fetchRosterMock).toHaveBeenCalled());
+    expect(screen.getByText("*********0001")).toBeInTheDocument();
+  });
+
   // GAP-VISITOR-GUARD-05: Expected today is scoped to the selected location.
   it("lists only the selected location's expected visitors", async () => {
     const mk = (id: string, locationId: string, name: string) => ({

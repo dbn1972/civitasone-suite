@@ -1,7 +1,10 @@
 import { describe, it, expect, vi, beforeEach, type MockInstance } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const pushMock = vi.fn();
 const refreshMock = vi.fn();
@@ -10,7 +13,21 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock, refresh: refreshMock, back: backMock, replace: vi.fn() }),
 }));
 
+// The registration backend is absent in production (./availability = false).
+// The original submit-path coverage runs with the flag ON so the kept
+// POST / error / route-to-/domains behaviour stays tested; the "unavailable"
+// block below flips it OFF to cover the honest not-available state.
+const flags = vi.hoisted(() => ({ available: true }));
+vi.mock("./availability", () => ({
+  get DOMAIN_REGISTRATION_AVAILABLE() { return flags.available; },
+}));
+
 import NewDomainPage from "./page";
+import { domainSchema } from "../schema";
+
+function render(ui: ReactElement) {
+  return rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+}
 
 const SOURCE = readFileSync(join(__dirname, "page.tsx"), "utf8");
 
@@ -27,6 +44,7 @@ function fillValidForm() {
 describe("NewDomainPage", () => {
   let spy: MockInstance<typeof fetch>;
   beforeEach(() => {
+    flags.available = true;
     vi.restoreAllMocks();
     pushMock.mockClear();
     refreshMock.mockClear();
@@ -153,5 +171,61 @@ describe("NewDomainPage", () => {
   it("shows a DPDP purpose/consent notice for the contact data", () => {
     render(<NewDomainPage />);
     expect(screen.getByText(/collected only to reach the domain owner/i)).toBeInTheDocument();
+  });
+});
+
+// GAP2-DOMAINS-NEW-07: with no registration backend the form is honest about it
+// and never issues the doomed POST, while field validation still works.
+describe("NewDomainPage (registration backend unavailable)", () => {
+  let spy: MockInstance<typeof fetch>;
+  beforeEach(() => {
+    flags.available = false;
+    vi.restoreAllMocks();
+    pushMock.mockClear();
+    spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 201 }));
+  });
+
+  function submitForm() {
+    fireEvent.submit(screen.getByRole("button", { name: /register/i }).closest("form")!);
+  }
+
+  it("shows a not-available notice and disables the Register submit", () => {
+    render(<NewDomainPage />);
+    expect(screen.getByText(/not yet connected to a backend service, so this form cannot be submitted/i)).toBeInTheDocument();
+    expect((screen.getByRole("button", { name: /register/i }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("never POSTs or routes away, even when the form is submitted directly", () => {
+    render(<NewDomainPage />);
+    fillValidForm();
+    submitForm();
+    expect(spy).not.toHaveBeenCalled();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it("still shows field-level validation errors", async () => {
+    render(<NewDomainPage />);
+    fill(/Domain Name/, "example.co.in");
+    submitForm();
+    expect(await screen.findByText(/valid \.gov\.in or \.nic\.in domain/i)).toBeInTheDocument();
+  });
+});
+
+// GAP-DOMAINS-NEW-06: the lower-case + trim of the submitted domain name lives
+// in the shared schema, so it is asserted here independent of the submit path.
+describe("domainSchema normalisation", () => {
+  it("lower-cases and trims a mixed-case domain name", () => {
+    const parsed = domainSchema.safeParse({
+      domainName: "  Example.GOV.in ",
+      organisation: "Ministry of X",
+      contactEmail: "webmaster@example.gov.in",
+      contactPhone: "",
+      department: "",
+      state: "",
+      domainType: "gov.in",
+      notes: "",
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.domainName).toBe("example.gov.in");
   });
 });

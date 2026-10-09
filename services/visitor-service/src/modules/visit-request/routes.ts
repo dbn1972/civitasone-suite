@@ -200,7 +200,20 @@ export async function visitRequestRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
     const query = listVisitRequestsQuery.parse(req.query);
-    const rows = await repo.listVisitRequests(ctx.tenantId, query, { actorId: ctx.actorId, correlationId: ctx.correlationId });
+    // SECURITY FIX (GAP2-VISITOR-VISIT-REQUESTS-01, PII over-exposure on list):
+    // READ_ROLES includes the broadly-held base "employee" role so any host can
+    // see the requests they host, but the LIST read was previously unscoped —
+    // a plain employee could enumerate every visitor's name + phone + email for
+    // every host in the tenant. Mirror assertOwnsRequest's elevated-role check:
+    // callers lacking ELEVATED_APPROVAL_ROLES are forced to their own hosted
+    // requests (filter.hostEmployeeId = ctx.actorId), and the list projection
+    // (repo.listVisitRequests) returns a reduced view WITHOUT raw
+    // visitorPhone/visitorEmail. Full contact detail is only returned by the
+    // owner/elevated detail read (GET …/:id), which already logs PII access.
+    const scopedFilter = hasAnyRole(ctx, ELEVATED_APPROVAL_ROLES)
+      ? query
+      : { ...query, hostEmployeeId: ctx.actorId };
+    const rows = await repo.listVisitRequests(ctx.tenantId, scopedFilter, { actorId: ctx.actorId, correlationId: ctx.correlationId });
     return reply.send({ data: rows });
   });
 

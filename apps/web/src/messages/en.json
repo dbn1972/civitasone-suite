@@ -2462,6 +2462,13 @@
     "revealReasonLabel": "Reason (recorded in the audit log)",
     "revealError": "Couldn't reveal the account number. Please try again."
   },
+  "domainsNew": {
+    "register": "Register Domain",
+    "registering": "Registering…",
+    "registerUnavailable": "Register Domain (unavailable)",
+    "unavailableTitle": "Domain registration is not yet connected to a backend service",
+    "unavailableNotice": "Domain registration is not yet connected to a backend service, so this form cannot be submitted yet. You can review the fields below; the Register button is disabled until the registration service is available."
+  },
   "dpc": {
     "title": "DPC — Departmental Promotion Committee",
     "subtitle": "Seniority list as of {asOf}. Minimum qualifying service: {years} years.",
