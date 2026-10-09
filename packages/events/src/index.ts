@@ -198,3 +198,35 @@ export {
   municipalDecisionNotificationEventType,
   type MunicipalFeeChallanPayload,
 } from "./municipal-cross.js";
+
+// ─── Event-contract foundation (FF-02 WP1, D-18) ─────────────────────────────
+// Also available as the "./contracts" subpath export. Re-exported here so a
+// caller that already imports from "@civitasone/events" can reach the contract
+// DSL, schema walker, mode resolver and PII-safe error formatter.
+export {
+  defineContract,
+  getContract,
+  listContracts,
+  resetContracts,
+  ContractDefinitionError,
+  walkSchema,
+  diffSchemas,
+  SchemaWalkerError,
+  resolveMode,
+  modeEnvFromProcess,
+  formatContractViolation,
+  violationRecordIsPiiSafe,
+  ContractViolationError,
+  type Contract,
+  type ContractKind,
+  type ContractVisibility,
+  type ContractDelivery,
+  type DefineContractInput,
+  type ValidationResult,
+  type SchemaNode,
+  type ContractMode,
+  type ContractModeEnv,
+  type ViolationCode,
+  type ViolationIssue,
+  type ViolationRecord,
+} from "./contracts/index.js";
