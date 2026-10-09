@@ -17,9 +17,36 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { resolveContext, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sqlClient } from "../../shared/db.js";
 import { withRawTenantGuc } from "@civitasone/db";
+
+/**
+ * GAP2-PLATFORM-HRMS-AIML-01 (HIGH, DPDP-sensitive biometric authz): the
+ * enroll/verify/status handlers below called only resolveContext() -- so any
+ * authenticated user of ANY role (bare "employee" included) could enroll or
+ * overwrite ANOTHER employee's stored face embedding (an attendance-fraud
+ * vector: whoever controls the embedding controls what the match pipeline
+ * treats as that employee's face), run a live match against anyone's stored
+ * face, or read anyone's enrollment status. Every other hrms module gates its
+ * routes with requireRole; this module never did.
+ *
+ * Fix: gate all three biometric routes to the HR/biometric-admin roles, fail
+ * closed for everyone else. Mirrors the sibling attendance face-verification
+ * module's HR_ROLES. Audit of the mutating routes is already covered by the
+ * app-level writeAuditLog onResponse hook (app.ts), which records actor,
+ * roles, method, path and status for every 2xx POST/PATCH/PUT/DELETE into
+ * audit.hr_action_log in the request's tenant scope.
+ *
+ * Decision (safest default, no product input available): biometric
+ * enroll/verify/status is HR/biometric-admin only -- there is no documented
+ * self-service "enroll my own face via this ML route" workflow here (the
+ * self-service profile-photo upload lives in the separate
+ * modules/face-verification route), so no self allowance is granted; this is
+ * restrictive-by-default and can be widened later if a self workflow is
+ * specified.
+ */
+const FACE_ROLES = ["hr_admin", "hr_officer", "super_admin", "biometric_admin"];
 
 /**
  * Audit: hrms.face_embeddings and hrms.face_verification_log are both FORCE
@@ -107,19 +134,33 @@ export async function faceVerificationMlRoutes(app: FastifyInstance): Promise<vo
   /** POST /v1/hrms/ai/face/enroll — enroll employee face (store embedding) */
   app.post("/v1/hrms/ai/face/enroll", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, FACE_ROLES);
     const body = enrollSchema.parse(req.body);
 
     // Extract embedding from the enrollment photo
     const embedding = await extractEmbedding(body.photoKey);
 
-    // Store embedding in employee profile
-    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
-      `INSERT INTO hrms.face_embeddings (id, tenant_id, employee_id, embedding, photo_key, enrolled_at)
-       VALUES ($1, $2, $3, $4, $5, NOW())
-       ON CONFLICT (tenant_id, employee_id) DO UPDATE SET
-        embedding = $4, photo_key = $5, enrolled_at = NOW()`,
-      [randomUUID(), ctx.tenantId, body.employeeId, JSON.stringify(embedding), body.photoKey],
-    ));
+    // Store embedding AND emit a biometric-mutation audit event in the SAME
+    // tenant-scoped transaction (GAP2-PLATFORM-HRMS-AIML-01): the audit row
+    // names the actor and the TARGET employee, which the app-level
+    // path-based audit hook cannot capture (the target is in the body, not
+    // the URL). Biometric enroll/overwrite is DPDP-sensitive and must leave a
+    // trail identifying whose face embedding was written and by whom.
+    await withTenantGuc(ctx.tenantId, async (pool) => {
+      await pool.query(
+        `INSERT INTO hrms.face_embeddings (id, tenant_id, employee_id, embedding, photo_key, enrolled_at)
+         VALUES ($1, $2, $3, $4, $5, NOW())
+         ON CONFLICT (tenant_id, employee_id) DO UPDATE SET
+          embedding = $4, photo_key = $5, enrolled_at = NOW()`,
+        [randomUUID(), ctx.tenantId, body.employeeId, JSON.stringify(embedding), body.photoKey],
+      );
+      await pool.query(
+        `INSERT INTO employee.hrms_audit_log
+           (id, tenant_id, actor_id, action, resource_type, resource_id, correlation_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [randomUUID(), ctx.tenantId, ctx.actorId, "face_enroll", "face_embedding", body.employeeId, ctx.correlationId],
+      );
+    });
 
     return reply.code(201).send({
       status: "enrolled",
@@ -132,6 +173,7 @@ export async function faceVerificationMlRoutes(app: FastifyInstance): Promise<vo
   /** POST /v1/hrms/ai/face/verify — verify selfie against enrolled face */
   app.post("/v1/hrms/ai/face/verify", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, FACE_ROLES);
     const body = verifySchema.parse(req.body);
 
     // Get enrolled embedding
@@ -158,12 +200,22 @@ export async function faceVerificationMlRoutes(app: FastifyInstance): Promise<vo
     else if (similarity >= 0.5) result = "LOW_CONFIDENCE";
     else result = "FAIL";
 
-    // Log verification attempt
-    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
-      `INSERT INTO hrms.face_verification_log (id, tenant_id, employee_id, selfie_key, similarity, result, verified_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
-      [randomUUID(), ctx.tenantId, body.employeeId, body.selfieKey, similarity, result],
-    ));
+    // Log verification attempt AND emit a biometric-mutation audit event in
+    // the SAME tenant-scoped transaction (GAP2-PLATFORM-HRMS-AIML-01), naming
+    // the actor and the TARGET employee whose face was verified.
+    await withTenantGuc(ctx.tenantId, async (pool) => {
+      await pool.query(
+        `INSERT INTO hrms.face_verification_log (id, tenant_id, employee_id, selfie_key, similarity, result, verified_at)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+        [randomUUID(), ctx.tenantId, body.employeeId, body.selfieKey, similarity, result],
+      );
+      await pool.query(
+        `INSERT INTO employee.hrms_audit_log
+           (id, tenant_id, actor_id, action, resource_type, resource_id, correlation_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [randomUUID(), ctx.tenantId, ctx.actorId, "face_verify", "face_verification", body.employeeId, ctx.correlationId],
+      );
+    });
 
     return reply.send({
       result,
@@ -177,6 +229,7 @@ export async function faceVerificationMlRoutes(app: FastifyInstance): Promise<vo
   /** GET /v1/hrms/ai/face/status/:employeeId — check enrollment status */
   app.get("/v1/hrms/ai/face/status/:employeeId", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, FACE_ROLES);
     const { employeeId } = req.params as { employeeId: string };
 
     const row = await withTenantGuc(ctx.tenantId, (pool) => pool.query(

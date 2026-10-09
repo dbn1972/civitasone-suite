@@ -69,7 +69,16 @@ function buildNextResponse(req: NextRequest): NextResponse {
   const csp = [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}'${ALLOW_UNSAFE_EVAL_DEV ? " 'unsafe-eval'" : ""}`,
+    // GAP2-SHELL-CSP-01 (review round 1): style-src / style-src-elem keep
+    // unsafe-inline. ~28 components render inline <style> ELEMENTS (loading
+    // shimmer keyframes, HR dashboard panels, print rules) that cannot carry
+    // the request nonce, so dropping it silently loses their styling in the
+    // browser. Inline style ATTRIBUTES are pinned explicitly via style-src-attr.
+    // Scripts remain strict (nonce-only). Tightening <style> needs a nonce
+    // threaded through every such component first.
     "style-src 'self' 'unsafe-inline'",
+    "style-src-elem 'self' 'unsafe-inline'",
+    "style-src-attr 'unsafe-inline'",
     "img-src 'self' data: blob:",
     `connect-src 'self'${KEYCLOAK_ORIGIN ? ` ${KEYCLOAK_ORIGIN}` : ''}`,
     "font-src 'self'",

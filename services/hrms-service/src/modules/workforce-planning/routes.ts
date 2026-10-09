@@ -77,6 +77,27 @@ function withTenantGuc<T>(
 
 export async function workforcePlanningRoutes(app: FastifyInstance): Promise<void> {
   // Current headcount by department, grade, employee type
+  //
+  // GAP2-HRMS-WORKFORCE-01: the three groupBy branches must count the SAME
+  // population so the web's "Total Headcount" (the sum of a tab's breakdown)
+  // is identical regardless of which tab is open. The department/grade
+  // branches used an INNER JOIN to hrms_departments/hrms_designations; because
+  // hrms_employees has no FK constraints, an employee whose department_id/
+  // designation_id points at a since-deleted master row (reachable after a
+  // permitted department delete -- the delete guard excludes EXITED_STATUSES,
+  // but headcount counts them) was silently DROPPED from those two tabs while
+  // the join-free `type` branch still counted it, so the three tabs reported
+  // three different totals for one workforce. Fixed to LEFT JOIN + a
+  // COALESCE('unassigned'/'ungraded') bucket so orphaned-FK employees are
+  // still counted (and visibly bucketed), making all three totals equal.
+  //
+  // Population definition (documented, consistent with the delete guard):
+  // headcount = non-separated employees (status != 'separated'), which
+  // deliberately INCLUDES retired/terminated. The department-delete guard
+  // (countActiveEmployeesByDept) excludes EXITED_STATUSES, so a department
+  // whose only remaining employees are retired/terminated can still be
+  // deleted; those employees then become COALESCE('unassigned') rows here
+  // rather than vanishing from two of the three tabs.
   app.get("/v1/hrms/workforce/headcount", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
@@ -88,19 +109,19 @@ export async function workforcePlanningRoutes(app: FastifyInstance): Promise<voi
     const rows = await withTenantGuc(ctx.tenantId, async (tx) => {
       if (query.groupBy === "department") {
         return tx`
-          SELECT d.name AS group_key, COUNT(*)::int AS count
+          SELECT COALESCE(d.name, 'unassigned') AS group_key, COUNT(*)::int AS count
           FROM employee.hrms_employees e
-          JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = e.tenant_id
+          LEFT JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = e.tenant_id
           WHERE e.tenant_id = ${ctx.tenantId} AND e.status != 'separated'
-          GROUP BY d.name ORDER BY count DESC
+          GROUP BY COALESCE(d.name, 'unassigned') ORDER BY count DESC
         `;
       } else if (query.groupBy === "grade") {
         return tx`
           SELECT COALESCE(dg.pay_grade, 'ungraded') AS group_key, COUNT(*)::int AS count
           FROM employee.hrms_employees e
-          JOIN employee.hrms_designations dg ON dg.id = e.designation_id AND dg.tenant_id = e.tenant_id
+          LEFT JOIN employee.hrms_designations dg ON dg.id = e.designation_id AND dg.tenant_id = e.tenant_id
           WHERE e.tenant_id = ${ctx.tenantId} AND e.status != 'separated'
-          GROUP BY dg.pay_grade ORDER BY count DESC
+          GROUP BY COALESCE(dg.pay_grade, 'ungraded') ORDER BY count DESC
         `;
       } else {
         return tx`

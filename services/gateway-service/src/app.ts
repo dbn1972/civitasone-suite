@@ -263,6 +263,59 @@ async function proxyHandler(
     delete (headers as Record<string, string | undefined>)[h];
   }
 
+  // GAP2-SHELL-PROXY-01: authoritatively re-derive the tenant/actor identity headers
+  // from a SERVER-VERIFIED source here, unconditionally, rather than relying on
+  // jwtEdgeVerify to have overwritten them. jwtEdgeVerify only reaches its
+  // x-tenant-id/x-actor-id overwrite on the happy "verify" path: it returns early
+  // when GATEWAY_JWT_EDGE_VERIFY === "off", and on a token-verification FAILURE under
+  // "audit" mode. In both of those first-class, runtime-togglable modes the inbound
+  // x-tenant-id / x-actor-id (both members of FORWARD_HEADERS) were copied verbatim
+  // onto the outgoing request above — so an authenticated user could set
+  // x-tenant-id to a victim tenant and have it trusted downstream (createTenantTxHook
+  // sources the RLS GUC straight from that header → cross-tenant RLS bypass).
+  //
+  // Trust order, each source verified before it is used — identical to
+  // verifiedTenantRateLimitKey's reasoning:
+  //   1. req.jwtPayload — set by jwtEdgeVerify ONLY from a cryptographically verified
+  //      token (never in "off" mode, never on a failed verify). Its tid/sub are the
+  //      authoritative tenant/actor.
+  //   2. req.apiKeyAuthenticated — a server-assigned boolean (apiKeyPreHandler sets it
+  //      only after resolving the key against identity-service and OVERWRITING
+  //      x-tenant-id/x-actor-id with the verified record's values). When set, the
+  //      header values already on the request are server-verified, so keep them.
+  //   3. Otherwise there is NO verified identity for this request (off mode with no/any
+  //      token, audit mode after a failed verify, or an un-authed non-public route that
+  //      slipped a Bearer header). Fail closed: DELETE both headers so FORCE RLS denies
+  //      downstream rather than trusting a client-supplied value.
+  //
+  // Public-prefix routes are exempt: PUBLIC_PREFIXES (e.g. /api/v1/careers, the public
+  // applicant-chooses-tenant portal) deliberately let an anonymous caller name the
+  // tenant, and jwtEdgeVerify never touches their headers. Leaving those untouched here
+  // preserves that documented behaviour (see GAP2-SHELL-CAREERS-01) without reopening the
+  // authenticated-route hole above.
+  if (!isPublic) {
+    const jwtPayload = (
+      req as FastifyRequest & { jwtPayload?: CivitasJwtPayload }
+    ).jwtPayload;
+    const apiKeyAuthenticated = (
+      req as FastifyRequest & { apiKeyAuthenticated?: boolean }
+    ).apiKeyAuthenticated;
+
+    if (jwtPayload?.tid) {
+      headers["x-tenant-id"] = jwtPayload.tid;
+    } else if (!apiKeyAuthenticated) {
+      // No verified tenant from either path → never forward a client-supplied value.
+      delete (headers as Record<string, string | undefined>)["x-tenant-id"];
+    }
+    // (api-key path: x-tenant-id already equals the verified record's tenantId.)
+
+    if (jwtPayload?.sub) {
+      headers["x-actor-id"] = jwtPayload.sub;
+    } else if (!apiKeyAuthenticated) {
+      delete (headers as Record<string, string | undefined>)["x-actor-id"];
+    }
+  }
+
   // Inject gateway-identity headers AFTER stripping so a client cannot forge them.
   // x-gateway-request is in STRIP_HEADERS above — any inbound value is already discarded.
   //
