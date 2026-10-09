@@ -34,7 +34,19 @@ function wire(q: Queue): Queue {
   q.subscribe = ((t: string, h: Handler) => raw(t, withTenantConsumer(h) as Handler)) as typeof q.subscribe;
   return q;
 }
-async function drain(q: MemoryQueue) { await new Promise<void>((r) => setTimeout(r, 400)); await q.stop(); }
+// Await actual handler completion (MemoryQueue.drain settles once every handler for every
+// published message has run), not a wall-clock guess. A fixed sleep raced the handler's DB
+// transaction: under load the test read the row before the commit and saw "pending".
+async function drain(q: MemoryQueue) {
+  const DRAIN_TIMEOUT_MS = 10_000;
+  let timedOut = false;
+  await Promise.race([
+    q.drain(),
+    new Promise<void>((resolve) => setTimeout(() => { timedOut = true; resolve(); }, DRAIN_TIMEOUT_MS)),
+  ]);
+  expect(timedOut, `queue did not drain within ${DRAIN_TIMEOUT_MS}ms`).toBe(false);
+  await q.stop();
+}
 async function wipe() {
   await runWithTenant(TENANT, () => db.transaction((tx) =>
     tx.delete(procurementGemIntegrationRefs).where(eq(procurementGemIntegrationRefs.tenantId, TENANT))));
