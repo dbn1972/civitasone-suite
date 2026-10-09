@@ -30,3 +30,16 @@ export async function listJobs(
     };
   });
 }
+
+/**
+ * GAP2-REPORTS-PAGINATION-01: the true tenant-scoped job count for meta.total.
+ * Cached under a distinct key so it does not collide with the paginated list.
+ */
+export async function countJobs(tenantId: string): Promise<number> {
+  const n = await cache.getOrLoad(
+    cache.makeKey(tenantId, RESOURCE, "count"),
+    () => repo.countByTenant(tenantId),
+    60,
+  );
+  return n ?? 0;
+}

@@ -16,34 +16,37 @@ import {
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
-
-const ROLES = ["analytics_user", "analytics_admin", "super_admin"];
+// GAP2-ANALYTICS-ROLES-01: READ_ROLES is the canonical analytics reader set
+// shared with kpi/exports/dashboards/metrics/stream so an analytics_user and
+// an analytics_viewer behave identically on every analytics read. WRITE_ROLES
+// (run a query / schedule a query — both persist rows) stays narrower.
+import { ANALYTICS_READ_ROLES as READ_ROLES, ANALYTICS_WRITE_ROLES as WRITE_ROLES } from "../../shared/roles.js";
 
 export async function queryRoutes(app: FastifyInstance): Promise<void> {
   // Discovery: the whitelisted catalog the UI builds queries from.
   app.get("/v1/analytics/catalog", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, READ_ROLES);
     sendValidated(reply, catalogSchema, catalog());
   });
 
   app.post("/v1/analytics/queries/run", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, WRITE_ROLES);
     const body = runQueryBody.parse(req.body);
     sendAccepted(reply, acceptedResponseSchema, await commands.runQuery(ctx, body));
   });
 
   app.get("/v1/analytics/queries", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, READ_ROLES);
     const q = listQuerySchema.parse(req.query);
     sendValidated(reply, queryRunsListSchema, await queries.listQueryRuns(ctx.tenantId, q.limit, q.offset));
   });
 
   app.get("/v1/analytics/queries/:id", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, READ_ROLES);
     const { id } = idParam.parse(req.params);
     const run = await queries.getQueryRun(ctx.tenantId, id);
     if (!run) throw new HttpError(404, "NOT_FOUND", "query run not found");
@@ -52,21 +55,21 @@ export async function queryRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/analytics/scheduled", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, WRITE_ROLES);
     const body = scheduleQueryBody.parse(req.body);
     sendAccepted(reply, acceptedResponseSchema, await commands.scheduleQuery(ctx, body));
   });
 
   app.get("/v1/analytics/scheduled", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, READ_ROLES);
     const q = listQuerySchema.parse(req.query);
     sendValidated(reply, scheduledListSchema, await queries.listScheduled(ctx.tenantId, q.limit, q.offset));
   });
 
   app.get("/v1/analytics/exports", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, READ_ROLES);
     const q = listQuerySchema.parse(req.query);
     sendValidated(reply, exportsListSchema, await queries.listExports(ctx.tenantId, q.limit, q.offset));
   });

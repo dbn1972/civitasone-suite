@@ -145,6 +145,8 @@ vi.mock("@fastify/cors", () => ({ default: async () => {} }));
 vi.mock("../src/modules/jobs/repo.js", () => ({
   findById: async () => mockState.queryResult[0] ?? null,
   listByTenant: async () => mockState.queryResult,
+  // GAP2-REPORTS-PAGINATION-01: meta.total now comes from a count query.
+  countByTenant: async () => mockState.countResult,
   insert: async () => {},
   toView: (r: Record<string, unknown>) => r,
 }));
@@ -156,6 +158,8 @@ vi.mock("../src/modules/dashboard/repo.js", () => ({
 vi.mock("../src/modules/scheduled/repo.js", () => ({
   findById: async () => mockState.queryResult[0] ?? null,
   listByTenant: async () => mockState.queryResult,
+  // GAP2-REPORTS-PAGINATION-01: meta.total now comes from a count query.
+  countByTenant: async () => mockState.countResult,
   insert: async () => {},
 }));
 
@@ -252,6 +256,9 @@ const SEED_JOB = {
   rowCount: 100,
   requestedBy: ACTOR_ID,
   completedAt: new Date("2026-07-01"),
+  // GAP2-REPORTS-JOBS-01: the /report-jobs mapper now derives requestedAt from
+  // the job's real createdAt, so the seed must carry one.
+  createdAt: new Date("2026-06-30"),
   downloadUrl: "https://s3.example.com/report.pdf",
   version: 1,
 };

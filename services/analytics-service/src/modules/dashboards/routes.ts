@@ -15,9 +15,12 @@ import {
 } from "./validators.js";
 import * as queries from "./queries.js";
 import * as commands from "./commands.js";
-
-const READ_ROLES = ["analytics_user", "analytics_admin", "report_admin", "report_viewer", "super_admin", "tenant_admin"];
-const WRITE_ROLES = ["analytics_user", "analytics_admin", "report_admin", "super_admin", "tenant_admin"];
+// GAP2-ANALYTICS-ROLES-01: READ_ROLES is now the single canonical analytics
+// reader vocabulary (shared across kpi/exports/dashboards/queries/metrics/
+// stream) so an analytics_user and an analytics_viewer get the SAME answer on
+// every analytics read route. WRITE_ROLES stays narrower (a read-only viewer
+// must not create/edit dashboards).
+import { ANALYTICS_READ_ROLES as READ_ROLES, ANALYTICS_WRITE_ROLES as WRITE_ROLES } from "../../shared/roles.js";
 
 // SEC-013: EMBED_SECRET used to fall back unconditionally to a hardcoded,
 // source-visible literal (the same value ecosystem.config.js uses as

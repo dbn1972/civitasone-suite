@@ -18,8 +18,13 @@
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole } from "../../shared/context.js";
 import { EventEmitter } from "node:events";
+// GAP2-ANALYTICS-ROLES-01: the SSE stream admits the canonical analytics
+// reader vocabulary (so analytics_user AND analytics_viewer connect), plus
+// crm_admin which the stream historically allowed (CRM dashboards consume the
+// live feed).
+import { ANALYTICS_READ_ROLES } from "../../shared/roles.js";
 
-const ANALYTICS_ROLES = ["analytics_user", "analytics_admin", "crm_admin", "super_admin", "tenant_admin"];
+const ANALYTICS_ROLES = [...ANALYTICS_READ_ROLES, "crm_admin"];
 
 /**
  * In-process event bus for dashboard updates. In production this would be

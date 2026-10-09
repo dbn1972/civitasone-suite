@@ -1,7 +1,7 @@
 /**
  * scheduled repo — Drizzle queries against reports.scheduled_reports.
  */
-import { eq, and } from "drizzle-orm";
+import { eq, and, count } from "drizzle-orm";
 import { db, readScoped } from "../../shared/db.js";
 import {
   scheduledReports,
@@ -62,6 +62,21 @@ export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function insert(tx: Writer, row: ScheduledReportInsert): Promise<void> {
   await tx.insert(scheduledReports).values(row);
+}
+
+/**
+ * GAP2-REPORTS-PAGINATION-01: tenant-scoped total of ENABLED scheduled
+ * reports — the same predicate listByTenant uses — so meta.total matches the
+ * rows actually listed rather than the capped page length.
+ */
+export async function countByTenant(tenantId: string): Promise<number> {
+  const rows = await readScoped(tenantId, (tx) =>
+    tx
+      .select({ value: count() })
+      .from(scheduledReports)
+      .where(and(eq(scheduledReports.tenantId, tenantId), eq(scheduledReports.enabled, true))),
+  );
+  return Number(rows[0]?.value ?? 0);
 }
 
 export async function update(

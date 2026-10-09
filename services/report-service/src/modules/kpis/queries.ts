@@ -49,7 +49,15 @@ export async function listDashboardItems(tenantId: string, limit = 10) {
     module: k.module,
     value: k.currentValue,
     unit: k.unit,
-    changePct: k.achievementPct >= 100 ? 5 : -3,
+    // GAP2-REPORTS-DASHBOARD-01: the KPI row carries no prior-period value
+    // (reports.kpis has no previous_value column), so there is NO honest
+    // period-over-period delta to report. The old `achievementPct >= 100 ? 5
+    // : -3` fabricated a confident +5/-3 that had no relation to any actual
+    // movement. `changePct` is therefore omitted entirely; the web already
+    // handles `changePct === undefined` by rendering "Trending down vs
+    // previous period" instead of a bare invented percentage. The trend
+    // direction below is a real stored signal (reports.kpis.trend) and still
+    // drives the up/down arrow.
     changeDirection: (k.trend === "up" ? "up" : k.trend === "down" ? "down" : "neutral") as "up" | "down" | "neutral",
   }));
 }

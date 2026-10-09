@@ -17,8 +17,11 @@ import { createExport } from "./commands.js";
 import { getExportJob } from "./queries.js";
 import { getQueryRun } from "../queries/queries.js";
 import type { ExportFormat } from "./domain.js";
-
-const EXPORT_ROLES = ["analytics_viewer", "analytics_admin", "tenant_admin", "super_admin"];
+// GAP2-ANALYTICS-ROLES-01: exports are a read-ish surface (download a query's
+// result); gate on the same canonical reader vocabulary as every other
+// analytics read route. Previously this used a bare ["analytics_viewer", ...]
+// array that excluded "analytics_user".
+import { ANALYTICS_READ_ROLES as EXPORT_ROLES } from "../../shared/roles.js";
 
 export async function exportRoutes(app: FastifyInstance): Promise<void> {
   /**

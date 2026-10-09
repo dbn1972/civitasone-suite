@@ -36,6 +36,7 @@ export type JobView = {
   rowCount: number | null;
   requestedBy: string | null;
   completedAt: Date | null;
+  createdAt: Date;
   downloadUrl: string | null;
   version: number;
 };

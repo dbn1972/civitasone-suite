@@ -21,3 +21,16 @@ export async function listScheduledReports(
     return { data: rows };
   });
 }
+
+/**
+ * GAP2-REPORTS-PAGINATION-01: the true tenant-scoped count of enabled
+ * scheduled reports for meta.total.
+ */
+export async function countScheduledReports(tenantId: string): Promise<number> {
+  const n = await cache.getOrLoad(
+    cache.makeKey(tenantId, RESOURCE, "count"),
+    () => repo.countByTenant(tenantId),
+    60,
+  );
+  return n ?? 0;
+}

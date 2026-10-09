@@ -11,6 +11,16 @@ function isHealthy(status: string): boolean {
   return status.trim().toLowerCase() === "healthy";
 }
 
+// GAP2-ANALYTICS-DATA-WAREHOUSE-01: a row whose status is unknown ("—"/empty)
+// carries NO real health signal, so it must count as neither Healthy nor
+// Attention. The backend no longer stamps a blanket "Healthy" (which made
+// Attention structurally always 0); it now returns "—" when no quality signal
+// exists. We only classify rows that report a concrete status.
+function hasHealthSignal(status: string): boolean {
+  const s = status.trim().toLowerCase();
+  return s !== "" && s !== "—" && s !== "-" && s !== "unknown";
+}
+
 export default async function DataWarehousePage() {
   const result = await getAnalyticsDataWarehouse();
   const { data: rows, source } = result;
@@ -21,8 +31,13 @@ export default async function DataWarehousePage() {
   // GAP-ANALYTICS-DATA-WAREHOUSE-01: parse strictly; show "—" if any row's
   // count is unreadable rather than a misleadingly-low fabricated total.
   const recordTotal = errored ? null : sumRecordCounts(rows.map((r) => r.records));
-  const healthy = errored ? null : rows.filter((r) => isHealthy(r.status)).length;
-  const attention = errored ? null : rows.length - (healthy ?? 0);
+  // GAP2-ANALYTICS-DATA-WAREHOUSE-01: classify only rows that report a real
+  // status. When no row carries a health signal (the current backend state),
+  // both counts render "—" rather than a misleading all-Healthy or
+  // all-Attention tally.
+  const classified = errored ? [] : rows.filter((r) => hasHealthSignal(r.status));
+  const healthy = errored || classified.length === 0 ? null : classified.filter((r) => isHealthy(r.status)).length;
+  const attention = errored || classified.length === 0 ? null : classified.length - (healthy ?? 0);
 
   const totalRecordsDisplay =
     recordTotal === null || recordTotal.partial
