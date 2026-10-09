@@ -6,13 +6,13 @@ import {
   ConfirmDialog,
   EmptyState,
   ErrorState,
-  Masked,
   RefreshErrorState,
   StatCard,
   StatGrid,
   StatusPill,
 } from "@/app/_components/ds";
 import { fmtDateTime, fmtTime } from "../_data/format";
+import { VisitorPhone } from "../_data/VisitorPhone";
 import type { VisitRequest } from "../_data/types";
 import { approveVisitRequest, fetchVisitRequests, rejectVisitRequest } from "../_data/client";
 
@@ -165,7 +165,7 @@ export function HostPortal({ pending, pendingSource, expectedToday, expectedToda
                     <div style={{ fontWeight: 700, fontSize: 15 }}>{r.visitorName}</div>
                     {/* GAP-VISITOR-HOST-02 (DPDP): mask the visitor phone. */}
                     <div style={{ fontSize: 12.5, color: "var(--ink2)" }}>
-                      <Masked kind="phone" value={r.visitorPhone} ariaLabel="Visitor phone (masked)" />
+                      <VisitorPhone value={r.visitorPhone} ariaLabel="Visitor phone (masked)" />
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 6, alignItems: "flex-start", flexWrap: "wrap" }}>

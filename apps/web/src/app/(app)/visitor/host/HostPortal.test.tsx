@@ -145,6 +145,13 @@ describe("HostPortal", () => {
     expect(screen.getByText("98XXXXX210")).toBeInTheDocument();
   });
 
+  // The list API now returns the phone already masked server-side; it must be
+  // shown as sent (last 4 digits), not re-masked down to placeholders.
+  it("shows a server-masked visitor phone verbatim in the approval card", () => {
+    render(<HostPortal pending={[{ ...pendingRequest, visitorPhone: "*********0001" }]} pendingSource="api" expectedToday={[]} expectedTodaySource="api" />);
+    expect(screen.getByText("*********0001")).toBeInTheDocument();
+  });
+
   // GAP-VISITOR-HOST-01: Approve/Reject are offered only on the signed-in
   // host's own requests (defence-in-depth over the server's assertOwnsRequest).
   it("hides Approve/Reject on a request raised for another host", () => {

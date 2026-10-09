@@ -116,6 +116,13 @@ describe("mapRateRows / isRateInForce — GAP-CATALOGUE-RATES-01 (MISSING-FIELDS
     expect(row.label).toBe("₹125.50");
   });
 
+  it("rejects a negative or non-integer serialized rateValue (strict minor-unit money)", () => {
+    for (const bad of ["-12550", "125.50", "1e3", " 12550", ""]) {
+      const row = mapRateRows([{ id: "r-bad", rateValue: bad, effectiveDate: "2026-01-01" }])![0]!;
+      expect(row.label).toBe("—");
+    }
+  });
+
   it("orders cards newest effective-from first, undated last", () => {
     const rows = mapRateRows([
       { id: "old", rateValueMinor: "100", effectiveFrom: "2025-01-01" },

@@ -9,8 +9,8 @@
  * FIXED (routes.ts + repo.ts):
  *   - callers lacking ELEVATED_APPROVAL_ROLES are forced to their own hosted
  *     requests (filter.hostEmployeeId = ctx.actorId), mirroring assertOwnsRequest;
- *   - the list projection omits raw visitorPhone / visitorEmail (and the
- *     encrypted identityDocRef) — full contact only on the owner/elevated
+ *   - the list projection omits visitorEmail (and the encrypted
+ *     identityDocRef) and returns visitorPhone only server-masked — full contact only on the owner/elevated
  *     detail read, which already logs PII access.
  *
  * Driven against the live app + DB: two approved requests, one hosted by E1
@@ -94,7 +94,7 @@ describe("GET /v1/visitor/visit-requests host-scoping + PII omission (FIXED)", (
     for (const r of rows) expect(r.hostEmployeeId).toBe(E1);
   });
 
-  it("does not return raw visitorPhone / visitorEmail in the list body", async () => {
+  it("returns visitorPhone only server-masked (last 4 digits) and never visitorEmail in the list body", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "GET", url: `/v1/visitor/visit-requests?status=approved`, headers: auth(E1, ["employee"]),
@@ -106,8 +106,10 @@ describe("GET /v1/visitor/visit-requests host-scoping + PII omission (FIXED)", (
     expect(res.body).not.toContain("+919000000001");
     expect(res.body).not.toContain("e1visitor@example.test");
     const rows = (res.json() as { data: Array<Record<string, unknown>> }).data;
+    expect(rows.length).toBeGreaterThan(0);
     for (const r of rows) {
-      expect(r.visitorPhone).toBeUndefined();
+      // Masked phone stays available for the host queue / guard console.
+      expect(r.visitorPhone).toBe("*********0001");
       expect(r.visitorEmail).toBeUndefined();
     }
   });

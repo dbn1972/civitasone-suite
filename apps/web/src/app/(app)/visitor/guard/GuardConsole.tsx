@@ -6,13 +6,13 @@ import {
   ConfirmDialog,
   EmptyState,
   ErrorState,
-  Masked,
   RefreshErrorState,
   StatCard,
   StatGrid,
   StatusPill,
 } from "@/app/_components/ds";
 import { fmtTime } from "../_data/format";
+import { VisitorPhone } from "../_data/VisitorPhone";
 import type { PassVerifyResult, RosterEntry, VisitRequest, VisitorLocation } from "../_data/types";
 import {
   fetchRoster,
@@ -343,7 +343,7 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
                           for every guard viewer; no reveal here (no audited
                           visitor-service reveal endpoint — HUMAN REVIEW). */}
                       <div style={{ fontSize: 12, color: "var(--ink2)" }}>
-                        <Masked kind="phone" value={v.visitorPhone} ariaLabel="Visitor phone (masked)" />
+                        <VisitorPhone value={v.visitorPhone} ariaLabel="Visitor phone (masked)" />
                       </div>
                     </td>
                     <td style={{ maxWidth: 260 }}>{v.purpose ?? "—"}</td>

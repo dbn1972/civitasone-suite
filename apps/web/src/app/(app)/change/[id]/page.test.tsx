@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { render, screen } from "@testing-library/react";
 import type { ChangeDetail, ChangeRequest } from "../_data/types";
 
@@ -53,8 +55,6 @@ describe("change detail page (GAP-CHANGE-DETAIL-03 / -04)", () => {
   });
 });
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 
 describe("change/[id] page — DS theme tokens, no hex literals (GAP2-CHANGE-DETAIL-02)", () => {
   it("contains no #rrggbb colour literal", () => {

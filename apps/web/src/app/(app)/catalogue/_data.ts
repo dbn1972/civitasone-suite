@@ -254,7 +254,7 @@ export function mapRateRows(payload: unknown): ModuleRowSummary[] | null {
     // `rateValue` is accepted ONLY in the shape the bigint column serialises to
     // (an integer string of minor units). A JS number such as 125.5 is a legacy
     // major-unit figure and must never be read as paise (shows "—" instead).
-    const serializedMinor = typeof r.rateValue === "string" && /^-?\d+$/.test(r.rateValue) ? r.rateValue : undefined;
+    const serializedMinor = typeof r.rateValue === "string" && /^\d+$/.test(r.rateValue) ? r.rateValue : undefined;
     const amountRaw = r.rateValueMinor ?? serializedMinor;
     const amount =
       typeof amountRaw === "bigint" || typeof amountRaw === "number" || typeof amountRaw === "string"
