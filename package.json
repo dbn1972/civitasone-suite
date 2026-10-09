@@ -87,7 +87,8 @@
       "compression": "^1.8.2",
       "basic-ftp": "^6.2.1",
       "tinypool": "^2.1.2",
-      "handlebars": ">=4.7.10"
+      "handlebars": ">=4.7.10",
+      "legacy-javascript": "0.0.1"
     }
   }
 }
