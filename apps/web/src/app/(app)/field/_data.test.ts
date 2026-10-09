@@ -1,9 +1,13 @@
 import { describe, it, expect } from "vitest";
+import { createTranslator } from "next-intl";
+import enMessages from "@/messages/en.json";
+import hiMessages from "@/messages/hi.json";
 import {
   mapTasks,
   mapRoutesDetailed,
   mapAgentRows,
   fieldSyncPullPath,
+  fieldSyncWindowNote,
   FIELD_SYNC_WINDOW_DAYS,
   FIELD_SYNC_LIMIT,
 } from "./_data";
@@ -69,5 +73,40 @@ describe("fieldSyncPullPath (GAP-FIELD-SYNC-01)", () => {
     expect(since.toISOString()).toBe(expected.toISOString());
     // within 8 days of "now" (sanity)
     expect(now.getTime() - since.getTime()).toBeLessThanOrEqual(8 * 24 * 60 * 60 * 1000);
+  });
+});
+
+describe("fieldSyncWindowNote (GAP2-FIELD-SYNC-WINDOW-01)", () => {
+  const tr = createTranslator({ locale: "en", messages: enMessages, namespace: "fieldSync" });
+  const t = (key: Parameters<typeof fieldSyncWindowNote>[1] extends (k: infer K, ...a: never[]) => string ? K : never, values: Record<string, string | number>) =>
+    tr(key, values);
+
+  it("states the cap and the server total when there are more pending changes than shown", () => {
+    const note = fieldSyncWindowNote({ shown: 100, total: 342, windowDays: FIELD_SYNC_WINDOW_DAYS, limit: FIELD_SYNC_LIMIT }, t);
+    expect(note).toContain("100 of 342");
+    expect(note).toContain(`last ${FIELD_SYNC_WINDOW_DAYS} days`);
+    expect(note).toMatch(/not shown/i);
+  });
+
+  it("warns the window may be partial when the page is full but no total was returned", () => {
+    const note = fieldSyncWindowNote({ shown: FIELD_SYNC_LIMIT, total: null, windowDays: FIELD_SYNC_WINDOW_DAYS, limit: FIELD_SYNC_LIMIT }, t);
+    expect(note).toContain(`first ${FIELD_SYNC_LIMIT} shown`);
+    expect(note).toMatch(/may be more/i);
+  });
+
+  it("states a plain count when the full pending set fits in the window", () => {
+    const note = fieldSyncWindowNote({ shown: 3, total: 3, windowDays: FIELD_SYNC_WINDOW_DAYS, limit: FIELD_SYNC_LIMIT }, t);
+    expect(note).toContain("3 shown");
+    expect(note).not.toMatch(/not shown|may be more/i);
+  });
+
+  it("renders the note in Hindi under the hi locale", () => {
+    const hiTr = createTranslator({ locale: "hi", messages: hiMessages, namespace: "fieldSync" });
+    const note = fieldSyncWindowNote(
+      { shown: 3, total: 3, windowDays: 7, limit: FIELD_SYNC_LIMIT },
+      (key, values) => hiTr(key, values),
+    );
+    expect(note).toContain("3 दिखाए गए");
+    expect(note).not.toMatch(/Showing/);
   });
 });

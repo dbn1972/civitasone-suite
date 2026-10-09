@@ -14857,5 +14857,57 @@
         "reports": { "label": "Reports", "desc": "Analytics and work register" }
       }
     }
+  },
+  "locationsOps": {
+    "backLabel": "Locations",
+    "infra": {
+      "pageTitle": "Locations — Infrastructure",
+      "pageSubtitle": "Infrastructure assets from location-service.",
+      "area": "infrastructure assets",
+      "cardTitle": "Infrastructure assets",
+      "emptyTitle": "No assets",
+      "emptyMessage": "No infrastructure assets to show yet.",
+      "filterPlaceholder": "Filter assets…",
+      "colName": "Name",
+      "colType": "Type",
+      "colCondition": "Condition",
+      "colStatus": "Status"
+    },
+    "geofences": {
+      "pageTitle": "Locations — Geofences",
+      "pageSubtitle": "Geofence definitions from location-service.",
+      "area": "geofences",
+      "cardTitle": "Geofences",
+      "emptyTitle": "No geofences",
+      "emptyMessage": "No geofence definitions to show yet.",
+      "filterPlaceholder": "Filter geofences…",
+      "colName": "Name",
+      "colType": "Type",
+      "colShape": "Shape",
+      "colRadius": "Radius",
+      "colStatus": "Status"
+    },
+    "jurisdictions": {
+      "pageTitle": "Locations — Jurisdictions",
+      "pageSubtitle": "Jurisdiction records from location-service.",
+      "area": "jurisdictions",
+      "cardTitle": "Jurisdictions",
+      "emptyTitle": "No jurisdictions",
+      "emptyMessage": "No jurisdiction records to show yet.",
+      "filterPlaceholder": "Filter jurisdictions…",
+      "colLevel": "Level",
+      "colOffice": "Office",
+      "colUnit": "Unit"
+    }
+  },
+  "fieldSync": {
+    "title": "Offline Sync",
+    "description": "Device sync changes pulled from the last {days} days.",
+    "backLabel": "Field Operations",
+    "errorArea": "sync changes",
+    "windowNoteBase": "Showing pending changes from the last {days} days",
+    "windowNotePartial": "{base}: {shown} of {total} total — older or additional changes beyond this window are not shown.",
+    "windowNoteCapped": "{base}: first {limit} shown — there may be more pending changes beyond this window.",
+    "windowNoteShown": "{base}: {shown} shown."
   }
 }

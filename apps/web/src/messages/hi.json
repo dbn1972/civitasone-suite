@@ -14354,5 +14354,57 @@
         "reports": { "label": "रिपोर्ट", "desc": "विश्लेषण और कार्य रजिस्टर" }
       }
     }
+  },
+  "locationsOps": {
+    "backLabel": "स्थान",
+    "infra": {
+      "pageTitle": "स्थान — बुनियादी ढांचा",
+      "pageSubtitle": "स्थान सेवा से बुनियादी ढांचा संपत्तियां।",
+      "area": "बुनियादी ढांचा संपत्तियां",
+      "cardTitle": "बुनियादी ढांचा संपत्तियां",
+      "emptyTitle": "कोई संपत्ति नहीं",
+      "emptyMessage": "दिखाने के लिए अभी कोई बुनियादी ढांचा संपत्ति नहीं है।",
+      "filterPlaceholder": "संपत्तियां फ़िल्टर करें…",
+      "colName": "नाम",
+      "colType": "प्रकार",
+      "colCondition": "स्थिति (कंडीशन)",
+      "colStatus": "स्थिति"
+    },
+    "geofences": {
+      "pageTitle": "स्थान — जियोफ़ेंस",
+      "pageSubtitle": "स्थान सेवा से जियोफ़ेंस परिभाषाएं।",
+      "area": "जियोफ़ेंस",
+      "cardTitle": "जियोफ़ेंस",
+      "emptyTitle": "कोई जियोफ़ेंस नहीं",
+      "emptyMessage": "दिखाने के लिए अभी कोई जियोफ़ेंस परिभाषा नहीं है।",
+      "filterPlaceholder": "जियोफ़ेंस फ़िल्टर करें…",
+      "colName": "नाम",
+      "colType": "प्रकार",
+      "colShape": "आकार",
+      "colRadius": "त्रिज्या",
+      "colStatus": "स्थिति"
+    },
+    "jurisdictions": {
+      "pageTitle": "स्थान — अधिकार क्षेत्र",
+      "pageSubtitle": "स्थान सेवा से अधिकार क्षेत्र के रिकॉर्ड।",
+      "area": "अधिकार क्षेत्र",
+      "cardTitle": "अधिकार क्षेत्र",
+      "emptyTitle": "कोई अधिकार क्षेत्र नहीं",
+      "emptyMessage": "दिखाने के लिए अभी कोई अधिकार क्षेत्र रिकॉर्ड नहीं है।",
+      "filterPlaceholder": "अधिकार क्षेत्र फ़िल्टर करें…",
+      "colLevel": "स्तर",
+      "colOffice": "कार्यालय",
+      "colUnit": "इकाई"
+    }
+  },
+  "fieldSync": {
+    "title": "ऑफ़लाइन सिंक",
+    "description": "पिछले {days} दिनों में डिवाइस से सिंक किए गए बदलाव।",
+    "backLabel": "फ़ील्ड संचालन",
+    "errorArea": "सिंक बदलाव",
+    "windowNoteBase": "पिछले {days} दिनों के लंबित बदलाव दिखाए जा रहे हैं",
+    "windowNotePartial": "{base}: कुल {total} में से {shown} — इस अवधि से पुराने या अतिरिक्त बदलाव नहीं दिखाए गए हैं।",
+    "windowNoteCapped": "{base}: पहले {limit} दिखाए गए — इस अवधि से परे और लंबित बदलाव हो सकते हैं।",
+    "windowNoteShown": "{base}: {shown} दिखाए गए।"
   }
 }

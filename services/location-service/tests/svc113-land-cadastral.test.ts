@@ -55,7 +55,8 @@ describePostGIS("SVC-113 land-records round-trip", () => {
     expect(list.statusCode).toBe(200);
     const rec = list.json().data.find((r: { surveyNo: string }) => r.surveyNo === surveyNo);
     expect(rec).toBeTruthy();
-    expect(rec.ownerName).toBe("Ram Kumar");
+    // GAP2-LOCATIONS-LANDRECORDS-PII-01: owner_name is masked by default.
+    expect(rec.ownerName).toBe("Ra***r");
     expect(rec.areaHectares).toBe(2.5);
   });
 
@@ -67,7 +68,8 @@ describePostGIS("SVC-113 land-records round-trip", () => {
     await drain();
     const one = await get(`/v1/locations/land-records/${rec.id}`, TENANT_A);
     expect(one.statusCode).toBe(200);
-    expect(one.json().data.ownerName).toBe("Sita Devi");
+    // Masked by default (GAP2-LOCATIONS-LANDRECORDS-PII-01); "Sita Devi" -> "Si***i".
+    expect(one.json().data.ownerName).toBe("Si***i");
     expect(one.json().data.mutationType).toBe("sale");
     expect(one.json().data.version).toBe(2);
   });

@@ -113,6 +113,64 @@ export const getFieldSync = (): Promise<LoaderResult<ModuleRowSummary[]>> =>
     mapResponse: mapRows,
   });
 
+/**
+ * GAP2-FIELD-SYNC-WINDOW-01: the sync pull is a bounded 7-day / limit-100
+ * window (GAP-FIELD-SYNC-01), but the generic ModuleListTable had no
+ * window/total affordance, so a device with >100 pending changes or changes
+ * older than the window silently showed a partial slice as if it were the
+ * whole pending set. This loader additionally captures the server-reported
+ * `meta.total` so the page can state the cap/window honestly ("pending changes
+ * in last 7 days: N shown; M total").
+ */
+export type FieldSyncPage = {
+  rows: ModuleRowSummary[];
+  /** Rows shown on this page (capped at FIELD_SYNC_LIMIT). */
+  shown: number;
+  /** Server-reported total pending changes in the window, when provided. */
+  total: number | null;
+  windowDays: number;
+  limit: number;
+};
+
+export const getFieldSyncWithMeta = (): Promise<LoaderResult<FieldSyncPage>> => {
+  const empty: FieldSyncPage = { rows: [], shown: 0, total: null, windowDays: FIELD_SYNC_WINDOW_DAYS, limit: FIELD_SYNC_LIMIT };
+  return fetchJson<unknown, FieldSyncPage>(fieldSyncPullPath(), empty, {
+    revalidateSeconds: 30,
+    telemetryKey: "field.sync.meta",
+    mapResponse: (payload: unknown): FieldSyncPage => {
+      const rows = mapRows(payload);
+      const total =
+        isRecord(payload) && isRecord(payload.meta) && typeof payload.meta.total === "number"
+          ? payload.meta.total
+          : null;
+      return { rows, shown: rows.length, total, windowDays: FIELD_SYNC_WINDOW_DAYS, limit: FIELD_SYNC_LIMIT };
+    },
+  });
+};
+
+/**
+ * GAP2-FIELD-SYNC-WINDOW-01: honest one-line summary of the sync window/cap.
+ * Pure + exported so a page and a test can share the exact copy.
+ */
+export type FieldSyncNoteTranslator = (
+  key: "windowNoteBase" | "windowNotePartial" | "windowNoteCapped" | "windowNoteShown",
+  values: Record<string, string | number>,
+) => string;
+
+export function fieldSyncWindowNote(
+  page: Pick<FieldSyncPage, "shown" | "total" | "windowDays" | "limit">,
+  t: FieldSyncNoteTranslator,
+): string {
+  const base = t("windowNoteBase", { days: page.windowDays });
+  if (page.total !== null && page.total > page.shown) {
+    return t("windowNotePartial", { base, shown: page.shown, total: page.total });
+  }
+  if (page.shown >= page.limit) {
+    return t("windowNoteCapped", { base, limit: page.limit });
+  }
+  return t("windowNoteShown", { base, shown: page.shown });
+}
+
 
 export type FieldVisitRow = {
   id: string;
