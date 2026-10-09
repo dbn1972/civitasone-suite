@@ -25,7 +25,7 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { resolveContext, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sqlPool as sqlClient, sqlClient as rawSqlClient } from "../../shared/db.js";
 import { withRawTenantGuc } from "@civitasone/db";
 
@@ -192,6 +192,13 @@ export async function nluChatbotRoutes(app: FastifyInstance): Promise<void> {
   /** POST /v1/hrms/ai/chat — intelligent HR chatbot with NLU */
   app.post("/v1/hrms/ai/chat", async (req, reply) => {
     const ctx = resolveContext(req);
+    // GAP2-PLATFORM-HRMS-AIML-02 (authz): the chat route called only
+    // resolveContext() with no requireRole, unlike every other hrms module.
+    // The assistant is a self-service tool for ordinary staff as well as HR,
+    // so gate it to the authenticated staff roles the service recognizes --
+    // rejecting unauthenticated/unknown-role callers and giving the route a
+    // recognized authz helper -- rather than leaving it open to any principal.
+    requireRole(ctx, ["hr_admin", "hr_officer", "super_admin", "manager", "officer", "employee"]);
     const body = chatSchema.parse(req.body);
 
     // Classify intent

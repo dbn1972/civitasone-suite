@@ -15,7 +15,19 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { resolveContext } from "../../shared/context.js";
+import { resolveContext, requireRole } from "../../shared/context.js";
+
+/**
+ * GAP2-PLATFORM-HRMS-AIML-02 (authz): the OCR routes below called only
+ * resolveContext() with no requireRole, unlike every other hrms module.
+ * OCR auto-fills expense / medical / travel claim data, so it is legitimately
+ * used by ordinary staff for their own claims as well as HR -- gate it to the
+ * authenticated staff roles the rest of the service recognizes (so an
+ * unauthenticated or unknown-role caller is rejected and a recognized authz
+ * helper is present on every mutating route), rather than leaving it open to
+ * every authenticated principal regardless of role.
+ */
+const OCR_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager", "officer", "employee"];
 
 const ocrRequestSchema = z.object({
   imageKey: z.string().min(1).max(512), // S3 key
@@ -99,6 +111,7 @@ export async function documentOcrRoutes(app: FastifyInstance): Promise<void> {
   /** POST /v1/hrms/ai/ocr/extract — extract text + structure from uploaded document */
   app.post("/v1/hrms/ai/ocr/extract", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, OCR_ROLES);
     const body = ocrRequestSchema.parse(req.body);
 
     const result = await performOcr(body.imageKey, body.documentType);
@@ -121,6 +134,7 @@ export async function documentOcrRoutes(app: FastifyInstance): Promise<void> {
   /** POST /v1/hrms/ai/ocr/batch — batch OCR for multiple documents */
   app.post("/v1/hrms/ai/ocr/batch", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, OCR_ROLES);
     const body = z.object({
       documents: z.array(ocrRequestSchema).min(1).max(10),
     }).parse(req.body);
