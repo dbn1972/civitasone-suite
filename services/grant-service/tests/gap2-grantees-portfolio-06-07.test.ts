@@ -20,6 +20,7 @@ import { grantBeneficiaries, grantBeneficiaryCounters } from "../src/modules/ben
 import { grantApplications } from "../src/modules/application/schema.js";
 import { grantInstallments, grantDisbursements } from "../src/modules/disbursement/schema.js";
 import { grantUcStatements } from "../src/modules/utilisation/schema.js";
+import { cache } from "../src/shared/infra.js";
 import { listGranteeSummaries } from "../src/modules/beneficiary/queries.js";
 
 const TENANT = "2a000000-aaaa-4000-8000-0000000000f6";
@@ -66,7 +67,7 @@ async function seed() {
   }));
 }
 
-beforeEach(async () => { await wipe(); await seed(); });
+beforeEach(async () => { await wipe(); await seed(); await cache.invalidate(cache.makeKey(TENANT, "grantees", "list:100")); });
 afterAll(async () => { await wipe(); await sqlClient.end(); });
 
 describe("GAP2-GRANTS-GRANTEES-06/07", () => {
@@ -92,5 +93,34 @@ describe("GAP2-GRANTS-GRANTEES-06/07", () => {
     // A no-grant grantee legitimately shows 0; the acceptance only forbids a
     // fabricated 0 for a grantee that ACTUALLY HAS grants (asserted above).
     expect(none.granteeCode).toBe("GR-00003");
+  });
+
+  it("does not fan out totalGrantsReceived across multiple installments and UC statements", async () => {
+    const BEN_FAN = "2a000000-9999-4000-8000-0000000000f6";
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(grantBeneficiaries).values({ id: BEN_FAN, tenantId: TENANT, name: "Fan Out", type: "institution", granteeCode: "GR-00004", createdBy: ACTOR, updatedBy: ACTOR });
+      const app = randomUUID();
+      await tx.insert(grantApplications).values({ id: app, tenantId: TENANT, grantNo: "G-F", schemeId: randomUUID(), beneficiaryId: BEN_FAN, purpose: "x", amountApprovedMinor: 900000n, currency: "INR", status: "approved", approvedBy: ACTOR, createdBy: ACTOR, updatedBy: ACTOR });
+      const inst1 = randomUUID();
+      const inst2 = randomUUID();
+      await tx.insert(grantInstallments).values([
+        { id: inst1, tenantId: TENANT, applicationId: app, installmentNo: 1, amountMinor: 250000n, currency: "INR", status: "disbursed", createdBy: ACTOR, updatedBy: ACTOR },
+        { id: inst2, tenantId: TENANT, applicationId: app, installmentNo: 2, amountMinor: 100000n, currency: "INR", status: "disbursed", createdBy: ACTOR, updatedBy: ACTOR },
+      ]);
+      await tx.insert(grantDisbursements).values([
+        { id: randomUUID(), tenantId: TENANT, installmentId: inst1, amountMinor: 250000n, currency: "INR", status: "completed", createdBy: ACTOR, updatedBy: ACTOR },
+        { id: randomUUID(), tenantId: TENANT, installmentId: inst2, amountMinor: 100000n, currency: "INR", status: "completed", createdBy: ACTOR, updatedBy: ACTOR },
+      ]);
+      await tx.insert(grantUcStatements).values([
+        { id: randomUUID(), tenantId: TENANT, applicationId: app, period: "2026-27", status: "submitted", validationStatus: "validated", createdBy: ACTOR, updatedBy: ACTOR },
+        { id: randomUUID(), tenantId: TENANT, applicationId: app, period: "2027-28", status: "submitted", validationStatus: "pending", createdBy: ACTOR, updatedBy: ACTOR },
+      ]);
+    }));
+    await cache.invalidate(cache.makeKey(TENANT, "grantees", "list:100"));
+    const list = await listGranteeSummaries(TENANT, 100);
+    const fan = list.find((g) => g.id === BEN_FAN)!;
+    expect(fan.totalGrantsReceived).toBe(350000); // 250000 + 100000, once each
+    expect(fan.activeGrants).toBe(1);
+    expect(fan.ucCompliancePct).toBe(50); // 1 validated / 2 due
   });
 });

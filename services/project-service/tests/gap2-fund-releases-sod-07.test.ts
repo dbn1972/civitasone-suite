@@ -126,4 +126,36 @@ describe("GAP2-PROJECTS-FUND-RELEASES-07 — fund release disburse SoD", () => {
     expect(disbursed).toBeTruthy();
     await q.stop();
   });
+
+  it("chained: create(A) -> approved -> disburse(B) twice → one messageId, single state change", async () => {
+    const rId = randomUUID(); const schemeId = randomUUID();
+    repoMock.findFundReleaseById.mockResolvedValue({ id: rId, createdBy: ACTOR_A, status: "approved" });
+    repoMock.findFundReleaseByIdTx.mockResolvedValue({ id: rId, schemeId, createdBy: ACTOR_A, status: "approved", amountMinor: 100n, version: 1, pfmsRef: null });
+    // The real queue dedupe is markProcessed(messageId): true first time, false after.
+    const seen = new Set<string>();
+    markProcessedMock.mockImplementation((async (_tx: unknown, id: string) => { if (seen.has(id)) return false; seen.add(id); return true; }) as never);
+    const q = new MemoryQueue(); registerSchemeConsumers(q); await q.start();
+    publish.mockImplementation((async (topic: string, msg: never) => { await q.publish(topic, msg); }) as never);
+    const ctx = { tenantId: TENANT, actorId: ACTOR_B, correlationId: "c", roles: [] };
+    await disburseFundRelease(ctx as never, schemeId, rId, disburseBody.parse({}));
+    await disburseFundRelease(ctx as never, schemeId, rId, disburseBody.parse({}));
+    await settle();
+    expect(publish).toHaveBeenCalledTimes(2);
+    const ids = publish.mock.calls.map((c) => (c[1] as { messageId: string }).messageId);
+    expect(ids[0]).toBe(ids[1]);
+    expect(repoMock.updateFundReleaseTx).toHaveBeenCalledTimes(1);
+    expect(enqueuedMessages.filter((m) => m.topic === EVENTS.fundReleaseDisbursed)).toHaveLength(1);
+    await q.stop();
+  });
+
+  it("an explicit x-idempotency-key drives the messageId", async () => {
+    const rId = randomUUID();
+    repoMock.findFundReleaseById.mockResolvedValue({ id: rId, createdBy: ACTOR_A, status: "approved" });
+    const a = { tenantId: TENANT, actorId: ACTOR_B, correlationId: "c", roles: [], idempotencyKey: "k1" };
+    const b = { ...a, idempotencyKey: "k2" };
+    await disburseFundRelease(a as never, randomUUID(), rId, disburseBody.parse({}));
+    await disburseFundRelease(b as never, randomUUID(), rId, disburseBody.parse({}));
+    const ids = publish.mock.calls.map((c) => (c[1] as { messageId: string }).messageId);
+    expect(ids[0]).not.toBe(ids[1]);
+  });
 });

@@ -39,6 +39,11 @@ CREATE POLICY tenant_isolation_policy ON beneficiary.grant_beneficiary_counters
 
 -- Backfill existing grantees with a stable code, numbered per tenant by
 -- registration order. Idempotent: only touches rows that have no code yet.
+-- Both tables are FORCE RLS and this runs outside any tenant GUC, so the table
+-- owner would see/modify zero rows. Lift FORCE for the backfill only, then restore.
+ALTER TABLE beneficiary.grant_beneficiaries NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE beneficiary.grant_beneficiary_counters NO FORCE ROW LEVEL SECURITY;
+
 WITH numbered AS (
   SELECT id,
          tenant_id,
@@ -59,6 +64,9 @@ FROM beneficiary.grant_beneficiaries
 GROUP BY tenant_id
 ON CONFLICT (tenant_id) DO UPDATE
   SET next_val = GREATEST(beneficiary.grant_beneficiary_counters.next_val, EXCLUDED.next_val);
+
+ALTER TABLE beneficiary.grant_beneficiaries FORCE ROW LEVEL SECURITY;
+ALTER TABLE beneficiary.grant_beneficiary_counters FORCE ROW LEVEL SECURITY;
 
 -- Unique per tenant (a code is only meaningful within its tenant).
 CREATE UNIQUE INDEX IF NOT EXISTS uq_grant_beneficiaries_tenant_code

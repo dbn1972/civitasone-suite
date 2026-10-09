@@ -134,17 +134,31 @@ export async function listGranteePortfolio(
     // approved applications per beneficiary + total disbursed (completed) + UC counts
     const rows = await (tx as typeof db).execute(sql`
       SELECT a.beneficiary_id AS beneficiary_id,
-             COUNT(DISTINCT CASE WHEN a.status = 'approved' THEN a.id END) AS active_grants,
-             COALESCE(SUM(CASE WHEN d.status = 'completed' THEN d.amount_minor ELSE 0 END), 0) AS total_received_minor,
-             COUNT(DISTINCT u.id) AS uc_due,
-             COUNT(DISTINCT CASE WHEN u.validation_status = 'validated' THEN u.id END) AS uc_validated
+             COUNT(*) FILTER (WHERE a.status = 'approved') AS active_grants,
+             COALESCE(SUM(dis.received_minor), 0) AS total_received_minor,
+             COALESCE(SUM(uc.uc_due), 0) AS uc_due,
+             COALESCE(SUM(uc.uc_validated), 0) AS uc_validated
       FROM application.grant_applications a
-      LEFT JOIN disbursement.grant_installments i
-        ON i.application_id = a.id AND i.tenant_id = a.tenant_id
-      LEFT JOIN disbursement.grant_disbursements d
-        ON d.installment_id = i.id AND d.tenant_id = a.tenant_id
-      LEFT JOIN utilisation.grant_uc_statements u
-        ON u.application_id = a.id AND u.tenant_id = a.tenant_id
+      -- Disbursements and UC statements are aggregated per application in
+      -- independent subqueries so the two child sets never multiply each other
+      -- (joining both to the same application fans the SUM out by UC count).
+      LEFT JOIN (
+        SELECT i.application_id, i.tenant_id,
+               SUM(d.amount_minor) FILTER (WHERE d.status = 'completed') AS received_minor
+        FROM disbursement.grant_installments i
+        JOIN disbursement.grant_disbursements d
+          ON d.installment_id = i.id AND d.tenant_id = i.tenant_id
+        WHERE i.tenant_id = ${tenantId}::uuid
+        GROUP BY i.application_id, i.tenant_id
+      ) dis ON dis.application_id = a.id AND dis.tenant_id = a.tenant_id
+      LEFT JOIN (
+        SELECT u.application_id, u.tenant_id,
+               COUNT(*) AS uc_due,
+               COUNT(*) FILTER (WHERE u.validation_status = 'validated') AS uc_validated
+        FROM utilisation.grant_uc_statements u
+        WHERE u.tenant_id = ${tenantId}::uuid
+        GROUP BY u.application_id, u.tenant_id
+      ) uc ON uc.application_id = a.id AND uc.tenant_id = a.tenant_id
       WHERE a.tenant_id = ${tenantId}::uuid
         AND a.beneficiary_id IN (${idList})
       GROUP BY a.beneficiary_id

@@ -84,9 +84,6 @@ export async function submitDisbursementForApproval(ctx: RequestContext, id: str
   }
   await queue.publish(COMMANDS.disbursementSubmitApproval, {
     messageId: idempotentId({ idempotencyKey: `disbursement-submit-approval:${id}`, tenantId: ctx.tenantId }),
-    // messageId for queue-level dedupe/traceability (consistent with every other
-    // publish in this module); the eOffice submit is a one-shot command.
-    messageId: randomUUID(),
     type: COMMANDS.disbursementSubmitApproval,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId },

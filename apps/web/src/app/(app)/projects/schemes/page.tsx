@@ -20,8 +20,10 @@ export default async function SchemesPage() {
   // GAP2-PROJECTS-SCHEMES-MONEY-04: totalAllocation/releasedAmount are now
   // bigint MINOR units (paise) as strings (same unit as the detail endpoint),
   // so sum them as BigInt and render with formatMoney — not formatRupees.
-  const totalAllocation = noData ? null : schemes.reduce((sum, s) => sum + BigInt(s.totalAllocation || "0"), 0n);
-  const totalReleased = noData ? null : schemes.reduce((sum, s) => sum + BigInt(s.releasedAmount || "0"), 0n);
+  // A malformed (non-digit) value counts as 0 rather than crashing the page in BigInt().
+  const minor = (v: string | null | undefined) => (v && /^\d+$/.test(v) ? BigInt(v) : 0n);
+  const totalAllocation = noData ? null : schemes.reduce((sum, s) => sum + minor(s.totalAllocation), 0n);
+  const totalReleased = noData ? null : schemes.reduce((sum, s) => sum + minor(s.releasedAmount), 0n);
 
   const rows: SchemeRow[] = schemes.map((s) => ({ ...s }));
 

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { idempotentId } from "@civitasone/auth";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
@@ -50,7 +51,11 @@ export async function disburseFundRelease(ctx: RequestContext, schemeId: string,
     throw new HttpError(403, "SOD_VIOLATION", "the actor who created a fund release may not disburse it (separation of duties)");
   }
   await queue.publish(COMMANDS.fundReleaseDisburse, {
-    messageId: randomUUID(), type: COMMANDS.fundReleaseDisburse,
+    // Money-out: deterministic messageId so a double-submit / retry is deduped
+    // by the consumer's markProcessed. Honours x-idempotency-key when sent,
+    // otherwise scopes to the release (a release is disbursed at most once).
+    messageId: idempotentId({ idempotencyKey: ctx.idempotencyKey ?? `fund-release-disburse:${rId}`, tenantId: ctx.tenantId }),
+    type: COMMANDS.fundReleaseDisburse,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { rId, tenantId: ctx.tenantId, schemeId, ...body },
   });

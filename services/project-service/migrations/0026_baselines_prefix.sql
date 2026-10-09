@@ -18,22 +18,35 @@
 --
 -- Rollback:
 --   ALTER TABLE project.project_baselines RENAME TO baselines;
---   (the legacy 0005 table is intentionally not recreated — it was unused.)
+--   (the legacy 0005 table is intentionally not recreated; the migration refuses
+--   to run while it still holds rows, so only an empty table is ever dropped.)
 -- Run as: project_svc (or superuser) on civitas_project
 -- Affected services: project-service (scheduling/baselines + world-class EVM check)
 
 SET lock_timeout = '5s';
 
 DO $$
+DECLARE
+  legacy_has_rows boolean := false;
 BEGIN
   -- Only act while the pre-rename state is present (idempotent).
   IF EXISTS (
     SELECT 1 FROM information_schema.tables
     WHERE table_schema = 'project' AND table_name = 'baselines'
   ) THEN
-    -- Retire the legacy, unused, differently-shaped project_baselines first so
-    -- the rename target name is free. Its RLS/indexes drop with it.
-    EXECUTE 'DROP TABLE IF EXISTS project.project_baselines';
+    -- Retire the legacy, differently-shaped project_baselines first so the
+    -- rename target name is free. Never drop data silently: the table is FORCE
+    -- RLS, so lift FORCE just long enough to see every row, and abort the whole
+    -- migration (nothing is dropped or renamed) if any row exists.
+    IF to_regclass('project.project_baselines') IS NOT NULL THEN
+      EXECUTE 'ALTER TABLE project.project_baselines NO FORCE ROW LEVEL SECURITY';
+      EXECUTE 'SELECT EXISTS (SELECT 1 FROM project.project_baselines)' INTO legacy_has_rows;
+      EXECUTE 'ALTER TABLE project.project_baselines FORCE ROW LEVEL SECURITY';
+      IF legacy_has_rows THEN
+        RAISE EXCEPTION 'migration 0026 aborted: legacy project.project_baselines (0005) is not empty; migrate or archive its rows to project.baselines before re-running';
+      END IF;
+      EXECUTE 'DROP TABLE project.project_baselines';
+    END IF;
     -- Rename the active table to carry the mandatory service prefix. Its RLS
     -- policy, indexes and grants travel with the table under RENAME.
     EXECUTE 'ALTER TABLE project.baselines RENAME TO project_baselines';

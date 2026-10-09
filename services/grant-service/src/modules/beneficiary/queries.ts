@@ -65,7 +65,11 @@ export async function listGranteeSummaries(tenantId: string, limit: number) {
       name: row.name,
       type: mapBeneficiaryType(row.type),
       activeGrants: p?.activeGrants ?? 0,
-      totalGrantsReceived: p ? Number(p.totalGrantsReceivedMinor) : 0,
+      // Contract field is z.number(): clamp at MAX_SAFE_INTEGER paise rather than
+      // silently losing precision above 2^53.
+      totalGrantsReceived: p
+        ? Number(p.totalGrantsReceivedMinor > BigInt(Number.MAX_SAFE_INTEGER) ? BigInt(Number.MAX_SAFE_INTEGER) : p.totalGrantsReceivedMinor)
+        : 0,
       ucCompliancePct,
     };
   });
