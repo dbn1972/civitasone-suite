@@ -142,11 +142,6 @@
       "kind": "env-gated"
     },
     {
-      "key": "services/estab-service/tests/perf-006-unbounded-lists.test.ts::PERF-006 — estab-service unbounded tenant-wide list queries",
-      "file": "services/estab-service/tests/perf-006-unbounded-lists.test.ts",
-      "kind": "hard"
-    },
-    {
       "key": "services/finance-service/tests/payments.perf.test.ts::finance payments query perf (p95)",
       "file": "services/finance-service/tests/payments.perf.test.ts",
       "kind": "env-gated"
