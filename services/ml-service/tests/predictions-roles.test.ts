@@ -15,7 +15,7 @@ import { describe, it, expect, beforeAll, afterAll, vi, beforeEach } from "vites
 import Fastify, { type FastifyInstance } from "fastify";
 import { signToken } from "@civitasone/auth";
 
-const JWT_SECRET = "test_secret_for_civitasone_32chr"; // gitleaks:allow
+const JWT_SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT_ID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
 const ACTOR_ID = "11111111-1111-1111-1111-111111111111";
 const ENTITY_ID = "22222222-2222-2222-2222-222222222222";

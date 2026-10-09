@@ -27,7 +27,7 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { factEvents } from "../src/modules/facts/schema.js";
 import * as factsRepo from "../src/modules/facts/repo.js";
 
-const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr"; // gitleaks:allow
+const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = randomUUID();
 const ACTOR = randomUUID();
 
