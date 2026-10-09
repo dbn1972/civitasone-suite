@@ -35,6 +35,18 @@ importers:
 
   .:
     devDependencies:
+      '@civitasone/db':
+        specifier: workspace:*
+        version: link:packages/db
+      '@civitasone/events':
+        specifier: workspace:*
+        version: link:packages/events
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:packages/outbox
+      '@civitasone/queue':
+        specifier: workspace:*
+        version: link:packages/queue
       '@semantic-release/commit-analyzer':
         specifier: ^13.0.1
         version: 13.0.1(semantic-release@25.0.9(typescript@5.9.3))
