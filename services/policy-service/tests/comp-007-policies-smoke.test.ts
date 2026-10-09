@@ -5,36 +5,17 @@
  *
  * Registered as a route only (GET/POST/PATCH .../v1/policy/policies, plus
  * .../publish, .../archive, .../acknowledge, .../versions, and GET
- * .../v1/policy/compliance-status) but had zero test references anywhere in
- * the service.
+ * .../v1/policy/compliance-status).
  *
- * KNOWN ISSUE (found by this smoke test, not fixed here -- real migration
- * authoring is out of COMP-007's scope; matches the precedent set by this
- * campaign's own asset-service comp-007-asset-water-smoke.test.ts for
- * water-metering): `policies/schema.ts` declares
- * `pgSchema("policies").table("policies", ...)` (and the sibling
- * policy_versions / policy_acknowledgments tables), but NO migration under
- * services/policy-service/migrations/ -- and no file under
- * infra/db/bootstrap/ either -- ever creates a `policies` schema or any
- * table in it. Confirmed three ways: grepping every migration file in this
- * service (zero matches for "policies.policies" or a `policies` schema);
- * `\dn` against a freshly bootstrapped disposable Postgres lists
- * `_inbox, _outbox, abac, bindings, public, role_features, roles` -- no
- * `policies`; and a real request reproduces
- * `PostgresError: relation "policies.policies" does not exist` (code 42P01).
- * This service has hit exactly this bug class before -- see
- * migrations/0002b_missing_module_tables.sql's own header, which patched in
- * role_features's table after the identical "declared in Drizzle, no
- * migration ever created it" gap -- but no equivalent patch exists for
- * `policies`. The module (routes + full lifecycle, 276 LOC) is fully wired
- * into app.ts and looks complete; every request that reaches the database
- * 500s. This is very likely why it had zero tests: it has never been
- * possible to write one that passes end-to-end for the actual CRUD/lifecycle
- * behavior. The tests below assert what genuinely works today (the
- * auth/role/validation layer, which runs entirely before any DB access) and
- * document the DB-touching gap as KNOWN ISSUE tests, rather than hiding it
- * behind assertions that would only pass once someone else's migration PR
- * lands.
+ * History: this file originally documented a KNOWN ISSUE -- `policies/schema.ts`
+ * declared `pgSchema("policies")` and three tables, but no migration ever created
+ * them, so every request that reached the database answered 500
+ * (`relation "policies.policies" does not exist`, 42P01) and the DB-touching tests
+ * asserted that 500. Migration 0013_policy_documents_tables.sql (and the
+ * `policies` schema in infra/db/bootstrap/bootstrap_missing_schemas.sql) now
+ * create them, so those tests assert the real behaviour instead: a full
+ * create -> version -> publish -> acknowledge -> compliance -> archive lifecycle,
+ * the 404/409 guards, and tenant isolation.
  */
 import { randomUUID } from "node:crypto";
 import { describe, it, expect, afterAll } from "vitest";
@@ -102,55 +83,128 @@ describe("COMP-007: policies -- auth/validation layer (runs before any DB access
     expect(res.statusCode).toBe(400);
   });
 
-  it("acknowledge has no requireRole -- any authenticated role reaches the DB layer (proven by getting the SAME known-issue 500, not a 403)", async () => {
+  it("acknowledge has no requireRole -- any authenticated role reaches the DB layer (a 404 for an unknown policy, not a 403)", async () => {
     const res = await app.inject({
       method: "POST",
       url: `/v1/policy/policies/${randomUUID()}/acknowledge`,
       headers: { authorization: `Bearer ${token(["citizen"])}` },
     });
-    expect(res.statusCode).toBe(500);
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe("NOT_FOUND");
   });
 });
 
-describe("COMP-007: policies -- KNOWN ISSUE: the `policies` schema was never migrated (see file header)", () => {
-  it("create 500s for an authorized admin with an otherwise-valid payload", async () => {
+describe("COMP-007: policies -- lifecycle against the migrated tables (0013_policy_documents_tables.sql)", () => {
+  const admin = () => ({ authorization: `Bearer ${token(["tenant_admin"])}` });
+  const citizen = () => ({ authorization: `Bearer ${token(["citizen"])}` });
+
+  async function createPolicy(over: Record<string, unknown> = {}): Promise<string> {
     const res = await app.inject({
       method: "POST",
       url: "/v1/policy/policies",
-      headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
-      payload: { title: "IT Usage Policy", slug: `it-usage-${randomUUID().slice(0, 8)}`, content: "v1" },
+      headers: admin(),
+      payload: { title: "IT Usage Policy", slug: `it-usage-${randomUUID().slice(0, 8)}`, content: "v1", ...over },
     });
-    expect(res.statusCode).toBe(500);
-    expect(res.json().message).toContain('relation "policies.policies" does not exist');
+    expect(res.statusCode).toBe(202);
+    return (res.json() as { id: string }).id;
+  }
+
+  it("create persists the policy as a draft, with its first version, visible in list and get", async () => {
+    const id = await createPolicy({ category: "security", tags: ["it", "security"] });
+
+    const got = await app.inject({ method: "GET", url: `/v1/policy/policies/${id}`, headers: citizen() });
+    expect(got.statusCode).toBe(200);
+    expect(got.json()).toMatchObject({ id, tenantId: TENANT, status: "draft", category: "security", tags: ["it", "security"], version: 1, content: "v1" });
+
+    const list = await app.inject({ method: "GET", url: "/v1/policy/policies", headers: citizen() });
+    expect(list.statusCode).toBe(200);
+    expect((list.json() as { data: Array<{ id: string }> }).data.some((p) => p.id === id)).toBe(true);
+
+    const versions = await app.inject({ method: "GET", url: `/v1/policy/policies/${id}/versions`, headers: citizen() });
+    expect(versions.statusCode).toBe(200);
+    const vs = (versions.json() as { data: Array<{ versionNum: number; status: string; content: string }> }).data;
+    expect(vs).toHaveLength(1);
+    expect(vs[0]).toMatchObject({ versionNum: 1, status: "draft", content: "v1" });
   });
 
-  it("list 500s even though it has no role gate", async () => {
-    const res = await app.inject({
-      method: "GET",
-      url: "/v1/policy/policies",
-      headers: { authorization: `Bearer ${token(["citizen"])}` },
-    });
-    expect(res.statusCode).toBe(500);
+  it("a content patch bumps the version and records a new version row", async () => {
+    const id = await createPolicy();
+    const patch = await app.inject({ method: "PATCH", url: `/v1/policy/policies/${id}`, headers: admin(), payload: { content: "v2" } });
+    expect(patch.statusCode).toBe(202);
+
+    const got = await app.inject({ method: "GET", url: `/v1/policy/policies/${id}`, headers: citizen() });
+    expect(got.json()).toMatchObject({ version: 2, content: "v2" });
+
+    const versions = await app.inject({ method: "GET", url: `/v1/policy/policies/${id}/versions`, headers: citizen() });
+    const vs = (versions.json() as { data: Array<{ versionNum: number }> }).data;
+    expect(vs.map((v) => v.versionNum)).toEqual([2, 1]);
   });
 
-  it("get-by-id and versions both 500 the same way", async () => {
+  it("publish -> acknowledge (idempotent per user) -> compliance-status counts one acknowledgment", async () => {
+    const id = await createPolicy();
+
+    // A draft cannot be acknowledged.
+    const early = await app.inject({ method: "POST", url: `/v1/policy/policies/${id}/acknowledge`, headers: citizen(), payload: {} });
+    expect(early.statusCode).toBe(409);
+
+    const publish = await app.inject({ method: "POST", url: `/v1/policy/policies/${id}/publish`, headers: admin() });
+    expect(publish.statusCode).toBe(202);
+    const published = await app.inject({ method: "GET", url: `/v1/policy/policies/${id}`, headers: citizen() });
+    expect(published.json()).toMatchObject({ status: "published" });
+    expect(published.json().publishedAt).toBeTruthy();
+
+    // The same user acknowledging twice upserts on (policy_id, user_id): one row.
+    const ackHeaders = citizen();
+    for (let i = 0; i < 2; i++) {
+      const ack = await app.inject({ method: "POST", url: `/v1/policy/policies/${id}/acknowledge`, headers: ackHeaders, payload: { ipAddress: "10.0.0.7" } });
+      expect(ack.statusCode).toBe(202);
+    }
+
+    const compliance = await app.inject({ method: "GET", url: "/v1/policy/compliance-status", headers: admin() });
+    expect(compliance.statusCode).toBe(200);
+    const row = (compliance.json() as { data: Array<{ id: string; acknowledgmentCount: number }> }).data.find((r) => r.id === id);
+    expect(row).toBeDefined();
+    // Same token (same actor) acknowledged twice: one row, not two.
+    expect(row!.acknowledgmentCount).toBe(1);
+  });
+
+  it("an archived policy cannot be published again, and is no longer in compliance-status", async () => {
+    const id = await createPolicy();
+    await app.inject({ method: "POST", url: `/v1/policy/policies/${id}/publish`, headers: admin() });
+    const archive = await app.inject({ method: "POST", url: `/v1/policy/policies/${id}/archive`, headers: admin() });
+    expect(archive.statusCode).toBe(202);
+
+    const again = await app.inject({ method: "POST", url: `/v1/policy/policies/${id}/publish`, headers: admin() });
+    expect(again.statusCode).toBe(409);
+    expect(again.json().code).toBe("CONFLICT");
+
+    const compliance = await app.inject({ method: "GET", url: "/v1/policy/compliance-status", headers: admin() });
+    expect((compliance.json() as { data: Array<{ id: string }> }).data.some((r) => r.id === id)).toBe(false);
+  });
+
+  it("404s get / versions-empty / patch / publish / archive for a policy that does not exist", async () => {
     const id = randomUUID();
-    for (const url of [`/v1/policy/policies/${id}`, `/v1/policy/policies/${id}/versions`]) {
-      const res = await app.inject({
-        method: "GET",
-        url,
-        headers: { authorization: `Bearer ${token(["citizen"])}` },
-      });
-      expect(res.statusCode, url).toBe(500);
+    const get = await app.inject({ method: "GET", url: `/v1/policy/policies/${id}`, headers: citizen() });
+    expect(get.statusCode).toBe(404);
+
+    const versions = await app.inject({ method: "GET", url: `/v1/policy/policies/${id}/versions`, headers: citizen() });
+    expect(versions.statusCode).toBe(200);
+    expect((versions.json() as { data: unknown[] }).data).toEqual([]);
+
+    for (const [method, url] of [
+      ["PATCH", `/v1/policy/policies/${id}`],
+      ["POST", `/v1/policy/policies/${id}/publish`],
+      ["POST", `/v1/policy/policies/${id}/archive`],
+    ] as const) {
+      const res = await app.inject({ method, url, headers: admin(), payload: method === "PATCH" ? { title: "x" } : undefined });
+      expect(res.statusCode, `${method} ${url}`).toBe(404);
     }
   });
 
-  it("compliance-status 500s for an authorized admin", async () => {
-    const res = await app.inject({
-      method: "GET",
-      url: "/v1/policy/compliance-status",
-      headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
-    });
-    expect(res.statusCode).toBe(500);
+  it("is tenant-isolated: another tenant cannot read the policy", async () => {
+    const id = await createPolicy();
+    const other = signToken({ sub: randomUUID(), tid: randomUUID(), roles: ["tenant_admin"], sid: "sess-other" }, SECRET);
+    const res = await app.inject({ method: "GET", url: `/v1/policy/policies/${id}`, headers: { authorization: `Bearer ${other}` } });
+    expect(res.statusCode).toBe(404);
   });
 });

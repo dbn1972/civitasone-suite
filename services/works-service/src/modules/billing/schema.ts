@@ -13,6 +13,11 @@ export const measurementBooks = works.table("measurement_books", {
   status: varchar("status", { length: 32 }).notNull().default("draft"),
   // draft|so_finalized|sdo_finalized|estimator_finalized|do_finalized
   version: integer("version").notNull().default(1),
+  // GAP2-WORKS-BILLING-08: standard record-provenance audit columns.
+  createdBy: uuid("created_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: uuid("updated_by"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const measurements = works.table("measurements", {
@@ -27,6 +32,11 @@ export const measurements = works.table("measurements", {
   depthVal: numeric("depth_val", { precision: 12, scale: 4 }),
   remarks: varchar("remarks", { length: 2048 }),
   version: integer("version").notNull().default(1),
+  // GAP2-WORKS-BILLING-08: standard record-provenance audit columns.
+  createdBy: uuid("created_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: uuid("updated_by"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const bills = works.table("bills", {
@@ -58,6 +68,11 @@ export const billItems = works.table("bill_items", {
   rate: bigint("rate", { mode: "bigint" }).notNull(),
   amountMinor: bigint("amount_minor", { mode: "bigint" }).notNull(),
   version: integer("version").notNull().default(1),
+  // GAP2-WORKS-BILLING-08: standard record-provenance audit columns.
+  createdBy: uuid("created_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: uuid("updated_by"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const billRecoveries = works.table("bill_recoveries", {
@@ -68,6 +83,11 @@ export const billRecoveries = works.table("bill_recoveries", {
   amountMinor: bigint("amount_minor", { mode: "bigint" }).notNull(),
   remarks: varchar("remarks", { length: 2048 }),
   version: integer("version").notNull().default(1),
+  // GAP2-WORKS-BILLING-08: standard record-provenance audit columns.
+  createdBy: uuid("created_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: uuid("updated_by"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const accountCompilations = works.table("account_compilations", {

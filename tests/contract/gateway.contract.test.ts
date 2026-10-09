@@ -85,7 +85,8 @@ describe("gateway contract", () => {
     const ALIAS_FAMILIES: readonly string[][] = [
       // identity-service hosts auth, admin user mgmt, platform-operator directory +
       // maker-checker requests (GAP-ADMIN-OPERATORS-05, registry.ts), mobile sync + device APIs
-      ["identity", "admin-users", "admin-operators", "sync", "devices"],
+      // identity-v1: /api/v1/identity -> /v1/identity (WebAuthn passkeys, GAP2-IDENTITY-WEBAUTHN-01)
+      ["identity", "identity-v1", "admin-users", "admin-operators", "sync", "devices"],
       // audit-service: legacy /api/audit + versioned /api/v1/audit
       ["audit", "audit-events"],
       // policy-service: unversioned + /v1 alias

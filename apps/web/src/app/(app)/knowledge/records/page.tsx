@@ -33,6 +33,13 @@ export default async function KnowledgeRecordsPage() {
   const weedingDueCount = errored ? 0 : records.filter((r) => isWeedingDue(r, now)).length;
   const permanent = errored ? 0 : records.filter((r) => r.retentionPeriod?.toLowerCase().includes("perm")).length;
 
+  // GAP2-KNOWLEDGE-RECORDS-01: when records exist but NONE carry a configured
+  // retention policy, the review/weeding/permanent KPIs are legitimately 0 —
+  // surface an honest note so a 0 reads as "retention not configured" rather
+  // than "nothing is due".
+  const retentionUnconfigured = !errored && total > 0
+    && records.every((r) => !r.retentionPeriod && !r.disposalDueDate);
+
   const rows: RecordRow[] = records.map((rec) => ({
     id: rec.id,
     recordNo: rec.recordNo,
@@ -67,6 +74,15 @@ export default async function KnowledgeRecordsPage() {
         <StatCard icon="🗑️" iconBg="#fef3f2" label="Overdue for weeding" value={errored ? "—" : weedingDueCount.toLocaleString("en-IN")} />
         <StatCard icon="🔒" iconBg="#ecfdf3" label="Permanent" value={errored ? "—" : permanent.toLocaleString("en-IN")} />
       </StatGrid>
+
+      {retentionUnconfigured && (
+        <p role="note" className="muted" style={{ marginTop: 12 }}>
+          No retention policy is applied to these record categories yet, so the
+          review/weeding/permanent counts above are 0. Configure a retention
+          policy from <Link href="/knowledge/policies">Policy</Link> to populate
+          disposal due dates.
+        </p>
+      )}
 
       <div className="card" style={{ marginTop: "18px" }}>
         <div className="card-h">

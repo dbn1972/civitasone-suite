@@ -12,6 +12,12 @@ export interface WorkflowResult<T> {
   data: T;
   source: WorkflowSource;
   status?: number;
+  /**
+   * GAP2-WORKFLOW-MY-TASKS-02 — the exact total of the WHOLE (unpaged) matching
+   * set, when the endpoint reports it (tasks list `pagination.total`). Lets a
+   * capped list surface a true "N of M" / "200+" instead of a flat window count.
+   */
+  total?: number;
 }
 
 export interface WorkflowDefinition {
@@ -151,6 +157,60 @@ export function inProgressCount(instancesByStatus: Record<string, number>): numb
     (instancesByStatus["pending"] ?? 0) +
     (instancesByStatus["running"] ?? 0)
   );
+}
+
+/**
+ * GAP2-WORKFLOW-DEFINITIONS-03 — the authoritative "live" (deployed) status set
+ * for workflow.definitions. The service's DB CHECK constraint restricts the
+ * column to exactly `('active', 'draft', 'archived')` (workflow-service
+ * migration 0019_check_constraints_status_columns.sql) and `deployDefinition`
+ * sets `status = 'active'`; there is NO `deployed`/`published` literal anywhere
+ * in the service. The old web predicate counted `active || deployed`, where
+ * `deployed` was a phantom that never matched and `draft`/`archived` were (correctly)
+ * excluded. Centralised here so web and DB agree in one place.
+ */
+export const LIVE_DEFINITION_STATUSES: readonly string[] = ["active"] as const;
+
+/** True when a definition's status is one the service treats as live/deployed. */
+export function isLiveDefinition(status: string): boolean {
+  return LIVE_DEFINITION_STATUSES.includes(status);
+}
+
+/**
+ * GAP2-WORKFLOW-INSTANCES-DETAIL-02 — human label for a raw refType enum code
+ * (e.g. "procurement_po" → "Purchase Order"). Mirrors the refType vocabulary
+ * that loaders.ts buildApprovalLink() maps for the approvals inbox so the two
+ * surfaces name the same subject the same way. An unknown code falls back to a
+ * title-cased version of the raw token rather than printing the enum verbatim.
+ */
+const REF_TYPE_LABELS: Record<string, string> = {
+  leave_app: "Leave Application",
+  payroll_run: "Payroll Run",
+  procurement_indent: "Procurement Indent",
+  procurement_po: "Purchase Order",
+  finance_bill: "Finance Bill",
+  estab_file: "Establishment File",
+};
+export function humanizeRefType(refType: string): string {
+  return REF_TYPE_LABELS[refType] ?? titleCase(refType);
+}
+
+/**
+ * GAP2-WORKFLOW-INSTANCES-DETAIL-02 — the refTypes that buildApprovalLink maps
+ * to a *record* detail route (as opposed to falling back to a workflow route).
+ * Used to decide whether the linked-record control deep-links to the source
+ * record or stays on the workflow instance.
+ */
+const DEEP_LINKED_REF_TYPES = new Set([
+  "leave_app",
+  "payroll_run",
+  "procurement_indent",
+  "procurement_po",
+  "finance_bill",
+  "estab_file",
+]);
+export function hasRefDeepLink(refType: string): boolean {
+  return DEEP_LINKED_REF_TYPES.has(refType);
 }
 
 /**

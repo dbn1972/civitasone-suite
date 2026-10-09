@@ -2,6 +2,8 @@
 
 import { UserFacingError } from "@/lib/userFacingError";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button, DataTable, StatusPill, ActionButton, Segmented, ErrorState } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { humanizeStatus, formatIndianDate } from "@/lib/formatters";
@@ -79,6 +81,15 @@ export function DfaPanel() {
   const [currentStepTitle, setCurrentStepTitle] = useState("");
   // GAP-ESTAB-DFA-06: timers for cleanup.
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // GAP2-ESTAB-NOTIFICATIONS-DFALINK-01: the eOffice notifications feed deep-
+  // links DFA items to /estab/dfa?focus=<id> (there is no /estab/dfa/[id]
+  // detail route). Honour that param: surface which draft the officer followed
+  // in and highlight its row when it is present in the current view.
+  const searchParams = useSearchParams();
+  const tFocus = useTranslations("estabDfaFocus");
+  const focusId = searchParams?.get("focus") ?? "";
+  const focusedRow = focusId ? rows.find((d) => d.id === focusId) : undefined;
 
   // Cleanup pending polls on unmount.
   useEffect(() => () => { if (pollRef.current) clearTimeout(pollRef.current); }, []);
@@ -268,6 +279,19 @@ export function DfaPanel() {
 
       <span className="sr-only" aria-live="assertive" aria-atomic="true">{currentStepTitle}</span>
 
+      {/* GAP2-ESTAB-NOTIFICATIONS-DFALINK-01: show the officer which draft they
+          followed in from a notification, and whether it is in the current
+          filter view. */}
+      {focusId ? (
+        <div className="card" data-testid="dfa-focus-banner">
+          <p className="pad" style={{ fontSize: "0.875rem", color: "var(--ink2)" }}>
+            {focusedRow
+              ? tFocus("shown", { dfaNo: focusedRow.dfaNo, subject: focusedRow.subject })
+              : tFocus("missing")}
+          </p>
+        </div>
+      ) : null}
+
       {showForm ? (
         <div className="card">
           <div className="card-h"><h3>New draft</h3></div>
@@ -318,7 +342,16 @@ export function DfaPanel() {
         ) : (
           <DataTable<Dfa>
             columns={[
-              { key: "dfaNo", label: "DFA No", render: (d) => <span className="mono">{d.dfaNo}</span> },
+              { key: "dfaNo", label: "DFA No", render: (d) => (
+                <span
+                  className="mono"
+                  data-focused={d.id === focusId ? "true" : undefined}
+                  style={d.id === focusId ? { fontWeight: 700, color: "var(--info)" } : undefined}
+                >
+                  {d.dfaNo}
+                  {d.id === focusId ? <span className="sr-only"> (selected)</span> : null}
+                </span>
+              ) },
               { key: "communicationType", label: "Type", render: (d) => <>{humanizeStatus(d.communicationType)}</> },
               { key: "subject", label: "Subject" },
               { key: "recipientName", label: "Recipient", render: (d) => <>{d.recipientName ?? "—"}</> },

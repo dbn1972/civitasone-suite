@@ -8,6 +8,7 @@ import { queue } from "../../shared/infra.js";
 import { enqueue } from "../../shared/outbox.js";
 import { EVENTS, COMMANDS } from "../../topics.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
+import { resolveOwnEmployeeIdIfNonHr } from "../../shared/self-scope.js";
 import {
   gradeAttempt, decidePass, canAttempt, issueCertificate, evaluateCertificateStatus,
   visibleAssessmentsForRoles, projectCertificateVerification, toLearnerSafeQuestion,
@@ -206,10 +207,19 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ALL_ROLES);
     const { id } = idParam.parse(req.params);
     const body = startAttemptBody.parse(req.body);
+    // GAP2-LEARNING-ASSESSMENTS-ATTEMPT-01: a non-HR/non-manager caller may
+    // only start an attempt for THEMSELVES, regardless of the employeeId they
+    // submit — otherwise any employee could sit (and certify) an assessment
+    // under a colleague's identity. HR/manager may act on behalf. Fail closed
+    // (403) when a non-HR caller has no linked employee record. The sibling
+    // learning routes (enroll, lesson progress) already self-scope with the
+    // same helper; this closes the inconsistent, missed boundary.
+    const effectiveEmployeeId = await resolveOwnEmployeeIdIfNonHr(ctx, req, body.employeeId);
+    if (!effectiveEmployeeId) throw new HttpError(403, "NO_EMPLOYEE_LINK", "no employee record linked to this account");
     const a = await repo.getAssessment(ctx.tenantId, id);
     if (!a) throw new HttpError(404, "NOT_FOUND", "assessment not found");
     if (a.status !== "published") throw new HttpError(409, "NOT_PUBLISHED", "assessment is not published");
-    const priorCount = await repo.countAttempts(ctx.tenantId, id, body.employeeId);
+    const priorCount = await repo.countAttempts(ctx.tenantId, id, effectiveEmployeeId);
     if (!canAttempt(priorCount, a.maxAttempts)) {
       throw new HttpError(409, "ATTEMPT_LIMIT", "maximum attempts exhausted");
     }
@@ -222,7 +232,7 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     // previously did) meant this variable was dead and the id this handler
     // returned only happened to line up with the inserted row by coincidence
     // of both reading off the placeholder's `id` field.
-    await publishF3Write(ctx, "assessment_routes__7", attemptId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "assessment_routes__7", attemptId, { body: { ...((req.body as Record<string, unknown>) ?? {}), employeeId: effectiveEmployeeId }, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     // publishF3Write only ever resolves the { id, status, correlationId }
     // placeholder (see shared/f3-publish.ts) — it never carries `attemptNo`,
     // so `attempt.attemptNo` was always `undefined`, and `attempt.status`
@@ -256,6 +266,14 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     const attempt = await repo.getAttempt(ctx.tenantId, id);
     if (!attempt) throw new HttpError(404, "NOT_FOUND", "attempt not found");
     if (attempt.status !== "in_progress") throw new HttpError(409, "INVALID_STATE", "attempt is not in progress");
+    // GAP2-LEARNING-ASSESSMENTS-ATTEMPT-01: a non-HR/non-manager caller may
+    // only submit THEIR OWN attempt — otherwise an employee could submit (and
+    // trigger certification on) a colleague's in-progress attempt. HR/manager
+    // may act on behalf. Fail closed (403) when the attempt is not the
+    // caller's own and the caller is not privileged.
+    const effectiveEmployeeId = await resolveOwnEmployeeIdIfNonHr(ctx, req, attempt.employeeId);
+    if (!effectiveEmployeeId) throw new HttpError(403, "NO_EMPLOYEE_LINK", "no employee record linked to this account");
+    if (effectiveEmployeeId !== attempt.employeeId) throw new HttpError(403, "FORBIDDEN", "cannot submit another employee's attempt");
     const a = await repo.getAssessment(ctx.tenantId, attempt.assessmentId);
     if (!a) throw new HttpError(404, "NOT_FOUND", "assessment not found");
     const bank = await repo.getBank(ctx.tenantId, a.bankId);

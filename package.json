@@ -44,6 +44,10 @@
     "ci:check": "pnpm turbo typecheck lint test && pnpm exec vitest run tests/contract/gateway.contract.test.ts"
   },
   "devDependencies": {
+    "@civitasone/db": "workspace:*",
+    "@civitasone/events": "workspace:*",
+    "@civitasone/outbox": "workspace:*",
+    "@civitasone/queue": "workspace:*",
     "@semantic-release/commit-analyzer": "^13.0.1",
     "@semantic-release/github": "^12.0.9",
     "@semantic-release/npm": "^13.1.5",
@@ -86,7 +90,9 @@
       "proxy-addr": "^2.0.8",
       "compression": "^1.8.2",
       "basic-ftp": "^6.2.1",
-      "tinypool": "^2.1.2"
+      "tinypool": "^2.1.2",
+      "handlebars": ">=4.7.10",
+      "legacy-javascript": "0.0.1"
     }
   }
 }

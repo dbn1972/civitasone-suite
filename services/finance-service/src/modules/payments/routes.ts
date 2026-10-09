@@ -11,7 +11,7 @@ import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import { DomainError, assertBillRejectable, assertPaymentSubmittable, assertPayerNotPasser, maskAdvanceBeneficiaries } from "./domain.js";
+import { DomainError, assertBillRejectable, assertBillApprovable, assertPaymentSubmittable, assertPayerNotPasser, maskAdvanceBeneficiaries } from "./domain.js";
 import * as mastersRepo from "../masters/repo.js";
 import * as ucRepo from "./uc-repo.js";
 import { assertUCWithinSanction, assertUCPeriodValid } from "./uc-domain.js";
@@ -156,7 +156,22 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, APPROVER_ROLES);
     const { id } = idParam.parse(req.params);
     const body = approveBillBody.parse(req.body ?? {});
-    return sendAccepted(reply, acceptedResponseSchema, await commands.approveBill(ctx, id, body));
+    // NEW-001 (FF-06, D-66): synchronous pre-check mirrors the reject route's
+    // toDomain(err, 409) pattern. Read the bill (tenant-scoped: another
+    // tenant's bill is NOT_FOUND, never leaked), refuse a non-'pending' bill
+    // (409 BILL_NOT_APPROVABLE — the P3 fix) or a bill already at the final
+    // 'pay' stage (409 STAGE_TERMINAL — the P4 fix) immediately instead of a
+    // false 202 the consumer could only reject later. The consumer stays the
+    // authoritative, race-safe guard (repo.advanceBillStage); this read-only
+    // pre-check narrows but cannot fully close the TOCTOU window. The stage the
+    // approver SAW is passed to the command so the message id names exactly
+    // that stage (and so the consumer can assert expectedStage == bill.stage).
+    const bill = await repo.findBillByIdAndTenant(id, ctx.tenantId);
+    if (!bill) throw new HttpError(404, "NOT_FOUND", "bill not found");
+    try {
+      assertBillApprovable(bill.status, bill.stage ?? "section");
+    } catch (err) { toDomain(err, 409); }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.approveBill(ctx, id, body, bill.stage ?? "section"));
   });
 
   app.post("/v1/finance/payments/eft", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req, reply) => {

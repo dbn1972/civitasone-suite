@@ -9,13 +9,19 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import {
   idParam, createQuarterBody, applyAllotmentBody, allotBody,
   occupyBody, vacationNoticeBody, vacateBody, cancelBody, createLicenceFeeRateBody,
-  quarterQueryParams,
+  quarterQueryParams, licenceFeeQueryParams,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
 const ESTAB_ROLES  = ["estab_officer", "estab_admin", "quarter_officer", "super_admin"];
 const READER_ROLES = [...ESTAB_ROLES, "audit_officer", "employee"];
+// GAP2-ESTAB-QUARTERS-RATEAUTHZ-01: the licence-fee rate schedule is the master
+// money table that drives recurring payroll salary deductions and finance
+// receivables for every occupant. Configuring it must be an administrator-level
+// control (consistent with approval-rules / operators), NOT the ordinary
+// estab_officer. Writes are therefore gated to admin roles only.
+const RATE_ADMIN_ROLES = ["estab_admin", "super_admin"];
 
 export async function quartersRoutes(app: FastifyInstance): Promise<void> {
   // ── Quarter inventory ──────────────────────────────────────────────────
@@ -120,16 +126,32 @@ export async function quartersRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ── Licence-fee rates (config) ─────────────────────────────────────────
+  // GAP2-ESTAB-QUARTERS-RATEAUTHZ-01: admin-only write (see RATE_ADMIN_ROLES).
   app.post("/v1/estab/quarter-licence-fees", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ESTAB_ROLES);
+    requireRole(ctx, RATE_ADMIN_ROLES);
     const body = createLicenceFeeRateBody.parse(req.body);
+    if (body.effectiveTo && body.effectiveTo < body.effectiveFrom) {
+      throw new HttpError(400, "INVALID_RANGE", "effectiveTo must not be before effectiveFrom");
+    }
+    // 0049 exclusion constraint: refuse an overlapping rate up front (the async
+    // consumer cannot report back to the caller).
+    const clash = await queries.findOverlappingLicenceFeeRate(
+      ctx.tenantId, body.quarterType, body.payLevel, body.effectiveFrom, body.effectiveTo);
+    if (clash) {
+      throw new HttpError(409, "LICENCE_FEE_OVERLAP",
+        `an existing rate (${clash.id}) already covers part of this period for the same quarter type and pay level`);
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createLicenceFeeRate(ctx, body));
   });
 
+  // GAP2-ESTAB-LICENCEFEE-RATE-UNBOUNDED-01: bound the list the same way
+  // listQuarters/listAllotments are, so a long effective-dated history can't
+  // trigger an unbounded tenant-wide read.
   app.get("/v1/estab/quarter-licence-fees", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    return reply.send({ data: await queries.listLicenceFeeRates(ctx.tenantId) });
+    const q = licenceFeeQueryParams.parse(req.query);
+    return reply.send({ data: await queries.listLicenceFeeRates(ctx.tenantId, q) });
   });
 }

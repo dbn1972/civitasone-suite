@@ -93,13 +93,17 @@ function ColorPicker({
         type="color"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer"
+        /* GAP2-PLATFORM-ADMIN-COLOURS-04: theme border token (dark-mode aware)
+           instead of a fixed light `border-gray-200`. */
+        className="w-10 h-10 rounded-lg border cursor-pointer"
+        style={{ borderColor: "var(--line)" }}
         aria-label={label}
         title={label}
       />
       <div className="flex-1">
-        <p className="text-sm font-medium text-gray-700">{label}</p>
-        <p className="text-xs text-gray-500 font-mono">{value}</p>
+        {/* GAP2-PLATFORM-ADMIN-COLOURS-04: theme text tokens, not fixed greys. */}
+        <p className="text-sm font-medium" style={{ color: "var(--ink2)" }}>{label}</p>
+        <p className="text-xs font-mono" style={{ color: "var(--mut)" }}>{value}</p>
       </div>
     </div>
   );

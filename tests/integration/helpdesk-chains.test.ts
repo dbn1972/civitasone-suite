@@ -34,6 +34,16 @@ vi.mock("../../services/helpdesk-service/src/shared/db.js", async () => {
   return { db: h.mockDb, sqlClient: {}, scopedRead: (fn: any) => h.mockDb.transaction(fn) };
 });
 
+// The SLA sweeper's cross-tenant candidate scan (repo.findOpenForSla) reads
+// through a second, BYPASSRLS "scanner" pool (shared/scanner-db.ts) so it can see
+// every tenant's tickets; writes then run on the primary db under runWithTenant.
+// Route the scanner handle at the same in-memory db or the scan would open a
+// real Postgres connection.
+vi.mock("../../services/helpdesk-service/src/shared/scanner-db.js", async () => {
+  const h = await import("./harness.js");
+  return { scannerDb: h.mockDb, scannerSqlClient: {} };
+});
+
 vi.mock("../../services/helpdesk-service/src/shared/outbox.js", async () => {
   const h = await import("./harness.js");
   return {

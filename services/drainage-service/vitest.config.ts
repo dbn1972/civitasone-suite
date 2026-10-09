@@ -54,7 +54,7 @@ export default defineConfig({
     fileParallelism: false,
     coverage: {
       provider: "v8",
-      exclude: ["dist/**", "src/index.ts", "src/worker.ts"],
+      exclude: ["dist/**", "src/index.ts", "src/worker.ts", "**/*.config.{ts,js,mjs,cjs}"],
       // REL-013: thresholds set at/just below real measured coverage
       // (lines 92.36 / branches 88.76 / functions 90.14 / statements
       // 92.36, via `pnpm --filter @civitasone/drainage-service run

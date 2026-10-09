@@ -60,10 +60,21 @@ const SEED_EVENT = `
  *   3. runs the mutation under test.
  * Always rolled back — the seeded row never persists.
  */
-function psqlScopedMutation(statement: string): { ok: boolean; output: string } {
+function psqlScopedMutation(
+  statement: string,
+  opts: { grant?: "UPDATE" | "DELETE" } = {},
+): { ok: boolean; output: string } {
   const sql = [
     "BEGIN",
     `SET LOCAL app.tenant_id = '${TENANT}'`,
+    // The privilege layer comes first: migrations 0005/0006 REVOKE UPDATE and
+    // DELETE on events.events from audit_svc, so on a correctly provisioned
+    // cluster the statement is refused with "permission denied" before the
+    // append-only TRIGGER is ever consulted. Re-grant the one privilege under
+    // test INSIDE this rolled-back transaction (audit_svc owns the table, so it
+    // may grant to itself) so the trigger layer is what gets measured. The
+    // privilege layer itself is asserted separately below.
+    ...(opts.grant ? [`GRANT ${opts.grant} ON events.events TO ${ROLE}`] : []),
     SEED_EVENT,
     statement,
     "ROLLBACK",
@@ -154,7 +165,8 @@ describe("L6 — Audit ledger: UPDATE is rejected", () => {
   it("UPDATE on a real audit row is rejected by the append-only trigger", () => {
     assertSeedWorks();
     const { ok, output } = psqlScopedMutation(
-      `UPDATE events.events SET type = 'TAMPERED' WHERE true`
+      `UPDATE events.events SET type = 'TAMPERED' WHERE true`,
+      { grant: "UPDATE" },
     );
     // A seeded row is present, so the row-level trigger MUST fire. Success here
     // means the audit log is mutable — a CERT-In / DPDP release blocker.
@@ -164,10 +176,21 @@ describe("L6 — Audit ledger: UPDATE is rejected", () => {
   });
 });
 
+describe("L6 — Audit ledger: the service role holds no UPDATE/DELETE privilege (layer 1 of 2)", () => {
+  it("UPDATE and DELETE are refused by privileges alone, before any trigger", () => {
+    assertSeedWorks();
+    for (const stmt of [`UPDATE events.events SET type = 'TAMPERED' WHERE true`, `DELETE FROM events.events WHERE true`]) {
+      const { ok, output } = psqlScopedMutation(stmt);
+      expect(ok, `${stmt} succeeded without any grant — audit log is MUTABLE`).toBe(false);
+      expect(output.toLowerCase()).toMatch(/permission denied|append-only|append only|immutab/);
+    }
+  });
+});
+
 describe("L6 — Audit ledger: DELETE is rejected", () => {
   it("DELETE on a real audit row is rejected by the append-only trigger", () => {
     assertSeedWorks();
-    const { ok, output } = psqlScopedMutation(`DELETE FROM events.events WHERE true`);
+    const { ok, output } = psqlScopedMutation(`DELETE FROM events.events WHERE true`, { grant: "DELETE" });
     expect(ok, "DELETE on a seeded audit row succeeded — audit log is MUTABLE").toBe(false);
     expect(output.toLowerCase()).toMatch(/append-only|append only|immutab/);
   });

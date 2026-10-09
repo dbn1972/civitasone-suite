@@ -271,3 +271,37 @@ export function nextStage(current: string): string {
   if (!next) throw new DomainError("STAGE_TERMINAL", `bill is already at final stage '${current}'`);
   return next;
 }
+
+/**
+ * NEW-001 (FF-06, D-66): the approve path had no status/stage guard, so a
+ * rejected bill could be re-animated (probe P3) and a bill already at the final
+ * stage 'pay' was retried as a transient DomainError (probe P4). An approval is
+ * only legitimate while the bill is 'pending' AND still awaiting a stage
+ * decision ('section' or 'accounts'):
+ *
+ *   - 'pay' is the terminal stage: there is no further approval to apply
+ *     (STAGE_TERMINAL).
+ *   - any status other than 'pending' ('passed', 'paid', 'rejected',
+ *     'on_hold', 'under_review', 'draft') is not approvable right now
+ *     (BILL_NOT_APPROVABLE).
+ *
+ * The route calls this synchronously for an immediate 409; the consumer calls
+ * it inside its transaction (converting the DomainError to a NonRetryableError
+ * exactly as billReject already does for assertBillRejectable), and the
+ * database guarded UPDATE (repo.advanceBillStage) is the authoritative, race-
+ * safe control regardless of what this early assert saw.
+ */
+export function assertBillApprovable(status: string, stage: string): void {
+  if (stage === "pay") {
+    throw new DomainError(
+      "STAGE_TERMINAL",
+      `bill is already at final stage 'pay'; there is no further approval stage to apply`,
+    );
+  }
+  if (status !== "pending") {
+    throw new DomainError(
+      "BILL_NOT_APPROVABLE",
+      `bill cannot be approved from status '${status}' (only a bill with status 'pending' awaiting a stage decision may be approved)`,
+    );
+  }
+}

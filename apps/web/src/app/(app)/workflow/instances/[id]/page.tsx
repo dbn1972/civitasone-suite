@@ -6,11 +6,14 @@ import { toHumanError } from "@/lib/messages";
 import { HistoryTimeline } from "../../_components/HistoryTimeline";
 import { TasksTable } from "../../_components/TasksTable";
 import { resolveUsers } from "@/lib/directory/resolveUsers";
+import { buildApprovalLink } from "@/app/_data/loaders";
 import {
   getInstanceById,
   getInstanceHistory,
   getTasksForInstance,
   titleCase,
+  humanizeRefType,
+  hasRefDeepLink,
 } from "../../_data/workflowData";
 
 export const dynamic = "force-dynamic";
@@ -99,8 +102,21 @@ export default async function InstanceDetailPage({ params }: { params: { id: str
       {instance.refType ? (
         <div className="pad" style={{ paddingTop: 0 }}>
           <span style={{ color: "var(--civitas-color-text-muted)", fontSize: 13 }}>
-            Linked to {instance.refType}
-            {instance.refId ? ` · ${instance.refId}` : ""}
+            {/* GAP2-WORKFLOW-INSTANCES-DETAIL-02 — humanise the refType enum and,
+                when the subject has a mapped detail route, deep-link to the
+                source record (reusing the approvals-inbox buildApprovalLink
+                mapping) instead of printing a raw code + opaque UUID. */}
+            Linked to{" "}
+            {instance.refId && hasRefDeepLink(instance.refType) ? (
+              <a
+                href={buildApprovalLink("workflow", instance.refType, instance.refId, instance.id)}
+                style={{ textDecoration: "underline" }}
+              >
+                {humanizeRefType(instance.refType)}
+              </a>
+            ) : (
+              humanizeRefType(instance.refType)
+            )}
           </span>
         </div>
       ) : null}

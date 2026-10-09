@@ -63,7 +63,7 @@ export default defineConfig({
     fileParallelism: false,
     coverage: {
       provider: "v8",
-      exclude: ["dist/**", "src/index.ts", "src/worker.ts"],
+      exclude: ["dist/**", "src/index.ts", "src/worker.ts", "**/*.config.{ts,js,mjs,cjs}"],
       // REL-013: thresholds set at/just below real measured coverage
       // (lines 95.44 / branches 88.34 / functions 91.54 / statements
       // 95.44, via `pnpm --filter @civitasone/crematorium-service run

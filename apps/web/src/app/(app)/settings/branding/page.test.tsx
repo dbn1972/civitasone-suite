@@ -252,4 +252,27 @@ describe("BrandingPage", () => {
 
     await waitFor(() => expect(screen.getByText(/https:\/\/ image URL/i)).toBeInTheDocument());
   });
+
+  // GAP2-PLATFORM-ADMIN-COLOURS-04: the ColorField label/value and the colour
+  // swatch border must use theme tokens (dark-mode aware), not fixed light
+  // greys (text-gray-700 / text-gray-500 / border-gray-200).
+  it("ColorField labels use theme tokens, not fixed gray classes", async () => {
+    mockFetchOk({ appName: "Test Gov Portal" }, []);
+    const { container } = render(<BrandingPage />);
+    await waitFor(() => expect(screen.getByDisplayValue("Test Gov Portal")).toBeInTheDocument());
+
+    // The "Primary" ColorField label <p> carries the label text.
+    const primaryLabel = screen.getAllByText("Primary").find((el) => el.tagName === "P");
+    expect(primaryLabel).toBeDefined();
+    expect(primaryLabel?.className).not.toMatch(/text-gray-700/);
+    expect(primaryLabel?.style.color).toBe("var(--ink2)");
+
+    // No colour swatch input keeps the fixed light border-gray-200.
+    const colorInputs = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="color"]'));
+    expect(colorInputs.length).toBeGreaterThan(0);
+    for (const input of colorInputs) {
+      expect(input.className).not.toMatch(/border-gray-200/);
+      expect(input.style.borderColor).toBe("var(--line)");
+    }
+  });
 });

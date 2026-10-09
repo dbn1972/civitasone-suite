@@ -5,51 +5,28 @@
  * Registered as a route only (app.ts, dynamic import) but had zero test
  * references anywhere in the service.
  *
- * REAL BUG (found while writing this test, not fixed here -- see PR
- * description): the ENTIRE module is non-functional against a real database.
- * `schema.ts` declares four tables in the `metadata` Postgres schema --
- * `kv_store`, `lookup_tables`, `lookup_values`, `enum_definitions` -- but NO
- * migration anywhere in the repo creates any of them (confirmed by grepping
- * every `*.sql` file in the repository, not just this service's own
- * migrations/ directory). Confirmed live against a real disposable Postgres
- * bootstrapped via this repo's own scripts/ci/bootstrap-postgres.sh: `\dn`
- * shows the `metadata` schema exists, and `\dt metadata.*` lists the 12
- * tables the OTHER metadata-service modules (entities, fields, layouts,
- * forms, numbering, etc.) own -- all real -- but none of this module's four.
- * Every route below that reaches the database 500s on every real request,
- * for every tenant, with a literal `relation "metadata.<table>" does not
- * exist` error. This is the same bug CLASS already disclosed (not fixed) for
- * `tenant-service/tenant-extensions` (COMP-007 tranche 2) and
- * `policy-service/policies` (also tranche 2) -- adding the missing migration
- * is a real schema/ops change outside this gap's "add tests" DoD, so it is
- * disclosed here, not fixed, matching that exact precedent.
+ * History: `schema.ts` declares four tables in the `metadata` Postgres schema
+ * -- `kv_store`, `lookup_tables`, `lookup_values`, `enum_definitions` -- and no
+ * migration used to create any of them, so every DB-touching route answered 500
+ * (`relation "metadata.<table>" does not exist`) and this file asserted those
+ * 500s as a KNOWN ISSUE. Migration 0007_lookups_tables.sql now creates them (with
+ * the unique indexes the routes' ON CONFLICT upserts need, plus RLS), so the
+ * DB-touching tests below assert the real behaviour: writes are accepted and read
+ * back, upserts replace, and tenants are isolated.
  *
  * Routes gated by auth/validation that fail BEFORE ever reaching the database
- * (401 with no token, 403 for a role outside the ACL, 400 for input that
- * fails `safeParse()`) work correctly today and are asserted as passing,
- * real behavior below -- only the DB-touching paths are broken.
+ * (401 with no token, 403 for a role outside the ACL, 400 for input that fails
+ * `safeParse()`) are asserted first.
  *
  * Also shares config module's disclosed error-handling gap (see
- * comp-007-config-smoke.test.ts's file header for the full root-cause
- * writeup: neither `config` nor `lookups` registers a local Fastify error
- * handler, so the service-level fallback -- confirmed dead for every route in
- * this app -- never converts an unhandled error into the service's normal
- * `{code, message, correlationId}` envelope). This module happens to shield
- * itself from the ZodError half of that gap already: every route funnels
- * validation through a local `safeParse()` helper that calls zod's
- * `.safeParse()` (never throws) and converts a failure into a thrown
- * `HttpError(400, "VALIDATION_FAILED", ...)` directly -- confirmed below, a
- * real 400. But the missing-migration 500s below are a DIFFERENT error
- * (Postgres `relation does not exist`, not a ZodError) and are NOT
- * HttpError-shaped either, so they still fall through to Fastify's bare
- * built-in default -- a generic 500, not even the `VALIDATION_FAILED`-style
- * envelope.
+ * comp-007-config-smoke.test.ts's file header): neither `config` nor `lookups`
+ * registers a local Fastify error handler. This module shields itself from the
+ * ZodError half of that gap: every route funnels validation through a local
+ * `safeParse()` that throws `HttpError(400, "VALIDATION_FAILED", ...)`.
  *
  * Two write routes (POST /kv, POST /:entityType/:entityId) carry their own
- * pre-existing "Deep-verify audit" comments noting a PRIOR fix already closed
- * a missing-ADMIN-check gap on both -- current code already has
- * requireRole(ctx, ADMIN) on both, confirmed by reading routes.ts; nothing
- * left to do there.
+ * "Deep-verify audit" comments noting a PRIOR fix added requireRole(ctx, ADMIN)
+ * on both; confirmed below.
  */
 import { randomUUID } from "node:crypto";
 import { describe, it, expect, afterAll } from "vitest";
@@ -73,7 +50,7 @@ afterAll(async () => {
   await sqlClient.end();
 });
 
-describe("COMP-007: lookups -- auth/validation gates that fail BEFORE reaching the (broken) database", () => {
+describe("COMP-007: lookups -- auth/validation gates that fail BEFORE reaching the database", () => {
   it("GET /v1/metadata/kv returns 401 without a token", async () => {
     const res = await app.inject({ method: "GET", url: "/v1/metadata/kv" });
     expect(res.statusCode).toBe(401);
@@ -113,114 +90,105 @@ describe("COMP-007: lookups -- auth/validation gates that fail BEFORE reaching t
   });
 });
 
-describe("COMP-007: lookups -- KNOWN ISSUE (see file header): every DB-touching route 500s, real Postgres error confirmed", () => {
-  it("GET /v1/metadata/kv: real Postgres 'relation does not exist' for metadata.kv_store", async () => {
+describe("COMP-007: lookups -- DB-backed behaviour against the migrated tables (0007_lookups_tables.sql)", () => {
+  const admin = (tid: string) => authHeaders(["tenant_admin"], tid);
+  const staff = (tid: string) => authHeaders(["staff"], tid);
+
+  it("kv: a write is accepted, read back by namespace and key, and a second write to the same key replaces it (ON CONFLICT upsert)", async () => {
     const tid = randomUUID();
-    const res = await app.inject({
-      method: "GET",
-      url: "/v1/metadata/kv",
-      headers: authHeaders(["staff"], tid),
-    });
-    expect(res.statusCode).toBe(500);
-    expect(res.json().message).toContain('relation "metadata.kv_store" does not exist');
+    const first = await app.inject({ method: "POST", url: "/v1/metadata/kv", headers: admin(tid), payload: { ns: "prefs", k: "theme", v: { color: "blue" } } });
+    expect(first.statusCode).toBe(202);
+    const second = await app.inject({ method: "POST", url: "/v1/metadata/kv", headers: admin(tid), payload: { ns: "prefs", k: "theme", v: { color: "green" } } });
+    expect(second.statusCode).toBe(202);
+    await app.inject({ method: "POST", url: "/v1/metadata/kv", headers: admin(tid), payload: { ns: "prefs", k: "density", v: "compact" } });
+
+    const all = await app.inject({ method: "GET", url: "/v1/metadata/kv?ns=prefs", headers: staff(tid) });
+    expect(all.statusCode).toBe(200);
+    const rows = (all.json() as { data: Array<{ k: string; v: unknown }> }).data;
+    expect(rows).toHaveLength(2);
+    expect(rows.find((r) => r.k === "theme")!.v).toEqual({ color: "green" });
+
+    const one = await app.inject({ method: "GET", url: "/v1/metadata/kv?ns=prefs&k=density", headers: staff(tid) });
+    expect((one.json() as { data: Array<{ k: string; v: unknown }> }).data).toEqual([expect.objectContaining({ k: "density", v: "compact" })]);
+
+    const empty = await app.inject({ method: "GET", url: "/v1/metadata/kv?ns=other", headers: staff(tid) });
+    expect((empty.json() as { data: unknown[] }).data).toEqual([]);
   });
 
-  it("POST /v1/metadata/kv (authorized, valid body): same table, same 500", async () => {
-    const tid = randomUUID();
-    const res = await app.inject({
-      method: "POST",
-      url: "/v1/metadata/kv",
-      headers: authHeaders(["tenant_admin"], tid),
-      payload: { ns: "prefs", k: "theme", v: { color: "blue" } },
-    });
-    expect(res.statusCode).toBe(500);
-    expect(res.json().message).toContain('relation "metadata.kv_store" does not exist');
+  it("kv: is tenant-isolated", async () => {
+    const a = randomUUID();
+    const b = randomUUID();
+    await app.inject({ method: "POST", url: "/v1/metadata/kv", headers: admin(a), payload: { k: "secret", v: 1 } });
+    const res = await app.inject({ method: "GET", url: "/v1/metadata/kv", headers: staff(b) });
+    expect((res.json() as { data: unknown[] }).data).toEqual([]);
   });
 
-  it("GET /v1/metadata/lookups: real Postgres 'relation does not exist' for metadata.lookup_tables", async () => {
+  it("lookups: create a table, add values, read it back with only its active values; unknown code is a real 404", async () => {
     const tid = randomUUID();
-    const res = await app.inject({
-      method: "GET",
-      url: "/v1/metadata/lookups",
-      headers: authHeaders(["staff"], tid),
-    });
-    expect(res.statusCode).toBe(500);
-    expect(res.json().message).toContain('relation "metadata.lookup_tables" does not exist');
+    const create = await app.inject({ method: "POST", url: "/v1/metadata/lookups", headers: admin(tid), payload: { code: "ward_types", label: "Ward Types", description: "d" } });
+    expect(create.statusCode).toBe(202);
+
+    for (const [valueCode, sortOrder] of [["urban", 2], ["rural", 1]] as const) {
+      const v = await app.inject({ method: "POST", url: "/v1/metadata/lookups/ward_types/values", headers: admin(tid), payload: { valueCode, label: valueCode.toUpperCase(), sortOrder } });
+      expect(v.statusCode).toBe(202);
+    }
+
+    const list = await app.inject({ method: "GET", url: "/v1/metadata/lookups", headers: staff(tid) });
+    expect((list.json() as { data: Array<{ code: string }> }).data.map((r) => r.code)).toEqual(["ward_types"]);
+
+    const one = await app.inject({ method: "GET", url: "/v1/metadata/lookups/ward_types", headers: staff(tid) });
+    expect(one.statusCode).toBe(200);
+    const body = one.json() as { code: string; label: string; isActive: boolean; values: Array<{ valueCode: string }> };
+    expect(body).toMatchObject({ code: "ward_types", label: "Ward Types", isActive: true });
+    expect(body.values.map((v) => v.valueCode).sort()).toEqual(["rural", "urban"]);
+
+    const missing = await app.inject({ method: "GET", url: "/v1/metadata/lookups/does_not_exist", headers: staff(tid) });
+    expect(missing.statusCode).toBe(404);
+    expect(missing.json().code).toBe("NOT_FOUND");
+
+    const addToMissing = await app.inject({ method: "POST", url: "/v1/metadata/lookups/does_not_exist/values", headers: admin(tid), payload: { valueCode: "x", label: "X" } });
+    expect(addToMissing.statusCode).toBe(404);
   });
 
-  it("POST /v1/metadata/lookups (authorized, valid body): same table, same 500 -- no lookup table can ever be created", async () => {
+  it("enums: create, read back, and re-posting the same name replaces its values (ON CONFLICT upsert); unknown name is a real 404", async () => {
     const tid = randomUUID();
-    const res = await app.inject({
-      method: "POST",
-      url: "/v1/metadata/lookups",
-      headers: authHeaders(["tenant_admin"], tid),
-      payload: { code: "ward_types", label: "Ward Types" },
-    });
-    expect(res.statusCode).toBe(500);
-    expect(res.json().message).toContain('relation "metadata.lookup_tables" does not exist');
+    const create = await app.inject({ method: "POST", url: "/v1/metadata/enums", headers: authHeaders(["platform_admin"], tid), payload: { name: "priority", values: ["low", "medium", "high"] } });
+    expect(create.statusCode).toBe(202);
+    const replace = await app.inject({ method: "POST", url: "/v1/metadata/enums", headers: authHeaders(["platform_admin"], tid), payload: { name: "priority", values: ["p1", "p2"] } });
+    expect(replace.statusCode).toBe(202);
+
+    const got = await app.inject({ method: "GET", url: "/v1/metadata/enums/priority", headers: staff(tid) });
+    expect(got.statusCode).toBe(200);
+    expect(got.json()).toMatchObject({ name: "priority", values: ["p1", "p2"] });
+
+    const missing = await app.inject({ method: "GET", url: "/v1/metadata/enums/nope", headers: staff(tid) });
+    expect(missing.statusCode).toBe(404);
   });
 
-  it("GET /v1/metadata/lookups/:code: 500, not the 404 a real 'not found' would be -- the SELECT itself fails, it never gets to say 'no such row'", async () => {
+  it("schemas: catalogues this tenant's lookup tables and enums together", async () => {
     const tid = randomUUID();
-    const res = await app.inject({
-      method: "GET",
-      url: "/v1/metadata/lookups/anything",
-      headers: authHeaders(["staff"], tid),
-    });
-    expect(res.statusCode).toBe(500);
-    expect(res.json().message).toContain('relation "metadata.lookup_tables" does not exist');
+    await app.inject({ method: "POST", url: "/v1/metadata/lookups", headers: admin(tid), payload: { code: "dept_codes", label: "Departments" } });
+    await app.inject({ method: "POST", url: "/v1/metadata/enums", headers: admin(tid), payload: { name: "status", values: ["open", "closed"] } });
+
+    const res = await app.inject({ method: "GET", url: "/v1/metadata/schemas", headers: staff(tid) });
+    expect(res.statusCode).toBe(200);
+    const data = (res.json() as { data: Array<{ type: string; code?: string; name?: string }> }).data;
+    expect(data).toHaveLength(2);
+    expect(data.find((d) => d.type === "lookup")!.code).toBe("dept_codes");
+    expect(data.find((d) => d.type === "enum")!.name).toBe("status");
   });
 
-  it("GET /v1/metadata/enums/:name: real Postgres 'relation does not exist' for metadata.enum_definitions", async () => {
-    const tid = randomUUID();
-    const res = await app.inject({
-      method: "GET",
-      url: "/v1/metadata/enums/anything",
-      headers: authHeaders(["staff"], tid),
-    });
-    expect(res.statusCode).toBe(500);
-    expect(res.json().message).toContain('relation "metadata.enum_definitions" does not exist');
-  });
-
-  it("POST /v1/metadata/enums (authorized, valid body): same table, same 500", async () => {
-    const tid = randomUUID();
-    const res = await app.inject({
-      method: "POST",
-      url: "/v1/metadata/enums",
-      headers: authHeaders(["platform_admin"], tid),
-      payload: { name: "priority", values: ["low", "medium", "high"] },
-    });
-    expect(res.statusCode).toBe(500);
-    expect(res.json().message).toContain('relation "metadata.enum_definitions" does not exist');
-  });
-
-  it("GET /v1/metadata/schemas: 500 too -- it reads BOTH broken tables (lookup_tables and enum_definitions) via Promise.all", async () => {
-    const tid = randomUUID();
-    const res = await app.inject({
-      method: "GET",
-      url: "/v1/metadata/schemas",
-      headers: authHeaders(["staff"], tid),
-    });
-    expect(res.statusCode).toBe(500);
-  });
-
-  it("generic entity metadata GET/POST: 500 too -- it is backed by the same broken kv_store table", async () => {
+  it("generic entity metadata: POST then GET round-trips under the entity's namespace and is isolated per entity", async () => {
     const tid = randomUUID();
     const entityId = randomUUID();
-    const write = await app.inject({
-      method: "POST",
-      url: `/v1/metadata/trade_license/${entityId}`,
-      headers: authHeaders(["tenant_admin"], tid),
-      payload: { k: "renewalNote", v: "pending inspection" },
-    });
-    expect(write.statusCode).toBe(500);
+    const write = await app.inject({ method: "POST", url: `/v1/metadata/trade_license/${entityId}`, headers: admin(tid), payload: { k: "renewalNote", v: "pending inspection" } });
+    expect(write.statusCode).toBe(202);
 
-    const read = await app.inject({
-      method: "GET",
-      url: `/v1/metadata/trade_license/${entityId}`,
-      headers: authHeaders(["staff"], tid),
-    });
-    expect(read.statusCode).toBe(500);
-    expect(read.json().message).toContain('relation "metadata.kv_store" does not exist');
+    const read = await app.inject({ method: "GET", url: `/v1/metadata/trade_license/${entityId}`, headers: staff(tid) });
+    expect(read.statusCode).toBe(200);
+    expect(read.json()).toMatchObject({ entityType: "trade_license", entityId, data: [expect.objectContaining({ k: "renewalNote", v: "pending inspection" })] });
+
+    const otherEntity = await app.inject({ method: "GET", url: `/v1/metadata/trade_license/${randomUUID()}`, headers: staff(tid) });
+    expect((otherEntity.json() as { data: unknown[] }).data).toEqual([]);
   });
 });

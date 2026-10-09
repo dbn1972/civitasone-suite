@@ -8,7 +8,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as budgetRepo from "../budget/repo.js";
-import { assertThreeWayMatchPresent, assertThreeWayMatch, assertBillPassed, assertBillRejectable, assertPaymentSubmittable, PAYMENT_SUBMIT_BLOCKED_LIST, assertValidPaymentMode, assertDistinctMakerChecker, assertPayerNotPasser, nextStage, deviationExceedsTolerance, DEFAULT_THREE_WAY_TOLERANCE_PCT, DomainError } from "./domain.js";
+import { assertThreeWayMatchPresent, assertThreeWayMatch, assertBillPassed, assertBillRejectable, assertBillApprovable, assertPaymentSubmittable, PAYMENT_SUBMIT_BLOCKED_LIST, assertValidPaymentMode, assertDistinctMakerChecker, assertPayerNotPasser, nextStage, deviationExceedsTolerance, DEFAULT_THREE_WAY_TOLERANCE_PCT, DomainError } from "./domain.js";
 import { minorString } from "@civitasone/schemas/money";
 import * as ucRepo from "./uc-repo.js";
 import { assertUCWithinSanction, assertUCPeriodValid } from "./uc-domain.js";
@@ -240,7 +240,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
   });
 
   sub(COMMANDS.billApprove, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; notes?: string };
+    const p = msg.payload as { id: string; tenantId: string; notes?: string; expectedStage?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const bill = await repo.findBillByIdTx(tx, p.id);
@@ -248,6 +248,32 @@ export function registerPaymentsConsumers(queue: Queue): void {
       // C4 FIX: Maker-checker on bill approval — the approver must differ from
       // the bill creator. Self-approval of a bill is a segregation-of-duties violation.
       assertDistinctMakerChecker(bill.createdBy, msg.actorId);
+      // NEW-001 (FF-06, D-66): status/stage guard. A rejected/passed/paid/
+      // on_hold/under_review bill, or one already at the final 'pay' stage, is
+      // not approvable. A DomainError here is a PERMANENT business rejection
+      // (retrying can never make a rejected bill approvable again), so it is
+      // re-thrown as NonRetryableError — exactly as billReject does for
+      // assertBillRejectable — instead of a bare DomainError the queue would
+      // retry as transient (probe P4's retry storm). This is the P3 fix.
+      const currentStage = bill.stage ?? "section";
+      try {
+        assertBillApprovable(bill.status, currentStage);
+      } catch (err) {
+        if (err instanceof DomainError) throw new NonRetryableError(`[finance/payments] ${err.message}`, err);
+        throw err;
+      }
+      // NEW-001: the approver acted on a specific stage. If the bill has since
+      // advanced past the stage the command named, the intent is stale — refuse
+      // it (STAGE_CHANGED) rather than silently applying stage-2 logic to a
+      // stage-1 click. A v1.0 message carries no expectedStage ("stage as
+      // found"): the status/stage guard above and the guarded UPDATE below
+      // still fully apply. legacyUnstaged flags that case in the audit trail.
+      const legacyUnstaged = p.expectedStage == null;
+      if (p.expectedStage != null && p.expectedStage !== currentStage) {
+        throw new NonRetryableError(
+          `[finance/payments] STAGE_CHANGED: approval expected stage '${p.expectedStage}' but bill ${p.id} is at '${currentStage}'`,
+        );
+      }
       // 3-way match must be valid before passing. When the bill carries the
       // authoritative PO + GRN(accepted) amounts (snapshotted at create or
       // resolved from the AP read-model), enforce the real tri-leg
@@ -271,15 +297,8 @@ export function registerPaymentsConsumers(queue: Queue): void {
       } else {
         assertThreeWayMatchPresent(bill.poRef, bill.grnRef);
       }
-      const currentStage = bill.stage ?? "section";
       const newStage = nextStage(currentStage);
       const isPassed = newStage === "pay";
-      await repo.updateBill(tx, p.id, {
-        stage: newStage,
-        status: isPassed ? "passed" : "pending",
-        updatedBy: msg.actorId,
-        version: (bill.version ?? 1) + 1,
-      });
       if (isPassed) {
         // BUG FIX: this is the point a bill actually posts to the GL (type
         // "bill", never adjustment/closing) — gate it on the period status of
@@ -291,6 +310,26 @@ export function registerPaymentsConsumers(queue: Queue): void {
         assertPeriodOpenForApPosting(
           await getPeriodStatusTx(tx, p.tenantId, billPeriodForClose), billPeriodForClose, "approve bill",
         );
+      }
+      // NEW-001 (house rule: "the database is the guard"). ONE guarded UPDATE
+      // advances the stage only while stage == currentStage AND status ==
+      // 'pending' AND version == the loaded version. Zero rows means a
+      // concurrent approval already advanced it (two officers, same stage, same
+      // instant) — refuse with a NonRetryableError that rolls back the WHOLE
+      // transaction, including markProcessed, so a corrected retry with the
+      // same (stage-exact) id is not blocked by the inbox.
+      const advanced = await repo.advanceBillStage(tx, {
+        id: p.id, tenantId: p.tenantId, fromStage: currentStage,
+        toStage: newStage, toStatus: isPassed ? "passed" : "pending",
+        version: bill.version ?? 1, updatedBy: msg.actorId,
+      });
+      if (advanced === 0) {
+        throw new NonRetryableError(
+          `[finance/payments] STAGE_CHANGED: bill ${p.id} was not at stage '${currentStage}'/pending/v${bill.version ?? 1} when the guarded advance ran (concurrent approval or status change)`,
+        );
+      }
+      if (isPassed) {
+        const billDateForClose = bill.billDate ?? new Date(bill.createdAt).toISOString().slice(0, 10);
         await enqueue(tx, {
           topic: EVENTS.billPassed, eventType: EVENTS.billPassed,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
@@ -308,7 +347,12 @@ export function registerPaymentsConsumers(queue: Queue): void {
           sourceKey: `bill:${p.id}`, type: "bill", postingDate: billDate, lines,
         });
       }
-      await audit(tx, msg, "approve", "bill", p.id);
+      // C6 FIX (NEW-001): the audit trail now names WHICH stage was approved and
+      // what it advanced to (a CAG audit asks "who passed which stage, when").
+      // legacyUnstaged marks a v1.0 command processed as "stage as found".
+      await audit(tx, msg, "approve", "bill", p.id, "success", {
+        stage: currentStage, nextStage: newStage, ...(legacyUnstaged ? { legacyUnstaged: true } : {}),
+      });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "bill", p.id));
   });
@@ -643,10 +687,10 @@ function isUniqueViolation(err: unknown): boolean {
   return e?.code === "23505" || e?.cause?.code === "23505";
 }
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string, outcome: "success" | "failure" = "success"): Promise<void> {
+async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string, outcome: "success" | "failure" = "success", detail?: Record<string, unknown>): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "finance", action, resourceType, resourceId, outcome },
+    payload: { service: "finance", action, resourceType, resourceId, outcome, ...(detail ?? {}) },
   });
 }

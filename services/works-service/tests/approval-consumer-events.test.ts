@@ -11,7 +11,10 @@ const mockUpdated: unknown[] = [];
 const mockEnqueued: Array<{ topic: string; payload?: unknown }> = [];
 let mockMarkResult = true;
 
+let mockSelectRows: unknown[] = [{ id: "aa-1", createdBy: "00000000-aaaa-4000-8000-0000000000ff" }];
+
 const mockTx: any = {
+  select: () => ({ from: () => ({ where: () => ({ limit: () => Promise.resolve(mockSelectRows) }) }) }),
   insert: (t: unknown) => { mockInserted.push(t); return { values: () => Promise.resolve() }; },
   update: (t: unknown) => { mockUpdated.push(t); return { set: () => ({ where: () => Promise.resolve() }) }; },
 };
@@ -43,6 +46,9 @@ beforeEach(() => {
   mockUpdated.length = 0;
   mockEnqueued.length = 0;
   mockMarkResult = true;
+  // Finalize now reads the record for the maker-checker check: the creator is a
+  // DIFFERENT actor than ACTOR_A (the finalizer) unless a test overrides it.
+  mockSelectRows = [{ id: "aa-1", createdBy: "00000000-aaaa-4000-8000-0000000000ff" }];
 });
 
 async function approvalHandlers(): Promise<Record<string, Function>> {

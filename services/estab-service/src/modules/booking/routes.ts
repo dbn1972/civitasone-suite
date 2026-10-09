@@ -5,12 +5,30 @@ import { z } from "zod";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
+import { hasAnyRole } from "@civitasone/auth";
+import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { maskAndAuditRead } from "../../shared/data-governance.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
 const ADMIN_ROLES  = ["estab_officer", "estab_admin", "super_admin"];
 const CITIZEN_ROLES = [...ADMIN_ROLES, "citizen", "employee"];
+// Recording a payment settles a booking: officers and accounts roles only,
+// never the citizen who owes the money.
+const PAYMENT_ROLES = [...ADMIN_ROLES, "finance_officer", "finance_admin"];
+
+// IDOR: officers see the tenant's bookings; citizen/employee callers only the
+// ones they created.
+const ownerScope = (ctx: RequestContext): string | undefined =>
+  hasAnyRole(ctx, ADMIN_ROLES) ? undefined : ctx.actorId;
+
+async function assertCanAct(ctx: RequestContext, id: string): Promise<void> {
+  const owner = ownerScope(ctx);
+  if (owner && !(await queries.getBooking(ctx.tenantId, id, owner))) {
+    throw new HttpError(404, "NOT_FOUND", "booking not found");
+  }
+}
 
 const idParam = z.object({ id: z.string().uuid() });
 const dateQuery = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) });
@@ -115,22 +133,25 @@ export async function bookingRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const q = listQuery.parse(req.query);
-    return reply.send(await queries.listBookings(ctx.tenantId, { status: q.status }, q.limit, q.offset));
+    const page = await queries.listBookings(ctx.tenantId, { status: q.status, ownerId: ownerScope(ctx) }, q.limit, q.offset);
+    return reply.send({ ...page, data: await maskAndAuditRead(ctx, "booking", page.data as Record<string, unknown>[]) });
   });
 
   app.get("/v1/estab/booking/bookings/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const { id } = idParam.parse(req.params);
-    const booking = await queries.getBooking(ctx.tenantId, id);
+    const booking = await queries.getBooking(ctx.tenantId, id, ownerScope(ctx));
     if (!booking) throw new HttpError(404, "NOT_FOUND", "booking not found");
-    return reply.send({ data: booking });
+    const [masked] = await maskAndAuditRead(ctx, "booking", [booking as Record<string, unknown>]);
+    return reply.send({ data: masked });
   });
 
   app.post("/v1/estab/booking/bookings/:id/submit", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertCanAct(ctx, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.submitBooking(ctx, id));
   });
 
@@ -143,7 +164,7 @@ export async function bookingRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/estab/booking/bookings/:id/pay", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, CITIZEN_ROLES);
+    requireRole(ctx, PAYMENT_ROLES);
     const { id } = idParam.parse(req.params);
     const body = paymentBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.recordPayment(ctx, id, body));
@@ -153,6 +174,7 @@ export async function bookingRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertCanAct(ctx, id);
     const body = cancelBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.cancelBooking(ctx, id, body));
   });

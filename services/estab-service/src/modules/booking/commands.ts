@@ -1,20 +1,20 @@
-import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
+import { commandId } from "../../shared/idempotency.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
 async function publish(type: string, ctx: RequestContext, id: string, payload: Record<string, unknown>): Promise<void> {
   await queue.publish(type, {
-    messageId: id, type,
+    messageId: commandId(ctx, `${type}:${id}`), type,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload,
   });
 }
 
 export async function createFacility(ctx: RequestContext, body: Record<string, unknown>): Promise<Accepted> {
-  const id = randomUUID();
+  const id = commandId(ctx, `${COMMANDS.bookingFacilityCreate}:id`);
   await publish(COMMANDS.bookingFacilityCreate, ctx, id, { id, tenantId: ctx.tenantId, ...body });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
@@ -25,7 +25,7 @@ export async function updateFacility(ctx: RequestContext, facilityId: string, bo
 }
 
 export async function createBooking(ctx: RequestContext, body: Record<string, unknown>): Promise<Accepted> {
-  const id = randomUUID();
+  const id = commandId(ctx, `${COMMANDS.bookingCreate}:id`);
   await publish(COMMANDS.bookingCreate, ctx, id, { id, tenantId: ctx.tenantId, ...body });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

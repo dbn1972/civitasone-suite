@@ -48,6 +48,7 @@ export default defineConfig({
         "src/modules/*/schema.ts",
         "src/modules/*/repo.ts",
         "src/modules/*/queries.ts",
+        "**/*.config.{ts,js,mjs,cjs}",
       ],
       thresholds: {
         lines: 80,

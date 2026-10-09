@@ -44,6 +44,7 @@ export default defineConfig({
         "src/modules/contacts/consumer.ts",
         "src/modules/deals/consumer.ts",
         "src/modules/activities/consumer.ts",
+        "**/*.config.{ts,js,mjs,cjs}",
       ],
       thresholds: {
         lines: 80,

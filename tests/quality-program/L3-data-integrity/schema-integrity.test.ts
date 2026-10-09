@@ -139,6 +139,28 @@ describe("L3 — Preflight: every configured database is reachable", () => {
   });
 });
 
+/**
+ * Columns whose NAME contains a money word but which hold something else. The
+ * detector matches on name, so each is excluded by exact name (never by pattern)
+ * and the reason is recorded here:
+ *   fee_pct, credit_hours       -- a percentage / a count of hours (original entries)
+ *   price_tolerance_pct,
+ *   price_variance_pct          -- procurement three-way-match: percentage thresholds
+ *   balance_days_exact          -- hrms leave balance in (fractional) DAYS, not rupees
+ */
+const NOT_MONEY_COLUMN_NAMES =
+  "('fee_pct', 'credit_hours', 'price_tolerance_pct', 'price_variance_pct', 'balance_days_exact')";
+
+/**
+ * Dated, reasoned exceptions: real money columns still held as numeric.
+ *   crm.rti_requests.fee_amount -- 2026-10-09. Legacy RUPEES column kept beside the
+ *     bigint fee_amount_minor so the RTI API can keep accepting/returning `feeAmount`
+ *     while clients move to `feeAmountMinor` (crm-service rti/rti-repo.ts resolveFee()
+ *     reconciles the two and rejects disagreeing values). Removing it is an API
+ *     deprecation, not a schema fix. Remove this entry when the column is dropped.
+ */
+const KNOWN_NUMERIC_MONEY_EXCEPTIONS = "('crm.rti_requests.fee_amount')";
+
 describe("L3 — Money columns: no float/real/double/numeric money columns", () => {
   for (const svc of SERVICE_DBS) {
     it(`${svc.name}: money columns are bigint (not float/numeric)`, () => {
@@ -157,7 +179,8 @@ describe("L3 — Money columns: no float/real/double/numeric money columns", () 
                    OR column_name ILIKE '%balance%' OR column_name ILIKE '%paise%'
                    OR column_name ILIKE '%minor%' OR column_name ILIKE '%fee%')
               AND data_type IN ('real', 'double precision', 'numeric', 'decimal', 'money')
-              AND column_name NOT IN ('fee_pct', 'credit_hours')`,
+              AND column_name NOT IN ${NOT_MONEY_COLUMN_NAMES}
+              AND (table_schema || '.' || table_name || '.' || column_name) NOT IN ${KNOWN_NUMERIC_MONEY_EXCEPTIONS}`,
         ),
         `${svc.name} money column types`,
       );
@@ -304,6 +327,13 @@ describe("L3 — Double-entry invariant (finance GL)", () => {
         FIN.pw,
         `BEGIN;
          SET LOCAL app.tenant_id = '${TEST_TENANT}';
+         -- fk_jlines_journal: a line cannot exist without its journal header, so plant
+         -- the two headers first (same schema as the lines table), all inside the
+         -- transaction that is rolled back below.
+         INSERT INTO ${rel.split(".")[0]}.finance_journals
+                (id, tenant_id, voucher_no, type, posting_date, created_by, updated_by)
+         VALUES ('${balanced}',   '${TEST_TENANT}', 'L3-CANARY-BALANCED',   'journal', current_date, '${head}', '${head}'),
+                ('${unbalanced}', '${TEST_TENANT}', 'L3-CANARY-UNBALANCED', 'journal', current_date, '${head}', '${head}');
          INSERT INTO ${rel} (id, tenant_id, journal_id, head_id, debit_minor, credit_minor, posting_date, journal_type)
          VALUES (gen_random_uuid(), '${TEST_TENANT}', '${balanced}',   '${head}', 100, 100, current_date, 'journal'),
                 (gen_random_uuid(), '${TEST_TENANT}', '${unbalanced}', '${head}', 100,  99, current_date, 'journal');

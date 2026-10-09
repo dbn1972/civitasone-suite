@@ -31,6 +31,7 @@ export default defineConfig({
         "src/modules/hierarchy/consumer.ts",
         "src/modules/jurisdiction/consumer.ts",
         "src/modules/pincode/consumer.ts",
+        "**/*.config.{ts,js,mjs,cjs}",
       ],
       thresholds: {
         lines: 80,

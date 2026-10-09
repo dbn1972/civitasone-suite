@@ -5,8 +5,8 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
-import { resolveApprovalType, canFinalize, canEnterTS } from "./domain.js";
-import { countAaForWork, countTsForWork, getAa, getTs, listAa, listTs } from "./repo.js";
+import { resolveApprovalType, canFinalize, canEnterTS, isSelfApproval } from "./domain.js";
+import { countAaForWork, countTsForWork, countAa, countTs, getAa, getTs, listAa, listTs } from "./repo.js";
 import { getProposal } from "../proposal/repo.js";
 import { paginationSchema } from "../masters/validators.js";
 
@@ -22,8 +22,13 @@ export async function approvalRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
     const query = paginationSchema.parse(req.query);
-    const data = await listAa(ctx.tenantId, query.page, query.pageSize);
-    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total: data.length } });
+    const [data, total] = await Promise.all([
+      listAa(ctx.tenantId, query.page, query.pageSize),
+      countAa(ctx.tenantId),
+    ]);
+    // GAP2-WORKS-APPROVALS-05: report the REAL tenant total (not data.length,
+    // which caps at pageSize and makes the register + stat cards undercount).
+    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total } });
   });
 
   // Tenant-wide TS register (paginated) — the FE approvals list page.
@@ -31,8 +36,12 @@ export async function approvalRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
     const query = paginationSchema.parse(req.query);
-    const data = await listTs(ctx.tenantId, query.page, query.pageSize);
-    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total: data.length } });
+    const [data, total] = await Promise.all([
+      listTs(ctx.tenantId, query.page, query.pageSize),
+      countTs(ctx.tenantId),
+    ]);
+    // GAP2-WORKS-APPROVALS-05: report the REAL tenant total (see aa route).
+    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total } });
   });
 
   // Single AA by id (tenant-scoped) — the FE AA detail page. Added so a record
@@ -79,6 +88,12 @@ export async function approvalRoutes(app: FastifyInstance): Promise<void> {
     const check = canFinalize({ id: aa.id, status: aa.status });
     if (!check.allowed) throw new HttpError(422, "FINALIZATION_BLOCKED", check.reason!);
 
+    // GAP2-WORKS-APPROVALS-01: maker-checker — the finalizer must differ from
+    // the creator (two-person rule). A self-finalize is rejected 422.
+    if (isSelfApproval(ctx.actorId, { createdBy: aa.createdBy })) {
+      throw new HttpError(422, "SELF_APPROVAL_FORBIDDEN", "The creator of an AA cannot finalize it (maker-checker rule)");
+    }
+
     return sendAccepted(reply, acceptedResponseSchema, await commands.finalizeAaCommand(ctx, id));
   });
 
@@ -110,6 +125,12 @@ export async function approvalRoutes(app: FastifyInstance): Promise<void> {
 
     const check = canFinalize({ id: ts.id, status: ts.status });
     if (!check.allowed) throw new HttpError(422, "FINALIZATION_BLOCKED", check.reason!);
+
+    // GAP2-WORKS-APPROVALS-01: maker-checker — the finalizer must differ from
+    // the creator (two-person rule). A self-finalize is rejected 422.
+    if (isSelfApproval(ctx.actorId, { createdBy: ts.createdBy })) {
+      throw new HttpError(422, "SELF_APPROVAL_FORBIDDEN", "The creator of a TS cannot finalize it (maker-checker rule)");
+    }
 
     return sendAccepted(reply, acceptedResponseSchema, await commands.finalizeTsCommand(ctx, id));
   });

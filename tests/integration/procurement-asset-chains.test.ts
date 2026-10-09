@@ -22,6 +22,12 @@
  * the REAL asset consumer, and asserts the asset insert, the balanced GL emit,
  * and idempotency on redelivery.
  *
+ * GL accounts: asset-service has NO default chart (enterprise/postings.ts). The
+ * acquisition journal posts to the tenant's configured asset_settings heads
+ * (fixed asset 1200, GRN clearing 2070 here); with none configured the asset is
+ * still saved and the journal is deferred (gl_post_status "awaiting_accounts",
+ * audit "gl_deferred"), never posted to a guessed account. Both paths are tested.
+ *
  * DB + outbox + cache are stubbed in-memory so it runs in CI with no Postgres.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -115,6 +121,13 @@ const EXPECTED_TOTAL_MINOR = 500000n * 3n; // 1,500,000 paise
 
 let harness: ChainHarness;
 
+/** The tenant has configured its asset GL heads (asset_settings row). */
+function configureGlAccounts(): void {
+  harness.seedSelect("asset_settings", [
+    { tenantId: TENANT, fixedAssetAccountCode: FIXED_ASSET_CODE, grnClearingAccountCode: GRN_CLEARING_CODE },
+  ]);
+}
+
 beforeEach(async () => {
   harness = new ChainHarness();
   setCurrentHarness(harness);
@@ -129,6 +142,7 @@ afterEach(async () => {
 
 describe("Chain #2: procurement.grn.accepted → asset capitalization → GL", () => {
   it("an accepted fixed-asset GRN registers the asset and posts a balanced acquisition GL (Dr 1200 / Cr 2070)", async () => {
+    configureGlAccounts();
     const glPost = harness.nextEvent("finance.gl.post");
     const grnId = "abcd1234-0011-4000-8000-000000000001";
 
@@ -187,6 +201,7 @@ describe("Chain #2: procurement.grn.accepted → asset capitalization → GL", (
   });
 
   it("a redelivered GRN event is processed once — one asset, one journal (idempotency)", async () => {
+    configureGlAccounts();
     const glPosts: string[] = [];
     harness.queue.subscribe("finance.gl.post", async () => {
       glPosts.push("posted");
@@ -204,6 +219,32 @@ describe("Chain #2: procurement.grn.accepted → asset capitalization → GL", (
     const assetRows = harness.inserts.filter((i) => i.table.includes("asset_assets"));
     expect(assetRows).toHaveLength(1);
     expect(glPosts).toHaveLength(1);
+  });
+
+  it("with no GL accounts configured the asset is still registered and its journal is deferred, not posted", async () => {
+    const glPosts: string[] = [];
+    harness.queue.subscribe("finance.gl.post", async () => {
+      glPosts.push("posted");
+    });
+    const audits: Array<Record<string, unknown>> = [];
+    harness.queue.subscribe("audit.event.record", async (m) => {
+      audits.push(m.payload as Record<string, unknown>);
+    });
+
+    await harness.queue.publish(
+      "procurement.grn.accepted",
+      envelope("eeee0004-0014-4000-8000-000000000001", "procurement.grn.accepted", grnAcceptedPayload("abcd1234-0014-4000-8000-000000000001")),
+    );
+    await new Promise((r) => setTimeout(r, 300));
+
+    // The operational record is kept...
+    expect(harness.inserts.filter((i) => i.table.includes("asset_assets"))).toHaveLength(1);
+    // ...but nothing is posted to a guessed account; the deferral is audited.
+    expect(glPosts).toHaveLength(0);
+    const deferred = audits.find((a) => a.action === "gl_deferred");
+    expect(deferred).toBeDefined();
+    expect(deferred!.outcome).toBe("failure");
+    expect((deferred!.details as { missing: string[] }).missing).toEqual(["fixed_asset", "grn_clearing"]);
   });
 
   it("a GRN with no fixed_asset lines registers nothing and posts no GL", async () => {

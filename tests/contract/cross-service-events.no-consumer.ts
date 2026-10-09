@@ -276,4 +276,5 @@ export const NO_CONSUMER_BY_DESIGN: Record<string, string> = {
   "crm.rti.responded": `${NO_CONSUMER_CATEGORY} — 2026-10-08 — rti responded audit/status fact in the crm lifecycle history (review-2 u07); no business consumer expected — ${NO_CONSUMER_DECISION_REF}`,
   "crm.service_request.created": `${NO_CONSUMER_CATEGORY} — 2026-10-08 — service request created audit/status fact in the crm lifecycle history (review-2 u07); no business consumer expected — ${NO_CONSUMER_DECISION_REF}`,
   "crm.service_request.status_changed": `${NO_CONSUMER_CATEGORY} — 2026-10-08 — service request status changed audit/status fact in the crm lifecycle history (review-2 u07); no business consumer expected — ${NO_CONSUMER_DECISION_REF}`,
+  "works.contractor.updated": `${NO_CONSUMER_CATEGORY} — 2026-10-08 — contractor updated audit/status fact in the works lifecycle history (review-2 u11); no business consumer expected — ${NO_CONSUMER_DECISION_REF}`,
 };

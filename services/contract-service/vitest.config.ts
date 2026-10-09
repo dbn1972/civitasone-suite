@@ -30,6 +30,7 @@ export default defineConfig({
         "src/modules/contracts/consumer.ts",
         "src/modules/contracts/eoffice-consumer.ts",
         "src/modules/rate/consumer.ts",
+        "**/*.config.{ts,js,mjs,cjs}",
       ],
       thresholds: {
         lines: 80,

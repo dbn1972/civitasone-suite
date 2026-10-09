@@ -42,7 +42,12 @@ export default defineConfig({
     },
     coverage: {
       provider: "v8",
-      exclude: ["dist/**", "src/index.ts", "src/worker.ts", "**/*.config.ts"],
+      // `exclude` REPLACES vitest's default list (which already skips
+      // eslint/vitest/etc `*.config.*`), so the pattern here must cover the
+      // JS-flavoured config too: this package's eslint.config.js (38 lines, 0%
+      // covered) was counted as source and dragged lines/statements from the
+      // measured 93.29 to 89.51, failing the 93 floor in CI.
+      exclude: ["dist/**", "src/index.ts", "src/worker.ts", "**/*.config.{ts,js,mjs,cjs}"],
       // REL-013: thresholds set at/just below real measured coverage
       // (lines 93.29 / branches 81.4 / functions 89.69 / statements 93.29,
       // via `pnpm --filter @civitasone/vendor-service run coverage`

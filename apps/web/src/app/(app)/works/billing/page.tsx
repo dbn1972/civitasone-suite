@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { PageHeader, Card } from "@/app/_components/ds";
-import { getBills } from "../_data/loaders";
+import { getBills, getBillsMeta } from "../_data/loaders";
 import { BillingRegister } from "./BillingTable";
 
 export default async function BillingPage() {
-  const { data: bills, source } = await getBills();
+  const [{ data: bills, source }, { data: billsMeta }] = await Promise.all([
+    getBills(),
+    getBillsMeta(),
+  ]);
 
   return (
     <div className="page-main wrap">
@@ -56,7 +59,7 @@ export default async function BillingPage() {
         }
       />
       <Card title="Works Bills">
-        <BillingRegister bills={bills} source={source === "error" ? "error" : "api"} />
+        <BillingRegister bills={bills} source={source === "error" ? "error" : "api"} total={billsMeta.total} />
       </Card>
     </div>
   );

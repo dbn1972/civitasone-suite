@@ -1,5 +1,5 @@
 import { randomInt } from "node:crypto";
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { parseMinor } from "@civitasone/schemas";
 import { db } from "../../shared/db.js";
 import { markProcessed, enqueue } from "../../shared/outbox.js";
@@ -58,6 +58,49 @@ export function registerProposalConsumers(rawQueue: Queue): void {
       await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "create", resourceType: "proposal", resourceId: p.id, outcome: "success" } });
     });
     await cache.invalidateResource(msg.tenantId, "master:work_proposals");
+  });
+
+  // GAP2-WORKS-PROPOSALS-02: the PATCH edit path now routes through this
+  // consumer (CQRS) instead of writing to Postgres inside the route handler.
+  // It applies the patch to a draft proposal and emits the domain event plus
+  // an `audit.event.record` (action=update, resourceType=proposal) in the SAME
+  // transaction — the edit was previously the only unaudited proposal
+  // mutation. The draft-only guard is re-asserted here (defence-in-depth; the
+  // route already checked it pre-enqueue).
+  queue.subscribe(COMMANDS.proposalUpdate, async (msg) => {
+    const { id, patch } = msg.payload as { id: string; patch: Record<string, unknown> };
+    await db.transaction(async (tx) => {
+      const ok = await markProcessed(tx, msg.messageId);
+      if (!ok) return;
+
+      const rows = await tx.select().from(workProposals)
+        .where(and(eq(workProposals.id, id), eq(workProposals.tenantId, msg.tenantId)))
+        .limit(1);
+      const existing = rows[0];
+      if (!existing) throw new NonRetryableError("PROPOSAL_NOT_FOUND: proposal not found for update");
+      if (existing.status !== "draft") {
+        throw new NonRetryableError("NOT_DRAFT: only draft proposals can be edited");
+      }
+
+      await tx.update(workProposals)
+        .set({
+          ...(patch as Partial<typeof workProposals.$inferInsert>),
+          updatedBy: msg.actorId,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(workProposals.id, id), eq(workProposals.tenantId, msg.tenantId)));
+
+      await enqueue(tx, {
+        topic: EVENTS.proposalUpdated,
+        eventType: EVENTS.proposalUpdated,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { id, fields: Object.keys(patch) },
+      });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "update", resourceType: "proposal", resourceId: id, outcome: "success", fields: Object.keys(patch) } });
+    });
+    await cache.invalidate(`works:${msg.tenantId}:proposal:${id}`);
   });
 
   queue.subscribe(COMMANDS.proposalDaoFinalize, async (msg) => {

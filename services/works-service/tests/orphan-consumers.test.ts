@@ -284,13 +284,19 @@ describe("Tender orphan consumers", () => {
     })).rejects.toThrow(/CONTRACTOR_NAME_MISMATCH/);
     expect(mockInserted).toHaveLength(0);
   });
+  // The consumer enforces maker-checker (reads the award row): seed an award
+  // created by a DIFFERENT actor than the finalizer (base.actorId).
+  const CREATOR = "33333333-3333-4333-8333-333333333333";
+  const DAO_FINALIZER = "44444444-4444-4444-8444-444444444444";
   it("awardDaoFinalize transitions award + emits dao_finalized", async () => {
+    mockSelectMap.set(awards, [{ id: "a-1", createdBy: CREATOR, daoFinalizedBy: null }]);
     const h = await load();
     await h[COMMANDS.awardDaoFinalize]({ ...base, payload: { id: "a-1" } });
     expect(mockUpdated).toHaveLength(1);
     expect(emitted(EVENTS.awardDaoFinalized)).toBe(true);
   });
   it("awardDoFinalize transitions award + emits do_finalized + finalized", async () => {
+    mockSelectMap.set(awards, [{ id: "a-1", createdBy: CREATOR, daoFinalizedBy: DAO_FINALIZER }]);
     const h = await load();
     await h[COMMANDS.awardDoFinalize]({ ...base, payload: { id: "a-1" } });
     expect(mockUpdated).toHaveLength(1);

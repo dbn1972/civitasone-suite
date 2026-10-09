@@ -42,3 +42,31 @@ describe("ApprovalsTable", () => {
     expect(screen.getByText("TS/1")).toBeInTheDocument();
   });
 });
+
+describe("ApprovalsTable — GAP2-WORKS-APPROVALS-05 true total + truncation notice", () => {
+  const aa100 = Array.from({ length: 100 }, (_v, i) => ({
+    id: `a${i}`, workNumber: `w${i}`, approvalNumber: `AA/${i}`, date: "01 Jan 2026",
+    authority: "x", amount: "100", type: "Original", status: "draft",
+  }));
+
+  it("Total AA shows the TRUE tenant count (101), not the capped page length (100)", () => {
+    render(<ApprovalsTable aaApprovals={aa100} tsApprovals={ts} source="api" aaTotal={101} tsTotal={1} />);
+    const totalAa = screen.getByText("Total AA").closest("div")?.parentElement;
+    expect(totalAa?.textContent).toContain("101");
+  });
+
+  it("shows a 'first 100 of 101' notice when the AA register is truncated", () => {
+    render(<ApprovalsTable aaApprovals={aa100} tsApprovals={ts} source="api" aaTotal={101} tsTotal={1} />);
+    expect(screen.getByText(/showing the first 100 of 101/i)).toBeInTheDocument();
+  });
+
+  it("labels the pending card as '(shown)' when truncated (count is over the page only)", () => {
+    render(<ApprovalsTable aaApprovals={aa100} tsApprovals={ts} source="api" aaTotal={101} tsTotal={1} />);
+    expect(screen.getByText(/Pending AA \(shown\)/i)).toBeInTheDocument();
+  });
+
+  it("no truncation notice when the page holds the whole set (rows == total)", () => {
+    render(<ApprovalsTable aaApprovals={aa} tsApprovals={ts} source="api" aaTotal={aa.length} tsTotal={ts.length} />);
+    expect(screen.queryByText(/showing the first/i)).not.toBeInTheDocument();
+  });
+});

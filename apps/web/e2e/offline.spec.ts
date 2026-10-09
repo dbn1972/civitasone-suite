@@ -8,6 +8,11 @@ import { authenticate } from './helpers/auth';
  * register (production build / `next start`); under `next dev` the SW is still
  * served from /public so registration succeeds.
  */
+// playwright.config.ts blocks service workers for every spec (page.route() cannot
+// see requests a worker handles, which made stubbed reads nondeterministic).
+// This is the one spec whose subject IS the worker, so it opts back in.
+test.use({ serviceWorkers: 'allow' });
+
 test.describe('Web offline-first', () => {
   test.beforeEach(async ({ page }) => {
     await authenticate(page);

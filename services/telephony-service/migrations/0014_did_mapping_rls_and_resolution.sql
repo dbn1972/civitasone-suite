@@ -38,18 +38,34 @@ CREATE POLICY tenant_isolation_policy ON telephony.did_mappings
 -- and only active rows matching that number are returned. Number comparison is
 -- normalised the same way `normalizeNumber()` does in the domain layer, so a
 -- carrier that formats the number with spaces/dashes still matches.
+-- Idempotent: migration 0019 moves ownership of this function to
+-- telephony_did_resolver, after which the service role (which runs this file)
+-- is no longer allowed to CREATE OR REPLACE it ("must be owner of function"),
+-- so a second bootstrap run aborted here. Create it only when absent; the
+-- body below is the definition 0019 takes ownership of.
+DO $mig$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'telephony' AND p.proname = 'did_mappings_for_number'
+  ) THEN
+    EXECUTE $fn$
 CREATE OR REPLACE FUNCTION telephony.did_mappings_for_number(p_number text)
 RETURNS TABLE (did_number varchar, tenant_id uuid, active boolean)
 LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = telephony, pg_temp
-AS $$
+AS $body$
   SELECT m.did_number, m.tenant_id, m.active
   FROM telephony.did_mappings m
   WHERE m.active
     AND coalesce(p_number, '') <> ''
     AND regexp_replace(m.did_number, '[\s()-]', '', 'g')
       = regexp_replace(p_number, '[\s()-]', '', 'g')
-$$;
+$body$;
+    $fn$;
+  END IF;
+END
+$mig$;
 
 REVOKE ALL ON FUNCTION telephony.did_mappings_for_number(text) FROM PUBLIC;
 DO $$

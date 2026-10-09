@@ -31,6 +31,8 @@ import { spacesRoutes } from "./modules/spaces/routes.js";
 import { consumablesRoutes } from "./modules/consumables/routes.js";
 import { scanLinkRoutes } from "./modules/scan-link/routes.js";
 import { registerRoutes } from "./modules/register/routes.js";
+import { bookingRoutes } from "./modules/booking/routes.js";
+import { citizenLeaseRoutes } from "./modules/citizen-lease/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -78,6 +80,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(consumablesRoutes);
   await app.register(scanLinkRoutes);
   await app.register(registerRoutes);
+  // GAP2-ESTAB-BOOKING-ORPHAN-01: facility-booking + citizen-lease route
+  // modules were defined but never registered (every endpoint 404'd). Now
+  // mounted with their consumers (worker.ts) + tables (migrations 0050/0051).
+  await app.register(bookingRoutes);
+  await app.register(citizenLeaseRoutes);
 
   return app;
 }

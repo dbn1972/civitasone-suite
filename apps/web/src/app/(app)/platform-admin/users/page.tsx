@@ -45,10 +45,11 @@ export default async function PlatformUsersPage() {
         subtitle="All platform users with role badges, last-login, status. Bulk select, export, suspend, and reset password."
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
-        <StatCard icon="👥" iconBg="#f1f5f9" label="Total users" value={total} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={active} />
-        <StatCard icon="⛔" iconBg="#fef3f2" label="Suspended" value={suspended} />
-        <StatCard icon="🔐" iconBg="#eff6ff" label="MFA enabled" value={mfaOn} />
+        {/* GAP2-PLATFORM-ADMIN-COLOURS-04: theme tones instead of fixed hex. */}
+        <StatCard icon="👥" tone="neutral" label="Total users" value={total} />
+        <StatCard icon="✅" tone="good" label="Active" value={active} />
+        <StatCard icon="⛔" tone="bad" label="Suspended" value={suspended} />
+        <StatCard icon="🔐" tone="info" label="MFA enabled" value={mfaOn} />
       </div>
       <UserManagementPage
         users={users}

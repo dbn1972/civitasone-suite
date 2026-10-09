@@ -676,8 +676,14 @@ export class SqsQueue implements Queue {
   private readonly maxReceiveCount: number;
   private readonly visibilityTimeout: number;
   private readonly topicVisibilityTimeouts = new Map<string, number>();
-  /** G-ASYNC-1: per-topic onOutcome hook (see SubscribeOptions.onOutcome). */
-  private readonly topicOutcomeCallbacks = new Map<string, SubscribeOptions["onOutcome"]>();
+  /**
+   * G-ASYNC-1 / FF-01 §2.1 C2: per-topic onOutcome hooks (see
+   * SubscribeOptions.onOutcome). A LIST, not a single callback: multiple
+   * subscribers may share a topic (handlers is already Map<string, Handler[]>),
+   * and a second subscribe() must NOT replace the first subscriber's onOutcome —
+   * every registered hook receives every terminal outcome.
+   */
+  private readonly topicOutcomeCallbacks = new Map<string, NonNullable<SubscribeOptions["onOutcome"]>[]>();
 
   constructor() {
     // QUE-FANOUT: the per-service queue name needs a DISTINCT service id.
@@ -875,18 +881,25 @@ export class SqsQueue implements Queue {
       this.topicVisibilityTimeouts.set(topic, options.visibilityTimeout);
     }
     if (options?.onOutcome) {
-      this.topicOutcomeCallbacks.set(topic, options.onOutcome);
+      const callbacks = this.topicOutcomeCallbacks.get(topic) ?? [];
+      callbacks.push(options.onOutcome);
+      this.topicOutcomeCallbacks.set(topic, callbacks);
     }
   }
 
   /** Best-effort outcome emit: never let a broken onOutcome affect ack/DLQ routing. */
   private async emitOutcome(topic: string, outcome: CommandOutcome): Promise<void> {
-    const onOutcome = this.topicOutcomeCallbacks.get(topic);
-    if (!onOutcome) return;
-    try {
-      await onOutcome(outcome);
-    } catch (err) {
-      this.logHandlerError(topic, null, 0, err);
+    const callbacks = this.topicOutcomeCallbacks.get(topic);
+    if (!callbacks || callbacks.length === 0) return;
+    // Each subscriber's hook is isolated: one throwing/rejecting onOutcome must
+    // not stop the others from recording their own result, and none may affect
+    // ack/DLQ routing.
+    for (const onOutcome of callbacks) {
+      try {
+        await onOutcome(outcome);
+      } catch (err) {
+        this.logHandlerError(topic, null, 0, err);
+      }
     }
   }
 
@@ -1006,12 +1019,13 @@ export class SqsQueue implements Queue {
               traceparent: msg.traceparent,
             });
             await this.routeToDlq(topic, sqsMsg.Body ?? "", "invalid_envelope");
-            await this.deleteSqsMessage(url, sqsMsg.ReceiptHandle!);
             // G-ASYNC-1: still attributable to a command if the envelope at
             // least carries messageId/tenantId despite failing validation.
+            // FF-01 I2: record it BEFORE deleting the message.
             if (msg.messageId && msg.tenantId) {
               await this.emitOutcome(topic, { messageId: msg.messageId, tenantId: msg.tenantId, topic, status: "rejected", reason: `invalid_envelope: ${parsed.error}` });
             }
+            await this.deleteSqsMessage(url, sqsMsg.ReceiptHandle!);
             continue;
           }
 
@@ -1037,8 +1051,11 @@ export class SqsQueue implements Queue {
                 captureError(err, { service: this.service, topic, messageId: msg.messageId, correlationId: msg.correlationId, traceparent: msg.traceparent, receiveCount });
                 this.logHandlerError(topic, msg, receiveCount, err);
                 await this.routeToDlq(topic, sqsMsg.Body ?? "", "non_retryable_error");
-                await this.deleteSqsMessage(url, sqsMsg.ReceiptHandle!);
+                // FF-01 I2: the result must be durable BEFORE the message is
+                // removed, so a lost outcome can never hide behind an
+                // already-deleted message.
                 await this.emitOutcome(topic, { messageId: msg.messageId, tenantId: msg.tenantId, topic, status: "rejected", reason: err.message });
+                await this.deleteSqsMessage(url, sqsMsg.ReceiptHandle!);
                 nonRetryableHandled = true;
                 break;
               }
@@ -1053,8 +1070,9 @@ export class SqsQueue implements Queue {
           if (nonRetryableHandled) continue;
 
           if (allHandled) {
-            await this.deleteSqsMessage(url, sqsMsg.ReceiptHandle!);
+            // FF-01 I2: record the terminal result BEFORE deleting the message.
             await this.emitOutcome(topic, { messageId: msg.messageId, tenantId: msg.tenantId, topic, status: "succeeded" });
+            await this.deleteSqsMessage(url, sqsMsg.ReceiptHandle!);
             continue;
           }
 
@@ -1063,11 +1081,12 @@ export class SqsQueue implements Queue {
           // this; this is the app-level safety net for parity in LocalStack.)
           if (receiveCount >= this.maxReceiveCount) {
             await this.routeToDlq(topic, sqsMsg.Body ?? "", "max_receive_count_exceeded");
-            await this.deleteSqsMessage(url, sqsMsg.ReceiptHandle!);
+            // FF-01 I2: record the 'failed' result BEFORE deleting the message.
             await this.emitOutcome(topic, {
               messageId: msg.messageId, tenantId: msg.tenantId, topic, status: "failed",
               reason: lastError instanceof Error ? lastError.message : (lastError !== undefined ? String(lastError) : "retries exhausted"),
             });
+            await this.deleteSqsMessage(url, sqsMsg.ReceiptHandle!);
             continue;
           }
           // PERF-004: leave the message, but extend its visibility timeout on an

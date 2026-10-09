@@ -71,7 +71,7 @@ export default defineConfig({
     fileParallelism: false,
     coverage: {
       provider: "v8",
-      exclude: ["dist/**", "src/index.ts", "src/worker.ts"],
+      exclude: ["dist/**", "src/index.ts", "src/worker.ts", "**/*.config.{ts,js,mjs,cjs}"],
       // REL-013: thresholds set at/just below real measured coverage
       // (lines 94.55 / branches 87.41 / functions 92.13 / statements
       // 94.55, via `pnpm --filter @civitasone/event-service run coverage`

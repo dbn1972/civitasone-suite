@@ -2593,6 +2593,16 @@ export type KnowledgeRecord = {
   status: "active" | "inactive" | "disposed" | "transferred";
 };
 
+// GAP2-KNOWLEDGE-DASHBOARD-CAP-01: repository-wide document aggregate.
+export type KnowledgeDocsSummary = {
+  total: number;
+  byStatus: Record<string, number>;
+  byCategory: Array<{ category: string; count: number }>;
+  circulars: number;
+  active: number;
+  archived: number;
+};
+
 export type NotificationItem = {
   id: string;
   title: string;

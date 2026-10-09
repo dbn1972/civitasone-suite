@@ -33,10 +33,11 @@ export default async function OrgConfigRoute() {
         subtitle={subtitle}
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
-        <StatCard icon="🏛️" iconBg="#eff6ff" label="Hierarchy levels" value={errored ? null : levels.length} />
-        <StatCard icon="⬆️" iconBg="#ecfdf3" label="Top level" value={topLevel} />
-        <StatCard icon="⬇️" iconBg="#f1f5f9" label="Lowest level" value={lowestLevel} />
-        <StatCard icon="✏️" iconBg="#fffaeb" label="Editable" value={errored ? null : "Name, order, description"} />
+        {/* GAP2-PLATFORM-ADMIN-COLOURS-04: theme tones instead of fixed hex. */}
+        <StatCard icon="🏛️" tone="info" label="Hierarchy levels" value={errored ? null : levels.length} />
+        <StatCard icon="⬆️" tone="good" label="Top level" value={topLevel} />
+        <StatCard icon="⬇️" tone="neutral" label="Lowest level" value={lowestLevel} />
+        <StatCard icon="✏️" tone="warn" label="Editable" value={errored ? null : "Name, order, description"} />
       </div>
       <OrgConfigPage initialLevels={levels} source={source} />
     </div>

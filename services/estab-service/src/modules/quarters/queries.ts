@@ -1,7 +1,7 @@
 /**
  * Quarters read queries — tenant-scoped via db.transaction() for RLS.
  */
-import { eq, and, inArray, count, type SQL } from "drizzle-orm";
+import { eq, and, inArray, count, desc, type SQL } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import {
   estabQuarters, estabQuarterAllotments, estabLicenceFeeRates,
@@ -134,7 +134,31 @@ export async function getAllotment(tenantId: string, id: string): Promise<Allotm
   };
 }
 
-export async function listLicenceFeeRates(tenantId: string): Promise<LicenceFeeRateRow[]> {
+export async function listLicenceFeeRates(
+  tenantId: string,
+  opts: { limit: number; offset: number } = { limit: 50, offset: 0 },
+): Promise<LicenceFeeRateRow[]> {
   return db.transaction((tx) => tx.select().from(estabLicenceFeeRates)
-    .where(eq(estabLicenceFeeRates.tenantId, tenantId)));
+    .where(eq(estabLicenceFeeRates.tenantId, tenantId))
+    .orderBy(desc(estabLicenceFeeRates.effectiveFrom))
+    .limit(opts.limit).offset(opts.offset));
+}
+
+/**
+ * Pre-check for the 0049 exclusion constraint: is there an existing rate for the
+ * same (tenant, quarter type, pay level) whose inclusive [from, to] range
+ * overlaps the candidate's? Lets the route refuse synchronously (409) instead
+ * of the async consumer dropping the write.
+ */
+export async function findOverlappingLicenceFeeRate(
+  tenantId: string, quarterType: string, payLevel: string, effectiveFrom: string, effectiveTo?: string,
+): Promise<LicenceFeeRateRow | undefined> {
+  const rows = await db.transaction((tx) => tx.select().from(estabLicenceFeeRates)
+    .where(and(
+      eq(estabLicenceFeeRates.tenantId, tenantId),
+      eq(estabLicenceFeeRates.quarterType, quarterType),
+      eq(estabLicenceFeeRates.payLevel, payLevel),
+    )));
+  const to = effectiveTo ?? "9999-12-31";
+  return rows.find((r) => r.effectiveFrom <= to && (r.effectiveTo ?? "9999-12-31") >= effectiveFrom);
 }

@@ -54,18 +54,35 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
     })));
   });
 
+  // GAP2-KNOWLEDGE-DASHBOARD-CAP-01: repository-wide document aggregate so the
+  // dashboard StatCards + category chart reflect true totals, not a count over
+  // the first (page-capped) 50 documents.
+  app.get("/v1/knowledge/documents/summary", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const summary = await queries.summarizeDocuments(ctx.tenantId);
+    return reply.send(summary);
+  });
+
   app.get("/v1/knowledge/records", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const q = listQuerySchema.parse(req.query);
-    const result = await queries.listDocuments(ctx.tenantId, q.limit, q.offset);
-    sendValidated(reply, KnowledgeRecordListSchema, result.data.map((doc) => ({
-      id: doc.id,
-      recordNo: doc.id.slice(0, 8).toUpperCase(),
-      title: doc.title,
+    // GAP2-KNOWLEDGE-RECORDS-01: back records with the retention policy applied
+    // to each document's category, so disposalDueDate / retentionPeriod /
+    // department are real (the review/weeding KPIs were structurally always 0
+    // before, since these fields were never emitted).
+    const records = await queries.listRecords(ctx.tenantId, q.limit, q.offset);
+    sendValidated(reply, KnowledgeRecordListSchema, records.map((rec) => ({
+      id: rec.id,
+      recordNo: rec.id.slice(0, 8).toUpperCase(),
+      title: rec.title,
       type: "file" as const,
-      createdDate: new Date(doc.createdAt as Date | string).toISOString().slice(0, 10),
-      status: (doc.status === "archived" ? "inactive" : "active") as "active" | "inactive" | "disposed" | "transferred",
+      ...(rec.department ? { department: rec.department } : {}),
+      createdDate: new Date(rec.createdAt).toISOString().slice(0, 10),
+      ...(rec.retentionPeriod ? { retentionPeriod: rec.retentionPeriod } : {}),
+      ...(rec.disposalDueDate ? { disposalDueDate: rec.disposalDueDate } : {}),
+      status: (rec.status === "archived" ? "inactive" : "active") as "active" | "inactive" | "disposed" | "transferred",
     })));
   });
 

@@ -3,6 +3,9 @@ import {
   inProgressCount,
   formatBreachRate,
   formatSlaMinutes,
+  isLiveDefinition,
+  humanizeRefType,
+  hasRefDeepLink,
 } from "./workflowTypes";
 
 describe("inProgressCount (GAP-WORKFLOW-HOME-03)", () => {
@@ -34,5 +37,38 @@ describe("formatSlaMinutes (GAP-WORKFLOW-DEFINITIONS-DETAIL-04)", () => {
   });
   it("returns null for a missing SLA", () => {
     expect(formatSlaMinutes(null)).toBeNull();
+  });
+});
+
+describe("isLiveDefinition (GAP2-WORKFLOW-DEFINITIONS-03)", () => {
+  it("treats only the authoritative live status 'active' as live", () => {
+    expect(isLiveDefinition("active")).toBe(true);
+  });
+  it("does not count draft/archived or a phantom 'deployed' as live", () => {
+    expect(isLiveDefinition("draft")).toBe(false);
+    expect(isLiveDefinition("archived")).toBe(false);
+    expect(isLiveDefinition("deployed")).toBe(false);
+    expect(isLiveDefinition("published")).toBe(false);
+  });
+});
+
+describe("humanizeRefType (GAP2-WORKFLOW-INSTANCES-DETAIL-02)", () => {
+  it("maps known enum codes to human labels", () => {
+    expect(humanizeRefType("procurement_po")).toBe("Purchase Order");
+    expect(humanizeRefType("finance_bill")).toBe("Finance Bill");
+    expect(humanizeRefType("leave_app")).toBe("Leave Application");
+  });
+  it("title-cases an unknown token instead of printing it verbatim", () => {
+    expect(humanizeRefType("some_other_ref")).not.toBe("some_other_ref");
+  });
+});
+
+describe("hasRefDeepLink (GAP2-WORKFLOW-INSTANCES-DETAIL-02)", () => {
+  it("is true for refTypes with a mapped record detail route", () => {
+    expect(hasRefDeepLink("procurement_po")).toBe(true);
+    expect(hasRefDeepLink("finance_bill")).toBe(true);
+  });
+  it("is false for an unmapped refType", () => {
+    expect(hasRefDeepLink("unknown_ref")).toBe(false);
   });
 });

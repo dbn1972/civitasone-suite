@@ -17,6 +17,22 @@ export async function publishProposalCreate(ctx: RequestContext, payload: Record
   return id;
 }
 
+export async function publishProposalUpdate(
+  ctx: RequestContext,
+  id: string,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  await queue.publish(COMMANDS.proposalUpdate, {
+    messageId: randomUUID(),
+    type: COMMANDS.proposalUpdate,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { id, patch },
+  });
+}
+
 export async function publishDaoFinalize(ctx: RequestContext, workId: string): Promise<void> {
   await queue.publish(COMMANDS.proposalDaoFinalize, {
     messageId: randomUUID(),

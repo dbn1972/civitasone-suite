@@ -80,7 +80,13 @@ export async function listByTenantEnriched(
   tenantId: string,
   limit: number,
   offset: number,
+  definitionId?: string,
 ): Promise<InstanceListRow[]> {
+  // GAP2-WORKFLOW-DEFINITIONS-DETAIL-01 — optional per-definition filter so the
+  // "View instances" control on a definition detail page shows only that
+  // definition's instances (not the whole tenant). The id is a validated UUID
+  // at the route boundary; interpolated as a bound parameter here.
+  const defFilter = definitionId ? sql` AND i.definition_id = ${definitionId}::uuid` : sql``;
   const rows = await scopedExecute(sql`
     SELECT i.id, i.tenant_id, i.name, i.status, i.version,
            i.ref_type, i.ref_id, i.current_node, i.definition_id,
@@ -88,7 +94,7 @@ export async function listByTenantEnriched(
            d.code AS definition_code, d.name AS definition_name
     FROM workflow.instances i
     LEFT JOIN workflow.definitions d ON d.id = i.definition_id
-    WHERE i.tenant_id = ${tenantId}
+    WHERE i.tenant_id = ${tenantId}${defFilter}
     ORDER BY i.created_at DESC
     LIMIT ${limit} OFFSET ${offset}
   `) as unknown as Array<{

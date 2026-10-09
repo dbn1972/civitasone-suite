@@ -927,6 +927,7 @@
     "planLabel": "Plan",
     "taxExempt": "tax-exempt",
     "invalidAmount": "Enter a valid amount with at most 2 decimal places.",
+    "amountOverCap": "This amount is above the limit set for this component.",
     "noAmountsEntered": "Enter an amount for at least one component.",
     "submitting": "Submitting…",
     "submitElection": "Submit election",
@@ -8747,6 +8748,7 @@
     "statApproved": "Approved",
     "statRejected": "Rejected",
     "cardTitle": "Travel Requests",
+    "pendingApprovalsCardTitle": "Pending Approvals",
     "colDestination": "Destination",
     "colPurpose": "Purpose",
     "colFrom": "From",
@@ -12085,6 +12087,10 @@
     "emptyTitle": "Empty folder",
     "emptyMessage": "No files or sub-folders here yet. Upload the first file.",
     "errorArea": "document library"
+  },
+  "estabDfaFocus": {
+    "shown": "Showing the draft you selected: {dfaNo} — {subject}.",
+    "missing": "The draft you selected isn't in this view — switch to \u201CAll\u201D or another status to find it."
   },
   "estabScannedDocuments": {
     "area": "scanned documents",
