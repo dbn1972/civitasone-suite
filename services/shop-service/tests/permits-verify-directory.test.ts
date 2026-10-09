@@ -41,6 +41,7 @@ import { registerPermitConsumers } from "../src/modules/permits/consumer.js";
 import { registerLifecycleConsumers } from "../src/modules/lifecycle/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 import { buildApp } from "../src/app.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET as string;
 const TENANT_A = "c1a1a1a1-0000-4000-8000-000000000001";
@@ -91,7 +92,7 @@ async function issuePermit(tenantId: string): Promise<{ permitId: string; applic
     tenantId, actorId: OFFICER, correlationId: "corr-verify-issue", schemaVersion: "1.0",
     payload: { id: permitId, tenantId, applicationId, establishmentName: "Verify Test Shop", validityMonths: 12 },
   });
-  await new Promise<void>((r) => setTimeout(r, 400));
+  await drainOrFail(q);
   await q.stop();
   return { permitId, applicationId };
 }
@@ -171,7 +172,7 @@ describe("GET /v1/shop/permits/verify — public directory (bug fix)", () => {
       tenantId: TENANT_A, actorId: OFFICER, correlationId: "corr-verify-suspend", schemaVersion: "1.0",
       payload: { permitId, tenantId: TENANT_A, reason: "fire safety violation" },
     });
-    await new Promise<void>((r) => setTimeout(r, 400));
+    await drainOrFail(q);
     await q.stop();
 
     const verifyRes = await app.inject({

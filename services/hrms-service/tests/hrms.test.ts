@@ -32,6 +32,7 @@ import {
 // directly onto the new function with an empty holiday set — same
 // weekend-exclusion behaviour, no re-export needed.
 import { countWorkingDaysExcludingHolidays } from "../src/modules/leave/rules-engine.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const ACTOR   = "00000000-aaaa-4000-8000-000000000001";
 const TENANT  = "11111111-aaaa-4000-8000-000000000011";
@@ -155,7 +156,7 @@ describe("Leave apply consumer — CQRS (integration)", () => {
       }),
     );
 
-    await new Promise<void>((r) => setTimeout(r, 600));
+    await drainOrFail(q);
     await q.stop();
 
     const apps = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsLeaveApps).where(eq(hrmsLeaveApps.id, APP_1))));
@@ -204,7 +205,7 @@ describe("Leave approve consumer — balance deduction (integration)", () => {
       }),
     );
 
-    await new Promise<void>((r) => setTimeout(r, 600));
+    await drainOrFail(q);
     await q.stop();
 
     const apps = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsLeaveApps).where(eq(hrmsLeaveApps.id, APP_2))));

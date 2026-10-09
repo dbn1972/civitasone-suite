@@ -29,6 +29,7 @@ import {
   isReservedKey, isValidKeyFormat, assertKeyAllowed, assertCanConfer,
   hasUnconditionalAuthority, DomainError as RbacDomainError,
 } from "../src/modules/rbac/domain.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 function wireTenantAwareQueue(q: Queue): Queue {
   const rawSubscribe = q.subscribe.bind(q);
@@ -252,7 +253,7 @@ describe("Tenant onboard consumer — integration", () => {
       },
     });
 
-    await new Promise((r) => setTimeout(r, 600));
+    await drainOrFail(q);
     await q.stop();
 
     // Verify outbox contains the expected commands
@@ -319,7 +320,7 @@ describe("Tenant onboard consumer — integration", () => {
       },
     });
 
-    await new Promise((r) => setTimeout(r, 400));
+    await drainOrFail(q);
     await q.stop();
 
     // Count should remain the same (2 rows: user.create + audit)
@@ -372,7 +373,7 @@ describe("Users consumer — createUser integration", () => {
       },
     });
 
-    await new Promise((r) => setTimeout(r, 600));
+    await drainOrFail(q);
     await q.stop();
 
     // Verify user was inserted

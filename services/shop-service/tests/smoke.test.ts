@@ -25,6 +25,7 @@ import { registerApprovalConsumers } from "../src/modules/approvals/consumer.js"
 import { registerLifecycleConsumers } from "../src/modules/lifecycle/consumer.js";
 import { COMMANDS, EVENTS } from "../src/topics.js";
 import { buildApp } from "../src/app.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET as string;
 const TENANT = "969292f7-976f-41bf-bd08-4df9c6b9e1ea";
@@ -97,7 +98,7 @@ describe("POST /v1/shop/applications — auth + CQRS wiring (integration)", () =
       tenantId: TENANT, actorId: APPLICANT, correlationId: "corr-app-1", schemaVersion: "1.0",
       payload: { id: appId, tenantId: TENANT, ...validCreateBody },
     });
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
 
     const rows = await asTenant((tx) => tx.select().from(applications).where(eq(applications.id, appId)));
@@ -135,7 +136,7 @@ describe("shop.scrutiny.initiate consumer — application status transition (int
       tenantId: TENANT, actorId: OFFICER, correlationId: "corr-scr-1", schemaVersion: "1.0",
       payload: { id: scrutinyId, tenantId: TENANT, applicationId: APP_ID, scrutinyType: "document_check", officerId: OFFICER },
     });
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
 
     const scrutiny = await asTenant((tx) => tx.select().from(scrutinyRecords).where(eq(scrutinyRecords.id, scrutinyId)));
@@ -177,7 +178,7 @@ describe("shop.renewal.request consumer — renewal against an active permit (in
       tenantId: TENANT, actorId: APPLICANT, correlationId: "corr-ren-1", schemaVersion: "1.0",
       payload: { id: renewalId, tenantId: TENANT, permitId: PERMIT_ID, renewalType: "renewal" },
     });
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
 
     const rows = await asTenant((tx) => tx.select().from(renewals).where(eq(renewals.id, renewalId)));

@@ -16,6 +16,8 @@
  * one process.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { relayAll } from "./outbox-relay-support.js";
+import { drainOrFail } from "../../../vitest.drain";
 import { randomUUID } from "node:crypto";
 import { SYSTEM_TEMPLATE_IDS } from "@civitasone/events";
 
@@ -83,7 +85,6 @@ afterAll(async () => {
 // passes end-to-end against the fixed notification-service.
 describe("building-service -> notification-service applicant status notification -- real DB, no mocks", () => {
   it("submitApplication relays into a real notification-service delivery row on the correct resolved template", async () => {
-    const { relayOnce } = await import("@civitasone/outbox");
     const applicationId = randomUUID();
 
     await building.queue.publish("building.application.create", makeMsg("building.application.create", {
@@ -92,10 +93,10 @@ describe("building-service -> notification-service applicant status notification
       siteAddress: { line1: "12 MG Road", city: "Test City", pin: "560001" },
       plotArea: 300,
     }));
-    await building.queue.drain();
+    await drainOrFail(building.queue);
 
     await building.queue.publish("building.application.submit", makeMsg("building.application.submit", { id: applicationId, tenantId: TENANT }));
-    await building.queue.drain();
+    await drainOrFail(building.queue);
 
     // building's REAL outbox now holds TWO pending notification.send messages
     // for this applicationId: createApplication's earlier municipal.fee.due
@@ -105,9 +106,9 @@ describe("building-service -> notification-service applicant status notification
     // the SAME transaction as their respective status writes -- relay them
     // exactly like the production relay would, in one batch, exactly like a
     // real relay cycle picking up whatever is pending would.
-    const relayed = await relayOnce(building.db as never, building.queue, 100, "building-service");
+    const relayed = await relayAll(building.db as never, building.queue as never, "building-service");
     expect(relayed, "building's outbox must have pending notification.send messages").toBeGreaterThan(0);
-    await building.queue.drain();
+    await drainOrFail(building.queue);
 
     // Both notifications share recipientId = applicationId, so select by
     // template rather than trusting deliveries[0] -- the two sends race each

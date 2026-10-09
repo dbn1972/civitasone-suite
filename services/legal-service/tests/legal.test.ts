@@ -14,6 +14,7 @@ import { registerCaseConsumers } from "../src/modules/cases/consumer.js";
 import { registerHearingConsumers } from "../src/modules/hearings/consumer.js";
 import { registerContractConsumers } from "../src/modules/contracts/consumer.js";
 import { COMMANDS, EVENTS } from "../src/topics.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const ACTOR     = "00000000-aaaa-4000-8000-000000000020";
 const TENANT    = "11111111-aaaa-4000-8000-000000000020";
@@ -125,7 +126,7 @@ describe("Legal hearing — adjournment CQRS (integration)", () => {
         nextDate: "2026-08-15", purpose: "Arguments on maintainability",
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     await q.stop();
 
     const [hearing] = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -156,7 +157,7 @@ describe("Legal hearing — adjournment CQRS (integration)", () => {
         nextDate: "2026-09-20",
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     await q.stop();
 
     const [hearing] = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -200,7 +201,7 @@ describe("Legal contract review — clearance CQRS (integration)", () => {
         clearanceType: "legal_opinion", notes: "No legal impediment found",
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     await q.stop();
 
     const [review] = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -226,7 +227,7 @@ describe("Legal contract review — clearance CQRS (integration)", () => {
       tenantId: TENANT, actorId: ACTOR, correlationId: "corr-clear-2", schemaVersion: "1.0",
       payload: { reviewId: REVIEW_1, tenantId: TENANT, clearanceType: "re-attempt" },
     });
-    await new Promise<void>((r) => setTimeout(r, 400));
+    await drainOrFail(q);
     await q.stop();
 
     const [review] = await runWithTenant(TENANT, () => db.transaction(async (tx) =>

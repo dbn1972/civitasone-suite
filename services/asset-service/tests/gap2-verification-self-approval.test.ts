@@ -20,6 +20,7 @@ import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerVerificationConsumers } from "../src/modules/verification/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 import * as repo from "../src/modules/verification/repo.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
@@ -54,13 +55,13 @@ beforeAll(async () => {
     tenantId: TENANT, actorId: CREATOR, correlationId: "corr-vc", schemaVersion: "1.0",
     payload: { id: SESSION, tenantId: TENANT, verificationDate: "2026-06-01", notes: null, location: null },
   });
-  await new Promise<void>((r) => setTimeout(r, 300));
+  await drainOrFail(q);
   await q.publish(COMMANDS.verificationSubmit, {
     messageId: randomUUID(), type: COMMANDS.verificationSubmit,
     tenantId: TENANT, actorId: CREATOR, correlationId: "corr-vs", schemaVersion: "1.0",
     payload: { id: SESSION, tenantId: TENANT },
   });
-  await new Promise<void>((r) => setTimeout(r, 300));
+  await drainOrFail(q);
   await q.stop();
 });
 
@@ -110,7 +111,7 @@ describe("GAP2-ASSETS-VERIFICATION-01 — self-approval forbidden", () => {
       tenantId: TENANT, actorId: APPROVER, correlationId: "corr-va", schemaVersion: "1.0",
       payload: { id: SESSION, tenantId: TENANT },
     });
-    await new Promise<void>((r) => setTimeout(r, 350));
+    await drainOrFail(q);
     await q.stop();
 
     const s = await runWithTenant(TENANT, () => repo.findVerificationById(SESSION, TENANT));
@@ -130,19 +131,19 @@ describe("GAP2-ASSETS-VERIFICATION-01 — self-approval forbidden", () => {
       tenantId: TENANT, actorId: CREATOR, correlationId: "corr-vc2", schemaVersion: "1.0",
       payload: { id: sid, tenantId: TENANT, verificationDate: "2026-06-02", notes: null, location: null },
     });
-    await new Promise<void>((r) => setTimeout(r, 250));
+    await drainOrFail(q);
     await q.publish(COMMANDS.verificationSubmit, {
       messageId: randomUUID(), type: COMMANDS.verificationSubmit,
       tenantId: TENANT, actorId: CREATOR, correlationId: "corr-vs2", schemaVersion: "1.0",
       payload: { id: sid, tenantId: TENANT },
     });
-    await new Promise<void>((r) => setTimeout(r, 250));
+    await drainOrFail(q);
     await q.publish(COMMANDS.verificationApprove, {
       messageId: randomUUID(), type: COMMANDS.verificationApprove,
       tenantId: TENANT, actorId: CREATOR, correlationId: "corr-va2", schemaVersion: "1.0",
       payload: { id: sid, tenantId: TENANT },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     await q.stop();
 
     const s = await runWithTenant(TENANT, () => repo.findVerificationById(sid, TENANT));

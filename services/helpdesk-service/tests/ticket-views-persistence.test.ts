@@ -16,6 +16,7 @@ import { savedViews } from "../src/modules/tickets/views-schema.js";
 import { outboxSchema } from "../src/shared/outbox.js";
 import { registerViewConsumers } from "../src/modules/tickets/views-consumer.js";
 import { VIEW_COMMANDS, EVENTS } from "../src/topics.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const { outboxMessages } = outboxSchema;
 
@@ -78,7 +79,7 @@ describe("VIEW_COMMANDS.create — persists a saved view", () => {
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { id, tenantId: TENANT_A, ownerId: OWNER, name: "My Open Tickets", filters: { status: "open" }, columns: ["id", "subject"], shared: false },
     });
-    await new Promise((r) => setTimeout(r, 150));
+    await drainOrFail(q);
 
     const row = await findView(id, TENANT_A);
     expect(row).not.toBeNull();
@@ -99,9 +100,9 @@ describe("VIEW_COMMANDS.create — persists a saved view", () => {
       payload: { id, tenantId: TENANT_A, ownerId: OWNER, name: "Dup View", filters: {}, columns: [], shared: false },
     };
     await q.publish(VIEW_COMMANDS.create, msg);
-    await new Promise((r) => setTimeout(r, 100));
+    await drainOrFail(q);
     await q.publish(VIEW_COMMANDS.create, msg);
-    await new Promise((r) => setTimeout(r, 100));
+    await drainOrFail(q);
 
     const row = await findView(id, TENANT_A);
     expect(row).not.toBeNull();
@@ -117,7 +118,7 @@ describe("VIEW_COMMANDS.create — persists a saved view", () => {
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { id, tenantId: TENANT_A, ownerId: OWNER, name: "A-only view", filters: {}, columns: [], shared: false },
     });
-    await new Promise((r) => setTimeout(r, 150));
+    await drainOrFail(q);
 
     expect(await findView(id, TENANT_A)).not.toBeNull();
     expect(await findView(id, TENANT_B)).toBeNull();
@@ -144,7 +145,7 @@ describe("VIEW_COMMANDS.update — persists changes to a saved view", () => {
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { id, tenantId: TENANT_A, actorId: OWNER, name: "Renamed", filters: { status: "closed" }, shared: true },
     });
-    await new Promise((r) => setTimeout(r, 150));
+    await drainOrFail(q);
 
     const row = await findView(id, TENANT_A);
     expect(row!.name).toBe("Renamed");
@@ -165,7 +166,7 @@ describe("VIEW_COMMANDS.update — persists changes to a saved view", () => {
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { id, tenantId: TENANT_B, actorId: OWNER, name: "Hijacked" },
     });
-    await new Promise((r) => setTimeout(r, 150));
+    await drainOrFail(q);
 
     const row = await findView(id, TENANT_A);
     expect(row!.name).toBe("Original"); // untouched — cross-tenant update rejected
@@ -192,7 +193,7 @@ describe("VIEW_COMMANDS.delete — persists removal of a saved view", () => {
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { id, tenantId: TENANT_A, actorId: OWNER },
     });
-    await new Promise((r) => setTimeout(r, 150));
+    await drainOrFail(q);
 
     expect(await findView(id, TENANT_A)).toBeNull();
     const emitted = await outboxFor(TENANT_A, id);
@@ -208,7 +209,7 @@ describe("VIEW_COMMANDS.delete — persists removal of a saved view", () => {
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { id, tenantId: TENANT_B, actorId: OWNER },
     });
-    await new Promise((r) => setTimeout(r, 150));
+    await drainOrFail(q);
 
     expect(await findView(id, TENANT_A)).not.toBeNull(); // still there
   });
@@ -233,7 +234,7 @@ describe("VIEW_COMMANDS.update/delete — ownership (IDOR) enforcement", () => {
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { id, tenantId: TENANT_A, actorId: OTHER_USER, actorRoles: ["helpdesk_user"], name: "Hijacked by B" },
     });
-    await new Promise((r) => setTimeout(r, 150));
+    await drainOrFail(q);
 
     const row = await findView(id, TENANT_A);
     expect(row!.name).toBe("Private"); // untouched
@@ -253,7 +254,7 @@ describe("VIEW_COMMANDS.update/delete — ownership (IDOR) enforcement", () => {
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { id, tenantId: TENANT_A, actorId: OTHER_USER, actorRoles: ["helpdesk_user"] },
     });
-    await new Promise((r) => setTimeout(r, 150));
+    await drainOrFail(q);
 
     expect(await findView(id, TENANT_A)).not.toBeNull(); // still there
 
@@ -271,7 +272,7 @@ describe("VIEW_COMMANDS.update/delete — ownership (IDOR) enforcement", () => {
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { id, tenantId: TENANT_A, actorId: ADMIN_USER, actorRoles: ["helpdesk_admin"], name: "Fixed by admin" },
     });
-    await new Promise((r) => setTimeout(r, 150));
+    await drainOrFail(q);
 
     const row = await findView(id, TENANT_A);
     expect(row!.name).toBe("Fixed by admin");
@@ -286,7 +287,7 @@ describe("VIEW_COMMANDS.update/delete — ownership (IDOR) enforcement", () => {
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { id, tenantId: TENANT_A, actorId: ADMIN_USER, actorRoles: ["helpdesk_admin"] },
     });
-    await new Promise((r) => setTimeout(r, 150));
+    await drainOrFail(q);
 
     expect(await findView(id, TENANT_A)).toBeNull();
   });
@@ -299,7 +300,7 @@ describe("VIEW_COMMANDS.update/delete — ownership (IDOR) enforcement", () => {
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { id, tenantId: TENANT_A, actorId: OWNER, actorRoles: ["helpdesk_user"], name: "Self-updated" },
     });
-    await new Promise((r) => setTimeout(r, 150));
+    await drainOrFail(q);
 
     const row = await findView(id, TENANT_A);
     expect(row!.name).toBe("Self-updated");

@@ -23,6 +23,7 @@ import {
   computeGratuity,
 } from "../src/modules/payroll/domain.js";
 import { EVENTS } from "../src/topics.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const ACTOR   = "00000000-aaaa-4000-8000-000000000002";
 const TENANT  = "11111111-aaaa-4000-8000-000000000022";
@@ -206,7 +207,7 @@ describe("Payroll run consumer — CQRS (integration)", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, 600));
+    await drainOrFail(q);
     await q.stop();
 
     const runs = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -266,7 +267,7 @@ describe("Payroll run approve — event emitted (integration)", () => {
       payload: { id: RUN_2, tenantId: TENANT, approvedBy: APPROVER },
     });
 
-    await new Promise<void>((r) => setTimeout(r, 600));
+    await drainOrFail(q);
     await q.stop();
 
     const runs = await runWithTenant(TENANT, () => db.transaction(async (tx) =>

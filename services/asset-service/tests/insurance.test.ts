@@ -20,6 +20,7 @@ import { registerInsuranceConsumers } from "../src/modules/insurance/consumer.js
 import { COMMANDS } from "../src/topics.js";
 import * as queries from "../src/modules/insurance/queries.js";
 import * as commands from "../src/modules/insurance/commands.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
@@ -105,7 +106,7 @@ describe("Insurance consumer — CQRS wiring + reads (integration)", () => {
         startDate: "2026-04-01", endDate: "2027-03-31", renewalReminderDays: 30,
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 400));
+    await drainOrFail(q);
     await q.stop();
 
     // queries.* go through scopedRead(), which relies on the tenant GUC set
@@ -155,7 +156,7 @@ describe("Insurance consumer — CQRS wiring + reads (integration)", () => {
         notes: "Fire damage to server room AC unit",
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 400));
+    await drainOrFail(q);
     await q.stop();
 
     const list = await runWithTenant(TENANT_A, () => queries.listClaims(TENANT_A, { policyId: POLICY_1 }));
@@ -193,7 +194,7 @@ describe("Insurance — claim-vs-coverage enforcement (integration, HTTP)", () =
         startDate: "2026-04-01", endDate: "2027-03-31", renewalReminderDays: 30,
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 400));
+    await drainOrFail(q);
     await q.stop();
   });
   afterAll(async () => {
@@ -295,7 +296,7 @@ describe("Insurance — cumulative claim aggregation across multiple claims", ()
         notes: "First claim — water damage",
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 400));
+    await drainOrFail(q);
     await q.stop();
   });
   afterAll(async () => {

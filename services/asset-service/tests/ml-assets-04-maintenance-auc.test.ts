@@ -22,6 +22,7 @@ import { registerF3EnterpriseConsumers } from "../src/modules/enterprise/f3-cons
 import { workOrderBody } from "../src/modules/maintenance/validators.js";
 import { COMMANDS } from "../src/topics.js";
 import type { FastifyInstance } from "fastify";
+import { drainOrFail } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-0000000004a1";
@@ -81,7 +82,7 @@ describe("maintenance type + asset label round trip", () => {
         payload: { id, tenantId: TENANT, assetId: ASSET, scheduledDate: "2026-10-05", ...extra },
       });
     }
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
 
     const rows = await asTenant((tx) => tx.select().from(assetWorkOrders).where(and(eq(assetWorkOrders.tenantId, TENANT))));
@@ -135,7 +136,7 @@ describe("AUC create audit (GAP-ASSETS-PROJECTS-05)", () => {
       tenantId: TENANT, actorId: ACTOR, correlationId: "corr-ml04-auc", schemaVersion: "1.0",
       payload: { op: "auc_create", id, tenantId: TENANT, projectCode: "AUC-ML04", name: "Block C", amountMinor: 0, reason: "Sanctioned vide order 12/2026" },
     });
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
     const out = await sqlClient`select payload from _outbox.messages where tenant_id = ${TENANT} and topic = 'audit.event.record' and payload->>'resourceId' = ${id}`;
     expect(out).toHaveLength(1);
@@ -181,14 +182,14 @@ describe("AUC capitalize double-click guard", () => {
       messageId: randomUUID(), type: COMMANDS.f3RouteWrite, tenantId: TENANT, actorId: ACTOR, correlationId: "c", schemaVersion: "1.0",
       payload: { op: "auc_create", id: aucId, tenantId: TENANT, projectCode: "AUC-DBL", name: "Dbl", amountMinor: 500, reason: "test reason" },
     });
-    await new Promise<void>((r) => setTimeout(r, 400));
+    await drainOrFail(q);
     for (let i = 0; i < 2; i++) {
       await q.publish(COMMANDS.f3RouteWrite, {
         messageId: randomUUID(), type: COMMANDS.f3RouteWrite, tenantId: TENANT, actorId: ACTOR, correlationId: "c", schemaVersion: "1.0",
         payload: { op: "auc_capitalize", id: randomUUID(), tenantId: TENANT, aucId, assetId: randomUUID(), projectCode: "AUC-DBL", name: "Dbl", accumulatedMinor: "500" },
       });
     }
-    await new Promise<void>((r) => setTimeout(r, 700));
+    await drainOrFail(q);
     await q.stop();
     const assets = await asTenant((tx) => tx.select().from(assetAssets).where(eq(assetAssets.code, "AUC/AUC-DBL")));
     expect(assets).toHaveLength(1);
@@ -238,9 +239,9 @@ describe("functional locations (GAP-ASSETS-LOCATIONS-02/-06)", () => {
       messageId: randomUUID(), type: COMMANDS.f3RouteWrite, tenantId: TENANT, actorId: ACTOR, correlationId: "corr-ml04-aud", schemaVersion: "1.0", payload,
     });
     await pub({ op: "location_create", id, tenantId: TENANT, code: "AUD-1", name: "Before", orgUnit: "Works" });
-    await new Promise<void>((r) => setTimeout(r, 400));
+    await drainOrFail(q);
     await pub({ op: "location_update", id, tenantId: TENANT, name: "After" });
-    await new Promise<void>((r) => setTimeout(r, 400));
+    await drainOrFail(q);
     await q.stop();
     const out = await sqlClient`select payload from _outbox.messages where tenant_id = ${TENANT} and topic = 'audit.event.record' and payload->>'resourceId' = ${id} order by created_at`;
     expect(out).toHaveLength(2);
@@ -262,7 +263,7 @@ describe("functional locations (GAP-ASSETS-LOCATIONS-02/-06)", () => {
       tenantId: TENANT, actorId: ACTOR, correlationId: "corr-ml04-loc", schemaVersion: "1.0",
       payload: { op: "location_update", id: LOC, tenantId: TENANT, name: "Block A (renamed)", orgUnit: "Works" },
     });
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
     const [row] = await asTenant((tx) => tx.select().from(functionalLocations).where(eq(functionalLocations.id, LOC)));
     expect(row).toMatchObject({ code: "BLDG-A", name: "Block A (renamed)", orgUnit: "Works" });

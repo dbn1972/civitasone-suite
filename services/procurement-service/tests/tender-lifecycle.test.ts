@@ -35,6 +35,7 @@ import { registerTenderConsumers } from "../src/modules/tender/consumer.js";
 import { registerPoConsumers } from "../src/modules/po/consumer.js";
 import { COMMANDS, EVENTS } from "../src/topics.js";
 import { randomUUID } from "node:crypto";
+import { drainOrFail } from "../../../vitest.drain";
 
 const TENANT = "77777777-1111-4000-8000-0000000000aa";
 const OTHER_TENANT = "77777777-2222-4000-8000-0000000000bb";
@@ -460,7 +461,7 @@ describe("Finance commitment — PO consumer calls finance for sanction availabi
       indentRef: `procurement_indent:${FINANCE_TEST_INDENT}`, sanctionRef: "finance_sanction:abc-123",
       items: [{ itemCode: "X", description: "Item", quantity: 1, unit: "nos", unitPriceMinor: 35_000_000, itemType: "service" }],
     }));
-    await new Promise<void>((r) => setTimeout(r, 400)); // settle create (queue stays running)
+    await drainOrFail(q); // settle create (queue stays running)
 
     const pos = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
       tx.select().from(procurementPos).where(eq(procurementPos.id, SANCTIONED_PO))
@@ -476,7 +477,7 @@ describe("Finance commitment — PO consumer calls finance for sanction availabi
 
     // draft → pending via submit-for-approval (eOffice administrative approval).
     await q.publish(COMMANDS.poSubmitApproval, msg(COMMANDS.poSubmitApproval, { id: SANCTIONED_PO, tenantId: TENANT }));
-    await new Promise<void>((r) => setTimeout(r, 400)); // settle submit
+    await drainOrFail(q); // settle submit
     await q.stop();
     global.fetch = originalFetch;
 

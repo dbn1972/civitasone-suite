@@ -24,6 +24,7 @@ import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerInsuranceConsumers } from "../src/modules/insurance/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 import * as queries from "../src/modules/insurance/queries.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
@@ -62,7 +63,7 @@ async function seedClaim(claimId: string, msgId: string) {
       claimDate: "2026-06-15", claimAmountMinor: 500000, currency: "INR", notes: "filed by FILER",
     },
   });
-  await new Promise<void>((r) => setTimeout(r, 350));
+  await drainOrFail(q);
   await q.stop();
 }
 
@@ -84,7 +85,7 @@ beforeAll(async () => {
       currency: "INR", startDate: "2026-04-01", endDate: "2027-03-31", renewalReminderDays: 30,
     },
   });
-  await new Promise<void>((r) => setTimeout(r, 350));
+  await drainOrFail(q);
   await q.stop();
   await seedClaim(CLAIM, MSG_CLAIM);
   await seedClaim(CLAIM2, MSG_CLAIM2);
@@ -157,7 +158,7 @@ describe("GAP2-ASSETS-INSURANCE-CLAIMS-01 — maker-checker (SoD)", () => {
       tenantId: TENANT, actorId: APPROVER, correlationId: "corr-settle", schemaVersion: "1.0",
       payload: { id: CLAIM, tenantId: TENANT, decision: "settle", settlementAmountMinor: 400000 },
     });
-    await new Promise<void>((r) => setTimeout(r, 350));
+    await drainOrFail(q);
     await q.stop();
 
     const claim = await runWithTenant(TENANT, () => queries.getClaim(TENANT, CLAIM));
@@ -174,7 +175,7 @@ describe("GAP2-ASSETS-INSURANCE-CLAIMS-01 — maker-checker (SoD)", () => {
       tenantId: TENANT, actorId: FILER, correlationId: "corr-self", schemaVersion: "1.0",
       payload: { id: CLAIM2, tenantId: TENANT, decision: "approve" },
     });
-    await new Promise<void>((r) => setTimeout(r, 350));
+    await drainOrFail(q);
     await q.stop();
     const claim = await runWithTenant(TENANT, () => queries.getClaim(TENANT, CLAIM2));
     expect(claim?.status).toBe("pending"); // still untouched

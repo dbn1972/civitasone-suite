@@ -27,6 +27,7 @@ import { registerDisbursementConsumers } from "../src/modules/disbursement/consu
 import { registerUtilisationConsumers } from "../src/modules/utilisation/consumer.js";
 import { registerSchemeConsumers } from "../src/modules/scheme/consumer.js";
 import { EVENTS, COMMANDS } from "../src/topics.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const ACTOR  = "00000000-aaaa-4000-8000-000000000001";
 const TENANT = "11111111-aaaa-4000-8000-000000000002";
@@ -90,7 +91,7 @@ describe("Beneficiary domain — Aadhaar masking (DPDP §4)", () => {
       schemaVersion: "1.0",
       payload: { id: BEN, tenantId: TENANT, name: "Test Ben", type: "individual", incomeAnnualMinor: 0 },
     });
-    await new Promise((r) => setTimeout(r, 400));
+    await drainOrFail(q);
 
     // Aadhaar is masked at the COMMAND boundary; the consumer receives only
     // (last4, HMAC token). Mirror that here — raw Aadhaar never hits the queue.
@@ -100,7 +101,7 @@ describe("Beneficiary domain — Aadhaar masking (DPDP §4)", () => {
       schemaVersion: "1.0",
       payload: { id: "88888888-bbbb-4000-8000-000000000001", tenantId: TENANT, beneficiaryId: BEN, aadhaarLast4: last4, aadhaarToken: token },
     });
-    await new Promise((r) => setTimeout(r, 400));
+    await drainOrFail(q);
 
     const links = await scopedQuery(TENANT, (tx) =>
       tx.select().from(grantAadhaarLinks).where(eq(grantAadhaarLinks.beneficiaryId, BEN)));
@@ -147,7 +148,7 @@ describe("Utilisation consumer — expenditure exceeds disbursed (integration)",
       schemaVersion: "1.0",
       payload: { id: UC, tenantId: TENANT, applicationId: APP, period: "2025-26", releasedMinor: 100000, utilisedMinor: 50000 },
     });
-    await new Promise((r) => setTimeout(r, 600));
+    await drainOrFail(q);
 
     const ucs = await scopedQuery(TENANT, (tx) =>
       tx.select().from(grantUcStatements).where(eq(grantUcStatements.applicationId, APP)));
@@ -200,7 +201,7 @@ describe("Disbursement consumer — CQRS wiring (integration)", () => {
         installments: [{ id: INST, installmentNo: 1, amountMinor: 300000 }],
       },
     });
-    await new Promise((r) => setTimeout(r, 500));
+    await drainOrFail(q);
 
     await q.publish(COMMANDS.disbursementInitiate, {
       messageId: MSG_DISB, type: COMMANDS.disbursementInitiate,
@@ -208,7 +209,7 @@ describe("Disbursement consumer — CQRS wiring (integration)", () => {
       schemaVersion: "1.0",
       payload: { id: DISB, tenantId: TENANT, installmentId: INST, mode: "PFMS" },
     });
-    await new Promise((r) => setTimeout(r, 600));
+    await drainOrFail(q);
 
     const disbs = await scopedQuery(TENANT, (tx) =>
       tx.select().from(grantDisbursements).where(eq(grantDisbursements.id, DISB)));

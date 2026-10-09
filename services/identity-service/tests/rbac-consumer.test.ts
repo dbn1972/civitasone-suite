@@ -14,6 +14,7 @@ import { roles, permissions, rolePermissions, roleAssignments } from "../src/mod
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerRbacConsumers } from "../src/modules/rbac/consumer.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const TENANT = "f3333333-3333-4000-8000-000000000f3f";
 const ACTOR = "a0000000-0000-4000-8000-00000000aa01";
@@ -69,7 +70,7 @@ describe("RBAC consumer — createRole", () => {
     await q.publish(COMMANDS.rbacCreateRole, envelope(COMMANDS.rbacCreateRole, MSG_CREATE_ROLE, {
       id: ROLE_ID, key: "test.coverage.role", name: "Coverage Role", description: "for tests",
     }));
-    await new Promise((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
 
     const [row] = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -91,7 +92,7 @@ describe("RBAC consumer — createRole", () => {
     await q.publish(COMMANDS.rbacCreateRole, envelope(COMMANDS.rbacCreateRole, MSG_CREATE_ROLE, {
       id: ROLE_ID, key: "test.coverage.role", name: "Coverage Role",
     }));
-    await new Promise((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     await q.stop();
     // No error, no duplicate row
     const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -111,7 +112,7 @@ describe("RBAC consumer — createPermission", () => {
     await q.publish(COMMANDS.rbacCreatePermission, envelope(COMMANDS.rbacCreatePermission, MSG_CREATE_PERM_2, {
       id: PERM_ID_2, key: "test.coverage.perm2", name: "Coverage Permission 2",
     }));
-    await new Promise((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
 
     const [row] = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -132,7 +133,7 @@ describe("RBAC consumer — grantPermission", () => {
       roleId: ROLE_ID, permissionId: PERM_ID, permissionKey: "test.coverage.perm",
       callerRoles: ["super_admin"],
     }));
-    await new Promise((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
 
     const attached = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -153,7 +154,7 @@ describe("RBAC consumer — revokePermission", () => {
     await q.publish(COMMANDS.rbacRevokePermission, envelope(COMMANDS.rbacRevokePermission, MSG_REVOKE_PERM, {
       roleId: ROLE_ID, permissionId: PERM_ID,
     }));
-    await new Promise((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
 
     const attached = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -175,7 +176,7 @@ describe("RBAC consumer — assignRole + revokeRole", () => {
       roleId: ROLE_ID, userId: ASSIGN_USER, reason: "test coverage assignment",
       callerRoles: ["super_admin"],
     }));
-    await new Promise((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
 
     const [assignment] = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -195,7 +196,7 @@ describe("RBAC consumer — assignRole + revokeRole", () => {
     await q.publish(COMMANDS.rbacRevokeRole, envelope(COMMANDS.rbacRevokeRole, MSG_REVOKE_ROLE, {
       roleId: ROLE_ID, userId: ASSIGN_USER, reason: "test coverage revocation",
     }));
-    await new Promise((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
 
     const [assignment] = await runWithTenant(TENANT, () => db.transaction(async (tx) =>

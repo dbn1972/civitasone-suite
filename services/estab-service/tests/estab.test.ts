@@ -20,6 +20,7 @@ import { registerFacilitiesConsumers } from "../src/modules/facilities/consumer.
 import { registerLegalConsumers }     from "../src/modules/legal/consumer.js";
 import { computeRtiDeadline } from "../src/modules/legal/domain.js";
 import { EVENTS } from "../src/topics.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const ACTOR  = "00000000-aaaa-4000-8000-000000000001";
 const TENANT = "11111111-aaaa-4000-8000-000000000002";
@@ -93,14 +94,14 @@ describe("Noting — immutability (idempotency)", () => {
     };
 
     await q.publish("estab.noting.add", notingMsg);
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainOrFail(q);
 
     // Second publish with same messageId but different body — should be ignored
     await q.publish("estab.noting.add", {
       ...notingMsg,
       payload: { id: NOTE_1, fileId: FILE_1, tenantId: TENANT, body: "Tampered body", officerId: ACTOR },
     });
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
 
     const rows = await runWithTenant(TENANT, () =>
@@ -134,7 +135,7 @@ describe("Room booking — overlap conflict", () => {
       tenantId: TENANT, actorId: ACTOR, correlationId: "corr-room-1", schemaVersion: "1.0",
       payload: { id: BOOKING_1, roomId: ROOM_1, tenantId: TENANT, guestName: "Test Guest", checkIn: from1, checkOut: to1 },
     });
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainOrFail(q);
 
     // Second booking — overlaps, should emit conflict
     await q.publish("estab.room.book", {
@@ -143,7 +144,7 @@ describe("Room booking — overlap conflict", () => {
       tenantId: TENANT, actorId: ACTOR, correlationId: "corr-room-2", schemaVersion: "1.0",
       payload: { id: BOOKING_2, roomId: ROOM_1, tenantId: TENANT, guestName: "Second Guest", checkIn: from2, checkOut: to2 },
     });
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
 
     const bookings = await runWithTenant(TENANT, () =>
@@ -256,7 +257,7 @@ describe("RTI CQRS — create wiring (integration)", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
 
     const rows = await runWithTenant(TENANT, () =>

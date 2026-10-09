@@ -30,6 +30,7 @@ import { assertTransitionAllowed } from "../src/modules/indent/domain.js";
 import { computeThreeWayMatch }    from "../src/modules/grn/domain.js";
 import { computeEffectivePrice, rankBids } from "../src/modules/auction/domain.js";
 import { COMMANDS, EVENTS } from "../src/topics.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const ACTOR  = "00000000-aaaa-4000-8000-000000000001";
 // DOM-002 — the GRN receiver (ACTOR, who creates/receives) and the inspector
@@ -153,7 +154,7 @@ describe("PO consumer — budget exceeded (integration)", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
     global.fetch = originalFetch;
 
@@ -400,7 +401,7 @@ describe("GRN consumer — CQRS wiring (integration)", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainOrFail(q);
 
     const afterCreate = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
       tx.select().from(procurementGrns).where(eq(procurementGrns.id, GRN_1))
@@ -421,7 +422,7 @@ describe("GRN consumer — CQRS wiring (integration)", () => {
       payload: { id: GRN_1, tenantId: TENANT, reason: "failed inspection" },
     });
 
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
 
     const grns = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -463,7 +464,7 @@ describe("GRN consumer — CQRS wiring (integration)", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainOrFail(q);
 
     // Step 2 — inspect (accept), authenticated as INSPECTOR — a genuinely
     // distinct actor from ACTOR.
@@ -477,7 +478,7 @@ describe("GRN consumer — CQRS wiring (integration)", () => {
       payload: { id: GRN_2, tenantId: TENANT },
     });
 
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
 
     const grns = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -517,7 +518,7 @@ describe("GRN consumer — CQRS wiring (integration)", () => {
         }],
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainOrFail(q);
 
     // Same actor (ACTOR) tries to accept the GRN it just created.
     await q.publish(COMMANDS.grnAccept, {
@@ -529,7 +530,7 @@ describe("GRN consumer — CQRS wiring (integration)", () => {
       schemaVersion: "1.0",
       payload: { id: selfGrnId, tenantId: TENANT },
     });
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
 
     const grns = await runWithTenant(TENANT, () => db.transaction(async (tx) =>

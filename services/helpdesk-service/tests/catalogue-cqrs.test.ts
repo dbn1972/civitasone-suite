@@ -14,6 +14,7 @@ import { catalogueOfferings, serviceRequests } from "../src/modules/catalogue/sc
 import { outboxSchema } from "../src/shared/outbox.js";
 import { registerCatalogueConsumers } from "../src/modules/catalogue/consumer.js";
 import { COMMANDS, EVENTS } from "../src/topics.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const { outboxMessages } = outboxSchema;
 const TENANT = "aaaaaaaa-0000-4000-8000-00000000ca99";
@@ -159,7 +160,7 @@ describe("catalogue consumer persistence", () => {
         resolutionDeadline: null,
       },
     });
-    await new Promise((r) => setTimeout(r, 200));
+    await drainOrFail(q);
 
     const reqs = await runWithTenant(TENANT, () =>
       db.transaction((tx) => tx.select().from(serviceRequests).where(eq(serviceRequests.id, requestId))),
@@ -211,7 +212,7 @@ describe("catalogue consumer persistence", () => {
     };
     await q.publish(COMMANDS.catalogueRequestRaise, msg);
     await q.publish(COMMANDS.catalogueRequestRaise, msg);
-    await new Promise((r) => setTimeout(r, 250));
+    await drainOrFail(q);
 
     const reqs = await runWithTenant(TENANT, () =>
       db.transaction((tx) => tx.select().from(serviceRequests).where(eq(serviceRequests.id, requestId))),

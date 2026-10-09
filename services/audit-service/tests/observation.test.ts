@@ -23,6 +23,7 @@ import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerObservationConsumers } from "../src/modules/observation/consumer.js";
 import { assertCanTransition, isClosable, assertCanDraftPara, DomainError } from "../src/modules/observation/domain.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 function token(roles: string[], tenantId: string, actorId: string) {
@@ -189,7 +190,7 @@ describe("Observation consumer — create (integration)", () => {
         amountInvolvedMinor: "500000",
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     await q.stop();
 
     const rows = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(auditObservations).where(eq(auditObservations.id, OBS_1))));
@@ -214,9 +215,9 @@ describe("Observation consumer — create (integration)", () => {
       },
     };
     await q.publish(COMMANDS.observationCreate, env);
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     await q.publish(COMMANDS.observationCreate, { ...env }); // redelivery, same messageId
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     await q.stop();
 
     const rows = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(auditObservations).where(eq(auditObservations.id, OBS_2))));
@@ -243,7 +244,7 @@ describe("Observation consumer — full lifecycle (integration)", () => {
         amountInvolvedMinor: "750000",
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
 
     let rows = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(auditObservations).where(eq(auditObservations.id, OBS_3))));
     expect(rows[0]?.status).toBe("open");
@@ -257,7 +258,7 @@ describe("Observation consumer — full lifecycle (integration)", () => {
         replyText: "Corrective action taken", respondedByRef: "dept:finance:head",
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
 
     rows = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(auditObservations).where(eq(auditObservations.id, OBS_3))));
     expect(rows[0]?.status).toBe("replied");
@@ -268,7 +269,7 @@ describe("Observation consumer — full lifecycle (integration)", () => {
       tenantId: TENANT, actorId: ACTOR, correlationId: "corr-life-3", schemaVersion: "1.0",
       payload: { id: randomUUID(), observationId: OBS_3, tenantId: TENANT, decision: "accepted" },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
 
     rows = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(auditObservations).where(eq(auditObservations.id, OBS_3))));
     expect(rows[0]?.status).toBe("compliance_pending");
@@ -279,7 +280,7 @@ describe("Observation consumer — full lifecycle (integration)", () => {
       tenantId: TENANT, actorId: ACTOR, correlationId: "corr-life-4", schemaVersion: "1.0",
       payload: { id: randomUUID(), observationId: OBS_3, tenantId: TENANT, mode: "full", closureRemarks: "Fully resolved, no outstanding paras" },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     await q.stop();
 
     rows = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(auditObservations).where(eq(auditObservations.id, OBS_3))));
