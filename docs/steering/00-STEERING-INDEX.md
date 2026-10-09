@@ -22,6 +22,12 @@ The map of governing documents. Read top-down; the higher a doc sits, the more b
 | [PERFORMANCE_DESIGN.md](../PERFORMANCE_DESIGN.md) | Latency/throughput targets, cache + queue design. | Vol 13 |
 | [`/MODULES_AND_SCHEMA.md`](../../archive/erpnext-develop/MODULES_AND_SCHEMA.md) | Module catalog, integration map, per-service schema, SoT registry, de-duplication. | (derived) |
 
+## 2a. Feature contract packs
+
+| Pack | What it governs |
+|---|---|
+| [smarttransfer/](../smarttransfer/README.md) | SmartTransfer OS (Universal Workforce Movement & Allocation Engine) — ADRs and contract pack C0: glossary, ER model, state machines, API sketch, event list. M01 "Foundations and frozen contracts". |
+
 ## 3. Workflow prompts — one per task type
 
 Pick the prompt that matches the task; fill the inputs; reference the relevant skill(s).
