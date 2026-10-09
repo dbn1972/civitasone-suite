@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { COOKIE } from "@/lib/auth/config";
 import { GLOSSARY } from "@/lib/glossary";
 import { HELP_MODULES } from "@/lib/helpContent";
+
+// GAP2-SHELL-PROXY-02: this route lives under the /api/proxy tree, where every
+// other path is session-gated by api/proxy/[...path]/route.ts (401 without a
+// session cookie). This hard-coded sibling previously answered anyone, so a
+// reader would wrongly assume it was gated like its neighbours. Mirror the
+// pass-through's COOKIE.ACCESS presence check (the Assistant panel is only shown
+// inside the authenticated shell) and cap the request body so an unbounded
+// question/context payload cannot be used to exhaust the Node process.
+const MAX_BODY_BYTES = 16 * 1024; // 16 KB — a help question, not a document.
 
 /**
  * Deterministic keyword-matching RAG endpoint for the AI Assistant.
@@ -141,8 +152,26 @@ function buildAnswer(
 }
 
 export async function POST(request: NextRequest) {
+  // GAP2-SHELL-PROXY-02: session gate — match every other /api/proxy/* path.
+  const token = cookies().get(COOKIE.ACCESS)?.value;
+  if (!token) {
+    return NextResponse.json({ code: "UNAUTHORIZED" }, { status: 401 });
+  }
+
+  // GAP2-SHELL-PROXY-02: reject an oversized body before parsing it. A declared
+  // content-length over the cap is refused outright; the actual parsed text is
+  // re-checked below in case the header is absent or lies.
+  const declaredLength = Number(request.headers.get("content-length") ?? "0");
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+    return NextResponse.json({ error: "Request body too large" }, { status: 413 });
+  }
+
   try {
-    const body = (await request.json()) as AskRequest;
+    const raw = await request.text();
+    if (raw.length > MAX_BODY_BYTES) {
+      return NextResponse.json({ error: "Request body too large" }, { status: 413 });
+    }
+    const body = (raw ? JSON.parse(raw) : {}) as AskRequest;
     const { question, context } = body;
 
     if (!question || typeof question !== "string" || question.trim().length === 0) {

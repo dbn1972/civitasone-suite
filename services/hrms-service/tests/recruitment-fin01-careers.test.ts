@@ -176,4 +176,26 @@ describe("public apply body: category + date of birth", () => {
     expect(H.submit).not.toHaveBeenCalled();
     await a.close();
   });
+
+  // GAP2-SHELL-CAREERS-01: the public apply route lets an anonymous applicant name
+  // the tenant (by design — a public multi-tenant careers portal). The service must
+  // still reject a tenant with NO public careers presence rather than trusting the
+  // body-supplied id: the published-only lookup (findPublishedOpening scoped to the
+  // body tenant) returns null → 404, and no application is ever written. This pins
+  // that the body tenant alone is never sufficient to create an application.
+  it("rejects a random-UUID tenant with no published opening (404, no write)", async () => {
+    H.findPublishedOpening.mockResolvedValue(null); // tenant has no public careers presence
+    H.submit.mockResolvedValue({ id: "x", applicationNo: "APP-X", status: "received", alreadyApplied: false });
+    const a = Fastify();
+    await a.register(publicRecruitmentRoutes);
+    const res = await a.inject({
+      method: "POST",
+      url: "/v1/careers/apply",
+      payload: { ...base, tenantId: randomUUID() }, // random, no presence
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe("NOT_FOUND");
+    expect(H.submit).not.toHaveBeenCalled();
+    await a.close();
+  });
 });
