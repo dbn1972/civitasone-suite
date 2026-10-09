@@ -1842,50 +1842,37 @@ jobs:
           path: release-gate.json
           retention-days: 30
 
+  # Derive the docker-build matrix from the tree so it cannot drift: one row
+  # per buildable service (a services/* dir whose package.json has a `build`
+  # script), each carrying the SERVICE/ENTRY/PORT the root Dockerfile needs.
+  # See scripts/ci/docker-matrix.mjs and tests/ops/docker-matrix.test.ts.
+  docker-matrix:
+    name: Derive Docker Build Matrix
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [e2e]
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}' }
+      # Exits 1 on an empty/undrivable matrix, so a silently-empty build set
+      # can never pass as success.
+      - name: Build matrix from services/ + ecosystem.config.js
+        id: set
+        run: echo "matrix=$(node scripts/ci/docker-matrix.mjs --compact)" >> "$GITHUB_OUTPUT"
+
   docker-build:
     name: Build & Push Docker Images
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [e2e]
+    needs: [docker-matrix]
     permissions:
       contents: read
       packages: write
     strategy:
-      matrix:
-        service:
-          - admin-service
-          - analytics-service
-          - asset-service
-          - audit-service
-          - billing-service
-          - citizen-service
-          - contract-service
-          - crm-service
-          - estab-service
-          - finance-service
-          - gateway-service
-          - grant-service
-          - helpdesk-service
-          - hrms-service
-          - identity-service
-          - install-service
-          - inventory-service
-          - knowledge-service
-          - legal-service
-          - location-service
-          - notification-service
-          - payroll-service
-          - plugin-service
-          - policy-service
-          - procurement-service
-          - project-service
-          - queue-service
-          - report-service
-          - stock-service
-          - telephony-service
-          - tenant-service
-          - theme-service
-          - workflow-service
+      matrix: ${{ fromJSON(needs.docker-matrix.outputs.matrix) }}
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
@@ -1900,11 +1887,18 @@ jobs:
       - name: Extract version
         id: version
         run: echo "version=$(node -p 'require("./package.json").version')" >> "$GITHUB_OUTPUT"
+      # Every service builds from the single parametrised root Dockerfile.
+      # No service has its own Dockerfile; SERVICE/ENTRY/PORT come from the
+      # docker-matrix job (derived from the tree). Workers share this image.
       - name: Build and push ${{ matrix.service }}
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: services/${{ matrix.service }}/Dockerfile
+          file: Dockerfile
+          build-args: |
+            SERVICE=${{ matrix.service }}
+            ENTRY=${{ matrix.entry }}
+            PORT=${{ matrix.port }}
           push: true
           tags: |
             ghcr.io/${{ github.repository }}/${{ matrix.service }}:latest
