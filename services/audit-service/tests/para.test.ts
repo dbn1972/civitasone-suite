@@ -14,6 +14,7 @@ import { registerComplianceConsumers } from "../src/modules/compliance/consumer.
 import { assertCanTransition, assertBodyMutable, isValidTransition } from "../src/modules/para/domain.js";
 import { COMMANDS, EVENTS } from "../src/topics.js";
 import type { ParaStatus } from "../src/modules/para/schema.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 // TENANT/PARA_1 are randomUUID()-scoped (not fixed literals) because
 // para.audit_paras is a case-of-record table guarded by migration 0027's
@@ -113,7 +114,7 @@ describe("Para consumer — CQRS state machine (integration)", () => {
       tenantId: TENANT, actorId: ACTOR, correlationId: "corr-para-1", schemaVersion: "1.0",
       payload: { paraId: PARA_1, tenantId: TENANT },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
 
     let rows = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(auditParas).where(eq(auditParas.id, PARA_1))));
     expect(rows[0]?.status).toBe("issued");
@@ -126,7 +127,7 @@ describe("Para consumer — CQRS state machine (integration)", () => {
         responseBody: "Recovery action initiated", respondedByRef: "dept:finance:head",
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
 
     rows = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(auditParas).where(eq(auditParas.id, PARA_1))));
     expect(rows[0]?.status).toBe("replied");
@@ -136,7 +137,7 @@ describe("Para consumer — CQRS state machine (integration)", () => {
       tenantId: TENANT, actorId: ACTOR, correlationId: "corr-para-3", schemaVersion: "1.0",
       payload: { paraId: PARA_1, tenantId: TENANT, reason: "amount recovered" },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     await q.stop();
 
     rows = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(auditParas).where(eq(auditParas.id, PARA_1))));
@@ -179,7 +180,7 @@ describe("Para consumer — CQRS state machine (integration)", () => {
         responseBody: "Dept reply", respondedByRef: "dept:hr:head",
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 600));
+    await drainOrFail(q);
     await q.stop();
 
     const rows = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(auditParas).where(eq(auditParas.id, paraId))));

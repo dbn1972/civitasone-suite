@@ -15,6 +15,7 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { adminModuleConfigs } from "../src/modules/config/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerConfigConsumers } from "../src/modules/config/consumer.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 /**
  * Test-harness fix: `new MemoryQueue()` used directly (not the `createQueue()`
@@ -99,7 +100,7 @@ describe("config consumer — module toggle (integration)", () => {
       actorId: ACTOR, correlationId: "corr-tog-1", schemaVersion: "1.0",
       timestamp: new Date().toISOString(), payload: { tenantId: T1, moduleKey: MODULE_KEY, enabled: false },
     });
-    await new Promise((r) => setTimeout(r, 500));
+    await drainOrFail(q);
 
     let [rows, audit] = await runWithTenant(T1, () =>
       db.transaction((tx) => Promise.all([
@@ -116,7 +117,7 @@ describe("config consumer — module toggle (integration)", () => {
       actorId: ACTOR, correlationId: "corr-tog-2", schemaVersion: "1.0",
       timestamp: new Date().toISOString(), payload: { tenantId: T1, moduleKey: MODULE_KEY, enabled: true },
     });
-    await new Promise((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
 
     rows = await runWithTenant(T1, () =>
@@ -141,7 +142,7 @@ describe("config consumer — module toggle (integration)", () => {
       timestamp: new Date().toISOString(),
       payload: { tenantId: T1, moduleKey: MODULE_KEY, enabled: false, reason: "Finance disabled pending audit" },
     });
-    await new Promise((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
 
     const audit = await runWithTenant(T1, () =>

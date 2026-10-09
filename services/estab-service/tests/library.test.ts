@@ -23,6 +23,7 @@ import { estabLibraryBooks, estabIssues } from "../src/modules/facilities/schema
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerFacilitiesConsumers } from "../src/modules/facilities/consumer.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const JWT_SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
@@ -195,7 +196,7 @@ describe("Library issue return — happy path and idempotency", () => {
       tenantId: T, actorId: actor, correlationId: "corr-return-1", schemaVersion: "1.0",
       payload: { issueId, tenantId: T },
     });
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainOrFail(q);
 
     // Second return of the same loan (e.g. a doubled client request, or the
     // PATCH being retried) — must be a no-op, not a double increment.
@@ -204,7 +205,7 @@ describe("Library issue return — happy path and idempotency", () => {
       tenantId: T, actorId: actor, correlationId: "corr-return-2", schemaVersion: "1.0",
       payload: { issueId, tenantId: T },
     });
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
 
     const issues = await runWithTenant(T, () =>

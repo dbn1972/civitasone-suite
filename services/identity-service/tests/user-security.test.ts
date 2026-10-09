@@ -19,6 +19,7 @@ import { sessions } from "../src/modules/sessions/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerSessionConsumers } from "../src/modules/sessions/consumer.js";
 import { registerUserConsumers } from "../src/modules/users/consumer.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET as string;
 
@@ -184,7 +185,7 @@ describe("revoke-all consumer — CQRS (integration)", () => {
       actorId: ACTOR, correlationId: "corr-revoke-1", schemaVersion: "1.0",
       timestamp: new Date().toISOString(), payload: { userId: USER_REVOKE },
     });
-    await new Promise((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
 
     const rows = await runWithTenant(T1, () => db.transaction(async (tx) =>
@@ -211,7 +212,7 @@ describe("revoke-all consumer — CQRS (integration)", () => {
       actorId: ACTOR, correlationId: "corr-revoke-2", schemaVersion: "1.0",
       timestamp: new Date().toISOString(), payload: { userId: USER_REVOKE },
     });
-    await new Promise((r) => setTimeout(r, 400));
+    await drainOrFail(q);
     await q.stop();
 
     const rows = await runWithTenant(T1, () => db.transaction(async (tx) =>
@@ -230,7 +231,7 @@ describe("reset-password consumer — CQRS (integration)", () => {
       actorId: ACTOR, correlationId: "corr-reset-1", schemaVersion: "1.0",
       timestamp: new Date().toISOString(), payload: { id: USER_RESET },
     });
-    await new Promise((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
 
     const outbox = await runWithTenant(T1, () => db.transaction(async (tx) =>
@@ -264,7 +265,7 @@ describe("GAP-TENANT-ADMIN-USERS-DETAIL-01/02 — reason is audited", () => {
       actorId: ACTOR, correlationId: "corr-reset-reason", schemaVersion: "1.0",
       timestamp: new Date().toISOString(), payload: { id: USER_RESET, reason: "offboarding per HR ticket 42" },
     });
-    await new Promise((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
 
     const evt = await runWithTenant(T1, () => db.transaction(async (tx) =>
@@ -284,7 +285,7 @@ describe("GAP-TENANT-ADMIN-USERS-DETAIL-01/02 — reason is audited", () => {
       actorId: ACTOR, correlationId: "corr-revoke-reason", schemaVersion: "1.0",
       timestamp: new Date().toISOString(), payload: { userId: USER_RESET, reason: "compromised credentials" },
     });
-    await new Promise((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
 
     const evt = await runWithTenant(T1, () => db.transaction(async (tx) =>
@@ -303,7 +304,7 @@ describe("GAP-TENANT-ADMIN-USERS-DETAIL-01/02 — reason is audited", () => {
       actorId: ACTOR, correlationId: "corr-single-revoke", schemaVersion: "1.0",
       timestamp: new Date().toISOString(), payload: { id: SESS_REASON, reason: "stolen laptop" },
     });
-    await new Promise((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
 
     const evt = await runWithTenant(T1, () => db.transaction(async (tx) =>

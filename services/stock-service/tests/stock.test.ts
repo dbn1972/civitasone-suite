@@ -19,6 +19,7 @@ import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerEntryConsumers } from "../src/modules/entry/consumer.js";
 import { weightedAvgRate, assertStockNotNegative } from "../src/modules/entry/domain.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 /**
  * Wraps queue subscriptions with tenant context so that db.transaction()
@@ -112,7 +113,7 @@ describe("Entry consumer — CQRS wiring (integration)", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, 600));
+    await drainOrFail(q);
     await q.stop();
 
     // Entry posted
@@ -209,9 +210,9 @@ describe("Entry consumer — idempotency (integration)", () => {
     };
 
     await q.publish(COMMANDS.entryCreate, payload);
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     await q.publish(COMMANDS.entryCreate, payload);
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     await q.stop();
 
     const entries = await runWithTenant(TENANT, () => db.transaction(async (tx) =>

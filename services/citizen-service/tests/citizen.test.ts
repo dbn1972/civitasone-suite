@@ -23,6 +23,7 @@ import { computeRtiDeadline } from "../src/modules/rti/domain.js";
 import { isSlaBreached } from "../src/modules/application/domain.js";
 import { assertGrievanceTransition } from "../src/modules/grievance/domain.js";
 import { COMMANDS, EVENTS } from "../src/topics.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const ACTOR  = "00000000-aaaa-4000-8000-000000000001";
 const TENANT = "11111111-aaaa-4000-8000-000000000002";
@@ -152,7 +153,7 @@ describe("Application CQRS — SLA breach event (integration)", () => {
       tenantId: TENANT, actorId: ACTOR, correlationId: "corr-sla-1", schemaVersion: "1.0",
       payload: { tenantId: TENANT, applicationId: APP_1, serviceType: "certificate", maxDays: 7 },
     });
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
 
     const outbox = await asTenant((tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT)));
@@ -194,7 +195,7 @@ describe("Grievance CQRS — register → assign → action → resolve", () => 
         category: "water supply", subject: "No water", description: "No water for 3 days",
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainOrFail(q);
 
     let rows = await asTenant((tx) => tx.select().from(citizenGrievances).where(eq(citizenGrievances.id, GRIEV_1)));
     expect(rows).toHaveLength(1);
@@ -212,7 +213,7 @@ describe("Grievance CQRS — register → assign → action → resolve", () => 
         actionType: "investigate", note: "Team dispatched", status: "in_progress",
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainOrFail(q);
 
     rows = await asTenant((tx) => tx.select().from(citizenGrievances).where(eq(citizenGrievances.id, GRIEV_1)));
     expect(rows[0]?.status).toBe("in_progress");
@@ -223,7 +224,7 @@ describe("Grievance CQRS — register → assign → action → resolve", () => 
       tenantId: TENANT, actorId: OFFICER, correlationId: "corr-g-4", schemaVersion: "1.0",
       payload: { id: GRIEV_1, tenantId: TENANT, note: "Water restored" },
     });
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
 
     rows = await asTenant((tx) => tx.select().from(citizenGrievances).where(eq(citizenGrievances.id, GRIEV_1)));

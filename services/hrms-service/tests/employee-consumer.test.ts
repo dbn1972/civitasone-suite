@@ -99,6 +99,7 @@ vi.mock("../src/modules/lifecycle/repo.js", () => ({
 // Now import the consumer AFTER mocks
 import { registerEmployeeConsumers } from "../src/modules/employee/consumer.js";
 import { COMMANDS, EVENTS } from "../src/topics.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 const TENANT = "10000000-aaaa-4000-8000-000000000001";
@@ -119,7 +120,6 @@ async function buildQueue(): Promise<MemoryQueue> {
   return q;
 }
 
-const settle = () => new Promise<void>((r) => setTimeout(r, 100));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -140,7 +140,7 @@ describe("employeeCreate command", () => {
       dateOfJoining: "2025-01-15", employeeType: "permanent",
       basicMinor: 5000000, currency: "INR",
     }));
-    await settle();
+    await drainOrFail(q);
     expect(insertEmployeeMock).toHaveBeenCalledOnce();
     const row = insertEmployeeMock.mock.calls[0]![1] as Record<string, unknown>;
     expect(row.id).toBe(empId);
@@ -156,7 +156,7 @@ describe("employeeCreate command", () => {
       dateOfJoining: "2025-01-15", employeeType: "permanent",
       basicMinor: 3000000, currency: "INR",
     }));
-    await settle();
+    await drainOrFail(q);
     const evt = enqueuedMessages.find((m) => m.topic === EVENTS.employeeCreated);
     expect(evt).toBeDefined();
     await q.stop();
@@ -170,7 +170,7 @@ describe("employeeCreate command", () => {
       dateOfJoining: "2025-01-15", employeeType: "permanent",
       basicMinor: 1000000, currency: "INR",
     }));
-    await settle();
+    await drainOrFail(q);
     const audit = enqueuedMessages.find((m) => m.topic === "audit.event.record");
     expect(audit).toBeDefined();
     expect((audit!.payload as any).action).toBe("create");
@@ -192,7 +192,7 @@ describe("employeeConfirm command", () => {
     await q.publish(COMMANDS.employeeConfirm, makeMsg(COMMANDS.employeeConfirm, {
       id: empId, tenantId: TENANT, confirmationDate: "2026-01-15",
     }));
-    await settle();
+    await drainOrFail(q);
     expect(updateEmployeeIfStatusMock).toHaveBeenCalledOnce();
     const [, id, tenantId, expectedStatus, patch] = updateEmployeeIfStatusMock.mock.calls[0]! as
       [unknown, string, string, string, Record<string, unknown>];
@@ -213,7 +213,7 @@ describe("employeeConfirm command", () => {
     await q.publish(COMMANDS.employeeConfirm, makeMsg(COMMANDS.employeeConfirm, {
       id: empId, tenantId: TENANT, confirmationDate: "2026-01-15",
     }));
-    await settle();
+    await drainOrFail(q);
     expect(updateEmployeeIfStatusMock).not.toHaveBeenCalled();
     await q.stop();
   });
@@ -227,7 +227,7 @@ describe("employeeConfirm command", () => {
       await q.publish(COMMANDS.employeeConfirm, makeMsg(COMMANDS.employeeConfirm, {
         id: empId, tenantId: TENANT, confirmationDate: "2026-01-15",
       }));
-      await settle();
+      await drainOrFail(q);
       // The write must never be attempted for any non-"probation" status —
       // this is the core of the fix: terminated/separated/retired employees
       // (this bug's named CRITICAL cases) can never be silently reactivated,
@@ -252,10 +252,10 @@ describe("employeeConfirm command", () => {
     await q.publish(COMMANDS.employeeConfirm, makeMsg(COMMANDS.employeeConfirm, {
       id: empId, tenantId: TENANT, confirmationDate: "2026-01-15",
     }));
-    await settle();
+    await drainOrFail(q);
     // Not toHaveBeenCalledOnce(): a throw here is retried by MemoryQueue's
     // bounded backoff (same reasoning as the analogous basicMinor-conflict
-    // test above), so multiple attempts land within the settle() window.
+    // test above), so multiple attempts may land before the queue drains.
     expect(updateEmployeeIfStatusMock.mock.calls.length).toBeGreaterThanOrEqual(1);
     // No audit/success signal reached the outbox for this employee.
     expect(enqueuedMessages.some((m) => m.payload && (m.payload as any).resourceId === empId)).toBe(false);
@@ -279,7 +279,7 @@ describe("employeeTransfer command", () => {
       fromDeptId: randomUUID(), toDeptId,
       effectiveDate: "2026-06-01",
     }));
-    await settle();
+    await drainOrFail(q);
     expect(insertTransferMock).toHaveBeenCalledOnce();
     const [, transferRow] = insertTransferMock.mock.calls[0]! as [unknown, Record<string, unknown>];
     expect(transferRow.status).toBe("completed");
@@ -321,7 +321,7 @@ describe("employeeTransfer command", () => {
       fromDeptId: randomUUID(), toDeptId,
       effectiveDate: "2026-06-01", payStructureId,
     }));
-    await settle();
+    await drainOrFail(q);
     const [, transferArg] = applyTransferEffectMock.mock.calls[0]! as [unknown, Record<string, unknown>];
     expect(transferArg.payStructureId).toBe(payStructureId);
     const insertRow = insertTransferMock.mock.calls[0]![1] as Record<string, unknown>;
@@ -338,7 +338,7 @@ describe("employeeTransfer command", () => {
       fromDeptId: randomUUID(), toDeptId,
       effectiveDate: "2026-06-01",
     }));
-    await settle();
+    await drainOrFail(q);
     const evt = enqueuedMessages.find((m) => m.topic === EVENTS.employeeTransferred);
     expect(evt).toBeDefined();
     expect((evt!.payload as any).employeeId).toBe(empId);
@@ -355,7 +355,7 @@ describe("employeeTransferSubmitApproval command", () => {
       id: transferId, employeeId: randomUUID(), tenantId: TENANT,
       fromDeptId: randomUUID(), toDeptId: randomUUID(), effectiveDate: "2026-06-01",
     }));
-    await settle();
+    await drainOrFail(q);
     expect(insertTransferMock).toHaveBeenCalledOnce();
     const row = insertTransferMock.mock.calls[0]![1] as Record<string, unknown>;
     expect(row.status).toBe("pending_approval");
@@ -374,7 +374,7 @@ describe("employeeTransferSubmitApproval command", () => {
       fromDeptId: randomUUID(), toDeptId: randomUUID(), effectiveDate: "2026-06-01",
       payStructureId,
     }));
-    await settle();
+    await drainOrFail(q);
     const row = insertTransferMock.mock.calls[0]![1] as Record<string, unknown>;
     expect(row.payStructureId).toBe(payStructureId);
     await q.stop();
@@ -389,7 +389,7 @@ describe("employeePromotionSubmitApproval command", () => {
       id: promoId, employeeId: randomUUID(), tenantId: TENANT,
       fromDesigId: randomUUID(), toDesigId: randomUUID(), effectiveDate: "2026-07-01",
     }));
-    await settle();
+    await drainOrFail(q);
     expect(insertPromotionMock).toHaveBeenCalledOnce();
     const row = insertPromotionMock.mock.calls[0]![1] as Record<string, unknown>;
     expect(row.status).toBe("pending_approval");
@@ -410,7 +410,7 @@ describe("employeeSeparate command", () => {
       separationType: "retirement", effectiveDate: "2026-06-30",
       encashmentDays: 200,
     }));
-    await settle();
+    await drainOrFail(q);
     expect(insertSeparationMock).toHaveBeenCalledOnce();
     const sepRow = insertSeparationMock.mock.calls[0]![1] as Record<string, unknown>;
     expect(sepRow.status).toBe("initiated");
@@ -438,7 +438,7 @@ describe("employeeSeparate command", () => {
       separationType: "resignation", effectiveDate: "2026-06-30",
       encashmentDays: 100,
     }));
-    await settle();
+    await drainOrFail(q);
     const sepRow = insertSeparationMock.mock.calls[0]![1] as Record<string, unknown>;
     expect(sepRow.gratuityMinor).toBe(0n); // resignation forfeits gratuity
     await q.stop();
@@ -455,7 +455,7 @@ describe("employeeUpdate command", () => {
       mobile: "9876543210", email: "test@gov.in",
       bankAccountNo: "12345678901234", bankIfsc: "SBIN0001234",
     }));
-    await settle();
+    await drainOrFail(q);
     // No basicMinor in this payload: the optimistic-concurrency guard is not
     // engaged, and this keeps going through the plain updateEmployee path.
     expect(updateEmployeeMock).toHaveBeenCalledOnce();
@@ -485,7 +485,7 @@ describe("employeeUpdate command", () => {
       bankAccountNo: "12345678901234", bankIfsc: "SBIN0001234",
       basicMinor: "6000000",
     }));
-    await settle();
+    await drainOrFail(q);
     expect(updateEmployeeMock).not.toHaveBeenCalled();
     expect(findVersionForUpdateMock).toHaveBeenCalledOnce();
     expect(findVersionForUpdateMock).toHaveBeenCalledWith(expect.anything(), empId, TENANT);
@@ -521,9 +521,9 @@ describe("employeeUpdate command", () => {
       id: empId, tenantId: TENANT, basicMinor: "7000000",
     }));
     // MemoryQueue retries a failing handler up to 5 times with exponential
-    // backoff (20/40/80/160/320ms ≈ 620ms total) before dead-lettering — the
-    // usual 100ms `settle()` isn't enough to observe the final DLQ outcome.
-    await new Promise((r) => setTimeout(r, 900));
+    // backoff (20/40/80/160/320ms ≈ 620ms total) before dead-lettering;
+    // a short fixed wait cannot observe the final DLQ outcome, drain can.
+    await drainOrFail(q);
     expect(updateEmployeeVersionedMock.mock.calls.length).toBeGreaterThanOrEqual(1);
     // The write is never silently treated as applied: no success event is
     // enqueued, and the message ends up in the queue's dead-letter queue
@@ -548,7 +548,7 @@ describe("employeeUpdate command", () => {
         mobile: "9876543210", email: "test@gov.in",
         bankAccountNo: "12345678901234", bankIfsc: "SBIN0001234",
       }));
-      await settle();
+      await drainOrFail(q);
       expect(updateEmployeeMock).not.toHaveBeenCalled();
       expect(findVersionForUpdateMock).not.toHaveBeenCalled();
       expect(updateEmployeeVersionedMock).not.toHaveBeenCalled();
@@ -563,7 +563,7 @@ describe("employeeUpdate command", () => {
     await q.publish(COMMANDS.employeeUpdate, makeMsg(COMMANDS.employeeUpdate, {
       id: empId, tenantId: TENANT, mobile: "9876543210",
     }));
-    await settle();
+    await drainOrFail(q);
     expect(updateEmployeeMock).not.toHaveBeenCalled();
     await q.stop();
   });
@@ -577,7 +577,7 @@ describe("employeeUpdate command", () => {
       await q.publish(COMMANDS.employeeUpdate, makeMsg(COMMANDS.employeeUpdate, {
         id: empId, tenantId: TENANT, mobile: "9876543210",
       }));
-      await settle();
+      await drainOrFail(q);
       expect(updateEmployeeMock).toHaveBeenCalledOnce();
       await q.stop();
     },

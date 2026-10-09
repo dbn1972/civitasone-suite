@@ -14,6 +14,7 @@ import { queue } from "../src/shared/infra.js";
 import { outboxMessages } from "../src/shared/outbox.js";
 import { settingsSections, tenantLogos } from "../src/modules/tenant-settings/schema.js";
 import { registerAllF3Consumers } from "./helpers/register-all-f3-consumers.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 process.env.CONFIG_ENC_KEY = process.env.CONFIG_ENC_KEY ?? "test_config_enc_key_for_civitasone_32c"; // gitleaks:allow
 const { buildApp } = await import("../src/app.js");
@@ -71,7 +72,10 @@ async function until<T>(fn: () => Promise<T | undefined | false>, tries = 300): 
 async function patch(section: string, payload: unknown, tenant = TA) {
   const prev = ((await get(tenant))[section]?.version as number | undefined) ?? 0;
   const res = await app.inject({ method: "PATCH", url: `/v1/admin/settings/${section}`, headers: admin(tenant), payload: payload as object });
-  if (res.statusCode === 202) await until(async () => (await get(tenant))[section].version > prev);
+  if (res.statusCode === 202) {
+    await drainOrFail(queue); // consumer (incl. retries) has fully settled
+    await until(async () => (await get(tenant))[section].version > prev);
+  }
   return res;
 }
 
@@ -122,6 +126,7 @@ describe("GET / PATCH round trip (SETTINGS-01)", () => {
       send({ passwordMinLen: 12, mfaRequired: true, ipWhitelist: "10.0.0.0/8\n192.168.1.0/24" }),
     ]);
     expect([a.statusCode, b.statusCode, c.statusCode]).toEqual([202, 202, 202]);
+    await drainOrFail(queue);
     await until(async () => (await get()).security.version >= 4);
     const s = (await get()).security;
     expect(s.values).toEqual({ sessionTimeoutMin: 30, maxLoginAttempts: 5, passwordMinLen: 12, mfaRequired: true, ipWhitelist: ["10.0.0.0/8", "192.168.1.0/24"] });
@@ -197,7 +202,7 @@ describe("test email throttling", () => {
     const again = await send(actor, T3);
     expect(again.statusCode).toBe(429);
     expect(again.json().code).toBe("RATE_LIMITED");
-    await new Promise((r) => setTimeout(r, 500));
+    await drainOrFail(queue);
     expect((await outboxFor(T3)).filter((r) => r.topic === "notification.send")).toHaveLength(1);
     await cleanup([T3]);
   });

@@ -19,6 +19,7 @@ import { computeWeightedPhysicalProgress } from "../src/modules/scheme/domain.js
 import { assertUcExpenditureWithinReleased } from "../src/modules/utilisation/domain.js";
 import { assertFundReleaseWithinAllocation } from "../src/modules/scheme/domain.js";
 import { EVENTS } from "../src/topics.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const ACTOR    = "00000000-aaaa-4000-8000-000000000001";
 const TENANT   = "11111111-aaaa-4000-8000-000000000002";
@@ -135,7 +136,7 @@ describe("Scheme consumer — fund release exceeds allocation (integration)", ()
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, 600));
+    await drainOrFail(q);
 
     // Try to release 1500000 (over 1000000 allocation)
     await q.publish("project.fund_release.create", {
@@ -148,7 +149,7 @@ describe("Scheme consumer — fund release exceeds allocation (integration)", ()
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, 600));
+    await drainOrFail(q);
     await q.stop();
 
     // Fund release should NOT be in DB.
@@ -220,7 +221,7 @@ describe("CQRS — fund release within allocation (integration)", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, 600));
+    await drainOrFail(q);
 
     // Release 3000000 (within 5000000 allocation)
     await q.publish("project.fund_release.create", {
@@ -233,7 +234,7 @@ describe("CQRS — fund release within allocation (integration)", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, 600));
+    await drainOrFail(q);
     await q.stop();
 
     // Fund release should be in DB with status=approved.

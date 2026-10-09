@@ -29,6 +29,7 @@ vi.mock("../src/shared/hrms-client.js", () => ({
 import { registerPayrollConsumers } from "../src/modules/payroll/consumer.js";
 import { registerIntegrationConsumers } from "../src/modules/integration/consumer.js";
 import { COMMANDS, CONSUMED_EVENTS, EVENTS } from "../src/topics.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const ACTOR  = "00000000-aaaa-4000-8000-000000000099";
 const TENANT = "11111111-bbbb-4000-8000-000000000033";
@@ -80,7 +81,7 @@ describe("HR integration consumers", () => {
       payload: { employeeId: EMP_ID, daysApplied: 2, fromDate: "2025-06-10" },
     });
 
-    await new Promise((r) => setTimeout(r, 200));
+    await drainOrFail(q);
 
     const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
       tx.select().from(payrollLopLedger)
@@ -120,7 +121,7 @@ describe("HR integration consumers", () => {
       payload: { id: RUN_ID, tenantId: TENANT, approvedBy: APPROVER },
     });
 
-    await new Promise((r) => setTimeout(r, 600));
+    await drainOrFail(q);
 
     const outbox = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
       tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))));
@@ -154,7 +155,7 @@ describe("HR integration consumers", () => {
       tenantId: TENANT, actorId: ACTOR, correlationId: "corr-self", schemaVersion: "1.0",
       payload: { id: SELF_RUN, tenantId: TENANT, approvedBy: ACTOR }, // approver === creator
     });
-    await new Promise((r) => setTimeout(r, 600));
+    await drainOrFail(q);
     await q.stop();
 
     const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -192,7 +193,7 @@ describe("HR integration consumers — attendance & idempotency", () => {
       payload: { employeeId: EMP_ID, attendanceDate: "2025-06-15", status: "absent" },
     });
 
-    await new Promise((r) => setTimeout(r, 200));
+    await drainOrFail(q);
     await q.stop();
 
     const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -222,7 +223,7 @@ describe("HR integration consumers — attendance & idempotency", () => {
       payload: { employeeId: EMP_ID, attendanceDate: "2025-06-16", status: "present" },
     });
 
-    await new Promise((r) => setTimeout(r, 200));
+    await drainOrFail(q);
     await q.stop();
 
     const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -255,9 +256,9 @@ describe("HR integration consumers — attendance & idempotency", () => {
 
     // Publish twice
     await q.publish(CONSUMED_EVENTS.leaveApproved, msg);
-    await new Promise((r) => setTimeout(r, 200));
+    await drainOrFail(q);
     await q.publish(CONSUMED_EVENTS.leaveApproved, msg);
-    await new Promise((r) => setTimeout(r, 200));
+    await drainOrFail(q);
     await q.stop();
 
     const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
@@ -290,7 +291,7 @@ describe("HR integration consumers — attendance & idempotency", () => {
       payload: { employeeId: EMP_ID, fullName: "Test Employee" },
     });
 
-    await new Promise((r) => setTimeout(r, 200));
+    await drainOrFail(q);
     await q.stop();
 
     // Verify it was marked as processed

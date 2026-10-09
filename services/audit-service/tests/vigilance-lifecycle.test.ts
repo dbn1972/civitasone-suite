@@ -13,7 +13,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
+import { MemoryQueue, type Handler } from "@civitasone/queue";
 import { signToken } from "@civitasone/auth";
 import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import type { FastifyInstance } from "fastify";
@@ -23,6 +23,7 @@ import { vigilanceCases, vigilanceActions, vigilanceEvidence } from "../src/modu
 import { outboxMessages } from "../src/shared/outbox.js";
 import { registerVigilanceConsumers } from "../src/modules/vigilance/consumer.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainOrFail } from "../../../vitest.drain";
 import {
   assertStageTransition, assertCanScreen, assertCanAssignIo, assertDifferentActor,
 } from "../src/modules/vigilance/domain.js";
@@ -31,7 +32,7 @@ const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 function token(roles: string[], tenantId: string, actorId: string) {
   return signToken({ sub: actorId, tid: tenantId, roles, sid: "sess-1" }, SECRET, 3600);
 }
-function wire(q: Queue): Queue {
+function wire(q: MemoryQueue): MemoryQueue {
   const raw = q.subscribe.bind(q);
   q.subscribe = ((t: string, h: Handler) => raw(t, withTenantConsumer(h) as Handler)) as typeof q.subscribe;
   return q;
@@ -81,12 +82,12 @@ async function wipe(t: string): Promise<void> {
   }));
 }
 
-async function pump(q: Queue, topic: string, actorId: string, tenantId: string, payload: Record<string, unknown>) {
+async function pump(q: MemoryQueue, topic: string, actorId: string, tenantId: string, payload: Record<string, unknown>) {
   await q.publish(topic, {
     messageId: randomUUID(), type: topic, tenantId, actorId,
     correlationId: "c", schemaVersion: "1.0", payload: { tenantId, ...payload },
   });
-  await new Promise<void>((r) => setTimeout(r, 200));
+  await drainOrFail(q);
 }
 
 describe("vigilance lifecycle + restricted access + maker-checker", () => {

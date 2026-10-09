@@ -15,6 +15,7 @@ import { holdQueue } from "../src/modules/routing/queue-schema.js";
 import { outboxSchema } from "../src/shared/outbox.js";
 import { registerRoutingConsumers } from "../src/modules/routing/consumer.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const { outboxMessages } = outboxSchema;
 const TENANT = "aaaaaaaa-0000-4000-8000-000000007201";
@@ -121,7 +122,7 @@ describe("routing consumer persistence", () => {
         ordinal: 0,
       },
     });
-    await new Promise((r) => setTimeout(r, 150));
+    await drainOrFail(q);
 
     const rows = await runWithTenant(TENANT, () =>
       db.transaction((tx) => tx.select().from(routingRules).where(eq(routingRules.id, id))),
@@ -153,7 +154,7 @@ describe("routing consumer persistence", () => {
     };
     await q.publish(COMMANDS.routingRuleCreate, msg);
     await q.publish(COMMANDS.routingRuleCreate, msg);
-    await new Promise((r) => setTimeout(r, 200));
+    await drainOrFail(q);
 
     const rows = await runWithTenant(TENANT, () =>
       db.transaction((tx) => tx.select().from(routingRules).where(eq(routingRules.id, id))),
@@ -173,7 +174,7 @@ describe("routing consumer persistence", () => {
       schemaVersion: "1.0",
       payload: { tenantId: TENANT, agentId, maxTickets: 5, skills: ["java"], available: true },
     });
-    await new Promise((r) => setTimeout(r, 150));
+    await drainOrFail(q);
 
     const rows = await runWithTenant(TENANT, () =>
       db.transaction((tx) =>
@@ -197,7 +198,7 @@ describe("routing consumer persistence", () => {
       schemaVersion: "1.0",
       payload: { id: entryId, tenantId: TENANT, ticketId, queueName: "default", priority: 3 },
     });
-    await new Promise((r) => setTimeout(r, 150));
+    await drainOrFail(q);
 
     let rows = await runWithTenant(TENANT, () =>
       db.transaction((tx) => tx.select().from(holdQueue).where(eq(holdQueue.ticketId, ticketId))),
@@ -213,7 +214,7 @@ describe("routing consumer persistence", () => {
       schemaVersion: "1.0",
       payload: { tenantId: TENANT, queueName: "default" },
     });
-    await new Promise((r) => setTimeout(r, 150));
+    await drainOrFail(q);
 
     rows = await runWithTenant(TENANT, () =>
       db.transaction((tx) => tx.select().from(holdQueue).where(eq(holdQueue.ticketId, ticketId))),

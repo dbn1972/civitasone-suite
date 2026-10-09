@@ -20,6 +20,7 @@ import { sweepDueRetries } from "../src/modules/deliveries/sweeper.js";
 import { maskRecipient } from "../src/adapters/mask.js";
 import { smsAdapter, whatsAppAdapter, pushAdapter } from "../src/adapters/index.js";
 import type { PrefView } from "../src/modules/templates/domain.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const TENANT = "dddddddd-1111-4000-8000-0000000000aa";
 
@@ -120,7 +121,8 @@ describe("P1-1 opt-out enforcement (DB + real consumer end-to-end)", () => {
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { templateId: TEMPLATE, recipient: "victim@d.gov.in", recipientId, eventType: "optout.evt" },
     });
-    await new Promise((r) => setTimeout(r, 250));
+    await drainOrFail(q);
+    await q.stop();
 
     const rows = await sqlAsTenant(TENANT, (sql) => sql`SELECT status, channel FROM deliveries.deliveries WHERE recipient_id = ${recipientId}`);
     expect(rows).toHaveLength(1);
@@ -147,7 +149,7 @@ describe("P1-2 durable retry sweep (DB — survives restart)", () => {
 
     const swept = await sweepDueRetries(q);
     expect(swept).toBe(1);
-    await new Promise((r) => setTimeout(r, 80));
+    await drainOrFail(q);
     expect(published).toContain(id);
 
     // Row was claimed out of `queued` → second sweep does nothing (no double-send).

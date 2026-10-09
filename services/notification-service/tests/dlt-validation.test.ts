@@ -17,6 +17,7 @@ import type { Queue, Handler } from "@civitasone/queue";
 import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { registerDltConsumers } from "../src/modules/dlt/consumer.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000001";
@@ -56,7 +57,7 @@ async function seedDltTemplate(payload: {
     tenantId: TENANT, actorId: ACTOR, correlationId: "corr-dlt", schemaVersion: "1.0",
     payload: { id, tenantId: TENANT, ...payload },
   });
-  await new Promise<void>((r) => setTimeout(r, 250));
+  await drainOrFail(q);
   await q.stop();
   return id;
 }
@@ -366,7 +367,7 @@ describe("DLT template status management", () => {
       tenantId: TENANT, actorId: ACTOR, correlationId: "corr-rev", schemaVersion: "1.0",
       payload: { id: templateUuid, tenantId: TENANT, status: "revoked" },
     });
-    await new Promise<void>((r) => setTimeout(r, 250));
+    await drainOrFail(q);
     await q.stop();
 
     const repo = await import("../src/modules/dlt/repo.js");

@@ -28,7 +28,8 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq, and } from "drizzle-orm";
 import { MemoryQueue } from "@civitasone/queue";
-import { relayOnce } from "@civitasone/outbox";
+import { relayAll } from "./outbox-relay-support.js";
+import { drainOrFail } from "../../../vitest.drain";
 import { MUNICIPAL_FEE_RECEIPT_HEAD_CODE } from "@civitasone/events";
 
 // Matches the CI/nightly convention (.github/workflows/nightly.yml uses
@@ -146,20 +147,20 @@ describe("building-service -> finance-service municipal fee challan -- real DB, 
       builtUpArea: 250,
       proposedFloors: 3,
     }));
-    await queue.drain();
+    await drainOrFail(queue);
 
     // ── Hop 1: building's REAL outbox holds the finance.challan.create
     // message emitMunicipalFeeChallan wrote, in the SAME transaction as the
     // application row (this is what the production outbox relay ships). ──
-    const relayedFromBuilding = await relayOnce(building.db as never, queue, 100, "building-service");
+    const relayedFromBuilding = await relayAll(building.db as never, queue as never, "building-service");
     expect(relayedFromBuilding, "building's outbox must have a pending finance.challan.create message").toBeGreaterThan(0);
-    await queue.drain();
+    await drainOrFail(queue);
 
     // ── Hop 2: finance's challanCreate consumer wrote the challan row and
     // enqueued the GL-post hop on FINANCE's own outbox; relay that too. ──
-    const relayedFromFinance = await relayOnce(finance.db as never, queue, 100, "finance-service");
+    const relayedFromFinance = await relayAll(finance.db as never, queue as never, "finance-service");
     expect(relayedFromFinance, "finance's outbox must have a pending GL-post message").toBeGreaterThan(0);
-    await queue.drain();
+    await drainOrFail(queue);
 
     // ── The challan row: resolved head, correct amount, real back-link ──
     const [challanRow] = await finance.withTenantScope(finance.db, TENANT, (tx: any) =>

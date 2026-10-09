@@ -17,6 +17,7 @@ import { registerRbacConsumers } from "../src/modules/rbac/consumer.js";
 import { randomUUID } from "node:crypto";
 import { escapeLike } from "../src/modules/users/repo.js";
 import { wouldStrandTenantAdmins } from "../src/modules/users/domain.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET as string;
 const T = "5e7b0000-0000-4000-8000-0000000000a1";
@@ -152,7 +153,7 @@ describe("last active tenant admin guard (USERS-01)", () => {
       schemaVersion: "1.0", timestamp: new Date().toISOString(), payload: { id, status: "suspended", reason: "race" },
     });
     await Promise.all([cmd("5e7bd000-0000-4000-8000-000000000001", ADMIN_A), cmd("5e7bd000-0000-4000-8000-000000000002", ADMIN_B)]);
-    await new Promise((r) => setTimeout(r, 1200));
+    await drainOrFail(q);
     await q.stop();
     const rows = await runWithTenant(T, () => db.transaction((tx) => tx.select().from(users).where(inArray(users.id, [ADMIN_A, ADMIN_B]))));
     expect(rows.filter((r) => r.status === "suspended")).toHaveLength(1);
@@ -199,7 +200,7 @@ describe("role revocation honours the last-admin guard (USERS-01)", () => {
     registerRbacConsumers(q);
     await q.start();
     await revokeCmd(q, ADMIN_B);
-    await new Promise((r) => setTimeout(r, 800));
+    await drainOrFail(q);
     await q.stop();
     expect((await assignments()).find((a) => a.userId === ADMIN_B)!.status).toBe("active");
     expect(await deniedAudits()).toHaveLength(1);
@@ -212,7 +213,7 @@ describe("role revocation honours the last-admin guard (USERS-01)", () => {
     registerRbacConsumers(q);
     await q.start();
     await revokeCmd(q, ADMIN_A);
-    await new Promise((r) => setTimeout(r, 800));
+    await drainOrFail(q);
     await q.stop();
     expect((await assignments()).find((a) => a.userId === ADMIN_A)!.status).toBe("revoked");
   });
@@ -225,7 +226,7 @@ describe("role revocation honours the last-admin guard (USERS-01)", () => {
       registerUserConsumers(q);
       await q.start();
       await Promise.all([revokeCmd(q, ADMIN_A), suspendCmd(q, ADMIN_B)]);
-      await new Promise((r) => setTimeout(r, 1200));
+      await drainOrFail(q);
       await q.stop();
       const us = await runWithTenant(T, () => db.transaction((tx) => tx.select().from(users).where(inArray(users.id, [ADMIN_A, ADMIN_B]))));
       const as = await assignments();
@@ -245,11 +246,11 @@ describe("role revocation honours the last-admin guard (USERS-01)", () => {
       schemaVersion: "1.0", timestamp: new Date().toISOString(), payload: { id: uid(30), status },
     });
     await set("locked");
-    await new Promise((r) => setTimeout(r, 600));
+    await drainOrFail(q);
     const read = () => runWithTenant(T, () => db.transaction((tx) => tx.select().from(users).where(eq(users.id, uid(30)))));
     expect((await read())[0]!.status).toBe("locked");
     await set("active");
-    await new Promise((r) => setTimeout(r, 600));
+    await drainOrFail(q);
     await q.stop();
     expect((await read())[0]!.status).toBe("active");
   });

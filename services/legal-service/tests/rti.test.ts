@@ -32,6 +32,7 @@ import {
   NORMAL_RESPONSE_DAYS, THIRD_PARTY_RESPONSE_DAYS, FIRST_APPEAL_DISPOSAL_DAYS,
   LIFE_LIBERTY_HOURS,
 } from "../src/modules/rti/domain.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 function token(roles: string[], tenantId: string, actorId: string) {
@@ -211,7 +212,7 @@ describe("RTI routes + consumer integration", () => {
         subject: "Budget", requestText: "Copy of budget", receivedAt: receivedAt.toISOString(),
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     await q.stop();
 
     const rows = await runWithTenant(TENANT_A, () => db.transaction((tx) => tx.select().from(rtiApplications).where(eq(rtiApplications.id, APP_1))));
@@ -231,13 +232,13 @@ describe("RTI routes + consumer integration", () => {
       tenantId: TENANT_A, actorId: ACTOR_A, correlationId: "c2", schemaVersion: "1.0",
       payload: { id: APP_XFER, tenantId: TENANT_A, applicationNo: "RTI-XFER-1", applicantName: "N", subject: "s", requestText: "r" },
     });
-    await new Promise<void>((r) => setTimeout(r, 200));
+    await drainOrFail(q);
     await q.publish(COMMANDS.rtiTransfer, {
       messageId: randomUUID(), type: COMMANDS.rtiTransfer,
       tenantId: TENANT_A, actorId: ACTOR_A, correlationId: "c2b", schemaVersion: "1.0",
       payload: { applicationId: APP_XFER, tenantId: TENANT_A, toAuthority: "PWD-PIO", reason: "subject matter" },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     await q.stop();
 
     const rows = await runWithTenant(TENANT_A, () => db.transaction((tx) => tx.select().from(rtiApplications).where(eq(rtiApplications.id, APP_XFER))));
@@ -257,14 +258,14 @@ describe("RTI routes + consumer integration", () => {
       tenantId: TENANT_A, actorId: ACTOR_A, correlationId: "c3", schemaVersion: "1.0",
       payload: { id: APP_APPEAL, tenantId: TENANT_A, applicationNo: "RTI-AP-1", applicantName: "P", subject: "s", requestText: "r" },
     });
-    await new Promise<void>((r) => setTimeout(r, 200));
+    await drainOrFail(q);
     // file first appeal — filed by ACTOR_A
     await q.publish(COMMANDS.rtiAppealFile, {
       messageId: randomUUID(), type: COMMANDS.rtiAppealFile,
       tenantId: TENANT_A, actorId: ACTOR_A, correlationId: "c3b", schemaVersion: "1.0",
       payload: { appealId: APPEAL_1, applicationId: APP_APPEAL, tenantId: TENANT_A, tier: "first", appellateAuthority: "FAA", grounds: "no response" },
     });
-    await new Promise<void>((r) => setTimeout(r, 200));
+    await drainOrFail(q);
 
     // maker == checker → order must NOT be applied (stays pending)
     await q.publish(COMMANDS.rtiAppealOrder, {
@@ -272,7 +273,7 @@ describe("RTI routes + consumer integration", () => {
       tenantId: TENANT_A, actorId: ACTOR_A, correlationId: "c3c", schemaVersion: "1.0",
       payload: { appealId: APPEAL_1, tenantId: TENANT_A, orderStatus: "allowed", orderText: "disclose" },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     let rows = await runWithTenant(TENANT_A, () => db.transaction((tx) => tx.select().from(rtiAppeals).where(eq(rtiAppeals.id, APPEAL_1))));
     expect(rows[0]!.orderStatus).toBe("pending");
     expect(rows[0]!.decidedBy).toBeNull();
@@ -283,7 +284,7 @@ describe("RTI routes + consumer integration", () => {
       tenantId: TENANT_A, actorId: ACTOR_B, correlationId: "c3d", schemaVersion: "1.0",
       payload: { appealId: APPEAL_1, tenantId: TENANT_A, orderStatus: "allowed", orderText: "disclose" },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     await q.stop();
     rows = await runWithTenant(TENANT_A, () => db.transaction((tx) => tx.select().from(rtiAppeals).where(eq(rtiAppeals.id, APPEAL_1))));
     expect(rows[0]!.orderStatus).toBe("allowed");
@@ -302,7 +303,7 @@ describe("RTI routes + consumer integration", () => {
       tenantId: TENANT_A, actorId: ACTOR_A, correlationId: "c3e", schemaVersion: "1.0",
       payload: { appealId: appeal2, applicationId: APP_APPEAL, tenantId: TENANT_A, tier: "second", appellateAuthority: "SIC", grounds: "FAA delay" },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     await q.stop();
 
     const first = await runWithTenant(TENANT_A, () => db.transaction((tx) => tx.select().from(rtiAppeals).where(eq(rtiAppeals.id, APPEAL_1))));
@@ -381,31 +382,31 @@ describe("RTI routes + consumer integration", () => {
       tenantId: TENANT_A, actorId: ACTOR_A, correlationId: "cc", schemaVersion: "1.0",
       payload: { id: APP, tenantId: TENANT_A, applicationNo: "RTI-FLOW-1", applicantName: "Q", subject: "s", requestText: "r" },
     });
-    await new Promise<void>((r) => setTimeout(r, 150));
+    await drainOrFail(q);
     await q.publish(COMMANDS.rtiThirdPartyConsult, {
       messageId: randomUUID(), type: COMMANDS.rtiThirdPartyConsult,
       tenantId: TENANT_A, actorId: ACTOR_A, correlationId: "cc2", schemaVersion: "1.0",
       payload: { applicationId: APP, tenantId: TENANT_A, thirdParty: "Beta Corp" },
     });
-    await new Promise<void>((r) => setTimeout(r, 150));
+    await drainOrFail(q);
     await q.publish(COMMANDS.rtiAdditionalFee, {
       messageId: randomUUID(), type: COMMANDS.rtiAdditionalFee,
       tenantId: TENANT_A, actorId: ACTOR_A, correlationId: "cc3", schemaVersion: "1.0",
       payload: { applicationId: APP, tenantId: TENANT_A, additionalFee: 25 },
     });
-    await new Promise<void>((r) => setTimeout(r, 150));
+    await drainOrFail(q);
     await q.publish(COMMANDS.rtiRespond, {
       messageId: randomUUID(), type: COMMANDS.rtiRespond,
       tenantId: TENANT_A, actorId: ACTOR_A, correlationId: "cc4", schemaVersion: "1.0",
       payload: { applicationId: APP, tenantId: TENANT_A, decision: "partial", responseText: "partial", exemptions: [{ section: "8(1)(j)", justification: "personal information" }] },
     });
-    await new Promise<void>((r) => setTimeout(r, 150));
+    await drainOrFail(q);
     await q.publish(COMMANDS.rtiDisclosureLog, {
       messageId: randomUUID(), type: COMMANDS.rtiDisclosureLog,
       tenantId: TENANT_A, actorId: ACTOR_A, correlationId: "cc5", schemaVersion: "1.0",
       payload: { id: randomUUID(), applicationId: APP, tenantId: TENANT_A, category: "org", description: "org chart" },
     });
-    await new Promise<void>((r) => setTimeout(r, 250));
+    await drainOrFail(q);
     await q.stop();
 
     const rows = await runWithTenant(TENANT_A, () => db.transaction((tx) => tx.select().from(rtiApplications).where(eq(rtiApplications.id, APP))));

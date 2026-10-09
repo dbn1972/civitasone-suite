@@ -23,6 +23,7 @@ import { processed } from "../src/shared/outbox.js";
 import { registerWaterTankerConsumers } from "../src/modules/water-tanker/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 import type { FastifyInstance } from "fastify";
+import { drainOrFail } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
@@ -71,7 +72,7 @@ describe("Water-tanker consumer — CQRS wiring (integration)", () => {
     expect(res.statusCode).toBe(202);
     bookingId = res.json().data.id;
     expect(bookingId).toBeTruthy();
-    await new Promise((r) => setTimeout(r, 300));
+    await drainOrFail(appQueue);
 
     const rows = await asTenant(TENANT_A, (tx) => tx.select().from(assetWaterTankerBookings).where(eq(assetWaterTankerBookings.id, bookingId)));
     expect(rows).toHaveLength(1);
@@ -119,9 +120,9 @@ describe("Water-tanker consumer — CQRS wiring (integration)", () => {
       payload: { id, tenantId: TENANT_A, tankerCapacityLitres: 5000, requestedDate: "2026-10-02" },
     });
     await publish();
-    await new Promise((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     await publish(); // replay
-    await new Promise((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     await q.stop();
 
     const rows = await asTenant(TENANT_A, (tx) => tx.select().from(assetWaterTankerBookings).where(eq(assetWaterTankerBookings.id, id)));
@@ -139,7 +140,7 @@ describe("Water-tanker consumer — CQRS wiring (integration)", () => {
       payload: { scheduledDate: "2026-10-02", tankerVehicleId: "TANKER-07" },
     });
     expect(scheduleRes.statusCode).toBe(202);
-    await new Promise((r) => setTimeout(r, 300));
+    await drainOrFail(appQueue);
     let rows = await asTenant(TENANT_A, (tx) => tx.select().from(assetWaterTankerBookings).where(eq(assetWaterTankerBookings.id, bookingId)));
     expect(rows[0]?.status).toBe("scheduled");
     expect(rows[0]?.tankerVehicleId).toBe("TANKER-07");
@@ -149,7 +150,7 @@ describe("Water-tanker consumer — CQRS wiring (integration)", () => {
       headers: { authorization: `Bearer ${token(TENANT_A, ACTOR_A)}` },
     });
     expect(dispatchRes.statusCode).toBe(202);
-    await new Promise((r) => setTimeout(r, 300));
+    await drainOrFail(appQueue);
     rows = await asTenant(TENANT_A, (tx) => tx.select().from(assetWaterTankerBookings).where(eq(assetWaterTankerBookings.id, bookingId)));
     expect(rows[0]?.status).toBe("dispatched");
     expect(rows[0]?.dispatchedAt).toBeTruthy();
@@ -159,7 +160,7 @@ describe("Water-tanker consumer — CQRS wiring (integration)", () => {
       headers: { authorization: `Bearer ${token(TENANT_A, ACTOR_A)}` },
     });
     expect(deliverRes.statusCode).toBe(202);
-    await new Promise((r) => setTimeout(r, 300));
+    await drainOrFail(appQueue);
     rows = await asTenant(TENANT_A, (tx) => tx.select().from(assetWaterTankerBookings).where(eq(assetWaterTankerBookings.id, bookingId)));
     expect(rows[0]?.status).toBe("delivered");
     expect(rows[0]?.deliveredAt).toBeTruthy();
@@ -172,14 +173,14 @@ describe("Water-tanker consumer — CQRS wiring (integration)", () => {
       payload: { tankerCapacityLitres: 15000, requestedDate: "2026-10-03" },
     });
     const cancelBookingId = createRes.json().data.id;
-    await new Promise((r) => setTimeout(r, 300));
+    await drainOrFail(appQueue);
 
     const cancelRes = await app.inject({
       method: "POST", url: `/v1/assets/water/tanker-bookings/${cancelBookingId}/cancel`,
       headers: { authorization: `Bearer ${token(TENANT_A, ACTOR_A)}` },
     });
     expect(cancelRes.statusCode).toBe(202);
-    await new Promise((r) => setTimeout(r, 300));
+    await drainOrFail(appQueue);
 
     const rows = await asTenant(TENANT_A, (tx) => tx.select().from(assetWaterTankerBookings).where(eq(assetWaterTankerBookings.id, cancelBookingId)));
     expect(rows[0]?.status).toBe("cancelled");
@@ -198,7 +199,7 @@ describe("Water-tanker — cross-tenant RLS isolation", () => {
       tenantId: TENANT_A, actorId: ACTOR_A, correlationId: "corr-rls-wt-1", schemaVersion: "1.0",
       payload: { id: bookingIdA, tenantId: TENANT_A, tankerCapacityLitres: 5000, requestedDate: "2026-10-04" },
     });
-    await new Promise((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     await q.stop();
   });
   afterAll(async () => {

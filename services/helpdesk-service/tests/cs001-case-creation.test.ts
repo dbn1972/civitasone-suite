@@ -29,6 +29,7 @@ import { registerTicketConsumers } from "../src/modules/tickets/consumer.js";
 import { VALID_CHANNELS } from "../src/modules/tickets/validators.js";
 import { allocateTicketNo } from "../src/shared/numbering.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const { outboxMessages } = outboxSchema;
 
@@ -145,7 +146,7 @@ async function createTicketViaConsumer(
     },
   });
   // MemoryQueue delivers asynchronously — wait for processing
-  await new Promise((r) => setTimeout(r, 200));
+  await drainOrFail(q);
   return id;
 }
 
@@ -199,7 +200,7 @@ describe("CS-001: Gapless ticket_no allocation", () => {
     }
 
     // Wait longer for consumer processing + DB commits
-    await new Promise((r) => setTimeout(r, 300));
+    await drainOrFail(q);
 
     const rows = await Promise.all(ids.map((id) => findTicketRow(id, TENANT_A)));
     for (let i = 0; i < rows.length; i++) {

@@ -26,6 +26,7 @@ import {
   assertSufficientBalance, DomainError,
 } from "../src/modules/consumables/domain.js";
 import * as repo from "../src/modules/consumables/repo.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 // Test-harness fix (see library.test.ts): a bare MemoryQueue does not
 // auto-wrap handlers with withTenantConsumer the way the production
@@ -207,21 +208,21 @@ describe("consumables consumer — CQRS create + transaction", () => {
       tenantId: T, actorId: actor, correlationId: "corr-create-1", schemaVersion: "1.0",
       payload: { id: itemId, tenantId: T, name: "A4 Paper Ream", category: "stationery", unit: "ream", reorderLevel: 10 },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
 
     await q.publish(COMMANDS.consumableTransaction, {
       messageId: randomUUID(), type: COMMANDS.consumableTransaction,
       tenantId: T, actorId: actor, correlationId: "corr-txn-1", schemaVersion: "1.0",
       payload: { id: randomUUID(), tenantId: T, itemId, txnType: "receipt", qty: 50 },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
 
     await q.publish(COMMANDS.consumableTransaction, {
       messageId: randomUUID(), type: COMMANDS.consumableTransaction,
       tenantId: T, actorId: actor, correlationId: "corr-txn-2", schemaVersion: "1.0",
       payload: { id: randomUUID(), tenantId: T, itemId, txnType: "issue", qty: 15 },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     await q.stop();
 
     const rows = await runWithTenant(T, () =>
@@ -251,7 +252,7 @@ describe("consumables consumer — CQRS create + transaction", () => {
       tenantId: T, actorId: actor, correlationId: "corr-txn-reject", schemaVersion: "1.0",
       payload: { id: randomUUID(), tenantId: T, itemId, txnType: "issue", qty: 999 },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     await q.stop();
 
     const balance = await runWithTenant(T, () => repo.getBalance(T, itemId));

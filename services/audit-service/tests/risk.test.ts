@@ -32,6 +32,7 @@ import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerRiskConsumers } from "../src/modules/risk/consumer.js";
 import { computeRiskScore, riskBand, HIGH_RISK_THRESHOLD } from "../src/modules/risk/domain.js";
 import { COMMANDS } from "../src/topics.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 function token(roles: string[], tenantId: string, actorId: string) {
@@ -220,7 +221,7 @@ describe("risk consumer — riskCreate (integration)", () => {
         category: "operational", likelihood: "likely", impact: "major", riskScore: 999,
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     await q.stop();
 
     const rows = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(auditRisks).where(eq(auditRisks.id, RISK_1))));
@@ -275,7 +276,7 @@ describe("risk consumer — riskUpdate (integration)", () => {
         status: "accepted", mitigationStatus: "in_progress",
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     await q.stop();
 
     const after = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(auditRisks).where(eq(auditRisks.id, RISK_2))));
@@ -318,10 +319,10 @@ describe("risk consumer — idempotency", () => {
     });
 
     await publishMsg();
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     // Republish the exact same messageId — markProcessed must short-circuit this.
     await publishMsg();
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     await q.stop();
 
     const rows = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(auditRisks).where(eq(auditRisks.id, RISK_IDEMPOTENT))));

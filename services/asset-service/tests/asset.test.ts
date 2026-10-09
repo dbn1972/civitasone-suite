@@ -20,6 +20,7 @@ import { uuidV5 } from "../src/shared/ids.js";
 import { slmMonthlyAmount, wdvMonthlyAmount, generatePeriods } from "../src/modules/depreciation/domain.js";
 import { assertAssetDisposable, computeDisposalGainLoss } from "../src/modules/lifecycle/domain.js";
 import { COMMANDS, CONSUMED } from "../src/topics.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const ACTOR   = "00000000-aaaa-4000-8000-000000000001";
 const TENANT  = "11111111-aaaa-4000-8000-000000000001";
@@ -148,7 +149,7 @@ describe("Register consumer — CQRS wiring (integration)", () => {
       },
     });
 
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await drainOrFail(q);
     await q.stop();
 
     const rows = await asTenant(TENANT, (tx) => tx.select().from(assetAssets).where(eq(assetAssets.id, ASSET_1)));
@@ -246,7 +247,7 @@ describe("Register consumer — GRN fixed_asset capitalization", () => {
         }],
       },
     });
-    await new Promise<void>((r) => setTimeout(r, 400));
+    await drainOrFail(q);
     await q.stop();
 
     const rows = await asTenant(TENANT, (tx) => tx.select().from(assetAssets).where(eq(assetAssets.code, "FA-001")));
@@ -286,9 +287,9 @@ describe("Register consumer — idempotency (integration)", () => {
     };
 
     await q.publish(COMMANDS.assetCreate, payload);
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     await q.publish(COMMANDS.assetCreate, payload);
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await drainOrFail(q);
     await q.stop();
 
     const rows = await asTenant(TENANT, (tx) => tx.select().from(assetAssets).where(eq(assetAssets.id, ASSET_2)));
