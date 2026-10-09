@@ -191,8 +191,10 @@ describe("Sandbox Page", () => {
     render(<SandboxPage />);
     const roles = document.querySelector('[data-testid="sandbox-roles"]');
     expect(roles).toBeInTheDocument();
-    const links = roles!.querySelectorAll("a");
-    expect(links).toHaveLength(7);
+    // GAP2-SHELL-SANDBOX-01: each card is now a same-origin POST form (not an
+    // anchor), so establishing a sandbox session can no longer ride a GET.
+    const forms = roles!.querySelectorAll("form");
+    expect(forms).toHaveLength(7);
   });
 
   it("renders all role names", () => {
@@ -237,13 +239,23 @@ describe("Sandbox Page", () => {
 
   // GAP-SANDBOX-HOME-02: cards now start a demo session via the enter route
   // instead of linking straight to /dashboard.
-  it("role cards link to the sandbox enter route", () => {
+  // GAP2-SHELL-SANDBOX-01: role cards POST to the sandbox enter route (a
+  // session-establishing mutation must not ride a GET; the route is CSRF-gated).
+  it("role cards POST to the sandbox enter route with the role in the form body", () => {
     render(<SandboxPage />);
     const roles = document.querySelector('[data-testid="sandbox-roles"]');
-    const links = roles!.querySelectorAll("a");
-    links.forEach((link) => {
-      expect(link.getAttribute("href")).toMatch(/^\/api\/sandbox\/enter\?role=/);
+    const forms = roles!.querySelectorAll("form");
+    expect(forms).toHaveLength(7);
+    forms.forEach((form) => {
+      expect(form.getAttribute("method")?.toLowerCase()).toBe("post");
+      expect(form.getAttribute("action")).toBe("/api/sandbox/enter");
+      const roleInput = form.querySelector('input[name="role"]');
+      expect(roleInput).toBeTruthy();
+      expect((roleInput as HTMLInputElement).value).toMatch(/^[a-z-]+$/);
+      expect(form.querySelector('button[type="submit"]')).toBeTruthy();
     });
+    // No anchor links into the enter route remain.
+    expect(roles!.querySelectorAll('a[href^="/api/sandbox/enter"]')).toHaveLength(0);
   });
 
   // GAP-SANDBOX-HOME-03: emoji icons are decorative (aria-hidden) and the cards

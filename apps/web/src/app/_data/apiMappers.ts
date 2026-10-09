@@ -29,6 +29,7 @@ import type {
   CRMDealSummary,
 } from "@civitasone/types";
 import { formatMoney } from "@/lib/formatters";
+import { parseRupeesToPaise } from "@/lib/money";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -99,11 +100,24 @@ export function parseMinorString(value: unknown): string | null {
   return null;
 }
 
+/**
+ * GAP2-SHELL-APIMAPPERS-01: last-resort display fallback for a PO amount when the
+ * server's minor-unit value is absent. The old implementation used float math
+ * (`parseFloat(digits)` then `Math.round(rupees * 100)`) — the exact
+ * `Number(x) * 100` anti-pattern lib/money.ts was written to avoid, which
+ * mis-rounds values like 1.005. Reconstruct paise with the BigInt-safe
+ * `parseRupeesToPaise` instead (handles ₹ and Indian/western thousands groups,
+ * rejects sub-paise rather than rounding). Returns 0 only when the string is
+ * genuinely unparseable. Still display-only — never feeds a write path.
+ */
 export function parsePaiseFromDisplay(display: string | null): number {
   if (!display) return 0;
-  const digits = display.replace(/[^\d.]/g, "");
-  const rupees = parseFloat(digits);
-  return Number.isFinite(rupees) ? Math.round(rupees * 100) : 0;
+  const minor = parseRupeesToPaise(display, { allowZero: true });
+  if (minor === null) return 0;
+  // Display amount only: Number is safe for the magnitudes a PO list shows, and
+  // the paise value was computed exactly in BigInt above (no float rounding).
+  const n = Number(minor);
+  return Number.isSafeInteger(n) ? n : 0;
 }
 
 function slugCode(name: string, fallback: string): string {

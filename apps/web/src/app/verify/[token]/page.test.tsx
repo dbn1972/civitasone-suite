@@ -36,4 +36,34 @@ describe("Public certificate verify page (GAP-CITIZEN-CERTIFICATES-01)", () => {
     render(await PublicVerifyPage({ params: { token: "x" } }));
     expect(screen.getByRole("alert")).toBeInTheDocument();
   });
+
+  // GAP2-SHELL-VERIFY-01: the page must use design-system tokens so a dark-mode
+  // client is not forced into a hard-coded light card. These assertions fail on
+  // the old code, which used literal hex (#ecfdf3/#fffaeb/#fef3f2) + system-ui.
+  it("styles the verdict with DS status tokens, not hard-coded hex", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ found: true, validity: "valid", certNo: "CERT-1" }), { status: 200 }),
+      ) as unknown as typeof fetch,
+    );
+    const { container } = render(await PublicVerifyPage({ params: { token: "abc" } }));
+    const html = container.innerHTML;
+    // valid verdict -> --good* tokens; no literal hex, no forced system-ui.
+    expect(html).toContain("var(--good");
+    expect(html).toContain("var(--bg)");
+    expect(html).not.toMatch(/#ecfdf3|#fffaeb|#fef3f2/i);
+    expect(html).not.toContain("system-ui");
+  });
+
+  it("uses the warn token for an expired certificate", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ found: true, validity: "expired", certNo: "CERT-2" }), { status: 200 }),
+      ) as unknown as typeof fetch,
+    );
+    const { container } = render(await PublicVerifyPage({ params: { token: "abc" } }));
+    expect(container.innerHTML).toContain("var(--warn");
+  });
 });

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -75,20 +74,27 @@ export default function SandboxPage() {
           data-testid="sandbox-roles"
         >
           {roles.map((role) => (
-            <Link
+            <form
               key={role.id}
-              href={`/api/sandbox/enter?role=${role.id}`}
-              className="group rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:border-gray-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
+              method="POST"
+              action="/api/sandbox/enter"
+              className="contents"
             >
-              <div className="text-4xl" aria-hidden="true">{role.icon}</div>
-              <h2 className="mt-4 text-lg font-semibold text-gray-900 group-hover:text-gray-700">
-                {role.name}
-              </h2>
-              <p className="mt-2 text-sm text-gray-500">{role.desc}</p>
-              <span className="mt-4 inline-block text-sm font-medium text-gray-900 group-hover:text-gray-600">
-                Enter as {role.name} →
-              </span>
-            </Link>
+              <input type="hidden" name="role" value={role.id} />
+              <button
+                type="submit"
+                className="group rounded-xl border border-gray-200 bg-white p-6 text-left shadow-sm transition-all hover:border-gray-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
+              >
+                <div className="text-4xl" aria-hidden="true">{role.icon}</div>
+                <h2 className="mt-4 text-lg font-semibold text-gray-900 group-hover:text-gray-700">
+                  {role.name}
+                </h2>
+                <p className="mt-2 text-sm text-gray-500">{role.desc}</p>
+                <span className="mt-4 inline-block text-sm font-medium text-gray-900 group-hover:text-gray-600">
+                  Enter as {role.name} →
+                </span>
+              </button>
+            </form>
           ))}
         </div>
 

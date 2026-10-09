@@ -131,7 +131,36 @@ function publicBase(req: Request): string {
   return `${proto}://${host}`;
 }
 
-export async function GET(req: Request): Promise<NextResponse> {
+// GAP2-SHELL-SANDBOX-01: establishing a session is a mutation, so it must not
+// ride on a GET (CLAUDE.md §4) — a cross-site <img>/link navigation could
+// otherwise drop a visitor into a sandbox session (login CSRF). Require a
+// same-origin POST and gate on Origin (fallback Referer) exactly like
+// /api/auth/dev-login's originAllowed(). The env gate (ENABLE_SANDBOX) and the
+// demo-tenant/secret config gate are unchanged.
+function originAllowed(req: Request): boolean {
+  const expectedHost = new URL(publicBase(req)).host;
+  const origin = req.headers.get("origin");
+  if (origin) {
+    try {
+      return new URL(origin).host === expectedHost;
+    } catch {
+      return false;
+    }
+  }
+  const referer = req.headers.get("referer");
+  if (referer) {
+    try {
+      return new URL(referer).host === expectedHost;
+    } catch {
+      return false;
+    }
+  }
+  // A same-origin form POST from a modern browser always sends at least one of
+  // Origin/Referer; absence is treated as untrusted (fail closed).
+  return false;
+}
+
+export async function POST(req: Request): Promise<NextResponse> {
   if (!isSandboxEnabled()) {
     return NextResponse.json({ error: "Not available" }, { status: 404 });
   }
@@ -141,8 +170,27 @@ export async function GET(req: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Not available" }, { status: 404 });
   }
 
+  // GAP2-SHELL-SANDBOX-01: CSRF/origin gate before minting any session.
+  if (!originAllowed(req)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const base = publicBase(req);
-  const roleParam = new URL(req.url).searchParams.get("role");
+
+  // The role is submitted as a form field (POST) rather than a query param.
+  // Fall back to the query string so a programmatic same-origin POST can also
+  // pass ?role=, but the marketing page posts it in the body.
+  let roleParam: string | null = null;
+  const contentType = req.headers.get("content-type") ?? "";
+  if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
+    const form = await req.formData();
+    const r = form.get("role");
+    roleParam = typeof r === "string" ? r : null;
+  }
+  if (roleParam === null) {
+    roleParam = new URL(req.url).searchParams.get("role");
+  }
+
   const parsed = roleSchema.safeParse(roleParam);
   if (!parsed.success) {
     return NextResponse.json({ error: "Unknown sandbox role" }, { status: 400 });
