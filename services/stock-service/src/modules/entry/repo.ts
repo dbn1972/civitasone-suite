@@ -1,4 +1,4 @@
-import { eq, and, gte, lte, desc, SQL } from "drizzle-orm";
+import { eq, and, gte, lte, desc, sql, SQL } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db, scopedRead } from "../../shared/db.js";
 import { stockEntries, stockEntryItems, type EntryInsert, type EntryItemInsert, type EntryRow } from "./schema.js";
@@ -72,18 +72,21 @@ export async function getValuationRateTx(tx: Writer, tenantId: string, itemId: s
 }
 
 /**
- * GAP2-STOCK-ENTRY-02 — like getValuationRateTx but takes a row lock
- * (SELECT ... FOR UPDATE) so a read-modify-write weighted-average revaluation
- * cannot lose an update under concurrent writers for the same
- * (tenant,item,warehouse). The lock is held until the enclosing transaction
- * commits. Serializes concurrent grn.accepted revaluations for one item.
+ * GAP2-STOCK-ENTRY-02 - like getValuationRateTx but serializes the
+ * read-modify-write for one (tenant,item,warehouse) so a weighted-average
+ * revaluation cannot lose an update under concurrent writers.
  *
- * When no valuation row exists yet there is nothing to lock; the caller treats
- * the absent row as qty 0 / rate 0 and the subsequent upsert's INSERT path (or
- * its ON CONFLICT) is itself serialized by the unique index, so the first
- * writer wins the insert and the second takes the locked ON CONFLICT branch.
+ * A row lock (SELECT ... FOR UPDATE) alone is not enough: when no valuation row
+ * exists yet it locks nothing, two writers both read "absent", and the second
+ * upsert overwrites the first with an absolute qty. So we first take a
+ * transaction-scoped advisory lock on the key (held until commit/rollback);
+ * that serializes the first-insert case as well as the update case. The
+ * FOR UPDATE is kept as defence in depth for writers that bypass this helper.
  */
 export async function lockValuationRateTx(tx: Writer, tenantId: string, itemId: string, warehouseId: string): Promise<{ qty: number; rateMinor: bigint }> {
+  await (tx as typeof db).execute(
+    sql`SELECT pg_advisory_xact_lock(hashtextextended(${`${tenantId}:${itemId}:${warehouseId}`}, 0))`
+  );
   const rows = await (tx as typeof db).select().from(stockValuationRates)
     .where(and(
       eq(stockValuationRates.tenantId, tenantId),

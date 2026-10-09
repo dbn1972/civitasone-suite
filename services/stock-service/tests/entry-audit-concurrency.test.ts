@@ -15,7 +15,7 @@
  *
  * Real Postgres, real pool, in-memory queue (production tenant wrapping).
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq, and } from "drizzle-orm";
 import { MemoryQueue, type Queue } from "@civitasone/queue";
@@ -26,6 +26,7 @@ import { stockLedger } from "../src/modules/ledger/schema.js";
 import { stockReceipts } from "../src/modules/receipt/schema.js";
 import { outboxMessages } from "../src/shared/outbox.js";
 import { registerEntryConsumers } from "../src/modules/entry/consumer.js";
+import * as repo from "../src/modules/entry/repo.js";
 import { COMMANDS, CONSUMED } from "../src/topics.js";
 
 const TENANT    = "a9b9c900-0000-4000-8000-00000000e101";
@@ -151,5 +152,100 @@ describe("stock entry consumer — audit + concurrency", () => {
     expect(rates[0].qty).toBe(10);
     // Both receipts have the same unit cost so WAVG stays 1000 paise.
     expect(rates[0].rateMinor).toBe(1000n);
+  });
+});
+
+/**
+ * Round-1 review fix (PR #1951): the test above runs the two handlers through
+ * MemoryQueue, which does not interleave them, so it passed against the
+ * first-insert race (SELECT ... FOR UPDATE locks nothing when no valuation row
+ * exists yet). This block drives the registered handlers concurrently and
+ * forces the interleave with a barrier between the locked read and the upsert:
+ * both handlers read, then neither upserts until both have arrived (or a
+ * timeout, which is what happens when the read is properly serialized and the
+ * second handler is still blocked on the lock). Against the un-serialized read
+ * both upserts use the stale qty-0 read and the final qty is 6, not 10.
+ */
+describe("stock entry consumer — forced interleave on first insert (no valuation row)", () => {
+  type Handler = (msg: unknown) => Promise<void>;
+
+  function captureHandlers(): Map<string, Handler> {
+    const handlers = new Map<string, Handler>();
+    const fake = {
+      subscribe: (topic: string, h: (m: { tenantId: string }) => Promise<void>) => {
+        handlers.set(topic, (m) => runWithTenant((m as { tenantId: string }).tenantId, () => h(m as { tenantId: string })));
+      },
+    } as unknown as Queue;
+    registerEntryConsumers(fake);
+    return handlers;
+  }
+
+  /** Barrier between the locked read and the upsert; releases on 2 arrivals or timeout. */
+  function installBarrier() {
+    const original = repo.upsertValuationRate;
+    let arrived = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const spy = vi.spyOn(repo, "upsertValuationRate").mockImplementation(async (...args) => {
+      arrived += 1;
+      if (arrived >= 2) release();
+      await Promise.race([gate, new Promise<void>((r) => setTimeout(r, 750))]);
+      return original(...args);
+    });
+    return spy;
+  }
+
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it("grn.accepted: two first receipts for a new item/warehouse sum to 10", async () => {
+    await clean();
+    const handlers = captureHandlers();
+    const itemId = randomUUID();
+    const mk = (qty: number) => ({
+      messageId: randomUUID(), type: CONSUMED.grnAccepted, tenantId: TENANT,
+      actorId: OFFICER, correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: {
+        grnId: randomUUID(), poRef: "PO-I", vendorId: randomUUID(), warehouseId: WAREHOUSE,
+        items: [{ itemCode: "IC-I", itemName: "Washer", acceptedQty: qty, rateMinor: 1000, itemId }],
+      },
+    });
+    installBarrier();
+    const h = handlers.get(CONSUMED.grnAccepted)!;
+    await Promise.all([h(mk(4)), h(mk(6))]);
+
+    const rates = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(stockValuationRates)
+        .where(and(eq(stockValuationRates.tenantId, TENANT), eq(stockValuationRates.itemId, itemId)))));
+    expect(rates).toHaveLength(1);
+    expect(rates[0].qty).toBe(10);
+  });
+
+  it("physical.verification: concurrent first counts leave a ledger consistent with on-hand", async () => {
+    await clean();
+    const handlers = captureHandlers();
+    const itemId = randomUUID();
+    const mk = (countedQty: number) => ({
+      messageId: randomUUID(), type: COMMANDS.physicalCreate, tenantId: TENANT,
+      actorId: OFFICER, correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: {
+        id: randomUUID(), tenantId: TENANT, warehouseId: WAREHOUSE, postingDate: "2026-09-10",
+        items: [{ itemId, countedQty }],
+      },
+    });
+    installBarrier();
+    const h = handlers.get(COMMANDS.physicalCreate)!;
+    await Promise.all([h(mk(5)), h(mk(8))]);
+
+    const { rates, ledger } = await runWithTenant(TENANT, () => db.transaction(async (tx) => ({
+      rates: await tx.select().from(stockValuationRates)
+        .where(and(eq(stockValuationRates.tenantId, TENANT), eq(stockValuationRates.itemId, itemId))),
+      ledger: await tx.select().from(stockLedger)
+        .where(and(eq(stockLedger.tenantId, TENANT), eq(stockLedger.itemId, itemId))),
+    })));
+    expect(rates).toHaveLength(1);
+    // Serialized: the second count diffs against the first, so net movement
+    // equals the final on-hand. Un-serialized: both diff against 0 (net 13 vs 8 or 5).
+    const net = ledger.reduce((a, r) => a + r.qtyIn - r.qtyOut, 0);
+    expect(net).toBe(rates[0].qty);
   });
 });

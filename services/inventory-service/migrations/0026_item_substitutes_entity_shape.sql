@@ -25,9 +25,17 @@ ALTER TABLE inventory.item_substitutes
   ADD COLUMN IF NOT EXISTS version    INTEGER NOT NULL DEFAULT 1;
 
 -- Backfill updated_by for pre-existing rows from created_by, then enforce NOT NULL.
+-- item_substitutes is FORCE ROW LEVEL SECURITY (0012), and a migration runs with
+-- no tenant GUC, so as the service role this UPDATE would match 0 rows and the
+-- SET NOT NULL below would abort on any populated table. Lift FORCE for the
+-- one-off backfill, then restore it (house rule 7).
+ALTER TABLE inventory.item_substitutes NO FORCE ROW LEVEL SECURITY;
+
 UPDATE inventory.item_substitutes
    SET updated_by = created_by
  WHERE updated_by IS NULL;
+
+ALTER TABLE inventory.item_substitutes FORCE ROW LEVEL SECURITY;
 
 ALTER TABLE inventory.item_substitutes
   ALTER COLUMN updated_by SET NOT NULL;
