@@ -15,22 +15,27 @@
  *   • applier idempotency, unknown-module rejection, tenant isolation, and that
  *     a tenant_admin cannot target another tenant.
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { randomUUID } from "node:crypto";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 
 const { buildApp } = await import("../src/app.js");
 const { sqlClient } = await import("../src/shared/db.js");
-const { queue } = await import("../src/shared/infra.js");
+const { queue, cache } = await import("../src/shared/infra.js");
+const { COMMANDS } = await import("../src/topics.js");
 const { registerCompositionConsumers } = await import("../src/modules/composition/consumer.js");
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const STANDALONE = "d7000000-0000-4000-8000-0000000000a1";
 const APPLY = "d7000000-0000-4000-8000-0000000000a2";
 const OTHER = "d7000000-0000-4000-8000-0000000000a3";
+const FAILING = "d7000000-0000-4000-8000-0000000000a5";
+const SHRINK = "d7000000-0000-4000-8000-0000000000a6";
+const CACHED = "d7000000-0000-4000-8000-0000000000a7";
 const PLATFORM_TARGET = "d7000000-0000-4000-8000-0000000000a4";
 const ADMIN = "d7000000-eeee-4000-8000-000000000001";
-const TENANTS = [STANDALONE, APPLY, OTHER, PLATFORM_TARGET];
+const TENANTS = [STANDALONE, APPLY, OTHER, PLATFORM_TARGET, FAILING, SHRINK, CACHED];
 
 function token(actorId: string, roles: string[], tenantId: string): string {
   return signToken({ sub: actorId, tid: tenantId, roles, sid: "sess-st03" }, SECRET, 3600);
@@ -44,6 +49,13 @@ async function wipe(): Promise<void> {
     await sqlClient`DELETE FROM composition.tenant_entitlement WHERE tenant_id = ${t}`;
     await sqlClient`DELETE FROM composition.tenant_profile WHERE tenant_id = ${t}`;
   }
+}
+
+/** Await every in-flight delivery; FAILS (not silently skips) if the queue has no drain(). */
+async function drain(): Promise<void> {
+  const q = queue as unknown as { drain?: () => Promise<void> };
+  expect(typeof q.drain).toBe("function");
+  await q.drain!();
 }
 
 function readAsTenant<T>(tenantId: string, run: (sql: typeof sqlClient) => Promise<T>): Promise<T> {
@@ -142,7 +154,7 @@ describe("plan-to-composition applier (write path)", () => {
       payload: { moduleIds: ["smarttransfer"], profileCode: "smarttransfer_standalone" },
     });
     expect(res.statusCode).toBe(202);
-    await (queue as unknown as { drain?: () => Promise<void> }).drain?.();
+    await drain();
 
     // entitlement rows written (user pick persisted; deps derived on read)
     const ents = await readAsTenant(APPLY, (sql) =>
@@ -174,21 +186,21 @@ describe("plan-to-composition applier (write path)", () => {
     expect(src["payroll"]).toBeUndefined();
   });
 
-  it("is idempotent on a re-sent command (same correlation id → one effect)", async () => {
-    // Re-apply with a different module set but the SAME correlation id must NOT
-    // double-write: the deterministic messageId dedupes at the consumer.
-    const corr = "11111111-2222-4000-8000-00000000c0de";
+  it("is idempotent on a re-sent command (same correlation id -> first effect persists)", async () => {
+    // Two sends with the SAME correlation id but DIFFERENT module sets. The apply
+    // is a REPLACE, so without the deterministic-messageId dedupe at the consumer
+    // (_inbox.processed) the second send would overwrite the first. The first must win.
+    const corr = randomUUID(); // fresh per run: _inbox.processed persists across runs
     const headers = { ...auth(APPLY), "x-correlation-id": corr };
     const first = await app.inject({ method: "POST", url: "/v1/admin/composition/apply-plan", headers, payload: { moduleIds: ["smarttransfer"], profileCode: null } });
     expect(first.statusCode).toBe(202);
-    await (queue as unknown as { drain?: () => Promise<void> }).drain?.();
-    const second = await app.inject({ method: "POST", url: "/v1/admin/composition/apply-plan", headers, payload: { moduleIds: ["smarttransfer"], profileCode: null } });
+    await drain();
+    const second = await app.inject({ method: "POST", url: "/v1/admin/composition/apply-plan", headers, payload: { moduleIds: ["smarttransfer", "payroll"], profileCode: null } });
     expect(second.statusCode).toBe(202);
-    await (queue as unknown as { drain?: () => Promise<void> }).drain?.();
-    // still exactly one entitlement row
+    await drain();
     const ents = await readAsTenant(APPLY, (sql) =>
-      sql<Array<{ module_id: string }>>`SELECT module_id FROM composition.tenant_entitlement WHERE tenant_id = ${APPLY}`);
-    expect(ents).toHaveLength(1);
+      sql<Array<{ module_id: string }>>`SELECT module_id FROM composition.tenant_entitlement WHERE tenant_id = ${APPLY} ORDER BY module_id`);
+    expect(ents.map((r) => r.module_id)).toEqual(["smarttransfer"]); // payroll from the dupe was NOT applied
   });
 
   it("rejects an unknown module id (404) before publishing", async () => {
@@ -216,7 +228,7 @@ describe("plan-to-composition applier (write path)", () => {
       payload: { moduleIds: ["smarttransfer"], profileCode: null, tenantId: OTHER },
     });
     expect(res.statusCode).toBe(202);
-    await (queue as unknown as { drain?: () => Promise<void> }).drain?.();
+    await drain();
     const otherEnts = await readAsTenant(OTHER, (sql) =>
       sql<Array<{ module_id: string }>>`SELECT module_id FROM composition.tenant_entitlement WHERE tenant_id = ${OTHER}`);
     expect(otherEnts).toHaveLength(0); // OTHER never touched
@@ -229,7 +241,7 @@ describe("plan-to-composition applier (write path)", () => {
       payload: { moduleIds: ["smarttransfer"], profileCode: "smarttransfer_standalone", tenantId: PLATFORM_TARGET },
     });
     expect(res.statusCode).toBe(202);
-    await (queue as unknown as { drain?: () => Promise<void> }).drain?.();
+    await drain();
     const ents = await readAsTenant(PLATFORM_TARGET, (sql) =>
       sql<Array<{ module_id: string }>>`SELECT module_id FROM composition.tenant_entitlement WHERE tenant_id = ${PLATFORM_TARGET}`);
     expect(ents.map((r) => r.module_id)).toEqual(["smarttransfer"]);
@@ -241,5 +253,76 @@ describe("plan-to-composition applier (write path)", () => {
       headers: auth(APPLY, ["employee"]), payload: { moduleIds: ["smarttransfer"], profileCode: null },
     });
     expect(res.statusCode).toBe(403);
+  });
+});
+
+describe("plan-to-composition consumer: failure paths, replace semantics, cache", () => {
+  const publishRaw = async (tenantId: string, moduleIds: string[], profileCode: string | null, messageId: string) =>
+    queue.publish(COMMANDS.compositionApplyPlan, {
+      messageId, type: COMMANDS.compositionApplyPlan, tenantId, actorId: ADMIN,
+      correlationId: "22222222-3333-4000-8000-000000000001", schemaVersion: "1.0",
+      payload: { tenantId, moduleIds, profileCode },
+    });
+
+  it("a bad module set leaves NO entitlement, profile or _inbox.processed row", async () => {
+    const messageId = randomUUID();
+    await publishRaw(FAILING, ["ghost_module"], "smarttransfer_standalone", messageId);
+    await drain();
+    const ents = await readAsTenant(FAILING, (sql) =>
+      sql`SELECT module_id FROM composition.tenant_entitlement WHERE tenant_id = ${FAILING}`);
+    expect(ents).toHaveLength(0);
+    const prof = await readAsTenant(FAILING, (sql) =>
+      sql`SELECT profile_code FROM composition.tenant_profile WHERE tenant_id = ${FAILING}`);
+    expect(prof).toHaveLength(0);
+    const inbox = await sqlClient`SELECT 1 FROM _inbox.processed WHERE message_id = ${messageId}`;
+    expect(inbox).toHaveLength(0);
+    // fail-loud: the message was dead-lettered, not silently swallowed
+    const dlq = (queue as unknown as { dlq: Array<{ msg: { messageId: string } }> }).dlq;
+    expect(dlq.some((d) => d.msg.messageId === messageId)).toBe(true);
+  });
+
+  it("re-applying a smaller set removes previously entitled modules", async () => {
+    await publishRaw(SHRINK, ["smarttransfer", "payroll"], null, randomUUID());
+    await drain();
+    const before = await readAsTenant(SHRINK, (sql) =>
+      sql<Array<{ module_id: string }>>`SELECT module_id FROM composition.tenant_entitlement WHERE tenant_id = ${SHRINK} ORDER BY module_id`);
+    expect(before.map((r) => r.module_id)).toContain("payroll");
+    await publishRaw(SHRINK, ["smarttransfer"], null, randomUUID());
+    await drain();
+    const after = await readAsTenant(SHRINK, (sql) =>
+      sql<Array<{ module_id: string }>>`SELECT module_id FROM composition.tenant_entitlement WHERE tenant_id = ${SHRINK} ORDER BY module_id`);
+    expect(after.map((r) => r.module_id)).toEqual(["smarttransfer"]);
+  });
+
+  it("invalidates the composition cache only AFTER the write has committed, and not on failure", async () => {
+    const key = cache.makeKey(CACHED, "composition", CACHED);
+    const seen: number[] = [];
+    const spy = vi.spyOn(cache, "invalidate").mockImplementation(async (k: string) => {
+      if (k !== key) return;
+      const rows = await readAsTenant(CACHED, (sql) =>
+        sql`SELECT 1 FROM composition.tenant_entitlement WHERE tenant_id = ${CACHED}`);
+      seen.push(rows.length); // rows visible at invalidate-time (>0 => already committed)
+    });
+    try {
+      const res = await app.inject({
+        method: "POST", url: "/v1/admin/composition/apply-plan",
+        headers: auth(CACHED), payload: { moduleIds: ["smarttransfer"], profileCode: null },
+      });
+      expect(res.statusCode).toBe(202);
+      expect(seen).toHaveLength(0); // publish side must NOT invalidate (pre-commit window)
+      await drain();
+      expect(seen).toEqual([1]); // the one invalidate saw the committed row
+      const committed = await readAsTenant(CACHED, (sql) =>
+        sql`SELECT module_id FROM composition.tenant_entitlement WHERE tenant_id = ${CACHED}`);
+      expect(committed).toHaveLength(1);
+
+      // failure path: no invalidation
+      seen.length = 0;
+      await publishRaw(CACHED, ["ghost_module"], null, randomUUID());
+      await drain();
+      expect(seen).toHaveLength(0);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

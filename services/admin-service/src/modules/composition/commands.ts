@@ -14,7 +14,7 @@
  * plan's module ids and profile.
  */
 import type { RequestContext } from "@civitasone/types";
-import { queue, cache } from "../../shared/infra.js";
+import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { commandMessageId } from "../../shared/idempotency.js";
 
@@ -50,7 +50,5 @@ export async function applyPlan(ctx: RequestContext, input: ApplyPlanInput): Pro
       profileCode: input.profileCode,
     },
   });
-  // Entitlements changed → drop any cached projection for this tenant.
-  await cache.invalidate(cache.makeKey(input.tenantId, "composition", input.tenantId));
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

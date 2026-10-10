@@ -17,6 +17,7 @@ import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
 import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
+import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
@@ -71,6 +72,10 @@ export function registerCompositionConsumers(queue: Queue): void {
           });
         }),
       );
+      // Entitlements changed -> drop any cached projection for this tenant. Done
+      // AFTER the commit (a pre-commit invalidate lets a concurrent read re-cache
+      // the old composition); also runs on an inbox-deduped replay, harmlessly.
+      await cache.invalidate(cache.makeKey(tenantId, "composition", tenantId));
     } catch (err) {
       log.error({ err, messageId: msg.messageId, type: COMMANDS.compositionApplyPlan }, "Consumer processing failed");
       throw err; // fail loud: retried / DLQ'd, never a silent half-write
