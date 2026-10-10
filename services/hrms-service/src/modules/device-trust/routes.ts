@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { STAFF_ROLES } from "../../shared/roles.js";
 import { sqlClient } from "../../shared/db.js";
 import { withRawTenantGuc } from "@civitasone/db";
 import { sendAccepted } from "@civitasone/schemas/validate";
@@ -95,6 +96,7 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
   /** POST /v1/hrms/devices/heartbeat — report device info + compliance state */
   app.post("/v1/hrms/devices/heartbeat", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, STAFF_ROLES);
     const body = deviceReportSchema.parse(req.body);
     const now = new Date().toISOString();
     const ip = req.ip ?? "";
@@ -399,6 +401,8 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
   /** GET /v1/hrms/devices/me — list my registered devices */
   app.get("/v1/hrms/devices/me", async (req, reply) => {
     const ctx = resolveContext(req);
+
+    requireRole(ctx, STAFF_ROLES);
 
     const rows = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT id, device_id, device_name, platform, os_version, app_version,

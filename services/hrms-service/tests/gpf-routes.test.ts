@@ -130,7 +130,7 @@ afterAll(async () => {
 
 describe("GPF — open account", () => {
   describe("POST /v1/hrms/employees/:id/gpf", () => {
-    const payload = { gpfNumber: "GPF-1001", openingBalanceMinor: 100000, monthlySubscriptionMinor: 5000, interestRatePct: 7.1 };
+    const payload = { gpfNumber: "GPF-1001", openingBalanceMinor: "100000", monthlySubscriptionMinor: "5000", interestRatePct: 7.1 };
 
     it("opens a GPF account (201)", async () => {
       const app = await buildApp();
@@ -236,7 +236,7 @@ describe("GPF — subscription (credit)", () => {
     it("accepts a subscription credit for async posting (202)", async () => {
       H.findAccountByEmployee.mockResolvedValue(gpfAccount());
       const app = await buildApp();
-      const r = await app.inject({ method: "POST", url: `/v1/hrms/employees/${EMP}/gpf/subscription`, headers: auth(), payload: { amountMinor: 5000 } });
+      const r = await app.inject({ method: "POST", url: `/v1/hrms/employees/${EMP}/gpf/subscription`, headers: auth(), payload: { amountMinor: "5000" } });
       // 202, not 201: the ledger row does not exist yet — it is written later
       // by the consumer. See the INSUFFICIENT_BALANCE / correct-sign coverage
       // in f3-consumer.test.ts for what actually lands.
@@ -262,7 +262,7 @@ describe("GPF — subscription (credit)", () => {
     it("returns 404 when no GPF account", async () => {
       H.findAccountByEmployee.mockResolvedValue(null);
       const app = await buildApp();
-      const r = await app.inject({ method: "POST", url: `/v1/hrms/employees/${EMP}/gpf/subscription`, headers: auth(), payload: { amountMinor: 5000 } });
+      const r = await app.inject({ method: "POST", url: `/v1/hrms/employees/${EMP}/gpf/subscription`, headers: auth(), payload: { amountMinor: "5000" } });
       expect(r.statusCode).toBe(404);
       await app.close();
     });
@@ -274,7 +274,7 @@ describe("GPF — advance (debit)", () => {
     it("accepts an advance debit for async posting (202)", async () => {
       H.findAccountByEmployee.mockResolvedValue(gpfAccount());
       const app = await buildApp();
-      const r = await app.inject({ method: "POST", url: `/v1/hrms/employees/${EMP}/gpf/advance`, headers: auth(), payload: { amountMinor: 50000 } });
+      const r = await app.inject({ method: "POST", url: `/v1/hrms/employees/${EMP}/gpf/advance`, headers: auth(), payload: { amountMinor: "50000" } });
       expect(r.statusCode).toBe(202);
       expect(r.json().entryType).toBe("advance");
       expect(r.json().amountMinor).toBe("50000");
@@ -292,7 +292,7 @@ describe("GPF — advance (debit)", () => {
     it("still answers 202 for an oversized debit — the balance guard is async (see f3-consumer.test.ts)", async () => {
       H.findAccountByEmployee.mockResolvedValue(gpfAccount());
       const app = await buildApp();
-      const r = await app.inject({ method: "POST", url: `/v1/hrms/employees/${EMP}/gpf/advance`, headers: auth(), payload: { amountMinor: 99999 } });
+      const r = await app.inject({ method: "POST", url: `/v1/hrms/employees/${EMP}/gpf/advance`, headers: auth(), payload: { amountMinor: "99999" } });
       expect(r.statusCode).toBe(202);
       await app.close();
     });
@@ -304,7 +304,7 @@ describe("GPF — refund (credit)", () => {
     it("accepts a refund credit for async posting (202)", async () => {
       H.findAccountByEmployee.mockResolvedValue(gpfAccount());
       const app = await buildApp();
-      const r = await app.inject({ method: "POST", url: `/v1/hrms/employees/${EMP}/gpf/refund`, headers: auth(), payload: { amountMinor: 20000 } });
+      const r = await app.inject({ method: "POST", url: `/v1/hrms/employees/${EMP}/gpf/refund`, headers: auth(), payload: { amountMinor: "20000" } });
       expect(r.statusCode).toBe(202);
       expect(r.json().entryType).toBe("refund");
       expect(r.json().amountMinor).toBe("20000");

@@ -10,7 +10,13 @@ import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
 
 const { mockTx, dbTransactionFn, enqueuedMessages } = vi.hoisted(() => {
-  const _mockTx = { insert: vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) }) };
+  // `execute` backs the social create consumers' guarded raw INSERT ... ON CONFLICT DO NOTHING
+  // RETURNING id: one returned row == "inserted", which is what lets the handler go on to emit
+  // the domain event + audit.
+  const _mockTx = {
+    insert: vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) }),
+    execute: vi.fn().mockResolvedValue([{ id: "inserted" }]),
+  };
   const _dbTransactionFn = vi.fn(async (cb: (tx: unknown) => Promise<void>) => { await cb(_mockTx); });
   const _enqueuedMessages: Array<{ topic: string; eventType: string; payload: unknown }> = [];
   return { mockTx: _mockTx, dbTransactionFn: _dbTransactionFn as any, enqueuedMessages: _enqueuedMessages };

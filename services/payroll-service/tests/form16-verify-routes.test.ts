@@ -237,7 +237,10 @@ describe("POST /v1/payroll/tax/form16/verify — role access", () => {
     expect(res.statusCode).toBe(200);
   });
 
-  it("allows citizen role (any authenticated user)", async () => {
+  // INTENTIONAL CONTRACT CHANGE (fix/hr-staff-only-guards): this test used to assert the old
+  // "any authenticated user, citizen included" behaviour (200). The route is now staff-only
+  // (requireRole STAFF_ROLES), so a citizen token is 403. The staff 200 cases above are unchanged.
+  it("rejects citizen role (staff-only route)", async () => {
     const fakePdf = Buffer.from("%PDF-1.7 citizen test content");
     const pdfBase64 = fakePdf.toString("base64");
 
@@ -253,6 +256,6 @@ describe("POST /v1/payroll/tax/form16/verify — role access", () => {
     });
     await app.close();
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(403);
   });
 });
