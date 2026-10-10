@@ -49,7 +49,7 @@ the consumer by SoD), **AUD** = `auditor`.
 | Method | Route | Command topic | messageId | Role | Screen |
 |---|---|---|---|---|---|
 | POST | `/cycles` | `smarttransfer.cycle.created` | `cycle:{slug}` | ADM | 1 Cycle Dashboard |
-| POST | `/cycles/:id/open` | `smarttransfer.cycle.created` (open txn) | `cycle-open:{id}` | ADM | 4 Policy Version Lock |
+| POST | `/cycles/:id/open` | `smarttransfer.cycle.opened` | `cycle-open:{id}` | ADM | 4 Policy Version Lock |
 | POST | `/cycles/:id/freeze` | `smarttransfer.cycle.frozen` | `cycle-freeze:{id}` | ADM | 3 Establishment & Vacancy Certification |
 | POST | `/cycles/:id/close` | `smarttransfer.cycle.closed` | `cycle-close:{id}` | APR | 18 Cycle Closure & Reconciliation |
 | GET | `/cycles/:id/eligibility` | — | — | ADM/AUD | 2 Eligibility Register |
@@ -60,14 +60,14 @@ the consumer by SoD), **AUD** = `auditor`.
 | GET | `/runs/:id/diagnostics` | — | — | ADM | 7 Constraint Violation Diagnostics |
 | GET | `/cycles/:id/scenarios/compare` | — | — | ADM | 8 Scenario Comparison |
 | GET | `/runs/:id/assignments` | — | — | ADM | 9 Proposed Transfer List |
-| POST | `/assignments/:id/exceptions` | `smarttransfer.scenario.created` (exception) | `exception:{assignmentId}` | ADM | 10 Exception & Manual Review |
+| POST | `/assignments/:id/exceptions` | `smarttransfer.exception.requested` | `exception:{assignmentId}` | ADM | 10 Exception & Manual Review |
 | POST | `/cycles/:id/committee-review` | *(approval path OPEN D-ST-08)* | `committee:{cycleId}` | APR | 11 Committee Review |
 | POST | `/cycles/:id/approve` | *(approval path OPEN D-ST-08)* | `approve:{cycleId}` | APR | 12 Competent Authority Approval |
 | POST | `/runs/:id/orders` | `smarttransfer.order.drafted` | `order-draft:{assignmentId}` | ADM | 13 Bulk Order Generation |
 | POST | `/orders/:id/issue` | `smarttransfer.order.issued` | `order-issue:{id}` | APR | 13 Bulk Order Generation |
 | POST | `/orders/:id/cancel` | `smarttransfer.order.cancelled` | `order-cancel:{id}` | APR | 13 Bulk Order Generation |
-| POST | `/orders/:id/relieving` | `smarttransfer.relieving.recorded` | `relieve:{orderId}` | OFF | 14 Relieving & Joining Tracker |
-| POST | `/orders/:id/joining` | `smarttransfer.joining.recorded` | `join:{orderId}` | OFF | 14 Relieving & Joining Tracker |
+| POST | `/orders/:id/relieving` | `smarttransfer.relieving.recorded` | `relieve:{orderId}` | OFF (releasing-office authority; not the employee) | 14 Relieving & Joining Tracker |
+| POST | `/orders/:id/joining` | `smarttransfer.joining.recorded` | `join:{orderId}` | OFF (receiving-office authority; not the employee) | 14 Relieving & Joining Tracker |
 | GET | `/cycles/:id/appeals` | — | — | ADM | 15 Grievance & Appeals |
 | POST | `/appeals/:id/decide` | `smarttransfer.appeal.decided` | `appeal-decide:{id}` | APR | 15 Grievance & Appeals |
 | GET | `/cycles/:id/staffing-balance` | — | — | ADM | 16 Staffing Balance Dashboard |
@@ -76,13 +76,19 @@ the consumer by SoD), **AUD** = `auditor`.
 Notes:
 - Each screen must have distinct empty, error, permission-denied and partial-failure states (house rule 6; spec §10).
 - `committee-review`/`approve` have no frozen command topic in C0 because the **approval path is OPEN (D-ST-08)**.
+- **Relieving and joining ownership:** `relieving` is recordable only by an officer whose server-derived
+  `jurisdiction_unit_ids` cover the order's **source** office; `joining` only by one covering the **destination**
+  office. The consumer rejects a record where the caller's employee id equals the order's `employeeId` (the employee
+  cannot record their own relieving or joining; SoD, house rule 5). The route guard alone is not sufficient.
+- **Cycle cancellation** (`cancelCycle` in [state-machines.md](state-machines.md)) has no route or topic in C0: it is
+  **OPEN** (see [open-items.md](open-items.md)) and will add `smarttransfer.cycle.cancelled` when decided.
 - SoD (approver ≠ maker; competent-authority bands from policy) is enforced in the **consumer** (house rule 5), not only
   in the route guard.
 
 ## HRMS / Workforce Core command path (spec §11.1; [ADR-0010](adr/0010-hrms-write-boundary.md))
 
-SmartTransfer never writes HRMS tables. It calls the one HRMS command. The command is published by SmartTransfer and
-consumed inside hrms-service.
+SmartTransfer never writes HRMS tables. It calls the one HRMS command. The command `hrms.posting.apply` is **published by
+`smarttransfer-service`** (after `smarttransfer.order.issued`) and consumed inside hrms-service.
 
 | Method (internal) | Route | Command topic | messageId | Caller | Idempotency |
 |---|---|---|---|---|---|

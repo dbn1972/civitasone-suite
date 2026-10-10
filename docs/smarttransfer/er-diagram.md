@@ -44,6 +44,8 @@ erDiagram
   EMPLOYEE ||--o{ EMPLOYEE_HOLD : "blocked by"
   EMPLOYEE }o--o{ REPORTING_RELATIONSHIP : "reports via"
   POSTING_LEDGER ||--o{ SERVICE_TENURE : "derives"
+  OFFICE ||--o{ STAFFING_REQUIREMENT : "needs minimum"
+  OFFICE }o--|| GEOGRAPHIC_JURISDICTION : "within (by id, location-service)"
 
   EMPLOYEE {
     uuid id PK
@@ -86,6 +88,21 @@ erDiagram
     uuid parent_cadre_id
     string name
     string external_code "Mode B mapping"
+  }
+  STAFFING_REQUIREMENT {
+    uuid id PK "BUILD ST-M01-07"
+    uuid office_id
+    uuid cadre_id
+    uuid designation_id
+    int minimum_count
+    date effective_from
+    date effective_to "null = open"
+  }
+  GEOGRAPHIC_JURISDICTION {
+    uuid id PK "EXISTS location-service jurisdiction/routes.ts:12-35, owned by location-service, referenced by id"
+    string lgd_code
+    string level "district|division|block"
+    uuid parent_id
   }
   EMPLOYEE_HOLD {
     uuid id PK "EXISTS lifecycle/schema.ts:212-232"

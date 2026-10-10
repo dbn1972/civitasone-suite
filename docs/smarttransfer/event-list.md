@@ -25,12 +25,14 @@
 | Topic | dash len | Kind | Producer | Consumers | Payload outline | Ver |
 |---|---|---|---|---|---|---|
 | `smarttransfer.cycle.created` | 27 | E | smarttransfer | audit; notification | `cycleId, tenantId, name, movementTypeId, calendar{opensAt,freezesAt,closesAt}` | 1.0 |
+| `smarttransfer.cycle.opened` | 26 | E | smarttransfer | audit; notification | `cycleId, tenantId, policyPackId, policyPackHash, openedAt` | 1.0 |
 | `smarttransfer.cycle.frozen` | 26 | E | smarttransfer | audit; (solver via snapshot) | `cycleId, tenantId, snapshotId, snapshotHash, policyPackId, policyPackHash, counts{employees,posts}` | 1.0 |
 | `smarttransfer.cycle.closed` | 26 | E | smarttransfer | audit; notification | `cycleId, tenantId, closedAt, reconciliationRef` | 1.0 |
 | `smarttransfer.request.submitted` | 31 | E | smarttransfer | audit; notification | `requestId, cycleId, tenantId, employeeId, movementTypeId` | 1.0 |
 | `smarttransfer.request.withdrawn` | 31 | E | smarttransfer | audit; notification | `requestId, cycleId, tenantId, employeeId, reasonCode` | 1.0 |
 | `smarttransfer.preference.submitted` | 34 | E | smarttransfer | audit | `preferenceId, cycleId, tenantId, employeeId, itemCount` | 1.0 |
 | `smarttransfer.scenario.created` | 30 | E | smarttransfer | audit | `scenarioId, cycleId, tenantId, name, weightsRef` | 1.0 |
+| `smarttransfer.exception.requested` | 33 | E | smarttransfer | audit; notification | `exceptionId, assignmentId, runId, tenantId, reasonCode, requestedBy` | 1.0 |
 | `smarttransfer.run.requested` | 27 | C | smarttransfer | smarttransfer (run coordinator) | `runId, scenarioId, cycleId, tenantId, snapshotId, policyPackHash, seed` | 1.0 |
 | `smarttransfer.run.completed` | 27 | E | smarttransfer | audit; notification | `runId, cycleId, tenantId, outputHash, score, assigned, unassigned` | 1.0 |
 | `smarttransfer.run.failed` | 24 | E | smarttransfer | audit; notification | `runId, cycleId, tenantId, reasonCode` | 1.0 |
@@ -38,7 +40,7 @@
 | `smarttransfer.solve.requested` | 29 | C | smarttransfer | allocation-solver | `runId, tenantId, snapshotRef, arcsRef, weightsRef, seed` | 1.0 |
 | `smarttransfer.solve.completed` | 29 | E | allocation-solver | smarttransfer | `runId, tenantId, planRef, planHash, score, hardViolations` | 1.0 |
 | `smarttransfer.order.drafted` | 27 | E | smarttransfer | audit | `orderId, assignmentId, tenantId, orderNumber` | 1.0 |
-| `smarttransfer.order.issued` | 26 | E | smarttransfer | audit; notification; hrms (applyPosting trigger) | `orderId, assignmentId, tenantId, employeeId, postId, orderNumber, effectiveDate, signingState` | 1.0 |
+| `smarttransfer.order.issued` | 26 | E | smarttransfer | audit; notification; smarttransfer (publishes `hrms.posting.apply` on this event) | `orderId, assignmentId, tenantId, employeeId, postId, orderNumber, effectiveDate, signingState` | 1.0 |
 | `smarttransfer.order.cancelled` | 29 | E | smarttransfer | audit; notification | `orderId, tenantId, reasonCode, cancelledBy` | 1.0 |
 | `smarttransfer.relieving.recorded` | 32 | E | smarttransfer | audit; notification | `orderId, tenantId, employeeId, sourceOfficeId, relievedOn` | 1.0 |
 | `smarttransfer.joining.recorded` | 30 | E | smarttransfer | audit; notification | `orderId, tenantId, employeeId, destOfficeId, joinedOn` | 1.0 |
@@ -46,11 +48,14 @@
 | `smarttransfer.appeal.decided` | 28 | E | smarttransfer | audit; notification | `appealId, orderId, tenantId, outcome, decidedBy, reasonCode` | 1.0 |
 | `smarttransfer.evidence.recorded` | 31 | E | smarttransfer | audit | `evidenceId, runId, tenantId, snapshotHash, policyPackHash, solverVersion, seed` | 1.0 |
 
-## `hrms.posting.*` topics (producer: `hrms-service` / Workforce Core)
+## `hrms.posting.*` topics
+
+Producers differ per row: `hrms.posting.apply` is a **command published by `smarttransfer-service`** and consumed by
+hrms-service; the other four are events published by `hrms-service` / Workforce Core.
 
 | Topic | dash len | Kind | Producer | Consumers | Payload outline | Ver |
 |---|---|---|---|---|---|---|
-| `hrms.posting.apply` | 18 | C | smarttransfer | hrms (applyPosting consumer) | `orderId, tenantId, employeeId, postId, effectiveDate, chargeType, orderNumber` | 1.0 |
+| `hrms.posting.apply` | 18 | C | **smarttransfer-service** (published by SmartTransfer, not hrms) | hrms (applyPosting consumer) | `orderId, tenantId, employeeId, postId, effectiveDate, chargeType, orderNumber` | 1.0 |
 | `hrms.posting.applied` | 20 | E | hrms | audit; smarttransfer (reconciliation) | `orderId, tenantId, employeeId, postId, chargeType, effectiveFrom, orderNumber` | 1.0 |
 | `hrms.posting.changed` | 20 | E | hrms | payroll (OPEN D-ST-13); audit; estab (quarters/desks); notification | `employeeId, tenantId, fromOfficeId, toOfficeId, station, state, cityClass, ddo, effectiveFrom, orderNumber` | 1.0 |
 | `hrms.posting.hold_placed` | 24 | E | hrms | audit; smarttransfer (eligibility, OPEN D-ST-16) | `employeeId, tenantId, holdType, effectiveFrom, source` | 1.0 |
