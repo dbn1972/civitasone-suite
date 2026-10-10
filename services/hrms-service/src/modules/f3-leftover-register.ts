@@ -31,37 +31,54 @@ import { registerF3_reservation_Consumers } from "./reservation/f3-consumer.js";
 import { registerF3_rti_Consumers } from "./rti/f3-consumer.js";
 import { registerF3_service_book_Consumers } from "./service-book/f3-consumer.js";
 import { registerF3_training_admin_Consumers } from "./training-admin/f3-consumer.js";
-export function registerF3LeftoverAll(queue: Queue): void {
-  registerF3_ai_fraud_Consumers(queue);
-  registerF3_apar_Consumers(queue);
-  registerF3_appraisals_Consumers(queue);
-  registerF3_apprentice_stipend_Consumers(queue);
-  registerF3_assessment_Consumers(queue);
-  registerF3_attendance_Consumers(queue);
-  registerF3_board_intake_Consumers(queue);
-  registerF3_claims_Consumers(queue);
-  registerF3_competency_Consumers(queue);
-  registerF3_consultant_invoice_Consumers(queue);
-  registerF3_contractor_bill_Consumers(queue);
-  registerF3_contracts_Consumers(queue);
-  registerF3_cpf_Consumers(queue);
-  registerF3_deputation_Consumers(queue);
-  registerF3_disciplinary_Consumers(queue);
+import type { ModuleProfile } from "../shared/module-profile.js";
+
+/**
+ * Register the F3 "leftover" per-module consumers.
+ *
+ * When a `profile` is supplied (ST-M01-04), CORE F3 consumers (employee,
+ * lifecycle, service-book, reservation, manpower-planning, holidays) are
+ * always registered and each non-core module's F3 consumers are registered
+ * only when that module is enabled by HRMS_MODULES. With no profile the full
+ * set registers (today's behaviour / default = all).
+ */
+export function registerF3LeftoverAll(queue: Queue, profile?: ModuleProfile): void {
+  const on = (m: Parameters<NonNullable<ModuleProfile["isNonCoreEnabled"]>>[0]): boolean =>
+    profile ? profile.isNonCoreEnabled(m) : true;
+
+  // ── CORE F3 consumers (always on) ──────────────────────────────────────
   registerF3_employee_Consumers(queue);
-  registerF3_face_verification_Consumers(queue);
-  registerF3_geo_attendance_Consumers(queue);
-  registerF3_gpf_Consumers(queue);
-  registerF3_holidays_Consumers(queue);
-  registerF3_learning_Consumers(queue);
-  registerF3_leave_Consumers(queue);
   registerF3_lifecycle_Consumers(queue);
-  registerF3_manpower_planning_Consumers(queue);
-  registerF3_nps_Consumers(queue);
-  registerF3_pay_matrix_Consumers(queue);
-  registerF3_pension_Consumers(queue);
-  registerF3_recruitment_Consumers(queue);
-  registerF3_reservation_Consumers(queue);
-  registerF3_rti_Consumers(queue);
   registerF3_service_book_Consumers(queue);
-  registerF3_training_admin_Consumers(queue);
+  registerF3_reservation_Consumers(queue);
+  registerF3_manpower_planning_Consumers(queue);
+  registerF3_holidays_Consumers(queue);
+
+  // ── NON-CORE F3 consumers (gated) ──────────────────────────────────────
+  if (on("ai")) registerF3_ai_fraud_Consumers(queue);
+  if (on("ai")) registerF3_face_verification_Consumers(queue);
+  if (on("appraisal")) registerF3_apar_Consumers(queue);
+  if (on("appraisal")) registerF3_appraisals_Consumers(queue);
+  if (on("contracts")) registerF3_apprentice_stipend_Consumers(queue);
+  if (on("contracts")) registerF3_consultant_invoice_Consumers(queue);
+  if (on("contracts")) registerF3_contractor_bill_Consumers(queue);
+  if (on("contracts")) registerF3_contracts_Consumers(queue);
+  if (on("assessment")) registerF3_assessment_Consumers(queue);
+  if (on("attendance")) registerF3_attendance_Consumers(queue);
+  if (on("attendance")) registerF3_geo_attendance_Consumers(queue);
+  if (on("board_intake")) registerF3_board_intake_Consumers(queue);
+  if (on("payroll_facing")) registerF3_claims_Consumers(queue);
+  if (on("payroll_facing")) registerF3_cpf_Consumers(queue);
+  if (on("payroll_facing")) registerF3_gpf_Consumers(queue);
+  if (on("payroll_facing")) registerF3_nps_Consumers(queue);
+  if (on("payroll_facing")) registerF3_pay_matrix_Consumers(queue);
+  if (on("payroll_facing")) registerF3_pension_Consumers(queue);
+  if (on("competency")) registerF3_competency_Consumers(queue);
+  if (on("deputation")) registerF3_deputation_Consumers(queue);
+  if (on("disciplinary")) registerF3_disciplinary_Consumers(queue);
+  if (on("training")) registerF3_learning_Consumers(queue);
+  if (on("training")) registerF3_training_admin_Consumers(queue);
+  if (on("leave")) registerF3_leave_Consumers(queue);
+  if (on("recruitment")) registerF3_recruitment_Consumers(queue);
+  if (on("rti")) registerF3_rti_Consumers(queue);
 }

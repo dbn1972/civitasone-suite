@@ -5,68 +5,11 @@ import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { startOutboxPurge } from "@civitasone/outbox";
-import { registerEmployeeConsumers }   from "./modules/employee/consumer.js";
-import { registerLifecycleConsumers }  from "./modules/lifecycle/consumer.js";
-import { registerEOfficeDecisionConsumers } from "./modules/lifecycle/eoffice-consumer.js";
-import { registerPromotionEOfficeConsumers } from "./modules/lifecycle/promotion-eoffice-consumer.js";
-import { registerDisciplinaryConsumers } from "./modules/disciplinary/consumer.js";
-import { registerDisciplinaryEOfficeConsumers } from "./modules/disciplinary/eoffice-consumer.js";
-import { registerLeaveSpecialEOfficeConsumers } from "./modules/leave/eoffice-consumer.js";
-import { registerRecruitmentEOfficeConsumers } from "./modules/recruitment/eoffice-consumer.js";
-import { registerLeaveConsumers }      from "./modules/leave/consumer.js";
-import { registerPolicySettingsConsumers } from "./modules/policy-settings/consumer.js";
-import { registerAttendanceConsumers } from "./modules/attendance/consumer.js";
-import { registerRecruitmentConsumers } from "./modules/recruitment/consumer.js";
-import { registerRecruitmentFinishConsumers } from "./modules/recruitment/finish-consumer.js";
-import { registerLifecycleMutationConsumers } from "./modules/lifecycle/consumer.js";
-import { registerLoanConsumers } from "./modules/employee/loans-consumer.js";
-import { registerF3LeftoverAll } from "./modules/f3-leftover-register.js";
-import { registerTrainingConsumers }   from "./modules/training/consumer.js";
-import { registerIntegrationConsumers } from "./modules/integration/consumer.js";
-import { registerAppraisalConsumers }  from "./modules/appraisals/consumer.js";
-// Previous batch consumers
-import { registerAparConsumers }       from "./modules/apar/consumer.js";
-import { registerClaimsConsumers }     from "./modules/claims/consumer.js";
-import { registerDeputationConsumers } from "./modules/deputation/consumer.js";
-import { registerPayProfileConsumers } from "./modules/pay-profile/consumer.js";
-import { registerGrievanceConsumers } from "./modules/grievance/consumer.js";
-import { registerOnboardingTemplateConsumers } from "./modules/lifecycle/onboarding-template.js";
-import { registerGeoAttendanceConsumers } from "./modules/geo-attendance/consumer.js";
-import { registerGpfConsumers }        from "./modules/gpf/consumer.js";
-import { registerHolidayConsumers }    from "./modules/holidays/consumer.js";
-import { registerIdCardConsumers }     from "./modules/id-cards/consumer.js";
-import { registerMedicalConsumers }    from "./modules/medical/consumer.js";
-import { registerScanLinkConsumers } from "./modules/employee/scan-link-consumer.js";
-import { registerOutsourcedConsumers } from "./modules/outsourced/consumer.js";
-import { registerPayMatrixConsumers }  from "./modules/pay-matrix/consumer.js";
-import { registerPensionConsumers }    from "./modules/pension/consumer.js";
-import { registerReservationConsumers } from "./modules/reservation/consumer.js";
-import { registerSeniorityConsumers }  from "./modules/seniority/consumer.js";
-import { registerServiceBookConsumers } from "./modules/service-book/consumer.js";
-import { registerWorkforcePlanningConsumers } from "./modules/workforce-planning/consumer.js";
-// Current batch consumers
-import { registerAiFraudConsumers }    from "./modules/ai-fraud/consumer.js";
-import { registerAiPredictionsConsumers } from "./modules/ai-predictions/consumer.js";
-import { registerBulkImportConsumers } from "./modules/bulk-import/consumer.js";
-import { registerDashboardConsumers }  from "./modules/dashboard/consumer.js";
-import { registerDeviceTrustConsumers } from "./modules/device-trust/consumer.js";
-import { registerFaceVerificationConsumers } from "./modules/face-verification/consumer.js";
-import { registerInternalConsumers }   from "./modules/internal/consumer.js";
-import { registerOrgchartConsumers }   from "./modules/orgchart/consumer.js";
-import { registerReportsConsumers }    from "./modules/reports/consumer.js";
-import { registerRtiConsumers }        from "./modules/rti/consumer.js";
-import { registerSchedulerConsumers }  from "./modules/scheduler/consumer.js";
-import { registerSelfServiceConsumers } from "./modules/self-service/consumer.js";
-import { registerSocialConsumers }     from "./modules/social/consumer.js";
-import { registerVisitingCardConsumers } from "./modules/visiting-cards/consumer.js";
-import { registerBoardIntakeConsumers } from "./modules/board-intake/consumer.js";
-import { registerCompetencyConsumers } from "./modules/competency/consumer.js";
-import { registerContractConsumers } from "./modules/contracts/consumer.js";
-import { registerContractExpiryConsumers } from "./modules/contracts/expiry-consumer.js";
-import { registerManpowerConsumers } from "./modules/manpower-planning/consumer.js";
+import { registerConsumers } from "./consumers.js";
 import { runSchedulerOnce } from "./modules/scheduler/tick.js";
 import { applyDueEffectiveChangesOnce } from "./modules/lifecycle/effective-scheduler.js";
 import { runWithTenant } from "@civitasone/db";
+import { loadModuleProfile } from "./shared/module-profile.js";
 import EventEmitter from "node:events";
 
 // Bump global listener ceiling before queue subscriptions open sockets;
@@ -87,70 +30,15 @@ const log = pino({ name: "hrms-worker" });
     rawSubscribe(topic, (msg: any) => runWithTenant(msg.tenantId, () => handler(msg)));
 }
 
-registerEmployeeConsumers(queue);
-registerLifecycleMutationConsumers(queue);
-registerLoanConsumers(queue);
-registerLifecycleConsumers(queue);
-registerEOfficeDecisionConsumers(queue);
-registerPromotionEOfficeConsumers(queue);
-registerDisciplinaryConsumers(queue);
-registerDisciplinaryEOfficeConsumers(queue);
-registerLeaveConsumers(queue);
-registerPolicySettingsConsumers(queue);
-registerLeaveSpecialEOfficeConsumers(queue);
-registerAttendanceConsumers(queue);
-registerRecruitmentConsumers(queue);
-registerRecruitmentFinishConsumers(queue);
-registerRecruitmentEOfficeConsumers(queue);
-registerTrainingConsumers(queue);
-registerF3LeftoverAll(queue);
-registerIntegrationConsumers(queue);
-registerAppraisalConsumers(queue);
-// Previous batch
-registerAparConsumers(queue);
-registerClaimsConsumers(queue);
-registerDeputationConsumers(queue);
-registerPayProfileConsumers(queue);
-registerGrievanceConsumers(queue);
-registerOnboardingTemplateConsumers(queue);
-registerGeoAttendanceConsumers(queue);
-registerGpfConsumers(queue);
-registerHolidayConsumers(queue);
-registerIdCardConsumers(queue);
-registerMedicalConsumers(queue);
-registerOutsourcedConsumers(queue);
-// GAP-ADMIN-BULK-SCAN-02: hr_employee scan-link target (document-service bulk-scan filing).
-registerScanLinkConsumers(queue);
-registerPayMatrixConsumers(queue);
-registerPensionConsumers(queue);
-registerReservationConsumers(queue);
-registerSeniorityConsumers(queue);
-registerServiceBookConsumers(queue);
-registerWorkforcePlanningConsumers(queue);
-// Current batch
-registerAiFraudConsumers(queue);
-registerAiPredictionsConsumers(queue);
-registerBulkImportConsumers(queue);
-registerDashboardConsumers(queue);
-registerDeviceTrustConsumers(queue);
-registerFaceVerificationConsumers(queue);
-registerInternalConsumers(queue);
-registerOrgchartConsumers(queue);
-registerReportsConsumers(queue);
-registerRtiConsumers(queue);
-registerSchedulerConsumers(queue);
-registerSelfServiceConsumers(queue);
-registerSocialConsumers(queue);
-registerVisitingCardConsumers(queue);
-// Cross-service choreography: board decision → HR intake (for-review).
-registerBoardIntakeConsumers(queue);
-// SVC-124: assessment.certificate.issued -> employee held competency.
-registerCompetencyConsumers(queue);
-// Contract renewal workflow consumers.
-registerContractConsumers(queue);
-registerContractExpiryConsumers(queue);
-// SVC-003: recruitment hire -> manpower plan fill-loop.
-registerManpowerConsumers(queue);
+// ── Module profile (ST-M01-04 / D-ST-23) ──────────────────────────────────
+// Subscribe CORE (Workforce Core) consumers always; subscribe non-core
+// consumers only when HRMS_MODULES enables them. Unset => all (no regression).
+const profile = loadModuleProfile();
+log.info(
+  { hrmsModules: profile.raw ?? "(unset=all)", coreOnly: profile.coreOnly, enabledNonCore: [...profile.enabledNonCore].sort() },
+  "hrms-worker module profile",
+);
+registerConsumers(queue, profile);
 
 await queue.start();
 const relay = startRelay(db, queue);

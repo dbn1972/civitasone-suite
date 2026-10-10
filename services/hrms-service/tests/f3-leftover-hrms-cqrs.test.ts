@@ -372,8 +372,13 @@ describe("F3 leftover hrms CQRS route boundary", () => {
   });
 
   it("f3 leftover consumers are registered", () => {
+    // ST-M01-04: consumer registration (incl. registerF3LeftoverAll) moved out
+    // of worker.ts into consumers.ts (registerConsumers), which the worker
+    // calls. Assert the wiring still exists, now via its new home.
     const worker = readFileSync(join(__dirname, "../src/worker.ts"), "utf8");
-    expect(worker).toContain("registerF3LeftoverAll");
+    expect(worker).toContain("registerConsumers");
+    const consumers = readFileSync(join(__dirname, "../src/consumers.ts"), "utf8");
+    expect(consumers).toContain("registerF3LeftoverAll");
     const topics = readFileSync(join(__dirname, "../src/topics.ts"), "utf8");
     expect(topics).toContain("f3RouteWrite");
     expect(topics).toContain("leaveCancel");
