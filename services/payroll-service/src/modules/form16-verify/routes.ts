@@ -5,12 +5,15 @@
  * extracts the PKCS#7 signature, validates against the embedded certificate chain.
  * Returns: { data: { valid, signerCN, signedAt, certificateExpiry, issues } }
  *
- * Auth: any authenticated user (no role restriction beyond being authenticated)
+ * Auth: STAFF_ROLES only (citizen / external principals get 403) + a per-user
+ * rate limit (FORM16_VERIFY_MAX per minute, default 10) - the verifier parses
+ * attacker-supplied PDF bytes, so it must not be open to every token.
  * Max body size: 2 MB
  */
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
-import { resolveContext, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { STAFF_ROLES } from "../../shared/roles.js";
 import { verifyPdfSignature } from "@civitasone/render";
 
 /** 2 MB limit for uploaded PDF */
@@ -41,11 +44,21 @@ export async function form16VerifyRoutes(app: FastifyInstance): Promise<void> {
    * Returns verification result with signer metadata.
    */
   app.post("/v1/payroll/tax/form16/verify", {
-    config: { rawBody: true },
+    config: {
+      rawBody: true,
+      // Per-user bucket (own key prefix, NOT the shared 300/min actor bucket).
+      rateLimit: {
+        max: Number(process.env.FORM16_VERIFY_MAX ?? 10),
+        timeWindow: "1 minute",
+        allowList: [],
+        keyGenerator: (req: { ip: string; ctx?: { actorId?: string } }) => `form16-verify:${req.ctx?.actorId ?? req.ip}`,
+      },
+    },
     bodyLimit: MAX_PDF_SIZE,
   }, async (req) => {
-    // Auth: any authenticated user
-    resolveContext(req);
+    // Auth: staff only - a citizen token is tenant-valid but must not reach the PDF verifier.
+    const ctx = resolveContext(req);
+    requireRole(ctx, STAFF_ROLES);
 
     let pdfBuffer: Buffer;
 
@@ -111,6 +124,13 @@ export async function form16VerifyRoutes(app: FastifyInstance): Promise<void> {
     }
     if (err instanceof HttpError) {
       void reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
+      return;
+    }
+    // @fastify/rate-limit (registerRateLimit's errorResponseBuilder) throws a plain object
+    // carrying statusCode 429; this plugin-scoped handler would otherwise turn it into a 500.
+    if ((err as { statusCode?: number } | null)?.statusCode === 429) {
+      const rl = err as { message?: string; retryAfter?: number };
+      void reply.code(429).send({ code: "TOO_MANY_REQUESTS", message: rl.message ?? "rate limit exceeded", correlationId, retryable: true, ...(rl.retryAfter ? { retryAfter: rl.retryAfter } : {}) });
       return;
     }
     req.log.error({ err }, "unhandled error in form16-verify routes");

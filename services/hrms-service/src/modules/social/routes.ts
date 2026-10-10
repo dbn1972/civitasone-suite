@@ -2,6 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { STAFF_ROLES } from "../../shared/roles.js";
+import * as socialCommands from "./commands.js";
 import { cache, queue } from "../../shared/infra.js";
 import { sqlClient } from "../../shared/db.js";
 import { withRawTenantGuc } from "@civitasone/db";
@@ -554,6 +556,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
    */
   app.post("/v1/hrms/birthdays/:id/wish", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, STAFF_ROLES);
     const { id } = req.params as { id: string };
     const body = birthdayWishSchema.parse(req.body ?? {});
 
@@ -603,27 +606,17 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
   /** POST /v1/hrms/travel-requests — submit travel request for reporting manager approval */
   app.post("/v1/hrms/travel-requests", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, STAFF_ROLES);
     const body = travelRequestSchema.parse(req.body);
-    const id = randomUUID();
-    const now = new Date().toISOString();
 
-    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
-      `INSERT INTO claims.hrms_travel_requests (id, tenant_id, employee_id, purpose, destination, from_date, to_date, advance_required, mode, status, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, $10)`,
-      [id, ctx.tenantId, ctx.actorId, body.purpose, body.destination, body.fromDate, body.toDate, body.advanceRequired ?? 0, body.mode ?? "rail", now],
-    ));
-
-    // Reporting-manager lookup for the approval notification is best-effort
-    // and deliberately kept OUTSIDE the write above (its own withTenantGuc
-    // call, not the same transaction) and fault-tolerant: the column-name
-    // drift that used to make this always fail (no reporting_to or user_id
-    // column -- the real ones are manager_id and user_ref) is now fixed. The
-    // try/catch stays as generic resilience; the travel request itself must
-    // still be created either way and only the notification may silently
-    // no-op.
-    let reportingTo: string | undefined;
+    // Reporting-manager lookup for the approval notification is a best-effort READ
+    // and deliberately fault-tolerant: the request itself must still be created
+    // either way, only the notification may silently no-op. The result rides in the
+    // command payload; the consumer emits the notification in the same transaction
+    // as the insert, so a notification can never exist for a request that did not land.
+    let managerId: string | undefined;
     try {
-      reportingTo = await withTenantGuc(ctx.tenantId, async (pool) => {
+      managerId = await withTenantGuc(ctx.tenantId, async (pool) => {
         const manager = await pool.query(
           `SELECT manager_id FROM employee.hrms_employees WHERE user_ref = $1 AND tenant_id = $2`,
           [ctx.actorId, ctx.tenantId],
@@ -634,27 +627,14 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
       req.log.warn({ err }, "travel-request manager lookup failed; skipping approval notification");
     }
 
-    if (reportingTo) {
-      await queue.publish("notification.send", {
-        messageId: randomUUID(),
-        type: "hrms.travel.requested",
-        schemaVersion: "1.0",
-        tenantId: ctx.tenantId,
-        correlationId: ctx.correlationId,
-        actorId: ctx.actorId,
-        timestamp: now,
-        payload: {
-          templateId: "00000000-0000-4000-8001-000000000000",
-          recipient: reportingTo,
-          recipientId: reportingTo,
-          channel: "push",
-          eventType: "hrms.travel.requested",
-          variables: { destination: body.destination, fromDate: body.fromDate, toDate: body.toDate },
-        },
-      });
-    }
-
-    return reply.code(202).send({ id, status: "pending" });
+    // route -> zod -> command (per-command messageId) -> 202 -> consumer.
+    const accepted = await socialCommands.createTravelRequest(ctx, {
+      purpose: body.purpose, destination: body.destination,
+      fromDate: body.fromDate, toDate: body.toDate,
+      advanceRequired: body.advanceRequired ?? 0, mode: body.mode ?? "rail",
+      ...(managerId ? { managerId } : {}),
+    });
+    return reply.code(202).send(accepted);
   });
 
   /**
@@ -680,6 +660,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
    */
   app.get("/v1/hrms/travel-requests", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, STAFF_ROLES);
     const q = z.object({ scope: z.enum(["me", "team"]).optional() }).parse(req.query);
 
     if (q.scope === "team") {
@@ -863,17 +844,25 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
   /** POST /v1/hrms/expenses — submit expense claim */
   app.post("/v1/hrms/expenses", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, STAFF_ROLES);
     const body = expenseClaimSchema.parse(req.body);
-    const id = randomUUID();
-    const now = new Date().toISOString();
 
-    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
-      `INSERT INTO claims.hrms_expense_claims (id, tenant_id, employee_id, category, amount, description, expense_date, receipt_key, travel_request_id, status, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, $10)`,
-      [id, ctx.tenantId, ctx.actorId, body.category, body.amount, body.description ?? "", body.date, body.receiptKey ?? null, body.travelRequestId ?? null, now],
-    ));
+    // A linked travel request must be the caller's own, in this tenant (the FK alone
+    // is tenant-blind). Checked here so the caller gets a real 404; the consumer
+    // re-asserts it atomically with the insert.
+    if (body.travelRequestId) {
+      const own = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
+        `SELECT 1 FROM claims.hrms_travel_requests WHERE id = $1 AND tenant_id = $2 AND employee_id = $3`,
+        [body.travelRequestId, ctx.tenantId, ctx.actorId],
+      ));
+      if (own.rowCount === 0) throw new HttpError(404, "NOT_FOUND", "Travel request not found");
+    }
 
-    return reply.code(202).send({ id, status: "pending" });
+    const accepted = await socialCommands.createExpenseClaim(ctx, {
+      category: body.category, amount: body.amount, description: body.description ?? "",
+      date: body.date, receiptKey: body.receiptKey ?? null, travelRequestId: body.travelRequestId ?? null,
+    });
+    return reply.code(202).send(accepted);
   });
 
   /**
@@ -1155,6 +1144,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
   /** POST /v1/hrms/devices/register — register FCM/APNs token for push notifications */
   app.post("/v1/hrms/devices/register", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, STAFF_ROLES);
     const { token, platform, deviceId } = req.body as { token: string; platform: string; deviceId: string };
 
     if (!token || !platform || !deviceId) {
@@ -1176,6 +1166,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
   /** GET /v1/hrms/orgchart — hierarchical org chart */
   app.get("/v1/hrms/orgchart", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, STAFF_ROLES);
     const rootId = (req.query as any)?.rootId;
 
     // Audit: same column-name drift as the rest of this file (full_name not

@@ -87,6 +87,10 @@ export const COMMANDS = {
   grievanceDispose:     "hrms.grievance.dispose",
   grievanceRead:        "hrms.grievance.read",
 
+  // social: travel-request / expense-claim creates (route -> command -> consumer insert).
+  travelRequestCreate:  "hrms.social.travel_request_create",
+  expenseCreate:        "hrms.social.expense_create",
+
   // medical
   medicalClaimCreate:    "hrms.medical_claim.create",
   medicalClaimApprove:   "hrms.medical_claim.approve",

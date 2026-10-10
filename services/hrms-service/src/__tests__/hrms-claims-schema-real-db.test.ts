@@ -53,6 +53,9 @@ import { signToken } from "@civitasone/auth";
 import { withRawTenantGuc } from "@civitasone/db";
 import { buildApp } from "../app.js";
 import { sqlClient } from "../shared/db.js";
+import { queue } from "../shared/infra.js";
+import type { MemoryQueue } from "@civitasone/queue";
+import { registerSocialConsumers } from "../modules/social/consumer.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "cccccccc-0115-4000-8000-000000000115";
@@ -172,6 +175,18 @@ beforeAll(async () => {
   `);
 
   app = await buildApp();
+
+  // POST /travel-requests and POST /expenses are COMMANDS now (route -> zod -> publish -> 202
+  // -> consumer inserts). buildApp() never wires worker-side consumers, so register the social
+  // ones and drain the in-memory queue after every request: every assertion below that reads
+  // the row back right after a POST is unchanged, it just waits for the consumer first.
+  registerSocialConsumers(queue);
+  const rawInject = app.inject.bind(app) as (o: unknown) => Promise<unknown>;
+  (app as unknown as { inject: (o: unknown) => Promise<unknown> }).inject = async (o: unknown) => {
+    const res = await rawInject(o);
+    await (queue as unknown as MemoryQueue).drain();
+    return res;
+  };
 });
 
 afterAll(async () => {

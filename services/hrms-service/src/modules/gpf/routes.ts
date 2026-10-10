@@ -24,6 +24,15 @@ import type { GpfAccountRow } from "./schema.js";
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin", "finance_officer", "payroll_admin"];
 const idParam = z.object({ id: z.string().uuid() });
 
+/**
+ * Money convention: integer minor units (paise) travel as a base-10 STRING and are
+ * converted with BigInt - never z.coerce.number(), which silently turns "1e3",
+ * "", " 5 " and 2^53+ values into floats/rounded numbers on a statutory PF ledger.
+ * max(18) keeps the value inside a signed 64-bit column.
+ */
+const minorUnits = z.string().regex(/^\d+$/, "must be a non-negative integer string of minor units (paise)").max(18);
+const positiveMinorUnits = minorUnits.refine((v) => /^\d+$/.test(v) && BigInt(v) > 0n, "must be greater than zero");
+
 function jsonSafe(v: unknown): unknown {
   if (typeof v === "bigint") return v.toString();
   if (Array.isArray(v)) return v.map(jsonSafe);
@@ -56,8 +65,8 @@ export async function gpfRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = z.object({
       gpfNumber: z.string().min(1).max(32),
-      openingBalanceMinor: z.coerce.number().int().min(0).default(0),
-      monthlySubscriptionMinor: z.coerce.number().int().min(0).default(0),
+      openingBalanceMinor: minorUnits.default("0"),
+      monthlySubscriptionMinor: minorUnits.default("0"),
       interestRatePct: z.coerce.number().min(0).max(20).default(7.10),
     }).parse(req.body);
     const emp = await mustEmployee(ctx.tenantId, id);
@@ -96,7 +105,7 @@ export async function gpfRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
     const body = z.object({
-      amountMinor: z.coerce.number().int().positive(),
+      amountMinor: positiveMinorUnits,
       narrative: z.string().max(500).optional(),
       effectiveDate: z.string().optional(),
     }).parse(req.body);

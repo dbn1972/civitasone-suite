@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { STAFF_ROLES } from "../../shared/roles.js";
 import { sqlPool as sqlClient, sqlClient as rawSqlClient } from "../../shared/db.js";
 import { withRawTenantGuc } from "@civitasone/db";
 import { goalHealth, statusAfterCheckin } from "./goal-health.js";
@@ -133,6 +134,8 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/pulse-surveys", async (req, reply) => {
     const ctx = resolveContext(req);
 
+    requireRole(ctx, STAFF_ROLES);
+
     const rows = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT s.id, s.question, s.category, s.anonymous, s.created_at,
               (SELECT COUNT(*) FROM hrms.pulse_responses r WHERE r.survey_id = s.id) AS response_count,
@@ -149,6 +152,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
   /** POST /v1/hrms/pulse-surveys/:id/respond — submit pulse response */
   app.post("/v1/hrms/pulse-surveys/:id/respond", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, STAFF_ROLES);
     const { id } = req.params as { id: string };
     const body = pulseRespondSchema.parse(req.body);
 
@@ -219,6 +223,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
   /** POST /v1/hrms/goals — create a goal */
   app.post("/v1/hrms/goals", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, STAFF_ROLES);
     const body = goalCreateSchema.parse(req.body);
     const id = randomUUID();
     const now = new Date().toISOString();
@@ -236,6 +241,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
   /** GET /v1/hrms/goals — list my goals */
   app.get("/v1/hrms/goals", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, STAFF_ROLES);
     const status = (req.query as any)?.status ?? "active";
 
     const rows = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
@@ -261,6 +267,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
   /** POST /v1/hrms/goals/:id/checkin — log progress check-in */
   app.post("/v1/hrms/goals/:id/checkin", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, STAFF_ROLES);
     const { id } = req.params as { id: string };
     const body = goalCheckinSchema.parse(req.body);
 
@@ -340,6 +347,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
   /** GET /v1/hrms/leaderboard — ranked employees by recognition points */
   app.get("/v1/hrms/leaderboard", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, STAFF_ROLES);
     const period = (req.query as any)?.period ?? "month"; // month, quarter, year, all
 
     let dateFilter = "";
@@ -406,6 +414,8 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/leaderboard/my-points", async (req, reply) => {
     const ctx = resolveContext(req);
 
+    requireRole(ctx, STAFF_ROLES);
+
     const breakdown = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT reason, SUM(points)::int AS total, COUNT(*)::int AS count
        FROM hrms.leaderboard_points
@@ -434,6 +444,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
   /** POST /v1/hrms/assistant — AI-powered HR assistant */
   app.post("/v1/hrms/assistant", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, STAFF_ROLES);
     const { message } = req.body as { message?: string };
     if (!message || message.trim().length < 2) {
       throw new HttpError(400, "INVALID_INPUT", "Message is required");

@@ -132,7 +132,9 @@ function getFileImports(filePath) {
     const spec = im[2];
     if (!spec.startsWith(".")) continue;
     const resolved = path.resolve(path.dirname(filePath), spec);
-    const candidates = [resolved + ".ts", resolved + ".tsx", resolved, resolved + ".js", path.join(resolved, "index.ts")];
+    // `import ... from "./x.js"` (the repo's ESM convention) names the COMPILED file; the source is x.ts.
+    const asTs = resolved.replace(/\.js$/, ".ts");
+    const candidates = [resolved + ".ts", resolved + ".tsx", asTs, resolved, resolved + ".js", path.join(resolved, "index.ts")];
     const found = candidates.find((c) => {
       try {
         return fs.statSync(c).isFile();
@@ -302,10 +304,48 @@ function extractRoutes(filePath) {
   const routeRe = /\b\w+\.(get|post|put|patch|delete|head|options)\s*\(\s*["'`](\/[^"'`]*)["'`]/i;
   const requireRoleRe = /requireRole\(\s*ctx\s*,\s*(.+?)\)\s*;/;
   const requirePermRe = /requirePermissionKey\(\s*ctx\s*,\s*["'`]([^"'`]+)["'`]\s*\)/;
+  // Guards the static `requireRole(ctx, EXPR)` matcher above cannot read. These do NOT
+  // change a route's status (a route stays NO_ROLE_CHECK until it carries a statically
+  // resolvable role list); they only annotate it with `guardedVia`, so a human can tell
+  // "genuinely unguarded" from "guarded by a named helper / inline check".
+  const indirectGuardRe = /\b(require(?:Viewer|Decider|InternalServiceCall)|ownEmployeeTarget|requireOwnEmployeeId)\s*\(\s*ctx\b|\bctx\.roles\.includes\(|\bhasAnyRole\(\s*ctx\b/;
+  // In-file helper (const X = ... / function X) whose body holds a requireRole/indirect guard:
+  // `app.patch(path, decide("approved"))`, `(req, reply) => post(req, reply, ...)`.
+  function helperGuard(name) {
+    const defRe = new RegExp(`^(\\s*)(?:export\\s+)?(?:async\\s+)?(?:const|function)\\s+${name}\\b`);
+    for (let i = 0; i < lines.length; i++) {
+      const dm = defRe.exec(lines[i]);
+      if (!dm) continue;
+      const indent = dm[1].length;
+      for (let j = i + 1; j < lines.length; j++) {
+        const l = lines[j];
+        if (/^\s*requireRole\(\s*ctx\b/.test(l) || indirectGuardRe.test(l)) return `${name}() @ line ${j + 1}`;
+        // End of the helper: its closing brace at the definition's own indentation.
+        if (/^\s*\}[);,]*\s*$/.test(l) && l.length - l.trimStart().length <= indent) break;
+      }
+    }
+    return null;
+  }
+  const attachGuard = (route, endLn) => {
+    if (route.roleChecks.length || route.permChecks.length) return;
+    const head = lines[route.line - 1];
+    for (let k = route.line - 1; k < endLn; k++) {
+      const l = lines[k];
+      const im = indirectGuardRe.exec(l);
+      if (im) { route.guardedVia = `${(im[1] ?? (l.includes("ctx.roles.includes") ? "ctx.roles.includes" : "hasAnyRole"))} @ line ${k + 1}`; return; }
+    }
+    // `(?<![.\w])` = a bare helper call, never a method call like `app.post(` / `reply.code(`.
+    for (const cm of head.matchAll(/(?<![.\w])([A-Za-z_]\w*)\s*\(/g)) {
+      if (/^(async|function|resolveContext)$/.test(cm[1])) continue;
+      const g = helperGuard(cm[1]);
+      if (g) { route.guardedVia = g; return; }
+    }
+  };
   for (let ln = 0; ln < lines.length; ln++) {
     const line = lines[ln];
     const rm = routeRe.exec(line);
     if (rm) {
+      if (currentRoute) attachGuard(currentRoute, ln);
       currentRoute = { method: rm[1].toUpperCase(), routePath: rm[2], line: ln + 1, roleChecks: [], permChecks: [] };
       results.push(currentRoute);
       continue;
@@ -318,6 +358,7 @@ function extractRoutes(filePath) {
     const permm = requirePermRe.exec(line);
     if (permm && currentRoute) currentRoute.permChecks.push({ key: permm[1], line: ln + 1 });
   }
+  if (currentRoute) attachGuard(currentRoute, lines.length);
   return results;
 }
 
@@ -346,6 +387,7 @@ function extractServiceRoutes(serviceRoot, serviceName) {
         line: r.line,
         roleExprs: r.roleChecks.map((x) => x.expr),
         permKeys: r.permChecks.map((x) => x.key),
+        ...(r.guardedVia ? { guardedVia: r.guardedVia } : {}),
         roles: resolved,
         errors: errs.length ? errs : null,
         dynamic: errs.length > 0,
