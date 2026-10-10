@@ -19,6 +19,12 @@ export const COMPOSITION_TO_GATEWAY_KEYS: Record<string, string[]> = {
   appraisal: ["hrms"],
   career: ["hrms"],
   ess: ["hrms", "reports"],
+  // SmartTransfer OS (standalone SKU, D-ST-23). Workforce Core is served by the
+  // Workforce-Core profile of hrms-service, so it projects to the "hrms" route
+  // today; sub-route granularity (so "hrms" no longer unlocks leave/payroll)
+  // is ST-M01-04's job, not this row's. SmartTransfer is its own service/route.
+  workforce_core: ["hrms"],
+  smarttransfer: ["smarttransfer"],
   // payroll & benefits (one payroll-service)
   payroll: ["payroll"],
   loans: ["payroll"],

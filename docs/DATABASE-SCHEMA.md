@@ -181,6 +181,16 @@ Schemas: `log`.
 - `log.event` — id, tenant_id, actor, action, resource, occurred_at, detail (jsonb).
 - Append-only. Subscribes broadly to `*.{pastTense}` events across services to build an immutable audit trail.
 
+### admin — `civitas_admin` (composition catalogue)
+Schema: `composition` (plus many other admin schemas not detailed here).
+
+- `composition.module_registry` — **GLOBAL reference data, NO tenant_id → NO RLS** (same rationale as a currency lookup; see §2 and migration 0025's header). The licensable-module dependency graph: id (PK), name, layer, is_core, cluster, hard_deps text[], soft_deps text[], screens text[], sort_order. Seeded by migrations 0025 (HR base), 0026 (full ERP, 34 modules), and **0049** which adds `workforce_core` (deps org, config) and `smarttransfer` (deps workforce_core, workflow, audit), cluster `workforce` (D-ST-23/01/02/03).
+- `composition.module_bundle` — **GLOBAL reference data, NO RLS.** One-click cluster SKUs: code (PK), label, subtitle, module_ids text[], sort_order. 0049 adds the `smarttransfer_standalone` bundle (`{smarttransfer}`).
+- `composition.org_profile` — **GLOBAL reference data, NO RLS.** Onboarding profiles: code (PK), label, subtitle, rule_packs jsonb, terminology jsonb, statutory jsonb, reservation, default_modules text[], sort_order. 0049 adds the `smarttransfer_standalone` profile whose default_modules is exactly `{smarttransfer}` (resolver folds in workforce_core + core kernel only — no leave/payroll/recruitment).
+- `composition.tenant_entitlement` — **tenant-scoped, ENABLE + FORCE ROW LEVEL SECURITY** (`tenant_isolation` policy, migration 0025). The persisted source-of-truth is the tenant's USER picks (source='user'); core + hard-deps are derived on read. tenant_id, module_id → `composition.module_registry(id)`, source CHECK (user/dep/core), audit columns. PK (tenant_id, module_id). Written by the composition routes and by the **plan-to-composition applier** (`admin.composition.apply_plan` command → consumer: markProcessed + guarded write + `audit.event.record` in one tx, ST-M01-03).
+- `composition.tenant_profile` — **tenant-scoped, ENABLE + FORCE ROW LEVEL SECURITY.** tenant_id (PK), profile_code → `composition.org_profile(code)`, applied_at, applied_by, version.
+- Emits `admin.composition.applied` and `audit.event.record` when a plan is applied; no cross-service FK — module_registry/org_profile are reference data every service composes from.
+
 ### estab — `civitas_estab`
 Schemas: `post`, `posting`, `seniority`, `quarters`, `fleet`.
 
