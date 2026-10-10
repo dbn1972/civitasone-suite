@@ -239,6 +239,45 @@ describe("forecast route auth (inject)", () => {
   });
 });
 
+// ── 3b. Not-found + role parity (DB-backed inject) ──────────────────────────
+
+describe("forecast route — not-found + role parity", () => {
+  it("GAP2-INVENTORY-FORECAST-01: an unknown item → 404 NOT_FOUND (not 200 null)", async () => {
+    const { signToken } = await import("@civitasone/auth");
+    const { buildApp } = await import("../src/app.js");
+    const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
+    const tenantId = "f0f0f0f0-0000-4000-8000-00000000f101";
+    const token = signToken({ sub: "f0f0f0f0-0000-4000-8000-00000000f10a", tid: tenantId, roles: ["inventory_admin"], sid: "s-fc" }, SECRET, 3600);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/inventory/items/${"11111111-0000-4000-8000-000000000999"}/forecast`,
+      headers: { authorization: `Bearer ${token}`, "x-tenant-id": tenantId },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe("NOT_FOUND");
+    await app.close();
+  });
+
+  it("GAP2-INVENTORY-FORECAST-02: an audit_officer may read the forecast (role gate passes → 404 for unknown, not 403)", async () => {
+    const { signToken } = await import("@civitasone/auth");
+    const { buildApp } = await import("../src/app.js");
+    const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
+    const tenantId = "f0f0f0f0-0000-4000-8000-00000000f201";
+    const token = signToken({ sub: "f0f0f0f0-0000-4000-8000-00000000f20a", tid: tenantId, roles: ["audit_officer"], sid: "s-fc2" }, SECRET, 3600);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/inventory/items/${"22222222-0000-4000-8000-000000000999"}/forecast`,
+      headers: { authorization: `Bearer ${token}`, "x-tenant-id": tenantId },
+    });
+    // Previously audit_officer was omitted from the forecast reader roles → 403.
+    expect(res.statusCode).not.toBe(403);
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+});
+
 // ── 4. Minimum data threshold constant ──────────────────────────────────────
 
 describe("forecast domain — data threshold", () => {

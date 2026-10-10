@@ -8,7 +8,7 @@
  * Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7
  */
 import type { FastifyInstance } from "fastify";
-import { resolveContext, requireRole, registerErrorHandler } from "../../shared/context.js";
+import { resolveContext, requireRole, registerErrorHandler, HttpError } from "../../shared/context.js";
 import { queue } from "../../shared/infra.js";
 import { enqueue } from "../../shared/outbox.js";
 import { db } from "../../shared/db.js";
@@ -27,11 +27,9 @@ import {
   type InsufficientDataResult,
   type DemandForecastResult,
 } from "./domain.js";
+import { INVENTORY_READER_ROLES } from "../../shared/roles.js";
 
-const READER_ROLES = [
-  "inventory_user", "inventory_manager", "inventory_admin", "store_keeper",
-  "procurement_officer", "finance_officer", "super_admin", "tenant_admin",
-];
+const READER_ROLES = [...INVENTORY_READER_ROLES];
 
 export async function forecastRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/inventory/items/:id/forecast", async (req, reply) => {
@@ -44,7 +42,11 @@ export async function forecastRoutes(app: FastifyInstance): Promise<void> {
     // 1. Get item metadata (lead time)
     const meta = await repo.getItemForecastMeta(ctx.tenantId, id);
     if (!meta) {
-      return reply.code(200).send({ forecast: null, reason: "item_not_found" });
+      // GAP2-INVENTORY-FORECAST-01: an unknown item is 404 NOT_FOUND (as with
+      // every other inventory resource), not a successful 200 with a null body.
+      // 200 + reason:"insufficient_data" is reserved for an item that EXISTS
+      // but lacks enough movement history (handled below).
+      throw new HttpError(404, "NOT_FOUND", `item ${id} not found`);
     }
 
     // 2. Check minimum data threshold (30 movement records)

@@ -96,7 +96,8 @@ export function registerItemConsumers(rawQueue: Queue): void {
       try {
         await repo.insertSubstitute(tx, {
           id: p.id, tenantId: p.tenantId, itemId: p.itemId, substituteId: p.substituteId,
-          priority: p.priority, conversionFactor: p.conversionFactor, createdBy: msg.actorId,
+          priority: p.priority, conversionFactor: p.conversionFactor,
+          createdBy: msg.actorId, updatedBy: msg.actorId,
         });
       } catch (err) {
         // uq_item_subs_pair(tenant_id, item_id, substitute_id) — a concurrent

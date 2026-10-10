@@ -136,6 +136,12 @@ describe("substitute consumer — create round-trip (persists, not just 202)", (
     const rows = await runWithTenant(TENANT_A, () => db.transaction(async (tx) =>
       tx.select().from(itemSubstitutes).where(and(eq(itemSubstitutes.itemId, ITEM_A1), eq(itemSubstitutes.substituteId, ITEM_A2)))));
     expect(rows).toHaveLength(1);
+    // GAP2-INVENTORY-SUBSTITUTES-01: item_substitutes must carry the mandatory
+    // entity-shape columns (updated_at/updated_by/version). On the old schema
+    // these columns did not exist and the consumer did not set updated_by.
+    expect(rows[0]!.updatedBy).toBe(ACTOR_A);
+    expect(rows[0]!.version).toBe(1);
+    expect(rows[0]!.updatedAt).toBeInstanceOf(Date);
   });
 });
 

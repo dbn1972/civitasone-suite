@@ -154,6 +154,9 @@ export class ChainHarness {
   //  - update is a thenable exposing .returning (seedable; default one {} row).
   //  - select resolves to seeded rows (default []), with or without .limit().
   private readonly tx = {
+    // Raw statements (e.g. the pg_advisory_xact_lock taken before a valuation
+    // read-modify-write); the lock is a no-op in-memory.
+    execute: (_query?: unknown): Promise<unknown[]> => Promise.resolve(this.executeRows),
     insert: (table: unknown) => ({
       values: (rowOrRows: Record<string, unknown> | Record<string, unknown>[]) => {
         const rows = Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows];
@@ -182,6 +185,8 @@ export class ChainHarness {
         const rows = () => self.seededRowsFor(table);
         const where = (_cond?: unknown) => {
           const limitable = makeThenable<unknown[]>(rows);
+          // Row-locking read (SELECT ... FOR UPDATE): the lock is a no-op in-memory.
+          limitable.for = (_strength?: unknown) => limitable;
           limitable.limit = (_n?: unknown) => {
             const offsetable = makeThenable<unknown[]>(rows);
             offsetable.offset = (_o?: unknown) => makeThenable<unknown[]>(rows);

@@ -31,6 +31,8 @@ export const COMMANDS = {
   goodsReturnInspect: "inventory.goods_return.inspect",
   // Stores (store locations)
   storeCreate:      "inventory.store.create",
+  // Store custodian assignment (accountability record) — CQRS write path
+  custodianCreate:  "inventory.custodian.create",
   // Warehouses (canonical model — unification with stock-service)
   warehouseCreate:  "inventory.warehouse.create",
   warehouseUpdate:  "inventory.warehouse.update",
@@ -99,6 +101,8 @@ export const EVENTS = {
   itemUnlinked:      "inventory.item.unlinked",
   /** Emitted when a tenant inventory policy setting changes. */
   settingsUpdated:   "inventory.settings.updated",
+  /** Emitted when a store custodian assignment is created. */
+  custodianCreated:  "inventory.custodian.created",
   /** Emitted when stock is reserved against an indent/PO. */
   reservationCreated: "inventory.reservation.created",
   /** Emitted when a reservation is released (issued or cancelled). */
@@ -152,4 +156,5 @@ export const RESOURCE = {
   threeWayMatch: "three-way-match",
   srn:           "srn",
   goodsReturn:   "goods-return",
+  custodian:     "custodian",
 } as const;

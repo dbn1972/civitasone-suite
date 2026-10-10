@@ -19,7 +19,8 @@ const dash = vi.mocked(getStockDashboard);
 const ledger = vi.mocked(getStockLedger);
 
 const HEALTHY = {
-  data: { totalSKUs: 128, lowStockAlerts: 4, stockOuts: 2, grnsThisMonth: 5, inventoryValue: 500000 },
+  // GAP2-STOCK-DASHBOARD-01: inventoryValue is a bigint-paise string.
+  data: { totalSKUs: 128, lowStockAlerts: 4, stockOuts: 2, grnsThisMonth: 5, inventoryValue: "500000" },
   source: "api" as const,
 };
 

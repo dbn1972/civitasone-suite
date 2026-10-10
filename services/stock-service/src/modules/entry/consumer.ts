@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Queue } from "@civitasone/queue";
+import type { Queue, CommandEnvelope } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed, stableUuid } from "../../shared/outbox.js";
@@ -12,6 +12,8 @@ import type { LedgerInsert } from "../ledger/schema.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const GL_TOPIC    = "finance.gl.post";
+
+type EnqueueTx = Parameters<typeof enqueue>[0];
 
 export function registerEntryConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.entryCreate, async (msg) => {
@@ -151,15 +153,21 @@ export function registerEntryConsumers(queue: Queue): void {
 
     for (const item of consumableItems) {
       if (!item.itemId) continue;
-      const current = await repo.getValuationRate(msg.tenantId, item.itemId, warehouseId);
-      const newRate = weightedAvgRate(
-        { qty: current.qty, rateMinor: current.rateMinor },
-        item.acceptedQty, BigInt(item.rateMinor)
-      );
-      const newQty = current.qty + item.acceptedQty;
 
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, stableUuid(`${msg.messageId}:${item.itemCode}`)))) return;
+
+        // GAP2-STOCK-ENTRY-02: read the current valuation INSIDE the transaction
+        // under a row lock so concurrent grn.accepted revaluations for the same
+        // item/warehouse serialize instead of computing WAVG from a stale
+        // snapshot and overwriting each other (lost update).
+        const current = await repo.lockValuationRateTx(tx, msg.tenantId, item.itemId!, warehouseId);
+        const newRate = weightedAvgRate(
+          { qty: current.qty, rateMinor: current.rateMinor },
+          item.acceptedQty, BigInt(item.rateMinor)
+        );
+        const newQty = current.qty + item.acceptedQty;
+
         await repo.upsertValuationRate(tx, msg.tenantId, item.itemId!, warehouseId, newQty, newRate, item.currency ?? "INR");
         await repo.appendLedger(tx, {
           id: randomUUID(), tenantId: msg.tenantId,
@@ -176,6 +184,9 @@ export function registerEntryConsumers(queue: Queue): void {
           quantity: item.acceptedQty, remainingQty: item.acceptedQty,
           unitCostMinor: BigInt(item.rateMinor), currency: item.currency ?? "INR",
         });
+        // GAP2-STOCK-ENTRY-01: a GRN-driven stock receipt is a financial stock
+        // mutation and must be audited in the same transaction.
+        await audit(tx, msg, "create", "stock_receipt", entryId);
       });
     }
   });
@@ -188,11 +199,14 @@ export function registerEntryConsumers(queue: Queue): void {
       notes?: string;
     };
     for (const item of p.items) {
-      const current = await repo.getValuationRate(p.tenantId, item.itemId, p.warehouseId);
-      const diff = item.countedQty - current.qty;
-      if (diff === 0) continue;
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, stableUuid(`${msg.messageId}:${item.itemId}`)))) return;
+        // GAP2-STOCK-ENTRY-02: lock + read the valuation row inside the tx so a
+        // physical-count adjustment computes its diff from the committed on-hand
+        // and cannot race another writer.
+        const current = await repo.lockValuationRateTx(tx, p.tenantId, item.itemId, p.warehouseId);
+        const diff = item.countedQty - current.qty;
+        if (diff === 0) return;
         await repo.upsertValuationRate(tx, p.tenantId, item.itemId, p.warehouseId, item.countedQty, current.rateMinor, "INR");
         await repo.appendLedger(tx, {
           id: randomUUID(), tenantId: p.tenantId, itemId: item.itemId,
@@ -201,12 +215,15 @@ export function registerEntryConsumers(queue: Queue): void {
           balanceQty: item.countedQty, rateMinor: current.rateMinor,
           currency: "INR", postingDate: p.postingDate, createdBy: msg.actorId,
         });
+        // GAP2-STOCK-ENTRY-01: a physical-verification stock adjustment changes
+        // on-hand quantity and must be audited in the same transaction.
+        await audit(tx, msg, "adjust", "stock_entry", p.id);
       });
     }
   });
 }
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
+async function audit(tx: EnqueueTx, msg: CommandEnvelope, action: string, resourceType: string, resourceId: string): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,

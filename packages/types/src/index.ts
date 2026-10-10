@@ -2025,7 +2025,10 @@ export type StockDashboard = {
   /** GAP-STOCK-DASHBOARD-04: active items with on-hand qty <= 0. */
   stockOuts: number;
   grnsThisMonth: number;
-  inventoryValue: number;
+  /** GAP2-STOCK-DASHBOARD-01: inventory valuation as a bigint-paise string
+   *  (money is bigint minor units end-to-end; a float lost precision past
+   *  Number.MAX_SAFE_INTEGER paise). formatMoney() accepts strings. */
+  inventoryValue: string;
 };
 
 export type StockItemSummary = {

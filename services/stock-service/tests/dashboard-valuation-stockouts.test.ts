@@ -71,11 +71,12 @@ afterAll(async () => {
 });
 
 describe("GET /v1/stock/dashboard", () => {
-  it("GAP-STOCK-DASHBOARD-06: inventoryValue is in paise (10 @ ₹5.00 => 5000)", async () => {
+  it("GAP-STOCK-DASHBOARD-06 / GAP2-STOCK-DASHBOARD-01: inventoryValue is a paise STRING (10 @ ₹5.00 => \"5000\")", async () => {
     const res = await app.inject({ method: "GET", url: "/v1/stock/dashboard", headers: hdr() });
     expect(res.statusCode).toBe(200);
     const b = res.json();
-    expect(b.inventoryValue).toBe(5000);
+    // GAP2-STOCK-DASHBOARD-01: money is a bigint-paise string end-to-end, not a float.
+    expect(b.inventoryValue).toBe("5000");
     expect(b.totalSKUs).toBe(3);
   });
 

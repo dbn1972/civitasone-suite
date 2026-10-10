@@ -16,6 +16,7 @@ import { registerForecastConsumers } from "./modules/forecast/consumer.js";
 import { registerCycleCountConsumers } from "./modules/cycle-count/consumer.js";
 import { registerMatchingConsumers } from "./modules/matching/consumer.js";
 import { registerSrnConsumers } from "./modules/srn/consumer.js";
+import { registerCustodianConsumers } from "./modules/custodians/consumer.js";
 import { startForecastRefresh } from "./modules/forecast/scheduler.js";
 import { runWithTenant } from "@civitasone/db";
 
@@ -43,6 +44,7 @@ registerForecastConsumers(queue);
 registerCycleCountConsumers(queue);
 registerMatchingConsumers(queue);
 registerSrnConsumers(queue);
+registerCustodianConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue, 500, "inventory-service");
