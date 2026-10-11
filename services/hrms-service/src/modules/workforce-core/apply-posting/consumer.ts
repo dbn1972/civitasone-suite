@@ -154,6 +154,13 @@ export function registerApplyPostingConsumer(queue: Queue): void {
                 employeeId: p.employeeId,
                 postId: p.postId,
                 reason: err.code,
+                // ST-M01-10: the refusal's structured params (e.g. the blocking
+                // hold's id/type/window for EMPLOYEE_ON_HOLD) ride the audit so
+                // the refusal is explainable without re-querying — a
+                // CommandRefusal code + params recorded via audit (hrms has no
+                // command_results table on main; D-20 is adopted by the
+                // smarttransfer-service, not here).
+                ...(err.details ? { params: err.details } : {}),
               },
             },
           });

@@ -30,6 +30,7 @@
  */
 import type { Writer } from "./repo.js";
 import * as repo from "./repo.js";
+import * as holdsRepo from "../holds/repo.js";
 import { enqueue } from "../../../shared/outbox.js";
 import { HttpError } from "../../../shared/context.js";
 import { isPostingEventsEnabled } from "../config.js";
@@ -126,6 +127,34 @@ export async function applyPostingTx(
   // holding and must leave the employee master (and the office-movement event)
   // untouched.
   const isSubstantive = input.chargeType === "substantive";
+  // Hold registry (ST-M01-10, PROPOSED D-ST-16). BEFORE any write: an active,
+  // blocking hold covering the effective date refuses the posting with a clean
+  // CommandRefusal code + params — nothing is written (the throw rolls back the
+  // consumer's single transaction, so there is no partial posting). "Which hold
+  // types block" is configuration with a conservative default (every active
+  // hold blocks); see holds/config.ts. The read is RLS-scoped to the tenant by
+  // the open transaction. We read the EXISTING table only — no new hold type,
+  // publisher or court/vigilance integration is added here.
+  const blockingHold = await holdsRepo.findActiveBlockingHold(
+    tx,
+    input.employeeId,
+    input.effectiveDate,
+  );
+  if (blockingHold) {
+    throw new HttpError(
+      409,
+      "EMPLOYEE_ON_HOLD",
+      `employee ${input.employeeId} is under an active ${blockingHold.holdType} hold and may not be posted`,
+      {
+        holdId: blockingHold.id,
+        holdType: blockingHold.holdType,
+        holdStatus: blockingHold.status,
+        effectiveFrom: blockingHold.effectiveFrom,
+        effectiveTo: blockingHold.effectiveTo,
+      },
+    );
+  }
+
   const fromOfficeId = employee.departmentId;
   const toOfficeId = post.officeId;
   const officeChanged = isSubstantive && fromOfficeId !== toOfficeId;
