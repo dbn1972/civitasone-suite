@@ -1,6 +1,12 @@
 /**
  * ST-M01-06 — `smarttransfer.*` contract pack C0 (enforce; D-ST-19).
  *
+ * ST-M01-06b follow-up: `smarttransfer.cycle.opened` and
+ * `smarttransfer.exception.requested` were added to
+ * `docs/smarttransfer/event-list.md` after #1976 merged; their contracts are
+ * defined here in the same enforce pattern to keep the pack and the doc in
+ * lockstep (asserted by the contract tests).
+ *
  * Producer of every topic here is `smarttransfer-service`, except
  * `smarttransfer.solve.completed` whose producer is `allocation-solver`
  * (the solver returns the plan). Topic names, kinds, consumers and payload
@@ -41,6 +47,21 @@ export const smarttransferCycleCreated = defineStContract({
       freezesAt: zWhen,
       closesAt: zWhen,
     }),
+  }),
+});
+
+export const smarttransferCycleOpened = defineStContract({
+  topic: "smarttransfer.cycle.opened",
+  kind: "event",
+  owner: ST,
+  version: "1.0",
+  consumers: ["audit-service", "notification-service"],
+  schema: z.object({
+    cycleId: zId,
+    tenantId: zTenantId,
+    policyPackId: zId,
+    policyPackHash: z.string().min(1),
+    openedAt: zWhen,
   }),
 });
 
@@ -137,6 +158,24 @@ export const smarttransferScenarioCreated = defineStContract({
     tenantId: zTenantId,
     name: z.string().min(1),
     weightsRef: zId,
+  }),
+});
+
+// ── Exception ──────────────────────────────────────────────────────────────
+
+export const smarttransferExceptionRequested = defineStContract({
+  topic: "smarttransfer.exception.requested",
+  kind: "event",
+  owner: ST,
+  version: "1.0",
+  consumers: ["audit-service", "notification-service"],
+  schema: z.object({
+    exceptionId: zId,
+    assignmentId: zId,
+    runId: zId,
+    tenantId: zTenantId,
+    reasonCode: zCode,
+    requestedBy: zId,
   }),
 });
 
@@ -378,12 +417,14 @@ export const smarttransferEvidenceRecorded = defineStContract({
 /** Every `smarttransfer.*` contract in this pack, in event-list order. */
 export const smarttransferContracts = [
   smarttransferCycleCreated,
+  smarttransferCycleOpened,
   smarttransferCycleFrozen,
   smarttransferCycleClosed,
   smarttransferRequestSubmitted,
   smarttransferRequestWithdrawn,
   smarttransferPreferenceSubmitted,
   smarttransferScenarioCreated,
+  smarttransferExceptionRequested,
   smarttransferRunRequested,
   smarttransferRunCompleted,
   smarttransferRunFailed,
