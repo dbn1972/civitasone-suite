@@ -58,7 +58,7 @@ function validBody() {
 }
 
 describe("SmartTransfer cycle write path", () => {
-  it("POST returns 202 with commandId + statusUrl, then the consumer writes the row + event + audit + command result in one tx", async () => {
+  it("POST returns 202 with commandId + statusUrl, then the consumer writes the row + audit + command result in one tx", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/smarttransfer/cycles",

@@ -12,6 +12,7 @@ import { cache } from "../../shared/infra.js";
 import { writeAudit } from "../../shared/audit.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
+import { cycleCalendar } from "./validators.js";
 
 const log = pino({ name: "smarttransfer.movement.consumer" });
 
@@ -26,7 +27,7 @@ const createCyclePayload = z.object({
   tenantId: z.string().uuid(),
   name: z.string().min(1).max(200),
   movementTypeId: z.string().uuid(),
-  calendar: z.object({ opensAt: z.string(), freezesAt: z.string(), closesAt: z.string() }),
+  calendar: cycleCalendar,
   jurisdictionUnitId: z.string().uuid().nullable(),
 });
 type CreateCyclePayload = z.infer<typeof createCyclePayload>;

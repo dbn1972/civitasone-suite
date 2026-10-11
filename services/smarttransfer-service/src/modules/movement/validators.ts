@@ -11,14 +11,27 @@ import { z } from "zod";
  * emitted `smarttransfer.cycle.created` event (frozen contract, #1976) requires
  * all three — so the write path can never produce a contract-invalid event.
  */
-export const createCycleBody = z.object({
-  name: z.string().min(1).max(200),
-  movementTypeId: z.string().uuid(),
-  calendar: z.object({
+/**
+ * The cycle window: valid ISO instants ordered opensAt <= freezesAt <= closesAt.
+ * Shared by the route body and the queue consumer payload so both trust
+ * boundaries enforce the same rule.
+ */
+export const cycleCalendar = z
+  .object({
     opensAt: z.string().datetime(),
     freezesAt: z.string().datetime(),
     closesAt: z.string().datetime(),
-  }),
+  })
+  .refine(
+    (c) =>
+      Date.parse(c.opensAt) <= Date.parse(c.freezesAt) && Date.parse(c.freezesAt) <= Date.parse(c.closesAt),
+    { message: "calendar must satisfy opensAt <= freezesAt <= closesAt" },
+  );
+
+export const createCycleBody = z.object({
+  name: z.string().min(1).max(200),
+  movementTypeId: z.string().uuid(),
+  calendar: cycleCalendar,
 });
 export type CreateCycleBody = z.infer<typeof createCycleBody>;
 

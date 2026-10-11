@@ -101,6 +101,26 @@ describe("recordOutcome / onOutcome (rejected + failed)", () => {
     expect(data.reason).toBeUndefined();
   });
 
+  it("a mis-ordered or non-ISO calendar is REJECTED at the queue trust boundary and writes nothing", async () => {
+    const bad = [
+      { opensAt: "2026-03-01T00:00:00.000Z", freezesAt: "2026-02-01T00:00:00.000Z", closesAt: "2026-01-01T00:00:00.000Z" },
+      { opensAt: "2026-01-01T00:00:00.000Z", freezesAt: "2026-03-01T00:00:00.000Z", closesAt: "2026-02-01T00:00:00.000Z" },
+      { opensAt: "not-a-date", freezesAt: "2026-02-01T00:00:00.000Z", closesAt: "2026-03-01T00:00:00.000Z" },
+    ];
+    for (const calendar of bad) {
+      const id = randomUUID();
+      const messageId = randomUUID();
+      await publish(messageId, validPayload({ id, calendar }));
+      const rows = await runWithTenant(TENANT, () =>
+        db.transaction((tx) => tx.select().from(cycles).where(eq(cycles.id, id))),
+      );
+      expect(rows.length).toBe(0);
+      const res = await statusOf(messageId);
+      expect(res.statusCode).toBe(200);
+      expect((res.json() as { data: { status: string } }).data.status).toBe("rejected");
+    }
+  });
+
   it("a payload whose tenantId differs from the envelope tenant is REJECTED and writes nothing", async () => {
     const id = randomUUID();
     const messageId = randomUUID();
