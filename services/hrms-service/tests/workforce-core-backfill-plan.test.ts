@@ -84,6 +84,12 @@ describe("planBackfill — non-current employees and existing ledger history", (
     const un = plan.unmapped.filter((u) => u.source === "employee");
     expect(un.length).toBe(5);
     expect(un.every((u) => /not current/.test(u.reason))).toBe(true);
+    const reasonOf = (n: number) => un.find((u) => u.ref === mk(n, "").id)?.reason;
+    expect(reasonOf(1)).toBe("employee status retired is not current (no open ledger span)");
+    expect(reasonOf(2)).toBe("employee status separated is not current (no open ledger span)");
+    expect(reasonOf(3)).toBe("employee status terminated is not current (no open ledger span)");
+    expect(reasonOf(4)).toBe("employee status no_show is not current (no open ledger span)");
+    expect(reasonOf(5)).toBe("employee status terminated is not current (no open ledger span)");
   });
 
   it("skips an employee who already has foreign ledger history as employee_overlap", async () => {

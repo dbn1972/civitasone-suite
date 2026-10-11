@@ -384,7 +384,7 @@ export async function planBackfill(opts: BackfillOptions): Promise<{
     const empId = String(e.id);
     const empStatus = String(e.status ?? "").trim().toLowerCase();
     if (NON_CURRENT_EMPLOYEE_STATUSES.has(empStatus)) {
-      unmapped.push({ source: "employee", ref: empId, reason: `employee status  is not current (no open ledger span)` });
+      unmapped.push({ source: "employee", ref: empId, reason: `employee status ${empStatus} is not current (no open ledger span)` });
       continue;
     }
     const dept = e.department_id ? String(e.department_id) : null;
