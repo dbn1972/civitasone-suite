@@ -99,7 +99,9 @@ describe("migration 0050 grandfather backfill", () => {
     const body = await projection(app, LEGACY);
     expect(body.configured).toBe(true); // was false before the fix => enforce 403'd everything
     const keys = body.data.map((m: { name: string }) => m.name);
-    for (const k of ["hrms", "payroll", "finance", "telephony", "meeting", "court", "visitor", "billing", "analytics"]) expect(keys).toContain(k);
+    // ST-M01-04b: the coarse `hrms` key is split; a grandfathered legacy HRMS tenant now carries
+    // the core key plus every per-prefix HRMS key (same reach, finer keys).
+    for (const k of ["workforce_core", "hrms-leave", "hrms-attendance", "hrms-recruitment", "hrms-appraisal", "hrms-payroll", "payroll", "finance", "telephony", "meeting", "court", "visitor", "billing", "analytics"]) expect(keys).toContain(k);
     expect(keys).not.toContain("crm");
   });
 

@@ -201,12 +201,17 @@ export async function checkModuleEnabled(
   // (M01 exit criterion 3; D-ST-23/24). When no pathname is available (a direct
   // caller that passes only the route name) we keep the legacy `hrms` key so
   // behaviour is unchanged for callers that have not opted in.
-  const moduleKey =
-    HRMS_ROUTE_NAMES.has(routeName) && pathname !== undefined
-      ? resolveHrmsModuleKey(pathname)
-      : ROUTE_TO_MODULE[routeName];
+  //
+  // The split keys exist ONLY in the composition projection. Legacy mode
+  // (COMPOSITION_ENFORCEMENT!="on") allow-lists carry the single coarse `hrms`
+  // key, so resolving a split key there would 403 every HRMS request; legacy mode
+  // therefore always uses the coarse ROUTE_TO_MODULE key.
   const tenantId = extractTenantId(req);
   const useComposition = process.env.COMPOSITION_ENFORCEMENT === "on";
+  const moduleKey =
+    useComposition && HRMS_ROUTE_NAMES.has(routeName) && pathname !== undefined
+      ? resolveHrmsModuleKey(pathname)
+      : ROUTE_TO_MODULE[routeName];
 
   // Legacy (non-composition) deployments have NO enforcement-mode source, so
   // the effective mode is always `off`. In that case an unmapped route or a

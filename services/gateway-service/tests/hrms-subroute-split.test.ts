@@ -226,6 +226,27 @@ describe("off mode + backward-compat (no regression)", () => {
     expect(await checkModuleEnabled(fakeReq(TID), fakeReply(), "hrms", "/api/v1/hrms/employees/1")).toBe(true);
   });
 
+  it("legacy mode (COMPOSITION_ENFORCEMENT unset): a coarse `hrms` allow-list still reaches every HRMS path (no split-key 403)", async () => {
+    // Regression (review round 1): the path-aware split key must apply ONLY in
+    // composition mode. Legacy allow-lists carry the single `hrms` key.
+    vi.stubEnv("COMPOSITION_ENFORCEMENT", "");
+    for (const path of ["/api/v1/hrms/employees", "/api/v1/hrms/leave/apply", "/api/v1/hrms/recruitment/openings"]) {
+      _test.moduleCache.clear();
+      mockFetch({ data: [{ name: "hrms" }] });
+      const reply = fakeReply();
+      expect(await checkModuleEnabled(fakeReq(TID), reply, "hrms", path), path).toBe(true);
+      expect(reply._code).toBe(200);
+    }
+  });
+
+  it("legacy mode: a tenant WITHOUT the coarse `hrms` key is still denied on HRMS paths", async () => {
+    vi.stubEnv("COMPOSITION_ENFORCEMENT", "");
+    mockFetch({ data: [{ name: "finance" }] });
+    const reply = fakeReply();
+    expect(await checkModuleEnabled(fakeReq(TID), reply, "hrms", "/api/v1/hrms/leave/apply")).toBe(false);
+    expect(reply._code).toBe(403);
+  });
+
   it("backward-compat: with NO pathname the legacy coarse `hrms` key is used", async () => {
     // A direct caller that passes only the route name keeps the pre-split
     // behaviour: the whole HRMS surface rides the single `hrms` key.
