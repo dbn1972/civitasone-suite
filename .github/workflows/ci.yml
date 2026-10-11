@@ -328,6 +328,17 @@ jobs:
           git checkout -- scripts/ci/tenant-index-baseline.json
       - name: Run integration tests
         run: pnpm exec vitest run tests/integration/
+      # ST-M01-16: run ONLY the SmartTransfer eOffice callback loop-back test
+      # (tests/cross-service-live/). No lane runs tests/cross-service-live/ on
+      # main yet — the full lane is PR-FF02-06b in the ERP backlog; this is the
+      # minimal step that exercises exactly this PR's new file against the CI
+      # Postgres service already bootstrapped above (D-17). PGPORT/PGHOST and the
+      # non-superuser estab_svc role come from bootstrap; CI=true lets the
+      # harness assertFresh run against the shared CI port.
+      - name: Run SmartTransfer eOffice callback loop-back (cross-service-live, ST-M01-16)
+        env:
+          CACHE_DRIVER: memory
+        run: pnpm exec vitest run --maxWorkers=2 tests/cross-service-live/eoffice-smarttransfer-callbacks.test.ts
 
   # ─────────────────────────────────────────────
   # Job 3: Architecture guard (no cross-service SQL)

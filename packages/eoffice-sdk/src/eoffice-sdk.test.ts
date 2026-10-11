@@ -33,6 +33,21 @@ describe("contract integrity", () => {
     expect(topics).toHaveLength(2);
     expect(topics).toContain(callbackTopicFor("hr_transfer"));
   });
+
+  // ST-M01-16 — SmartTransfer OS source ref types (D-ST-08, PROPOSED).
+  it("defines the two SmartTransfer source ref types with owner topics", () => {
+    expect(SOURCE_REF_TYPES).toContain("hr_transfer_order");
+    expect(SOURCE_REF_TYPES).toContain("hr_posting_cycle");
+    expect(MODULE_CALLBACK_TOPICS["hr_transfer_order"]).toBe("hrms.transfer_order.file_decided");
+    expect(MODULE_CALLBACK_TOPICS["hr_posting_cycle"]).toBe("hrms.posting_cycle.file_decided");
+  });
+
+  it("every callback topic's dash-form is under the 45-char bus limit", () => {
+    for (const t of SOURCE_REF_TYPES) {
+      const dash = MODULE_CALLBACK_TOPICS[t].replace(/\./g, "-");
+      expect(dash.length, `${t} → ${dash}`).toBeLessThanOrEqual(45);
+    }
+  });
 });
 
 describe("EOfficeClient.raiseFile", () => {
