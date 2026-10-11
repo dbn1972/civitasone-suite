@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isDecisionConsumed, DECISION_CONSUMED_REF_TYPES, MODULE_CALLBACK_TOPICS, SOURCE_REF_TYPES } from "./index.js";
+import { isDecisionConsumed, DECISION_CONSUMED_REF_TYPES, MODULE_CALLBACK_TOPICS, SOURCE_REF_TYPES, EXTRA_DECISION_CONSUMED_ENV } from "./index.js";
 
 /**
  * R21 — only source types with a working decision consumer may be raised.
@@ -33,5 +33,32 @@ describe("decision-consumed ref types (R21)", () => {
 
   it("unknown strings are not consumed", () => {
     expect(isDecisionConsumed("totally_made_up")).toBe(false);
+  });
+
+  // ST-M01-16 — the SmartTransfer types are fail-closed by default (their
+  // consumer, smarttransfer-service, is unmerged) and opt-in via the env.
+  it("hr_transfer_order / hr_posting_cycle are NOT in the hard-coded consumed set", () => {
+    expect(DECISION_CONSUMED_REF_TYPES.has("hr_transfer_order" as never)).toBe(false);
+    expect(DECISION_CONSUMED_REF_TYPES.has("hr_posting_cycle" as never)).toBe(false);
+  });
+
+  it("fail-closed by default; EXTRA_DECISION_CONSUMED_REF_TYPES opts them in", () => {
+    const prev = process.env[EXTRA_DECISION_CONSUMED_ENV];
+    try {
+      delete process.env[EXTRA_DECISION_CONSUMED_ENV];
+      expect(isDecisionConsumed("hr_transfer_order")).toBe(false);
+      expect(isDecisionConsumed("hr_posting_cycle")).toBe(false);
+
+      process.env[EXTRA_DECISION_CONSUMED_ENV] = "hr_transfer_order , hr_posting_cycle";
+      expect(isDecisionConsumed("hr_transfer_order")).toBe(true);
+      expect(isDecisionConsumed("hr_posting_cycle")).toBe(true);
+
+      // An unknown string in the env is ignored (stays fail-closed).
+      process.env[EXTRA_DECISION_CONSUMED_ENV] = "totally_made_up";
+      expect(isDecisionConsumed("totally_made_up")).toBe(false);
+    } finally {
+      if (prev === undefined) delete process.env[EXTRA_DECISION_CONSUMED_ENV];
+      else process.env[EXTRA_DECISION_CONSUMED_ENV] = prev;
+    }
   });
 });
