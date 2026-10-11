@@ -119,6 +119,7 @@ import { contractorBillRoutes } from "./modules/contractor-bill/routes.js";
 import { apprenticeStipendRoutes } from "./modules/apprentice-stipend/routes.js";
 import { registerRateLimit } from "@civitasone/rate-limit";
 import { INTERNAL_PROXY_TRUST } from "./modules/recruitment/careers-resume.js";
+import { loadModuleProfile, type NonCoreModule } from "./shared/module-profile.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -184,146 +185,230 @@ export async function buildApp(): Promise<FastifyInstance> {
   registerOpsRoutes(app, { service: "hrms-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
 
+  // ── Module profile (ST-M01-04 / D-ST-23) ────────────────────────────────
+  // Register CORE (Workforce Core) routes always; register non-core routes
+  // only when the HRMS_MODULES allow-list enables them. Unset => all on
+  // (today's behaviour, no regression); "core" => Workforce Core only.
+  const profile = loadModuleProfile();
+  app.log.info(
+    { hrmsModules: profile.raw ?? "(unset=all)", coreOnly: profile.coreOnly, enabledNonCore: [...profile.enabledNonCore].sort() },
+    "hrms-service module profile",
+  );
+  const nonCore = (m: NonCoreModule) => profile.isNonCoreEnabled(m);
+
+  // ── CORE: Workforce Core — always registered (STANDALONE-FEASIBILITY §4,
+  // _work/2-workforce-core.md §7): employee basics + masters, departments /
+  // designations / office hierarchy, posting-related lifecycle + service book,
+  // sanctioned posts / occupancy / manpower, bulk import, cross-service
+  // internal surface, dashboard / reports / holidays / scheduler.
   await app.register(employeeRoutes);
   await app.register(locationEmployeeRoutes);
   await app.register(nomineeAddressRoutes);
-  await app.register(leaveRoutes);
-  await app.register(leaveConversionRoutes);
-  await app.register(leaveContextRoutes);
-  await app.register(attendanceRoutes);
-  await app.register(recruitmentRoutes);
-  await app.register(publicRecruitmentRoutes);
-  await app.register(jdTemplateRoutes);
-  await app.register(recruitmentSettingsRoutes);
-  await app.register(piiRevealRoutes);
-  await app.register(careersResumeRoutes);
-  await app.register(admitCardRoutes);
-  await app.register(candidatePublicAuthRoutes);
-  await app.register(candidatePublicPortalRoutes);
-  await app.register(trainingRoutes);
   await app.register(dashboardRoutes);
   await app.register(orgChartRoutes);
-  await app.register(appraisalRoutes);
-  await app.register(feedbackRoutes);
   await app.register(internalRoutes);
-  await app.register(retirementAccountsRoutes);
   await app.register(holidayRoutes);
-  await app.register(leaveTypesReadRoutes);
   await app.register(reportRoutes);
   await app.register(bulkImportRoutes);
-  await app.register(selfServiceRoutes);
-  await app.register(policyAdminRoutes);
-  await app.register(policySettingsRoutes);
-  await app.register(geoAttendanceRoutes);
-  await app.register(faceVerificationRoutes);
-  await app.register(aiFraudRoutes);
-  await app.register(interviewRoutes);
-  await app.register(requisitionRoutes);
-  await app.register(eligibilityRoutes);
-  await app.register(screeningRoutes);
-  await app.register(screeningOverrideRoutes);
-  await app.register(rejectionNoticeRoutes);
-  await app.register(interviewCommsRoutes);
-  await app.register(interviewResponseRoutes);
-  await app.register(interviewRecordingRoutes);
-  await app.register(applicationFeeRoutes);
-  await app.register(applicationPdfRoutes);
-  await app.register(interviewCalendarRoutes);
-  await app.register(externalSeamRoutes);
-  await app.register(offerRoutes);
-  await app.register(offerExtraRoutes);
-  await app.register(selectionListRoutes);
-  await app.register(recruitmentReservationRoutes);
-  await app.register(coiRoutes);
-  await app.register(candidateReferenceRoutes);
-  await app.register(candidateSkillsRoutes);
-  await app.register(qualificationRoutes);
-  await app.register(candidateRoutes);
-  await app.register(candidateResumeRoutes);
-  await app.register(otpVerifyRoutes);
-  await app.register(jobPublicationRoutes);
-  await app.register(editionPolicyRoutes);
-  await app.register(applicationScorecardRoutes);
-  await app.register(assessmentBlueprintRoutes);
-  await app.register(assessmentAttemptRoutes);
-  await app.register(assessmentResultRoutes);
-  await app.register(assessmentReportRoutes);
-  await app.register(interviewScoringRoutes);
-  await app.register(interviewPanelRoutes);
-  await app.register(leaveCancelRoutes);
-  await app.register(compOffRoutes);
-  await app.register(fnfRoutes);
   await app.register(lifecycleRoutes);
   await app.register(onboardingRoutes);
+  await app.register(onboardingTemplateRoutes);
   await app.register(bgvPropertyPolicyRoutes);
   await app.register(serviceBookRoutes);
-  await app.register(pensionRoutes);
-  await app.register(aparRoutes);
   await app.register(seniorityRoutes);
-  await app.register(gpfRoutes);
-  await app.register(npsRoutes);
-  await app.register(cpfRoutes);
-  await app.register(deputationRoutes);
-  await app.register(payProfileRoutes);
-  await app.register(grievanceRoutes);
-  await app.register(onboardingTemplateRoutes);
-  await app.register(claimsRoutes);
-  await app.register(consultantInvoiceRoutes);
-  await app.register(contractorBillRoutes);
-  await app.register(apprenticeStipendRoutes);
-  await app.register(schedulerRoutes);
-  await app.register(disciplinaryRoutes);
-  await app.register(coiDeclarationRoutes);
-  await app.register(agent1GapRoutes);
   await app.register(holdRoutes);
   await app.register(m7ListRoutes);
-  await app.register(iccRoutes);
   await app.register(reservationRoutes);
-  await app.register(rtiRoutes);
-  await app.register(socialRoutes);
-  await app.register(pulseGoalsRoutes);
-  await app.register(idCardRoutes);
-  await app.register(visitingCardRoutes);
-  await app.register(deviceTrustRoutes);
-  await app.register(boardIntakeRoutes);
-  await app.register(assessmentRoutes);
-  await app.register(trainingAdminRoutes);
-  await app.register(learningRoutes);
-  await app.register(competencyRoutes);
-  await app.register(contractRoutes);
-  await app.register(integrationRoutes);
+  await app.register(schedulerRoutes);
   const { manpowerPlanningRoutes } = await import("./modules/manpower-planning/routes.js");
   await app.register(manpowerPlanningRoutes);
   await app.register((await import("./modules/service-book/pdf-routes.js")).serviceBookPdfRoutes);
-  await app.register((await import("./modules/pay-matrix/routes.js")).payMatrixRoutes);
   await app.register((await import("./modules/employee/masters-routes.js")).mastersRoutes);
   await app.register((await import("./modules/employee/employee-types-routes.js")).employeeTypeRoutes);
   await app.register((await import("./modules/employee/engagement-policy.js")).engagementPolicyRoutes);
-  await app.register((await import("./modules/employee/loans-routes.js")).loansRoutes);
-  const { medicalClaimsRoutes } = await import("./modules/medical/routes.js");
-  await app.register(medicalClaimsRoutes);
-  const { outsourcedRoutes } = await import("./modules/outsourced/routes.js");
-  await app.register(outsourcedRoutes);
   // GAP-ADMIN-BULK-SCAN-02: scan-link target (lookup + scanned-documents read).
   const { scanLinkRoutes } = await import("./modules/employee/scan-link-routes.js");
   await app.register(scanLinkRoutes);
-  const { workforcePlanningRoutes } = await import("./modules/workforce-planning/routes.js");
-  await app.register(workforcePlanningRoutes);
-  const { aiPredictionsRoutes } = await import("./modules/ai-predictions/routes.js");
-  await app.register(aiPredictionsRoutes);
-  const { faceVerificationMlRoutes } = await import("./modules/ai-ml/face-verification.js");
-  await app.register(faceVerificationMlRoutes);
-  const { documentOcrRoutes } = await import("./modules/ai-ml/document-ocr.js");
-  await app.register(documentOcrRoutes);
-  const { nluChatbotRoutes } = await import("./modules/ai-ml/nlu-chatbot.js");
-  await app.register(nluChatbotRoutes);
-  const { recruitmentAiRoutes } = await import("./modules/ai-ml/recruitment-ai.js");
-  await app.register(recruitmentAiRoutes);
-  const { aiPluginRegistryRoutes } = await import("./modules/ai-ml/plugin-registry.js");
-  await app.register(aiPluginRegistryRoutes);
-  const { hrmsGapRoutes } = await import("./modules/gap-features/routes.js");
-  await app.register(hrmsGapRoutes);
-  await app.register(performanceDevRoutes);
+
+  // ── NON-CORE: gated by HRMS_MODULES ──────────────────────────────────────
+  // leave
+  if (nonCore("leave")) {
+    await app.register(leaveRoutes);
+    await app.register(leaveConversionRoutes);
+    await app.register(leaveContextRoutes);
+    await app.register(leaveTypesReadRoutes);
+    await app.register(policyAdminRoutes);
+    await app.register(policySettingsRoutes);
+    await app.register(leaveCancelRoutes);
+    await app.register(compOffRoutes);
+  }
+  // attendance
+  if (nonCore("attendance")) {
+    await app.register(attendanceRoutes);
+    await app.register(geoAttendanceRoutes);
+    await app.register(faceVerificationRoutes);
+  }
+  // recruitment
+  if (nonCore("recruitment")) {
+    await app.register(recruitmentRoutes);
+    await app.register(publicRecruitmentRoutes);
+    await app.register(jdTemplateRoutes);
+    await app.register(recruitmentSettingsRoutes);
+    await app.register(piiRevealRoutes);
+    await app.register(careersResumeRoutes);
+    await app.register(admitCardRoutes);
+    await app.register(candidatePublicAuthRoutes);
+    await app.register(candidatePublicPortalRoutes);
+    await app.register(interviewRoutes);
+    await app.register(requisitionRoutes);
+    await app.register(eligibilityRoutes);
+    await app.register(screeningRoutes);
+    await app.register(screeningOverrideRoutes);
+    await app.register(rejectionNoticeRoutes);
+    await app.register(interviewCommsRoutes);
+    await app.register(interviewResponseRoutes);
+    await app.register(interviewRecordingRoutes);
+    await app.register(applicationFeeRoutes);
+    await app.register(applicationPdfRoutes);
+    await app.register(interviewCalendarRoutes);
+    await app.register(externalSeamRoutes);
+    await app.register(offerRoutes);
+    await app.register(offerExtraRoutes);
+    await app.register(selectionListRoutes);
+    await app.register(recruitmentReservationRoutes);
+    await app.register(coiRoutes);
+    await app.register(candidateReferenceRoutes);
+    await app.register(candidateSkillsRoutes);
+    await app.register(qualificationRoutes);
+    await app.register(candidateRoutes);
+    await app.register(candidateResumeRoutes);
+    await app.register(otpVerifyRoutes);
+    await app.register(jobPublicationRoutes);
+    await app.register(editionPolicyRoutes);
+    await app.register(applicationScorecardRoutes);
+    const { recruitmentAiRoutes } = await import("./modules/ai-ml/recruitment-ai.js");
+    await app.register(recruitmentAiRoutes);
+  }
+  // appraisal
+  if (nonCore("appraisal")) {
+    await app.register(appraisalRoutes);
+    await app.register(feedbackRoutes);
+    await app.register(aparRoutes);
+  }
+  // payroll_facing: pension / gpf / nps / cpf / pay-matrix / pay-profile /
+  // loans / claims / medical / benefits / retirement / separation (fnf).
+  if (nonCore("payroll_facing")) {
+    await app.register(fnfRoutes);
+    await app.register(pensionRoutes);
+    await app.register(retirementAccountsRoutes);
+    await app.register(gpfRoutes);
+    await app.register(npsRoutes);
+    await app.register(cpfRoutes);
+    await app.register(payProfileRoutes);
+    await app.register(claimsRoutes);
+    await app.register((await import("./modules/pay-matrix/routes.js")).payMatrixRoutes);
+    await app.register((await import("./modules/employee/loans-routes.js")).loansRoutes);
+    const { medicalClaimsRoutes } = await import("./modules/medical/routes.js");
+    await app.register(medicalClaimsRoutes);
+  }
+  // training & learning
+  if (nonCore("training")) {
+    await app.register(trainingRoutes);
+    await app.register(trainingAdminRoutes);
+    await app.register(learningRoutes);
+  }
+  // social / engagement
+  if (nonCore("social")) {
+    await app.register(socialRoutes);
+    await app.register(pulseGoalsRoutes);
+  }
+  // disciplinary / vigilance (incl. ICC + grievance)
+  if (nonCore("disciplinary")) {
+    await app.register(disciplinaryRoutes);
+    await app.register(coiDeclarationRoutes);
+    await app.register(iccRoutes);
+    await app.register(grievanceRoutes);
+  }
+  // deputation (a non-core mover; core transfers live in lifecycle)
+  if (nonCore("deputation")) {
+    await app.register(deputationRoutes);
+  }
+  // contracts & engagements (consultant / contractor / apprentice / outsourced)
+  if (nonCore("contracts")) {
+    await app.register(consultantInvoiceRoutes);
+    await app.register(contractorBillRoutes);
+    await app.register(apprenticeStipendRoutes);
+    await app.register(contractRoutes);
+    const { outsourcedRoutes } = await import("./modules/outsourced/routes.js");
+    await app.register(outsourcedRoutes);
+  }
+  // assessment
+  if (nonCore("assessment")) {
+    await app.register(assessmentBlueprintRoutes);
+    await app.register(assessmentAttemptRoutes);
+    await app.register(assessmentResultRoutes);
+    await app.register(assessmentReportRoutes);
+    await app.register(interviewScoringRoutes);
+    await app.register(interviewPanelRoutes);
+    await app.register(assessmentRoutes);
+  }
+  // id cards & visiting cards
+  if (nonCore("id_cards")) {
+    await app.register(idCardRoutes);
+    await app.register(visitingCardRoutes);
+  }
+  // device trust
+  if (nonCore("device_trust")) {
+    await app.register(deviceTrustRoutes);
+  }
+  // ai (ml / fraud / predictions)
+  if (nonCore("ai")) {
+    await app.register(aiFraudRoutes);
+    const { aiPredictionsRoutes } = await import("./modules/ai-predictions/routes.js");
+    await app.register(aiPredictionsRoutes);
+    const { faceVerificationMlRoutes } = await import("./modules/ai-ml/face-verification.js");
+    await app.register(faceVerificationMlRoutes);
+    const { documentOcrRoutes } = await import("./modules/ai-ml/document-ocr.js");
+    await app.register(documentOcrRoutes);
+    const { nluChatbotRoutes } = await import("./modules/ai-ml/nlu-chatbot.js");
+    await app.register(nluChatbotRoutes);
+    const { aiPluginRegistryRoutes } = await import("./modules/ai-ml/plugin-registry.js");
+    await app.register(aiPluginRegistryRoutes);
+  }
+  // rti
+  if (nonCore("rti")) {
+    await app.register(rtiRoutes);
+  }
+  // gap features (compensation plans, performance-dev, agent1-gap)
+  if (nonCore("gap_features")) {
+    await app.register(agent1GapRoutes);
+    const { hrmsGapRoutes } = await import("./modules/gap-features/routes.js");
+    await app.register(hrmsGapRoutes);
+    await app.register(performanceDevRoutes);
+  }
+  // workforce planning (budgeted-headcount analytics; distinct from manpower
+  // sanctioned-post core)
+  if (nonCore("workforce_planning")) {
+    const { workforcePlanningRoutes } = await import("./modules/workforce-planning/routes.js");
+    await app.register(workforcePlanningRoutes);
+  }
+  // board intake
+  if (nonCore("board_intake")) {
+    await app.register(boardIntakeRoutes);
+  }
+  // competency
+  if (nonCore("competency")) {
+    await app.register(competencyRoutes);
+  }
+  // self-service / ESS
+  if (nonCore("self_service")) {
+    await app.register(selfServiceRoutes);
+  }
+  // integration sync (external HRMS adapter stub); kept available whenever any
+  // non-core module is on. Harmless in core-only (no routes beyond last_sync).
+  if (!profile.coreOnly) {
+    await app.register(integrationRoutes);
+  }
 
   // Local audit log — records all mutating HR operations for e-Governance compliance.
   // Supplements the central audit-service outbox events with a co-located trail.
