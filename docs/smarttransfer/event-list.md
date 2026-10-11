@@ -57,7 +57,7 @@ hrms-service; the other four are events published by `hrms-service` / Workforce 
 |---|---|---|---|---|---|---|
 | `hrms.posting.apply` | 18 | C | **smarttransfer-service** (published by SmartTransfer, not hrms) | hrms (applyPosting consumer) | `orderId, tenantId, employeeId, postId, effectiveDate, chargeType, orderNumber` | 1.0 |
 | `hrms.posting.applied` | 20 | E | hrms | audit; smarttransfer (reconciliation) | `orderId, tenantId, employeeId, postId, chargeType, effectiveFrom, orderNumber` | 1.0 |
-| `hrms.posting.changed` | 20 | E | hrms | payroll (OPEN D-ST-13); audit; estab (quarters/desks); notification | `employeeId, tenantId, fromOfficeId, toOfficeId, station, state, cityClass, ddo, effectiveFrom, orderNumber` | 1.0 |
+| `hrms.posting.changed` | 20 | E | hrms | payroll (OPEN D-ST-13); audit; estab (quarters/desks); notification | `employeeId, tenantId, fromOfficeId, toOfficeId, station, state, cityClass, ddo?, effectiveFrom, orderNumber` | 1.0 |
 | `hrms.posting.hold_placed` | 24 | E | hrms | audit; smarttransfer (eligibility, OPEN D-ST-16) | `employeeId, tenantId, holdType, effectiveFrom, source` | 1.0 |
 | `hrms.posting.hold_released` | 26 | E | hrms | audit; smarttransfer (eligibility, OPEN D-ST-16) | `employeeId, tenantId, holdType, releasedOn, source` | 1.0 |
 
@@ -69,7 +69,9 @@ the contract (tolerant reader; `define.ts` rule 5):
 
 - `payroll` consuming `hrms.posting.changed` → **OPEN D-ST-13** (payroll scope). The `cityClass`/`ddo`/`state` fields
   support the dated posting/DDO history planned in ST-M01-11; today `hra_city_class` is unwritten
-  (`employee/schema.ts:54`, default `X`).
+  (`employee/schema.ts:54`, default `X`). `ddo` is **optional** (ST-M01-09): there is no DDO source in Workforce
+  Core today, so the `applyPosting` producer omits it rather than invent one; the field stays in the frozen
+  contract for when a source exists (PROPOSED D-ST-13/14).
 - `smarttransfer` consuming `hrms.posting.hold_placed`/`.hold_released` for eligibility → **OPEN D-ST-16** (hold
   registry consumption). The `hrms_employee_holds` table exists (`lifecycle/schema.ts:212-232`) but is read by no
   transfer path today (M00 §1.3).

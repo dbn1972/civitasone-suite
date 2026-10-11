@@ -4,6 +4,9 @@ import { hrmsTransfers, hrmsPromotions, hrmsSeparations, hrmsSeparationChecklist
 import { TOTAL_CHECKLIST_ITEMS } from "./validators.js";
 import * as employeeRepo from "../employee/repo.js";
 import { HttpError } from "../../shared/context.js";
+import { isPostingLedgerEnabled } from "../workforce-core/config.js";
+import { recordLegacyPostingLedger } from "../workforce-core/apply-posting/legacy-bridge.js";
+import type { Writer as BridgeWriter } from "../workforce-core/apply-posting/repo.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -314,7 +317,10 @@ export async function applyPromotionEffect(
  */
 export async function applyTransferEffect(
   tx: Writer,
-  transfer: Pick<TransferRow, "tenantId" | "employeeId" | "toDeptId" | "toDesigId" | "payStructureId">,
+  transfer: Pick<TransferRow, "tenantId" | "employeeId" | "toDeptId" | "toDesigId" | "payStructureId"> &
+    Partial<Pick<TransferRow, "fromDeptId" | "effectiveDate" | "orderNo" | "orderRef">> & {
+      actorCorrelationId?: string;
+    },
   actorId: string,
 ): Promise<void> {
   const emp = await employeeRepo.findVersionForUpdate(tx, transfer.employeeId, transfer.tenantId);
@@ -331,4 +337,30 @@ export async function applyTransferEffect(
   // only gets applied later by the scheduler tick.
   if (transfer.payStructureId) patch.payStructureId = transfer.payStructureId;
   await employeeRepo.updateEmployeeVersioned(tx, transfer.employeeId, transfer.tenantId, emp.version, patch, actorId);
+
+  // ST-M01-09: thin caller of the Workforce Core posting ledger. When
+  // WORKFORCE_CORE_LEDGER_ENABLED is on, this legacy office-move ALSO records a
+  // dated posting-ledger span and emits the rich posting event — the tenure
+  // trail the legacy overwrite above never kept (D-ST-09; M00 §B-hr). When the
+  // flag is off, nothing below runs and behaviour is byte-for-byte legacy.
+  // It needs the from-office + effective date to date the span; callers that
+  // pass a full transfer row (eOffice consumer, scheduler) carry them, and the
+  // direct path now passes them explicitly. If a caller did not supply them we
+  // skip (no silent half-write).
+  if (
+    isPostingLedgerEnabled() &&
+    transfer.fromDeptId &&
+    transfer.effectiveDate
+  ) {
+    await recordLegacyPostingLedger(tx as unknown as BridgeWriter, {
+      tenantId: transfer.tenantId,
+      employeeId: transfer.employeeId,
+      fromOfficeId: transfer.fromDeptId,
+      toOfficeId: transfer.toDeptId,
+      effectiveDate: transfer.effectiveDate,
+      orderRef: transfer.orderNo ?? transfer.orderRef ?? null,
+      actorId,
+      correlationId: transfer.actorCorrelationId ?? "",
+    });
+  }
 }

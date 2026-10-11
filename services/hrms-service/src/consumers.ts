@@ -14,6 +14,8 @@ import type { Queue } from "@civitasone/queue";
 import type { ModuleProfile } from "./shared/module-profile.js";
 
 import { registerEmployeeConsumers }   from "./modules/employee/consumer.js";
+import { registerApplyPostingConsumer } from "./modules/workforce-core/apply-posting/consumer.js";
+import { isPostingLedgerEnabled } from "./modules/workforce-core/config.js";
 import { registerLifecycleConsumers }  from "./modules/lifecycle/consumer.js";
 import { registerEOfficeDecisionConsumers } from "./modules/lifecycle/eoffice-consumer.js";
 import { registerPromotionEOfficeConsumers } from "./modules/lifecycle/promotion-eoffice-consumer.js";
@@ -84,6 +86,13 @@ export function registerConsumers(queue: Queue, profile: ModuleProfile): void {
   // reservation / manpower, bulk import, dashboard / reports / orgchart /
   // holidays, scheduler, seniority, and the cross-service internal surface.
   registerEmployeeConsumers(queue);
+  // ST-M01-09: the single applyPosting write path. Subscribed ONLY when the
+  // Workforce Core posting ledger is enabled (M01 exit criterion 2); when the
+  // flag is off the consumer is absent and the legacy transfer paths are
+  // unchanged.
+  if (isPostingLedgerEnabled()) {
+    registerApplyPostingConsumer(queue);
+  }
   registerLifecycleMutationConsumers(queue);
   registerLifecycleConsumers(queue);
   registerEOfficeDecisionConsumers(queue);

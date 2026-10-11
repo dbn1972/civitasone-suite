@@ -206,6 +206,11 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
         await lifecycleRepo.applyTransferEffect(tx, {
           tenantId: p.tenantId, employeeId: p.employeeId, toDeptId: p.toDeptId,
           toDesigId: p.toDesigId ?? null, payStructureId: p.payStructureId ?? null,
+          // ST-M01-09: supply the from-office + effective date + order ref so
+          // applyTransferEffect can record the posting ledger span (only acts
+          // when WORKFORCE_CORE_LEDGER_ENABLED is on; otherwise ignored).
+          fromDeptId: p.fromDeptId, effectiveDate: p.effectiveDate,
+          orderRef: p.orderRef ?? null, actorCorrelationId: msg.correlationId,
         }, msg.actorId);
         // HIGH fix: previously no event was published after a transfer at all
         // (unlike create/update/separate). Published once the transfer has
