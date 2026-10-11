@@ -132,15 +132,21 @@ export function registerLinkageConsumers(queue: Queue): void {
 
 /**
  * Emit the decision callback to the source module.
- * Called from the files consumer when an eFile is approved/rejected.
+ * Called from the files consumer when an eFile is approved/rejected/returned.
  * Looks up the file's source_ref_type → callback topic, and emits the decision.
+ *
+ * ST-M01-16: `returned` is now a first-class outcome (the FF-11 "return/reject
+ * not surfaced" gap, governed by PROPOSED D-ST-08 option (a)). `reasonCode`
+ * carries the machine-readable reason for the outcome, surfaced on the callback
+ * payload (SDK `decisionCallbackPayload.reasonCode`) and persisted on the
+ * decision log.
  */
 export async function emitModuleDecisionCallback(
   tx: Parameters<typeof enqueue>[0],
   opts: {
     tenantId: string; fileId: string; correlationId: string;
-    decision: "approved" | "rejected"; decidedBy: string;
-    notingId?: string | null; dscHash?: string | null;
+    decision: "approved" | "rejected" | "returned"; decidedBy: string;
+    notingId?: string | null; dscHash?: string | null; reasonCode?: string | null;
   },
 ): Promise<void> {
   // Read the file's source linkage
@@ -168,6 +174,7 @@ export async function emitModuleDecisionCallback(
       decidedBy: opts.decidedBy,
       notingId: opts.notingId ?? null,
       dscHash: opts.dscHash ?? null,
+      reasonCode: opts.reasonCode ?? null,
       sourceContext: row.source_context ?? {},
       decidedAt: new Date().toISOString(),
     },
@@ -176,9 +183,9 @@ export async function emitModuleDecisionCallback(
   // Log the decision callback for audit + observability
   await tx.execute(sql`
     INSERT INTO files.module_decision_log
-      (id, tenant_id, file_id, source_ref_type, source_ref_id, decision, callback_topic, noting_id, dsc_hash, decided_by)
+      (id, tenant_id, file_id, source_ref_type, source_ref_id, decision, callback_topic, noting_id, dsc_hash, reason_code, decided_by)
     VALUES
       (${randomUUID()}, ${opts.tenantId}, ${opts.fileId}, ${row.source_ref_type}, ${row.source_ref_id},
-       ${opts.decision}, ${callbackTopic}, ${opts.notingId ?? null}, ${opts.dscHash ?? null}, ${opts.decidedBy})
+       ${opts.decision}, ${callbackTopic}, ${opts.notingId ?? null}, ${opts.dscHash ?? null}, ${opts.reasonCode ?? null}, ${opts.decidedBy})
   `);
 }

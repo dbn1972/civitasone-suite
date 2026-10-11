@@ -19,6 +19,12 @@ export const SOURCE_REF_TYPES = [
   "finance_sanction", "finance_payment", "finance_reappropriation",
   "procurement_award", "procurement_po",
   "hr_promotion", "hr_transfer", "hr_disciplinary", "hr_leave_special", "hr_recruitment",
+  // SmartTransfer OS (ST-M01-16): a transfer ORDER and a posting CYCLE raised to
+  // eOffice for formal approval. Spec §11; governing (PROPOSED) decision D-ST-08
+  // option (a) — approvals flow via the eOffice linkage with these new callback
+  // types. The decision consumer is smarttransfer-service (unmerged, PR #1979),
+  // so these are NOT in the hard-coded DECISION_CONSUMED_REF_TYPES; see below.
+  "hr_transfer_order", "hr_posting_cycle",
   "grant_scheme", "grant_disbursement",
   "asset_disposal", "legal_opinion", "contract_award",
 ] as const;
@@ -47,6 +53,11 @@ export const MODULE_CALLBACK_TOPICS: Record<SourceRefType, string> = {
   hr_disciplinary:         "hrms.disciplinary.file_decided",
   hr_leave_special:        "hrms.leave_special.file_decided",
   hr_recruitment:          "hrms.recruitment.file_decided",
+  // SmartTransfer OS owner topics (ST-M01-16). Dash-form lengths (bus.ts
+  // truncates at 45): hrms-transfer_order-file_decided = 32,
+  // hrms-posting_cycle-file_decided = 31 — both well under the limit.
+  hr_transfer_order:       "hrms.transfer_order.file_decided",
+  hr_posting_cycle:        "hrms.posting_cycle.file_decided",
   grant_scheme:            "grant.scheme.file_decided",
   grant_disbursement:      "grant.disbursement.file_decided",
   asset_disposal:          "asset.disposal.file_decided",
@@ -61,6 +72,15 @@ export const MODULE_CALLBACK_TOPICS: Record<SourceRefType, string> = {
  * never acts on — the decision would be silently lost — so the estab linkage
  * raise path rejects unsupported types (fail-closed). Add a type here only once
  * its decision consumer exists. (R21)
+ *
+ * NOT in this set (ST-M01-16): `hr_transfer_order` and `hr_posting_cycle`. Their
+ * decision consumer is smarttransfer-service, which is not on main yet (PR
+ * #1979). Hard-coding them here now would make estab accept a raise whose
+ * callback no one consumes on main — exactly the orphan R21 exists to prevent.
+ * Instead they are enabled per-deployment via EXTRA_DECISION_CONSUMED_REF_TYPES
+ * (see `isDecisionConsumed`): a deployment sets it once it runs a service that
+ * subscribes to the SmartTransfer callback topics. This keeps main fail-closed
+ * and needs no D-101 allow-list addition against the still-PROPOSED D-ST-08.
  */
 export const DECISION_CONSUMED_REF_TYPES: ReadonlySet<SourceRefType> = new Set<SourceRefType>([
   "finance_sanction", "finance_payment", "finance_reappropriation",
@@ -70,9 +90,34 @@ export const DECISION_CONSUMED_REF_TYPES: ReadonlySet<SourceRefType> = new Set<S
   "asset_disposal", "legal_opinion", "contract_award",
 ]);
 
-/** True when a raised eFile of this type will have its decision consumed. */
+/**
+ * The env var a deployment sets (comma-separated source ref types) to extend
+ * the decision-consumed allow-list for types whose consumer it actually runs
+ * but which are not yet in the hard-coded set on main. Only values that are
+ * also valid `SOURCE_REF_TYPES` take effect — an unknown string is ignored, so
+ * the raise path stays fail-closed for genuinely unsupported types. Plain
+ * config (a list of ref-type names); carries no secret.
+ */
+export const EXTRA_DECISION_CONSUMED_ENV = "EXTRA_DECISION_CONSUMED_REF_TYPES";
+
+function extraConsumedFromEnv(): ReadonlySet<string> {
+  const raw = process.env[EXTRA_DECISION_CONSUMED_ENV];
+  if (!raw) return new Set();
+  const valid = new Set<string>(SOURCE_REF_TYPES);
+  return new Set(
+    raw.split(",").map((s) => s.trim()).filter((s) => s.length > 0 && valid.has(s)),
+  );
+}
+
+/**
+ * True when a raised eFile of this type will have its decision consumed —
+ * either because it is in the hard-coded `DECISION_CONSUMED_REF_TYPES`, or
+ * because the deployment opted it in via `EXTRA_DECISION_CONSUMED_REF_TYPES`
+ * (a service that subscribes to that type's callback topic is running).
+ */
 export function isDecisionConsumed(refType: string): boolean {
-  return DECISION_CONSUMED_REF_TYPES.has(refType as SourceRefType);
+  if (DECISION_CONSUMED_REF_TYPES.has(refType as SourceRefType)) return true;
+  return extraConsumedFromEnv().has(refType);
 }
 
 /** The SQS command topic estab-service consumes to create a file from a module. */
@@ -140,6 +185,10 @@ export const decisionCallbackPayload = z.object({
   decision: z.enum(DECISIONS),
   notingId: z.string().uuid().nullable().optional(),
   dscHash: z.string().nullable().optional(),
+  // Optional machine-readable reason for the outcome (e.g. why a file was
+  // rejected or returned). Additive and backward-compatible: a producer that
+  // omits it stays valid (tolerant reader, D-18). ST-M01-16.
+  reasonCode: z.string().nullable().optional(),
   decidedBy: z.string(),
   decidedAt: z.string(),
 });

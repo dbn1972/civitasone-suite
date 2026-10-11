@@ -265,13 +265,26 @@ export function registerFilesConsumers(rawQueue: Queue): void {
   });
 
   queue.subscribe(CONSUMED_EVENTS.fileReject, async (msg) => {
-    const p = msg.payload as { fileId: string; tenantId: string; rejectedBy: string };
+    const p = msg.payload as {
+      fileId: string; tenantId: string; rejectedBy: string;
+      reasonCode?: string | null;
+      // ST-M01-16: a decision on the reject topic is either a terminal REJECT
+      // (default) or a RETURN to the originator for revision. Folded onto the
+      // existing wired topic (not a new `estab.file.return`) so no new dead
+      // subscription is introduced while the FF-11 return producer is unbuilt;
+      // the future FF-11 workflow return simply sets outcome:"returned".
+      outcome?: "rejected" | "returned";
+    };
+    const outcome: "rejected" | "returned" = p.outcome === "returned" ? "returned" : "rejected";
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const noting = await repo.findLatestSubmittedNoting(tx, p.fileId, p.tenantId);
       if (noting) {
+        // Reject freezes the note rejected (terminal); return reopens it as
+        // draft for revision (body preserved — the immutability trigger allows
+        // a status move that does not change the body).
         await repo.updateNoting(tx, noting.id, {
-          noteStatus: "rejected",
+          noteStatus: outcome === "returned" ? "draft" : "rejected",
           updatedBy: p.rejectedBy,
         });
       }
@@ -279,14 +292,20 @@ export function registerFilesConsumers(rawQueue: Queue): void {
       await enqueue(tx, {
         topic: EVENTS.fileMoved, eventType: EVENTS.fileMoved,
         tenantId: msg.tenantId, actorId: p.rejectedBy, correlationId: msg.correlationId,
-        payload: { fileId: p.fileId, action: "noting_rejected", rejectedBy: p.rejectedBy },
+        payload: {
+          fileId: p.fileId,
+          action: outcome === "returned" ? "noting_returned" : "noting_rejected",
+          rejectedBy: p.rejectedBy,
+        },
       });
-      // Cross-module: send the rejected decision back to the source module
+      // Cross-module: send the decision (rejected | returned) back to the source
+      // module, carrying the reason (ST-M01-16; governed by PROPOSED D-ST-08).
       await emitModuleDecisionCallback(tx, {
         tenantId: p.tenantId, fileId: p.fileId, correlationId: msg.correlationId,
-        decision: "rejected", decidedBy: p.rejectedBy,
+        decision: outcome, decidedBy: p.rejectedBy,
+        reasonCode: p.reasonCode ?? null,
       });
-      await audit(tx, msg, "reject", "file", p.fileId);
+      await audit(tx, msg, outcome === "returned" ? "return" : "reject", "file", p.fileId);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "file", p.fileId));
   });
