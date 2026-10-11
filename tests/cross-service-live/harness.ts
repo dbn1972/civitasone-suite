@@ -66,6 +66,7 @@ export const SERVICE_DB_MAP: Record<string, { db: string; role: string }> = {
   "citizen-service": { db: "civitas_citizen", role: "citizen_svc" },
   "grant-service": { db: "civitas_grant", role: "grant_svc" },
   "admin-service": { db: "civitas_admin", role: "admin_svc" },
+  "smarttransfer-service": { db: "civitas_smarttransfer", role: "smarttransfer_svc" },
 };
 
 const PASSWORD_FOR = (role: string): string => `${role.replace(/_svc$/, "")}_dev_pw`;
