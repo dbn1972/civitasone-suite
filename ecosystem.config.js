@@ -667,6 +667,7 @@ module.exports = {
     worker("advertisement", "advertisement_svc", "civitas_advertisement"),
     worker("animal",        "animal_svc",        "civitas_animal"),
     worker("building",      "building_svc",      "civitas_building"),
+    worker("smarttransfer", "smarttransfer_svc", "civitas_smarttransfer", { SMARTTRANSFER_SCANNER_DATABASE_URL: scannerDbUrl("smarttransfer_scanner", "civitas_smarttransfer", "SMARTTRANSFER_SCANNER_DATABASE_URL") }),
     worker("crematorium",   "crematorium_svc",   "civitas_crematorium"),
     worker("drainage",      "drainage_svc",      "civitas_drainage"),
     worker("event",         "event_svc",         "civitas_event"),
@@ -785,6 +786,11 @@ module.exports = {
     svc("swm",           3079, "swm_svc",           "civitas_swm", {}, { graceful: true }), // PERF-015
     svc("trade",         3070, "trade_svc",         "civitas_trade", {}, { graceful: true }), // PERF-015
     svc("vendor",        3074, "vendor_svc",        "civitas_vendor", {}, { graceful: true }), // PERF-015
+
+    // ── SmartTransfer OS (ST-M01-12) ────────────────────────────────────────────
+    // New workforce-movement service. GATEWAY_ADMIN_URL is where the in-service
+    // entitlement re-check reads the module composition projection (fails CLOSED).
+    svc("smarttransfer", 3086, "smarttransfer_svc", "civitas_smarttransfer", { GATEWAY_ADMIN_URL: process.env.GATEWAY_ADMIN_URL ?? "http://127.0.0.1:3022" }, { graceful: true }),
 
     // ── Gateway ────────────────────────────────────────────────────────────────
     // DATABASE_URL required to mount CAP-052 catalogue routes (FORCE-RLS reads)

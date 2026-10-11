@@ -84,6 +84,10 @@ const DB_USERS = {
   // has no grants on them" gap the batches above already fixed for their
   // own services.
   civitas_building: "building_svc",
+  // smarttransfer-service (ST-M01-12): migrate-all.mjs provisions
+  // civitas_smarttransfer; grant-all applies schema/table grants to
+  // smarttransfer_svc, same as every other service.
+  civitas_smarttransfer: "smarttransfer_svc",
 };
 
 const GRANT_SQL = (role) => `

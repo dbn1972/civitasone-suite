@@ -112,6 +112,9 @@ services:
   workflow:     { port: 3029, db: civitas_workflow,     replicas: 2, worker: true, autoscaling: { enabled: true, minReplicas: 2, maxReplicas: 6, targetCPUUtilizationPercentage: 70 } }
   analytics:    { port: 3031, db: civitas_analytics,    replicas: 1, worker: true }
   location:     { port: 4012, db: civitas_location,     replicas: 1, worker: true }
+  # SmartTransfer OS (ST-M01-12): workforce-movement service, own DB
+  # civitas_smarttransfer, svc + worker (outbox relay + command-result purge).
+  smarttransfer: { port: 3086, db: civitas_smarttransfer, replicas: 1, worker: true }
   queue:        { port: 3030, replicas: 2, entry: dist/server.js, autoscaling: { enabled: true, minReplicas: 2, maxReplicas: 8, targetCPUUtilizationPercentage: 65 } }
 
 # Gateway (public entrypoint to the service mesh).

@@ -75,6 +75,12 @@ const ROUTE_TO_MODULE: Record<string, string> = {
   crematorium: "crematorium",
   parking: "parking",
   market: "market",
+  // SmartTransfer OS (ST-M01-12): gateway registry entry; module key
+  // `smarttransfer`. Additive — no existing mapping or fail-open/closed
+  // semantic is changed (those are BLOCKED on the owner, ST-M01-02). The
+  // smarttransfer-service additionally re-checks entitlement in-process and
+  // fails CLOSED (shared/entitlement.ts).
+  smarttransfer: "smarttransfer",
 };
 
 // Platform routes (always available, not module-gated)
