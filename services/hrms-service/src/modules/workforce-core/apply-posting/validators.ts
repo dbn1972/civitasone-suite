@@ -17,6 +17,12 @@ export const chargeTypeEnum = z.enum([
   "in_charge",
 ]);
 
+/** Rejects impossible dates like 2027-09-31 that Postgres would refuse. */
+function isRealCalendarDate(v: string): boolean {
+  const d = new Date(`${v}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+}
+
 export const applyPostingBody = z.object({
   /** The movement ORDER id this apply is for. Idempotency key. */
   orderId: z.string().uuid(),
@@ -25,7 +31,10 @@ export const applyPostingBody = z.object({
   /** The target sanctioned post (workforce_core.post.id). */
   postId: z.string().uuid(),
   /** The date the posting takes effect (YYYY-MM-DD). */
-  effectiveDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD"),
+  effectiveDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD")
+    .refine(isRealCalendarDate, "not a real calendar date"),
   /** The order number as printed on the signed order. */
   orderNumber: z.string().min(1).max(128),
   /** Placement kind; defaults to a substantive posting. */

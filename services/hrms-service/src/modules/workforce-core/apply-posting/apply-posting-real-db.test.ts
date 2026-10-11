@@ -476,7 +476,8 @@ describe("applyPosting — A -> B -> C substantive chain", () => {
     );
     expect(occ).toHaveLength(2);
     expect(occ[0]!.postId).toBe(postB);
-    expect(occ[0]!.effectiveTo).toBe("2027-03-09");
+    // occupancy is half-open [from, to): it closes AT the next effective date
+    expect(occ[0]!.effectiveTo).toBe("2027-03-10");
     expect(occ[1]!.postId).toBe(postC);
     expect(occ[1]!.effectiveTo).toBeNull();
 
@@ -484,6 +485,7 @@ describe("applyPosting — A -> B -> C substantive chain", () => {
       a.effectiveFrom.localeCompare(b.effectiveFrom),
     );
     expect(ledger).toHaveLength(2);
+    // the ledger is inclusive: it closes the day before
     expect(ledger[0]!.effectiveTo).toBe("2027-03-09");
     expect(ledger[1]!.effectiveTo).toBeNull();
     expect(await readEmployeeDept(employeeId)).toBe(officeC);
@@ -536,6 +538,34 @@ describe("applyPosting — same-day / back-dated orders are audited refusals", (
     expect(await readOccupancy(employeeId)).toHaveLength(1);
     expect(await readLedger(employeeId)).toHaveLength(1);
     expect(await readEmployeeDept(employeeId)).toBe(officeB);
+  });
+
+  it("an order effective the day after the open span started is accepted (no gap)", async () => {
+    const employeeId = await seedEmployee(officeA);
+    const postB = await seedPost(officeB);
+    const postC = await seedPost(randomUUID());
+    await publishApply({ orderId: randomUUID(), employeeId, postId: postB, effectiveDate: "2027-07-10", orderNumber: "ORD/ND/1" });
+    const orderId = randomUUID();
+    await publishApply({ orderId, employeeId, postId: postC, effectiveDate: "2027-07-11", orderNumber: "ORD/ND/2" });
+
+    const occ = (await readOccupancy(employeeId)).sort((a, b) =>
+      a.effectiveFrom.localeCompare(b.effectiveFrom),
+    );
+    expect(occ).toHaveLength(2);
+    expect(occ[0]!.effectiveTo).toBe(occ[1]!.effectiveFrom);
+    expect(occ[1]!.effectiveFrom).toBe("2027-07-11");
+    const ledger = (await readLedger(employeeId)).sort((a, b) =>
+      a.effectiveFrom.localeCompare(b.effectiveFrom),
+    );
+    expect(ledger[0]!.effectiveTo).toBe("2027-07-10");
+  });
+
+  it("an impossible calendar date is an audited refusal, not a raw data error", async () => {
+    const employeeId = await seedEmployee(officeA);
+    const orderId = randomUUID();
+    await publishApply({ orderId, employeeId, postId: await seedPost(officeB), effectiveDate: "2027-09-31", orderNumber: "ORD/BADDATE" });
+    expect(await refusalReason(orderId)).toBe("INVALID_EFFECTIVE_DATE");
+    expect(await readOccupancy(employeeId)).toHaveLength(0);
   });
 
   it("back-dated order is refused with an audited reason", async () => {

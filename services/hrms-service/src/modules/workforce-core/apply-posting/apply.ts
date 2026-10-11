@@ -80,6 +80,21 @@ export async function applyPostingTx(
   // an authoritative control; it is enforced only when the order carries an
   // approver. We never invent an approval rule here
   // (D-ST-08/18 PROPOSED) — if no approver is supplied, no SoD check applies.
+  // Defence in depth for queue payloads that bypassed the route validator: an
+  // impossible calendar date (2027-09-31) would otherwise surface as a raw
+  // Postgres data error and loop through retry/DLQ.
+  const parsedDate = new Date(`${input.effectiveDate}T00:00:00Z`);
+  if (
+    Number.isNaN(parsedDate.getTime()) ||
+    parsedDate.toISOString().slice(0, 10) !== input.effectiveDate
+  ) {
+    throw new HttpError(
+      422,
+      "INVALID_EFFECTIVE_DATE",
+      `effective date ${input.effectiveDate} is not a real calendar date`,
+    );
+  }
+
   if (input.approvedBy && input.approvedBy === input.actorId) {
     throw new HttpError(
       409,
@@ -132,11 +147,13 @@ export async function applyPostingTx(
   // Only applies to substantive postings — acting/additional/in_charge may
   // legitimately coexist with a substantive holder.
   if (isSubstantive) {
+    // Ledger dates are inclusive (close the day before); occupancy is
+    // half-open [from, to), so it closes AT the new effective date.
     const closeAt = repo.dayBefore(input.effectiveDate);
     const open = await repo.findOpenOccupancyForEmployee(tx, input.employeeId);
-    // Half-open [from, to) occupancy needs to > from, and the ledger needs
-    // to >= from. A same-day or back-dated order (effective on/before the day
-    // after the current span began) cannot close the current span validly:
+    // Half-open occupancy needs to > from (effective > from); the inclusive
+    // ledger needs closeAt >= from (same condition). A same-day or back-dated
+    // order (effective on/before the day the current span began) cannot close the current span validly:
     // refuse with a domain error (audited by the consumer) instead of letting
     // post_occupancy_dates_check / posting_ledger_dates_check (23514) surface.
     const ledgerStart = await repo.findOpenLedgerSpanStart(
@@ -144,7 +161,7 @@ export async function applyPostingTx(
       input.employeeId,
     );
     if (
-      (open && closeAt <= open.effectiveFrom) ||
+      (open && input.effectiveDate <= open.effectiveFrom) ||
       (ledgerStart && closeAt < ledgerStart)
     ) {
       throw new HttpError(
@@ -154,7 +171,12 @@ export async function applyPostingTx(
       );
     }
     if (open) {
-      await repo.closeOccupancy(tx, open.id, closeAt, input.actorId);
+      await repo.closeOccupancy(
+        tx,
+        open.id,
+        input.effectiveDate,
+        input.actorId,
+      );
     }
     await repo.closeOpenLedgerSpan(tx, input.employeeId, closeAt);
   }
