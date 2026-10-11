@@ -19,6 +19,9 @@
  * never fights the pack's own registrations.
  */
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 import { z } from "zod";
 import { zMoneyMinorString } from "@civitasone/schemas/money";
 import {
@@ -111,10 +114,10 @@ function carriesMoney(node: SchemaNode): boolean {
 }
 
 describe("SmartTransfer contract pack — surface", () => {
-  it("defines all 21 smarttransfer.* and 5 hrms.posting.* topics (26 total)", () => {
-    expect(smarttransferContracts.length).toBe(21);
+  it("defines all 23 smarttransfer.* and 5 hrms.posting.* topics (28 total)", () => {
+    expect(smarttransferContracts.length).toBe(23);
     expect(hrmsPostingContracts.length).toBe(5);
-    expect(smartTransferContractPack.length).toBe(26);
+    expect(smartTransferContractPack.length).toBe(28);
   });
 
   it("registers every pack topic in the module registry (single owner/kind)", () => {
@@ -292,5 +295,67 @@ describe("SmartTransfer contract pack — kind vs naming convention", () => {
       .map((c) => c.topic)
       .sort();
     expect(commands).toEqual([...commandTopics].sort());
+  });
+});
+
+describe("SmartTransfer contract pack — lockstep with event-list.md", () => {
+  // The event list (docs/smarttransfer/event-list.md, ST-M01-05) is the single
+  // source of the frozen topic surface; the pack realises it as code. This test
+  // keeps the two in lockstep in BOTH directions.
+  //
+  // Parsing is deliberately narrow to avoid fragility: a doc "topic row" is a
+  // Markdown table row whose FIRST cell is a single backtick-wrapped
+  // `smarttransfer.*` or `hrms.posting.*` token. Prose mentions, consumer notes
+  // and the "Existing HRMS transfer topics (context)" section are not table
+  // rows with a backticked topic in the first cell, so they are not matched.
+  const docPath = resolve(
+    dirname(fileURLToPath(import.meta.url)),
+    "../../../../docs/smarttransfer/event-list.md",
+  );
+  const doc = readFileSync(docPath, "utf8");
+
+  // First-cell topic of a table row: line starts with `| ` then `` `topic` ``.
+  const ROW_TOPIC_RE =
+    /^\|\s*`((?:smarttransfer|hrms\.posting)\.[a-z0-9_.]+)`\s*\|/;
+  const docTopics = new Set<string>();
+  for (const line of doc.split("\n")) {
+    const m = ROW_TOPIC_RE.exec(line.trim());
+    if (m) docTopics.add(m[1]!);
+  }
+
+  const packTopics = new Set(smartTransferContractPack.map((c) => c.topic));
+
+  it("parsed a non-empty topic surface from the doc tables", () => {
+    // Guard against a silent parser break (e.g. table format changes): the doc
+    // defines the full C0 surface, so this must equal the pack size.
+    expect(docTopics.size).toBe(packTopics.size);
+  });
+
+  it("every topic in the pack appears as a row in the event list", () => {
+    for (const topic of packTopics) {
+      expect(
+        docTopics.has(topic),
+        `${topic} is in the pack but not a row in event-list.md`,
+      ).toBe(true);
+    }
+  });
+
+  it("every topic row in the event list has a contract in the pack", () => {
+    for (const topic of docTopics) {
+      expect(
+        packTopics.has(topic),
+        `${topic} is a row in event-list.md but has no contract in the pack`,
+      ).toBe(true);
+    }
+  });
+
+  it("explicitly covers the ST-M01-06b additions in both the pack and the doc", () => {
+    for (const topic of [
+      "smarttransfer.cycle.opened",
+      "smarttransfer.exception.requested",
+    ]) {
+      expect(packTopics.has(topic), `${topic} missing from pack`).toBe(true);
+      expect(docTopics.has(topic), `${topic} missing from doc`).toBe(true);
+    }
   });
 });
