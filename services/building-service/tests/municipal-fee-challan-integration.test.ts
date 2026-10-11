@@ -35,7 +35,7 @@ import { MUNICIPAL_FEE_RECEIPT_HEAD_CODE } from "@civitasone/events";
 // Matches the CI/nightly convention (.github/workflows/nightly.yml uses
 // finance_svc@.../civitas_finance on the standing dev container's port);
 // this test's own bootstrap container is addressed via BUILDING_TEST_PGPORT.
-const PGPORT = process.env.BUILDING_TEST_PGPORT ?? "5435";
+const PGPORT = process.env.BUILDING_TEST_PGPORT ?? process.env.PGPORT ?? "5435";
 const BUILDING_DSN = `postgres://building_svc:building_dev_pw@localhost:${PGPORT}/civitas_building`;
 const FINANCE_DSN = `postgres://finance_svc:finance_dev_pw@localhost:${PGPORT}/civitas_finance`;
 
