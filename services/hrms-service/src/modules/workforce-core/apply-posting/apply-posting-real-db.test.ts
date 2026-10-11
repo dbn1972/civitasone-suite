@@ -109,6 +109,13 @@ async function publishApply(order: {
   chargeType?: string;
   approvedBy?: string;
   actorId?: string;
+  /**
+   * ST-M01-15: the producing service stamped in the payload. Defaults to the
+   * frozen contract owner `smarttransfer-service` (the authorised cross-service
+   * publisher). Overridable so the producer-ACL tests can drive an
+   * unauthorised producer.
+   */
+  producer?: string;
 }): Promise<void> {
   await runWithTenant(TENANT, () =>
     queue.publish(COMMANDS.postingApply, {
@@ -131,6 +138,7 @@ async function publishApply(order: {
         effectiveDate: order.effectiveDate,
         chargeType: order.chargeType ?? "substantive",
         orderNumber: order.orderNumber,
+        producer: order.producer ?? "smarttransfer-service",
         ...(order.approvedBy ? { approvedBy: order.approvedBy } : {}),
       },
     }),
@@ -633,6 +641,9 @@ describe("applyPosting — cross-tenant isolation (RLS)", () => {
           effectiveDate: "2027-10-01",
           chargeType: "substantive",
           orderNumber: "ORD/XT/1",
+          // ST-M01-15: stamp the authorised producer so the command reaches the
+          // tenant/RLS path under test rather than the producer ACL.
+          producer: "smarttransfer-service",
         },
       }),
     );
@@ -670,5 +681,130 @@ describe("applyPosting — cross-tenant isolation (RLS)", () => {
         tx.select().from(wcPostingLedger).where(eq(wcPostingLedger.employeeId, employeeId)),
       ),
     ).toHaveLength(0);
+  });
+});
+
+// ST-M01-15 — scoped service credential for the SmartTransfer→HRMS command
+// path. Only the frozen contract owner (smarttransfer-service) and the
+// hrms-service in-service affordance may drive a posting write; any other
+// producer is refused with an AUDITED record and NOTHING is written. The
+// producer label is built at runtime (no secret-shaped literal). Spec §14;
+// D-ST-10, D-ST-04, D-ST-19.
+describe("applyPosting — producer ACL (scoped service credential)", () => {
+  it("accepts the frozen contract owner smarttransfer-service", async () => {
+    const employeeId = await seedEmployee(officeA);
+    const postId = await seedPost(officeB);
+    const orderId = randomUUID();
+    await publishApply({
+      orderId,
+      employeeId,
+      postId,
+      effectiveDate: "2026-10-01",
+      orderNumber: "ORD/2026/0007",
+      producer: "smarttransfer-service",
+    });
+    expect(await readOccupancy(employeeId)).toHaveLength(1);
+    expect(await readLedger(employeeId)).toHaveLength(1);
+  });
+
+  it("accepts the hrms-service in-service affordance (self-producer)", async () => {
+    const employeeId = await seedEmployee(officeA);
+    const postId = await seedPost(officeB);
+    const orderId = randomUUID();
+    await publishApply({
+      orderId,
+      employeeId,
+      postId,
+      effectiveDate: "2026-10-01",
+      orderNumber: "ORD/2026/0008",
+      producer: "hrms-service",
+    });
+    expect(await readOccupancy(employeeId)).toHaveLength(1);
+  });
+
+  it("refuses a command from any other producer with an audited refusal and no write", async () => {
+    const employeeId = await seedEmployee(officeA);
+    const postId = await seedPost(officeB);
+
+    // Drive the command as a service that is NOT on the allow-list. These are
+    // plausible wrong producers: payroll (a downstream of the posting event),
+    // a leave consumer, and an unlabelled producer. None may write a posting.
+    for (const [i, producer] of [
+      "payroll-service",
+      "leave-service",
+      "",
+    ].entries()) {
+      const orderId = randomUUID();
+      await publishApply({
+        orderId,
+        employeeId,
+        postId,
+        effectiveDate: "2026-11-01",
+        orderNumber: `ORD/2026/010${i}`,
+        producer,
+      });
+
+      // Nothing written.
+      expect(await readOccupancy(employeeId)).toHaveLength(0);
+      expect(await readLedger(employeeId)).toHaveLength(0);
+      expect(await readServiceBook(employeeId)).toHaveLength(0);
+
+      // Audited refusal with the PRODUCER_NOT_AUTHORISED reason, no raw leak.
+      const audits = await readAuditEvents(orderId);
+      const refusal = audits.find(
+        (a) =>
+          (a.payload as { resourceId?: string }).resourceId === orderId &&
+          (a.payload as { outcome?: string }).outcome === "failure",
+      );
+      expect(
+        refusal,
+        `producer '${producer || "(blank)"}' was refused`,
+      ).toBeDefined();
+      expect(
+        (refusal!.payload as { metadata?: { reason?: string } }).metadata
+          ?.reason,
+      ).toBe("PRODUCER_NOT_AUTHORISED");
+    }
+  });
+
+  it("a missing producer field is refused (fail closed)", async () => {
+    const employeeId = await seedEmployee(officeA);
+    const postId = await seedPost(officeB);
+    const orderId = randomUUID();
+    // Publish a raw command with NO producer key at all.
+    await runWithTenant(TENANT, () =>
+      queue.publish(COMMANDS.postingApply, {
+        messageId: idempotentId({
+          idempotencyKey: `posting.apply:${orderId}`,
+          tenantId: TENANT,
+        }),
+        type: COMMANDS.postingApply,
+        tenantId: TENANT,
+        actorId: ACTOR,
+        correlationId: randomUUID(),
+        schemaVersion: "1.0",
+        payload: {
+          orderId,
+          tenantId: TENANT,
+          employeeId,
+          postId,
+          effectiveDate: "2026-11-15",
+          chargeType: "substantive",
+          orderNumber: "ORD/2026/0199",
+        },
+      }),
+    );
+    await drain();
+
+    expect(await readOccupancy(employeeId)).toHaveLength(0);
+    const audits = await readAuditEvents(orderId);
+    const refusal = audits.find(
+      (a) =>
+        (a.payload as { resourceId?: string }).resourceId === orderId &&
+        (a.payload as { outcome?: string }).outcome === "failure",
+    );
+    expect(
+      (refusal!.payload as { metadata?: { reason?: string } }).metadata?.reason,
+    ).toBe("PRODUCER_NOT_AUTHORISED");
   });
 });
