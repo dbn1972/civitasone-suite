@@ -26,6 +26,17 @@
  * routes, so they 404 at the source; this split is the gateway BRACES
  * (defense in depth), so the request is refused before it is ever proxied.
  *
+ * APPROXIMATION NOTE (`career`): the composition module `career` (Transfer &
+ * Promotion) projects to the `hrms-recruitment` gateway key in
+ * services/admin-service/src/modules/composition/gateway-map.ts because it
+ * surfaces through the recruitment/careers routes. That is an approximation, not
+ * an exact module boundary: a tenant entitled to `career` is allowed the
+ * `hrms-recruitment` sub-routes (and `/api/v1/careers/*` resolves the same way).
+ *
+ * PATH DELIMITER: the first segment is truncated at the first `;` before lookup
+ * because Fastify 4 (hrms-service) treats `;` as a path delimiter
+ * (`/leave;x/apply` is served as `/leave`).
+ *
  * KEY NAMING (aligned with #1980's HRMS_MODULES names + composition module ids)
  * ----------------------------------------------------------------------------
  * Core HRMS resolves to the `workforce_core` composition module-id/gateway-key
@@ -191,7 +202,11 @@ export function resolveHrmsModuleKey(pathname: string): string {
   const m = pathname.match(/^\/api\/v\d+\/(?:hrms|hr|careers)\/([^/?#]+)/i);
   const captured = m?.[1];
   if (!captured) return WORKFORCE_CORE_KEY; // bare /api/v1/hrms or no sub-segment → core
-  const seg = decodeURIComponent(captured).toLowerCase();
+  // Fastify 4 (hrms-service) treats `;` as a path delimiter, so `leave;x/apply`
+  // is served as the `/v1/hrms/leave` route. Truncate at the first `;` (raw or
+  // percent-encoded, after decoding) so the lookup keys on what the upstream
+  // router will actually dispatch, never on the decorated segment.
+  const seg = (decodeURIComponent(captured).split(";")[0] ?? "").toLowerCase();
   return HRMS_SUBROUTE_TO_KEY[seg] ?? WORKFORCE_CORE_KEY;
 }
 

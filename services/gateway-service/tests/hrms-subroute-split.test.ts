@@ -261,3 +261,19 @@ describe("off mode + backward-compat (no regression)", () => {
     expect(reply._code).toBe(403);
   });
 });
+
+// ───────────────────────────────────────────────────────────────────────────
+// 5. `;` path-delimiter bypass (Fastify 4 treats `;` as a delimiter)
+// ───────────────────────────────────────────────────────────────────────────
+describe("resolveHrmsModuleKey: `;` path-delimiter bypass", () => {
+  it.each([
+    ["/api/v1/hrms/leave;x", "hrms-leave"],
+    ["/api/v1/hrms/leave;x/apply", "hrms-leave"],
+    ["/api/v1/hrms/attendance;a=b", "hrms-attendance"],
+    ["/api/v1/hrms/attendance;a=b/mark", "hrms-attendance"],
+    ["/api/v1/hr/recruitment;z/openings", "hrms-recruitment"],
+    ["/api/v1/hrms/leave%3Bx/apply", "hrms-leave"],
+  ])("%s resolves to %s, not workforce_core", (path, key) => {
+    expect(resolveHrmsModuleKey(path)).toBe(key);
+  });
+});
