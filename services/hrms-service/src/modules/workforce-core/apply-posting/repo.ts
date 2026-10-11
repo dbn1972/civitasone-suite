@@ -134,6 +134,25 @@ export async function closeOpenLedgerSpan(
     );
 }
 
+/** The employee's open substantive ledger span's start date, if any. */
+export async function findOpenLedgerSpanStart(
+  tx: Writer,
+  employeeId: string,
+): Promise<string | undefined> {
+  const rows = await (tx as typeof db)
+    .select({ effectiveFrom: wcPostingLedger.effectiveFrom })
+    .from(wcPostingLedger)
+    .where(
+      and(
+        eq(wcPostingLedger.employeeId, employeeId),
+        eq(wcPostingLedger.chargeType, "substantive"),
+        isNull(wcPostingLedger.effectiveTo),
+      ),
+    )
+    .limit(1);
+  return rows[0]?.effectiveFrom;
+}
+
 export interface OpenPosting {
   tenantId: string;
   employeeId: string;
@@ -265,9 +284,12 @@ export async function updateEmployeeCurrentPost(
   designationId: string | null,
   actorId: string,
 ): Promise<number> {
+  // version is bumped so a concurrent versioned employee edit (optimistic
+  // lock on `version`) is detected rather than silently overwritten.
   const set: Record<string, unknown> = {
     departmentId: officeId,
     updatedBy: actorId,
+    version: sql`${hrmsEmployees.version} + 1`,
   };
   if (designationId) set.designationId = designationId;
   const rows = await (tx as typeof db)

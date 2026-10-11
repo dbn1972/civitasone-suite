@@ -167,6 +167,30 @@ async function readServiceBook(employeeId: string) {
       ),
   );
 }
+async function readEmployeeRow(id: string) {
+  const rows = await withTenant((tx) =>
+    tx
+      .select({
+        departmentId: hrmsEmployees.departmentId,
+        designationId: hrmsEmployees.designationId,
+        version: hrmsEmployees.version,
+      })
+      .from(hrmsEmployees)
+      .where(eq(hrmsEmployees.id, id))
+      .limit(1),
+  );
+  return rows[0]!;
+}
+async function refusalReason(orderId: string): Promise<string | undefined> {
+  const audits = await readAuditEvents(orderId);
+  const r = audits.find(
+    (a) =>
+      (a.payload as { resourceId?: string }).resourceId === orderId &&
+      (a.payload as { outcome?: string }).outcome === "failure",
+  );
+  return (r?.payload as { metadata?: { reason?: string } } | undefined)
+    ?.metadata?.reason;
+}
 async function readEmployeeDept(id: string): Promise<string | undefined> {
   const rows = await withTenant((tx) =>
     tx
@@ -434,5 +458,116 @@ describe("applyPosting — SoD in the consumer", () => {
     expect(
       (refusal!.payload as { metadata?: { reason?: string } }).metadata?.reason,
     ).toBe("SOD_VIOLATION");
+  });
+});
+
+describe("applyPosting — A -> B -> C substantive chain", () => {
+  it("closes each previous span the day before and keeps one open holder", async () => {
+    const employeeId = await seedEmployee(officeA);
+    const officeC = randomUUID();
+    const postB = await seedPost(officeB);
+    const postC = await seedPost(officeC);
+
+    await publishApply({ orderId: randomUUID(), employeeId, postId: postB, effectiveDate: "2027-01-10", orderNumber: "ORD/CH/1" });
+    await publishApply({ orderId: randomUUID(), employeeId, postId: postC, effectiveDate: "2027-03-10", orderNumber: "ORD/CH/2" });
+
+    const occ = (await readOccupancy(employeeId)).sort((a, b) =>
+      a.effectiveFrom.localeCompare(b.effectiveFrom),
+    );
+    expect(occ).toHaveLength(2);
+    expect(occ[0]!.postId).toBe(postB);
+    expect(occ[0]!.effectiveTo).toBe("2027-03-09");
+    expect(occ[1]!.postId).toBe(postC);
+    expect(occ[1]!.effectiveTo).toBeNull();
+
+    const ledger = (await readLedger(employeeId)).sort((a, b) =>
+      a.effectiveFrom.localeCompare(b.effectiveFrom),
+    );
+    expect(ledger).toHaveLength(2);
+    expect(ledger[0]!.effectiveTo).toBe("2027-03-09");
+    expect(ledger[1]!.effectiveTo).toBeNull();
+    expect(await readEmployeeDept(employeeId)).toBe(officeC);
+  });
+});
+
+describe("applyPosting — non-substantive charges leave the home office alone", () => {
+  for (const chargeType of ["acting", "additional", "in_charge"]) {
+    it(`${chargeType} charge records occupancy but does not move the employee`, async () => {
+      const employeeId = await seedEmployee(officeA);
+      const before = await readEmployeeRow(employeeId);
+      const postId = await seedPost(officeB);
+      const orderId = randomUUID();
+
+      await publishApply({ orderId, employeeId, postId, effectiveDate: "2027-02-01", orderNumber: `ORD/${chargeType}`, chargeType });
+
+      const occ = await readOccupancy(employeeId);
+      expect(occ).toHaveLength(1);
+      expect(occ[0]!.chargeType).toBe(chargeType);
+      const after = await readEmployeeRow(employeeId);
+      expect(after.departmentId).toBe(officeA);
+      expect(after.designationId).toBe(before.designationId);
+      // no office-movement event for a non-substantive charge
+      const changed = (await readOutboxByTopics(["hrms.posting.changed"])).filter(
+        (e) => (e.payload as { employeeId?: string }).employeeId === employeeId,
+      );
+      expect(changed).toHaveLength(0);
+    });
+  }
+
+  it("a substantive posting bumps the employee version (optimistic lock sees it)", async () => {
+    const employeeId = await seedEmployee(officeA);
+    const before = await readEmployeeRow(employeeId);
+    await publishApply({ orderId: randomUUID(), employeeId, postId: await seedPost(officeB), effectiveDate: "2027-02-01", orderNumber: "ORD/VER" });
+    expect((await readEmployeeRow(employeeId)).version).toBe(before.version + 1);
+  });
+});
+
+describe("applyPosting — same-day / back-dated orders are audited refusals", () => {
+  it("same-day order after a posting is refused (no raw 23514, nothing written)", async () => {
+    const employeeId = await seedEmployee(officeA);
+    const postB = await seedPost(officeB);
+    const postC = await seedPost(randomUUID());
+    await publishApply({ orderId: randomUUID(), employeeId, postId: postB, effectiveDate: "2027-04-10", orderNumber: "ORD/SD/1" });
+
+    const orderId = randomUUID();
+    await publishApply({ orderId, employeeId, postId: postC, effectiveDate: "2027-04-10", orderNumber: "ORD/SD/2" });
+
+    expect(await refusalReason(orderId)).toBe("EFFECTIVE_DATE_NOT_AFTER_CURRENT");
+    expect(await readOccupancy(employeeId)).toHaveLength(1);
+    expect(await readLedger(employeeId)).toHaveLength(1);
+    expect(await readEmployeeDept(employeeId)).toBe(officeB);
+  });
+
+  it("back-dated order is refused with an audited reason", async () => {
+    const employeeId = await seedEmployee(officeA);
+    const postB = await seedPost(officeB);
+    const postC = await seedPost(randomUUID());
+    await publishApply({ orderId: randomUUID(), employeeId, postId: postB, effectiveDate: "2027-05-10", orderNumber: "ORD/BD/1" });
+
+    const orderId = randomUUID();
+    await publishApply({ orderId, employeeId, postId: postC, effectiveDate: "2027-05-01", orderNumber: "ORD/BD/2" });
+
+    expect(await refusalReason(orderId)).toBe("EFFECTIVE_DATE_NOT_AFTER_CURRENT");
+    expect(await readOccupancy(employeeId)).toHaveLength(1);
+  });
+});
+
+describe("applyPosting — command idempotency is order-derived only", () => {
+  it("two submissions of one order with different client idempotency keys apply once", async () => {
+    const { applyPosting } = await import("./commands.js");
+    const employeeId = await seedEmployee(officeA);
+    const postId = await seedPost(officeB);
+    const orderId = randomUUID();
+    const body = { orderId, employeeId, postId, effectiveDate: "2027-06-01", orderNumber: "ORD/IDEM", chargeType: "substantive" as const };
+    const ctx = (key: string) =>
+      ({ tenantId: TENANT, actorId: ACTOR, correlationId: randomUUID(), idempotencyKey: key }) as never;
+
+    await runWithTenant(TENANT, () => applyPosting(ctx("client-key-1"), body));
+    await drain();
+    await runWithTenant(TENANT, () => applyPosting(ctx("client-key-2"), body));
+    await drain();
+
+    expect(await readOccupancy(employeeId)).toHaveLength(1);
+    expect(await readServiceBook(employeeId)).toHaveLength(1);
   });
 });

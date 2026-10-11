@@ -5,8 +5,8 @@
  * DETERMINISTIC on the ORDER id — `posting.apply:<orderId>` — never the
  * employee or post id, so a redelivery (or a double-submitted order) is dropped
  * by markProcessed in the consumer and the posting is applied exactly once per
- * order (idempotent on the order id). A genuine client idempotency key
- * (x-idempotency-key) still takes precedence when supplied.
+ * order (idempotent on the order id). A client x-idempotency-key is ignored:
+ * the order id is the only idempotency key.
  */
 import type { RequestContext } from "@civitasone/types";
 import { idempotentId } from "@civitasone/auth";
@@ -25,7 +25,10 @@ export async function applyPosting(
   body: ApplyPostingBody,
 ): Promise<Accepted> {
   const messageId = idempotentId({
-    idempotencyKey: ctx.idempotencyKey ?? `posting.apply:${body.orderId}`,
+    // Always derived from the ORDER id. A client x-idempotency-key is
+    // deliberately ignored: honouring it would let one order be applied twice
+    // under two different keys.
+    idempotencyKey: `posting.apply:${body.orderId}`,
     tenantId: ctx.tenantId,
   });
   await queue.publish(COMMANDS.postingApply, {

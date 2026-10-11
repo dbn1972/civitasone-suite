@@ -1,9 +1,9 @@
 export const COMMANDS = {
-  employeeCreate: "hrms.employee.create",
-  employeeConfirm: "hrms.employee.confirm",
+  employeeCreate:       "hrms.employee.create",
+  employeeConfirm:      "hrms.employee.confirm",
   // GAP-HR-CONFIRMATION-05: probation-extension audit record.
   employeeProbationExtend: "hrms.employee.probation.extend",
-  employeeTransfer: "hrms.employee.transfer",
+  employeeTransfer:     "hrms.employee.transfer",
   employeeTransferSubmitApproval: "hrms.employee.transfer.submit_approval",
   employeePromotionSubmitApproval: "hrms.employee.promotion.submit_approval",
   disciplinarySubmitApproval: "hrms.disciplinary.submit_approval",
@@ -13,94 +13,87 @@ export const COMMANDS = {
   // GAP-HR-MEDICAL-01's medicalClaimsListRead (routes must not write to
   // Postgres directly; see f3-leftover-hrms-cqrs.test.ts).
   disciplinaryCaseViewed: "hrms.disciplinary_case.viewed",
-  employeeSeparate: "hrms.employee.separate",
-  employeeUpdate: "hrms.employee.update",
-  leaveTypeCreate: "hrms.leave_type.create",
-  leaveAllocate: "hrms.leave.allocate",
-  leaveApply: "hrms.leave.apply",
-  leaveApprove: "hrms.leave.approve",
-  leaveReject: "hrms.leave.reject",
-  attendanceMark: "hrms.attendance.mark",
+  employeeSeparate:     "hrms.employee.separate",
+  employeeUpdate:       "hrms.employee.update",
+  leaveTypeCreate:      "hrms.leave_type.create",
+  leaveAllocate:        "hrms.leave.allocate",
+  leaveApply:           "hrms.leave.apply",
+  leaveApprove:         "hrms.leave.approve",
+  leaveReject:          "hrms.leave.reject",
+  attendanceMark:       "hrms.attendance.mark",
   regularisationCreate: "hrms.attendance.regularisation.create",
   // DEF-AT-001: payroll cut-off / attendance period lock (locks or re-opens a month)
-  attendanceLockPeriod: "hrms.attendance.period.lock",
+  attendanceLockPeriod:   "hrms.attendance.period.lock",
   attendanceUnlockPeriod: "hrms.attendance.period.unlock",
-  appraisalCreate: "hrms.appraisal.create",
+  appraisalCreate:      "hrms.appraisal.create",
   appraisalAdvanceStage: "hrms.appraisal.advance_stage",
-  jobCreate: "hrms.job.create",
+  jobCreate:            "hrms.job.create",
   // GAP-RECRUITMENT-NEW-06: per-tenant edition policy (requisition-first vacancy creation).
   recruitmentPolicySet: "hrms.recruitment_policy.set",
-  jdTemplateCreate: "hrms.jd_template.create",
-  jdTemplateUpdate: "hrms.jd_template.update",
-  jdTemplateArchive: "hrms.jd_template.archive",
-  applicationCreate: "hrms.application.create",
-  applicationOffer: "hrms.application.offer",
-  applicationHire: "hrms.application.hire",
-  trainingCreate: "hrms.training.create",
-  nominationCreate: "hrms.nomination.create",
+  jdTemplateCreate:     "hrms.jd_template.create",
+  jdTemplateUpdate:     "hrms.jd_template.update",
+  jdTemplateArchive:    "hrms.jd_template.archive",
+  applicationCreate:    "hrms.application.create",
+  applicationOffer:     "hrms.application.offer",
+  applicationHire:      "hrms.application.hire",
+  trainingCreate:       "hrms.training.create",
+  nominationCreate:     "hrms.nomination.create",
 
   // lifecycle
-  lifecycleConfirm: "hrms.lifecycle.confirm",
-  lifecycleSeparate: "hrms.lifecycle.separate",
-  lifecycleReinstate: "hrms.lifecycle.reinstate",
+  lifecycleConfirm:     "hrms.lifecycle.confirm",
+  lifecycleSeparate:    "hrms.lifecycle.separate",
+  lifecycleReinstate:   "hrms.lifecycle.reinstate",
   lifecyclePromotionCreate: "hrms.lifecycle.promotion.create",
-  lifecycleTransferCreate: "hrms.lifecycle.transfer.create",
-  lifecycleTransferIssue: "hrms.lifecycle.transfer.issue",
+  lifecycleTransferCreate:  "hrms.lifecycle.transfer.create",
+  lifecycleTransferIssue:   "hrms.lifecycle.transfer.issue",
   lifecycleTransferRelieve: "hrms.lifecycle.transfer.relieve",
-  lifecycleTransferJoin: "hrms.lifecycle.transfer.join",
+  lifecycleTransferJoin:    "hrms.lifecycle.transfer.join",
   // GAP-HR-RETIREMENT-01
   lifecycleChecklistToggle: "hrms.lifecycle.separation.checklist_toggle",
-  lifecycleIssuePpo: "hrms.lifecycle.separation.issue_ppo",
-  nominationComplete: "hrms.nomination.complete",
+  lifecycleIssuePpo:        "hrms.lifecycle.separation.issue_ppo",
+  nominationComplete:       "hrms.nomination.complete",
   // GAP-HR-OUTSOURCED-01: vendor-supplied workforce contract register.
   // GAP-ADMIN-BULK-SCAN-02: DPDP audit-on-read of scanned documents (published by the route, audited by scan-link-consumer.ts).
-  scanLinkDocumentsViewed: "hrms.scan-link.documents_viewed",
-  outsourcedCreate: "hrms.outsourced.create",
-  outsourcedUpdate: "hrms.outsourced.update",
-  loanCreate: "hrms.loan.create",
-  loanEmiPaid: "hrms.loan.emi_paid",
+  scanLinkDocumentsViewed:  "hrms.scan-link.documents_viewed",
+  outsourcedCreate:         "hrms.outsourced.create",
+  outsourcedUpdate:         "hrms.outsourced.update",
+  loanCreate:               "hrms.loan.create",
+  loanEmiPaid:              "hrms.loan.emi_paid",
   // GAP-HR-LOANS-02: audit-on-export for the HR loans CSV (same async shape as
   // medicalClaimsListRead: route publishes, consumer writes the audit outbox).
-  loanExportRecorded: "hrms.loan.export_recorded",
+  loanExportRecorded:       "hrms.loan.export_recorded",
   // GAP-ADMIN-DEVICES-04: audit-on-export for the device-trust CSV (employee + device data).
-  deviceExportRecorded: "hrms.device_trust.export_recorded",
-  salaryAdvanceCreate: "hrms.salary_advance.create",
-  salaryAdvanceApprove: "hrms.salary_advance.approve",
-  salaryAdvanceReject: "hrms.salary_advance.reject",
-
-  // workforce-core: the single applyPosting write path (ST-M01-09, D-ST-09/10).
-  // The ONLY way a posting changes. Published by smarttransfer-service (via the
-  // frozen `hrms.posting.apply` contract, D-ST-10) and — when the flag is on —
-  // by HRMS's own transfer paths acting as thin callers. Idempotent on the
-  // ORDER id (deterministic messageId from orderId, never the entity id).
-  postingApply: "hrms.posting.apply",
+  deviceExportRecorded:     "hrms.device_trust.export_recorded",
+  salaryAdvanceCreate:      "hrms.salary_advance.create",
+  salaryAdvanceApprove:     "hrms.salary_advance.approve",
+  salaryAdvanceReject:      "hrms.salary_advance.reject",
 
   // deputation
-  deputationCreate: "hrms.deputation.create",
-  deputationExtend: "hrms.deputation.extend",
-  deputationRevert: "hrms.deputation.revert",
+  deputationCreate:     "hrms.deputation.create",
+  deputationExtend:     "hrms.deputation.extend",
+  deputationRevert:     "hrms.deputation.revert",
   // PAY-PROFILES: deputation-order pay terms (Option A/B, station, parent/post basic, DA source).
   deputationPayTermsUpdate: "hrms.deputation.pay_terms.update",
   // PAY-PROFILES: per-employee pay profile, maker (request) / checker (decide).
-  payProfileRequest: "hrms.pay_profile.request",
-  payProfileDecide: "hrms.pay_profile.decide",
+  payProfileRequest:    "hrms.pay_profile.request",
+  payProfileDecide:     "hrms.pay_profile.decide",
 
   // GAP-HR-ONBOARDING-02: create an employee's onboarding tasks from a template.
   onboardingApplyTemplate: "hrms.onboarding.apply_template",
 
   // GAP-HR-GRIEVANCE-01/02: grievance register (register / assign / dispose + DPDP detail-read audit).
-  grievanceRegister: "hrms.grievance.register",
-  grievanceAssign: "hrms.grievance.assign",
-  grievanceDispose: "hrms.grievance.dispose",
-  grievanceRead: "hrms.grievance.read",
+  grievanceRegister:    "hrms.grievance.register",
+  grievanceAssign:      "hrms.grievance.assign",
+  grievanceDispose:     "hrms.grievance.dispose",
+  grievanceRead:        "hrms.grievance.read",
 
   // social: travel-request / expense-claim creates (route -> command -> consumer insert).
-  travelRequestCreate: "hrms.social.travel_request_create",
-  expenseCreate: "hrms.social.expense_create",
+  travelRequestCreate:  "hrms.social.travel_request_create",
+  expenseCreate:        "hrms.social.expense_create",
 
   // medical
-  medicalClaimCreate: "hrms.medical_claim.create",
-  medicalClaimApprove: "hrms.medical_claim.approve",
+  medicalClaimCreate:    "hrms.medical_claim.create",
+  medicalClaimApprove:   "hrms.medical_claim.approve",
   // GAP-HR-MEDICAL-01: DPDP audit-on-read for a privileged (HR/manager)
   // bulk list read of others' medical claims — published (fire-and-forget)
   // from the route, recorded to the audit outbox by the consumer below,
@@ -109,57 +102,57 @@ export const COMMANDS = {
   medicalClaimsListRead: "hrms.medical_claims.list_read",
 
   // claims (LTC / CEA)
-  claimCreate: "hrms.claim.create",
-  claimApprove: "hrms.claim.approve",
-  claimReject: "hrms.claim.reject",
+  claimCreate:          "hrms.claim.create",
+  claimApprove:         "hrms.claim.approve",
+  claimReject:          "hrms.claim.reject",
 
   // pension
-  pensionInitiate: "hrms.pension.initiate",
-  pensionApprove: "hrms.pension.approve",
-  pensionCalculate: "hrms.pension.calculate",
+  pensionInitiate:      "hrms.pension.initiate",
+  pensionApprove:       "hrms.pension.approve",
+  pensionCalculate:     "hrms.pension.calculate",
 
   // gpf
-  gpfAdvance: "hrms.gpf.advance",
-  gpfWithdrawal: "hrms.gpf.withdrawal",
-  gpfFinalSettlement: "hrms.gpf.final_settlement",
+  gpfAdvance:           "hrms.gpf.advance",
+  gpfWithdrawal:        "hrms.gpf.withdrawal",
+  gpfFinalSettlement:   "hrms.gpf.final_settlement",
 
   // seniority
-  seniorityGenerate: "hrms.seniority.generate",
-  seniorityApprove: "hrms.seniority.approve",
+  seniorityGenerate:    "hrms.seniority.generate",
+  seniorityApprove:     "hrms.seniority.approve",
 
   // service-book
-  serviceBookAddEntry: "hrms.service_book.add_entry",
-  serviceBookVerify: "hrms.service_book.verify",
+  serviceBookAddEntry:  "hrms.service_book.add_entry",
+  serviceBookVerify:    "hrms.service_book.verify",
 
   // apar
-  aparCreate: "hrms.apar.create",
-  aparSubmit: "hrms.apar.submit",
-  aparReview: "hrms.apar.review",
-  aparAccept: "hrms.apar.accept",
+  aparCreate:           "hrms.apar.create",
+  aparSubmit:           "hrms.apar.submit",
+  aparReview:           "hrms.apar.review",
+  aparAccept:           "hrms.apar.accept",
 
   // geo-attendance
-  geoCheckIn: "hrms.geo_attendance.check_in",
-  geoCheckOut: "hrms.geo_attendance.check_out",
+  geoCheckIn:           "hrms.geo_attendance.check_in",
+  geoCheckOut:          "hrms.geo_attendance.check_out",
   // GAP-HR-ATTENDANCE-REPORTEES-01 (DPDP): audit-on-read for a privileged
   // bulk read of other employees' geo-attendance via GET .../reportees —
   // see geo-attendance/routes.ts's auditReporteesListRead doc comment.
   geoAttendanceReporteesRead: "hrms.geo_attendance.reportees_read",
 
   // holidays
-  holidayCreate: "hrms.holiday.create",
-  holidayDelete: "hrms.holiday.delete",
+  holidayCreate:        "hrms.holiday.create",
+  holidayDelete:        "hrms.holiday.delete",
 
   // id-cards
-  idCardIssue: "hrms.id_card.issue",
-  idCardSuspend: "hrms.id_card.suspend",
-  idCardRevoke: "hrms.id_card.revoke",
-  idCardReactivate: "hrms.id_card.reactivate",
+  idCardIssue:          "hrms.id_card.issue",
+  idCardSuspend:        "hrms.id_card.suspend",
+  idCardRevoke:         "hrms.id_card.revoke",
+  idCardReactivate:     "hrms.id_card.reactivate",
 
   // pay-matrix
-  payMatrixIncrement: "hrms.pay_matrix.annual_increment",
+  payMatrixIncrement:   "hrms.pay_matrix.annual_increment",
 
   // reservation
-  rosterCreate: "hrms.roster.create",
+  rosterCreate:         "hrms.roster.create",
   rosterGeneratePoints: "hrms.roster.generate_points",
   sanctionedPostCreate: "hrms.sanctioned_post.create",
 
@@ -167,13 +160,13 @@ export const COMMANDS = {
   workforcePlanRefresh: "hrms.workforce_plan.refresh",
 
   // contracts
-  contractCreate: "hrms.contract.create",
-  contractActivate: "hrms.contract.activate",
-  contractTerminate: "hrms.contract.terminate",
+  contractCreate:          "hrms.contract.create",
+  contractActivate:        "hrms.contract.activate",
+  contractTerminate:       "hrms.contract.terminate",
   contractRenewalInitiate: "hrms.contract.renewal.initiate",
-  contractRenewalBulk: "hrms.contract.renewal.bulk",
-  contractExpiryDetect: "hrms.contract.expiry.detect",
-  contractAutoSeparate: "hrms.contract.auto_separate",
+  contractRenewalBulk:     "hrms.contract.renewal.bulk",
+  contractExpiryDetect:    "hrms.contract.expiry.detect",
+  contractAutoSeparate:    "hrms.contract.auto_separate",
   // F3 leftover — generic route-write command bus for residual sync lifts
   f3RouteWrite: "hrms.f3.route_write",
   leaveCancel: "hrms.leave.cancel",
@@ -187,43 +180,49 @@ export const COMMANDS = {
   // shape as medicalClaimsListRead (routes must not write to Postgres
   // directly; see f3-leftover-hrms-cqrs.test.ts).
   assessmentCertificateVerified: "hrms.assessment_certificate.verified",
+  // workforce-core: the single applyPosting write path (ST-M01-09, D-ST-09/10).
+  // The ONLY way a posting changes. Published by smarttransfer-service (via the
+  // frozen `hrms.posting.apply` contract, D-ST-10) and — when the flag is on —
+  // by HRMS's own transfer paths acting as thin callers. Idempotent on the
+  // ORDER id (deterministic messageId from orderId, never the entity id).
+  postingApply: "hrms.posting.apply",
 } as const;
 
 export const EVENTS = {
   certificateIssued: "assessment.certificate.issued",
-  employeeCreated: "hrms.employee.created",
-  employeeUpdated: "hrms.employee.updated",
+  employeeCreated:   "hrms.employee.created",
+  employeeUpdated:   "hrms.employee.updated",
   employeeSeparated: "hrms.employee.separated",
-  leaveApplied: "hrms.leave.applied",
-  leaveApproved: "hrms.leave.approved",
-  attendanceMarked: "hrms.attendance.marked",
-  attendancePeriodLocked: "hrms.attendance.period_locked",
+  leaveApplied:      "hrms.leave.applied",
+  leaveApproved:     "hrms.leave.approved",
+  attendanceMarked:  "hrms.attendance.marked",
+  attendancePeriodLocked:   "hrms.attendance.period_locked",
   attendancePeriodUnlocked: "hrms.attendance.period_unlocked",
-  claimApproved: "hrms.claim.approved",
+  claimApproved:     "hrms.claim.approved",
   // consultant / invoice (194J) — consumed by Finance AP
   consultantInvoiceApproved: "hrms.consultant_invoice.approved",
-  consultantInvoicePaid: "hrms.consultant_invoice.paid",
+  consultantInvoicePaid:     "hrms.consultant_invoice.paid",
   // third-party / agency (194C, CLRA) — consumed by Finance AP
-  contractorBillApproved: "hrms.contractor_bill.approved",
-  contractorBillPaid: "hrms.contractor_bill.paid",
+  contractorBillApproved:    "hrms.contractor_bill.approved",
+  contractorBillPaid:        "hrms.contractor_bill.paid",
   // apprentice / NAPS stipend — consumed by Finance AP + NAPS reimbursement claim
   apprenticeStipendApproved: "hrms.apprentice_stipend.approved",
-  apprenticeStipendPaid: "hrms.apprentice_stipend.paid",
+  apprenticeStipendPaid:     "hrms.apprentice_stipend.paid",
   // SVC-003: a recruitment hire filled a position for an auto-generated
   // manpower-plan requisition (consumed by modules/manpower-planning).
-  positionFilled: "hrms.recruitment.position_filled",
+  positionFilled:    "hrms.recruitment.position_filled",
   // R-RA-0142: interview communication queued for delivery (consumed by the
   // notification service). Only emitted when interview comms are flag-enabled.
   interviewCommDispatch: "hrms.interview.comm.dispatch",
 
   // contracts
-  contractCreated: "hrms.contract.created",
+  contractCreated:    "hrms.contract.created",
   regularisationApproved: "hrms.attendance.regularisation.approved",
   regularisationRejected: "hrms.attendance.regularisation.rejected",
-  contractRenewed: "hrms.contract.renewed",
-  contractExpired: "hrms.contract.expired",
-  contractEscalated: "hrms.contract.escalated",
-  contractSeparated: "hrms.contract.separated",
+  contractRenewed:    "hrms.contract.renewed",
+  contractExpired:    "hrms.contract.expired",
+  contractEscalated:  "hrms.contract.escalated",
+  contractSeparated:  "hrms.contract.separated",
   // HIGH fix: a transfer changes an employee's posting (and sometimes their
   // pay-structure) but previously published nothing afterward -- unlike
   // employeeCreated/employeeUpdated/employeeSeparated, there was no signal

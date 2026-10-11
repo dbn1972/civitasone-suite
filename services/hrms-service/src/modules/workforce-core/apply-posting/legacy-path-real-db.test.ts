@@ -77,6 +77,8 @@ async function seedEmployee(officeId: string): Promise<string> {
 async function publishTransfer(
   employeeId: string,
   effectiveDate: string,
+  fromDeptId: string = officeA,
+  toDeptId: string = officeB,
 ): Promise<void> {
   const orderRef = `ORD/LEG/${effectiveDate}`;
   await runWithTenant(TENANT, () =>
@@ -93,8 +95,8 @@ async function publishTransfer(
       payload: {
         employeeId,
         tenantId: TENANT,
-        fromDeptId: officeA,
-        toDeptId: officeB,
+        fromDeptId,
+        toDeptId,
         effectiveDate,
         orderRef,
       },
@@ -160,5 +162,21 @@ describe("legacy transfer — flag ON records a ledger span + emits the event", 
     expect(ledger[0]!.officeId).toBe(officeB);
     expect(ledger[0]!.postId).toBeNull(); // legacy path carries no sanctioned post
     expect(ledger[0]!.effectiveFrom).toBe("2020-02-01");
+  });
+});
+
+describe("legacy transfer — a back-dated move never rolls back the legacy transfer", () => {
+  it("applies the master update and skips (not throws) the unrepresentable ledger span", async () => {
+    process.env.WORKFORCE_CORE_LEDGER_ENABLED = "true";
+    const employeeId = await seedEmployee(officeA);
+    await publishTransfer(employeeId, "2020-03-01"); // A -> B, ledger span opens 2020-03-01
+    // B -> A effective BEFORE the open span began: closing it would violate
+    // posting_ledger_dates_check (23514) and previously rolled the transfer back.
+    await publishTransfer(employeeId, "2020-02-01", officeB, officeA);
+
+    expect(await readDept(employeeId)).toBe(officeA); // legacy transfer committed
+    const ledger = await readLedger(employeeId);
+    expect(ledger).toHaveLength(1); // back-dated span skipped, original intact
+    expect(ledger[0]!.effectiveTo).toBeNull();
   });
 });

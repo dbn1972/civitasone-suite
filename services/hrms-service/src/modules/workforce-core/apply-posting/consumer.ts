@@ -28,10 +28,14 @@ import { applyPostingTx } from "./apply.js";
 
 const AUDIT = "audit.event.record";
 
-/** Postgres exclusion-constraint violation (an EXCLUDE … WITH && clash). */
+/** Postgres exclusion-constraint violation (an EXCLUDE … WITH && clash) only. */
 function isExclusionViolation(err: unknown): boolean {
-  const code = (err as { code?: string } | undefined)?.code;
-  return code === "23P01" || code === "23505";
+  return (err as { code?: string } | undefined)?.code === "23P01";
+}
+
+/** CHECK-constraint violation (e.g. the occupancy/ledger date checks). */
+function isCheckViolation(err: unknown): boolean {
+  return (err as { code?: string } | undefined)?.code === "23514";
 }
 
 export function registerApplyPostingConsumer(queue: Queue): void {
@@ -97,11 +101,15 @@ export function registerApplyPostingConsumer(queue: Queue): void {
         });
       });
     } catch (err) {
-      if (isExclusionViolation(err)) {
+      if (isExclusionViolation(err) || isCheckViolation(err)) {
+        const reason = isExclusionViolation(err)
+          ? "POST_ALREADY_OCCUPIED"
+          : "POSTING_DATES_INVALID";
         // Concurrent apply of two orders for the same post/employee: exactly
         // one wins; the other is refused with an AUDITED record, not a leaked
-        // 23P01. markProcessed already rolled back with the failed tx, so a
-        // retry is still possible if the winning posting is later vacated.
+        // 23P01. The failed tx (incl. markProcessed) rolled back, but the
+        // message is acknowledged here, so it is NOT retried: the refusal is
+        // final for this order and a corrected posting needs a new order.
         await db.transaction(async (tx) => {
           await enqueue(tx, {
             topic: AUDIT,
@@ -118,7 +126,7 @@ export function registerApplyPostingConsumer(queue: Queue): void {
               metadata: {
                 employeeId: p.employeeId,
                 postId: p.postId,
-                reason: "POST_ALREADY_OCCUPIED",
+                reason,
               },
             },
           });

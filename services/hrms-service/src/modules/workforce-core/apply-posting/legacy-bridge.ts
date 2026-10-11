@@ -31,6 +31,9 @@ import * as repo from "./repo.js";
 import { enqueue } from "../../../shared/outbox.js";
 import { isPostingEventsEnabled } from "../config.js";
 import { randomUUID } from "node:crypto";
+import { pino } from "pino";
+
+const log = pino({ name: "workforce-core-legacy-bridge" });
 
 type EnqueueTx = Parameters<typeof enqueue>[0];
 
@@ -69,6 +72,22 @@ export async function recordLegacyPostingLedger(
   // then append the new open span (post_id NULL — no sanctioned post is known
   // on the legacy path).
   const closeAt = repo.dayBefore(input.effectiveDate);
+  // A same-day or back-dated legacy transfer cannot be represented as a valid
+  // ledger span (posting_ledger_dates_check). The ledger is supplementary here:
+  // it must never roll back the legacy transfer it shadows, so skip (and log)
+  // rather than throw.
+  const openStart = await repo.findOpenLedgerSpanStart(tx, input.employeeId);
+  if (openStart && closeAt < openStart) {
+    log.warn(
+      {
+        employeeId: input.employeeId,
+        effectiveDate: input.effectiveDate,
+        openSpanStart: openStart,
+      },
+      "legacy transfer is not after the current ledger span; ledger span skipped",
+    );
+    return;
+  }
   await repo.closeOpenLedgerSpan(tx, input.employeeId, closeAt);
   await repo.appendLegacyLedgerSpan(tx, {
     tenantId: input.tenantId,

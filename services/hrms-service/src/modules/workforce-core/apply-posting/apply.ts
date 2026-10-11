@@ -18,7 +18,7 @@
  *      a correct run;
  *   4. open the new substantive occupancy;
  *   5. append the posting ledger (append-only history);
- *   6. update the employee's current office/designation;
+ *   6. (substantive charge only) update the employee's current office/designation;
  *   7. append a service-book entry;
  *   8. enqueue hrms.posting.applied (authoritative fact) and, when the office
  *      changed, the rich hrms.posting.changed (station/state/cityClass; `ddo`
@@ -75,8 +75,10 @@ export async function applyPostingTx(
   tx: Writer,
   input: ApplyPostingInput,
 ): Promise<ApplyPostingResult> {
-  // SoD (house rule 5): enforced in the consumer path, only when the order
-  // actually carries an approver. We never invent an approval rule here
+  // SoD (house rule 5): ADVISORY ONLY. `approvedBy` is caller-supplied and the
+  // frozen `hrms.posting.apply` contract carries no approver, so this cannot be
+  // an authoritative control; it is enforced only when the order carries an
+  // approver. We never invent an approval rule here
   // (D-ST-08/18 PROPOSED) — if no approver is supplied, no SoD check applies.
   if (input.approvedBy && input.approvedBy === input.actorId) {
     throw new HttpError(
@@ -104,9 +106,14 @@ export async function applyPostingTx(
     );
   }
 
+  // Only a SUBSTANTIVE posting moves the employee's home office/designation.
+  // An acting / additional / in_charge charge coexists with the substantive
+  // holding and must leave the employee master (and the office-movement event)
+  // untouched.
+  const isSubstantive = input.chargeType === "substantive";
   const fromOfficeId = employee.departmentId;
   const toOfficeId = post.officeId;
-  const officeChanged = fromOfficeId !== toOfficeId;
+  const officeChanged = isSubstantive && fromOfficeId !== toOfficeId;
 
   const posting: repo.OpenPosting = {
     tenantId: input.tenantId,
@@ -124,9 +131,28 @@ export async function applyPostingTx(
   // never overlaps, so the EXCLUDE constraint cannot fire in a correct run.
   // Only applies to substantive postings — acting/additional/in_charge may
   // legitimately coexist with a substantive holder.
-  if (input.chargeType === "substantive") {
+  if (isSubstantive) {
     const closeAt = repo.dayBefore(input.effectiveDate);
     const open = await repo.findOpenOccupancyForEmployee(tx, input.employeeId);
+    // Half-open [from, to) occupancy needs to > from, and the ledger needs
+    // to >= from. A same-day or back-dated order (effective on/before the day
+    // after the current span began) cannot close the current span validly:
+    // refuse with a domain error (audited by the consumer) instead of letting
+    // post_occupancy_dates_check / posting_ledger_dates_check (23514) surface.
+    const ledgerStart = await repo.findOpenLedgerSpanStart(
+      tx,
+      input.employeeId,
+    );
+    if (
+      (open && closeAt <= open.effectiveFrom) ||
+      (ledgerStart && closeAt < ledgerStart)
+    ) {
+      throw new HttpError(
+        409,
+        "EFFECTIVE_DATE_NOT_AFTER_CURRENT",
+        `effective date ${input.effectiveDate} must be after the start of the employee's current posting`,
+      );
+    }
     if (open) {
       await repo.closeOccupancy(tx, open.id, closeAt, input.actorId);
     }
@@ -140,19 +166,21 @@ export async function applyPostingTx(
   const occupancyId = await repo.openOccupancy(tx, posting);
   const ledgerId = await repo.appendLedger(tx, posting);
 
-  const updated = await repo.updateEmployeeCurrentPost(
-    tx,
-    input.employeeId,
-    toOfficeId,
-    post.designationId,
-    input.actorId,
-  );
-  if (updated === 0) {
-    throw new HttpError(
-      404,
-      "EMPLOYEE_NOT_FOUND",
-      `employee ${input.employeeId} not found`,
+  if (isSubstantive) {
+    const updated = await repo.updateEmployeeCurrentPost(
+      tx,
+      input.employeeId,
+      toOfficeId,
+      post.designationId,
+      input.actorId,
     );
+    if (updated === 0) {
+      throw new HttpError(
+        404,
+        "EMPLOYEE_NOT_FOUND",
+        `employee ${input.employeeId} not found`,
+      );
+    }
   }
 
   await repo.appendServiceBookEntry(tx, {
