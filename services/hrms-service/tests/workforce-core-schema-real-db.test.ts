@@ -78,7 +78,24 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await sql.end();
+  // Best-effort cleanup of this run's rows. posting_ledger is append-only (a
+  // trigger rejects DELETE), so ledger rows — and the post/cadre rows they
+  // reference — are intentionally left; they sit under random tenant ids that
+  // no other test or tenant can see.
+  try {
+    for (const t of [TA, TB]) {
+      await setTenant(t);
+      await sql`delete from workforce_core.post_occupancy where tenant_id = ${t}::uuid`;
+      await sql`delete from workforce_core.employee_cadre where tenant_id = ${t}::uuid`;
+      await sql`delete from workforce_core.post p where p.tenant_id = ${t}::uuid
+                and not exists (select 1 from workforce_core.posting_ledger l where l.post_id = p.id)`;
+      await sql`delete from workforce_core.cadre c where c.tenant_id = ${t}::uuid
+                and not exists (select 1 from workforce_core.post p where p.cadre_id = c.id)
+                and not exists (select 1 from workforce_core.employee_cadre e where e.cadre_id = c.id)`;
+    }
+  } finally {
+    await sql.end();
+  }
 });
 
 describe("workforce_core — runtime role & RLS", () => {
@@ -213,5 +230,102 @@ describe("workforce_core — tenure from the posting ledger", () => {
     await setTenant(TA);
     const rows = await sql`select workforce_core.service_tenure_days(${randomUUID()}::uuid, '2023-12-31'::date) as d`;
     expect(rows[0].d).toBe(0);
+  });
+});
+
+describe("workforce_core — tenure never double-counts a day", () => {
+  async function ledgerRow(emp: string, from: string, to: string | null, charge = "substantive") {
+    await sql`insert into workforce_core.posting_ledger (tenant_id, employee_id, office_id, charge_type, effective_from, effective_to)
+              values (${TA}::uuid, ${emp}::uuid, ${randomUUID()}::uuid, ${charge}, ${from}::date, ${to}::date)`;
+  }
+  const tenure = async (emp: string, asOf: string) =>
+    (await sql`select workforce_core.service_tenure_days(${emp}::uuid, ${asOf}::date) as d`)[0].d;
+
+  it("a transfer (old span ends the day the new one begins) counts that day once", async () => {
+    await setTenant(TA);
+    const emp = randomUUID();
+    await ledgerRow(emp, "2020-01-01", "2020-01-31");
+    await ledgerRow(emp, "2020-01-31", null);
+    expect(await tenure(emp, "2020-02-01")).toBe(32); // Jan 1..Feb 1 inclusive
+  });
+
+  it("a span nested inside another adds nothing", async () => {
+    await setTenant(TA);
+    const emp = randomUUID();
+    await ledgerRow(emp, "2020-01-01", "2020-01-31");
+    await ledgerRow(emp, "2020-01-31", null);
+    await ledgerRow(emp, "2020-01-15", "2020-01-20");
+    expect(await tenure(emp, "2020-02-01")).toBe(32);
+  });
+
+  it("disjoint spans still sum and non-substantive charge is ignored", async () => {
+    await setTenant(TA);
+    const emp = randomUUID();
+    await ledgerRow(emp, "2020-01-01", "2020-01-10"); // 10
+    await ledgerRow(emp, "2020-02-01", "2020-02-05"); // 5
+    await ledgerRow(emp, "2020-01-01", "2020-12-31", "acting");
+    expect(await tenure(emp, "2020-12-31")).toBe(15);
+  });
+
+  it("spans starting after as_of are excluded and open spans stop at as_of", async () => {
+    await setTenant(TA);
+    const emp = randomUUID();
+    await ledgerRow(emp, "2020-01-01", null);
+    await ledgerRow(emp, "2021-01-01", "2021-01-31");
+    expect(await tenure(emp, "2020-01-10")).toBe(10);
+  });
+});
+
+describe("workforce_core — posting_ledger is append-only", () => {
+  async function fresh(open = true) {
+    await setTenant(TA);
+    const id = randomUUID();
+    await sql`insert into workforce_core.posting_ledger (id, tenant_id, employee_id, office_id, charge_type, effective_from, effective_to)
+              values (${id}::uuid, ${TA}::uuid, ${randomUUID()}::uuid, ${randomUUID()}::uuid, 'substantive', '2024-01-01',
+                      ${open ? null : "2024-06-01"}::date)`;
+    return id;
+  }
+
+  it("rejects DELETE", async () => {
+    const id = await fresh();
+    await expect(sql`delete from workforce_core.posting_ledger where id = ${id}::uuid`).rejects.toThrow(/append-only/);
+    const rows = await sql`select id from workforce_core.posting_ledger where id = ${id}::uuid`;
+    expect(rows.length).toBe(1);
+  });
+
+  it("rejects rewriting history (office, dates of a closed span, order_ref)", async () => {
+    const closed = await fresh(false);
+    await expect(
+      sql`update workforce_core.posting_ledger set effective_to = '2024-09-01' where id = ${closed}::uuid`,
+    ).rejects.toThrow(/append-only/);
+    const open = await fresh();
+    await expect(
+      sql`update workforce_core.posting_ledger set office_id = ${randomUUID()}::uuid where id = ${open}::uuid`,
+    ).rejects.toThrow(/append-only/);
+    await expect(
+      sql`update workforce_core.posting_ledger set effective_from = '2023-01-01' where id = ${open}::uuid`,
+    ).rejects.toThrow(/append-only/);
+    await expect(
+      sql`update workforce_core.posting_ledger set order_ref = 'X' where id = ${open}::uuid`,
+    ).rejects.toThrow(/append-only/);
+  });
+
+  it("allows the one sanctioned mutation: closing an open span", async () => {
+    const open = await fresh();
+    const rows = await sql`update workforce_core.posting_ledger
+                              set effective_to = '2024-03-01', version = version + 1
+                            where id = ${open}::uuid returning effective_to, version`;
+    expect(rows.length).toBe(1);
+    expect(rows[0].version).toBe(2);
+  });
+});
+
+describe("workforce_core — empty occupancy range cannot bypass the EXCLUDE constraints", () => {
+  it("rejects effective_to = effective_from", async () => {
+    await setTenant(TA);
+    await expect(
+      sql`insert into workforce_core.post_occupancy (tenant_id, post_id, employee_id, charge_type, effective_from, effective_to)
+          values (${TA}::uuid, ${seedA.postId}::uuid, ${randomUUID()}::uuid, 'substantive', '2021-06-01', '2021-06-01')`,
+    ).rejects.toThrow(/post_occupancy_dates_check/);
   });
 });

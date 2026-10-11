@@ -163,8 +163,26 @@ CREATE TABLE IF NOT EXISTS workforce_core.post_occupancy (
   updated_by       uuid,
   version          integer NOT NULL DEFAULT 1,
   CONSTRAINT post_occupancy_charge_check CHECK (charge_type IN ('substantive','acting','additional','in_charge')),
-  CONSTRAINT post_occupancy_dates_check  CHECK (effective_to IS NULL OR effective_to >= effective_from)
+  -- Half-open [from, to): an equal from/to is an EMPTY range, and an empty range
+  -- bypasses the EXCLUDE constraints below, so require to > from strictly.
+  CONSTRAINT post_occupancy_dates_check  CHECK (effective_to IS NULL OR effective_to > effective_from)
 );
+-- Re-assert on databases where an earlier revision of this file created the
+-- table with the looser (>=) check. Idempotent.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'post_occupancy_dates_check'
+      AND conrelid = 'workforce_core.post_occupancy'::regclass
+      AND pg_get_constraintdef(oid) LIKE '%>=%'
+  ) THEN
+    ALTER TABLE workforce_core.post_occupancy DROP CONSTRAINT post_occupancy_dates_check;
+    ALTER TABLE workforce_core.post_occupancy
+      ADD CONSTRAINT post_occupancy_dates_check
+      CHECK (effective_to IS NULL OR effective_to > effective_from);
+  END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS post_occupancy_tenant_idx      ON workforce_core.post_occupancy (tenant_id, post_id);
 CREATE INDEX IF NOT EXISTS post_occupancy_tenant_emp_idx  ON workforce_core.post_occupancy (tenant_id, employee_id);
 
@@ -241,11 +259,47 @@ CREATE INDEX IF NOT EXISTS posting_ledger_tenant_idx      ON workforce_core.post
 CREATE INDEX IF NOT EXISTS posting_ledger_emp_from_idx    ON workforce_core.posting_ledger (tenant_id, employee_id, effective_from);
 CREATE INDEX IF NOT EXISTS posting_ledger_tenant_office_idx ON workforce_core.posting_ledger (tenant_id, office_id);
 
+-- ── Append-only enforcement for posting_ledger ──────────────────────────────
+-- The ledger is history: rows are never deleted or rewritten. The ONLY permitted
+-- mutation is closing an open span (effective_to NULL -> a date, optionally with
+-- a version bump), which is how a transfer ends the previous posting. Any other
+-- UPDATE, any DELETE and any TRUNCATE is rejected for every role including the
+-- table owner (hrms_svc), so a REVOKE alone would not bind. Corrections are made
+-- by appending a new row.
+CREATE OR REPLACE FUNCTION workforce_core.posting_ledger_append_only()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF TG_OP = 'UPDATE'
+     AND OLD.effective_to IS NULL
+     AND NEW.effective_to IS NOT NULL
+     AND (to_jsonb(NEW) - 'effective_to' - 'version')
+         = (to_jsonb(OLD) - 'effective_to' - 'version') THEN
+    RETURN NEW;  -- closing an open span
+  END IF;
+  RAISE EXCEPTION 'workforce_core.posting_ledger is append-only (% rejected)', TG_OP
+    USING ERRCODE = 'restrict_violation';
+END;
+$$;
+
+DROP TRIGGER IF EXISTS posting_ledger_append_only ON workforce_core.posting_ledger;
+CREATE TRIGGER posting_ledger_append_only
+  BEFORE UPDATE OR DELETE ON workforce_core.posting_ledger
+  FOR EACH ROW EXECUTE FUNCTION workforce_core.posting_ledger_append_only();
+
+DROP TRIGGER IF EXISTS posting_ledger_no_truncate ON workforce_core.posting_ledger;
+CREATE TRIGGER posting_ledger_no_truncate
+  BEFORE TRUNCATE ON workforce_core.posting_ledger
+  FOR EACH STATEMENT EXECUTE FUNCTION workforce_core.posting_ledger_append_only();
+
 -- ── Tenure read model (derivable from the posting ledger) ───────────────────
--- service_tenure_days(employee, as_of): total days the employee has been in
--- SUBSTANTIVE postings up to and including as_of, counting a span's days from
--- effective_from to min(effective_to, as_of). Open spans (effective_to NULL) are
--- counted to as_of. SECURITY INVOKER so RLS still applies to the caller.
+-- service_tenure_days(employee, as_of): number of DISTINCT calendar days the
+-- employee has been in SUBSTANTIVE postings up to and including as_of. Each
+-- span covers effective_from..effective_to INCLUSIVE (open spans run to as_of);
+-- spans are merged (range_agg) before counting, so a transfer where the old span
+-- ends the day the new one begins, or any overlap between ledger rows, never
+-- counts a day twice. SECURITY INVOKER so RLS still applies to the caller.
 CREATE OR REPLACE FUNCTION workforce_core.service_tenure_days(
   p_employee_id uuid,
   p_as_of       date DEFAULT CURRENT_DATE
@@ -254,16 +308,17 @@ RETURNS integer
 LANGUAGE sql
 STABLE
 AS $$
-  SELECT COALESCE(SUM(
-    GREATEST(
-      0,
-      (LEAST(COALESCE(l.effective_to, p_as_of), p_as_of) - l.effective_from) + 1
-    )
-  ), 0)::integer
-  FROM workforce_core.posting_ledger l
-  WHERE l.employee_id = p_employee_id
-    AND l.charge_type = 'substantive'
-    AND l.effective_from <= p_as_of;
+  SELECT COALESCE(SUM(upper(r) - lower(r)), 0)::integer
+  FROM unnest((
+    SELECT range_agg(daterange(
+             l.effective_from,
+             LEAST(COALESCE(l.effective_to, p_as_of), p_as_of),
+             '[]'))
+    FROM workforce_core.posting_ledger l
+    WHERE l.employee_id = p_employee_id
+      AND l.charge_type = 'substantive'
+      AND l.effective_from <= p_as_of
+  )) AS r;
 $$;
 
 -- current_station_tenure_days(employee, as_of): days in the CURRENT (latest, by
