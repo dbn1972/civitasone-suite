@@ -5,7 +5,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { CONSUMED_EVENTS } from "../../topics.js";
 import { definitions } from "../definitions/schema.js";
 import * as defRepo from "../definitions/repo.js";
-import { STANDARD_DEFINITIONS, linearEdges } from "./catalog.js";
+import { definitionsForClusters, seedClustersFromEnv, linearEdges } from "./catalog.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -29,7 +29,13 @@ export function registerProvisioningConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
-      for (const def of STANDARD_DEFINITIONS) {
+      // ST-M01-03: seed only the standard definitions whose module cluster is
+      // enabled for this deployment. Default = every cluster (unchanged for
+      // existing tenants); a SmartTransfer-standalone deployment narrows this
+      // via WORKFLOW_SEED_CLUSTERS so the HR/finance/procurement/grant chains
+      // are not seeded for a tenant that has none of those modules.
+      const toSeed = definitionsForClusters(seedClustersFromEnv());
+      for (const def of toSeed) {
         const existing = await defRepo.findByCodeTx(tx, tenantId, def.code);
         if (existing) continue; // already provisioned
 
