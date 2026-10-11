@@ -30,7 +30,7 @@
  * hard-coded DECISION_CONSUMED_REF_TYPES (their consumer, smarttransfer-service,
  * is unmerged). They are enabled for this test via the documented env
  * EXTRA_DECISION_CONSUMED_REF_TYPES, set BEFORE estab's modules are imported.
- * The final case proves the raise is REJECTED (no file created, audited) when a
+ * The final case proves the raise is REJECTED (no file created) when a
  * type is NOT consumable — the production default on main.
  *
  * Governing (PROPOSED) decision: D-ST-08 option (a). Spec §11. D-17, D-ST-10.
@@ -218,6 +218,17 @@ async function fileRow(tenantId: string, fileId: string): Promise<{ status: stri
   return r[0] ?? null;
 }
 
+/** Note status of the file's latest noting (RLS-scoped). */
+async function notingStatus(tenantId: string, fileId: string): Promise<string | null> {
+  const { withTenantScope } = await import("@civitasone/db");
+  const rows = await withTenantScope(estab.db, tenantId, async (tx: typeof estab.db) =>
+    tx.execute(sql`SELECT note_status FROM files.estab_notings
+      WHERE file_id = ${fileId} AND tenant_id = ${tenantId} ORDER BY seq DESC LIMIT 1`),
+  );
+  const r = rows as unknown as Array<{ note_status: string }>;
+  return r[0]?.note_status ?? null;
+}
+
 describe("eOffice ↔ SmartTransfer loop-back — hr_transfer_order (D-ST-08, PROPOSED)", () => {
   it("approved: raise → approve → callback 'approved' on hrms.transfer_order.file_decided", async () => {
     const tn = tenant();
@@ -249,6 +260,7 @@ describe("eOffice ↔ SmartTransfer loop-back — hr_transfer_order (D-ST-08, PR
     const topic = MODULE_CALLBACK_TOPICS["hr_transfer_order"];
     const { fileId } = await raise(tn, "hr_transfer_order", refId);
 
+    expect(await notingStatus(tn, fileId), "raise leaves the proposal noting submitted").toBe("submitted");
     const rejecter = randomUUID();
     await decide(CONSUMED_EVENTS.fileReject, tn, fileId, "rejectedBy", rejecter, "INELIGIBLE_POST");
 
@@ -260,8 +272,9 @@ describe("eOffice ↔ SmartTransfer loop-back — hr_transfer_order (D-ST-08, PR
       expect(parsed.value.decision).toBe<Decision>("rejected");
       expect(parsed.value.reasonCode).toBe("INELIGIBLE_POST");
     }
-    // Reject sends the file back to draft.
+    // Reject sends the file back to draft and freezes the noting rejected (terminal).
     expect((await fileRow(tn, fileId))?.status).toBe("draft");
+    expect(await notingStatus(tn, fileId), "reject freezes the noting rejected").toBe("rejected");
   });
 
   it("returned: raise → return(reason) → callback 'returned' with reason", async () => {
@@ -270,6 +283,7 @@ describe("eOffice ↔ SmartTransfer loop-back — hr_transfer_order (D-ST-08, PR
     const topic = MODULE_CALLBACK_TOPICS["hr_transfer_order"];
     const { fileId } = await raise(tn, "hr_transfer_order", refId);
 
+    expect(await notingStatus(tn, fileId), "raise leaves the proposal noting submitted").toBe("submitted");
     const returner = randomUUID();
     await decide(CONSUMED_EVENTS.fileReject, tn, fileId, "rejectedBy", returner, "NEEDS_REVISION", { outcome: "returned" });
 
@@ -282,6 +296,42 @@ describe("eOffice ↔ SmartTransfer loop-back — hr_transfer_order (D-ST-08, PR
       expect(parsed.value.reasonCode).toBe("NEEDS_REVISION");
     }
     expect((await fileRow(tn, fileId))?.status).toBe("draft");
+    expect(await notingStatus(tn, fileId), "return reopens the noting as draft for revision").toBe("draft");
+  });
+
+  it("redelivery: the same messageId on estab.file.reject (returned) yields ONE callback and ONE decision-log row", async () => {
+    const tn = tenant();
+    const refId = randomUUID();
+    const topic = MODULE_CALLBACK_TOPICS["hr_transfer_order"];
+    const { fileId } = await raise(tn, "hr_transfer_order", refId);
+
+    const returner = randomUUID();
+    const envelope = {
+      messageId: randomUUID(), // SAME id on both deliveries
+      type: CONSUMED_EVENTS.fileReject,
+      tenantId: tn,
+      actorId: returner,
+      correlationId: randomUUID(),
+      schemaVersion: "1.0",
+      payload: { fileId, tenantId: tn, rejectedBy: returner, reasonCode: "NEEDS_REVISION", outcome: "returned" },
+    };
+    for (let i = 0; i < 2; i++) {
+      await h.queue.publish(CONSUMED_EVENTS.fileReject, envelope);
+      await h.queue.drain();
+      await h.relayAll();
+    }
+
+    const got = (callbacks[topic] ?? []).filter((p) => p.fileId === fileId);
+    expect(got.length, "a redelivered decision must not emit a second callback").toBe(1);
+
+    const { withTenantScope } = await import("@civitasone/db");
+    const rows = await withTenantScope(estab.db, tn, async (tx: typeof estab.db) =>
+      tx.execute(sql`
+        SELECT decision FROM files.module_decision_log
+        WHERE tenant_id = ${tn} AND file_id = ${fileId}`),
+    );
+    expect((rows as unknown as unknown[]).length, "exactly one decision-log row").toBe(1);
+    expect(await notingStatus(tn, fileId)).toBe("draft");
   });
 });
 
