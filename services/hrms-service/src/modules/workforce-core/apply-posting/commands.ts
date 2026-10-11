@@ -12,6 +12,7 @@ import type { RequestContext } from "@civitasone/types";
 import { idempotentId } from "@civitasone/auth";
 import { queue } from "../../../shared/infra.js";
 import { COMMANDS } from "../../../topics.js";
+import { IN_SERVICE_PRODUCER } from "./producer.js";
 import type { ApplyPostingBody } from "./validators.js";
 
 export type Accepted = {
@@ -49,6 +50,13 @@ export async function applyPosting(
       effectiveDate: body.effectiveDate,
       chargeType: body.chargeType,
       orderNumber: body.orderNumber,
+      // ST-M01-15: the producing service, carried so the consumer can enforce
+      // the frozen contract's producer ACL (D-ST-19 / D-ST-10). This is the
+      // hrms-service in-service HTTP affordance — a trusted self-producer that
+      // runs the SAME path SmartTransfer drives (routes.ts). Same `.passthrough`
+      // tolerant-reader shape as the `sourceService` convention, so it does not
+      // change the frozen `hrms.posting.apply` schema (D-18).
+      producer: IN_SERVICE_PRODUCER,
       ...(body.approvedBy ? { approvedBy: body.approvedBy } : {}),
     },
   });
