@@ -72,6 +72,14 @@ the contract (tolerant reader; `define.ts` rule 5):
   (`employee/schema.ts:54`, default `X`). `ddo` is **optional** (ST-M01-09): there is no DDO source in Workforce
   Core today, so the `applyPosting` producer omits it rather than invent one; the field stays in the frozen
   contract for when a source exists (PROPOSED D-ST-13/14).
+  **ST-M01-11 implements this consumer** (`payroll-service/src/modules/posting-history/`): it records the posting
+  FACT the event carries into a dated `payroll.posting_history` table (migration 0087, FORCE RLS) and exposes an
+  as-of read API — NO pay computation / TA-DA / mid-month split / HRA-class derivation (all still OPEN under
+  D-ST-13/14). Because D-ST-13 is PROPOSED, the consumer is gated behind `PAYROLL_POSTING_CONSUMER_ENABLED`
+  (default off), so it is not subscribed on main — keeping the cross-service-events ratchet green exactly as the
+  hrms producer stays behind `HRMS_POSTING_EVENTS_ENABLED`. The topic is therefore **not** added to
+  payroll-service's exported `CONSUMED_EVENTS` map (it would register a dead subscription); it moves there, and
+  into this row's `Consumers` column, when D-ST-13 is APPROVED and both flags are turned on.
 - `smarttransfer` consuming `hrms.posting.hold_placed`/`.hold_released` for eligibility → **OPEN D-ST-16** (hold
   registry consumption). The `hrms_employee_holds` table exists (`lifecycle/schema.ts:212-232`) but is read by no
   transfer path today (M00 §1.3).
