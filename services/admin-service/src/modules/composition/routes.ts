@@ -36,6 +36,8 @@ const onboardBody = z.object({ profile: z.string().min(1).max(64) });
 const internalParam = z.object({ tenantId: z.string().uuid() });
 const moduleParam = z.object({ id: z.string().min(1).max(64).regex(/^[a-z][a-z0-9_]*$/) });
 const bundleParam = z.object({ code: z.string().min(1).max(64).regex(/^[a-z][a-z0-9_]*$/) });
+const enforcementModeBody = z.object({ mode: z.enum(["off", "shadow", "enforce"]) });
+const enforcementModeParam = z.object({ tenantId: z.string().uuid() });
 // ST-M01-03 — plan-to-composition applier. `tenantId` is OPTIONAL and only
 // honoured for platform/super admins (a tenant_admin may only apply to its own
 // tenant — never trust a client-supplied tenant id for a tenant-scoped actor).
@@ -186,15 +188,16 @@ export async function compositionRoutes(app: FastifyInstance): Promise<void> {
       requireRole(ctx, ADMIN_ROLES);
     }
     const { tenantId } = safeParse(internalParam, req.params);
-    const [profileCode, userModules] = await Promise.all([
+    const [profileCode, userModules, mode] = await Promise.all([
       repo.getTenantProfileCode(tenantId),
       repo.getUserModules(tenantId),
+      repo.getEffectiveEnforcementMode(tenantId),
     ]);
     const configured = profileCode !== null || userModules.length > 0;
-    if (!configured) return reply.send({ configured: false, data: [] });
+    if (!configured) return reply.send({ configured: false, mode, data: [] });
     const reg = await registryFor(tenantId);
     const comp = resolveComposition(reg, userModules);
-    return reply.send({ configured: true, data: toGatewayKeys(comp.moduleIds).map((name) => ({ name })) });
+    return reply.send({ configured: true, mode, data: toGatewayKeys(comp.moduleIds).map((name) => ({ name })) });
   });
 
   // The caller's OWN enabled modules (gateway route-keys) for web nav visibility.
@@ -229,6 +232,31 @@ export async function compositionRoutes(app: FastifyInstance): Promise<void> {
     }
     await repo.applyProfile(ctx.tenantId, chosen.code, chosen.defaultModules, ctx.actorId);
     return reply.send(await tenantView(ctx.tenantId));
+  });
+
+  // Read the EFFECTIVE module-gating enforcement mode for a tenant (FF-03,
+  // D-ST-24). off | shadow | enforce, resolved per repo.getEffectiveEnforcementMode
+  // (explicit row > standalone-profile ⇒ enforce > off). Platform-operator
+  // control surface; scoped to platform/super admins only.
+  app.get("/v1/admin/composition/:tenantId/enforcement-mode", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["super_admin", "platform_admin"]);
+    const { tenantId } = safeParse(enforcementModeParam, req.params);
+    const mode = await repo.getEffectiveEnforcementMode(tenantId);
+    return reply.send({ tenantId, mode });
+  });
+
+  // Set the EXPLICIT per-tenant enforcement mode. Default is `off` (fail-open,
+  // the gateway-service #986 legacy safeguard); an operator moves a tenant to
+  // `shadow` (log would-denies, still allow) then `enforce` (fail closed) after
+  // the grandfather backfill (migration 0050) has run. Platform/super admin only.
+  app.put("/v1/admin/composition/:tenantId/enforcement-mode", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["super_admin", "platform_admin"]);
+    const { tenantId } = safeParse(enforcementModeParam, req.params);
+    const { mode } = safeParse(enforcementModeBody, req.body);
+    await repo.setEnforcementMode(tenantId, mode, ctx.actorId);
+    return reply.send({ tenantId, mode });
   });
 
   // Apply a subscription plan's module set (+ optional profile) to a tenant's

@@ -48,4 +48,27 @@ describe("module visibility gating (R13.1, R13.2, R13.4)", () => {
       expect(isModuleEnabled([], "audit", ["super_admin"])).toBe(true);
     });
   });
+
+  // ST-M01-02: platform module keys are always visible, mirroring the gateway
+  // PLATFORM_ROUTES, so a composed/standalone tenant whose projection omits a
+  // platform key (e.g. documents) is never blocked from a platform screen.
+  describe("platform modules are always visible (ST-M01-02)", () => {
+    it("shows documents/eoffice even when NOT in a non-empty enabled list", () => {
+      // A standalone tenant has a real, non-empty list that omits documents.
+      const standalone = ["smarttransfer", "workflow"];
+      expect(isModuleEnabled(standalone, "documents")).toBe(true);
+      expect(isModuleEnabled(standalone, "eoffice")).toBe(true);
+    });
+
+    it("shows notification/workflow/audit/identity/admin regardless of the list", () => {
+      for (const key of ["notification", "workflow", "audit", "identity", "admin"]) {
+        expect(isModuleEnabled(["finance"], key)).toBe(true);
+      }
+    });
+
+    it("still hides a genuinely non-platform disabled module", () => {
+      // Guard against over-broad platform matching: payroll is NOT platform.
+      expect(isModuleEnabled(["smarttransfer", "workflow"], "payroll")).toBe(false);
+    });
+  });
 });

@@ -25,6 +25,24 @@ export async function getEnabledModules(): Promise<string[] | null> {
 }
 
 /**
+ * Platform module keys that are ALWAYS visible, in every tenant composition
+ * (ST-M01-02). Mirrors the gateway's PLATFORM_ROUTES and the standalone platform
+ * layer (SMARTTRANSFER-MASTER-SPEC-v3 §1). Exported for the parity test.
+ */
+export const PLATFORM_MODULE_KEYS = new Set([
+  "identity",
+  "admin",
+  "audit",
+  "notification",
+  "workflow",
+  "documents",
+  "eoffice",
+  "policy",
+  "queue",
+  "tenant",
+]);
+
+/**
  * True when a module should be visible. A null moduleKey is always visible
  * (platform/overview). A null enabled-list means "unknown" → show all.
  * Matching is lenient: a module is enabled if any enabled name contains, or is
@@ -40,8 +58,18 @@ export function isModuleEnabled(
   if (moduleKey === null) return true;
   // Super admins and platform admins bypass module gating
   if (roles?.includes("super_admin") || roles?.includes("platform_admin")) return true;
-  if (!enabled) return true; // unknown → show all
   const key = moduleKey.toLowerCase();
+  // ST-M01-02: platform module keys are ALWAYS visible, in every tenant
+  // composition. These mirror the gateway's PLATFORM_ROUTES
+  // (services/gateway-service/src/module-guard.ts) and the standalone platform
+  // layer (SMARTTRANSFER-MASTER-SPEC-v3 §1: identity, admin, audit, notification,
+  // workflow, DOCUMENT/eOffice, queue, policy, tenant). The gateway lets these
+  // through in enforce mode as platform routes; the web nav/ModuleGate must
+  // agree, or a composed/standalone tenant whose projection omits "documents"
+  // would hide a platform screen the API happily serves. Additive — can only
+  // ENABLE visibility, never hide a module.
+  if (PLATFORM_MODULE_KEYS.has(key)) return true;
+  if (!enabled) return true; // unknown → show all
   // GAP-RECOMMENDATIONS-HOME-04: the recommendations route/nav gate on the key
   // "recommendation" (singular) while a tenant's entitlement flag may be named
   // either "recommendation" or "recommendations". The existing bidirectional
