@@ -134,12 +134,14 @@ describe("onboarding the standalone profile", () => {
     });
     expect(res.statusCode).toBe(200);
     const keys = res.json().data.map((m: { name: string }) => m.name);
-    expect(keys).toEqual(expect.arrayContaining(["smarttransfer", "hrms", "workflow"]));
-    // workforce_core projects to "hrms" (sub-route granularity is ST-M01-04);
-    // but payroll is a SEPARATE key and must be absent, as must any
-    // leave/recruitment-specific key. (hrms is present only via workforce_core;
-    // leave/recruitment have no distinct gateway key, they ride "hrms" — the
-    // gateway sub-route split that withholds them is explicitly ST-M01-04.)
+    // ST-M01-04b: workforce_core now projects to its OWN gateway key
+    // `workforce_core` (the sub-route split landed). payroll is a SEPARATE key
+    // and must be absent, as must every non-core HRMS sub-key — the standalone
+    // SKU reaches core Workforce Core + SmartTransfer + workflow only.
+    expect(keys).toEqual(expect.arrayContaining(["smarttransfer", "workforce_core", "workflow"]));
+    expect(keys).not.toContain("hrms");
+    expect(keys).not.toContain("hrms-leave");
+    expect(keys).not.toContain("hrms-recruitment");
     expect(keys).not.toContain("payroll");
     expect(keys).not.toContain("finance");
     expect(keys).not.toContain("procurement");

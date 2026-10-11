@@ -24,6 +24,7 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
 import { CircuitBreaker, CircuitBreakerOpenError } from "@civitasone/circuit-breaker";
 import { pino } from "pino";
+import { HRMS_ROUTE_NAMES, resolveHrmsModuleKey } from "./hrms-subroute-map.js";
 
 const log = pino({ name: "gateway-module-guard" });
 
@@ -186,11 +187,24 @@ export async function checkModuleEnabled(
   req: FastifyRequest,
   reply: FastifyReply,
   routeName: string,
+  pathname?: string,
 ): Promise<boolean> {
   // Platform routes bypass the module check in EVERY mode.
   if (PLATFORM_ROUTES.has(routeName)) return true;
 
-  const moduleKey = ROUTE_TO_MODULE[routeName];
+  // ST-M01-04b: the HRMS surface (`hrms` / `hr` / `careers` registry routes) is
+  // proxied under ONE gateway route but served by a service with a core
+  // (Workforce Core) surface and many non-core modules. Split the single `hrms`
+  // key into a path-aware per-prefix key so a standalone tenant entitled to
+  // `workforce_core` can reach the core surface but is BLOCKED from leave /
+  // attendance / recruitment / payroll-facing and the other non-core surfaces
+  // (M01 exit criterion 3; D-ST-23/24). When no pathname is available (a direct
+  // caller that passes only the route name) we keep the legacy `hrms` key so
+  // behaviour is unchanged for callers that have not opted in.
+  const moduleKey =
+    HRMS_ROUTE_NAMES.has(routeName) && pathname !== undefined
+      ? resolveHrmsModuleKey(pathname)
+      : ROUTE_TO_MODULE[routeName];
   const tenantId = extractTenantId(req);
   const useComposition = process.env.COMPOSITION_ENFORCEMENT === "on";
 

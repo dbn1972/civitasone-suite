@@ -11,19 +11,65 @@
 export const COMPOSITION_TO_GATEWAY_KEYS: Record<string, string[]> = {
   // kernel
   workflow: ["workflow"],
-  // establishment / HR — all HR modules proxy through the hrms route
-  employee: ["hrms", "establishment"],
-  attendance: ["hrms"],
-  leave: ["hrms"],
-  recruitment: ["hrms"],
-  appraisal: ["hrms"],
-  career: ["hrms"],
-  ess: ["hrms", "reports"],
+  // establishment / HR.
+  //
+  // ST-M01-04b (D-ST-23/24): the hrms-service is proxied under ONE gateway
+  // route, but it serves a core (Workforce Core) surface plus many non-core
+  // modules. The gateway module-guard is now PATH-AWARE for the HRMS surface
+  // (services/gateway-service/src/hrms-subroute-map.ts) and resolves each
+  // non-core prefix to its own `hrms-<module>` key, with the core prefixes
+  // resolving to `workforce_core`. So each composition HR module must project
+  // to the gateway key that its routes resolve to, NOT the old blanket `hrms`:
+  //   • `employee` is the full HRIS employee master. Its own screens live on the
+  //     core prefixes (employees / departments / service-book / …) which the
+  //     guard resolves to `workforce_core`; it also surfaces establishment. The
+  //     HRMS modules that are NOT separately licensable in the composition
+  //     registry (training, social, disciplinary, deputation, contracts,
+  //     assessment, id-cards, ai, rti, workforce-planning, board-intake,
+  //     competency, and the payroll-FACING hrms routes pay-matrix/medical/*-claims)
+  //     are part of the base HRIS, so `employee` also projects to each of their
+  //     sub-keys. This keeps a full-HRMS tenant reaching its WHOLE surface after
+  //     the split (no regression), while a standalone tenant — which has
+  //     `workforce_core` but NOT `employee` — reaches only the core surface.
+  //   • the separately-licensable HR modules (`attendance`, `leave`,
+  //     `recruitment`, `appraisal`, `career`, `ess`) project to their matching
+  //     sub-key, kept in lock-step with hrms-subroute-map.ts.
+  // A tenant entitled to `employee` therefore keeps the core + base-HRIS surface;
+  // a tenant entitled to `leave` keeps the leave surface; and the standalone SKU
+  // (only workforce_core, no HR modules) reaches the core surface but is blocked
+  // from every non-core sub-key — exactly M01 exit criterion 3.
+  employee: [
+    "workforce_core",
+    "establishment",
+    "hrms-payroll",
+    "hrms-training",
+    "hrms-social",
+    "hrms-disciplinary",
+    "hrms-deputation",
+    "hrms-contracts",
+    "hrms-assessment",
+    "hrms-id-cards",
+    "hrms-ai",
+    "hrms-rti",
+    "hrms-workforce-planning",
+    "hrms-board-intake",
+    "hrms-competency",
+  ],
+  attendance: ["hrms-attendance"],
+  leave: ["hrms-leave"],
+  recruitment: ["hrms-recruitment"],
+  appraisal: ["hrms-appraisal"],
+  // `career` (Transfer & Promotion) surfaces through the recruitment/careers
+  // prefixes at the gateway; it is a non-core HR module, so it maps to the
+  // recruitment sub-key rather than the core Workforce-Core transfer surface.
+  career: ["hrms-recruitment"],
+  ess: ["hrms-self-service", "reports"],
   // SmartTransfer OS (standalone SKU, D-ST-23). Workforce Core is served by the
-  // Workforce-Core profile of hrms-service, so it projects to the "hrms" route
-  // today; sub-route granularity (so "hrms" no longer unlocks leave/payroll)
-  // is ST-M01-04's job, not this row's. SmartTransfer is its own service/route.
-  workforce_core: ["hrms"],
+  // Workforce-Core profile of hrms-service and now projects to its OWN gateway
+  // key `workforce_core` (ST-M01-04b): the guard resolves the core HRMS prefixes
+  // to this key, so a standalone tenant reaches the core surface and nothing
+  // else. SmartTransfer is its own service/route.
+  workforce_core: ["workforce_core"],
   smarttransfer: ["smarttransfer"],
   // payroll & benefits (one payroll-service)
   payroll: ["payroll"],
