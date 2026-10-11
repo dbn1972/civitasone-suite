@@ -57,8 +57,9 @@ function mockAdminResponse(modules: Array<{ name: string }>, ok = true) {
 }
 
 beforeEach(() => {
-  // Clear module cache between tests
+  // Clear module cache + sticky mode between tests
   _test.moduleCache.clear();
+  _test.lastKnownMode.clear();
   mockFetchResponse.mockReset();
 });
 
@@ -219,6 +220,82 @@ describe("Gateway module-guard: checkModuleEnabled", () => {
       await checkModuleEnabled(req, reply, "finance");
 
       expect(mockFetchResponse).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ── ST-M01-02 / D-ST-24 — per-tenant enforcement mode ─────────────────────
+  // Helper for the composition projection shape (configured + mode + data).
+  function mockComposition(mode: "off" | "shadow" | "enforce", modules: Array<{ name: string }>, configured = true) {
+    process.env.COMPOSITION_ENFORCEMENT = "on";
+    mockFetchResponse.mockResolvedValue({ ok: true, json: async () => ({ configured, mode, data: modules }) } as Response);
+  }
+
+  describe("enforce mode fails closed (D-ST-24)", () => {
+    afterEach(() => { delete process.env.COMPOSITION_ENFORCEMENT; });
+
+    it("403s a disabled module", async () => {
+      mockComposition("enforce", [{ name: "finance" }]);
+      const reply = makeFakeReply();
+      expect(await checkModuleEnabled(makeFakeRequest(TENANT_ID), reply, "payroll")).toBe(false);
+      expect(reply._status).toBe(403);
+      expect((reply._body as Record<string, unknown>).code).toBe("MODULE_DISABLED");
+    });
+
+    it("403s an unmapped route", async () => {
+      mockComposition("enforce", [{ name: "finance" }]);
+      const reply = makeFakeReply();
+      expect(await checkModuleEnabled(makeFakeRequest(TENANT_ID), reply, "unknown-service")).toBe(false);
+      expect(reply._status).toBe(403);
+    });
+
+    it("403s configured:false", async () => {
+      mockComposition("enforce", [], false);
+      const reply = makeFakeReply();
+      expect(await checkModuleEnabled(makeFakeRequest(TENANT_ID), reply, "finance")).toBe(false);
+      expect(reply._status).toBe(403);
+    });
+
+    it("403s on admin outage once the tenant is known to be enforce", async () => {
+      mockComposition("enforce", [{ name: "finance" }]);
+      expect(await checkModuleEnabled(makeFakeRequest(TENANT_ID), makeFakeReply(), "finance")).toBe(true);
+      _test.moduleCache.clear();
+      mockFetchResponse.mockRejectedValue(new Error("ECONNREFUSED"));
+      const reply = makeFakeReply();
+      expect(await checkModuleEnabled(makeFakeRequest(TENANT_ID), reply, "finance")).toBe(false);
+      expect(reply._status).toBe(403);
+    });
+
+    it("still allows documents + eoffice (platform routes) in enforce mode", async () => {
+      mockComposition("enforce", []);
+      expect(await checkModuleEnabled(makeFakeRequest(TENANT_ID), makeFakeReply(), "documents")).toBe(true);
+      expect(await checkModuleEnabled(makeFakeRequest(TENANT_ID), makeFakeReply(), "eoffice")).toBe(true);
+    });
+  });
+
+  describe("shadow mode logs would-deny but allows (D-ST-24)", () => {
+    afterEach(() => { delete process.env.COMPOSITION_ENFORCEMENT; });
+
+    it("allows a disabled module and counts the would-deny", async () => {
+      mockComposition("shadow", [{ name: "finance" }]);
+      _test.resetShadowCount();
+      const reply = makeFakeReply();
+      expect(await checkModuleEnabled(makeFakeRequest(TENANT_ID), reply, "payroll")).toBe(true);
+      expect(reply._status).toBe(0);
+      expect(_test.shadowWouldDenyCount).toBe(1);
+    });
+  });
+
+  describe("off mode preserves the pre-FF-03 contract (D-ST-24)", () => {
+    afterEach(() => { delete process.env.COMPOSITION_ENFORCEMENT; });
+
+    it("fails OPEN on configured:false (ambiguous) but 403s a known-disabled module", async () => {
+      mockComposition("off", [], false);
+      expect(await checkModuleEnabled(makeFakeRequest(TENANT_ID), makeFakeReply(), "finance")).toBe(true);
+      _test.moduleCache.clear();
+      mockComposition("off", [{ name: "finance" }]);
+      const reply = makeFakeReply();
+      expect(await checkModuleEnabled(makeFakeRequest(TENANT_ID), reply, "payroll")).toBe(false);
+      expect(reply._status).toBe(403);
     });
   });
 });

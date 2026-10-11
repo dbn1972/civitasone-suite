@@ -13,8 +13,11 @@
 import type { FastifyInstance } from "fastify";
 import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
+import * as commands from "./commands.js";
 import { toGatewayKeys } from "./gateway-map.js";
 import {
   buildRegistry,
@@ -27,11 +30,22 @@ import {
 } from "./domain.js";
 
 const ADMIN_ROLES = ["tenant_admin", "super_admin", "platform_admin"];
+const PLATFORM_ADMIN = ["super_admin", "platform_admin"];
 
 const onboardBody = z.object({ profile: z.string().min(1).max(64) });
 const internalParam = z.object({ tenantId: z.string().uuid() });
 const moduleParam = z.object({ id: z.string().min(1).max(64).regex(/^[a-z][a-z0-9_]*$/) });
 const bundleParam = z.object({ code: z.string().min(1).max(64).regex(/^[a-z][a-z0-9_]*$/) });
+const enforcementModeBody = z.object({ mode: z.enum(["off", "shadow", "enforce"]) });
+const enforcementModeParam = z.object({ tenantId: z.string().uuid() });
+// ST-M01-03 — plan-to-composition applier. `tenantId` is OPTIONAL and only
+// honoured for platform/super admins (a tenant_admin may only apply to its own
+// tenant — never trust a client-supplied tenant id for a tenant-scoped actor).
+const applyPlanBody = z.object({
+  moduleIds: z.array(z.string().min(1).max(64).regex(/^[a-z][a-z0-9_]*$/)).max(128),
+  profileCode: z.string().min(1).max(64).regex(/^[a-z][a-z0-9_]*$/).nullable().default(null),
+  tenantId: z.string().uuid().optional(),
+});
 
 function safeParse<T>(schema: z.ZodType<T, z.ZodTypeDef, any>, data: unknown): T {
   const result = schema.safeParse(data);
@@ -174,15 +188,16 @@ export async function compositionRoutes(app: FastifyInstance): Promise<void> {
       requireRole(ctx, ADMIN_ROLES);
     }
     const { tenantId } = safeParse(internalParam, req.params);
-    const [profileCode, userModules] = await Promise.all([
+    const [profileCode, userModules, mode] = await Promise.all([
       repo.getTenantProfileCode(tenantId),
       repo.getUserModules(tenantId),
+      repo.getEffectiveEnforcementMode(tenantId),
     ]);
     const configured = profileCode !== null || userModules.length > 0;
-    if (!configured) return reply.send({ configured: false, data: [] });
+    if (!configured) return reply.send({ configured: false, mode, data: [] });
     const reg = await registryFor(tenantId);
     const comp = resolveComposition(reg, userModules);
-    return reply.send({ configured: true, data: toGatewayKeys(comp.moduleIds).map((name) => ({ name })) });
+    return reply.send({ configured: true, mode, data: toGatewayKeys(comp.moduleIds).map((name) => ({ name })) });
   });
 
   // The caller's OWN enabled modules (gateway route-keys) for web nav visibility.
@@ -217,6 +232,68 @@ export async function compositionRoutes(app: FastifyInstance): Promise<void> {
     }
     await repo.applyProfile(ctx.tenantId, chosen.code, chosen.defaultModules, ctx.actorId);
     return reply.send(await tenantView(ctx.tenantId));
+  });
+
+  // Read the EFFECTIVE module-gating enforcement mode for a tenant (FF-03,
+  // D-ST-24). off | shadow | enforce, resolved per repo.getEffectiveEnforcementMode
+  // (explicit row > standalone-profile ⇒ enforce > off). Platform-operator
+  // control surface; scoped to platform/super admins only.
+  app.get("/v1/admin/composition/:tenantId/enforcement-mode", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["super_admin", "platform_admin"]);
+    const { tenantId } = safeParse(enforcementModeParam, req.params);
+    const mode = await repo.getEffectiveEnforcementMode(tenantId);
+    return reply.send({ tenantId, mode });
+  });
+
+  // Set the EXPLICIT per-tenant enforcement mode. Default is `off` (fail-open,
+  // the gateway-service #986 legacy safeguard); an operator moves a tenant to
+  // `shadow` (log would-denies, still allow) then `enforce` (fail closed) after
+  // the grandfather backfill (migration 0050) has run. Platform/super admin only.
+  app.put("/v1/admin/composition/:tenantId/enforcement-mode", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["super_admin", "platform_admin"]);
+    const { tenantId } = safeParse(enforcementModeParam, req.params);
+    const { mode } = safeParse(enforcementModeBody, req.body);
+    await repo.setEnforcementMode(tenantId, mode, ctx.actorId);
+    return reply.send({ tenantId, mode });
+  });
+
+  // Apply a subscription plan's module set (+ optional profile) to a tenant's
+  // composition — the plan-to-composition applier (ST-M01-03). Write path:
+  // validate → publish command → 202; the consumer does the durable write +
+  // audit in one transaction. A tenant_admin may only apply to its OWN tenant;
+  // a platform/super admin may target any tenant via `tenantId` in the body.
+  app.post("/v1/admin/composition/apply-plan", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    const result = applyPlanBody.safeParse(req.body);
+    if (!result.success) {
+      const msg = result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
+      throw new HttpError(400, "VALIDATION_FAILED", msg);
+    }
+    const { moduleIds, profileCode, tenantId: bodyTenant } = result.data;
+    // Server-derived tenant: only a platform/super admin may act on another
+    // tenant; everyone else is pinned to their own context tenant.
+    const isPlatform = PLATFORM_ADMIN.some((r) => ctx.roles?.includes(r));
+    const targetTenant = isPlatform && bodyTenant ? bodyTenant : ctx.tenantId;
+
+    // Pre-validate the module set + profile against the GLOBAL registry so a
+    // bogus request is a 4xx here, not a silent DLQ later. (The consumer
+    // re-validates and is the source of truth for the write.)
+    const reg = await registryFor(targetTenant);
+    for (const id of moduleIds) {
+      if (!reg.has(id)) throw new HttpError(404, "UNKNOWN_MODULE", `unknown module: ${id}`);
+    }
+    if (profileCode !== null) {
+      const profiles = await repo.loadProfiles(targetTenant);
+      if (!profiles.some((p) => p.code === profileCode)) {
+        throw new HttpError(404, "UNKNOWN_PROFILE", `unknown org profile: ${profileCode}`);
+      }
+    }
+
+    const accepted = await commands.applyPlan(ctx, { tenantId: targetTenant, moduleIds, profileCode });
+    return sendAccepted(reply, acceptedResponseSchema, accepted);
   });
 
   // Enable a module — hard deps are pulled in automatically.

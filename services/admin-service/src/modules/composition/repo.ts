@@ -13,7 +13,7 @@
 import { eq, and } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db, scopedRead } from "../../shared/db.js";
-import { moduleRegistry, orgProfile, moduleBundle, tenantEntitlement, tenantProfile } from "./schema.js";
+import { moduleRegistry, orgProfile, moduleBundle, tenantEntitlement, tenantProfile, tenantEnforcementMode } from "./schema.js";
 import type { ModuleDef } from "./domain.js";
 
 export interface BundleRow {
@@ -128,6 +128,89 @@ export async function applyProfile(tenantId: string, profileCode: string, defaul
           defaultModules.map((id) => ({ tenantId, moduleId: id, source: "user", createdBy: actorId })),
         );
       }
+    }),
+  );
+}
+
+/**
+ * ST-M01-03 — tx-scoped applier write, used ONLY by the composition consumer
+ * (plan-to-composition applier). Replaces the tenant's user-module selection
+ * set and, when a profileCode is supplied, upserts tenant_profile — all inside
+ * the SAME transaction as the consumer's markProcessed + audit outbox enqueue.
+ *
+ * The caller is responsible for running this inside runWithTenant(tenantId, …)
+ * so the FORCE-RLS tenant tables see the right app.tenant_id GUC.
+ *
+ * `tx` is the drizzle transaction handle; typed loosely for the same reason the
+ * sibling modules' consumers do (the outbox helper's DrizzleTx and drizzle's
+ * own PgTransaction do not share a nominal type).
+ */
+export async function applyPlanTx(
+  tx: {
+    insert: typeof db.insert;
+    delete: typeof db.delete;
+  },
+  tenantId: string,
+  userModuleIds: string[],
+  profileCode: string | null,
+  actorId: string,
+): Promise<void> {
+  if (profileCode !== null) {
+    await tx
+      .insert(tenantProfile)
+      .values({ tenantId, profileCode, appliedBy: actorId })
+      .onConflictDoUpdate({
+        target: tenantProfile.tenantId,
+        set: { profileCode, appliedBy: actorId, appliedAt: new Date() },
+      });
+  }
+  await tx.delete(tenantEntitlement).where(eq(tenantEntitlement.tenantId, tenantId));
+  if (userModuleIds.length > 0) {
+    await tx.insert(tenantEntitlement).values(
+      userModuleIds.map((id) => ({ tenantId, moduleId: id, source: "user" as const, createdBy: actorId })),
+    );
+  }
+}
+
+export type EnforcementMode = "off" | "shadow" | "enforce";
+
+/** The profile that is fail-closed from day one (D-ST-23/24, migration 0049). */
+export const STANDALONE_PROFILE_CODE = "smarttransfer_standalone";
+
+/**
+ * Effective per-tenant module-gating enforcement mode (FF-03, D-ST-24).
+ * Resolution order:
+ *   1. an explicit tenant_enforcement_mode row wins;
+ *   2. else a tenant on the `smarttransfer_standalone` profile ⇒ `enforce`
+ *      (fail-closed from provisioning, D-ST-23/24);
+ *   3. else `off` — every pre-existing tenant, no behaviour change.
+ */
+export async function getEffectiveEnforcementMode(tenantId: string): Promise<EnforcementMode> {
+  const [explicitRows, profileCode] = await Promise.all([
+    runWithTenant(tenantId, () =>
+      scopedRead((tx) =>
+        tx.select({ mode: tenantEnforcementMode.mode }).from(tenantEnforcementMode).where(eq(tenantEnforcementMode.tenantId, tenantId)).limit(1),
+      ),
+    ),
+    getTenantProfileCode(tenantId),
+  ]);
+  const explicit = explicitRows[0]?.mode;
+  if (explicit === "off" || explicit === "shadow" || explicit === "enforce") return explicit;
+  if (profileCode === STANDALONE_PROFILE_CODE) return "enforce";
+  return "off";
+}
+
+/** Upsert the explicit per-tenant enforcement mode (super-admin control path). */
+export async function setEnforcementMode(tenantId: string, mode: EnforcementMode, actorId: string): Promise<void> {
+  await runWithTenant(tenantId, () =>
+    db.transaction(async (tx) => {
+      await tx
+        .insert(tenantEnforcementMode)
+        .values({ tenantId, mode, updatedBy: actorId })
+        .onConflictDoUpdate({
+          target: tenantEnforcementMode.tenantId,
+          set: { mode, updatedBy: actorId, updatedAt: new Date() },
+        });
     }),
   );
 }
