@@ -13,7 +13,7 @@ import { quotaCheckPlugin } from "@civitasone/db";
 import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { resolveRoute, SERVICE_ROUTES } from "./registry.js";
-import { checkModuleEnabled } from "./module-guard.js";
+import { checkModuleEnabled, invalidateModuleCache } from "./module-guard.js";
 import { checkPolicy } from "./policy-check.js";
 import {
   createRedisQuotaStore,
@@ -80,6 +80,16 @@ function verifyInternalSecret(req: FastifyRequest): boolean {
     Buffer.from(secret, "utf8"),
     Buffer.from(expected, "utf8"),
   );
+}
+
+/**
+ * Service-to-service guard for internal-only routes: replies 403 and returns
+ * false unless the caller presented a valid x-internal-secret.
+ */
+function assertInternalServiceSecret(req: FastifyRequest, reply: FastifyReply): boolean {
+  if (verifyInternalSecret(req)) return true;
+  void reply.code(403).send({ code: "FORBIDDEN", message: "invalid internal secret" });
+  return false;
 }
 
 /**
@@ -578,6 +588,22 @@ export async function buildApp(): Promise<FastifyInstance> {
     return reply.send({ data: getConfig() });
   });
 
+  // ST-M01-02: drop the module-guard cache (and sticky last-known mode) for one
+  // tenant. The cache lives in THIS process; admin-service consumers and the
+  // gateway-worker call it after a module toggle / composition apply / enforcement
+  // mode flip commits. Authenticated via x-internal-secret, like /internal/config.
+  app.post("/internal/module-cache/invalidate", async (req, reply) => {
+    if (!assertInternalServiceSecret(req, reply)) return reply;
+    const tenantId = (req.body as { tenantId?: unknown } | null | undefined)?.tenantId;
+    if (typeof tenantId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tenantId)) {
+      return reply
+        .code(400)
+        .send({ code: "VALIDATION_FAILED", message: "tenantId (uuid) required" });
+    }
+    invalidateModuleCache(tenantId);
+    return reply.send({ status: "invalidated" });
+  });
+
   app.patch("/internal/config", async (req, reply) => {
     if (!verifyInternalSecret(req)) {
       return reply
@@ -607,7 +633,32 @@ export async function buildApp(): Promise<FastifyInstance> {
       _upstreamNames.set(route.upstream, route.name);
     }
   }
-  const _dedupedUpstreams = [..._upstreamNames.entries()]; // [[url, name], ...]
+  // /ready allow-list (ST-M01-02): a deployment rarely runs EVERY upstream (a
+  // standalone SmartTransfer tenant runs the platform + workforce + smarttransfer
+  // services only), so probing the full registry would hold /ready at 503
+  // forever on upstreams that are intentionally absent. GATEWAY_READY_UPSTREAMS
+  // is a comma-separated allow-list of registry route-names (the representative
+  // name per unique upstream); when set, only those upstreams are probed. Unset
+  // keeps the previous behaviour (probe every unique upstream), so existing
+  // full-suite deployments are unaffected. An entry that names no known upstream
+  // is ignored (logged) rather than silently dropping readiness.
+  const _readyAllowRaw = (process.env.GATEWAY_READY_UPSTREAMS ?? "").trim();
+  const _readyAllow = _readyAllowRaw
+    ? new Set(_readyAllowRaw.split(",").map((s) => s.trim()).filter(Boolean))
+    : null;
+  const _dedupedUpstreams = [..._upstreamNames.entries()].filter(([, name]) =>
+    _readyAllow ? _readyAllow.has(name) : true,
+  ); // [[url, name], ...]
+  if (_readyAllow) {
+    const known = new Set([..._upstreamNames.values()]);
+    const unknown = [..._readyAllow].filter((n) => !known.has(n));
+    if (unknown.length > 0) {
+      app.log.warn(
+        { unknown, hint: "GATEWAY_READY_UPSTREAMS names an upstream not in the registry" },
+        "/ready allow-list ignored unknown upstream name(s)",
+      );
+    }
+  }
 
   // Concurrent-probe batch: the first ping() call in a /ready request starts ALL
   // upstream fetches simultaneously (Promise.allSettled). Subsequent ping() calls

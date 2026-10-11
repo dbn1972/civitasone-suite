@@ -47,6 +47,12 @@ export const COMPOSITION_TO_GATEWAY_KEYS: Record<string, string[]> = {
   // citizen services
   citizen: ["citizen"],
   crm: ["crm"],
+  // Legacy gateway-gated services that had no registry module before 0050.
+  telephony: ["telephony"],
+  meeting: ["meeting"],
+  court: ["court"],
+  visitor: ["visitor"],
+  billing: ["billing"],
   helpdesk: ["helpdesk"],
   knowledge: ["knowledge"],
   // governance

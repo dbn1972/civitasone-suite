@@ -4,6 +4,7 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
+import { notifyGatewayModuleCache } from "../../module-cache-notify.js";
 import * as repo from "./repo.js";
 
 const log = pino({ name: "admin-config-consumer" });
@@ -22,6 +23,7 @@ export function registerConfigConsumers(queue: Queue): void {
         });
       });
       await cache.invalidate(cache.makeKey(msg.payload.tenantId, "config", msg.payload.tenantId));
+      await notifyGatewayModuleCache(msg.payload.tenantId);
     } catch (err) {
       log.error({ err, messageId: msg.messageId, type: COMMANDS.moduleToggle }, "Consumer processing failed");
     }

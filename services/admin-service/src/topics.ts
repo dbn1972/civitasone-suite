@@ -33,6 +33,13 @@ export const COMMANDS = {
   // after dot-to-dash (`admin-composition-apply_plan`), well under the 45-char
   // queue-truncation limit (D-ST-19).
   compositionApplyPlan: "admin.composition.apply_plan",
+  // ST-M01-02 — set a tenant's module-gating enforcement mode (off|shadow|enforce).
+  // Payload: { tenantId, mode }. Published by PUT
+  // /v1/admin/composition/:tenantId/enforcement-mode (-> 202); consumed by
+  // registerCompositionConsumers (markProcessed + guarded upsert + audit +
+  // enforcement_mode_changed event in ONE transaction). 33 chars after
+  // dot-to-dash, under the 45-char queue limit (D-ST-19).
+  compositionSetEnforcementMode: "admin.composition.set_enforcement",
   // Platform-wide flag registry (config module — config.admin_feature_flags,
   // global + per-tenant `overrides` jsonb).
   featureFlagCreate:  "admin.feature_flag.create",
@@ -166,6 +173,10 @@ export const COMMANDS = {
 } as const;
 
 export const EVENTS = {
+  // ST-M01-02. Payload: { tenantId, mode, previousMode? }. Fires from the
+  // set-enforcement-mode consumer through the outbox, i.e. only AFTER commit.
+  // Declared for the audit trail / future consumers. The gateway app cache is NOT dropped by it (separate process); its 60s TTL is the bound.
+  compositionEnforcementModeChanged: "admin.composition.enforcement_mode_changed",
   tenantCreated:      "admin.tenant.created",
   tenantSuspended:    "admin.tenant.suspended",
   tenantReactivated:  "admin.tenant.reactivated",

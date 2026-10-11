@@ -9,6 +9,7 @@ import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { registerCatalogueConsumers } from "./modules/catalogue/consumer.js";
+import { registerModuleCacheInvalidation } from "./module-cache-invalidation.js";
 
 const log = pino({ name: "gateway-worker" });
 
@@ -25,6 +26,7 @@ const log = pino({ name: "gateway-worker" });
 }
 
 registerCatalogueConsumers(queue);
+registerModuleCacheInvalidation(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 log.info("gateway-service worker: catalogue consumers + outbox relay running");
