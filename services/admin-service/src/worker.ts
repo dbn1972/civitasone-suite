@@ -7,6 +7,7 @@ import { startOutboxPurge } from "@civitasone/outbox";
 import { registerTenantConsumers } from "./modules/tenants/consumer.js";
 import { registerTenantLifecycleConsumers, startLifecycleSweeper } from "./modules/tenants/lifecycle-consumer.js";
 import { registerConfigConsumers } from "./modules/config/consumer.js";
+import { registerCompositionConsumers } from "./modules/composition/consumer.js";
 import { registerBackupConsumers } from "./modules/backup/consumer.js";
 import { registerSupportConsumers, startBreakGlassSweeper, sweepExpiredBreakGlass } from "./modules/support/consumer.js";
 import { registerScheduledJobConsumers } from "./modules/scheduled-jobs/consumer.js";
@@ -30,6 +31,10 @@ const log = pino({ name: "admin-worker" });
 
 registerTenantConsumers(queue);
 registerConfigConsumers(queue);
+// ST-M01-03: plan-to-composition applier. The handler wraps its own write in
+// runWithTenant() (composition tenant tables are FORCE-RLS), so it is
+// registered on the plain queue, like registerSandboxConsumers below.
+registerCompositionConsumers(queue);
 registerBackupConsumers(queue);
 registerSupportConsumers(queue);
 registerScheduledJobConsumers(tenantScoped(queue));

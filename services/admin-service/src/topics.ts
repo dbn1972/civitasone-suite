@@ -25,6 +25,14 @@ export const COMMANDS = {
   apiMetricsIngest:       "admin.api_metrics.ingest",
   apiMetricsRetentionSet: "admin.api_metrics.retention_set",
   moduleToggle:       "admin.module.toggle",
+  // ST-M01-03 — plan-to-composition applier. A tenant's subscription plan
+  // (its resolved module set + optional org profile) is applied to the tenant's
+  // composition entitlements through the standard write path: route → command
+  // with a deterministic messageId → 202 → consumer (markProcessed + guarded
+  // write + audit.event.record in ONE transaction). Topic name is 28 chars
+  // after dot-to-dash (`admin-composition-apply_plan`), well under the 45-char
+  // queue-truncation limit (D-ST-19).
+  compositionApplyPlan: "admin.composition.apply_plan",
   // Platform-wide flag registry (config module — config.admin_feature_flags,
   // global + per-tenant `overrides` jsonb).
   featureFlagCreate:  "admin.feature_flag.create",

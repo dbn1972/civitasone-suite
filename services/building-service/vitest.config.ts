@@ -27,7 +27,7 @@ export default defineConfig({
       DATABASE_URL:
         process.env.DATABASE_URL ??
         (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
-          ? "postgres://building_svc:building_dev_pw@localhost:5435/civitas_building"
+          ? "postgres://building_svc:building_dev_pw@localhost:" + (process.env.BUILDING_TEST_PGPORT ?? process.env.PGPORT ?? "5435") + "/civitas_building"
           : (() => {
               throw new Error(
                 "REL-035: DATABASE_URL is not set. This test suite no longer silently falls back to the shared, long-lived civitasone-postgres:5435 dev instance outside CI — export DATABASE_URL explicitly (point it at your own disposable Postgres) before running tests.",

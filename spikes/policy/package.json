@@ -1,0 +1,22 @@
+{
+  "name": "@civitasone-spike/policy",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "ST-M01-14 policy spike (D-ST-07). NOT a workspace member; not imported by any production service.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "bench": "node --import tsx src/benchmark.ts bench-results/benchmark.json",
+    "determinism": "node --import tsx src/determinism.ts bench-results/determinism.json"
+  },
+  "dependencies": {
+    "@gorules/zen-engine": "2.1.4"
+  },
+  "devDependencies": {
+    "@types/node": "20.19.9",
+    "tsx": "4.19.2",
+    "typescript": "5.6.3",
+    "vitest": "2.1.8"
+  }
+}

@@ -134,6 +134,18 @@ Schemas: `employee`, `leave`, `attendance`, `gpf`, `pension`, `disciplinary`, `c
 - Emits `hrms.leave.approved`; on leave approval, payroll and finance react.
 - Emits `hrms.contract.*` events (created, renewed, expired, escalated, separated); consumes `contractRenewalDecided` from workflow-service.
 
+#### `workforce_core` schema (SmartTransfer OS — Workforce Core, ST-M01-07)
+
+Added by migration `0201_workforce_core.sql`. Its own schema so it is liftable to a package/service later (D-ST-23). Spec §4; D-ST-01 (canonical Post + effective-dated Occupancy), D-ST-02 (office = HRMS department tree, by id), D-ST-03 (cadre master + employee-cadre link + cadre-wise seniority). Every table carries `tenant_id`, `version`, audit columns, a leading `tenant_id` index, and ENABLE + FORCE ROW LEVEL SECURITY with a `tenant_isolation` policy (USING + WITH CHECK) via a schema-local fail-closed `workforce_core.current_tenant_id()`. No cross-service foreign keys — `office_id`, `designation_id`, `employee_id` reference other domains by id only (D-ST-10).
+
+- `workforce_core.cadre` — cadre master; `parent_cadre_id` self-reference (hierarchical), `code` (unique per tenant), `name`, `external_code` (Mode B mapping), `status` (active/merged/abolished). D-ST-03.
+- `workforce_core.employee_cadre` — employee→cadre link + cadre-wise seniority: `employee_id` (by id), `cadre_id`, `seniority_date`, optional `seniority_rank`, `status`. Partial unique indexes: one active membership per employee; one active rank per cadre. D-ST-03.
+- `workforce_core.post` — sanctioned position: `post_no` (unique per tenant), `office_id` (HRMS department/office node, by id), `designation_id`, `cadre_id`, `grade_pay_level`, `reservation_tag`, `attributes` jsonb, `status` (sanctioned/frozen/abolished). D-ST-01/02.
+- `workforce_core.post_occupancy` — effective-dated `[effective_from, effective_to)` occupancy with `charge_type` (substantive/acting/additional/in_charge). Two `EXCLUDE USING gist` (btree_gist) constraints enforce, over the half-open daterange, (a) at most one substantive holder per post and (b) an employee is substantively in at most one post at any instant (spec §4). Adjacent ranges do not overlap and are allowed; non-substantive charges may coexist. D-ST-01.
+- `workforce_core.posting_ledger` — append-only effective-dated posting history, enforced by a trigger — DELETE/TRUNCATE and any UPDATE other than closing an open span (effective_to NULL → date) are rejected; tenure counts distinct days (overlapping or touching spans never double-count) (`employee_id`, `office_id`, `post_id`, `charge_type`, `effective_from`, `effective_to`, `order_ref`). Tenure is derivable; no employee row is overwritten. "Live behind a flag" (M01 exit criterion 2): the schema exists now, and `WORKFORCE_CORE_LEDGER_ENABLED` (default off, `src/modules/workforce-core/config.ts`) gates the `applyPosting` writer added in ST-M01-09. D-ST-01.
+- Read model (functions + view, SECURITY INVOKER so RLS still applies): `workforce_core.service_tenure_days(employee, as_of)` (total substantive days, inclusive), `workforce_core.current_station_tenure_days(employee, as_of)` (days in the current substantive posting), `workforce_core.v_current_posting` (current substantive posting per employee + running tenure).
+- No events, no write path, no backfill in ST-M01-07 (those are ST-M01-09 / ST-M01-08). Columns depending on PROPOSED decisions (holds D-ST-16; payroll/DDO D-ST-13/14) are deliberately absent.
+
 ### payroll — `civitas_payroll`
 Schemas: `run`, `component`, `payslip`, `bank`.
 
@@ -180,6 +192,16 @@ Schemas: `log`.
 
 - `log.event` — id, tenant_id, actor, action, resource, occurred_at, detail (jsonb).
 - Append-only. Subscribes broadly to `*.{pastTense}` events across services to build an immutable audit trail.
+
+### admin — `civitas_admin` (composition catalogue)
+Schema: `composition` (plus many other admin schemas not detailed here).
+
+- `composition.module_registry` — **GLOBAL reference data, NO tenant_id → NO RLS** (same rationale as a currency lookup; see §2 and migration 0025's header). The licensable-module dependency graph: id (PK), name, layer, is_core, cluster, hard_deps text[], soft_deps text[], screens text[], sort_order. Seeded by migrations 0025 (HR base), 0026 (full ERP, 34 modules), and **0049** which adds `workforce_core` (deps org, config) and `smarttransfer` (deps workforce_core, workflow, audit), cluster `workforce` (D-ST-23/01/02/03).
+- `composition.module_bundle` — **GLOBAL reference data, NO RLS.** One-click cluster SKUs: code (PK), label, subtitle, module_ids text[], sort_order. 0049 adds the `smarttransfer_standalone` bundle (`{smarttransfer}`).
+- `composition.org_profile` — **GLOBAL reference data, NO RLS.** Onboarding profiles: code (PK), label, subtitle, rule_packs jsonb, terminology jsonb, statutory jsonb, reservation, default_modules text[], sort_order. 0049 adds the `smarttransfer_standalone` profile whose default_modules is exactly `{smarttransfer}` (resolver folds in workforce_core + core kernel only — no leave/payroll/recruitment).
+- `composition.tenant_entitlement` — **tenant-scoped, ENABLE + FORCE ROW LEVEL SECURITY** (`tenant_isolation` policy, migration 0025). The persisted source-of-truth is the tenant's USER picks (source='user'); core + hard-deps are derived on read. tenant_id, module_id → `composition.module_registry(id)`, source CHECK (user/dep/core), audit columns. PK (tenant_id, module_id). Written by the composition routes and by the **plan-to-composition applier** (`admin.composition.apply_plan` command → consumer: markProcessed + guarded write + `audit.event.record` in one tx, ST-M01-03).
+- `composition.tenant_profile` — **tenant-scoped, ENABLE + FORCE ROW LEVEL SECURITY.** tenant_id (PK), profile_code → `composition.org_profile(code)`, applied_at, applied_by, version.
+- Emits `admin.composition.applied` and `audit.event.record` when a plan is applied; no cross-service FK — module_registry/org_profile are reference data every service composes from.
 
 ### estab — `civitas_estab`
 Schemas: `post`, `posting`, `seniority`, `quarters`, `fleet`.

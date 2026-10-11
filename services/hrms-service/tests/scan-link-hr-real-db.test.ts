@@ -44,6 +44,11 @@ async function asTenant<T>(tid: string, fn: (tx: postgres.TransactionSql) => Pro
   });
 }
 
+// Distinctive fake Aadhaar tail, built at runtime. It contains a non-hex letter
+// so no random UUID (hex digits + dashes) in the audit JSON can contain it by
+// chance, unlike a bare "1234".
+const FAKE_AADHAAR_TAIL = ["Q", "1234", "Z"].join("");
+
 function linkPayload(over: { linkId?: string; targetId?: string; documentId?: string; preview?: string | null } = {}) {
   return {
     linkId: over.linkId ?? randomUUID(),
@@ -52,7 +57,7 @@ function linkPayload(over: { linkId?: string; targetId?: string; documentId?: st
     document: {
       documentId: over.documentId ?? randomUUID(), batchId: randomUUID(), fileName: "service-book-p1.pdf", mimeType: "application/pdf",
       docType: "service_book", pageCount: 3, ocrConfidence: 0.912, piiFlags: ["aadhaar"],
-      textPreviewMasked: over.preview === undefined ? "Service book of XXXX XXXX 1234" : over.preview, filedAt: new Date().toISOString(),
+      textPreviewMasked: over.preview === undefined ? `Service book of XXXX XXXX ${FAKE_AADHAAR_TAIL}` : over.preview, filedAt: new Date().toISOString(),
     },
     requestedBy: ACTOR, approvedBy: randomUUID(),
   };
@@ -128,7 +133,7 @@ describe("link request (consumer)", () => {
     expect(audits[0]).toMatchObject({ service: "hrms", action: "scan_link", resourceType: "employee", resourceId: EMP_A, outcome: "success" });
     const json = JSON.stringify(audits[0]);
     expect(json).not.toContain("Service book");      // no extracted text
-    expect(json).not.toContain("1234");
+    expect(json).not.toContain(FAKE_AADHAAR_TAIL);
     const results = await outbox(TA, "hrms.scan-link.result", p.linkId);
     expect(results).toHaveLength(1);
     expect(results[0]).toMatchObject({ linkId: p.linkId, targetId: EMP_A, documentId: p.document.documentId, status: "linked", reason: null });
