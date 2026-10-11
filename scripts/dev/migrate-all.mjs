@@ -123,6 +123,11 @@ const SERVICES = [
   // not here, so tests/ops/migrate-all-inventory.test.ts (Architecture Guard)
   // failed on main.
   { name: "document-service",     db: "civitas_document" },
+  // smarttransfer-service (ST-M01-12): new DB-backed service. Role/db created
+  // by infra/db/bootstrap/bootstrap_smarttransfer.sql + SERVICE_DBS in
+  // scripts/ci/bootstrap-postgres.sh; registered here so migrate-all provisions
+  // its schema, and in grant-all.mjs so smarttransfer_svc gets table grants.
+  { name: "smarttransfer-service", db: "civitas_smarttransfer" },
 ];
 
 let applied = 0;

@@ -101,4 +101,9 @@ describe("ecosystem workflow scanner DSN", () => {
     expect(eco).toMatch(/worker\(\s*"inspection"[\s\S]*INSPECTION_SCANNER_DATABASE_URL/);
     expect(eco).toContain('scannerDbUrl("inspection_scanner"');
   });
+
+  it("wires SMARTTRANSFER_SCANNER_DATABASE_URL into smarttransfer-worker (FORCE RLS outbox/command_results)", () => {
+    expect(eco).toMatch(/worker\(\s*"smarttransfer"[\s\S]*?SMARTTRANSFER_SCANNER_DATABASE_URL/);
+    expect(eco).toContain('scannerDbUrl("smarttransfer_scanner"');
+  });
 });
