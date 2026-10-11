@@ -28,6 +28,8 @@ import { registerBankFileSigningConsumers } from "./modules/bank-file-signing/co
 import { registerCostingRuleConsumers } from "./modules/costing-rules/consumer.js";
 import { registerLetterheadConsumers } from "./modules/letterhead/consumer.js";
 import { registerReturnFilingConsumers } from "./modules/return-filings/consumer.js";
+import { registerPostingConsumers } from "./modules/posting-history/consumer.js";
+import { isPostingConsumerEnabled } from "./modules/posting-history/config.js";
 import { loadTaxConfig } from "./modules/tax/config.js";
 import { assertPiiKeyAtBoot } from "./shared/pii-crypto.js";
 
@@ -90,6 +92,18 @@ registerBankFileSigningConsumers(queue);
 registerCostingRuleConsumers(queue);
 registerLetterheadConsumers(queue);
 registerReturnFilingConsumers(queue);
+
+// ST-M01-11: payroll posting consumer (hrms.posting.changed → dated posting/DDO
+// history). OPTIONAL — subscribed only when PAYROLL_POSTING_CONSUMER_ENABLED is
+// on (default off), so a deployment without the payroll consequence wired pulls
+// no posting topic into a void (D-ST-13 PROPOSED; D-101 ratchet-safe). Its own
+// module file, registered minimally here (payroll consumer.ts is a one-lane
+// file). Per-tenant no-op for non-payroll tenants is handled inside the
+// consumer (config.tenantHasPayroll).
+if (isPostingConsumerEnabled()) {
+  registerPostingConsumers(queue);
+  log.info("payroll-service worker: posting consumer (hrms.posting.changed) subscribed");
+}
 
 await queue.start();
 // Cross-tenant outbox scan must use BYPASSRLS scannerDb — FORCE RLS on
