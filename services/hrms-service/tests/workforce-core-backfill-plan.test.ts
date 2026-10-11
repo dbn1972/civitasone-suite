@@ -22,12 +22,14 @@ function stub(rows: {
   plans?: Array<Record<string, unknown>>;
   sposts?: Array<Record<string, unknown>>;
   emps?: Array<Record<string, unknown>>;
+  ledger?: Array<Record<string, unknown>>;
 }): SqlClient {
   return {
     async unsafe(query: string): Promise<Array<Record<string, unknown>>> {
       if (/from manpower\.plans/i.test(query)) return rows.plans ?? [];
       if (/from reservation\.hrms_sanctioned_posts/i.test(query)) return rows.sposts ?? [];
       if (/from employee\.hrms_employees/i.test(query)) return rows.emps ?? [];
+      if (/from workforce_core\.posting_ledger/i.test(query)) return rows.ledger ?? [];
       // set_config / counts / txid: harmless defaults
       return [];
     },
@@ -68,6 +70,42 @@ describe("planBackfill — employee mapping edge cases", () => {
     const sql = stub({ emps: [{ id: "e1", department_id: "d1", date_of_joining: "2020-01-01", status: "active" }] });
     const plan = await planBackfill({ sql, tenantId: T, apply: false });
     expect(plan.ledger[0].id).toBe(deterministicId(`ledger:${T}:e1`));
+  });
+});
+
+describe("planBackfill — non-current employees and existing ledger history", () => {
+  it("excludes retired/separated/terminated/no_show employees and reports them unmapped", async () => {
+    const mk = (n: number, status: string) => ({ id: `bbbbbbbb-0000-0000-0000-00000000000${n}`, department_id: "d1", date_of_joining: "2020-01-01", status });
+    const sql = stub({
+      emps: [mk(1, "retired"), mk(2, "separated"), mk(3, "terminated"), mk(4, "no_show"), mk(5, "TERMINATED"), mk(6, "confirmed"), mk(7, "probation")],
+    });
+    const plan = await planBackfill({ sql, tenantId: T, apply: false });
+    expect(plan.ledger.map((l) => l.employeeId).sort()).toEqual([mk(6, "").id, mk(7, "").id].sort());
+    const un = plan.unmapped.filter((u) => u.source === "employee");
+    expect(un.length).toBe(5);
+    expect(un.every((u) => /not current/.test(u.reason))).toBe(true);
+  });
+
+  it("skips an employee who already has foreign ledger history as employee_overlap", async () => {
+    const e1 = "cccccccc-0000-0000-0000-000000000001";
+    const sql = stub({
+      emps: [{ id: e1, department_id: "d1", date_of_joining: "2020-01-01", status: "confirmed" }],
+      ledger: [{ id: "99999999-0000-0000-0000-000000000001", employee_id: e1 }],
+    });
+    const plan = await planBackfill({ sql, tenantId: T, apply: false });
+    expect(plan.ledger.length).toBe(0);
+    expect(plan.conflicts.some((c) => c.kind === "employee_overlap" && c.ref === e1)).toBe(true);
+  });
+
+  it("treats this tool's own deterministic ledger row as already applied (no conflict)", async () => {
+    const e1 = "cccccccc-0000-0000-0000-000000000002";
+    const sql = stub({
+      emps: [{ id: e1, department_id: "d1", date_of_joining: "2020-01-01", status: "confirmed" }],
+      ledger: [{ id: deterministicId(`ledger:${T}:${e1}`), employee_id: e1 }],
+    });
+    const plan = await planBackfill({ sql, tenantId: T, apply: false });
+    expect(plan.conflicts.length).toBe(0);
+    expect(plan.ledger.length).toBe(1);
   });
 });
 

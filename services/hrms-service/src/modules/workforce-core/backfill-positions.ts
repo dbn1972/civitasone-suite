@@ -35,11 +35,18 @@ interface RawPosition {
   status?: unknown;
 }
 
-function normalise(raw: RawPosition): TenantPosition | null {
-  const id = typeof raw.id === "string" ? raw.id : null;
-  const code = typeof raw.code === "string" ? raw.code : null;
-  const title = typeof raw.title === "string" ? raw.title : null;
-  if (!id || !code || !title) return null;
+function normalise(raw: RawPosition, index: number): TenantPosition {
+  const bad = (why: string): never => {
+    throw new Error(`tenant.positions row #${index} is malformed: ${why}`);
+  };
+  if (!raw || typeof raw !== "object") return bad("not an object");
+  const id = typeof raw.id === "string" && raw.id ? raw.id : null;
+  const code = typeof raw.code === "string" && raw.code ? raw.code : null;
+  const title = typeof raw.title === "string" && raw.title ? raw.title : null;
+  if (!id) return bad("missing id");
+  if (!code) return bad("missing code");
+  if (!title) return bad("missing title");
+  if (typeof raw.status !== "string" || !raw.status) return bad("missing status");
   const orgUnitRaw = raw.orgUnitId ?? raw.org_unit_id;
   return {
     id,
@@ -47,8 +54,13 @@ function normalise(raw: RawPosition): TenantPosition | null {
     code,
     title,
     grade: typeof raw.grade === "string" ? raw.grade : null,
-    status: typeof raw.status === "string" ? raw.status : "active",
+    status: raw.status,
   };
+}
+
+/** Parse a payload, FAILING CLOSED on any malformed row (never drops silently). */
+export function parsePositions(body: unknown): TenantPosition[] {
+  return extractArray(body).map(normalise);
 }
 
 function extractArray(body: unknown): RawPosition[] {
@@ -63,9 +75,7 @@ function extractArray(body: unknown): RawPosition[] {
 export async function readPositionsFromFile(path: string): Promise<TenantPosition[]> {
   const text = await readFile(path, "utf8");
   const body = JSON.parse(text) as unknown;
-  return extractArray(body)
-    .map(normalise)
-    .filter((p): p is TenantPosition => p !== null);
+  return extractArray(body).map(normalise);
 }
 
 /**
@@ -90,7 +100,5 @@ export async function fetchPositionsFromTenantService(
     throw new Error(`tenant-service GET /v1/positions failed: HTTP ${res.status}`);
   }
   const body = (await res.json()) as unknown;
-  return extractArray(body)
-    .map(normalise)
-    .filter((p): p is TenantPosition => p !== null);
+  return extractArray(body).map(normalise);
 }

@@ -175,6 +175,14 @@ export interface BackfillOptions {
 
 const WC = "workforce_core";
 
+/** Employee statuses that must not receive an open-ended ledger span. */
+const NON_CURRENT_EMPLOYEE_STATUSES = new Set([
+  "retired",
+  "separated",
+  "terminated",
+  "no_show",
+]);
+
 const COUNT_TABLES = [
   `${WC}.post`,
   `${WC}.posting_ledger`,
@@ -355,11 +363,30 @@ export async function planBackfill(opts: BackfillOptions): Promise<{
        FROM employee.hrms_employees WHERE tenant_id = $1::uuid`,
     [tenantId],
   );
+  // Existing ledger history: posting_ledger has no per-employee overlap
+  // constraint, so ON CONFLICT (id) alone cannot protect an employee who already
+  // has history under a different id (e.g. written by applyPosting, ST-M01-09).
+  const existing = await sql.unsafe(
+    `SELECT id, employee_id FROM ${WC}.posting_ledger WHERE tenant_id = $1::uuid`,
+    [tenantId],
+  );
+  const existingByEmp = new Map<string, string[]>();
+  for (const r of existing) {
+    const k = String(r.employee_id);
+    const list = existingByEmp.get(k) ?? [];
+    list.push(String(r.id));
+    existingByEmp.set(k, list);
+  }
   const ledger: PlannedLedger[] = [];
   const occupancy: PlannedLedger[] = [];
   const empSeen = new Set<string>();
   for (const e of emps) {
     const empId = String(e.id);
+    const empStatus = String(e.status ?? "").trim().toLowerCase();
+    if (NON_CURRENT_EMPLOYEE_STATUSES.has(empStatus)) {
+      unmapped.push({ source: "employee", ref: empId, reason: `employee status  is not current (no open ledger span)` });
+      continue;
+    }
     const dept = e.department_id ? String(e.department_id) : null;
     const doj = e.date_of_joining ? String(e.date_of_joining) : null;
     if (!dept) {
@@ -375,7 +402,22 @@ export async function planBackfill(opts: BackfillOptions): Promise<{
       continue;
     }
     empSeen.add(empId);
-    ledger.push({ id: deterministicId(`ledger:${tenantId}:${empId}`), employeeId: empId, officeId: dept, effectiveFrom: doj });
+    const ledgerId = deterministicId(`ledger:${tenantId}:${empId}`);
+    const prior = existingByEmp.get(empId);
+    if (prior && prior.length > 0) {
+      // Only this tool's own deterministic row => already backfilled, a re-run
+      // is a silent no-op (ON CONFLICT DO NOTHING). Anything else is real
+      // history we must not stack a second open substantive span on.
+      if (!(prior.length === 1 && prior[0] === ledgerId)) {
+        conflicts.push({
+          kind: "employee_overlap",
+          ref: empId,
+          detail: `employee already has ${prior.length} posting_ledger row(s); skipped to avoid a second open substantive span`,
+        });
+        continue;
+      }
+    }
+    ledger.push({ id: ledgerId, employeeId: empId, officeId: dept, effectiveFrom: doj });
     occupancy.push({ id: deterministicId(`occ:${tenantId}:${empId}`), employeeId: empId, officeId: dept, effectiveFrom: doj });
   }
 
@@ -460,7 +502,6 @@ export async function runBackfillForTenant(
   }
 
   const rowCountsBefore = await snapshotCounts(sql, tenantId);
-  const plan = await planBackfill(opts);
   const actorId = opts.actorId ?? OPS_ACTOR;
   const correlationId = (opts.correlationId ?? randomUUID()).slice(0, 64);
 
@@ -468,9 +509,14 @@ export async function runBackfillForTenant(
   let ledgerWritten = 0;
   const occupancyWritten = 0;
 
+  let plan: Awaited<ReturnType<typeof planBackfill>>;
   await sql.unsafe(`BEGIN`);
   try {
     await sql.unsafe(`SELECT set_config('app.tenant_id', $1, true)`, [tenantId]);
+    // Serialise concurrent backfills of the same tenant, then plan INSIDE the
+    // write transaction so the plan cannot go stale against concurrent writes.
+    await sql.unsafe(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`wc-backfill:${tenantId}`]);
+    plan = await planBackfill(opts);
 
     // Posts: only those with a resolvable office (D-ST-02). ON CONFLICT on
     // (tenant_id, post_no) + a deterministic id make a re-run idempotent.

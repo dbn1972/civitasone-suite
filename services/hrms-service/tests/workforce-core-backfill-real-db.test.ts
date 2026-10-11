@@ -284,6 +284,46 @@ describe("workforce-core backfill — apply mode", () => {
   });
 });
 
+describe("workforce-core backfill — existing ledger history and non-current employees", () => {
+  it("apply skips an employee with foreign ledger history and one terminated employee", async () => {
+    const fxC = await seed("C" + tag);
+    const sysUser = randomUUID();
+    await setTenant(fxC.tenant);
+    const desig = (await pg`select id from employee.hrms_designations where tenant_id = ${fxC.tenant}::uuid limit 1`)[0].id as string;
+    const mkEmp = async (status: string, doj: string) => {
+      const id = randomUUID();
+      await pg`insert into employee.hrms_employees (id, tenant_id, employee_no, full_name, department_id, designation_id, date_of_joining, status, created_by, updated_by)
+               values (${id}::uuid, ${fxC.tenant}::uuid, ${"E-C-" + id.slice(0, 6)}, 'Synthetic Emp', ${fxC.office}::uuid, ${desig}::uuid, ${doj}::date, ${status}, ${sysUser}::uuid, ${sysUser}::uuid)`;
+      return id;
+    };
+    const termEmp = await mkEmp("terminated", "2010-01-01");
+    // pre-existing history for empGood1 under a NON-deterministic id
+    await pg`insert into workforce_core.posting_ledger (id, tenant_id, employee_id, office_id, charge_type, effective_from, created_by)
+             values (${randomUUID()}::uuid, ${fxC.tenant}::uuid, ${fxC.empGood1}::uuid, ${fxC.office}::uuid, 'substantive', '2015-06-01', ${sysUser}::uuid)`;
+    const report = await runBackfillForTenant({ sql, tenantId: fxC.tenant, apply: true, tenantPositions: fxC.positions, env: ENABLED });
+    expect(report.ledgerWritten).toBe(1);
+    expect(report.conflicts.some((c) => c.kind === "employee_overlap" && c.ref === fxC.empGood1)).toBe(true);
+    expect(report.unmapped.some((u) => u.source === "employee" && u.ref === termEmp)).toBe(true);
+    await setTenant(fxC.tenant);
+    const rows = await pg`select employee_id from workforce_core.posting_ledger where tenant_id = ${fxC.tenant}::uuid`;
+    expect(rows.length).toBe(2);
+    expect(rows.some((r) => r.employee_id === termEmp)).toBe(false);
+    // chained re-run: nothing new, and no overlap reported for the backfilled employee
+    const again = await runBackfillForTenant({ sql, tenantId: fxC.tenant, apply: true, tenantPositions: fxC.positions, env: ENABLED });
+    expect(again.ledgerWritten).toBe(0);
+    expect(again.conflicts.filter((c) => c.ref === fxC.empGood2).length).toBe(0);
+    // cleanup (ledger is append-only; left under a random tenant)
+    await setTenant(fxC.tenant);
+    await pg`delete from workforce_core.post where tenant_id = ${fxC.tenant}::uuid`;
+    await pg`delete from manpower.plans where tenant_id = ${fxC.tenant}::uuid`;
+    await pg`delete from reservation.hrms_sanctioned_posts where tenant_id = ${fxC.tenant}::uuid`;
+    await pg`delete from employee.hrms_employees where tenant_id = ${fxC.tenant}::uuid`;
+    await pg`delete from employee.hrms_designations where tenant_id = ${fxC.tenant}::uuid`;
+    await pg`delete from employee.hrms_departments where tenant_id = ${fxC.tenant}::uuid`;
+    await pg`delete from _outbox.messages where tenant_id = ${fxC.tenant}::uuid`;
+  });
+});
+
 describe("workforce-core backfill — tenant isolation", () => {
   it("backfill for tenant A never reads or writes tenant B", async () => {
     const fxB = await seed("B" + tag);
