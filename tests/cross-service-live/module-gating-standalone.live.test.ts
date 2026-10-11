@@ -280,6 +280,26 @@ describe.skipIf(!RUN_DB)("cross-service-live: module gating (D-17, D-ST-24)", ()
       }
     });
 
+    it("BLOCKS the careers candidate routes (route `careers` -> hrms-recruitment) and survives a malformed escape", async () => {
+      for (const path of [
+        "/api/v1/careers/apply",
+        "/api/v1/careers/resume",
+        "/api/v1/careers/auth/login",
+        "/api/v1/careers/portal/applications",
+      ]) {
+        guardTest.moduleCache.clear();
+        const reply = fakeReply();
+        const allowed = await checkModuleEnabled(fakeReq(T_STANDALONE), reply as never, "careers", path);
+        expect(allowed, `standalone must be BLOCKED from ${path}`).toBe(false);
+        expect(reply._code).toBe(403);
+        expect((reply._body as { message: string }).message).toContain("hrms-recruitment");
+      }
+      guardTest.moduleCache.clear();
+      await expect(
+        checkModuleEnabled(fakeReq(T_STANDALONE), fakeReply() as never, "hrms", "/api/v1/hrms/%zz"),
+      ).resolves.toBeTypeOf("boolean");
+    });
+
     it("REACHES the Workforce Core (core HRMS) surface for the same standalone tenant", async () => {
       for (const path of [
         hrmsPath("employees/1"),

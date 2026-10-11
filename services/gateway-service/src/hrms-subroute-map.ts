@@ -80,6 +80,9 @@
 /** The gateway module-key for the core Workforce Core HRMS surface. */
 export const WORKFORCE_CORE_KEY = "workforce_core";
 
+/** Gateway key for the whole /api/v1/careers/* surface (recruitment module). */
+export const RECRUITMENT_KEY = "hrms-recruitment";
+
 /**
  * First-path-segment → non-core gateway module-key. Only UNAMBIGUOUS non-core
  * segments appear (see the "ambiguity rule" above). Segments shared with a core
@@ -199,14 +202,29 @@ export function resolveHrmsModuleKey(pathname: string): string {
   // Strip the leading `/api` the gateway prefixes carry, then the version +
   // surface segment, to isolate the first HRMS sub-segment. Matches:
   //   /api/v1/hrms/<seg>/...   /api/v1/hr/<seg>/...   /api/v1/careers/<seg>/...
-  const m = pathname.match(/^\/api\/v\d+\/(?:hrms|hr|careers)\/([^/?#]+)/i);
+  // `careers` is resolved by ROUTE NAME, not by its first sub-segment: the whole
+  // /api/v1/careers/* surface (apply, resume, auth/*, portal/*, openings, offers,
+  // ...) is served by the recruitment module of hrms-service, so it must never
+  // fall through to workforce_core for a standalone tenant.
+  if (/^\/api\/v\d+\/careers(?:[/?#;]|$)/i.test(pathname)) return RECRUITMENT_KEY;
+  const m = pathname.match(/^\/api\/v\d+\/(?:hrms|hr)\/([^/?#]+)/i);
   const captured = m?.[1];
-  if (!captured) return WORKFORCE_CORE_KEY; // bare /api/v1/hrms or no sub-segment → core
+  if (!captured) return WORKFORCE_CORE_KEY; // bare /api/v1/hrms or no sub-segment -> core
+  // canonicalisePath has already percent-decoded the path (up to 3 rounds), so a
+  // residual `%` may be a literal that is not a valid escape (`%zz`). A second
+  // decode must never throw (unhandled 500): fall back to the raw segment, which
+  // matches no map key and so resolves like any unknown segment.
+  let decoded = captured;
+  try {
+    decoded = decodeURIComponent(captured);
+  } catch {
+    decoded = captured;
+  }
   // Fastify 4 (hrms-service) treats `;` as a path delimiter, so `leave;x/apply`
   // is served as the `/v1/hrms/leave` route. Truncate at the first `;` (raw or
   // percent-encoded, after decoding) so the lookup keys on what the upstream
   // router will actually dispatch, never on the decorated segment.
-  const seg = (decodeURIComponent(captured).split(";")[0] ?? "").toLowerCase();
+  const seg = (decoded.split(";")[0] ?? "").toLowerCase();
   return HRMS_SUBROUTE_TO_KEY[seg] ?? WORKFORCE_CORE_KEY;
 }
 

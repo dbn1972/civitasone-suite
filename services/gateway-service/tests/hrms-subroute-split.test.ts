@@ -277,3 +277,62 @@ describe("resolveHrmsModuleKey: `;` path-delimiter bypass", () => {
     expect(resolveHrmsModuleKey(path)).toBe(key);
   });
 });
+
+// ───────────────────────────────────────────────────────────────────────────
+// 6. /careers is resolved by route name (whole surface = recruitment)
+// ───────────────────────────────────────────────────────────────────────────
+describe("resolveHrmsModuleKey: /api/v1/careers/* is recruitment for every sub-path", () => {
+  it.each([
+    "/api/v1/careers",
+    "/api/v1/careers/",
+    "/api/v1/careers/apply",
+    "/api/v1/careers/resume",
+    "/api/v1/careers/auth/login",
+    "/api/v1/careers/portal/applications",
+    "/api/v1/careers/openings",
+    "/api/v1/careers/offers",
+    "/api/v1/careers;x/apply",
+    "/api/v1/careers?x=1",
+  ])("%s -> hrms-recruitment", (path) => {
+    expect(resolveHrmsModuleKey(path)).toBe("hrms-recruitment");
+  });
+
+  it("a standalone (workforce_core only) tenant is BLOCKED from the careers candidate routes", async () => {
+    vi.stubEnv("COMPOSITION_ENFORCEMENT", "on");
+    for (const path of [
+      "/api/v1/careers/apply",
+      "/api/v1/careers/resume",
+      "/api/v1/careers/auth/login",
+      "/api/v1/careers/portal/applications",
+    ]) {
+      _test.moduleCache.clear();
+      mockFetch({ configured: true, mode: "enforce", data: [{ name: "workforce_core" }, { name: "smarttransfer" }, { name: "workflow" }] });
+      const reply = fakeReply();
+      expect(await checkModuleEnabled(fakeReq(TID), reply, "careers", path), `must block ${path}`).toBe(false);
+      expect(reply._code).toBe(403);
+      expect(reply._body.message).toContain("hrms-recruitment");
+    }
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// 7. malformed percent-escapes must never throw (unhandled 500)
+// ───────────────────────────────────────────────────────────────────────────
+describe("resolveHrmsModuleKey: malformed percent-escape does not throw", () => {
+  it.each([
+    "/api/v1/hrms/%zz",
+    "/api/v1/hrms/%",
+    "/api/v1/hrms/%E0%A4%A",
+    "/api/v1/hr/%zz/apply",
+  ])("%s resolves to workforce_core without throwing", (path) => {
+    expect(() => resolveHrmsModuleKey(path)).not.toThrow();
+    expect(resolveHrmsModuleKey(path)).toBe(WORKFORCE_CORE_KEY);
+  });
+
+  it("checkModuleEnabled survives the post-canonicalisation `%zz` path", async () => {
+    vi.stubEnv("COMPOSITION_ENFORCEMENT", "on");
+    mockFetch({ configured: true, mode: "enforce", data: [{ name: "workforce_core" }] });
+    const reply = fakeReply();
+    await expect(checkModuleEnabled(fakeReq(TID), reply, "hrms", "/api/v1/hrms/%zz")).resolves.toBeTypeOf("boolean");
+  });
+});
