@@ -9,6 +9,7 @@ import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerFeatureFlagConsumers } from "../src/modules/feature-flags/consumer.js";
+import { drainOrFail } from "../../../vitest.drain";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "dddddddd-eeee-4000-8000-0000000000f1";
@@ -26,17 +27,18 @@ beforeAll(async () => {
 });
 afterAll(async () => { await app.close(); await queue.stop(); await sqlClient.end(); });
 
-async function settle() { await new Promise((r) => setTimeout(r, 100)); }
-
-// Poll the manage list until a flag with `key` is visible (consumer is async).
-async function waitForFlag(key: string, tries = 40): Promise<{ id: string; owner: string; expiresAt: string }> {
-  for (let i = 0; i < tries; i++) {
-    const list = await app.inject({ method: "GET", url: "/v1/admin/feature-flags/manage", headers: auth() });
-    const row = (list.json().data as Array<{ id: string; key: string; owner: string; expiresAt: string }>).find((r) => r.key === key);
-    if (row) return row;
-    await settle();
-  }
-  throw new Error(`flag ${key} never appeared`);
+// The create command is applied by an async consumer. Quiesce the queue
+// (bounded, fails on timeout) so the write has committed AND the list cache has
+// been invalidated, then read once. Polling instead raced the consumer: a poll
+// that read the list before the commit could re-populate the cache with the
+// stale (empty) list after the consumer invalidated it, and every later poll in
+// the budget then hit that stale cache.
+async function waitForFlag(key: string): Promise<{ id: string; owner: string; expiresAt: string }> {
+  await drainOrFail(queue, 20_000, `feature-flag create (${key})`);
+  const list = await app.inject({ method: "GET", url: "/v1/admin/feature-flags/manage", headers: auth() });
+  const row = (list.json().data as Array<{ id: string; key: string; owner: string; expiresAt: string }>).find((r) => r.key === key);
+  if (!row) throw new Error(`flag ${key} never appeared after the queue drained`);
+  return row;
 }
 
 describe("feature-flags rollout — expiry + owner + evaluate", () => {
