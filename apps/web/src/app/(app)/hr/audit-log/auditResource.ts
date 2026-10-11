@@ -143,6 +143,7 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "payroll_tax_proof_settings",
   "recruitment_edition_policy",
   "recruitment_settings",
+  "workforce_core", // ST-M01-08 backfill/mapping tool
 ] as const;
 
 /** Detail-page route per resource type, for the types that have one keyed by the audited id. */

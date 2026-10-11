@@ -194,12 +194,23 @@ async function snapshotCounts(
   tenantId: string,
 ): Promise<Record<string, number>> {
   const out: Record<string, number> = {};
-  for (const tbl of COUNT_TABLES) {
-    const rows = await sql.unsafe(
-      `SELECT count(*)::int AS n FROM ${tbl} WHERE tenant_id = $1::uuid`,
-      [tenantId],
-    );
-    out[tbl] = Number(rows[0]?.n ?? 0);
+  // Tenant GUC is transaction-local (set_config(..., true)); read the counts in
+  // their own short READ ONLY transaction so RLS scopes them to this tenant.
+  await sql.unsafe(`BEGIN`);
+  try {
+    await sql.unsafe(`SET TRANSACTION READ ONLY`);
+    await sql.unsafe(`SELECT set_config('app.tenant_id', $1, true)`, [tenantId]);
+    for (const tbl of COUNT_TABLES) {
+      const rows = await sql.unsafe(
+        `SELECT count(*)::int AS n FROM ${tbl} WHERE tenant_id = $1::uuid`,
+        [tenantId],
+      );
+      out[tbl] = Number(rows[0]?.n ?? 0);
+    }
+    await sql.unsafe(`COMMIT`);
+  } catch (e) {
+    await sql.unsafe(`ROLLBACK`).catch(() => undefined);
+    throw e;
   }
   return out;
 }
@@ -447,9 +458,8 @@ export async function runBackfillForTenant(
   const ledgerFlagEnabled = isPostingLedgerEnabled(env);
   const generatedAt = new Date().toISOString();
 
-  // Scope every statement to this tenant (RLS). Session GUC so snapshotCounts
-  // (outside the tx) is tenant-scoped too; re-asserted LOCAL inside each tx.
-  await sql.unsafe(`SELECT set_config('app.tenant_id', $1, false)`, [tenantId]);
+  // Tenant scoping (RLS) is transaction-local: every tx below (and each
+  // snapshotCounts read) sets app.tenant_id with set_config(..., true).
 
   if (!apply) {
     // DRY-RUN: a read-only transaction. Any INSERT/UPDATE/DELETE throws
