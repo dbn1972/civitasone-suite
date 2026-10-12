@@ -92,8 +92,26 @@ describe("GET /v1/admin/composition/internal/:tenantId/modules", () => {
     const body = res.json();
     expect(body.configured).toBe(true);
     const keys = body.data.map((m: { name: string }) => m.name);
-    // HR cluster projects to "hrms"; payroll/finance/procurement present; core→workflow
-    expect(keys).toEqual(expect.arrayContaining(["hrms", "payroll", "finance", "procurement", "workflow"]));
+    // ST-M01-04b: the HR cluster now projects to the SPLIT sub-keys, not a
+    // single coarse "hrms". A govt tenant has the full HR module set, so it
+    // reaches workforce_core (core HRMS) + every non-core sub-key; payroll /
+    // finance / procurement present; core → workflow.
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        "workforce_core",
+        "hrms-leave",
+        "hrms-attendance",
+        "hrms-recruitment",
+        "hrms-appraisal",
+        "hrms-self-service",
+        "payroll",
+        "finance",
+        "procurement",
+        "workflow",
+      ]),
+    );
+    // the coarse "hrms" key is gone after the split
+    expect(keys).not.toContain("hrms");
     // govt has no CRM by default → "crm" absent
     expect(keys).not.toContain("crm");
   });
@@ -112,7 +130,9 @@ describe("GET /v1/admin/composition/my-modules (web nav visibility)", () => {
     const res = await app.inject({ method: "GET", url: "/v1/admin/composition/my-modules", headers: navAuth(ONBOARDED) });
     expect(res.statusCode).toBe(200);
     const keys = res.json().data.map((m: { name: string }) => m.name);
-    expect(keys).toEqual(expect.arrayContaining(["hrms", "finance", "payroll"]));
+    // ST-M01-04b: HR cluster split into per-prefix keys.
+    expect(keys).toEqual(expect.arrayContaining(["workforce_core", "hrms-leave", "finance", "payroll"]));
+    expect(keys).not.toContain("hrms");
   });
 
   it("returns an empty list for an un-onboarded tenant (web shows all)", async () => {
@@ -160,19 +180,30 @@ describe("enforcement mode (FF-03, D-ST-24)", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().mode).toBe("enforce");
     const keys = res.json().data.map((m: { name: string }) => m.name);
-    // Standalone resolves smarttransfer + workforce_core + core kernel only.
-    // workforce_core currently projects to the coarse "hrms" gateway key
-    // (composition/gateway-map.ts, from ST-M01-03) because the hrms route is
-    // still the single door to Workforce Core employee basics — the sub-route
-    // key SPLIT that makes "hrms" NOT also unlock leave/payroll/recruitment is
-    // ST-M01-04's deferred piece. What the standalone SKU must NOT get as its
-    // OWN gateway keys are the non-core finance/HR SKUs: payroll, finance,
-    // procurement, crm are absent here.
+    // ST-M01-04b: standalone resolves smarttransfer + workforce_core + core
+    // kernel only. The sub-route key split means its OWN gateway keys include
+    // `workforce_core` (the core HRMS surface) but NONE of the non-core HRMS
+    // sub-keys and none of the finance/HR SKUs. This is exactly M01 exit
+    // criterion 3 at the projection layer: no leave/attendance/recruitment/
+    // payroll-facing surface is reachable for the standalone SKU.
     expect(keys).toContain("smarttransfer");
-    expect(keys).not.toContain("payroll");
-    expect(keys).not.toContain("finance");
-    expect(keys).not.toContain("procurement");
-    expect(keys).not.toContain("crm");
+    expect(keys).toContain("workforce_core");
+    // the coarse "hrms" door is gone, and no non-core HRMS sub-key is granted
+    expect(keys).not.toContain("hrms");
+    for (const blocked of [
+      "hrms-leave",
+      "hrms-attendance",
+      "hrms-recruitment",
+      "hrms-appraisal",
+      "hrms-payroll",
+      "hrms-self-service",
+      "payroll",
+      "finance",
+      "procurement",
+      "crm",
+    ]) {
+      expect(keys, `standalone must NOT get ${blocked}`).not.toContain(blocked);
+    }
   });
 
   it("PUT sets an explicit mode and GET reads it back (super-admin only)", async () => {

@@ -246,4 +246,95 @@ describe.skipIf(!RUN_DB)("cross-service-live: module gating (D-17, D-ST-24)", ()
     expect(await checkModuleEnabled(fakeReq(T_STANDALONE), fakeReply() as never, "documents")).toBe(true);
     expect(await checkModuleEnabled(fakeReq(T_STANDALONE), fakeReply() as never, "eoffice")).toBe(true);
   });
+
+  // ── ST-M01-04b — HRMS sub-route key split (path-aware), real projection ────
+  // M01 exit criterion 3: a smarttransfer_standalone tenant (enforce) must be
+  // BLOCKED at the gateway from leave AND payroll AND recruitment AND attendance
+  // while reaching the Workforce Core (core HRMS) surface and the platform
+  // documents/eoffice routes — proven through the REAL admin composition
+  // projection (gateway-map.ts) over real HTTP + real Postgres. The guard is now
+  // PATH-AWARE for the single `hrms` gateway route (route name `hrms`, pathname
+  // under /api/v1/hrms/...), so these assertions pass the real pathname.
+  describe("ST-M01-04b: HRMS sub-route split for the standalone SKU", () => {
+    const hrmsPath = (sub: string) => `/api/v1/hrms/${sub}`;
+
+    it("BLOCKS leave, payroll-facing, recruitment AND attendance HRMS sub-routes", async () => {
+      const blocked: Array<[string, string]> = [
+        [hrmsPath("leave/apply"), "hrms-leave"],
+        [hrmsPath("leave-requests/1"), "hrms-leave"],
+        [hrmsPath("attendance/mark"), "hrms-attendance"],
+        [hrmsPath("shifts"), "hrms-attendance"],
+        [hrmsPath("recruitment/openings"), "hrms-recruitment"],
+        [hrmsPath("candidates/9"), "hrms-recruitment"],
+        [hrmsPath("pay-matrix"), "hrms-payroll"],
+        [hrmsPath("medical/claims"), "hrms-payroll"],
+      ];
+      for (const [path, key] of blocked) {
+        guardTest.moduleCache.clear();
+        const reply = fakeReply();
+        const allowed = await checkModuleEnabled(fakeReq(T_STANDALONE), reply as never, "hrms", path);
+        expect(allowed, `standalone must be BLOCKED from ${path}`).toBe(false);
+        expect(reply._code).toBe(403);
+        expect((reply._body as { code: string }).code).toBe("MODULE_DISABLED");
+        expect((reply._body as { message: string }).message, `names ${key}`).toContain(key);
+      }
+    });
+
+    it("BLOCKS the careers candidate routes (route `careers` -> hrms-recruitment) and survives a malformed escape", async () => {
+      for (const path of [
+        "/api/v1/careers/apply",
+        "/api/v1/careers/resume",
+        "/api/v1/careers/auth/login",
+        "/api/v1/careers/portal/applications",
+      ]) {
+        guardTest.moduleCache.clear();
+        const reply = fakeReply();
+        const allowed = await checkModuleEnabled(fakeReq(T_STANDALONE), reply as never, "careers", path);
+        expect(allowed, `standalone must be BLOCKED from ${path}`).toBe(false);
+        expect(reply._code).toBe(403);
+        expect((reply._body as { message: string }).message).toContain("hrms-recruitment");
+      }
+      guardTest.moduleCache.clear();
+      await expect(
+        checkModuleEnabled(fakeReq(T_STANDALONE), fakeReply() as never, "hrms", "/api/v1/hrms/%zz"),
+      ).resolves.toBeTypeOf("boolean");
+    });
+
+    it("REACHES the Workforce Core (core HRMS) surface for the same standalone tenant", async () => {
+      for (const path of [
+        hrmsPath("employees/1"),
+        hrmsPath("departments"),
+        hrmsPath("service-book/1"),
+        hrmsPath("sanctioned-posts"),
+        hrmsPath("seniority"),
+      ]) {
+        guardTest.moduleCache.clear();
+        const reply = fakeReply();
+        expect(
+          await checkModuleEnabled(fakeReq(T_STANDALONE), reply as never, "hrms", path),
+          `standalone must REACH core ${path}`,
+        ).toBe(true);
+        expect(reply._code).toBe(0);
+      }
+    });
+
+    it("still reaches platform documents/eoffice (path-aware call does not change platform bypass)", async () => {
+      guardTest.moduleCache.clear();
+      expect(await checkModuleEnabled(fakeReq(T_STANDALONE), fakeReply() as never, "documents", "/api/v1/documents/1")).toBe(true);
+      expect(await checkModuleEnabled(fakeReq(T_STANDALONE), fakeReply() as never, "eoffice", "/api/v1/eoffice/files/1")).toBe(true);
+    });
+
+    it("a govt (full-HRMS) ENFORCE tenant REACHES leave + recruitment + the core surface (no regression)", async () => {
+      // The govt profile seeds the full HR module set, which projects to every
+      // HRMS sub-key, so an enforce govt tenant is NOT blocked by the split.
+      for (const path of [hrmsPath("leave/apply"), hrmsPath("recruitment/openings"), hrmsPath("employees/1")]) {
+        guardTest.moduleCache.clear();
+        const reply = fakeReply();
+        expect(
+          await checkModuleEnabled(fakeReq(T_ENFORCE), reply as never, "hrms", path),
+          `govt enforce tenant must REACH ${path}`,
+        ).toBe(true);
+      }
+    });
+  });
 });

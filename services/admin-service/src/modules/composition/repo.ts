@@ -113,6 +113,42 @@ export async function isCompositionConfigured(tenantId: string): Promise<boolean
   return profileCode !== null || modules.length > 0;
 }
 
+/**
+ * The tenant's EFFECTIVE selected modules for dependency resolution: the union
+ * of its own `user` picks and the `grandfather` entitlements materialised by
+ * the FF-03 backfill (migrations 0050 / 0051, D-ST-24).
+ *
+ * WHY grandfather must count here (ST-M01-04b): the gateway projection resolves
+ * the dependency closure from this set and projects it to gateway route-keys.
+ * The grandfather backfill grants every pre-existing tenant exactly the modules
+ * it can reach today so that, once the HRMS surface is split into per-prefix
+ * gateway keys (hrms-leave / hrms-attendance / …), those tenants keep that
+ * reach. Reading ONLY `user` here would make the backfill invisible to the
+ * projection and silently 403 a grandfathered tenant on a surface it has today.
+ * `core`/`dep` are still DERIVED by resolveComposition from this seed set, so
+ * they are intentionally excluded (adding them here would double-count).
+ *
+ * Grandfather is kept a DISTINCT source (not promoted to `user`) so a tenant's
+ * own picks stay cleanly separable from the backfill and can be migrated or
+ * removed later without touching user selections (see migration 0050 header).
+ */
+export async function getEffectiveSelectedModules(tenantId: string): Promise<string[]> {
+  const rows = await runWithTenant(tenantId, () =>
+    scopedRead((tx) =>
+      tx
+        .select({ id: tenantEntitlement.moduleId })
+        .from(tenantEntitlement)
+        .where(
+          and(
+            eq(tenantEntitlement.tenantId, tenantId),
+            inArray(tenantEntitlement.source, ["user", "grandfather"]),
+          ),
+        ),
+    ),
+  );
+  return [...new Set(rows.map((r) => r.id))].sort();
+}
+
 /** Replace the tenant's user-module selection set (transactional). */
 export async function replaceUserModules(tenantId: string, userModuleIds: string[], actorId: string): Promise<void> {
   await runWithTenant(tenantId, () =>

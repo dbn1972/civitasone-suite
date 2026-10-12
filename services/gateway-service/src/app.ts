@@ -208,7 +208,10 @@ async function proxyHandler(
   const { route } = resolved;
 
   // V-01: Module-guard enforcement — reject requests for disabled modules before proxying.
-  const moduleAllowed = await checkModuleEnabled(req, reply, route.name);
+  // ST-M01-04b: pass the canonical pathname so the HRMS surface (one gateway
+  // route) can be split into per-prefix module keys (hrms-leave / hrms-recruitment
+  // / … vs workforce_core). Non-HRMS routes ignore it.
+  const moduleAllowed = await checkModuleEnabled(req, reply, route.name, pathname);
   if (!moduleAllowed) return; // reply already sent with 403
 
   // V-02: ABAC policy enforcement — evaluate mutations against policy-service rules.

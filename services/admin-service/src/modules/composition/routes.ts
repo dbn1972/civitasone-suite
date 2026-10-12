@@ -188,15 +188,19 @@ export async function compositionRoutes(app: FastifyInstance): Promise<void> {
       requireRole(ctx, ADMIN_ROLES);
     }
     const { tenantId } = safeParse(internalParam, req.params);
-    const [profileCode, userModules, mode] = await Promise.all([
+    const [profileCode, selectedModules, mode] = await Promise.all([
       repo.getTenantProfileCode(tenantId),
-      repo.getUserModules(tenantId),
+      // ST-M01-04b: union of user picks + grandfather backfill (0050/0051), so a
+      // grandfathered tenant projects the sub-keys it can reach today. A tenant
+      // with ONLY grandfather entitlements (legacy, never composed) is now
+      // `configured:true` and projects those keys, instead of configured:false.
+      repo.getEffectiveSelectedModules(tenantId),
       repo.getEffectiveEnforcementMode(tenantId),
     ]);
-    const configured = profileCode !== null || userModules.length > 0;
+    const configured = profileCode !== null || selectedModules.length > 0;
     if (!configured) return reply.send({ configured: false, mode, data: [] });
     const reg = await registryFor(tenantId);
-    const comp = resolveComposition(reg, userModules);
+    const comp = resolveComposition(reg, selectedModules);
     return reply.send({ configured: true, mode, data: toGatewayKeys(comp.moduleIds).map((name) => ({ name })) });
   });
 
@@ -207,13 +211,14 @@ export async function compositionRoutes(app: FastifyInstance): Promise<void> {
   // and show all — fail-open, never a blank nav.
   app.get("/v1/admin/composition/my-modules", async (req, reply) => {
     const ctx = resolveContext(req);
-    const [profileCode, userModules] = await Promise.all([
+    const [profileCode, selectedModules] = await Promise.all([
       repo.getTenantProfileCode(ctx.tenantId),
-      repo.getUserModules(ctx.tenantId),
+      // ST-M01-04b: match the gateway projection — user picks + grandfather.
+      repo.getEffectiveSelectedModules(ctx.tenantId),
     ]);
-    if (profileCode === null && userModules.length === 0) return reply.send({ data: [] });
+    if (profileCode === null && selectedModules.length === 0) return reply.send({ data: [] });
     const reg = await registryFor(ctx.tenantId);
-    const comp = resolveComposition(reg, userModules);
+    const comp = resolveComposition(reg, selectedModules);
     return reply.send({ data: toGatewayKeys(comp.moduleIds).map((name) => ({ name })) });
   });
 
