@@ -50,6 +50,10 @@ CREATE TABLE IF NOT EXISTS _outbox.messages (
 CREATE INDEX IF NOT EXISTS idx_smarttransfer_outbox_unpublished
   ON _outbox.messages (created_at)
   WHERE published_at IS NULL;
+-- PERF-002: RLS tenant table needs an index whose LEADING column is tenant_id
+-- (the partial index above leads with created_at, so it does not count).
+CREATE INDEX IF NOT EXISTS idx_smarttransfer_outbox_tenant
+  ON _outbox.messages (tenant_id, created_at);
 
 CREATE TABLE IF NOT EXISTS _inbox.processed (
   message_id   uuid PRIMARY KEY,
