@@ -158,6 +158,9 @@ async function publishApply(order: {
         effectiveDate: order.effectiveDate,
         chargeType: "substantive",
         orderNumber: order.orderNumber,
+        // ST-M01-15 producer ACL: only the frozen contract owner may publish
+        // hrms.posting.apply, so stamp it like apply-posting-real-db does.
+        producer: "smarttransfer-service",
       },
     }),
   );
