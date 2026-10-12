@@ -19,7 +19,8 @@ import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { COMMANDS } from "../../topics.js";
+import { COMMANDS, EVENTS } from "../../topics.js";
+import { notifyGatewayModuleCache } from "../../module-cache-notify.js";
 import * as repo from "./repo.js";
 import { buildRegistry, resolveComposition } from "./domain.js";
 
@@ -32,7 +33,68 @@ interface ApplyPlanPayload {
   profileCode: string | null;
 }
 
+interface SetEnforcementModePayload {
+  tenantId: string;
+  mode: "off" | "shadow" | "enforce";
+}
+
 export function registerCompositionConsumers(queue: Queue): void {
+  queue.subscribe<SetEnforcementModePayload>(COMMANDS.compositionSetEnforcementMode, async (msg) => {
+    const { tenantId, mode } = msg.payload;
+    try {
+      // Re-check readiness (the route checked too; this closes the race where the
+      // composition was cleared between 202 and consume): `enforce` on an
+      // un-composed tenant would lock it out of every module.
+      const ready = mode !== "enforce" || (await repo.isCompositionConfigured(tenantId));
+      let applied = false;
+      // Read before the tx (informational for audit/event only) - a nested
+      // scopedRead inside db.transaction is the nested-tx anti-pattern.
+      const previousMode = await repo.getEffectiveEnforcementMode(tenantId);
+      await runWithTenant(tenantId, () =>
+        db.transaction(async (tx) => {
+          if (!(await markProcessed(tx, msg.messageId))) return;
+          const t = tx as Parameters<typeof enqueue>[0];
+          if (!ready) {
+            await enqueue(t, {
+              topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+              tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+              payload: {
+                service: "admin", action: "composition_set_enforcement_mode",
+                resourceType: "tenant_composition", resourceId: tenantId, outcome: "denied",
+                mode, reason: "composition_not_configured",
+              },
+            });
+            return;
+          }
+          await repo.setEnforcementModeTx(
+            tx as unknown as Parameters<typeof repo.setEnforcementModeTx>[0],
+            tenantId, mode, msg.actorId,
+          );
+          await enqueue(t, {
+            topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: {
+              service: "admin", action: "composition_set_enforcement_mode",
+              resourceType: "tenant_composition", resourceId: tenantId, outcome: "success",
+              mode, previousMode,
+            },
+          });
+          await enqueue(t, {
+            topic: EVENTS.compositionEnforcementModeChanged, eventType: EVENTS.compositionEnforcementModeChanged,
+            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: { tenantId, mode, previousMode },
+          });
+          applied = true;
+        }),
+      );
+      if (!ready) log.warn({ tenantId, mode, messageId: msg.messageId }, "enforcement-mode change refused: tenant not composed");
+      if (applied) await cache.invalidate(cache.makeKey(tenantId, "composition", tenantId));
+    } catch (err) {
+      log.error({ err, messageId: msg.messageId, type: COMMANDS.compositionSetEnforcementMode }, "Consumer processing failed");
+      throw err;
+    }
+  });
+
   queue.subscribe<ApplyPlanPayload>(COMMANDS.compositionApplyPlan, async (msg) => {
     const { tenantId, moduleIds, profileCode } = msg.payload;
     try {
@@ -76,6 +138,7 @@ export function registerCompositionConsumers(queue: Queue): void {
       // AFTER the commit (a pre-commit invalidate lets a concurrent read re-cache
       // the old composition); also runs on an inbox-deduped replay, harmlessly.
       await cache.invalidate(cache.makeKey(tenantId, "composition", tenantId));
+      await notifyGatewayModuleCache(tenantId);
     } catch (err) {
       log.error({ err, messageId: msg.messageId, type: COMMANDS.compositionApplyPlan }, "Consumer processing failed");
       throw err; // fail loud: retried / DLQ'd, never a silent half-write

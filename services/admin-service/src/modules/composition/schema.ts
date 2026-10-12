@@ -63,8 +63,20 @@ export const tenantProfile = compositionSchema.table("tenant_profile", {
   version: integer("version").notNull().default(1),
 });
 
+// Per-tenant module-gating enforcement mode (FF-03, D-ST-24). FORCE-RLS'd by
+// migration 0050. `off` (default) is the pre-FF-03 fail-open behaviour; `shadow`
+// logs would-denies but allows; `enforce` fails closed. A tenant with NO row
+// here resolves to `off` unless its profile is `smarttransfer_standalone`
+// (resolved in the internal projection route, not stored here).
+export const tenantEnforcementMode = compositionSchema.table("tenant_enforcement_mode", {
+  tenantId: uuid("tenant_id").primaryKey(),
+  mode: text("mode").notNull().default("off"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: uuid("updated_by").notNull(),
+});
+
 export type ModuleRegistryRow = typeof moduleRegistry.$inferSelect;
 export type OrgProfileRow = typeof orgProfile.$inferSelect;
 export type ModuleBundleRow = typeof moduleBundle.$inferSelect;
 
-export const schema = { moduleRegistry, orgProfile, moduleBundle, tenantEntitlement, tenantProfile };
+export const schema = { moduleRegistry, orgProfile, moduleBundle, tenantEntitlement, tenantProfile, tenantEnforcementMode };

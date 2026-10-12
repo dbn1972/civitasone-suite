@@ -20,6 +20,26 @@ import { commandMessageId } from "../../shared/idempotency.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
+export interface SetEnforcementModeInput {
+  tenantId: string;
+  mode: "off" | "shadow" | "enforce";
+}
+
+/** Publish the set-enforcement-mode command (deterministic messageId, no DB write). */
+export async function setEnforcementMode(ctx: RequestContext, input: SetEnforcementModeInput): Promise<Accepted> {
+  const id = commandMessageId(ctx, `composition-mode:${input.tenantId}`, "set_enforcement_mode");
+  await queue.publish(COMMANDS.compositionSetEnforcementMode, {
+    messageId: id,
+    type: COMMANDS.compositionSetEnforcementMode,
+    tenantId: input.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { tenantId: input.tenantId, mode: input.mode },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
 export interface ApplyPlanInput {
   /** The tenant whose composition is being set. */
   tenantId: string;

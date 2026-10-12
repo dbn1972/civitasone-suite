@@ -11,5 +11,13 @@ export const EVENTS = {
   catalogueSeeded: "gateway.catalogue.seeded",
 } as const;
 
+/**
+ * Admin-owned events the gateway-worker consumes (module-cache-invalidation.ts):
+ * the post-commit enforcement-mode event drops the module-guard cache in the app.
+ */
+export const CONSUMED_EVENTS = {
+  compositionEnforcementModeChanged: "admin.composition.enforcement_mode_changed",
+} as const;
+
 export const SERVICE = "gateway";
 export const RESOURCE = "catalogue";
