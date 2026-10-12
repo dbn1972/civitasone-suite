@@ -601,3 +601,74 @@ describe("applyPosting — command idempotency is order-derived only", () => {
     expect(await readServiceBook(employeeId)).toHaveLength(1);
   });
 });
+
+describe("applyPosting — cross-tenant isolation (RLS)", () => {
+  it("tenant B cannot apply tenant A's post/employee: audited NOT_FOUND, nothing written", async () => {
+    // Tenant A owns a real employee and a real post.
+    const employeeId = await seedEmployee(officeA);
+    const postId = await seedPost(officeB);
+    const TENANT_B = randomUUID();
+    const orderId = randomUUID();
+    const inB = <T>(
+      fn: (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => Promise<T>,
+    ): Promise<T> => runWithTenant(TENANT_B, () => db.transaction(fn)) as Promise<T>;
+
+    // Tenant B submits the apply command naming A's ids.
+    await runWithTenant(TENANT_B, () =>
+      queue.publish(COMMANDS.postingApply, {
+        messageId: idempotentId({
+          idempotencyKey: `posting.apply:${orderId}`,
+          tenantId: TENANT_B,
+        }),
+        type: COMMANDS.postingApply,
+        tenantId: TENANT_B,
+        actorId: ACTOR,
+        correlationId: randomUUID(),
+        schemaVersion: "1.0",
+        payload: {
+          orderId,
+          tenantId: TENANT_B,
+          employeeId,
+          postId,
+          effectiveDate: "2027-10-01",
+          chargeType: "substantive",
+          orderNumber: "ORD/XT/1",
+        },
+      }),
+    );
+    await drain();
+
+    // Audited refusal, recorded under tenant B.
+    const audits = (await inB((tx) =>
+      tx
+        .select({ payload: outboxMessages.payload })
+        .from(outboxMessages)
+        .where(eq(outboxMessages.topic, "audit.event.record")),
+    )) as Array<{ payload: Record<string, unknown> }>;
+    const refusal = audits.find(
+      (a) =>
+        (a.payload as { resourceId?: string }).resourceId === orderId &&
+        (a.payload as { outcome?: string }).outcome === "failure",
+    );
+    expect(refusal, "tenant B got an audited refusal").toBeDefined();
+    expect(["POST_NOT_FOUND", "EMPLOYEE_NOT_FOUND"]).toContain(
+      (refusal!.payload as { metadata?: { reason?: string } }).metadata?.reason,
+    );
+
+    // Nothing written in either tenant for this employee.
+    expect(await readOccupancy(employeeId)).toHaveLength(0);
+    expect(await readLedger(employeeId)).toHaveLength(0);
+    expect(await readServiceBook(employeeId)).toHaveLength(0);
+    expect(await readEmployeeDept(employeeId)).toBe(officeA);
+    expect(
+      await inB((tx) =>
+        tx.select().from(wcPostOccupancy).where(eq(wcPostOccupancy.employeeId, employeeId)),
+      ),
+    ).toHaveLength(0);
+    expect(
+      await inB((tx) =>
+        tx.select().from(wcPostingLedger).where(eq(wcPostingLedger.employeeId, employeeId)),
+      ),
+    ).toHaveLength(0);
+  });
+});

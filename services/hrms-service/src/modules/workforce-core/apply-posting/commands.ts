@@ -15,9 +15,12 @@ import { COMMANDS } from "../../../topics.js";
 import type { ApplyPostingBody } from "./validators.js";
 
 export type Accepted = {
+  /** Standard 202 envelope key (acceptedResponseSchema) — the order id. */
+  id: string;
   orderId: string;
   status: string;
   correlationId: string;
+  data: { id: string; orderId: string };
 };
 
 export async function applyPosting(
@@ -50,8 +53,10 @@ export async function applyPosting(
     },
   });
   return {
+    id: body.orderId,
     orderId: body.orderId,
     status: "accepted",
     correlationId: ctx.correlationId,
+    data: { id: body.orderId, orderId: body.orderId },
   };
 }
