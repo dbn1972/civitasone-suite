@@ -81,7 +81,17 @@ export const hrmsPostingChanged = defineStContract({
     // v1-minimal: HRA city class (X/Y/Z). Source is OPEN D-ST-14; the field is
     // a plain string the producer fills, no classification is invented here.
     cityClass: zCode,
-    ddo: zId,
+    // ST-M01-09 additive revision: `ddo` is now OPTIONAL. There is NO DDO
+    // (Drawing & Disbursing Officer) source in Workforce Core / HRMS today —
+    // the field depends on the dated DDO history planned under PROPOSED
+    // D-ST-13/14 (ST-M01-11), so the `applyPosting` producer cannot honestly
+    // fill it. Making it optional (rather than inventing a value) keeps the
+    // event emittable now while leaving the field in the frozen contract for
+    // when a source exists; adding/relaxing an optional field is a
+    // backward-compatible, tolerant-reader change (D-18) — every existing
+    // producer that DID supply a `ddo` still validates. zId still constrains
+    // the shape when present.
+    ddo: zId.optional(),
     effectiveFrom: zWhen,
     orderNumber: z.string().min(1),
   }),

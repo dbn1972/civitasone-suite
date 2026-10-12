@@ -359,3 +359,34 @@ describe("SmartTransfer contract pack — lockstep with event-list.md", () => {
     }
   });
 });
+
+describe("hrms.posting.changed — ddo is optional (ST-M01-09)", () => {
+  const changed = hrmsPostingContracts.find((c) => c.topic === "hrms.posting.changed")!;
+
+  const base = {
+    employeeId: "22222222-2222-2222-2222-222222222222",
+    tenantId: TENANT,
+    fromOfficeId: "33333333-3333-3333-3333-333333333333",
+    toOfficeId: "44444444-4444-4444-4444-444444444444",
+    station: "Dharwad",
+    state: "KA",
+    cityClass: "Y",
+    effectiveFrom: "2026-04-01",
+    orderNumber: "ORD/2026/0001",
+  };
+
+  it("validates WITHOUT ddo (no DDO source in Workforce Core today)", () => {
+    const r = changed.validate(base);
+    expect(r.ok, JSON.stringify(r.violation)).toBe(true);
+  });
+
+  it("still validates WITH a ddo supplied (tolerant reader, D-18)", () => {
+    const r = changed.validate({ ...base, ddo: "55555555-5555-5555-5555-555555555555" });
+    expect(r.ok, JSON.stringify(r.violation)).toBe(true);
+  });
+
+  it("rejects an empty-string ddo when one IS supplied (zId still constrains)", () => {
+    const r = changed.validate({ ...base, ddo: "" });
+    expect(r.ok).toBe(false);
+  });
+});

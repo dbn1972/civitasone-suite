@@ -78,6 +78,8 @@ import { leaveCancelRoutes } from "./modules/leave/cancel-route.js";
 import { compOffRoutes } from "./modules/leave/comp-off-routes.js";
 import { fnfRoutes } from "./modules/employee/fnf-route.js";
 import { lifecycleRoutes } from "./modules/lifecycle/routes.js";
+import { applyPostingRoutes } from "./modules/workforce-core/apply-posting/routes.js";
+import { isPostingLedgerEnabled } from "./modules/workforce-core/config.js";
 import { onboardingRoutes } from "./modules/lifecycle/onboarding-routes.js";
 import { bgvPropertyPolicyRoutes } from "./modules/lifecycle/bgv-property-policy-routes.js";
 import { serviceBookRoutes } from "./modules/service-book/routes.js";
@@ -211,6 +213,12 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(reportRoutes);
   await app.register(bulkImportRoutes);
   await app.register(lifecycleRoutes);
+  // ST-M01-09: the applyPosting HTTP affordance is mounted ONLY when the
+  // Workforce Core posting ledger is enabled (M01 exit criterion 2). Flag off =
+  // the route is absent and the legacy transfer behaviour is unchanged.
+  if (isPostingLedgerEnabled()) {
+    await app.register(applyPostingRoutes);
+  }
   await app.register(onboardingRoutes);
   await app.register(onboardingTemplateRoutes);
   await app.register(bgvPropertyPolicyRoutes);

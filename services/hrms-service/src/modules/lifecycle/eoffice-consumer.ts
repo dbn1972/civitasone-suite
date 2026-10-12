@@ -75,7 +75,7 @@ export function registerEOfficeDecisionConsumers(queue: Queue): void {
             // applyTransferEffect now carries payStructureId the same way it
             // already carries departmentId/designationId, see its doc comment
             // in lifecycle/repo.ts.
-            await repo.applyTransferEffect(tx, transfer, cb.decidedBy);
+            await repo.applyTransferEffect(tx, { ...transfer, actorCorrelationId: msg.correlationId }, cb.decidedBy);
             // HIGH fix: this eOffice-approved posting is the other transfer
             // path that previously published no event at all. Mirrors the
             // direct path's EVENTS.employeeTransferred, under the same

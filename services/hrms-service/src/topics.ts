@@ -180,6 +180,12 @@ export const COMMANDS = {
   // shape as medicalClaimsListRead (routes must not write to Postgres
   // directly; see f3-leftover-hrms-cqrs.test.ts).
   assessmentCertificateVerified: "hrms.assessment_certificate.verified",
+  // workforce-core: the single applyPosting write path (ST-M01-09, D-ST-09/10).
+  // The ONLY way a posting changes. Published by smarttransfer-service (via the
+  // frozen `hrms.posting.apply` contract, D-ST-10) and — when the flag is on —
+  // by HRMS's own transfer paths acting as thin callers. Idempotent on the
+  // ORDER id (deterministic messageId from orderId, never the entity id).
+  postingApply: "hrms.posting.apply",
 } as const;
 
 export const EVENTS = {
@@ -225,6 +231,20 @@ export const EVENTS = {
   // command, and lifecycle/eoffice-consumer.ts's eOffice-approved posting).
   employeeTransferred: "hrms.employee.transferred",
 } as const;
+
+/**
+ * Workforce Core posting topics (ST-M01-09) are frozen in the #1976 contract
+ * pack (`hrms.posting.applied` / `hrms.posting.changed`). They are intentionally
+ * NOT declared as an exported EVENTS-style map here: their declared consumers
+ * (payroll OPEN D-ST-13; estab/notification; smarttransfer-service
+ * reconciliation PR #1979, unmerged) are not wired on main, so advertising them
+ * would be a publish-into-void orphan that trips the cross-service-events
+ * ratchet (D-101; D-ST-09/13 are PROPOSED). The posting FACT is carried on
+ * audit.event.record (consumer.ts) in the same transaction. When
+ * HRMS_POSTING_EVENTS_ENABLED is on, apply.ts / legacy-bridge.ts publish the
+ * topics by their frozen-contract literal names — same deferral precedent as
+ * ST-M01-03 / ST-M01-12.
+ */
 
 export const CONSUMED_EVENTS = {
   tenantCreated: "tenant.tenant.created",
