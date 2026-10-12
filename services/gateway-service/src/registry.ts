@@ -102,6 +102,9 @@ export const SERVICE_ROUTES: ServiceRoute[] = [
   { name: "advertisement", prefix: "/api/v1/advertisement", upstream: upstream("advertisement", 3073) },
   { name: "animal",        prefix: "/api/v1/animal",        upstream: upstream("animal", 3082) },
   { name: "building",      prefix: "/api/v1/building",      upstream: upstream("building", 3071) },
+  // SmartTransfer OS (ST-M01-12): module key `smarttransfer`; routes are
+  // /api/v1/smarttransfer/* → upstream /v1/smarttransfer/* (port 3086).
+  { name: "smarttransfer", prefix: "/api/v1/smarttransfer", upstream: upstream("smarttransfer", 3086) },
   { name: "crematorium",   prefix: "/api/v1/crematorium",   upstream: upstream("crematorium", 3083) },
   { name: "drainage",      prefix: "/api/v1/drainage",      upstream: upstream("drainage", 3080) },
   { name: "event",         prefix: "/api/v1/event",         upstream: upstream("event", 3076) },

@@ -116,7 +116,7 @@ const PORTS: Record<string, number> = {
   // port" discovery guard failed on all 18.
   document: 3049, shop: 3060, trade: 3070, building: 3071, fire: 3072, advertisement: 3073,
   vendor: 3074, roadcut: 3075, event: 3076, refund: 3077, sewerage: 3078, swm: 3079,
-  drainage: 3080, parks: 3081, animal: 3082, crematorium: 3083, parking: 3084, market: 3085,
+  drainage: 3080, parks: 3081, animal: 3082, crematorium: 3083, parking: 3084, market: 3085, smarttransfer: 3086,
 };
 
 let discoveredServices: string[] = [];

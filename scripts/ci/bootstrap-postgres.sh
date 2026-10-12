@@ -227,6 +227,13 @@ run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_ai_agent.sql"
 # 0001_init.sql fails to even authenticate on a fresh CI Postgres.
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_building.sql"
 
+# smarttransfer-service (ST-M01-12): new DB-backed service (database-per-
+# service), role smarttransfer_svc / db civitas_smarttransfer, routed at
+# /api/v1/smarttransfer and run as a PM2 app + worker. SERVICE_DBS below carries
+# its entry; this creates the role/database the migration loop authenticates
+# as. Same pattern as bootstrap_building.sql above.
+run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_smarttransfer.sql"
+
 # Every migration that fails is recorded here and reconciled against a committed
 # allow-list at the end of this script. Before that reconciliation existed, a
 # failed migration printed a warning and the script still exited 0 — which is how
@@ -352,6 +359,12 @@ declare -A SERVICE_DBS=(
   [parks-service]="parks_svc:civitas_parks"
   [roadcut-service]="roadcut_svc:civitas_roadcut"
   [building-service]="building_svc:civitas_building"
+  # smarttransfer-service (ST-M01-12): role/db created by
+  # bootstrap_smarttransfer.sql above. Migrations live at
+  # services/smarttransfer-service/migrations/ (0001_init.sql). Wired into
+  # ecosystem.config.js as svc("smarttransfer", 3086, ...) + worker, the
+  # gateway registry (/api/v1/smarttransfer) and Helm values.
+  [smarttransfer-service]="smarttransfer_svc:civitas_smarttransfer"
   # market-service: role/db already created by bootstrap_sec5_batch3.sql
   # above, but this entry was never added, so the migration loop above never
   # reached it even though civitas_market/market_svc already existed.
