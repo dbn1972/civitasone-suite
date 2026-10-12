@@ -44,7 +44,10 @@ const query = z.object({
   asOf: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "asOf must be YYYY-MM-DD")
-    .refine((s) => !Number.isNaN(Date.parse(`${s}T00:00:00Z`)), "asOf is not a valid date")
+    .refine((s) => {
+      const d = new Date(`${s}T00:00:00Z`);
+      return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+    }, "asOf is not a valid calendar date")
     .optional(),
 });
 

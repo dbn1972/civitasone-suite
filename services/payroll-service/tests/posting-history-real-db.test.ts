@@ -189,6 +189,17 @@ describe("ST-M01-11 posting consumer (real Postgres)", () => {
     expect(res.json().error?.code ?? res.json().code).toBe("POSTING_NOT_FOUND");
   });
 
+  it("400s impossible calendar dates in asOf (not 500)", async () => {
+    for (const bad of ["2026-02-30", "2026-02-31", "2026-04-31", "2026-13-01"]) {
+      const res = await app.inject({
+        method: "GET",
+        url: `/v1/payroll/posting-history/${EMP}?asOf=${bad}`,
+        headers: { authorization: `Bearer ${token(["payroll_officer"])}`, "x-tenant-id": TENANT },
+      });
+      expect(res.statusCode, bad).toBe(400);
+    }
+  });
+
   it("is idempotent on a redelivered event (same messageId): no new row, no new audit", async () => {
     const mid = randomUUID();
     await deliver(TENANT, { messageId: mid, effectiveFrom: "2026-09-01", orderNumber: "ORD-3" });
