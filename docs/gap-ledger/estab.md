@@ -694,7 +694,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-FILES-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme STATE (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W1 SF-06 re-confirmed on this branch (FileDetailActions.tsx no longer guards on the dead 'closed' status; FileDetailActions.test.tsx terminal-state tests pass): closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Write actions are hidden only for status "closed" (FileDetailActions.tsx:183) but the register vocabulary is active/pending/archived/disposed (list/page.tsx:9-11); archived and disposed files still offer Sign, Submit and Refer, and "closed" may never occur.
 - **Verified evidence:** FileDetailActions.tsx:183 `if (status === "closed") return null;` but mapEstabFileSummaries (_data/apiMappers.ts:726-731) normalises status to only active|pending|archived|disposed, so 'closed' can never occur and archived/disposed files always render Save note, Submit, Sign and Refer. Server rejection for such files cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/estab/files/[id]/FileDetailActions.tsx`, `apps/web/src/app/(app)/estab/files/[id]/page.tsx`
@@ -1003,7 +1003,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-GUESTHOUSE-NEW-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W1 SF-06 re-confirmed on this branch (guesthouse/new/page.test.tsx NEW-01..05 pass): closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Officers must type a room UUID (new/page.tsx:36-40,139-160); the page itself admits the picker is "pending a rooms directory API". A clerk cannot know a room's UUID, so the form is unusable without out-of-band data.
 - **Verified evidence:** guesthouse/new/page.tsx:8-9,37-40 require roomId to match UUID_RE; input at :139-151 is a free-text 'Room UUID' field; help text at :152-155 says 'A room picker is pending a rooms directory API'. No rooms list loader exists in _data/loaders.ts and hrms-service has no guesthouse code, so the rooms endpoint is not in the snapshot.
 - **Files to change:** `apps/web/src/app/(app)/estab/guesthouse/new/page.tsx`, `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/_components/ds/RoomPicker.tsx (new) or generic EntityPicker`
@@ -1020,7 +1020,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-GUESTHOUSE-NEW-02  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W1 SF-06: closed by #2013, guest employee is now chosen with EmployeePicker; supersedes the W0 PROVISIONAL tick)
 - **First-pass claim:** Guest employee ref is also a raw UUID (new/page.tsx:44-49,186-200) instead of a staff search; staff guests (the common case) cannot be linked by name.
 - **Verified evidence:** new/page.tsx:45-50 validate guestRef against UUID_RE; input at :186-196 is plain text with placeholder 'Employee UUID, if the guest is staff'. The codebase already reads the HRMS directory via /api/proxy/v1/hrms/employees?limit=200 (files/[id]/OfficerName.tsx), so a name lookup is feasible.
 - **Files to change:** `apps/web/src/app/(app)/estab/guesthouse/new/page.tsx`, `apps/web/src/app/_components/ds/StaffPicker.tsx (new)`
@@ -1037,7 +1037,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-GUESTHOUSE-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION (was CAP)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W1 SF-06 re-confirmed on this branch (guesthouse/new/page.test.tsx NEW-01..05 pass): closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Only the first validation error is shown, at the bottom of the form (new/page.tsx:34-58,259-266), with no field highlighting or focus move.
 - **Verified evidence:** handleSubmit (new/page.tsx:34-60) returns on the first failing check and sets a single fieldError string rendered once below the fields (:259-268, role=alert). Inputs have no aria-invalid/aria-describedby for the error and no focus move. Native `required` on inputs catches blank fields first, so the gap is mainly UUID/date-order errors.
 - **Files to change:** `apps/web/src/app/(app)/estab/guesthouse/new/page.tsx`
@@ -1054,7 +1054,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-GUESTHOUSE-NEW-04  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W1 SF-06 re-confirmed on this branch (guesthouse/new/page.test.tsx NEW-01..05 pass): closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** On success the finally block re-enables the button at once (new/page.tsx:91-93) while the redirect to the register waits 900 ms (new/page.tsx:81); a second click in that window posts a duplicate booking request.
 - **Verified evidence:** On success, setTimeout(router.push, 900) is scheduled at new/page.tsx:82, but the finally block (:91-93) runs immediately and calls setSubmitting(false), so the Create button (:277) is re-enabled for ~900 ms and a second click POSTs /api/proxy/v1/estab/room-bookings again. No idempotency key is sent.
 - **Files to change:** `apps/web/src/app/(app)/estab/guesthouse/new/page.tsx`
@@ -1070,7 +1070,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-GUESTHOUSE-NEW-05  ·  LOW  ·  confirmed  ·  theme DATEFMT
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W1 SF-06 re-confirmed on this branch (guesthouse/new/page.test.tsx NEW-01..05 pass): closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Check-in/out are datetime-local converted with new Date(...).toISOString() (new/page.tsx:56-57), i.e. browser timezone → UTC; nothing indicates the timezone or standard check-in time.
 - **Verified evidence:** new/page.tsx:55-56 do new Date(checkIn).toISOString(); datetime-local values have no zone so they are interpreted in the browser's timezone and sent as UTC. Labels (:206-228) show no timezone or standard check-in/out time. Correct only if every browser is set to IST.
 - **Files to change:** `apps/web/src/app/(app)/estab/guesthouse/new/page.tsx`, `apps/web/src/lib/formatters.ts`
