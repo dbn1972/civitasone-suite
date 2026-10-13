@@ -14,7 +14,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-HOME-01  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** /knowledge/list and /knowledge/documents/new are not reachable from the hub (page.tsx:9-15); the Documents list is only reachable by typing the URL.
 - **Verified evidence:** Hub links (page.tsx:9-15) list dashboard, repository, policies, faqs, assistant, records, search; none to /knowledge/list or /knowledge/documents/new. However documents are reachable via Repository (its '+ Publish Document' button repository/page.tsx:62) and the dashboard (:117); only /knowledge/list is orphaned (no inbound link anywhere in apps/web/src, and it duplicates repository - see LIST-03). Not in navRouteManifest either.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/page.tsx`, `apps/web/src/app/(app)/knowledge/list/page.tsx`
@@ -29,7 +29,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-HOME-02  ·  MEDIUM  ·  confirmed  ·  theme COPY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Three names for the same area: hub "Knowledge & DMS" (page.tsx:6), dashboard "Knowledge & Document Management" (dashboard/page.tsx:112), list "Knowledge — Documents" (list/page.tsx:48).
 - **Verified evidence:** Titles differ: hub 'Knowledge & DMS' (page.tsx:6), dashboard 'Knowledge &amp; Document Management' (dashboard/page.tsx:112), list 'Knowledge — Documents' (list/page.tsx:48), repository 'Digital Repository' (repository/page.tsx:57).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/page.tsx`, `apps/web/src/app/(app)/knowledge/dashboard/page.tsx`, `apps/web/src/app/(app)/knowledge/list/page.tsx`, `apps/web/src/app/(app)/knowledge/repository/page.tsx`
@@ -43,7 +43,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-HOME-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER (was LOADING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** not-found.tsx gives no back link or retry — EmptyState only (not-found.tsx:5-8).
 - **Verified evidence:** not-found.tsx:5-8 renders <EmptyState title message/> with no action; ds EmptyState supports an action?: ReactNode prop (EmptyState.tsx:8). It is triggered by notFound() in policies/[id]/page.tsx:11, so a missing document shows a generic 'Page not found' with no way back. error.tsx already uses RouteError with back link, so only not-found is bare.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/not-found.tsx`
@@ -78,7 +78,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-ASSISTANT-01  ·  HIGH  ·  confirmed  ·  theme VALIDATION (was LOADING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Failed ask/escalate prints the raw proxy response body to the user: throw new Error(await res.text()) then setError(e.message) (AssistantClient.tsx:35,39,54,58,90) — breaks the clerk-safe error rule stated in RouteError.tsx.
 - **Verified evidence:** AssistantClient.tsx:61 and :80 throw new Error((await res.text()) || fallback) and the catch blocks (l.64-66, l.83-85) setError(e.message), rendered at l.116. The fallback only applies when body is empty, so proxy/gateway JSON or HTML error bodies are shown to the clerk. Line numbers differ from the finding (35,39,54,58,90). RouteError.tsx header states raw server text must never be shown.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/assistant/AssistantClient.tsx`
@@ -94,7 +94,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-ASSISTANT-02  ·  HIGH  ·  partly  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Metrics failure renders real zeros: source==="error" only adds a badge while all four StatCards show 0 / 0% (page.tsx:16-21, loaders.ts:136 empty default) — reads as "no questions asked".
 - **Verified evidence:** assistant/page.tsx:16 renders DataSourceBadge when source==="error" (so a badge is shown), but StatCards l.18-21 use loaders.ts empty default (getAssistantMetrics, ~l.132-133 all zeros) and render 0 / 0%. Zeros are thus shown beside a badge; misleading but not entirely unflagged.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/assistant/page.tsx`
@@ -109,7 +109,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-ASSISTANT-03  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Enter key calls ask() without the busy guard (AssistantClient.tsx:76 vs disabled only on the button :82), allowing duplicate submissions.
 - **Verified evidence:** AssistantClient.tsx:102 onKeyDown Enter calls void ask() with no busy check; ask() (l.49-51) only guards on !question.trim(), and the Button is disabled by busy at l.108. Pressing Enter repeatedly (or while thinking) fires duplicate POSTs. Also IME composition Enter isn't handled.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/assistant/AssistantClient.tsx`
@@ -123,7 +123,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-ASSISTANT-04  ·  MEDIUM  ·  partly  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Escalation is one click with hard-coded priority "Medium", no confirmation and no ticket reference returned to the user (AssistantClient.tsx:52,125).
 - **Verified evidence:** AssistantClient.tsx:78 hard-codes priority "Medium" and escalate() (l.71-88) fires on a single click (button l.143-150); on success it sets escalated and shows 'A helpdesk ticket has been opened.' (l.151) but no ticket reference is displayed even though the response body is never read. Escalation creates a ticket, not a financial/approval action, so maker-checker is not applicable; a confirmation is optional. Finding's line numbers (52,125) are off.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/assistant/AssistantClient.tsx`
@@ -139,7 +139,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-ASSISTANT-05  ·  MEDIUM  ·  partly  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Citations show a truncated document id (docId.slice(0,8)) as monospace with no link to the source document (AssistantClient.tsx:104); grounded flag is fetched but never used (:8).
 - **Verified evidence:** AssistantClient.tsx:130 shows c.title plus ({c.docId.slice(0,8)}) in monospace, no link. The grounded field is declared in AskAnswer (l.34) but never read (answer.grounded unused). A document viewer route exists at knowledge/policies/[id] (policies only); no generic knowledge document detail route exists, so a link is only possible for policy-source citations. Line refs in finding (104, :8) are off.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/assistant/AssistantClient.tsx`
@@ -162,7 +162,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-DASHBOARD-01  ·  HIGH  ·  confirmed  ·  theme FABRICATED
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** "Storage — % of quota" is fabricated: storagePct = round(total documents / 500 × 100) (dashboard/page.tsx:93). A count of documents is presented as a storage quota; file bytes are never read.
 - **Verified evidence:** dashboard/page.tsx:93 storagePct = min(100, round(total/500*100)); StorageDonut (l.46-66, rendered l.165) labels it 'Storage usage: N% of quota'. 500 is a magic number; no file size or quota data is read. KnowledgeDocSummary/types show no size field (grep of _data/types.ts found none).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/dashboard/page.tsx`
@@ -176,7 +176,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-DASHBOARD-02  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** "Due for Archival" counts status==="archived" (already archived) and "Under Retention" counts approved+under_review (page.tsx:82-83); neither derives from a retention date.
 - **Verified evidence:** page.tsx:82 underRetention counts status approved or under_review; l.83 dueForArchival counts status==="archived" (already archived). Neither uses a retention date. A records loader exists (getKnowledgeRecords, loaders.ts:4421) with a records page; whether records carry retention/expiry dates cannot be verified from this file. Theme DATEFMT is wrong.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/dashboard/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -191,7 +191,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-DASHBOARD-03  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Dead deep links: Bulk upload → ?bulk=true (page.tsx:116) and search chips → ?q= (page.tsx:178) are ignored — documents/new/page.tsx reads only searchParams.category and search/page.tsx reads no params.
 - **Verified evidence:** page.tsx:116 links /knowledge/documents/new?bulk=true; documents/new/page.tsx reads only searchParams.category and grep for 'bulk' in documents/ finds nothing. Search chips (l.178) link /knowledge/search?q=...; search/page.tsx takes no searchParams and passes only initialDocs; grep of SearchClient for searchParams/q found nothing.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/dashboard/page.tsx`, `apps/web/src/app/(app)/knowledge/documents/new/page.tsx`, `apps/web/src/app/(app)/knowledge/search/page.tsx`, `apps/web/src/app/(app)/knowledge/search/SearchClient.tsx`
@@ -220,7 +220,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-DASHBOARD-06  ·  LOW  ·  partly  ·  theme VISUAL (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Chart: hard-coded #ca8a04 fill, single-series labels truncated at 9 chars, no values/axis and a generic aria-label (page.tsx:25,32,35).
 - **Verified evidence:** page.tsx:35 hard-codes fill="#ca8a04"; l.32 truncates labels at >10 chars to 9 + ellipsis (finding said 9); l.25 aria-label is 'Documents by category bar chart' with no data summary; bars have no value labels or axis, only <text> category names. Also fixed 9px text.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/dashboard/page.tsx`
@@ -289,7 +289,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-DOCUMENTS-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Category is free text (form:68) but the repository segments filter by substring of "circulars/policies/notifications" (RepositoryClient.tsx:24) — typos or "Circular Letter" silently fall out of filters.
 - **Verified evidence:** CreateDocumentForm.tsx:68 is a free-text input with placeholder 'Circular, Policy, Notification' (singular). RepositoryClient.tsx:24 filters with rawCategory.toLowerCase().includes(seg.toLowerCase()) where seg is 'Circulars'/'Policies'/'Notifications' (SEG_OPTIONS :17). So even the placeholder examples 'Circular', 'Policy', 'Notification' do NOT match (substring of plural), i.e. the documented usage silently drops out of segments. Stored category vocabulary in the backend is not visible.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/documents/new/CreateDocumentForm.tsx`, `apps/web/src/app/(app)/knowledge/repository/RepositoryClient.tsx`
@@ -305,7 +305,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-DOCUMENTS-NEW-04  ·  MEDIUM  ·  partly  ·  theme COPY (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Button says "Publish" but no publish/approval semantics are visible; the maker-checker lifecycle lives on /knowledge/policies/[id] and this route does not create governed documents (POST /documents, not /policies).
 - **Verified evidence:** Submit label is 'Publish document' (CreateDocumentForm.tsx:81) and page title 'Publish Document' (page.tsx:11), POSTing to /api/proxy/v1/knowledge/documents (:41). The governed lifecycle (submit/approve/publish/acknowledge) lives in policies/[id]/PolicyActions.tsx:20-69 against /policies/{id}/... The copy is misleading. The proposed fix (ConfirmDialog with reason, maker!=checker, audit) is not appropriate for a plain create; whether the documents endpoint sets a published status is not visible (service absent).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/documents/new/CreateDocumentForm.tsx`, `apps/web/src/app/(app)/knowledge/documents/new/page.tsx`, `apps/web/src/app/(app)/knowledge/repository/page.tsx`, `apps/web/src/app/(app)/knowledge/dashboard/page.tsx`
@@ -321,7 +321,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-DOCUMENTS-NEW-06  ·  LOW  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Field wrappers hard-code background:#fff (form:62,66) and a fixed maxWidth 820, so dark mode shows white cards.
 - **Verified evidence:** CreateDocumentForm.tsx:62 and :66 set inline background:'#fff' on .field wrappers, overriding civitas-ds.css:221 .field{background:var(--panel)}; dark mode is a .dark class on <html> (civitas-ds.css:317), so these render white. Also page.tsx:20 hard-codes the info banner colours (#fffaeb/#92400e). The fixed maxWidth 820 (form :60, page :20) is a layout choice, not a dark-mode defect.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/documents/new/CreateDocumentForm.tsx`, `apps/web/src/app/(app)/knowledge/documents/new/page.tsx`
@@ -343,7 +343,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-FAQS-01  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Stat cards are not null-gated: on error the page shows badge + RefreshErrorState but FAQs/Categories/Guided flows read 0 (page.tsx:24-28,30).
 - **Verified evidence:** faqs/page.tsx:25-27 pass faqs.length, categories.size, flows.length directly; loader fallback is [] (loaders.ts:99,115) so on error all read '0'. errored (:12) only gates the body (:30) and badge (:23). The error body itself already uses RefreshErrorState (:31). StatCard maps null/NaN to '—' (StatCard.tsx displayValue), so passing null is enough.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/faqs/page.tsx`
@@ -357,7 +357,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-FAQS-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** "Browse" page with no search or category filter; long FAQ lists are only scannable by scrolling, while /knowledge/search covers documents only (SearchClient.tsx:63-74).
 - **Verified evidence:** faqs/page.tsx renders every FAQ as <details> (:40-48) with no input or filter; page is a server component. SearchClient.tsx:55-74 filters initialDocs (documents) only. FaqSummary carries category and tags (loaders.ts:106-107) so client-side filtering needs no backend change.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/faqs/page.tsx`, `apps/web/src/app/(app)/knowledge/faqs/FaqBrowser.tsx`
@@ -373,7 +373,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-FAQS-05  ·  LOW  ·  confirmed  ·  theme OTHER (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Null category is counted as "general" in the stat (page.tsx:14) but no category label is printed for those FAQs (page.tsx:44).
 - **Verified evidence:** faqs/page.tsx:14 counts null category as 'general' in the Categories stat, while :44 prints the category only when truthy, so uncategorised FAQs show no label. Theme is not I18N.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/faqs/page.tsx`
@@ -410,7 +410,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-LIST-01  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Dead-end table: rows have no link and no detail route exists (knowledge/ has documents/new only) — a document cannot be opened, downloaded, versioned or archived from any page.
 - **Verified evidence:** list/page.tsx:72 renders KnowledgeDocsTable; its DataTable (KnowledgeDocsTable.tsx:18-36) has no rowLinkKey/rowLinkPrefix (policies/page.tsx:75-76 shows the prop pair). rows.id is the truncated 8-char string (page.tsx:34), so the real id is not even in the row. knowledge/documents contains only new/ (no [id] route), no download/archive/version calls anywhere in apps/web/src knowledge. Backend endpoints for GET/archive/version are not visible (service absent).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/list/page.tsx`, `apps/web/src/app/(app)/knowledge/list/KnowledgeDocsTable.tsx`, `apps/web/src/app/(app)/knowledge/documents/[id]/page.tsx`, `apps/web/src/app/(app)/knowledge/repository/RepositoryClient.tsx`
@@ -427,7 +427,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-LIST-02  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** "Doc ID" is the first 8 hex characters of the UUID upper-cased (page.tsx:34) — not a stable reference number and not what policies show (referenceNo).
 - **Verified evidence:** list/page.tsx:34 sets id: doc.id.slice(0,8).toUpperCase(); repository/page.tsx:43 does the same. Governed policies show referenceNo with the same slice only as a fallback (policies/page.tsx:22). Whether the documents API returns a referenceNo is not visible (KnowledgeDocSummary type is imported from a module absent in the snapshot).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/list/page.tsx`, `apps/web/src/app/(app)/knowledge/repository/page.tsx`
@@ -442,7 +442,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-LIST-03  ·  MEDIUM  ·  partly  ·  theme OTHER (was VALIDATION)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Near-duplicate of /knowledge/repository (same loader, same table with fewer columns) and not linked from the hub; two competing lists with different status labels (repository labels under_review "Draft", repository/page.tsx:18).
 - **Verified evidence:** Both list/page.tsx:10 and repository/page.tsx:9 call getKnowledgeDocs() (app/_data/loaders.ts:4412). list adds stats, Access column and status labels; repository adds Circulars/Policies/Notifications segments. Status labels do differ: list:21 'Under review' vs repository:18 'Draft' for under_review, and repository has no draft label (:16-21). /knowledge/list has no inbound link. Extra defect: repository stat cards 'Circulars' = approved count and 'Notifications' = under_review count (repository/page.tsx:69,71) - not real category counts. Theme VALIDATION is wrong.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/list/page.tsx`, `apps/web/src/app/(app)/knowledge/repository/page.tsx`, `apps/web/src/app/(app)/knowledge/repository/RepositoryClient.tsx`, `apps/web/src/app/(app)/knowledge/_data/docStatus.ts`
@@ -473,7 +473,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-LIST-06  ·  LOW  ·  confirmed  ·  theme OTHER (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Access level printed raw (KnowledgeDocsTable.tsx:25) with no pill or lock icon for restricted documents (DPDP visibility cue).
 - **Verified evidence:** KnowledgeDocsTable.tsx:25 declares { key:'accessLevel', label:'Access' } with no render, so DataTable.cellValue (DataTable.tsx:138) prints the raw string. Restriction is not visually distinguished. The proposed <Masked> fix does not apply (nothing to mask; the mask helper does not exist in the shared tree, only a local MaskedInput in hr/employees/new/steps/Step4.tsx). Enforcement of access level on the server cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/list/KnowledgeDocsTable.tsx`, `apps/web/src/app/(app)/knowledge/repository/RepositoryClient.tsx`
@@ -494,7 +494,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-POLICIES-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Empty state instructs "Create a SOP, policy or circular to begin the lifecycle" (page.tsx:62) but the route has no create action and there is no policies/new page; documents/new posts to /documents, not /policies, so governed documents cannot be authored from the web app.
 - **Verified evidence:** policies/page.tsx:62 EmptyState says 'Create a SOP, policy or circular...' yet PageHeader (:45-49) has no actions, and there is no policies/new directory. No web code POSTs to /knowledge/policies (only lifecycle calls at PolicyActions.tsx:20). documents/new posts to /documents (CreateDocumentForm.tsx:41). A draft-creating policies endpoint is implied by the lifecycle (submit on 'draft') but cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/policies/page.tsx`, `apps/web/src/app/(app)/knowledge/policies/new/page.tsx`, `apps/web/src/app/(app)/knowledge/policies/new/CreatePolicyForm.tsx`
@@ -551,7 +551,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-POLICIES-06  ·  LOW  ·  partly  ·  theme I18N
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Statuses shown lowercase with underscores replaced ("under review"), not sentence-case labels used on the dashboard/list pages (page.tsx:25).
 - **Verified evidence:** toRow makes status 'under review' (policies/page.tsx:25), but the Status column uses cellType 'status' (:69) so the visible pill is passed through StatusPill/humanizeStatus -> 'Under Review' (Title Case), not lowercase. It stays lowercase in CSV export and the filter text, and in the detail StatCard (policies/[id]/page.tsx:34 renders policy.status.replace(/_/g,' ') as plain lowercase). list/page.tsx uses sentence case ('Under review'), so labels are inconsistent.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/policies/page.tsx`, `apps/web/src/app/(app)/knowledge/policies/[id]/page.tsx`, `apps/web/src/lib/formatters.ts`
@@ -588,7 +588,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-POLICIES-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Lifecycle buttons render by status only (PolicyActions.tsx:29-32): Approve is offered to the author and to every role; the maker-checker rule fails only after Confirm, and the raw server text is shown in the dialog (PolicyActions.tsx:25).
 - **Verified evidence:** PolicyActions.tsx:29-32 derive canSubmit/canApprove/canPublish/canAcknowledge from status only; the component receives only policyId and status (:15), and page.tsx:47 does not pass authorId or the session user. The dialog itself says 'you must not be the author' (:50). On failure post() throws new Error(await res.text()) (:25) and ActionButton shows e.message in the dialog (ActionButton.tsx:48-49), i.e. raw server body (likely JSON). Server-side maker-checker enforcement is claimed in the comment (:10) but the service is absent - cannot verify. Session helpers: roleGuard.ts has roles/tid/name but no getSessionUserId (sub is in the JWT payload type, roleGuard.ts:6); whether sub equals authorId is unknown.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/policies/[id]/PolicyActions.tsx`, `apps/web/src/app/(app)/knowledge/policies/[id]/page.tsx`, `apps/web/src/lib/auth/roleGuard.ts`
@@ -606,7 +606,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-POLICIES-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Publish hard-codes reviewMonths:12 and the dialog promises "sets the effective date" (PolicyActions.tsx:58-59) — reviewer cannot choose effective date or review cycle.
 - **Verified evidence:** PolicyActions.tsx:59 sends { reviewMonths: 12 } fixed; ActionButton offers only an optional reason input (requireReason, ActionButton.tsx:74), not effective-date or review-cycle fields. Dialog text at :58 says 'sets the effective date' without stating the value. Whether the publish endpoint accepts effectiveDate is not visible (service absent).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/policies/[id]/PolicyActions.tsx`
@@ -621,7 +621,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-POLICIES-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Under review has only Approve — no Reject / return-for-changes path (PolicyActions.tsx:46-53); reviewerId, approverId, authorId and supersedesId are loaded but never displayed (loaders.ts:42-43,71-72), so maker-checker evidence is invisible.
 - **Verified evidence:** PolicyActions.tsx:46-53 shows only Approve for under_review; there is no reject/return action and no reject endpoint call in the web tree. authorId/approverId are mapped in toPolicySummary (loaders.ts:42-43), reviewerId/supersedesId in the detail mapper (loaders.ts:77-78); page.tsx never renders them (only status/effective/review/ack count, :34-37). Line refs in the observation (71-72) are off by a few lines. Existence of a reject endpoint cannot be verified (service absent).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/policies/[id]/PolicyActions.tsx`, `apps/web/src/app/(app)/knowledge/policies/[id]/page.tsx`
@@ -637,7 +637,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-POLICIES-DETAIL-05  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** "I have read & understood" stays available while status is published, with no per-user acknowledged state; repeat acknowledgements and the constant note "Read and understood" (PolicyActions.tsx:62-67) are unmanaged.
 - **Verified evidence:** canAcknowledge = status === 'published' (PolicyActions.tsx:32) and the note is the constant 'Read and understood' (:67) - true. But the component cannot know the current employee's ack state: page.tsx:47 passes only policyId/status, the ack list has employee ids only, and the session has no employee id helper. Whether the server ignores duplicate acknowledgements is not visible (service absent).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/policies/[id]/PolicyActions.tsx`, `apps/web/src/app/(app)/knowledge/policies/[id]/page.tsx`, `apps/web/src/lib/auth/roleGuard.ts`
@@ -653,7 +653,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-POLICIES-DETAIL-07  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** No version history, no download and no supersedes link; body is plain pre-wrapped text (page.tsx:42-44).
 - **Verified evidence:** page.tsx:42-44 renders policy.body as pre-wrap text. No version history, download or supersedes link is rendered although supersedesId is loaded (loaders.ts:78) and the target route /knowledge/policies/[id] exists. Version-history and download endpoints are unknown (service absent).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/policies/[id]/page.tsx`, `apps/web/src/app/(app)/knowledge/_data/loaders.ts`
@@ -674,7 +674,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-RECORDS-01  ·  HIGH  ·  confirmed  ·  theme OTHER (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** A record with status "disposed" (already destroyed) is labelled "Weeding due" with a red rejected pill and counted in "Weeding Due" (page.tsx:26,34,81) — the register shows finished disposals as pending work.
 - **Verified evidence:** apps/web/src/app/(app)/knowledge/records/page.tsx:26,34 map status 'disposed' to pill 'rejected' and label 'Weeding due'; :81 counts disposed as 'Weeding Due' KPI. 'disposed' is a terminal state so the label presents a finished action as pending work. Strings are hard-coded English (no next-intl), which is the tagged theme but a minor part.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/records/page.tsx`
@@ -691,7 +691,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-RECORDS-02  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** "Due" means three different things: KPI Due Review = active with disposalDueDate ≤ +30 days (page.tsx:17-21), KPI Weeding Due = disposed (page.tsx:81), Due segment = disposed OR transferred (RecordsClient.tsx:23-24). Counts will not reconcile with the filtered table.
 - **Verified evidence:** apps/web/src/app/(app)/knowledge/records/page.tsx:17-21 Due Review = active with disposalDueDate<=now+30d; :81 Weeding Due = status disposed; RecordsClient.tsx:22-24 'Due' segment = disposed OR transferred. Three definitions; the Due segment matches neither KPI.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/records/page.tsx`, `apps/web/src/app/(app)/knowledge/records/RecordsClient.tsx`
@@ -754,7 +754,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-RECORDS-07  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** 30-day window uses the server clock in server-local time (page.tsx:12-14), so the "Due Review" count can differ by a day from what IST users expect.
 - **Verified evidence:** apps/web/src/app/(app)/knowledge/records/page.tsx:12-14 uses new Date() and setDate on the server (server TZ, default UTC) and compares to new Date(r.disposalDueDate) at :19; a date-only value parses as UTC midnight. Page is a server component with revalidate 120s in the loader, so boundaries shift by up to a day for IST users. Impact is small.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/records/page.tsx`
@@ -775,7 +775,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-REPOSITORY-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Stat cards are wrong by construction: "Circulars" and "Published" both = approved count, "Notifications" = under_review count (page.tsx:69-71). Circulars are not counted by category, and pending-review documents are reported as notifications.
 - **Verified evidence:** apps/web/src/app/(app)/knowledge/repository/page.tsx:69-71: Circulars and Published both use approved; Notifications uses under_review. The category segment (RepositoryClient.tsx:17,24) uses category text, so cards disagree with the segments.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/repository/page.tsx`
@@ -808,7 +808,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-REPOSITORY-03  ·  HIGH  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Footnote says archived documents are "not shown" (page.tsx:79-83) but rows = docs.map(...) includes archived documents (page.tsx:42) — the message is false.
 - **Verified evidence:** apps/web/src/app/(app)/knowledge/repository/page.tsx:42 rows = docs.map(...) with no status filter (archived included, labelled 'Archived' at :19), while :79-83 says '{archived} archived documents not shown'. The message is false.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/repository/page.tsx`
@@ -823,7 +823,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-REPOSITORY-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** under_review is labelled "Draft" here (page.tsx:18) but "Under review" on list, dashboard and search; real drafts (status "draft") show the raw string.
 - **Verified evidence:** apps/web/src/app/(app)/knowledge/repository/page.tsx:18 maps under_review to 'Draft' whereas knowledge/list/page.tsx:19 and search/SearchClient.tsx:48 use 'Under review'/'Draft' distinctly; :16-21 has no 'draft' case, so a real draft prints raw 'draft' (pill is 'draft' at :26). Dashboard label not re-checked.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/repository/page.tsx`, `apps/web/src/app/(app)/knowledge/search/SearchClient.tsx`, `apps/web/src/app/(app)/knowledge/list/page.tsx`, `(new) apps/web/src/app/(app)/knowledge/_data/statusLabels.ts`
@@ -838,7 +838,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-REPOSITORY-05  ·  MEDIUM  ·  partly  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Import navigates to ?mode=import, ignored by the target form (ImportButton.tsx:11); rows have no link to a document detail (none exists).
 - **Verified evidence:** apps/web/src/app/(app)/knowledge/repository/ImportButton.tsx:11 navigates to /knowledge/documents/new?mode=import; documents/new/page.tsx:4-5 reads only searchParams.category, so mode is ignored (confirmed). Rows have no link (RepositoryClient.tsx DataTable has no rowHref although DataTable supports a row link builder). A governed detail route does exist at knowledge/policies/[id] but it uses getKnowledgePolicy; whether it serves every category is cannot-verify without the service.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/repository/ImportButton.tsx`, `apps/web/src/app/(app)/knowledge/repository/RepositoryClient.tsx`, `apps/web/src/app/(app)/knowledge/documents/new/page.tsx`
@@ -853,7 +853,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-REPOSITORY-07  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Segments filter by substring of a free-text category; "Notifications" matches only categories containing that word (RepositoryClient.tsx:24).
 - **Verified evidence:** apps/web/src/app/(app)/knowledge/repository/RepositoryClient.tsx:24 filters by rawCategory.toLowerCase().includes('circulars'|'policies'|'notifications'); a category 'Circular' (singular) does not match 'Circulars'. Category is a free string from the API type.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/repository/RepositoryClient.tsx`, `apps/web/src/app/(app)/knowledge/repository/page.tsx`
@@ -875,7 +875,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-SEARCH-01  ·  HIGH  ·  partly  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Search is a client-side substring score over whatever documents the list loader returned (SearchClient.tsx:28-37,66-74) yet is titled "Full-text + metadata search across all documents & modules". There is no full-text index, no other module and no server call; large repositories are capped by the list endpoint.
 - **Verified evidence:** apps/web/src/app/(app)/knowledge/search/SearchClient.tsx:28-37 scores by substring on title, category, author, fileType and tags; :66-74 filters initialDocs client-side; search/page.tsx:5 loads getKnowledgeDocs (/api/v1/knowledge/documents). Subtitle at :124 claims full-text across all documents and modules and placeholder :178 mentions files and records. True: no full-text, no other modules. The list endpoint cap cannot be verified (knowledge service absent from snapshot).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/search/SearchClient.tsx`, `apps/web/src/app/(app)/knowledge/search/page.tsx`
@@ -891,7 +891,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-SEARCH-02  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** A failed documents fetch is invisible: page.tsx:6 drops source, so the user sees "No documents found" for every query (SearchClient.tsx:213-219).
 - **Verified evidence:** apps/web/src/app/(app)/knowledge/search/page.tsx:5 destructures only data, dropping source; on failure the loader returns [] so SearchClient.tsx:213-219 renders 'No documents found'. No error indicator at all (not even DataSourceBadge).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/search/page.tsx`, `apps/web/src/app/(app)/knowledge/search/SearchClient.tsx`
@@ -905,7 +905,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-SEARCH-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** "Source module" column renders the document status pill (SearchClient.tsx:90-92); the All/Documents/Files segment keeps state in resultSeg but never filters rows (SearchClient.tsx:61,225-229).
 - **Verified evidence:** apps/web/src/app/(app)/knowledge/search/SearchClient.tsx:90-92 the 'Source module' column renders StatusPill of doc.status; :61 resultSeg set by Segmented (:225-229) but resultRows is never filtered by it (matchedDocs at :66-74 ignores resultSeg). Files segment has no basis since fileType is not used to classify.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/search/SearchClient.tsx`
@@ -935,7 +935,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-SEARCH-05  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Ranking ignores archived/superseded documents: an archived, superseded policy scores the same as the live one (SearchClient.tsx:28-37).
 - **Verified evidence:** apps/web/src/app/(app)/knowledge/search/SearchClient.tsx:28-37 relevanceScore never inspects doc.status; sort at :72 is by score only, so archived and live get equal rank. The Doc type has no supersededBy field, so 'superseded' cannot be detected on the client (cannot-verify whether API supplies it).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/search/SearchClient.tsx`
@@ -965,7 +965,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-ASSISTANT-06  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Free-text questions are stored as assistant interactions (metrics.total); DPDP retention/masking of personal data typed into the question is undeterminable. Backend knowledge-service is not in the snapshot (services/ holds only hrms-service): endpoints, roles, audit and payload validation for /v1/knowledge/* are undeterminable; shapes below come from the page/loader code only.
 - **Service:** `knowledge-service`  ·  **Endpoint(s):** `['POST /api/proxy/v1/knowledge/assistant/ask', 'POST /v1/knowledge/assistant/escalate', 'GET /v1/knowledge/assistant/metrics']`
 - **Question:** The assistant ask/escalate handlers must apply a retention limit and PII masking (Aadhaar, PAN, phone, email) to stored question text, and log an audit event per interaction.
@@ -987,7 +987,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-DOCUMENTS-NEW-05  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Audit event on document creation, title length limit and duplicate-title handling are undeterminable. Backend knowledge-service is not in the snapshot (services/ holds only hrms-service): endpoints, roles, audit and payload validation for /v1/knowledge/* are undeterminable; shapes below come from the page/loader code only.
 - **Service:** `knowledge-service`  ·  **Endpoint(s):** `['POST /api/proxy/v1/knowledge/documents']`
 - **Question:** POST /v1/knowledge/documents must zod-validate title (max length, trim), reject or version duplicate titles per tenant, restrict to a publisher role and emit a document.created audit event.
@@ -998,7 +998,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-FAQS-02  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** status is loaded for FAQs and flows (loaders.ts:108,130) but the page never filters on it (page.tsx:40,59); draft/retired entries would be shown to every viewer unless the API filters — undeterminable.
 - **Service:** `knowledge-service`  ·  **Endpoint(s):** `['GET /api/v1/knowledge/faqs', 'GET /api/v1/knowledge/guided-flows']`
 - **Question:** GET faqs and guided-flows must return only status=published items to non-editor roles (drafts/retired only for knowledge editors).

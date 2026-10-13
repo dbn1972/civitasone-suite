@@ -14,7 +14,7 @@ Counts: ACTION 14, REFUTED 1
 
 ### GAP-DOCS-HOME-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Manual chapters stop at the original module set; Court Mgmt, Service Designer, Visitor, Meeting and Inspection routes exist in the app but have no chapter (docs/_content/chapters.ts slugs vs app routes).
 - **Verified evidence:** apps/web/src/app/(marketing)/docs/_content/chapters.ts slugs: getting-started, finance, hr-payroll, procurement, projects-grants, establishment, citizen-helpdesk, stock-assets, small-business, admin-settings, mobile-app, glossary. Sidebar.tsx:97-101 has Service Designer, Visitor, Meeting, Court, Inspection with no chapter.
 - **Files to change:** `apps/web/src/app/(marketing)/docs/_content/chapters.ts`
@@ -28,7 +28,7 @@ Counts: ACTION 14, REFUTED 1
 
 ### GAP-DOCS-HOME-02  ·  MEDIUM  ·  confirmed  ·  theme SEARCH (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** No search or on-page filter across 12 long chapters; the Glossary is a separate chapter instead of inline term help (docs/page.tsx).
 - **Verified evidence:** apps/web/src/app/(marketing)/docs/page.tsx is a static grid of chapters; no search/filter. Glossary is chapter slug 'glossary'. Theme WIRING is wrong.
 - **Files to change:** `apps/web/src/app/(marketing)/docs/page.tsx`, `apps/web/src/app/(marketing)/docs/[slug]/page.tsx`
@@ -43,7 +43,7 @@ Counts: ACTION 14, REFUTED 1
 
 ### GAP-DOCS-HOME-03  ·  MEDIUM  ·  partly  ·  theme NAV (was STATUS)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Chapter cards use emoji icons and a numbering derived from array index, so reordering renumbers external references (docs/page.tsx i + 1).
 - **Verified evidence:** apps/web/src/app/(marketing)/docs/page.tsx:~37 renders '{i + 1}. {chapter.title}' and apps/web/src/app/(marketing)/docs/[slug]/page.tsx sidebar uses same; emoji icons from chapter.icon. URLs use stable slugs, so external links do not renumber; only visible numbers change on reorder. Theme STATUS wrong.
 - **Files to change:** `apps/web/src/app/(marketing)/docs/page.tsx`, `apps/web/src/app/(marketing)/docs/_content/chapters.ts`
@@ -56,7 +56,7 @@ Counts: ACTION 14, REFUTED 1
 
 ### GAP-DOCS-HOME-04  ·  LOW  ·  partly  ·  theme DEADROUTE (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** PDF download target is a static file whose generation is not in the web app; it can drift from chapters.ts (page.tsx href).
 - **Verified evidence:** apps/web/src/app/(marketing)/docs/page.tsx:~20 href '/docs/CivitasOne-User-Manual.pdf'. apps/web has no public/ directory in this snapshot and no such PDF or openapi.yaml exists in the repo, so the link is likely a 404 or served by deploy tooling not visible here.
 - **Files to change:** `apps/web/src/app/(marketing)/docs/page.tsx`, `apps/web/src/app/(marketing)/docs/[slug]/page.tsx`
@@ -77,7 +77,7 @@ Counts: ACTION 14, REFUTED 1
 
 ### GAP-DOCS-SLUG-01  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Sidebar is hidden below lg and replaced by a single '← All Chapters' link, so on mobile there is no chapter navigation except prev/next (page.tsx:46 'hidden lg:block').
 - **Verified evidence:** apps/web/src/app/(marketing)/docs/[slug]/page.tsx:46 <aside className='hidden lg:block'>; below lg a '← All Chapters' link (lg:hidden) goes to /docs, whose grid lists all chapters, plus prev/next. So mobile navigation exists but costs a full page hop.
 - **Files to change:** `apps/web/src/app/(marketing)/docs/[slug]/page.tsx`
@@ -89,7 +89,7 @@ Counts: ACTION 14, REFUTED 1
 
 ### GAP-DOCS-SLUG-02  ·  MEDIUM  ·  partly  ·  theme COPY (was MONEY)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Instructions are written for touch ('Tap Save') although the doc set serves desktop office staff, and money examples are 'amount in rupees' without lakh-grouping examples (chapters.ts:117-125).
 - **Verified evidence:** apps/web/src/app/(marketing)/docs/_content/chapters.ts:31-36,118-145 use 'Tap' and 'Enter the Budget Estimate amount in rupees' (:121). Confirmed wording; no lakh grouping example. This is prose only, no code money handling, so paise theme is not applicable.
 - **Files to change:** `apps/web/src/app/(marketing)/docs/_content/chapters.ts`
@@ -102,7 +102,7 @@ Counts: ACTION 14, REFUTED 1
 
 ### GAP-DOCS-SLUG-03  ·  MEDIUM  ·  confirmed  ·  theme NAV (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1933, verified on main 2bae96ba7)
 - **First-pass claim:** No in-page table of contents or heading anchors for long chapters (Glossary lists A-U terms as H2s); the renderer emits headings without ids (markdown.tsx:59-69).
 - **Verified evidence:** apps/web/src/app/(marketing)/docs/_content/markdown.tsx:59-75 h1/h2/h3 rendered without id attributes; apps/web/src/app/(marketing)/docs/[slug]/page.tsx has no ToC. Theme I18N wrong.
 - **Files to change:** `apps/web/src/app/(marketing)/docs/_content/markdown.tsx`, `apps/web/src/app/(marketing)/docs/[slug]/page.tsx`
@@ -117,7 +117,7 @@ Counts: ACTION 14, REFUTED 1
 
 ### GAP-DOCS-SLUG-04  ·  LOW  ·  partly  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Unknown slugs fall to the framework 404, not a designed docs not-found (page.tsx notFound()).
 - **Verified evidence:** apps/web/src/app/(marketing)/docs/[slug]/page.tsx calls notFound(); apps/web/src/app/not-found.tsx exists as a custom app EmptyState '404 — Page not found', so it is not the raw framework 404, only not docs-specific.
 - **Files to change:** `apps/web/src/app/(marketing)/docs/not-found.tsx`
@@ -129,7 +129,7 @@ Counts: ACTION 14, REFUTED 1
 
 ### GAP-DOCS-SLUG-05  ·  LOW  ·  partly  ·  theme COPY (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** The metadata title suffix '— CivitasOne Docs' differs from the product suffix used elsewhere.
 - **Verified evidence:** apps/web/src/app/(marketing)/docs/[slug]/page.tsx:19 title '{title} — CivitasOne Docs' vs other marketing pages '— CivitasOne'. Minor difference, arguably intentional section naming.
 - **Files to change:** `apps/web/src/app/(marketing)/docs/[slug]/page.tsx`
@@ -148,7 +148,7 @@ Counts: ACTION 14, REFUTED 1
 
 ### GAP-DOCS-API-01  ·  HIGH  ·  confirmed  ·  theme FABRICATED
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Numbers disagree: hero text says 33 microservices / 1,185+ endpoints, the grid lists 10 services totalling 279 endpoints, and the curated spec has 35 — all hard-coded, none generated (docs/api/page.tsx services array vs intro).
 - **Verified evidence:** apps/web/src/app/(marketing)/docs/api/page.tsx:6-7 and hero: '33 microservices' and '1,185+ endpoints' (also :~95 '1,185'); services array (:10-21) has 10 entries summing 279; :~91 'top 35 most-used'. All hard-coded strings.
 - **Files to change:** `apps/web/src/app/(marketing)/docs/api/page.tsx`
@@ -163,7 +163,7 @@ Counts: ACTION 14, REFUTED 1
 
 ### GAP-DOCS-API-02  ·  HIGH  ·  partly  ·  theme COPY (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** The example advertises the client_credentials flow with client_secret in a form-encoded body against a public docs page and 'Production Base URL'; no note on secret handling or scopes and it conflicts with the Developer Portal, which says API Reference is 'Planned' (page.tsx auth block; developer-portal/page.tsx).
 - **Verified evidence:** apps/web/src/app/(marketing)/docs/api/page.tsx:~57-64 pre block shows client_credentials with placeholders <id>/<secret>: no real secret, so not a PII/secrets leak; standard OAuth docs. Valid points: no guidance on secret storage, scopes, or tenant base URL, and the Developer Portal marks API Reference 'Planned' (developer-portal/page.tsx:35).
 - **Files to change:** `apps/web/src/app/(marketing)/docs/api/page.tsx`
@@ -177,7 +177,7 @@ Counts: ACTION 14, REFUTED 1
 
 ### GAP-DOCS-API-03  ·  MEDIUM  ·  partly  ·  theme COPY (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** 'Production Base URL' is an external link to api.civitasone.app labelled generically; government tenants self-host, so a fixed production URL is misleading (page.tsx:~46).
 - **Verified evidence:** apps/web/src/app/(marketing)/docs/api/page.tsx:~40 href 'https://api.civitasone.app' labelled 'Production Base URL'. Hard-coded; no config. Self-hosting claim is not verifiable from code but Editions/on-prem is in CLAUDE.md.
 - **Files to change:** `apps/web/src/app/(marketing)/docs/api/page.tsx`
@@ -191,7 +191,7 @@ Counts: ACTION 14, REFUTED 1
 
 ### GAP-DOCS-API-04  ·  MEDIUM  ·  partly  ·  theme UX (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Code samples are dark green-on-black <pre> blocks with fixed colours (text-green-400 on gray-900) that ignore theme tokens; no copy button (page.tsx pre blocks).
 - **Verified evidence:** apps/web/src/app/(marketing)/docs/api/page.tsx pre blocks use 'bg-gray-900 text-green-400' (two blocks). Green-400 on gray-900 has good contrast; whole marketing group uses fixed tailwind grays, not theme tokens. No copy button: confirmed. Not an i18n issue.
 - **Files to change:** `apps/web/src/app/(marketing)/docs/api/page.tsx`, `apps/web/src/app/(marketing)/docs/_content/markdown.tsx`
@@ -204,7 +204,7 @@ Counts: ACTION 14, REFUTED 1
 
 ### GAP-DOCS-API-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** 'Keycloak OIDC' and 'SQS' are implementation details exposed to API consumers as contract.
 - **Verified evidence:** apps/web/src/app/(marketing)/docs/api/page.tsx hero text 'Keycloak OIDC' and CQRS note 'processed asynchronously via SQS'. CLAUDE.md says queue is an adapter over SQS/Kafka/RabbitMQ, so SQS is deployment-specific and wrong on-prem.
 - **Files to change:** `apps/web/src/app/(marketing)/docs/api/page.tsx`

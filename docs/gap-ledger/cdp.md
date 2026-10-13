@@ -28,7 +28,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-HOME-02  ·  MEDIUM  ·  confirmed  ·  theme LOADING (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** loading.tsx shows four stat placeholders and a 96-unit block (loading.tsx:11-21) although page.tsx has neither stats nor a table; also hard-coded slate/gray colours, so dark mode flashes light.
 - **Verified evidence:** cdp/loading.tsx:12-21 four stat cards and an h-96 block; hub has only LinkTiles. Uses bg-slate-50, bg-gray-200, bg-white (no dark variants). Child routes have their own loading.tsx, so this file effectively serves only the hub.
 - **Files to change:** `apps/web/src/app/(app)/cdp/loading.tsx`
@@ -50,7 +50,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-EVENTS-01  ·  HIGH  ·  partly  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Meta column prints raw ISO timestamps (e.g. 2026-09-12T05:41:09.221Z) because mapRows passes toText(row.updatedAt) through unformatted (_data.ts:78-86) while sibling CDP pages use formatIndianDate (profiles/page.tsx:9).
 - **Verified evidence:** apps/web/src/app/(app)/cdp/_data.ts:79-87 meta = code ?? currency ?? updatedAt ?? createdAt ?? lastSeenAt, all via toText with no formatting, so a row lacking code/currency shows raw ISO. profiles/page.tsx:3,39 uses formatIndianDate. Whether taxonomy rows (GET /api/v1/cdp/events/taxonomy) carry updatedAt cannot be verified (cdp-service absent); the example timestamp is illustrative. formatIndianDate returns dd/mm/yyyy, not 'dd Mon yyyy'. Severity high is overstated.
 - **Files to change:** `apps/web/src/app/(app)/cdp/_data.ts`, `apps/web/src/lib/formatters.ts`
@@ -65,7 +65,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-EVENTS-02  ·  MEDIUM  ·  confirmed  ·  theme TABLE-FEATURES (was CAP)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** ModuleListTable prints the raw record id truncated to 8 chars in an 'ID' column (ModuleListTable.tsx:44) and a generic 'Detail'/'Meta' pair, so a steward sees hash-like fragments instead of business labels; no sort, filter or pagination for lists that can hold many rows.
 - **Verified evidence:** apps/web/src/app/_components/ModuleListTable.tsx:50 slices id to 8 chars; generic Detail/Meta headers (:42-44); plain table without sort/filter/paging (:40-53). Whether taxonomy lists are large is unknown.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/(app)/cdp/_data.ts`, `apps/web/src/app/(app)/cdp/events/page.tsx`
@@ -80,7 +80,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-EVENTS-03  ·  MEDIUM  ·  confirmed  ·  theme LOADING (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Loading skeleton heading is 'Events' but the page title is 'CDP — Events' (loading.tsx:8 vs page.tsx:17); inconsistent title flicker and hard-coded light colours (loading.tsx:13-16).
 - **Verified evidence:** apps/web/src/app/(app)/cdp/events/loading.tsx:6 h1 'Events' vs events/page.tsx:15 'CDP — Events'; :12,15 hard-coded #f1f5f9 blocks (light only). Also the skeleton has four stat blocks though the page has none.
 - **Files to change:** `apps/web/src/app/(app)/cdp/events/loading.tsx`
@@ -95,7 +95,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-EVENTS-04  ·  MEDIUM  ·  confirmed  ·  theme DUPLICATE-COLUMN (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Detail column is populated with description ?? status ?? …, so status can appear twice (Detail and Status) for taxonomy rows without a description (_data.ts:66-76).
 - **Verified evidence:** apps/web/src/app/(app)/cdp/_data.ts:69-78 sublabel chain includes status/state, and Status column duplicates it (apps/web/src/app/_components/ModuleListTable.tsx:52-53).
 - **Files to change:** `apps/web/src/app/(app)/cdp/_data.ts`
@@ -117,7 +117,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-IDENTITY-01  ·  HIGH  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Only the first 50 anonymous visitors are ever shown: loader hard-codes ?limit=50 (_data.ts:113) and the table has no pagination or 'showing 50 of N' note, so a steward cannot tell the list is truncated.
 - **Verified evidence:** cdp/_data.ts:115 hard-codes '/api/v1/cdp/identity/anonymous-visitors?limit=50' (comment 109-114 says limit is mandatory server-side). identity/page.tsx passes rows straight to ModuleListPage -> ModuleListTable (_components/ModuleListTable.tsx:34-58), a plain <table> with no pagination, no count, no truncation note. Note: there is no client-side filtering here (fix text about that is n/a). Whether the API returns a total/cursor cannot be verified: cdp-service is not in the snapshot.
 - **Files to change:** `apps/web/src/app/(app)/cdp/_data.ts`, `apps/web/src/app/(app)/cdp/identity/page.tsx`, `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -152,7 +152,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-IDENTITY-03  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Meta shows raw lastSeenAt ISO string (_data.ts:83-84), unformatted.
 - **Verified evidence:** mapRows meta ladder (_data.ts:79-87) uses toText(row.lastSeenAt) as a raw string; ModuleListTable.tsx:54 prints it as-is, so users see e.g. 2026-09-28T10:15:00.000Z. Correction: shared formatIndianDate (lib/formatters.ts:2) is date-only dd/mm/yyyy in browser locale, not 'dd Mon yyyy' and not forced IST; there is no shared date-time formatter (ai/chat has two local formatDateTime copies).
 - **Files to change:** `apps/web/src/lib/formatters.ts`, `apps/web/src/app/(app)/cdp/_data.ts`, `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -190,7 +190,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-PROFILES-01  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** labelOf() uses email then phone as the row label (page.tsx:19-25), so direct personal identifiers (email, phone) render unmasked in the list and in the CSV export (exportable, page.tsx:83-84) — DPDP data-minimisation gap; no role gate or masking.
 - **Verified evidence:** profiles/page.tsx:22-28 labelOf tries name, fullName, email, phone then id, and l.35 puts it in the 'Profile' column; DataTable at l.61-81 has exportable so the CSV includes the label (ds/DataTable.tsx:274). No masking, gate or audit. Line refs in finding (19-25, 83-84) are off; real ones are 22-28 and 76-77.
 - **Files to change:** `apps/web/src/app/(app)/cdp/profiles/page.tsx`, `apps/web/src/app/_components/ds/Masked.tsx (new)`
@@ -207,7 +207,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-PROFILES-02  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** On fetch failure the four StatCards render 0 and the table shows 'No profiles yet' (page.tsx:63-68,86-87) with only a small badge above; a steward can read 'zero profiles' as fact (compare change/page.tsx which renders '—' when errored).
 - **Verified evidence:** Loader returns [] with source 'error' (_data.ts:123-130). profiles/page.tsx:42-58 computes stats from rows so StatCards show '0' (Avg Attributes hard-codes '0', l.58); the DataTable shows emptyTitle 'No profiles yet' (l.78-80); only a DataSourceBadge (l.53) hints at failure. Change home uses errored ? '—'.
 - **Files to change:** `apps/web/src/app/(app)/cdp/profiles/page.tsx`
@@ -223,7 +223,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-PROFILES-03  ·  MEDIUM  ·  partly  ·  theme UUID (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Rows with no name/email/phone fall back to the full 36-char profile UUID as label (page.tsx:26), a raw id shown to users.
 - **Verified evidence:** labelOf falls back to full profile id (page.tsx:27) so a nameless profile shows a 36-char UUID in the Profile column. Real but the theme PII is wrong (it is an internal id, not personal data).
 - **Files to change:** `apps/web/src/app/(app)/cdp/profiles/page.tsx`
@@ -237,7 +237,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-PROFILES-04  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Footnote 'Showing the {n} most recently resolved profiles' uses rows.length even when the loader silently capped at limit=200 (_data.ts:122); there is no 'of N total' count.
 - **Verified evidence:** _data.ts:124 requests '/api/v1/cdp/profiles?limit=200'; footnote page.tsx:83-85 says 'Showing the {rows.length} most recently resolved profiles', and the 'Total Profiles' stat (l.55) is also rows.length, so at 200 it reads as the total. Schema cdpProfileListSchema lives in @civitasone/schemas, absent from the snapshot, so a total field cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/cdp/_data.ts`, `apps/web/src/app/(app)/cdp/profiles/page.tsx`
@@ -253,7 +253,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-PROFILES-05  ·  LOW  ·  confirmed  ·  theme LOADING (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Loading heading 'Profiles' vs 'CDP — Profiles'; hard-coded #f1f5f9 skeleton colour (profiles/loading.tsx:13-16).
 - **Verified evidence:** profiles/loading.tsx:6 heading 'Profiles' vs page title 'CDP — Profiles' (page.tsx:48); skeleton uses hard-coded #f1f5f9 (l.12,15). No fabricated data; StatCard iconBg hex literals on page are the same style. Theme FABRICATED is wrong.
 - **Files to change:** `apps/web/src/app/(app)/cdp/profiles/loading.tsx`
@@ -274,7 +274,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-PROFILES-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Attributes table prints every attribute value verbatim (value: entry.value, page.tsx:70) with an exportable CSV (page.tsx:112-113) — email, phone and any other personal attribute are shown and exportable with no masking, role gate or access audit (DPDP); the 'hashed' promise on page.tsx:168 covers only identifiers.
 - **Verified evidence:** resolveAttributeSources (c360.ts) maps every profile.attributes key via displayValue with no filtering; profiles/[id]/page.tsx:61-67 builds rows, 112-128 renders DataTable with exportable and exportFilename, and DataTable.downloadCsv (ds/DataTable.tsx:274-290) writes all values client-side. No <Masked> use, no role check (cdp/layout.tsx only has ModuleGate moduleKey='cdp'), no audit call on view/export. The 'stored hashed' note (page.tsx:175-177) covers identifiers only. No shared <Masked> component exists in the app (only unrelated mentions in admin/integrations).
 - **Files to change:** `apps/web/src/app/(app)/cdp/profiles/[id]/page.tsx`, `apps/web/src/app/(app)/cdp/profiles/[id]/c360.ts`, `apps/web/src/app/_components/ds/DataTable.tsx`, `apps/web/src/app/_components/ds/Masked.tsx (new)`
@@ -293,7 +293,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-PROFILES-DETAIL-02  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Subtitle prints the full profile UUID ('Golden profile {profile.id}', page.tsx:82) and Source Lineage prints raw sourceId — raw ids shown to users.
 - **Verified evidence:** page.tsx:94 subtitle prints `Golden profile ${profile.id}` (full UUID) and Source Lineage column 'Record' prints entry.sourceId (l.82-88, 137). Line refs in the finding are off (82 -> 94). The URL already carries the id. EntityPicker is not relevant on a read-only detail page.
 - **Files to change:** `apps/web/src/app/(app)/cdp/profiles/[id]/page.tsx`
@@ -309,7 +309,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-PROFILES-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** When a secondary loader fails (identity or timeline) that table falls to its 'No linked identifiers' / 'No events yet' empty copy beside a single generic badge (page.tsx:39-44,146-160); the badge does not say which panel is wrong.
 - **Verified evidence:** Loaders return {data:[],source:'error'} on failure (_data.ts:146-166). page.tsx:41 folds three sources into one anyLoadFailed and shows a single generic DataSourceBadge (l.98). Identity table falls to 'No linked identifiers' (l.171-173) and events to 'No events yet' (155-157) and stat 'Linked Identifiers' reads 0 (l.102). Related: when the profile fetch itself errors, profile is null so the 'Profile not found' EmptyState renders (l.43-54) beside the badge - an error shown as not-found.
 - **Files to change:** `apps/web/src/app/(app)/cdp/profiles/[id]/page.tsx`
@@ -325,7 +325,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-PROFILES-DETAIL-04  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Attribution Coverage and Contributing Systems stats read 0 for lineage-free profiles with no explanatory tooltip; 'Unattributed' is explained only in a paragraph.
 - **Verified evidence:** Coverage: attributionCoveragePct returns 0 when there are no attributes (c360.ts) and 0% when nothing is attributed; Contributing Systems = 0 when lineage empty (page.tsx:100-103). StatCards have no tooltip/help; explanation of 'Unattributed' is only the paragraph at l.107-111. But the 0 values are genuine, not fabricated, and the Contributing Systems card has an explicit empty state (l.181-186), so impact is small. StatCard has no help/title prop.
 - **Files to change:** `apps/web/src/app/_components/ds/StatCard.tsx`, `apps/web/src/app/(app)/cdp/profiles/[id]/page.tsx`
@@ -362,7 +362,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-SEGMENTS-01  ·  HIGH  ·  confirmed  ·  theme WIRING (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Page description 'Audience segments for campaigns.' (page.tsx:18) contradicts the hub tile 'Create and manage audience segments for campaigns.' (page.tsx:8 of hub) — the route offers no create, edit, or delete control at all.
 - **Verified evidence:** segments/page.tsx:15 description 'Audience segments for campaigns.' while cdp/page.tsx:8 tile says 'Create and manage audience segments for campaigns.'. The route renders only ModuleListPage -> read-only ModuleListTable; no create/edit/delete control anywhere in cdp/segments. Whether cdp-service has segment write endpoints cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/cdp/page.tsx`, `apps/web/src/app/(app)/cdp/segments/page.tsx`
@@ -377,7 +377,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-SEGMENTS-02  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Segment membership counts and rule definitions are not shown; the generic table only prints id, name, description, status, updatedAt (ModuleListTable.tsx:34-41).
 - **Verified evidence:** mapRows maps only id/label/sublabel/status/meta (_data.ts:41-97); ModuleListTable columns are ID, Name, Detail, Status, Meta (l.40-44). No member count or rule summary is mapped or shown. Whether the segments API returns memberCount/rules cannot be verified (service absent).
 - **Files to change:** `apps/web/src/app/(app)/cdp/_data.ts`, `apps/web/src/app/(app)/cdp/segments/page.tsx`, `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -408,7 +408,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-SEGMENTS-04  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Loading heading 'Segments' vs title 'CDP — Segments' (loading.tsx:8); Meta is a raw ISO timestamp (_data.ts:78-86).
 - **Verified evidence:** segments/loading.tsx:6 heading 'Segments' vs 'CDP — Segments' (page.tsx:14); Meta shows raw updatedAt ISO via mapRows (_data.ts:79-83) rendered unformatted at ModuleListTable.tsx:54. Loading uses hard-coded #f1f5f9.
 - **Files to change:** `apps/web/src/app/(app)/cdp/segments/loading.tsx`, `apps/web/src/app/(app)/cdp/_data.ts`, `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -429,7 +429,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-STEWARD-02  ·  HIGH  ·  partly  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Merge is judged from two 8-char UUID prefixes (ProfileLink id.slice(0,8), panel:33-37) and a confidence bar; the confirm dialog also shows only prefixes, so the steward approves an irreversible merge without seeing the two people's names or attributes.
 - **Verified evidence:** StewardQueuePanel: ProfileLink shows id.slice(0,8)… (l.56-62); ConfirmDialog text shows target/source prefixes (l.196-199); success message also prefixes (l.95). Confidence bar present. But the dialog is already an ActionButton/ConfirmDialog with requireReason, a warning that it is irreversible, and the ProfileLink opens the full Customer 360 in another route. So 'no ConfirmDialog/reason' in the fix text is already done; the real gap is that names/attributes are not shown in the queue or dialog. Maker != checker: queue has decidedBy but no requester field on MergeCandidate, enforcement is server-side and cannot be verified. Audit emission is backend (absent).
 - **Files to change:** `apps/web/src/app/(app)/cdp/steward/StewardQueuePanel.tsx`, `apps/web/src/lib/cdp/steward.ts`
@@ -447,7 +447,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-STEWARD-03  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Decision is async (202 → queue consumer): rows show 'Submitted…' locally and stay until a manual Refresh; a reload resets submittedIds so a decided row may reappear as pending and offer a second decision (panel:45-56).
 - **Verified evidence:** submittedIds (l.68) is component state and is reset inside load() (l.79), so both Refresh and page reload drop it; a row still 'pending' server-side (consumer lag) becomes actionable again. Server-side duplicate protection (ALREADY_DECIDED per steward.ts:64-66 comment) cannot be verified because cdp-service is absent; the UI only guarantees within one mounted session. The 'stay until manual Refresh' part is true (no polling).
 - **Files to change:** `apps/web/src/app/(app)/cdp/steward/StewardQueuePanel.tsx`
@@ -463,7 +463,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-STEWARD-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Loading state is bare 'Loading…' text (panel:102) and the Refresh button is hidden when the queue is empty, so an empty queue cannot be re-polled.
 - **Verified evidence:** StewardQueuePanel.tsx:121-122 loading branch is a bare <p>Loading…</p>; the Refresh button sits inside the non-empty branch (l.131-136), so with items.length===0 (l.123-128) there is no Refresh/retry. steward/loading.tsx is the route skeleton, separate.
 - **Files to change:** `apps/web/src/app/(app)/cdp/steward/StewardQueuePanel.tsx`
@@ -548,7 +548,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-STEWARD-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Approve/Reject render for every viewer (panel:150-190); the client has no role check, so a non-steward gets buttons that will 403 at cdp-service (route roles undeterminable: service absent).
 - **Service:** `cdp-service`  ·  **Endpoint(s):** `['GET /v1/cdp/steward/queue', 'POST /v1/cdp/steward/decide']`
 - **Question:** Does POST steward/decide enforce a steward role (403 otherwise) so non-stewards cannot merge profiles?
@@ -559,7 +559,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-STEWARD-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** steward/consumer.ts referenced in the panel comment lives in cdp-service — absent from snapshot; merge semantics, audit trail and maker-checker are undeterminable.
 - **Service:** `cdp-service`  ·  **Endpoint(s):** `['POST /v1/cdp/steward/decide', 'steward/consumer.ts (queue)']`
 - **Question:** Does approve merge profiles atomically, write an audit record with decider identity, and forbid the requester from being the sole approver?

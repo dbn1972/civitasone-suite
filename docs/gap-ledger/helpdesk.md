@@ -14,7 +14,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-HOME-01  ·  HIGH  ·  partly  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Status counts, SLA Breach % and Total Tickets are computed client-side from one unpaginated GET /api/v1/citizen/tickets (page.tsx:14-20, loaders.ts:3258-3263), while loaders.ts:3279-3283 documents that citizen-service returns a paginated {data, pagination} envelope. On a tenant with more tickets than one page the headline numbers are silently truncated; analytics already exposes totalTickets/openTickets/slaBreachedCount server-side.
 - **Verified evidence:** page.tsx:8-20 derives open/inProgress/pending/resolved/breached/total/slaBreachPct by filtering the array from getHelpdeskTicketList() (loaders.ts:3258-3264, GET /api/v1/citizen/tickets, mapHelpdeskTicketList in _data/apiMappers.ts:593 unwraps only the data array and discards any pagination). The loaders.ts doc comment (~3268-3283) says citizen-service wraps the filtered branch as {data, pagination}; whether the unfiltered branch caps rows is cannot-verify (citizen-service absent). getTicketAnalytics() (loaders.ts:~3319) already returns totalTickets/openTickets/slaBreachedCount, but not in_progress/pending/resolved split. Also: the comment says the unfiltered call returns a narrower summary, and mapSingleHelpdeskTicket defaults a missing slaStatus to within_sla (apiMappers.ts:~626), so breached could under-count silently.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -32,7 +32,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-HOME-02  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Avg Resolution comes from a second fetch whose source is discarded (page.tsx:8-11 reads only data): an analytics failure falls back to zeros and renders "—" (page.tsx:22-28) with no badge, indistinguishable from "no resolved tickets".
 - **Verified evidence:** page.tsx:8-11 destructures only {data: analytics} from getTicketAnalytics(); on failure fetchJson returns TICKET_ANALYTICS_EMPTY (avgResolutionHours 0) so page.tsx:22-28 shows an em dash with no error cue, same as a real no-data state. The ticket-list error IS handled (page.tsx:12, 38, 74-75).
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/page.tsx`
@@ -63,7 +63,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-HOME-04  ·  LOW  ·  confirmed  ·  theme THEME (was LOADING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** loading.tsx uses Tailwind slate classes on bg-slate-50 (loading.tsx:3) rather than DS Skeleton, so it flashes light in dark theme, and shows 4 stat blocks vs 8 cards.
 - **Verified evidence:** loading.tsx:3 uses min-h-screen bg-slate-50 with bg-slate-200 blocks (no dark variants), not the DS Skeleton (_components/ds/Skeleton.tsx which uses --line/--line2 vars). It renders 4 blocks (loading.tsx:~8) vs 8 StatCards on page.tsx:41-48 plus the Quick Navigation card. The same slate pattern is in reports/slas/internal loading.tsx.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/loading.tsx`
@@ -79,7 +79,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-HOME-05  ·  LOW  ·  partly  ·  theme A11Y (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Stat card icons are emoji (page.tsx:41-48,54-58) — inconsistent rendering across OS and no accessible name beyond the label.
 - **Verified evidence:** Emoji are passed as StatCard icon (page.tsx:41-48) and Quick Navigation tiles (page.tsx:55-59, rendered at :67). Real. Whether StatCard hides the icon from AT was not checked, and the label text is present so 'no accessible name' is overstated. Strings are also hardcoded English rather than next-intl.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/page.tsx`, `apps/web/src/app/_components/ds/StatCard.tsx`
@@ -101,7 +101,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-CATALOGUE-01  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** "My Requests" stat is a hard-coded "—" (page.tsx:44) although getMyServiceRequests exists (loaders.ts:5476); a permanently empty card on a user-facing page.
 - **Verified evidence:** helpdesk/catalogue/page.tsx:44 renders <StatCard icon='📥' label='My Requests' value='—' /> as a constant, never fetching. getMyServiceRequests exists at _data/loaders.ts:5476 (my-requests/page.tsx uses it). Not a fabricated figure, just a permanently empty card.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/catalogue/page.tsx`
@@ -118,7 +118,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-CATALOGUE-02  ·  MEDIUM  ·  confirmed  ·  theme COPY (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** No route exists to publish or retire offerings, yet the empty state says "An administrator can publish catalogue offerings" (page.tsx:55); nothing in /helpdesk/catalogue/** lets an administrator do so, and the empty state has no action.
 - **Verified evidence:** catalogue/page.tsx:55 empty state says 'An administrator can publish catalogue offerings...' with no action. helpdesk/catalogue/** contains only page, [id], breaches, my-requests; a grep for 'catalogue/offerings' finds only loaders.ts and RaiseRequestForm.tsx (GET/POST for requests), so no web screen creates, publishes or retires offerings. Whether the helpdesk-service has a create/publish endpoint cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/catalogue/page.tsx`
@@ -133,7 +133,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-CATALOGUE-03  ·  MEDIUM  ·  confirmed  ·  theme COPY (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Category and Priority use cellType "status" (page.tsx:60-61), rendering a category name like "Facilities" as a status pill with status colours; "Maker-checker" (page.tsx:27) is jargon for the citizen/staff requester.
 - **Verified evidence:** catalogue/page.tsx:60-61 sets cellType 'status' on Category and Priority, which DataTable renders through StatusPill (ds/DataTable.tsx:127). STATUS_MAP (ds/StatusPill.tsx:4-36) has none of category names or Low/Medium/High/Critical, so every value gets a neutral info pill: category is styled like a status, and priority is not colour-coded at all (Critical looks the same as Low). Line 27 sets approval: 'Maker-checker' / 'Auto', which is internal jargon in a staff-facing list. ConfirmDialog/maker-checker enforcement (theme CONFIRM) does not apply to a read-only list.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/catalogue/page.tsx`, `apps/web/src/app/_components/ds/StatusPill.tsx`
@@ -165,7 +165,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-CATALOGUE-05  ·  LOW  ·  partly  ·  theme UX (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Fulfilment column shows only "3 stages" (page.tsx:28) — no indication of elapsed time or SLA target although OLA data exists on the detail record.
 - **Verified evidence:** catalogue/page.tsx:28 shows fulfilment as `${n} stage(s)` only. Partly mis-described: 'elapsed time' is per-request and has no meaning in an offering list; the useful missing item is the expected turnaround. CatalogueOfferingSummary.olas is optional and documented as part of the detail record (loaders.ts ~5421-5435, getCatalogueOffering comment); whether the list endpoint /api/v1/helpdesk/catalogue/offerings also returns olas is not visible (cannot verify), and RaiseRequestForm/detail page.tsx:~30 is the only place using it.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/catalogue/page.tsx`, `apps/web/src/lib/formatters.ts`
@@ -188,7 +188,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-CATALOGUE-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Fetch failure becomes a 404: page.tsx:8-9 ignores source and calls notFound() on null, so a transient error shows "Page not found — does not exist or has been moved" (helpdesk/not-found.tsx) with no retry, and users may abandon a valid service.
 - **Verified evidence:** helpdesk/catalogue/[id]/page.tsx:8-9: `const { data: offering } = await getCatalogueOffering(params.id); if (!offering) notFound();`. The loader (_data/loaders.ts:5467-5473) returns data null as its fallback for any failure, so a 500/timeout gives source 'error', data null, and the page shows helpdesk/not-found.tsx ('Page not found... has been moved') with no retry. LoaderResult exposes `status` (apiClient.ts:32-35, documented for telling 404 from other errors) and ai/chat/[id]/page.tsx is a peer that already uses source==='error' with RefreshErrorState. catalogue/[id]/error.tsx only catches thrown errors.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/catalogue/[id]/page.tsx`
@@ -205,7 +205,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-CATALOGUE-DETAIL-02  ·  MEDIUM  ·  confirmed  ·  theme UX (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Requester can pick any priority up to Critical for every offering, overriding defaultPriority with no explanation (RaiseRequestForm.tsx:96-108); priority drives SLA clocks.
 - **Verified evidence:** helpdesk/catalogue/[id]/RaiseRequestForm.tsx:~99-106 renders a Priority <select> with Low/Medium/High/Critical for every offering; state is initialised from defaultPriority (line ~22) and posted as `priority` in the body (line ~54). Nothing explains the choice or limits Critical. Whether the backend uses priority for SLA clocks or validates it against the offering is not visible here (helpdesk-service absent, cannot verify). The About card shows 'Default priority' but not what changing it does.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/catalogue/[id]/RaiseRequestForm.tsx`, `apps/web/src/app/(app)/helpdesk/catalogue/[id]/page.tsx`
@@ -221,7 +221,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-CATALOGUE-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme UX (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Submit gives no confirmation: unlike the ticket forms there is no toast or request number, just a redirect to My Requests (RaiseRequestForm.tsx:62-64), where requests appear only as UUIDs.
 - **Verified evidence:** RaiseRequestForm.tsx:~61-63 on res.ok does router.push('/helpdesk/catalogue/my-requests') and router.refresh() with no toast, no message and no read of the response body. The peer helpdesk/tickets/new/NewTicketForm.tsx:26,66-67 calls useToast().toast.success('Ticket submitted successfully.') before navigating. My Requests then lists requests by raw UUID (see MY-REQUESTS-01). Whether the POST response contains a request id/number is not visible (cannot verify). A ConfirmDialog with reason is not appropriate for a self-service request; the missing piece is success feedback.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/catalogue/[id]/RaiseRequestForm.tsx`
@@ -237,7 +237,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-CATALOGUE-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme COPY (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Internal ITIL jargon shown to the requester: "OLA / underpinning contracts", provider names and "target 4320 min" (page.tsx:31-41), and approvals as "Maker-checker required" with no approver named.
 - **Verified evidence:** catalogue/[id]/page.tsx:~30-40 prints heading 'OLA / underpinning contracts' and per item `{o.name} - {o.kind.toUpperCase()} via {o.provider}, target {o.targetMinutes} min` (raw minutes such as 4320); line ~26 shows 'Maker-checker required' / 'Auto-approved'. CatalogueStage has assigneeRole but no approver is named or available for approvals (loaders.ts CatalogueStage/CatalogueOla types). The offering page is a self-service page for all staff, so this is internal jargon.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/catalogue/[id]/page.tsx`, `apps/web/src/lib/formatters.ts`
@@ -276,7 +276,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-CATALOGUE-BREACHES-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** A management report row identifies a request only by raw UUID (page.tsx:15-21,50-51): no offering, requester, current assignee or link to the ticket (ticketId exists on the type), so a manager cannot act on a breach from this screen.
 - **Verified evidence:** helpdesk/catalogue/breaches/page.tsx:20-26 builds rows with id: r.id and the first column {key:'id', label:'Request'} (line 52) shows the raw UUID; no link (no rowLinkKey). ServiceRequestSummary (_data/loaders.ts:5426-5440 region) has offeringId, ticketId, requestedBy (all UUIDs), currentStage, slaStatus, resolutionDeadline, breachEscalatedAt, createdAt but no names, so offering name needs a lookup via getCatalogueOfferings(); requester name and assignee are not in the type (cannot verify whether the breach endpoint returns them). A ticket detail route exists at helpdesk/tickets/[id].
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/catalogue/breaches/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -294,7 +294,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-CATALOGUE-BREACHES-02  ·  MEDIUM  ·  partly  ·  theme COPY (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Card is titled "Breached service requests" but the table maps all report.data rows without filtering (page.tsx:19-25), which by the page subtitle includes "at risk" ones; the At Risk stat and mixed rows contradict the card title.
 - **Verified evidence:** breaches/page.tsx:20 maps every row of report.data with no filter and the card heading at :44 reads 'Breached service requests', while the page subtitle (:32) says 'breached or are at risk'. Whether report.data contains at-risk rows depends on the helpdesk-service breaches endpoint, which is not in the snapshot (cannot verify), but the summary has separate breached/atRisk/escalated/total counts (loaders.ts RequestBreachReport), so mixed rows are plausible. In the table the SLA column (:54) does show each row's status, so users can tell them apart; only the title is inconsistent.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/catalogue/breaches/page.tsx`
@@ -309,7 +309,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-CATALOGUE-BREACHES-04  ·  MEDIUM  ·  confirmed  ·  theme UX (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** No export and no escalation action; "Escalated" is a read-only flag (page.tsx:23) with no timestamp shown although breachEscalatedAt is available.
 - **Verified evidence:** breaches/page.tsx:24 reduces breachEscalatedAt to the text 'Escalated' or a dash, dropping the timestamp although ServiceRequestSummary.breachEscalatedAt is available. The DataTable (:50-63) does not set exportable/exportFilename, whereas catalogue/page.tsx:440-441 does. No escalate action exists on the page and no escalate endpoint is referenced anywhere in helpdesk/catalogue/** (backend cannot be verified). The theme PII does not apply; rows hold ids and dates only.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/catalogue/breaches/page.tsx`
@@ -325,7 +325,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-CATALOGUE-BREACHES-05  ·  LOW  ·  partly  ·  theme COPY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Trailing "My requests" link (page.tsx:66-68) is a requester action on a manager report; SLA text lower-case with underscores replaced (page.tsx:22).
 - **Verified evidence:** True: breaches/page.tsx:66-68 ends with a 'My requests' ghost link to /helpdesk/catalogue/my-requests, which is a requester view on a manager report. Overstated: the SLA cell is not lower-case on screen. Line 23 does replace underscores, but the column uses cellType 'status' (line 54), and DataTable.cellValue (ds/DataTable.tsx:127) renders StatusPill, whose humanizeStatus (lib/formatters.ts:44-52) title-cases it, giving 'Within Sla' / 'Due Soon'. The real defects are the wrong acronym casing ('Sla') and no tone: STATUS_MAP (ds/StatusPill.tsx:4-36) lacks 'within sla', 'due soon', 'at risk', so those show as neutral info pills; only 'breached' is red.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/catalogue/breaches/page.tsx`, `apps/web/src/app/_components/ds/StatusPill.tsx`
@@ -348,7 +348,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-CATALOGUE-MY-REQUESTS-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** The only identifier in the table is the raw request UUID (page.tsx:34,39-40 prints r.id): no offering name, no request number, no ticket link (ticketId and offeringId are in the type but never shown), so a user cannot tell their requests apart or quote one to support.
 - **Verified evidence:** my-requests/page.tsx:~34 sets id: r.id and the first column {key:'id', label:'Request'} (~line 49) prints the raw UUID. ServiceRequestSummary has offeringId and ticketId (loaders.ts ~5437-5446) which are never used; there is no request number field in the type, and no rowLink on the DataTable (~47-60). Offering names are obtainable via getCatalogueOfferings() (active offerings only), and helpdesk/tickets/[id] exists for the ticket link.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/catalogue/my-requests/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -383,7 +383,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-CATALOGUE-MY-REQUESTS-03  ·  MEDIUM  ·  partly  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** SLA shows lower-case "within sla" / "due soon" (page.tsx:42 replaces underscores only) while Status uses a proper label map (page.tsx:15-23); Stage prints the stage key as stored.
 - **Verified evidence:** Overstated: my-requests/page.tsx:~42 does `slaStatus.replace(/_/g,' ')` but the SLA column uses cellType 'status' (~line 52), so DataTable renders StatusPill (ds/DataTable.tsx:127) and humanizeStatus (lib/formatters.ts:44-52) title-cases it: 'Within Sla', 'Due Soon' (not lower-case), with the wrong SLA casing. Real problems: STATUS_MAP in ds/StatusPill.tsx:4-36 has no 'within sla', 'due soon', 'at risk', 'pending approval', 'in fulfilment', 'pending fulfilment' keys, so those pills are neutral 'info' (only approved/rejected/breached/cancelled? map: approved good, rejected bad, breached bad). Stage (~line 41) prints r.currentStage, the stage key stored in the DB, not the stage name from the offering's fulfilmentStages.
 - **Files to change:** `apps/web/src/app/_components/ds/StatusPill.tsx`, `apps/web/src/lib/slaLabels.ts`, `apps/web/src/app/(app)/helpdesk/catalogue/my-requests/page.tsx`, `apps/web/src/app/(app)/helpdesk/SlaBadge.tsx`
@@ -400,7 +400,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-CATALOGUE-MY-REQUESTS-04  ·  LOW  ·  confirmed  ·  theme MISSING-FEATURE (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** resolutionDeadline is fetched but not shown (only Raised date), so the user sees an SLA state without the date it depends on.
 - **Verified evidence:** ServiceRequestSummary.resolutionDeadline (loaders.ts ~5443) is returned by getMyServiceRequests but my-requests/page.tsx Row type (lines 8-14 of the file) and the columns (~47-55) contain only id, status, stage, sla, raised. The breaches page does show 'Resolution Due' (breaches/page.tsx:56), so the data is formatted there already. Theme DEADROUTE is wrong (no route involved).
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/catalogue/my-requests/page.tsx`
@@ -437,7 +437,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-INTERNAL-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Failure reads as an empty queue: on error the list is [] so the stat cards show 0 and the table shows "No internal tickets" (page.tsx:10-30, InternalTicketsTable.tsx:47-48); only a small badge hints otherwise and no retry is offered.
 - **Verified evidence:** internal/page.tsx:8-13 uses data with [] fallback; on error stat cards show 0 (:26-29) and InternalTicketsTable shows EmptyState 'No internal tickets' (InternalTicketsTable.tsx:81-82); only DataSourceBadge (:24) hints, no retry.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/internal/page.tsx`, `apps/web/src/app/(app)/helpdesk/internal/InternalTicketsTable.tsx`
@@ -452,7 +452,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-INTERNAL-02  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** The "Ticket" column shows id.slice(0,8).toUpperCase() of a UUID (InternalTicketsTable.tsx:26) — a code the user cannot look up or quote; the list has no ticket number like the citizen list does.
 - **Verified evidence:** InternalTicketsTable.tsx:60 ticketId: t.id.slice(0,8).toUpperCase(). Unlike citizen (ticketNo), the InternalHelpdeskTicketSummary type built in mapTickets (loaders.ts:472-487) has only id/subject/priority/status.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/internal/InternalTicketsTable.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -468,7 +468,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-INTERNAL-03  ·  MEDIUM  ·  partly  ·  theme ROLEGATE (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** "+ New Ticket" is offered to every viewer though POST /v1/helpdesk/tickets is limited to helpdesk roles (page.tsx:20, NewInternalTicketForm.tsx:9-19).
 - **Verified evidence:** internal/page.tsx:20-22 always renders '+ New Ticket'. Same as NEW-01: role restriction rests on a code comment (NewInternalTicketForm.tsx:9-19); service enforcement cannot-verify. Duplicate of NEW-01.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/internal/page.tsx`
@@ -481,7 +481,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-INTERNAL-04  ·  MEDIUM  ·  partly  ·  theme DATA-LOSS (was NAVUX)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Status tabs match exact capitalised strings (InternalTicketsTable.tsx:31-35); any other backend status (Pending, Closed, On Hold) is reachable only under "All" and is uncounted in the stat cards.
 - **Verified evidence:** InternalTicketsTable.tsx:20-24/39-43 Open tab = Open|In Progress, Resolved tab = Resolved only. But worse than stated: mapTickets (loaders.ts:472-487) drops any row whose status is not Open/In Progress/Resolved/Closed, and priority not Low/Medium/High/Critical, so Pending/On Hold rows never appear even under All. Closed appears only under All and is not counted in the Resolved stat (page.tsx:11).
 - **Files to change:** `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/helpdesk/internal/page.tsx`, `apps/web/src/app/(app)/helpdesk/internal/InternalTicketsTable.tsx`
@@ -497,7 +497,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-INTERNAL-05  ·  LOW  ·  partly  ·  theme COPY (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Unlike /helpdesk/tickets this table has no useSeededResource offline copy and no provenance badge in the table (InternalTicketsTable.tsx); subtitle leaks the service name "helpdesk-service" (page.tsx:19).
 - **Verified evidence:** InternalTicketsTable.tsx uses plain server data with no useSeededResource, true; but the tickets list of the citizen side uses it only if TicketsTable does (not checked). Subtitle 'Staff operations queue via helpdesk-service.' at page.tsx:18 leaks the service name (confirmed; the finding says :19). Not fabricated data.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/internal/page.tsx`
@@ -517,7 +517,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-INTERNAL-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** The description typed in the New Internal Ticket form (NewInternalTicketForm.tsx:47-51) is never shown: InternalTicket and its mapper have no description field (page.tsx:6-40), so the reader of a ticket cannot see what was asked.
 - **Verified evidence:** internal/[id]/page.tsx:9-17 InternalTicket type has no description; mapResponse (:35-43) maps only id/subject/priority/status/dueDate/slaStatus/assignee. NewInternalTicketForm.tsx:240-244 posts description, so it is stored (if the service accepts it) but never displayed. Whether GET /v1/helpdesk/tickets/{id} returns description is cannot-verify (helpdesk-service absent).
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/internal/[id]/page.tsx`
@@ -533,7 +533,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-INTERNAL-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Read-only dead end: no assign, resolve, reply or close control exists for an internal ticket (whole page), so the queue can be filed to but not worked from the UI; the citizen detail page has these actions (tickets/[id]/TicketActions.tsx).
 - **Verified evidence:** internal/[id]/page.tsx renders only a read-only fields card (:53-61 region); no client component, no assign/resolve/reply controls. Citizen detail has tickets/[id]/TicketActions.tsx (reply/assign/resolve/close with ConfirmDialog). Which helpdesk-service endpoints exist for update/assign is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/internal/[id]/page.tsx`, `apps/web/src/app/(app)/helpdesk/internal/[id]/InternalTicketActions.tsx (new)`
@@ -550,7 +550,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-INTERNAL-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Fetch failure renders "This internal ticket does not exist." (page.tsx:46-52) because the loader falls back to null; the badge is the only hint.
 - **Verified evidence:** page.tsx:20-46 fetchJson falls back to null on error; the !ticket branch (:47-55) renders EmptyState 'Ticket not found / does not exist' with only a DataSourceBadge when source==='error'. Error and true not-found are conflated.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/internal/[id]/page.tsx`
@@ -581,7 +581,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-INTERNAL-DETAIL-05  ·  LOW  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Subtitle shows an 8-character UUID fragment as the "ticket number" (page.tsx:59).
 - **Verified evidence:** page.tsx:61 subtitle `Internal ticket ${ticket.id.slice(0, 8).toUpperCase()}`; list table does the same (InternalTicketsTable.tsx:60). The internal type has no ticketNo field in the mapper; whether the service issues one is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/internal/[id]/page.tsx`, `apps/web/src/app/(app)/helpdesk/internal/InternalTicketsTable.tsx`
@@ -603,7 +603,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-INTERNAL-NEW-01  ·  HIGH  ·  partly  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Role-gated endpoint, ungated UI: the component comment states POST /v1/helpdesk/tickets returns 403 for a plain citizen role (NewInternalTicketForm.tsx:9-19) yet neither the page (page.tsx) nor the list button (internal/page.tsx:20) checks a role; the user fills the whole form, then sees a generic save failure.
 - **Verified evidence:** Confirmed web side: neither internal/new/page.tsx nor internal/page.tsx:20-22 checks roles, though NewInternalTicketForm.tsx:9-19 documents a 403 for non-helpdesk roles. A role helper exists (lib/auth/roleGuard.ts getSessionRoles) and PermissionDenied is used in hr/rti/page.tsx:36-40. The HELPDESK_ROLES list (helpdesk_user/helpdesk_admin/super_admin) is only asserted in a comment; helpdesk-service is absent so cannot-verify server enforcement.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/internal/new/page.tsx`, `apps/web/src/app/(app)/helpdesk/internal/page.tsx`, `apps/web/src/lib/auth/roleGuard.ts`
@@ -636,7 +636,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-INTERNAL-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme THEME (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Hard-coded #fff backgrounds and #b91c1c / #047857 (NewInternalTicketForm.tsx:84,101,118,144) — dark theme breaks.
 - **Verified evidence:** Hard-coded colours in NewInternalTicketForm.tsx: background '#fff' at :277, :294, :311 (line numbers in the finding are off); '#b91c1c' / '#047857' at :337. In dark theme the white field panels and the fixed message colours break contrast. Not fabricated data.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/internal/new/NewInternalTicketForm.tsx`
@@ -651,7 +651,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-INTERNAL-NEW-04  ·  MEDIUM  ·  partly  ·  theme UX (was UUID)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Success toast "Ticket created." gives no ticket id; internal ids are shown elsewhere as an 8-char slice of a UUID (InternalTicketsTable.tsx:26) which the user never sees at creation.
 - **Verified evidence:** Success path (NewInternalTicketForm.tsx:257-259) toasts 'Ticket created.' and routes to the list; the POST response is not read, so no id is available. Whether the service returns id/ticketNo is cannot-verify. The list shows the 8-char slice (InternalTicketsTable.tsx:60).
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/internal/new/NewInternalTicketForm.tsx`
@@ -667,7 +667,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-INTERNAL-NEW-05  ·  LOW  ·  confirmed  ·  theme ERRORMSG (was ROLEGATE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** 403 surfaces as the generic "save" error (useFormError) rather than a "you do not have access" message (NewInternalTicketForm.tsx:57-60).
 - **Verified evidence:** NewInternalTicketForm.tsx:252-256 uses formError.fromResponse(res,'save'). useFormError.ts CODE_TO_KIND (:40-44) maps only VALIDATION_* and NOT_FOUND; MessageKind (messages.ts:19-24) has no forbidden kind, so a 403 gets the generic save copy.
 - **Files to change:** `apps/web/src/lib/useFormError.ts`, `apps/web/src/lib/messages.ts`, `apps/web/src/app/(app)/helpdesk/internal/new/NewInternalTicketForm.tsx`
@@ -706,7 +706,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-REPORTS-02  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Average resolution is "31.2 hrs" here (page.tsx:90) but "1.3d" on the Helpdesk home (helpdesk/page.tsx:22-28); with no data it prints "0.0 hrs" instead of "—" (page.tsx:90 vs home).
 - **Verified evidence:** reports/page.tsx:89 prints `${avgResolutionHours.toFixed(1)} hrs` (0 gives '0.0 hrs'); helpdesk/page.tsx:22-27 prints h under 24 else d, and em dash for 0.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/reports/page.tsx`, `apps/web/src/app/(app)/helpdesk/page.tsx`, `apps/web/src/lib/formatters.ts`
@@ -734,7 +734,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-REPORTS-04  ·  LOW  ·  partly  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** loading.tsx renders five stat blocks and the page four (reports/loading.tsx:8 vs page.tsx:42-47); on error the page stacks a badge plus two identical RefreshErrorStates (page.tsx:41,52,70).
 - **Verified evidence:** reports/loading.tsx:8 md:grid-cols-5 with 5 blocks vs 4 StatCards on page (:43-46): confirmed. On error page shows DataSourceBadge (:41) plus two RefreshErrorStates (:52, :70) with different area text (priority vs channel breakdown), so not identical but redundant, three error cues.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/reports/page.tsx`, `apps/web/src/app/(app)/helpdesk/reports/loading.tsx`
@@ -748,7 +748,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-REPORTS-05  ·  LOW  ·  partly  ·  theme CLEANUP (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Percentages are strings ("14.3%") built in the page and sorted lexically by the sortable DataTable (page.tsx:23-31,63).
 - **Verified evidence:** Strings like '14.3%' are built at page.tsx:25,31, true. But DataTable compareValues (ds/DataTable.tsx:159-170) falls back to localeCompare with {numeric:true}, so '9.0%' < '14.3%' sorts correctly; the lexical-sort claim is refuted in practice. Still a smell, and CSV/other consumers get strings.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/reports/page.tsx`
@@ -768,7 +768,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-SLAS-01  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Only breached tickets are tabulated (page.tsx:26-38); the Due Soon count is a dead number with no list, so the queue cannot be used to prevent the next breach.
 - **Verified evidence:** slas/page.tsx:20-33 counts due_soon and within_sla but the table shows only rows filtered to breached (:19-37,:67-92). getBreachedSLATickets already fetches the due_soon rows (loaders.ts ~3296-3313), so data is available and unused.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/slas/page.tsx`
@@ -783,7 +783,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-SLAS-02  ·  MEDIUM  ·  partly  ·  theme FAILMASK (was CAP)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** getBreachedSLATickets fires three unpaginated requests and returns source "error" if any one fails (loaders.ts:3293-3312), so a single failing bucket blanks the counts and the table even when the breached list loaded.
 - **Verified evidence:** loaders.ts:3298-3316 getBreachedSLATickets runs three fetches and sets source 'error' if any fails; data is still the merge of the successful ones, but slas/page.tsx:17 errored blanks stat cards and table (:63,:98-100). Confirmed. 'Unpaginated' is cannot-verify: doc comment says the filtered branch returns {data, pagination} and mapTicketDetails discards pagination, so only the first page per bucket is likely loaded.
 - **Files to change:** `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/helpdesk/slas/page.tsx`
@@ -799,7 +799,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-SLAS-03  ·  MEDIUM  ·  confirmed  ·  theme SORT (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** "Oldest first" sorts by createdAt (page.tsx:28-31), not by SLA deadline; a Low ticket opened earlier outranks a Critical one already past due. No deadline or overdue-by column exists in TicketDetail.
 - **Verified evidence:** slas/page.tsx:28-31 sorts by createdAt ascending; subtitle says 'sorted oldest first'. TicketDetail/mapSingleHelpdeskTicket (apiMappers.ts:~640-655) has no due/deadline field, so sorting by deadline needs a backend field. Priority is available and could be a tiebreaker.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/slas/page.tsx`, `apps/web/src/app/_data/apiMappers.ts`
@@ -814,7 +814,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-SLAS-04  ·  MEDIUM  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** exportable table exports requester names for the whole SLA queue (page.tsx:74-75) with no role gate, masking or audit note — DPDP-relevant bulk export.
 - **Verified evidence:** slas/page.tsx:93-94 exportable + exportFilename on a table with requesterName (:56). DataTable.downloadCsv (ds/DataTable.tsx:274-290) exports all sorted rows client-side with no audit call. The page has no getSessionRoles check. Export audit would need a backend audit endpoint (cannot-verify).
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/slas/page.tsx`, `apps/web/src/app/_components/ds/DataTable.tsx`
@@ -829,7 +829,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-SLAS-05  ·  LOW  ·  confirmed  ·  theme NAMING (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Three names for one screen: route /helpdesk/slas, title "SLA Queue", home tile "SLA Monitor" (helpdesk/page.tsx:60); loader is named getBreachedSLATickets but returns all buckets.
 - **Verified evidence:** Title 'SLA Queue' (slas/page.tsx:39), home tile 'SLA Monitor' at helpdesk/page.tsx:57 (finding says :60), route /slas; getBreachedSLATickets returns breached+due_soon+within_sla.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/slas/page.tsx`, `apps/web/src/app/(app)/helpdesk/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -849,7 +849,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-TICKETS-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Failure reads as good news: on a failed fetch the list is [] so SLA Met = 100% and Open Tickets = 0 (page.tsx:11-14), and no RefreshErrorState is shown; the only signal is a badge inside the table card (TicketsTable.tsx:78). The home page nulls the same numbers correctly (helpdesk/page.tsx:14-48).
 - **Verified evidence:** tickets/page.tsx:8-14: on error getHelpdeskTicketList returns [] so breached=0, slaMetPct falls to 100 (lines 11-13), open=0; StatCards at 42-45 render '0' and '100%'. page never reads source except passing it to TicketsTable, which shows only a DataSourceBadge (TicketsTable.tsx:81) and the 'No tickets' EmptyState (82-83). helpdesk/page.tsx:14-48 uses ticketsErrored to show '—' and RefreshErrorState (line 75). Line refs in the finding for TicketsTable were 78 (actual 81).
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/tickets/page.tsx`, `apps/web/src/app/(app)/helpdesk/tickets/TicketsTable.tsx`
@@ -866,7 +866,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-TICKETS-02  ·  MEDIUM  ·  confirmed  ·  theme CONSISTENCY (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Stat cards are computed from the server-fetched list while the table reads a separately seeded/cached copy (page.tsx:6-14 vs TicketsTable.tsx:31-36): offline, cards say 0 while the table shows cached tickets.
 - **Verified evidence:** page.tsx:8-14 computes stats from server list; TicketsTable.tsx:39-44 uses useSeededResource('helpdesk.tickets', tickets, source, isEmpty), which on server error/empty falls back to an IndexedDB cached copy (lib/sync/resource.ts:229-262). So offline or on error the table shows cached rows while cards show 0/100%. Not 'fabricated' data; a source-of-truth mismatch.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/tickets/page.tsx`, `apps/web/src/app/(app)/helpdesk/tickets/TicketsTable.tsx`
@@ -912,7 +912,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-TICKETS-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Breach Risk column is a prediction (PredictionBadge) with no legend for probability vs confidence in the table header (TicketsTable.tsx:93-105).
 - **Verified evidence:** TicketsTable.tsx:93-105: Breach Risk column renders PredictionBadge with label '{p}% breach' and confidence; column header is plain 'Breach Risk' with no legend or tooltip. ds/PredictionBadge and ExplainabilityTooltip exist so a legend can reuse them. isFallback is passed through (102).
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/tickets/TicketsTable.tsx`
@@ -934,7 +934,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-TICKETS-DETAIL-01  ·  HIGH  ·  partly  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Assign asks for "Assignee user UUID" in a free-text field (TicketActions.tsx:158-165) and the confirm dialog says only "The selected agent" (TicketActions.tsx:209-212): a typo or pasted wrong id reassigns the ticket with no name shown before or after; list pages display agent names, not ids.
 - **Verified evidence:** TicketActions.tsx:158-166 is a free-text 'Assignee user UUID' input; on submit it opens a ConfirmDialog (205-214, description 'The selected agent becomes responsible...') so a confirm step DOES exist (the stub 'fix' text is stale), but no agent name is shown before or after, and the dialog has no reason field. PATCH /v1/citizen/tickets/:id/assign sends { assigneeId } (line 91). Detail page prints ticket.assignedTo (page.tsx:65,94), which mapSingleHelpdeskTicket (app/_data/apiMappers.ts) fills from assignedTo ?? assigneeId, i.e. possibly a raw id. No shared EntityPicker/user-lookup exists in ds (only local use in admin/integrations); user-directory endpoint cannot be verified (citizen-service/identity absent).
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/tickets/[id]/TicketActions.tsx`, `apps/web/src/app/_components/ds/EntityPicker.tsx`, `apps/web/src/app/_components/ds/index.ts`
@@ -953,7 +953,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-TICKETS-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** A failed fetch is rendered as "Ticket not found — does not exist or has been removed" beside the badge (page.tsx:22-28) because getHelpdeskTicketById returns null on error; an agent can conclude a live ticket was deleted. Sibling pages use RefreshErrorState.
 - **Verified evidence:** page.tsx:20-29: when getHelpdeskTicketById fails, fetchJson (app/_data/apiClient.ts:141-144) returns data=null with source:'error' and status; the page shows DataSourceBadge plus EmptyState 'Ticket not found - This ticket does not exist or has been removed.' regardless of cause (5xx, 401, network, or genuine 404). Sibling pages (helpdesk/page.tsx:75, slas, reports, catalogue) use RefreshErrorState with toHumanError('load').
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/tickets/[id]/page.tsx`
@@ -971,7 +971,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-TICKETS-DETAIL-03  ·  MEDIUM  ·  partly  ·  theme WIRING (was NAVUX)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Conversation has a Notes tab for isInternal comments (TicketConversation.tsx:8-13) but the composer only posts to /notes with { body } and no internal flag (TicketActions.tsx:80): the UI cannot create the internal notes it displays, and the reply message always says "sent to the citizen" (TicketActions.tsx:81).
 - **Verified evidence:** TicketConversation.tsx:15-23 has Messages/Notes tabs filtering on isInternal (mapped from n.isInternal in apiMappers.ts). Composer TicketActions.tsx:80 POSTs /v1/citizen/tickets/:id/notes with { body: reply } only, and the label/success text always say 'citizen' (127, 81). So the UI has no way to send isInternal:true and would label an internal note as a citizen reply. Whether the /notes endpoint accepts an isInternal flag cannot be verified (citizen-service absent); the bare notes endpoint name suggests notes may be internal-by-default, so the true behaviour is unknown.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/tickets/[id]/TicketActions.tsx`
@@ -987,7 +987,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-TICKETS-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme RBAC (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Reply/Assign/Resolve/Close render for every viewer and every status (TicketActions.tsx:111-121), including closed tickets and non-agent roles; only the server can refuse, after the user has typed. Audit of these four mutations cannot be checked (citizen-service absent).
 - **Verified evidence:** TicketActions.tsx:109-122 renders Reply, Assign, Resolve, Close unconditionally; the component receives only ticketId (line 8) and page.tsx:51 passes no status or permissions, so closed/resolved tickets and any role see all four. Server-side refusal and audit events for the four mutations cannot be checked (citizen-service absent).
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/tickets/[id]/page.tsx`, `apps/web/src/app/(app)/helpdesk/tickets/[id]/TicketActions.tsx`
@@ -1059,7 +1059,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-TICKETS-NEW-01  ·  MEDIUM  ·  partly  ·  theme WIRING (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** No requester, channel or category fields (NewTicketForm.tsx:50-54): the header says "on behalf of citizen support" but the ticket is filed as the signed-in user, so an agent logging a phone/walk-in complaint cannot record the citizen or the channel that the ticket list later displays (TicketDetail.channel, loaders.ts:3243).
 - **Verified evidence:** NewTicketForm.tsx:49-53 body has only subject, description, priority; no requester, channel or category inputs (85-138). File header comment (11-19) says it posts to citizen-service POST /v1/citizen/tickets 'citizen-facing intake' and page subtitle is 'Submit a helpdesk request for citizen support.' (new/page.tsx:9), not 'on behalf of'. Tickets read back carry channel and requesterName (apiMappers.ts:650), so an agent filing a phone/walk-in complaint cannot set them. Whether POST accepts requester/channel/category cannot be verified (citizen-service absent). Not a PII-masking issue.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/tickets/new/NewTicketForm.tsx`
@@ -1075,7 +1075,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-TICKETS-NEW-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Success gives no ticket number: toast "Ticket submitted successfully." then redirect to the list (NewTicketForm.tsx:64-66), so the filer has nothing to quote back to the citizen.
 - **Verified evidence:** NewTicketForm.tsx:61-68: on ok it calls toast.success('Ticket submitted successfully.') then router.push('/helpdesk/tickets'); the response body is never read, so no ticketNo is shown. Whether the POST response contains ticketNo/id cannot be verified (citizen-service absent).
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/tickets/new/NewTicketForm.tsx`
@@ -1105,7 +1105,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-TICKETS-NEW-04  ·  LOW  ·  partly  ·  theme A11Y (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Single summary error, no per-field aria-invalid / aria-describedby, form is noValidate (NewTicketForm.tsx:74-80); Description free text up to 5000 chars has no DPDP hint not to paste Aadhaar/PAN.
 - **Verified evidence:** NewTicketForm.tsx:78-83 form has noValidate; validation errors go to a single <p role='alert'> (140-152) with no aria-invalid/aria-describedby on inputs (90-117); inputs have proper label/htmlFor. Description (107-117) maxLength 5000 with no DPDP hint about Aadhaar/PAN. Masked/CSV parts of the suggested fix do not apply here.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/tickets/new/NewTicketForm.tsx`
@@ -1121,7 +1121,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-TICKETS-NEW-05  ·  LOW  ·  confirmed  ·  theme UX (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Priority is freely selectable up to Critical for any role with no explanation of SLA impact (NewTicketForm.tsx:127-136).
 - **Verified evidence:** NewTicketForm.tsx:124-136: priority select offers Low/Medium/High/Critical for everyone, no help text; priority is lowercased and sent (20-22, 52). Whether the server restricts Critical by role or how SLA is derived from priority cannot be verified (citizen-service absent).
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/tickets/new/NewTicketForm.tsx`
@@ -1140,7 +1140,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-CATALOGUE-BREACHES-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Tenant-wide breach data (requestedBy, stages) has no role gate in the page (whole file) — visible to any user who types the URL; the only entry is a ghost link on /helpdesk/catalogue for everyone (catalogue/page.tsx:47-49). Enforcement is server-side and undeterminable.
 - **Service:** `helpdesk-service`  ·  **Endpoint(s):** `['GET /api/v1/helpdesk/catalogue/requests/breaches']`
 - **Question:** Does the breaches endpoint restrict tenant-wide requestedBy/stage data to supervisor/admin roles?

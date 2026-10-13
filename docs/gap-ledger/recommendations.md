@@ -14,7 +14,7 @@ Counts: ACTION 16, BACKEND-VERIFY 4
 
 ### GAP-RECOMMENDATIONS-HOME-01  ·  MEDIUM  ·  confirmed  ·  theme COPY (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Hub promises "Real-time recommendations" and "churn prediction" but every child is the same generic 5-column ID/Name/Detail/Status/Meta list (recommendations/*/page.tsx, ModuleListTable.tsx:34-46).
 - **Verified evidence:** recommendations/page.tsx:6-9 descriptions promise 'Real-time recommendations', 'churn prediction', 'analytics'; all four child pages (nba, matrix, health, feedback) use identical ModuleListPage -> ModuleListTable 5-column list (ModuleListTable.tsx:37-57). The NBA endpoint is /predictive, refreshed with revalidate 30s (_data.ts:79-85), not real-time push.
 - **Files to change:** `apps/web/src/app/(app)/recommendations/page.tsx`
@@ -27,7 +27,7 @@ Counts: ACTION 16, BACKEND-VERIFY 4
 
 ### GAP-RECOMMENDATIONS-HOME-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Tiles carry no counts or status, so a clerk cannot tell whether anything needs action (page.tsx:5-10).
 - **Verified evidence:** recommendations/page.tsx:5-10 static NavTile[] with title, description, href only; LinkTiles is fed no counts. Data would need four extra fetches (_data.ts loaders exist).
 - **Files to change:** `apps/web/src/app/(app)/recommendations/page.tsx`
@@ -42,7 +42,7 @@ Counts: ACTION 16, BACKEND-VERIFY 4
 
 ### GAP-RECOMMENDATIONS-HOME-03  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** loading.tsx draws four stat cards and a 24rem block; the loaded hub has neither (loading.tsx:12-21), so the skeleton jumps.
 - **Verified evidence:** recommendations/loading.tsx:12-21 draws 4 stat cards and :21 a h-96 block, while the loaded page (page.tsx:12-18) is a header plus LinkTiles only; also uses tailwind min-h-screen and inline pulse animation unlike the .skeleton pattern elsewhere.
 - **Files to change:** `apps/web/src/app/(app)/recommendations/loading.tsx`
@@ -55,7 +55,7 @@ Counts: ACTION 16, BACKEND-VERIFY 4
 
 ### GAP-RECOMMENDATIONS-HOME-04  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Gate key is "recommendation" while route and nav are "recommendations" (layout.tsx:5) — works only via fuzzy match in isModuleEnabled; a tenant flag named "recommendations" is ambiguous.
 - **Verified evidence:** recommendations/layout.tsx:5 moduleKey='recommendation'; lib/moduleVisibility.ts:44-45 isModuleEnabled matches name===key || name.includes(key) || key.includes(name), so 'recommendations' enabled matches via includes. Works but bidirectional substring matching is loose (a short name could match other modules).
 - **Files to change:** `apps/web/src/app/(app)/recommendations/layout.tsx`, `apps/web/src/lib/moduleVisibility.ts`
@@ -76,7 +76,7 @@ Counts: ACTION 16, BACKEND-VERIFY 4
 
 ### GAP-RECOMMENDATIONS-FEEDBACK-01  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** "Analytics" without any aggregate: no acceptance rate, count or chart — only a raw event list (feedback/page.tsx:16-19, ModuleListTable.tsx).
 - **Verified evidence:** recommendations/feedback/page.tsx:14-19 passes rows to ModuleListPage with description 'Acceptance and rejection analytics.'; ModuleListTable.tsx renders only a 5-column row list (:37-57). No counts, rates or charts. Endpoint /api/v1/recommendations/feedback (_data.ts:91) shape unknown; recommendation-service absent, so whether an aggregate endpoint exists cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/recommendations/feedback/page.tsx`, `apps/web/src/app/(app)/recommendations/_data.ts`
@@ -106,7 +106,7 @@ Counts: ACTION 16, BACKEND-VERIFY 4
 
 ### GAP-RECOMMENDATIONS-FEEDBACK-03  ·  LOW  ·  confirmed  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Status is printed as plain text with no StatusPill styling, so accepted and rejected look identical (ModuleListTable.tsx:53).
 - **Verified evidence:** ModuleListTable.tsx:53 renders `{row.status ?? '—'}` as plain text; StatusPill (ds/StatusPill.tsx) is not imported in this file. 'accepted' is also not in STATUS_MAP; 'rejected' is (bad).
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/_components/ds/StatusPill.tsx`
@@ -127,7 +127,7 @@ Counts: ACTION 16, BACKEND-VERIFY 4
 
 ### GAP-RECOMMENDATIONS-HEALTH-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Health Scores page shows no score: the endpoint is /health/at-risk and the table has no numeric or trend column, only a guessed status string (_data.ts:36-53, ModuleListTable.tsx:53), so nothing tells a clerk who to call first.
 - **Verified evidence:** health/page.tsx:8 uses getRecHealth -> /api/v1/recommendations/health/at-risk (_data.ts:90). The table (ModuleListTable.tsx:37-57) has no score, trend or sort; ordering is whatever the API returns. Response fields unknown (service absent), so whether a score is even returned is cannot-verify; mapRows would show a numeric score only as bal/points meta if named so.
 - **Files to change:** `apps/web/src/app/(app)/recommendations/health/page.tsx`, `apps/web/src/app/(app)/recommendations/_data.ts`, `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -143,7 +143,7 @@ Counts: ACTION 16, BACKEND-VERIFY 4
 
 ### GAP-RECOMMENDATIONS-HEALTH-02  ·  MEDIUM  ·  partly  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** At-risk accounts are business names/contacts of customers; the table prints label/sublabel verbatim with no role gate or masking beyond ModuleGate (DPDP) (ModuleListTable.tsx:51-52).
 - **Verified evidence:** ModuleListTable.tsx:51-52 prints row.label and row.sublabel verbatim; access is gated only by ModuleGate (layout.tsx:5, tenant module flag), not by role. Whether at-risk rows carry personal data (customer names/contacts) is not verifiable; ModuleRowSummary only has label/sublabel/meta. For business accounts this is CRM-level data normally visible to the role.
 - **Files to change:** `apps/web/src/app/(app)/recommendations/health/page.tsx`, `apps/web/src/app/(app)/recommendations/layout.tsx`
@@ -192,7 +192,7 @@ Counts: ACTION 16, BACKEND-VERIFY 4
 
 ### GAP-RECOMMENDATIONS-MATRIX-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** An affinity matrix is rendered as a flat list, so source product, target product and weight are squeezed into Name/Detail (ModuleListTable.tsx:50-54).
 - **Verified evidence:** matrix/page.tsx uses generic ModuleListPage; ModuleListTable.tsx:50-54 has only ID/Name/Detail/Status/Meta, and _data.ts:42-59 has no source/target/weight fields, so a rule's source product, target product and weight land in label/sublabel/meta by key-name luck. Real response shape not visible.
 - **Files to change:** `apps/web/src/app/(app)/recommendations/matrix/page.tsx`, `apps/web/src/app/(app)/recommendations/_data.ts`
@@ -228,7 +228,7 @@ Counts: ACTION 16, BACKEND-VERIFY 4
 
 ### GAP-RECOMMENDATIONS-NBA-01  ·  MEDIUM  ·  confirmed  ·  theme COPY (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** Subtitle leaks an internal service name — "Predictive / NBA signals from recommendation-service." (nba/page.tsx:16); clerks see infrastructure jargon.
 - **Verified evidence:** nba/page.tsx:16 passes description="Predictive / NBA signals from recommendation-service." to ModuleListPage, rendered as visible subtitle. It is a raw service name; no recommendation-service exists in this snapshot (only services/hrms-service). Theme WIRING is wrong: it is copy.
 - **Files to change:** `apps/web/src/app/(app)/recommendations/nba/page.tsx`
@@ -243,7 +243,7 @@ Counts: ACTION 16, BACKEND-VERIFY 4
 
 ### GAP-RECOMMENDATIONS-NBA-02  ·  MEDIUM  ·  partly  ·  theme WIRING (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 62bf2e6eb)
 - **First-pass claim:** A "next best action" list with no customer, no recommended action and no accept/reject control: the row is only id[0:8]/label/sublabel/status/meta guessed from ~10 keys (_data.ts:32-62, ModuleListTable.tsx:50-54).
 - **Verified evidence:** True that the UI shows only ID/Name/Detail/Status/Meta: ModuleListTable.tsx:40-54 renders row.id.slice(0,8), label, sublabel, status, meta, and _data.ts:28-77 mapRows guesses each from ~8-10 alternative keys (name/title/label/code/type..., description/status/state/category/tier..., status/state/lifecycle, code/currency/updatedAt/points/balance). No customer, recommended-action or accept/reject control exists. Cannot verify what /api/v1/recommendations/predictive actually returns (recommendation-service absent from snapshot), so whether the payload even has customer/action fields is unknown. Theme I18N is wrong.
 - **Files to change:** `apps/web/src/app/(app)/recommendations/nba/page.tsx`, `apps/web/src/app/(app)/recommendations/_data.ts`, `apps/web/src/app/_components/ModuleListTable.tsx`, `packages/types (new NbaRecommendation type)`

@@ -14,7 +14,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-HOME-01  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** All five tiles show the identical 📁 icon: TILE_ICONS has no AI titles and tileIcon() only matches dashboard/employees/leave/payroll/procurement hrefs (LinkTiles.tsx:18-60), so the hub gives no visual cue between Chat, Guardrails and Governance.
 - **Verified evidence:** LinkTiles.tsx:10-49 TILE_ICONS has no Chat/Copilot/Agents/Guardrails/Governance; tileIcon (l.53-61) falls to '📁' unless href includes dashboard/employees/leave/payroll/procurement/orders. All five ai tiles (ai/page.tsx:431-436) resolve to 📁 ('Audit' etc. keys do not match titles).
 - **Files to change:** `apps/web/src/app/_components/LinkTiles.tsx`
@@ -27,7 +27,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-HOME-02  ·  MEDIUM  ·  partly  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Tiles are not role- or state-aware: Governance (audit trail, agent kill-switch) is offered to every user who passes the module gate (page.tsx:6-12); the kill-switch 403s for non-admins only after the click (governance/AgentKillSwitch.tsx:34-40).
 - **Verified evidence:** ai/page.tsx:431-437 lists all tiles unconditionally; only the module gate applies (ai/layout.tsx). Kill-switch is inside Governance, which is also useful read-only to non-admins, so hiding the tile is not necessarily right. 403 handling is in AgentKillSwitch.tsx:131. Role model/guard not verified.
 - **Files to change:** `apps/web/src/app/(app)/ai/page.tsx`, `apps/web/src/app/(app)/ai/governance/AgentKillSwitch.tsx`
@@ -54,7 +54,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-HOME-04  ·  LOW  ·  partly  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** ai/loading.tsx is Tailwind slate/white with fixed light colours (loading.tsx:4-24), out of step with the DS tokens used elsewhere and unreadable in dark mode.
 - **Verified evidence:** ai/loading.tsx uses Tailwind bg-slate-50, bg-white, bg-gray-200 (l.3-24) with fixed light colours and min-h-screen; app dark mode is a `.dark` class with DS tokens (civitas-ds.css:315-331), so skeleton is light in dark mode. copilot/loading.tsx shares the pattern. Line refs are approximate.
 - **Files to change:** `apps/web/src/app/(app)/ai/loading.tsx`, `apps/web/src/app/(app)/ai/copilot/loading.tsx`, `apps/web/src/app/(app)/ai/governance/loading.tsx`
@@ -75,7 +75,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-AGENTS-01  ·  HIGH  ·  partly  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Failed fetch reads as an empty list: loader returns [] and the table shows 'No records — Nothing to show yet' (ai/_data.ts:86-94, ModuleListTable.tsx:35); on the Agents page this looks like 'no agents defined' when the service is merely unreachable.
 - **Verified evidence:** _data.ts moduleLoader (line ~85-91) returns [] with source 'error' on failure; agents/page.tsx passes source to ModuleListPage, which passes 'error' to ModuleListTable. useSeededResource (lib/sync/resource.ts:215-260) sets provenance 'error-no-data' when no cache exists, and the table renders DataSourceBadge with it, so an amber error badge does appear; however lines 34-36 of ModuleListTable still render EmptyState 'No records — Nothing to show yet for this module.' for data.length===0, contradicting the badge. Shared by 64 pages using ModuleListPage. Line refs in the observation are off (ModuleListTable EmptyState is at ~35).
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -91,7 +91,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-AGENTS-02  ·  MEDIUM  ·  confirmed  ·  theme UUID (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Generic five-column table for a domain list: ID is truncated to 8 chars (ModuleListTable.tsx:50) with no way to copy the full id; Detail/Meta are guessed from whichever field exists first (ai/_data.ts:50-78), so the same column may show a status word, a description or a timestamp on different rows.
 - **Verified evidence:** ModuleListTable.tsx:50 renders row.id.slice(0, 8) in a span, no copy control or title/tooltip. _data.ts mapRows: sublabel (line 59+) = description ?? status ?? state ?? category ?? tier ?? programName ?? agentId ?? profileId; meta (line 69+) = code ?? currency ?? updatedAt ?? createdAt ?? points ?? balance, so columns vary per row. Headers 'ID/Name/Detail/Status/Meta' are hard-coded English (no next-intl). Note ModuleListRowSummary type is in @civitasone/types (not in snapshot). Theme is not really I18N; primarily generic-table/UUID.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/(app)/ai/_data.ts`, `apps/web/src/app/(app)/ai/agents/page.tsx`
@@ -124,7 +124,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-AGENTS-04  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** No pause/resume here although the tile says 'Multi-agent workflows and autonomous task execution': the only control is on /ai/governance (AgentKillSwitch.tsx), and rows are not clickable.
 - **Verified evidence:** AI hub ai/page.tsx:8 tile says 'Multi-agent workflows and autonomous task execution.'; agents/page.tsx is a read-only ModuleListPage (page description 'Multi-agent workflows and orchestration.'), ModuleListTable rows have no href/onClick. Pause/resume lives in ai/governance/AgentKillSwitch.tsx:25 (POST /api/proxy/v1/ai/agents/:id/pause|resume) on the governance page. Confirmed.
 - **Files to change:** `apps/web/src/app/(app)/ai/agents/page.tsx`, `apps/web/src/app/(app)/ai/governance/AgentKillSwitch.tsx`
@@ -140,7 +140,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-AGENTS-05  ·  LOW  ·  confirmed  ·  theme NAVUX
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Back navigation is a plain <a href="/ai"> (full page load) with a lucide icon, not PageHeader back/Link (page.tsx:11-13).
 - **Verified evidence:** agents/page.tsx:10-12: <nav className='back'><ArrowLeft/> <a href='/ai'>AI & Copilot</a></nav> — plain anchor (full reload) with lucide icon, plus a separate PageHeader inside ModuleListPage without back. PageHeader supports back/backLabel props (ds/PageHeader.tsx:16-17) but ModuleListPage does not forward them.
 - **Files to change:** `apps/web/src/app/(app)/ai/agents/page.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -162,7 +162,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-CHAT-01  ·  HIGH  ·  partly  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Failed fetch reads as good news: getChatConversations falls back to [] so stats show 0 and the table 'No conversations yet' (page.tsx:30-38, ConversationsTable.tsx:59-62); only a small badge signals the error.
 - **Verified evidence:** getChatConversations (loaders.ts:2916-2923) returns [] with source 'error'. chat/page.tsx:30-38 computes summary from [] (stats 0) and only renders <DataSourceBadge> when source==='error'; ConversationsTable then shows DataTable empty 'No conversations yet'. So 'only a small badge' is accurate; the badge is not absent. Stats 0 and the empty state contradict the error.
 - **Files to change:** `apps/web/src/app/(app)/ai/chat/page.tsx`, `apps/web/src/app/(app)/ai/chat/ConversationsTable.tsx`
@@ -178,7 +178,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-CHAT-02  ·  HIGH  ·  partly  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** The first column prints the raw conversation UUID (ConversationsTable.tsx:32,45) — the operator gets no citizen, channel, topic or last message to recognise a conversation; a row that needs a human is indistinguishable from a closed one except by pill.
 - **Verified evidence:** ConversationsTable.tsx builds rows with id: conversation.id and the first column key 'id' label 'Conversation' prints it raw (UUID); rowHref links to detail. Other columns are status pill, language, handoff reason, duration, started, ended — so status/handoff reason/queue-related cues exist, contradicting 'indistinguishable except by pill' (handoff reason column shows why). Whether ChatConversation carries citizen/channel/topic/last-message cannot be verified (@civitasone/types and ai-agent-service absent); handoffQueue, handoffNote, language exist per detail page.
 - **Files to change:** `apps/web/src/app/(app)/ai/chat/ConversationsTable.tsx`
@@ -194,7 +194,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-CHAT-03  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Stats are computed over the fetched page only (limit=100, page.tsx:20 + loaders.ts:2916-2923): with more than 100 conversations the 'Conversations' card silently reports at most 100 and 'With agent' can under-count; the StatusFilter comment acknowledges pagination for the list but the cards ignore it.
 - **Verified evidence:** getChatConversations calls /api/v1/ai/chat?limit=100 (loaders.ts:2916-2923); summariseConversations (chat.ts) counts only the returned array, so total = min(100,n), and with ?status= filter the other cards read 0. DataTable paginates only client-side (pageSize 20). No total count from API used (response schema chatConversationsListSchema only exposes data in mapResponse; presence of a total field is cannot-verify).
 - **Files to change:** `apps/web/src/app/(app)/ai/chat/page.tsx`, `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/ai/chat/chat.ts`
@@ -209,7 +209,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-CHAT-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** A handed-off conversation waiting for an operator has no age/urgency cue: 'With agent' rows show 'In progress' duration and no queue or wait time (ConversationsTable.tsx:36-40) although handoffQueue exists on the type.
 - **Verified evidence:** ConversationsTable.tsx (~36-40): duration = 'In progress' whenever endedAt null; no wait time and no queue column, though detail page uses conversation.handedOffAt and handoffQueue (chat/[id]/page.tsx ~86-99), so those fields exist on the type.
 - **Files to change:** `apps/web/src/app/(app)/ai/chat/ConversationsTable.tsx`
@@ -226,7 +226,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-CHAT-05  ·  LOW  ·  confirmed  ·  theme NAVUX
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Governance action is a plain <a className='btn'> (full reload) rather than Link (page.tsx:28); 'Loading…' next to the filter is plain 12px grey (StatusFilter.tsx:46).
 - **Verified evidence:** chat/page.tsx:28 uses <a className='btn' href='/ai/governance'> (full reload); StatusFilter.tsx:46 renders {pending && <span style={{fontSize:12,color:'#64748b'}}>Loading…</span>} next to the select. PageHeader back='/ai' is already used.
 - **Files to change:** `apps/web/src/app/(app)/ai/chat/page.tsx`, `apps/web/src/app/(app)/ai/chat/StatusFilter.tsx`
@@ -264,7 +264,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-CHAT-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** 'End conversation' is a single click on a danger button with no ConfirmDialog (EndConversationButton.tsx:75-84); it is irreversible (the service rejects re-opening) and, for a citizen mid-chat, cuts the session.
 - **Verified evidence:** EndConversationButton.tsx: <button className='btn danger' onClick={end}> (lines ~62-70) POSTs /api/proxy/v1/ai/chat/:id/end immediately; reason input is optional (label 'Reason (optional)') and no ConfirmDialog is used. The component maps INVALID_TRANSITION to 'already ended', and its header comment says the service rejects re-opening (service not in snapshot -> irreversibility itself is cannot-verify beyond that). ds/ConfirmDialog.tsx exists with requireReason, minReasonLength, danger props. Audit event emission is server-side in ai-agent-service (absent).
 - **Files to change:** `apps/web/src/app/(app)/ai/chat/[id]/EndConversationButton.tsx`
@@ -282,7 +282,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-CHAT-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** DPDP: full citizen message text (names, PPO numbers, complaints) is printed unmasked to whoever passes the module gate (page.tsx:115-125); no role check or masking is visible in the page or loader.
 - **Verified evidence:** chat/[id]/page.tsx renders entry.content in <p style whiteSpace pre-wrap> (~lines 112-118) for every message, unmasked. ai/layout.tsx only wraps ModuleGate moduleKey='ai-agent' (tenant module check, no requireAnyRole); the page and getChatTranscript (loaders.ts ~2941) do no role check or redaction. No <Masked> component exists in apps/web/src (search found none). Whether the service redacts PII is cannot-verify (ai-agent-service absent).
 - **Files to change:** `apps/web/src/app/(app)/ai/layout.tsx`, `apps/web/src/app/(app)/ai/chat/[id]/page.tsx`, `apps/web/src/app/_components/ds/Masked.tsx (new)`
@@ -299,7 +299,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-CHAT-DETAIL-03  ·  HIGH  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** No single-conversation endpoint: getChatConversation downloads the list with limit=200 and picks by id (loaders.ts:2925-2939). A conversation older than the newest 200 renders 'Conversation not found — belongs to another tenant' although it exists.
 - **Verified evidence:** loaders.ts:2932-2939 getChatConversation fetches '/api/v1/ai/chat?limit=200' and mapResponse finds by id, returning null when absent; the doc comment at ~2925-2931 admits no single-conversation endpoint. Page then shows 'Conversation not found — ... belongs to another tenant' (page.tsx:38-52). The transcript endpoint /api/v1/ai/chat/:id/history exists separately. Service-side limit/ordering cannot be verified (absent), but any tenant with >200 conversations loses older ones.
 - **Files to change:** `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/ai/chat/[id]/page.tsx`, `services/ai-agent-service (chat routes; not in snapshot)`
@@ -315,7 +315,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-CHAT-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Controls are rendered for every role and rely on a 403 after clicking (HandoffButton.tsx:70-72, EndConversationButton.tsx:42-45); the page never learns the caller's role.
 - **Verified evidence:** page.tsx never reads session roles (no getSessionRoles/requireAnyRole import); HandoffButton (rendered when active) and EndConversationButton (active/handed_off) show to all who pass ai/layout ModuleGate. Both only handle 403 after the POST (HandoffButton ~line 62-66, EndConversationButton ~line 41-44). Which roles the service permits is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/ai/chat/[id]/page.tsx`, `apps/web/src/app/(app)/ai/layout.tsx`
@@ -331,7 +331,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-CHAT-DETAIL-05  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Two error paths disagree: a failed transcript gives RefreshErrorState with stats of 0 (page.tsx:105-107), a failed conversation call gives 'Conversation not found' plus badge (page.tsx:38-52) — an outage is indistinguishable from a wrong id.
 - **Verified evidence:** page.tsx:38-52: `if (!conversation)` returns EmptyState 'Conversation not found' with a small badge even when conversationSource==='error'; page.tsx ~105-107: transcript error renders RefreshErrorState while the stat grid above still shows Messages 0 and Tokens 0 (summariseTranscript of []). So both mis-states exist.
 - **Files to change:** `apps/web/src/app/(app)/ai/chat/[id]/page.tsx`
@@ -347,7 +347,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-CHAT-DETAIL-06  ·  MEDIUM  ·  partly  ·  theme WIRING (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Handoff queue is a free-text field (HandoffButton.tsx:122-135, placeholder 'water-supply-tier2') with no list of real queues, and the End-conversation reason asks the operator to 'record here if this was handed to a human agent' although handoff is a separate control — two ways to record one fact.
 - **Verified evidence:** HandoffButton.tsx: queue is <input type=text maxLength=64 placeholder='e.g. water-supply-tier2'> (~lines 120-135) with no source of valid queues (no queue-list endpoint referenced anywhere; existence in service cannot-verify). EndConversationButton.tsx label 'Reason (optional) — record here if this was handed to a human agent' and placeholder 'escalated to the water supply desk' conflicts with the separate handoff state. The placeholders are examples, not fabricated figures; the real defects are free-text routing and the misleading label.
 - **Files to change:** `apps/web/src/app/(app)/ai/chat/[id]/HandoffButton.tsx`, `apps/web/src/app/(app)/ai/chat/[id]/EndConversationButton.tsx`
@@ -385,7 +385,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-COPILOT-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Failed fetch reads as an empty history: loader returns [] so stats are 0 and the table says 'Ask the copilot a question above…' (page.tsx:22-34, TurnHistoryTable.tsx:58-62); only a small badge signals the failure.
 - **Verified evidence:** copilot/page.tsx:11 destructures data/source; getCopilotTurns falls back to [] on error (loaders.ts:2953). Stats render summary.total etc. as 0 (l.24-26, 0 not '—') and TurnHistoryTable shows emptyTitle 'No copilot turns yet' (TurnHistoryTable.tsx:220-221). Only DataSourceBadge at l.22 signals failure. (Line refs in observation 22-34 correct; empty text is at TurnHistoryTable.tsx:220-221 not 58-62.)
 - **Files to change:** `apps/web/src/app/(app)/ai/copilot/page.tsx`, `apps/web/src/app/(app)/ai/copilot/TurnHistoryTable.tsx`
@@ -401,7 +401,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-COPILOT-02  ·  HIGH  ·  partly  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** DPDP: nothing warns the officer before submitting that a prompt is stored in full (32,000 chars) and listed to everyone with access; the guardrail runs server-side after send (AskCopilotForm.tsx:48-52) so PII typed into the box has already left the browser when the block message appears.
 - **Verified evidence:** AskCopilotForm.tsx:79-94 POSTs the prompt to /api/proxy/v1/ai/copilot/ask and only then learns of a 422 GUARDRAIL_BLOCKED, so the text has left the browser; true. There is no warning copy near the textarea (l.120-134), only a char counter (max 32000 at l.48). Whether the blocked prompt is persisted server-side, and who can list turns, cannot be seen (ai-agent-service absent). Stored-in-full and visible-to-all is inferred from the list/detail pages, not verified in the service.
 - **Files to change:** `apps/web/src/app/(app)/ai/copilot/AskCopilotForm.tsx`, `apps/web/src/lib/pii.ts (new)`
@@ -417,7 +417,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-COPILOT-03  ·  MEDIUM  ·  confirmed  ·  theme LOADING (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Answers are asynchronous (202) but the page never refreshes itself: the new turn shows 'Awaiting' until the user reloads (AskCopilotForm.tsx:66-68 calls router.refresh() once); the detail page says 'Reload this page in a moment' (copilot/[id]/page.tsx:76-80).
 - **Verified evidence:** AskCopilotForm.tsx:110 calls router.refresh() once after 202; the new turn appears with state Awaiting (copilot.ts:242 turnState) and nothing re-polls. Detail page copy tells the user to reload (copilot/[id]/page.tsx:79).
 - **Files to change:** `apps/web/src/app/(app)/ai/copilot/AutoRefresh.tsx (new)`, `apps/web/src/app/(app)/ai/copilot/page.tsx`, `apps/web/src/app/(app)/ai/copilot/[id]/page.tsx`
@@ -433,7 +433,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-COPILOT-04  ·  MEDIUM  ·  confirmed  ·  theme PAGINATION (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Only the newest 50 turns are fetched (loaders.ts:2952-2955) and stats are computed over them, so 'Turns' tops out at 50 with no pager or hint.
 - **Verified evidence:** loaders.ts:2953 requests `/api/v1/ai/copilot/turns?limit=50`; summariseTurns(turns) (copilot.ts:255) counts only that slice, so Turns/Answered/Awaiting max at 50 combined; no pager or hint. Service-side pagination params beyond limit are not visible (service absent).
 - **Files to change:** `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/ai/copilot/page.tsx`
@@ -448,7 +448,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-COPILOT-05  ·  LOW  ·  partly  ·  theme DARKMODE (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Textarea and inputs use inline light-mode colours (#475569, #047857, #b42318) and fixed padding (AskCopilotForm.tsx:83-125); the 'Ask' button is 44px while the header actions use default height.
 - **Verified evidence:** AskCopilotForm.tsx uses inline #475569 (l.122), #047857 (l.145), #b42318 (l.150,155), #64748b (l.136), padding 10 on textarea (l.133). Ask button has minHeight 44 (l.139) while the header action is a plain `btn` (page.tsx:20). Line range 83-125 is off; real 122-158. Effect in dark mode not tested.
 - **Files to change:** `apps/web/src/app/(app)/ai/copilot/AskCopilotForm.tsx`
@@ -463,7 +463,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-COPILOT-06  ·  LOW  ·  partly  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Hard-coded English, emoji stat icons (page.tsx:24-34); the truncated prompt column gives no full-text tooltip (copilot.ts:56-60).
 - **Verified evidence:** Emoji icons and fixed hex iconBg at page.tsx:24-33 are true; English strings are hard-coded (no next-intl in this page). truncatePrompt (copilot.ts:280) cuts to 90 chars and TurnHistoryTable.tsx:193 passes only the truncated text, so no full text/tooltip. Not fabricated data, so theme is wrong. Line ref 56-60 should be 280-284.
 - **Files to change:** `apps/web/src/app/(app)/ai/copilot/TurnHistoryTable.tsx`, `apps/web/src/app/(app)/ai/copilot/page.tsx`
@@ -485,7 +485,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-COPILOT-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** A service failure is presented as 'Turn not found — does not exist, or belongs to another tenant' (page.tsx:25-42): `!turn || source === "error"` collapses outage and 404 into one message, badge notwithstanding.
 - **Verified evidence:** copilot/[id]/page.tsx:25 `if (!turn || source === "error")` renders one EmptyState 'Turn not found ... belongs to another tenant' (l.32-36) for both outage and missing turn; DataSourceBadge (l.29) is the only differentiator. LoaderResult from fetchJson (app/_data/apiClient.ts:144) carries `status`, so a real 404 is distinguishable.
 - **Files to change:** `apps/web/src/app/(app)/ai/copilot/[id]/page.tsx`
@@ -503,7 +503,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-COPILOT-DETAIL-02  ·  MEDIUM  ·  confirmed  ·  theme XSS (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Citation url is placed straight into href (page.tsx:95-97) with no scheme allow-list; a retrieved document with a javascript: or data: URL would render as a live link. rel/target are set correctly, but the value comes from the model's retrieval payload.
 - **Verified evidence:** copilot/[id]/page.tsx:96 renders `<a href={citation.url}>` with no scheme check; rel='noreferrer noopener' target='_blank' are set. Citation url comes from copilotTurnDetailSchema payload (loaders.ts:2968-2981, no URL validation seen in mapResponse). React 18 does not block javascript: hrefs; target=_blank reduces but does not remove risk (middle-click/copy). Schema definition itself not inspected in the packages snapshot.
 - **Files to change:** `apps/web/src/app/(app)/ai/copilot/[id]/page.tsx`, `apps/web/src/lib/safeUrl.ts (new)`, `apps/web/src/lib/safeUrl.test.ts (new)`
@@ -519,7 +519,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-COPILOT-DETAIL-03  ·  MEDIUM  ·  partly  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** DPDP: the full prompt and response are shown unmasked to any module user (page.tsx:68-83); a prompt containing an Aadhaar or PPO number is displayed as typed, with no masking or role gate.
 - **Verified evidence:** Prompt and response are printed as-is (page.tsx:68-83, whiteSpace pre-wrap) and the list shows the first 90 chars (copilot.ts truncatePrompt). Access is gated only by ModuleGate moduleKey='ai-agent' (ai/layout.tsx). No <Masked> component exists anywhere in apps/web or packages/ui-kit. A server-side guardrail exists (AskCopilotForm.tsx:90 handles 422 GUARDRAIL_BLOCKED), so some PII may be blocked before storage; that service is not in the snapshot, so what it blocks is unverified. No view audit event is emitted from the page.
 - **Files to change:** `apps/web/src/app/(app)/ai/copilot/[id]/page.tsx`, `apps/web/src/app/(app)/ai/copilot/TurnHistoryTable.tsx`, `apps/web/src/app/_components/ds/Masked.tsx (new)`, `apps/web/src/lib/pii.ts (new)`
@@ -536,7 +536,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-COPILOT-DETAIL-04  ·  MEDIUM  ·  partly  ·  theme LOADING (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Pending turn: page says 'Reload this page in a moment' (page.tsx:76-80) — no auto-refresh; and the Sources card claims 'answered without citing retrieved documents' while the answer does not exist yet (page.tsx:86-92).
 - **Verified evidence:** Confirmed: pending turn shows 'Reload this page in a moment' (page.tsx:79) and the page is a static Server Component (dynamic data, revalidateSeconds:0, no polling). Sources card (l.84-92) says 'answered without citing retrieved documents' even when answered===false. Not a dead route, so the theme is wrong; it is a stale/pending-state issue.
 - **Files to change:** `apps/web/src/app/(app)/ai/copilot/[id]/page.tsx`, `apps/web/src/app/(app)/ai/copilot/AutoRefresh.tsx (new)`
@@ -552,7 +552,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-COPILOT-DETAIL-05  ·  LOW  ·  confirmed  ·  theme COPY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Relevance scores print as raw 0.00 numbers (page.tsx:100) and citations without id/title show 'Untitled source'; emoji stat icons on fixed hex backgrounds (page.tsx:52-66).
 - **Verified evidence:** page.tsx:100 prints `relevance {score.toFixed(2)}` (raw 0-1 float) and l.97 falls back to 'Untitled source'; StatCard icons are emoji with fixed hex iconBg (l.52-66: #dcfce7,#fef3c7,#e0f2fe,#fce7f3), which do not adapt in .dark mode (civitas-ds.css:317).
 - **Files to change:** `apps/web/src/app/(app)/ai/copilot/[id]/page.tsx`
@@ -574,7 +574,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-GOVERNANCE-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** On a failed fetch the page reports health: counters default to 0 (page.tsx:29-31,43-62), the band reads 'Within normal range' in green (page.tsx:11-17,65-67) and the kill-switch card says 'No agents defined' (AgentKillSwitch.tsx:51-52). Only the Top Block Reasons card shows an error (page.tsx:75-77).
 - **Verified evidence:** governance/page.tsx:28 computes source but counters default to 0 (l.29,48,54,61) and blockRatePct 0 gives band 'normal' green 'Within normal range' (l.65-67). AgentKillSwitch.tsx:149-150 shows 'No agents defined' when agents is []. Only the Top Block Reasons card uses RefreshErrorState (l.75-76). The audit table shows 'No AI actions recorded' on error (AuditTrailTable.tsx:232-241).
 - **Files to change:** `apps/web/src/app/(app)/ai/governance/page.tsx`, `apps/web/src/app/(app)/ai/governance/AgentKillSwitch.tsx`, `apps/web/src/app/(app)/ai/governance/AuditTrailTable.tsx`
@@ -591,7 +591,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-GOVERNANCE-03  ·  MEDIUM  ·  confirmed  ·  theme DATA-SCOPE (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Block-rate band and 'Top Block Reasons' mix scopes: counters come from the dashboard endpoint but reasons are computed from the latest 100 audit rows only (_data.ts:109-130, governance.ts:130-150), so the two can contradict each other, and there is no 'window' label though the copy says 'in this window'.
 - **Verified evidence:** Counters come from /api/v1/ai/governance/dashboard (_data.ts:101), audit from `/audit?limit=100` (_data.ts:112), and topBlockReasons(audit.data) (page.tsx:31, governance.ts:390) counts only those rows, so reasons can diverge from blockedCount. Copy 'in this window' (page.tsx:78, AuditTrailTable.tsx:238) has no window label. Theme is wrong (scope mismatch, not i18n).
 - **Files to change:** `apps/web/src/app/(app)/ai/governance/page.tsx`, `apps/web/src/app/(app)/ai/governance/AuditTrailTable.tsx`, `apps/web/src/app/(app)/ai/_data.ts`
@@ -606,7 +606,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-GOVERNANCE-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Agent column prints the raw agentId (AuditTrailTable.tsx:27) while the kill-switch beside it lists agent names — the operator cannot tie a blocked action to an agent to pause without cross-referencing ids.
 - **Verified evidence:** AuditTrailTable.tsx:215 `agent: e.agentId ?? "—"` prints the raw id; AgentKillSwitch lists agent.name from getAiAgentStatuses (governance/page.tsx:25,93). Page has both lists so a join is possible client-side.
 - **Files to change:** `apps/web/src/app/(app)/ai/governance/page.tsx`, `apps/web/src/app/(app)/ai/governance/AuditTrailTable.tsx`
@@ -620,7 +620,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-GOVERNANCE-05  ·  MEDIUM  ·  partly  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Kill-switch is shown to every viewer and relies on a 403 message (AgentKillSwitch.tsx:30-38, and only when body.code is FORBIDDEN, else 'Could not pause the agent'); the comment in the file acknowledges hiding is not authorisation, but the control could still be disabled with an explanation for non-admins.
 - **Verified evidence:** AgentKillSwitch.tsx renders Pause/Resume for all viewers (l.165-173); 403 is mapped only when body.code==='FORBIDDEN' (l.131), otherwise generic 'Could not ...'. Comment l.106-110 states the service enforces ai_admin/super_admin; service not in snapshot so enforcement cannot be verified. No role hook is used in this component; a client role guard helper would need to be located.
 - **Files to change:** `apps/web/src/app/(app)/ai/governance/AgentKillSwitch.tsx`, `apps/web/src/app/(app)/ai/governance/page.tsx`
@@ -635,7 +635,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-GOVERNANCE-06  ·  LOW  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Audit 'When' uses formatIndianDate (date only, AuditTrailTable.tsx:25) — no time for an audit trail; Reason is free text from the service and may echo prompt content (DPDP), unmasked.
 - **Verified evidence:** AuditTrailTable.tsx:213 uses formatIndianDate (formatters.ts:2, dd/mm/yyyy only, no time). Reason is e.reason as returned (l.217) shown unmasked; whether the service redacts prompt text in reason cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/ai/governance/AuditTrailTable.tsx`, `apps/web/src/lib/formatters.ts`
@@ -651,7 +651,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-GOVERNANCE-07  ·  LOW  ·  partly  ·  theme DARKMODE (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Health colours (#047857/#92400e/#b42318) are inline hex, and the band is the only non-colour-independent cue: text is present, but no icon (page.tsx:65-67).
 - **Verified evidence:** page.tsx:17 BAND_COLOUR holds inline hex; band is text (l.65-67) so it is not colour-only, but has no icon. Observation wording 'non-colour-independent' is garbled; the text label does provide a non-colour cue.
 - **Files to change:** `apps/web/src/app/(app)/ai/governance/page.tsx`
@@ -672,7 +672,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-GUARDRAILS-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Failed fetch reads as an empty list: loader returns [] and the table shows 'No records — Nothing to show yet' (ai/_data.ts:86-94, ModuleListTable.tsx:35); on the Guardrails page this can mean 'no safety rules in force' when the service is merely unreachable.
 - **Verified evidence:** guardrails/page.tsx:8 passes {data,source} to ModuleListPage; getAiGuardrails falls back to [] (ai/_data.ts:89,97). ModuleListTable.tsx:34-35 shows 'No records / Nothing to show yet' when data empty; the provenance badge is the only cue (l.33). Nuance: useSeededResource may serve a cached copy, so this is only fully wrong with no cache.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -688,7 +688,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-GUARDRAILS-02  ·  MEDIUM  ·  confirmed  ·  theme GENERIC-TABLE (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Generic five-column table for a domain list: ID is truncated to 8 chars (ModuleListTable.tsx:50) with no way to copy the full id; Detail/Meta are guessed from whichever field exists first (ai/_data.ts:50-78), so the same column may show a status word, a description or a timestamp on different rows.
 - **Verified evidence:** ModuleListTable.tsx:50 prints row.id.slice(0,8) with no copy; mapRows (_data.ts:36-85) picks label/sublabel/meta from first available field, so Detail/Meta vary by row. Theme wrong (not i18n).
 - **Files to change:** `apps/web/src/app/(app)/ai/guardrails/page.tsx`, `apps/web/src/app/(app)/ai/_data.ts`
@@ -703,7 +703,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-GUARDRAILS-03  ·  MEDIUM  ·  partly  ·  theme INFO-GAP (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Rules are read-only and unexplained: there is no rule code, scope or action (block/redact) column, only whatever mapRows picks for Detail/Meta (ai/_data.ts:50-78); reviewers cannot tell what a rule does from this page.
 - **Verified evidence:** Table columns are fixed ID/Name/Detail/Status/Meta (ModuleListTable.tsx:40-44) fed by mapRows (_data.ts:36-85), which only looks for description/status/code etc. Whether the service returns scope/action fields is not visible, so the missing columns may need backend. Not a dead route.
 - **Files to change:** `apps/web/src/app/(app)/ai/guardrails/page.tsx`, `apps/web/src/app/(app)/ai/_data.ts`
@@ -718,7 +718,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-GUARDRAILS-04  ·  MEDIUM  ·  partly  ·  theme NAVUX (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** The tile description promises 'Safety policies, content filtering, and governance' but the page has no create/enable/disable action and no link to the audit trail of blocked prompts on /ai/governance.
 - **Verified evidence:** Page (guardrails/page.tsx) is read-only with no actions or link to /ai/governance; ai/page.tsx:435 tile promises 'Safety policies, content filtering, and governance'. Read-only may be intentional; no create/toggle endpoint verified in the snapshot. The governance page exists and supports ?blocked=true (governance/page.tsx:20).
 - **Files to change:** `apps/web/src/app/(app)/ai/guardrails/page.tsx`, `apps/web/src/app/(app)/ai/page.tsx`
@@ -732,7 +732,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-GUARDRAILS-05  ·  LOW  ·  confirmed  ·  theme NAVUX
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Back navigation is a plain <a href="/ai"> (full page load) with a lucide icon, not PageHeader back/Link (page.tsx:11-13).
 - **Verified evidence:** guardrails/page.tsx:11-13 uses <nav class=back><a href='/ai'> with lucide ArrowLeft, and ModuleListPage renders its own PageHeader without `back`; sibling pages pass back='/ai' to PageHeader (copilot/page.tsx:19, governance/page.tsx:38). Plain <a> triggers a full load.
 - **Files to change:** `apps/web/src/app/(app)/ai/guardrails/page.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -749,7 +749,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-GOVERNANCE-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Pause is a one-click danger button with no ConfirmDialog (AgentKillSwitch.tsx:66-76): a mis-click halts a live citizen-facing agent, and the audit of that mutation is not shown here (whether ai-agent-service records it is undeterminable).
 - **Service:** `ai-agent-service`  ·  **Endpoint(s):** `POST /api/v1/ai/agents/{id}/pause and /resume`
 - **Question:** Does pause/resume require an AI-governance role, emit an audit event with actor and reason, and is it idempotent?

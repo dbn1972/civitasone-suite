@@ -14,7 +14,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-HOME-01  ·  HIGH  ·  partly  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** "Executive Summary" tile links to /reports/executive-summary (page.tsx:14) but no such route exists under reports/ — every click lands on the bare not-found EmptyState.
 - **Verified evidence:** apps/web/src/app/(app)/reports/page.tsx:14 links to /reports/executive-summary; no such folder exists (find under reports/ confirmed). But because /reports/[id] is dynamic, the URL matches it: getReportJobById('executive-summary') fails and the user sees the report-detail 'Report job not found... ID is incorrect' page, NOT reports/not-found.tsx (no notFound() call anywhere under reports/).
 - **Files to change:** `apps/web/src/app/(app)/reports/page.tsx`
@@ -27,7 +27,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-HOME-02  ·  MEDIUM  ·  partly  ·  theme NAV (was LOADING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** not-found.tsx offers no way back: EmptyState with title and message only (not-found.tsx:5-8).
 - **Verified evidence:** apps/web/src/app/(app)/reports/not-found.tsx:4-8 is EmptyState with title/message and no action, confirmed. But nothing in reports/ calls notFound() (grep), so it only shows for unmatched nested paths (e.g. /reports/a/b), not for the executive-summary case.
 - **Files to change:** `apps/web/src/app/(app)/reports/not-found.tsx`
@@ -40,7 +40,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-HOME-03  ·  LOW  ·  partly  ·  theme CONSISTENCY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Mixed page conventions: hub uses "page-main"/ModuleHub while every child uses "wrap"/PageHeader; tile order (Dashboard, Report Jobs, KPI, MIS, Scheduled) has no grouping between viewing and creating (page.tsx:9-14).
 - **Verified evidence:** apps/web/src/app/(app)/reports/page.tsx uses ModuleHub (components/ModuleHub.tsx: div.page-main + PageHeader) while children use div.wrap + PageHeader (e.g. dashboard/page.tsx:87); talent-pool uses 'page-main wrap'. Convention mismatch is real but harmless. Tile order (l.9-14) is dashboard, jobs, KPI, MIS, scheduled, exec summary; grouping critique is subjective.
 - **Files to change:** `apps/web/src/app/(app)/reports/page.tsx`
@@ -53,7 +53,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-HOME-04  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** loading.tsx draws stat and table blocks the static hub never shows (loading.tsx:7-13).
 - **Verified evidence:** apps/web/src/app/(app)/reports/loading.tsx:7-13 draws breadcrumb, title, 4 stat blocks and two tall blocks; the hub page is static ModuleHub tiles with no data fetch. Also uses hard-coded bg-slate-50/min-h-screen (no dark mode).
 - **Files to change:** `apps/web/src/app/(app)/reports/loading.tsx`
@@ -73,7 +73,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Fetch error and true not-found both render "Report job not found … the ID is incorrect" (page.tsx:10-17); a transient outage tells the user their link is wrong.
 - **Verified evidence:** apps/web/src/app/(app)/reports/[id]/page.tsx:8-17: `!job || source==='error'` renders PageHeader 'Report not found' + EmptyState 'Report job not found... the ID is incorrect' (DataSourceBadge shown on error but message still wrong). LoaderResult exposes status (apiClient.ts:125-144) so 404 can be distinguished.
 - **Files to change:** `apps/web/src/app/(app)/reports/[id]/page.tsx`
@@ -88,7 +88,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-DETAIL-02  ·  HIGH  ·  partly  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Report rows are printed raw with no masking or role gate (page.tsx:30-36): a report over HR or citizen data exposes Aadhaar/PAN/bank fields to any ModuleGate user (DPDP), and money cells are not converted from paise.
 - **Verified evidence:** apps/web/src/app/(app)/reports/[id]/page.tsx:24-32 maps rows generically (row[col] ?? '—') and DataTable prints values raw; no role gate beyond reports layout ModuleGate; no paise handling. But the page has no money-typed columns of its own and the payload shape/content (report service, @civitasone/types) is absent, so whether Aadhaar/PAN/bank fields or paise integers appear is cannot-verify; the risk is structural (generic dump of unknown columns).
 - **Files to change:** `apps/web/src/app/(app)/reports/[id]/page.tsx`, `services/report-service (not in snapshot)`
@@ -104,7 +104,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Only 100 rows are shown and there is no in-page indication how to get the rest beyond "100 of N rows" (page.tsx:26,97); download is the only route and disappears for non-completed jobs.
 - **Verified evidence:** apps/web/src/app/(app)/reports/[id]/page.tsx:26 slice(0,100); count shown at l.97 ('x of N rows'); Download only if status==='completed' && downloadUrl (l.42-46). DataTable then paginates the 100 rows client-side (pageSize 15) and is not exportable.
 - **Files to change:** `apps/web/src/app/(app)/reports/[id]/page.tsx`
@@ -119,7 +119,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Parameters print raw keys and values (fromDate, departmentId UUID) with no labels or formatting (page.tsx:81-86); dates in cards are formatted but parameters are not.
 - **Verified evidence:** apps/web/src/app/(app)/reports/[id]/page.tsx:81-86 prints {k} and {v} verbatim from job.parameters (e.g. fromDate, departmentId). Dates in the summary cards use formatIndianDate (l.63,67) but parameter values do not.
 - **Files to change:** `apps/web/src/app/(app)/reports/[id]/page.tsx`
@@ -134,7 +134,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-DETAIL-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** No failed-job branch: a failed job shows status "failed" but the body still says "Data will be available once the report completes." (page.tsx:104-105), and there is no error reason or retry.
 - **Verified evidence:** apps/web/src/app/(app)/reports/[id]/page.tsx:100-103: when displayColumns is empty the empty state shows title 'Pending' and 'Data will be available once the report completes.' for any status != completed, including 'failed'. No failure reason/retry rendered; whether ReportJobDetail carries an error field is cannot-verify (types package absent).
 - **Files to change:** `apps/web/src/app/(app)/reports/[id]/page.tsx`
@@ -155,7 +155,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-DASHBOARD-01  ·  HIGH  ·  confirmed  ·  theme FABRICATED
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Invented numbers: "Data Sources" falls back to 12 when there are no KPIs or the fetch failed (page.tsx:217), and "Refresh: Real-time" is a constant (page.tsx:220) — both render on the error branch.
 - **Verified evidence:** apps/web/src/app/(app)/reports/dashboard/page.tsx:98 value={modules || 12} (12 shows when kpis empty or loader errored; line numbers in observation 217/220 are wrong) and apps/web/src/app/(app)/reports/dashboard/page.tsx:101 value="Real-time" constant. StatGrid (l.97-102) renders outside the errored ternary (l.104), so both appear above RefreshErrorState. Also l.100 delta='live' is static.
 - **Files to change:** `apps/web/src/app/(app)/reports/dashboard/page.tsx`
@@ -171,7 +171,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-DASHBOARD-02  ·  HIGH  ·  confirmed  ·  theme FABRICATED
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** "Outcome index" is 50 + average changePct clamped to 0-100 (page.tsx:194-202) with the label "composite": a made-up score that reads as 50% on flat data and cannot be traced to any outcome definition.
 - **Verified evidence:** apps/web/src/app/(app)/reports/dashboard/page.tsx:75-83 avgChangePct = mean of kpi.changePct; outcomePct = clamp(50+avg,0,100); OutcomeDonut (l.45-65) labels it 'composite' and aria-label 'Outcome index'. No outcome definition in code; flat data reads 50%; empty data (avg 0) also 50% but card is hidden only when kpis empty.
 - **Files to change:** `apps/web/src/app/(app)/reports/dashboard/page.tsx`
@@ -186,7 +186,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-DASHBOARD-03  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** FY / QTD Segmented holds local state only (SpendSegmented.tsx:9-14); it changes nothing, and the card title says "spend vs outcome" though the chart plots KPI values (page.tsx:134,232).
 - **Verified evidence:** apps/web/src/app/(app)/reports/dashboard/SpendSegmented.tsx:9-14 holds useState only, no callback/param; page.tsx:113-116 card titled 'Cross-department spend vs outcome' but ModuleBarChart (l.14-43) plots kpi.value of top 8 positive KPIs. Segmented (ds/Segmented.tsx) uses span onClick with role=tab, not keyboard-operable (side note). Theme DATEFMT is wrong.
 - **Files to change:** `apps/web/src/app/(app)/reports/dashboard/page.tsx`, `apps/web/src/app/(app)/reports/dashboard/SpendSegmented.tsx`
@@ -200,7 +200,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-DASHBOARD-04  ·  MEDIUM  ·  confirmed  ·  theme DARKMODE (was FAILMASK)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Chart and donut use hard-coded hex (#0369a1, #eef0f4, #667085) instead of tokens, fail dark mode, and labels truncate to 10 chars at 9px (page.tsx:150-154,174-181); no legend, no values on bars, no table alternative.
 - **Verified evidence:** apps/web/src/app/(app)/reports/dashboard/page.tsx:34 fill '#0369a1', :55-56 '#eef0f4'/'#0369a1', :35,62 '#667085', :59 '#101828' hard-coded; label = (module||title).slice(0,10) at fontSize 9 (l.31,35); no legend, no value labels, no table alternative (only aria-label on svg). Observation's suggested RefreshErrorState fix is already implemented (l.104-105); the real remaining error-branch issue is stat cards (see -01).
 - **Files to change:** `apps/web/src/app/(app)/reports/dashboard/page.tsx`
@@ -216,7 +216,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-DASHBOARD-05  ·  LOW  ·  partly  ·  theme CHART (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Bars are opacity-stepped by position (page.tsx:149) implying an ordering that does not exist; "trending down" alerts show only percentage with no period (page.tsx:272).
 - **Verified evidence:** apps/web/src/app/(app)/reports/dashboard/page.tsx:30 opacity = 0.45 + i/(n-1)*0.5 by array index, implying rank though bars are unsorted (confirmed). Alerts (l.151-154) show `${changePct.toFixed(1)}%` else 'trending down'; period is not shown, and the KPI summary shape in the dashboard payload is not visible in this snapshot (@civitasone/types absent). Not a dead-route issue.
 - **Files to change:** `apps/web/src/app/(app)/reports/dashboard/page.tsx`
@@ -236,7 +236,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-KPI-01  ·  HIGH  ·  partly  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** A KPI monitor with no target and no actual: the table carries only name, module, unit, period and a Met/Near/Below label (KpiClient.tsx:178-188); the header promises "indicators with targets" (page.tsx:54).
 - **Verified evidence:** apps/web/src/app/(app)/reports/kpi/KpiClient.tsx:20-31 columns: kpiName, module, unit, period, status only; subtitle at apps/web/src/app/(app)/reports/kpi/page.tsx:54 promises 'outcome indicators with targets'. Whether KPISummary carries target/actual is cannot-verify (@civitasone/types absent), though the analytics screen (analytics/kpi/KpiTable.tsx) shows current value and target from another loader.
 - **Files to change:** `apps/web/src/app/(app)/reports/kpi/page.tsx`, `apps/web/src/app/(app)/reports/kpi/KpiClient.tsx`
@@ -251,7 +251,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-KPI-02  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** On fetch error the stat cards print 0 KPIs and "0%" (page.tsx:10-13,61-64) above RefreshErrorState.
 - **Verified evidence:** apps/web/src/app/(app)/reports/kpi/page.tsx:8-13,61-64: on error kpis=[] so stats print 0, 0, 0 and delta '0%' (l.62) while RefreshErrorState shows below (l.71-72).
 - **Files to change:** `apps/web/src/app/(app)/reports/kpi/page.tsx`
@@ -264,7 +264,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-KPI-03  ·  MEDIUM  ·  confirmed  ·  theme FABRICATED (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** "Outcome-linked" counts KPIs whose unit is "%" or "pct" and always shows the static delta "→ budget" (page.tsx:13,64) — a heuristic presented as a budget link.
 - **Verified evidence:** apps/web/src/app/(app)/reports/kpi/page.tsx:13 outcomeLinked = kpis with unit '%' or 'pct'; l.64 hard-coded delta='→ budget'. No budget linkage in data seen.
 - **Files to change:** `apps/web/src/app/(app)/reports/kpi/page.tsx`
@@ -277,7 +277,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-KPI-04  ·  MEDIUM  ·  confirmed  ·  theme COPY (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** "Below target" filter with zero matches reuses the "No KPI data available" empty copy (KpiClient.tsx:174-175).
 - **Verified evidence:** apps/web/src/app/(app)/reports/kpi/KpiClient.tsx:35-37 (observation lines wrong): filtered.length===0 shows 'No KPI data available / KPIs will appear once the service has processed data' even when the 'Below target' filter merely matches nothing (good news). Strings are hard-coded English, not next-intl (page-wide).
 - **Files to change:** `apps/web/src/app/(app)/reports/kpi/KpiClient.tsx`
@@ -290,7 +290,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-KPI-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Status pill mapping folds any unknown status into "rejected"/red (page.tsx:22-26); "Set Targets" goes to a generic report-job form (list/new/page.tsx:12-14).
 - **Verified evidence:** apps/web/src/app/(app)/reports/kpi/page.tsx:22-26 statusPill returns 'rejected' (red) for anything except on_track/at_risk; statusLabel (l.15-20) returns raw status for unknown. 'Set Targets' -> /reports/list/new?reportType=kpi-target (l.56), which only queues a generic report job (see LIST-NEW-01).
 - **Files to change:** `apps/web/src/app/(app)/reports/kpi/page.tsx`
@@ -311,7 +311,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-LIST-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Failed fetch shows Total/Completed/Running/Failed as real 0 above the error card (page.tsx:10-13,36-46).
 - **Verified evidence:** apps/web/src/app/(app)/reports/list/page.tsx:8-13 derives total/completed/running/failed from jobs, which is [] when getReportJobs() (loaders.ts:4374) fails; :37-40 pass those numbers to StatCard. The error card is rendered at :45-46, but the stats above it read 0. StatCard.tsx:19-23 already renders null/undefined/NaN as an em dash, so only the caller is wrong.
 - **Files to change:** `apps/web/src/app/(app)/reports/list/page.tsx`
@@ -328,7 +328,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-LIST-02  ·  MEDIUM  ·  partly  ·  theme OTHER (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** No status filter, no retry for failed jobs and no cancel for running ones; a failed job shows only "—" with no reason (ReportJobsTable.tsx:113-131).
 - **Verified evidence:** apps/web/src/app/(app)/reports/list/ReportJobsTable.tsx is 59 lines (observation's :113-131 is wrong; columns are :20-52). DataTable has only the free-text filter (filterable, :55) which matches the status text, so there is no dedicated status control. Rows have no error-reason field (JobRow :4-15) and the Download cell shows '—' for anything without downloadUrl (:48-50). No retry/cancel UI exists. The report-service and the ReportJobSummary type are not in the snapshot, so retry/cancel endpoints and an error-message field cannot be confirmed. The generic ConfirmDialog/maker-checker fix text does not fit: retry/cancel are not approvals.
 - **Files to change:** `apps/web/src/app/(app)/reports/list/ReportJobsTable.tsx`, `apps/web/src/app/(app)/reports/list/page.tsx`, `(backend) report-service retry/cancel endpoints if absent`
@@ -346,7 +346,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-LIST-03  ·  MEDIUM  ·  partly  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Requester is rendered from requestedBy verbatim — may be a raw user id rather than a name; jobs of all users are listed to every gated user (page.tsx:19).
 - **Verified evidence:** apps/web/src/app/(app)/reports/list/page.tsx:19 passes j.requestedBy straight to ReportJobsTable.tsx:31 ('Requested By' column, no render mapping), so a user id would show raw if the API returns one. The (app)/reports/layout.tsx only applies ModuleGate moduleKey='reports' (no role check) and the page does no per-user filtering. Whether the API returns all users' jobs or only the caller's, and whether requestedBy is a name or an id, lives in report-service, which is absent: cannot confirm the 'all users' claim.
 - **Files to change:** `apps/web/src/app/(app)/reports/list/page.tsx`, `apps/web/src/app/(app)/reports/list/ReportJobsTable.tsx`
@@ -368,7 +368,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-LIST-NEW-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** "Set KPI Targets" does not set a target: it queues a report job named by the clerk with reportType "kpi-target" (page.tsx:12-14, CreateReportForm.tsx:29-32); no KPI, value or period is captured and the KPI page never reflects it.
 - **Verified evidence:** apps/web/src/app/(app)/reports/list/new/page.tsx:6-11 kpi-target mode changes title/subtitle; CreateReportForm.tsx:29-32 posts only {name, reportType} to /api/proxy/v1/reports/jobs; no KPI id, value or period captured. Mitigation: page banner (l.17-24) and subtitle honestly say it is recorded as a report job. KPI page does not consume it (kpi/page.tsx uses getKPIs only).
 - **Files to change:** `apps/web/src/app/(app)/reports/list/new/page.tsx`, `apps/web/src/app/(app)/reports/list/new/CreateReportForm.tsx`, `apps/web/src/app/(app)/reports/kpi/page.tsx`
@@ -384,7 +384,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-LIST-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** "Report type / module" is a free-text input (CreateReportForm.tsx:61); typos ("Finanace") create an unusable job. No format (pdf/xlsx/csv), date range or parameters, although list and detail pages show format and parameters.
 - **Verified evidence:** apps/web/src/app/(app)/reports/list/new/CreateReportForm.tsx:61 free-text input id=reportType (obs line 61 correct); body (l.29-32) only name, reportType; no format/date range/parameters UI though detail page renders format (detail:59) and parameters (l.78-90). Backend validation of reportType is cannot-verify (report-service absent).
 - **Files to change:** `apps/web/src/app/(app)/reports/list/new/CreateReportForm.tsx`, `apps/web/src/app/(app)/reports/list/new/page.tsx`
@@ -399,7 +399,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-LIST-NEW-04  ·  LOW  ·  confirmed  ·  theme DARKMODE (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Banner colours and radius are hard-coded hex (page.tsx:20) and the ℹ️ emoji is decorative; card fields use inline #fff backgrounds (CreateReportForm.tsx:55,59) that break in dark mode.
 - **Verified evidence:** apps/web/src/app/(app)/reports/list/new/page.tsx:20 hex background #fffaeb/border #fde68a/color #92400e; CreateReportForm.tsx:55,59 background '#fff'; :67 error/success colours #b91c1c/#047857. The emoji is wrapped in aria-hidden so it is purely decorative (not an a11y defect).
 - **Files to change:** `apps/web/src/app/(app)/reports/list/new/page.tsx`, `apps/web/src/app/(app)/reports/list/new/CreateReportForm.tsx`
@@ -413,7 +413,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-LIST-NEW-05  ·  LOW  ·  partly  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** No loading.tsx for the segment and the ℹ️ banner is not a role="status" region (page.tsx:17-25).
 - **Verified evidence:** No list/new/loading.tsx, but reports/list/loading.tsx exists at the parent segment and Next wraps nested routes in it; new/page.tsx is synchronous with no data fetch, so a dedicated loading file adds nothing. Banner (page.tsx:17-24) is static content present at render, so role=status (for dynamic updates) is not warranted; the true nuance is that the parent skeleton is table-shaped.
 - **Files to change:** `apps/web/src/app/(app)/reports/list/new/loading.tsx (optional)`
@@ -433,7 +433,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-MIS-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** On fetch error the four stat cards show 0 (page.tsx:10-12) — "0 Data Sources, 0 Metrics" reads as a real result above the error card.
 - **Verified evidence:** apps/web/src/app/(app)/reports/mis/page.tsx:8-12 computes modules.length, totalMetrics, positive/negative from modules=[] on failure; :35-38 pass numbers to StatCard, so the four cards read 0 above the error card at :41-45.
 - **Files to change:** `apps/web/src/app/(app)/reports/mis/page.tsx`
@@ -449,7 +449,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-MIS-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Trends are derived by string-matching change.startsWith("+") / "-" (page.tsx:11-12, MISMetricsTable.tsx:224); a change like "12%" or "−4" (unicode minus) is counted neither way and shown uncoloured.
 - **Verified evidence:** apps/web/src/app/(app)/reports/mis/page.tsx:11-12 counts only change?.startsWith('+') / startsWith('-'), and apps/web/src/app/(app)/reports/mis/MISMetricsTable.tsx:27 colours the same way. A '−4' (U+2212), '12%' or '0%' matches neither, so it is uncounted and uncoloured. The page passes String(value) and change as free strings, so the API's change type (string vs number) is not visible here.
 - **Files to change:** `apps/web/src/app/(app)/reports/mis/page.tsx`, `apps/web/src/app/(app)/reports/mis/MISMetricsTable.tsx`, `apps/web/src/lib/trend.ts (new)`
@@ -465,7 +465,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-MIS-04  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Empty branch has no card wrapper (page.tsx:46-47) while other branches do; "Build Report" is offered even when there is no data.
 - **Verified evidence:** apps/web/src/app/(app)/reports/mis/page.tsx:46-47 renders a bare EmptyState with no card wrapper, whereas :42 and :49 wrap in <div className='card'>. The 'Build Report' action (:30) is in PageHeader and always shown, including in the empty and error states.
 - **Files to change:** `apps/web/src/app/(app)/reports/mis/page.tsx`
@@ -487,7 +487,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-SCHEDULED-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Template is a free-typed UUID (NewScheduledForm.tsx:307-315) and the list shows only its first 8 characters (page.tsx:370): nobody can create or recognise a schedule by report name.
 - **Verified evidence:** apps/web/src/app/(app)/reports/scheduled/NewScheduledForm.tsx:67-78 is a required text input 'Template ID' with a UUID regex pattern and a 'UUID of report template' placeholder; apps/web/src/app/(app)/reports/scheduled/page.tsx:83-85 prints templateId.slice(0,8)+'…' in monospace. The page has no template list. Whether a report-template list endpoint exists is not visible in the snapshot (report-service absent).
 - **Files to change:** `apps/web/src/app/(app)/reports/scheduled/NewScheduledForm.tsx`, `apps/web/src/app/(app)/reports/scheduled/page.tsx`, `apps/web/src/app/_data/loaders.ts (getReportTemplates if endpoint exists)`
@@ -503,7 +503,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-SCHEDULED-03  ·  MEDIUM  ·  confirmed  ·  theme REFRESH (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** After a successful create the list is not refreshed (no router.refresh, NewScheduledForm.tsx:292-294), so the new schedule does not appear until reload.
 - **Verified evidence:** apps/web/src/app/(app)/reports/scheduled/NewScheduledForm.tsx:54-56 on res.ok only sets success state and clears templateId/recipients; there is no useRouter/router.refresh(), and the list is a server component (page.tsx:37-38, revalidate via fetchJson), so the new row does not appear until a reload.
 - **Files to change:** `apps/web/src/app/(app)/reports/scheduled/NewScheduledForm.tsx`
@@ -519,7 +519,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-SCHEDULED-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** No enable/disable, edit, run-now or delete on any row although stats count Enabled / Disabled (page.tsx:326-339); recipients are shown as a count only, hiding who receives the report.
 - **Verified evidence:** apps/web/src/app/(app)/reports/scheduled/page.tsx:72-77 has six columns and no actions column; no enable/disable, edit, run-now or delete exists anywhere in the folder. Stats (:40-41,52-53) count Enabled/Disabled that users cannot change. Recipients render as a count (:87-89) even though the ScheduledReport type (:10) holds the emails. Backend support for PATCH/DELETE/run-now is unverifiable (report-service absent).
 - **Files to change:** `apps/web/src/app/(app)/reports/scheduled/page.tsx`, `apps/web/src/app/(app)/reports/scheduled/ScheduledRowActions.tsx (new)`
@@ -537,7 +537,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-SCHEDULED-05  ·  LOW  ·  partly  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Table and form are hand-styled with inline styles rather than the DS DataTable (page.tsx:315-321,355-390) — no sorting, no mobile transform; "Next Run" uses browser locale rather than formatIndianDate.
 - **Verified evidence:** Table is hand-built with inline styles (page.tsx:29-35,69-104), not DataTable: true, so no sorting/pagination/mobile handling (it does wrap in overflowX:auto :68). Next Run uses new Date(...).toLocaleString('en-IN') (:99) which uses the server's timezone, not IST, and is not the shared date helper. Line numbers in the observation are off (:355-390 does not exist; file is 117 lines). The form uses inline styles too. The stats also show 0 on fetch error (:51-53), same masking as LIST-01.
 - **Files to change:** `apps/web/src/app/(app)/reports/scheduled/page.tsx`, `apps/web/src/lib/format (existing formatIndianDateTime helper, locate)`
@@ -569,7 +569,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-LIST-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Status "running" is not in StatusPill's map shown here, so it falls to the default variant (StatusPill.tsx:53); job status vocabulary (queued/cancelled) undeterminable.
 - **Service:** `report-service`  ·  **Endpoint(s):** `['GET /api/v1/reports/report-jobs']`
 - **Question:** Which status values can a report job take (queued, running, completed, failed, cancelled) and does the API return exactly that set?
@@ -591,7 +591,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-MIS-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Value is String(m.value) with no locale grouping and Unit is a separate column (page.tsx:18-19): money metrics would print raw numbers — paise-vs-rupee handling undeterminable.
 - **Service:** `report-service`  ·  **Endpoint(s):** `['GET /api/v1/reports/mis']`
 - **Question:** Does each MIS metric declare its unit (INR paise vs rupees vs count vs percent) so the web can format it?
@@ -602,7 +602,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-SCHEDULED-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Read uses /v1/reports/scheduled via fetchJson (page.tsx:306) while the form POSTs to /api/v1/reports/scheduled (NewScheduledForm.tsx:283) — two prefixes for one resource; audit of the create (recipients are personal email addresses, DPDP) is undeterminable.
 - **Service:** `report-service`  ·  **Endpoint(s):** `['GET /v1/reports/scheduled (fetchJson)', 'POST /api/v1/reports/scheduled (NewScheduledForm)']`
 - **Question:** Are the read and create paths the same resource on the gateway, and does create validate recipients with zod, restrict to authorised roles and emit an audit event?

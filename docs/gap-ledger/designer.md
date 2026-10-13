@@ -14,7 +14,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-HOME-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Loader failure is invisible: page.tsx keeps only `data` from LoaderResult and drops `source`, so an API outage renders zero counts and 'No services yet' — the maker may start duplicate services (designer/page.tsx:5-9).
 - **Verified evidence:** designer/page.tsx:5-8 destructures only { data } from both LoaderResult (apps/web/src/app/_data/apiClient.ts:32 has source, status). fetchJson returns empty + source 'error' on missing gateway/401/failure (apiClient.ts:113-125). DesignerHomeClient then shows StatCards 0 (:65-68) and EmptyState 'No services yet' (:85).
 - **Files to change:** `apps/web/src/app/(app)/designer/page.tsx`, `apps/web/src/app/(app)/designer/DesignerHomeClient.tsx`
@@ -30,7 +30,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-HOME-02  ·  MEDIUM  ·  confirmed  ·  theme STATUS (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Row link goes to /designer/${id}, which is a redirect-only route to /b1 (designer/[id]/page.tsx) — a published service is opened in the draft wizard with no read-only state (DesignerHomeClient.tsx:115, [id]/page.tsx:16).
 - **Verified evidence:** DesignerHomeClient.tsx:~92-95 DataTable rowLinkPrefix='/designer/' rowLinkKey='id' -> /designer/{id} -> redirect to /b1 (designer/[id]/page.tsx:15). Published rows therefore open in the draft wizard. Not a dead link; a status-blind one.
 - **Files to change:** `apps/web/src/app/(app)/designer/DesignerHomeClient.tsx`, `apps/web/src/app/(app)/designer/[id]/page.tsx`
@@ -44,7 +44,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-HOME-03  ·  MEDIUM  ·  partly  ·  theme COPY (was STATUS)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Pattern and status are shown as raw tokens ('certificate', 'in_review'); Pattern column uses StatusPill on a non-status (DesignerHomeClient.tsx:39-46, PatternLabel).
 - **Verified evidence:** Status column uses cellType 'status' -> StatusPill, which calls humanizeStatus (StatusPill.tsx:61), so 'in_review' shows 'In review' - not raw. Pattern column (:~78) is a plain string of servicePattern ('certificate' lowercase raw). PatternLabel (DesignerHomeClient.tsx:140) wraps StatusPill on a pattern but is exported and unused, so the 'StatusPill on non-status' claim is not live. Also status 'in_review' vs 'submitted' both counted at :30.
 - **Files to change:** `apps/web/src/app/(app)/designer/DesignerHomeClient.tsx`, `apps/web/src/app/(app)/designer/_data/designerConstants.ts`
@@ -57,7 +57,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-HOME-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** 'Needs Attention' counts only rejected; drafts with incomplete blocks or failed sandbox test are not flagged (DesignerHomeClient.tsx:37).
 - **Verified evidence:** DesignerHomeClient.tsx:30 attention = services.filter(status==='rejected'). No signal for incomplete drafts or failed sandbox test; list API rows (DesignerServiceRow) carry no completeness or test fields, so this needs backend data.
 - **Files to change:** `apps/web/src/app/(app)/designer/DesignerHomeClient.tsx`, `apps/web/src/app/(app)/designer/_data/designerLoader.ts`
@@ -71,7 +71,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-HOME-05  ·  LOW  ·  confirmed  ·  theme ENTITLEMENT (was ROLEGATE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Page uses ModuleGate moduleKey 'citizen' while the nav lists Service Designer separately, so disabling Citizen hides the designer (layout.tsx).
 - **Verified evidence:** designer/layout.tsx wraps with ModuleGate moduleKey='citizen'; Sidebar.tsx:97 lists 'Service Designer' with moduleKey 'citizen' too. So both are tied to the Citizen module; disabling Citizen hides the designer. Observation's 'nav lists separately' is only true as a separate entry, same key. Whether a distinct 'designer' entitlement exists cannot be verified here.
 - **Files to change:** `apps/web/src/app/(app)/designer/layout.tsx`, `apps/web/src/app/_components/ds/Sidebar.tsx`
@@ -91,7 +91,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-01  ·  MEDIUM  ·  confirmed  ·  theme STATUS (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Every definition opens at B1 in edit mode regardless of status; a submitted definition should land on /review and a published one on a read-only view (designer/[id]/page.tsx:15).
 - **Verified evidence:** designer/[id]/page.tsx is a synchronous redirect to /designer/${id}/b1 (line 15-16); it does not fetch the definition, so status (submitted/published/rejected) is ignored. Edit-mode b1 opens for all.
 - **Files to change:** `apps/web/src/app/(app)/designer/[id]/page.tsx`, `apps/web/src/app/(app)/designer/_data/designerApi.ts`
@@ -107,7 +107,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-02  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Multi-value query params (?a=1&a=2) are silently dropped by the forwarder (page.tsx:9-12).
 - **Verified evidence:** [id]/page.tsx:10-12 copies only `typeof value === 'string'`; array values (?a=1&a=2) are skipped. Impact is minor since wizard pages use few params.
 - **Files to change:** `apps/web/src/app/(app)/designer/[id]/page.tsx`
@@ -126,7 +126,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B1-01  ·  HIGH  ·  confirmed  ·  theme CONSISTENCY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Rail status is static — b1 always 'in-progress', all other blocks 'empty' — so the maker gets no signal of what is complete; sibling pages compute status from different fields (b1/page.tsx:81 vs b5/page.tsx:46).
 - **Verified evidence:** b1/page.tsx:81 status is 'in-progress' for b1, 'empty' for all others. b2 (:63) sets b1 complete, b3 (:83) sets b1,b2 complete, b5 (:103) sets b1-b4 'complete' unconditionally and computes b5 from feeModel/hoaCode. So the rail is inconsistent between pages and only b5 uses data; none reflects real completion.
 - **Files to change:** `apps/web/src/app/(app)/designer/[id]/b1/page.tsx`, `apps/web/src/app/(app)/designer/[id]/b2/page.tsx`, `apps/web/src/app/(app)/designer/[id]/b3/page.tsx`, `apps/web/src/app/(app)/designer/[id]/b4/page.tsx`, `apps/web/src/app/(app)/designer/[id]/b5/page.tsx`, `apps/web/src/app/(app)/designer/[id]/b6/page.tsx`, `apps/web/src/app/(app)/designer/_data/designerConstants.ts`
@@ -142,7 +142,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B1-02  ·  HIGH  ·  partly  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** DPDP: the profile attribute registry lets a service bind Aadhaar (last 4) and PAN as applicant attributes with no purpose statement, masking note or role gate for the designer (ApplicantTypesForm.tsx attribute list).
 - **Verified evidence:** ApplicantTypesForm.tsx:22-23 REGISTRY offers aadhaarLast4 and pan; toggleBinding (:112-119) adds {required:true}. UI (:191-215) gives only 'Bind identity attributes collected for each allowed type' - no purpose statement, DPDP/Aadhaar Act note or consent hint. But this is design-time metadata: no PII values are shown, so masking (<Masked>) does not apply. Role gate: designer layout uses ModuleGate moduleKey='citizen' (layout.tsx:2-5), not a specific designer-role check.
 - **Files to change:** `apps/web/src/app/(app)/designer/_components/ApplicantTypesForm.tsx`
@@ -158,7 +158,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B1-03  ·  MEDIUM  ·  partly  ·  theme AUTOSAVE (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Autosave with a 2s debounce and 'Saved just now' label; no unsaved-changes guard on Next or pattern switch, and service key is editable after creation (CatalogueB1Form.tsx:63, :195).
 - **Verified evidence:** CatalogueB1Form.tsx:62 2s debounce persist, save state passed to WizardShell (saved/saving/offline); no flush on unmount (:65 clears timer, dropping pending save) and WizardShell Next (WizardShell.tsx:230) navigates without flush, so edits in the last 2s are lost on Next/block switch/pattern change. Pattern switch does have a confirm (pendingPattern/patternChangeImpact :120). Service key input (:195-200) is editable, help text says 'Locked after first publish', so 'editable after creation' is only true for drafts. 'Saved just now' string not found in this form. Also persist failure sets only 'offline' state.
 - **Files to change:** `apps/web/src/app/(app)/designer/_components/CatalogueB1Form.tsx`, `apps/web/src/app/(app)/designer/[id]/b1/page.tsx`, `apps/web/src/app/_components/ds/designer/WizardShell.tsx`
@@ -174,7 +174,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B1-04  ·  MEDIUM  ·  confirmed  ·  theme REFDATA (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Designation fields for appeal/RTI take free-text snake_case tokens (placeholder 'additional_commissioner') rather than a positions picker used elsewhere in B4 (GovernanceLinkageBuilder.tsx:68-135 vs ApprovalChainBuilder.tsx:44).
 - **Verified evidence:** GovernanceLinkageBuilder.tsx appellateDesignationId (~:68-80) and pioDesignationId (~:125-135) are free-text inputs with placeholders 'additional_commissioner' / 'deputy_commissioner', while ApprovalChainBuilder.tsx:44 uses fetchTenantPositions() and <select> (:348, :377). Free text allows values that match no position. Publish blocking for empty is mentioned in hints, validity of value is unverified.
 - **Files to change:** `apps/web/src/app/(app)/designer/_components/GovernanceLinkageBuilder.tsx`, `apps/web/src/app/(app)/designer/_components/ApprovalChainBuilder.tsx`, `apps/web/src/app/(app)/designer/_data/workflowBuilderApi.ts`
@@ -190,7 +190,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B1-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Three separate cards and a governance panel stack in one column with no anchors; long page with a sticky footer.
 - **Verified evidence:** b1/page.tsx:116-142 stacks CatalogueB1Form, ApplicantTypesForm and GovernanceLinkageBuilder (with two more cards inside) in one column within WizardShell; no in-page anchors or section nav. Sticky footer is in WizardShell (not verified in detail).
 - **Files to change:** `apps/web/src/app/(app)/designer/[id]/b1/page.tsx`
@@ -212,7 +212,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B2-01  ·  HIGH  ·  confirmed  ·  theme SAVE-RELIABILITY (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Each edit fans out into several metadata-service calls (entity, fields, layout, form-version) from the browser via autosave; partial failure leaves a half-created form with only a save-state label to show it (formBuilderApi.ts:147-297, FormBuilder onSaveState).
 - **Verified evidence:** formBuilderApi.ts:157-300 persistFormDesign runs from the browser as a sequential chain of fetches through /api/proxy/v1/metadata: GET entities (POST if missing, :138-150), GET fields, then one PATCH or POST per field (:186-215), then layout PATCH/POST (:226-240), then form-version PATCH/POST (:253-270). Nothing is transactional. FormBuilder.tsx:75-90 wraps it in a 2s debounce; any throw only calls onSaveState('offline'), which b2/page.tsx:17 passes to WizardShell as a label. There is no retry, no message saying which step failed, and no beforeunload guard. A failure mid-loop leaves some fields created and no layout or version. The next edit re-runs the whole chain, which is mostly idempotent because it looks fields up by apiName (:180). By code reading, replace(saved) at FormBuilder.tsx:82 creates a new design object, which re-triggers the [design] effect at :91, so autosave appears to re-fire every ~2s while the page is open (not run). The theme tag I18N is wrong. The finding is about atomicity and error surfacing.
 - **Files to change:** `apps/web/src/app/(app)/designer/_data/formBuilderApi.ts`, `apps/web/src/app/(app)/designer/_components/FormBuilder.tsx`, `apps/web/src/app/(app)/designer/[id]/b2/page.tsx`
@@ -230,7 +230,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B2-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Field type icons are emoji glyphs (📅, 📍, 🗺, 📎) in the palette (formTypes.ts:73-110).
 - **Verified evidence:** formTypes.ts:80-109 FIELD_PALETTE_GROUPS uses emoji or Unicode glyphs for icons. Real emoji are 📅 (:82), 📎 (:95), 📍 (:100), 🗺 (:101), 👤 (:107) and 📱 (:108). Others are plain glyphs (Aa, #, ☑, ◉, ☰, ✉). FormBuilder.tsx:227 renders them in an aria-hidden span, and typeIcon() (:544) reuses them in field rows; :411 also uses 👁 for conditional fields. Emoji render differently per OS and clash with the design system. They are aria-hidden, so there is no screen-reader harm.
 - **Files to change:** `apps/web/src/app/_components/ds/designer/formTypes.ts`, `apps/web/src/app/(app)/designer/_components/FormBuilder.tsx`
@@ -261,7 +261,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B2-05  ·  LOW  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Delete field is immediate with a transient Undo toast, no confirm — undo lost on navigation.
 - **Verified evidence:** FormBuilder.tsx:534 'Delete field' calls deleteField() (:140-156) immediately. It removes the field and its id from the section, then sets undoToast for 8s via an un-cleared setTimeout (:154). The toast is component state, so it disappears on navigation. The whole-form Ctrl/Cmd+Z in useUndoRedo.ts:38-51 is in-memory and also lost on navigation. Two extra points: deleteField does not clean other fields' visibility conditions that reference the deleted field, and persistFormDesign (formBuilderApi.ts:157-300) never deletes the metadata field, so it remains orphaned server-side. The suggested generic fix (mandatory reason, maker!=checker, audit event) is over-scoped for a draft field. The service-level maker-checker already exists at publish.
 - **Files to change:** `apps/web/src/app/(app)/designer/_components/FormBuilder.tsx`, `apps/web/src/app/(app)/designer/_data/formBuilderModel.ts`
@@ -285,7 +285,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B3-01  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** DPDP: 'Below poverty line' and 'Income band' are sensitive socio-economic attributes offered as plain eligibility inputs, with no note on lawful basis, source of truth or who can read the decision trail (eligibilityTypes.ts:53-58).
 - **Verified evidence:** eligibilityTypes.ts:53-60 PROFILE_ATTRIBUTES includes 'bpl' (Below poverty line, boolean) and 'income_band' (Income band, text) as ordinary attributes. EligibilityConditionBuilder.tsx renders them in the 'Applicant profile' optgroup with no sensitivity marker, and EligibilityBuilder.tsx:105-108 has no lawful-basis text. Nothing in b3/page.tsx or the builder records the source of truth or who can read the decision trail. Who can read decision results at runtime is cannot-verify (citizen-service and its eligibility store are absent from the snapshot). The proposed fix, shared <Masked> with role reveal, does not fit here. These are rule inputs, not displayed values. The real need is a sensitivity flag, a lawful-basis or source note, and an audit trail.
 - **Files to change:** `apps/web/src/app/_components/ds/designer/eligibilityTypes.ts`, `apps/web/src/app/_components/ds/designer/EligibilityConditionBuilder.tsx`, `apps/web/src/app/(app)/designer/_components/EligibilityBuilder.tsx`
@@ -319,7 +319,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B3-03  ·  MEDIUM  ·  partly  ·  theme OTHER (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** 'Block application' takes effect for every applicant with no override path or appeal wording preview shown to the designer.
 - **Verified evidence:** Partly true. ELIGIBILITY_EFFECTS_UI (eligibilityTypes.ts:97-101) offers 'Block application', and effectUiToApi maps it to 'disqualify'. The builder has a free-text 'Rule message' (EligibilityConditionBuilder.tsx:180-186) but shows no preview of the applicant-facing wording and no reference to an appeal or override path. Whether a runtime override exists is cannot-verify (citizen-service absent). There is a bigger verified defect: effectUiToApi collapses both 'warn' and 'flag' to 'refer' (eligibilityTypes.ts:34-36), and effectApiToUi maps 'refer' back to 'flag' (:38-40). So 'Warn applicant' silently becomes 'Flag for review' after the first save and reload. The I18N theme tag is wrong.
 - **Files to change:** `apps/web/src/app/_components/ds/designer/eligibilityTypes.ts`, `apps/web/src/app/_components/ds/designer/EligibilityConditionBuilder.tsx`, `apps/web/src/app/(app)/designer/_data/eligibilityBuilderApi.ts`
@@ -336,7 +336,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B3-04  ·  LOW  ·  confirmed  ·  theme FORMS (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Operator labels are natural language but 'Value' has no type-aware input (date vs number) shown in the copy read.
 - **Verified evidence:** EligibilityConditionBuilder.tsx:155-162 renders the value as a plain text input (placeholder 'Expected value') regardless of attribute type. Each EligibilityAttributeOption carries valueType (text, number or boolean), but it is not used in this component. formFieldOptions (:24-33) reduces date fields to 'text', so an age or date comparison is typed as free text. parseRuleValue (eligibilityBuilderApi.ts:47-53) then guesses the type: 'true' or 'false' becomes a boolean and numeric strings become numbers. Operator labels ('is at least', etc.) are plain-language, so that half of the observation is fine. The DATEFMT theme tag is wrong.
 - **Files to change:** `apps/web/src/app/_components/ds/designer/EligibilityConditionBuilder.tsx`, `apps/web/src/app/_components/ds/designer/eligibilityTypes.ts`
@@ -352,7 +352,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B3-05  ·  LOW  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Test panel results stay local; nothing is recorded for the sandbox run (EligibilityBuilder.tsx:139).
 - **Verified evidence:** True in fact: the sample-applicant panel (EligibilityBuilder.tsx:139-215) calls evaluateEligibilityLocal in a useMemo (:57-61). It is entirely client-side, keeps sample values in React state, and records nothing. This is a design choice rather than a defect. It performs no mutation, so the CLAUDE.md rule 8 (audit events on mutations) does not apply. The only thing missing is the ability to keep test cases with the rule set. Consider severity 'low, enhancement'.
 - **Files to change:** `apps/web/src/app/(app)/designer/_components/EligibilityBuilder.tsx`
@@ -372,7 +372,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B4-01  ·  HIGH  ·  partly  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Maker-checker is shown only later: the chain builder never states that the submitting designer cannot approve their own service (that rule lives in review/page.tsx), so designers can build a one-person chain (ApprovalChainBuilder.tsx vs review/page.tsx:41-44).
 - **Verified evidence:** The maker!=checker rule is in review/page.tsx:41-44 (isSubmitter / isChecker from session.userId vs wizard.meta.submittedBy) and hides Approve and Reject for the submitter (:152). It governs who may publish the service definition, not who staffs approval lanes. It is computed in the client, and server enforcement is cannot-verify (citizen-service absent). The observation blurs the two. What is true in ApprovalChainBuilder.tsx: each LaneCard picks a designation (:348-361) and no validation checks that consecutive lanes have different designations, or that any designation is set (defaultLanes gives designationId '' , workflowConstants.ts:56). narrateWorkflow then falls back to 'the assigned officer' (:106). So a chain where the same designation inspects and decides, or where nobody is assigned, can be built and autosaved without any hint. Whether that violates policy depends on a product rule.
 - **Files to change:** `apps/web/src/app/(app)/designer/_data/workflowConstants.ts`, `apps/web/src/app/(app)/designer/_components/ApprovalChainBuilder.tsx`
@@ -405,7 +405,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B4-03  ·  MEDIUM  ·  partly  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Switching to the advanced editor moves the service to custom-workflow mode and locks the guided chain; reverting discards visual-editor changes, which the dialog says only at revert time (ApprovalChainBuilder.tsx:134,:260-270).
 - **Verified evidence:** Behaviour confirmed and worse than described. openAdvanced (ApprovalChainBuilder.tsx:103-109) immediately sets mode 'custom' and shows a warning banner (:134-135: 'changes here switch this service to custom-workflow mode; the guided chain below is locked until you revert'). The banner does not say that reverting discards the visual edits. That is said only in RevertDiffDialog (:268-270) with a before/after diff. No confirm is used to enter advanced mode. However, schedulePersist returns early when advanced or custom (:69), and the embedded DesignerCanvas has no fetch or save code (grep of DesignerCanvas.tsx finds none). So from B4 the visual-editor changes look unsaved altogether, unless persistence is wired somewhere I could not find. That question is not answerable from this snapshot. Also the page-level mode is local state only, so 'custom' is not persisted by B4 either (persistWorkflowDesign is never called in custom mode).
 - **Files to change:** `apps/web/src/app/(app)/designer/_components/ApprovalChainBuilder.tsx`, `apps/web/src/app/(app)/workflow/designer/_components/DesignerCanvas.tsx`, `apps/web/src/app/(app)/designer/_data/workflowBuilderApi.ts`
@@ -422,7 +422,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B4-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Position picker lists designation labels only — no holder, vacancy or delegation info (ApprovalChainBuilder.tsx:357-359).
 - **Verified evidence:** ApprovalChainBuilder.tsx:357-359 (also 392-394 for escalation) lists positions as <option>{p.label}</option>. fetchTenantPositions (workflowBuilderApi.ts:90-99) maps only id and a label (row.name / title / label / code) from /api/proxy/v1/tenant/positions. It drops any other field. Whether that endpoint returns holder, vacancy or delegation data is cannot-verify (tenant service absent). On fetch failure the component sets positions to [] silently (:44-47), leaving empty dropdowns with no message. The I18N theme tag is wrong.
 - **Files to change:** `apps/web/src/app/(app)/designer/_data/workflowBuilderApi.ts`, `apps/web/src/app/(app)/designer/_components/ApprovalChainBuilder.tsx`
@@ -438,7 +438,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B4-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** The visual editor is dynamically imported with a plain 'Loading visual editor…' paragraph as fallback (ApprovalChainBuilder.tsx:17).
 - **Verified evidence:** ApprovalChainBuilder.tsx:15-18 uses next/dynamic with loading: () => <p style={{color:'var(--mut)'}}>Loading visual editor…</p>. The ds library has a Skeleton component (apps/web/src/app/_components/ds/Skeleton.tsx) that could replace it. Impact is low. The paragraph has no role=status and does not reserve the canvas's 420px embedded height (DesignerCanvas.tsx:258), so the page jumps when it loads.
 - **Files to change:** `apps/web/src/app/(app)/designer/_components/ApprovalChainBuilder.tsx`
@@ -459,7 +459,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B5-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Engine fee model is permanently unavailable in this wizard: FeeBuilder receives engineAvailable={false}, so selecting 'Engine' can never proceed even though /designer/[id]/engines exists and is reachable only by URL (b5/page.tsx:~176, feeBuilderModel.ts:114-116).
 - **Verified evidence:** b5/page.tsx:179 hard-codes engineAvailable={false} on FeeBuilder. modelCardDisabled (feeBuilderModel.ts:113-119) returns true for 'engine' when false, and FeeBuilder.tsx:209-232 renders that card as a disabled radio with the text 'No assessment engine is bound to this service yet.' So the Engine option cannot be selected at all (the finding's 'selecting can never proceed' is slightly off; it is not selectable). The 'Engine parameters' card (FeeBuilder.tsx:332) is dead code. /designer/[id]/engines/page.tsx exists (EngineBindingBuilder, adjacentBlocks 'b5'), and a grep of apps/web/src finds no link or router push to it from B5 or the wizard, so it is reachable only by URL. persistFeeDesign has a branch for feeModel 'engine' (feeBuilderApi.ts:250), and the preview says 'live preview unavailable in designer'.
 - **Files to change:** `apps/web/src/app/(app)/designer/[id]/b5/page.tsx`, `apps/web/src/app/(app)/designer/_components/FeeBuilder.tsx`, `apps/web/src/app/(app)/designer/_data/engineBindingApi.ts`
@@ -476,7 +476,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B5-02  ·  HIGH  ·  partly  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Money rule: the ₹ input is parsed with Number() then Math.round(rupees*100) into a JS number (not bigint paise) and any invalid or negative entry silently becomes 0, so a typo yields a ₹0 fee that still passes isFeeDesignReadyToAdvance for non-flat models (feeBuilderApi.ts:403-412; CLAUDE.md money rule).
 - **Verified evidence:** Core money defect confirmed. rupeesInputToPaise (feeBuilderApi.ts:403-407) does Number(input), returns 0 for NaN or negative, and returns Math.round(rupees*100) as a JS number. FeeBuilder.tsx:163 assigns it to baseAmountPaise, and persistFeeDesign sends it as `baseAmount` (feeBuilderApi.ts:349). CLAUDE.md rule 11 wants bigint minor units, and float parsing is used. A typo becomes 0 silently, and float rounding is off for inputs with more than 2 decimals (e.g. 1.005 gives 100). Mis-described part: it only applies to the flat model (the only user of the Amount input). isFeeDesignReadyToAdvance (feeBuilderModel.ts:65-71) is never called anywhere in apps/web/src, so the real Next gate is only the HOA check (b5/page.tsx:93,150). A flat model with a 0 amount therefore does advance, and only the 'Configure' step badge (FeeBuilder.tsx:178) stays unticked. Backend validation of baseAmount is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/designer/_data/feeBuilderApi.ts`, `apps/web/src/app/(app)/designer/_components/FeeBuilder.tsx`, `apps/web/src/app/(app)/designer/_data/feeBuilderModel.ts`, `apps/web/src/app/(app)/designer/[id]/b5/page.tsx`
@@ -494,7 +494,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B5-03  ·  MEDIUM  ·  confirmed  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Office variant 'Fee (₹)' of 0 is allowed ('A free zone is legitimate') with no approval or audit prompt for a fee waiver, though it is a revenue decision (OfficeOverridesBuilder.tsx:93).
 - **Verified evidence:** OfficeOverridesBuilder.tsx:77-94: 'Fee (₹)' is a number input (min 0, step 0.01). onChange stores feeFromMinor = Math.round(Number(value)*100) (float, same weakness as B5-02), and displays feeFromMinor/100. The hint at :93 says 'A free zone is legitimate — enter 0 to charge nothing here.' No confirmation, reason or audit prompt appears. b5/page.tsx:195-199 persists via phase3.patch({officeOverrides}) to updateServiceDefinition. Publish-time review exists at service level (review/page.tsx), but versionDiffModel.ts only compares the top-level feeFromMinor (:31-41), not officeOverrides, so a checker's diff would not show a fee waiver for an office. Whether the backend audits the definition PATCH is cannot-verify (citizen-service absent).
 - **Files to change:** `apps/web/src/app/(app)/designer/_components/OfficeOverridesBuilder.tsx`, `apps/web/src/app/(app)/designer/_data/versionDiffModel.ts`, `apps/web/src/app/(app)/designer/_data/feeBuilderApi.ts`
@@ -552,7 +552,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B6-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** A mandatory document with no verifying lane only warns; the service can be submitted with a document nobody checks (DocumentsBuilder.tsx:283, b6/page.tsx help text).
 - **Verified evidence:** documentBuilderModel.ts:60-92 assessDocumentWarnings sets warning kind 'missing_lane' for a mandatory document with no verifiedAtLane; its type comment says 'warning, not a hard block' (:10). DocumentsBuilder.tsx:270-286 shows the banner 'Verification lane warning', and per-row text at :343-350. b6/page.tsx:136-139 help text says these 'warn but do not block Next'. The onNext handler (b6/page.tsx:118) navigates unconditionally. No submit-time check is visible in the designer code (grep for a submit call in apps/web/src/app/(app)/designer found none other than review actions), and backend enforcement at submit or publish is cannot-verify (citizen-service absent).
 - **Files to change:** `apps/web/src/app/(app)/designer/_data/documentBuilderModel.ts`, `apps/web/src/app/(app)/designer/[id]/b6/page.tsx`, `apps/web/src/app/(app)/designer/[id]/review/page.tsx`
@@ -618,7 +618,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B6-05  ·  LOW  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Formats are shown as file-extension tokens (pdf/jpg/png), no size-in-bytes helper for citizens.
 - **Verified evidence:** Formats are shown as uppercase tokens PDF/JPG/PNG (documentTypes.ts:23-27; toggle buttons DocumentsBuilder.tsx:391-400; preview formatsLabel in documentBuilderModel.ts:155). But size is shown: the editor has 'Max size (MB)' (:404-411, min 1 max 50), and the citizen preview shows 'Max 5 MB' (maxSizeLabel, documentBuilderModel.ts:163, rendered :152). A bytes helper would not help citizens, since MB is the right unit. Small real issues: 0, blank or non-numeric size silently falls back to 5 (`Number(...)||5`, :410), and the format toggle silently resets to ['pdf'] when the last format is deselected (:260). Overall a copy nit.
 - **Files to change:** `apps/web/src/app/(app)/designer/_components/DocumentsBuilder.tsx`, `apps/web/src/app/(app)/designer/_data/documentBuilderModel.ts`
@@ -640,7 +640,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B7-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Two separate 'Validity & renewal' editors on one page (OutputIssuanceBuilder Card and RenewalPolicyBuilder) with different field sets and different persistence paths (service design vs phase3 config) can disagree (OutputIssuanceBuilder.tsx:272-338 vs RenewalPolicyBuilder.tsx:46-111, b7/page.tsx).
 - **Verified evidence:** Two validity and renewal editors. (1) OutputIssuanceBuilder.tsx:271-356 'Validity & renewal' tab edits design.validityMode (duration / fixed_date / none), validityYears, validityFixedDate, renewable and renewalWindowDays (min 1, default 30). It is saved via issuanceBuilderApi (fields at :17-21,36-40) into updateServiceDefinition({issuanceType, outputs}) (b7/page.tsx:98-105). (2) RenewalPolicyBuilder.tsx:46-111 edits a separate renewalPolicy (validityMode 'none' | 'duration' | 'fixed_date', validityYears, validityFixedDate, renewable, renewalWindowDays min 0), saved via phase3.patch({renewalPolicy}) (b7/page.tsx:151-154). The labels and defaults differ. The issuance default is 'duration' for non-closure outputs (issuanceTypes.ts:123), while renewalPolicy defaults to 'none' / never expires. No code syncs them. Related: OutputIssuanceBuilder.schedulePersist (:75-86) calls onDesignPersisted without awaiting it, and the page's onDesignPersisted swallows errors (b7/page.tsx:106), so the footer says 'saved' even if the PATCH failed.
 - **Files to change:** `apps/web/src/app/(app)/designer/[id]/b7/page.tsx`, `apps/web/src/app/(app)/designer/_components/OutputIssuanceBuilder.tsx`, `apps/web/src/app/(app)/designer/_components/RenewalPolicyBuilder.tsx`, `apps/web/src/app/(app)/designer/_data/issuanceBuilderApi.ts`
@@ -729,7 +729,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B8-01  ·  HIGH  ·  partly  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1934, verified on main 101076c1a)
 - **First-pass claim:** Locale tabs and the completeness warning are hard-coded to Hindi and English while B1 defines tenant locales such as 'en, or' (Odia); an Odia-only service cannot satisfy the check (NotificationsBuilder.tsx summary vs GovernanceLinkageBuilder.tsx:156-168).
 - **Verified evidence:** NotificationsBuilder.tsx:91-99 renders the completeness note 'missing Hindi or English - fill both locale tabs before submit'; templates are typed with fixed en/hi bodies (ds/designer/notificationTypes.ts:14, cellChipLabel reads body.en/body.hi). B1 GovernanceLinkageBuilder.tsx:156-168 lets the tenant enter locales such as 'en, or'. So en/hi is hard-coded and Odia cannot be authored. However the note is only advisory text (not wired to canSubmit in useDesignerWizard.ts:98), so an Odia-only service is not blocked, just mis-warned and unable to author Odia templates.
 - **Files to change:** `apps/web/src/app/(app)/designer/_components/NotificationsBuilder.tsx`, `apps/web/src/app/_components/ds/designer/notificationTypes.ts`, `apps/web/src/app/(app)/designer/_data/notificationBuilderModel.ts`, `apps/web/src/app/(app)/designer/_data/notificationBuilderApi.ts`
@@ -748,7 +748,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B8-02  ·  MEDIUM  ·  partly  ·  theme COPY (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Webhook subscriptions default to events ['application.issued'] and label events by stripping the 'application.' prefix, so users see raw tokens (issued, …); the signing secret is write-only and shown as password input, which is right, but there is no test-delivery button (WebhookSubscriptionsBuilder.tsx:66,125).
 - **Verified evidence:** WebhookSubscriptionsBuilder.tsx:66 add() defaults events to ['application.issued']; :125 labels events with event.replace('application.','') so raw tokens appear. Signing secret is type=password, autoComplete=new-password, placeholder 'Set - type to replace' (write-only, fine). No test/ping delivery control exists in the file. Theme is not PII: the payload note says case metadata only; no masking issue.
 - **Files to change:** `apps/web/src/app/(app)/designer/_components/WebhookSubscriptionsBuilder.tsx`
@@ -779,7 +779,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B8-04  ·  MEDIUM  ·  confirmed  ·  theme COMPLIANCE (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** SMS length hint says 'under 160 characters' but Odia/Hindi SMS are Unicode (70-char segments); no DLT template id field for Indian SMS compliance (notificationTypes.ts:45).
 - **Verified evidence:** ds/designer/notificationTypes.ts:45 hint 'keep under 160 characters'; :258-260 smsSegmentCount uses 160/153 thresholds on text.length and smsStats warns only above 160. Hindi/Odia bodies (UCS-2) segment at 70/67, so counts are wrong. Grep found no DLT / template-id field in designer UI code.
 - **Files to change:** `apps/web/src/app/_components/ds/designer/notificationTypes.ts`, `apps/web/src/app/(app)/designer/_components/NotificationsBuilder.tsx`, `apps/web/src/app/(app)/designer/_data/notificationBuilderApi.ts`
@@ -795,7 +795,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B8-05  ·  LOW  ·  partly  ·  theme I18N
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Save label in the wizard shell is static in hooks that use useDesignerWizard (saveState never changes).
 - **Verified evidence:** b8/page.tsx:125 passes its own useState saveState, updated by NotificationsBuilder onSaveState, so the label does change for notifications. The hook's saveState (useDesignerWizard.ts:45, no setter) is a constant 'saved', consumed only by test/page.tsx:75 (a page that saves nothing). Real gap: webhook edits on b8 go through phase3.patch (b8/page.tsx ~150) and never drive saveState, and the hook exposes a dead constant.
 - **Files to change:** `apps/web/src/app/(app)/designer/[id]/b8/page.tsx`, `apps/web/src/app/(app)/designer/_data/useDesignerWizard.ts`, `apps/web/src/app/(app)/designer/_data/usePhase3Config.ts`
@@ -815,7 +815,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-ENGINES-01  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Page is orphaned: B5's Engine model is disabled (engineAvailable={false}) and no link points at /designer/[id]/engines, so the only way in is a typed URL (b5/page.tsx vs engines/page.tsx).
 - **Verified evidence:** b5/page.tsx:179 passes engineAvailable={false} to FeeBuilder; FeeBuilder.tsx:332 only renders engine UI when design.feeModel==='engine' && engineAvailable and modelCardDisabled (:157,:209) blocks selecting it. Repo-wide grep finds no href/router.push to /designer/{id}/engines (only engineBindingApi calling /api/proxy/v1/citizen/engines). The engines page (engines/page.tsx) is reachable only by typed URL. Route itself works and is a full implementation.
 - **Files to change:** `apps/web/src/app/(app)/designer/[id]/b5/page.tsx`, `apps/web/src/app/(app)/designer/_components/FeeBuilder.tsx`
@@ -830,7 +830,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-ENGINES-02  ·  HIGH  ·  partly  ·  theme VALIDATION
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Rebate/penalty percentages and exemption percentages are free numeric inputs feeding a tax computation with no range validation surfaced in the UI (EngineBindingBuilder.tsx:333-451).
 - **Verified evidence:** Inputs are not free: EngineBindingBuilder.tsx:369-374,420-425,442-446 have type=number min=0 max=100 and percentInputToBps (engineBindingTypes.ts:99-103) clamps to 0..10000 bps and coerces invalid to 0. So range is enforced silently, with no message, and days fields (:432,:454,:487) only have min=0 (Number(x)||0, no max, no integer check). No zod schema and no cross-field checks (e.g. rebate window vs penalty start, exemption total > 100). Amounts are handled as bps/integers, not float money.
 - **Files to change:** `apps/web/src/app/(app)/designer/_components/EngineBindingBuilder.tsx`, `apps/web/src/app/_components/ds/designer/engineBindingTypes.ts`
@@ -845,7 +845,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-ENGINES-03  ·  MEDIUM  ·  partly  ·  theme COPY (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Engine key is a raw dotted identifier ('revenue.assessment') in the empty-state copy and selector (EngineBindingBuilder.tsx:268).
 - **Verified evidence:** EngineBindingBuilder.tsx:268 empty-state message contains 'bind revenue.assessment' (raw key); :293 shows `{b.block} · {b.engineKey}` raw; selector (:227-231) keys by engineKey. Registry entries may carry a display name; not checked in the snapshot. Strings are also hard-coded English (no next-intl in this file).
 - **Files to change:** `apps/web/src/app/(app)/designer/_components/EngineBindingBuilder.tsx`, `apps/web/src/app/(app)/designer/_data/engineBindingApi.ts`
@@ -859,7 +859,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-ENGINES-04  ·  MEDIUM  ·  confirmed  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Designer code carries three separate paise formatters (formatMoney in lib/formatters, formatPaise in sandboxTestModel.ts:72, formatPaiseInr in versionDiffModel.ts:22) with different fraction rules (whole rupees drop decimals in the diff view only), so the same fee reads differently on B5, test and review (EngineBindingBuilder/FeeBuilder use formatMoney).
 - **Verified evidence:** Three formatters: lib/formatters.ts:90 formatMoney (always 2dp); sandboxTestModel.ts:72 formatPaise (own toLocaleString, always 2dp, via minorToRupeesOrNull); versionDiffModel.ts:22 formatPaiseInr (amountMinor/100 float, drops decimals when whole rupees - '₹500' vs '₹500.00'). formatPaiseInr is used in the diff and in feeSummaryForPublish (:209) on the publish dialog. EngineBindingBuilder.tsx:547,553 and FeeBuilder.tsx:682,697 use formatMoney. Values are JS numbers, not bigint.
 - **Files to change:** `apps/web/src/app/(app)/designer/_data/sandboxTestModel.ts`, `apps/web/src/app/(app)/designer/_data/versionDiffModel.ts`, `apps/web/src/lib/formatters.ts`
@@ -893,7 +893,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-REVIEW-02  ·  HIGH  ·  partly  ·  theme GATING (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Accessibility panel says 'Must fix before publishing' but the Approve & Publish button is only disabled while busy; errors do not gate publish (AccessibilityPreview.tsx:87 vs review/page.tsx:158).
 - **Verified evidence:** AccessibilityPreview.tsx:87 heading 'Must fix before publishing' for severity==='error' issues. review/page.tsx:158-160 Approve & Publish is disabled only by `busy`; page never receives preview.passed/errorCount (component fetches internally via fetchA11yPreview). Publish endpoint enforcement is server-side in a service absent from this snapshot (citizen-service), so cannot tell if the API also blocks. UI copy therefore promises a gate the UI does not apply. Theme is publish-gating, not I18N.
 - **Files to change:** `apps/web/src/app/(app)/designer/_components/AccessibilityPreview.tsx`, `apps/web/src/app/(app)/designer/[id]/review/page.tsx`
@@ -908,7 +908,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-REVIEW-03  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Read-only summary shows a raw id fragment ('Form linked (3f9a12c0…)') and 'Approval chain configured' without content, so the approver cannot inspect what they publish (review/page.tsx blockSummary).
 - **Verified evidence:** review/page.tsx blockSummary: b2 `Form linked (${def.formId.slice(0,8)}…)`; b4 'Approval chain configured' if workflowDefinitionId; b3 'Eligibility rules configured'; b8 constant 'Notification matrix configured'; b5 does show model+HOA; b6 shows count. Approver sees ids/booleans not contents.
 - **Files to change:** `apps/web/src/app/(app)/designer/[id]/review/page.tsx`
@@ -924,7 +924,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-REVIEW-04  ·  MEDIUM  ·  partly  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Publish dialog copy shows the fee but not the HOA, SLA or approval lanes that will go live (feeSummaryForPublish only).
 - **Verified evidence:** review/page.tsx:183-192 ConfirmDialog description = name, version, feeSummaryForPublish (versionDiffModel.ts:205: fee model, from-amount, HOA if present) and 'Citizens will see this service once published'. So HOA is included when set; SLA and approval lanes are not. Approve has no reason field (reject uses requireReason). Maker!=checker is UI-derived (isChecker at :49) - server enforcement cannot be verified here; audit event emission is backend.
 - **Files to change:** `apps/web/src/app/(app)/designer/[id]/review/page.tsx`, `apps/web/src/app/(app)/designer/_data/versionDiffModel.ts`
@@ -961,7 +961,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-TEST-02  ·  MEDIUM  ·  partly  ·  theme STALE (was VALIDATION)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Test passes are keyed to a run, not to the current design version; editing a block after a pass does not visibly invalidate it in the UI, so canSubmit can stay true on stale results (useDesignerWizard.ts:98, TestRunPanel history).
 - **Verified evidence:** useDesignerWizard.ts:98 canSubmit uses testPassed from fetchLatestSandboxTest (reload at :51-52) which returns the latest run status only; no run/version/updatedAt comparison client-side. Whether the backend invalidates 'latest' on definition change cannot be verified (citizen-service absent). Client also has createdAt on the run and def.updatedAt could be compared if present in ServiceDefinitionDto.
 - **Files to change:** `apps/web/src/app/(app)/designer/_data/useDesignerWizard.ts`, `apps/web/src/app/(app)/designer/_data/sandboxTestApi.ts`
@@ -975,7 +975,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-TEST-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Rail block status is not updated with the failing step, although BlockRail supports 'error' with error count (WizardShell.tsx BlockStatus).
 - **Verified evidence:** test/page.tsx passes wizard.blocks (from blockStatusForDef, never 'error'); steps state is local and never mapped to blocks. WizardShell BlockRail (ds/designer/WizardShell.tsx:13,29,71-90) supports status 'error' with errorCount, but nothing sets it. Failing steps do carry a link to block (TestRunPanel href).
 - **Files to change:** `apps/web/src/app/(app)/designer/[id]/test/page.tsx`, `apps/web/src/app/(app)/designer/_data/sandboxTestModel.ts`
@@ -1008,7 +1008,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-LIBRARY-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** fetchServicePacks swallows every non-OK response as an empty list, so outages and 403s show 'No packs match the current filters.' (packLibraryApi.ts:38-39, PackLibraryClient.tsx:174-176).
 - **Verified evidence:** packLibraryApi.ts:38-39 fetchServicePacks returns [] when !res.ok (also 401/403/500), and network throw is uncaught in PackLibraryClient useEffect (:46-55, would leave loading stuck). PackLibraryClient.tsx shows 'No packs match the current filters.' for empty (~:174-176). Server loader getDomainPacks source is also dropped in library/page.tsx:5.
 - **Files to change:** `apps/web/src/app/(app)/designer/_data/packLibraryApi.ts`, `apps/web/src/app/(app)/designer/library/PackLibraryClient.tsx`, `apps/web/src/app/(app)/designer/library/page.tsx`
@@ -1024,7 +1024,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-LIBRARY-02  ·  MEDIUM  ·  partly  ·  theme A11Y (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** The pack preview is a hand-rolled fixed overlay (role=dialog, aria-modal, close on backdrop click) rather than the shared ConfirmDialog; no focus trap or return-focus logic is present in the component (PackLibraryClient.tsx preview block).
 - **Verified evidence:** Preview overlay in PackLibraryClient.tsx (~:205-270): role='dialog' aria-modal, backdrop click closes; no Escape handler, no focus move or trap, no focus return. The shared ConfirmDialog (ds/ConfirmDialog.tsx:7-8,93-109) implements focus trap, ESC and return-focus but is confirm-oriented, so a reusable Modal/Drawer primitive is the right fix. Theme is a11y, not CONFIRM.
 - **Files to change:** `apps/web/src/app/(app)/designer/library/PackLibraryClient.tsx`, `apps/web/src/app/_components/ds/ConfirmDialog.tsx`
@@ -1038,7 +1038,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-LIBRARY-03  ·  MEDIUM  ·  confirmed  ·  theme COPY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Domain-pack tokens (domainPackKey, sector) shown raw in meta line; no display names (PackCard.tsx metaBits).
 - **Verified evidence:** ds/designer/PackCard.tsx:32-38 metaBits = [pack.domainPackKey ?? 'tenant', v, source, sector, jurisdiction]; domainPackKey is a raw key. sector/jurisdiction come from domain pack row (packSector/packJurisdiction) and may be raw tokens; domainByKey has display name available in PackLibraryClient.
 - **Files to change:** `apps/web/src/app/_components/ds/designer/PackCard.tsx`, `apps/web/src/app/(app)/designer/library/PackLibraryClient.tsx`
@@ -1051,7 +1051,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-LIBRARY-04  ·  MEDIUM  ·  confirmed  ·  theme UX (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Native selects styled with className 'btn ghost' and four separate filters plus a segmented control in one wrapping row; no reset/clear.
 - **Verified evidence:** PackLibraryClient.tsx:~117-160: four native <select className='btn ghost'> (Sector, Jurisdiction, Source, Domain pack) plus Segmented for patterns in one flex-wrap row; no Reset/clear control, no result count.
 - **Files to change:** `apps/web/src/app/(app)/designer/library/PackLibraryClient.tsx`
@@ -1064,7 +1064,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-LIBRARY-05  ·  LOW  ·  partly  ·  theme CONSISTENCY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Pack list and domain packs load through two different paths (server loader vs client fetch via /api/proxy), so one can be stale while the other is fresh.
 - **Verified evidence:** Real: domainPacks come from server loader (library/page.tsx, revalidate 60s via fetchJson) while service packs are fetched client-side no-store in PackLibraryClient useEffect (:46-55) via /api/proxy. Inconsistent but no shared cache, so staleness is only up to 60s for domain pack filter options; not a correctness bug.
 - **Files to change:** `apps/web/src/app/(app)/designer/library/page.tsx`, `apps/web/src/app/(app)/designer/library/PackLibraryClient.tsx`
@@ -1085,7 +1085,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-NEW-01  ·  MEDIUM  ·  confirmed  ·  theme COPY (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Owning office placeholder claims 'Pre-filled from your office (optional)' but state is initialised to '' — nothing pre-fills (new/page.tsx:12 vs :103).
 - **Verified evidence:** apps/web/src/app/(app)/designer/new/page.tsx:14 office state is useState(''); the input (~:98-104) placeholder says 'Pre-filled from your office (optional)'. Nothing reads a user/office profile, so it is never pre-filled; value only feeds ownerDepartment (:29).
 - **Files to change:** `apps/web/src/app/(app)/designer/new/page.tsx`
@@ -1099,7 +1099,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-NEW-02  ·  MEDIUM  ·  confirmed  ·  theme A11Y (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Pattern cards are buttons with no aria-pressed/radio semantics; selection is signalled by border colour only (new/page.tsx:64-84).
 - **Verified evidence:** apps/web/src/app/(app)/designer/new/page.tsx:64-84 pattern cards are <button type=button> with border/background change only (active var). No aria-pressed, no radiogroup, no check mark. FeeBuilder.tsx:204-215 in same module already uses role=radiogroup/radio.
 - **Files to change:** `apps/web/src/app/(app)/designer/new/page.tsx`
@@ -1114,7 +1114,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-NEW-03  ·  MEDIUM  ·  partly  ·  theme API (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Service key is auto-slugified from the name with no uniqueness feedback until the API responds; the key is immutable identity for published services (designerApi.ts slugifyServiceKey, new/page.tsx:30).
 - **Verified evidence:** designerApi.ts:132-140 slugifyServiceKey appends crypto.randomUUID().slice(0,8) to the slug, so collisions are practically impossible; the claim of no uniqueness handling is overstated. True: key is generated silently (:26), never shown to the user, and error from createServiceDefinition is only surfaced generically (:33). Whether the key is immutable after publish is not verifiable here (catalogue service absent).
 - **Files to change:** `apps/web/src/app/(app)/designer/_data/designerApi.ts`, `apps/web/src/app/(app)/designer/new/page.tsx`
@@ -1129,7 +1129,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-NEW-04  ·  LOW  ·  confirmed  ·  theme VALIDATION
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** 'Create draft' stays disabled without explanation when the name is empty; no inline validation message.
 - **Verified evidence:** apps/web/src/app/(app)/designer/new/page.tsx:21 handleCreate returns silently if !name.trim(); Button disabled={!name.trim() || busy} (~:115). No message or aria-describedby; no zod schema at the form boundary (CLAUDE.md rule).
 - **Files to change:** `apps/web/src/app/(app)/designer/new/page.tsx`
@@ -1144,7 +1144,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-NEW-05  ·  LOW  ·  confirmed  ·  theme COPY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Channels are silently fixed to ['portal'] at creation (new/page.tsx:36); user sees them only later in B1.
 - **Verified evidence:** apps/web/src/app/(app)/designer/new/page.tsx:30 channels: ['portal'] hard-coded in createServiceDefinition payload; UI never mentions channels. Later editing in B1 not checked.
 - **Files to change:** `apps/web/src/app/(app)/designer/new/page.tsx`
@@ -1162,7 +1162,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-REVIEW-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Checker is inferred as 'anyone who is not the submitter' — no role check for Department Head — so any office user opening /designer/[id]/review sees Approve & Publish; enforcement is server-side only and undeterminable here (review/page.tsx:41-44,152).
 - **Service:** `citizen-service (catalogue)`  ·  **Endpoint(s):** `['POST /v1/citizen/catalogue/services/:id/publish', 'POST /v1/citizen/catalogue/services/:id/reject', 'POST /v1/citizen/catalogue/services/:id/submit']`
 - **Question:** Does publish/reject require a Department Head/approver role and reject when caller equals the submitter (maker-checker)?
@@ -1173,7 +1173,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-TEST-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** The sandbox test posts a payment and a GL journal in step 5-6; the panel does not say whether these are ledger-isolated sandbox postings, and finance-service is not in the snapshot so isolation is undeterminable (sandboxTestModel.ts:13-14; finance not present).
 - **Service:** `citizen-service, finance-service`  ·  **Endpoint(s):** `['POST /v1/citizen/catalogue/services/:id/sandbox-test/run', 'GET .../sandbox-test/latest']`
 - **Question:** Does sandbox-test/run create payment and GL journal in an isolated sandbox (flagged, rolled back or separate ledger) never touching real balances or reports?

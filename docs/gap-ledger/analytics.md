@@ -14,7 +14,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-HOME-01  ·  MEDIUM  ·  partly  ·  theme DUPLICATE (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Hub lists 'Dashboards' and 'Dashboards (legacy list)' side by side (page.tsx:9,11) — two routes over the same GET /api/v1/analytics/dashboards, one via _data.ts and one via the generic moduleLoader in _data/loaders.ts:1829; reviewers cannot tell which is canonical.
 - **Verified evidence:** analytics/page.tsx:9,11 list Dashboards and 'Dashboards (legacy list)' with note 'Simple read-only list view'; so labelled as legacy but still duplicate. Two loaders confirmed: analytics/_data.ts:38 getAnalyticsDashboards (dashboards page) and loaders.ts:1829 moduleLoader used by list/page.tsx:2. Both hit /api/v1/analytics/dashboards.
 - **Files to change:** `apps/web/src/app/(app)/analytics/page.tsx`, `apps/web/src/app/(app)/analytics/list/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -30,7 +30,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-HOME-02  ·  MEDIUM  ·  confirmed  ·  theme LOADING (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** loading.tsx renders stat-card placeholders and a table (loading.tsx:23-36) for the hub, which has neither; a screen that fetches nothing still flashes a data skeleton.
 - **Verified evidence:** page.tsx renders ModuleHub with static links and fetches nothing, but the segment analytics/loading.tsx:23-36 renders 3 stat-card placeholders and a 6-row table; no page-level loading.tsx exists for the hub. Segment layout awaits ModuleGate (getEnabledModules), so the skeleton can flash. Theme FABRICATED is wrong.
 - **Files to change:** `apps/web/src/app/(app)/analytics/loading.tsx`, `apps/web/src/app/(app)/analytics/page.tsx`
@@ -43,7 +43,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-HOME-03  ·  LOW  ·  partly  ·  theme COPY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Tile order mixes user tasks (Query Results) with a deprecated view and two similarly named insight surfaces, 'AI Insights' vs 'ML Insights' (page.tsx:14-15); notes do not say how they differ.
 - **Verified evidence:** page.tsx:14-15 tiles AI Insights ('ML-powered insights and recommendations') and ML Insights ('Model performance, accuracy trends, and prediction explainability per domain') are distinct routes and the notes do differ somewhat, but AI Insights wording is vague and the deprecated list tile sits between task tiles (line 11). Overstated.
 - **Files to change:** `apps/web/src/app/(app)/analytics/page.tsx`
@@ -57,7 +57,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-HOME-04  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Hard-coded English strings in page.tsx:6-15 rather than next-intl keys.
 - **Verified evidence:** analytics/page.tsx:6-15 pass hard-coded English title, description, labels and notes to ModuleHub. Many other pages in (app) use getTranslations/useTranslations (~418 files reference next-intl), so this is a divergence, though 21 pages use ModuleHub and likely share the pattern.
 - **Files to change:** `apps/web/src/app/(app)/analytics/page.tsx`, `apps/web/src/messages/en.json`
@@ -96,7 +96,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-AI-INSIGHTS-02  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Read-only page shows an 'Actioned' status and 'New (Unread)' count (page.tsx:27-28) but no control marks an insight read or actioned and no link opens the source record; the stats cannot change from this UI.
 - **Verified evidence:** page.tsx:27-28 derive New (Unread) and Actioned from r.status === 'New'/'Actioned'; AnalyticsAiInsightRow (loaders.ts:5325-5332) has no id or source-record reference, and AiInsightsTable.tsx has no row action, rowHref or mutate control. No [id] route under ai-insights. Counts are therefore read-only and cannot change from the UI.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ai-insights/page.tsx`, `apps/web/src/app/(app)/analytics/ai-insights/AiInsightsTable.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -113,7 +113,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-AI-INSIGHTS-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Avg. Confidence = parseInt of a display string like '84%' averaged over all rows (page.tsx:16-20); rows with unparsable text count as 0 and drag the average down; no explanation of what confidence means (automated-inference transparency, DPDP).
 - **Verified evidence:** page.tsx:16-20 average = round(sum(parseInt(r.confidence,10)||0)/rows.length): unparsable values count as 0 in numerator and stay in the denominator, dragging the average down. Value 0 renders as '—' (line 29). confidence is typed string (loaders.ts:5328). No explanation of the metric anywhere (no HelpTip/Term). ds/ConfidenceBar.tsx exists but is not used. Suggested fix text in the finding (Masked) does not fit; real theme is data correctness/transparency.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ai-insights/page.tsx`, `apps/web/src/app/(app)/analytics/ai-insights/AiInsightsTable.tsx`
@@ -129,7 +129,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-AI-INSIGHTS-04  ·  MEDIUM  ·  confirmed  ·  theme COPY (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** EmptyState tells the user to 'Enable the AI assistant in platform settings' (page.tsx:37) with no link; a non-admin cannot act, and the message is shown even when the AI assistant is on but has produced nothing.
 - **Verified evidence:** page.tsx:36-37 rows.length===0 (after the errored branch at 32) shows EmptyState with text 'Enable the AI assistant in platform settings' and no action/link. It cannot distinguish 'AI disabled' from 'enabled but nothing generated yet'; no settings flag is read on this page. A non-admin gets an instruction they cannot act on.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ai-insights/page.tsx`
@@ -144,7 +144,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-AI-INSIGHTS-05  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** loading.tsx is a single blank block (loading.tsx:2); emoji icons and hex colours inline in page.tsx:26-29.
 - **Verified evidence:** ai-insights/loading.tsx:2 is a single .skeleton div (same in kpi and data-warehouse loading.tsx), overriding the richer segment analytics/loading.tsx. Emoji icons and hex iconBg are inline at page.tsx:26-29 (also emptyIcon at AiInsightsTable.tsx:41).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ai-insights/loading.tsx`, `apps/web/src/app/(app)/analytics/ai-insights/page.tsx`, `apps/web/src/app/(app)/analytics/data-warehouse/loading.tsx`, `apps/web/src/app/(app)/analytics/kpi/loading.tsx`
@@ -166,7 +166,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-DASHBOARDS-01  ·  HIGH  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Dashboards can be listed but not opened: no row link or action (DashboardsTable.tsx:16-22) and no /analytics/dashboards/[id] route exists under the segment; the subtitle's 'widgets, layout and owner/shared access control' (page.tsx:24) is not reachable.
 - **Verified evidence:** DashboardsTable.tsx:16-22 columns have no link/action and the DataTable call (46-53) passes no rowHref although DataTable supports rowHref (DataTable.tsx:56). No dashboards/[id] route exists (dir has only page.tsx and DashboardsTable.tsx). Subtitle at page.tsx:24 promises widgets/layout/access control. No getAnalyticsDashboardById loader; whether a detail endpoint exists cannot be verified (analytics service absent).
 - **Files to change:** `apps/web/src/app/(app)/analytics/dashboards/page.tsx`, `apps/web/src/app/(app)/analytics/dashboards/DashboardsTable.tsx`, `apps/web/src/app/(app)/analytics/_data.ts`, `apps/web/src/app/(app)/analytics/dashboards/[id]/page.tsx`
@@ -182,7 +182,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-DASHBOARDS-02  ·  MEDIUM  ·  partly  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Error state is a badge plus '—' stats over an empty table (page.tsx:14,31-33; DashboardsTable.tsx:45-53): the table reads as 'no dashboards' rather than offering retry (compare kpi/page.tsx RefreshErrorState).
 - **Verified evidence:** UX-013 already gates the stats: page.tsx:14,31-33 show '—' when source==='error'. DashboardsTable.tsx:45 renders DataSourceBadge (provenance) and then an empty DataTable (rows default []), so the table shows its generic empty state with no retry or explanation beyond the badge. kpi/page.tsx uses RefreshErrorState via toResourceState; dashboards does not. Stats claim in finding is outdated; missing retry is real.
 - **Files to change:** `apps/web/src/app/(app)/analytics/dashboards/page.tsx`
@@ -197,7 +197,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-DASHBOARDS-03  ·  MEDIUM  ·  partly  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Visibility 'private' rows appear in a tenant-wide list; the page does not show owner, so a viewer cannot tell why they see or do not see a dashboard (owner column missing from AnalyticsDashboardRow, _data.ts:9-16).
 - **Verified evidence:** _data.ts:9-16 AnalyticsDashboardRow has id,name,description,status,visibility,version only; mapper (47-54) reads no owner field, so owner cannot be shown. visibility defaults to 'private' when missing (line 52). Whether the API returns owner fields or filters private dashboards by caller cannot be verified (analytics service absent). Rows are tenant-list as returned by the API; the page does not itself filter.
 - **Files to change:** `apps/web/src/app/(app)/analytics/_data.ts`, `apps/web/src/app/(app)/analytics/dashboards/DashboardsTable.tsx`
@@ -213,7 +213,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-DASHBOARDS-04  ·  LOW  ·  partly  ·  theme NAVUX (was VALIDATION)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Version is printed as a bare number and status/visibility upper-cased in pills (DashboardsTable.tsx:19-21); duplicate route /analytics/list lists the same endpoint.
 - **Verified evidence:** DashboardsTable.tsx:19-21 pass label={value.toUpperCase()} to StatusPill; 'shared'/'private' are not in STATUS_MAP (StatusPill.tsx) so they render neutral 'info'. version is a right-aligned number without 'v' prefix (line 21). Duplicate /analytics/list on the same endpoint is true (list/page.tsx:5). Cosmetic; theme VALIDATION is wrong.
 - **Files to change:** `apps/web/src/app/(app)/analytics/dashboards/DashboardsTable.tsx`, `apps/web/src/app/_components/ds/StatusPill.tsx`
@@ -237,7 +237,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-DATA-WAREHOUSE-01  ·  HIGH  ·  confirmed  ·  theme DATA (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Total Records is computed by stripping every non-digit from the string records and parseInt-ing it (page.tsx:14-16): '1.2 M' becomes 12 and '12,48,320' only works because it is plain digits; any abbreviated or decimal record count silently corrupts the total.
 - **Verified evidence:** page.tsx:14-16 sums parseInt(r.records.replace(/[^0-9]/g,''),10). '1.2 M' -> 12, '1.5' -> 15, '2 Cr' -> 2. Indian-grouped '12,48,320' happens to work because commas are stripped (not only plain digits). records is typed string (loaders.ts:5312) so the API format is unknown; a NaN/empty record counts as 0 silently.
 - **Files to change:** `apps/web/src/app/(app)/analytics/data-warehouse/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -253,7 +253,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-DATA-WAREHOUSE-02  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Subtitle promises 'refresh schedules' (page.tsx:22) but the table shows only Last Refresh; no schedule, no next-run, and no stale threshold, so a dataset that stopped refreshing is only visible if the API labels it something other than 'Healthy'.
 - **Verified evidence:** Subtitle at page.tsx:22 says 'refresh schedules'. DataWarehouseTable.tsx:7-14 columns: dataset,lastRefresh,records,size,qualityScore,status; AnalyticsDataWarehouseRow (loaders.ts:5308-5315) has no schedule/nextRun/staleness. Only status signals staleness.
 - **Files to change:** `apps/web/src/app/(app)/analytics/data-warehouse/page.tsx`, `apps/web/src/app/(app)/analytics/data-warehouse/DataWarehouseTable.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -267,7 +267,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-DATA-WAREHOUSE-03  ·  MEDIUM  ·  partly  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Attention = every status that is not exactly 'Healthy' (page.tsx:18), so a case difference ('healthy') or a new status value counts as a problem; Quality Score is an unparsed string, not sortable numerically.
 - **Verified evidence:** page.tsx:17-18 use exact r.status === 'Healthy' (case-sensitive); anything else counts as Attention. Confirmed. Quality Score is a string but DataTable.compareValues (DataTable.tsx:160-171) falls back to localeCompare with numeric:true, so '92%' vs '100%' sort correctly; 'not sortable numerically' is overstated. StatusPill STATUS_MAP has no 'healthy' entry so it renders neutral.
 - **Files to change:** `apps/web/src/app/(app)/analytics/data-warehouse/page.tsx`, `apps/web/src/app/_components/ds/StatusPill.tsx`
@@ -304,7 +304,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-KPI-01  ·  HIGH  ·  confirmed  ·  theme DATA (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** On Target / Below Target / Improving are computed by string-matching the preformatted trend ('↑', '+') and comparing currentValue===target strings (kpi/page.tsx:14-18): a KPI where up is bad (file disposal days ↑) counts as On Target and Improving, and a falling vacancy rate (↓) counts as Below Target.
 - **Verified evidence:** kpi/page.tsx:14 onTarget = trend.includes('↑') || currentValue===target; :15-17 belowTarget = total - onTarget; :18 improving = trend has '↑' or '+'. AnalyticsKpiRow (loaders.ts:5291-5298) has no direction/polarity or numeric fields, so a KPI where lower is better with ↑ counts On Target and Improving, and a ↓ falling vacancy is Below Target. Also a trend '+' only is 'Improving' but not 'On Target'. Counts can be misleading.
 - **Files to change:** `apps/web/src/app/(app)/analytics/kpi/page.tsx`, `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/analytics/kpi/KpiTable.tsx`
@@ -320,7 +320,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-KPI-02  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Empty-state CTA 'Create Metric' links to /analytics/queries (kpi/page.tsx:35), which only runs whitelisted queries; no route creates a KPI, so the CTA promises something the app cannot do.
 - **Verified evidence:** kpi/page.tsx:35 empty-state action links to /analytics/queries; that route exists (queries/page.tsx + RunQueryForm.tsx) for running queries, and there is no KPI create/edit route or loader in analytics/. 'Create Metric' promises something not offered.
 - **Files to change:** `apps/web/src/app/(app)/analytics/kpi/page.tsx`
@@ -384,7 +384,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-LIST-01  ·  MEDIUM  ·  confirmed  ·  theme DUPLICATE (was VALIDATION)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Duplicate of /analytics/dashboards over the same endpoint (list/page.tsx:5 vs dashboards/page.tsx:8) with a generic mapping; two different stat/badge behaviours for one dataset.
 - **Verified evidence:** list/page.tsx:5 uses loaders.ts:1829 moduleLoader (ModuleRowSummary via mapModuleRows) while dashboards/page.tsx:7 uses _data.ts getAnalyticsDashboards; same /api/v1/analytics/dashboards. List has no stats, badge behaviour differs (ModuleListTable vs DashboardsTable). Only referenced by hub tile.
 - **Files to change:** `apps/web/src/app/(app)/analytics/list/page.tsx`, `apps/web/src/app/(app)/analytics/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -399,7 +399,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-LIST-02  ·  MEDIUM  ·  confirmed  ·  theme UX-COPY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1934, verified on main 101076c1a)
 - **First-pass claim:** Raw record id shown to users: ModuleListTable prints row.id.slice(0, 8) in an ID column (ModuleListTable.tsx:46) — an internal identifier with no meaning to a clerk.
 - **Verified evidence:** ModuleListTable.tsx:71,81 renders an ID column with row.id.slice(0,8) in mono (finding cited line 46; actual 81). It is a shared component, so every ModuleListPage in the app shows truncated internal ids.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -448,7 +448,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Failed fetch reads as 'ML is off': on source 'error' only a badge is added (page.tsx:37) while stats show 0 / '0/6' (page.tsx:39-42) and all six cards render 'No model active' (page.tsx:76).
 - **Verified evidence:** ml-insights/page.tsx: getMLDomainOverview fallback is [] (_data.ts:67-71); on error the page renders only a DataSourceBadge (page.tsx:37), Total Predictions '0' (:39), Avg Accuracy/Fallback '—' (:40-41), Active Domains '0/6' (:42) and all six cards 'No model active' (:76). Lines are accurate.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/page.tsx`
@@ -464,7 +464,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-02  ·  HIGH  ·  confirmed  ·  theme METRIC (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Avg. Accuracy averages `accuracy` across domains (page.tsx:22-24) whose metrics differ — AUC-ROC (leads, subscriptions), precision (tickets, transactions), MAPE (inventory, lower is better; inventory/page.tsx label) — so the headline number is meaningless, and a good MAPE of 12% drags it down.
 - **Verified evidence:** page.tsx:22-24 averages d.accuracy across all domains; the per-domain pages label the same field differently (subscriptions 'AUC-ROC' subscriptions/page.tsx:17, tickets 'Precision' tickets/page.tsx:17). Inventory/leads/anomalies/projects pages not each opened, but the inventory label MAPE is asserted in the finding; the mixed-metric average is arithmetically meaningless regardless. Card shows 'accuracy' for all too. Theme I18N is wrong. Whether MAPE is lower-is-better vs the API returning normalised accuracy is unverifiable (ms-service absent).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/page.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_data.ts`
@@ -479,7 +479,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-03  ·  MEDIUM  ·  confirmed  ·  theme A11Y (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Card aria-label and dl label say 'accuracy' for every domain (page.tsx:52,62), including 'MAPE (lower is better)'; screen-reader users hear '12% accuracy' for Demand Forecasting.
 - **Verified evidence:** page.tsx:52 card aria-label uses `${formatPct(accuracy)} accuracy` and :62 dt 'Accuracy' for every domain including the MAPE one; a formatPct of 0.12 would read '12% accuracy' for Demand Forecasting. Lines accurate. Depends on the actual inventory metric definition (finding -02).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/page.tsx`
@@ -495,7 +495,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-04  ·  MEDIUM  ·  confirmed  ·  theme STALE (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Domain key 'tasks' is labelled 'Project Delay Prediction' and 'transactions' 'Anomaly Detection' (page.tsx:10-11); Active Domains counts modelVersion !== null (page.tsx:28) so a stale model last trained months ago counts as active — lastTrainedAt is fetched (_data.ts:100) but never shown.
 - **Verified evidence:** page.tsx:10-11 DOMAIN_META tasks -> 'Project Delay Prediction', transactions -> 'Anomaly Detection' (labels are consistent with hrefs projects/anomalies; the key/label mismatch is only naming, not a bug). Active Domains = domains.filter(modelVersion !== null) (:28); lastTrainedAt is mapped (_data.ts:84) but never rendered on the hub or domain pages. So stale models count active. The 'WIRING' claim about wrong labelling is not a defect; the stale-model point is real.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/page.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx`
@@ -552,7 +552,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-ANOMALIES-02  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Dead drill-through: rowLinkPrefix '/finance/anomalies/' (anomalies/page.tsx:14) — apps/web/src/app/(app)/finance has no anomalies route, so a flagged transaction cannot be opened from the one page built to review it.
 - **Verified evidence:** anomalies/page.tsx:14 rowLinkPrefix='/finance/anomalies/'; directory apps/web/src/app/(app)/finance has no 'anomalies' entry (listing checked), so every Entity link 404s (finance/not-found.tsx). Closest existing detail is finance/payments/[id] but it is unverified that transaction ids match payment ids (ms-service absent).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/anomalies/page.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_components/RecentPredictionsTable.tsx`
@@ -568,7 +568,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-ANOMALIES-03  ·  MEDIUM  ·  partly  ·  theme CHART (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Trend bars are scaled to the series maximum, not 0-100% (AccuracyTrendChart.tsx:23,29), and coloured green/amber/red at fixed 0.7/0.4 cut-offs (AccuracyTrendChart.tsx:36); x labels are MM-DD only (slice(5), :55) with no year; per-bar aria-label sits on role='presentation' nodes (:44-45).
 - **Verified evidence:** AccuracyTrendChart.tsx: bars scale to the series max (maxAccuracy :22, heightPct :28) so a flat 40% series looks full-height; colour thresholds hard-coded 0.7/0.4 (:42); x labels are point.date.slice(5) = MM-DD, no year (:53-54); per-bar aria-label is on a div with role='presentation' (:44-45) inside a role='img' parent (:25) whose label is only 'Accuracy trend over N data points', so per-point values are not exposed to screen readers (visible % labels at :36 are text but colour is the only good/bad cue). Earlier line numbers were off by 1-2. The suggested i18n fix does not match: the problem is chart semantics/a11y, not translation (the file has no hard-coded translated keys beyond a few English strings). For anomaly precision the 0.7/0.4 thresholds are arbitrary.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/AccuracyTrendChart.tsx`
@@ -621,7 +621,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-ANOMALIES-07  ·  MEDIUM  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Financial-transaction fraud scores are visible to every analytics role and exportable (RecentPredictionsTable.tsx:159-160); flagged-payment data is normally finance/audit-restricted.
 - **Verified evidence:** RecentPredictionsTable.tsx:66-67 sets exportable + exportFilename='ms-predictions'; DataTable.tsx:276-291 downloadCsv builds the CSV client-side from the currently sorted rows (all filtered rows, not just the page) with no permission check, purpose note or audit event. Access control is only ModuleGate moduleKey='analytics' (analytics/layout.tsx). Original :159-160 refs wrong (actual 66-67). Data exported: entityId, prediction, confidence, outcome, date; no names or PII columns, so 'PII' is overstated unless entityId maps to a person (e.g. leads/contacts). No <Masked> component exists in apps/web/src/app/_components. Backend RBAC/audit is cannot-verify (ms-service absent). Finding 07 (fraud-score visibility) is really the same control as -08: only ModuleGate analytics gates the page; finance/audit-only restriction cannot be verified without policy-service/ms-service.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/RecentPredictionsTable.tsx`, `apps/web/src/app/_components/ds/DataTable.tsx`
@@ -640,7 +640,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-ANOMALIES-08  ·  LOW  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** CSV export 'ms-predictions' (RecentPredictionsTable.tsx:159-160) exports entity ids and scores for the whole table with no role gate or DPDP purpose note.
 - **Verified evidence:** RecentPredictionsTable.tsx:66-67 sets exportable + exportFilename='ms-predictions'; DataTable.tsx:276-291 downloadCsv builds the CSV client-side from the currently sorted rows (all filtered rows, not just the page) with no permission check, purpose note or audit event. Access control is only ModuleGate moduleKey='analytics' (analytics/layout.tsx). Original :159-160 refs wrong (actual 66-67). Data exported: entityId, prediction, confidence, outcome, date; no names or PII columns, so 'PII' is overstated unless entityId maps to a person (e.g. leads/contacts). No <Masked> component exists in apps/web/src/app/_components. Backend RBAC/audit is cannot-verify (ms-service absent).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/RecentPredictionsTable.tsx`, `apps/web/src/app/_components/ds/DataTable.tsx`
@@ -684,7 +684,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-INVENTORY-02  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Dead drill-through: rowLinkPrefix '/inventory/items/' (inventory/page.tsx:14) — apps/web/src/app/(app)/inventory/items contains only page.tsx, so every Entity link is a 404.
 - **Verified evidence:** inventory/page.tsx:14 rowLinkPrefix='/inventory/items/'; apps/web/src/app/(app)/inventory/items contains only page.tsx (the items list, no [id]), so /inventory/items/<id> 404s (inventory/not-found.tsx). The stock item detail route is inventory/[id]/page.tsx (getStockItemById), so /inventory/<id> is the likely target, assuming entityId is a stock item id (ms-service absent).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/inventory/page.tsx`
@@ -698,7 +698,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-INVENTORY-03  ·  HIGH  ·  confirmed  ·  theme CHART (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** MAPE is lower-is-better (inventory/page.tsx:17 label) but AccuracyTrendChart colours by accuracy thresholds (>=0.7 green, >=0.4 amber, else red — AccuracyTrendChart.tsx:36), so a good 12% MAPE renders as red bars; the trend also reads upward when errors fall.
 - **Verified evidence:** inventory/page.tsx:17 labels the card 'MAPE (lower is better)' and DomainInsightPage.tsx:60 shows it via formatPct(evaluation.accuracy); AccuracyTrendChart.tsx:42 colours every bar by higher-is-better thresholds (>=0.7 green, >=0.4 amber, else red) and has no higherIsBetter prop, so a 12% MAPE is drawn as small red bars. Bar height is proportional to the value, so falling error shows as shrinking bars while the title says 'Accuracy Trend' (DomainInsightPage.tsx:76). Caveat: if the API returns 1-MAPE in `accuracy` the colours would be right but the label wrong; ms-service is absent so the semantics cannot be verified. Theme is not I18N.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/AccuracyTrendChart.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/inventory/page.tsx`
@@ -717,7 +717,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-INVENTORY-04  ·  MEDIUM  ·  partly  ·  theme CHART (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Trend bars are scaled to the series maximum, not 0-100% (AccuracyTrendChart.tsx:23,29), and coloured green/amber/red at fixed 0.7/0.4 cut-offs (AccuracyTrendChart.tsx:36); x labels are MM-DD only (slice(5), :55) with no year; per-bar aria-label sits on role='presentation' nodes (:44-45).
 - **Verified evidence:** AccuracyTrendChart.tsx: bars scale to the series max (maxAccuracy :22, heightPct :28) so a flat 40% series looks full-height; colour thresholds hard-coded 0.7/0.4 (:42); x labels are point.date.slice(5) = MM-DD, no year (:53-54); per-bar aria-label is on a div with role='presentation' (:44-45) inside a role='img' parent (:25) whose label is only 'Accuracy trend over N data points', so per-point values are not exposed to screen readers (visible % labels at :36 are text but colour is the only good/bad cue). Earlier line numbers were off by 1-2. The suggested i18n fix does not match: the problem is chart semantics/a11y, not translation (the file has no hard-coded translated keys beyond a few English strings).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/AccuracyTrendChart.tsx`
@@ -770,7 +770,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-INVENTORY-07  ·  LOW  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** CSV export 'ms-predictions' (RecentPredictionsTable.tsx:159-160) exports entity ids and scores for the whole table with no role gate or DPDP purpose note.
 - **Verified evidence:** RecentPredictionsTable.tsx:66-67 sets exportable + exportFilename='ms-predictions'; DataTable.tsx:276-291 downloadCsv builds the CSV client-side from the currently sorted rows (all filtered rows, not just the page) with no permission check, purpose note or audit event. Access control is only ModuleGate moduleKey='analytics' (analytics/layout.tsx). Original :159-160 refs wrong (actual 66-67). Data exported: entityId, prediction, confidence, outcome, date; no names or PII columns, so 'PII' is overstated unless entityId maps to a person (e.g. leads/contacts). No <Masked> component exists in apps/web/src/app/_components. Backend RBAC/audit is cannot-verify (ms-service absent).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/RecentPredictionsTable.tsx`, `apps/web/src/app/_components/ds/DataTable.tsx`
@@ -814,7 +814,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-LEADS-02  ·  MEDIUM  ·  partly  ·  theme CHART (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Trend bars are scaled to the series maximum, not 0-100% (AccuracyTrendChart.tsx:23,29), and coloured green/amber/red at fixed 0.7/0.4 cut-offs (AccuracyTrendChart.tsx:36); x labels are MM-DD only (slice(5), :55) with no year; per-bar aria-label sits on role='presentation' nodes (:44-45).
 - **Verified evidence:** AccuracyTrendChart.tsx: bars scale to the series max (maxAccuracy :22, heightPct :28) so a flat 40% series looks full-height; colour thresholds hard-coded 0.7/0.4 (:42); x labels are point.date.slice(5) = MM-DD, no year (:53-54); per-bar aria-label is on a div with role='presentation' (:44-45) inside a role='img' parent (:25) whose label is only 'Accuracy trend over N data points', so per-point values are not exposed to screen readers (visible % labels at :36 are text but colour is the only good/bad cue). Earlier line numbers were off by 1-2. The suggested i18n fix does not match: the problem is chart semantics/a11y, not translation (the file has no hard-coded translated keys beyond a few English strings).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/AccuracyTrendChart.tsx`
@@ -867,7 +867,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-LEADS-06  ·  LOW  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** CSV export 'ms-predictions' (RecentPredictionsTable.tsx:159-160) exports entity ids and scores for the whole table with no role gate or DPDP purpose note.
 - **Verified evidence:** RecentPredictionsTable.tsx:66-67 sets exportable + exportFilename='ms-predictions'; DataTable.tsx:276-291 downloadCsv builds the CSV client-side from the currently sorted rows (all filtered rows, not just the page) with no permission check, purpose note or audit event. Access control is only ModuleGate moduleKey='analytics' (analytics/layout.tsx). Original :159-160 refs wrong (actual 66-67). Data exported: entityId, prediction, confidence, outcome, date; no names or PII columns, so 'PII' is overstated unless entityId maps to a person (e.g. leads/contacts). No <Masked> component exists in apps/web/src/app/_components. Backend RBAC/audit is cannot-verify (ms-service absent). Leads link to crm/contacts/[id] (route exists), so exported ids may identify individuals - the DPDP concern is more real here.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/RecentPredictionsTable.tsx`, `apps/web/src/app/_components/ds/DataTable.tsx`
@@ -928,7 +928,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-PROJECTS-03  ·  MEDIUM  ·  partly  ·  theme CHART (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Trend bars are scaled to the series maximum, not 0-100% (AccuracyTrendChart.tsx:23,29), and coloured green/amber/red at fixed 0.7/0.4 cut-offs (AccuracyTrendChart.tsx:36); x labels are MM-DD only (slice(5), :55) with no year; per-bar aria-label sits on role='presentation' nodes (:44-45).
 - **Verified evidence:** AccuracyTrendChart.tsx: bars scale to the series max (maxAccuracy :22, heightPct :28) so a flat 40% series looks full-height; colour thresholds hard-coded 0.7/0.4 (:42); x labels are point.date.slice(5) = MM-DD, no year (:53-54); per-bar aria-label is on a div with role='presentation' (:44-45) inside a role='img' parent (:25) whose label is only 'Accuracy trend over N data points', so per-point values are not exposed to screen readers (visible % labels at :36 are text but colour is the only good/bad cue). Earlier line numbers were off by 1-2. The suggested i18n fix does not match: the problem is chart semantics/a11y, not translation (the file has no hard-coded translated keys beyond a few English strings).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/AccuracyTrendChart.tsx`
@@ -981,7 +981,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-PROJECTS-06  ·  LOW  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** CSV export 'ms-predictions' (RecentPredictionsTable.tsx:159-160) exports entity ids and scores for the whole table with no role gate or DPDP purpose note.
 - **Verified evidence:** RecentPredictionsTable.tsx:66-67 sets exportable + exportFilename='ms-predictions'; DataTable.tsx:276-291 downloadCsv builds the CSV client-side from the currently sorted rows (all filtered rows, not just the page) with no permission check, purpose note or audit event. Access control is only ModuleGate moduleKey='analytics' (analytics/layout.tsx). Original :159-160 refs wrong (actual 66-67). Data exported: entityId, prediction, confidence, outcome, date; no names or PII columns, so 'PII' is overstated unless entityId maps to a person (e.g. leads/contacts). No <Masked> component exists in apps/web/src/app/_components. Backend RBAC/audit is cannot-verify (ms-service absent).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/RecentPredictionsTable.tsx`, `apps/web/src/app/_components/ds/DataTable.tsx`
@@ -998,7 +998,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-PROJECTS-07  ·  LOW  ·  partly  ·  theme COPY (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Route segment 'projects' but data domain 'tasks' (ml-insights/page.tsx:10 vs projects/page.tsx:5) — hub label 'Project Delay Prediction' scores tasks.
 - **Verified evidence:** Hub ml-insights/page.tsx:12 maps key tasks -> label 'Project Delay Prediction' -> href /analytics/ml-insights/projects; projects/page.tsx:5 fetches domain 'tasks', title 'Project Delay Prediction Insights', stat 'Tasks Scored'. Naming is inconsistent (project vs task) but consistent internally: it scores task completion dates (subtitle). Low-severity copy/naming issue, not i18n; also the hub line ref 10 in the finding is actually :12.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/projects/page.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/page.tsx`
@@ -1039,7 +1039,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-SUBSCRIPTIONS-02  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Dead drill-through: rowLinkPrefix '/billing/subscriptions/' (subscriptions/page.tsx:14) — billing/subscriptions has page.tsx, SubscriptionsTable.tsx, loading and error only, no [id] route, so every Entity link is a 404.
 - **Verified evidence:** subscriptions/page.tsx:14 sets rowLinkPrefix='/billing/subscriptions/'; DataTable resolveHref builds `${prefix}${row.entityId}` (DataTable.tsx:212) and renders it as a link/click-through (:362-389). apps/web/src/app/(app)/billing/subscriptions contains only SubscriptionsTable.tsx, error.tsx, loading.tsx, page.tsx - no [id] dir, so every row link 404s.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/subscriptions/page.tsx`, `apps/web/src/app/(app)/billing/subscriptions/[id]/page.tsx (new, if detail wanted)`
@@ -1054,7 +1054,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-SUBSCRIPTIONS-03  ·  MEDIUM  ·  confirmed  ·  theme A11Y (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Trend bars are scaled to the series maximum, not 0-100% (AccuracyTrendChart.tsx:23,29), and coloured green/amber/red at fixed 0.7/0.4 cut-offs (AccuracyTrendChart.tsx:36); x labels are MM-DD only (slice(5), :55) with no year; per-bar aria-label sits on role='presentation' nodes (:44-45).
 - **Verified evidence:** AccuracyTrendChart.tsx: bar height = accuracy/maxAccuracy (:22,28) so bars scale to series max, not 0-100% (a flat 30% series looks full height); colour thresholds 0.7/0.4 hard-coded (:42, not :36); x labels point.date.slice(5) = MM-DD (:54) with no year; per-bar aria-label on a role='presentation' div (:44-45) which is ignored by AT (outer role='img' carries only a generic 'over N data points' label, :25). Bars also hard-code hex colours and English strings; colour is the only status cue (value label is shown above, partly mitigating). Also applies to inventory MAPE domain, where the 0.7/0.4 green/red semantics are inverted (lower is better).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/AccuracyTrendChart.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx`
@@ -1105,7 +1105,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-SUBSCRIPTIONS-06  ·  MEDIUM  ·  partly  ·  theme EMPTYSTATE (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** The hub shows this domain as 'No model active' whenever the evaluations list omits it (ml-insights/page.tsx:46,76) yet this page still renders zeros and 'once the ML model is active' copy with no link back to how to activate a model.
 - **Verified evidence:** Hub ml-insights/page.tsx:46 uses domains.find(...) and shows 'No model active' (:76) when absent - correct as described (the observed lines :46,76 are right). The subscriptions page, by contrast, renders zero stats plus 'once the ML model is active' copy (RecentPredictionsTable.tsx:68-70). The mismatch is real but the framing as DEADROUTE is wrong: there is no dead link, and no model-activation screen is visible in the web app (grep found none), so 'link back to how to activate' has no target. Hub also cannot distinguish an errored list (see ML-INSIGHTS-01) from a missing domain.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx`
@@ -1121,7 +1121,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-SUBSCRIPTIONS-07  ·  LOW  ·  partly  ·  theme EXPORT (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** CSV export 'ms-predictions' (RecentPredictionsTable.tsx:159-160) exports entity ids and scores for the whole table with no role gate or DPDP purpose note.
 - **Verified evidence:** RecentPredictionsTable.tsx:66-67 sets exportable + exportFilename='ms-predictions' (not :159-160); DataTable.tsx:275-291 builds a client-side CSV Blob of the already-rendered (max recentPredictions) rows and downloads it - no role gate, no audit call, no purpose note. Overstated: it exports only the rows the page already showed (formatted % strings and entity ids), not 'the whole table' server-side, and the ids are business record ids, not direct personal data (whether they are PII depends on the domain; unverified). The page itself is reachable by anyone with route access; server-side authorization not verifiable here.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/RecentPredictionsTable.tsx`, `apps/web/src/app/_components/ds/DataTable.tsx`
@@ -1163,7 +1163,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-TICKETS-02  ·  MEDIUM  ·  confirmed  ·  theme A11Y (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Trend bars are scaled to the series maximum, not 0-100% (AccuracyTrendChart.tsx:23,29), and coloured green/amber/red at fixed 0.7/0.4 cut-offs (AccuracyTrendChart.tsx:36); x labels are MM-DD only (slice(5), :55) with no year; per-bar aria-label sits on role='presentation' nodes (:44-45).
 - **Verified evidence:** AccuracyTrendChart.tsx: bar height = accuracy/maxAccuracy (:22,28) so bars scale to series max, not 0-100% (a flat 30% series looks full height); colour thresholds 0.7/0.4 hard-coded (:42, not :36); x labels point.date.slice(5) = MM-DD (:54) with no year; per-bar aria-label on a role='presentation' div (:44-45) which is ignored by AT (outer role='img' carries only a generic 'over N data points' label, :25). Bars also hard-code hex colours and English strings; colour is the only status cue (value label is shown above, partly mitigating). Also applies to inventory MAPE domain, where the 0.7/0.4 green/red semantics are inverted (lower is better).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/AccuracyTrendChart.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx`
@@ -1214,7 +1214,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-TICKETS-05  ·  MEDIUM  ·  partly  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Drill-through opens /helpdesk/internal/<entityId> (tickets/page.tsx:14); the domain scores helpdesk tickets in general, so citizen-facing tickets would link to an internal-only route that may 404 or be role-gated.
 - **Verified evidence:** tickets/page.tsx:14 rowLinkPrefix='/helpdesk/internal/'. That route exists: helpdesk/internal/[id]/page.tsx fetches /api/v1/helpdesk/tickets/${id} (the general ticket endpoint), so it will not 404. However a separate general detail page helpdesk/tickets/[id] (with TicketActions/TicketConversation) exists and is the fuller view; the 'internal' page is a read-only summary. Whether citizen-facing tickets are role-restricted at /helpdesk/internal or by the API cannot be verified (helpdesk service and layout guards not inspected; no service in snapshot).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/tickets/page.tsx`
@@ -1229,7 +1229,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-TICKETS-06  ·  LOW  ·  partly  ·  theme EXPORT (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** CSV export 'ms-predictions' (RecentPredictionsTable.tsx:159-160) exports entity ids and scores for the whole table with no role gate or DPDP purpose note.
 - **Verified evidence:** RecentPredictionsTable.tsx:66-67 sets exportable + exportFilename='ms-predictions' (not :159-160); DataTable.tsx:275-291 builds a client-side CSV Blob of the already-rendered (max recentPredictions) rows and downloads it - no role gate, no audit call, no purpose note. Overstated: it exports only the rows the page already showed (formatted % strings and entity ids), not 'the whole table' server-side, and the ids are business record ids, not direct personal data (whether they are PII depends on the domain; unverified). The page itself is reachable by anyone with route access; server-side authorization not verifiable here.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/RecentPredictionsTable.tsx`, `apps/web/src/app/_components/ds/DataTable.tsx`
@@ -1252,7 +1252,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-QUERIES-01  ·  HIGH  ·  partly  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Silent zeros on failure: stats use runs.length / completed / failed with no source gate (queries/page.tsx:10-11,41-43), so a failed fetch shows Runs 0 / Completed 0 / Failed 0 beside a badge — dashboards/page.tsx (UX-013) already null-gates for the same reason.
 - **Verified evidence:** queries/page.tsx:10-11,41-43: Runs/Completed/Failed StatCards use runs.length and filter counts with no source gate; on error runs=[] so the cards show 0. Correct. But the badge is not beside it any more: DataSourceBadge lives inside QueryResultsView (QueryResultsView.tsx:70), driven by useSeededResource, so a cached copy may exist and the stat cards (which use the server-side `runs`, not the hook's `rows`) can disagree with the table when offline/cached. dashboards/page.tsx:14,22-24 shows the `errored ? '—'` fix.
 - **Files to change:** `apps/web/src/app/(app)/analytics/queries/page.tsx`, `apps/web/src/app/(app)/analytics/queries/QueryResultsView.tsx`
@@ -1268,7 +1268,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-QUERIES-02  ·  HIGH  ·  confirmed  ·  theme MISSING-DETAIL (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Failed runs show only a FAILED pill: AnalyticsQueryRunRow.error is mapped (_data.ts:83) but never rendered (QueryResultsView.tsx:17-23), so a user cannot see why a run failed.
 - **Verified evidence:** _data.ts:83 maps error: string|null into AnalyticsQueryRunRow (field declared :29). QueryResultsView.tsx:17-23 runColumns has no error column and the StatusPill (:21) shows only 'FAILED'; the Result detail section lists only completed runs (:50). grep confirms `error` is never rendered. Theme DEADROUTE is wrong (missing feature).
 - **Files to change:** `apps/web/src/app/(app)/analytics/queries/QueryResultsView.tsx`
@@ -1283,7 +1283,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-QUERIES-03  ·  MEDIUM  ·  confirmed  ·  theme REFRESH (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Fire-and-forget with no refresh: after the 202 the form says results 'appear once processed' (RunQueryForm.tsx:200) but the page is a server component with no router.refresh or polling, so a queued run stays invisible until manual reload; a 'running' row never updates.
 - **Verified evidence:** RunQueryForm.tsx:200 sets 'Query queued - results appear in Query Results once processed.' then resetForm(); the file has no useRouter/router.refresh/interval (grep shows none). page.tsx is a server component with the initial `runs`; useSeededResource (QueryResultsView.tsx:43) only reseeds from props. So new/running rows appear only after manual reload. Theme should be REFRESH not DEADROUTE.
 - **Files to change:** `apps/web/src/app/(app)/analytics/queries/RunQueryForm.tsx`, `apps/web/src/app/(app)/analytics/queries/QueryResultsView.tsx`
@@ -1298,7 +1298,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-QUERIES-04  ·  MEDIUM  ·  partly  ·  theme UNITS (was MONEY)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Result values have no unit or currency: AccessibleBarChart takes a unit prop (AccessibleBarChart.tsx:20) that QueryResultsView never passes (QueryResultsView.tsx:117), so money metrics render as bare numbers (paise vs rupees ambiguous); result-row column headers are the raw dimension keys (QueryResultsView.tsx:59).
 - **Verified evidence:** AccessibleBarChart accepts unit (:18-26) and QueryResultsView.tsx:117 does not pass it; values are shown via toLocaleString('en-IN') (:38,67), so no currency/unit. Result table column headers are raw dimension keys (QueryResultsView.tsx:59: label: d). True. But whether any metric is money in paise cannot be verified: the catalog MetricDef only has key/label/agg (RunQueryForm.tsx:25) and the analytics service is absent, so the paise/rupee ambiguity is plausible but unconfirmed. Value column is fixed label 'Value' (:60).
 - **Files to change:** `apps/web/src/app/(app)/analytics/queries/QueryResultsView.tsx`, `apps/web/src/app/(app)/analytics/_data.ts`, `apps/web/src/app/(app)/analytics/queries/RunQueryForm.tsx`
@@ -1313,7 +1313,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-QUERIES-05  ·  MEDIUM  ·  confirmed  ·  theme A11Y (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Chart a11y: figure has role='img' with the sr-only <dl> text alternative nested inside (AccessibleBarChart.tsx:42,73-83); children of role=img are presentational, so the structured list is not exposed to screen readers—only the long aria-label.
 - **Verified evidence:** AccessibleBarChart.tsx:42 <figure role='img' aria-label={summary}> contains an sr-only <dl> (:76-86). role='img' has presentational children so the dl is not exposed; the long aria-label is the only text. The header comment (:6-12) claims the dl is 'structured reading'. Also the sr-only dl uses `${value} ${unit}` while aria-label uses no space. aria-label is also unbounded for many bars.
 - **Files to change:** `apps/web/src/app/(app)/analytics/queries/AccessibleBarChart.tsx`
@@ -1328,7 +1328,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-QUERIES-06  ·  MEDIUM  ·  partly  ·  theme FORM-VALIDATION (was STATUS)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Filter values are free text (RunQueryForm.tsx:417-424) though the catalog types each filter field (FilterDef.type); a numeric/date/enum field can be filtered with arbitrary strings; empty-valued rows are silently dropped on submit (RunQueryForm.tsx:178).
 - **Verified evidence:** RunQueryForm.tsx:417-424 filter value is a single <input type='text'> with placeholder 'e.g. Finance' regardless of FilterDef.type (type is loaded in the catalog, :27); confirmed. Empty values are dropped by `.filter(r => r.field && r.value.trim() !== '')` at :177-178 (line numbers off by a few) with no message - confirmed. What FilterDef.type values exist is not visible (analytics service absent), and the server presumably validates via zod, so invalid strings would be rejected with a 400 shown as submitError; 'arbitrary strings' is not silently accepted. Theme STATUS is wrong.
 - **Files to change:** `apps/web/src/app/(app)/analytics/queries/RunQueryForm.tsx`
@@ -1343,7 +1343,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-QUERIES-07  ·  LOW  ·  partly  ·  theme DS (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Hard-coded inline hex styles and English strings across RunQueryForm.tsx (labelStyle etc., :532-584) instead of tokens/next-intl; 'Clear' removes a filter row but is labelled like a field reset.
 - **Verified evidence:** RunQueryForm.tsx:530-584 defines inline style consts with hex colours (labelStyle, inputStyle, clearBtnStyle...) and English strings throughout - true. The 'Clear' button (:428-435) removes a filter row (onClick removeFilter) and has aria-label 'Remove filter N', so AT is fine; the visible label 'Clear' is a naming nit. Theme FABRICATED is wrong - no fabricated data.
 - **Files to change:** `apps/web/src/app/(app)/analytics/queries/RunQueryForm.tsx`
@@ -1362,7 +1362,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-ANOMALIES-06  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Stat label 'False Positive Rate' is bound to the API field fallbackRate (anomalies/page.tsx:18; DomainInsightPage.tsx:65): 'fallback' (rule-based path used) and 'false positive' are different measures, so the number is mislabelled or the field is overloaded; undeterminable without the ms-service definition.
 - **Service:** `ml-service`  ·  **Endpoint(s):** `GET /api/v1/ml/evaluations?domain=anomalies&window=30d`
 - **Question:** Does the evaluation response define fallbackRate as rule-based fallback share and provide a separate falsePositiveRate, or is fallbackRate mislabelled?
