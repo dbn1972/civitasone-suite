@@ -3090,7 +3090,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-DETAIL-06  ·  MEDIUM  ·  confirmed  ·  theme RESPONSIVE (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9; W1 SF-12 re-confirmed on #2003)
 - **First-pass claim:** The two-column layout is an inline `1fr 320px` grid with no breakpoint, so at phone width the main column is squeezed to a sliver (page.tsx:148).
 - **Verified evidence:** page.tsx:148 `style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 20 }}` is inline, so no media query can override it; at 360px the main column is ~1fr of 360-320-20 minus gutters, a sliver. The same inline pattern exists in crm/rti/[id]/page.tsx:80 and crm/service-requests/[id]/page.tsx:99. Also the 140px/1fr details dl (line ~155) does not collapse. Theme tag PII is wrong.
 - **Files to change:** `apps/web/src/app/globals.css`, `apps/web/src/app/(app)/crm/grievances/[id]/page.tsx`, `apps/web/src/app/(app)/crm/rti/[id]/page.tsx`, `apps/web/src/app/(app)/crm/service-requests/[id]/page.tsx`
@@ -3106,7 +3106,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-DETAIL-07  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9; W1 SF-12 re-confirmed on #2003)
 - **First-pass claim:** A failed fetch renders 'Grievance Not Found' (title) with only 'The grievance could not be loaded.' beneath, so an outage is titled as a missing record (page.tsx:117-126).
 - **Verified evidence:** page.tsx:117-126: `if (!g)` renders PageHeader title 'Grievance Not Found', a DataSourceBadge only when source==='error', and 'The grievance could not be loaded.' There is no distinction between HTTP 404 and network/5xx/403, although fetchJson returns `status` (app/_data/apiClient.ts LoaderResult) and ds/LoadErrorState.tsx already implements 403/other handling with RefreshErrorState; hr/apar/[id]/page.tsx:97 shows the intended pattern.
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/[id]/page.tsx`, `apps/web/src/app/(app)/crm/rti/[id]/page.tsx`
@@ -5016,7 +5016,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9; W1 SF-12 re-confirmed on #2003)
 - **First-pass claim:** Statuses FIRST_APPEAL and SECOND_APPEAL (and DISPOSED) fall through to "no further action available here", so once First Appeal is raised nothing in the UI can decide, forward or close it; the statutory appeal chain dead-ends at the button that starts it (apps/web/src/app/(app)/crm/rti/[id]/RtiActions.tsx:27,35).
 - **Verified evidence:** RtiActions.tsx:214-215 canProgress = RECEIVED|TRANSFERRED, canAppeal = RESPONDED|REJECTED; any other status (FIRST_APPEAL, SECOND_APPEAL, DISPOSED) hits the early return at 229-235 'no further action available here'. The file header comment (208-210) states there is no backend route for second appeal or disposal, and nothing exists to decide a first appeal. Confirmed as a real dead end; fix needs backend routes (crm-service absent, cannot see). Cited lines 27,35 are wrong; correct 214-235.
 - **Files to change:** `apps/web/src/app/(app)/crm/rti/[id]/RtiActions.tsx`, `apps/web/src/app/(app)/crm/rti/[id]/page.tsx`
@@ -5033,7 +5033,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-DETAIL-02  ·  HIGH  ·  partly  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9; W1 SF-12 re-confirmed on #2003)
 - **First-pass claim:** Forward, Respond and First Appeal are offered to every CRM user: the CPIO/APIO roles are not modelled, and the recorded response (a statutory document) needs only a 1-character "Response text" with no draft, attachment or preview (RtiActions.tsx:35-75, ds/ConfirmDialog.tsx:72).
 - **Verified evidence:** True: Forward/Respond/First Appeal (RtiActions.tsx:239-271) are shown to any user who reaches the page by status only; no role/CPIO/APIO check (header lists CPIO only in comments). Respond uses ActionButton requireReason with default minReasonLength=1 (ConfirmDialog.tsx:72,174), so a 1-char response is accepted, no attachment/preview/draft. Overstated: all three actions do go through a ConfirmDialog (ActionButton) and Forward/Respond require non-empty text. Whether the server enforces roles and emits audit events is cannot-verify. Cited ConfirmDialog line 72 is the minReasonLength default.
 - **Files to change:** `apps/web/src/app/(app)/crm/rti/[id]/RtiActions.tsx`, `apps/web/src/app/(app)/crm/rti/[id]/page.tsx`
@@ -5050,7 +5050,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-DETAIL-03  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9; W1 SF-12 re-confirmed on #2003)
 - **First-pass claim:** Applicant name and contact (phone/email) print in clear to all CRM users with no masking or reveal-with-reason; under DPDP the applicant's identity and contact should be role-gated and access-logged (rti/[id]/page.tsx:160-170).
 - **Verified evidence:** Detail page prints applicantName and applicantContact in clear to any viewer (page.tsx:162-165) with no masking or access logging; the list does the same (RtiTable.tsx:511-517). There is no shared <Masked> component in ds (only ad-hoc secretMasked strings in admin/integrations). Whether the server audit-logs reads is cannot-verify. Line refs 160-170 are approximately right.
 - **Files to change:** `apps/web/src/app/(app)/crm/rti/[id]/page.tsx`, `apps/web/src/app/_components/ds/Masked.tsx (new)`, `apps/web/src/app/_components/ds/index.ts`
@@ -5068,7 +5068,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9; W1 SF-12 re-confirmed on #2003)
 - **First-pass claim:** Forward asks for a free-text "Department / Office" that overwrites departmentRef; there is no department picker, no record of the previous department, and no check of the s.6(3) transfer window (RtiActions.tsx:39).
 - **Verified evidence:** Forward (RtiActions.tsx:242-248) uses the ConfirmDialog reason box labelled 'Department / Office' and sends {departmentRef:dept} to PATCH /forward; the value is free text that replaces departmentRef (page.tsx:100 shows only the current value). The UI keeps no previous-department history and does not check the s.6(3) 5-day transfer window (only text in the description). Backend behaviour on history is cannot-verify. Cited line 39 is wrong; correct 242-248.
 - **Files to change:** `apps/web/src/app/(app)/crm/rti/[id]/RtiActions.tsx`, `apps/web/src/app/(app)/crm/rti/[id]/page.tsx`
@@ -5085,7 +5085,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-DETAIL-05  ·  MEDIUM  ·  confirmed  ·  theme MONEY
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9; W1 SF-12 re-confirmed on #2003)
 - **First-pass claim:** Fee prints "₹" + a raw JS number (e.g. ₹10, ₹2.5) instead of paise-based lakh-grouped formatMoney, breaking the platform money rule (rti/[id]/page.tsx:118).
 - **Verified evidence:** page.tsx:102 renders `Paid — ₹${r.feeAmount}` with the raw JS number (RtiDetail.feeAmount?: number, line 17), so 10 prints ₹10 and 2.5 prints ₹2.5, with no formatRupees/formatMoney (formatters.ts:67,90). The amount is in rupees not paise (see RTI-NEW-01), so the fix depends on the contract. Cited line 118 is wrong; correct 102.
 - **Files to change:** `apps/web/src/app/(app)/crm/rti/[id]/page.tsx`, `apps/web/src/lib/formatters.ts`
@@ -5101,7 +5101,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-DETAIL-06  ·  MEDIUM  ·  partly  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9; W1 SF-12 re-confirmed on #2003)
 - **First-pass claim:** A failed or forbidden load is shown as "RTI Request Not Found — The RTI request could not be loaded." so a network outage, a 403 and a genuine 404 look identical; there is no timeline of forward/respond events beyond "Last Updated" (rti/[id]/page.tsx:60-66).
 - **Verified evidence:** page.tsx:44-67: fetchJson result's status/errorCode are ignored; any null (network error, 401/403, 404, invalid payload) renders the same 'RTI Request Not Found' header and 'could not be loaded' text. A DataSourceBadge is shown when source==='error' (61) so failure is partly signalled, but the title still says Not Found and 403 vs 404 are not distinguished; fetchJson returns status (apiClient.ts:144) and ds/LoadErrorState.tsx already maps 403 to PermissionDenied and others to RefreshErrorState. Also no timeline of forward/respond events exists (only Last Updated), and the response-record shows in a Response card. There is no notFound() call. Cited lines 60-66 fit.
 - **Files to change:** `apps/web/src/app/(app)/crm/rti/[id]/page.tsx`
