@@ -47,6 +47,33 @@ describe("RecordReceiptForm", () => {
     expect(refreshMock).toHaveBeenCalled();
   });
 
+  it.each([
+    ["1.15", "115"],
+    ["0.07", "7"],
+    ["1234567.89", "123456789"],
+  ])("sends exact paise for %s rupees (no float error)", async (rupees, paise) => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "r1", status: "accepted", correlationId: "c1" }), { status: 202 }),
+    );
+    render(<RecordReceiptForm assesseeId="a1" demands={demands} />);
+    fillValidForm();
+    fireEvent.change(screen.getByLabelText(/^Amount/), { target: { value: rupees } });
+    fireEvent.click(screen.getByRole("button", { name: "Record Receipt" }));
+    await waitFor(() => expect(screen.getByText("Record this receipt?")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Record receipt"));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const init = fetchSpy.mock.calls[0][1] as RequestInit;
+    expect((JSON.parse(init.body as string) as { amountMinor: string }).amountMinor).toBe(paise);
+  });
+
+  it.each(["", "abc", "1.005"])("rejects %j as an amount without opening the confirm dialog", (bad) => {
+    render(<RecordReceiptForm assesseeId="a1" demands={demands} />);
+    fillValidForm();
+    fireEvent.change(screen.getByLabelText(/^Amount/), { target: { value: bad } });
+    fireEvent.click(screen.getByRole("button", { name: "Record Receipt" }));
+    expect(screen.queryByText("Record this receipt?")).not.toBeInTheDocument();
+  });
+
   it("surfaces a clerk-safe error on the confirm dialog, never the server's raw code/message (error path, UX-020)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));
 
