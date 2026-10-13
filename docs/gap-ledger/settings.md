@@ -82,7 +82,7 @@ Counts: ACTION 6, BACKEND-VERIFY 1
 
 ### GAP-SETTINGS-BRANDING-06  ·  MEDIUM  ·  confirmed  ·  theme CONTRAST (was I18N)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1925, verified on main 9c5e9e9e9)
+- [x] **Status** (W1 SF-06 re-confirmed on this branch (page.test.tsx contrast-block test passes): closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** Text-on-Background and Text-on-Surface contrast is never checked, so a tenant can save an inaccessible palette; only the accent button gets a derived foreground (page.tsx:295).
 - **Verified evidence:** apps/web/src/app/(app)/settings/branding/page.tsx only calls readableForeground for the accent button (:295). There is no contrast check between colorText and colorBackground/colorSurface (preview uses them at :~209,:217), nor for links/borders, and handleSave (:~440) sends whatever is chosen. Theme I18N is wrong (accessibility).
 - **Files to change:** `apps/web/src/app/(app)/settings/branding/page.tsx`, `apps/web/src/lib/contrast.ts (new)`
@@ -118,7 +118,7 @@ Counts: ACTION 6, BACKEND-VERIFY 1
 
 ### GAP-SETTINGS-BRANDING-03  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W1 SF-06: closed by #2013: theme-service PUT /v1/themes/brand admits only theme_admin and super_admin (tokens/brand-routes.ts ADMIN_ROLES); the page edit roles now match exactly, so tenant_admin sees a read-only page instead of a Save that 403s. Audit: the brand consumer records an audit.event.record with the changed field names, not values or a before/after diff)
 - **W0 note:** partly fixed by #1925 — Client role check (BRANDING_ADMIN_ROLES) and save confirm added; no settings layout gate; server auth/audit unverifiable
 - **First-pass claim:** Any signed-in user can rewrite tenant-wide branding: no requireAnyRole, no settings/layout.tsx and no ModuleGate; Save PUTs the entire BrandConfig with no confirmation and no audit indication in the UI. theme-service is absent from the snapshot (services/ has only hrms-service), so server role checks and auditing are undeterminable (page.tsx:430-455).
 - **Service:** `theme-service`  ·  **Endpoint(s):** `['GET/PUT /api/proxy/v1/themes/brand', 'GET /api/proxy/v1/themes/brand/presets']`

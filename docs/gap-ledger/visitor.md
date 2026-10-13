@@ -170,7 +170,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-GUARD-02  ·  HIGH  ·  partly  ·  theme WIRING (was ROLEGATE)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1923, verified on main 9c5e9e9e9)
+- [x] **Status** (W1 SF-06 re-confirmed on this branch (gate id is now persisted and UUID-validated and the Location fallback is a picker; the Gate terminal ID is still typed because there is no gates list API): closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Gate terminal ID" is a hand-typed UUID with no gate list, no persistence and no validation (GuardConsole.tsx:175-183); verify/check-in/check-out all send it, and check-out silently sends "" when it is blank (GuardConsole.tsx:145) so a guard's first tap can fail with a generic save error.
 - **Verified evidence:** GuardConsole.tsx:177-185 is a free-text 'Gate terminal ID' input (placeholder 'Gate UUID for this terminal'), state at line 56 with no persistence and no list; onVerify (111-114) only checks non-empty, no UUID validation. Check-in uses gateId.trim() (132), check-out `gateId.trim() || ""` (145) so a blank gate is sent. Correction: when check-out fails, onCheckOut sets rosterError (148) but rosterState stays 'ok', and rosterError is only rendered under rosterState==='error' (307-317), so the failure is silently swallowed, not shown as a generic save error. Whether a gates-list endpoint exists is unknown.
 - **Files to change:** `apps/web/src/app/(app)/visitor/guard/GuardConsole.tsx`, `apps/web/src/app/(app)/visitor/_data/client.ts`, `apps/web/src/app/(app)/visitor/_data/loaders.ts`

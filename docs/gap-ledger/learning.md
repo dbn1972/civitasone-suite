@@ -714,7 +714,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-TRAINING-PLANS-02  ·  MEDIUM  ·  confirmed  ·  theme ROLEGATE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W1 SF-06 re-confirmed on this branch (training-plans/page.tsx has the HR-gated New plan action and CreatePlanForm now uses a department picker): closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Empty state tells HR admins they can create plans, but there is no create action or route and the page does no role check (page.tsx:35-39; POST /training-plans is HR_ROLES, learning/routes.ts:263-266).
 - **Verified evidence:** Empty-state message at apps/web/src/app/(app)/learning/training-plans/page.tsx:86-90 says HR admins can create plans; page has no create button/route and no role check. Backend POST /v1/hrms/learning/training-plans requires HR_ROLES (learning/routes.ts:263-266) and accepts title, planYear, departmentId?, roleCode?. Session roles helper exists: getSessionRoles in @/lib/auth/roleGuard (used in hr/disciplinary/page.tsx:5,42).
 - **Files to change:** `apps/web/src/app/(app)/learning/training-plans/page.tsx`, `apps/web/src/app/(app)/learning/training-plans/new/page.tsx (new)`, `apps/web/src/app/(app)/learning/training-plans/new/CreatePlanForm.tsx (new)`
