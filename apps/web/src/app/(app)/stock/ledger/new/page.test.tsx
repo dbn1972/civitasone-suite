@@ -56,4 +56,19 @@ describe("New Stock Entry page (target of the /stock/ledger/new links)", () => {
     expect(body.entryType).toBe("receipt");
     expect(body.items).toEqual([{ itemId: ITEMS.data[0]!.id, qty: 10, rateMinor: 1250, currency: "INR" }]);
   });
+
+  it("rejects a rate with sub-paise or non-plain-decimal input instead of posting zero", async () => {
+    for (const bad of ["12.345", "1e3"]) {
+      const fetchMock = installFetch();
+      const { unmount } = render(<Page />);
+      await waitFor(() => expect(screen.getByRole("option", { name: /A4 Paper/ })).toBeInTheDocument());
+      fireEvent.change(screen.getByLabelText("Item"), { target: { value: ITEMS.data[0]!.id } });
+      fireEvent.change(screen.getByLabelText("Quantity"), { target: { value: "10" } });
+      fireEvent.change(screen.getByLabelText("Rate per unit (₹)"), { target: { value: bad } });
+      fireEvent.click(screen.getByRole("button", { name: "Record entry" }));
+      expect(await screen.findByText(/Rate must be zero or a positive amount/)).toBeInTheDocument();
+      expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "POST")).toBe(false);
+      unmount();
+    }
+  });
 });

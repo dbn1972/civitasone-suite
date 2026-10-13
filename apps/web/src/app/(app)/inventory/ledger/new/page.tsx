@@ -16,7 +16,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader, ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
-import { rupeesInputToMinorNumber } from "@/lib/money";
+import { rupeesInputToMinorNumber, rupeesToMinorString } from "@/lib/money";
 import { ItemPicker } from "@/app/_components/ItemPicker";
 import { resolveStockItemEntry } from "@/lib/entityAdapters/item";
 import type { PickerEntry } from "../../linkHelpers";
@@ -115,6 +115,12 @@ export default function NewStockEntryPage() {
     e.preventDefault();
     setMessage("");
     setIsError(false);
+    // Strict submit-time check: an invalid rate must not be posted as zero.
+    if (rate.trim() !== "" && rupeesToMinorString(rate, { allowZero: true }) === null) {
+      setIsError(true);
+      setMessage("Rate must be zero or a positive amount with at most 2 decimals.");
+      return;
+    }
     post.trigger();
   }
 
