@@ -103,4 +103,60 @@ describe("NewTrainingForm", () => {
       expect(screen.getByText(/this start date is in the past/i)).toBeInTheDocument();
     });
   });
+
+  describe("SF-19 discard ConfirmDialog (replaces native confirm)", () => {
+    function cancelLink() {
+      return screen.getByRole("link", { name: /^cancel$/i });
+    }
+
+    it("opens the dialog without navigating when a dirty form is cancelled, and never calls window.confirm", () => {
+      const confirmSpy = vi.spyOn(window, "confirm");
+      renderForm();
+      fireEvent.change(screen.getByLabelText(/^title/i), { target: { value: "typed something" } });
+      const notPrevented = fireEvent.click(cancelLink());
+      expect(notPrevented).toBe(false);
+      expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+      expect(pushMock).not.toHaveBeenCalled();
+      expect(confirmSpy).not.toHaveBeenCalled();
+    });
+
+    it("Escape closes the dialog and keeps the form without navigating", () => {
+      renderForm();
+      fireEvent.change(screen.getByLabelText(/^title/i), { target: { value: "typed something" } });
+      fireEvent.click(cancelLink());
+      expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+      fireEvent.keyDown(document, { key: "Escape" });
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+      expect(pushMock).not.toHaveBeenCalled();
+      expect(screen.getByLabelText(/^title/i)).toHaveValue("typed something");
+    });
+
+    it("Keep editing closes the dialog and keeps the form without navigating", () => {
+      renderForm();
+      fireEvent.change(screen.getByLabelText(/^title/i), { target: { value: "typed something" } });
+      fireEvent.click(cancelLink());
+      fireEvent.click(screen.getByRole("button", { name: /^keep editing$/i }));
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+      expect(pushMock).not.toHaveBeenCalled();
+      expect(screen.getByLabelText(/^title/i)).toHaveValue("typed something");
+    });
+
+    it("Discard navigates to the list", () => {
+      renderForm();
+      fireEvent.change(screen.getByLabelText(/^title/i), { target: { value: "typed something" } });
+      fireEvent.click(cancelLink());
+      fireEvent.click(screen.getByRole("button", { name: /^discard$/i }));
+      expect(pushMock).toHaveBeenCalledWith("/hr/training");
+    });
+
+    it("a clean form does not open the dialog on Cancel", () => {
+      const confirmSpy = vi.spyOn(window, "confirm");
+      renderForm();
+      const notPrevented = fireEvent.click(cancelLink());
+      expect(notPrevented).toBe(true);
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+      expect(confirmSpy).not.toHaveBeenCalled();
+      expect(pushMock).not.toHaveBeenCalled();
+    });
+  });
 });

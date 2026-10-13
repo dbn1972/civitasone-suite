@@ -198,4 +198,60 @@ describe("NewGrievancePage", () => {
     const headers = (init as RequestInit).headers as Record<string, string>;
     expect(headers["x-device-id"]).toBeTruthy();
   });
+
+  describe("SF-19 discard ConfirmDialog (replaces native confirm)", () => {
+    function cancelLink() {
+      return screen.getByRole("link", { name: /^cancel$/i });
+    }
+
+    it("opens the dialog without navigating when a dirty form is cancelled, and never calls window.confirm", () => {
+      const confirmSpy = vi.spyOn(window, "confirm");
+      render(<NewGrievancePage />);
+      fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: "typed something" } });
+      const notPrevented = fireEvent.click(cancelLink());
+      expect(notPrevented).toBe(false);
+      expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+      expect(pushMock).not.toHaveBeenCalled();
+      expect(confirmSpy).not.toHaveBeenCalled();
+    });
+
+    it("Escape closes the dialog and keeps the form without navigating", () => {
+      render(<NewGrievancePage />);
+      fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: "typed something" } });
+      fireEvent.click(cancelLink());
+      expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+      fireEvent.keyDown(document, { key: "Escape" });
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+      expect(pushMock).not.toHaveBeenCalled();
+      expect(screen.getByLabelText(/subject/i)).toHaveValue("typed something");
+    });
+
+    it("Keep editing closes the dialog and keeps the form without navigating", () => {
+      render(<NewGrievancePage />);
+      fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: "typed something" } });
+      fireEvent.click(cancelLink());
+      fireEvent.click(screen.getByRole("button", { name: /^keep editing$/i }));
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+      expect(pushMock).not.toHaveBeenCalled();
+      expect(screen.getByLabelText(/subject/i)).toHaveValue("typed something");
+    });
+
+    it("Discard navigates to the list", () => {
+      render(<NewGrievancePage />);
+      fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: "typed something" } });
+      fireEvent.click(cancelLink());
+      fireEvent.click(screen.getByRole("button", { name: /^discard$/i }));
+      expect(pushMock).toHaveBeenCalledWith("/crm/grievances");
+    });
+
+    it("a clean form does not open the dialog on Cancel", () => {
+      const confirmSpy = vi.spyOn(window, "confirm");
+      render(<NewGrievancePage />);
+      const notPrevented = fireEvent.click(cancelLink());
+      expect(notPrevented).toBe(true);
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+      expect(confirmSpy).not.toHaveBeenCalled();
+      expect(pushMock).not.toHaveBeenCalled();
+    });
+  });
 });
